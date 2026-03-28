@@ -2007,280 +2007,245 @@ export function CRMClient({ userRole, userName, userId }: { userRole: string; us
 
 // ─── Prospecção Tab ───────────────────────────────────────────────────────────
 
-interface CnpjResult {
-  cnpj: string;
-  razao_social: string;
-  nome_fantasia?: string;
-  situacao_cadastral?: string;
-  capital_social?: number;
-  email?: string;
-  telefone1?: string;
-  ddd1?: string;
-  municipio?: { descricao: string };
-  estado?: { sigla: string };
-  socios?: Array<{ nome: string; qualificacao_socio?: { descricao: string } }>;
-  cnae_fiscal_principal?: { descricao: string; codigo: string };
-  porte?: string;
-}
-
 function ProspeccaoTab({ onAddLead }: { onAddLead: (prefill: Partial<{ personType: "PF"|"PJ"; name: string; document: string; email: string; phone: string; city: string; state: string; segment: string; }>) => void }) {
-  const [query, setQuery] = useState("");
-  const [uf, setUf] = useState("");
-  const [cidade, setCidade] = useState("");
+  const [mode, setMode] = useState<"single" | "batch">("single");
+  const [cnpjInput, setCnpjInput] = useState("");
+  const [batchInput, setBatchInput] = useState("");
   const [capitalMin, setCapitalMin] = useState("");
+  const [ufFilter, setUfFilter] = useState("");
   const [loading, setLoading] = useState(false);
-  const [results, setResults] = useState<CnpjResult[]>([]);
+  const [results, setResults] = useState<NormalizedCompany[]>([]);
   const [error, setError] = useState("");
-  const [detailLoading, setDetailLoading] = useState<string | null>(null);
-  const [details, setDetails] = useState<Record<string, CnpjResult>>({});
   const [expanded, setExpanded] = useState<string | null>(null);
-
   const UF_LIST = ["AC","AL","AM","AP","BA","CE","DF","ES","GO","MA","MG","MS","MT","PA","PB","PE","PI","PR","RJ","RN","RO","RR","RS","SC","SE","SP","TO"];
 
-  async function handleSearch() {
-    if (!query.trim() && !cidade.trim()) {
-      setError("Informe um termo de busca ou cidade.");
-      return;
-    }
-    setLoading(true);
-    setError("");
-    setResults([]);
-    setExpanded(null);
-    try {
-      const params = new URLSearchParams();
-      if (query.trim()) params.set("q", query.trim());
-      if (uf) params.set("uf", uf);
-      if (cidade.trim()) params.set("cidade", cidade.trim());
-      const res = await fetch(`/api/cnpj-search?${params.toString()}`);
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Erro na busca");
-      const arr: CnpjResult[] = Array.isArray(data) ? data : (data.items ?? data.data ?? []);
-      // Filter by capital social if specified
-      const capMin = Number(capitalMin.replace(/\D/g, "")) || 0;
-      const filtered = capMin > 0 ? arr.filter((c) => (c.capital_social ?? 0) >= capMin) : arr;
-      setResults(filtered.slice(0, 50));
-      if (filtered.length === 0) setError("Nenhuma empresa encontrada com esses filtros.");
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Erro ao buscar empresas.");
-    } finally {
-      setLoading(false);
-    }
+  function maskCnpj(v: string) {
+    const d = v.replace(/\D/g, "").slice(0, 14);
+    return d
+      .replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5")
+      .replace(/^(\d{2})(\d{3})(\d{3})(\d{4})$/, "$1.$2.$3/$4")
+      .replace(/^(\d{2})(\d{3})(\d{3})$/, "$1.$2.$3")
+      .replace(/^(\d{2})(\d{3})$/, "$1.$2")
+      .replace(/^(\d{2})$/, "$1");
   }
 
-  async function loadDetails(cnpj: string) {
-    if (details[cnpj]) { setExpanded(expanded === cnpj ? null : cnpj); return; }
-    setDetailLoading(cnpj);
-    try {
-      const res = await fetch(`/api/cnpj-search?cnpj=${cnpj}`);
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      setDetails((prev) => ({ ...prev, [cnpj]: data }));
-      setExpanded(cnpj);
-    } catch (e) {
-      alert(e instanceof Error ? e.message : "Erro ao carregar detalhes.");
-    } finally {
-      setDetailLoading(null);
-    }
+  function fmtCnpj(c: string) {
+    return c.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5");
   }
 
-  function fmt(v?: number) {
-    if (!v || v === 0) return "—";
+  async function fetchCnpj(cnpj: string): Promise<NormalizedCompany | null> {
+    const clean = cnpj.replace(/\D/g, "");
+    if (clean.length !== 14) return null;
+    const res = await fetch(`/api/cnpj-search?cnpj=${clean}`);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "CNPJ nao encontrado");
+    return data as NormalizedCompany;
+  }
+
+  async function handleSingle() {
+    const clean = cnpjInput.replace(/\D/g, "");
+    if (clean.length !== 14) { setError("CNPJ invalido — 14 digitos."); return; }
+    setLoading(true); setError(""); setResults([]); setExpanded(null);
+    try {
+      const c = await fetchCnpj(clean);
+      if (c) { setResults([c]); setExpanded(c.cnpj); }
+    } catch (e) { setError(e instanceof Error ? e.message : "Erro ao consultar."); }
+    finally { setLoading(false); }
+  }
+
+  async function handleBatch() {
+    const lines = batchInput.split(/[\n,;]/).map((l) => l.trim().replace(/\D/g, "")).filter((l) => l.length === 14);
+    if (lines.length === 0) { setError("Nenhum CNPJ valido. Um por linha."); return; }
+    if (lines.length > 20) { setError("Maximo 20 CNPJs."); return; }
+    setLoading(true); setError(""); setResults([]); setExpanded(null);
+    const found: NormalizedCompany[] = [];
+    const errs: string[] = [];
+    for (const cnpj of lines) {
+      try {
+        const c = await fetchCnpj(cnpj);
+        if (c) found.push(c);
+        await new Promise((r) => setTimeout(r, 400));
+      } catch (e) { errs.push(`${cnpj}: ${e instanceof Error ? e.message : "erro"}`); }
+    }
+    setResults(found);
+    if (errs.length) setError(`Erros: ${errs.slice(0, 3).join("; ")}`);
+    setLoading(false);
+  }
+
+  function fmtCap(v?: number) {
+    if (!v) return "—";
     if (v >= 1e9) return `R$ ${(v/1e9).toFixed(1)}B`;
     if (v >= 1e6) return `R$ ${(v/1e6).toFixed(1)}M`;
     if (v >= 1e3) return `R$ ${(v/1e3).toFixed(0)}K`;
-    return `R$ ${v.toFixed(2)}`;
+    return `R$ ${v.toLocaleString("pt-BR")}`;
   }
+
+  const filtered = results.filter((c) => {
+    const cap = Number(capitalMin.replace(/\D/g, "")) || 0;
+    return (cap === 0 || (c.capital_social ?? 0) >= cap) && (!ufFilter || c.uf === ufFilter);
+  });
+
+  const btnBase: React.CSSProperties = { border: "none", borderRadius: 8, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 8 };
 
   return (
     <div>
       <div style={{ background: "#091221", border: "1px solid #122036", borderRadius: 12, padding: 20, marginBottom: 16 }}>
-        <div style={{ fontSize: 14, fontWeight: 700, color: "#C4922E", marginBottom: 4 }}>Busca de Empresas — Dados Públicos Receita Federal</div>
-        <div style={{ fontSize: 12, color: "#5A7490", marginBottom: 16 }}>
-          Pesquise empresas por nome, segmento, cidade e UF. Dados extraídos de fontes públicas (CNPJ.ws / BrasilAPI).
+        <div style={{ fontSize: 14, fontWeight: 700, color: "#C4922E", marginBottom: 4 }}>Prospeccao — Consulta CNPJ</div>
+        <div style={{ fontSize: 12, color: "#5A7490", marginBottom: 16 }}>Dados publicos BrasilAPI · Razao social, socios, telefone, e-mail, capital social.</div>
+
+        <div style={{ display: "flex", gap: 6, marginBottom: 16 }}>
+          {(["single", "batch"] as const).map((m) => (
+            <button key={m} onClick={() => { setMode(m); setResults([]); setError(""); }}
+              style={{ ...btnBase, padding: "6px 16px", fontSize: 12,
+                background: mode === m ? "#C4922E" : "#0F1E35", color: mode === m ? "#050C18" : "#5A7490" }}>
+              {m === "single" ? "Busca por CNPJ" : "Importar Lista de CNPJs"}
+            </button>
+          ))}
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1.5fr 1fr", gap: 10, marginBottom: 12 }}>
-          <div>
-            <label style={{ fontSize: 11, color: "#5A7490", display: "block", marginBottom: 4 }}>Nome / Segmento / Palavra-chave</label>
-            <input
-              type="text"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-              placeholder="Ex: construtora, farmácia, transportadora..."
-              style={pInputStyle}
-            />
+        {mode === "single" ? (
+          <div style={{ display: "flex", gap: 10, alignItems: "flex-end" }}>
+            <div style={{ flex: 1 }}>
+              <label style={{ fontSize: 11, color: "#5A7490", display: "block", marginBottom: 4 }}>CNPJ da Empresa</label>
+              <input type="text" value={cnpjInput}
+                onChange={(e) => setCnpjInput(maskCnpj(e.target.value))}
+                onKeyDown={(e) => e.key === "Enter" && handleSingle()}
+                placeholder="00.000.000/0000-00" maxLength={18}
+                style={{ ...pInputStyle, letterSpacing: "0.08em", fontSize: 15 }} />
+            </div>
+            <button onClick={handleSingle} disabled={loading}
+              style={{ ...btnBase, background: loading ? "#5A7490" : "#C4922E", color: "#050C18", padding: "9px 22px", fontSize: 13, cursor: loading ? "not-allowed" : "pointer" }}>
+              <Search className="w-4 h-4" />{loading ? "Consultando..." : "Consultar"}
+            </button>
           </div>
+        ) : (
           <div>
-            <label style={{ fontSize: 11, color: "#5A7490", display: "block", marginBottom: 4 }}>UF</label>
-            <select value={uf} onChange={(e) => setUf(e.target.value)} style={{ ...pInputStyle, width: "100%" }}>
-              <option value="">Todos</option>
-              {UF_LIST.map((s) => <option key={s} value={s}>{s}</option>)}
-            </select>
+            <label style={{ fontSize: 11, color: "#5A7490", display: "block", marginBottom: 4 }}>Lista de CNPJs — um por linha (max. 20)</label>
+            <textarea value={batchInput} onChange={(e) => setBatchInput(e.target.value)}
+              placeholder={"11.222.333/0001-81\n44.555.666/0001-22"} rows={5}
+              style={{ ...pInputStyle, resize: "vertical", fontFamily: "monospace", lineHeight: 1.6 }} />
+            <button onClick={handleBatch} disabled={loading}
+              style={{ ...btnBase, background: loading ? "#5A7490" : "#C4922E", color: "#050C18", padding: "9px 22px", fontSize: 13, cursor: loading ? "not-allowed" : "pointer", marginTop: 10 }}>
+              <Search className="w-4 h-4" />{loading ? `Consultando... (${results.length} ok)` : "Consultar todos"}
+            </button>
           </div>
-          <div>
-            <label style={{ fontSize: 11, color: "#5A7490", display: "block", marginBottom: 4 }}>Cidade</label>
-            <input type="text" value={cidade} onChange={(e) => setCidade(e.target.value)} placeholder="São Paulo" style={pInputStyle} />
-          </div>
-          <div>
-            <label style={{ fontSize: 11, color: "#5A7490", display: "block", marginBottom: 4 }}>Capital Social Mín.</label>
-            <input type="text" value={capitalMin} onChange={(e) => setCapitalMin(e.target.value)} placeholder="Ex: 500000" style={pInputStyle} />
-          </div>
-        </div>
-
-        <button
-          onClick={handleSearch}
-          disabled={loading}
-          style={{
-            background: loading ? "#5A7490" : "#C4922E",
-            color: "#050C18",
-            border: "none",
-            borderRadius: 8,
-            padding: "9px 24px",
-            fontSize: 13,
-            fontWeight: 700,
-            cursor: loading ? "not-allowed" : "pointer",
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-          }}
-        >
-          <Search className="w-4 h-4" />
-          {loading ? "Buscando..." : "Buscar Empresas"}
-        </button>
+        )}
 
         {error && (
           <div style={{ marginTop: 12, padding: "10px 14px", background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 8, color: "#EF4444", fontSize: 12 }}>
             {error}
           </div>
         )}
+
+        <div style={{ marginTop: 14, padding: "10px 14px", background: "rgba(196,146,46,0.06)", border: "1px solid rgba(196,146,46,0.15)", borderRadius: 8 }}>
+          <div style={{ fontSize: 11, color: "#C4922E", fontWeight: 700, marginBottom: 3 }}>Como prospectar por cidade/segmento?</div>
+          <div style={{ fontSize: 11, color: "#5A7490", lineHeight: 1.6 }}>
+            A Receita Federal nao disponibiliza busca gratuita por nome/cidade. Pesquise em{" "}
+            <a href="https://casadosdados.com.br" target="_blank" rel="noreferrer" style={{ color: "#C4922E" }}>casadosdados.com.br</a>
+            {" ou "}<a href="https://cnpja.com.br" target="_blank" rel="noreferrer" style={{ color: "#C4922E" }}>cnpja.com.br</a>
+            {", copie os CNPJs e importe aqui em lote para buscar socios, telefone e e-mail."}
+          </div>
+        </div>
       </div>
 
-      {results.length > 0 && (
-        <div style={{ background: "#091221", border: "1px solid #122036", borderRadius: 12, overflow: "hidden" }}>
-          <div style={{ padding: "12px 20px", borderBottom: "1px solid #122036", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ fontSize: 13, fontWeight: 700, color: "#E8EDF5" }}>{results.length} empresa(s) encontrada(s)</span>
-            <span style={{ fontSize: 11, color: "#5A7490" }}>Clique em "Ver Detalhes" para carregar sócios e contato</span>
-          </div>
-          <div style={{ overflowX: "auto" }}>
-            {results.map((company) => {
-              const det = details[company.cnpj];
-              const isExpanded = expanded === company.cnpj;
-              const phone = det?.ddd1 && det?.telefone1
-                ? `(${det.ddd1}) ${det.telefone1}`
-                : company.telefone1 || "—";
-              return (
-                <div key={company.cnpj} style={{ borderBottom: "1px solid #122036" }}>
-                  <div style={{ display: "grid", gridTemplateColumns: "2fr 1.2fr 0.8fr 1fr 1fr auto auto", gap: 12, padding: "12px 16px", alignItems: "center" }}>
-                    <div>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: "#E8EDF5" }}>{company.razao_social}</div>
-                      {company.nome_fantasia && company.nome_fantasia !== company.razao_social && (
-                        <div style={{ fontSize: 11, color: "#5A7490" }}>{company.nome_fantasia}</div>
-                      )}
-                      <div style={{ fontSize: 10, color: "#5A7490", marginTop: 2 }}>{company.cnpj}</div>
-                    </div>
-                    <div style={{ fontSize: 12, color: "#5A7490" }}>
-                      {company.municipio?.descricao || "—"}{company.estado ? ` / ${company.estado.sigla}` : ""}
-                    </div>
-                    <div style={{ fontSize: 12, color: "#C4922E", fontWeight: 600 }}>
-                      {fmt(company.capital_social)}
-                    </div>
-                    <div style={{ fontSize: 12, color: "#5A7490" }}>
-                      {company.cnae_fiscal_principal?.descricao?.slice(0, 30) || "—"}
-                    </div>
-                    <div>
-                      <span style={{
-                        fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 4,
-                        background: company.situacao_cadastral === "ATIVA" ? "rgba(16,185,129,0.15)" : "rgba(239,68,68,0.15)",
-                        color: company.situacao_cadastral === "ATIVA" ? "#10B981" : "#EF4444",
-                      }}>
-                        {company.situacao_cadastral || "—"}
-                      </span>
-                    </div>
-                    <button
-                      onClick={() => loadDetails(company.cnpj)}
-                      disabled={detailLoading === company.cnpj}
-                      style={{
-                        background: "transparent",
-                        border: "1px solid #122036",
-                        borderRadius: 6,
-                        padding: "5px 12px",
-                        color: "#5A7490",
-                        fontSize: 11,
-                        cursor: "pointer",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {detailLoading === company.cnpj ? "..." : isExpanded ? "Ocultar" : "Ver Detalhes"}
-                    </button>
-                    <button
-                      onClick={() => onAddLead({
-                        personType: "PJ",
-                        name: company.razao_social,
-                        document: company.cnpj,
-                        email: det?.email || "",
-                        phone: phone !== "—" ? phone : "",
-                        city: company.municipio?.descricao || "",
-                        state: company.estado?.sigla || "",
-                        segment: company.cnae_fiscal_principal?.descricao?.slice(0, 40) || "",
-                      })}
-                      style={{
-                        background: "rgba(196,146,46,0.15)",
-                        border: "1px solid rgba(196,146,46,0.3)",
-                        borderRadius: 6,
-                        padding: "5px 12px",
-                        color: "#E5B96A",
-                        fontSize: 11,
-                        cursor: "pointer",
-                        fontWeight: 700,
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      + Lead
-                    </button>
-                  </div>
+      {results.length > 1 && (
+        <div style={{ display: "flex", gap: 10, marginBottom: 12, alignItems: "center" }}>
+          <span style={{ fontSize: 12, color: "#5A7490" }}>Filtrar:</span>
+          <select value={ufFilter} onChange={(e) => setUfFilter(e.target.value)}
+            style={{ ...pInputStyle, width: 80, padding: "5px 8px", fontSize: 12 }}>
+            <option value="">Todos UF</option>
+            {UF_LIST.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+          <input type="text" value={capitalMin} onChange={(e) => setCapitalMin(e.target.value)}
+            placeholder="Capital min. R$" style={{ ...pInputStyle, width: 150, padding: "5px 10px", fontSize: 12 }} />
+          <span style={{ fontSize: 12, color: "#5A7490" }}>{filtered.length}/{results.length} empresa(s)</span>
+        </div>
+      )}
 
-                  {/* Detail expand */}
-                  {isExpanded && det && (
-                    <div style={{ padding: "12px 16px 16px", background: "#050C18", borderTop: "1px solid #122036" }}>
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
-                        <div>
-                          <div style={{ fontSize: 11, fontWeight: 700, color: "#C4922E", marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.5 }}>Contato</div>
-                          <div style={{ fontSize: 12, color: "#5A7490", marginBottom: 4 }}>Telefone</div>
-                          <div style={{ fontSize: 13, color: "#E8EDF5", marginBottom: 8 }}>{phone}</div>
-                          <div style={{ fontSize: 12, color: "#5A7490", marginBottom: 4 }}>E-mail</div>
-                          <div style={{ fontSize: 13, color: "#E8EDF5" }}>{det.email || "—"}</div>
-                        </div>
-                        <div>
-                          <div style={{ fontSize: 11, fontWeight: 700, color: "#C4922E", marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.5 }}>Empresa</div>
-                          <div style={{ fontSize: 12, color: "#5A7490", marginBottom: 2 }}>Porte</div>
-                          <div style={{ fontSize: 13, color: "#E8EDF5", marginBottom: 6 }}>{det.porte || "—"}</div>
-                          <div style={{ fontSize: 12, color: "#5A7490", marginBottom: 2 }}>Capital Social</div>
-                          <div style={{ fontSize: 13, color: "#C4922E", fontWeight: 600 }}>{fmt(det.capital_social)}</div>
-                        </div>
-                        <div>
-                          <div style={{ fontSize: 11, fontWeight: 700, color: "#C4922E", marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.5 }}>
-                            Sócios ({det.socios?.length || 0})
+      {filtered.length > 0 && (
+        <div style={{ background: "#091221", border: "1px solid #122036", borderRadius: 12, overflow: "hidden" }}>
+          {filtered.map((c) => {
+            const isOpen = expanded === c.cnpj;
+            return (
+              <div key={c.cnpj} style={{ borderBottom: "1px solid #122036" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 16px", flexWrap: "wrap" }}>
+                  <div style={{ flex: 1, minWidth: 200 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: "#E8EDF5" }}>{c.razao_social}</div>
+                    {c.nome_fantasia && c.nome_fantasia !== c.razao_social && (
+                      <div style={{ fontSize: 11, color: "#5A7490" }}>{c.nome_fantasia}</div>
+                    )}
+                    <div style={{ fontSize: 10, color: "#5A7490", marginTop: 2, fontFamily: "monospace" }}>{fmtCnpj(c.cnpj)}</div>
+                  </div>
+                  <div style={{ fontSize: 12, color: "#5A7490" }}>{c.municipio || "—"}{c.uf ? ` / ${c.uf}` : ""}</div>
+                  <div style={{ fontSize: 13, color: "#C4922E", fontWeight: 700 }}>{fmtCap(c.capital_social)}</div>
+                  <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 4,
+                    background: c.situacao_cadastral === "ATIVA" ? "rgba(16,185,129,0.15)" : "rgba(239,68,68,0.15)",
+                    color: c.situacao_cadastral === "ATIVA" ? "#10B981" : "#EF4444" }}>
+                    {c.situacao_cadastral || "—"}
+                  </span>
+                  <button onClick={() => setExpanded(isOpen ? null : c.cnpj)}
+                    style={{ background: "transparent", border: "1px solid #122036", borderRadius: 6, padding: "5px 12px", color: "#5A7490", fontSize: 11, cursor: "pointer" }}>
+                    {isOpen ? "Ocultar" : "Detalhes"}
+                  </button>
+                  <button onClick={() => onAddLead({ personType: "PJ", name: c.razao_social,
+                    document: fmtCnpj(c.cnpj), email: c.email || "", phone: c.telefone || "",
+                    city: c.municipio || "", state: c.uf || "", segment: (c.cnae || "").slice(0, 50) })}
+                    style={{ ...btnBase, background: "rgba(196,146,46,0.15)", border: "1px solid rgba(196,146,46,0.3)", padding: "5px 14px", color: "#E5B96A", fontSize: 11 }}>
+                    + Lead
+                  </button>
+                </div>
+
+                {isOpen && (
+                  <div style={{ padding: "14px 16px 18px", background: "#050C18", borderTop: "1px solid #122036" }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 20 }}>
+                      <div>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: "#C4922E", marginBottom: 10, textTransform: "uppercase" }}>Contato</div>
+                        {([["Telefone", c.telefone], ["Telefone 2", c.telefone2], ["E-mail", c.email], ["Logradouro", c.logradouro], ["Bairro", c.bairro], ["CEP", c.cep]] as [string,string][]).map(([l, v]) => (
+                          <div key={l} style={{ marginBottom: 6 }}>
+                            <div style={{ fontSize: 10, color: "#5A7490" }}>{l}</div>
+                            <div style={{ fontSize: 12, color: "#E8EDF5" }}>{v || "—"}</div>
                           </div>
-                          {det.socios && det.socios.length > 0 ? det.socios.slice(0, 5).map((s, i) => (
-                            <div key={i} style={{ marginBottom: 6 }}>
-                              <div style={{ fontSize: 12, color: "#E8EDF5" }}>{s.nome}</div>
-                              <div style={{ fontSize: 10, color: "#5A7490" }}>{s.qualificacao_socio?.descricao || ""}</div>
-                            </div>
-                          )) : <div style={{ fontSize: 12, color: "#5A7490" }}>Sem sócios registrados</div>}
-                        </div>
+                        ))}
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: "#C4922E", marginBottom: 10, textTransform: "uppercase" }}>Empresa</div>
+                        {([["Porte", c.porte], ["Capital Social", fmtCap(c.capital_social)], ["CNAE", (c.cnae || "").slice(0, 60)], ["Abertura", c.data_abertura ? new Date(c.data_abertura).toLocaleDateString("pt-BR") : "—"]] as [string,string][]).map(([l, v]) => (
+                          <div key={l} style={{ marginBottom: 6 }}>
+                            <div style={{ fontSize: 10, color: "#5A7490" }}>{l}</div>
+                            <div style={{ fontSize: 12, color: l === "Capital Social" ? "#C4922E" : "#E8EDF5", fontWeight: l === "Capital Social" ? 700 : 400 }}>{v || "—"}</div>
+                          </div>
+                        ))}
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: "#C4922E", marginBottom: 10, textTransform: "uppercase" }}>Socios ({c.socios?.length || 0})</div>
+                        {c.socios && c.socios.length > 0 ? c.socios.slice(0, 6).map((s, i) => (
+                          <div key={i} style={{ marginBottom: 8 }}>
+                            <div style={{ fontSize: 12, color: "#E8EDF5" }}>{s.nome}</div>
+                            <div style={{ fontSize: 10, color: "#5A7490" }}>{s.qualificacao}{s.entrada ? ` · desde ${new Date(s.entrada).toLocaleDateString("pt-BR")}` : ""}</div>
+                          </div>
+                        )) : <div style={{ fontSize: 12, color: "#5A7490" }}>Sem socios registrados</div>}
                       </div>
                     </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
   );
 }
+
+interface NormalizedCompany {
+  cnpj: string; razao_social: string; nome_fantasia: string;
+  situacao_cadastral: string; capital_social: number; email: string;
+  telefone: string; telefone2: string; municipio: string; uf: string;
+  logradouro: string; bairro: string; cep: string; porte: string;
+  cnae: string; data_abertura: string;
+  socios: Array<{ nome: string; qualificacao: string; entrada: string; faixa_etaria: string }>;
+}
+
 
 const pInputStyle: React.CSSProperties = {
   width: "100%",

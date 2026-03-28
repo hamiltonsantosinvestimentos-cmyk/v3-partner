@@ -1,71 +1,152 @@
 import { NextRequest, NextResponse } from "next/server";
 
-// Proxy for public CNPJ APIs — avoids CORS and centralizes rate-limit handling
+// BrasilAPI CNPJ lookup — free, reliable, no auth required
+// https://brasilapi.com.br/api/cnpj/v1/{cnpj}
 
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl;
   const cnpj = searchParams.get("cnpj") || "";
-  const q = searchParams.get("q") || "";
-  const uf = searchParams.get("uf") || "";
-  const cidade = searchParams.get("cidade") || "";
+
+  if (!cnpj) {
+    return NextResponse.json({ error: "Informe o CNPJ" }, { status: 400 });
+  }
+
+  const clean = cnpj.replace(/\D/g, "");
+  if (clean.length !== 14) {
+    return NextResponse.json({ error: "CNPJ inválido — deve ter 14 dígitos" }, { status: 400 });
+  }
 
   try {
-    // ── Mode 1: individual CNPJ lookup ────────────────────────────────────────
-    if (cnpj) {
-      const clean = cnpj.replace(/\D/g, "");
-      if (clean.length !== 14) {
-        return NextResponse.json({ error: "CNPJ inválido" }, { status: 400 });
-      }
-      const res = await fetch(`https://publica.cnpj.ws/cnpj/${clean}`, {
-        headers: { Accept: "application/json" },
-        signal: AbortSignal.timeout(10000),
-      });
-      if (!res.ok) {
-        return NextResponse.json({ error: "CNPJ não encontrado" }, { status: 404 });
-      }
-      const data = await res.json();
-      return NextResponse.json(data);
-    }
-
-    // ── Mode 2: search by query + city/state ──────────────────────────────────
-    let municipioCode = "";
-    if (cidade && uf) {
-      try {
-        const muniRes = await fetch(
-          `https://brasilapi.com.br/api/ibge/municipios/v1/${uf.toUpperCase()}`,
-          { signal: AbortSignal.timeout(6000) }
-        );
-        if (muniRes.ok) {
-          const munis = await muniRes.json() as Array<{ nome: string; codigo_ibge: string }>;
-          const found = munis.find(
-            (m) => m.nome.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") ===
-              cidade.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-          );
-          if (found) municipioCode = found.codigo_ibge;
-        }
-      } catch {
-        // proceed without municipio code
-      }
-    }
-
-    const params = new URLSearchParams();
-    if (q.trim()) params.set("q", q.trim());
-    if (municipioCode) params.set("municipio", municipioCode);
-
-    const searchUrl = `https://publica.cnpj.ws/cnpj/search?${params.toString()}`;
-    const res = await fetch(searchUrl, {
+    // Primary: BrasilAPI
+    const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${clean}`, {
       headers: { Accept: "application/json" },
-      signal: AbortSignal.timeout(12000),
+      next: { revalidate: 3600 }, // cache 1h
     });
 
-    if (!res.ok) {
-      return NextResponse.json({ error: `API indisponível (${res.status})` }, { status: res.status });
+    if (res.ok) {
+      const data = await res.json();
+      return NextResponse.json(normalizebrasilapi(data));
     }
 
-    const data = await res.json();
-    return NextResponse.json(data);
+    // Fallback: ReceitaWS (rate limited: 3 req/min on free tier)
+    const res2 = await fetch(`https://receitaws.com.br/v1/cnpj/${clean}`, {
+      headers: { Accept: "application/json" },
+    });
+
+    if (res2.ok) {
+      const data2 = await res2.json();
+      if (data2.status === "ERROR") {
+        return NextResponse.json({ error: data2.message || "CNPJ não encontrado" }, { status: 404 });
+      }
+      return NextResponse.json(normalizeReceitaWS(data2));
+    }
+
+    return NextResponse.json({ error: "CNPJ não encontrado nas bases públicas" }, { status: 404 });
   } catch (err) {
-    const msg = err instanceof Error ? err.message : "Erro desconhecido";
-    return NextResponse.json({ error: `Erro ao consultar dados públicos: ${msg}` }, { status: 500 });
+    const msg = err instanceof Error ? err.message : "Erro de conexão";
+    return NextResponse.json({ error: `Erro ao consultar CNPJ: ${msg}` }, { status: 500 });
   }
+}
+
+interface BrasilApiData {
+  cnpj?: string;
+  razao_social?: string;
+  nome_fantasia?: string;
+  descricao_situacao_cadastral?: string;
+  capital_social?: number;
+  email?: string;
+  ddd_telefone_1?: string;
+  ddd_telefone_2?: string;
+  municipio?: string;
+  uf?: string;
+  logradouro?: string;
+  numero?: string;
+  complemento?: string;
+  bairro?: string;
+  cep?: string;
+  porte?: string;
+  cnae_fiscal_descricao?: string;
+  data_inicio_atividade?: string;
+  qsa?: Array<{
+    nome_socio?: string;
+    qualificacao_socio?: string;
+    data_entrada_sociedade?: string;
+    faixa_etaria?: string;
+  }>;
+}
+
+function normalizebrasilapi(d: BrasilApiData) {
+  return {
+    cnpj: d.cnpj || "",
+    razao_social: d.razao_social || "",
+    nome_fantasia: d.nome_fantasia || "",
+    situacao_cadastral: d.descricao_situacao_cadastral || "ATIVA",
+    capital_social: d.capital_social || 0,
+    email: d.email || "",
+    telefone: d.ddd_telefone_1 || "",
+    telefone2: d.ddd_telefone_2 || "",
+    municipio: d.municipio || "",
+    uf: d.uf || "",
+    logradouro: `${d.logradouro || ""}, ${d.numero || ""}`.trim().replace(/^,\s*/, ""),
+    bairro: d.bairro || "",
+    cep: d.cep || "",
+    porte: d.porte || "",
+    cnae: d.cnae_fiscal_descricao || "",
+    data_abertura: d.data_inicio_atividade || "",
+    socios: (d.qsa || []).map((s) => ({
+      nome: s.nome_socio || "",
+      qualificacao: s.qualificacao_socio || "",
+      entrada: s.data_entrada_sociedade || "",
+      faixa_etaria: s.faixa_etaria || "",
+    })),
+  };
+}
+
+interface ReceitaWSData {
+  cnpj?: string;
+  nome?: string;
+  fantasia?: string;
+  situacao?: string;
+  capital_social?: string;
+  email?: string;
+  telefone?: string;
+  municipio?: string;
+  uf?: string;
+  logradouro?: string;
+  numero?: string;
+  bairro?: string;
+  cep?: string;
+  porte?: string;
+  atividade_principal?: Array<{ text?: string }>;
+  abertura?: string;
+  qsa?: Array<{ nome?: string; qual?: string }>;
+  status?: string;
+  message?: string;
+}
+
+function normalizeReceitaWS(d: ReceitaWSData) {
+  return {
+    cnpj: d.cnpj || "",
+    razao_social: d.nome || "",
+    nome_fantasia: d.fantasia || "",
+    situacao_cadastral: d.situacao || "ATIVA",
+    capital_social: parseFloat((d.capital_social || "0").replace(/\./g, "").replace(",", ".")) || 0,
+    email: d.email || "",
+    telefone: d.telefone || "",
+    telefone2: "",
+    municipio: d.municipio || "",
+    uf: d.uf || "",
+    logradouro: `${d.logradouro || ""}, ${d.numero || ""}`.trim().replace(/^,\s*/, ""),
+    bairro: d.bairro || "",
+    cep: d.cep || "",
+    porte: d.porte || "",
+    cnae: d.atividade_principal?.[0]?.text || "",
+    data_abertura: d.abertura || "",
+    socios: (d.qsa || []).map((s) => ({
+      nome: s.nome || "",
+      qualificacao: s.qual || "",
+      entrada: "",
+      faixa_etaria: "",
+    })),
+  };
 }
