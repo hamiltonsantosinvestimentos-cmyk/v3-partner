@@ -206,41 +206,39 @@ export function Sidebar({ role, onClose }: SidebarProps) {
       <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-[#C4922E] to-transparent opacity-60" />
 
       {/* Logo */}
-      <div className="flex items-center justify-between px-3 py-3 border-b border-[#122036]/60">
-        <div className="flex items-center gap-2.5 min-w-0">
-          {/* Logo image — fundo navy igual ao da logo, object-contain para mostrar completa */}
-          <div className="w-11 h-11 rounded-xl overflow-hidden flex-shrink-0 shadow-lg ring-1 ring-[#C4922E]/30 bg-[#0A1628]">
-            <Image
-              src="/logo.jpg"
-              alt="V3 PARTNERS"
-              width={44}
-              height={44}
-              className="w-full h-full object-contain"
-              priority
-            />
-          </div>
-          <div className="min-w-0">
-            <span className="text-[13px] font-bold tracking-wide" style={{
-              background: "linear-gradient(120deg, #E5B96A 0%, #F5D99A 50%, #C4922E 100%)",
-              WebkitBackgroundClip: "text",
-              WebkitTextFillColor: "transparent",
-              backgroundClip: "text",
-            }}>
-              V3 PARTNERS
-            </span>
-            <p className="text-[9px] text-[#5A7490] uppercase tracking-[0.18em] mt-0.5">
-              Plataforma Financeira
-            </p>
-          </div>
-        </div>
+      <div className="flex flex-col items-center px-4 pt-5 pb-4 border-b border-[#122036]/60 relative">
         {onClose && (
           <button
             onClick={onClose}
-            className="p-1 rounded-lg hover:bg-secondary transition-colors lg:hidden flex-shrink-0"
+            className="absolute top-3 right-3 p-1 rounded-lg hover:bg-secondary transition-colors lg:hidden"
           >
             <X className="w-4 h-4 text-muted-foreground" />
           </button>
         )}
+        {/* Logo centralizado — fundo navy idêntico ao do logo para integração perfeita */}
+        <div className="flex items-center justify-center w-full">
+          <div
+            className="rounded-2xl overflow-hidden shadow-xl flex items-center justify-center"
+            style={{
+              width: 148,
+              height: 148,
+              background: "#0E2040",
+              boxShadow: "0 8px 32px rgba(196,146,46,0.18), 0 0 0 1px rgba(196,146,46,0.15)",
+            }}
+          >
+            <Image
+              src="/logo.jpg"
+              alt="V3 PARTNERS"
+              width={148}
+              height={148}
+              className="w-full h-full object-contain"
+              priority
+            />
+          </div>
+        </div>
+        <p className="text-[9px] text-[#5A7490] uppercase tracking-[0.18em] mt-2.5">
+          Plataforma Financeira
+        </p>
       </div>
 
       {/* Navigation */}

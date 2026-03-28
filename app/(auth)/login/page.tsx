@@ -98,26 +98,28 @@ export default function LoginPage() {
           }} />
 
           {/* ── Logo ── */}
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", marginBottom: 32 }}>
-            {/* Logo image — grande, fundo navy igual ao logo, object-contain */}
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", marginBottom: 28 }}>
+            {/* Logo completo — fundo navy idêntico ao da imagem para integração perfeita */}
             <div style={{
-              width: 140, height: 140, borderRadius: 24,
+              width: 200, height: 200, borderRadius: 28,
               overflow: "hidden",
-              background: "#0A1628",
-              boxShadow: "0 12px 40px rgba(196,146,46,0.2), 0 0 0 1px rgba(196,146,46,0.15)",
-              marginBottom: 0,
+              background: "#0E2040",
+              boxShadow: "0 16px 48px rgba(196,146,46,0.25), 0 0 0 1px rgba(196,146,46,0.18)",
               flexShrink: 0,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
             }}>
               <Image
                 src="/logo.jpg"
                 alt="V3 PARTNERS"
-                width={140}
-                height={140}
-                style={{ width: "100%", height: "100%", objectFit: "contain" }}
+                width={200}
+                height={200}
+                style={{ width: "100%", height: "100%", objectFit: "contain", objectPosition: "center" }}
                 priority
               />
             </div>
-            <p style={{ fontSize: 10, color: "#5A7490", letterSpacing: "0.18em", textTransform: "uppercase", marginTop: 10 }}>
+            <p style={{ fontSize: 10, color: "#5A7490", letterSpacing: "0.18em", textTransform: "uppercase", marginTop: 14 }}>
               Plataforma Financeira
             </p>
           </div>
