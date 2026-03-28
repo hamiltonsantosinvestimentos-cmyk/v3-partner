@@ -57,6 +57,8 @@ type CRMLead = {
   notes: string;
   convertedTo: "" | "credito_varejo" | "credito_estruturado" | "high_ticket" | "ma" | "consorcio" | "split";
   convertedAt: string;
+  productInterest?: string;
+  creditLine?: string;
   partnerId: string;
   partnerName: string;
   createdAt: string;
@@ -493,7 +495,7 @@ const INTERACTION_TYPE_LABELS: Record<string, string> = {
 export function CRMClient({ userRole, userName, userId }: { userRole: string; userName: string; userId: string }) {
   const isAdmin = userRole === "ADMIN";
 
-  const [tab, setTab] = useState<"pipeline" | "leads" | "relatorios">("pipeline");
+  const [tab, setTab] = useState<"pipeline" | "leads" | "prospeccao" | "relatorios">("pipeline");
   const [leads, setLeads] = useState<CRMLead[]>(DEMO_LEADS);
   const [selectedLead, setSelectedLead] = useState<CRMLead | null>(null);
   const [showNewLead, setShowNewLead] = useState(false);
@@ -511,6 +513,7 @@ export function CRMClient({ userRole, userName, userId }: { userRole: string; us
     name: "", document: "", email: "", phone: "", city: "", state: "",
     segment: "", annualRevenue: "", source: "ativo" as CRMLead["source"],
     notes: "", visitDate: "", nextContact: "",
+    productInterest: "", creditLine: "",
   });
 
   // New interaction state (inside detail modal)
@@ -609,6 +612,8 @@ export function CRMClient({ userRole, userName, userId }: { userRole: string; us
       notes: newLead.notes,
       convertedTo: "",
       convertedAt: "",
+      productInterest: newLead.productInterest,
+      creditLine: newLead.creditLine,
       partnerId: userId,
       partnerName: userName,
       createdAt: todayISO(),
@@ -619,6 +624,7 @@ export function CRMClient({ userRole, userName, userId }: { userRole: string; us
     setNewLead({
       personType: "PJ", name: "", document: "", email: "", phone: "", city: "", state: "",
       segment: "", annualRevenue: "", source: "ativo", notes: "", visitDate: "", nextContact: "",
+      productInterest: "", creditLine: "",
     });
   }
 
@@ -698,8 +704,8 @@ export function CRMClient({ userRole, userName, userId }: { userRole: string; us
         </div>
 
         {/* Tabs */}
-        <div style={{ display: "flex", gap: 4, marginTop: 16 }}>
-          {(["pipeline", "leads", "relatorios"] as const).map((t) => (
+        <div style={{ display: "flex", gap: 4, marginTop: 16, flexWrap: "wrap" }}>
+          {(["pipeline", "leads", "prospeccao", "relatorios"] as const).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -715,7 +721,7 @@ export function CRMClient({ userRole, userName, userId }: { userRole: string; us
                 transition: "all 0.15s",
               }}
             >
-              {t === "pipeline" ? "Pipeline" : t === "leads" ? "Leads" : "Relatórios"}
+              {t === "pipeline" ? "Pipeline" : t === "leads" ? "Leads" : t === "prospeccao" ? "🔍 Prospecção" : "Relatórios"}
             </button>
           ))}
         </div>
@@ -1097,6 +1103,16 @@ export function CRMClient({ userRole, userName, userId }: { userRole: string; us
           </div>
         )}
 
+        {/* ── TAB: PROSPECÇÃO ── */}
+        {tab === "prospeccao" && (
+          <ProspeccaoTab
+            onAddLead={(prefill) => {
+              setNewLead((prev) => ({ ...prev, ...prefill }));
+              setShowNewLead(true);
+            }}
+          />
+        )}
+
         {/* ── TAB: RELATÓRIOS ── */}
         {tab === "relatorios" && (
           <div>
@@ -1463,6 +1479,10 @@ export function CRMClient({ userRole, userName, userId }: { userRole: string; us
                     { label: "Última Visita", value: formatDate(selectedLead.visitDate) },
                     { label: "Próximo Contato", value: formatDate(selectedLead.nextContact) },
                     { label: "Status", value: STATUS_LABELS[selectedLead.status] },
+                    ...(selectedLead.productInterest ? [
+                      { label: "Produto de Interesse", value: CONVERTED_LABELS[selectedLead.productInterest] || selectedLead.productInterest },
+                      ...(selectedLead.creditLine ? [{ label: "Linha de Crédito", value: selectedLead.creditLine }] : []),
+                    ] : []),
                     ...(selectedLead.convertedTo ? [
                       { label: "Convertido p/", value: CONVERTED_LABELS[selectedLead.convertedTo] },
                       { label: "Data Conversão", value: formatDate(selectedLead.convertedAt) },
@@ -1603,15 +1623,35 @@ export function CRMClient({ userRole, userName, userId }: { userRole: string; us
               </div>
 
               {/* Footer */}
-              <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16 }}>
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16, flexWrap: "wrap" }}>
                 <Button variant="outline" onClick={() => setSelectedLead(null)}>
                   Fechar
                 </Button>
+                {selectedLead.productInterest === "split" && (
+                  <Button
+                    variant="outline"
+                    onClick={() => { window.location.href = "/split-fiscal"; }}
+                    style={{ borderColor: "#C4922E", color: "#E5B96A" }}
+                  >
+                    <PieChart className="w-4 h-4 mr-2" />
+                    Simulador Split Fiscal
+                  </Button>
+                )}
+                {selectedLead.productInterest === "consorcio" && (
+                  <Button
+                    variant="outline"
+                    onClick={() => { window.location.href = "/consorcio/simulacao"; }}
+                    style={{ borderColor: "#10B981", color: "#10B981" }}
+                  >
+                    <Trophy className="w-4 h-4 mr-2" />
+                    Simulador Consórcio
+                  </Button>
+                )}
                 {selectedLead.status !== "ganho" && selectedLead.status !== "perdido" && (
                   <Button
                     onClick={() => {
                       setShowConvert(selectedLead);
-                      setSelectedConvert("");
+                      setSelectedConvert(selectedLead.productInterest || "");
                     }}
                   >
                     <ArrowRight className="w-4 h-4 mr-2" />
@@ -1860,6 +1900,94 @@ export function CRMClient({ userRole, userName, userId }: { userRole: string; us
                 </div>
               </div>
             </div>
+
+            {/* Section 4: Produto de Interesse */}
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "#C4922E", marginBottom: 12, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                4. Produto de Interesse
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 12 }}>
+                {CONVERT_OPTIONS.map((opt) => {
+                  const Icon = opt.icon;
+                  const sel = newLead.productInterest === opt.id;
+                  return (
+                    <div
+                      key={opt.id}
+                      onClick={() => setNewLead((p) => ({ ...p, productInterest: sel ? "" : opt.id, creditLine: "" }))}
+                      style={{
+                        background: sel ? opt.bg : "#0F1E35",
+                        border: `2px solid ${sel ? opt.color : "#122036"}`,
+                        borderRadius: 8,
+                        padding: "10px 12px",
+                        cursor: "pointer",
+                        transition: "all 0.15s",
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
+                        <Icon className="w-3.5 h-3.5" style={{ color: opt.color, flexShrink: 0 }} />
+                        <span style={{ fontSize: 11, fontWeight: 700, color: sel ? opt.color : "#E8EDF5" }}>{opt.label}</span>
+                      </div>
+                      <div style={{ fontSize: 10, color: "#5A7490" }}>{opt.desc}</div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Credit line sub-selector */}
+              {(newLead.productInterest === "credito_varejo" || newLead.productInterest === "credito_estruturado" || newLead.productInterest === "high_ticket") && (
+                <div>
+                  <label style={{ fontSize: 11, color: "#5A7490", display: "block", marginBottom: 6 }}>Linha de Crédito Específica</label>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                    {(newLead.productInterest === "credito_varejo"
+                      ? ["HOME EQUITY", "AVAL", "FUNDO CONSTRUÇÃO RESIDENCIAL"]
+                      : newLead.productInterest === "credito_estruturado"
+                      ? ["HOMECASH", "V3GIRO E V3AUTOGIRO", "CGI"]
+                      : ["CRI", "CRA", "CPR", "FUNDO INTERNACIONAL CASH COLATERAL", "FUNDO INTERNACIONAL IMOB", "FUNDO CONSTRUÇÃO LOTEAMENTO", "FUNDO CONSTRUÇÃO EMPREENDIMENTO"]
+                    ).map((line) => (
+                      <button
+                        key={line}
+                        type="button"
+                        onClick={() => setNewLead((p) => ({ ...p, creditLine: p.creditLine === line ? "" : line }))}
+                        style={{
+                          padding: "4px 12px",
+                          borderRadius: 6,
+                          border: `1px solid ${newLead.creditLine === line ? "#C4922E" : "#122036"}`,
+                          background: newLead.creditLine === line ? "rgba(196,146,46,0.15)" : "#0F1E35",
+                          color: newLead.creditLine === line ? "#E5B96A" : "#5A7490",
+                          fontSize: 11,
+                          cursor: "pointer",
+                          fontWeight: newLead.creditLine === line ? 700 : 400,
+                          transition: "all 0.15s",
+                        }}
+                      >
+                        {line}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Split note */}
+              {newLead.productInterest === "split" && (
+                <div style={{ background: "rgba(196,146,46,0.08)", border: "1px solid rgba(196,146,46,0.25)", borderRadius: 8, padding: "10px 14px", fontSize: 12, color: "#E5B96A" }}>
+                  💡 Ao avançar este lead, você poderá acessar o <strong>Simulador Monetto</strong> para gerar uma proposta personalizada de Split Fiscal.
+                </div>
+              )}
+
+              {/* Consórcio note */}
+              {newLead.productInterest === "consorcio" && (
+                <div style={{ background: "rgba(16,185,129,0.08)", border: "1px solid rgba(16,185,129,0.25)", borderRadius: 8, padding: "10px 14px", fontSize: 12, color: "#10B981" }}>
+                  💡 Ao avançar este lead, você poderá acessar o <strong>Simulador de Consórcio</strong> para calcular parcelas e carta de crédito.
+                </div>
+              )}
+
+              {/* M&A note */}
+              {newLead.productInterest === "ma" && (
+                <div style={{ background: "rgba(99,102,241,0.08)", border: "1px solid rgba(99,102,241,0.25)", borderRadius: 8, padding: "10px 14px", fontSize: 12, color: "#818CF8" }}>
+                  💡 Lead será encaminhado para a <strong>Mesa M&A</strong> para avaliação e structuring da operação.
+                </div>
+              )}
+            </div>
           </div>
 
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 20 }}>
@@ -1876,6 +2004,295 @@ export function CRMClient({ userRole, userName, userId }: { userRole: string; us
     </div>
   );
 }
+
+// ─── Prospecção Tab ───────────────────────────────────────────────────────────
+
+interface CnpjResult {
+  cnpj: string;
+  razao_social: string;
+  nome_fantasia?: string;
+  situacao_cadastral?: string;
+  capital_social?: number;
+  email?: string;
+  telefone1?: string;
+  ddd1?: string;
+  municipio?: { descricao: string };
+  estado?: { sigla: string };
+  socios?: Array<{ nome: string; qualificacao_socio?: { descricao: string } }>;
+  cnae_fiscal_principal?: { descricao: string; codigo: string };
+  porte?: string;
+}
+
+function ProspeccaoTab({ onAddLead }: { onAddLead: (prefill: Partial<{ personType: "PF"|"PJ"; name: string; document: string; email: string; phone: string; city: string; state: string; segment: string; }>) => void }) {
+  const [query, setQuery] = useState("");
+  const [uf, setUf] = useState("");
+  const [cidade, setCidade] = useState("");
+  const [capitalMin, setCapitalMin] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [results, setResults] = useState<CnpjResult[]>([]);
+  const [error, setError] = useState("");
+  const [detailLoading, setDetailLoading] = useState<string | null>(null);
+  const [details, setDetails] = useState<Record<string, CnpjResult>>({});
+  const [expanded, setExpanded] = useState<string | null>(null);
+
+  const UF_LIST = ["AC","AL","AM","AP","BA","CE","DF","ES","GO","MA","MG","MS","MT","PA","PB","PE","PI","PR","RJ","RN","RO","RR","RS","SC","SE","SP","TO"];
+
+  async function handleSearch() {
+    if (!query.trim() && !cidade.trim()) {
+      setError("Informe um termo de busca ou cidade.");
+      return;
+    }
+    setLoading(true);
+    setError("");
+    setResults([]);
+    setExpanded(null);
+    try {
+      const params = new URLSearchParams();
+      if (query.trim()) params.set("q", query.trim());
+      if (uf) params.set("uf", uf);
+      if (cidade.trim()) params.set("cidade", cidade.trim());
+      const res = await fetch(`/api/cnpj-search?${params.toString()}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Erro na busca");
+      const arr: CnpjResult[] = Array.isArray(data) ? data : (data.items ?? data.data ?? []);
+      // Filter by capital social if specified
+      const capMin = Number(capitalMin.replace(/\D/g, "")) || 0;
+      const filtered = capMin > 0 ? arr.filter((c) => (c.capital_social ?? 0) >= capMin) : arr;
+      setResults(filtered.slice(0, 50));
+      if (filtered.length === 0) setError("Nenhuma empresa encontrada com esses filtros.");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Erro ao buscar empresas.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function loadDetails(cnpj: string) {
+    if (details[cnpj]) { setExpanded(expanded === cnpj ? null : cnpj); return; }
+    setDetailLoading(cnpj);
+    try {
+      const res = await fetch(`/api/cnpj-search?cnpj=${cnpj}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setDetails((prev) => ({ ...prev, [cnpj]: data }));
+      setExpanded(cnpj);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Erro ao carregar detalhes.");
+    } finally {
+      setDetailLoading(null);
+    }
+  }
+
+  function fmt(v?: number) {
+    if (!v || v === 0) return "—";
+    if (v >= 1e9) return `R$ ${(v/1e9).toFixed(1)}B`;
+    if (v >= 1e6) return `R$ ${(v/1e6).toFixed(1)}M`;
+    if (v >= 1e3) return `R$ ${(v/1e3).toFixed(0)}K`;
+    return `R$ ${v.toFixed(2)}`;
+  }
+
+  return (
+    <div>
+      <div style={{ background: "#091221", border: "1px solid #122036", borderRadius: 12, padding: 20, marginBottom: 16 }}>
+        <div style={{ fontSize: 14, fontWeight: 700, color: "#C4922E", marginBottom: 4 }}>Busca de Empresas — Dados Públicos Receita Federal</div>
+        <div style={{ fontSize: 12, color: "#5A7490", marginBottom: 16 }}>
+          Pesquise empresas por nome, segmento, cidade e UF. Dados extraídos de fontes públicas (CNPJ.ws / BrasilAPI).
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1.5fr 1fr", gap: 10, marginBottom: 12 }}>
+          <div>
+            <label style={{ fontSize: 11, color: "#5A7490", display: "block", marginBottom: 4 }}>Nome / Segmento / Palavra-chave</label>
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+              placeholder="Ex: construtora, farmácia, transportadora..."
+              style={pInputStyle}
+            />
+          </div>
+          <div>
+            <label style={{ fontSize: 11, color: "#5A7490", display: "block", marginBottom: 4 }}>UF</label>
+            <select value={uf} onChange={(e) => setUf(e.target.value)} style={{ ...pInputStyle, width: "100%" }}>
+              <option value="">Todos</option>
+              {UF_LIST.map((s) => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </div>
+          <div>
+            <label style={{ fontSize: 11, color: "#5A7490", display: "block", marginBottom: 4 }}>Cidade</label>
+            <input type="text" value={cidade} onChange={(e) => setCidade(e.target.value)} placeholder="São Paulo" style={pInputStyle} />
+          </div>
+          <div>
+            <label style={{ fontSize: 11, color: "#5A7490", display: "block", marginBottom: 4 }}>Capital Social Mín.</label>
+            <input type="text" value={capitalMin} onChange={(e) => setCapitalMin(e.target.value)} placeholder="Ex: 500000" style={pInputStyle} />
+          </div>
+        </div>
+
+        <button
+          onClick={handleSearch}
+          disabled={loading}
+          style={{
+            background: loading ? "#5A7490" : "#C4922E",
+            color: "#050C18",
+            border: "none",
+            borderRadius: 8,
+            padding: "9px 24px",
+            fontSize: 13,
+            fontWeight: 700,
+            cursor: loading ? "not-allowed" : "pointer",
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+          }}
+        >
+          <Search className="w-4 h-4" />
+          {loading ? "Buscando..." : "Buscar Empresas"}
+        </button>
+
+        {error && (
+          <div style={{ marginTop: 12, padding: "10px 14px", background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 8, color: "#EF4444", fontSize: 12 }}>
+            {error}
+          </div>
+        )}
+      </div>
+
+      {results.length > 0 && (
+        <div style={{ background: "#091221", border: "1px solid #122036", borderRadius: 12, overflow: "hidden" }}>
+          <div style={{ padding: "12px 20px", borderBottom: "1px solid #122036", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: "#E8EDF5" }}>{results.length} empresa(s) encontrada(s)</span>
+            <span style={{ fontSize: 11, color: "#5A7490" }}>Clique em "Ver Detalhes" para carregar sócios e contato</span>
+          </div>
+          <div style={{ overflowX: "auto" }}>
+            {results.map((company) => {
+              const det = details[company.cnpj];
+              const isExpanded = expanded === company.cnpj;
+              const phone = det?.ddd1 && det?.telefone1
+                ? `(${det.ddd1}) ${det.telefone1}`
+                : company.telefone1 || "—";
+              return (
+                <div key={company.cnpj} style={{ borderBottom: "1px solid #122036" }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "2fr 1.2fr 0.8fr 1fr 1fr auto auto", gap: 12, padding: "12px 16px", alignItems: "center" }}>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: "#E8EDF5" }}>{company.razao_social}</div>
+                      {company.nome_fantasia && company.nome_fantasia !== company.razao_social && (
+                        <div style={{ fontSize: 11, color: "#5A7490" }}>{company.nome_fantasia}</div>
+                      )}
+                      <div style={{ fontSize: 10, color: "#5A7490", marginTop: 2 }}>{company.cnpj}</div>
+                    </div>
+                    <div style={{ fontSize: 12, color: "#5A7490" }}>
+                      {company.municipio?.descricao || "—"}{company.estado ? ` / ${company.estado.sigla}` : ""}
+                    </div>
+                    <div style={{ fontSize: 12, color: "#C4922E", fontWeight: 600 }}>
+                      {fmt(company.capital_social)}
+                    </div>
+                    <div style={{ fontSize: 12, color: "#5A7490" }}>
+                      {company.cnae_fiscal_principal?.descricao?.slice(0, 30) || "—"}
+                    </div>
+                    <div>
+                      <span style={{
+                        fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 4,
+                        background: company.situacao_cadastral === "ATIVA" ? "rgba(16,185,129,0.15)" : "rgba(239,68,68,0.15)",
+                        color: company.situacao_cadastral === "ATIVA" ? "#10B981" : "#EF4444",
+                      }}>
+                        {company.situacao_cadastral || "—"}
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => loadDetails(company.cnpj)}
+                      disabled={detailLoading === company.cnpj}
+                      style={{
+                        background: "transparent",
+                        border: "1px solid #122036",
+                        borderRadius: 6,
+                        padding: "5px 12px",
+                        color: "#5A7490",
+                        fontSize: 11,
+                        cursor: "pointer",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {detailLoading === company.cnpj ? "..." : isExpanded ? "Ocultar" : "Ver Detalhes"}
+                    </button>
+                    <button
+                      onClick={() => onAddLead({
+                        personType: "PJ",
+                        name: company.razao_social,
+                        document: company.cnpj,
+                        email: det?.email || "",
+                        phone: phone !== "—" ? phone : "",
+                        city: company.municipio?.descricao || "",
+                        state: company.estado?.sigla || "",
+                        segment: company.cnae_fiscal_principal?.descricao?.slice(0, 40) || "",
+                      })}
+                      style={{
+                        background: "rgba(196,146,46,0.15)",
+                        border: "1px solid rgba(196,146,46,0.3)",
+                        borderRadius: 6,
+                        padding: "5px 12px",
+                        color: "#E5B96A",
+                        fontSize: 11,
+                        cursor: "pointer",
+                        fontWeight: 700,
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      + Lead
+                    </button>
+                  </div>
+
+                  {/* Detail expand */}
+                  {isExpanded && det && (
+                    <div style={{ padding: "12px 16px 16px", background: "#050C18", borderTop: "1px solid #122036" }}>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
+                        <div>
+                          <div style={{ fontSize: 11, fontWeight: 700, color: "#C4922E", marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.5 }}>Contato</div>
+                          <div style={{ fontSize: 12, color: "#5A7490", marginBottom: 4 }}>Telefone</div>
+                          <div style={{ fontSize: 13, color: "#E8EDF5", marginBottom: 8 }}>{phone}</div>
+                          <div style={{ fontSize: 12, color: "#5A7490", marginBottom: 4 }}>E-mail</div>
+                          <div style={{ fontSize: 13, color: "#E8EDF5" }}>{det.email || "—"}</div>
+                        </div>
+                        <div>
+                          <div style={{ fontSize: 11, fontWeight: 700, color: "#C4922E", marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.5 }}>Empresa</div>
+                          <div style={{ fontSize: 12, color: "#5A7490", marginBottom: 2 }}>Porte</div>
+                          <div style={{ fontSize: 13, color: "#E8EDF5", marginBottom: 6 }}>{det.porte || "—"}</div>
+                          <div style={{ fontSize: 12, color: "#5A7490", marginBottom: 2 }}>Capital Social</div>
+                          <div style={{ fontSize: 13, color: "#C4922E", fontWeight: 600 }}>{fmt(det.capital_social)}</div>
+                        </div>
+                        <div>
+                          <div style={{ fontSize: 11, fontWeight: 700, color: "#C4922E", marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                            Sócios ({det.socios?.length || 0})
+                          </div>
+                          {det.socios && det.socios.length > 0 ? det.socios.slice(0, 5).map((s, i) => (
+                            <div key={i} style={{ marginBottom: 6 }}>
+                              <div style={{ fontSize: 12, color: "#E8EDF5" }}>{s.nome}</div>
+                              <div style={{ fontSize: 10, color: "#5A7490" }}>{s.qualificacao_socio?.descricao || ""}</div>
+                            </div>
+                          )) : <div style={{ fontSize: 12, color: "#5A7490" }}>Sem sócios registrados</div>}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const pInputStyle: React.CSSProperties = {
+  width: "100%",
+  background: "#0F1E35",
+  border: "1px solid #122036",
+  borderRadius: 8,
+  padding: "8px 12px",
+  color: "#E8EDF5",
+  fontSize: 13,
+  outline: "none",
+  boxSizing: "border-box",
+};
 
 const inputStyle: React.CSSProperties = {
   width: "100%",
