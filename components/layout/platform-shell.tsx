@@ -1,0 +1,56 @@
+"use client";
+
+import React, { useState } from "react";
+import { Sidebar } from "./sidebar";
+import { Topbar } from "./topbar";
+import type { UserRole } from "@/lib/constants";
+
+interface PlatformShellProps {
+  user: {
+    id: string;
+    full_name: string | null;
+    email: string;
+    role: UserRole;
+    avatar_url: string | null;
+  };
+  notificationCount: number;
+  children: React.ReactNode;
+}
+
+export function PlatformShell({ user, notificationCount, children }: PlatformShellProps) {
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  return (
+    <div className="flex h-screen overflow-hidden bg-[#060D1A]">
+      {/* Desktop sidebar */}
+      <div className="hidden lg:flex flex-shrink-0">
+        <Sidebar role={user.role} />
+      </div>
+
+      {/* Mobile sidebar overlay */}
+      {sidebarOpen && (
+        <div className="fixed inset-0 z-40 lg:hidden">
+          <div
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            onClick={() => setSidebarOpen(false)}
+          />
+          <div className="absolute left-0 top-0 bottom-0 z-50">
+            <Sidebar role={user.role} onClose={() => setSidebarOpen(false)} />
+          </div>
+        </div>
+      )}
+
+      {/* Main content */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <Topbar
+          user={user}
+          onMenuClick={() => setSidebarOpen(true)}
+          notificationCount={notificationCount}
+        />
+        <main className="flex-1 overflow-y-auto p-5 lg:p-6">
+          {children}
+        </main>
+      </div>
+    </div>
+  );
+}

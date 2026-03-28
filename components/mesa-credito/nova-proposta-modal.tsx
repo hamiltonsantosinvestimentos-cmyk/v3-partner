@@ -1,0 +1,619 @@
+"use client";
+
+import React, { useState } from "react";
+import {
+  X, User, Building2, FileText, Upload, CheckCircle2, Circle,
+  ChevronRight, AlertCircle, Home, Shield, TrendingUp, Zap,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { formatCurrency } from "@/lib/utils";
+
+// ─── Checklists por linha e tipo de pessoa ─────────────────────────────────
+const CHECKLISTS: Record<string, Record<"PF" | "PJ", { id: string; label: string; required: boolean; hint?: string }[]>> = {
+  "HOME EQUITY": {
+    PF: [
+      { id: "he_pf_1", label: "RG e CPF (ou CNH)", required: true, hint: "Documento de identificação com foto" },
+      { id: "he_pf_2", label: "Comprovante de renda (3 últimos meses)", required: true, hint: "Holerite, pró-labore ou decore" },
+      { id: "he_pf_3", label: "Extrato bancário (3 últimos meses)", required: true },
+      { id: "he_pf_4", label: "Matrícula do imóvel atualizada (máx. 30 dias)", required: true },
+      { id: "he_pf_5", label: "IPTU do ano corrente", required: true },
+      { id: "he_pf_6", label: "Imposto de Renda completo + recibo de entrega", required: true },
+      { id: "he_pf_7", label: "Comprovante de residência (máx. 90 dias)", required: true },
+      { id: "he_pf_8", label: "Certidão de casamento / divórcio", required: false, hint: "Se aplicável" },
+      { id: "he_pf_9", label: "Certidão negativa de débitos cartoriais", required: false },
+    ],
+    PJ: [
+      { id: "he_pj_1", label: "Contrato Social + todas as alterações", required: true },
+      { id: "he_pj_2", label: "Cartão CNPJ atualizado", required: true },
+      { id: "he_pj_3", label: "Faturamento mensal — últimos 12 meses", required: true },
+      { id: "he_pj_4", label: "Balanço Patrimonial + DRE (últimos 2 anos)", required: true },
+      { id: "he_pj_5", label: "Certidão Negativa Federal, Estadual e Municipal", required: true },
+      { id: "he_pj_6", label: "Matrícula do imóvel atualizada (máx. 30 dias)", required: true },
+      { id: "he_pj_7", label: "IPTU do ano corrente", required: true },
+      { id: "he_pj_8", label: "RG e CPF dos sócios e respectivos cônjuges", required: true },
+      { id: "he_pj_9", label: "Imposto de Renda PJ (DIPJ) + recibo", required: true },
+      { id: "he_pj_10", label: "Comprovante de residência dos sócios", required: true },
+    ],
+  },
+  "AVAL": {
+    PF: [
+      { id: "av_pf_1", label: "RG e CPF (ou CNH)", required: true },
+      { id: "av_pf_2", label: "Comprovante de renda (3 últimos meses)", required: true },
+      { id: "av_pf_3", label: "Extrato bancário (3 últimos meses)", required: true },
+      { id: "av_pf_4", label: "Comprovante de residência (máx. 90 dias)", required: true },
+      { id: "av_pf_5", label: "Imposto de Renda completo + recibo", required: true },
+      { id: "av_pf_6", label: "Certidão de casamento / divórcio", required: false },
+    ],
+    PJ: [
+      { id: "av_pj_1", label: "Contrato Social + alterações", required: true },
+      { id: "av_pj_2", label: "Cartão CNPJ atualizado", required: true },
+      { id: "av_pj_3", label: "Balanço Patrimonial + DRE", required: true },
+      { id: "av_pj_4", label: "Faturamento mensal — últimos 12 meses", required: true },
+      { id: "av_pj_5", label: "Certidões Negativas (Federal, Estadual, Municipal)", required: true },
+      { id: "av_pj_6", label: "RG e CPF dos sócios", required: true },
+    ],
+  },
+  "FIDC": {
+    PF: [
+      { id: "fidc_pf_1", label: "RG e CPF dos sócios/gestores", required: true },
+      { id: "fidc_pf_2", label: "Comprovante de renda e patrimônio", required: true },
+      { id: "fidc_pf_3", label: "Imposto de Renda + recibo", required: true },
+    ],
+    PJ: [
+      { id: "fidc_pj_1", label: "Contrato Social + alterações", required: true },
+      { id: "fidc_pj_2", label: "Cartão CNPJ atualizado", required: true },
+      { id: "fidc_pj_3", label: "Balanço Patrimonial + DRE (últimos 3 anos)", required: true },
+      { id: "fidc_pj_4", label: "Carteira de recebíveis — relatório detalhado", required: true },
+      { id: "fidc_pj_5", label: "Contratos de originação de crédito (amostra)", required: true },
+      { id: "fidc_pj_6", label: "Inadimplência histórica por safra", required: true },
+      { id: "fidc_pj_7", label: "Certidões Negativas completas", required: true },
+      { id: "fidc_pj_8", label: "Relatório de auditoria independente", required: false },
+    ],
+  },
+  "CRI": {
+    PF: [
+      { id: "cri_pf_1", label: "RG e CPF (ou CNH)", required: true },
+      { id: "cri_pf_2", label: "Comprovante de renda e patrimônio", required: true },
+      { id: "cri_pf_3", label: "Matrícula do imóvel vinculado", required: true },
+      { id: "cri_pf_4", label: "IPTU do ano corrente", required: true },
+      { id: "cri_pf_5", label: "Imposto de Renda + recibo", required: true },
+    ],
+    PJ: [
+      { id: "cri_pj_1", label: "Contrato Social + alterações", required: true },
+      { id: "cri_pj_2", label: "Cartão CNPJ atualizado", required: true },
+      { id: "cri_pj_3", label: "Balanço Patrimonial + DRE (últimos 3 anos)", required: true },
+      { id: "cri_pj_4", label: "Matrícula do imóvel vinculado (atualizada)", required: true },
+      { id: "cri_pj_5", label: "Laudo de avaliação imobiliária (CRECI)", required: true },
+      { id: "cri_pj_6", label: "Memorial descritivo do empreendimento", required: true },
+      { id: "cri_pj_7", label: "Certidões Negativas completas", required: true },
+    ],
+  },
+  "CRA": {
+    PF: [
+      { id: "cra_pf_1", label: "RG e CPF (ou CNH)", required: true },
+      { id: "cra_pf_2", label: "Comprovante de atividade rural / agroindustrial", required: true },
+      { id: "cra_pf_3", label: "Imposto de Renda + recibo", required: true },
+      { id: "cra_pf_4", label: "CAR — Cadastro Ambiental Rural", required: true },
+    ],
+    PJ: [
+      { id: "cra_pj_1", label: "Contrato Social + alterações", required: true },
+      { id: "cra_pj_2", label: "Cartão CNPJ atualizado", required: true },
+      { id: "cra_pj_3", label: "Balanço Patrimonial + DRE (últimos 3 anos)", required: true },
+      { id: "cra_pj_4", label: "Comprovante de atividade agronegócio (contratos)", required: true },
+      { id: "cra_pj_5", label: "CAR — Cadastro Ambiental Rural", required: true },
+      { id: "cra_pj_6", label: "Certidões Negativas completas", required: true },
+    ],
+  },
+  "HIGH TICKET": {
+    PF: [
+      { id: "ht_pf_1", label: "RG e CPF (ou CNH)", required: true },
+      { id: "ht_pf_2", label: "Comprovante de patrimônio e renda", required: true },
+      { id: "ht_pf_3", label: "Imposto de Renda (últimos 3 anos)", required: true },
+      { id: "ht_pf_4", label: "Teaser executivo da operação", required: true },
+      { id: "ht_pf_5", label: "Projeções financeiras (5 anos)", required: true },
+    ],
+    PJ: [
+      { id: "ht_pj_1", label: "Contrato Social + todas as alterações", required: true },
+      { id: "ht_pj_2", label: "Cartão CNPJ atualizado", required: true },
+      { id: "ht_pj_3", label: "Balanço Patrimonial + DRE (últimos 3 anos)", required: true },
+      { id: "ht_pj_4", label: "Fluxo de Caixa histórico e projetado", required: true },
+      { id: "ht_pj_5", label: "Teaser executivo / Information Memorandum", required: true },
+      { id: "ht_pj_6", label: "Projeções financeiras detalhadas (5 anos)", required: true },
+      { id: "ht_pj_7", label: "Certidões Negativas completas (PGFN, Receita, FGTS)", required: true },
+      { id: "ht_pj_8", label: "Relatório de auditoria independente", required: true },
+      { id: "ht_pj_9", label: "Laudo de avaliação patrimonial", required: false },
+      { id: "ht_pj_10", label: "Apresentação executiva (pitch deck)", required: false },
+    ],
+  },
+  "PROJECT FINANCE": {
+    PF: [],
+    PJ: [
+      { id: "pf_pj_1", label: "Contrato Social + alterações", required: true },
+      { id: "pf_pj_2", label: "Cartão CNPJ atualizado", required: true },
+      { id: "pf_pj_3", label: "Estudo de viabilidade do projeto", required: true },
+      { id: "pf_pj_4", label: "Projeções financeiras completas (10 anos)", required: true },
+      { id: "pf_pj_5", label: "Licenças ambientais e regulatórias", required: true },
+      { id: "pf_pj_6", label: "Contratos off-take ou receita garantida", required: false },
+      { id: "pf_pj_7", label: "Balanço Patrimonial + DRE (últimos 3 anos)", required: true },
+      { id: "pf_pj_8", label: "Certidões Negativas completas", required: true },
+    ],
+  },
+};
+
+const DEFAULT_CHECKLIST = {
+  PF: [
+    { id: "def_pf_1", label: "RG e CPF (ou CNH)", required: true },
+    { id: "def_pf_2", label: "Comprovante de renda (3 últimos meses)", required: true },
+    { id: "def_pf_3", label: "Comprovante de residência (máx. 90 dias)", required: true },
+    { id: "def_pf_4", label: "Imposto de Renda completo + recibo", required: true },
+  ],
+  PJ: [
+    { id: "def_pj_1", label: "Contrato Social + alterações", required: true },
+    { id: "def_pj_2", label: "Cartão CNPJ atualizado", required: true },
+    { id: "def_pj_3", label: "Balanço Patrimonial + DRE", required: true },
+    { id: "def_pj_4", label: "Certidões Negativas", required: true },
+  ],
+};
+
+// ─── Linhas por nível ──────────────────────────────────────────────────────
+const LEVEL_LINES: Record<string, string[]> = {
+  NIVEL_1: ["HOME EQUITY", "AVAL", "CRÉDITO PESSOAL", "CDC"],
+  NIVEL_2: ["FIDC", "CRI", "CRA", "DEBENTURES", "CAPITAL DE GIRO ESTRUTURADO"],
+  NIVEL_3: ["HIGH TICKET", "PROJECT FINANCE", "FUSÕES E AQUISIÇÕES", "INFRASTRUCTURE FINANCE", "REAL ESTATE HIGH VALUE"],
+};
+
+type Tab = "cliente" | "operacao" | "documentos";
+
+interface UploadedFile {
+  docId: string;
+  name: string;
+  size: number;
+  status: "uploading" | "done";
+}
+
+interface NovaPropostaModalProps {
+  open: boolean;
+  onClose: () => void;
+  level: string;
+  partnerName: string;
+  partnerId: string;
+  onSubmit: (proposal: Record<string, unknown>) => void;
+}
+
+export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId, onSubmit }: NovaPropostaModalProps) {
+  const [tab, setTab] = useState<Tab>("cliente");
+  const [clientType, setClientType] = useState<"PF" | "PJ">("PF");
+  const [submitted, setSubmitted] = useState(false);
+
+  // Dados do cliente
+  const [nome, setNome] = useState("");
+  const [cpfCnpj, setCpfCnpj] = useState("");
+  const [email, setEmail] = useState("");
+  const [telefone, setTelefone] = useState("");
+  const [rg, setRg] = useState("");
+  const [nascimento, setNascimento] = useState("");
+  const [estadoCivil, setEstadoCivil] = useState("");
+  const [renda, setRenda] = useState("");
+  const [razaoSocial, setRazaoSocial] = useState("");
+  const [nomeFantasia, setNomeFantasia] = useState("");
+  const [socioResponsavel, setSocioResponsavel] = useState("");
+  const [faturamento, setFaturamento] = useState("");
+  const [enderecoRua, setEnderecoRua] = useState("");
+  const [enderecoCity, setEnderecoCity] = useState("");
+  const [enderecoUf, setEnderecoUf] = useState("");
+
+  // Dados da operação
+  const [creditLine, setCreditLine] = useState(LEVEL_LINES[level]?.[0] ?? "");
+  const [valorSolicitado, setValorSolicitado] = useState("");
+  const [prazo, setPrazo] = useState("");
+  const [finalidade, setFinalidade] = useState("");
+  const [imovelEndereco, setImovelEndereco] = useState("");
+  const [imovelValor, setImovelValor] = useState("");
+  const [observacoes, setObservacoes] = useState("");
+
+  // Documentos
+  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
+
+  const lines = LEVEL_LINES[level] ?? [];
+  const checklist = (CHECKLISTS[creditLine]?.[clientType]) ?? DEFAULT_CHECKLIST[clientType];
+
+  const uploadedIds = uploadedFiles.filter((f) => f.status === "done").map((f) => f.docId);
+  const requiredDocs = checklist.filter((d) => d.required);
+  const completedRequired = requiredDocs.filter((d) => uploadedIds.includes(d.id)).length;
+
+  function simulateUpload(docId: string, fileName: string) {
+    const fake: UploadedFile = { docId, name: fileName, size: Math.floor(Math.random() * 900 + 100), status: "uploading" };
+    setUploadedFiles((prev) => [...prev.filter((f) => f.docId !== docId), fake]);
+    setTimeout(() => {
+      setUploadedFiles((prev) =>
+        prev.map((f) => f.docId === docId ? { ...f, status: "done" } : f)
+      );
+    }, 1200);
+  }
+
+  function handleFileChange(docId: string, e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (file) simulateUpload(docId, file.name);
+    e.target.value = "";
+  }
+
+  function handleSubmit() {
+    const code = `CRED-26-${String(Date.now()).slice(-6)}`;
+    const clientName = clientType === "PF" ? nome : (razaoSocial || nomeFantasia);
+    const proposal = {
+      id: `new-${Date.now()}`,
+      code,
+      title: `${creditLine} — ${clientName}`,
+      client_name: clientName,
+      client_type: clientType,
+      cpf_cnpj: cpfCnpj,
+      email,
+      telefone,
+      credit_line: creditLine,
+      requested_value: parseFloat(valorSolicitado.replace(/\D/g, "")) || 0,
+      approved_value: null,
+      prazo,
+      finalidade,
+      current_level: level,
+      status: "PENDING",
+      stage: "RECEBIDO",
+      partner_id: partnerId,
+      partner_name: partnerName,
+      docs_uploaded: uploadedIds.length,
+      docs_required: requiredDocs.length,
+      created_at: new Date().toISOString(),
+    };
+    onSubmit(proposal);
+    setSubmitted(true);
+  }
+
+  function handleClose() {
+    setSubmitted(false);
+    setTab("cliente");
+    setNome(""); setCpfCnpj(""); setEmail(""); setTelefone("");
+    setValorSolicitado(""); setPrazo(""); setFinalidade("");
+    setUploadedFiles([]);
+    onClose();
+  }
+
+  if (!open) return null;
+
+  const tabLabels: { key: Tab; label: string; icon: React.ReactNode }[] = [
+    { key: "cliente", label: "Dados do Cliente", icon: <User className="w-4 h-4" /> },
+    { key: "operacao", label: "Operação", icon: <TrendingUp className="w-4 h-4" /> },
+    { key: "documentos", label: `Documentos (${completedRequired}/${requiredDocs.length})`, icon: <FileText className="w-4 h-4" /> },
+  ];
+
+  if (submitted) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+        <div className="bg-card border border-border rounded-2xl p-10 max-w-md w-full text-center animate-fade-in">
+          <div className="w-16 h-16 rounded-full bg-emerald-500/20 flex items-center justify-center mx-auto mb-4">
+            <CheckCircle2 className="w-8 h-8 text-emerald-400" />
+          </div>
+          <h2 className="text-xl font-bold text-white mb-2">Proposta Enviada!</h2>
+          <p className="text-sm text-muted-foreground mb-1">
+            A proposta foi registrada e vinculada ao partner:
+          </p>
+          <p className="text-base font-semibold text-primary mb-4">{partnerName}</p>
+          <p className="text-xs text-muted-foreground mb-6">
+            A Mesa Operacional irá analisar e mover para a próxima etapa.
+          </p>
+          <Button onClick={handleClose} className="w-full">Fechar</Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      <div className="bg-card border border-border rounded-2xl w-full max-w-2xl max-h-[92vh] flex flex-col animate-fade-in">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+          <div>
+            <h2 className="text-base font-bold text-white">Nova Proposta</h2>
+            <p className="text-xs text-muted-foreground">Partner: <span className="text-primary">{partnerName}</span></p>
+          </div>
+          <button onClick={handleClose} className="w-8 h-8 rounded-lg hover:bg-secondary flex items-center justify-center text-muted-foreground hover:text-white transition-colors">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* PF / PJ Toggle */}
+        <div className="px-6 pt-4 flex gap-2">
+          <button
+            onClick={() => setClientType("PF")}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all border ${
+              clientType === "PF"
+                ? "bg-primary/15 border-primary/40 text-primary"
+                : "border-border text-muted-foreground hover:bg-secondary"
+            }`}
+          >
+            <User className="w-4 h-4" /> Pessoa Física (PF)
+          </button>
+          <button
+            onClick={() => setClientType("PJ")}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all border ${
+              clientType === "PJ"
+                ? "bg-primary/15 border-primary/40 text-primary"
+                : "border-border text-muted-foreground hover:bg-secondary"
+            }`}
+          >
+            <Building2 className="w-4 h-4" /> Pessoa Jurídica (PJ)
+          </button>
+        </div>
+
+        {/* Tabs */}
+        <div className="px-6 pt-3 flex gap-1 border-b border-border">
+          {tabLabels.map((t) => (
+            <button
+              key={t.key}
+              onClick={() => setTab(t.key)}
+              className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-semibold rounded-t-lg transition-all -mb-px border-b-2 ${
+                tab === t.key
+                  ? "text-primary border-primary"
+                  : "text-muted-foreground border-transparent hover:text-foreground"
+              }`}
+            >
+              {t.icon} {t.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto px-6 py-5">
+          {/* ── TAB: CLIENTE ── */}
+          {tab === "cliente" && (
+            <div className="space-y-4">
+              {clientType === "PF" ? (
+                <>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field label="Nome completo *" value={nome} onChange={setNome} placeholder="João da Silva" />
+                    <Field label="CPF *" value={cpfCnpj} onChange={setCpfCnpj} placeholder="000.000.000-00" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field label="RG" value={rg} onChange={setRg} placeholder="00.000.000-0" />
+                    <Field label="Data de Nascimento *" value={nascimento} onChange={setNascimento} type="date" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field label="E-mail *" value={email} onChange={setEmail} placeholder="joao@email.com" type="email" />
+                    <Field label="Telefone *" value={telefone} onChange={setTelefone} placeholder="(11) 99999-0000" />
+                  </div>
+                  <div className="grid grid-cols-3 gap-3">
+                    <SelectField label="Estado Civil" value={estadoCivil} onChange={setEstadoCivil}
+                      options={["Solteiro(a)", "Casado(a)", "Divorciado(a)", "Viúvo(a)", "União Estável"]} />
+                    <Field label="Renda Mensal (R$) *" value={renda} onChange={setRenda} placeholder="0,00" />
+                    <Field label="UF" value={enderecoUf} onChange={setEnderecoUf} placeholder="SP" />
+                  </div>
+                  <Field label="Endereço" value={enderecoRua} onChange={setEnderecoRua} placeholder="Rua, número, bairro" />
+                  <Field label="Cidade" value={enderecoCity} onChange={setEnderecoCity} placeholder="São Paulo" />
+                </>
+              ) : (
+                <>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field label="Razão Social *" value={razaoSocial} onChange={setRazaoSocial} placeholder="Empresa Ltda" />
+                    <Field label="CNPJ *" value={cpfCnpj} onChange={setCpfCnpj} placeholder="00.000.000/0001-00" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field label="Nome Fantasia" value={nomeFantasia} onChange={setNomeFantasia} placeholder="Nome fantasia" />
+                    <Field label="Sócio Responsável *" value={socioResponsavel} onChange={setSocioResponsavel} placeholder="Nome do sócio" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field label="E-mail *" value={email} onChange={setEmail} placeholder="contato@empresa.com" type="email" />
+                    <Field label="Telefone *" value={telefone} onChange={setTelefone} placeholder="(11) 3000-0000" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field label="Faturamento Anual (R$) *" value={faturamento} onChange={setFaturamento} placeholder="0,00" />
+                    <Field label="UF" value={enderecoUf} onChange={setEnderecoUf} placeholder="SP" />
+                  </div>
+                  <Field label="Endereço da Empresa" value={enderecoRua} onChange={setEnderecoRua} placeholder="Rua, número, bairro" />
+                  <Field label="Cidade" value={enderecoCity} onChange={setEnderecoCity} placeholder="São Paulo" />
+                </>
+              )}
+            </div>
+          )}
+
+          {/* ── TAB: OPERAÇÃO ── */}
+          {tab === "operacao" && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <SelectField
+                  label="Linha de Crédito *"
+                  value={creditLine}
+                  onChange={setCreditLine}
+                  options={lines}
+                />
+                <Field label="Valor Solicitado (R$) *" value={valorSolicitado} onChange={setValorSolicitado} placeholder="0,00" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <SelectField
+                  label="Prazo desejado"
+                  value={prazo}
+                  onChange={setPrazo}
+                  options={["12 meses", "24 meses", "36 meses", "48 meses", "60 meses", "84 meses", "120 meses", "180 meses", "240 meses"]}
+                />
+                <SelectField
+                  label="Finalidade"
+                  value={finalidade}
+                  onChange={setFinalidade}
+                  options={["Capital de Giro", "Investimento", "Refinanciamento", "Aquisição", "Expansão", "Outro"]}
+                />
+              </div>
+
+              {(creditLine === "HOME EQUITY" || creditLine === "CRI") && (
+                <div className="p-4 rounded-xl border border-amber-500/20 bg-amber-500/5 space-y-3">
+                  <p className="text-xs font-semibold text-amber-400 flex items-center gap-1">
+                    <Home className="w-3.5 h-3.5" /> Dados do Imóvel em Garantia
+                  </p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field label="Endereço do Imóvel" value={imovelEndereco} onChange={setImovelEndereco} placeholder="Rua, número, cidade" />
+                    <Field label="Valor Estimado do Imóvel (R$)" value={imovelValor} onChange={setImovelValor} placeholder="0,00" />
+                  </div>
+                  {imovelValor && valorSolicitado && (
+                    <div className="text-xs text-muted-foreground">
+                      LTV estimado:{" "}
+                      <span className={`font-bold ${
+                        (parseFloat(valorSolicitado.replace(/\D/g, "")) / parseFloat(imovelValor.replace(/\D/g, ""))) > 0.7
+                          ? "text-red-400" : "text-emerald-400"
+                      }`}>
+                        {((parseFloat(valorSolicitado.replace(/\D/g, "")) / parseFloat(imovelValor.replace(/\D/g, ""))) * 100).toFixed(1)}%
+                      </span>
+                      <span className="ml-1 text-muted-foreground">(máx. 70%)</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Observações adicionais</label>
+                <textarea
+                  value={observacoes}
+                  onChange={(e) => setObservacoes(e.target.value)}
+                  rows={3}
+                  placeholder="Informações relevantes sobre a operação..."
+                  className="w-full px-3 py-2 text-sm bg-secondary border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 resize-none"
+                />
+              </div>
+
+              <div className="p-3 rounded-lg bg-primary/5 border border-primary/20">
+                <p className="text-xs font-semibold text-primary mb-1">Partner Vinculado</p>
+                <p className="text-sm text-white">{partnerName}</p>
+                <p className="text-xs text-muted-foreground">ID: {partnerId}</p>
+              </div>
+            </div>
+          )}
+
+          {/* ── TAB: DOCUMENTOS ── */}
+          {tab === "documentos" && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs text-muted-foreground">
+                  Checklist para <span className="font-semibold text-white">{creditLine}</span> — {clientType === "PF" ? "Pessoa Física" : "Pessoa Jurídica"}
+                </p>
+                <Badge className={`text-xs ${completedRequired === requiredDocs.length && requiredDocs.length > 0 ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" : "bg-amber-500/20 text-amber-400 border-amber-500/30"}`}>
+                  {completedRequired}/{requiredDocs.length} obrigatórios
+                </Badge>
+              </div>
+
+              {checklist.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-8">Selecione a linha de crédito na aba Operação.</p>
+              ) : (
+                checklist.map((doc) => {
+                  const uploaded = uploadedFiles.find((f) => f.docId === doc.id);
+                  return (
+                    <div key={doc.id} className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${
+                      uploaded?.status === "done"
+                        ? "border-emerald-500/30 bg-emerald-500/5"
+                        : "border-border bg-secondary/30 hover:bg-secondary/60"
+                    }`}>
+                      <div className="flex-shrink-0">
+                        {uploaded?.status === "done" ? (
+                          <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+                        ) : uploaded?.status === "uploading" ? (
+                          <div className="w-5 h-5 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+                        ) : (
+                          <Circle className={`w-5 h-5 ${doc.required ? "text-amber-400" : "text-muted-foreground"}`} />
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className={`text-sm font-medium ${uploaded?.status === "done" ? "text-emerald-300" : "text-foreground"}`}>
+                          {doc.label}
+                          {doc.required && <span className="text-red-400 ml-1">*</span>}
+                        </p>
+                        {doc.hint && <p className="text-xs text-muted-foreground">{doc.hint}</p>}
+                        {uploaded?.status === "done" && (
+                          <p className="text-xs text-muted-foreground">{uploaded.name} — {uploaded.size} KB</p>
+                        )}
+                      </div>
+                      <label className="flex-shrink-0 cursor-pointer">
+                        <input type="file" className="hidden" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" onChange={(e) => handleFileChange(doc.id, e)} />
+                        <span className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                          uploaded?.status === "done"
+                            ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30"
+                            : "bg-secondary border border-border text-muted-foreground hover:text-white hover:border-primary/50"
+                        }`}>
+                          <Upload className="w-3 h-3" />
+                          {uploaded?.status === "done" ? "Substituir" : "Upload"}
+                        </span>
+                      </label>
+                    </div>
+                  );
+                })
+              )}
+
+              <p className="text-xs text-muted-foreground pt-2">
+                Formatos aceitos: PDF, JPG, PNG, DOC, DOCX · Tamanho máximo: 10 MB por arquivo
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="px-6 py-4 border-t border-border flex items-center justify-between gap-3">
+          <div className="flex gap-2">
+            {tab !== "cliente" && (
+              <Button variant="outline" size="sm" onClick={() => setTab(tab === "documentos" ? "operacao" : "cliente")}>
+                Voltar
+              </Button>
+            )}
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={handleClose}>Cancelar</Button>
+            {tab !== "documentos" ? (
+              <Button size="sm" onClick={() => setTab(tab === "cliente" ? "operacao" : "documentos")}>
+                Próximo <ChevronRight className="w-4 h-4 ml-1" />
+              </Button>
+            ) : (
+              <Button
+                size="sm"
+                onClick={handleSubmit}
+                disabled={!nome && !razaoSocial}
+                className="bg-emerald-600 hover:bg-emerald-500"
+              >
+                <Zap className="w-4 h-4 mr-1.5" />
+                Enviar Proposta
+              </Button>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Helpers ───────────────────────────────────────────────────────────────
+function Field({ label, value, onChange, placeholder, type = "text" }: {
+  label: string; value: string; onChange: (v: string) => void; placeholder?: string; type?: string;
+}) {
+  return (
+    <div>
+      <label className="block text-xs font-semibold text-muted-foreground mb-1.5">{label}</label>
+      <input
+        type={type}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="w-full h-9 px-3 text-sm bg-secondary border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
+      />
+    </div>
+  );
+}
+
+function SelectField({ label, value, onChange, options }: {
+  label: string; value: string; onChange: (v: string) => void; options: string[];
+}) {
+  return (
+    <div>
+      <label className="block text-xs font-semibold text-muted-foreground mb-1.5">{label}</label>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full h-9 px-3 text-sm bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
+      >
+        <option value="">Selecione...</option>
+        {options.map((o) => <option key={o} value={o}>{o}</option>)}
+      </select>
+    </div>
+  );
+}

@@ -1,0 +1,468 @@
+export type VideoLevel = "Iniciante" | "Intermediário" | "Avançado";
+
+export interface Video {
+  id: string;
+  title: string;
+  description: string;
+  duration: string; // "mm:ss"
+  durationSecs: number;
+  instructor: string;
+  instructorRole: string;
+  category: string;
+  level: VideoLevel;
+  gradient: string;        // tailwind gradient classes for thumbnail
+  accentColor: string;     // hex for glow effects
+  tags: string[];
+  featured?: boolean;
+}
+
+export interface VideoCategory {
+  id: string;
+  label: string;
+  description: string;
+  icon: string;
+  color: string;
+  videos: Video[];
+}
+
+export const ACADEMY_CATEGORIES: VideoCategory[] = [
+  // ── HOME EQUITY ─────────────────────────────────────────────────────────
+  {
+    id: "home-equity",
+    label: "Home Equity",
+    description: "Financiamento com garantia de imóvel — do conceito à operação",
+    icon: "🏠",
+    color: "#3B6EF8",
+    videos: [
+      {
+        id: "he-001",
+        title: "Home Equity: Fundamentos e Mercado",
+        description: "Conceito, regulamentação CMN 4.676/2018, LTV, taxas e principais players do mercado brasileiro.",
+        duration: "18:42",
+        durationSecs: 1122,
+        instructor: "Dr. Ricardo Mendes",
+        instructorRole: "Especialista em Crédito Imobiliário",
+        category: "home-equity",
+        level: "Iniciante",
+        gradient: "from-blue-600 via-blue-700 to-indigo-800",
+        accentColor: "#3B6EF8",
+        tags: ["LTV", "CMN 4.676", "Garantia"],
+        featured: true,
+      },
+      {
+        id: "he-002",
+        title: "Análise de LTV e Avaliação de Imóveis",
+        description: "Como calcular o LTV corretamente, tipos de avaliação (CRECI/IBAPE), laudos e critérios de aceite.",
+        duration: "24:15",
+        durationSecs: 1455,
+        instructor: "Ana Cristina Luz",
+        instructorRole: "Analista Sênior de Crédito",
+        category: "home-equity",
+        level: "Intermediário",
+        gradient: "from-indigo-600 via-blue-600 to-blue-700",
+        accentColor: "#4F46E5",
+        tags: ["LTV", "Avaliação", "CRECI", "IBAPE"],
+      },
+      {
+        id: "he-003",
+        title: "Checklist Documental — PF e PJ",
+        description: "Documentação completa para Pessoa Física e Jurídica: o que pedir, prazos de validade e como verificar autenticidade.",
+        duration: "31:08",
+        durationSecs: 1868,
+        instructor: "Marcos Vieira",
+        instructorRole: "Gerente de Operações",
+        category: "home-equity",
+        level: "Intermediário",
+        gradient: "from-blue-700 via-cyan-700 to-blue-800",
+        accentColor: "#0891B2",
+        tags: ["Documentação", "PF", "PJ", "Compliance"],
+      },
+      {
+        id: "he-004",
+        title: "Processo de Aprovação e Registro Cartorário",
+        description: "Fluxo completo: análise de crédito, aprovação, emissão de CCB, registro em cartório e liberação.",
+        duration: "27:33",
+        durationSecs: 1653,
+        instructor: "Dr. Ricardo Mendes",
+        instructorRole: "Especialista em Crédito Imobiliário",
+        category: "home-equity",
+        level: "Avançado",
+        gradient: "from-violet-700 via-blue-700 to-blue-800",
+        accentColor: "#7C3AED",
+        tags: ["CCB", "Cartório", "Registro", "Aprovação"],
+      },
+      {
+        id: "he-005",
+        title: "Simulação e Precificação de Operações",
+        description: "Como simular operações de Home Equity, precificar taxas, tabelas Price e SAC na prática.",
+        duration: "22:50",
+        durationSecs: 1370,
+        instructor: "Fernanda Rocha",
+        instructorRole: "Especialista em Produtos",
+        category: "home-equity",
+        level: "Avançado",
+        gradient: "from-blue-800 via-blue-700 to-indigo-700",
+        accentColor: "#1D4ED8",
+        tags: ["Simulação", "Price", "SAC", "Precificação"],
+      },
+    ],
+  },
+
+  // ── CRÉDITO ESTRUTURADO ──────────────────────────────────────────────────
+  {
+    id: "estruturado",
+    label: "Crédito Estruturado",
+    description: "FIDC, CRI, CRA e Debêntures — estruturação de operações complexas",
+    icon: "📊",
+    color: "#F59E0B",
+    videos: [
+      {
+        id: "fidc-001",
+        title: "FIDC: Estrutura, Cotas e Regulação",
+        description: "O que é um FIDC, cotas sênior/mezanino/subordinadas, RCVM 175/2022 e benefícios para cedentes.",
+        duration: "35:20",
+        durationSecs: 2120,
+        instructor: "Prof. Carlos Eduardo",
+        instructorRole: "Mestre em Finanças Estruturadas",
+        category: "estruturado",
+        level: "Intermediário",
+        gradient: "from-amber-600 via-orange-600 to-amber-700",
+        accentColor: "#D97706",
+        featured: true,
+      },
+      {
+        id: "fidc-002",
+        title: "CRI e CRA: Certificados do Mercado Real",
+        description: "Diferenças entre CRI e CRA, emissores, estrutura de garantias, isenção IR e quando usar.",
+        duration: "28:45",
+        durationSecs: 1725,
+        instructor: "Dra. Beatriz Santos",
+        instructorRole: "Advogada Estruturada em Mercado de Capitais",
+        category: "estruturado",
+        level: "Intermediário",
+        gradient: "from-orange-600 via-amber-600 to-yellow-700",
+        accentColor: "#EA580C",
+        tags: ["CRI", "CRA", "Isenção IR", "Garantias"],
+      },
+      {
+        id: "fidc-003",
+        title: "Debêntures Simples e Incentivadas",
+        description: "Tipos de debêntures, debêntures de infraestrutura (Lei 12.431), emissão via ANBIMA e precificação.",
+        duration: "41:12",
+        durationSecs: 2472,
+        instructor: "Prof. Carlos Eduardo",
+        instructorRole: "Mestre em Finanças Estruturadas",
+        category: "estruturado",
+        level: "Avançado",
+        gradient: "from-yellow-700 via-amber-700 to-orange-700",
+        accentColor: "#B45309",
+        tags: ["Debêntures", "Lei 12.431", "ANBIMA"],
+      },
+      {
+        id: "fidc-004",
+        title: "Due Diligence em Operações Estruturadas",
+        description: "Como realizar due diligence financeira, jurídica e operacional em FIDCs, CRIs e CRAs.",
+        duration: "33:58",
+        durationSecs: 2038,
+        instructor: "Dra. Beatriz Santos",
+        instructorRole: "Advogada Estruturada em Mercado de Capitais",
+        category: "estruturado",
+        level: "Avançado",
+        gradient: "from-amber-800 via-orange-700 to-amber-700",
+        accentColor: "#92400E",
+        tags: ["Due Diligence", "Risco", "FIDC"],
+      },
+    ],
+  },
+
+  // ── HIGH TICKET ─────────────────────────────────────────────────────────
+  {
+    id: "high-ticket",
+    label: "High Ticket",
+    description: "Operações acima de R$ 5M — Project Finance e Real Estate premium",
+    icon: "⚡",
+    color: "#8B5CF6",
+    videos: [
+      {
+        id: "ht-001",
+        title: "High Ticket: Estruturação de Grandes Operações",
+        description: "Como abordar operações a partir de R$ 5M — documentação, alçada, stakeholders e timelines.",
+        duration: "45:30",
+        durationSecs: 2730,
+        instructor: "Roberto Figueiredo",
+        instructorRole: "Diretor de Operações High Ticket",
+        category: "high-ticket",
+        level: "Avançado",
+        gradient: "from-purple-600 via-violet-700 to-purple-800",
+        accentColor: "#7C3AED",
+        featured: true,
+      },
+      {
+        id: "ht-002",
+        title: "Project Finance: Modelagem e Estrutura",
+        description: "Modelagem financeira para Project Finance — fluxo de caixa, TIR, VPL e fontes de financiamento.",
+        duration: "52:15",
+        durationSecs: 3135,
+        instructor: "Eng. Paulo Neves",
+        instructorRole: "Especialista em Project Finance",
+        category: "high-ticket",
+        level: "Avançado",
+        gradient: "from-violet-700 via-purple-700 to-indigo-800",
+        accentColor: "#6D28D9",
+        tags: ["Project Finance", "TIR", "VPL", "Modelagem"],
+      },
+      {
+        id: "ht-003",
+        title: "Real Estate High Value: Oportunidades e Riscos",
+        description: "Financiamento de empreendimentos imobiliários de alto padrão, FIIs, multipropriedade e riscos.",
+        duration: "38:22",
+        durationSecs: 2302,
+        instructor: "Arq. Sofia Leal",
+        instructorRole: "Especialista em Real Estate",
+        category: "high-ticket",
+        level: "Intermediário",
+        gradient: "from-purple-800 via-violet-600 to-purple-700",
+        accentColor: "#5B21B6",
+        tags: ["Real Estate", "FII", "Alto Padrão"],
+      },
+    ],
+  },
+
+  // ── M&A ─────────────────────────────────────────────────────────────────
+  {
+    id: "ma",
+    label: "M&A",
+    description: "Fusões e Aquisições — do valuation ao fechamento",
+    icon: "🤝",
+    color: "#10B981",
+    videos: [
+      {
+        id: "ma-001",
+        title: "M&A do Zero: Conceitos e Processo",
+        description: "Fases do M&A (originação, qualificação, due diligence, negociação, fechamento) e papel do advisor.",
+        duration: "40:10",
+        durationSecs: 2410,
+        instructor: "Rodrigo Nascimento",
+        instructorRole: "Diretor de M&A",
+        category: "ma",
+        level: "Iniciante",
+        gradient: "from-emerald-600 via-teal-600 to-emerald-700",
+        accentColor: "#059669",
+        featured: true,
+      },
+      {
+        id: "ma-002",
+        title: "Valuation: Múltiplos de EBITDA na Prática",
+        description: "Como calcular EBITDA ajustado, múltiplos setoriais, comparáveis de mercado e Enterprise Value.",
+        duration: "48:33",
+        durationSecs: 2913,
+        instructor: "Dra. Helena Costa",
+        instructorRole: "Analista de Valuation",
+        category: "ma",
+        level: "Intermediário",
+        gradient: "from-teal-700 via-emerald-600 to-teal-800",
+        accentColor: "#0D9488",
+        tags: ["EBITDA", "Múltiplos", "Enterprise Value"],
+      },
+      {
+        id: "ma-003",
+        title: "Due Diligence Financeira e Jurídica",
+        description: "Checklist completo de due diligence — passivos ocultos, contratos, questões tributárias e trabalhistas.",
+        duration: "55:20",
+        durationSecs: 3320,
+        instructor: "Dr. Leandro Alves",
+        instructorRole: "Advogado M&A",
+        category: "ma",
+        level: "Avançado",
+        gradient: "from-emerald-800 via-green-700 to-emerald-700",
+        accentColor: "#065F46",
+        tags: ["Due Diligence", "Passivos", "Tributário"],
+      },
+      {
+        id: "ma-004",
+        title: "Negociação de LOI, MOU e SPA",
+        description: "Estrutura de documentos de M&A: Carta de Intenções, Memorando de Entendimentos e Contrato de Compra.",
+        duration: "36:45",
+        durationSecs: 2205,
+        instructor: "Dr. Leandro Alves",
+        instructorRole: "Advogado M&A",
+        category: "ma",
+        level: "Avançado",
+        gradient: "from-green-700 via-emerald-700 to-teal-700",
+        accentColor: "#047857",
+        tags: ["LOI", "MOU", "SPA", "Negociação"],
+      },
+    ],
+  },
+
+  // ── SPLIT FISCAL ────────────────────────────────────────────────────────
+  {
+    id: "split-fiscal",
+    label: "Split Fiscal",
+    description: "Estruturação de receitas e otimização tributária para correspondentes",
+    icon: "📋",
+    color: "#F97316",
+    videos: [
+      {
+        id: "sf-001",
+        title: "Split Fiscal: Conceito e Aplicação",
+        description: "O que é split fiscal, quando utilizar, regulamentação do BACEN e como funciona para correspondentes bancários.",
+        duration: "22:18",
+        durationSecs: 1338,
+        instructor: "Contador João Luz",
+        instructorRole: "Especialista Tributário",
+        category: "split-fiscal",
+        level: "Iniciante",
+        gradient: "from-orange-600 via-red-600 to-orange-700",
+        accentColor: "#EA580C",
+        featured: true,
+      },
+      {
+        id: "sf-002",
+        title: "Estruturação de Receitas para Partners",
+        description: "Como estruturar comissões, splits e repasses de forma eficiente e dentro da regulamentação vigente.",
+        duration: "34:55",
+        durationSecs: 2095,
+        instructor: "Contador João Luz",
+        instructorRole: "Especialista Tributário",
+        category: "split-fiscal",
+        level: "Intermediário",
+        gradient: "from-red-700 via-orange-600 to-red-700",
+        accentColor: "#B91C1C",
+        tags: ["Comissão", "Repasse", "Estruturação"],
+      },
+      {
+        id: "sf-003",
+        title: "Tributação PJ vs PF para Correspondentes",
+        description: "Comparativo de tributação, abertura de PJ, Simples Nacional, Lucro Presumido e planejamento tributário.",
+        duration: "29:40",
+        durationSecs: 1780,
+        instructor: "Dra. Carla Mendes",
+        instructorRole: "Advogada Tributarista",
+        category: "split-fiscal",
+        level: "Intermediário",
+        gradient: "from-orange-700 via-amber-700 to-orange-800",
+        accentColor: "#C2410C",
+        tags: ["PJ", "Simples Nacional", "Tributação"],
+      },
+    ],
+  },
+
+  // ── CONSÓRCIO ────────────────────────────────────────────────────────────
+  {
+    id: "consorcio",
+    label: "Consórcio",
+    description: "Cartas contempladas, simulação e projetos de consórcio",
+    icon: "🎯",
+    color: "#06B6D4",
+    videos: [
+      {
+        id: "con-001",
+        title: "Consórcio: Como Funciona e Regulação",
+        description: "Funcionamento do consórcio, regulação pelo BACEN, lei 11.795/2008, administradoras e grupos.",
+        duration: "19:25",
+        durationSecs: 1165,
+        instructor: "Renata Borges",
+        instructorRole: "Especialista em Consórcio",
+        category: "consorcio",
+        level: "Iniciante",
+        gradient: "from-cyan-600 via-sky-600 to-cyan-700",
+        accentColor: "#0891B2",
+        featured: true,
+      },
+      {
+        id: "con-002",
+        title: "Cartas Contempladas: Oportunidades de Negócio",
+        description: "Como identificar, negociar e vender cartas contempladas — diferenciais e abordagem comercial.",
+        duration: "26:18",
+        durationSecs: 1578,
+        instructor: "Renata Borges",
+        instructorRole: "Especialista em Consórcio",
+        category: "consorcio",
+        level: "Intermediário",
+        gradient: "from-sky-700 via-cyan-600 to-blue-700",
+        accentColor: "#0284C7",
+        tags: ["Carta Contemplada", "Negociação", "Comercial"],
+      },
+      {
+        id: "con-003",
+        title: "Simulação e Análise de Viabilidade",
+        description: "Como simular consórcios, analisar viabilidade financeira para o cliente e comparar com outras modalidades.",
+        duration: "23:44",
+        durationSecs: 1424,
+        instructor: "Marcos Teixeira",
+        instructorRole: "Analista de Produtos",
+        category: "consorcio",
+        level: "Iniciante",
+        gradient: "from-cyan-700 via-teal-600 to-cyan-800",
+        accentColor: "#0E7490",
+        tags: ["Simulação", "Viabilidade", "Análise"],
+      },
+    ],
+  },
+
+  // ── COMPLIANCE ─────────────────────────────────────────────────────────
+  {
+    id: "compliance",
+    label: "Compliance & Regulação",
+    description: "BACEN, CVM, LGPD e melhores práticas regulatórias",
+    icon: "🛡️",
+    color: "#64748B",
+    videos: [
+      {
+        id: "comp-001",
+        title: "Regulação do Sistema Financeiro Nacional",
+        description: "Estrutura do SFN, papel do BACEN e CVM, licenças necessárias para correspondentes bancários.",
+        duration: "30:15",
+        durationSecs: 1815,
+        instructor: "Dr. Fábio Monteiro",
+        instructorRole: "Compliance Officer",
+        category: "compliance",
+        level: "Iniciante",
+        gradient: "from-slate-600 via-gray-600 to-slate-700",
+        accentColor: "#475569",
+        featured: true,
+      },
+      {
+        id: "comp-002",
+        title: "LGPD no Mercado Financeiro",
+        description: "Aplicação da Lei Geral de Proteção de Dados em operações financeiras — consentimento, bases legais e ANPD.",
+        duration: "25:40",
+        durationSecs: 1540,
+        instructor: "Dra. Patrícia Lima",
+        instructorRole: "DPO e Especialista em LGPD",
+        category: "compliance",
+        level: "Intermediário",
+        gradient: "from-gray-700 via-slate-600 to-gray-800",
+        accentColor: "#374151",
+        tags: ["LGPD", "ANPD", "Privacidade", "Dados"],
+      },
+      {
+        id: "comp-003",
+        title: "Prevenção à Lavagem de Dinheiro (PLD-FT)",
+        description: "Normas BACEN sobre PLD, KYC, due diligence de clientes, COAF e obrigações de reporte.",
+        duration: "38:50",
+        durationSecs: 2330,
+        instructor: "Dr. Fábio Monteiro",
+        instructorRole: "Compliance Officer",
+        category: "compliance",
+        level: "Avançado",
+        gradient: "from-slate-700 via-zinc-700 to-slate-800",
+        accentColor: "#334155",
+        tags: ["PLD", "KYC", "COAF", "Anti-lavagem"],
+      },
+    ],
+  },
+];
+
+export function getAllVideos(): Video[] {
+  return ACADEMY_CATEGORIES.flatMap((c) => c.videos);
+}
+
+export function getFeaturedVideos(): Video[] {
+  return getAllVideos().filter((v) => v.featured);
+}
+
+export function getCategoryById(id: string): VideoCategory | undefined {
+  return ACADEMY_CATEGORIES.find((c) => c.id === id);
+}
