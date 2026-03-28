@@ -39,7 +39,7 @@ interface CreditDeskLevel1ClientProps {
   currentUser?: { id: string; full_name: string; role: string };
 }
 
-const CREDIT_LINES = ["HOME EQUITY", "AVAL", "CRÉDITO PESSOAL", "CDC"];
+const CREDIT_LINES = ["HOME EQUITY", "AVAL", "FUNDO CONSTRUÇÃO RESIDENCIAL"];
 
 export function CreditDeskLevel1Client({ proposals: initial, currentUser }: CreditDeskLevel1ClientProps) {
   const [proposals, setProposals] = useState<Proposal[]>(initial);
@@ -89,7 +89,7 @@ export function CreditDeskLevel1Client({ proposals: initial, currentUser }: Cred
           </div>
           <div>
             <h1 className="text-xl font-bold text-white">Nível 1 — Crédito Varejo</h1>
-            <p className="text-xs text-muted-foreground">Home Equity · Aval · Crédito Pessoal · CDC</p>
+            <p className="text-xs text-muted-foreground">Home Equity · Aval · Fundo Construção Residencial</p>
           </div>
         </div>
         <Button size="sm" onClick={() => setNewOpen(true)}>

@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
@@ -14,9 +15,12 @@ import {
   ChevronDown,
   ChevronRight,
   X,
-  TrendingUp,
   Trophy,
   GraduationCap,
+  Handshake,
+  Settings2,
+  Medal,
+  ContactRound,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { UserRole } from "@/lib/constants";
@@ -31,6 +35,10 @@ const iconMap = {
   Headphones,
   Trophy,
   GraduationCap,
+  Handshake,
+  Settings2,
+  Medal,
+  ContactRound,
 };
 
 interface NavSubItem {
@@ -53,6 +61,18 @@ const NAV_ITEMS: NavItem[] = [
     label: "Dashboard",
     icon: "LayoutDashboard",
     roles: ["ADMIN", "PARTNER", "MESA_OPERACIONAL", "GESTAO"],
+  },
+  {
+    href: "/crm",
+    label: "CRM",
+    icon: "ContactRound",
+    roles: ["ADMIN", "PARTNER"],
+  },
+  {
+    href: "/ranking",
+    label: "Ranking",
+    icon: "Medal",
+    roles: ["ADMIN", "PARTNER"],
   },
   {
     href: "/usuarios",
@@ -102,6 +122,12 @@ const NAV_ITEMS: NavItem[] = [
     ],
   },
   {
+    href: "/mesa-ma",
+    label: "Mesa M&A",
+    icon: "Handshake",
+    roles: ["ADMIN", "GESTAO"],
+  },
+  {
     href: "/consorcio",
     label: "Consórcio",
     icon: "Trophy",
@@ -123,6 +149,12 @@ const NAV_ITEMS: NavItem[] = [
         roles: ["ADMIN", "PARTNER", "MESA_OPERACIONAL", "GESTAO"],
       },
     ],
+  },
+  {
+    href: "/mesa-consorcio-op",
+    label: "Mesa Consórcio",
+    icon: "Settings2",
+    roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL"],
   },
   {
     href: "/mesa-operacional",
@@ -169,26 +201,42 @@ export function Sidebar({ role, onClose }: SidebarProps) {
   );
 
   return (
-    <aside className="flex flex-col h-full w-64 bg-[#0F172A] border-r border-border/50">
+    <aside className="flex flex-col h-full w-64 bg-[#060E1C] border-r border-[#122036]/80 relative">
+      {/* Top gold accent line */}
+      <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-[#C4922E] to-transparent opacity-60" />
+
       {/* Logo */}
-      <div className="flex items-center justify-between px-5 py-5 border-b border-border/50">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#1B4FD8] to-[#D4A017] flex items-center justify-center shadow-lg">
-            <TrendingUp className="w-5 h-5 text-white" />
+      <div className="flex items-center justify-between px-3 py-3 border-b border-[#122036]/60">
+        <div className="flex items-center gap-2.5 min-w-0">
+          {/* Logo image — fundo navy igual ao da logo, object-contain para mostrar completa */}
+          <div className="w-11 h-11 rounded-xl overflow-hidden flex-shrink-0 shadow-lg ring-1 ring-[#C4922E]/30 bg-[#0A1628]">
+            <Image
+              src="/logo.jpg"
+              alt="V3 PARTNERS"
+              width={44}
+              height={44}
+              className="w-full h-full object-contain"
+              priority
+            />
           </div>
-          <div>
-            <span className="text-base font-bold text-white tracking-tight">
-              V3 PARTNER
+          <div className="min-w-0">
+            <span className="text-[13px] font-bold tracking-wide" style={{
+              background: "linear-gradient(120deg, #E5B96A 0%, #F5D99A 50%, #C4922E 100%)",
+              WebkitBackgroundClip: "text",
+              WebkitTextFillColor: "transparent",
+              backgroundClip: "text",
+            }}>
+              V3 PARTNERS
             </span>
-            <p className="text-[10px] text-muted-foreground uppercase tracking-widest">
-              Plataforma
+            <p className="text-[9px] text-[#5A7490] uppercase tracking-[0.18em] mt-0.5">
+              Plataforma Financeira
             </p>
           </div>
         </div>
         {onClose && (
           <button
             onClick={onClose}
-            className="p-1 rounded-lg hover:bg-secondary transition-colors lg:hidden"
+            className="p-1 rounded-lg hover:bg-secondary transition-colors lg:hidden flex-shrink-0"
           >
             <X className="w-4 h-4 text-muted-foreground" />
           </button>
@@ -196,7 +244,7 @@ export function Sidebar({ role, onClose }: SidebarProps) {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-0.5">
+      <nav className="flex-1 overflow-y-auto py-3 px-3 space-y-0.5">
         {filteredItems.map((item) => {
           const Icon = iconMap[item.icon];
           const isActive =
@@ -241,7 +289,7 @@ export function Sidebar({ role, onClose }: SidebarProps) {
 
               {/* Sub-items */}
               {hasChildren && isExpanded && filteredChildren && (
-                <div className="ml-7 mt-0.5 space-y-0.5 border-l border-border/50 pl-3">
+                <div className="ml-7 mt-0.5 space-y-0.5 border-l border-[#C4922E]/20 pl-3">
                   {filteredChildren.map((child) => {
                     const childActive = pathname === child.href;
                     return (
@@ -252,7 +300,7 @@ export function Sidebar({ role, onClose }: SidebarProps) {
                         className={cn(
                           "flex items-center gap-2 px-2 py-2 rounded-lg text-xs font-medium transition-all duration-200",
                           childActive
-                            ? "text-[#3B6EF8] bg-[#1B4FD8]/10"
+                            ? "text-[#E5B96A] bg-[#C4922E]/10"
                             : "text-muted-foreground hover:text-foreground hover:bg-secondary"
                         )}
                       >
@@ -269,10 +317,16 @@ export function Sidebar({ role, onClose }: SidebarProps) {
       </nav>
 
       {/* Role badge */}
-      <div className="px-4 py-3 border-t border-border/50">
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-muted-foreground">Perfil:</span>
-          <span className="text-xs font-semibold text-[#D4A017]">
+      <div className="px-4 py-3 border-t border-[#122036]/60">
+        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#C4922E]/5 border border-[#C4922E]/15">
+          <div className="w-1.5 h-1.5 rounded-full bg-[#C4922E] animate-pulse-gold flex-shrink-0" />
+          <span className="text-[10px] text-[#5A7490] uppercase tracking-wider">Perfil</span>
+          <span className="text-xs font-semibold ml-auto" style={{
+            background: "linear-gradient(120deg, #C4922E, #E5B96A)",
+            WebkitBackgroundClip: "text",
+            WebkitTextFillColor: "transparent",
+            backgroundClip: "text",
+          }}>
             {role === "ADMIN"
               ? "Administrador"
               : role === "PARTNER"

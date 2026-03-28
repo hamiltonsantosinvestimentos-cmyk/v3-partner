@@ -7,7 +7,7 @@ const nextConfig: NextConfig = {
     ignoreBuildErrors: true,
   },
   images: {
-    domains: ["avatars.githubusercontent.com", "lh3.googleusercontent.com"],
+    domains: ["avatars.githubusercontent.com", "lh3.googleusercontent.com", "img.youtube.com"],
   },
 };
 

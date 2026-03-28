@@ -49,21 +49,24 @@ export const CREDIT_DESK_LEVEL_DESCRIPTIONS: Record<CreditDeskLevel, string> = {
 };
 
 export const CREDIT_DESK_LINES: Record<CreditDeskLevel, string[]> = {
-  NIVEL_1: ["HOME EQUITY", "AVAL", "CRÉDITO PESSOAL", "CDC"],
+  NIVEL_1: [
+    "HOME EQUITY",
+    "AVAL",
+    "FUNDO CONSTRUÇÃO RESIDENCIAL",
+  ],
   NIVEL_2: [
-    "CRÉDITO ESTRUTURADO",
-    "FIDC",
-    "CRI",
-    "CRA",
-    "DEBENTURES",
-    "CAPITAL DE GIRO ESTRUTURADO",
+    "HOMECASH",
+    "V3GIRO E V3AUTOGIRO",
+    "CGI",
   ],
   NIVEL_3: [
-    "HIGH TICKET",
-    "FUSÕES E AQUISIÇÕES",
-    "PROJECT FINANCE",
-    "INFRASTRUCTURE FINANCE",
-    "REAL ESTATE HIGH VALUE",
+    "CRI",
+    "CRA",
+    "CPR",
+    "FUNDO INTERNACIONAL CASH COLATERAL",
+    "FUNDO INTERNACIONAL IMOB",
+    "FUNDO CONSTRUÇÃO LOTEAMENTO",
+    "FUNDO CONSTRUÇÃO EMPREENDIMENTO",
   ],
 };
 

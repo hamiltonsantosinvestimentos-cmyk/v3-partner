@@ -199,30 +199,30 @@ export function DashboardClient({
             <ResponsiveContainer width="100%" height={180}>
               <AreaChart data={revenueData}>
                 <defs>
-                  <linearGradient id="blueGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#1B4FD8" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#1B4FD8" stopOpacity={0} />
+                  <linearGradient id="goldGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#C4922E" stopOpacity={0.35} />
+                    <stop offset="95%" stopColor="#C4922E" stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#1E293B" />
+                <CartesianGrid strokeDasharray="3 3" stroke="#122036" />
                 <XAxis
                   dataKey="month"
-                  tick={{ fill: "#64748B", fontSize: 11 }}
+                  tick={{ fill: "#5A7490", fontSize: 11 }}
                   axisLine={false}
                   tickLine={false}
                 />
                 <YAxis
-                  tick={{ fill: "#64748B", fontSize: 11 }}
+                  tick={{ fill: "#5A7490", fontSize: 11 }}
                   axisLine={false}
                   tickLine={false}
                   tickFormatter={(v) => `R$${(v / 1000000).toFixed(1)}M`}
                 />
                 <Tooltip
                   contentStyle={{
-                    backgroundColor: "#0F172A",
-                    border: "1px solid #1E293B",
-                    borderRadius: "8px",
-                    color: "#E2E8F0",
+                    backgroundColor: "#091221",
+                    border: "1px solid rgba(196,146,46,0.2)",
+                    borderRadius: "10px",
+                    color: "#E8EDF5",
                     fontSize: "12px",
                   }}
                   formatter={(value: number) => [formatCurrency(value), "Volume"]}
@@ -230,9 +230,9 @@ export function DashboardClient({
                 <Area
                   type="monotone"
                   dataKey="value"
-                  stroke="#1B4FD8"
+                  stroke="#C4922E"
                   strokeWidth={2}
-                  fill="url(#blueGrad)"
+                  fill="url(#goldGrad)"
                 />
               </AreaChart>
             </ResponsiveContainer>
@@ -249,31 +249,31 @@ export function DashboardClient({
           <CardContent>
             <ResponsiveContainer width="100%" height={180}>
               <BarChart data={operationsData} layout="vertical">
-                <CartesianGrid strokeDasharray="3 3" stroke="#1E293B" horizontal={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="#122036" horizontal={false} />
                 <XAxis
                   type="number"
-                  tick={{ fill: "#64748B", fontSize: 10 }}
+                  tick={{ fill: "#5A7490", fontSize: 10 }}
                   axisLine={false}
                   tickLine={false}
                 />
                 <YAxis
                   type="category"
                   dataKey="name"
-                  tick={{ fill: "#94A3B8", fontSize: 10 }}
+                  tick={{ fill: "#8BA4BE", fontSize: 10 }}
                   axisLine={false}
                   tickLine={false}
                   width={80}
                 />
                 <Tooltip
                   contentStyle={{
-                    backgroundColor: "#0F172A",
-                    border: "1px solid #1E293B",
-                    borderRadius: "8px",
-                    color: "#E2E8F0",
+                    backgroundColor: "#091221",
+                    border: "1px solid rgba(196,146,46,0.2)",
+                    borderRadius: "10px",
+                    color: "#E8EDF5",
                     fontSize: "12px",
                   }}
                 />
-                <Bar dataKey="valor" fill="#1B4FD8" radius={[0, 4, 4, 0]} />
+                <Bar dataKey="valor" fill="#C4922E" radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
@@ -287,7 +287,7 @@ export function DashboardClient({
           <CardHeader>
             <CardTitle className="text-sm font-semibold flex items-center justify-between">
               <span>Últimas Operações Split Fiscal</span>
-              <a href="/split-fiscal" className="text-xs text-[#1B4FD8] hover:text-[#3B6EF8] transition-colors">
+              <a href="/split-fiscal" className="text-xs text-[#C4922E] hover:text-[#E5B96A] transition-colors">
                 Ver todas →
               </a>
             </CardTitle>
@@ -332,7 +332,7 @@ export function DashboardClient({
           <CardHeader>
             <CardTitle className="text-sm font-semibold flex items-center justify-between">
               <span>Pipeline M&A</span>
-              <a href="/ma" className="text-xs text-[#1B4FD8] hover:text-[#3B6EF8] transition-colors">
+              <a href="/ma" className="text-xs text-[#C4922E] hover:text-[#E5B96A] transition-colors">
                 Ver pipeline →
               </a>
             </CardTitle>

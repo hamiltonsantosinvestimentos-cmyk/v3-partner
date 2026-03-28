@@ -1,8 +1,9 @@
 "use client";
 
 import React, { useState } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { TrendingUp, Eye, EyeOff, Lock, Mail, ArrowRight, Sparkles } from "lucide-react";
+import { Eye, EyeOff, Lock, Mail, ArrowRight, Sparkles } from "lucide-react";
 import { demoLogin, IS_DEMO_MODE } from "@/lib/demo-auth";
 
 export default function LoginPage() {
@@ -18,7 +19,6 @@ export default function LoginPage() {
     setLoading(true);
     setError("");
 
-    // DEMO MODE
     if (IS_DEMO_MODE) {
       const user = demoLogin(email, password);
       if (!user) {
@@ -37,7 +37,6 @@ export default function LoginPage() {
       return;
     }
 
-    // PRODUCTION MODE (Supabase)
     const { createClient } = await import("@/lib/supabase/client");
     const supabase = createClient();
     const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -57,148 +56,214 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center relative overflow-hidden"
-      style={{ backgroundColor: "#060D1A" }}>
-      {/* Background effects */}
-      <div style={{
-        position: "absolute", inset: 0,
-        backgroundImage: "linear-gradient(rgba(27,79,216,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(27,79,216,0.05) 1px, transparent 1px)",
-        backgroundSize: "32px 32px"
-      }} />
-      <div style={{ position: "absolute", top: "25%", left: "25%", width: 384, height: 384, background: "rgba(27,79,216,0.04)", borderRadius: "50%", filter: "blur(64px)" }} />
-      <div style={{ position: "absolute", bottom: "25%", right: "25%", width: 384, height: 384, background: "rgba(212,160,23,0.04)", borderRadius: "50%", filter: "blur(64px)" }} />
+      style={{ backgroundColor: "#050C18" }}>
 
-      <div style={{ position: "relative", width: "100%", maxWidth: 400, margin: "0 16px" }}>
+      {/* ── Background layers ── */}
+      {/* Subtle grid */}
+      <div style={{
+        position: "absolute", inset: 0, pointerEvents: "none",
+        backgroundImage: "linear-gradient(rgba(196,146,46,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(196,146,46,0.04) 1px, transparent 1px)",
+        backgroundSize: "36px 36px"
+      }} />
+      {/* Gold glow top-center */}
+      <div style={{
+        position: "absolute", top: "-10%", left: "50%", transform: "translateX(-50%)",
+        width: 600, height: 300,
+        background: "radial-gradient(ellipse, rgba(196,146,46,0.08) 0%, transparent 70%)",
+        pointerEvents: "none"
+      }} />
+      {/* Blue glow bottom-left */}
+      <div style={{
+        position: "absolute", bottom: "10%", left: "5%",
+        width: 400, height: 400,
+        background: "radial-gradient(ellipse, rgba(26,79,196,0.06) 0%, transparent 70%)",
+        pointerEvents: "none"
+      }} />
+
+      {/* ── Card ── */}
+      <div style={{ position: "relative", width: "100%", maxWidth: 420, margin: "0 20px" }}>
         <div style={{
-          background: "#0F172A",
-          border: "1px solid rgba(30,41,59,0.8)",
-          borderRadius: 16,
-          padding: 32,
-          boxShadow: "0 25px 50px rgba(0,0,0,0.5)"
+          background: "linear-gradient(160deg, #091221 0%, #060E1C 100%)",
+          border: "1px solid rgba(196,146,46,0.15)",
+          borderRadius: 20,
+          padding: "40px 36px",
+          boxShadow: "0 32px 64px rgba(0,0,0,0.6), 0 0 0 1px rgba(196,146,46,0.08) inset",
+          position: "relative",
+          overflow: "hidden",
         }}>
-          {/* Logo */}
+          {/* Top shine */}
+          <div style={{
+            position: "absolute", top: 0, left: "20%", right: "20%", height: 1,
+            background: "linear-gradient(90deg, transparent, rgba(196,146,46,0.5), transparent)"
+          }} />
+
+          {/* ── Logo ── */}
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", marginBottom: 32 }}>
+            {/* Logo image — grande, fundo navy igual ao logo, object-contain */}
             <div style={{
-              width: 56, height: 56, borderRadius: 16,
-              background: "linear-gradient(135deg, #1B4FD8, #D4A017)",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              boxShadow: "0 8px 24px rgba(27,79,216,0.3)",
-              marginBottom: 12
+              width: 140, height: 140, borderRadius: 24,
+              overflow: "hidden",
+              background: "#0A1628",
+              boxShadow: "0 12px 40px rgba(196,146,46,0.2), 0 0 0 1px rgba(196,146,46,0.15)",
+              marginBottom: 0,
+              flexShrink: 0,
             }}>
-              <TrendingUp style={{ width: 28, height: 28, color: "white" }} />
+              <Image
+                src="/logo.jpg"
+                alt="V3 PARTNERS"
+                width={140}
+                height={140}
+                style={{ width: "100%", height: "100%", objectFit: "contain" }}
+                priority
+              />
             </div>
-            <h1 style={{ fontSize: 24, fontWeight: 700, color: "white", letterSpacing: "-0.5px" }}>
-              V3 PARTNER
-            </h1>
-            <p style={{ fontSize: 13, color: "#64748B", marginTop: 4 }}>Plataforma Financeira</p>
+            <p style={{ fontSize: 10, color: "#5A7490", letterSpacing: "0.18em", textTransform: "uppercase", marginTop: 10 }}>
+              Plataforma Financeira
+            </p>
           </div>
 
-          {/* Demo badge */}
+          {/* ── Demo badge ── */}
           {IS_DEMO_MODE && (
             <div style={{
-              padding: "8px 12px", borderRadius: 8, marginBottom: 20,
-              background: "rgba(27,79,216,0.1)", border: "1px solid rgba(27,79,216,0.3)",
+              padding: "9px 14px", borderRadius: 10, marginBottom: 24,
+              background: "rgba(196,146,46,0.06)", border: "1px solid rgba(196,146,46,0.2)",
               display: "flex", alignItems: "center", gap: 8
             }}>
-              <Sparkles style={{ width: 14, height: 14, color: "#3B6EF8" }} />
-              <span style={{ fontSize: 12, color: "#3B6EF8", fontWeight: 500 }}>
+              <Sparkles style={{ width: 13, height: 13, color: "#E5B96A", flexShrink: 0 }} />
+              <span style={{ fontSize: 12, color: "#E5B96A", fontWeight: 500 }}>
                 Modo Demo — use os acessos abaixo
               </span>
             </div>
           )}
 
-          {/* Form */}
-          <form onSubmit={handleLogin} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          {/* ── Form ── */}
+          <form onSubmit={handleLogin} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            {/* Email */}
             <div>
-              <label style={{ fontSize: 11, fontWeight: 600, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.08em", display: "block", marginBottom: 6 }}>
-                E-mail
-              </label>
+              <label style={{
+                fontSize: 10, fontWeight: 700, color: "#5A7490",
+                textTransform: "uppercase", letterSpacing: "0.1em",
+                display: "block", marginBottom: 7
+              }}>E-mail</label>
               <div style={{ position: "relative" }}>
-                <Mail style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", width: 16, height: 16, color: "#64748B" }} />
+                <Mail style={{ position: "absolute", left: 13, top: "50%", transform: "translateY(-50%)", width: 15, height: 15, color: "#5A7490" }} />
                 <input
                   type="email" value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="seu@email.com" required
                   style={{
-                    width: "100%", height: 44, paddingLeft: 40, paddingRight: 16,
-                    background: "#1E293B", border: "1px solid #1E293B", borderRadius: 12,
-                    color: "#E2E8F0", fontSize: 14, outline: "none", boxSizing: "border-box"
+                    width: "100%", height: 46, paddingLeft: 42, paddingRight: 16,
+                    background: "#0F1E35", border: "1px solid #122036", borderRadius: 12,
+                    color: "#E8EDF5", fontSize: 14, outline: "none", boxSizing: "border-box",
+                    transition: "border-color 0.2s",
                   }}
+                  onFocus={(e) => e.target.style.borderColor = "rgba(196,146,46,0.4)"}
+                  onBlur={(e) => e.target.style.borderColor = "#122036"}
                 />
               </div>
             </div>
 
+            {/* Password */}
             <div>
-              <label style={{ fontSize: 11, fontWeight: 600, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.08em", display: "block", marginBottom: 6 }}>
-                Senha
-              </label>
+              <label style={{
+                fontSize: 10, fontWeight: 700, color: "#5A7490",
+                textTransform: "uppercase", letterSpacing: "0.1em",
+                display: "block", marginBottom: 7
+              }}>Senha</label>
               <div style={{ position: "relative" }}>
-                <Lock style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", width: 16, height: 16, color: "#64748B" }} />
+                <Lock style={{ position: "absolute", left: 13, top: "50%", transform: "translateY(-50%)", width: 15, height: 15, color: "#5A7490" }} />
                 <input
                   type={showPassword ? "text" : "password"} value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••" required
                   style={{
-                    width: "100%", height: 44, paddingLeft: 40, paddingRight: 48,
-                    background: "#1E293B", border: "1px solid #1E293B", borderRadius: 12,
-                    color: "#E2E8F0", fontSize: 14, outline: "none", boxSizing: "border-box"
+                    width: "100%", height: 46, paddingLeft: 42, paddingRight: 50,
+                    background: "#0F1E35", border: "1px solid #122036", borderRadius: 12,
+                    color: "#E8EDF5", fontSize: 14, outline: "none", boxSizing: "border-box",
+                    transition: "border-color 0.2s",
                   }}
+                  onFocus={(e) => e.target.style.borderColor = "rgba(196,146,46,0.4)"}
+                  onBlur={(e) => e.target.style.borderColor = "#122036"}
                 />
                 <button type="button" onClick={() => setShowPassword(!showPassword)}
-                  style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "#64748B" }}>
-                  {showPassword ? <EyeOff style={{ width: 16, height: 16 }} /> : <Eye style={{ width: 16, height: 16 }} />}
+                  style={{
+                    position: "absolute", right: 13, top: "50%", transform: "translateY(-50%)",
+                    background: "none", border: "none", cursor: "pointer", color: "#5A7490", padding: 0
+                  }}>
+                  {showPassword ? <EyeOff style={{ width: 15, height: 15 }} /> : <Eye style={{ width: 15, height: 15 }} />}
                 </button>
               </div>
             </div>
 
+            {/* Error */}
             {error && (
-              <div style={{ padding: "10px 12px", borderRadius: 8, background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)", color: "#F87171", fontSize: 13 }}>
+              <div style={{
+                padding: "10px 13px", borderRadius: 10,
+                background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)",
+                color: "#F87171", fontSize: 13
+              }}>
                 {error}
               </div>
             )}
 
+            {/* Submit */}
             <button type="submit" disabled={loading} style={{
-              height: 44, background: loading ? "#1B4FD8AA" : "linear-gradient(135deg, #1B4FD8, #1B4FD8CC)",
-              color: "white", border: "none", borderRadius: 12, fontSize: 14, fontWeight: 600,
-              cursor: loading ? "not-allowed" : "pointer", display: "flex", alignItems: "center",
-              justifyContent: "center", gap: 8, transition: "all 0.2s",
-              boxShadow: "0 4px 16px rgba(27,79,216,0.3)"
+              marginTop: 4, height: 48,
+              background: loading
+                ? "rgba(196,146,46,0.4)"
+                : "linear-gradient(120deg, #C4922E 0%, #E5B96A 50%, #C4922E 100%)",
+              backgroundSize: "200% 100%",
+              color: "#050C18", border: "none", borderRadius: 12,
+              fontSize: 14, fontWeight: 700, letterSpacing: "0.04em",
+              cursor: loading ? "not-allowed" : "pointer",
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+              boxShadow: loading ? "none" : "0 4px 20px rgba(196,146,46,0.35)",
+              transition: "all 0.2s",
             }}>
-              {loading ? "Entrando..." : (<>Entrar <ArrowRight style={{ width: 16, height: 16 }} /></>)}
+              {loading ? "Entrando..." : (<>Acessar Plataforma <ArrowRight style={{ width: 16, height: 16 }} /></>)}
             </button>
           </form>
 
-          {/* Demo quick access */}
+          {/* ── Demo quick access ── */}
           {IS_DEMO_MODE && (
-            <div style={{ marginTop: 24, paddingTop: 20, borderTop: "1px solid #1E293B" }}>
-              <p style={{ fontSize: 11, color: "#64748B", textAlign: "center", marginBottom: 12, textTransform: "uppercase", letterSpacing: "0.08em" }}>
-                Acesso rápido — Demo
+            <div style={{ marginTop: 28, paddingTop: 22, borderTop: "1px solid rgba(196,146,46,0.12)" }}>
+              <p style={{
+                fontSize: 10, color: "#5A7490", textAlign: "center",
+                marginBottom: 12, textTransform: "uppercase", letterSpacing: "0.12em"
+              }}>
+                Acesso Rápido — Demo
               </p>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                 {[
-                  { label: "Administrador", email: "admin@v3partner.com", pass: "admin123", color: "#EF4444" },
-                  { label: "Partner", email: "partner@v3partner.com", pass: "partner123", color: "#1B4FD8" },
-                  { label: "Gestão", email: "gestao@v3partner.com", pass: "gestao123", color: "#F59E0B" },
-                  { label: "Mesa Oper.", email: "mesa@v3partner.com", pass: "mesa123", color: "#8B5CF6" },
+                  { label: "Administrador", email: "admin@v3partner.com",   pass: "admin123",   color: "#EF4444" },
+                  { label: "Partner",       email: "partner@v3partner.com", pass: "partner123", color: "#C4922E" },
+                  { label: "Gestão",        email: "gestao@v3partner.com",  pass: "gestao123",  color: "#10B981" },
+                  { label: "Mesa Oper.",    email: "mesa@v3partner.com",    pass: "mesa123",    color: "#8B5CF6" },
                 ].map((item) => (
                   <button key={item.email} onClick={() => quickLogin(item.email, item.pass)}
                     style={{
-                      padding: "8px 10px", borderRadius: 8, fontSize: 12, fontWeight: 500,
-                      border: `1px solid ${item.color}30`, background: `${item.color}10`,
-                      color: item.color, cursor: "pointer", transition: "all 0.15s"
-                    }}>
+                      padding: "9px 10px", borderRadius: 10, fontSize: 12, fontWeight: 600,
+                      border: `1px solid ${item.color}30`, background: `${item.color}0D`,
+                      color: item.color, cursor: "pointer", transition: "all 0.15s",
+                      letterSpacing: "0.01em",
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = `${item.color}1A`)}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = `${item.color}0D`)}
+                  >
                     {item.label}
                   </button>
                 ))}
               </div>
-              <p style={{ fontSize: 11, color: "#475569", textAlign: "center", marginTop: 10 }}>
-                Clique no perfil e depois em Entrar
+              <p style={{ fontSize: 10, color: "#3A5068", textAlign: "center", marginTop: 10 }}>
+                Selecione o perfil e clique em Acessar
               </p>
             </div>
           )}
         </div>
 
-        <p style={{ textAlign: "center", fontSize: 11, color: "#475569", marginTop: 16 }}>
-          © {new Date().getFullYear()} V3 Partner. Todos os direitos reservados.
+        {/* ── Footer ── */}
+        <p style={{ textAlign: "center", fontSize: 10, color: "#3A5068", marginTop: 18, letterSpacing: "0.05em" }}>
+          © {new Date().getFullYear()} V3 Partners. Todos os direitos reservados.
         </p>
       </div>
     </div>

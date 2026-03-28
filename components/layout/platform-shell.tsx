@@ -21,7 +21,7 @@ export function PlatformShell({ user, notificationCount, children }: PlatformShe
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
-    <div className="flex h-screen overflow-hidden bg-[#060D1A]">
+    <div className="flex h-screen overflow-hidden bg-[#050C18]">
       {/* Desktop sidebar */}
       <div className="hidden lg:flex flex-shrink-0">
         <Sidebar role={user.role} />

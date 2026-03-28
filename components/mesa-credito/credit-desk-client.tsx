@@ -31,14 +31,14 @@ interface CreditDeskClientProps {
 const CONFIG = {
   NIVEL_2: {
     title: "Nível 2 — Crédito Estruturado",
-    subtitle: "FIDC · CRI · CRA · Debêntures · Capital de Giro Estruturado",
+    subtitle: "HomeCash · V3Giro e V3AutoGiro · CGI",
     gradient: "from-amber-500 to-orange-600",
     color: "text-amber-400",
     badgeVariant: "warning" as const,
   },
   NIVEL_3: {
     title: "Nível 3 — High Ticket",
-    subtitle: "Operações a partir de R$ 5.000.000 · Project Finance · Fusões e Aquisições",
+    subtitle: "CRI · CRA · CPR · Fundos Internacionais · Fundos de Construção",
     gradient: "from-purple-500 to-indigo-600",
     color: "text-purple-400",
     badgeVariant: "default" as const,

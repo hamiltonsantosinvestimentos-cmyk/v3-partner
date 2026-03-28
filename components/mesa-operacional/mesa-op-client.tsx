@@ -4,8 +4,9 @@ import React, { useState, useCallback } from "react";
 import {
   Headphones, Plus, ChevronRight, User, Building2,
   Banknote, Clock, CheckCircle2, AlertCircle, Link2,
-  LayoutGrid, List, Search, X, FileText, ArrowRight,
+  LayoutGrid, List, Search, X, FileText, ArrowRight, Webhook,
 } from "lucide-react";
+import { PipefyConfig } from "@/components/shared/pipefy-config";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -126,8 +127,17 @@ function NovoTicketModal({ open, onClose, onSubmit }: {
 }
 
 // ─── Main Component ────────────────────────────────────────────────────────
+const MESA_OP_STAGES = [
+  { localStage: "RECEBIDO",     label: "Recebido" },
+  { localStage: "TRIAGEM",      label: "Triagem" },
+  { localStage: "ANALISE",      label: "Análise" },
+  { localStage: "PENDENCIA",    label: "Pendência" },
+  { localStage: "EM_APROVACAO", label: "Em Aprovação" },
+  { localStage: "FINALIZADO",   label: "Finalizado" },
+];
+
 export function MesaOpClient({ tickets: initialTickets, proposals: initialProposals, currentUser }: MesaOpClientProps) {
-  const [view, setView] = useState<"kanban" | "tickets">("kanban");
+  const [view, setView] = useState<"kanban" | "tickets" | "pipefy">("kanban");
   const [tickets, setTickets] = useState<Ticket[]>(initialTickets);
   const [proposals, setProposals] = useState<ProposalCard[]>(initialProposals);
   const [novoTicket, setNovoTicket] = useState(false);
@@ -172,12 +182,16 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
         <div className="flex gap-2">
           <div className="flex rounded-lg border border-border overflow-hidden">
             <button onClick={() => setView("kanban")}
-              className={`px-3 py-1.5 text-xs font-medium flex items-center gap-1.5 transition-colors ${view === "kanban" ? "bg-primary/15 text-primary" : "text-muted-foreground hover:text-white hover:bg-secondary"}`}>
+              className={`px-3 py-1.5 text-xs font-medium flex items-center gap-1.5 transition-colors ${view === "kanban" ? "bg-[#C4922E]/15 text-[#E5B96A]" : "text-muted-foreground hover:text-white hover:bg-secondary"}`}>
               <LayoutGrid className="w-3.5 h-3.5" /> Kanban
             </button>
             <button onClick={() => setView("tickets")}
-              className={`px-3 py-1.5 text-xs font-medium flex items-center gap-1.5 transition-colors ${view === "tickets" ? "bg-primary/15 text-primary" : "text-muted-foreground hover:text-white hover:bg-secondary"}`}>
+              className={`px-3 py-1.5 text-xs font-medium flex items-center gap-1.5 transition-colors ${view === "tickets" ? "bg-[#C4922E]/15 text-[#E5B96A]" : "text-muted-foreground hover:text-white hover:bg-secondary"}`}>
               <List className="w-3.5 h-3.5" /> Tickets
+            </button>
+            <button onClick={() => setView("pipefy")}
+              className={`px-3 py-1.5 text-xs font-medium flex items-center gap-1.5 transition-colors ${view === "pipefy" ? "bg-[#C4922E]/15 text-[#E5B96A]" : "text-muted-foreground hover:text-white hover:bg-secondary"}`}>
+              <Webhook className="w-3.5 h-3.5" /> Pipefy
             </button>
           </div>
           <Button size="sm" onClick={() => setNovoTicket(true)}>
@@ -339,6 +353,26 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
             </div>
           </CardContent>
         </Card>
+      )}
+
+      {/* ── VIEW: PIPEFY ── */}
+      {view === "pipefy" && (
+        <div className="space-y-4">
+          <div className="p-4 rounded-xl border border-[#C4922E]/20 bg-[#C4922E]/5 flex items-start gap-3">
+            <Webhook className="w-4 h-4 text-[#E5B96A] mt-0.5 flex-shrink-0" />
+            <div>
+              <p className="text-sm font-semibold text-[#E5B96A] mb-1">Integração Pipefy — Mesa Operacional</p>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Configure a sincronização das propostas da Mesa Operacional com o Pipefy. Cole o token de API e o ID do pipe para ativar a integração.
+              </p>
+            </div>
+          </div>
+          <PipefyConfig
+            mesaName="Operacional"
+            storageKey="mesa_operacional"
+            stageMapping={MESA_OP_STAGES}
+          />
+        </div>
       )}
 
       {/* Modais */}

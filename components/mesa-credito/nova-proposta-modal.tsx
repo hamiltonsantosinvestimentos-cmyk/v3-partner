@@ -139,6 +139,184 @@ const CHECKLISTS: Record<string, Record<"PF" | "PJ", { id: string; label: string
       { id: "pf_pj_8", label: "Certidões Negativas completas", required: true },
     ],
   },
+  "FUNDO CONSTRUÇÃO RESIDENCIAL": {
+    PF: [
+      { id: "fcr_pf_1", label: "RG e CPF (ou CNH)", required: true },
+      { id: "fcr_pf_2", label: "Comprovante de renda (3 últimos meses)", required: true },
+      { id: "fcr_pf_3", label: "Matrícula do terreno atualizada (máx. 30 dias)", required: true },
+      { id: "fcr_pf_4", label: "IPTU do terreno — ano corrente", required: true },
+      { id: "fcr_pf_5", label: "Projeto arquitetônico aprovado pela prefeitura", required: true },
+      { id: "fcr_pf_6", label: "Alvará de construção", required: true },
+      { id: "fcr_pf_7", label: "Orçamento da obra detalhado", required: true },
+      { id: "fcr_pf_8", label: "Imposto de Renda completo + recibo", required: true },
+      { id: "fcr_pf_9", label: "Certidão de casamento / divórcio", required: false },
+    ],
+    PJ: [
+      { id: "fcr_pj_1", label: "Contrato Social + todas as alterações", required: true },
+      { id: "fcr_pj_2", label: "Cartão CNPJ atualizado", required: true },
+      { id: "fcr_pj_3", label: "Balanço Patrimonial + DRE (últimos 2 anos)", required: true },
+      { id: "fcr_pj_4", label: "Matrícula do terreno atualizada", required: true },
+      { id: "fcr_pj_5", label: "Projeto arquitetônico aprovado", required: true },
+      { id: "fcr_pj_6", label: "Alvará de construção", required: true },
+      { id: "fcr_pj_7", label: "Orçamento da obra detalhado + cronograma físico-financeiro", required: true },
+      { id: "fcr_pj_8", label: "Memorial descritivo da construção", required: true },
+      { id: "fcr_pj_9", label: "Certidões Negativas completas", required: true },
+      { id: "fcr_pj_10", label: "RG e CPF dos sócios", required: true },
+    ],
+  },
+  "HOMECASH": {
+    PF: [
+      { id: "hc_pf_1", label: "RG e CPF (ou CNH)", required: true },
+      { id: "hc_pf_2", label: "Comprovante de renda (3 últimos meses)", required: true },
+      { id: "hc_pf_3", label: "Extrato bancário (3 últimos meses)", required: true },
+      { id: "hc_pf_4", label: "Matrícula do imóvel atualizada (máx. 30 dias)", required: true },
+      { id: "hc_pf_5", label: "IPTU do ano corrente", required: true },
+      { id: "hc_pf_6", label: "Laudo de avaliação do imóvel (CRECI)", required: true },
+      { id: "hc_pf_7", label: "Imposto de Renda completo + recibo", required: true },
+      { id: "hc_pf_8", label: "Comprovante de residência (máx. 90 dias)", required: true },
+      { id: "hc_pf_9", label: "Certidão de casamento / divórcio", required: false },
+    ],
+    PJ: [
+      { id: "hc_pj_1", label: "Contrato Social + todas as alterações", required: true },
+      { id: "hc_pj_2", label: "Cartão CNPJ atualizado", required: true },
+      { id: "hc_pj_3", label: "Balanço Patrimonial + DRE (últimos 2 anos)", required: true },
+      { id: "hc_pj_4", label: "Faturamento mensal — últimos 12 meses", required: true },
+      { id: "hc_pj_5", label: "Matrícula do imóvel atualizada", required: true },
+      { id: "hc_pj_6", label: "Laudo de avaliação do imóvel (CRECI)", required: true },
+      { id: "hc_pj_7", label: "IPTU do ano corrente", required: true },
+      { id: "hc_pj_8", label: "Certidões Negativas completas", required: true },
+      { id: "hc_pj_9", label: "RG e CPF dos sócios e cônjuges", required: true },
+    ],
+  },
+  "V3GIRO E V3AUTOGIRO": {
+    PF: [
+      { id: "v3g_pf_1", label: "RG e CPF (ou CNH)", required: true },
+      { id: "v3g_pf_2", label: "Comprovante de renda (3 últimos meses)", required: true },
+      { id: "v3g_pf_3", label: "Extrato bancário (6 últimos meses)", required: true },
+      { id: "v3g_pf_4", label: "Imposto de Renda completo + recibo", required: true },
+    ],
+    PJ: [
+      { id: "v3g_pj_1", label: "Contrato Social + alterações", required: true },
+      { id: "v3g_pj_2", label: "Cartão CNPJ atualizado", required: true },
+      { id: "v3g_pj_3", label: "Balanço Patrimonial + DRE (últimos 2 anos)", required: true },
+      { id: "v3g_pj_4", label: "Faturamento mensal — últimos 12 meses", required: true },
+      { id: "v3g_pj_5", label: "Extrato bancário PJ (6 últimos meses)", required: true },
+      { id: "v3g_pj_6", label: "Certidões Negativas (Federal, Estadual, Municipal)", required: true },
+      { id: "v3g_pj_7", label: "RG e CPF dos sócios", required: true },
+      { id: "v3g_pj_8", label: "Nota fiscal de faturamento (amostra 3 meses)", required: false },
+    ],
+  },
+  "CGI": {
+    PF: [
+      { id: "cgi_pf_1", label: "RG e CPF (ou CNH)", required: true },
+      { id: "cgi_pf_2", label: "Comprovante de renda (3 últimos meses)", required: true },
+      { id: "cgi_pf_3", label: "Matrícula do imóvel em garantia (máx. 30 dias)", required: true },
+      { id: "cgi_pf_4", label: "IPTU do ano corrente", required: true },
+      { id: "cgi_pf_5", label: "Laudo de avaliação do imóvel (CRECI)", required: true },
+      { id: "cgi_pf_6", label: "Imposto de Renda completo + recibo", required: true },
+      { id: "cgi_pf_7", label: "Extrato bancário (6 últimos meses)", required: true },
+    ],
+    PJ: [
+      { id: "cgi_pj_1", label: "Contrato Social + alterações", required: true },
+      { id: "cgi_pj_2", label: "Cartão CNPJ atualizado", required: true },
+      { id: "cgi_pj_3", label: "Balanço Patrimonial + DRE (últimos 2 anos)", required: true },
+      { id: "cgi_pj_4", label: "Matrícula do imóvel em garantia", required: true },
+      { id: "cgi_pj_5", label: "Laudo de avaliação do imóvel (CRECI)", required: true },
+      { id: "cgi_pj_6", label: "IPTU do ano corrente", required: true },
+      { id: "cgi_pj_7", label: "Faturamento mensal — últimos 12 meses", required: true },
+      { id: "cgi_pj_8", label: "Certidões Negativas completas", required: true },
+      { id: "cgi_pj_9", label: "RG e CPF dos sócios", required: true },
+    ],
+  },
+  "CPR": {
+    PF: [
+      { id: "cpr_pf_1", label: "RG e CPF (ou CNH)", required: true },
+      { id: "cpr_pf_2", label: "CAR — Cadastro Ambiental Rural", required: true },
+      { id: "cpr_pf_3", label: "ITR — Imposto Territorial Rural", required: true },
+      { id: "cpr_pf_4", label: "Comprovante de atividade rural", required: true },
+      { id: "cpr_pf_5", label: "Imposto de Renda completo + recibo", required: true },
+      { id: "cpr_pf_6", label: "Matrícula da propriedade rural (máx. 30 dias)", required: true },
+    ],
+    PJ: [
+      { id: "cpr_pj_1", label: "Contrato Social + alterações", required: true },
+      { id: "cpr_pj_2", label: "Cartão CNPJ atualizado", required: true },
+      { id: "cpr_pj_3", label: "Balanço Patrimonial + DRE (últimos 3 anos)", required: true },
+      { id: "cpr_pj_4", label: "CAR — Cadastro Ambiental Rural", required: true },
+      { id: "cpr_pj_5", label: "ITR — Imposto Territorial Rural", required: true },
+      { id: "cpr_pj_6", label: "Matrícula da propriedade rural", required: true },
+      { id: "cpr_pj_7", label: "Contratos de comercialização (safra futura)", required: false },
+      { id: "cpr_pj_8", label: "Certidões Negativas completas", required: true },
+    ],
+  },
+  "FUNDO INTERNACIONAL CASH COLATERAL": {
+    PF: [
+      { id: "ficc_pf_1", label: "RG e CPF (ou CNH)", required: true },
+      { id: "ficc_pf_2", label: "Comprovante de patrimônio internacional", required: true },
+      { id: "ficc_pf_3", label: "Extrato de conta no exterior (6 meses)", required: true },
+      { id: "ficc_pf_4", label: "Declaração BACEN (se aplicável)", required: true },
+      { id: "ficc_pf_5", label: "Imposto de Renda + recibo", required: true },
+    ],
+    PJ: [
+      { id: "ficc_pj_1", label: "Contrato Social + alterações", required: true },
+      { id: "ficc_pj_2", label: "Cartão CNPJ atualizado", required: true },
+      { id: "ficc_pj_3", label: "Balanço Patrimonial + DRE (últimos 3 anos)", required: true },
+      { id: "ficc_pj_4", label: "Extrato de contas no exterior", required: true },
+      { id: "ficc_pj_5", label: "Comprovante de capital no exterior (colateral)", required: true },
+      { id: "ficc_pj_6", label: "Declaração BACEN Capital Estrangeiro", required: true },
+      { id: "ficc_pj_7", label: "Certidões Negativas completas", required: true },
+      { id: "ficc_pj_8", label: "Relatório de compliance AML/KYC", required: true },
+    ],
+  },
+  "FUNDO INTERNACIONAL IMOB": {
+    PF: [
+      { id: "fii_pf_1", label: "RG e CPF (ou CNH)", required: true },
+      { id: "fii_pf_2", label: "Imposto de Renda + recibo", required: true },
+      { id: "fii_pf_3", label: "Comprovante de patrimônio e renda", required: true },
+      { id: "fii_pf_4", label: "Documentação do imóvel internacional (se aplicável)", required: false },
+    ],
+    PJ: [
+      { id: "fii_pj_1", label: "Contrato Social + alterações", required: true },
+      { id: "fii_pj_2", label: "Cartão CNPJ atualizado", required: true },
+      { id: "fii_pj_3", label: "Balanço Patrimonial + DRE (últimos 3 anos)", required: true },
+      { id: "fii_pj_4", label: "Teaser do projeto imobiliário internacional", required: true },
+      { id: "fii_pj_5", label: "Declaração BACEN Capital Estrangeiro", required: true },
+      { id: "fii_pj_6", label: "Relatório de compliance AML/KYC", required: true },
+      { id: "fii_pj_7", label: "Certidões Negativas completas", required: true },
+    ],
+  },
+  "FUNDO CONSTRUÇÃO LOTEAMENTO": {
+    PF: [],
+    PJ: [
+      { id: "fcl_pj_1", label: "Contrato Social + todas as alterações", required: true },
+      { id: "fcl_pj_2", label: "Cartão CNPJ atualizado", required: true },
+      { id: "fcl_pj_3", label: "Balanço Patrimonial + DRE (últimos 3 anos)", required: true },
+      { id: "fcl_pj_4", label: "Matrícula da área bruta do loteamento", required: true },
+      { id: "fcl_pj_5", label: "Projeto de loteamento aprovado — SEURB/Prefeitura", required: true },
+      { id: "fcl_pj_6", label: "Licença Ambiental (LP + LI + LO)", required: true },
+      { id: "fcl_pj_7", label: "Orçamento de obras de infraestrutura", required: true },
+      { id: "fcl_pj_8", label: "Cronograma físico-financeiro do loteamento", required: true },
+      { id: "fcl_pj_9", label: "Estudo de viabilidade econômica (VGV e custos)", required: true },
+      { id: "fcl_pj_10", label: "Certidões Negativas completas", required: true },
+      { id: "fcl_pj_11", label: "RG e CPF dos sócios", required: true },
+    ],
+  },
+  "FUNDO CONSTRUÇÃO EMPREENDIMENTO": {
+    PF: [],
+    PJ: [
+      { id: "fce_pj_1", label: "Contrato Social + todas as alterações", required: true },
+      { id: "fce_pj_2", label: "Cartão CNPJ atualizado", required: true },
+      { id: "fce_pj_3", label: "Balanço Patrimonial + DRE (últimos 3 anos)", required: true },
+      { id: "fce_pj_4", label: "Matrícula do terreno atualizada (máx. 30 dias)", required: true },
+      { id: "fce_pj_5", label: "Projeto arquitetônico aprovado + HABITE-SE parcial (se retrofit)", required: true },
+      { id: "fce_pj_6", label: "Licença Ambiental e Alvará de Construção", required: true },
+      { id: "fce_pj_7", label: "Memorial descritivo do empreendimento", required: true },
+      { id: "fce_pj_8", label: "Orçamento de obras + cronograma físico-financeiro", required: true },
+      { id: "fce_pj_9", label: "Estudo de viabilidade (VGV, custo e margem)", required: true },
+      { id: "fce_pj_10", label: "Contrato de venda de unidades (se houver)", required: false },
+      { id: "fce_pj_11", label: "Certidões Negativas completas (PGFN, Receita, FGTS)", required: true },
+      { id: "fce_pj_12", label: "RG e CPF dos sócios e cônjuges", required: true },
+    ],
+  },
 };
 
 const DEFAULT_CHECKLIST = {
@@ -158,9 +336,9 @@ const DEFAULT_CHECKLIST = {
 
 // ─── Linhas por nível ──────────────────────────────────────────────────────
 const LEVEL_LINES: Record<string, string[]> = {
-  NIVEL_1: ["HOME EQUITY", "AVAL", "CRÉDITO PESSOAL", "CDC"],
-  NIVEL_2: ["FIDC", "CRI", "CRA", "DEBENTURES", "CAPITAL DE GIRO ESTRUTURADO"],
-  NIVEL_3: ["HIGH TICKET", "PROJECT FINANCE", "FUSÕES E AQUISIÇÕES", "INFRASTRUCTURE FINANCE", "REAL ESTATE HIGH VALUE"],
+  NIVEL_1: ["HOME EQUITY", "AVAL", "FUNDO CONSTRUÇÃO RESIDENCIAL"],
+  NIVEL_2: ["HOMECASH", "V3GIRO E V3AUTOGIRO", "CGI"],
+  NIVEL_3: ["CRI", "CRA", "CPR", "FUNDO INTERNACIONAL CASH COLATERAL", "FUNDO INTERNACIONAL IMOB", "FUNDO CONSTRUÇÃO LOTEAMENTO", "FUNDO CONSTRUÇÃO EMPREENDIMENTO"],
 };
 
 type Tab = "cliente" | "operacao" | "documentos";
@@ -441,7 +619,7 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
                 />
               </div>
 
-              {(creditLine === "HOME EQUITY" || creditLine === "CRI") && (
+              {(creditLine === "HOME EQUITY" || creditLine === "CRI" || creditLine === "HOMECASH" || creditLine === "CGI" || creditLine === "FUNDO CONSTRUÇÃO RESIDENCIAL") && (
                 <div className="p-4 rounded-xl border border-amber-500/20 bg-amber-500/5 space-y-3">
                   <p className="text-xs font-semibold text-amber-400 flex items-center gap-1">
                     <Home className="w-3.5 h-3.5" /> Dados do Imóvel em Garantia
