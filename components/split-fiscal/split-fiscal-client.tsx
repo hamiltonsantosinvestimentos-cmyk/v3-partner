@@ -812,73 +812,94 @@ function ComissaoTab({ selectedPlan, setSelectedPlan }: { selectedPlan: number; 
 
 // ─── Tab: Simulador de Proposta ao Cliente ─────────────────────────────────────
 function PropostaTab({ onAddLead }: { onAddLead: (lead: Lead) => void }) {
+  // Dados do cliente
   const [razaoSocial, setRazaoSocial] = useState("");
   const [cnpj, setCnpj] = useState("");
-  const [tpvTotal, setTpvTotal] = useState("100000");
-  const [pctMonetto, setPctMonetto] = useState("50");
+  // TPV direto com Monetto (sem split %)
+  const [tpvMonetto, setTpvMonetto] = useState("100000");
+  // Plano selecionado: 0-6 = Planos 1-7, null = manual
+  const [propostaPlan, setPropostaPlan] = useState<number | null>(null);
+  // Mix de pagamentos (%)
   const [pixPct, setPixPct] = useState("18");
   const [debitoPct, setDebitoPct] = useState("35");
-  const [creditoPct, setCreditoPct] = useState("47");
-  const [parceladoPct, setParceladoPct] = useState("0");
+  const [cred1xPct, setCred1xPct] = useState("12");
+  const [cred2a6Pct, setCred2a6Pct] = useState("20");
+  const [cred7a12Pct, setCred7a12Pct] = useState("10");
+  const [cred13a21Pct, setCred13a21Pct] = useState("5");
+  // Concorrente taxas (%)
+  const [concTaxaPix, setConcTaxaPix] = useState("1.19");
   const [concTaxaDebito, setConcTaxaDebito] = useState("1.99");
-  const [concTaxaCredito, setConcTaxaCredito] = useState("3.49");
-  const [monTaxaDebito, setMonTaxaDebito] = useState("2.99");
-  const [monTaxaCredito, setMonTaxaCredito] = useState("2.99");
+  const [concTaxaCred1x, setConcTaxaCred1x] = useState("3.49");
+  const [concTaxaParc, setConcTaxaParc] = useState("4.99");
+  // Monetto taxas (auto do plano ou manual)
+  const [monTaxaPix, setMonTaxaPix] = useState("1.99");
+  const [monTaxaDebito, setMonTaxaDebito] = useState("1.99");
+  const [monTaxaCred1x, setMonTaxaCred1x] = useState("3.99");
+  const [monTaxaCred2a6, setMonTaxaCred2a6] = useState("8.72");
+  const [monTaxaCred7a12, setMonTaxaCred7a12] = useState("12.65");
+  const [monTaxaCred13a21, setMonTaxaCred13a21] = useState("20.52");
+  // Mensalidade e imposto
   const [mensalidadeAtual, setMensalidadeAtual] = useState("99");
   const [mensalidadeNova, setMensalidadeNova] = useState("199");
   const [aliquotaAtual, setAliquotaAtual] = useState("8.2");
   const [aliquotaNova, setAliquotaNova] = useState("0");
 
+  // Helper: taxa média Visa de um grupo de modalidades
+  const getPlanTaxa = (planIdx: number, keys: string[]): string => {
+    const plan = PLANS[planIdx];
+    const rates = keys
+      .map((k) => { const v = plan.taxa[k]?.visa; return typeof v === "number" ? v : null; })
+      .filter((v): v is number => v !== null);
+    if (!rates.length) return "0";
+    return ((rates.reduce((a, b) => a + b, 0) / rates.length) * 100).toFixed(2);
+  };
+
+  // Auto-fill taxas Monetto ao selecionar plano
+  React.useEffect(() => {
+    if (propostaPlan === null) return;
+    setMonTaxaPix(getPlanTaxa(propostaPlan, ["PIX"]));
+    setMonTaxaDebito(getPlanTaxa(propostaPlan, ["DÉBITO"]));
+    setMonTaxaCred1x(getPlanTaxa(propostaPlan, ["Crédito 1x"]));
+    setMonTaxaCred2a6(getPlanTaxa(propostaPlan, ["Crédito 2x","Crédito 3x","Crédito 4x","Crédito 5x","Crédito 6x"]));
+    setMonTaxaCred7a12(getPlanTaxa(propostaPlan, ["Crédito 7x","Crédito 8x","Crédito 9x","Crédito 10x","Crédito 11x","Crédito 12x"]));
+    setMonTaxaCred13a21(getPlanTaxa(propostaPlan, ["Crédito 13x","Crédito 14x","Crédito 15x","Crédito 16x","Crédito 17x","Crédito 18x","Crédito 19x","Crédito 20x","Crédito 21x"]));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [propostaPlan]);
+
   const calc = useMemo(() => {
-    const tpv = n(tpvTotal);
-    const pMon = n(pctMonetto) / 100;
-    const tpvMon = tpv * pMon;
-
-    const pix = n(pixPct) / 100;
-    const deb = n(debitoPct) / 100;
-    const cred = n(creditoPct) / 100;
-    const parc = n(parceladoPct) / 100;
-
-    const fatPix = tpvMon * pix;
-    const fatDeb = tpvMon * deb;
-    const fatCred = tpvMon * cred;
-    const fatParc = tpvMon * parc;
-
-    const concDebRate = n(concTaxaDebito) / 100;
-    const concCredRate = n(concTaxaCredito) / 100;
-    const monDebRate = n(monTaxaDebito) / 100;
-    const monCredRate = n(monTaxaCredito) / 100;
-
-    const concCustoPix = 0; // PIX 0 no concorrente
-    const concCustoDeb = fatDeb * concDebRate;
-    const concCustoCred = fatCred * concCredRate;
-    const concCustoParc = fatParc * concCredRate;
-    const concSoma = concCustoPix + concCustoDeb + concCustoCred + concCustoParc;
-    const imposto = tpvMon * (n(aliquotaAtual) / 100);
-    const concTotal = concSoma + imposto + n(mensalidadeAtual);
-
-    const monCustoDeb = fatDeb * monDebRate;
-    const monCustoCred = fatCred * monCredRate;
-    const monCustoParc = fatParc * monCredRate;
-    const monSoma = monCustoDeb + monCustoCred + monCustoParc;
-    const monImpostoVal = tpvMon * (n(aliquotaNova) / 100);
-    const monTotal = monSoma + monImpostoVal + n(mensalidadeNova);
-
+    const tpv = n(tpvMonetto);
+    const mods = [
+      { label: "PIX",            pct: n(pixPct)/100,       concRate: n(concTaxaPix)/100,    monRate: n(monTaxaPix)/100 },
+      { label: "Débito",         pct: n(debitoPct)/100,    concRate: n(concTaxaDebito)/100, monRate: n(monTaxaDebito)/100 },
+      { label: "Crédito 1x",    pct: n(cred1xPct)/100,    concRate: n(concTaxaCred1x)/100, monRate: n(monTaxaCred1x)/100 },
+      { label: "Crédito 2-6x",  pct: n(cred2a6Pct)/100,   concRate: n(concTaxaParc)/100,   monRate: n(monTaxaCred2a6)/100 },
+      { label: "Crédito 7-12x", pct: n(cred7a12Pct)/100,  concRate: n(concTaxaParc)/100,   monRate: n(monTaxaCred7a12)/100 },
+      { label: "Crédito 13-21x",pct: n(cred13a21Pct)/100, concRate: n(concTaxaParc)/100,   monRate: n(monTaxaCred13a21)/100 },
+    ];
+    let concSoma = 0, monSoma = 0;
+    const rows = mods.map((m) => {
+      const fat = m.pct > 0 ? tpv * m.pct : 0;
+      const concCusto = fat * m.concRate;
+      const monCusto  = fat * m.monRate;
+      concSoma += concCusto;
+      monSoma  += monCusto;
+      return { label: m.label, pct: m.pct, fat, concCusto, monCusto };
+    });
+    const imposto      = tpv * (n(aliquotaAtual) / 100);
+    const monImpostoVal = tpv * (n(aliquotaNova) / 100);
+    const concTotal    = concSoma + imposto + n(mensalidadeAtual);
+    const monTotal     = monSoma  + monImpostoVal + n(mensalidadeNova);
     const economiaMensal = concTotal - monTotal;
-    const economiaAnual = economiaMensal * 12;
-
-    return {
-      tpvMon, fatPix, fatDeb, fatCred, fatParc,
-      concCustoPix, concCustoDeb, concCustoCred, concSoma, imposto, concTotal,
-      monCustoDeb, monCustoCred, monSoma, monImpostoVal, monTotal,
-      economiaMensal, economiaAnual,
-    };
-  }, [tpvTotal, pctMonetto, pixPct, debitoPct, creditoPct, parceladoPct,
-      concTaxaDebito, concTaxaCredito, monTaxaDebito, monTaxaCredito,
+    const economiaAnual  = economiaMensal * 12;
+    return { tpv, rows, concSoma, monSoma, imposto, monImpostoVal, concTotal, monTotal, economiaMensal, economiaAnual };
+  }, [tpvMonetto, pixPct, debitoPct, cred1xPct, cred2a6Pct, cred7a12Pct, cred13a21Pct,
+      concTaxaPix, concTaxaDebito, concTaxaCred1x, concTaxaParc,
+      monTaxaPix, monTaxaDebito, monTaxaCred1x, monTaxaCred2a6, monTaxaCred7a12, monTaxaCred13a21,
       mensalidadeAtual, mensalidadeNova, aliquotaAtual, aliquotaNova]);
 
   const handlePrint = () => {
     const fmtR = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
+    const planLabel = propostaPlan !== null ? PLANS[propostaPlan].name : "Manual";
     const html = `<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -889,7 +910,6 @@ function PropostaTab({ onAddLead }: { onAddLead: (lead: Lead) => void }) {
     *{margin:0;padding:0;box-sizing:border-box;}
     body{font-family:'Outfit',sans-serif;background:#fff;color:#1a1a2e;padding:40px;}
     .header{display:flex;align-items:center;justify-content:space-between;padding-bottom:24px;border-bottom:3px solid #C4922E;margin-bottom:32px;}
-    .brand{display:flex;flex-direction:column;}
     .brand-name{font-size:22px;font-weight:800;background:linear-gradient(120deg,#C4922E,#E5B96A);-webkit-background-clip:text;-webkit-text-fill-color:transparent;letter-spacing:2px;}
     .brand-sub{font-size:10px;color:#666;text-transform:uppercase;letter-spacing:3px;margin-top:2px;}
     .doc-title{text-align:right;}
@@ -902,7 +922,6 @@ function PropostaTab({ onAddLead }: { onAddLead: (lead: Lead) => void }) {
     .card-label{font-size:10px;color:#888;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;}
     .card-value{font-size:22px;font-weight:800;color:#C4922E;}
     .card-value.green{color:#16a34a;}
-    .card-value.blue{color:#2563eb;}
     table{width:100%;border-collapse:collapse;margin-bottom:28px;}
     th{background:#f8f6f2;padding:10px 14px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#888;border-bottom:2px solid #f0e6d3;}
     td{padding:10px 14px;font-size:12px;border-bottom:1px solid #f5f0ea;}
@@ -933,7 +952,7 @@ function PropostaTab({ onAddLead }: { onAddLead: (lead: Lead) => void }) {
     </div>
     <div class="doc-title">
       <h1>Proposta Comercial — Monetto Digital</h1>
-      <p>Split Fiscal · Simulação de Economia · ${new Date().toLocaleDateString("pt-BR")}</p>
+      <p>Split Fiscal · Simulação de Economia · ${new Date().toLocaleDateString("pt-BR")} · ${planLabel}</p>
     </div>
   </div>
   <div class="gold-bar"></div>
@@ -946,18 +965,9 @@ function PropostaTab({ onAddLead }: { onAddLead: (lead: Lead) => void }) {
       ${cnpj ? `<div style="font-size:11px;color:#888;margin-top:4px">CNPJ: ${cnpj}</div>` : ""}
     </div>
     <div class="card">
-      <div class="card-label">TPV Total Atual</div>
-      <div class="card-value">${fmtR(n(tpvTotal))}</div>
-    </div>
-  </div>
-  <div class="grid2">
-    <div class="card">
-      <div class="card-label">TPV Migrado para Monetto (${pctMonetto}%)</div>
-      <div class="card-value">${fmtR(calc.tpvMon)}</div>
-    </div>
-    <div class="card" style="background:#f0fdf4;border-color:#bbf7d0;">
-      <div class="card-label">Economia Mensal Estimada</div>
-      <div class="card-value green">${fmtR(Math.abs(calc.economiaMensal))}</div>
+      <div class="card-label">TPV Monetto / Mês</div>
+      <div class="card-value">${fmtR(calc.tpv)}</div>
+      <div style="font-size:11px;color:#888;margin-top:4px">Plano: ${planLabel}</div>
     </div>
   </div>
 
@@ -965,20 +975,15 @@ function PropostaTab({ onAddLead }: { onAddLead: (lead: Lead) => void }) {
   <table>
     <thead><tr><th>Modalidade</th><th class="td-right">% do Volume</th><th class="td-right">Faturamento (R$)</th></tr></thead>
     <tbody>
-      <tr><td>PIX</td><td class="td-right">${pixPct}%</td><td class="td-right">${fmtR(calc.fatPix)}</td></tr>
-      <tr><td>Débito</td><td class="td-right">${debitoPct}%</td><td class="td-right">${fmtR(calc.fatDeb)}</td></tr>
-      <tr><td>Crédito</td><td class="td-right">${creditoPct}%</td><td class="td-right">${fmtR(calc.fatCred)}</td></tr>
-      <tr><td>Parcelado</td><td class="td-right">${parceladoPct}%</td><td class="td-right">${fmtR(calc.fatParc)}</td></tr>
+      ${calc.rows.filter(r => r.pct > 0).map(r => `<tr><td>${r.label}</td><td class="td-right">${(r.pct*100).toFixed(1)}%</td><td class="td-right">${fmtR(r.fat)}</td></tr>`).join("")}
     </tbody>
   </table>
 
-  <div class="section-title">Custo Mensal: Concorrente vs Monetto</div>
+  <div class="section-title">Custo Mensal: Concorrente vs Monetto ${planLabel}</div>
   <table>
-    <thead><tr><th>Item</th><th class="td-right">Concorrente (Stone/Getnet)</th><th class="td-right">Monetto Digital</th></tr></thead>
+    <thead><tr><th>Modalidade</th><th class="td-right">Concorrente (Stone/Getnet)</th><th class="td-right">Monetto ${planLabel}</th></tr></thead>
     <tbody>
-      <tr><td>PIX</td><td class="td-right red">R$ 0,00</td><td class="td-right gold">R$ 0,00</td></tr>
-      <tr><td>Débito (taxa: ${concTaxaDebito}% vs ${monTaxaDebito}%)</td><td class="td-right red">${fmtR(calc.concCustoDeb)}</td><td class="td-right gold">${fmtR(calc.monCustoDeb)}</td></tr>
-      <tr><td>Crédito (taxa: ${concTaxaCredito}% vs ${monTaxaCredito}%)</td><td class="td-right red">${fmtR(calc.concCustoCred)}</td><td class="td-right gold">${fmtR(calc.monCustoCred)}</td></tr>
+      ${calc.rows.filter(r => r.pct > 0).map(r => `<tr><td>${r.label}</td><td class="td-right red">${fmtR(r.concCusto)}</td><td class="td-right gold">${fmtR(r.monCusto)}</td></tr>`).join("")}
       <tr><td>Subtotal Taxas</td><td class="td-right red">${fmtR(calc.concSoma)}</td><td class="td-right gold">${fmtR(calc.monSoma)}</td></tr>
       <tr><td>Impostos (${aliquotaAtual}% vs ${aliquotaNova}%)</td><td class="td-right red">${fmtR(calc.imposto)}</td><td class="td-right gold">${fmtR(calc.monImpostoVal)}</td></tr>
       <tr><td>Mensalidade</td><td class="td-right red">${fmtR(n(mensalidadeAtual))}</td><td class="td-right gold">${fmtR(n(mensalidadeNova))}</td></tr>
@@ -1003,9 +1008,8 @@ function PropostaTab({ onAddLead }: { onAddLead: (lead: Lead) => void }) {
   </div>
 
   <div class="info-box">
-    <strong>Observações:</strong> Esta simulação é baseada no volume informado e nas taxas vigentes da Monetto Digital no momento da geração deste documento.
-    Os valores de economia consideram a migração de ${pctMonetto}% do TPV atual para a plataforma Monetto.
-    A alíquota de imposto atual considerada é de ${aliquotaAtual}% e a Monetto oferece ${aliquotaNova}%.
+    <strong>Observações:</strong> Simulação baseada no TPV informado e taxas do ${planLabel} Monetto Digital (média Visa por grupo de parcelamento).
+    Modalidades com mix 0% não foram consideradas no cálculo. Custo = TPV × mix% × taxa por modalidade.
     Documento gerado pela plataforma V3 PARTNERS — ${new Date().toLocaleDateString("pt-BR")} às ${new Date().toLocaleTimeString("pt-BR")}.
   </div>
 
@@ -1022,12 +1026,11 @@ function PropostaTab({ onAddLead }: { onAddLead: (lead: Lead) => void }) {
     win.focus();
     setTimeout(() => win.print(), 800);
 
-    // Save as lead
     onAddLead({
       id: Date.now().toString(),
       razao_social: razaoSocial || "Cliente sem nome",
-      cnpj: cnpj,
-      tpv: calc.tpvMon,
+      cnpj,
+      tpv: calc.tpv,
       economiaMensal: calc.economiaMensal,
       economiaAnual: calc.economiaAnual,
       created_at: new Date().toLocaleDateString("pt-BR"),
@@ -1047,47 +1050,124 @@ function PropostaTab({ onAddLead }: { onAddLead: (lead: Lead) => void }) {
     </div>
   );
 
+  const MIX_ROWS = [
+    { label: "PIX",            pct: pixPct,       setPct: setPixPct },
+    { label: "Débito",         pct: debitoPct,    setPct: setDebitoPct },
+    { label: "Crédito 1x",    pct: cred1xPct,    setPct: setCred1xPct },
+    { label: "Crédito 2-6x",  pct: cred2a6Pct,   setPct: setCred2a6Pct },
+    { label: "Crédito 7-12x", pct: cred7a12Pct,  setPct: setCred7a12Pct },
+    { label: "Crédito 13-21x",pct: cred13a21Pct, setPct: setCred13a21Pct },
+  ];
+
   return (
     <div className="space-y-4">
-      {/* Inputs */}
       <div className="grid md:grid-cols-3 gap-4">
+        {/* Card 1: Dados do Cliente */}
         <Card>
           <CardHeader><CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Dados do Cliente</CardTitle></CardHeader>
           <CardContent className="space-y-3">
             {inp("Razão Social / Nome", razaoSocial, setRazaoSocial)}
             {inp("CNPJ", cnpj, setCnpj)}
-            {inp("TPV Total Atual (R$)", tpvTotal, setTpvTotal, "R$")}
-            {inp("% TPV para Monetto", pctMonetto, setPctMonetto, "", "%")}
+            {inp("TPV com Monetto (R$/mês)", tpvMonetto, setTpvMonetto, "R$")}
             <div className="pt-1 border-t border-border/30">
-              <p className="text-xs text-muted-foreground">TPV com Monetto</p>
-              <p className="text-lg font-bold text-[#E5B96A]">{formatCurrency(calc.tpvMon)}</p>
+              <p className="text-xs text-muted-foreground">TPV Monetto</p>
+              <p className="text-lg font-bold text-[#E5B96A]">{formatCurrency(calc.tpv)}</p>
             </div>
           </CardContent>
         </Card>
 
+        {/* Card 2: Mix de Pagamentos com faturamento inline */}
         <Card>
           <CardHeader><CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Mix de Pagamentos (%)</CardTitle></CardHeader>
-          <CardContent className="space-y-3">
-            {inp("PIX (%)", pixPct, setPixPct, "", "%")}
-            {inp("Débito (%)", debitoPct, setDebitoPct, "", "%")}
-            {inp("Crédito (%)", creditoPct, setCreditoPct, "", "%")}
-            {inp("Parcelado (%)", parceladoPct, setParceladoPct, "", "%")}
+          <CardContent className="space-y-2.5">
+            {MIX_ROWS.map(({ label, pct: v, setPct }) => {
+              const fat = n(v) > 0 ? calc.tpv * (n(v) / 100) : 0;
+              return (
+                <div key={label}>
+                  <label className="block text-xs text-muted-foreground mb-1">{label}</label>
+                  <div className="flex gap-2 items-center">
+                    <div className="relative flex items-center flex-1">
+                      <input value={v} onChange={(e) => setPct(e.target.value)} placeholder="0"
+                        className="w-full h-8 pl-3 pr-7 text-xs bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-1 focus:ring-[#C4922E]/50 text-right" />
+                      <span className="absolute right-2.5 text-xs text-muted-foreground">%</span>
+                    </div>
+                    <span className="text-xs font-semibold w-28 text-right shrink-0">
+                      {fat > 0 ? <span className="text-[#E5B96A]">{formatCurrency(fat)}</span> : <span className="text-muted-foreground/40">—</span>}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
           </CardContent>
         </Card>
 
+        {/* Card 3: Taxas — Plano Monetto + Concorrente */}
         <Card>
           <CardHeader><CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Taxas e Mensalidades</CardTitle></CardHeader>
           <CardContent className="space-y-3">
-            <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Concorrente (Stone/Getnet)</p>
-            {inp("Débito (%)", concTaxaDebito, setConcTaxaDebito, "", "%")}
-            {inp("Crédito (%)", concTaxaCredito, setConcTaxaCredito, "", "%")}
-            <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold mt-1">Monetto Digital</p>
-            {inp("Débito (%)", monTaxaDebito, setMonTaxaDebito, "", "%")}
-            {inp("Crédito (%)", monTaxaCredito, setMonTaxaCredito, "", "%")}
+            {/* Plano Monetto selector */}
+            <div>
+              <p className="text-[10px] text-[#E5B96A] uppercase tracking-wider font-bold mb-2">Plano Monetto — selecione para preencher automático</p>
+              <div className="flex flex-wrap gap-1.5 mb-3">
+                {PLANS.map((p, i) => (
+                  <button key={i} onClick={() => setPropostaPlan(i)}
+                    className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-all ${propostaPlan === i ? "bg-[#C4922E] border-[#C4922E] text-white" : "border-border text-muted-foreground hover:border-[#C4922E]/50"}`}>
+                    {p.name.replace("Plano ", "P")}
+                  </button>
+                ))}
+                <button onClick={() => setPropostaPlan(null)}
+                  className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-all ${propostaPlan === null ? "bg-[#C4922E] border-[#C4922E] text-white" : "border-border text-muted-foreground hover:border-[#C4922E]/50"}`}>
+                  Manual
+                </button>
+              </div>
+            </div>
+
+            {/* Monetto taxas por modalidade */}
+            <div className="space-y-1.5">
+              <p className="text-[9px] text-[#C4922E] uppercase tracking-wider font-semibold">Monetto — taxas por modalidade</p>
+              {[
+                { label: "PIX",            val: monTaxaPix,      set: setMonTaxaPix },
+                { label: "Débito",         val: monTaxaDebito,   set: setMonTaxaDebito },
+                { label: "Crédito 1x",    val: monTaxaCred1x,   set: setMonTaxaCred1x },
+                { label: "Crédito 2-6x",  val: monTaxaCred2a6,  set: setMonTaxaCred2a6 },
+                { label: "Crédito 7-12x", val: monTaxaCred7a12, set: setMonTaxaCred7a12 },
+                { label: "Crédito 13-21x",val: monTaxaCred13a21,set: setMonTaxaCred13a21 },
+              ].map(({ label, val, set }) => (
+                <div key={label} className="flex items-center gap-2">
+                  <span className="text-[10px] text-muted-foreground w-24 shrink-0">{label}</span>
+                  <div className="relative flex items-center flex-1">
+                    <input value={val} onChange={(e) => set(e.target.value)} readOnly={propostaPlan !== null}
+                      className={`w-full h-7 pl-2 pr-6 text-[11px] border rounded text-right focus:outline-none focus:ring-1 focus:ring-[#C4922E]/50 ${propostaPlan !== null ? "bg-[#C4922E]/10 border-[#C4922E]/30 text-[#E5B96A] cursor-default" : "bg-secondary border-border text-foreground"}`} />
+                    <span className="absolute right-2 text-[10px] text-muted-foreground">%</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Concorrente taxas */}
+            <div className="border-t border-border/30 pt-2 space-y-1.5">
+              <p className="text-[9px] text-muted-foreground uppercase tracking-wider font-semibold">Concorrente — taxas</p>
+              {[
+                { label: "PIX",        val: concTaxaPix,     set: setConcTaxaPix },
+                { label: "Débito",     val: concTaxaDebito,  set: setConcTaxaDebito },
+                { label: "Crédito 1x", val: concTaxaCred1x,  set: setConcTaxaCred1x },
+                { label: "Parcelado",  val: concTaxaParc,    set: setConcTaxaParc },
+              ].map(({ label, val, set }) => (
+                <div key={label} className="flex items-center gap-2">
+                  <span className="text-[10px] text-muted-foreground w-24 shrink-0">{label}</span>
+                  <div className="relative flex items-center flex-1">
+                    <input value={val} onChange={(e) => set(e.target.value)}
+                      className="w-full h-7 pl-2 pr-6 text-[11px] bg-secondary border border-border rounded text-foreground text-right focus:outline-none focus:ring-1 focus:ring-[#C4922E]/50" />
+                    <span className="absolute right-2 text-[10px] text-muted-foreground">%</span>
+                  </div>
+                </div>
+              ))}
+            </div>
           </CardContent>
         </Card>
       </div>
 
+      {/* Mensalidade/impostos + Comparação */}
       <div className="grid md:grid-cols-2 gap-4">
         <Card>
           <CardHeader><CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Mensalidade e Impostos</CardTitle></CardHeader>
@@ -1099,53 +1179,41 @@ function PropostaTab({ onAddLead }: { onAddLead: (lead: Lead) => void }) {
           </CardContent>
         </Card>
 
-        {/* Comparison */}
         <Card>
           <CardHeader><CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Custo Mensal: Concorrente vs Monetto</CardTitle></CardHeader>
-          <CardContent className="space-y-2 text-xs">
+          <CardContent className="space-y-1.5 text-xs">
             <div className="grid grid-cols-3 gap-2 border-b border-border/30 pb-2 text-[10px] font-semibold text-muted-foreground uppercase">
-              <span>Item</span><span className="text-right">Concorrente</span><span className="text-right text-[#E5B96A]">Monetto</span>
+              <span>Modalidade</span><span className="text-right">Concorrente</span><span className="text-right text-[#E5B96A]">Monetto</span>
             </div>
-            {[
-              { label: "PIX", conc: calc.concCustoPix, mon: 0 },
-              { label: "Débito", conc: calc.concCustoDeb, mon: calc.monCustoDeb },
-              { label: "Crédito", conc: calc.concCustoCred, mon: calc.monCustoCred },
-            ].map((r) => (
-              <div key={r.label} className="grid grid-cols-3 gap-2">
-                <span className="text-muted-foreground">{r.label}</span>
-                <span className="text-right text-red-400">{formatCurrency(r.conc)}</span>
-                <span className="text-right text-emerald-400">{formatCurrency(r.mon)}</span>
+            {calc.rows.map((r) => (
+              <div key={r.label} className={`grid grid-cols-3 gap-2 ${r.pct === 0 ? "opacity-30" : ""}`}>
+                <span className="text-muted-foreground text-[11px]">{r.label}</span>
+                <span className="text-right text-red-400">{r.pct > 0 ? formatCurrency(r.concCusto) : "—"}</span>
+                <span className="text-right text-emerald-400">{r.pct > 0 ? formatCurrency(r.monCusto) : "—"}</span>
               </div>
             ))}
-            <div className="grid grid-cols-3 gap-2 border-t border-border/30 pt-2">
-              <span className="text-muted-foreground">Subtotal Taxas</span>
+            <div className="grid grid-cols-3 gap-2 border-t border-border/30 pt-1.5">
+              <span className="text-muted-foreground text-[11px]">Subtotal Taxas</span>
               <span className="text-right text-red-400">{formatCurrency(calc.concSoma)}</span>
               <span className="text-right text-emerald-400">{formatCurrency(calc.monSoma)}</span>
             </div>
             <div className="grid grid-cols-3 gap-2">
-              <span className="text-muted-foreground">Impostos</span>
+              <span className="text-muted-foreground text-[11px]">Impostos</span>
               <span className="text-right text-red-400">{formatCurrency(calc.imposto)}</span>
               <span className="text-right text-emerald-400">{formatCurrency(calc.monImpostoVal)}</span>
             </div>
             <div className="grid grid-cols-3 gap-2">
-              <span className="text-muted-foreground">Mensalidade</span>
+              <span className="text-muted-foreground text-[11px]">Mensalidade</span>
               <span className="text-right text-red-400">{formatCurrency(n(mensalidadeAtual))}</span>
               <span className="text-right text-emerald-400">{formatCurrency(n(mensalidadeNova))}</span>
             </div>
             <div className="grid grid-cols-3 gap-2 border-t-2 border-[#C4922E]/30 pt-2 font-bold">
-              <span className="text-foreground">TOTAL</span>
+              <span className="text-foreground text-[11px]">TOTAL</span>
               <span className="text-right text-red-400">{formatCurrency(calc.concTotal)}</span>
               <span className="text-right text-[#E5B96A]">{formatCurrency(calc.monTotal)}</span>
             </div>
           </CardContent>
         </Card>
-      </div>
-
-      {/* PDF button */}
-      <div className="flex justify-end">
-        <Button onClick={handlePrint} size="sm" className="gap-2 bg-[#C4922E] hover:bg-[#E5B96A] text-white">
-          <FileDown className="w-4 h-4" /> Gerar Proposta PDF
-        </Button>
       </div>
 
       {/* Result highlights */}
@@ -1177,15 +1245,22 @@ function PropostaTab({ onAddLead }: { onAddLead: (lead: Lead) => void }) {
         </Card>
       </div>
 
-      <Card className="border-[#C4922E]/20 bg-[#C4922E]/5">
-        <CardContent className="p-4">
-          <p className="text-xs text-muted-foreground">
-            <span className="text-[#E5B96A] font-semibold">Como usar este simulador:</span> Insira o TPV (volume total de vendas) do cliente e o percentual que seria migrado para a Monetto.
-            Configure o mix de pagamentos (PIX, Débito, Crédito) e as taxas do concorrente atual.
-            O simulador calcula automaticamente a economia mensal, anual e em 2 anos com a migração para a Monetto Digital.
-          </p>
-        </CardContent>
-      </Card>
+      {/* Dica + PDF */}
+      <div className="flex items-start gap-4">
+        <Card className="flex-1 border-[#C4922E]/20 bg-[#C4922E]/5">
+          <CardContent className="p-3">
+            <p className="text-xs text-muted-foreground">
+              <span className="text-[#E5B96A] font-semibold">Dica:</span>{" "}
+              Selecione um Plano (P1–P7) para preencher as taxas Monetto automaticamente pela média Visa.
+              No mix, deixe 0% nas modalidades que o cliente não usa — elas ficam zeradas e não entram no cálculo.
+              Fórmula: <span className="text-foreground/70">TPV × mix% × taxa = custo da modalidade.</span>
+            </p>
+          </CardContent>
+        </Card>
+        <Button onClick={handlePrint} size="sm" className="gap-2 bg-[#C4922E] hover:bg-[#E5B96A] text-white shrink-0 self-center">
+          <FileDown className="w-4 h-4" /> Gerar Proposta PDF
+        </Button>
+      </div>
     </div>
   );
 }
