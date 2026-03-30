@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import {
   X, User, Building2, CheckCircle2, Clock, ArrowRight,
   FileText, CreditCard, Calendar, Link2, Pencil, Check,
-  Percent, TrendingUp, BadgeDollarSign,
+  Percent, TrendingUp, BadgeDollarSign, Upload, Paperclip, Trash2,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -64,13 +64,16 @@ interface PropostaDetailModalProps {
 export function PropostaDetailModal({ open, onClose, proposal, onStageChange, onProposalUpdate, canChangeStage }: PropostaDetailModalProps) {
   // ── Checklist state ───────────────────────────────────────────────────────
   const [checkedDocs, setCheckedDocs] = useState<Record<string, boolean>>({});
+  const [uploadedFiles, setUploadedFiles] = useState<Record<string, string>>({}); // docId → filename
 
   useEffect(() => {
     if (!proposal) return;
     try {
-      const saved = JSON.parse(localStorage.getItem(`v3_docs_${proposal.id}`) ?? "{}");
-      setCheckedDocs(saved);
-    } catch { setCheckedDocs({}); }
+      const savedChecks = JSON.parse(localStorage.getItem(`v3_docs_${proposal.id}`) ?? "{}");
+      const savedFiles  = JSON.parse(localStorage.getItem(`v3_files_${proposal.id}`) ?? "{}");
+      setCheckedDocs(savedChecks);
+      setUploadedFiles(savedFiles);
+    } catch { setCheckedDocs({}); setUploadedFiles({}); }
   }, [proposal?.id, open]);
 
   function toggleDoc(docId: string) {
@@ -78,6 +81,32 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
     const updated = { ...checkedDocs, [docId]: !checkedDocs[docId] };
     setCheckedDocs(updated);
     try { localStorage.setItem(`v3_docs_${proposal.id}`, JSON.stringify(updated)); } catch {}
+  }
+
+  function handleFileUpload(docId: string, file: File) {
+    if (!proposal) return;
+    // Auto-check the doc and save filename
+    const newChecks = { ...checkedDocs, [docId]: true };
+    const newFiles  = { ...uploadedFiles, [docId]: file.name };
+    setCheckedDocs(newChecks);
+    setUploadedFiles(newFiles);
+    try {
+      localStorage.setItem(`v3_docs_${proposal.id}`,  JSON.stringify(newChecks));
+      localStorage.setItem(`v3_files_${proposal.id}`, JSON.stringify(newFiles));
+    } catch {}
+  }
+
+  function removeFile(docId: string) {
+    if (!proposal) return;
+    const newFiles  = { ...uploadedFiles };
+    const newChecks = { ...checkedDocs, [docId]: false };
+    delete newFiles[docId];
+    setUploadedFiles(newFiles);
+    setCheckedDocs(newChecks);
+    try {
+      localStorage.setItem(`v3_docs_${proposal.id}`,  JSON.stringify(newChecks));
+      localStorage.setItem(`v3_files_${proposal.id}`, JSON.stringify(newFiles));
+    } catch {}
   }
 
   // ── Commission state ──────────────────────────────────────────────────────
@@ -400,24 +429,63 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
                   <div className="bg-emerald-500 h-1.5 rounded-full transition-all"
                     style={{ width: `${Math.min(100, (checkedCount / (docs.length || 1)) * 100)}%` }} />
                 </div>
-                <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
-                  {docs.map((doc) => (
-                    <label key={doc.id} className="flex items-start gap-2.5 cursor-pointer group">
-                      <input
-                        type="checkbox"
-                        checked={!!checkedDocs[doc.id]}
-                        onChange={() => toggleDoc(doc.id)}
-                        className="mt-0.5 w-3.5 h-3.5 accent-emerald-500 flex-shrink-0"
-                      />
-                      <span className={`text-xs leading-snug ${checkedDocs[doc.id] ? "line-through text-muted-foreground" : "text-foreground"}`}>
-                        {doc.label}
-                        {doc.required && <span className="text-red-400 ml-0.5">*</span>}
-                        {doc.hint && <span className="text-muted-foreground ml-1">— {doc.hint}</span>}
-                      </span>
-                    </label>
-                  ))}
+                <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                  {docs.map((doc) => {
+                    const isChecked = !!checkedDocs[doc.id];
+                    const fileName  = uploadedFiles[doc.id];
+                    return (
+                      <div key={doc.id} className="rounded-lg border border-border bg-secondary/20 p-2.5 space-y-1.5">
+                        {/* Row 1: checkbox + label */}
+                        <div className="flex items-start gap-2">
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={() => toggleDoc(doc.id)}
+                            className="mt-0.5 w-3.5 h-3.5 accent-emerald-500 flex-shrink-0"
+                          />
+                          <span className={`text-xs leading-snug flex-1 ${isChecked ? "line-through text-muted-foreground" : "text-foreground"}`}>
+                            {doc.label}
+                            {doc.required && <span className="text-red-400 ml-0.5">*</span>}
+                            {doc.hint && <span className="text-muted-foreground ml-1">— {doc.hint}</span>}
+                          </span>
+                        </div>
+
+                        {/* Row 2: upload area */}
+                        {fileName ? (
+                          <div className="flex items-center gap-2 px-2 py-1 rounded bg-emerald-500/10 border border-emerald-500/30">
+                            <Paperclip className="w-3 h-3 text-emerald-400 flex-shrink-0" />
+                            <span className="text-[11px] text-emerald-400 flex-1 truncate">{fileName}</span>
+                            <button
+                              onClick={() => removeFile(doc.id)}
+                              className="text-muted-foreground hover:text-red-400 transition-colors flex-shrink-0"
+                              title="Remover arquivo"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          </div>
+                        ) : (
+                          <label className="flex items-center gap-2 px-2 py-1.5 rounded border border-dashed border-border hover:border-primary/50 hover:bg-primary/5 cursor-pointer transition-colors group">
+                            <Upload className="w-3 h-3 text-muted-foreground group-hover:text-primary flex-shrink-0" />
+                            <span className="text-[11px] text-muted-foreground group-hover:text-primary">
+                              Clique para anexar arquivo (PDF, JPG, PNG)
+                            </span>
+                            <input
+                              type="file"
+                              accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                              className="hidden"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) handleFileUpload(doc.id, file);
+                                e.target.value = "";
+                              }}
+                            />
+                          </label>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
-                <p className="text-[10px] text-muted-foreground">* Obrigatório — marque cada documento conforme for enviando</p>
+                <p className="text-[10px] text-muted-foreground">* Obrigatório — anexe o arquivo e o documento será marcado automaticamente</p>
               </div>
             );
           })()}
