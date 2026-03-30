@@ -64,19 +64,19 @@ const NAV_ITEMS: NavItem[] = [
     href: "/dashboard",
     label: "Dashboard",
     icon: "LayoutDashboard",
-    roles: ["ADMIN", "PARTNER", "MESA_OPERACIONAL", "GESTAO"],
+    roles: ["ADMIN", "PARTNER", "PARTNER_PRO", "MESA_OPERACIONAL", "GESTAO"],
   },
   {
     href: "/crm",
     label: "CRM",
     icon: "ContactRound",
-    roles: ["ADMIN", "PARTNER"],
+    roles: ["ADMIN", "PARTNER", "PARTNER_PRO"],
   },
   {
     href: "/ranking",
     label: "Ranking",
     icon: "Medal",
-    roles: ["ADMIN", "PARTNER"],
+    roles: ["ADMIN", "PARTNER", "PARTNER_PRO"],
   },
   {
     href: "/usuarios",
@@ -88,7 +88,7 @@ const NAV_ITEMS: NavItem[] = [
     href: "/ia-assistant",
     label: "V3 IA Partner",
     icon: "BrainCircuit",
-    roles: ["ADMIN", "PARTNER", "MESA_OPERACIONAL", "GESTAO", "FINANCEIRO"],
+    roles: ["ADMIN", "PARTNER", "PARTNER_PRO", "MESA_OPERACIONAL", "GESTAO", "FINANCEIRO"],
   },
   {
     href: "/financeiro",
@@ -100,40 +100,40 @@ const NAV_ITEMS: NavItem[] = [
     href: "/comissoes",
     label: "Comissões",
     icon: "Wallet",
-    roles: ["ADMIN", "PARTNER", "FINANCEIRO"],
+    roles: ["ADMIN", "PARTNER", "PARTNER_PRO", "FINANCEIRO"],
   },
   {
     href: "/split-fiscal",
     label: "Split Fiscal",
     icon: "PieChart",
-    roles: ["ADMIN", "PARTNER", "GESTAO"],
+    roles: ["ADMIN", "PARTNER", "PARTNER_PRO", "GESTAO"],
   },
   {
     href: "/ma",
     label: "M&A",
     icon: "Building2",
-    roles: ["ADMIN", "GESTAO", "PARTNER"],
+    roles: ["ADMIN", "GESTAO", "PARTNER", "PARTNER_PRO"],
   },
   {
     href: "/mesa-credito",
     label: "Mesa de Crédito",
     icon: "CreditCard",
-    roles: ["ADMIN", "MESA_OPERACIONAL", "GESTAO", "PARTNER"],
+    roles: ["ADMIN", "MESA_OPERACIONAL", "GESTAO", "PARTNER", "PARTNER_PRO"],
     children: [
       {
         href: "/mesa-credito/nivel-1",
         label: "N1 — Crédito Varejo",
-        roles: ["ADMIN", "MESA_OPERACIONAL", "GESTAO", "PARTNER"],
+        roles: ["ADMIN", "MESA_OPERACIONAL", "GESTAO", "PARTNER", "PARTNER_PRO"],
       },
       {
         href: "/mesa-credito/nivel-2",
         label: "N2 — Crédito Estruturado",
-        roles: ["ADMIN", "MESA_OPERACIONAL", "GESTAO", "PARTNER"],
+        roles: ["ADMIN", "MESA_OPERACIONAL", "GESTAO", "PARTNER", "PARTNER_PRO"],
       },
       {
         href: "/mesa-credito/nivel-3",
         label: "N3 — High Ticket",
-        roles: ["ADMIN", "GESTAO"],
+        roles: ["ADMIN", "GESTAO", "PARTNER_PRO"],
       },
     ],
   },
@@ -147,22 +147,22 @@ const NAV_ITEMS: NavItem[] = [
     href: "/consorcio",
     label: "Consórcio",
     icon: "Trophy",
-    roles: ["ADMIN", "PARTNER", "MESA_OPERACIONAL", "GESTAO"],
+    roles: ["ADMIN", "PARTNER", "PARTNER_PRO", "MESA_OPERACIONAL", "GESTAO"],
     children: [
       {
         href: "/consorcio/simulacao",
         label: "Simulação",
-        roles: ["ADMIN", "PARTNER", "MESA_OPERACIONAL", "GESTAO"],
+        roles: ["ADMIN", "PARTNER", "PARTNER_PRO", "MESA_OPERACIONAL", "GESTAO"],
       },
       {
         href: "/consorcio/cartas-contempladas",
         label: "Cartas Contempladas",
-        roles: ["ADMIN", "PARTNER", "MESA_OPERACIONAL", "GESTAO"],
+        roles: ["ADMIN", "PARTNER", "PARTNER_PRO", "MESA_OPERACIONAL", "GESTAO"],
       },
       {
         href: "/consorcio/projetos",
         label: "Projetos",
-        roles: ["ADMIN", "PARTNER", "MESA_OPERACIONAL", "GESTAO"],
+        roles: ["ADMIN", "PARTNER", "PARTNER_PRO", "MESA_OPERACIONAL", "GESTAO"],
       },
     ],
   },
@@ -182,15 +182,15 @@ const NAV_ITEMS: NavItem[] = [
     href: "/academy",
     label: "V3 Academy",
     icon: "GraduationCap",
-    roles: ["ADMIN", "PARTNER", "MESA_OPERACIONAL", "GESTAO"],
+    roles: ["ADMIN", "PARTNER", "PARTNER_PRO", "MESA_OPERACIONAL", "GESTAO"],
     children: [
-      { href: "/academy?cat=home-equity", label: "🏠 Home Equity", roles: ["ADMIN", "PARTNER", "MESA_OPERACIONAL", "GESTAO"] },
-      { href: "/academy?cat=estruturado", label: "📊 Crédito Estruturado", roles: ["ADMIN", "PARTNER", "MESA_OPERACIONAL", "GESTAO"] },
-      { href: "/academy?cat=high-ticket", label: "⚡ High Ticket", roles: ["ADMIN", "PARTNER", "MESA_OPERACIONAL", "GESTAO"] },
-      { href: "/academy?cat=ma", label: "🤝 M&A", roles: ["ADMIN", "GESTAO"] },
-      { href: "/academy?cat=split-fiscal", label: "📋 Split Fiscal", roles: ["ADMIN", "PARTNER", "GESTAO"] },
-      { href: "/academy?cat=consorcio", label: "🎯 Consórcio", roles: ["ADMIN", "PARTNER", "MESA_OPERACIONAL", "GESTAO"] },
-      { href: "/academy?cat=compliance", label: "🛡️ Compliance", roles: ["ADMIN", "PARTNER", "MESA_OPERACIONAL", "GESTAO"] },
+      { href: "/academy?cat=home-equity", label: "🏠 Home Equity", roles: ["ADMIN", "PARTNER", "PARTNER_PRO", "MESA_OPERACIONAL", "GESTAO"] },
+      { href: "/academy?cat=estruturado", label: "📊 Crédito Estruturado", roles: ["ADMIN", "PARTNER", "PARTNER_PRO", "MESA_OPERACIONAL", "GESTAO"] },
+      { href: "/academy?cat=high-ticket", label: "⚡ High Ticket", roles: ["ADMIN", "PARTNER", "PARTNER_PRO", "MESA_OPERACIONAL", "GESTAO"] },
+      { href: "/academy?cat=ma", label: "🤝 M&A", roles: ["ADMIN", "GESTAO", "PARTNER_PRO"] },
+      { href: "/academy?cat=split-fiscal", label: "📋 Split Fiscal", roles: ["ADMIN", "PARTNER", "PARTNER_PRO", "GESTAO"] },
+      { href: "/academy?cat=consorcio", label: "🎯 Consórcio", roles: ["ADMIN", "PARTNER", "PARTNER_PRO", "MESA_OPERACIONAL", "GESTAO"] },
+      { href: "/academy?cat=compliance", label: "🛡️ Compliance", roles: ["ADMIN", "PARTNER", "PARTNER_PRO", "MESA_OPERACIONAL", "GESTAO"] },
     ],
   },
 ];
@@ -345,8 +345,12 @@ export function Sidebar({ role, onClose }: SidebarProps) {
               ? "Administrador"
               : role === "PARTNER"
               ? "Partner"
+              : role === "PARTNER_PRO"
+              ? "Partner PRO ⭐"
               : role === "MESA_OPERACIONAL"
               ? "Mesa Operacional"
+              : role === "FINANCEIRO"
+              ? "Financeiro"
               : "Gestão"}
           </span>
         </div>

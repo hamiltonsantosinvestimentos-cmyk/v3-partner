@@ -4,12 +4,12 @@ const PUBLIC_ROUTES = ["/login", "/auth/callback", "/unauthorized"];
 
 const ROLE_ROUTES: Record<string, string[]> = {
   "/usuarios": ["ADMIN"],
-  "/ma": ["ADMIN", "GESTAO", "PARTNER"],
-  "/split-fiscal": ["ADMIN", "PARTNER", "GESTAO"],
-  "/mesa-credito/nivel-3": ["ADMIN", "GESTAO"],
+  "/ma": ["ADMIN", "GESTAO", "PARTNER", "PARTNER_PRO"],
+  "/split-fiscal": ["ADMIN", "PARTNER", "PARTNER_PRO", "GESTAO"],
+  "/mesa-credito/nivel-3": ["ADMIN", "GESTAO", "PARTNER_PRO"],
   "/mesa-operacional": ["ADMIN", "MESA_OPERACIONAL", "GESTAO"],
   "/financeiro": ["ADMIN", "FINANCEIRO"],
-  "/comissoes": ["ADMIN", "PARTNER", "FINANCEIRO"],
+  "/comissoes": ["ADMIN", "PARTNER", "PARTNER_PRO", "FINANCEIRO"],
 };
 
 const IS_DEMO =

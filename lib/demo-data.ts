@@ -55,6 +55,17 @@ export const DEMO_USERS = [
     is_active: true,
     created_at: "2026-01-25T00:00:00Z",
   },
+  {
+    id: "demo-partner-pro-001",
+    email: "partnerpro@v3partner.com",
+    password: "partnerpro123",
+    full_name: "Lucas Partner PRO",
+    role: "PARTNER_PRO" as const,
+    avatar_url: null,
+    phone: "(11) 94444-0001",
+    is_active: true,
+    created_at: "2026-02-01T00:00:00Z",
+  },
 ];
 
 export const DEMO_SPLITS = [
