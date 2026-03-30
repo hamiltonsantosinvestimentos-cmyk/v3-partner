@@ -42,7 +42,10 @@ export function Topbar({ user, onMenuClick, notificationCount = 0 }: TopbarProps
   const supabase = createClient();
 
   const handleSignOut = async () => {
-    await supabase.auth.signOut();
+    // Limpa cookie de sessão demo
+    document.cookie = "v3_demo_session=; path=/; max-age=0";
+    // Tenta signOut do Supabase (não-demo), ignora erro se não conectado
+    try { await supabase.auth.signOut(); } catch {}
     router.push("/login");
     router.refresh();
   };
