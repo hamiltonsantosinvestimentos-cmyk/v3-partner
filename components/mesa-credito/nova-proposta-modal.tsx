@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { formatCurrency } from "@/lib/utils";
 
 // ─── Checklists por linha e tipo de pessoa ─────────────────────────────────
-const CHECKLISTS: Record<string, Record<"PF" | "PJ", { id: string; label: string; required: boolean; hint?: string }[]>> = {
+export const CHECKLISTS: Record<string, Record<"PF" | "PJ", { id: string; label: string; required: boolean; hint?: string }[]>> = {
   "HOME EQUITY": {
     PF: [
       { id: "he_pf_1", label: "RG e CPF (ou CNH)", required: true, hint: "Documento de identificação com foto" },
@@ -319,7 +319,7 @@ const CHECKLISTS: Record<string, Record<"PF" | "PJ", { id: string; label: string
   },
 };
 
-const DEFAULT_CHECKLIST = {
+export const DEFAULT_CHECKLIST = {
   PF: [
     { id: "def_pf_1", label: "RG e CPF (ou CNH)", required: true },
     { id: "def_pf_2", label: "Comprovante de renda (3 últimos meses)", required: true },

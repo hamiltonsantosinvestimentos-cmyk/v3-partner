@@ -4,9 +4,8 @@ const PUBLIC_ROUTES = ["/login", "/auth/callback", "/unauthorized"];
 
 const ROLE_ROUTES: Record<string, string[]> = {
   "/usuarios": ["ADMIN"],
-  "/ma": ["ADMIN", "GESTAO"],
+  "/ma": ["ADMIN", "GESTAO", "PARTNER"],
   "/split-fiscal": ["ADMIN", "PARTNER", "GESTAO"],
-  "/mesa-credito/nivel-2": ["ADMIN", "MESA_OPERACIONAL", "GESTAO"],
   "/mesa-credito/nivel-3": ["ADMIN", "GESTAO"],
   "/mesa-operacional": ["ADMIN", "MESA_OPERACIONAL", "GESTAO"],
   "/financeiro": ["ADMIN", "FINANCEIRO"],

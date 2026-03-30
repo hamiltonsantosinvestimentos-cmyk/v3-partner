@@ -180,7 +180,7 @@ export const NAV_ITEMS = [
     href: "/ma",
     label: "M&A",
     icon: "Building2",
-    roles: ["ADMIN", "GESTAO"],
+    roles: ["ADMIN", "GESTAO", "PARTNER"],
   },
   {
     href: "/mesa-credito",
@@ -190,17 +190,17 @@ export const NAV_ITEMS = [
     children: [
       {
         href: "/mesa-credito/nivel-1",
-        label: "Nível 1 — Triagem",
-        roles: ["ADMIN", "MESA_OPERACIONAL", "GESTAO"],
+        label: "Nível 1 — Crédito Varejo",
+        roles: ["ADMIN", "MESA_OPERACIONAL", "GESTAO", "PARTNER"],
       },
       {
         href: "/mesa-credito/nivel-2",
-        label: "Nível 2 — Análise",
-        roles: ["ADMIN", "MESA_OPERACIONAL", "GESTAO"],
+        label: "Nível 2 — Crédito Estruturado",
+        roles: ["ADMIN", "MESA_OPERACIONAL", "GESTAO", "PARTNER"],
       },
       {
         href: "/mesa-credito/nivel-3",
-        label: "Nível 3 — Aprovação",
+        label: "Nível 3 — High Ticket",
         roles: ["ADMIN", "GESTAO"],
       },
     ],

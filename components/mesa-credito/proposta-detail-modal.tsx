@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { STATUS_LABELS, STATUS_COLORS, type OperationStatus } from "@/lib/constants";
+import { CHECKLISTS, DEFAULT_CHECKLIST } from "./nova-proposta-modal";
 
 // Taxa de impostos sobre comissões (ISS 2% + PIS 0,65% + COFINS 3%) — sincronizado com aba Financeiro
 const TAXA_IMPOSTOS_COMISSAO = 5.65;
@@ -61,6 +62,24 @@ interface PropostaDetailModalProps {
 }
 
 export function PropostaDetailModal({ open, onClose, proposal, onStageChange, onProposalUpdate, canChangeStage }: PropostaDetailModalProps) {
+  // ── Checklist state ───────────────────────────────────────────────────────
+  const [checkedDocs, setCheckedDocs] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    if (!proposal) return;
+    try {
+      const saved = JSON.parse(localStorage.getItem(`v3_docs_${proposal.id}`) ?? "{}");
+      setCheckedDocs(saved);
+    } catch { setCheckedDocs({}); }
+  }, [proposal?.id, open]);
+
+  function toggleDoc(docId: string) {
+    if (!proposal) return;
+    const updated = { ...checkedDocs, [docId]: !checkedDocs[docId] };
+    setCheckedDocs(updated);
+    try { localStorage.setItem(`v3_docs_${proposal.id}`, JSON.stringify(updated)); } catch {}
+  }
+
   // ── Commission state ──────────────────────────────────────────────────────
   const [valorCredito, setValorCredito] = useState(0);
   const [valorCreditoEdit, setValorCreditoEdit] = useState("");
@@ -356,27 +375,52 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
             )}
           </div>
 
-          {/* Documentos */}
-          {typeof proposal.docs_uploaded === "number" && (
-            <div className="p-3 rounded-xl border border-border bg-secondary/30">
-              <div className="flex items-center justify-between mb-2">
-                <p className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
-                  <FileText className="w-3.5 h-3.5" /> Documentos
-                </p>
-                <Badge className={proposal.docs_uploaded >= (proposal.docs_required ?? 0)
-                  ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
-                  : "bg-amber-500/20 text-amber-400 border-amber-500/30"}>
-                  {proposal.docs_uploaded}/{proposal.docs_required ?? "?"} enviados
-                </Badge>
+          {/* ── Checklist de Documentos ── */}
+          {(() => {
+            const clientType = (proposal.client_type === "PJ" ? "PJ" : "PF") as "PF" | "PJ";
+            const docs = CHECKLISTS[proposal.credit_line]?.[clientType] ?? DEFAULT_CHECKLIST[clientType];
+            const checkedCount = docs.filter((d) => checkedDocs[d.id]).length;
+            const allRequired = docs.filter((d) => d.required);
+            const requiredChecked = allRequired.filter((d) => checkedDocs[d.id]).length;
+            return (
+              <div className="p-4 rounded-xl border border-border bg-secondary/30 space-y-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
+                    <FileText className="w-3.5 h-3.5" /> Checklist de Documentos
+                  </p>
+                  <Badge className={checkedCount === docs.length
+                    ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
+                    : requiredChecked === allRequired.length
+                    ? "bg-amber-500/20 text-amber-400 border-amber-500/30"
+                    : "bg-red-500/20 text-red-400 border-red-500/30"}>
+                    {checkedCount}/{docs.length} enviados
+                  </Badge>
+                </div>
+                <div className="w-full bg-secondary rounded-full h-1.5 mb-1">
+                  <div className="bg-emerald-500 h-1.5 rounded-full transition-all"
+                    style={{ width: `${Math.min(100, (checkedCount / (docs.length || 1)) * 100)}%` }} />
+                </div>
+                <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                  {docs.map((doc) => (
+                    <label key={doc.id} className="flex items-start gap-2.5 cursor-pointer group">
+                      <input
+                        type="checkbox"
+                        checked={!!checkedDocs[doc.id]}
+                        onChange={() => toggleDoc(doc.id)}
+                        className="mt-0.5 w-3.5 h-3.5 accent-emerald-500 flex-shrink-0"
+                      />
+                      <span className={`text-xs leading-snug ${checkedDocs[doc.id] ? "line-through text-muted-foreground" : "text-foreground"}`}>
+                        {doc.label}
+                        {doc.required && <span className="text-red-400 ml-0.5">*</span>}
+                        {doc.hint && <span className="text-muted-foreground ml-1">— {doc.hint}</span>}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+                <p className="text-[10px] text-muted-foreground">* Obrigatório — marque cada documento conforme for enviando</p>
               </div>
-              <div className="w-full bg-secondary rounded-full h-1.5">
-                <div
-                  className="bg-emerald-500 h-1.5 rounded-full transition-all"
-                  style={{ width: `${Math.min(100, ((proposal.docs_uploaded ?? 0) / (proposal.docs_required || 1)) * 100)}%` }}
-                />
-              </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* Datas */}
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
