@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import {
   Headphones, Plus, ChevronRight, User, Building2,
   Banknote, Clock, CheckCircle2, AlertCircle, Link2,
@@ -140,6 +140,21 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
   const [view, setView] = useState<"kanban" | "tickets" | "pipefy">("kanban");
   const [tickets, setTickets] = useState<Ticket[]>(initialTickets);
   const [proposals, setProposals] = useState<ProposalCard[]>(initialProposals);
+
+  // Carregar propostas criadas pelo partner (salvas no localStorage)
+  useEffect(() => {
+    try {
+      const stored: ProposalCard[] = JSON.parse(localStorage.getItem("v3_demo_proposals") ?? "[]");
+      if (stored.length === 0) return;
+      setProposals((prev) => {
+        const ids = new Set(prev.map((p) => p.id));
+        const newOnes = stored
+          .filter((s) => !ids.has(s.id))
+          .map((s) => ({ ...s, stage: s.stage ?? "RECEBIDO" }));
+        return newOnes.length > 0 ? [...newOnes, ...prev] : prev;
+      });
+    } catch {}
+  }, []);
   const [novoTicket, setNovoTicket] = useState(false);
   const [detailProposal, setDetailProposal] = useState<ProposalCard | null>(null);
   const [search, setSearch] = useState("");

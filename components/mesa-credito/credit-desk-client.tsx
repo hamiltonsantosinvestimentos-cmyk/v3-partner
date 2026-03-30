@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import { Plus, Search, TrendingUp, Zap } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -48,12 +48,30 @@ const CONFIG = {
   },
 };
 
+const LS_KEY = "v3_demo_proposals";
+function loadFromStorage(): Proposal[] {
+  try { return JSON.parse(localStorage.getItem(LS_KEY) ?? "[]"); } catch { return []; }
+}
+function saveToStorage(all: Proposal[]) {
+  try { localStorage.setItem(LS_KEY, JSON.stringify(all)); } catch {}
+}
+
 export function CreditDeskClient({ proposals: initial, level, currentUser }: CreditDeskClientProps) {
   const [proposals, setProposals] = useState<Proposal[]>(initial);
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
   const [newOpen, setNewOpen] = useState(false);
   const [detailProposal, setDetailProposal] = useState<Proposal | null>(null);
+
+  useEffect(() => {
+    const stored = loadFromStorage().filter((s) => s.current_level === level);
+    if (stored.length === 0) return;
+    setProposals((prev) => {
+      const ids = new Set(prev.map((p) => p.id));
+      const newOnes = stored.filter((s) => !ids.has(s.id));
+      return newOnes.length > 0 ? [...newOnes, ...prev] : prev;
+    });
+  }, [level]);
 
   const cfg = CONFIG[level];
   const partnerName = currentUser?.full_name ?? "João Partner Silva";
@@ -71,7 +89,12 @@ export function CreditDeskClient({ proposals: initial, level, currentUser }: Cre
   const totalValue = filtered.reduce((s, p) => s + p.requested_value, 0);
 
   const handleNewProposal = useCallback((proposal: Record<string, unknown>) => {
-    setProposals((prev) => [proposal as unknown as Proposal, ...prev]);
+    const p = proposal as unknown as Proposal;
+    setProposals((prev) => {
+      const stored = loadFromStorage().filter((s) => s.id !== p.id);
+      saveToStorage([p, ...stored]);
+      return [p, ...prev];
+    });
   }, []);
 
   const handleStageChange = useCallback((proposalId: string, newStage: string) => {

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import { Home as HomeIcon, Plus, Search } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -44,6 +44,19 @@ interface CreditDeskLevel1ClientProps {
 
 const CREDIT_LINES = ["HOME EQUITY", "AVAL", "FUNDO CONSTRUÇÃO RESIDENCIAL"];
 
+const LS_KEY = "v3_demo_proposals";
+
+function loadFromStorage(): Proposal[] {
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch { return []; }
+}
+
+function saveToStorage(proposals: Proposal[]) {
+  try { localStorage.setItem(LS_KEY, JSON.stringify(proposals)); } catch {}
+}
+
 export function CreditDeskLevel1Client({ proposals: initial, currentUser }: CreditDeskLevel1ClientProps) {
   const [proposals, setProposals] = useState<Proposal[]>(initial);
   const [search, setSearch] = useState("");
@@ -51,6 +64,17 @@ export function CreditDeskLevel1Client({ proposals: initial, currentUser }: Cred
   const [filterStatus, setFilterStatus] = useState("");
   const [newOpen, setNewOpen] = useState(false);
   const [detailProposal, setDetailProposal] = useState<Proposal | null>(null);
+
+  // Merge proposals from localStorage (created by partner in other sessions/pages)
+  useEffect(() => {
+    const stored = loadFromStorage().filter((s) => s.current_level === "NIVEL_1");
+    if (stored.length === 0) return;
+    setProposals((prev) => {
+      const existingIds = new Set(prev.map((p) => p.id));
+      const newOnes = stored.filter((s) => !existingIds.has(s.id));
+      return newOnes.length > 0 ? [...newOnes, ...prev] : prev;
+    });
+  }, []);
 
   const partnerName = currentUser?.full_name ?? "João Partner Silva";
   const partnerId = currentUser?.id ?? "demo-partner-001";
@@ -70,7 +94,14 @@ export function CreditDeskLevel1Client({ proposals: initial, currentUser }: Cred
   const totalValue = filtered.reduce((sum, p) => sum + p.requested_value, 0);
 
   const handleNewProposal = useCallback((proposal: Record<string, unknown>) => {
-    setProposals((prev) => [proposal as unknown as Proposal, ...prev]);
+    const p = proposal as unknown as Proposal;
+    setProposals((prev) => {
+      const updated = [p, ...prev];
+      // Persist to localStorage so Mesa de Crédito and Mesa Operacional pick it up
+      const stored = loadFromStorage().filter((s) => s.id !== p.id);
+      saveToStorage([p, ...stored]);
+      return updated;
+    });
   }, []);
 
   const handleStageChange = useCallback((proposalId: string, newStage: string) => {
