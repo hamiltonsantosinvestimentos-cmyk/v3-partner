@@ -500,6 +500,7 @@ export function CRMClient({ userRole, userName, userId }: { userRole: string; us
   const [selectedLead, setSelectedLead] = useState<CRMLead | null>(null);
   const [showNewLead, setShowNewLead] = useState(false);
   const [showConvert, setShowConvert] = useState<CRMLead | null>(null);
+  const [mesaSuccess, setMesaSuccess] = useState<string | null>(null);
   const [filterPartner, setFilterPartner] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterSource, setFilterSource] = useState("all");
@@ -588,6 +589,45 @@ export function CRMClient({ userRole, userName, userId }: { userRole: string; us
     }
     setShowConvert(null);
     setSelectedConvert("");
+  }
+
+  function handleEnviarMesa(lead: CRMLead) {
+    const code = `CRED-26-${String(Date.now()).slice(-6)}`;
+    const creditLine =
+      lead.creditLine ||
+      (lead.productInterest === "credito_estruturado" ? "AVAL" :
+       lead.productInterest === "high_ticket" ? "FUNDO CONSTRUÇÃO RESIDENCIAL" :
+       "HOME EQUITY");
+    const proposal = {
+      id: `prop-crm-${lead.id}-${Date.now()}`,
+      code,
+      title: `${creditLine} - ${lead.name}`,
+      client_name: lead.name,
+      client_type: lead.personType,
+      cpf_cnpj: lead.document,
+      email: lead.email,
+      telefone: lead.phone,
+      credit_line: creditLine,
+      requested_value: lead.annualRevenue > 0 ? Math.round(lead.annualRevenue * 0.3) : 100000,
+      approved_value: null,
+      current_level: "NIVEL_1",
+      status: "PENDING",
+      stage: "RECEBIDO",
+      partner_id: lead.partnerId,
+      partner_name: lead.partnerName,
+      docs_uploaded: 0,
+      docs_required: 5,
+      created_at: new Date().toISOString(),
+    };
+    try {
+      const existing: { id: string; title: string }[] = JSON.parse(localStorage.getItem("v3_demo_proposals") ?? "[]");
+      const alreadySent = existing.some((p) => p.title === proposal.title);
+      if (!alreadySent) {
+        localStorage.setItem("v3_demo_proposals", JSON.stringify([proposal, ...existing]));
+      }
+    } catch {}
+    setMesaSuccess(`Proposta ${code} enviada para a Mesa de Crédito com sucesso!`);
+    setTimeout(() => setMesaSuccess(null), 5000);
   }
 
   function handleNewLeadSubmit() {
@@ -726,6 +766,26 @@ export function CRMClient({ userRole, userName, userId }: { userRole: string; us
           ))}
         </div>
       </div>
+
+      {/* Success toast */}
+      {mesaSuccess && (
+        <div style={{
+          position: "fixed", bottom: 24, right: 24, zIndex: 9999,
+          background: "#0F2A1A", border: "1px solid #10B981", borderRadius: 10,
+          padding: "14px 20px", color: "#10B981", fontSize: 14, fontWeight: 600,
+          boxShadow: "0 4px 24px rgba(0,0,0,0.4)", maxWidth: 380,
+          display: "flex", alignItems: "center", gap: 10,
+        }}>
+          <span style={{ fontSize: 18 }}>✓</span>
+          <span>{mesaSuccess}</span>
+          <button
+            onClick={() => setMesaSuccess(null)}
+            style={{ marginLeft: "auto", background: "none", border: "none", color: "#10B981", cursor: "pointer", fontSize: 16 }}
+          >
+            ×
+          </button>
+        </div>
+      )}
 
       {/* Content */}
       <div style={{ padding: "24px" }}>
@@ -1069,6 +1129,29 @@ export function CRMClient({ userRole, userName, userId }: { userRole: string; us
                           >
                             Ver
                           </button>
+                          {(lead.status === "proposta" || lead.status === "negociacao") && (
+                            <button
+                              onClick={() => handleEnviarMesa(lead)}
+                              style={{
+                                background: "rgba(16,185,129,0.15)",
+                                border: "1px solid rgba(16,185,129,0.4)",
+                                borderRadius: 6,
+                                padding: "4px 10px",
+                                color: "#10B981",
+                                cursor: "pointer",
+                                fontSize: 12,
+                                fontWeight: 600,
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 4,
+                                whiteSpace: "nowrap",
+                              }}
+                              title="Enviar para Mesa de Crédito"
+                            >
+                              <CreditCard className="w-3 h-3" />
+                              Mesa
+                            </button>
+                          )}
                           {lead.status !== "ganho" && lead.status !== "perdido" && (
                             <button
                               onClick={() => { setShowConvert(lead); setSelectedConvert(""); }}
@@ -1645,6 +1728,18 @@ export function CRMClient({ userRole, userName, userId }: { userRole: string; us
                   >
                     <Trophy className="w-4 h-4 mr-2" />
                     Simulador Consórcio
+                  </Button>
+                )}
+                {(selectedLead.status === "proposta" || selectedLead.status === "negociacao") && (
+                  <Button
+                    onClick={() => {
+                      handleEnviarMesa(selectedLead);
+                      setSelectedLead(null);
+                    }}
+                    style={{ background: "#10B981", borderColor: "#10B981", color: "#fff" }}
+                  >
+                    <CreditCard className="w-4 h-4 mr-2" />
+                    Enviar para Mesa de Crédito
                   </Button>
                 )}
                 {selectedLead.status !== "ganho" && selectedLead.status !== "perdido" && (
