@@ -578,15 +578,58 @@ export function CRMClient({ userRole, userName, userId }: { userRole: string; us
   function handleConvert() {
     if (!showConvert || !selectedConvert) return;
     const now = todayISO();
-    const updated = leads.map((l) =>
-      l.id === showConvert.id
-        ? { ...l, convertedTo: selectedConvert as CRMLead["convertedTo"], convertedAt: now, status: "ganho" as const }
-        : l
-    );
+    const convertedLead = { ...showConvert, convertedTo: selectedConvert as CRMLead["convertedTo"], convertedAt: now, status: "ganho" as const };
+    const updated = leads.map((l) => l.id === showConvert.id ? convertedLead : l);
     setLeads(updated);
     if (selectedLead?.id === showConvert.id) {
-      setSelectedLead({ ...selectedLead, convertedTo: selectedConvert as CRMLead["convertedTo"], convertedAt: now, status: "ganho" });
+      setSelectedLead(convertedLead);
     }
+
+    // ── Envio automático para Mesa de Crédito ──────────────────────────────
+    if (selectedConvert === "credito_varejo" || selectedConvert === "credito_estruturado" || selectedConvert === "high_ticket") {
+      const levelMap: Record<string, string> = {
+        credito_varejo: "NIVEL_1",
+        credito_estruturado: "NIVEL_2",
+        high_ticket: "NIVEL_3",
+      };
+      const lineMap: Record<string, string> = {
+        credito_varejo: convertedLead.creditLine || "HOME EQUITY",
+        credito_estruturado: convertedLead.creditLine || "AVAL",
+        high_ticket: convertedLead.creditLine || "CRI",
+      };
+      const code = `CRED-26-${String(Date.now()).slice(-6)}`;
+      const creditLine = lineMap[selectedConvert];
+      const proposal = {
+        id: `prop-crm-${showConvert.id}-${Date.now()}`,
+        code,
+        title: `${creditLine} — ${showConvert.name}`,
+        client_name: showConvert.name,
+        client_type: showConvert.personType,
+        cpf_cnpj: showConvert.document,
+        email: showConvert.email,
+        telefone: showConvert.phone,
+        credit_line: creditLine,
+        requested_value: showConvert.annualRevenue > 0 ? Math.round(showConvert.annualRevenue * 0.3) : 100000,
+        approved_value: null,
+        current_level: levelMap[selectedConvert],
+        status: "PENDING",
+        stage: "RECEBIDO",
+        partner_id: showConvert.partnerId,
+        partner_name: showConvert.partnerName,
+        docs_uploaded: 0,
+        docs_required: 9,
+        created_at: new Date().toISOString(),
+      };
+      try {
+        const existing: { id: string }[] = JSON.parse(localStorage.getItem("v3_demo_proposals") ?? "[]");
+        if (!existing.some((p) => p.id === proposal.id)) {
+          localStorage.setItem("v3_demo_proposals", JSON.stringify([proposal, ...existing]));
+        }
+      } catch {}
+      setMesaSuccess(`✅ Lead encaminhado! Proposta ${code} criada na Mesa de Crédito (${levelMap[selectedConvert].replace("_", " ")}).`);
+      setTimeout(() => setMesaSuccess(null), 6000);
+    }
+
     setShowConvert(null);
     setSelectedConvert("");
   }
