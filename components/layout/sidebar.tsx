@@ -112,7 +112,7 @@ const NAV_ITEMS: NavItem[] = [
     href: "/ma",
     label: "M&A",
     icon: "Building2",
-    roles: ["ADMIN", "GESTAO"],
+    roles: ["ADMIN", "GESTAO", "PARTNER"],
   },
   {
     href: "/mesa-credito",
@@ -128,7 +128,7 @@ const NAV_ITEMS: NavItem[] = [
       {
         href: "/mesa-credito/nivel-2",
         label: "N2 — Crédito Estruturado",
-        roles: ["ADMIN", "MESA_OPERACIONAL", "GESTAO"],
+        roles: ["ADMIN", "MESA_OPERACIONAL", "GESTAO", "PARTNER"],
       },
       {
         href: "/mesa-credito/nivel-3",
