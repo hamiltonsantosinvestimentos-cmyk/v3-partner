@@ -44,6 +44,17 @@ export const DEMO_USERS = [
     is_active: true,
     created_at: "2026-01-20T00:00:00Z",
   },
+  {
+    id: "demo-financeiro-001",
+    email: "financeiro@v3partner.com",
+    password: "financeiro123",
+    full_name: "Ana Financeiro Lima",
+    role: "FINANCEIRO" as const,
+    avatar_url: null,
+    phone: "(11) 95555-0001",
+    is_active: true,
+    created_at: "2026-01-25T00:00:00Z",
+  },
 ];
 
 export const DEMO_SPLITS = [

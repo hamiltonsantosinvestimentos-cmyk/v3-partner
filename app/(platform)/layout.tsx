@@ -20,7 +20,7 @@ export default async function PlatformLayout({
 
     let session: {
       id: string; email: string; full_name: string;
-      role: "ADMIN" | "PARTNER" | "MESA_OPERACIONAL" | "GESTAO";
+      role: "ADMIN" | "PARTNER" | "MESA_OPERACIONAL" | "GESTAO" | "FINANCEIRO";
     };
 
     try {
@@ -59,7 +59,7 @@ export default async function PlatformLayout({
 
   const profile = profileData as {
     id: string; email: string; full_name: string | null;
-    role: "ADMIN" | "PARTNER" | "MESA_OPERACIONAL" | "GESTAO";
+    role: "ADMIN" | "PARTNER" | "MESA_OPERACIONAL" | "GESTAO" | "FINANCEIRO";
     avatar_url: string | null;
   };
 

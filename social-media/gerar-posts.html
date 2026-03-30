@@ -1,0 +1,1167 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<title>V3 Partner — Posts Premium</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#02070f;font-family:Arial,sans-serif;color:#E8EDF5;padding:30px 20px}
+  h1{text-align:center;font-size:1.8rem;font-weight:900;
+    background:linear-gradient(90deg,#C4922E,#F5D99A,#C4922E);
+    -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+    background-clip:text;margin-bottom:4px}
+  .sub{text-align:center;color:#5A7490;font-size:.85rem;margin-bottom:28px}
+  #btn-all{display:block;margin:0 auto 28px;padding:13px 40px;border:none;border-radius:12px;
+    background:linear-gradient(120deg,#C4922E,#E5B96A);color:#050C18;
+    font-weight:900;font-size:1rem;cursor:pointer;letter-spacing:.5px;
+    box-shadow:0 4px 24px rgba(196,146,46,.35)}
+  #btn-all:hover{transform:translateY(-2px);box-shadow:0 8px 32px rgba(196,146,46,.5)}
+  #status{text-align:center;color:#5A7490;font-size:.82rem;margin-bottom:16px;min-height:18px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:28px}
+  .card{background:#060e1a;border:1px solid #0f2035;border-radius:14px;
+    padding:16px;display:flex;flex-direction:column;gap:10px;
+    box-shadow:0 4px 32px rgba(0,0,0,.5)}
+  .card h3{font-size:.72rem;color:#C4922E;text-transform:uppercase;letter-spacing:.8px;font-weight:700}
+  canvas{width:100%;border-radius:10px;display:block;
+    box-shadow:0 8px 40px rgba(0,0,0,.6)}
+  .dl{width:100%;padding:10px;border:none;border-radius:9px;cursor:pointer;
+    background:linear-gradient(120deg,#C4922E,#E5B96A);
+    color:#050C18;font-weight:800;font-size:.82rem;letter-spacing:.4px;
+    transition:.2s;box-shadow:0 2px 12px rgba(196,146,46,.25)}
+  .dl:hover{transform:translateY(-1px);box-shadow:0 4px 20px rgba(196,146,46,.4)}
+</style>
+</head>
+<body>
+<h1>V3 PARTNER — POSTS PREMIUM</h1>
+<p class="sub">21 posts 1080×1080px · Design premium · Instagram &amp; LinkedIn</p>
+<div id="status"></div>
+<button id="btn-all" onclick="baixarTodos()">⬇️ BAIXAR TODOS OS 21 POSTS</button>
+<div class="grid" id="grid"></div>
+
+<script>
+const LOGO=new Image(); LOGO.src='../public/logo.jpg';
+const W=1080,H=1080;
+
+// ─── PALETTE ────────────────────────────────────────────────
+const C={
+  navy:'#050C18',navy2:'#091221',navy3:'#0F1E35',
+  gold:'#C4922E',goldL:'#E5B96A',goldP:'#F5D99A',
+  blue:'#1A4FC4',blueL:'#2E67E8',
+  green:'#10B981',red:'#EF4444',
+  fg:'#E8EDF5',muted:'#5A7490'
+};
+
+function hex(h,a=1){
+  const r=parseInt(h.slice(1,3),16),g=parseInt(h.slice(3,5),16),b=parseInt(h.slice(5,7),16);
+  return `rgba(${r},${g},${b},${a})`;
+}
+
+// ─── CANVAS HELPERS ──────────────────────────────────────────
+function mk(){const c=document.createElement('canvas');c.width=W;c.height=H;return c;}
+
+function rrect(ctx,x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);ctx.lineTo(x+w-r,y);ctx.quadraticCurveTo(x+w,y,x+w,y+r);
+  ctx.lineTo(x+w,y+h-r);ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+  ctx.lineTo(x+r,y+h);ctx.quadraticCurveTo(x,y+h,x,y+h-r);
+  ctx.lineTo(x,y+r);ctx.quadraticCurveTo(x,y,x+r,y);
+  ctx.closePath();
+}
+
+function lingrad(ctx,x1,y1,x2,y2,stops){
+  const g=ctx.createLinearGradient(x1,y1,x2,y2);
+  stops.forEach(([p,c])=>g.addColorStop(p,c));
+  return g;
+}
+function radgrad(ctx,cx,cy,r0,r1,stops){
+  const g=ctx.createRadialGradient(cx,cy,r0,cx,cy,r1);
+  stops.forEach(([p,c])=>g.addColorStop(p,c));
+  return g;
+}
+
+// ─── BACKGROUND SYSTEMS ─────────────────────────────────────
+
+// Dark navy gradient bg
+function bgDark(ctx,c1=C.navy,c2=C.navy2){
+  const g=lingrad(ctx,0,0,W,H,[[0,c1],[1,c2]]);
+  ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+}
+
+// Dot matrix pattern
+function dots(ctx,color=C.gold,alpha=.04,size=3,gap=48){
+  ctx.fillStyle=hex(color,alpha);
+  for(let x=gap;x<W;x+=gap)for(let y=gap;y<H;y+=gap){
+    ctx.beginPath();ctx.arc(x,y,size,0,Math.PI*2);ctx.fill();
+  }
+}
+
+// Diagonal lines pattern
+function diagLines(ctx,color=C.gold,alpha=.03){
+  ctx.strokeStyle=hex(color,alpha);ctx.lineWidth=1;
+  for(let i=-H;i<W+H;i+=60){
+    ctx.beginPath();ctx.moveTo(i,0);ctx.lineTo(i+H,H);ctx.stroke();
+  }
+}
+
+// Gold top accent line (thick, glowing)
+function accentTop(ctx){
+  const g=lingrad(ctx,0,0,W,0,[[0,'transparent'],[.25,C.gold],[.5,C.goldP],[.75,C.gold],[1,'transparent']]);
+  ctx.fillStyle=g;ctx.fillRect(0,0,W,4);
+  ctx.fillStyle=hex(C.gold,.15);ctx.fillRect(0,4,W,16);
+}
+
+// Large glowing orb
+function orb(ctx,cx,cy,r,color=C.gold,alpha=.18){
+  const g=radgrad(ctx,cx,cy,0,r,[[0,hex(color,alpha)],[.5,hex(color,alpha*.4)],[1,'transparent']]);
+  ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+}
+
+// Decorative ring
+function ring(ctx,cx,cy,r,color=C.gold,alpha=.15,lw=1.5){
+  ctx.strokeStyle=hex(color,alpha);ctx.lineWidth=lw;
+  ctx.beginPath();ctx.arc(cx,cy,r,0,Math.PI*2);ctx.stroke();
+}
+
+// Diagonal color block (bottom right corner)
+function diagBlock(ctx,color=C.blueL,alpha=.08){
+  ctx.fillStyle=hex(color,alpha);
+  ctx.beginPath();ctx.moveTo(W*.55,H);ctx.lineTo(W,H*.35);ctx.lineTo(W,H);ctx.closePath();ctx.fill();
+}
+
+// Bold left accent bar
+function leftBar(ctx,color=C.gold,h=H*.5,y=H*.25){
+  const g=lingrad(ctx,0,y,0,y+h,[[0,'transparent'],[.3,hex(color,.8)],[.7,hex(color,.8)],[1,'transparent']]);
+  ctx.fillStyle=g;ctx.fillRect(0,y,5,h);
+}
+
+// ─── LOGO ────────────────────────────────────────────────────
+function drawLogo(ctx,x=54,y=50,size=54){
+  // Logo image with rounded clip
+  ctx.save();
+  rrect(ctx,x,y,size,size,12);
+  ctx.clip();
+  if(LOGO.complete&&LOGO.naturalWidth>0) ctx.drawImage(LOGO,x,y,size,size);
+  else{ctx.fillStyle=C.navy3;ctx.fill();}
+  ctx.restore();
+  // Glow border
+  ctx.strokeStyle=hex(C.gold,.5);ctx.lineWidth=2;
+  rrect(ctx,x,y,size,size,12);ctx.stroke();
+  // Text
+  const gx=lingrad(ctx,x+size+12,0,x+size+200,0,[[0,C.gold],[1,C.goldP]]);
+  ctx.fillStyle=gx;ctx.font='bold 30px Arial';
+  ctx.fillText('V3 PARTNER',x+size+14,y+size/2+11);
+}
+
+// ─── TYPOGRAPHY ──────────────────────────────────────────────
+
+// Big gradient headline (left aligned)
+function bigHead(ctx,lines,x,y,size=80,lh=96){
+  lines.forEach((l,i)=>{
+    const txt=typeof l==='string'?l:l.t;
+    const style=typeof l==='string'?'white':l.s;
+    ctx.font=`900 ${size}px Arial`;
+    if(style==='gold'){
+      ctx.fillStyle=lingrad(ctx,x,0,x+800,0,[[0,C.gold],[.5,C.goldP],[1,C.goldL]]);
+    } else if(style==='blue'){
+      ctx.fillStyle=lingrad(ctx,x,0,x+700,0,[[0,C.blueL],[1,C.gold]]);
+    } else {
+      ctx.fillStyle=C.fg;
+    }
+    // Text glow
+    ctx.shadowColor=style==='gold'?hex(C.gold,.4):style==='blue'?hex(C.blueL,.3):'transparent';
+    ctx.shadowBlur=style!=='white'?20:0;
+    ctx.fillText(txt,x,y+i*lh);
+    ctx.shadowBlur=0;ctx.shadowColor='transparent';
+  });
+}
+
+// Centered headline
+function centHead(ctx,lines,y,size=72,lh=88){
+  ctx.textAlign='center';
+  bigHead(ctx,lines,W/2,y,size,lh);
+  ctx.textAlign='left';
+}
+
+// Eyebrow label
+function eyebrow(ctx,text,x,y,color=C.gold){
+  ctx.font='bold 24px Arial';ctx.fillStyle=color;
+  ctx.fillText(text.toUpperCase(),x,y);
+}
+
+// Body text
+function bodyText(ctx,text,x,y,maxW=920,lh=42,size=28){
+  ctx.font=`${size}px Arial`;ctx.fillStyle=C.muted;
+  const words=text.split(' ');let line='',cy=y;
+  words.forEach(w=>{
+    const t=line?line+' '+w:w;
+    if(ctx.measureText(t).width>maxW){ctx.fillText(line,x,cy);line=w;cy+=lh;}
+    else line=t;
+  });
+  if(line)ctx.fillText(line,x,cy);
+}
+
+// ─── UI COMPONENTS ───────────────────────────────────────────
+
+// Tag badge
+function badge(ctx,text,x,y,bg2,stroke2,text2=C.fg,r=22){
+  ctx.font='bold 22px Arial';
+  const tw=ctx.measureText(text).width;
+  const pw=tw+40,ph=46;
+  ctx.fillStyle=bg2;rrect(ctx,x,y-34,pw,ph,r);ctx.fill();
+  ctx.strokeStyle=stroke2;ctx.lineWidth=2;rrect(ctx,x,y-34,pw,ph,r);ctx.stroke();
+  ctx.fillStyle=text2;ctx.fillText(text,x+20,y);
+}
+
+function goldBadge(ctx,t,x,y){badge(ctx,t,x,y,hex(C.gold,.15),hex(C.gold,.5),C.goldL);}
+function blueBadge(ctx,t,x,y){badge(ctx,t,x,y,hex(C.blueL,.15),hex(C.blueL,.5),C.blueL);}
+function greenBadge(ctx,t,x,y){badge(ctx,t,x,y,hex(C.green,.15),hex(C.green,.5),C.green);}
+
+// Gold CTA button
+function ctaBtn(ctx,text,x,y){
+  ctx.font='bold 30px Arial';
+  const tw=ctx.measureText(text).width;
+  const pw=tw+70,ph=68,r=18;
+  const g=lingrad(ctx,x,y-48,x+pw,y,[[0,C.gold],[1,C.goldL]]);
+  ctx.fillStyle=g;rrect(ctx,x,y-50,pw,ph,r);ctx.fill();
+  ctx.shadowColor=hex(C.gold,.4);ctx.shadowBlur=20;
+  ctx.fillStyle=C.navy;ctx.fillText(text,x+35,y-6);
+  ctx.shadowBlur=0;ctx.shadowColor='transparent';
+}
+
+// Gold divider
+function divider(ctx,x,y,w=960){
+  const g=lingrad(ctx,x,y,x+w,y,[[0,'transparent'],[.4,hex(C.gold,.4)],[.6,hex(C.gold,.4)],[1,'transparent']]);
+  ctx.strokeStyle=g;ctx.lineWidth=2;
+  ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+w,y);ctx.stroke();
+}
+
+// Bullet item
+function bItem(ctx,text,x,y,col=C.gold,size=28){
+  ctx.font=`bold ${size}px Arial`;ctx.fillStyle=col;
+  ctx.fillText('▸',x,y);
+  ctx.font=`${size}px Arial`;ctx.fillStyle='#b0c8e0';
+  ctx.fillText(text,x+36,y);
+}
+
+// Check item
+function chk(ctx,text,x,y,ok=true,size=28){
+  const col=ok?C.green:C.red;
+  ctx.font=`bold ${size}px Arial`;ctx.fillStyle=col;
+  ctx.fillText(ok?'✓':'✗',x,y);
+  ctx.font=`${size}px Arial`;ctx.fillStyle=ok?'#90c8a8':'#c09898';
+  ctx.fillText(text,x+44,y);
+}
+
+// Stat block
+function statBlock(ctx,num,label,x,y,w=220,col=C.gold){
+  // Card
+  ctx.fillStyle=hex(C.navy3,.9);
+  rrect(ctx,x,y,w,130,16);ctx.fill();
+  ctx.strokeStyle=hex(col,.3);ctx.lineWidth=2;
+  rrect(ctx,x,y,w,130,16);ctx.stroke();
+  // Top line
+  const g=lingrad(ctx,x,y,x+w,y,[[0,'transparent'],[.5,hex(col,.8)],[1,'transparent']]);
+  ctx.strokeStyle=g;ctx.lineWidth=3;
+  ctx.beginPath();ctx.moveTo(x+16,y);ctx.lineTo(x+w-16,y);ctx.stroke();
+  // Number
+  ctx.font='bold 56px Arial';ctx.fillStyle=col;
+  ctx.textAlign='center';
+  ctx.shadowColor=hex(col,.5);ctx.shadowBlur=18;
+  ctx.fillText(num,x+w/2,y+80);
+  ctx.shadowBlur=0;
+  // Label
+  ctx.font='20px Arial';ctx.fillStyle=C.muted;
+  ctx.fillText(label,x+w/2,y+110);
+  ctx.textAlign='left';
+}
+
+// Level row
+function levelRow(ctx,lv,title,sub,x,y,col=C.green){
+  ctx.fillStyle=hex(C.navy3,.8);
+  rrect(ctx,x,y,960,88,14);ctx.fill();
+  ctx.strokeStyle=hex(col,.3);ctx.lineWidth=2;
+  rrect(ctx,x,y,960,88,14);ctx.stroke();
+  // Level pill
+  ctx.fillStyle=hex(col,.2);
+  rrect(ctx,x+14,y+16,66,56,12);ctx.fill();
+  ctx.strokeStyle=hex(col,.5);rrect(ctx,x+14,y+16,66,56,12);ctx.stroke();
+  ctx.font='bold 26px Arial';ctx.fillStyle=col;ctx.textAlign='center';
+  ctx.fillText(lv,x+14+33,y+52);ctx.textAlign='left';
+  ctx.font='bold 28px Arial';ctx.fillStyle=C.fg;ctx.fillText(title,x+96,y+40);
+  ctx.font='22px Arial';ctx.fillStyle=C.muted;ctx.fillText(sub,x+96,y+68);
+}
+
+// Module pill
+function modPill(ctx,text,x,y,col=C.gold){
+  ctx.font='23px Arial';
+  const tw=ctx.measureText(text).width;
+  ctx.fillStyle=hex(C.navy3,.9);rrect(ctx,x,y-26,tw+52,48,24);ctx.fill();
+  ctx.strokeStyle=hex(col,.35);ctx.lineWidth=1.5;rrect(ctx,x,y-26,tw+52,48,24);ctx.stroke();
+  ctx.fillStyle=col;ctx.beginPath();ctx.arc(x+22,y-2,8,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='#9ab0c8';ctx.fillText(text,x+38,y);
+}
+
+// Progress bar
+function progressBar(ctx,label,pct,x,y,w=900,col=C.gold){
+  ctx.font='bold 24px Arial';ctx.fillStyle='#9ab0c8';ctx.fillText(label,x,y-8);
+  const pctTxt=pct+'%';ctx.textAlign='right';ctx.fillStyle=col;ctx.fillText(pctTxt,x+w,y-8);
+  ctx.textAlign='left';
+  ctx.fillStyle=hex(C.navy3,1);rrect(ctx,x,y,w,18,9);ctx.fill();
+  const g=lingrad(ctx,x,y,x+w*pct/100,y,[[0,col],[1,C.goldL]]);
+  ctx.fillStyle=g;rrect(ctx,x,y,w*pct/100,18,9);ctx.fill();
+  ctx.shadowColor=hex(col,.5);ctx.shadowBlur=8;
+  ctx.fillStyle=g;rrect(ctx,x,y,w*pct/100,18,9);ctx.fill();
+  ctx.shadowBlur=0;
+}
+
+// ─── GLOW TEXT HELPER ────────────────────────────────────────
+function glowText(ctx,text,x,y,color,size,blur=30){
+  ctx.font=`900 ${size}px Arial`;
+  ctx.shadowColor=color;ctx.shadowBlur=blur;
+  ctx.fillStyle=color;ctx.fillText(text,x,y);
+  ctx.fillText(text,x,y);
+  ctx.shadowBlur=0;ctx.shadowColor='transparent';
+}
+
+// ─── GEOMETRIC DECO ──────────────────────────────────────────
+function hexShape(ctx,cx,cy,r,color,alpha=.06,fill=true){
+  ctx.beginPath();
+  for(let i=0;i<6;i++){
+    const a=Math.PI/3*i-Math.PI/6;
+    i===0?ctx.moveTo(cx+r*Math.cos(a),cy+r*Math.sin(a)):ctx.lineTo(cx+r*Math.cos(a),cy+r*Math.sin(a));
+  }
+  ctx.closePath();
+  if(fill){ctx.fillStyle=hex(color,alpha);ctx.fill();}
+  else{ctx.strokeStyle=hex(color,alpha);ctx.lineWidth=1.5;ctx.stroke();}
+}
+
+function dataBar(ctx,num,label,x,y,w=880,col=C.gold){
+  ctx.fillStyle=hex(col,.08);rrect(ctx,x,y,w,100,14);ctx.fill();
+  ctx.strokeStyle=hex(col,.25);ctx.lineWidth=2;rrect(ctx,x,y,w,100,14);ctx.stroke();
+  ctx.font='bold 58px Arial';ctx.fillStyle=col;
+  ctx.shadowColor=hex(col,.5);ctx.shadowBlur=20;
+  ctx.fillText(num,x+28,y+72);ctx.shadowBlur=0;
+  ctx.font='27px Arial';ctx.fillStyle='#9ab0c8';ctx.fillText(label,x+160,y+64);
+}
+
+// ─────────────────────────────────────────────────────────────
+//  POSTS
+// ─────────────────────────────────────────────────────────────
+const POSTS=[
+
+/* ── 01 INSTITUCIONAL ─────────────────────────────────────── */
+{name:'01-institucional',title:'Post 1 — Institucional (Instagram)',
+draw(ctx){
+  bgDark(ctx,C.navy,'#080f1e');
+  orb(ctx,W/2,-60,700,C.gold,.22);
+  orb(ctx,W,.9*H,500,C.blueL,.12);
+  hexShape(ctx,860,160,200,C.gold,.05,false);
+  hexShape(ctx,860,160,150,C.gold,.04,false);
+  ring(ctx,220,880,300,C.gold,.08);
+  diagLines(ctx,C.gold,.025);
+  accentTop(ctx);
+  leftBar(ctx,C.gold);
+  drawLogo(ctx,54,50);
+  goldBadge(ctx,'PLATAFORMA FINANCEIRA',W-500,102);
+
+  eyebrow(ctx,'A revolução chegou',60,280);
+  bigHead(ctx,[
+    {t:'A plataforma',s:'white'},
+    {t:'que o mercado',s:'white'},
+    {t:'financeiro',s:'gold'},
+    {t:'esperava.',s:'gold'},
+  ],60,370,78,94);
+
+  divider(ctx,60,745);
+
+  // Feature pills row
+  const feats=['CRM','Split Fiscal','Mesa Crédito','M&A','Consórcio','IA'];
+  feats.forEach((f,i)=>{
+    const x=60+(i%3)*326, y=810+(Math.floor(i/3)*68)+28;
+    modPill(ctx,f,x,y,i%2===0?C.gold:C.blueL);
+  });
+
+  ctaBtn(ctx,'Conheça a V3 ▸',60,1010);
+}},
+
+/* ── 02 SPLIT FISCAL ──────────────────────────────────────── */
+{name:'02-split-fiscal',title:'Post 2 — Split Fiscal',
+draw(ctx){
+  bgDark(ctx,'#030d08','#050f12');
+  orb(ctx,W*.8,H*.2,600,C.green,.16);
+  orb(ctx,0,H,400,C.gold,.1);
+  dots(ctx,C.green,.05);
+  accentTop(ctx);
+  leftBar(ctx,C.green);
+  drawLogo(ctx,54,50);
+  greenBadge(ctx,'SPLIT FISCAL ⚡',W-380,102);
+
+  eyebrow(ctx,'Otimização Tributária',60,280,C.green);
+  bigHead(ctx,[
+    {t:'Seus clientes'},
+    {t:'pagam impostos'},
+    {t:'a mais.',s:'gold'},
+    {t:'A gente resolve.',s:'white'},
+  ],60,370,72,88);
+
+  divider(ctx,60,730);
+  bItem(ctx,'Simulador de proposta em tempo real',60,800,C.green,30);
+  bItem(ctx,'Mix de pagamentos: PIX, débito, crédito',60,856,C.green,30);
+  bItem(ctx,'Comparativo: Monetto vs. concorrente',60,912,C.green,30);
+  bItem(ctx,'Proposta em PDF gerada automaticamente',60,968,C.green,30);
+  ctaBtn(ctx,'Simule agora ▸',60,1042);
+}},
+
+/* ── 03 IA ASSISTANT ──────────────────────────────────────── */
+{name:'03-ia-assistant',title:'Post 3 — IA Assistant',
+draw(ctx){
+  bgDark(ctx,C.navy,'#060c1a');
+  orb(ctx,W/2,H/2,600,C.blueL,.18);
+  orb(ctx,W/2,H/2,300,C.gold,.1);
+  ring(ctx,W/2,400,320,C.blueL,.2,2);
+  ring(ctx,W/2,400,240,C.gold,.15,1.5);
+  ring(ctx,W/2,400,160,C.blueL,.1,1);
+  hexShape(ctx,W/2,400,100,C.gold,.08,true);
+  accentTop(ctx);
+  drawLogo(ctx,54,50);
+  blueBadge(ctx,'IA INTEGRADA 🤖',W-380,102);
+
+  // Big robot icon
+  ctx.font='90px Arial';ctx.textAlign='center';
+  ctx.shadowColor=hex(C.blueL,.6);ctx.shadowBlur=40;
+  ctx.fillText('🤖',W/2,450);ctx.shadowBlur=0;ctx.textAlign='left';
+
+  eyebrow(ctx,'Inteligência Artificial',60,700,C.blueL);
+  bigHead(ctx,[
+    {t:'IA que trabalha',s:'blue'},
+    {t:'por você.',s:'blue'},
+    {t:'24 horas por dia.',s:'gold'},
+  ],60,790,68,84);
+}},
+
+/* ── 04 M&A ───────────────────────────────────────────────── */
+{name:'04-ma',title:'Post 4 — M&A',
+draw(ctx){
+  bgDark(ctx,C.navy,'#07101e');
+  orb(ctx,W,0,600,C.gold,.15);
+  orb(ctx,0,H,500,C.blueL,.12);
+  diagBlock(ctx,C.blueL,.1);
+  hexShape(ctx,800,800,250,C.gold,.04,false);
+  hexShape(ctx,200,200,180,C.blueL,.04,false);
+  dots(ctx,C.gold,.04);
+  accentTop(ctx);
+  leftBar(ctx,C.gold);
+  drawLogo(ctx,54,50);
+  goldBadge(ctx,'FUSÕES & AQUISIÇÕES',W-450,102);
+
+  eyebrow(ctx,'Mesa M&A',60,280);
+  bigHead(ctx,[
+    {t:'As maiores'},
+    {t:'operações',s:'gold'},
+    {t:'do mercado.'},
+    {t:'Na sua mesa.',s:'gold'},
+  ],60,370,76,92);
+
+  divider(ctx,60,740);
+  statBlock(ctx,'M&A','Módulo Completo',60,790,230,C.gold);
+  statBlock(ctx,'360°','Visão Total',330,790,230,C.blueL);
+  statBlock(ctx,'N3','High Ticket',600,790,230,C.goldL);
+  statBlock(ctx,'100%','Integrado',870,790,180,C.green);
+}},
+
+/* ── 05 MESA DE CRÉDITO ───────────────────────────────────── */
+{name:'05-mesa-credito',title:'Post 5 — Mesa de Crédito',
+draw(ctx){
+  bgDark(ctx,C.navy,C.navy2);
+  orb(ctx,W/2,0,500,C.gold,.12);
+  ring(ctx,W*.8,H*.6,300,C.gold,.08);
+  dots(ctx,C.gold,.04);
+  accentTop(ctx);
+  leftBar(ctx,C.gold);
+  drawLogo(ctx,54,50);
+  goldBadge(ctx,'MESA DE CRÉDITO',W-390,102);
+
+  eyebrow(ctx,'3 Níveis. 1 Plataforma.',60,280);
+  bigHead(ctx,[
+    {t:'Do varejo ao'},
+    {t:'High Ticket.',s:'gold'},
+    {t:'Sem limites.',s:'white'},
+  ],60,375,80,96);
+
+  divider(ctx,60,660);
+  levelRow(ctx,'N1','Crédito Varejo','Agilidade máxima — feche mais contratos',60,700,C.green);
+  levelRow(ctx,'N2','Crédito Estruturado','Operações complexas com método e precisão',60,812,C.gold);
+  levelRow(ctx,'N3','High Ticket','Grandes volumes — operações premium',60,924,C.blueL);
+}},
+
+/* ── 06 V3 ACADEMY ────────────────────────────────────────── */
+{name:'06-academy',title:'Post 6 — V3 Academy',
+draw(ctx){
+  bgDark(ctx,C.navy,'#060e1c');
+  orb(ctx,W*.7,H*.3,500,C.gold,.12);
+  // Big watermark
+  ctx.font='bold 180px Arial';ctx.fillStyle=hex(C.gold,.04);
+  ctx.textAlign='center';ctx.fillText('ACADEMY',W/2,H/2+40);ctx.textAlign='left';
+  accentTop(ctx);
+  leftBar(ctx,C.gold);
+  drawLogo(ctx,54,50);
+  goldBadge(ctx,'V3 ACADEMY 📚',W-350,102);
+
+  eyebrow(ctx,'Formação que transforma',60,280);
+  bigHead(ctx,[
+    {t:'Conhecimento'},
+    {t:'que gera',s:'gold'},
+    {t:'resultado real.',s:'gold'},
+  ],60,375,80,96);
+
+  divider(ctx,60,660);
+  const m=[['Home Equity',C.gold],['Crédito Estruturado',C.blueL],['High Ticket',C.green],
+            ['M&A',C.gold],['Split Fiscal',C.blueL],['Compliance',C.green]];
+  m.forEach(([t,c],i)=>modPill(ctx,t,60+(i%3)*320,750+(Math.floor(i/3)*80)+30,c));
+  ctaBtn(ctx,'Acessar Academy ▸',60,1010);
+}},
+
+/* ── 07 CRM ───────────────────────────────────────────────── */
+{name:'07-crm',title:'Post 7 — CRM',
+draw(ctx){
+  bgDark(ctx,C.navy,C.navy2);
+  orb(ctx,W*.8,H*.8,500,C.blueL,.15);
+  dots(ctx,C.blueL,.04);
+  ring(ctx,180,900,300,C.gold,.07);
+  accentTop(ctx);
+  leftBar(ctx,C.blueL);
+  drawLogo(ctx,54,50);
+  blueBadge(ctx,'GESTÃO DE CLIENTES',W-420,102);
+
+  eyebrow(ctx,'CRM Inteligente',60,280,C.blueL);
+  bigHead(ctx,[
+    {t:'Cada cliente.'},
+    {t:'Cada oportunidade.',s:'gold'},
+    {t:'Nada escapando.',s:'white'},
+  ],60,375,74,90);
+
+  divider(ctx,60,660);
+  progressBar(ctx,'Pipeline de vendas',82,60,720,960,C.gold);
+  progressBar(ctx,'Conversão de leads',68,60,820,960,C.blueL);
+  progressBar(ctx,'Retenção de clientes',91,60,920,960,C.green);
+
+  ctaBtn(ctx,'Ver CRM ▸',60,1020);
+}},
+
+/* ── 08 CONSÓRCIO ─────────────────────────────────────────── */
+{name:'08-consorcio',title:'Post 8 — Consórcio',
+draw(ctx){
+  bgDark(ctx,C.navy,'#080e18');
+  orb(ctx,W*.3,H*.3,500,C.gold,.14);
+  orb(ctx,W*.8,H*.8,400,C.blueL,.1);
+  hexShape(ctx,840,220,180,C.gold,.06,false);
+  ring(ctx,240,860,260,C.gold,.1);
+  diagLines(ctx,C.gold,.02);
+  accentTop(ctx);
+  leftBar(ctx,C.gold);
+  drawLogo(ctx,54,50);
+  goldBadge(ctx,'CONSÓRCIO 🏠',W-300,102);
+
+  eyebrow(ctx,'Simule. Venda. Conquiste.',60,280);
+  bigHead(ctx,[
+    {t:'Consórcio'},
+    {t:'completo',s:'gold'},
+    {t:'na sua plataforma.',s:'white'},
+  ],60,375,78,94);
+
+  divider(ctx,60,660);
+  bItem(ctx,'Simulação completa em segundos',60,740);
+  bItem(ctx,'Banco de cartas contempladas',60,806);
+  bItem(ctx,'Gestão de projetos integrada',60,872);
+  bItem(ctx,'Mesa de consórcio operacional',60,938);
+  ctaBtn(ctx,'Simular agora ▸',60,1024);
+}},
+
+/* ── 09 CARROSSEL slide 1 ─────────────────────────────────── */
+{name:'09-carrossel-capa',title:'Carrossel 09 — Capa "5 Motivos"',
+draw(ctx){
+  bgDark(ctx,C.navy,'#06101c');
+  orb(ctx,W/2,-100,700,C.gold,.25);
+  orb(ctx,W,H,600,C.blueL,.15);
+  for(let i=0;i<5;i++){ring(ctx,W*.85,H*.15,80+i*60,C.gold,.06-i*.01);}
+  hexShape(ctx,180,880,200,C.blueL,.05,false);
+  dots(ctx,C.gold,.03);
+  accentTop(ctx);
+  leftBar(ctx,C.gold,H*.6,H*.2);
+  drawLogo(ctx,54,50);
+
+  ctx.font='bold 28px Arial';ctx.fillStyle=hex(C.gold,.7);
+  ctx.textAlign='right';ctx.fillText('ARRASTA ▸',W-54,90);ctx.textAlign='left';
+
+  eyebrow(ctx,'Por que escolher a V3?',60,320);
+  bigHead(ctx,[
+    {t:'5 motivos'},
+    {t:'para você',s:'gold'},
+    {t:'operar com a',s:'gold'},
+    {t:'V3 Partner.',s:'white'},
+  ],60,420,80,96);
+
+  // Slide counter
+  for(let i=0;i<5;i++){
+    const col=i===0?C.gold:hex(C.gold,.3);
+    if(i===0){ctx.fillStyle=C.gold;ctx.fillRect(60+i*52,1010,32,8);}
+    else{ctx.fillStyle=hex(C.gold,.3);ctx.beginPath();ctx.arc(60+i*52+10,1014,6,0,Math.PI*2);ctx.fill();}
+  }
+}},
+
+/* ── 09 CARROSSEL slide 2 ─────────────────────────────────── */
+{name:'09-carrossel-s2',title:'Carrossel 09 — Slide 2 "Integrado"',
+draw(ctx){
+  bgDark(ctx,C.navy,'#07111d');
+  orb(ctx,W*.15,H*.15,400,C.gold,.18);
+  ring(ctx,W*.15,H*.15,200,C.gold,.2,2);
+  ring(ctx,W*.15,H*.15,300,C.gold,.1,1.5);
+  accentTop(ctx);
+  drawLogo(ctx,54,50);
+  goldBadge(ctx,'MOTIVO #1',W-240,102);
+
+  ctx.font='90px Arial';ctx.textAlign='center';
+  ctx.shadowColor=hex(C.gold,.5);ctx.shadowBlur=30;
+  ctx.fillText('🏆',230,220);ctx.shadowBlur=0;ctx.textAlign='left';
+
+  eyebrow(ctx,'Motivo #1 de 5',60,340);
+  bigHead(ctx,[
+    {t:'Tudo integrado'},
+    {t:'em uma só',s:'gold'},
+    {t:'plataforma.',s:'gold'},
+  ],60,430,78,94);
+
+  divider(ctx,60,720);
+  const itens=['CRM + Pipeline de vendas','Mesa de Crédito N1, N2 e N3',
+    'M&A + Consórcio + Split Fiscal','IA Assistant com Claude','V3 Academy'];
+  itens.forEach((t,i)=>bItem(ctx,t,60,790+i*58));
+
+  for(let i=0;i<5;i++){
+    if(i===1){ctx.fillStyle=C.gold;ctx.fillRect(60+i*52,1040,32,8);}
+    else{ctx.fillStyle=hex(C.gold,.3);ctx.beginPath();ctx.arc(60+i*52+10,1044,6,0,Math.PI*2);ctx.fill();}
+  }
+}},
+
+/* ── 09 CARROSSEL slide 3 ─────────────────────────────────── */
+{name:'09-carrossel-s3',title:'Carrossel 09 — Slide 3 "IA"',
+draw(ctx){
+  bgDark(ctx,C.navy,'#050d18');
+  orb(ctx,W*.85,H*.2,500,C.blueL,.22);
+  ring(ctx,W*.85,H*.2,220,C.blueL,.25,2);
+  ring(ctx,W*.85,H*.2,160,C.gold,.15,1.5);
+  accentTop(ctx);
+  drawLogo(ctx,54,50);
+  blueBadge(ctx,'MOTIVO #2',W-240,102);
+
+  ctx.font='90px Arial';ctx.textAlign='right';
+  ctx.shadowColor=hex(C.blueL,.6);ctx.shadowBlur=40;
+  ctx.fillText('🤖',W-60,220);ctx.shadowBlur=0;ctx.textAlign='left';
+
+  eyebrow(ctx,'Motivo #2 de 5',60,340,C.blueL);
+  bigHead(ctx,[
+    {t:'Inteligência'},
+    {t:'Artificial',s:'blue'},
+    {t:'real integrada.',s:'white'},
+  ],60,430,80,96);
+
+  divider(ctx,60,720);
+  bItem(ctx,'Powered by Claude (Anthropic)',60,790,C.blueL);
+  bItem(ctx,'Análise de clientes em segundos',60,848,C.blueL);
+  bItem(ctx,'Propostas automáticas inteligentes',60,906,C.blueL);
+  bItem(ctx,'Insights de mercado em tempo real',60,964,C.blueL);
+
+  for(let i=0;i<5;i++){
+    if(i===2){ctx.fillStyle=C.gold;ctx.fillRect(60+i*52,1040,32,8);}
+    else{ctx.fillStyle=hex(C.gold,.3);ctx.beginPath();ctx.arc(60+i*52+10,1044,6,0,Math.PI*2);ctx.fill();}
+  }
+}},
+
+/* ── 09 CARROSSEL slide 4 ─────────────────────────────────── */
+{name:'09-carrossel-s4',title:'Carrossel 09 — Slide 4 "Academy"',
+draw(ctx){
+  bgDark(ctx,C.navy,'#060c18');
+  orb(ctx,0,H*.8,500,C.gold,.15);
+  hexShape(ctx,W*.7,H*.3,300,C.gold,.04,false);
+  dots(ctx,C.gold,.04);
+  accentTop(ctx);
+  drawLogo(ctx,54,50);
+  goldBadge(ctx,'MOTIVO #3',W-240,102);
+
+  ctx.font='90px Arial';ctx.textAlign='center';
+  ctx.shadowColor=hex(C.gold,.4);ctx.shadowBlur=25;
+  ctx.fillText('📚',W/2,240);ctx.shadowBlur=0;ctx.textAlign='left';
+
+  eyebrow(ctx,'Motivo #3 de 5',60,360);
+  bigHead(ctx,[
+    {t:'Formação'},
+    {t:'especializada',s:'gold'},
+    {t:'inclusa.',s:'gold'},
+  ],60,450,80,96);
+
+  divider(ctx,60,740);
+  const mods=['Home Equity','Crédito Estruturado','High Ticket','M&A','Split Fiscal','Compliance'];
+  mods.forEach((m,i)=>modPill(ctx,m,60+(i%3)*320,810+(Math.floor(i/3)*80)+30,i%2===0?C.gold:C.blueL));
+
+  for(let i=0;i<5;i++){
+    if(i===3){ctx.fillStyle=C.gold;ctx.fillRect(60+i*52,1050,32,8);}
+    else{ctx.fillStyle=hex(C.gold,.3);ctx.beginPath();ctx.arc(60+i*52+10,1054,6,0,Math.PI*2);ctx.fill();}
+  }
+}},
+
+/* ── 09 CARROSSEL slide 5 CTA ────────────────────────────── */
+{name:'09-carrossel-cta',title:'Carrossel 09 — Slide 5 CTA',
+draw(ctx){
+  bgDark(ctx,C.navy,'#08121e');
+  orb(ctx,W/2,H/2,700,C.gold,.2);
+  orb(ctx,W/2,H/2,400,C.blueL,.1);
+  for(let i=0;i<4;i++)ring(ctx,W/2,H/2,150+i*100,C.gold,.08-i*.015);
+  accentTop(ctx);
+  drawLogo(ctx,54,50);
+
+  ctx.font='90px Arial';ctx.textAlign='center';
+  ctx.shadowColor=hex(C.gold,.6);ctx.shadowBlur=40;
+  ctx.fillText('🚀',W/2,380);ctx.shadowBlur=0;
+
+  eyebrow(ctx,'Pronto para o próximo nível?',W/2-300,480);
+  centHead(ctx,[
+    {t:'Entre para a',s:'white'},
+    {t:'V3 Partner',s:'gold'},
+    {t:'hoje mesmo.',s:'white'},
+  ],560,68,84);
+  ctx.textAlign='left';
+  ctaBtn(ctx,'Quero conhecer a V3 ▸',W/2-220,850);
+
+  ctx.textAlign='center';
+  ctx.font='26px Arial';ctx.fillStyle=C.muted;
+  ctx.fillText('A plataforma financeira mais completa do mercado',W/2,940);
+  ctx.textAlign='left';
+}},
+
+/* ── 10 ANTES ────────────────────────────────────────────── */
+{name:'10-antes',title:'Carrossel 10 — ANTES',
+draw(ctx){
+  bgDark(ctx,'#150505','#0f0707');
+  orb(ctx,W*.8,H*.2,500,C.red,.12);
+  dots(ctx,C.red,.03);
+  // Red top line
+  ctx.fillStyle=C.red;ctx.fillRect(0,0,W,4);
+  ctx.fillStyle=hex(C.red,.12);ctx.fillRect(0,4,W,16);
+  drawLogo(ctx,54,50);
+
+  ctx.font='bold 44px Arial';ctx.fillStyle=C.red;
+  ctx.shadowColor=hex(C.red,.5);ctx.shadowBlur=20;
+  ctx.fillText('ANTES DA V3  ✗',60,120);ctx.shadowBlur=0;
+
+  divider(ctx,60,170,960);
+
+  eyebrow(ctx,'Como era a sua operação',60,250,C.red);
+  bigHead(ctx,[{t:'A realidade',s:'white'},{t:'antes.',s:'white'}],60,340,82,96);
+  divider(ctx,60,550);
+
+  const itens=[
+    'Planilhas desorganizadas e dados perdidos',
+    'Clientes esquecidos no pipeline',
+    'Sem visão do desempenho em tempo real',
+    'Propostas manuais que levam horas',
+    'Sem análise tributária dos clientes',
+    'Sistemas separados, zero integração',
+  ];
+  itens.forEach((t,i)=>chk(ctx,t,60,640+i*72,false,28));
+}},
+
+/* ── 11 DEPOIS ───────────────────────────────────────────── */
+{name:'11-depois',title:'Carrossel 11 — DEPOIS',
+draw(ctx){
+  bgDark(ctx,'#030d07','#040f09');
+  orb(ctx,W*.2,H*.3,500,C.green,.15);
+  dots(ctx,C.green,.04);
+  ctx.fillStyle=C.green;ctx.fillRect(0,0,W,4);
+  ctx.fillStyle=hex(C.green,.12);ctx.fillRect(0,4,W,16);
+  drawLogo(ctx,54,50);
+
+  ctx.font='bold 44px Arial';ctx.fillStyle=C.green;
+  ctx.shadowColor=hex(C.green,.5);ctx.shadowBlur=20;
+  ctx.fillText('DEPOIS DA V3  ✓',60,120);ctx.shadowBlur=0;
+
+  divider(ctx,60,170,960);
+
+  eyebrow(ctx,'A sua operação transformada',60,250,C.green);
+  bigHead(ctx,[{t:'A realidade',s:'white'},{t:'depois.',s:'gold'}],60,340,82,96);
+  divider(ctx,60,550);
+
+  const itens=[
+    'CRM integrado com pipeline visual',
+    'Alertas automáticos de follow-up',
+    'Dashboard com KPIs em tempo real',
+    'Propostas em segundos com PDF',
+    'Split Fiscal automatizado',
+    'Tudo em uma única plataforma',
+  ];
+  itens.forEach((t,i)=>chk(ctx,t,60,640+i*72,true,28));
+}},
+
+/* ── 12 RANKING ──────────────────────────────────────────── */
+{name:'12-ranking',title:'Post 12 — Ranking',
+draw(ctx){
+  bgDark(ctx,C.navy,'#08101a');
+  orb(ctx,W/2,H*.4,600,C.gold,.2);
+  ring(ctx,W/2,H*.4,280,C.gold,.15,2);
+  ring(ctx,W/2,H*.4,360,C.gold,.08,1.5);
+  hexShape(ctx,W/2,H*.4,200,C.gold,.06,false);
+  accentTop(ctx);
+  leftBar(ctx,C.gold);
+  drawLogo(ctx,54,50);
+  goldBadge(ctx,'RANKING 🏆',W-270,102);
+
+  eyebrow(ctx,'Performance em tempo real',60,280);
+  bigHead(ctx,[
+    {t:'Quem'},
+    {t:'performa,',s:'gold'},
+    {t:'aparece.',s:'gold'},
+  ],60,370,84,100);
+
+  divider(ctx,60,680);
+
+  const rows=[
+    ['🥇','1º LUGAR','Top performer do mês',C.gold,.2,.5],
+    ['🥈','2º LUGAR','Destaque da semana',C.muted,.12,.25],
+    ['🥉','3º LUGAR','Em ascensão',C.muted,.08,.18],
+  ];
+  rows.forEach(([ico,ttl,sub,col,bg2,bdr],i)=>{
+    ctx.fillStyle=hex(col,bg2);rrect(ctx,60,740+i*104,960,88,14);ctx.fill();
+    ctx.strokeStyle=hex(col,bdr);ctx.lineWidth=i===0?2:1.5;rrect(ctx,60,740+i*104,960,88,14);ctx.stroke();
+    if(i===0){// gold left accent
+      const g=lingrad(ctx,60,740,60,840,[[0,C.gold],[1,C.goldL]]);
+      ctx.fillStyle=g;ctx.fillRect(60,740,5,88);
+    }
+    ctx.font='46px Arial';ctx.textAlign='left';ctx.fillText(ico,86,797+i*104);
+    ctx.font='bold 30px Arial';ctx.fillStyle=i===0?C.goldP:C.fg;ctx.fillText(ttl,148,780+i*104);
+    ctx.font='22px Arial';ctx.fillStyle=C.muted;ctx.fillText(sub,148,808+i*104);
+  });
+}},
+
+/* ── 13 LINKEDIN INSTITUCIONAL ───────────────────────────── */
+{name:'13-li-institucional',title:'LinkedIn 13 — Institucional',
+draw(ctx){
+  bgDark(ctx,C.navy,'#070e18');
+  orb(ctx,W/2,-80,700,C.gold,.2);
+  orb(ctx,W,H*.8,500,C.blueL,.12);
+  hexShape(ctx,880,180,220,C.gold,.05,false);
+  diagLines(ctx,C.gold,.02);
+  accentTop(ctx);
+  leftBar(ctx,C.gold,H*.5,H*.2);
+  drawLogo(ctx,54,50);
+  goldBadge(ctx,'LINKEDIN · INSTITUCIONAL',W-500,102);
+
+  eyebrow(ctx,'Inovação no mercado financeiro',60,280);
+  bigHead(ctx,[
+    {t:'O mercado financeiro'},
+    {t:'precisa de tecnologia.'},
+    {t:'A V3 entrega.',s:'gold'},
+  ],60,370,68,84);
+
+  divider(ctx,60,640);
+
+  // Modules grid
+  const mods=['CRM','Split Fiscal','Crédito N1–N3','M&A','Consórcio','IA','Academy','Dashboard'];
+  mods.forEach((m,i)=>modPill(ctx,m,60+(i%4)*242,700+(Math.floor(i/4)*80)+30,i%2===0?C.gold:C.blueL));
+
+  divider(ctx,60,880);
+  statBlock(ctx,'10+','Módulos',60,920,200,C.gold);
+  statBlock(ctx,'4','Perfis',300,920,200,C.blueL);
+  statBlock(ctx,'360°','Visão',540,920,200,C.green);
+  statBlock(ctx,'1','Plataforma',780,920,200,C.goldL);
+}},
+
+/* ── 14 LINKEDIN SPLIT FISCAL ────────────────────────────── */
+{name:'14-li-split',title:'LinkedIn 14 — Split Fiscal',
+draw(ctx){
+  bgDark(ctx,'#030d09','#040f10');
+  orb(ctx,0,H,600,C.green,.15);
+  orb(ctx,W,0,400,C.gold,.1);
+  accentTop(ctx);
+  leftBar(ctx,C.green);
+  drawLogo(ctx,54,50);
+  greenBadge(ctx,'SPLIT FISCAL · LINKEDIN',W-490,102);
+
+  eyebrow(ctx,'Otimização tributária na prática',60,280,C.green);
+  bigHead(ctx,[
+    {t:'Como o Split Fiscal'},
+    {t:'reduz custos',s:'gold'},
+    {t:'em até 40%.',s:'gold'},
+  ],60,370,72,88);
+
+  divider(ctx,60,640);
+
+  const steps=[
+    ['01','Cliente informa o TPV mensal'],
+    ['02','Plataforma calcula o mix de pagamentos'],
+    ['03','Multiplica cada modalidade pela taxa real'],
+    ['04','Compara: operadora atual vs. Monetto'],
+    ['05','Gera proposta profissional em PDF'],
+  ];
+  steps.forEach(([n,t],i)=>{
+    const y=700+i*66;
+    ctx.fillStyle=hex(C.green,.15);rrect(ctx,60,y-36,62,48,10);ctx.fill();
+    ctx.strokeStyle=hex(C.green,.4);rrect(ctx,60,y-36,62,48,10);ctx.stroke();
+    ctx.font='bold 22px Arial';ctx.fillStyle=C.green;ctx.textAlign='center';ctx.fillText(n,91,y);ctx.textAlign='left';
+    ctx.font='27px Arial';ctx.fillStyle='#9ab0c8';ctx.fillText(t,140,y);
+  });
+  ctaBtn(ctx,'Simule agora ▸',60,1042);
+}},
+
+/* ── 15 LI HIGH TICKET ───────────────────────────────────── */
+{name:'15-li-highticket',title:'LinkedIn 15 — High Ticket N3',
+draw(ctx){
+  bgDark(ctx,C.navy,'#06101e');
+  orb(ctx,W,H,700,C.blueL,.18);
+  ring(ctx,W*.8,H*.7,300,C.blueL,.15,2);
+  dots(ctx,C.blueL,.035);
+  accentTop(ctx);
+  leftBar(ctx,C.blueL);
+  drawLogo(ctx,54,50);
+  blueBadge(ctx,'MESA N3 · HIGH TICKET',W-460,102);
+
+  eyebrow(ctx,'Mesa de Crédito Nível 3',60,280,C.blueL);
+  bigHead(ctx,[
+    {t:'O que separa'},
+    {t:'um corretor comum'},
+    {t:'de um',s:'white'},
+    {t:'high performer.',s:'blue'},
+  ],60,370,68,84);
+
+  divider(ctx,60,680);
+  const itens=[
+    'Estrutura de pipeline clara e rastreável',
+    'Proposta profissional em segundos',
+    'Formação contínua especializada (Academy)',
+    'Decisões baseadas em dados reais',
+    'IA auxiliando cada etapa da venda',
+  ];
+  itens.forEach((t,i)=>bItem(ctx,t,60,740+i*66,C.blueL,27));
+  ctaBtn(ctx,'Conhecer Mesa N3 ▸',60,1042);
+}},
+
+/* ── 16 LI ACADEMY ───────────────────────────────────────── */
+{name:'16-li-academy',title:'LinkedIn 16 — Academy',
+draw(ctx){
+  bgDark(ctx,C.navy,'#070d1a');
+  orb(ctx,W*.3,H*.6,500,C.gold,.12);
+  ctx.font='bold 220px Arial';ctx.fillStyle=hex(C.gold,.03);
+  ctx.textAlign='center';ctx.fillText('V3',W/2,H*.55);ctx.textAlign='left';
+  accentTop(ctx);
+  leftBar(ctx,C.gold);
+  drawLogo(ctx,54,50);
+  goldBadge(ctx,'V3 ACADEMY · LINKEDIN',W-490,102);
+
+  eyebrow(ctx,'Por que os melhores não param',60,280);
+  bigHead(ctx,[
+    {t:'Dominar o produto'},
+    {t:'que você vende',s:'gold'},
+    {t:'é vantagem',s:'white'},
+    {t:'competitiva.',s:'gold'},
+  ],60,370,66,82);
+
+  divider(ctx,60,680);
+  const t=[['📘','Home Equity',C.gold],['📗','Crédito Estruturado',C.blueL],
+            ['📙','High Ticket',C.goldL],['📕','M&A',C.gold],
+            ['📒','Split Fiscal',C.blueL],['📓','Compliance',C.green]];
+  t.forEach(([i,n,c],idx)=>{
+    const col=idx%2, row=Math.floor(idx/2);
+    ctx.font='28px Arial';ctx.fillStyle=c;ctx.fillText(i+' ',60+col*480,750+row*84);
+    ctx.fillStyle='#b0c8e0';ctx.fillText(n,115+col*480,750+row*84);
+  });
+}},
+
+/* ── 17 LI IA ────────────────────────────────────────────── */
+{name:'17-li-ia',title:'LinkedIn 17 — IA no Mercado',
+draw(ctx){
+  bgDark(ctx,C.navy,'#050c1a');
+  orb(ctx,W/2,H/2,650,C.blueL,.18);
+  orb(ctx,W/2,H/2,350,C.gold,.08);
+  for(let i=0;i<3;i++)ring(ctx,W/2,H/2,200+i*120,C.blueL,.1-i*.025);
+  accentTop(ctx);
+  drawLogo(ctx,54,50);
+  blueBadge(ctx,'IA · LINKEDIN',W-320,102);
+
+  ctx.font='100px Arial';ctx.textAlign='center';
+  ctx.shadowColor=hex(C.blueL,.7);ctx.shadowBlur=50;
+  ctx.fillText('🤖',W/2,380);ctx.shadowBlur=0;ctx.textAlign='left';
+
+  eyebrow(ctx,'Inteligência Artificial',60,500,C.blueL);
+  bigHead(ctx,[
+    {t:'IA no financeiro:'},
+    {t:'não é tendência.',s:'white'},
+    {t:'É realidade.',s:'gold'},
+  ],60,590,70,86);
+
+  divider(ctx,60,860);
+  bItem(ctx,'Powered by Claude · Anthropic',60,920,C.blueL,26);
+  bItem(ctx,'Integrado direto na plataforma V3',60,968,C.blueL,26);
+}},
+
+/* ── 18 LI M&A ───────────────────────────────────────────── */
+{name:'18-li-ma',title:'LinkedIn 18 — M&A',
+draw(ctx){
+  bgDark(ctx,C.navy,'#070e1b');
+  orb(ctx,W,0,600,C.gold,.15);
+  diagBlock(ctx,C.blueL,.08);
+  hexShape(ctx,200,800,250,C.gold,.05,false);
+  accentTop(ctx);
+  leftBar(ctx,C.gold);
+  drawLogo(ctx,54,50);
+  goldBadge(ctx,'M&A · LINKEDIN',W-340,102);
+
+  eyebrow(ctx,'Fusões & Aquisições',60,280);
+  bigHead(ctx,[
+    {t:'M&A não é'},
+    {t:'só para',s:'white'},
+    {t:'grandes bancos.',s:'gold'},
+  ],60,370,76,92);
+
+  divider(ctx,60,660);
+  bItem(ctx,'Pipeline estruturado de oportunidades',60,730);
+  bItem(ctx,'Metodologia de due diligence integrada',60,800);
+  bItem(ctx,'Gestão de propostas e contratos',60,870);
+  bItem(ctx,'Acompanhamento em tempo real',60,940);
+  ctaBtn(ctx,'Ver Mesa M&A ▸',60,1024);
+}},
+
+/* ── 19 VIRAL ENQUETE ────────────────────────────────────── */
+{name:'19-viral-enquete',title:'Post 19 — Enquete Viral',
+draw(ctx){
+  bgDark(ctx,C.navy,C.navy2);
+  orb(ctx,W/2,H/2,600,C.gold,.1);
+  dots(ctx,C.gold,.04);
+  ring(ctx,W/2,560,350,C.gold,.1,2);
+  accentTop(ctx);
+  drawLogo(ctx,54,50);
+  goldBadge(ctx,'ENQUETE 🎯',W-270,102);
+
+  ctx.font='90px Arial';ctx.textAlign='center';
+  ctx.shadowColor=hex(C.gold,.4);ctx.shadowBlur=30;
+  ctx.fillText('🤔',W/2,260);ctx.shadowBlur=0;ctx.textAlign='left';
+
+  eyebrow(ctx,'Responde nos comentários',60,360);
+  bigHead(ctx,[
+    {t:'Qual é seu'},
+    {t:'maior desafio',s:'gold'},
+    {t:'hoje?',s:'gold'},
+  ],60,450,78,94);
+
+  divider(ctx,60,720);
+  const opts=[
+    ['A','Organizar e acompanhar clientes',C.gold],
+    ['B','Criar propostas e fechar negócios',C.blueL],
+    ['C','Gestão tributária dos clientes',C.green],
+    ['D','Gerenciar múltiplos produtos',C.goldL],
+  ];
+  opts.forEach(([l,t,c],i)=>{
+    const y=780+i*66;
+    ctx.fillStyle=hex(c,.12);rrect(ctx,60,y-38,960,54,14);ctx.fill();
+    ctx.strokeStyle=hex(c,.3);ctx.lineWidth=1.5;rrect(ctx,60,y-38,960,54,14);ctx.stroke();
+    ctx.font='bold 26px Arial';ctx.fillStyle=c;ctx.fillText(l+')',84,y);
+    ctx.font='25px Arial';ctx.fillStyle='#9ab0c8';ctx.fillText(t,138,y);
+  });
+}},
+
+/* ── 20 VIRAL FRASE ──────────────────────────────────────── */
+{name:'20-viral-frase',title:'Post 20 — Frase de Impacto',
+draw(ctx){
+  bgDark(ctx,C.navy,'#070d16');
+  orb(ctx,W/2,H/2,800,C.gold,.18);
+  orb(ctx,W/2,H/2,500,C.blueL,.08);
+  for(let i=0;i<5;i++)ring(ctx,W/2,H/2,80+i*120,C.gold,.1-i*.015,i===0?2:1);
+  accentTop(ctx);
+  drawLogo(ctx,54,50);
+
+  ctx.textAlign='center';
+
+  // Big quote marks
+  ctx.font='bold 220px Arial';ctx.fillStyle=hex(C.gold,.08);
+  ctx.fillText('"',260,460);ctx.fillText('"',820,640);
+
+  ctx.font='900 62px Arial';
+  const gL=lingrad(ctx,0,0,W,0,[[0,C.fg],[1,C.fg]]);
+  ctx.fillStyle=gL;ctx.shadowColor=hex(C.fg,.1);ctx.shadowBlur=10;
+  ctx.fillText('"A ferramenta certa',W/2,440);
+  ctx.fillText('não substitui o talento',W/2,520);
+  ctx.shadowBlur=0;
+
+  const gG=lingrad(ctx,100,0,W-100,0,[[0,C.gold],[.5,C.goldP],[1,C.goldL]]);
+  ctx.fillStyle=gG;ctx.shadowColor=hex(C.gold,.5);ctx.shadowBlur=30;
+  ctx.font='900 70px Arial';ctx.fillText('— ela multiplica."',W/2,620);
+  ctx.shadowBlur=0;
+
+  divider(ctx,150,700,780);
+
+  ctx.font='28px Arial';ctx.fillStyle=C.muted;
+  ctx.fillText('V3 Partner — Tecnologia para quem quer resultado',W/2,760);
+  ctx.textAlign='left';
+
+  ctaBtn(ctx,'💛  Salva esse post',W/2-200,900);
+}},
+
+/* ── 21 VIRAL DADOS ──────────────────────────────────────── */
+{name:'21-viral-dados',title:'Post 21 — Dados de Mercado',
+draw(ctx){
+  bgDark(ctx,C.navy,C.navy2);
+  orb(ctx,W*.15,H*.5,500,C.gold,.12);
+  diagLines(ctx,C.gold,.025);
+  accentTop(ctx);
+  leftBar(ctx,C.gold);
+  drawLogo(ctx,54,50);
+  goldBadge(ctx,'DADOS 📊',W-220,102);
+
+  eyebrow(ctx,'A tecnologia em números',60,280);
+  bigHead(ctx,[
+    {t:'Por que a V3'},
+    {t:'faz a diferença.',s:'gold'},
+  ],60,370,80,96);
+
+  divider(ctx,60,580);
+  dataBar(ctx,'3x',  'mais conversões com CRM estruturado vs. sem gestão',60,630,C.gold);
+  dataBar(ctx,'40%','redução em custos tributários com Split Fiscal',60,766,C.green);
+  dataBar(ctx,'10x','mais rápido para gerar uma proposta profissional',60,902,C.blueL);
+}},
+
+];
+
+// ─── RENDER ─────────────────────────────────────────────────
+function renderAll(){
+  document.getElementById('status').textContent='✓ '+POSTS.length+' posts gerados — clique em "Baixar" para salvar cada PNG';
+  const g=document.getElementById('grid');
+  POSTS.forEach(p=>{
+    const c=mk();
+    try{p.draw(c.getContext('2d'));}catch(e){console.error(p.name,e);}
+    const card=document.createElement('div');card.className='card';
+    card.innerHTML=`<h3>${p.title}</h3>`;
+    card.appendChild(c);
+    const btn=document.createElement('button');btn.className='dl';
+    btn.textContent='⬇️ Baixar PNG — '+p.name;
+    btn.onclick=()=>{const a=document.createElement('a');a.download='v3partner-'+p.name+'.png';a.href=c.toDataURL('image/png');a.click();};
+    card.appendChild(btn);
+    g.appendChild(card);
+  });
+}
+
+function baixarTodos(){
+  const btn=document.getElementById('btn-all');
+  btn.disabled=true;btn.textContent='⏳ Baixando...';
+  const canvases=document.querySelectorAll('canvas');
+  canvases.forEach((c,i)=>{
+    setTimeout(()=>{
+      const a=document.createElement('a');
+      a.download='v3partner-'+POSTS[i].name+'.png';
+      a.href=c.toDataURL('image/png');a.click();
+      if(i===canvases.length-1){btn.disabled=false;btn.textContent='✅ Todos baixados!';}
+    },i*350);
+  });
+}
+
+LOGO.onload=renderAll;
+LOGO.onerror=renderAll;
+window.addEventListener('DOMContentLoaded',()=>{if(LOGO.complete)renderAll();});
+</script>
+</body>
+</html>

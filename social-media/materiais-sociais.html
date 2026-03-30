@@ -1,0 +1,1636 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>V3 Partner — Materiais para Redes Sociais</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<style>
+  :root{
+    --gold:#C4922E;--gold-l:#E5B96A;--gold-p:#F5D99A;
+    --navy:#050C18;--navy-m:#091221;--navy-s:#0F1E35;
+    --blue:#1A4FC4;--blue-l:#2E67E8;
+    --fg:#E8EDF5;--muted:#5A7490;
+    --success:#10B981;--danger:#EF4444;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#0a0f1a;font-family:'Inter',sans-serif;color:var(--fg);padding:40px 20px}
+
+  /* PAGE HEADER */
+  .page-header{text-align:center;margin-bottom:60px}
+  .page-header h1{font-family:'Outfit',sans-serif;font-size:2.4rem;font-weight:900;
+    background:linear-gradient(120deg,#C4922E,#F5D99A,#C4922E);
+    -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+  .page-header p{color:var(--muted);margin-top:8px;font-size:1rem}
+
+  /* SECTION */
+  .section{margin-bottom:80px}
+  .section-title{font-family:'Outfit',sans-serif;font-size:1.4rem;font-weight:700;color:var(--gold-l);
+    border-left:3px solid var(--gold);padding-left:14px;margin-bottom:32px}
+
+  /* GRID */
+  .grid-2{display:grid;grid-template-columns:repeat(auto-fill,minmax(500px,1fr));gap:40px}
+  .grid-3{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:32px}
+
+  /* POST WRAPPER */
+  .post-wrap{display:flex;flex-direction:column;gap:16px}
+  .post-label{display:flex;gap:8px;align-items:center}
+  .badge{padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;letter-spacing:.5px}
+  .badge-ig{background:linear-gradient(135deg,#833ab4,#fd1d1d,#fcb045);color:#fff}
+  .badge-li{background:#0077B5;color:#fff}
+  .badge-carousel{background:rgba(196,146,46,.2);color:var(--gold-l);border:1px solid rgba(196,146,46,.3)}
+  .badge-feed{background:rgba(16,185,129,.15);color:#10B981;border:1px solid rgba(16,185,129,.3)}
+  .badge-story{background:rgba(46,103,232,.2);color:var(--blue-l);border:1px solid rgba(46,103,232,.3)}
+
+  /* CAPTION BOX */
+  .caption-box{background:var(--navy-m);border:1px solid rgba(196,146,46,.15);border-radius:12px;padding:16px 18px}
+  .caption-box h4{font-size:.75rem;font-weight:600;color:var(--gold);text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px}
+  .caption-box p{font-size:.88rem;line-height:1.65;color:#c5cfe0;white-space:pre-wrap}
+  .copy-btn{margin-top:10px;background:rgba(196,146,46,.1);border:1px solid rgba(196,146,46,.25);
+    color:var(--gold-l);padding:6px 14px;border-radius:8px;font-size:12px;cursor:pointer;
+    font-family:'Inter',sans-serif;transition:.2s}
+  .copy-btn:hover{background:rgba(196,146,46,.2)}
+
+  /* ─────────────────────────────────
+     POST VISUAL BASE
+  ───────────────────────────────── */
+  .post{position:relative;width:100%;aspect-ratio:1/1;border-radius:16px;overflow:hidden;
+    display:flex;flex-direction:column;justify-content:flex-end;
+    background:var(--navy);font-family:'Outfit',sans-serif}
+  .post-wide{aspect-ratio:16/9}
+  .post-portrait{aspect-ratio:4/5}
+
+  /* Backgrounds */
+  .bg-grid-overlay::before{content:'';position:absolute;inset:0;z-index:0;
+    background-image:linear-gradient(rgba(196,146,46,.04) 1px,transparent 1px),
+      linear-gradient(90deg,rgba(196,146,46,.04) 1px,transparent 1px);
+    background-size:40px 40px}
+  .bg-radial-gold::after{content:'';position:absolute;inset:0;z-index:0;
+    background:radial-gradient(ellipse 70% 60% at 50% 0%,rgba(196,146,46,.18) 0%,transparent 70%)}
+  .bg-radial-blue::after{content:'';position:absolute;inset:0;z-index:0;
+    background:radial-gradient(ellipse 80% 60% at 80% 100%,rgba(26,79,196,.25) 0%,transparent 70%)}
+  .bg-radial-dual::after{content:'';position:absolute;inset:0;z-index:0;
+    background:radial-gradient(ellipse 50% 50% at 20% 20%,rgba(196,146,46,.15) 0%,transparent 60%),
+               radial-gradient(ellipse 50% 50% at 80% 80%,rgba(26,79,196,.2) 0%,transparent 60%)}
+
+  .post-content{position:relative;z-index:2;padding:28px}
+  .post-top{position:absolute;top:0;left:0;right:0;z-index:2;padding:22px 28px;
+    display:flex;justify-content:space-between;align-items:center}
+
+  /* Logo mini */
+  .logo-mini{display:flex;align-items:center;gap:7px}
+  .logo-mini img{width:28px;height:28px;border-radius:6px;object-fit:cover;
+    box-shadow:0 2px 8px rgba(196,146,46,.3)}
+  .logo-mini span{font-family:'Outfit',sans-serif;font-size:.85rem;font-weight:800;
+    background:linear-gradient(120deg,#C4922E,#F5D99A);
+    -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+    letter-spacing:.05em}
+
+  /* Gold line top */
+  .gold-line-top{position:absolute;top:0;left:0;right:0;height:2px;z-index:3;
+    background:linear-gradient(90deg,transparent,#C4922E 30%,#F5D99A 50%,#C4922E 70%,transparent)}
+
+  /* Tags */
+  .tag{display:inline-block;padding:4px 12px;border-radius:20px;font-size:.7rem;font-weight:700;
+    letter-spacing:.6px;text-transform:uppercase}
+  .tag-gold{background:rgba(196,146,46,.15);border:1px solid rgba(196,146,46,.4);color:var(--gold-l)}
+  .tag-blue{background:rgba(26,79,196,.2);border:1px solid rgba(46,103,232,.4);color:var(--blue-l)}
+  .tag-green{background:rgba(16,185,129,.15);border:1px solid rgba(16,185,129,.4);color:#10B981}
+
+  /* Gradient text */
+  .g-text{background:linear-gradient(120deg,#C4922E,#F5D99A,#E5B96A);
+    -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+  .g-text-b{background:linear-gradient(135deg,#2E67E8,#C4922E);
+    -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+
+  /* Post typography */
+  .post-eyebrow{font-size:.7rem;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;
+    color:var(--gold);margin-bottom:10px}
+  .post-h1{font-size:1.9rem;font-weight:900;line-height:1.1;margin-bottom:12px}
+  .post-h2{font-size:1.5rem;font-weight:800;line-height:1.15;margin-bottom:12px}
+  .post-body{font-family:'Inter',sans-serif;font-size:.82rem;color:#9ab0c8;line-height:1.6;margin-bottom:16px}
+  .post-cta{display:inline-flex;align-items:center;gap:6px;
+    background:linear-gradient(120deg,#C4922E,#E5B96A);
+    color:var(--navy);font-weight:700;font-size:.75rem;letter-spacing:.5px;
+    padding:8px 18px;border-radius:8px;text-transform:uppercase}
+
+  /* Divider gold */
+  .divider-gold{height:1px;background:linear-gradient(90deg,transparent,rgba(196,146,46,.5),transparent);margin:14px 0}
+
+  /* Stat blocks */
+  .stat-row{display:flex;gap:16px;margin-bottom:16px}
+  .stat-item{flex:1;background:rgba(15,30,53,.7);border:1px solid rgba(196,146,46,.2);
+    border-radius:10px;padding:12px;text-align:center}
+  .stat-num{font-size:1.4rem;font-weight:900;font-family:'Outfit',sans-serif}
+  .stat-label{font-size:.65rem;color:var(--muted);font-family:'Inter',sans-serif;margin-top:2px}
+
+  /* Feature list */
+  .feat-list{list-style:none;display:flex;flex-direction:column;gap:8px}
+  .feat-list li{display:flex;align-items:center;gap:8px;font-family:'Inter',sans-serif;font-size:.8rem;color:#b0c4d8}
+  .feat-list li::before{content:'✦';color:var(--gold);font-size:.65rem;flex-shrink:0}
+
+  /* Module pill */
+  .mod-pill{display:inline-flex;align-items:center;gap:6px;padding:6px 14px;
+    background:rgba(15,30,53,.8);border:1px solid rgba(196,146,46,.2);border-radius:20px;
+    font-size:.72rem;font-family:'Inter',sans-serif;color:#9ab0c8}
+  .mod-pill-dot{width:6px;height:6px;border-radius:50%;background:var(--gold);flex-shrink:0}
+
+  /* ─── CAROUSEL ─── */
+  .carousel-wrap{position:relative}
+  .carousel{display:block;overflow:hidden;border-radius:16px;position:relative}
+  .slide{width:100%;aspect-ratio:1/1;position:relative;display:none;flex-direction:column}
+  .slide.shown{display:flex}
+  .carousel-nav{display:flex;justify-content:space-between;align-items:center;margin-top:10px}
+  .carousel-dots{display:flex;gap:6px;justify-content:center;flex:1}
+  .dot{width:7px;height:7px;border-radius:50%;background:rgba(196,146,46,.3);cursor:pointer;transition:.2s}
+  .dot.active{background:var(--gold);width:20px;border-radius:4px}
+  .nav-btn{background:rgba(196,146,46,.12);border:1px solid rgba(196,146,46,.25);
+    color:var(--gold-l);width:34px;height:34px;border-radius:50%;cursor:pointer;
+    font-size:1rem;display:flex;align-items:center;justify-content:center;
+    font-family:'Inter',sans-serif;transition:.2s;flex-shrink:0}
+  .nav-btn:hover{background:rgba(196,146,46,.25)}
+
+  /* Number indicator (carousel slide) */
+  .slide-num{position:absolute;bottom:20px;right:22px;z-index:3;
+    font-family:'Outfit',sans-serif;font-size:.75rem;font-weight:700;
+    color:rgba(196,146,46,.6);letter-spacing:.3px}
+
+  /* Decorative elements */
+  .deco-ring{position:absolute;border-radius:50%;border:1px solid;pointer-events:none;opacity:.12}
+  .deco-line{position:absolute;background:linear-gradient(transparent,rgba(196,146,46,.4),transparent);
+    width:1px;pointer-events:none}
+
+  /* ─────────────────────────────────
+     PRINT/EXPORT
+  ───────────────────────────────── */
+  @media print{
+    .caption-box,.copy-btn,.section-title,.page-header,.carousel-nav{display:none!important}
+    .post-wrap{page-break-inside:avoid}
+    body{background:#fff;padding:10px}
+  }
+
+  /* Responsive */
+  @media(max-width:600px){
+    .grid-2,.grid-3{grid-template-columns:1fr}
+    .post-h1{font-size:1.4rem}.post-h2{font-size:1.2rem}
+  }
+
+  /* Download button */
+  .dl-btn{width:100%;padding:10px;border-radius:10px;border:none;cursor:pointer;
+    background:linear-gradient(120deg,#C4922E,#E5B96A);
+    color:#050C18;font-family:'Outfit',sans-serif;font-weight:800;font-size:.85rem;
+    letter-spacing:.5px;transition:.2s;display:flex;align-items:center;justify-content:center;gap:8px}
+  .dl-btn:hover{opacity:.9;transform:translateY(-1px)}
+  .dl-btn:disabled{opacity:.5;cursor:wait}
+
+  /* Export overlay */
+  #export-overlay{display:none;position:fixed;inset:0;background:rgba(5,12,24,.85);
+    z-index:9999;align-items:center;justify-content:center;flex-direction:column;gap:16px}
+  #export-overlay.show{display:flex}
+  #export-overlay p{font-family:'Outfit';font-size:1.1rem;color:#E5B96A;font-weight:700}
+  #export-overlay span{font-family:'Inter';font-size:.8rem;color:#5A7490}
+</style>
+</head>
+<body>
+
+<!-- Loading overlay -->
+<div id="export-overlay">
+  <p>⏳ Gerando imagem PNG...</p>
+  <span>Aguarde, isso leva alguns segundos</span>
+</div>
+
+<!-- ═══════════════════════════ PAGE HEADER ═══════════════════════════ -->
+<div class="page-header">
+  <h1>V3 PARTNER — MATERIAIS SOCIAIS</h1>
+  <p>20 materiais prontos para Instagram &amp; LinkedIn · Carrosseis · Legendas otimizadas</p>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     SEÇÃO 1 — INSTAGRAM FEED (POSTS ESTÁTICOS)
+═══════════════════════════════════════════════════════════ -->
+<div class="section">
+<div class="section-title">📱 Instagram — Posts Feed</div>
+<div class="grid-2">
+
+  <!-- POST 1 — INSTITUCIONAL LANÇAMENTO -->
+  <div class="post-wrap">
+    <div class="post-label">
+      <span class="badge badge-ig">Instagram</span>
+      <span class="badge badge-feed">Feed 1:1</span>
+    </div>
+    <div class="post bg-grid-overlay bg-radial-gold" style="background:linear-gradient(160deg,#050C18 0%,#091221 100%)">
+      <div class="gold-line-top"></div>
+      <div class="post-top">
+        <span class="logo-mini"><img src="../public/logo.jpg" alt="V3"/><span>V3 PARTNER</span></span>
+        <span class="tag tag-gold">NOVO</span>
+      </div>
+      <!-- Decorative rings -->
+      <div class="deco-ring" style="width:320px;height:320px;border-color:#C4922E;top:-80px;right:-80px"></div>
+      <div class="deco-ring" style="width:180px;height:180px;border-color:#2E67E8;bottom:60px;left:-50px"></div>
+      <div class="post-content">
+        <div class="post-eyebrow">Plataforma Financeira</div>
+        <h2 class="post-h1">A plataforma que o<br/><span class="g-text">mercado financeiro</span><br/>esperava.</h2>
+        <p class="post-body">CRM · Split Fiscal · Mesa de Crédito · M&amp;A · Consórcio · IA — tudo integrado, tudo inteligente.</p>
+        <span class="post-cta">Conheça a V3 ▸</span>
+      </div>
+    </div>
+    <div class="caption-box">
+      <h4>Legenda — Post #1</h4>
+      <p>🚀 O mercado financeiro evoluiu. A sua operação acompanhou?
+
+A V3 Partner é a plataforma mais completa para gestão financeira: CRM inteligente, Split Fiscal, Mesa de Crédito N1 ao High Ticket, M&A, Consórcio e até IA integrada com Claude.
+
+Tudo em um só lugar. Tudo em tempo real.
+
+💬 Comenta "V3" que a gente te explica tudo.
+
+#V3Partner #MercadoFinanceiro #Fintech #PlataformaFinanceira #GestãoFinanceira #Inovação #TechFinance #Empreendedorismo</p>
+      <button class="copy-btn" onclick="copyCaption(this)">📋 Copiar legenda</button>
+    </div>
+  </div>
+
+  <!-- POST 2 — SPLIT FISCAL -->
+  <div class="post-wrap">
+    <div class="post-label">
+      <span class="badge badge-ig">Instagram</span>
+      <span class="badge badge-feed">Feed 1:1</span>
+    </div>
+    <div class="post bg-grid-overlay" style="background:linear-gradient(135deg,#050C18 0%,#091830 60%,#050C18 100%)">
+      <div class="gold-line-top"></div>
+      <div class="post-top">
+        <span class="logo-mini"><img src="../public/logo.jpg" alt="V3"/><span>V3 PARTNER</span></span>
+        <span class="tag tag-green">SPLIT FISCAL</span>
+      </div>
+      <div class="deco-ring" style="width:250px;height:250px;border-color:#10B981;top:40px;right:20px;opacity:.08"></div>
+      <div class="post-content">
+        <div class="post-eyebrow">Otimização Tributária</div>
+        <h2 class="post-h1">Seus clientes<br/>pagam impostos<br/><span class="g-text">demais.</span></h2>
+        <div class="divider-gold"></div>
+        <ul class="feat-list">
+          <li>Simulador de proposta em tempo real</li>
+          <li>Comparativo monetto vs. concorrente</li>
+          <li>Mix de pagamentos por modalidade</li>
+          <li>Geração automática de PDF</li>
+        </ul>
+        <div style="margin-top:14px"><span class="post-cta">Simule agora ▸</span></div>
+      </div>
+    </div>
+    <div class="caption-box">
+      <h4>Legenda — Post #2</h4>
+      <p>💰 Você sabia que seus clientes podem estar pagando impostos a mais?
+
+O módulo Split Fiscal da V3 Partner faz a simulação completa: analisa o mix de pagamentos (PIX, débito, crédito 1x, parcelado), calcula o custo real com cada operadora e mostra a economia real.
+
+✅ Compare taxas na hora
+✅ Gere proposta em PDF automaticamente
+✅ Mostre a diferença em R$ para o cliente
+
+Resultado? Mais contratos fechados.
+
+💬 Salva esse post pra não esquecer!
+
+#SplitFiscal #Tributação #Fintech #V3Partner #MercadoFinanceiro #Impostos #Negócios #Empreendedor</p>
+      <button class="copy-btn" onclick="copyCaption(this)">📋 Copiar legenda</button>
+    </div>
+  </div>
+
+  <!-- POST 3 — IA ASSISTANT -->
+  <div class="post-wrap">
+    <div class="post-label">
+      <span class="badge badge-ig">Instagram</span>
+      <span class="badge badge-feed">Feed 1:1</span>
+    </div>
+    <div class="post bg-grid-overlay bg-radial-dual" style="background:#050C18">
+      <div class="gold-line-top"></div>
+      <div class="post-top">
+        <span class="logo-mini"><img src="../public/logo.jpg" alt="V3"/><span>V3 PARTNER</span></span>
+        <span class="tag tag-blue">IA</span>
+      </div>
+      <!-- AI circles decoration -->
+      <div style="position:absolute;inset:0;z-index:1;display:flex;align-items:center;justify-content:center">
+        <div style="position:relative;width:180px;height:180px">
+          <div style="position:absolute;inset:0;border-radius:50%;border:1px solid rgba(196,146,46,.3);animation:none"></div>
+          <div style="position:absolute;inset:20px;border-radius:50%;border:1px solid rgba(46,103,232,.25)"></div>
+          <div style="position:absolute;inset:40px;border-radius:50%;background:radial-gradient(circle,rgba(196,146,46,.15),transparent);display:flex;align-items:center;justify-content:center">
+            <span style="font-size:2rem">🤖</span>
+          </div>
+        </div>
+      </div>
+      <div class="post-content">
+        <div class="post-eyebrow">Inteligência Artificial</div>
+        <h2 class="post-h2"><span class="g-text-b">IA integrada</span><br/>na sua operação<br/>financeira.</h2>
+        <p class="post-body">Powered by Claude — o modelo de IA mais avançado do mercado, direto na V3 Partner.</p>
+        <span class="post-cta">Ver demonstração ▸</span>
+      </div>
+    </div>
+    <div class="caption-box">
+      <h4>Legenda — Post #3</h4>
+      <p>🤖 Não é mais o futuro. É agora.
+
+A V3 Partner tem IA real integrada à sua plataforma financeira, powered by Claude (Anthropic) — o mesmo modelo usado pelas maiores empresas do mundo.
+
+O que você pode fazer:
+→ Analisar clientes em segundos
+→ Gerar propostas automáticas
+→ Tirar dúvidas técnicas sobre produtos
+→ Obter insights de mercado em tempo real
+
+Enquanto outros ainda usam planilha, você opera com IA. 🔥
+
+📌 Salva esse post!
+
+#InteligenciaArtificial #IA #Fintech #V3Partner #Claude #Tecnologia #MercadoFinanceiro #Inovação</p>
+      <button class="copy-btn" onclick="copyCaption(this)">📋 Copiar legenda</button>
+    </div>
+  </div>
+
+  <!-- POST 4 — M&A -->
+  <div class="post-wrap">
+    <div class="post-label">
+      <span class="badge badge-ig">Instagram</span>
+      <span class="badge badge-feed">Feed 1:1</span>
+    </div>
+    <div class="post" style="background:linear-gradient(160deg,#050C18 0%,#0D1B35 50%,#050C18 100%)">
+      <div class="gold-line-top"></div>
+      <div class="post-top">
+        <span class="logo-mini"><img src="../public/logo.jpg" alt="V3"/><span>V3 PARTNER</span></span>
+        <span class="tag tag-gold">M&amp;A</span>
+      </div>
+      <div style="position:absolute;top:0;right:0;bottom:0;width:40%;z-index:1;
+        background:linear-gradient(135deg,rgba(196,146,46,.06),rgba(26,79,196,.12));
+        clip-path:polygon(30% 0%,100% 0%,100% 100%,0% 100%)"></div>
+      <div class="post-content">
+        <div class="post-eyebrow">Fusões &amp; Aquisições</div>
+        <h2 class="post-h1">As maiores<br/>operações do<br/>mercado.<br/><span class="g-text">Na sua mesa.</span></h2>
+        <div class="stat-row">
+          <div class="stat-item">
+            <div class="stat-num g-text">M&amp;A</div>
+            <div class="stat-label">Módulo Completo</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-num" style="color:#2E67E8">360°</div>
+            <div class="stat-label">Visão da Operação</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="caption-box">
+      <h4>Legenda — Post #4</h4>
+      <p>🏢 M&A: onde os grandes negócios acontecem.
+
+Fusões e aquisições não são só para grandes bancos. Com a Mesa M&A da V3 Partner, você estrutura as maiores operações do mercado com metodologia, análise e tecnologia de alto nível.
+
+✦ Pipeline completo de oportunidades
+✦ Análise e due diligence integrada
+✦ Gestão de propostas e contratos
+✦ Acompanhamento em tempo real
+
+Você está pronto para operar nesse nível? 💼
+
+#MA #FusoesEAquisicoes #MercadoFinanceiro #V3Partner #HighTicket #Negócios #Investimentos #CorretorFinanceiro</p>
+      <button class="copy-btn" onclick="copyCaption(this)">📋 Copiar legenda</button>
+    </div>
+  </div>
+
+  <!-- POST 5 — MESA DE CRÉDITO -->
+  <div class="post-wrap">
+    <div class="post-label">
+      <span class="badge badge-ig">Instagram</span>
+      <span class="badge badge-feed">Feed 1:1</span>
+    </div>
+    <div class="post bg-grid-overlay" style="background:#050C18">
+      <div class="gold-line-top"></div>
+      <div class="post-top">
+        <span class="logo-mini"><img src="../public/logo.jpg" alt="V3"/><span>V3 PARTNER</span></span>
+        <span class="tag tag-gold">CRÉDITO</span>
+      </div>
+      <div class="post-content">
+        <div class="post-eyebrow">Mesa de Crédito</div>
+        <h2 class="post-h1">Do varejo<br/>ao <span class="g-text">High Ticket.</span><br/>Uma mesa só.</h2>
+        <div class="divider-gold"></div>
+        <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px">
+          <div style="display:flex;align-items:center;gap:10px">
+            <div style="width:28px;height:28px;border-radius:6px;background:rgba(16,185,129,.15);border:1px solid rgba(16,185,129,.3);display:flex;align-items:center;justify-content:center;font-size:.75rem;color:#10B981;font-weight:700;flex-shrink:0">N1</div>
+            <span style="font-family:'Inter';font-size:.8rem;color:#9ab0c8">Crédito Varejo — rápido e direto</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px">
+            <div style="width:28px;height:28px;border-radius:6px;background:rgba(196,146,46,.15);border:1px solid rgba(196,146,46,.3);display:flex;align-items:center;justify-content:center;font-size:.75rem;color:var(--gold);font-weight:700;flex-shrink:0">N2</div>
+            <span style="font-family:'Inter';font-size:.8rem;color:#9ab0c8">Crédito Estruturado — operações complexas</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px">
+            <div style="width:28px;height:28px;border-radius:6px;background:rgba(46,103,232,.15);border:1px solid rgba(46,103,232,.3);display:flex;align-items:center;justify-content:center;font-size:.75rem;color:var(--blue-l);font-weight:700;flex-shrink:0">N3</div>
+            <span style="font-family:'Inter';font-size:.8rem;color:#9ab0c8">High Ticket — grandes volumes</span>
+          </div>
+        </div>
+        <span class="post-cta">Acessar mesa ▸</span>
+      </div>
+    </div>
+    <div class="caption-box">
+      <h4>Legenda — Post #5</h4>
+      <p>💳 3 níveis de crédito. Uma plataforma. Resultado máximo.
+
+A Mesa de Crédito da V3 Partner foi desenhada para atender qualquer tipo de operação:
+
+🟢 N1 — Crédito Varejo: agilidade para fechar mais
+🟡 N2 — Crédito Estruturado: operações complexas com método
+🔵 N3 — High Ticket: grandes volumes, alta performance
+
+Cada nível tem workflow dedicado, análise integrada e gestão de pipeline completa.
+
+Você opera em qual nível hoje? 👇
+
+#MesaDeCredito #Credito #HighTicket #CreditoEstruturado #V3Partner #MercadoFinanceiro #Correspondente #Fintech</p>
+      <button class="copy-btn" onclick="copyCaption(this)">📋 Copiar legenda</button>
+    </div>
+  </div>
+
+  <!-- POST 6 — V3 ACADEMY -->
+  <div class="post-wrap">
+    <div class="post-label">
+      <span class="badge badge-ig">Instagram</span>
+      <span class="badge badge-feed">Feed 1:1</span>
+    </div>
+    <div class="post" style="background:linear-gradient(155deg,#050C18 0%,#091628 100%)">
+      <div class="gold-line-top"></div>
+      <div class="post-top">
+        <span class="logo-mini"><img src="../public/logo.jpg" alt="V3"/><span>V3 PARTNER</span></span>
+        <span class="tag tag-gold">ACADEMY</span>
+      </div>
+      <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-60%);z-index:1;
+        font-size:5rem;opacity:.06;font-family:'Outfit',sans-serif;font-weight:900;
+        color:#C4922E;white-space:nowrap">ACADEMY</div>
+      <div class="post-content">
+        <div class="post-eyebrow">V3 Academy</div>
+        <h2 class="post-h1">Conhecimento<br/>que gera<br/><span class="g-text">resultado.</span></h2>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px">
+          <span class="mod-pill"><span class="mod-pill-dot"></span>Home Equity</span>
+          <span class="mod-pill"><span class="mod-pill-dot" style="background:#2E67E8"></span>Crédito Estruturado</span>
+          <span class="mod-pill"><span class="mod-pill-dot" style="background:#10B981"></span>High Ticket</span>
+          <span class="mod-pill"><span class="mod-pill-dot"></span>M&amp;A</span>
+          <span class="mod-pill"><span class="mod-pill-dot" style="background:#2E67E8"></span>Split Fiscal</span>
+          <span class="mod-pill"><span class="mod-pill-dot" style="background:#10B981"></span>Compliance</span>
+        </div>
+        <span class="post-cta">Acessar Academy ▸</span>
+      </div>
+    </div>
+    <div class="caption-box">
+      <h4>Legenda — Post #6</h4>
+      <p>📚 Plataforma boa não basta. Você precisa dominar o que está vendendo.
+
+A V3 Academy é o hub de conhecimento dentro da V3 Partner. Trilhas especializadas em:
+
+📘 Home Equity
+📗 Crédito Estruturado
+📙 High Ticket
+📕 M&A
+📒 Split Fiscal
+📓 Consórcio
+📔 Compliance
+
+Aprenda, aplique e feche mais negócios.
+
+💡 Conhecimento = Vantagem competitiva.
+
+👉 Siga @v3partner para mais conteúdos.
+
+#V3Academy #Educação #Fintech #MercadoFinanceiro #V3Partner #Treinamento #Capacitação #HomeEquity</p>
+      <button class="copy-btn" onclick="copyCaption(this)">📋 Copiar legenda</button>
+    </div>
+  </div>
+
+  <!-- POST 7 — CRM -->
+  <div class="post-wrap">
+    <div class="post-label">
+      <span class="badge badge-ig">Instagram</span>
+      <span class="badge badge-feed">Feed 1:1</span>
+    </div>
+    <div class="post bg-grid-overlay" style="background:#050C18">
+      <div class="gold-line-top"></div>
+      <div class="post-top">
+        <span class="logo-mini"><img src="../public/logo.jpg" alt="V3"/><span>V3 PARTNER</span></span>
+        <span class="tag tag-blue">CRM</span>
+      </div>
+      <div class="post-content">
+        <div class="post-eyebrow">Gestão de Clientes</div>
+        <h2 class="post-h1">Cada cliente.<br/>Cada oportunidade.<br/><span class="g-text">Nada escapando.</span></h2>
+        <div class="stat-row">
+          <div class="stat-item"><div class="stat-num g-text">CRM</div><div class="stat-label">Completo</div></div>
+          <div class="stat-item"><div class="stat-num" style="color:#10B981">100%</div><div class="stat-label">Integrado</div></div>
+          <div class="stat-item"><div class="stat-num" style="color:#2E67E8">360°</div><div class="stat-label">Visão</div></div>
+        </div>
+        <p class="post-body">Pipeline visual · Histórico completo · Alertas automáticos · Relatórios</p>
+      </div>
+    </div>
+    <div class="caption-box">
+      <h4>Legenda — Post #7</h4>
+      <p>📊 Você sabe onde está cada cliente do seu pipeline?
+
+Com o CRM da V3 Partner, você tem:
+
+→ Pipeline visual com todas as etapas
+→ Histórico completo de interações
+→ Alertas e lembretes automáticos
+→ Integração com todos os módulos da plataforma
+→ Relatórios em tempo real
+
+Chega de perder negócio por falta de acompanhamento. 🎯
+
+Comenta "CRM" pra saber mais!
+
+#CRM #GestãoDeClientes #Vendas #Fintech #V3Partner #Pipeline #NegóciasFinanceiros #MercadoFinanceiro</p>
+      <button class="copy-btn" onclick="copyCaption(this)">📋 Copiar legenda</button>
+    </div>
+  </div>
+
+  <!-- POST 8 — CONSÓRCIO -->
+  <div class="post-wrap">
+    <div class="post-label">
+      <span class="badge badge-ig">Instagram</span>
+      <span class="badge badge-feed">Feed 1:1</span>
+    </div>
+    <div class="post" style="background:linear-gradient(145deg,#050C18,#0C1A2E)">
+      <div class="gold-line-top"></div>
+      <div class="post-top">
+        <span class="logo-mini"><img src="../public/logo.jpg" alt="V3"/><span>V3 PARTNER</span></span>
+        <span class="tag tag-gold">CONSÓRCIO</span>
+      </div>
+      <div style="position:absolute;right:-30px;top:-30px;z-index:1;width:200px;height:200px;
+        border-radius:50%;background:radial-gradient(circle,rgba(196,146,46,.1),transparent 70%)"></div>
+      <div class="post-content">
+        <div class="post-eyebrow">Consórcio</div>
+        <h2 class="post-h1">Simule.<br/>Venda.<br/><span class="g-text">Conquiste.</span></h2>
+        <div class="divider-gold"></div>
+        <ul class="feat-list">
+          <li>Simulação completa em segundos</li>
+          <li>Cartas contempladas disponíveis</li>
+          <li>Gestão de projetos integrada</li>
+          <li>Mesa de consórcio operacional</li>
+        </ul>
+        <div style="margin-top:14px"><span class="post-cta">Simular agora ▸</span></div>
+      </div>
+    </div>
+    <div class="caption-box">
+      <h4>Legenda — Post #8</h4>
+      <p>🏠 Consórcio ainda é um dos produtos mais rentáveis do mercado. Você está aproveitando?
+
+A V3 Partner tem um módulo completo de consórcio:
+
+🔸 Simulador instantâneo de parcelas
+🔸 Banco de cartas contempladas
+🔸 Gestão de projetos do cliente
+🔸 Mesa operacional dedicada
+
+Do atendimento ao pós-venda, tudo em uma plataforma.
+
+Quantos consórcios você vendeu esse mês? 👇
+
+#Consórcio #V3Partner #MercadoFinanceiro #Fintech #Simulador #Imóveis #Veículos #Correspondente</p>
+      <button class="copy-btn" onclick="copyCaption(this)">📋 Copiar legenda</button>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     SEÇÃO 2 — INSTAGRAM CARROSSÉIS
+═══════════════════════════════════════════════════════════ -->
+<div class="section">
+<div class="section-title">🎠 Instagram — Carrosseis</div>
+<div class="grid-2">
+
+  <!-- CARROSSEL 1 — 5 MOTIVOS V3 -->
+  <div class="post-wrap">
+    <div class="post-label">
+      <span class="badge badge-ig">Instagram</span>
+      <span class="badge badge-carousel">Carrossel 5 slides</span>
+    </div>
+    <div class="carousel-wrap">
+      <div class="carousel" id="c1" style="border-radius:16px">
+
+        <!-- SLIDE 1 -->
+        <div class="slide bg-grid-overlay bg-radial-gold" style="background:#050C18">
+          <div class="gold-line-top"></div>
+          <div class="post-top"><span class="logo-mini"><img src="../public/logo.jpg" alt="V3"/><span>V3 PARTNER</span></span><span class="tag tag-gold">SWIPE ▸</span></div>
+          <div class="post-content" style="display:flex;flex-direction:column;justify-content:center;height:100%;padding-top:80px">
+            <div class="post-eyebrow">Por que escolher</div>
+            <h2 class="post-h1" style="font-size:2.1rem">5 motivos<br/>para operar<br/><span class="g-text">com a V3.</span></h2>
+            <p class="post-body">Arrasta para ver cada razão 👉</p>
+          </div>
+          <div class="slide-num">01 / 05</div>
+        </div>
+
+        <!-- SLIDE 2 -->
+        <div class="slide" style="background:linear-gradient(135deg,#050C18,#091830)">
+          <div class="gold-line-top"></div>
+          <div class="post-top"><span class="logo-mini"><img src="../public/logo.jpg" alt="V3"/><span>V3 PARTNER</span></span></div>
+          <div class="post-content" style="display:flex;flex-direction:column;justify-content:center;height:100%;padding-top:60px">
+            <div style="font-size:3rem;margin-bottom:16px">🏆</div>
+            <div class="post-eyebrow">Motivo #1</div>
+            <h2 class="post-h2"><span class="g-text">Tudo integrado</span><br/>em uma só plataforma</h2>
+            <p class="post-body">CRM + Crédito + M&A + Consórcio + Split Fiscal + IA. Sem precisar alternar entre sistemas. Sem perda de informação.</p>
+            <span class="tag tag-gold" style="align-self:flex-start">Integração Total</span>
+          </div>
+          <div class="slide-num">02 / 05</div>
+        </div>
+
+        <!-- SLIDE 3 -->
+        <div class="slide" style="background:linear-gradient(135deg,#050C18,#0a1525)">
+          <div class="gold-line-top"></div>
+          <div class="post-top"><span class="logo-mini"><img src="../public/logo.jpg" alt="V3"/><span>V3 PARTNER</span></span></div>
+          <div class="post-content" style="display:flex;flex-direction:column;justify-content:center;height:100%;padding-top:60px">
+            <div style="font-size:3rem;margin-bottom:16px">🤖</div>
+            <div class="post-eyebrow">Motivo #2</div>
+            <h2 class="post-h2"><span class="g-text-b">Inteligência Artificial</span><br/>na sua operação</h2>
+            <p class="post-body">IA com Claude integrada diretamente na plataforma. Análise instantânea, propostas automáticas, insights de mercado.</p>
+            <span class="tag tag-blue" style="align-self:flex-start">IA Real</span>
+          </div>
+          <div class="slide-num">03 / 05</div>
+        </div>
+
+        <!-- SLIDE 4 -->
+        <div class="slide" style="background:linear-gradient(135deg,#050C18,#091221)">
+          <div class="gold-line-top"></div>
+          <div class="post-top"><span class="logo-mini"><img src="../public/logo.jpg" alt="V3"/><span>V3 PARTNER</span></span></div>
+          <div class="post-content" style="display:flex;flex-direction:column;justify-content:center;height:100%;padding-top:60px">
+            <div style="font-size:3rem;margin-bottom:16px">📚</div>
+            <div class="post-eyebrow">Motivo #3</div>
+            <h2 class="post-h2">Formação<br/><span class="g-text">especializada</span><br/>inclusa</h2>
+            <p class="post-body">V3 Academy com trilhas em Home Equity, M&A, High Ticket, Compliance e muito mais. Conhecimento aplicado = mais vendas.</p>
+            <span class="tag tag-gold" style="align-self:flex-start">Academy</span>
+          </div>
+          <div class="slide-num">04 / 05</div>
+        </div>
+
+        <!-- SLIDE 5 — CTA -->
+        <div class="slide bg-radial-gold" style="background:#050C18">
+          <div class="gold-line-top"></div>
+          <div class="post-top"><span class="logo-mini"><img src="../public/logo.jpg" alt="V3"/><span>V3 PARTNER</span></span></div>
+          <div class="post-content" style="display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;height:100%;padding-top:60px">
+            <div style="font-size:3rem;margin-bottom:12px">🚀</div>
+            <div class="post-eyebrow" style="text-align:center">Pronto para o próximo nível?</div>
+            <h2 class="post-h2" style="text-align:center">Entre para a<br/><span class="g-text">V3 Partner</span><br/>hoje mesmo.</h2>
+            <p class="post-body" style="text-align:center">Acesse nossa plataforma e transforme sua operação financeira.</p>
+            <span class="post-cta" style="margin-top:8px">Quero conhecer ▸</span>
+          </div>
+          <div class="slide-num">05 / 05</div>
+        </div>
+
+      </div>
+      <div class="carousel-nav">
+        <button class="nav-btn" onclick="moveCarousel('c1',-1)">‹</button>
+        <div class="carousel-dots" id="c1-dots">
+          <div class="dot active" onclick="goSlide('c1',0)"></div>
+          <div class="dot" onclick="goSlide('c1',1)"></div>
+          <div class="dot" onclick="goSlide('c1',2)"></div>
+          <div class="dot" onclick="goSlide('c1',3)"></div>
+          <div class="dot" onclick="goSlide('c1',4)"></div>
+        </div>
+        <button class="nav-btn" onclick="moveCarousel('c1',1)">›</button>
+      </div>
+    </div>
+    <div class="caption-box">
+      <h4>Legenda — Carrossel #9</h4>
+      <p>➡️ Arrasta até o final (vale muito a pena)
+
+5 motivos para operar com a V3 Partner em 2025:
+
+1️⃣ Tudo integrado — CRM, crédito, M&A, consórcio em um só lugar
+2️⃣ IA real integrada — powered by Claude (Anthropic)
+3️⃣ Academy inclusa — formação especializada em produtos financeiros
+4️⃣ Multi-perfil — Admin, Partner, Gestão e Mesa Operacional
+5️⃣ Resultados — dados em tempo real para decisões melhores
+
+Qual desses mais chamou sua atenção? Comenta aí 👇
+
+#V3Partner #Fintech #MercadoFinanceiro #Plataforma #Tecnologia #Resultados #Inovação</p>
+      <button class="copy-btn" onclick="copyCaption(this)">📋 Copiar legenda</button>
+    </div>
+  </div>
+
+  <!-- CARROSSEL 2 — ANTES x DEPOIS -->
+  <div class="post-wrap">
+    <div class="post-label">
+      <span class="badge badge-ig">Instagram</span>
+      <span class="badge badge-carousel">Carrossel 4 slides</span>
+    </div>
+    <div class="carousel-wrap">
+      <div class="carousel" id="c2" style="border-radius:16px">
+
+        <!-- SLIDE 1 -->
+        <div class="slide" style="background:linear-gradient(145deg,#050C18,#0c1425)">
+          <div class="gold-line-top"></div>
+          <div class="post-top"><span class="logo-mini"><img src="../public/logo.jpg" alt="V3"/><span>V3 PARTNER</span></span><span class="tag tag-gold">SWIPE ▸</span></div>
+          <div class="post-content" style="display:flex;flex-direction:column;justify-content:center;height:100%;padding-top:70px">
+            <div class="post-eyebrow">Transformação real</div>
+            <h2 class="post-h1" style="font-size:2rem">Sua operação<br/><span style="color:#EF4444">antes</span> vs<br/><span class="g-text">depois</span> da V3.</h2>
+            <p class="post-body">Arrasta e veja a diferença que a plataforma faz 👉</p>
+          </div>
+          <div class="slide-num">01 / 04</div>
+        </div>
+
+        <!-- SLIDE 2 — ANTES -->
+        <div class="slide" style="background:linear-gradient(145deg,#1a0505,#120a0a)">
+          <div style="position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,#EF4444,transparent)"></div>
+          <div class="post-top"><span style="color:#EF4444;font-weight:700;font-family:'Outfit',sans-serif;font-size:.9rem">ANTES ✗</span></div>
+          <div class="post-content" style="display:flex;flex-direction:column;justify-content:center;height:100%;padding-top:60px">
+            <div style="display:flex;flex-direction:column;gap:10px">
+              <div style="display:flex;gap:10px;align-items:center;font-family:'Inter';font-size:.8rem;color:#c0a0a0">
+                <span style="color:#EF4444;font-size:1rem">✗</span> Planilhas desorganizadas
+              </div>
+              <div style="display:flex;gap:10px;align-items:center;font-family:'Inter';font-size:.8rem;color:#c0a0a0">
+                <span style="color:#EF4444;font-size:1rem">✗</span> Clientes perdidos no processo
+              </div>
+              <div style="display:flex;gap:10px;align-items:center;font-family:'Inter';font-size:.8rem;color:#c0a0a0">
+                <span style="color:#EF4444;font-size:1rem">✗</span> Sem visão do pipeline
+              </div>
+              <div style="display:flex;gap:10px;align-items:center;font-family:'Inter';font-size:.8rem;color:#c0a0a0">
+                <span style="color:#EF4444;font-size:1rem">✗</span> Propostas manuais demoradas
+              </div>
+              <div style="display:flex;gap:10px;align-items:center;font-family:'Inter';font-size:.8rem;color:#c0a0a0">
+                <span style="color:#EF4444;font-size:1rem">✗</span> Sem análise tributária
+              </div>
+              <div style="display:flex;gap:10px;align-items:center;font-family:'Inter';font-size:.8rem;color:#c0a0a0">
+                <span style="color:#EF4444;font-size:1rem">✗</span> Dados espalhados em vários sistemas
+              </div>
+            </div>
+          </div>
+          <div class="slide-num" style="color:rgba(239,68,68,.5)">02 / 04</div>
+        </div>
+
+        <!-- SLIDE 3 — DEPOIS -->
+        <div class="slide" style="background:linear-gradient(145deg,#030f0c,#041510)">
+          <div style="position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,#10B981,transparent)"></div>
+          <div class="post-top"><span style="color:#10B981;font-weight:700;font-family:'Outfit',sans-serif;font-size:.9rem">DEPOIS ✓</span></div>
+          <div class="post-content" style="display:flex;flex-direction:column;justify-content:center;height:100%;padding-top:60px">
+            <div style="display:flex;flex-direction:column;gap:10px">
+              <div style="display:flex;gap:10px;align-items:center;font-family:'Inter';font-size:.8rem;color:#90c8a8">
+                <span style="color:#10B981;font-size:1rem">✓</span> CRM integrado e organizado
+              </div>
+              <div style="display:flex;gap:10px;align-items:center;font-family:'Inter';font-size:.8rem;color:#90c8a8">
+                <span style="color:#10B981;font-size:1rem">✓</span> Pipeline visual e rastreável
+              </div>
+              <div style="display:flex;gap:10px;align-items:center;font-family:'Inter';font-size:.8rem;color:#90c8a8">
+                <span style="color:#10B981;font-size:1rem">✓</span> Propostas geradas em segundos
+              </div>
+              <div style="display:flex;gap:10px;align-items:center;font-family:'Inter';font-size:.8rem;color:#90c8a8">
+                <span style="color:#10B981;font-size:1rem">✓</span> Split Fiscal automático
+              </div>
+              <div style="display:flex;gap:10px;align-items:center;font-family:'Inter';font-size:.8rem;color:#90c8a8">
+                <span style="color:#10B981;font-size:1rem">✓</span> IA auxiliando decisões
+              </div>
+              <div style="display:flex;gap:10px;align-items:center;font-family:'Inter';font-size:.8rem;color:#90c8a8">
+                <span style="color:#10B981;font-size:1rem">✓</span> Tudo em uma plataforma
+              </div>
+            </div>
+          </div>
+          <div class="slide-num" style="color:rgba(16,185,129,.5)">03 / 04</div>
+        </div>
+
+        <!-- SLIDE 4 CTA -->
+        <div class="slide bg-radial-gold" style="background:#050C18">
+          <div class="gold-line-top"></div>
+          <div class="post-content" style="display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;height:100%">
+            <span class="logo-mini" style="justify-content:center;margin-bottom:20px"><img src="../public/logo.jpg" alt="V3" style="width:38px;height:38px;border-radius:8px"/><span style="font-size:1.1rem">V3 PARTNER</span></span>
+            <h2 class="post-h2" style="text-align:center">Qual versão<br/>você quer ser?</h2>
+            <p class="post-body" style="text-align:center;margin-top:8px">A transformação começa com a plataforma certa.</p>
+            <span class="post-cta" style="margin-top:16px">Começar agora ▸</span>
+          </div>
+          <div class="slide-num">04 / 04</div>
+        </div>
+
+      </div>
+      <div class="carousel-nav">
+        <button class="nav-btn" onclick="moveCarousel('c2',-1)">‹</button>
+        <div class="carousel-dots" id="c2-dots">
+          <div class="dot active" onclick="goSlide('c2',0)"></div>
+          <div class="dot" onclick="goSlide('c2',1)"></div>
+          <div class="dot" onclick="goSlide('c2',2)"></div>
+          <div class="dot" onclick="goSlide('c2',3)"></div>
+        </div>
+        <button class="nav-btn" onclick="moveCarousel('c2',1)">›</button>
+      </div>
+    </div>
+    <div class="caption-box">
+      <h4>Legenda — Carrossel #10</h4>
+      <p>👈 Arrasta e veja como muda TUDO
+
+Sua operação financeira antes vs depois da V3 Partner:
+
+❌ ANTES: Planilhas, sistemas separados, clientes perdendo-se no processo, propostas manuais, zero visibilidade.
+
+✅ DEPOIS: CRM integrado, pipeline visual, propostas automáticas, Split Fiscal, IA e tudo em uma só plataforma.
+
+A diferença? Uma plataforma feita para quem quer resultado de verdade.
+
+💬 Marca aquele amigo que ainda usa planilha 👇
+
+#V3Partner #Transformação #Fintech #Produtividade #MercadoFinanceiro #Tecnologia #Inovação #Correspondente</p>
+      <button class="copy-btn" onclick="copyCaption(this)">📋 Copiar legenda</button>
+    </div>
+  </div>
+
+  <!-- CARROSSEL 3 — MÓDULOS DA V3 -->
+  <div class="post-wrap">
+    <div class="post-label">
+      <span class="badge badge-ig">Instagram</span>
+      <span class="badge badge-carousel">Carrossel 6 slides</span>
+    </div>
+    <div class="carousel-wrap">
+      <div class="carousel" id="c3" style="border-radius:16px">
+
+        <div class="slide bg-grid-overlay bg-radial-gold" style="background:#050C18">
+          <div class="gold-line-top"></div>
+          <div class="post-top"><span class="logo-mini"><img src="../public/logo.jpg" alt="V3"/><span>V3 PARTNER</span></span><span class="tag tag-gold">SWIPE ▸</span></div>
+          <div class="post-content" style="display:flex;flex-direction:column;justify-content:center;height:100%;padding-top:70px">
+            <div class="post-eyebrow">Descubra cada módulo</div>
+            <h2 class="post-h1">O que tem<br/>dentro da<br/><span class="g-text">V3 Partner?</span></h2>
+            <p class="post-body">Arrasta para ver todos os módulos 👉</p>
+          </div>
+          <div class="slide-num">01 / 06</div>
+        </div>
+
+        <div class="slide" style="background:linear-gradient(135deg,#050C18,#051528)">
+          <div class="gold-line-top"></div>
+          <div class="post-top"><span class="logo-mini"><img src="../public/logo.jpg" alt="V3"/><span>V3 PARTNER</span></span><span class="tag tag-gold">MÓDULO 1</span></div>
+          <div class="post-content" style="display:flex;flex-direction:column;justify-content:center;height:100%;padding-top:60px">
+            <div style="font-size:2.5rem;margin-bottom:12px">📊</div>
+            <h2 class="post-h2"><span class="g-text">Dashboard</span><br/>&amp; CRM</h2>
+            <p class="post-body">Visão 360° da operação. Gerencie clientes, acompanhe KPIs e tome decisões baseadas em dados reais.</p>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <span class="tag tag-gold">KPIs em tempo real</span>
+              <span class="tag tag-blue">Pipeline visual</span>
+            </div>
+          </div>
+          <div class="slide-num">02 / 06</div>
+        </div>
+
+        <div class="slide" style="background:linear-gradient(135deg,#050C18,#051a12)">
+          <div class="gold-line-top"></div>
+          <div class="post-top"><span class="logo-mini"><img src="../public/logo.jpg" alt="V3"/><span>V3 PARTNER</span></span><span class="tag tag-green">MÓDULO 2</span></div>
+          <div class="post-content" style="display:flex;flex-direction:column;justify-content:center;height:100%;padding-top:60px">
+            <div style="font-size:2.5rem;margin-bottom:12px">💰</div>
+            <h2 class="post-h2"><span style="color:#10B981">Split Fiscal</span></h2>
+            <p class="post-body">Simulador de proposta, mix de pagamentos, comparativo de taxas e geração de PDF. Otimize a tributação dos seus clientes.</p>
+            <span class="tag tag-green" style="align-self:flex-start">Otimização tributária</span>
+          </div>
+          <div class="slide-num">03 / 06</div>
+        </div>
+
+        <div class="slide" style="background:linear-gradient(135deg,#050C18,#12050a)">
+          <div class="gold-line-top"></div>
+          <div class="post-top"><span class="logo-mini"><img src="../public/logo.jpg" alt="V3"/><span>V3 PARTNER</span></span><span class="tag tag-gold">MÓDULO 3</span></div>
+          <div class="post-content" style="display:flex;flex-direction:column;justify-content:center;height:100%;padding-top:60px">
+            <div style="font-size:2.5rem;margin-bottom:12px">🏦</div>
+            <h2 class="post-h2"><span class="g-text">Mesa de</span><br/><span class="g-text">Crédito</span></h2>
+            <p class="post-body">3 níveis: Varejo (N1), Estruturado (N2) e High Ticket (N3). Do crédito simples ao mais complexo.</p>
+            <div style="display:flex;gap:6px">
+              <span style="padding:3px 10px;border-radius:20px;font-size:.7rem;font-weight:700;background:rgba(16,185,129,.15);border:1px solid rgba(16,185,129,.3);color:#10B981">N1</span>
+              <span style="padding:3px 10px;border-radius:20px;font-size:.7rem;font-weight:700;background:rgba(196,146,46,.15);border:1px solid rgba(196,146,46,.3);color:var(--gold)">N2</span>
+              <span style="padding:3px 10px;border-radius:20px;font-size:.7rem;font-weight:700;background:rgba(46,103,232,.15);border:1px solid rgba(46,103,232,.3);color:var(--blue-l)">N3</span>
+            </div>
+          </div>
+          <div class="slide-num">04 / 06</div>
+        </div>
+
+        <div class="slide" style="background:linear-gradient(135deg,#050C18,#060c1e)">
+          <div class="gold-line-top"></div>
+          <div class="post-top"><span class="logo-mini"><img src="../public/logo.jpg" alt="V3"/><span>V3 PARTNER</span></span><span class="tag tag-blue">MÓDULO 4</span></div>
+          <div class="post-content" style="display:flex;flex-direction:column;justify-content:center;height:100%;padding-top:60px">
+            <div style="font-size:2.5rem;margin-bottom:12px">🤝</div>
+            <h2 class="post-h2"><span class="g-text-b">M&amp;A +</span><br/><span class="g-text-b">Consórcio</span></h2>
+            <p class="post-body">Fusões e Aquisições com metodologia e Consórcio com simulação, cartas contempladas e gestão completa de projetos.</p>
+            <div style="display:flex;gap:8px">
+              <span class="tag tag-blue">M&amp;A</span>
+              <span class="tag tag-gold">Consórcio</span>
+            </div>
+          </div>
+          <div class="slide-num">05 / 06</div>
+        </div>
+
+        <div class="slide bg-radial-dual" style="background:#050C18">
+          <div class="gold-line-top"></div>
+          <div class="post-content" style="display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;height:100%">
+            <div style="font-size:2.8rem;margin-bottom:14px">🚀</div>
+            <span class="logo-mini" style="justify-content:center;margin-bottom:8px"><img src="../public/logo.jpg" alt="V3" style="width:32px;height:32px;border-radius:7px"/><span style="font-size:1rem">V3 PARTNER</span></span>
+            <h2 class="post-h2" style="text-align:center">A plataforma<br/><span class="g-text">completa</span><br/>que você precisava.</h2>
+            <span class="post-cta" style="margin-top:20px">Conheça agora ▸</span>
+          </div>
+          <div class="slide-num">06 / 06</div>
+        </div>
+
+      </div>
+      <div class="carousel-nav">
+        <button class="nav-btn" onclick="moveCarousel('c3',-1)">‹</button>
+        <div class="carousel-dots" id="c3-dots">
+          <div class="dot active" onclick="goSlide('c3',0)"></div>
+          <div class="dot" onclick="goSlide('c3',1)"></div>
+          <div class="dot" onclick="goSlide('c3',2)"></div>
+          <div class="dot" onclick="goSlide('c3',3)"></div>
+          <div class="dot" onclick="goSlide('c3',4)"></div>
+          <div class="dot" onclick="goSlide('c3',5)"></div>
+        </div>
+        <button class="nav-btn" onclick="moveCarousel('c3',1)">›</button>
+      </div>
+    </div>
+    <div class="caption-box">
+      <h4>Legenda — Carrossel #11</h4>
+      <p>🔍 Você sabe exatamente o que tem dentro da V3 Partner? Arrasta pra descobrir!
+
+A plataforma mais completa do mercado financeiro:
+
+📊 Dashboard + CRM — visão 360° da operação
+💰 Split Fiscal — otimização tributária em segundos
+🏦 Mesa de Crédito — N1 ao High Ticket
+🏢 M&A — fusões e aquisições estruturadas
+🏠 Consórcio — simulação e cartas contempladas
+🤖 IA Assistant — inteligência aplicada
+📚 V3 Academy — formação especializada
+
+Qual módulo você mais usaria? 👇
+
+#V3Partner #Fintech #MercadoFinanceiro #Plataforma #Tecnologia #Crédito #Consórcio #SplitFiscal</p>
+      <button class="copy-btn" onclick="copyCaption(this)">📋 Copiar legenda</button>
+    </div>
+  </div>
+
+  <!-- CARROSSEL 4 — RANKING -->
+  <div class="post-wrap">
+    <div class="post-label">
+      <span class="badge badge-ig">Instagram</span>
+      <span class="badge badge-carousel">Carrossel 3 slides</span>
+    </div>
+    <div class="carousel-wrap">
+      <div class="carousel" id="c4" style="border-radius:16px">
+        <div class="slide bg-grid-overlay" style="background:#050C18">
+          <div class="gold-line-top"></div>
+          <div class="post-top"><span class="logo-mini"><img src="../public/logo.jpg" alt="V3"/><span>V3 PARTNER</span></span><span class="tag tag-gold">RANKING</span></div>
+          <div class="post-content" style="display:flex;flex-direction:column;justify-content:center;height:100%;padding-top:70px">
+            <div class="post-eyebrow">Performance</div>
+            <h2 class="post-h1">Quem<br/>performa,<br/><span class="g-text">aparece.</span></h2>
+            <p class="post-body">O Ranking V3 reconhece quem produz resultado. Arrasta ▸</p>
+          </div>
+          <div class="slide-num">01 / 03</div>
+        </div>
+        <div class="slide" style="background:linear-gradient(145deg,#050C18,#0d1025)">
+          <div class="gold-line-top"></div>
+          <div class="post-top"><span class="logo-mini"><img src="../public/logo.jpg" alt="V3"/><span>V3 PARTNER</span></span></div>
+          <div class="post-content" style="display:flex;flex-direction:column;justify-content:flex-end;height:100%;padding-bottom:40px">
+            <div style="display:flex;flex-direction:column;gap:10px">
+              <div style="display:flex;align-items:center;gap:12px;background:rgba(196,146,46,.12);border:1px solid rgba(196,146,46,.3);border-radius:12px;padding:12px 16px">
+                <span style="font-size:1.4rem">🥇</span>
+                <div><div style="font-family:'Outfit';font-weight:800;color:#F5D99A">1º LUGAR</div><div style="font-size:.72rem;color:var(--muted);font-family:'Inter'">Top performer do mês</div></div>
+                <div style="margin-left:auto;font-family:'Outfit';font-weight:900;color:var(--gold)">+R$</div>
+              </div>
+              <div style="display:flex;align-items:center;gap:12px;background:rgba(15,30,53,.5);border:1px solid rgba(196,146,46,.15);border-radius:12px;padding:12px 16px">
+                <span style="font-size:1.4rem">🥈</span>
+                <div><div style="font-family:'Outfit';font-weight:700;color:#9ab0c8">2º LUGAR</div><div style="font-size:.72rem;color:var(--muted);font-family:'Inter'">Destaque do mês</div></div>
+              </div>
+              <div style="display:flex;align-items:center;gap:12px;background:rgba(15,30,53,.4);border:1px solid rgba(196,146,46,.1);border-radius:12px;padding:12px 16px">
+                <span style="font-size:1.4rem">🥉</span>
+                <div><div style="font-family:'Outfit';font-weight:700;color:#9ab0c8">3º LUGAR</div><div style="font-size:.72rem;color:var(--muted);font-family:'Inter'">Em ascensão</div></div>
+              </div>
+            </div>
+          </div>
+          <div class="slide-num">02 / 03</div>
+        </div>
+        <div class="slide bg-radial-gold" style="background:#050C18">
+          <div class="gold-line-top"></div>
+          <div class="post-content" style="display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;height:100%">
+            <div style="font-size:2.5rem;margin-bottom:12px">🏆</div>
+            <h2 class="post-h2" style="text-align:center">Você está no<br/><span class="g-text">topo do ranking?</span></h2>
+            <p class="post-body" style="text-align:center">A V3 Partner mostra quem está entregando resultado de verdade.</p>
+            <span class="post-cta" style="margin-top:16px">Ver ranking ▸</span>
+          </div>
+          <div class="slide-num">03 / 03</div>
+        </div>
+      </div>
+      <div class="carousel-nav">
+        <button class="nav-btn" onclick="moveCarousel('c4',-1)">‹</button>
+        <div class="carousel-dots" id="c4-dots">
+          <div class="dot active" onclick="goSlide('c4',0)"></div>
+          <div class="dot" onclick="goSlide('c4',1)"></div>
+          <div class="dot" onclick="goSlide('c4',2)"></div>
+        </div>
+        <button class="nav-btn" onclick="moveCarousel('c4',1)">›</button>
+      </div>
+    </div>
+    <div class="caption-box">
+      <h4>Legenda — Carrossel #12</h4>
+      <p>🏆 Você sabe quem está no topo da sua operação?
+
+O Ranking V3 Partner mostra em tempo real quem está performando, quem está crescendo e quem precisa de atenção.
+
+✦ Visibilidade total da equipe
+✦ Reconhecimento dos melhores
+✦ Motivação por resultados
+✦ Gestão baseada em dados reais
+
+Porque o que é medido, é gerenciado. E o que é gerenciado, melhora.
+
+Você está no topo? 👇 Comenta sua posição!
+
+#Ranking #Performance #Gestão #V3Partner #Resultados #Equipe #MercadoFinanceiro #Liderança</p>
+      <button class="copy-btn" onclick="copyCaption(this)">📋 Copiar legenda</button>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     SEÇÃO 3 — LINKEDIN
+═══════════════════════════════════════════════════════════ -->
+<div class="section">
+<div class="section-title">💼 LinkedIn — Posts Profissionais</div>
+<div class="grid-2">
+
+  <!-- LINKEDIN 1 — INSTITUCIONAL -->
+  <div class="post-wrap">
+    <div class="post-label">
+      <span class="badge badge-li">LinkedIn</span>
+      <span class="badge badge-feed">Post Texto + Visual</span>
+    </div>
+    <div class="post post-wide bg-grid-overlay bg-radial-gold" style="background:#050C18;aspect-ratio:16/9">
+      <div class="gold-line-top"></div>
+      <div class="post-top">
+        <span class="logo-mini"><img src="../public/logo.jpg" alt="V3"/><span>V3 PARTNER</span></span>
+        <span class="tag tag-gold">INSTITUCIONAL</span>
+      </div>
+      <div class="post-content" style="display:flex;flex-direction:row;align-items:flex-end;justify-content:space-between">
+        <div style="flex:1">
+          <div class="post-eyebrow">Plataforma Financeira</div>
+          <h2 class="post-h2">O mercado financeiro<br/>precisa de tecnologia.<br/><span class="g-text">A V3 entrega.</span></h2>
+        </div>
+        <div style="text-align:right">
+          <div style="font-family:'Outfit';font-size:.75rem;color:var(--muted)">Módulos</div>
+          <div style="font-family:'Outfit';font-size:1.8rem;font-weight:900;color:var(--gold-l)">10+</div>
+        </div>
+      </div>
+    </div>
+    <div class="caption-box">
+      <h4>Legenda — LinkedIn #13</h4>
+      <p>O mercado financeiro vive um momento de ruptura. E quem não se adapta, fica para trás.
+
+Há alguns anos, montar uma operação financeira eficiente exigia múltiplos sistemas, equipes grandes e muito retrabalho. Hoje, com a V3 Partner, uma única plataforma centraliza tudo:
+
+📊 CRM com pipeline visual
+💰 Split Fiscal com simulação em tempo real
+🏦 Mesa de Crédito (Varejo, Estruturado e High Ticket)
+🤝 M&A com metodologia completa
+🏠 Consórcio — simulação e gestão
+🤖 IA integrada com Claude (Anthropic)
+📚 V3 Academy — formação especializada
+
+Não é sobre ter mais ferramentas. É sobre ter as ferramentas certas, integradas, funcionando juntas.
+
+Que desafio operacional você enfrenta hoje no mercado financeiro?
+
+👇 Compartilha nos comentários.
+
+#Fintech #MercadoFinanceiro #Tecnologia #Inovação #V3Partner #PlataformaFinanceira #Transformação #Empreendedorismo</p>
+      <button class="copy-btn" onclick="copyCaption(this)">📋 Copiar legenda</button>
+    </div>
+  </div>
+
+  <!-- LINKEDIN 2 — SPLIT FISCAL INSIGHT -->
+  <div class="post-wrap">
+    <div class="post-label">
+      <span class="badge badge-li">LinkedIn</span>
+      <span class="badge badge-feed">Post Artigo</span>
+    </div>
+    <div class="post post-wide bg-grid-overlay" style="background:#050C18;aspect-ratio:16/9">
+      <div class="gold-line-top"></div>
+      <div class="post-top"><span class="logo-mini"><img src="../public/logo.jpg" alt="V3"/><span>V3 PARTNER</span></span><span class="tag tag-green">SPLIT FISCAL</span></div>
+      <div class="post-content" style="display:flex;flex-direction:row;align-items:flex-end;justify-content:space-between">
+        <div>
+          <div class="post-eyebrow">Otimização Tributária</div>
+          <h2 class="post-h2">Como o Split Fiscal<br/>pode reduzir custos<br/><span class="g-text">em até 40%.</span></h2>
+        </div>
+        <div style="font-size:3rem;opacity:.5">💰</div>
+      </div>
+    </div>
+    <div class="caption-box">
+      <h4>Legenda — LinkedIn #14</h4>
+      <p>Você já calculou quanto seu cliente paga de taxa por modalidade de pagamento?
+
+A maioria dos empresários não sabe. E é exatamente esse desconhecimento que custa caro.
+
+O Split Fiscal da V3 Partner resolve isso de forma simples:
+
+1. O cliente informa o TPV (volume de transações)
+2. A plataforma calcula o mix de pagamentos: quanto vem de PIX, débito, crédito 1x, parcelado
+3. Multiplica cada modalidade pela taxa real cobrada pela operadora
+4. Compara com a alternativa (Monetto vs concorrente)
+5. Gera uma proposta profissional em PDF na hora
+
+Resultado? O cliente vê em R$ exatamente quanto está gastando e quanto pode economizar.
+
+Isso fecha contrato. Toda vez.
+
+🔖 Salva esse post pra usar na sua próxima reunião de vendas.
+
+#SplitFiscal #Tributação #MercadoFinanceiro #Vendas #Fintech #V3Partner #Tecnologia #Resultado</p>
+      <button class="copy-btn" onclick="copyCaption(this)">📋 Copiar legenda</button>
+    </div>
+  </div>
+
+  <!-- LINKEDIN 3 — HIGH TICKET -->
+  <div class="post-wrap">
+    <div class="post-label">
+      <span class="badge badge-li">LinkedIn</span>
+      <span class="badge badge-feed">Thought Leadership</span>
+    </div>
+    <div class="post post-wide" style="background:linear-gradient(135deg,#050C18,#0D1B35);aspect-ratio:16/9">
+      <div class="gold-line-top"></div>
+      <div class="post-top"><span class="logo-mini"><img src="../public/logo.jpg" alt="V3"/><span>V3 PARTNER</span></span><span class="tag tag-blue">HIGH TICKET</span></div>
+      <div class="post-content" style="display:flex;align-items:flex-end;justify-content:space-between">
+        <div>
+          <div class="post-eyebrow">Mesa N3</div>
+          <h2 class="post-h2">O que separa<br/>um corretor comum<br/>de um <span class="g-text">high performer.</span></h2>
+        </div>
+        <div style="text-align:center">
+          <div style="font-family:'Outfit';font-size:2.5rem;font-weight:900;color:#2E67E8">N3</div>
+          <div style="font-size:.65rem;color:var(--muted);font-family:'Inter'">High Ticket</div>
+        </div>
+      </div>
+    </div>
+    <div class="caption-box">
+      <h4>Legenda — LinkedIn #15</h4>
+      <p>Depois de anos no mercado financeiro, aprendi que o que separa um corretor comum de um high performer não é o produto — é o processo.
+
+Corretores de alto desempenho têm:
+
+→ Estrutura de pipeline clara (sabem onde cada oportunidade está)
+→ Acesso rápido a informação (não perdem tempo buscando dados)
+→ Proposta profissional instantânea (impressionam na primeira reunião)
+→ Formação contínua (dominam o produto que vendem)
+→ Visão de dados (tomam decisões baseadas em números, não feeling)
+
+A Mesa N3 da V3 Partner foi construída exatamente para isso: dar ao corretor de alto ticket as ferramentas que grandes players usam.
+
+Porque uma operação de R$ 500k merece uma ferramenta à altura.
+
+Você opera em high ticket? Qual é seu maior desafio hoje?
+
+#HighTicket #MercadoFinanceiro #Vendas #Crédito #V3Partner #Fintech #Performance #Resultado</p>
+      <button class="copy-btn" onclick="copyCaption(this)">📋 Copiar legenda</button>
+    </div>
+  </div>
+
+  <!-- LINKEDIN 4 — V3 ACADEMY -->
+  <div class="post-wrap">
+    <div class="post-label">
+      <span class="badge badge-li">LinkedIn</span>
+      <span class="badge badge-feed">Educacional</span>
+    </div>
+    <div class="post post-wide bg-grid-overlay" style="background:#050C18;aspect-ratio:16/9">
+      <div class="gold-line-top"></div>
+      <div class="post-top"><span class="logo-mini"><img src="../public/logo.jpg" alt="V3"/><span>V3 PARTNER</span></span><span class="tag tag-gold">ACADEMY</span></div>
+      <div class="post-content" style="display:flex;align-items:flex-end;justify-content:space-between">
+        <div>
+          <div class="post-eyebrow">Formação Especializada</div>
+          <h2 class="post-h2">Por que os melhores<br/><span class="g-text">nunca param</span><br/>de aprender.</h2>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end">
+          <span class="mod-pill" style="font-size:.65rem"><span class="mod-pill-dot"></span>Home Equity</span>
+          <span class="mod-pill" style="font-size:.65rem"><span class="mod-pill-dot" style="background:#2E67E8"></span>M&amp;A</span>
+          <span class="mod-pill" style="font-size:.65rem"><span class="mod-pill-dot" style="background:#10B981"></span>Compliance</span>
+        </div>
+      </div>
+    </div>
+    <div class="caption-box">
+      <h4>Legenda — LinkedIn #16</h4>
+      <p>Uma das maiores dores do mercado financeiro: produtos complexos, equipes sem formação adequada.
+
+Não é culpa do corretor. É falta de acesso a conteúdo estruturado, atualizado e aplicado à realidade do mercado.
+
+A V3 Academy resolve isso com trilhas de conhecimento em:
+
+📘 Home Equity — como estruturar operações com imóvel como garantia
+📗 Crédito Estruturado — produtos complexos de forma simples
+📙 High Ticket — mentalidade e processo para grandes operações
+📕 M&A — fusões e aquisições para o mercado mid-market
+📒 Split Fiscal — otimização tributária na prática
+📓 Consórcio — do básico ao avançado
+📔 Compliance — operação segura e dentro das normas
+
+Saber vender é bom. Saber o que está vendendo é melhor. E a combinação dos dois? Imbatível.
+
+Qual desses temas você mais precisa dominar?
+
+#V3Academy #Educação #MercadoFinanceiro #HomeEquity #Compliance #V3Partner #Conhecimento #Fintech</p>
+      <button class="copy-btn" onclick="copyCaption(this)">📋 Copiar legenda</button>
+    </div>
+  </div>
+
+  <!-- LINKEDIN 5 — IA NO FINANCEIRO -->
+  <div class="post-wrap">
+    <div class="post-label">
+      <span class="badge badge-li">LinkedIn</span>
+      <span class="badge badge-feed">Inovação</span>
+    </div>
+    <div class="post post-wide bg-radial-dual" style="background:#050C18;aspect-ratio:16/9">
+      <div class="gold-line-top"></div>
+      <div class="post-top"><span class="logo-mini"><img src="../public/logo.jpg" alt="V3"/><span>V3 PARTNER</span></span><span class="tag tag-blue">IA + FINTECH</span></div>
+      <div class="post-content" style="display:flex;align-items:flex-end;justify-content:space-between">
+        <div>
+          <div class="post-eyebrow">Inteligência Artificial</div>
+          <h2 class="post-h2">IA no mercado<br/>financeiro:<br/><span class="g-text-b">não é tendência,</span><br/><span class="g-text">é realidade.</span></h2>
+        </div>
+        <div style="font-size:3.5rem;opacity:.4">🤖</div>
+      </div>
+    </div>
+    <div class="caption-box">
+      <h4>Legenda — LinkedIn #17</h4>
+      <p>Em 2025, a pergunta não é mais "a IA vai afetar o mercado financeiro?" — ela já está afetando.
+
+A questão agora é: você está usando ou sendo substituído?
+
+Na V3 Partner, integramos IA (powered by Claude, da Anthropic) diretamente na plataforma de gestão financeira. Isso significa:
+
+→ Análise de cliente com suporte de IA em tempo real
+→ Sugestões automáticas de produtos baseadas no perfil
+→ Respostas instantâneas sobre produtos complexos
+→ Insights de mercado atualizados
+→ Suporte na construção de propostas
+
+Não substituímos o corretor. Potencializamos ele.
+
+O profissional financeiro do futuro não é aquele que compete com a IA — é aquele que sabe usar a IA como alavanca.
+
+Você já está usando IA na sua operação? Como? 👇
+
+#InteligenciaArtificial #IA #Fintech #MercadoFinanceiro #Inovação #Claude #Tecnologia #V3Partner</p>
+      <button class="copy-btn" onclick="copyCaption(this)">📋 Copiar legenda</button>
+    </div>
+  </div>
+
+  <!-- LINKEDIN 6 — M&A INSIGHT -->
+  <div class="post-wrap">
+    <div class="post-label">
+      <span class="badge badge-li">LinkedIn</span>
+      <span class="badge badge-feed">Insight de Mercado</span>
+    </div>
+    <div class="post post-wide" style="background:linear-gradient(160deg,#050C18,#0D1B35);aspect-ratio:16/9">
+      <div class="gold-line-top"></div>
+      <div class="post-top"><span class="logo-mini"><img src="../public/logo.jpg" alt="V3"/><span>V3 PARTNER</span></span><span class="tag tag-gold">M&amp;A</span></div>
+      <div class="post-content" style="display:flex;align-items:flex-end;justify-content:space-between">
+        <div>
+          <div class="post-eyebrow">Fusões &amp; Aquisições</div>
+          <h2 class="post-h2">M&amp;A não é<br/>só para<br/><span class="g-text">grandes bancos.</span></h2>
+        </div>
+        <div style="font-size:3rem;opacity:.35">🏢</div>
+      </div>
+    </div>
+    <div class="caption-box">
+      <h4>Legenda — LinkedIn #18</h4>
+      <p>Existe um mito no mercado: que M&A (Fusões e Aquisições) é assunto apenas para grandes bancos de investimento e empresas listadas na bolsa.
+
+Não é verdade.
+
+O mid-market brasileiro movimenta bilhões em transações M&A a cada ano. E a maioria dessas operações passa pela mão de assessores e corretores independentes — que muitas vezes não têm a estrutura para suportá-las adequadamente.
+
+A Mesa M&A da V3 Partner foi criada para mudar isso:
+
+✦ Pipeline estruturado de oportunidades
+✦ Metodologia de due diligence integrada
+✦ Gestão de propostas e contratos
+✦ Acompanhamento das etapas do processo
+✦ Visão consolidada de todas as operações
+
+Hoje, um assessor com a ferramenta certa consegue suportar operações que antes só grandes players atendiam.
+
+Essa é a democratização do M&A.
+
+Você já fechou ou está trabalhando em alguma operação de M&A?
+
+#MA #FusoesEAquisicoes #MercadoFinanceiro #V3Partner #InvestmentBanking #Fintech #Negócios #Empresas</p>
+      <button class="copy-btn" onclick="copyCaption(this)">📋 Copiar legenda</button>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     SEÇÃO 4 — POSTS EXTRAS INSTAGRAM (VIRAIS)
+═══════════════════════════════════════════════════════════ -->
+<div class="section">
+<div class="section-title">🔥 Instagram — Posts para Viralizar</div>
+<div class="grid-3">
+
+  <!-- POST VIRAL 1 — PERGUNTA ENGAJAMENTO -->
+  <div class="post-wrap">
+    <div class="post-label">
+      <span class="badge badge-ig">Instagram</span>
+      <span class="badge badge-feed">Engajamento</span>
+    </div>
+    <div class="post bg-grid-overlay" style="background:#050C18">
+      <div class="gold-line-top"></div>
+      <div class="post-top"><span class="logo-mini"><img src="../public/logo.jpg" alt="V3"/><span>V3 PARTNER</span></span></div>
+      <div class="post-content" style="display:flex;flex-direction:column;justify-content:center;height:100%;padding-top:60px;text-align:center;align-items:center">
+        <div style="font-size:3rem;margin-bottom:16px">🤔</div>
+        <div class="post-eyebrow" style="text-align:center">Enquete</div>
+        <h2 class="post-h2" style="text-align:center">Qual é seu<br/><span class="g-text">maior desafio</span><br/>hoje?</h2>
+        <div style="display:flex;flex-direction:column;gap:8px;width:100%;margin-top:16px">
+          <div style="padding:10px 14px;border:1px solid rgba(196,146,46,.3);border-radius:8px;font-family:'Inter';font-size:.8rem;color:#9ab0c8;text-align:center">Organizar clientes 📊</div>
+          <div style="padding:10px 14px;border:1px solid rgba(46,103,232,.3);border-radius:8px;font-family:'Inter';font-size:.8rem;color:#9ab0c8;text-align:center">Fechar mais propostas 💼</div>
+          <div style="padding:10px 14px;border:1px solid rgba(16,185,129,.3);border-radius:8px;font-family:'Inter';font-size:.8rem;color:#9ab0c8;text-align:center">Gestão tributária 💰</div>
+        </div>
+      </div>
+    </div>
+    <div class="caption-box">
+      <h4>Legenda — Post Viral #19</h4>
+      <p>Responde aqui 👇 (sem julgamento, prometo 😄)
+
+Qual é o seu maior desafio no dia a dia do mercado financeiro?
+
+A) 📊 Organizar e acompanhar clientes
+B) 💼 Criar propostas e fechar mais negócios
+C) 💰 Entender e otimizar a tributação dos clientes
+D) 🔄 Gerenciar múltiplos produtos ao mesmo tempo
+
+Comenta a letra! Quero entender o que você enfrenta pra trazer o conteúdo certo 🎯
+
+#MercadoFinanceiro #Desafios #Vendas #V3Partner #Fintech #Correspondente #Corretores #Engajamento</p>
+      <button class="copy-btn" onclick="copyCaption(this)">📋 Copiar legenda</button>
+    </div>
+  </div>
+
+  <!-- POST VIRAL 2 — FRASE DE IMPACTO -->
+  <div class="post-wrap">
+    <div class="post-label">
+      <span class="badge badge-ig">Instagram</span>
+      <span class="badge badge-feed">Motivacional</span>
+    </div>
+    <div class="post bg-radial-gold" style="background:#050C18">
+      <div class="gold-line-top"></div>
+      <div class="post-top"><span class="logo-mini"><img src="../public/logo.jpg" alt="V3"/><span>V3 PARTNER</span></span></div>
+      <div style="position:absolute;inset:0;z-index:1;display:flex;align-items:center;justify-content:center">
+        <div style="width:200px;height:200px;border-radius:50%;border:1px solid rgba(196,146,46,.15)"></div>
+      </div>
+      <div class="post-content" style="display:flex;flex-direction:column;justify-content:center;height:100%;padding-top:60px;text-align:center;align-items:center">
+        <div class="post-eyebrow" style="text-align:center">Verdade do dia</div>
+        <h2 style="font-family:'Outfit';font-size:1.5rem;font-weight:900;line-height:1.25;text-align:center;margin-bottom:16px">
+          "A ferramenta certa<br/>não substitui o talento —<br/><span class="g-text">ela multiplica.</span>"
+        </h2>
+        <div class="divider-gold" style="width:60px;margin:0 auto 16px"></div>
+        <p style="font-family:'Inter';font-size:.75rem;color:var(--muted);text-align:center">V3 Partner — Tecnologia para quem<br/>quer resultado de verdade</p>
+      </div>
+    </div>
+    <div class="caption-box">
+      <h4>Legenda — Post Viral #20</h4>
+      <p>"A ferramenta certa não substitui o talento — ela multiplica."
+
+E essa é a nossa filosofia na V3 Partner.
+
+Não criamos a plataforma para fazer o trabalho por você. Criamos para que você faça mais, em menos tempo, com mais precisão.
+
+✦ Você traz o talento
+✦ A V3 traz a tecnologia
+✦ Juntos, vocês entregam resultado
+
+💛 Salva esse post se você acredita nisso!
+
+#Mindset #MercadoFinanceiro #Tecnologia #V3Partner #Fintech #Motivação #Resultado #Talento</p>
+      <button class="copy-btn" onclick="copyCaption(this)">📋 Copiar legenda</button>
+    </div>
+  </div>
+
+  <!-- POST VIRAL 3 — DADOS DE MERCADO -->
+  <div class="post-wrap">
+    <div class="post-label">
+      <span class="badge badge-ig">Instagram</span>
+      <span class="badge badge-feed">Dados</span>
+    </div>
+    <div class="post bg-grid-overlay" style="background:#050C18">
+      <div class="gold-line-top"></div>
+      <div class="post-top"><span class="logo-mini"><img src="../public/logo.jpg" alt="V3"/><span>V3 PARTNER</span></span><span class="tag tag-gold">DADOS</span></div>
+      <div class="post-content" style="display:flex;flex-direction:column;justify-content:center;height:100%;padding-top:60px">
+        <div class="post-eyebrow">Mercado em números</div>
+        <h2 class="post-h2" style="font-size:1.4rem;margin-bottom:20px">Por que a tecnologia<br/><span class="g-text">faz a diferença.</span></h2>
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <div style="background:rgba(196,146,46,.08);border:1px solid rgba(196,146,46,.2);border-radius:10px;padding:12px 14px;display:flex;gap:12px;align-items:center">
+            <div style="font-family:'Outfit';font-size:1.6rem;font-weight:900;color:var(--gold);flex-shrink:0">3x</div>
+            <div style="font-family:'Inter';font-size:.75rem;color:#9ab0c8">mais conversões com CRM estruturado vs. sem gestão</div>
+          </div>
+          <div style="background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.2);border-radius:10px;padding:12px 14px;display:flex;gap:12px;align-items:center">
+            <div style="font-family:'Outfit';font-size:1.6rem;font-weight:900;color:#10B981;flex-shrink:0">40%</div>
+            <div style="font-family:'Inter';font-size:.75rem;color:#9ab0c8">de redução em custos tributários com Split Fiscal adequado</div>
+          </div>
+          <div style="background:rgba(46,103,232,.08);border:1px solid rgba(46,103,232,.2);border-radius:10px;padding:12px 14px;display:flex;gap:12px;align-items:center">
+            <div style="font-family:'Outfit';font-size:1.6rem;font-weight:900;color:var(--blue-l);flex-shrink:0">10x</div>
+            <div style="font-family:'Inter';font-size:.75rem;color:#9ab0c8">mais rápido gerar uma proposta com a plataforma certa</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="caption-box">
+      <h4>Legenda — Post Viral #21 (bônus)</h4>
+      <p>📊 Os números não mentem.
+
+✦ 3x mais conversões com CRM estruturado
+✦ 40% de redução em custos com Split Fiscal bem feito
+✦ 10x mais rápido com automação e tecnologia
+
+Enquanto muitos ainda operam no feeling, os melhores do mercado usam dados, processos e tecnologia para tomar decisões.
+
+A V3 Partner coloca essas ferramentas na sua mão.
+
+💬 Você usa dados pra tomar decisões ou ainda vai no instinto? Comenta! 👇
+
+🔖 Salva pra mostrar pro seu sócio.
+
+#Dados #Tecnologia #MercadoFinanceiro #V3Partner #Fintech #Resultados #CRM #SplitFiscal #Inovação</p>
+      <button class="copy-btn" onclick="copyCaption(this)">📋 Copiar legenda</button>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     GUIA DE HASHTAGS E ESTRATÉGIA INSTAGRAM
+═══════════════════════════════════════════════════════════ -->
+<div class="section">
+<div class="section-title">📋 Guia de Estratégia — Instagram Viral</div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:24px">
+
+  <div style="background:var(--navy-m);border:1px solid rgba(196,146,46,.15);border-radius:14px;padding:24px">
+    <h3 style="font-family:'Outfit';font-weight:700;color:var(--gold-l);font-size:1rem;margin-bottom:14px">🏷️ Set de Hashtags por Categoria</h3>
+    <div style="display:flex;flex-direction:column;gap:16px;font-family:'Inter';font-size:.82rem">
+      <div>
+        <div style="color:var(--gold);font-weight:600;margin-bottom:6px">INSTITUCIONAL (use sempre)</div>
+        <code style="color:#9ab0c8;background:rgba(15,30,53,.7);padding:8px 10px;border-radius:6px;display:block;line-height:1.8">#V3Partner #MercadoFinanceiro #Fintech #PlataformaFinanceira #Inovação #Tecnologia</code>
+      </div>
+      <div>
+        <div style="color:#10B981;font-weight:600;margin-bottom:6px">SPLIT FISCAL</div>
+        <code style="color:#9ab0c8;background:rgba(15,30,53,.7);padding:8px 10px;border-radius:6px;display:block;line-height:1.8">#SplitFiscal #Tributação #ImpostoDeRenda #PlanejamentoTributário #Contabilidade</code>
+      </div>
+      <div>
+        <div style="color:var(--blue-l);font-weight:600;margin-bottom:6px">CRÉDITO</div>
+        <code style="color:#9ab0c8;background:rgba(15,30,53,.7);padding:8px 10px;border-radius:6px;display:block;line-height:1.8">#Credito #HighTicket #CreditoEstruturado #CorrespondentesBancarios #Correspondente</code>
+      </div>
+      <div>
+        <div style="color:var(--gold);font-weight:600;margin-bottom:6px">M&A</div>
+        <code style="color:#9ab0c8;background:rgba(15,30,53,.7);padding:8px 10px;border-radius:6px;display:block;line-height:1.8">#MA #FusoesAquisicoes #Investimentos #MercadoCapital #BusinessDevelopment</code>
+      </div>
+      <div>
+        <div style="color:#E5B96A;font-weight:600;margin-bottom:6px">ENGAJAMENTO</div>
+        <code style="color:#9ab0c8;background:rgba(15,30,53,.7);padding:8px 10px;border-radius:6px;display:block;line-height:1.8">#EmpreendedorBrasileiro #Empreendedorismo #Negócios #Vendas #Resultado</code>
+      </div>
+    </div>
+  </div>
+
+  <div style="background:var(--navy-m);border:1px solid rgba(196,146,46,.15);border-radius:14px;padding:24px">
+    <h3 style="font-family:'Outfit';font-weight:700;color:var(--gold-l);font-size:1rem;margin-bottom:14px">🚀 Estratégia para Viralizar</h3>
+    <div style="display:flex;flex-direction:column;gap:12px;font-family:'Inter';font-size:.82rem;color:#9ab0c8;line-height:1.6">
+      <div style="display:flex;gap:10px"><span style="color:var(--gold);flex-shrink:0">▸</span><span><strong style="color:var(--fg)">Horários de pico:</strong> Publique ter/qua/qui entre 18h–21h (maior engajamento financeiro no BR)</span></div>
+      <div style="display:flex;gap:10px"><span style="color:var(--gold);flex-shrink:0">▸</span><span><strong style="color:var(--fg)">CTAs poderosos:</strong> "Salva esse post", "Comenta a letra", "Marca um colega" — aumentam alcance orgânico</span></div>
+      <div style="display:flex;gap:10px"><span style="color:var(--gold);flex-shrink:0">▸</span><span><strong style="color:var(--fg)">Carrosseis:</strong> O Instagram prioriza carrosseis — usam 3x mais tempo na tela e têm 3x mais alcance</span></div>
+      <div style="display:flex;gap:10px"><span style="color:var(--gold);flex-shrink:0">▸</span><span><strong style="color:var(--fg)">Primeiro frame:</strong> Deve parar o scroll em 0,5s — use perguntas, números grandes ou afirmações fortes</span></div>
+      <div style="display:flex;gap:10px"><span style="color:var(--gold);flex-shrink:0">▸</span><span><strong style="color:var(--fg)">Alt text:</strong> Sempre adicionar descrição do post (SEO do Instagram)</span></div>
+      <div style="display:flex;gap:10px"><span style="color:var(--gold);flex-shrink:0">▸</span><span><strong style="color:var(--fg)">Responder comentários:</strong> Nas primeiras 2h após publicar — o algoritmo mede interação</span></div>
+      <div style="display:flex;gap:10px"><span style="color:var(--gold);flex-shrink:0">▸</span><span><strong style="color:var(--fg)">Consistência:</strong> 4–5 posts/semana + 3 stories/dia — regularidade bate viralidade</span></div>
+      <div style="display:flex;gap:10px"><span style="color:var(--gold);flex-shrink:0">▸</span><span><strong style="color:var(--fg)">Mix ideal:</strong> 40% educacional · 30% institucional · 20% engajamento · 10% venda direta</span></div>
+    </div>
+  </div>
+
+  <div style="background:var(--navy-m);border:1px solid rgba(46,103,232,.15);border-radius:14px;padding:24px;grid-column:1/-1">
+    <h3 style="font-family:'Outfit';font-weight:700;color:var(--blue-l);font-size:1rem;margin-bottom:14px">💼 Estratégia LinkedIn — Algoritmo e Viralizção</h3>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;font-family:'Inter';font-size:.82rem;color:#9ab0c8;line-height:1.6">
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div style="color:var(--blue-l);font-weight:600">📅 Frequência Ideal</div>
+        <div style="display:flex;gap:8px"><span style="color:var(--gold)">▸</span>3–5 posts por semana</div>
+        <div style="display:flex;gap:8px"><span style="color:var(--gold)">▸</span>Horário: seg–sex, 7h–9h ou 11h–12h</div>
+        <div style="display:flex;gap:8px"><span style="color:var(--gold)">▸</span>Evitar finais de semana</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div style="color:var(--blue-l);font-weight:600">✍️ Formato que Performa</div>
+        <div style="display:flex;gap:8px"><span style="color:var(--gold)">▸</span>Primeira linha = gancho forte</div>
+        <div style="display:flex;gap:8px"><span style="color:var(--gold)">▸</span>Parágrafos curtos (1–2 linhas)</div>
+        <div style="display:flex;gap:8px"><span style="color:var(--gold)">▸</span>Pergunta no final = comentários</div>
+        <div style="display:flex;gap:8px"><span style="color:var(--gold)">▸</span>Evitar links no corpo do post</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div style="color:var(--blue-l);font-weight:600">🎯 Conteúdo que Engaja</div>
+        <div style="display:flex;gap:8px"><span style="color:var(--gold)">▸</span>Histórias pessoais + aprendizado</div>
+        <div style="display:flex;gap:8px"><span style="color:var(--gold)">▸</span>Dados e estatísticas do setor</div>
+        <div style="display:flex;gap:8px"><span style="color:var(--gold)">▸</span>Opiniões contrárias ao senso comum</div>
+        <div style="display:flex;gap:8px"><span style="color:var(--gold)">▸</span>Bastidores e processo interno</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<!-- ════════ SCRIPT ════════ -->
+<script>
+const carousels = {};
+
+function getSlides(id) {
+  return document.querySelectorAll('#' + id + ' .slide');
+}
+function getDots(id) {
+  return document.querySelectorAll('#' + id + '-dots .dot');
+}
+
+function goSlide(id, idx) {
+  if (!carousels[id]) carousels[id] = { current: 0 };
+  const slides = getSlides(id);
+  const dots = getDots(id);
+  const total = slides.length;
+  const target = ((idx % total) + total) % total;
+  slides.forEach((s, i) => {
+    s.classList.toggle('shown', i === target);
+  });
+  dots.forEach((d, i) => {
+    d.classList.toggle('active', i === target);
+  });
+  carousels[id].current = target;
+}
+
+function moveCarousel(id, dir) {
+  if (!carousels[id]) carousels[id] = { current: 0 };
+  goSlide(id, carousels[id].current + dir);
+}
+
+// Init all carousels showing slide 0
+document.addEventListener('DOMContentLoaded', function() {
+  ['c1','c2','c3','c4'].forEach(id => {
+    carousels[id] = { current: 0 };
+    goSlide(id, 0);
+  });
+
+  // Add download buttons to all post-wraps
+  const nomes = [
+    'post-01-institucional','post-02-split-fiscal','post-03-ia-assistant',
+    'post-04-ma','post-05-mesa-credito','post-06-academy',
+    'post-07-crm','post-08-consorcio',
+    'carrossel-09-5motivos','carrossel-10-antes-depois',
+    'carrossel-11-modulos','carrossel-12-ranking',
+    'linkedin-13-institucional','linkedin-14-split-fiscal',
+    'linkedin-15-high-ticket','linkedin-16-academy',
+    'linkedin-17-ia','linkedin-18-ma',
+    'viral-19-enquete','viral-20-frase','viral-21-dados'
+  ];
+  document.querySelectorAll('.post-wrap').forEach((wrap, i) => {
+    const nome = nomes[i] || ('post-' + (i+1));
+    const btn = document.createElement('button');
+    btn.className = 'dl-btn';
+    btn.innerHTML = '⬇️ Baixar PNG — ' + nome.replace(/-/g,' ').toUpperCase();
+    btn.onclick = () => downloadPost(wrap, nome);
+    // Insert before caption-box
+    const caption = wrap.querySelector('.caption-box');
+    if (caption) wrap.insertBefore(btn, caption);
+    else wrap.appendChild(btn);
+  });
+});
+
+// Download post as PNG
+function downloadPost(wrap, nome) {
+  const overlay = document.getElementById('export-overlay');
+  const postEl = wrap.querySelector('.post, .carousel');
+  if (!postEl) return;
+
+  overlay.classList.add('show');
+  const btn = wrap.querySelector('.dl-btn');
+  if (btn) btn.disabled = true;
+
+  // Temporarily hide non-post elements
+  html2canvas(postEl, {
+    scale: 3,
+    useCORS: true,
+    allowTaint: true,
+    backgroundColor: null,
+    logging: false
+  }).then(canvas => {
+    const link = document.createElement('a');
+    link.download = 'v3partner-' + nome + '.png';
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+    overlay.classList.remove('show');
+    if (btn) btn.disabled = false;
+  }).catch(err => {
+    console.error(err);
+    overlay.classList.remove('show');
+    if (btn) btn.disabled = false;
+    alert('Erro ao gerar imagem. Tente usar a Ferramenta de Captura do Windows (Win+Shift+S) para capturar o post.');
+  });
+}
+
+// Copy caption
+function copyCaption(btn) {
+  const p = btn.parentElement.querySelector('p');
+  navigator.clipboard.writeText(p.innerText).then(() => {
+    btn.textContent = '✅ Copiado!';
+    setTimeout(() => { btn.textContent = '📋 Copiar legenda'; }, 2000);
+  });
+}
+</script>
+</body>
+</html>

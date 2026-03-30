@@ -428,6 +428,12 @@ function n(v: string) {
   const x = parseFloat(s);
   return isNaN(x) ? 0 : x;
 }
+// Para taxas e percentuais (ex: "2.99" = 2,99%) — NÃO remove o ponto decimal
+function r(v: string): number {
+  const s = v.replace(",", ".");
+  const x = parseFloat(s);
+  return isNaN(x) ? 0 : x;
+}
 
 interface SplitItem {
   id: string; code: string; title: string;
@@ -869,12 +875,12 @@ function PropostaTab({ onAddLead }: { onAddLead: (lead: Lead) => void }) {
   const calc = useMemo(() => {
     const tpv = n(tpvMonetto);
     const mods = [
-      { label: "PIX",            pct: n(pixPct)/100,       concRate: n(concTaxaPix)/100,    monRate: n(monTaxaPix)/100 },
-      { label: "Débito",         pct: n(debitoPct)/100,    concRate: n(concTaxaDebito)/100, monRate: n(monTaxaDebito)/100 },
-      { label: "Crédito 1x",    pct: n(cred1xPct)/100,    concRate: n(concTaxaCred1x)/100, monRate: n(monTaxaCred1x)/100 },
-      { label: "Crédito 2-6x",  pct: n(cred2a6Pct)/100,   concRate: n(concTaxaParc)/100,   monRate: n(monTaxaCred2a6)/100 },
-      { label: "Crédito 7-12x", pct: n(cred7a12Pct)/100,  concRate: n(concTaxaParc)/100,   monRate: n(monTaxaCred7a12)/100 },
-      { label: "Crédito 13-21x",pct: n(cred13a21Pct)/100, concRate: n(concTaxaParc)/100,   monRate: n(monTaxaCred13a21)/100 },
+      { label: "PIX",            pct: r(pixPct)/100,       concRate: r(concTaxaPix)/100,    monRate: r(monTaxaPix)/100 },
+      { label: "Débito",         pct: r(debitoPct)/100,    concRate: r(concTaxaDebito)/100, monRate: r(monTaxaDebito)/100 },
+      { label: "Crédito 1x",    pct: r(cred1xPct)/100,    concRate: r(concTaxaCred1x)/100, monRate: r(monTaxaCred1x)/100 },
+      { label: "Crédito 2-6x",  pct: r(cred2a6Pct)/100,   concRate: r(concTaxaParc)/100,   monRate: r(monTaxaCred2a6)/100 },
+      { label: "Crédito 7-12x", pct: r(cred7a12Pct)/100,  concRate: r(concTaxaParc)/100,   monRate: r(monTaxaCred7a12)/100 },
+      { label: "Crédito 13-21x",pct: r(cred13a21Pct)/100, concRate: r(concTaxaParc)/100,   monRate: r(monTaxaCred13a21)/100 },
     ];
     let concSoma = 0, monSoma = 0;
     const rows = mods.map((m) => {
@@ -885,8 +891,8 @@ function PropostaTab({ onAddLead }: { onAddLead: (lead: Lead) => void }) {
       monSoma  += monCusto;
       return { label: m.label, pct: m.pct, fat, concCusto, monCusto };
     });
-    const imposto      = tpv * (n(aliquotaAtual) / 100);
-    const monImpostoVal = tpv * (n(aliquotaNova) / 100);
+    const imposto      = tpv * (r(aliquotaAtual) / 100);
+    const monImpostoVal = tpv * (r(aliquotaNova) / 100);
     const concTotal    = concSoma + imposto + n(mensalidadeAtual);
     const monTotal     = monSoma  + monImpostoVal + n(mensalidadeNova);
     const economiaMensal = concTotal - monTotal;
@@ -1081,7 +1087,7 @@ function PropostaTab({ onAddLead }: { onAddLead: (lead: Lead) => void }) {
           <CardHeader><CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Mix de Pagamentos (%)</CardTitle></CardHeader>
           <CardContent className="space-y-2.5">
             {MIX_ROWS.map(({ label, pct: v, setPct }) => {
-              const fat = n(v) > 0 ? calc.tpv * (n(v) / 100) : 0;
+              const fat = r(v) > 0 ? calc.tpv * (r(v) / 100) : 0;
               return (
                 <div key={label}>
                   <label className="block text-xs text-muted-foreground mb-1">{label}</label>

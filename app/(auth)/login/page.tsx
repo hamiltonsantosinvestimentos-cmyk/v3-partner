@@ -237,10 +237,11 @@ export default function LoginPage() {
               </p>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                 {[
-                  { label: "Administrador", email: "admin@v3partner.com",   pass: "admin123",   color: "#EF4444" },
-                  { label: "Partner",       email: "partner@v3partner.com", pass: "partner123", color: "#C4922E" },
-                  { label: "Gestão",        email: "gestao@v3partner.com",  pass: "gestao123",  color: "#10B981" },
-                  { label: "Mesa Oper.",    email: "mesa@v3partner.com",    pass: "mesa123",    color: "#8B5CF6" },
+                  { label: "Administrador", email: "admin@v3partner.com",       pass: "admin123",       color: "#EF4444" },
+                  { label: "Partner",       email: "partner@v3partner.com",     pass: "partner123",     color: "#C4922E" },
+                  { label: "Gestão",        email: "gestao@v3partner.com",      pass: "gestao123",      color: "#10B981" },
+                  { label: "Mesa Oper.",    email: "mesa@v3partner.com",        pass: "mesa123",        color: "#8B5CF6" },
+                  { label: "Financeiro",    email: "financeiro@v3partner.com",  pass: "financeiro123",  color: "#06B6D4" },
                 ].map((item) => (
                   <button key={item.email} onClick={() => quickLogin(item.email, item.pass)}
                     style={{

@@ -9,6 +9,8 @@ const ROLE_ROUTES: Record<string, string[]> = {
   "/mesa-credito/nivel-2": ["ADMIN", "MESA_OPERACIONAL", "GESTAO"],
   "/mesa-credito/nivel-3": ["ADMIN", "GESTAO"],
   "/mesa-operacional": ["ADMIN", "MESA_OPERACIONAL", "GESTAO"],
+  "/financeiro": ["ADMIN", "FINANCEIRO"],
+  "/comissoes": ["ADMIN", "PARTNER", "FINANCEIRO"],
 };
 
 const IS_DEMO =

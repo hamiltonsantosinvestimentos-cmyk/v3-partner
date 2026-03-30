@@ -1,0 +1,1152 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<title>V3 Partner — Apresentação Premium</title>
+<script src="https://unpkg.com/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:radial-gradient(ellipse at 30% 40%,#0a1628 0%,#020810 70%);
+  font-family:'Segoe UI',Arial,sans-serif;color:#E8EDF5;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  min-height:100vh;padding:40px;text-align:center}
+.logo-wrap{position:relative;margin-bottom:22px}
+.logo-preview{width:100px;height:100px;border-radius:16px;border:2px solid #C4922E;
+  object-fit:cover;box-shadow:0 0 50px rgba(196,146,46,.7),0 0 100px rgba(196,146,46,.3)}
+h1{font-size:2.4rem;font-weight:900;margin-bottom:8px;letter-spacing:2px;
+  background:linear-gradient(90deg,#C4922E,#F5D99A,#E5B96A,#C4922E);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.sub{color:#5A7490;font-size:.9rem;margin-bottom:40px;max-width:700px;line-height:1.8}
+#btn{padding:22px 80px;border:none;border-radius:50px;cursor:pointer;
+  background:linear-gradient(120deg,#8A6018,#C4922E,#F5D99A,#C4922E,#8A6018);
+  background-size:200%;
+  color:#050C18;font-weight:900;font-size:1.2rem;letter-spacing:2px;
+  box-shadow:0 0 40px rgba(196,146,46,.6),0 0 80px rgba(196,146,46,.2);
+  transition:.3s;text-transform:uppercase}
+#btn:hover{background-position:right;box-shadow:0 0 60px rgba(196,146,46,.9);transform:scale(1.03)}
+#btn:disabled{opacity:.35;cursor:wait;transform:none;box-shadow:none}
+#status{margin-top:28px;color:#E5B96A;font-size:1rem;font-weight:700;min-height:30px;letter-spacing:.5px}
+#progress{width:480px;height:12px;background:#0a1628;border-radius:6px;margin-top:16px;
+  overflow:hidden;border:1px solid #122036}
+#bar{height:100%;width:0;background:linear-gradient(90deg,#8A6018,#C4922E,#F5D99A);
+  border-radius:6px;transition:width .4s;box-shadow:0 0 12px rgba(196,146,46,.6)}
+.grid{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;max-width:850px;margin-top:36px}
+.sl{background:rgba(9,18,33,.8);border:1px solid #1a2f4a;border-radius:10px;padding:12px 8px;
+  font-size:.68rem;color:#5A7490;transition:.2s}
+.sl strong{color:#C4922E;display:block;font-size:.9rem;margin-bottom:4px}
+</style>
+</head>
+<body>
+<img class="logo-preview" src="../public/logo.jpg" id="logoEl" alt="V3 Logo"/>
+<h1>V3 PARTNER</h1>
+<p class="sub">Apresentação Institucional Elite · 20 Slides · Fundos Canvas Ultra-Premium · Alto Impacto · Brandbook V3 Completo</p>
+<button id="btn" onclick="gerar()">⚡ GERAR APRESENTAÇÃO ELITE</button>
+<div id="status"></div>
+<div id="progress"><div id="bar"></div></div>
+<div class="grid">
+  <div class="sl"><strong>01</strong>Capa Elite</div>
+  <div class="sl"><strong>02</strong>Agenda</div>
+  <div class="sl"><strong>03</strong>Quem Somos</div>
+  <div class="sl"><strong>04</strong>Propósito</div>
+  <div class="sl"><strong>05</strong>Mercado</div>
+  <div class="sl"><strong>06</strong>O Problema</div>
+  <div class="sl"><strong>07</strong>A Solução</div>
+  <div class="sl"><strong>08</strong>Ecossistema</div>
+  <div class="sl"><strong>09</strong>Split Fiscal</div>
+  <div class="sl"><strong>10</strong>Mesa Crédito</div>
+  <div class="sl"><strong>11</strong>M&A</div>
+  <div class="sl"><strong>12</strong>IA Assistant</div>
+  <div class="sl"><strong>13</strong>V3 Academy</div>
+  <div class="sl"><strong>14</strong>Dashboard</div>
+  <div class="sl"><strong>15</strong>Consórcio</div>
+  <div class="sl"><strong>16</strong>Tecnologia</div>
+  <div class="sl"><strong>17</strong>Diferenciais</div>
+  <div class="sl"><strong>18</strong>Impacto</div>
+  <div class="sl"><strong>19</strong>Próx. Passos</div>
+  <div class="sl"><strong>20</strong>Fechamento</div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════
+//  BRAND
+// ═══════════════════════════════════════════════════════════
+const NAVY='#050C18',NAVY2='#091221',NAVY3='#0F1E35',
+      GOLD='#C4922E',GOLDL='#E5B96A',GOLDP='#F5D99A',GOLDD='#8A6018',
+      BLUE='#1A4FC4',BLUEL='#2E67E8',BLULL='#4A7FF0',
+      GREEN='#10B981',GREENL='#34D399',
+      RED='#EF4444',WHITE='#FFFFFF',FG='#E8EDF5',MUTED='#5A7490';
+
+// hex without # for pptx
+const C={
+  navy:'050C18',navy2:'091221',navy3:'0F1E35',navy4:'122036',
+  gold:'C4922E',goldL:'E5B96A',goldP:'F5D99A',goldD:'8A6018',
+  blue:'1A4FC4',blueL:'2E67E8',blueLL:'4A7FF0',
+  green:'10B981',greenL:'34D399',red:'EF4444',redL:'F87171',
+  white:'FFFFFF',fg:'E8EDF5',muted:'5A7490',dim:'2A3F55'
+};
+
+let LOGO_B64=null;
+const W=1280, H=720;
+
+// ═══════════════════════════════════════════════════════════
+//  CANVAS UTILITIES
+// ═══════════════════════════════════════════════════════════
+function mkCanvas(){ const c=document.createElement('canvas'); c.width=W; c.height=H; return c; }
+
+function orb(ctx,cx,cy,r,col,a=0.5){
+  const g=ctx.createRadialGradient(cx,cy,0,cx,cy,r);
+  g.addColorStop(0,col+Math.round(a*255).toString(16).padStart(2,'0'));
+  g.addColorStop(1,col+'00');
+  ctx.fillStyle=g; ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.fill();
+}
+
+function ring(ctx,cx,cy,r,col,a=0.3,lw=1.5){
+  ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2);
+  ctx.strokeStyle=col+Math.round(a*255).toString(16).padStart(2,'0');
+  ctx.lineWidth=lw; ctx.stroke();
+}
+
+function particles(ctx,col,n=120,minR=.5,maxR=2.5){
+  for(let i=0;i<n;i++){
+    const x=Math.random()*W, y=Math.random()*H,
+          r=minR+Math.random()*(maxR-minR),
+          a=0.05+Math.random()*0.55;
+    ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2);
+    ctx.fillStyle=col+Math.round(a*255).toString(16).padStart(2,'0'); ctx.fill();
+  }
+}
+
+function grid(ctx,col,a=0.04,sz=64){
+  ctx.strokeStyle=col+Math.round(a*255).toString(16).padStart(2,'0');
+  ctx.lineWidth=.7;
+  for(let x=0;x<=W;x+=sz){ ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke(); }
+  for(let y=0;y<=H;y+=sz){ ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); }
+}
+
+function dots(ctx,col,a=0.06,gap=40){
+  for(let x=gap/2;x<W;x+=gap) for(let y=gap/2;y<H;y+=gap){
+    ctx.beginPath(); ctx.arc(x,y,1.2,0,Math.PI*2);
+    ctx.fillStyle=col+Math.round(a*255).toString(16).padStart(2,'0'); ctx.fill();
+  }
+}
+
+function hex(ctx,cx,cy,r,col,a=0.15,fill=false){
+  ctx.beginPath();
+  for(let i=0;i<6;i++){
+    const angle=Math.PI/180*(60*i-30);
+    const x=cx+r*Math.cos(angle), y=cy+r*Math.sin(angle);
+    i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+  }
+  ctx.closePath();
+  if(fill){ctx.fillStyle=col+Math.round(a*255).toString(16).padStart(2,'0'); ctx.fill();}
+  else{ctx.strokeStyle=col+Math.round(a*255).toString(16).padStart(2,'0'); ctx.lineWidth=1; ctx.stroke();}
+}
+
+function hexGrid(ctx,col,a=0.06,size=55){
+  const w2=size*Math.sqrt(3), h2=size*1.5;
+  for(let row=0;row<H/h2+2;row++){
+    for(let col2=0;col2<W/w2+2;col2++){
+      const cx=col2*w2+(row%2?w2/2:0), cy=row*h2;
+      hex(ctx,cx,cy,size*.97,col,a+Math.random()*.03);
+    }
+  }
+}
+
+function circuitLines(ctx,col,a=0.12,n=18){
+  ctx.strokeStyle=col+Math.round(a*255).toString(16).padStart(2,'0');
+  ctx.lineWidth=1;
+  for(let i=0;i<n;i++){
+    let x=Math.random()*W, y=Math.random()*H;
+    ctx.beginPath(); ctx.moveTo(x,y);
+    for(let j=0;j<6;j++){
+      const dir=Math.floor(Math.random()*4);
+      const len=30+Math.random()*120;
+      if(dir===0)x+=len; else if(dir===1)x-=len;
+      else if(dir===2)y+=len; else y-=len;
+      ctx.lineTo(x,y);
+      // small dot at corner
+      ctx.arc(x,y,2,0,Math.PI*2);
+    }
+    ctx.stroke();
+  }
+}
+
+function diagStripe(ctx,col,a=0.04){
+  ctx.save();
+  ctx.strokeStyle=col+Math.round(a*255).toString(16).padStart(2,'0');
+  ctx.lineWidth=1;
+  for(let i=-H;i<W+H;i+=30){
+    ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i+H,H); ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function goldAccentBar(ctx,side='left',w=8,h=H){
+  const g=ctx.createLinearGradient(0,0,0,h);
+  g.addColorStop(0,GOLDD+'00');
+  g.addColorStop(.3,GOLD+'dd');
+  g.addColorStop(.7,GOLDL+'dd');
+  g.addColorStop(1,GOLDD+'00');
+  ctx.fillStyle=g;
+  ctx.fillRect(side==='left'?0:W-w,0,w,h);
+}
+
+function topBar(ctx,col=GOLD,h=6){
+  const g=ctx.createLinearGradient(0,0,W,0);
+  g.addColorStop(0,GOLDD+'00');
+  g.addColorStop(.2,GOLD+'ff');
+  g.addColorStop(.8,GOLDL+'ff');
+  g.addColorStop(1,GOLDD+'00');
+  ctx.fillStyle=g; ctx.fillRect(0,0,W,h);
+}
+
+function vignette(ctx){
+  const g=ctx.createRadialGradient(W/2,H/2,H*.2,W/2,H/2,H*.85);
+  g.addColorStop(0,'rgba(0,0,0,0)');
+  g.addColorStop(1,'rgba(0,0,0,0.65)');
+  ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+}
+
+function drawLogo(ctx,logoImg,x,y,size){
+  if(!logoImg||!logoImg.naturalWidth) return;
+  ctx.save();
+  ctx.shadowColor=GOLD; ctx.shadowBlur=30;
+  const r=size*.12;
+  ctx.beginPath();
+  ctx.roundRect(x,y,size,size,r);
+  ctx.clip();
+  ctx.drawImage(logoImg,x,y,size,size);
+  ctx.restore();
+  // gold border
+  ctx.beginPath(); ctx.roundRect(x,y,size,size,r);
+  ctx.strokeStyle=GOLD+'cc'; ctx.lineWidth=3; ctx.stroke();
+}
+
+// ═══════════════════════════════════════════════════════════
+//  BACKGROUND GENERATORS
+// ═══════════════════════════════════════════════════════════
+
+function bgCover(logoImg){
+  const cv=mkCanvas(), ctx=cv.getContext('2d');
+  // Deep space gradient
+  const g=ctx.createRadialGradient(300,360,0,300,360,900);
+  g.addColorStop(0,'#0A1628'); g.addColorStop(.5,'#050C18'); g.addColorStop(1,'#020810');
+  ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+  // Right side gold radial burst
+  const g2=ctx.createRadialGradient(1100,340,0,1100,340,600);
+  g2.addColorStop(0,GOLD+'22'); g2.addColorStop(.4,GOLD+'08'); g2.addColorStop(1,'transparent');
+  ctx.fillStyle=g2; ctx.fillRect(0,0,W,H);
+  // Hex grid subtle
+  hexGrid(ctx,GOLD,.04,55);
+  // Circuit lines
+  circuitLines(ctx,GOLD,.08,14);
+  // Big rings right side
+  for(let r=80;r<500;r+=80) ring(ctx,1080,360,r,GOLD,r<200?.12:.06,r<200?2:1);
+  // Orbs
+  orb(ctx,1080,360,350,GOLD,.18);
+  orb(ctx,1080,360,150,GOLD,.25);
+  orb(ctx,1080,360,60,GOLDP,.4);
+  orb(ctx,200,100,200,BLUEL,.08);
+  orb(ctx,0,650,180,BLUEL,.07);
+  // Particles
+  particles(ctx,GOLD,180,1,3);
+  particles(ctx,BLUEL,60,1,2);
+  // Gold bar left
+  goldAccentBar(ctx,'left',10,H);
+  // Top bar gold
+  topBar(ctx,GOLD,7);
+  // Vignette
+  vignette(ctx);
+  // Logo watermark giant (semi-transparent bg)
+  if(logoImg&&logoImg.naturalWidth){
+    ctx.save(); ctx.globalAlpha=.06;
+    ctx.drawImage(logoImg,700,100,520,520);
+    ctx.restore();
+  }
+  return cv.toDataURL('image/jpeg',.92);
+}
+
+function bgDark(accentCol=GOLD,side='left'){
+  const cv=mkCanvas(), ctx=cv.getContext('2d');
+  const g=ctx.createLinearGradient(0,0,W,H);
+  g.addColorStop(0,'#050C18'); g.addColorStop(.6,'#091221'); g.addColorStop(1,'#0A1828');
+  ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+  // Dot grid
+  dots(ctx,GOLD,.05,44);
+  // Subtle hex
+  hexGrid(ctx,GOLD,.025,60);
+  // Orb corner
+  orb(ctx,side==='left'?0:W,0,380,accentCol,.1);
+  orb(ctx,side==='left'?W:0,H,300,BLUEL,.08);
+  // Circuit
+  circuitLines(ctx,accentCol,.07,10);
+  // Particles
+  particles(ctx,accentCol,100,1,2.2);
+  // Accent bar
+  goldAccentBar(ctx,side,8,H);
+  topBar(ctx,accentCol,6);
+  vignette(ctx);
+  return cv.toDataURL('image/jpeg',.92);
+}
+
+function bgProblem(){
+  const cv=mkCanvas(), ctx=cv.getContext('2d');
+  const g=ctx.createLinearGradient(0,0,W,H);
+  g.addColorStop(0,'#0D0508'); g.addColorStop(.5,'#050C18'); g.addColorStop(1,'#120508');
+  ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+  // Red atmospheric glow bottom
+  orb(ctx,W/2,H+100,600,RED,.15);
+  orb(ctx,0,H,400,RED,.1);
+  orb(ctx,W,H,350,RED,.08);
+  // Grid dark red
+  grid(ctx,RED,.04,60);
+  diagStripe(ctx,RED,.025);
+  particles(ctx,RED,100,1,2.5);
+  particles(ctx,GOLD,40,1,1.5);
+  // Top accent red
+  const tg=ctx.createLinearGradient(0,0,W,0);
+  tg.addColorStop(0,'#EF444400'); tg.addColorStop(.5,'#EF444488'); tg.addColorStop(1,'#EF444400');
+  ctx.fillStyle=tg; ctx.fillRect(0,0,W,5);
+  // Gold bar left
+  goldAccentBar(ctx,'left',6,H);
+  vignette(ctx);
+  return cv.toDataURL('image/jpeg',.92);
+}
+
+function bgSolution(){
+  const cv=mkCanvas(), ctx=cv.getContext('2d');
+  const g=ctx.createLinearGradient(0,0,W,H);
+  g.addColorStop(0,'#020E0A'); g.addColorStop(.5,'#050C18'); g.addColorStop(1,'#040D1A');
+  ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+  orb(ctx,W/2,0,500,GREEN,.12);
+  orb(ctx,0,H/2,350,GREEN,.08);
+  grid(ctx,GREEN,.04,56);
+  hexGrid(ctx,GREEN,.03,50);
+  particles(ctx,GREEN,120,1,2.5);
+  particles(ctx,GOLD,50,1,1.5);
+  const tg=ctx.createLinearGradient(0,0,W,0);
+  tg.addColorStop(0,'#10B98100'); tg.addColorStop(.5,'#10B98177'); tg.addColorStop(1,'#10B98100');
+  ctx.fillStyle=tg; ctx.fillRect(0,0,W,5);
+  goldAccentBar(ctx,'left',6,H);
+  vignette(ctx);
+  return cv.toDataURL('image/jpeg',.92);
+}
+
+function bgTech(){
+  const cv=mkCanvas(), ctx=cv.getContext('2d');
+  const g=ctx.createLinearGradient(0,0,W,H);
+  g.addColorStop(0,'#020A18'); g.addColorStop(.5,'#030E1E'); g.addColorStop(1,'#050C18');
+  ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+  orb(ctx,W,0,500,BLUEL,.14);
+  orb(ctx,0,H,400,BLUEL,.1);
+  orb(ctx,W/2,H/2,200,BLUEL,.06);
+  grid(ctx,BLUEL,.05,48);
+  circuitLines(ctx,BLUEL,.14,22);
+  particles(ctx,BLUEL,150,1,2.5);
+  particles(ctx,GOLD,60,1,1.5);
+  const tg=ctx.createLinearGradient(0,0,W,0);
+  tg.addColorStop(0,BLUEL+'00'); tg.addColorStop(.5,BLUEL+'88'); tg.addColorStop(1,BLUEL+'00');
+  ctx.fillStyle=tg; ctx.fillRect(0,0,W,5);
+  goldAccentBar(ctx,'right',6,H);
+  vignette(ctx);
+  return cv.toDataURL('image/jpeg',.92);
+}
+
+function bgGold(){
+  const cv=mkCanvas(), ctx=cv.getContext('2d');
+  const g=ctx.createRadialGradient(W/2,H/2,0,W/2,H/2,700);
+  g.addColorStop(0,'#0F1A08'); g.addColorStop(.4,'#080E14'); g.addColorStop(1,'#050C18');
+  ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+  orb(ctx,W/2,H/2,500,GOLD,.18);
+  orb(ctx,W/2,H/2,250,GOLD,.25);
+  orb(ctx,W/2,H/2,100,GOLDP,.3);
+  for(let r=60;r<480;r+=80) ring(ctx,W/2,H/2,r,GOLD,r<200?.15:.07,r<200?2:1);
+  hexGrid(ctx,GOLD,.05,52);
+  particles(ctx,GOLD,200,1,3);
+  particles(ctx,GOLDP,80,2,4);
+  topBar(ctx,GOLD,8);
+  goldAccentBar(ctx,'left',8,H);
+  vignette(ctx);
+  return cv.toDataURL('image/jpeg',.92);
+}
+
+function bgClosing(logoImg){
+  const cv=mkCanvas(), ctx=cv.getContext('2d');
+  const g=ctx.createRadialGradient(W/2,H/2,0,W/2,H/2,800);
+  g.addColorStop(0,'#0C1A2E'); g.addColorStop(.5,'#050C18'); g.addColorStop(1,'#020810');
+  ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+  // Center gold burst
+  orb(ctx,W/2,H/2,600,GOLD,.15);
+  orb(ctx,W/2,H/2,300,GOLD,.25);
+  orb(ctx,W/2,H/2,120,GOLDP,.35);
+  // Rings
+  for(let r=50;r<550;r+=70) ring(ctx,W/2,H/2,r,GOLD,r<200?.18:.07,r<200?2.5:1);
+  // Blue corners
+  orb(ctx,0,0,300,BLUEL,.1);
+  orb(ctx,W,H,300,BLUEL,.1);
+  // Particles
+  particles(ctx,GOLD,250,1,3.5);
+  particles(ctx,GOLDP,80,2,5);
+  particles(ctx,BLUEL,60,1,2);
+  hexGrid(ctx,GOLD,.04,55);
+  // Logo watermark large
+  if(logoImg&&logoImg.naturalWidth){
+    ctx.save(); ctx.globalAlpha=.08;
+    ctx.drawImage(logoImg,W/2-280,H/2-280,560,560);
+    ctx.restore();
+  }
+  topBar(ctx,GOLD,9);
+  goldAccentBar(ctx,'left',12,H);
+  vignette(ctx);
+  return cv.toDataURL('image/jpeg',.92);
+}
+
+// ═══════════════════════════════════════════════════════════
+//  PPTX HELPERS
+// ═══════════════════════════════════════════════════════════
+function addBg(s,img){ s.addImage({data:img,x:0,y:0,w:'100%',h:'100%'}); }
+
+function footer(s,pptx,logo,n,tot){
+  s.addShape(pptx.ShapeType.rect,{x:0,y:7.08,w:'100%',h:.42,
+    fill:{color:'020810'},line:{type:'none'},transparency:10});
+  const topG=[{position:0,color:'C4922E'},{position:100,color:'8A6018'}];
+  s.addShape(pptx.ShapeType.rect,{x:0,y:7.08,w:'100%',h:.025,
+    fill:{type:'gradient',gradType:'linear',angle:90,stops:topG},line:{type:'none'}});
+  if(logo) s.addImage({data:logo,x:.22,y:7.12,w:.32,h:.32});
+  s.addText('V3 PARTNER',{x:.63,y:7.12,w:3,h:.32,fontSize:8.5,bold:true,color:C.goldL,align:'left',valign:'middle'});
+  s.addText('Financial Technology · Mercado Financeiro Brasileiro',{
+    x:3,y:7.12,w:4.5,h:.32,fontSize:7.5,color:C.muted,align:'center',valign:'middle'});
+  s.addText(String(n).padStart(2,'0')+' / '+String(tot).padStart(2,'0'),{
+    x:8.2,y:7.12,w:1.6,h:.32,fontSize:9,bold:true,color:C.gold,align:'right',valign:'middle'});
+}
+
+function badge(s,pptx,txt,x,y,w=2.8,col=C.gold){
+  s.addShape(pptx.ShapeType.roundRect,{x,y,w,h:.3,
+    fill:{type:'gradient',gradType:'linear',angle:90,
+      stops:[{position:0,color:col},{position:100,color:C.goldD}]},
+    line:{type:'none'},arcsize:35});
+  s.addText(txt.toUpperCase(),{x,y,w,h:.3,fontSize:7.5,bold:true,
+    color:C.navy,align:'center',valign:'middle',charSpacing:1.5});
+}
+
+function hline(s,pptx,y,x=.4,w=9.2,col=C.dim){
+  s.addShape(pptx.ShapeType.rect,{x,y,w,h:.018,fill:{color:col},line:{type:'none'}});
+}
+
+function card(s,pptx,x,y,w,h,bg2=C.navy3,border=C.dim,r=4){
+  s.addShape(pptx.ShapeType.roundRect,{x,y,w,h,
+    fill:{color:bg2},line:{color:border,width:.8},arcsize:r});
+}
+
+function accentCard(s,pptx,x,y,w,h,col=C.gold){
+  card(s,pptx,x,y,w,h,C.navy3,col,4);
+  s.addShape(pptx.ShapeType.rect,{x,y,w,h:.055,fill:{color:col},line:{type:'none'}});
+}
+
+function stat(s,pptx,num,label,sub,x,y,w=2.1,h=1.4,col=C.gold){
+  accentCard(s,pptx,x,y,w,h,col);
+  s.addText(num,{x,y:y+.08,w,h:.68,fontSize:28,bold:true,color:col,align:'center',valign:'middle',
+    shadow:{type:'outer',color:col,blur:18,offset:2,angle:45,opacity:.7}});
+  s.addText(label,{x,y:y+.76,w,h:.32,fontSize:10.5,bold:true,color:C.fg,align:'center'});
+  if(sub) s.addText(sub,{x,y:y+1.06,w,h:.26,fontSize:8.5,color:C.muted,align:'center'});
+}
+
+function pBar(s,pptx,label,pct,x,y,w=4,col=C.gold){
+  s.addText(label,{x,y,w:w*.65,h:.22,fontSize:9,color:C.muted});
+  s.addText(pct+'%',{x:x+w*.65,y,w:w*.35,h:.22,fontSize:9,bold:true,color:col,align:'right'});
+  s.addShape(pptx.ShapeType.rect,{x,y:y+.23,w,h:.1,fill:{color:C.navy4},line:{type:'none'}});
+  s.addShape(pptx.ShapeType.rect,{x,y:y+.23,w:Math.max(.05,w*pct/100),h:.1,
+    fill:{type:'gradient',gradType:'linear',angle:90,
+      stops:[{position:0,color:col},{position:100,color:C.goldD}]},line:{type:'none'}});
+}
+
+function bullet(s,pptx,x,y,txt,sz=11,col=C.fg){
+  s.addShape(pptx.ShapeType.ellipse,{x:x+.04,y:y+.08,w:.12,h:.12,fill:{color:C.gold},line:{type:'none'}});
+  s.addText(txt,{x:x+.24,y:y-.04,w:8.5,h:.36,fontSize:sz,color:col,valign:'middle'});
+}
+
+function featureRow(s,pptx,icon,title,desc,x,y,col=C.gold){
+  s.addShape(pptx.ShapeType.roundRect,{x,y,w:.42,h:.42,
+    fill:{color:col+'33'},line:{color:col,width:1},arcsize:20});
+  s.addText(icon,{x,y,w:.42,h:.42,fontSize:15,align:'center',valign:'middle'});
+  s.addText(title,{x:x+.52,y:y+.02,w:3.8,h:.2,fontSize:11,bold:true,color:col});
+  s.addText(desc, {x:x+.52,y:y+.22,w:3.8,h:.2,fontSize:9, color:C.muted});
+}
+
+// ═══════════════════════════════════════════════════════════
+//  SLIDES
+// ═══════════════════════════════════════════════════════════
+
+function S01_Capa(pptx,logo,bgs){
+  const s=pptx.addSlide();
+  addBg(s,bgs.cover);
+  // Logo grande esquerda
+  if(logo) s.addImage({data:logo,x:.5,y:.9,w:1.45,h:1.45});
+  // Gold glow around logo
+  s.addShape(pptx.ShapeType.ellipse,{x:.35,y:.75,w:1.75,h:1.75,
+    fill:{type:'none'},line:{color:C.gold,width:1.5},transparency:55});
+  // Brand
+  s.addText('V3 PARTNER',{x:2.2,y:.9,w:6.5,h:.9,fontSize:48,bold:true,color:C.goldP,align:'left',
+    shadow:{type:'outer',color:C.gold,blur:28,offset:3,angle:45,opacity:.9}});
+  s.addText('FINANCIAL TECHNOLOGY',{x:2.2,y:1.78,w:6.5,h:.38,
+    fontSize:14,color:C.muted,align:'left',charSpacing:6,bold:false});
+  // Divider
+  s.addShape(pptx.ShapeType.rect,{x:.5,y:2.32,w:7.5,h:.04,
+    fill:{type:'gradient',gradType:'linear',angle:90,
+      stops:[{position:0,color:C.gold},{position:70,color:C.goldD},{position:100,color:'050C18'}]},
+    line:{type:'none'}});
+  // Main headline
+  s.addText('A PLATAFORMA\nDO PARCEIRO\nDE SUCESSO',{x:.5,y:2.5,w:7,h:2.45,
+    fontSize:55,bold:true,color:'FFFFFF',align:'left',lineSpacingMultiple:1.1,
+    shadow:{type:'outer',color:'000000',blur:12,offset:5,angle:45,opacity:.7}});
+  // Sub
+  s.addText('Tecnologia · Inteligência · Resultados no Mercado Financeiro',{
+    x:.5,y:5.05,w:8,h:.42,fontSize:14,color:C.goldL,align:'left',italic:true});
+  // Year badge
+  badge(s,pptx,'2025 · Apresentação Institucional',.5,5.6,4.8,C.gold);
+  footer(s,pptx,logo,1,20);
+}
+
+function S02_Agenda(pptx,logo,bgs){
+  const s=pptx.addSlide();
+  addBg(s,bgs.dark);
+  badge(s,pptx,'agenda',.4,.18,1.8,C.gold);
+  s.addText('O que vamos cobrir',{x:.4,y:.5,w:9,h:.65,fontSize:30,bold:true,color:'FFFFFF'});
+  hline(s,pptx,1.22,.4,9.2,C.gold);
+  const its=[
+    ['01','Quem Somos — Propósito & DNA V3',C.gold],
+    ['02','Oportunidade — Mercado de R$ 4 Trilhões',C.blueLL],
+    ['03','O Problema que Resolvemos',C.redL],
+    ['04','A Solução — Plataforma Unificada',C.greenL],
+    ['05','9 Módulos em Detalhe',C.goldL],
+    ['06','Tecnologia e Segurança',C.blueLL],
+    ['07','Diferenciais & Impacto',C.gold],
+    ['08','Como Começar — Próximos Passos',C.greenL],
+  ];
+  its.forEach(([n,t,c],i)=>{
+    const cx=i%2===0?.4:5.1, ry=Math.floor(i/2);
+    const y=1.38+ry*1.3;
+    card(s,pptx,cx,y,4.5,1.1,C.navy3,c,4);
+    s.addShape(pptx.ShapeType.rect,{x:cx,y,w:.08,h:1.1,fill:{color:c},line:{type:'none'}});
+    s.addText(n,{x:cx+.18,y:y+.08,w:.7,h:.45,fontSize:22,bold:true,color:c});
+    s.addText(t,{x:cx+.92,y:y+.1,w:3.4,h:.45,fontSize:11,bold:true,color:C.fg,valign:'middle'});
+    s.addText('→',{x:cx+4.1,y:y+.5,w:.3,h:.45,fontSize:14,color:c,valign:'middle'});
+  });
+  footer(s,pptx,logo,2,20);
+}
+
+function S03_QuemSomos(pptx,logo,bgs){
+  const s=pptx.addSlide();
+  addBg(s,bgs.dark);
+  badge(s,pptx,'quem somos',.4,.18,2.2,C.gold);
+  s.addText('A V3 Partner',{x:.4,y:.5,w:9,h:.65,fontSize:32,bold:true,color:'FFFFFF'});
+  hline(s,pptx,1.22,.4,9.2,C.gold);
+  // Logo right large
+  if(logo){
+    s.addImage({data:logo,x:7.0,y:1.4,w:2.35,h:2.35});
+    s.addShape(pptx.ShapeType.ellipse,{x:6.8,y:1.2,w:2.75,h:2.75,
+      fill:{type:'none'},line:{color:C.gold,width:1.5},transparency:55});
+  }
+  s.addText('Somos uma empresa de tecnologia fintech especializada em capacitar parceiros do mercado financeiro brasileiro com ferramentas de nível institucional.',{
+    x:.4,y:1.4,w:6.3,h:.9,fontSize:12.5,color:C.fg,lineSpacingMultiple:1.6});
+  const ps=[
+    {t:'Fundada por especialistas do mercado financeiro',c:C.gold},
+    {t:'Parceiros: assessores, corretores e gestores',c:C.blueLL},
+    {t:'Plataforma 100% digital, cloud e integrada',c:C.green},
+    {t:'IA generativa Claude (Anthropic) nativa',c:C.goldL},
+    {t:'Modelo SaaS escalável — sem limitação de escala',c:C.blueLL},
+  ];
+  ps.forEach((p,i)=>{
+    s.addShape(pptx.ShapeType.rect,{x:.4,y:2.48+i*.58,w:.06,h:.38,fill:{color:p.c},line:{type:'none'}});
+    s.addText(p.t,{x:.58,y:2.48+i*.58,w:6,h:.38,fontSize:11.5,color:C.fg,valign:'middle'});
+  });
+  // Stats
+  stat(s,pptx,'9+','Módulos','integrados',.4,5.7,2.85,1.1,C.gold);
+  stat(s,pptx,'24/7','Disponível','cloud',.4+2.98,5.7,2.85,1.1,C.blueL);
+  stat(s,pptx,'100%','Digital','& seguro',.4+2.98*2,5.7,2.85,1.1,C.green);
+  footer(s,pptx,logo,3,20);
+}
+
+function S04_Proposito(pptx,logo,bgs){
+  const s=pptx.addSlide();
+  addBg(s,bgs.gold);
+  badge(s,pptx,'propósito & DNA',3.5,.18,3,C.gold);
+  s.addText('Por que a V3 existe?',{x:1,y:.52,w:8,h:.65,fontSize:30,bold:true,color:'FFFFFF',align:'center'});
+  hline(s,pptx,1.22,1,8,C.gold);
+  // Big quote
+  s.addText('"Democratizar o acesso às melhores ferramentas do\nmercado financeiro para cada parceiro brasileiro."',{
+    x:.8,y:1.42,w:8.4,h:1.6,fontSize:23,bold:true,color:C.goldP,align:'center',
+    lineSpacingMultiple:1.5,italic:true,
+    shadow:{type:'outer',color:C.gold,blur:22,offset:2,angle:45,opacity:.7}});
+  const vs=[
+    {i:'🎯',t:'Missão',d:'Empoderar parceiros com\ntecnologia de ponta'},
+    {i:'🔭',t:'Visão',d:'Ser a plataforma #1 do\nparceiro financeiro BR'},
+    {i:'💎',t:'Valores',d:'Excelência · Ética\nInovação · Resultado'},
+    {i:'🚀',t:'Cultura',d:'Alta performance com\npropósito real'},
+  ];
+  vs.forEach((v,i)=>{
+    const x=.5+i*2.38;
+    accentCard(s,pptx,x,3.25,2.15,2.15,C.gold);
+    s.addText(v.i,{x,y:3.38,w:2.15,h:.6,fontSize:24,align:'center'});
+    s.addText(v.t,{x,y:4.0,w:2.15,h:.35,fontSize:13,bold:true,color:C.goldL,align:'center'});
+    s.addText(v.d,{x:x+.12,y:4.36,w:1.91,h:.88,fontSize:9.5,color:C.muted,align:'center',lineSpacingMultiple:1.5});
+  });
+  footer(s,pptx,logo,4,20);
+}
+
+function S05_Mercado(pptx,logo,bgs){
+  const s=pptx.addSlide();
+  addBg(s,bgs.tech);
+  badge(s,pptx,'oportunidade de mercado',.4,.18,3.6,C.blueLL);
+  s.addText('O Mercado Financeiro Brasileiro',{x:.4,y:.52,w:9.2,h:.65,fontSize:28,bold:true,color:'FFFFFF'});
+  hline(s,pptx,1.22,.4,9.2,C.blueLL);
+  stat(s,pptx,'R$ 4 Tri','Crédito Total','PF + PJ',.4,1.42,2.28,1.55,C.gold);
+  stat(s,pptx,'2M+','Micro/Pequenas','empresas sem crédito',.4+2.4,1.42,2.28,1.55,C.blueLL);
+  stat(s,pptx,'68%','Crédito Inadequado','grande oportunidade',.4+2.4*2,1.42,2.28,1.55,C.redL);
+  stat(s,pptx,'R$280Bi','Crédito Estruturado','por ano',.4+2.4*3,1.42,2.28,1.55,C.greenL);
+  s.addText('Crescimento Fintech Brasil 2020–2025',{x:.4,y:3.18,w:9,h:.38,fontSize:14,bold:true,color:C.goldL});
+  const bars=[['Crédito Digital',82,C.gold],['PIX / Pagamentos',96,C.greenL],
+    ['Investimentos',74,C.blueLL],['Seguros',61,C.goldL],['Câmbio',58,C.blueLL]];
+  bars.forEach(([l,p,c],i)=>{
+    const x=i<3?.4:5.2, y=3.65+(i<3?i:i-3)*.6;
+    pBar(s,pptx,l,p,x,y,4.5,c);
+  });
+  s.addText('Fonte: Banco Central do Brasil / FEBRABAN 2024',{
+    x:.4,y:6.82,w:9,h:.22,fontSize:8,color:C.dim,italic:true});
+  footer(s,pptx,logo,5,20);
+}
+
+function S06_Problema(pptx,logo,bgs){
+  const s=pptx.addSlide();
+  addBg(s,bgs.problem);
+  badge(s,pptx,'o problema',.4,.18,2,C.redL);
+  s.addText('O que trava o parceiro hoje?',{x:.4,y:.52,w:9,h:.65,fontSize:28,bold:true,color:'FFFFFF'});
+  hline(s,pptx,1.22,.4,9.2,'EF4444');
+  const ps=[
+    {t:'Ferramentas Fragmentadas',d:'CRM, crédito, comissões — tudo separado, sem integração'},
+    {t:'Zero Inteligência de Dados',d:'Decisões no "feeling", sem analytics, sem visibilidade'},
+    {t:'Processos Manuais e Lentos',d:'Propostas por WhatsApp, aprovação demorada, erros'},
+    {t:'Baixo Poder de Negociação',d:'Sem estrutura para FIDC, CRI, M&A, High Ticket'},
+    {t:'Capacitação Inexistente',d:'Sem treinamentos, sem academy, parceiro estagnado'},
+    {t:'Gestão Fiscal Desorganizada',d:'Split manual, tributação não otimizada, prejuízo'}
+  ];
+  ps.forEach((p,i)=>{
+    const x=i%2===0?.4:5.1, y=1.45+Math.floor(i/2)*1.28;
+    card(s,pptx,x,y,4.5,1.12,'1A0608','EF4444',4);
+    s.addShape(pptx.ShapeType.rect,{x,y,w:.07,h:1.12,fill:{color:'EF4444'},line:{type:'none'}});
+    s.addText('✗  '+p.t,{x:x+.18,y:y+.1,w:4.2,h:.38,fontSize:12,bold:true,color:'FCA5A5'});
+    s.addText(p.d,{x:x+.18,y:y+.5,w:4.2,h:.55,fontSize:9.5,color:C.muted,lineSpacingMultiple:1.4});
+  });
+  footer(s,pptx,logo,6,20);
+}
+
+function S07_Solucao(pptx,logo,bgs){
+  const s=pptx.addSlide();
+  addBg(s,bgs.solution);
+  badge(s,pptx,'a solução V3',.4,.18,2.2,C.greenL);
+  s.addText('Uma plataforma. Tudo integrado.',{x:.4,y:.52,w:9,h:.65,fontSize:30,bold:true,color:'FFFFFF'});
+  hline(s,pptx,1.22,.4,9.2,'10B981');
+  s.addText('A V3 Partner unifica em um único ecossistema tudo que o parceiro precisa para operar, crescer e prosperar.',{
+    x:.4,y:1.35,w:9.2,h:.72,fontSize:13,color:C.fg,lineSpacingMultiple:1.6});
+  const ss=[
+    {i:'✅',t:'Plataforma Unificada',d:'9 módulos, um login, total integração',c:C.green},
+    {i:'🤖',t:'IA Generativa (Claude)',d:'Especializada em finanças BR, 24/7',c:C.blueLL},
+    {i:'⚡',t:'Tempo Real',d:'Propostas, status, aprovações ao vivo',c:C.gold},
+    {i:'📊',t:'Analytics Avançado',d:'Dashboard com KPIs, gráficos, alertas',c:C.goldL},
+    {i:'🎓',t:'V3 Academy',d:'25+ videoaulas, certificações, crescimento',c:C.goldL},
+    {i:'🔐',t:'Segurança Bancária',d:'PostgreSQL + RLS + JWT + HTTPS',c:C.greenL}
+  ];
+  ss.forEach((p,i)=>{
+    const x=i%2===0?.4:5.1, y=2.2+Math.floor(i/2)*1.2;
+    card(s,pptx,x,y,4.5,1.05,'041A0E','10B981',4);
+    s.addShape(pptx.ShapeType.rect,{x,y,w:.07,h:1.05,fill:{color:p.c},line:{type:'none'}});
+    s.addText(p.i+'  '+p.t,{x:x+.18,y:y+.1,w:4.2,h:.38,fontSize:12,bold:true,color:'A7F3D0'});
+    s.addText(p.d,{x:x+.18,y:y+.5,w:4.2,h:.46,fontSize:9.5,color:C.muted});
+  });
+  footer(s,pptx,logo,7,20);
+}
+
+function S08_Plataforma(pptx,logo,bgs){
+  const s=pptx.addSlide();
+  addBg(s,bgs.gold);
+  badge(s,pptx,'ecossistema V3',3.5,.18,3,C.gold);
+  s.addText('9 Módulos. 1 Plataforma.',{x:1,y:.52,w:8,h:.65,fontSize:30,bold:true,color:'FFFFFF',align:'center'});
+  hline(s,pptx,1.22,1,8,C.gold);
+  // Center logo
+  if(logo) s.addImage({data:logo,x:4.15,y:2.9,w:1.7,h:1.7});
+  s.addShape(pptx.ShapeType.ellipse,{x:3.8,y:2.55,w:2.4,h:2.4,
+    fill:{type:'none'},line:{color:C.gold,width:2},transparency:50});
+  s.addShape(pptx.ShapeType.ellipse,{x:3.1,y:1.85,w:3.8,h:3.8,
+    fill:{type:'none'},line:{color:C.gold,width:1},transparency:70});
+  // Modules
+  const ms=[
+    {t:'Split Fiscal',     c:C.gold,  x:.1, y:1.4},
+    {t:'Mesa Crédito N1',  c:C.blueLL,x:3.5,y:1.1},
+    {t:'M & A',            c:C.goldL, x:7.0,y:1.4},
+    {t:'IA Assistant',     c:C.green, x:8.3,y:3.4},
+    {t:'V3 Academy',       c:C.goldL, x:7.0,y:5.4},
+    {t:'Consórcio',        c:C.blueLL,x:3.5,y:5.7},
+    {t:'Dashboard',        c:C.gold,  x:.1, y:5.4},
+    {t:'Mesa Operacional', c:C.greenL,x:-.1,y:3.4},
+    {t:'Gestão Usuários',  c:C.muted, x:3.5,y:3.05},
+  ];
+  ms.forEach(m=>{
+    const bx=m.x<0?.05:m.x;
+    card(s,pptx,bx,m.y,1.95,.58,C.navy3,m.c,6);
+    s.addShape(pptx.ShapeType.rect,{x:bx,y:m.y,w:1.95,h:.05,fill:{color:m.c},line:{type:'none'}});
+    s.addText(m.t,{x:bx,y:m.y,w:1.95,h:.58,fontSize:9.5,bold:true,color:m.c,align:'center',valign:'middle'});
+  });
+  footer(s,pptx,logo,8,20);
+}
+
+function S09_SplitFiscal(pptx,logo,bgs){
+  const s=pptx.addSlide();
+  addBg(s,bgs.dark);
+  badge(s,pptx,'módulo 01 — split fiscal',.4,.18,3.4,C.gold);
+  s.addText('Split Fiscal',{x:.4,y:.52,w:9,h:.65,fontSize:34,bold:true,color:C.goldP,
+    shadow:{type:'outer',color:C.gold,blur:18,offset:2,angle:45,opacity:.7}});
+  hline(s,pptx,1.22,.4,9.2,C.gold);
+  s.addText('Otimização tributária e divisão de receitas com transparência total.',{
+    x:.4,y:1.32,w:9,h:.42,fontSize:12,color:C.muted});
+  const sts=[
+    {n:'01',t:'Cadastro TPV',d:'Volume total e mix\nde meios de pagamento'},
+    {n:'02',t:'Simulação Fiscal',d:'Alíquota atual vs nova\neconomia automática'},
+    {n:'03',t:'Receita Partner',d:'% por modalidade\ncom transparência'},
+    {n:'04',t:'Relatório',d:'Exportação com\ndetalhamento completo'},
+  ];
+  sts.forEach((st,i)=>{
+    accentCard(s,pptx,.4+i*2.4,1.85,2.2,2.95,C.gold);
+    s.addText(st.n,{x:.4+i*2.4,y:1.98,w:2.2,h:.65,fontSize:30,bold:true,color:C.gold,align:'center',
+      shadow:{type:'outer',color:C.gold,blur:12,offset:1,angle:45,opacity:.6}});
+    s.addText(st.t,{x:.5+i*2.4,y:2.68,w:2.0,h:.42,fontSize:12,bold:true,color:C.fg,align:'center'});
+    s.addText(st.d,{x:.5+i*2.4,y:3.14,w:2.0,h:1.4,fontSize:9.5,color:C.muted,align:'center',lineSpacingMultiple:1.5});
+  });
+  card(s,pptx,.4,5.02,9.2,1.58,'051A08','10B981',5);
+  s.addShape(pptx.ShapeType.rect,{x:.4,y:5.02,w:9.2,h:.05,fill:{color:C.green},line:{type:'none'}});
+  s.addText('💡 Impacto Comprovado',{x:.65,y:5.1,w:4,h:.42,fontSize:13,bold:true,color:C.greenL});
+  s.addText('Parceiros V3 reportam redução média de 18% na carga tributária e aumento de 32% na receita líquida por operação com o simulador de Split Fiscal.',{
+    x:.65,y:5.54,w:8.8,h:.92,fontSize:10.5,color:C.fg,lineSpacingMultiple:1.5});
+  footer(s,pptx,logo,9,20);
+}
+
+function S10_MesaCredito(pptx,logo,bgs){
+  const s=pptx.addSlide();
+  addBg(s,bgs.tech);
+  badge(s,pptx,'módulo 02 — mesa de crédito',.4,.18,3.8,C.blueLL);
+  s.addText('Mesa de Crédito — 3 Níveis',{x:.4,y:.52,w:9,h:.65,fontSize:30,bold:true,color:C.blueLL,
+    shadow:{type:'outer',color:C.blueL,blur:14,offset:2,angle:45,opacity:.6}});
+  hline(s,pptx,1.22,.4,9.2,C.blueL);
+  const lvls=[
+    {lv:'N1',t:'Crédito Varejo',c:C.blueLL,its:['Home Equity','Crédito Pessoal','CDC','Aval'],min:'Qualquer valor'},
+    {lv:'N2',t:'Crédito Estruturado',c:C.blueL,its:['FIDC','CRI / CRA','Debêntures','Capital de Giro'],min:'R$ 500 mil+'},
+    {lv:'N3',t:'High Ticket',c:C.gold,its:['Project Finance','M&A / Fusões','Infrastructure','Real Estate HV'],min:'R$ 5 milhões+'},
+  ];
+  lvls.forEach((l,i)=>{
+    const x=.4+i*3.22;
+    accentCard(s,pptx,x,1.42,3.0,4.35,l.c);
+    badge(s,pptx,l.lv,x+1.1,1.52,.8,l.c);
+    s.addText(l.t,{x,y:1.9,w:3.0,h:.42,fontSize:13,bold:true,color:l.c,align:'center'});
+    hline(s,pptx,2.36,x+.2,2.6,l.c);
+    l.its.forEach((it,j)=>{
+      s.addShape(pptx.ShapeType.ellipse,{x:x+.25,y:2.52+j*.62,w:.12,h:.12,fill:{color:l.c},line:{type:'none'}});
+      s.addText(it,{x:x+.45,y:2.43+j*.62,w:2.45,h:.38,fontSize:11,color:C.fg,valign:'middle'});
+    });
+    s.addShape(pptx.ShapeType.roundRect,{x:x+.1,y:5.05,w:2.8,h:.55,
+      fill:{color:l.c},line:{type:'none'},arcsize:15});
+    s.addText('Mín: '+l.min,{x:x+.1,y:5.05,w:2.8,h:.55,
+      fontSize:10,bold:true,color:C.navy,align:'center',valign:'middle'});
+  });
+  s.addText('Pipeline 6 etapas · Checklist documentos · LTV automático · Partner vinculado automaticamente',{
+    x:.4,y:5.72,w:9.2,h:.3,fontSize:9.5,color:C.muted,align:'center',italic:true});
+  footer(s,pptx,logo,10,20);
+}
+
+function S11_MA(pptx,logo,bgs){
+  const s=pptx.addSlide();
+  addBg(s,bgs.dark);
+  badge(s,pptx,'módulo 03 — M&A',.4,.18,2.4,C.goldL);
+  s.addText('Fusões & Aquisições',{x:.4,y:.52,w:9,h:.65,fontSize:32,bold:true,color:C.goldP});
+  hline(s,pptx,1.22,.4,9.2,C.goldL);
+  s.addText('Pipeline Visual de Deals',{x:.4,y:1.35,w:5,h:.4,fontSize:14,bold:true,color:C.goldL});
+  const stages=[{t:'Prospecção',n:'12',c:C.muted},{t:'Análise',n:'8',c:C.blueLL},
+    {t:'Due Diligence',n:'5',c:C.goldL},{t:'Negociação',n:'3',c:C.gold},{t:'Fechamento',n:'1',c:C.green}];
+  stages.forEach((st,i)=>{
+    accentCard(s,pptx,.4+i*1.9,1.85,1.78,1.72,st.c);
+    s.addText(st.n,{x:.4+i*1.9,y:1.98,w:1.78,h:.7,fontSize:34,bold:true,color:st.c,align:'center',
+      shadow:{type:'outer',color:st.c,blur:14,offset:1,angle:45,opacity:.6}});
+    s.addText(st.t,{x:.4+i*1.9,y:2.72,w:1.78,h:.72,fontSize:10,bold:true,color:C.fg,align:'center',lineSpacingMultiple:1.3});
+    if(i<4) s.addShape(pptx.ShapeType.rect,{x:2.18+i*1.9,y:2.42,w:.05,h:.55,fill:{color:C.dim},line:{type:'none'}});
+  });
+  const fs=[
+    {t:'Valuation Automatizado',d:'Múltiplos EBITDA calculados em tempo real com benchmarks'},
+    {t:'Score por IA',d:'Probabilidade de fechamento baseada em dados históricos'},
+    {t:'Gestão de Documentos',d:'Checklist NDAs, due diligence, contratos — tudo rastreado'},
+    {t:'Timeline Completa',d:'Histórico completo e auditável de cada negociação M&A'},
+  ];
+  fs.forEach((f,i)=>{
+    const x=i%2===0?.4:5.1, y=3.75+Math.floor(i/2)*1.02;
+    accentCard(s,pptx,x,y,4.5,.9,C.goldD);
+    s.addText('◆ '+f.t,{x:x+.15,y:y+.1,w:4.2,h:.32,fontSize:11,bold:true,color:C.goldL});
+    s.addText(f.d,{x:x+.15,y:y+.44,w:4.2,h:.35,fontSize:9.5,color:C.muted});
+  });
+  footer(s,pptx,logo,11,20);
+}
+
+function S12_IA(pptx,logo,bgs){
+  const s=pptx.addSlide();
+  addBg(s,bgs.tech);
+  badge(s,pptx,'módulo 04 — IA Assistant',.4,.18,3,C.blueLL);
+  s.addText('IA Assistant',{x:.4,y:.52,w:7,h:.65,fontSize:34,bold:true,color:C.blueLL,
+    shadow:{type:'outer',color:C.blueL,blur:20,offset:2,angle:45,opacity:.7}});
+  s.addText('Powered by Claude AI · Anthropic',{x:.4,y:1.15,w:7,h:.35,fontSize:12,color:C.muted,italic:true});
+  hline(s,pptx,1.55,.4,9.2,C.blueL);
+  // Chat mockup
+  const msgs=[
+    {t:'Qual a diferença entre CRI e CRA para cliente PF?',bot:false},
+    {t:'🤖  CRI é lastreado em recebíveis imobiliários e CRA no agronegócio. Ambos são isentos de IR para PF. Recomendo CRI para diversificação + CRA como complemento de renda fixada. Posso estruturar uma proposta personalizada?',bot:true},
+    {t:'Estruture proposta FIDC para empresa com R$ 5M em recebíveis',bot:false},
+  ];
+  msgs.forEach((m,i)=>{
+    const x=m.bot?.4:3.8, w=5.5;
+    const y=1.72+i*.92;
+    card(s,pptx,x,y,w,.8,m.bot?C.navy3:'091E3A',m.bot?C.blueL:C.blueLL,5);
+    if(m.bot) s.addShape(pptx.ShapeType.rect,{x,y,w,h:.04,fill:{color:C.blueL},line:{type:'none'}});
+    s.addText(m.t,{x:x+.12,y:y+.08,w:w-.24,h:.65,fontSize:9,
+      color:m.bot?C.fg:C.blueLL,lineSpacingMultiple:1.4,valign:'middle'});
+  });
+  const caps=['📝 Estrutura propostas complexas instantaneamente',
+    '⚖️ Compliance e regulatório do mercado BR',
+    '🏦 Especializado: FIDC · CRI · CRA · Home Equity · M&A',
+    '🔄 Streaming em tempo real — resposta em segundos'];
+  caps.forEach((c,i)=> bullet(s,pptx,.4,4.6+i*.46,c,10.5,C.muted));
+  // Big highlight
+  s.addShape(pptx.ShapeType.roundRect,{x:.4,y:6.5,w:9.2,h:.52,
+    fill:{color:C.blueL+'22'},line:{color:C.blueL,width:1},arcsize:6});
+  s.addText('⚡  O único assistente de IA treinado especificamente para o mercado financeiro brasileiro',{
+    x:.6,y:6.5,w:9,h:.52,fontSize:11,bold:true,color:C.blueLL,valign:'middle'});
+  footer(s,pptx,logo,12,20);
+}
+
+function S13_Academy(pptx,logo,bgs){
+  const s=pptx.addSlide();
+  addBg(s,bgs.dark);
+  badge(s,pptx,'módulo 05 — V3 Academy',.4,.18,3,C.goldL);
+  s.addText('V3 Academy',{x:.4,y:.52,w:9,h:.65,fontSize:34,bold:true,color:C.goldP});
+  s.addText('Aprenda. Cresça. Domine o Mercado.',{x:.4,y:1.15,w:9,h:.35,fontSize:12,color:C.muted,italic:true});
+  hline(s,pptx,1.55,.4,9.2,C.goldL);
+  stat(s,pptx,'25','Videoaulas','7 categorias',.4,1.72,2.15,1.22,C.gold);
+  stat(s,pptx,'100%','Digital','acesso 24/7',.4+2.28,1.72,2.15,1.22,C.blueL);
+  stat(s,pptx,'Netflix','Interface','UX premium',.4+2.28*2,1.72,2.15,1.22,C.goldL);
+  stat(s,pptx,'YouTube','Integrado','admin configura',.4+2.28*3,1.72,2.15,1.22,C.green);
+  s.addText('7 Categorias de Conteúdo',{x:.4,y:3.12,w:9,h:.38,fontSize:14,bold:true,color:C.goldL});
+  const cats=[
+    {c:'🏠 Home Equity',col:C.gold},{c:'💼 Crédito Estruturado',col:C.blueLL},
+    {c:'💎 High Ticket',col:C.goldL},{c:'🤝 M&A',col:C.green},
+    {c:'📊 Split Fiscal',col:C.gold},{c:'🏘️ Consórcio',col:C.blueLL},{c:'⚖️ Compliance',col:C.redL}];
+  cats.forEach((c,i)=>{
+    const x=.4+(i%4)*2.4, y=3.58+Math.floor(i/4)*.72;
+    s.addShape(pptx.ShapeType.roundRect,{x,y,w:2.22,h:.55,
+      fill:{color:c.col+'1A'},line:{color:c.col,width:1},arcsize:18});
+    s.addText(c.c,{x:x+.1,y,w:2.02,h:.55,fontSize:10.5,bold:true,color:c.col,valign:'middle'});
+  });
+  s.addText('Continuar Assistindo automático · Player com progresso · Admin vincula link YouTube por aula',{
+    x:.4,y:6.75,w:9.2,h:.28,fontSize:8.5,color:C.dim,align:'center',italic:true});
+  footer(s,pptx,logo,13,20);
+}
+
+function S14_Dashboard(pptx,logo,bgs){
+  const s=pptx.addSlide();
+  addBg(s,bgs.dark);
+  badge(s,pptx,'módulo 06 — dashboard',.4,.18,2.8,C.gold);
+  s.addText('Dashboard & Analytics',{x:.4,y:.52,w:9,h:.65,fontSize:30,bold:true,color:'FFFFFF'});
+  hline(s,pptx,1.22,.4,9.2,C.gold);
+  const ks=[
+    {n:'R$ 48,2M',l:'Volume Total',s:'+12.4% mês',c:C.gold},
+    {n:'147',l:'Deals Ativos',s:'+8.1% mês',c:C.blueLL},
+    {n:'63',l:'Propostas',s:'+22% mês',c:C.green},
+    {n:'R$ 2,8M',l:'Splits Gerados',s:'+15% mês',c:C.goldL}
+  ];
+  ks.forEach((k,i)=>{
+    accentCard(s,pptx,.4+i*2.4,1.42,2.18,1.45,k.c);
+    s.addText(k.n,{x:.4+i*2.4,y:1.56,w:2.18,h:.62,fontSize:21,bold:true,color:k.c,align:'center',
+      shadow:{type:'outer',color:k.c,blur:12,offset:1,angle:45,opacity:.5}});
+    s.addText(k.l,{x:.4+i*2.4,y:2.2,w:2.18,h:.3,fontSize:10.5,bold:true,color:C.fg,align:'center'});
+    s.addText('▲ '+k.s,{x:.4+i*2.4,y:2.52,w:2.18,h:.28,fontSize:8.5,color:C.green,align:'center'});
+  });
+  // Chart bars mock
+  s.addText('Volume Mensal — Últimos 6 Meses',{x:.4,y:3.06,w:5,h:.36,fontSize:12.5,bold:true,color:C.goldL});
+  const months=['Out','Nov','Dez','Jan','Fev','Mar'];
+  const hts=[55,62,48,70,78,85];
+  months.forEach((m,i)=>{
+    const bx=.55+i*.78, bh=hts[i]/100*2.4, by=5.58-bh;
+    s.addShape(pptx.ShapeType.rect,{x:bx,y:by,w:.6,h:bh,
+      fill:{type:'gradient',gradType:'linear',angle:0,
+        stops:[{position:0,color:C.goldL},{position:100,color:C.goldD}]},line:{type:'none'}});
+    s.addText(m,{x:bx-.04,y:5.62,w:.68,h:.28,fontSize:8,color:C.muted,align:'center'});
+  });
+  const rf=['📈 Volume Mensal (Área)','🍕 Distribuição Crédito (Pizza)',
+    '📊 Pipeline M&A (Barras)','🔄 Atualização em tempo real','📱 Responsivo total'];
+  rf.forEach((f,i)=> bullet(s,pptx,5.35,3.08+i*.62,f,10.5,C.fg));
+  footer(s,pptx,logo,14,20);
+}
+
+function S15_Consorcio(pptx,logo,bgs){
+  const s=pptx.addSlide();
+  addBg(s,bgs.dark);
+  badge(s,pptx,'módulos 07 & 08',.4,.18,2.4,C.blueLL);
+  s.addText('Consórcio + Mesa Operacional',{x:.4,y:.52,w:9,h:.65,fontSize:26,bold:true,color:'FFFFFF'});
+  hline(s,pptx,1.22,.4,9.2,C.blueLL);
+  // Left
+  card(s,pptx,.4,1.42,4.55,5.22,C.navy3,C.blueLL,5);
+  s.addShape(pptx.ShapeType.rect,{x:.4,y:1.42,w:4.55,h:.07,fill:{color:C.blueLL},line:{type:'none'}});
+  s.addText('🏘️  Consórcio',{x:.6,y:1.55,w:4.15,h:.55,fontSize:18,bold:true,color:C.blueLL});
+  ['Simulação interativa com slider em tempo real','Cartas contempladas — marketplace digital',
+    'Projetos de consórcio com formulário inline','Cálculo de parcelas, prazo e rentabilidade',
+    'Integração com propostas de crédito'].forEach((t,i)=> bullet(s,pptx,.6,2.22+i*.6,t,10.5,C.fg));
+  // Right
+  card(s,pptx,5.15,1.42,4.55,5.22,C.navy3,C.green,5);
+  s.addShape(pptx.ShapeType.rect,{x:5.15,y:1.42,w:4.55,h:.07,fill:{color:C.green},line:{type:'none'}});
+  s.addText('⚙️  Mesa Operacional',{x:5.35,y:1.55,w:4.15,h:.55,fontSize:18,bold:true,color:C.green});
+  ['Vista Kanban — 6 colunas de etapas','Vista Tickets — tabela com ações inline',
+    'Prioridades: Urgente / Alta / Normal / Baixa','Modal novo ticket com prazo e categoria',
+    'KPIs: ativos, urgentes, abertos, finalizados'].forEach((t,i)=> bullet(s,pptx,5.35,2.22+i*.6,t,10.5,C.fg));
+  footer(s,pptx,logo,15,20);
+}
+
+function S16_Tecnologia(pptx,logo,bgs){
+  const s=pptx.addSlide();
+  addBg(s,bgs.tech);
+  badge(s,pptx,'stack tecnológico',.4,.18,2.5,C.green);
+  s.addText('Tecnologia de Ponta',{x:.4,y:.52,w:9,h:.65,fontSize:32,bold:true,color:'FFFFFF'});
+  hline(s,pptx,1.22,.4,9.2,C.green);
+  const ts=[
+    {t:'Next.js 16',sub:'App Router · Server Components · TypeScript',c:C.white},
+    {t:'Supabase',sub:'PostgreSQL · Auth · RLS · Realtime · Backup auto',c:C.green},
+    {t:'Claude AI (Anthropic)',sub:'claude-sonnet-4-6 · Streaming · Contexto BR',c:C.blueLL},
+    {t:'Tailwind CSS v4',sub:'Design system · Dark mode nativo · Brandbook',c:C.blueLL},
+    {t:'Recharts',sub:'Gráficos interativos · Dados em tempo real',c:C.goldL},
+    {t:'Radix UI',sub:'Acessibilidade WCAG · Componentes primitivos',c:C.gold},
+  ];
+  ts.forEach((t,i)=>{
+    const x=i%2===0?.4:5.1, y=1.42+Math.floor(i/2)*1.2;
+    accentCard(s,pptx,x,y,4.5,1.0,t.c);
+    s.addShape(pptx.ShapeType.rect,{x,y,w:.07,h:1.0,fill:{color:t.c},line:{type:'none'}});
+    s.addText(t.t,{x:x+.18,y:y+.12,w:4.2,h:.38,fontSize:14,bold:true,color:t.c});
+    s.addText(t.sub,{x:x+.18,y:y+.55,w:4.2,h:.36,fontSize:9.5,color:C.muted});
+  });
+  card(s,pptx,.4,5.08,9.2,.72,'041A0A','10B981',4);
+  s.addShape(pptx.ShapeType.rect,{x:.4,y:5.08,w:9.2,h:.05,fill:{color:C.green},line:{type:'none'}});
+  s.addText('🔐  Segurança Nível Bancário: JWT Auth · Row Level Security · HTTPS · Dados criptografados · 99.9% uptime',{
+    x:.6,y:5.1,w:9,h:.68,fontSize:11,color:C.greenL,valign:'middle',lineSpacingMultiple:1.4});
+  footer(s,pptx,logo,16,20);
+}
+
+function S17_Diferenciais(pptx,logo,bgs){
+  const s=pptx.addSlide();
+  addBg(s,bgs.dark);
+  badge(s,pptx,'por que a V3?',.4,.18,2,C.gold);
+  s.addText('V3 vs Concorrentes',{x:.4,y:.52,w:9,h:.65,fontSize:30,bold:true,color:'FFFFFF'});
+  hline(s,pptx,1.22,.4,9.2,C.gold);
+  // Headers
+  s.addShape(pptx.ShapeType.roundRect,{x:4.5,y:1.32,w:2.5,h:.42,
+    fill:{color:C.gold},line:{type:'none'},arcsize:8});
+  s.addText('V3 PARTNER',{x:4.5,y:1.32,w:2.5,h:.42,fontSize:11,bold:true,color:C.navy,align:'center',valign:'middle'});
+  s.addShape(pptx.ShapeType.roundRect,{x:7.15,y:1.32,w:2.5,h:.42,
+    fill:{color:'3A1010'},line:{color:C.redL,width:1},arcsize:8});
+  s.addText('CONCORRENTES',{x:7.15,y:1.32,w:2.5,h:.42,fontSize:11,bold:true,color:C.redL,align:'center',valign:'middle'});
+  const rows=['Plataforma all-in-one integrada','IA generativa especializada BR',
+    'Split Fiscal automatizado','Academy com 25+ videoaulas',
+    'Mesa Crédito N1/N2/N3','M&A + Pipeline visual','Suporte e onboarding dedicado'];
+  rows.forEach((r,i)=>{
+    const y=1.88+i*.68;
+    s.addShape(pptx.ShapeType.rect,{x:.4,y,w:9.2,h:.62,
+      fill:{color:i%2===0?C.navy3:C.navy2},line:{type:'none'}});
+    s.addShape(pptx.ShapeType.ellipse,{x:.6,y:y+.22,w:.18,h:.18,fill:{color:C.gold},line:{type:'none'}});
+    s.addText(r,{x:.88,y,w:3.42,h:.62,fontSize:10.5,color:C.fg,valign:'middle'});
+    // V3 ✓
+    s.addShape(pptx.ShapeType.roundRect,{x:5.25,y:y+.1,w:.95,h:.42,
+      fill:{color:C.green},line:{type:'none'},arcsize:25});
+    s.addText('✓',{x:5.25,y:y+.1,w:.95,h:.42,fontSize:16,bold:true,color:'FFFFFF',align:'center',valign:'middle'});
+    // Competitor ✗
+    s.addShape(pptx.ShapeType.roundRect,{x:7.9,y:y+.1,w:.95,h:.42,
+      fill:{color:C.redL},line:{type:'none'},arcsize:25});
+    s.addText('✗',{x:7.9,y:y+.1,w:.95,h:.42,fontSize:16,bold:true,color:'FFFFFF',align:'center',valign:'middle'});
+  });
+  footer(s,pptx,logo,17,20);
+}
+
+function S18_Impacto(pptx,logo,bgs){
+  const s=pptx.addSlide();
+  addBg(s,bgs.gold);
+  badge(s,pptx,'impacto & resultados',2.8,.18,4.4,C.gold);
+  s.addText('Números que Provam',{x:1,y:.52,w:8,h:.65,fontSize:30,bold:true,color:'FFFFFF',align:'center'});
+  hline(s,pptx,1.22,1,8,C.gold);
+  const sts=[
+    {n:'+32%',l:'Receita por Operação',s:'Split Fiscal otimizado',c:C.gold},
+    {n:'+280%',l:'Velocidade de Proposta',s:'1º contato ao envio',c:C.blueLL},
+    {n:'-18%',l:'Carga Tributária',s:'redução média verificada',c:C.greenL},
+    {n:'9x',l:'Ferramentas em Uma',s:'vs. sistemas separados',c:C.goldL},
+    {n:'100%',l:'Visibilidade Total',s:'dashboard tempo real',c:C.greenL},
+    {n:'24/7',l:'Disponibilidade',s:'cloud premium garantido',c:C.blueLL},
+  ];
+  sts.forEach((st,i)=>{
+    const x=.4+(i%3)*3.17, y=1.52+Math.floor(i/3)*2.42;
+    accentCard(s,pptx,x,y,2.98,2.2,st.c);
+    s.addText(st.n,{x,y:y+.15,w:2.98,h:.82,fontSize:34,bold:true,color:st.c,align:'center',
+      shadow:{type:'outer',color:st.c,blur:22,offset:2,angle:45,opacity:.8}});
+    s.addText(st.l,{x:x+.1,y:y+1.0,w:2.78,h:.38,fontSize:11.5,bold:true,color:C.fg,align:'center'});
+    s.addText(st.s,{x:x+.1,y:y+1.4,w:2.78,h:.62,fontSize:9,color:C.muted,align:'center',lineSpacingMultiple:1.4});
+  });
+  footer(s,pptx,logo,18,20);
+}
+
+function S19_Passos(pptx,logo,bgs){
+  const s=pptx.addSlide();
+  addBg(s,bgs.dark);
+  badge(s,pptx,'como começar',.4,.18,2.2,C.gold);
+  s.addText('4 Passos para o Sucesso',{x:.4,y:.52,w:9,h:.65,fontSize:30,bold:true,color:'FFFFFF'});
+  hline(s,pptx,1.22,.4,9.2,C.gold);
+  const ss=[
+    {n:'01',t:'Onboarding',d:'Reunião de apresentação, alinhamento estratégico e configuração inicial do perfil e módulos.',c:C.gold},
+    {n:'02',t:'Configuração',d:'Setup da plataforma, cadastro de usuários, personalização dos módulos conforme necessidade.',c:C.blueLL},
+    {n:'03',t:'Capacitação',d:'Acesso ao V3 Academy — treinamentos completos em cada produto com certificação por módulo.',c:C.green},
+    {n:'04',t:'Operação',d:'Parceiro operando de forma autônoma com suporte dedicado V3 e acesso a novos módulos.',c:C.goldL},
+  ];
+  ss.forEach((st,i)=>{
+    accentCard(s,pptx,.4,1.45+i*1.38,9.2,1.2,st.c);
+    s.addShape(pptx.ShapeType.roundRect,{x:.6,y:1.65+i*1.38,w:.72,h:.72,
+      fill:{color:st.c},line:{type:'none'},arcsize:18});
+    s.addText(st.n,{x:.6,y:1.65+i*1.38,w:.72,h:.72,fontSize:18,bold:true,
+      color:C.navy,align:'center',valign:'middle'});
+    s.addText(st.t,{x:1.48,y:1.56+i*1.38,w:2.5,h:.42,fontSize:15,bold:true,color:st.c});
+    s.addText(st.d,{x:1.48,y:1.99+i*1.38,w:8,h:.58,fontSize:10.5,color:C.muted,lineSpacingMultiple:1.5});
+  });
+  footer(s,pptx,logo,19,20);
+}
+
+function S20_Fechamento(pptx,logo,bgs){
+  const s=pptx.addSlide();
+  addBg(s,bgs.closing);
+  // Logo central grande com glow
+  if(logo){
+    s.addShape(pptx.ShapeType.ellipse,{x:3.75,y:.75,w:2.5,h:2.5,
+      fill:{type:'none'},line:{color:C.gold,width:2},transparency:45});
+    s.addShape(pptx.ShapeType.ellipse,{x:3.35,y:.35,w:3.3,h:3.3,
+      fill:{type:'none'},line:{color:C.gold,width:1},transparency:70});
+    s.addImage({data:logo,x:4.05,y:1.0,w:1.9,h:1.9});
+  }
+  s.addText('V3 PARTNER',{x:.5,y:3.22,w:9,h:.95,fontSize:52,bold:true,color:C.goldP,align:'center',
+    shadow:{type:'outer',color:C.gold,blur:30,offset:4,angle:45,opacity:.95}});
+  s.addShape(pptx.ShapeType.rect,{x:1.8,y:4.22,w:6.4,h:.04,
+    fill:{type:'gradient',gradType:'linear',angle:90,
+      stops:[{position:0,color:'050C18'},{position:50,color:C.gold},{position:100,color:'050C18'}]},
+    line:{type:'none'}});
+  s.addText('A PLATAFORMA DO PARCEIRO DE SUCESSO',{
+    x:1,y:4.32,w:8,h:.45,fontSize:13,color:C.muted,align:'center',charSpacing:3});
+  s.addText('Tecnologia · Inteligência · Resultados',{
+    x:1.5,y:4.85,w:7,h:.42,fontSize:15,color:C.goldL,align:'center',italic:true});
+  // CTA
+  s.addShape(pptx.ShapeType.roundRect,{x:2.8,y:5.38,w:4.4,h:.85,
+    fill:{type:'gradient',gradType:'linear',angle:90,
+      stops:[{position:0,color:C.goldL},{position:100,color:C.gold}]},
+    line:{type:'none'},arcsize:20});
+  s.addText('ENTRE EM CONTATO AGORA',{x:2.8,y:5.38,w:4.4,h:.85,
+    fontSize:13.5,bold:true,color:C.navy,align:'center',valign:'middle',charSpacing:1.5});
+  s.addText('© 2025 V3 Partner Financial Technology. Todos os direitos reservados.',{
+    x:1,y:6.52,w:8,h:.3,fontSize:8,color:C.dim,align:'center'});
+  footer(s,pptx,logo,20,20);
+}
+
+// ═══════════════════════════════════════════════════════════
+//  MAIN
+// ═══════════════════════════════════════════════════════════
+async function loadLogo(){
+  const el=document.getElementById('logoEl');
+  if(el&&el.complete&&el.naturalWidth>0){
+    const cv=document.createElement('canvas');
+    cv.width=el.naturalWidth; cv.height=el.naturalHeight;
+    cv.getContext('2d').drawImage(el,0,0);
+    try{ return cv.toDataURL('image/jpeg',.95); }catch(e){}
+  }
+  return new Promise(res=>{
+    const img=new Image(); img.crossOrigin='anonymous';
+    img.onload=()=>{
+      const cv=document.createElement('canvas');
+      cv.width=img.width; cv.height=img.height;
+      cv.getContext('2d').drawImage(img,0,0);
+      try{ res(cv.toDataURL('image/jpeg',.95)); }catch(e){ res(null); }
+    };
+    img.onerror=()=>res(null);
+    img.src='../public/logo.jpg?t='+Date.now();
+  });
+}
+
+async function gerar(){
+  const btn=document.getElementById('btn');
+  btn.disabled=true;
+  prog(2,'Carregando logo V3 Partners...');
+  const logo=await loadLogo();
+  if(!logo) prog(4,'⚠️ Logo sem CORS — continuando...');
+  else prog(5,'✅ Logo carregado com sucesso!');
+
+  prog(8,'Renderizando fundos premium Canvas...');
+  await delay(50);
+  const logoEl=document.getElementById('logoEl');
+
+  prog(12,'Fundo 1/6: Cover...');
+  const bgCv=bgCover(logoEl); await delay(30);
+  prog(20,'Fundo 2/6: Dark...');
+  const bgDk=bgDark(GOLD,'left'); await delay(30);
+  prog(26,'Fundo 3/6: Problema...');
+  const bgPb=bgProblem(); await delay(30);
+  prog(32,'Fundo 4/6: Solução...');
+  const bgSl=bgSolution(); await delay(30);
+  prog(38,'Fundo 5/6: Tech...');
+  const bgTk=bgTech(); await delay(30);
+  prog(44,'Fundo 6/6: Gold & Closing...');
+  const bgGd=bgGold(); await delay(30);
+  const bgCl=bgClosing(logoEl); await delay(30);
+
+  const bgs={cover:bgCv,dark:bgDk,problem:bgPb,solution:bgSl,tech:bgTk,gold:bgGd,closing:bgCl};
+
+  const pptx=new PptxGenJS();
+  pptx.layout='LAYOUT_WIDE';
+  pptx.author='V3 Partner Financial Technology';
+  pptx.company='V3 Partner';
+  pptx.subject='Apresentação Institucional 2025';
+  pptx.title='V3 Partner — A Plataforma do Parceiro de Sucesso';
+
+  prog(50,'Gerando slides...'); await delay(50);
+  S01_Capa(pptx,logo,bgs);      prog(52,'01/20 — Capa Elite'); await delay(60);
+  S02_Agenda(pptx,logo,bgs);    prog(55,'02/20 — Agenda'); await delay(60);
+  S03_QuemSomos(pptx,logo,bgs); prog(57,'03/20 — Quem Somos'); await delay(60);
+  S04_Proposito(pptx,logo,bgs); prog(59,'04/20 — Propósito'); await delay(60);
+  S05_Mercado(pptx,logo,bgs);   prog(62,'05/20 — Mercado'); await delay(60);
+  S06_Problema(pptx,logo,bgs);  prog(64,'06/20 — Problema'); await delay(60);
+  S07_Solucao(pptx,logo,bgs);   prog(66,'07/20 — Solução'); await delay(60);
+  S08_Plataforma(pptx,logo,bgs);prog(68,'08/20 — Plataforma'); await delay(60);
+  S09_SplitFiscal(pptx,logo,bgs);prog(71,'09/20 — Split Fiscal'); await delay(60);
+  S10_MesaCredito(pptx,logo,bgs);prog(73,'10/20 — Mesa Crédito'); await delay(60);
+  S11_MA(pptx,logo,bgs);        prog(75,'11/20 — M&A'); await delay(60);
+  S12_IA(pptx,logo,bgs);        prog(77,'12/20 — IA Assistant'); await delay(60);
+  S13_Academy(pptx,logo,bgs);   prog(79,'13/20 — V3 Academy'); await delay(60);
+  S14_Dashboard(pptx,logo,bgs); prog(81,'14/20 — Dashboard'); await delay(60);
+  S15_Consorcio(pptx,logo,bgs); prog(83,'15/20 — Consórcio'); await delay(60);
+  S16_Tecnologia(pptx,logo,bgs);prog(85,'16/20 — Tecnologia'); await delay(60);
+  S17_Diferenciais(pptx,logo,bgs);prog(88,'17/20 — Diferenciais'); await delay(60);
+  S18_Impacto(pptx,logo,bgs);   prog(90,'18/20 — Impacto'); await delay(60);
+  S19_Passos(pptx,logo,bgs);    prog(93,'19/20 — Próximos Passos'); await delay(60);
+  S20_Fechamento(pptx,logo,bgs);prog(96,'20/20 — Fechamento'); await delay(60);
+
+  prog(98,'Empacotando PPTX premium...');
+  await pptx.writeFile({fileName:'V3Partner-Apresentacao-Elite-2025.pptx'});
+  prog(100,'✅ Download concluído!');
+  document.getElementById('status').style.color='#34D399';
+  btn.disabled=false;
+  btn.textContent='⬇️ BAIXAR NOVAMENTE';
+}
+
+function delay(ms){ return new Promise(r=>setTimeout(r,ms)); }
+</script>
+</body>
+</html>

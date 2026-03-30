@@ -32,6 +32,9 @@ interface Proposal {
   docs_uploaded?: number;
   docs_required?: number;
   created_at: string;
+  valor_credito_atual?: number;
+  comissao_mandato_perc?: number;
+  comissao_instituicao_perc?: number;
 }
 
 interface CreditDeskLevel1ClientProps {
@@ -76,6 +79,15 @@ export function CreditDeskLevel1Client({ proposals: initial, currentUser }: Cred
     );
     if (detailProposal?.id === proposalId) {
       setDetailProposal((prev) => prev ? { ...prev, stage: newStage } : prev);
+    }
+  }, [detailProposal]);
+
+  const handleProposalUpdate = useCallback((proposalId: string, updates: Partial<Proposal>) => {
+    setProposals((prev) =>
+      prev.map((p) => p.id === proposalId ? { ...p, ...updates } : p)
+    );
+    if (detailProposal?.id === proposalId) {
+      setDetailProposal((prev) => prev ? { ...prev, ...updates } : prev);
     }
   }, [detailProposal]);
 
@@ -205,6 +217,7 @@ export function CreditDeskLevel1Client({ proposals: initial, currentUser }: Cred
         onClose={() => setDetailProposal(null)}
         proposal={detailProposal as ProposalFull | null}
         onStageChange={handleStageChange}
+        onProposalUpdate={handleProposalUpdate}
         canChangeStage={canChangeStage}
       />
     </div>

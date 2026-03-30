@@ -1,14 +1,18 @@
 "use client";
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 import {
   X, User, Building2, CheckCircle2, Clock, ArrowRight,
-  FileText, CreditCard, Banknote, Calendar, Link2,
+  FileText, CreditCard, Calendar, Link2, Pencil, Check,
+  Percent, TrendingUp, BadgeDollarSign,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { STATUS_LABELS, STATUS_COLORS, type OperationStatus } from "@/lib/constants";
+
+// Taxa de impostos sobre comissões (ISS 2% + PIS 0,65% + COFINS 3%) — sincronizado com aba Financeiro
+const TAXA_IMPOSTOS_COMISSAO = 5.65;
 
 export const PIPELINE_STAGES = [
   { key: "RECEBIDO", label: "Recebido", color: "text-slate-400", bg: "bg-slate-500/20" },
@@ -41,6 +45,10 @@ export interface ProposalFull {
   docs_uploaded?: number;
   docs_required?: number;
   created_at: string;
+  // Campos de comissão (editáveis apenas por MESA_OPERACIONAL/ADMIN)
+  valor_credito_atual?: number;
+  comissao_mandato_perc?: number;
+  comissao_instituicao_perc?: number;
 }
 
 interface PropostaDetailModalProps {
@@ -48,11 +56,70 @@ interface PropostaDetailModalProps {
   onClose: () => void;
   proposal: ProposalFull | null;
   onStageChange?: (proposalId: string, newStage: string) => void;
+  onProposalUpdate?: (proposalId: string, updates: Partial<ProposalFull>) => void;
   canChangeStage?: boolean;
 }
 
-export function PropostaDetailModal({ open, onClose, proposal, onStageChange, canChangeStage }: PropostaDetailModalProps) {
+export function PropostaDetailModal({ open, onClose, proposal, onStageChange, onProposalUpdate, canChangeStage }: PropostaDetailModalProps) {
+  // ── Commission state ──────────────────────────────────────────────────────
+  const [valorCredito, setValorCredito] = useState(0);
+  const [valorCreditoEdit, setValorCreditoEdit] = useState("");
+  const [editandoValor, setEditandoValor] = useState(false);
+  const [percMandato, setPercMandato] = useState(6);
+  const [percMandatoEdit, setPercMandatoEdit] = useState("6");
+  const [editandoMandato, setEditandoMandato] = useState(false);
+  const [percInstituicao, setPercInstituicao] = useState(0);
+  const [percInstituicaoEdit, setPercInstituicaoEdit] = useState("0");
+  const [editandoInstituicao, setEditandoInstituicao] = useState(false);
+
+  // Sync state when proposal changes
+  useEffect(() => {
+    if (!proposal) return;
+    const vc = proposal.valor_credito_atual ?? proposal.requested_value;
+    setValorCredito(vc);
+    setValorCreditoEdit(String(vc));
+    const pm = proposal.comissao_mandato_perc ?? 6;
+    setPercMandato(pm);
+    setPercMandatoEdit(String(pm));
+    const pi = proposal.comissao_instituicao_perc ?? 0;
+    setPercInstituicao(pi);
+    setPercInstituicaoEdit(String(pi));
+    setEditandoValor(false);
+    setEditandoMandato(false);
+    setEditandoInstituicao(false);
+  }, [proposal?.id, open]);
+
   if (!open || !proposal) return null;
+
+  // ── Calculations ──────────────────────────────────────────────────────────
+  const comissaoMandato = valorCredito * (percMandato / 100);
+  const comissaoInstituicao = valorCredito * (percInstituicao / 100);
+  const totalComissao = comissaoMandato + comissaoInstituicao;
+  const comissaoLicenciado = totalComissao * ((50 - TAXA_IMPOSTOS_COMISSAO) / 100);
+
+  function salvarValorCredito() {
+    const v = parseFloat(valorCreditoEdit.replace(",", "."));
+    if (isNaN(v) || v <= 0) return;
+    setValorCredito(v);
+    setEditandoValor(false);
+    onProposalUpdate?.(proposal!.id, { valor_credito_atual: v });
+  }
+
+  function salvarMandato() {
+    const v = parseFloat(percMandatoEdit.replace(",", "."));
+    if (isNaN(v) || v < 0) return;
+    setPercMandato(v);
+    setEditandoMandato(false);
+    onProposalUpdate?.(proposal!.id, { comissao_mandato_perc: v });
+  }
+
+  function salvarInstituicao() {
+    const v = parseFloat(percInstituicaoEdit.replace(",", "."));
+    if (isNaN(v) || v < 0) return;
+    setPercInstituicao(v);
+    setEditandoInstituicao(false);
+    onProposalUpdate?.(proposal!.id, { comissao_instituicao_perc: v });
+  }
 
   const currentStageIdx = PIPELINE_STAGES.findIndex((s) => s.key === (proposal.stage ?? "RECEBIDO"));
   const activeIdx = currentStageIdx >= 0 ? currentStageIdx : 0;
@@ -154,6 +221,140 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, ca
               </div>
             </div>
           )}
+
+          {/* ── Comissões da Operação ── */}
+          <div className="p-4 rounded-xl border border-amber-500/30 bg-amber-500/5 space-y-3">
+            <p className="text-xs font-semibold text-amber-400 flex items-center gap-1.5">
+              <TrendingUp className="w-3.5 h-3.5" /> Comissões da Operação
+            </p>
+
+            {/* Valor do Crédito (editável) */}
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs text-muted-foreground flex items-center gap-1">
+                <BadgeDollarSign className="w-3 h-3" /> Valor do Crédito
+              </span>
+              {canChangeStage && editandoValor ? (
+                <div className="flex items-center gap-1">
+                  <span className="text-xs text-muted-foreground">R$</span>
+                  <input
+                    type="number"
+                    value={valorCreditoEdit}
+                    onChange={(e) => setValorCreditoEdit(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && salvarValorCredito()}
+                    className="w-28 h-6 text-xs px-2 bg-secondary border border-primary/50 rounded text-white focus:outline-none"
+                    autoFocus
+                  />
+                  <button onClick={salvarValorCredito} className="w-5 h-5 rounded flex items-center justify-center bg-emerald-500/20 hover:bg-emerald-500/40 text-emerald-400">
+                    <Check className="w-3 h-3" />
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1">
+                  <span className="text-xs font-semibold text-white">{formatCurrency(valorCredito)}</span>
+                  {canChangeStage && (
+                    <button onClick={() => { setValorCreditoEdit(String(valorCredito)); setEditandoValor(true); }}
+                      className="w-5 h-5 rounded flex items-center justify-center hover:bg-secondary text-muted-foreground hover:text-white">
+                      <Pencil className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Campo 1 — Mandato */}
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs text-muted-foreground flex items-center gap-1">
+                <Percent className="w-3 h-3" /> Mandato
+              </span>
+              <div className="flex items-center gap-2">
+                {canChangeStage && editandoMandato ? (
+                  <div className="flex items-center gap-1">
+                    <input
+                      type="number"
+                      value={percMandatoEdit}
+                      onChange={(e) => setPercMandatoEdit(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && salvarMandato()}
+                      className="w-16 h-6 text-xs px-2 bg-secondary border border-primary/50 rounded text-white focus:outline-none"
+                      autoFocus
+                    />
+                    <span className="text-xs text-muted-foreground">%</span>
+                    <button onClick={salvarMandato} className="w-5 h-5 rounded flex items-center justify-center bg-emerald-500/20 hover:bg-emerald-500/40 text-emerald-400">
+                      <Check className="w-3 h-3" />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1">
+                    <span className="text-xs text-amber-300 font-medium">{percMandato}%</span>
+                    {canChangeStage && (
+                      <button onClick={() => { setPercMandatoEdit(String(percMandato)); setEditandoMandato(true); }}
+                        className="w-5 h-5 rounded flex items-center justify-center hover:bg-secondary text-muted-foreground hover:text-white">
+                        <Pencil className="w-3 h-3" />
+                      </button>
+                    )}
+                  </div>
+                )}
+                <span className="text-xs font-semibold text-white w-24 text-right">{formatCurrency(comissaoMandato)}</span>
+              </div>
+            </div>
+
+            {/* Campo 2 — Comissão Instituição */}
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs text-muted-foreground flex items-center gap-1">
+                <Percent className="w-3 h-3" /> Comissão Instituição
+              </span>
+              <div className="flex items-center gap-2">
+                {canChangeStage && editandoInstituicao ? (
+                  <div className="flex items-center gap-1">
+                    <input
+                      type="number"
+                      value={percInstituicaoEdit}
+                      onChange={(e) => setPercInstituicaoEdit(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && salvarInstituicao()}
+                      className="w-16 h-6 text-xs px-2 bg-secondary border border-primary/50 rounded text-white focus:outline-none"
+                      autoFocus
+                    />
+                    <span className="text-xs text-muted-foreground">%</span>
+                    <button onClick={salvarInstituicao} className="w-5 h-5 rounded flex items-center justify-center bg-emerald-500/20 hover:bg-emerald-500/40 text-emerald-400">
+                      <Check className="w-3 h-3" />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1">
+                    <span className="text-xs text-amber-300 font-medium">{percInstituicao}%</span>
+                    {canChangeStage && (
+                      <button onClick={() => { setPercInstituicaoEdit(String(percInstituicao)); setEditandoInstituicao(true); }}
+                        className="w-5 h-5 rounded flex items-center justify-center hover:bg-secondary text-muted-foreground hover:text-white">
+                        <Pencil className="w-3 h-3" />
+                      </button>
+                    )}
+                  </div>
+                )}
+                <span className="text-xs font-semibold text-white w-24 text-right">{formatCurrency(comissaoInstituicao)}</span>
+              </div>
+            </div>
+
+            {/* Separador */}
+            <div className="border-t border-amber-500/20 pt-2 space-y-1">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-muted-foreground">Total Bruto (Mandato + Instituição)</span>
+                <span className="font-semibold text-amber-300">{formatCurrency(totalComissao)}</span>
+              </div>
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-muted-foreground">Impostos (ISS+PIS+COFINS {TAXA_IMPOSTOS_COMISSAO}%)</span>
+                <span className="text-red-400">− {formatCurrency(totalComissao * TAXA_IMPOSTOS_COMISSAO / 100)}</span>
+              </div>
+            </div>
+
+            {/* Campo 3 — Comissão Licenciado */}
+            <div className="flex items-center justify-between p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/30">
+              <span className="text-xs font-semibold text-emerald-400">Comissão Licenciado (50% líquido)</span>
+              <span className="text-sm font-bold text-emerald-400">{formatCurrency(comissaoLicenciado)}</span>
+            </div>
+
+            {!canChangeStage && (
+              <p className="text-[10px] text-muted-foreground text-center italic">Somente analistas e administradores podem editar os campos de comissão.</p>
+            )}
+          </div>
 
           {/* Documentos */}
           {typeof proposal.docs_uploaded === "number" && (

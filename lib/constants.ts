@@ -3,6 +3,7 @@ export const USER_ROLES = {
   PARTNER: "PARTNER",
   MESA_OPERACIONAL: "MESA_OPERACIONAL",
   GESTAO: "GESTAO",
+  FINANCEIRO: "FINANCEIRO",
 } as const;
 
 export type UserRole = keyof typeof USER_ROLES;
@@ -12,6 +13,7 @@ export const ROLE_LABELS: Record<UserRole, string> = {
   PARTNER: "Partner",
   MESA_OPERACIONAL: "Mesa Operacional",
   GESTAO: "Gestão",
+  FINANCEIRO: "Financeiro",
 };
 
 export const ROLE_COLORS: Record<UserRole, string> = {
@@ -19,6 +21,7 @@ export const ROLE_COLORS: Record<UserRole, string> = {
   PARTNER: "bg-blue-500/20 text-blue-400 border-blue-500/30",
   MESA_OPERACIONAL: "bg-purple-500/20 text-purple-400 border-purple-500/30",
   GESTAO: "bg-amber-500/20 text-amber-400 border-amber-500/30",
+  FINANCEIRO: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
 };
 
 // Mesa de Crédito - 3 níveis

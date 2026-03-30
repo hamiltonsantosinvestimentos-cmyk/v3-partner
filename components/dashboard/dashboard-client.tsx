@@ -27,6 +27,7 @@ import {
   BarChart,
   Bar,
 } from "recharts";
+import { MarketTicker } from "@/components/dashboard/market-ticker";
 
 const revenueData = [
   { month: "Out", value: 4200000 },
@@ -127,6 +128,9 @@ export function DashboardClient({
 
   return (
     <div className="space-y-6 animate-fade-in">
+      {/* Market Ticker */}
+      <MarketTicker />
+
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-white">

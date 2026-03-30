@@ -21,6 +21,8 @@ import {
   Settings2,
   Medal,
   ContactRound,
+  DollarSign,
+  Wallet,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { UserRole } from "@/lib/constants";
@@ -39,6 +41,8 @@ const iconMap = {
   Settings2,
   Medal,
   ContactRound,
+  DollarSign,
+  Wallet,
 };
 
 interface NavSubItem {
@@ -82,9 +86,21 @@ const NAV_ITEMS: NavItem[] = [
   },
   {
     href: "/ia-assistant",
-    label: "IA Assistant",
+    label: "V3 IA Partner",
     icon: "BrainCircuit",
-    roles: ["ADMIN", "PARTNER", "MESA_OPERACIONAL", "GESTAO"],
+    roles: ["ADMIN", "PARTNER", "MESA_OPERACIONAL", "GESTAO", "FINANCEIRO"],
+  },
+  {
+    href: "/financeiro",
+    label: "Financeiro",
+    icon: "DollarSign",
+    roles: ["ADMIN", "FINANCEIRO"],
+  },
+  {
+    href: "/comissoes",
+    label: "Comissões",
+    icon: "Wallet",
+    roles: ["ADMIN", "PARTNER", "FINANCEIRO"],
   },
   {
     href: "/split-fiscal",
