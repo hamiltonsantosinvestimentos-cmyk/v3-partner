@@ -12,7 +12,7 @@ import {
   Settings,
   ChevronDown,
 } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
+const IS_DEMO = !process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL.includes("SEU_PROJETO");
 import { abbreviateName } from "@/lib/utils";
 import {
   DropdownMenu,
@@ -39,15 +39,17 @@ interface TopbarProps {
 
 export function Topbar({ user, onMenuClick, notificationCount = 0 }: TopbarProps) {
   const router = useRouter();
-  const supabase = createClient();
 
   const handleSignOut = async () => {
-    // Limpa cookie de sessão demo
     document.cookie = "v3_demo_session=; path=/; max-age=0";
-    // Tenta signOut do Supabase (não-demo), ignora erro se não conectado
-    try { await supabase.auth.signOut(); } catch {}
-    router.push("/login");
-    router.refresh();
+    if (!IS_DEMO) {
+      try {
+        const { createClient } = await import("@/lib/supabase/client");
+        const supabase = createClient();
+        await supabase.auth.signOut();
+      } catch {}
+    }
+    window.location.href = "/login";
   };
 
   const initials = abbreviateName(user.full_name || user.email);
