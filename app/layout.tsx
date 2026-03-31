@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { PWARegister } from "@/components/pwa-register";
 
 export const metadata: Metadata = {
   title: "V3 PARTNERS — Plataforma Financeira",
@@ -32,7 +33,10 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-title" content="V3 Partners" />
         <link rel="apple-touch-icon" href="/icon-192.png" />
       </head>
-      <body className="min-h-full bg-[#050C18]">{children}</body>
+      <body className="min-h-full bg-[#050C18]">
+        <PWARegister />
+        {children}
+      </body>
     </html>
   );
 }
