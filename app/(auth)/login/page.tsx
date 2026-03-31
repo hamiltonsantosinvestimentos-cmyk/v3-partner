@@ -32,7 +32,7 @@ export default function LoginPage() {
         return;
       }
 
-      router.push("/dashboard");
+      window.location.href = "/dashboard";
     } catch {
       setError("Erro ao conectar. Tente novamente.");
       setLoading(false);
