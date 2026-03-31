@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 
-const PUBLIC_ROUTES = ["/login", "/auth/callback", "/unauthorized"];
+const PUBLIC_ROUTES = ["/login", "/auth/callback", "/unauthorized", "/api/demo-login"];
 
 const ROLE_ROUTES: Record<string, string[]> = {
   "/usuarios": ["ADMIN"],
