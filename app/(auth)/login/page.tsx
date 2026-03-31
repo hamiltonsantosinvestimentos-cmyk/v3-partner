@@ -3,8 +3,7 @@
 import React, { useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { Eye, EyeOff, Lock, Mail, ArrowRight, Sparkles } from "lucide-react";
-import { demoLogin, IS_DEMO_MODE } from "@/lib/demo-auth";
+import { Eye, EyeOff, Lock, Mail, ArrowRight } from "lucide-react";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -19,61 +18,43 @@ export default function LoginPage() {
     setLoading(true);
     setError("");
 
-    if (IS_DEMO_MODE) {
-      const user = demoLogin(email, password);
-      if (!user) {
-        setError("Email ou senha inválidos.");
+    try {
+      const res = await fetch("/api/demo-login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        setError(data.error || "Email ou senha inválidos.");
         setLoading(false);
         return;
       }
-      const isSecure = location.protocol === "https:";
-      document.cookie = `v3_demo_session=${JSON.stringify({
-        id: user.id,
-        email: user.email,
-        full_name: user.full_name,
-        role: user.role,
-      })}; path=/; max-age=86400; SameSite=Lax${isSecure ? "; Secure" : ""}`;
+
       router.push("/dashboard");
-      router.refresh();
-      return;
-    }
-
-    const { createClient } = await import("@/lib/supabase/client");
-    const supabase = createClient();
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) {
-      setError("Email ou senha inválidos.");
+    } catch {
+      setError("Erro ao conectar. Tente novamente.");
       setLoading(false);
-      return;
     }
-    router.push("/dashboard");
-    router.refresh();
-  };
-
-  const quickLogin = (demoEmail: string, demoPass: string) => {
-    setEmail(demoEmail);
-    setPassword(demoPass);
   };
 
   return (
     <div className="min-h-screen flex items-center justify-center relative overflow-hidden"
       style={{ backgroundColor: "#050C18" }}>
 
-      {/* ── Background layers ── */}
-      {/* Subtle grid */}
+      {/* Background layers */}
       <div style={{
         position: "absolute", inset: 0, pointerEvents: "none",
         backgroundImage: "linear-gradient(rgba(196,146,46,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(196,146,46,0.04) 1px, transparent 1px)",
         backgroundSize: "36px 36px"
       }} />
-      {/* Gold glow top-center */}
       <div style={{
         position: "absolute", top: "-10%", left: "50%", transform: "translateX(-50%)",
         width: 600, height: 300,
         background: "radial-gradient(ellipse, rgba(196,146,46,0.08) 0%, transparent 70%)",
         pointerEvents: "none"
       }} />
-      {/* Blue glow bottom-left */}
       <div style={{
         position: "absolute", bottom: "10%", left: "5%",
         width: 400, height: 400,
@@ -81,7 +62,7 @@ export default function LoginPage() {
         pointerEvents: "none"
       }} />
 
-      {/* ── Card ── */}
+      {/* Card */}
       <div style={{ position: "relative", width: "100%", maxWidth: 420, margin: "0 20px" }}>
         <div style={{
           background: "linear-gradient(160deg, #091221 0%, #060E1C 100%)",
@@ -92,15 +73,13 @@ export default function LoginPage() {
           position: "relative",
           overflow: "hidden",
         }}>
-          {/* Top shine */}
           <div style={{
             position: "absolute", top: 0, left: "20%", right: "20%", height: 1,
             background: "linear-gradient(90deg, transparent, rgba(196,146,46,0.5), transparent)"
           }} />
 
-          {/* ── Logo ── */}
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", marginBottom: 28 }}>
-            {/* Logo completo — fundo navy idêntico ao da imagem para integração perfeita */}
+          {/* Logo */}
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", marginBottom: 32 }}>
             <div style={{
               width: 200, height: 200, borderRadius: 28,
               overflow: "hidden",
@@ -125,23 +104,8 @@ export default function LoginPage() {
             </p>
           </div>
 
-          {/* ── Demo badge ── */}
-          {IS_DEMO_MODE && (
-            <div style={{
-              padding: "9px 14px", borderRadius: 10, marginBottom: 24,
-              background: "rgba(196,146,46,0.06)", border: "1px solid rgba(196,146,46,0.2)",
-              display: "flex", alignItems: "center", gap: 8
-            }}>
-              <Sparkles style={{ width: 13, height: 13, color: "#E5B96A", flexShrink: 0 }} />
-              <span style={{ fontSize: 12, color: "#E5B96A", fontWeight: 500 }}>
-                Modo Demo — use os acessos abaixo
-              </span>
-            </div>
-          )}
-
-          {/* ── Form ── */}
+          {/* Form */}
           <form onSubmit={handleLogin} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            {/* Email */}
             <div>
               <label style={{
                 fontSize: 10, fontWeight: 700, color: "#5A7490",
@@ -166,7 +130,6 @@ export default function LoginPage() {
               </div>
             </div>
 
-            {/* Password */}
             <div>
               <label style={{
                 fontSize: 10, fontWeight: 700, color: "#5A7490",
@@ -198,7 +161,6 @@ export default function LoginPage() {
               </div>
             </div>
 
-            {/* Error */}
             {error && (
               <div style={{
                 padding: "10px 13px", borderRadius: 10,
@@ -209,7 +171,6 @@ export default function LoginPage() {
               </div>
             )}
 
-            {/* Submit */}
             <button type="submit" disabled={loading} style={{
               marginTop: 4, height: 48,
               background: loading
@@ -226,47 +187,8 @@ export default function LoginPage() {
               {loading ? "Entrando..." : (<>Acessar Plataforma <ArrowRight style={{ width: 16, height: 16 }} /></>)}
             </button>
           </form>
-
-          {/* ── Demo quick access ── */}
-          {IS_DEMO_MODE && (
-            <div style={{ marginTop: 28, paddingTop: 22, borderTop: "1px solid rgba(196,146,46,0.12)" }}>
-              <p style={{
-                fontSize: 10, color: "#5A7490", textAlign: "center",
-                marginBottom: 12, textTransform: "uppercase", letterSpacing: "0.12em"
-              }}>
-                Acesso Rápido — Demo
-              </p>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                {[
-                  { label: "Administrador", email: "admin@v3partner.com",          pass: "admin123",          color: "#EF4444" },
-                  { label: "Partner",       email: "partner@v3partner.com",        pass: "partner123",        color: "#C4922E" },
-                  { label: "Partner PRO ⭐",email: "partnerpro@v3partner.com",     pass: "partnerpro123",     color: "#8B5CF6" },
-                  { label: "Gestão",        email: "gestao@v3partner.com",         pass: "gestao123",         color: "#10B981" },
-                  { label: "Mesa Oper.",    email: "mesa@v3partner.com",           pass: "mesa123",           color: "#6366F1" },
-                  { label: "Financeiro",    email: "financeiro@v3partner.com",     pass: "financeiro123",     color: "#06B6D4" },
-                ].map((item) => (
-                  <button key={item.email} onClick={() => quickLogin(item.email, item.pass)}
-                    style={{
-                      padding: "9px 10px", borderRadius: 10, fontSize: 12, fontWeight: 600,
-                      border: `1px solid ${item.color}30`, background: `${item.color}0D`,
-                      color: item.color, cursor: "pointer", transition: "all 0.15s",
-                      letterSpacing: "0.01em",
-                    }}
-                    onMouseEnter={(e) => (e.currentTarget.style.background = `${item.color}1A`)}
-                    onMouseLeave={(e) => (e.currentTarget.style.background = `${item.color}0D`)}
-                  >
-                    {item.label}
-                  </button>
-                ))}
-              </div>
-              <p style={{ fontSize: 10, color: "#3A5068", textAlign: "center", marginTop: 10 }}>
-                Selecione o perfil e clique em Acessar
-              </p>
-            </div>
-          )}
         </div>
 
-        {/* ── Footer ── */}
         <p style={{ textAlign: "center", fontSize: 10, color: "#3A5068", marginTop: 18, letterSpacing: "0.05em" }}>
           © {new Date().getFullYear()} V3 Partners. Todos os direitos reservados.
         </p>
