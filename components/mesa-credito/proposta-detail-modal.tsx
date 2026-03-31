@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import {
   X, User, Building2, CheckCircle2, Clock, ArrowRight,
   FileText, CreditCard, Calendar, Link2, Pencil, Check,
-  Percent, TrendingUp, BadgeDollarSign, Upload, Paperclip, Trash2,
+  Percent, TrendingUp, BadgeDollarSign, Upload, Paperclip, Trash2, Home,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -50,6 +50,10 @@ export interface ProposalFull {
   valor_credito_atual?: number;
   comissao_mandato_perc?: number;
   comissao_instituicao_perc?: number;
+  imovel_endereco?: string;
+  imovel_valor_medio?: number;
+  imovel_cidade?: string;
+  imovel_estado?: string;
 }
 
 interface PropostaDetailModalProps {
@@ -59,9 +63,10 @@ interface PropostaDetailModalProps {
   onStageChange?: (proposalId: string, newStage: string) => void;
   onProposalUpdate?: (proposalId: string, updates: Partial<ProposalFull>) => void;
   canChangeStage?: boolean;
+  canEditValorSolicitado?: boolean;
 }
 
-export function PropostaDetailModal({ open, onClose, proposal, onStageChange, onProposalUpdate, canChangeStage }: PropostaDetailModalProps) {
+export function PropostaDetailModal({ open, onClose, proposal, onStageChange, onProposalUpdate, canChangeStage, canEditValorSolicitado }: PropostaDetailModalProps) {
   // ── Checklist state ───────────────────────────────────────────────────────
   const [checkedDocs, setCheckedDocs] = useState<Record<string, boolean>>({});
   const [uploadedFiles, setUploadedFiles] = useState<Record<string, string>>({}); // docId → filename
@@ -119,6 +124,9 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
   const [percInstituicao, setPercInstituicao] = useState(0);
   const [percInstituicaoEdit, setPercInstituicaoEdit] = useState("0");
   const [editandoInstituicao, setEditandoInstituicao] = useState(false);
+  const [valorSolicitado, setValorSolicitado] = useState(0);
+  const [valorSolicitadoEdit, setValorSolicitadoEdit] = useState("");
+  const [editandoValorSolicitado, setEditandoValorSolicitado] = useState(false);
 
   // Sync state when proposal changes
   useEffect(() => {
@@ -135,6 +143,9 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
     setEditandoValor(false);
     setEditandoMandato(false);
     setEditandoInstituicao(false);
+    setValorSolicitado(proposal.requested_value ?? 0);
+    setValorSolicitadoEdit(String(proposal.requested_value ?? 0));
+    setEditandoValorSolicitado(false);
   }, [proposal?.id, open]);
 
   if (!open || !proposal) return null;
@@ -167,6 +178,14 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
     setPercInstituicao(v);
     setEditandoInstituicao(false);
     onProposalUpdate?.(proposal!.id, { comissao_instituicao_perc: v });
+  }
+
+  function salvarValorSolicitado() {
+    const v = parseFloat(valorSolicitadoEdit.replace(",", "."));
+    if (isNaN(v) || v <= 0) return;
+    setValorSolicitado(v);
+    setEditandoValorSolicitado(false);
+    onProposalUpdate?.(proposal!.id, { requested_value: v });
   }
 
   const currentStageIdx = PIPELINE_STAGES.findIndex((s) => s.key === (proposal.stage ?? "RECEBIDO"));
@@ -249,7 +268,39 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
 
             <InfoSection title="Operação" icon={<CreditCard className="w-4 h-4" />}>
               <InfoRow label="Linha" value={proposal.credit_line} highlight />
-              <InfoRow label="Valor Solicitado" value={formatCurrency(proposal.requested_value)} />
+              {/* Valor Solicitado editável */}
+              <div className="flex items-start justify-between gap-2">
+                <span className="text-xs text-muted-foreground flex-shrink-0">Valor Solicitado</span>
+                {(canChangeStage || canEditValorSolicitado) && editandoValorSolicitado ? (
+                  <div className="flex items-center gap-1">
+                    <span className="text-xs text-muted-foreground">R$</span>
+                    <input
+                      type="number"
+                      value={valorSolicitadoEdit}
+                      onChange={(e) => setValorSolicitadoEdit(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && salvarValorSolicitado()}
+                      className="w-28 h-5 text-xs px-2 bg-secondary border border-primary/50 rounded text-white focus:outline-none"
+                      autoFocus
+                    />
+                    <button onClick={salvarValorSolicitado} className="w-5 h-5 rounded flex items-center justify-center bg-emerald-500/20 hover:bg-emerald-500/40 text-emerald-400">
+                      <Check className="w-3 h-3" />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1">
+                    <span className="text-xs font-medium text-foreground">{formatCurrency(valorSolicitado || proposal.requested_value)}</span>
+                    {(canChangeStage || canEditValorSolicitado) && (
+                      <button
+                        onClick={() => { setValorSolicitadoEdit(String(valorSolicitado || proposal.requested_value)); setEditandoValorSolicitado(true); }}
+                        className="w-4 h-4 rounded flex items-center justify-center hover:bg-secondary text-muted-foreground hover:text-white"
+                        title="Editar valor solicitado"
+                      >
+                        <Pencil className="w-2.5 h-2.5" />
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
               {proposal.approved_value && (
                 <InfoRow label="Valor Aprovado" value={formatCurrency(proposal.approved_value)} success />
               )}
@@ -257,6 +308,47 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
               {proposal.finalidade && <InfoRow label="Finalidade" value={proposal.finalidade} />}
             </InfoSection>
           </div>
+
+          {/* Card de Imóvel em Garantia */}
+          {["HOME EQUITY","HOMECASH","CGI","CRI","FUNDO CONSTRUÇÃO RESIDENCIAL","FUNDO CONSTRUÇÃO LOTEAMENTO","FUNDO CONSTRUÇÃO EMPREENDIMENTO"].includes(proposal.credit_line) &&
+            (proposal.imovel_valor_medio || proposal.imovel_cidade) && (
+            <div className="p-4 rounded-xl border border-amber-500/30 bg-amber-500/5 space-y-2">
+              <p className="text-xs font-semibold text-amber-400 flex items-center gap-1.5">
+                <Home className="w-3.5 h-3.5" /> Imóvel em Garantia
+              </p>
+              {proposal.imovel_endereco && (
+                <div className="flex items-start justify-between gap-2">
+                  <span className="text-xs text-muted-foreground flex-shrink-0">Endereço</span>
+                  <span className="text-xs font-medium text-foreground text-right">{proposal.imovel_endereco}</span>
+                </div>
+              )}
+              {(proposal.imovel_cidade || proposal.imovel_estado) && (
+                <div className="flex items-start justify-between gap-2">
+                  <span className="text-xs text-muted-foreground flex-shrink-0">Localização</span>
+                  <span className="text-xs font-medium text-foreground text-right">
+                    {[proposal.imovel_cidade, proposal.imovel_estado].filter(Boolean).join(" — ")}
+                  </span>
+                </div>
+              )}
+              {proposal.imovel_valor_medio && (
+                <div className="flex items-start justify-between gap-2">
+                  <span className="text-xs text-muted-foreground flex-shrink-0">Valor Médio de Avaliação</span>
+                  <span className="text-xs font-bold text-amber-300">{formatCurrency(proposal.imovel_valor_medio)}</span>
+                </div>
+              )}
+              {proposal.imovel_valor_medio && (
+                <div className="flex items-center justify-between text-xs pt-1 border-t border-amber-500/20">
+                  <span className="text-muted-foreground">LTV estimado</span>
+                  <span className={`font-bold ${
+                    (proposal.requested_value / proposal.imovel_valor_medio) > 0.7 ? "text-red-400" : "text-emerald-400"
+                  }`}>
+                    {((proposal.requested_value / proposal.imovel_valor_medio) * 100).toFixed(1)}%
+                    <span className="font-normal text-muted-foreground ml-1">(máx. 70%)</span>
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Partner vinculado */}
           {proposal.partner_name && (

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useCallback, useEffect } from "react";
-import { Plus, Search, TrendingUp, Zap } from "lucide-react";
+import { LayoutGrid, List, Plus, Search, TrendingUp, Zap } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -23,6 +23,10 @@ interface Proposal {
   valor_credito_atual?: number;
   comissao_mandato_perc?: number;
   comissao_instituicao_perc?: number;
+  imovel_endereco?: string;
+  imovel_valor_medio?: number;
+  imovel_cidade?: string;
+  imovel_estado?: string;
 }
 
 interface CreditDeskClientProps {
@@ -62,6 +66,7 @@ export function CreditDeskClient({ proposals: initial, level, currentUser }: Cre
   const [filterStatus, setFilterStatus] = useState("");
   const [newOpen, setNewOpen] = useState(false);
   const [detailProposal, setDetailProposal] = useState<Proposal | null>(null);
+  const [view, setView] = useState<"table" | "kanban">("table");
 
   useEffect(() => {
     const stored = loadFromStorage().filter((s) => s.current_level === level);
@@ -77,6 +82,7 @@ export function CreditDeskClient({ proposals: initial, level, currentUser }: Cre
   const partnerName = currentUser?.full_name ?? "João Partner Silva";
   const partnerId = currentUser?.id ?? "demo-partner-001";
   const canChangeStage = currentUser?.role === "MESA_OPERACIONAL" || currentUser?.role === "ADMIN" || currentUser?.role === "GESTAO";
+  const canEditValorSolicitado = canChangeStage || currentUser?.role === "PARTNER" || currentUser?.role === "PARTNER_PRO";
 
   const filtered = proposals.filter((p) => {
     const matchSearch = !search ||
@@ -158,9 +164,77 @@ export function CreditDeskClient({ proposals: initial, level, currentUser }: Cre
           <option value="APPROVED">Aprovado</option>
           <option value="REJECTED">Reprovado</option>
         </select>
+        <div className="flex gap-1 p-1 bg-secondary rounded-lg ml-auto">
+          <button
+            title="Tabela"
+            onClick={() => setView("table")}
+            className={`p-1.5 rounded transition-colors ${view === "table" ? "bg-primary/20 text-primary" : "text-muted-foreground hover:text-white"}`}
+          >
+            <List className="w-4 h-4" />
+          </button>
+          <button
+            title="Kanban"
+            onClick={() => setView("kanban")}
+            className={`p-1.5 rounded transition-colors ${view === "kanban" ? "bg-primary/20 text-primary" : "text-muted-foreground hover:text-white"}`}
+          >
+            <LayoutGrid className="w-4 h-4" />
+          </button>
+        </div>
       </div>
 
-      <Card>
+      {(() => {
+        const KANBAN_STAGES = [
+          { key: "RECEBIDO",   label: "Recebido",          borderColor: "border-slate-500/40",   headerColor: "text-slate-400",   bg: "bg-slate-500/5"  },
+          { key: "TRIAGEM",    label: "Triagem",            borderColor: "border-blue-500/40",    headerColor: "text-blue-400",    bg: "bg-blue-500/5"   },
+          { key: "ANALISE",    label: "Análise de Crédito", borderColor: "border-amber-500/40",   headerColor: "text-amber-400",   bg: "bg-amber-500/5"  },
+          { key: "PENDENCIA",  label: "Pendência de Docs",  borderColor: "border-orange-500/40",  headerColor: "text-orange-400",  bg: "bg-orange-500/5" },
+          { key: "APROVACAO",  label: "Em Aprovação",       borderColor: "border-purple-500/40",  headerColor: "text-purple-400",  bg: "bg-purple-500/5" },
+          { key: "FINALIZADO", label: "Finalizado",         borderColor: "border-emerald-500/40", headerColor: "text-emerald-400", bg: "bg-emerald-500/5"},
+        ];
+        if (view === "kanban") return (
+          <div className="overflow-x-auto pb-2">
+            <div className="flex gap-3 min-w-max">
+              {KANBAN_STAGES.map((stage) => {
+                const stageCards = filtered.filter((p) => (p.stage ?? "RECEBIDO") === stage.key);
+                return (
+                  <div key={stage.key} className={`w-56 flex-shrink-0 rounded-xl border ${stage.borderColor} ${stage.bg} p-3 flex flex-col gap-2`}>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className={`text-[11px] font-bold uppercase tracking-wide ${stage.headerColor}`}>{stage.label}</span>
+                      <span className="text-[10px] text-muted-foreground bg-secondary/80 rounded px-1.5 py-0.5 font-semibold">{stageCards.length}</span>
+                    </div>
+                    {stageCards.length === 0 ? (
+                      <div className="flex items-center justify-center py-8 text-[11px] text-muted-foreground/40">Vazio</div>
+                    ) : (
+                      stageCards.map((p) => (
+                        <div
+                          key={p.id}
+                          onClick={() => setDetailProposal(p)}
+                          className="bg-card border border-border/60 rounded-lg p-3 cursor-pointer hover:border-primary/40 hover:bg-card/80 transition-all space-y-2 group"
+                        >
+                          <div className="flex items-center justify-between gap-1">
+                            <span className="font-mono text-[9px] text-muted-foreground truncate">{p.code}</span>
+                            <Badge className={`${STATUS_COLORS[p.status as OperationStatus]} text-[9px] px-1.5 py-0 leading-4`}>
+                              {STATUS_LABELS[p.status as OperationStatus]}
+                            </Badge>
+                          </div>
+                          <p className="text-[11px] font-semibold text-white leading-tight line-clamp-2 group-hover:text-primary transition-colors">{p.client_name}</p>
+                          <div className="flex items-center justify-between gap-1">
+                            <Badge variant={cfg.badgeVariant} className="text-[9px] truncate max-w-[100px]">{p.credit_line}</Badge>
+                            <span className="text-[10px] font-bold text-emerald-400 flex-shrink-0">{formatCurrency(p.requested_value)}</span>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+        return null;
+      })()}
+
+      <Card className={view === "kanban" ? "hidden" : ""}>
         <CardContent className="p-0">
           {filtered.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 gap-3">
@@ -219,6 +293,7 @@ export function CreditDeskClient({ proposals: initial, level, currentUser }: Cre
         onStageChange={handleStageChange}
         onProposalUpdate={handleProposalUpdate}
         canChangeStage={canChangeStage}
+        canEditValorSolicitado={canEditValorSolicitado}
       />
     </div>
   );

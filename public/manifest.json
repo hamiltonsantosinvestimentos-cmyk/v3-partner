@@ -1,0 +1,24 @@
+{
+  "name": "V3 PARTNERS — Plataforma Financeira",
+  "short_name": "V3 Partners",
+  "description": "Plataforma de gestão para parceiros e operações financeiras",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#050C18",
+  "theme_color": "#C4922E",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

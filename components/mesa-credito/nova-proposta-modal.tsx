@@ -388,6 +388,9 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
   const [finalidade, setFinalidade] = useState("");
   const [imovelEndereco, setImovelEndereco] = useState("");
   const [imovelValor, setImovelValor] = useState("");
+  const [imovelCidade, setImovelCidade] = useState("");
+  const [imovelEstado, setImovelEstado] = useState("");
+  const [imovelValorMedio, setImovelValorMedio] = useState("");
   const [observacoes, setObservacoes] = useState("");
 
   // Documentos
@@ -441,6 +444,10 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
       docs_uploaded: uploadedIds.length,
       docs_required: requiredDocs.length,
       created_at: new Date().toISOString(),
+      imovel_endereco: imovelEndereco || undefined,
+      imovel_valor_medio: parseFloat(imovelValorMedio.replace(/\D/g, "")) || undefined,
+      imovel_cidade: imovelCidade || undefined,
+      imovel_estado: imovelEstado || undefined,
     };
     onSubmit(proposal);
     setSubmitted(true);
@@ -451,6 +458,7 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
     setTab("cliente");
     setNome(""); setCpfCnpj(""); setEmail(""); setTelefone("");
     setValorSolicitado(""); setPrazo(""); setFinalidade("");
+    setImovelCidade(""); setImovelEstado(""); setImovelValorMedio("");
     setUploadedFiles([]);
     onClose();
   }
@@ -619,23 +627,33 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
                 />
               </div>
 
-              {(creditLine === "HOME EQUITY" || creditLine === "CRI" || creditLine === "HOMECASH" || creditLine === "CGI" || creditLine === "FUNDO CONSTRUÇÃO RESIDENCIAL") && (
+              {(creditLine === "HOME EQUITY" || creditLine === "CRI" || creditLine === "HOMECASH" || creditLine === "CGI" || creditLine === "FUNDO CONSTRUÇÃO RESIDENCIAL" || creditLine === "FUNDO CONSTRUÇÃO LOTEAMENTO" || creditLine === "FUNDO CONSTRUÇÃO EMPREENDIMENTO") && (
                 <div className="p-4 rounded-xl border border-amber-500/20 bg-amber-500/5 space-y-3">
                   <p className="text-xs font-semibold text-amber-400 flex items-center gap-1">
                     <Home className="w-3.5 h-3.5" /> Dados do Imóvel em Garantia
                   </p>
+                  <Field label="Endereço do Imóvel" value={imovelEndereco} onChange={setImovelEndereco} placeholder="Rua, número, bairro" />
                   <div className="grid grid-cols-2 gap-3">
-                    <Field label="Endereço do Imóvel" value={imovelEndereco} onChange={setImovelEndereco} placeholder="Rua, número, cidade" />
-                    <Field label="Valor Estimado do Imóvel (R$)" value={imovelValor} onChange={setImovelValor} placeholder="0,00" />
+                    <Field label="Cidade do Imóvel *" value={imovelCidade} onChange={setImovelCidade} placeholder="Ex: São Paulo" />
+                    <SelectField
+                      label="Estado (UF) *"
+                      value={imovelEstado}
+                      onChange={setImovelEstado}
+                      options={["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"]}
+                    />
                   </div>
-                  {imovelValor && valorSolicitado && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field label="Valor Médio de Avaliação (R$) *" value={imovelValorMedio} onChange={setImovelValorMedio} placeholder="0,00" />
+                    <Field label="Valor Estimado pelo Cliente (R$)" value={imovelValor} onChange={setImovelValor} placeholder="0,00" />
+                  </div>
+                  {(imovelValorMedio || imovelValor) && valorSolicitado && (
                     <div className="text-xs text-muted-foreground">
                       LTV estimado:{" "}
                       <span className={`font-bold ${
-                        (parseFloat(valorSolicitado.replace(/\D/g, "")) / parseFloat(imovelValor.replace(/\D/g, ""))) > 0.7
+                        (parseFloat(valorSolicitado.replace(/\D/g, "")) / parseFloat((imovelValorMedio || imovelValor).replace(/\D/g, ""))) > 0.7
                           ? "text-red-400" : "text-emerald-400"
                       }`}>
-                        {((parseFloat(valorSolicitado.replace(/\D/g, "")) / parseFloat(imovelValor.replace(/\D/g, ""))) * 100).toFixed(1)}%
+                        {((parseFloat(valorSolicitado.replace(/\D/g, "")) / parseFloat((imovelValorMedio || imovelValor).replace(/\D/g, ""))) * 100).toFixed(1)}%
                       </span>
                       <span className="ml-1 text-muted-foreground">(máx. 70%)</span>
                     </div>
