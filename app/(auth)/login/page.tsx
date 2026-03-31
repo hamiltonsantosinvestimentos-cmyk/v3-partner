@@ -26,12 +26,13 @@ export default function LoginPage() {
         setLoading(false);
         return;
       }
+      const isSecure = location.protocol === "https:";
       document.cookie = `v3_demo_session=${JSON.stringify({
         id: user.id,
         email: user.email,
         full_name: user.full_name,
         role: user.role,
-      })}; path=/; max-age=86400`;
+      })}; path=/; max-age=86400; SameSite=Lax${isSecure ? "; Secure" : ""}`;
       router.push("/dashboard");
       router.refresh();
       return;
