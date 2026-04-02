@@ -38,13 +38,16 @@ export default function LoginPage() {
           return;
         }
       } else {
-        // Production mode: Supabase Auth
-        const { createClient } = await import("@/lib/supabase/client");
-        const supabase = createClient();
-        const { error: authError } = await supabase.auth.signInWithPassword({ email, password });
+        // Production mode: Supabase Auth via API
+        const res = await fetch("/api/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password }),
+        });
 
-        if (authError) {
-          setError("Email ou senha inválidos.");
+        if (!res.ok) {
+          const data = await res.json();
+          setError(data.error || "Email ou senha inválidos.");
           setLoading(false);
           return;
         }
