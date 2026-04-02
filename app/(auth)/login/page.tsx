@@ -13,23 +13,41 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  const IS_DEMO =
+    !process.env.NEXT_PUBLIC_SUPABASE_URL ||
+    process.env.NEXT_PUBLIC_SUPABASE_URL.includes("SEU_PROJETO");
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError("");
 
     try {
-      const res = await fetch("/api/demo-login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
-      });
+      if (IS_DEMO) {
+        // Demo mode: cookie-based login
+        const res = await fetch("/api/demo-login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password }),
+        });
 
-      if (!res.ok) {
-        const data = await res.json();
-        setError(data.error || "Email ou senha inválidos.");
-        setLoading(false);
-        return;
+        if (!res.ok) {
+          const data = await res.json();
+          setError(data.error || "Email ou senha inválidos.");
+          setLoading(false);
+          return;
+        }
+      } else {
+        // Production mode: Supabase Auth
+        const { createClient } = await import("@/lib/supabase/client");
+        const supabase = createClient();
+        const { error: authError } = await supabase.auth.signInWithPassword({ email, password });
+
+        if (authError) {
+          setError("Email ou senha inválidos.");
+          setLoading(false);
+          return;
+        }
       }
 
       window.location.href = "/dashboard";

@@ -1,7 +1,15 @@
-import { createServiceClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 
+const IS_DEMO =
+  !process.env.NEXT_PUBLIC_SUPABASE_URL ||
+  process.env.NEXT_PUBLIC_SUPABASE_URL.includes("SEU_PROJETO");
+
 export async function GET() {
+  if (IS_DEMO) {
+    return NextResponse.json([]);
+  }
+
+  const { createServiceClient } = await import("@/lib/supabase/server");
   const supabase = await createServiceClient();
 
   const { data, error } = await supabase
@@ -17,9 +25,25 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const { email, password, full_name, role, phone } = await request.json();
+
+  if (IS_DEMO) {
+    // Demo mode: return a fake user without touching Supabase
+    const fakeUser = {
+      id: `demo-${Date.now()}`,
+      email,
+      full_name,
+      role,
+      phone: phone || null,
+      is_active: true,
+      created_at: new Date().toISOString(),
+    };
+    return NextResponse.json({ user: fakeUser }, { status: 201 });
+  }
+
+  const { createServiceClient } = await import("@/lib/supabase/server");
   const supabase = await createServiceClient();
 
-  // Verify the requester is ADMIN
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -39,9 +63,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
   }
 
-  const { email, password, full_name, role, phone } = await request.json();
-
-  // Create user in Supabase Auth
   const { data: authData, error: authError } =
     await supabase.auth.admin.createUser({
       email,
@@ -54,7 +75,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: authError.message }, { status: 400 });
   }
 
-  // Update profile with role and additional info
   const { data: newProfile, error: profileError } = await supabase
     .from("profiles")
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

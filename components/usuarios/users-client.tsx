@@ -23,7 +23,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { createClient } from "@/lib/supabase/client";
 
 interface User {
   id: string;
@@ -55,8 +54,6 @@ export function UsersClient({ users: initialUsers }: UsersClientProps) {
     role: "PARTNER" as UserRole,
     phone: "",
   });
-
-  const supabase = createClient();
 
   const filtered = users.filter((u) => {
     const matchSearch =
@@ -116,6 +113,15 @@ export function UsersClient({ users: initialUsers }: UsersClientProps) {
     if (res.ok) {
       setUsers(users.map((u) => (u.id === userId ? { ...u, role: newRole } : u)));
       setEditUser(null);
+    }
+  };
+
+  const handleDelete = async (user: User) => {
+    if (!confirm(`Excluir o usuário "${user.full_name || user.email}"? Esta ação não pode ser desfeita.`)) return;
+
+    const res = await fetch(`/api/usuarios/${user.id}`, { method: "DELETE" });
+    if (res.ok) {
+      setUsers(users.filter((u) => u.id !== user.id));
     }
   };
 
@@ -240,7 +246,7 @@ export function UsersClient({ users: initialUsers }: UsersClientProps) {
                           onClick={() => handleToggleActive(user)}
                           className={`p-1.5 rounded hover:bg-secondary transition-colors ${
                             user.is_active
-                              ? "text-red-400 hover:text-red-300"
+                              ? "text-amber-400 hover:text-amber-300"
                               : "text-emerald-400 hover:text-emerald-300"
                           }`}
                           title={user.is_active ? "Desativar" : "Ativar"}
@@ -250,6 +256,13 @@ export function UsersClient({ users: initialUsers }: UsersClientProps) {
                           ) : (
                             <UserCheck className="w-3.5 h-3.5" />
                           )}
+                        </button>
+                        <button
+                          onClick={() => handleDelete(user)}
+                          className="p-1.5 rounded hover:bg-secondary transition-colors text-red-500 hover:text-red-400"
+                          title="Excluir usuário"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
                     </td>

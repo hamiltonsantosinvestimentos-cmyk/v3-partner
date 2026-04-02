@@ -1,50 +1,44 @@
-import { createServiceClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 
-async function checkAdmin(supabase: Awaited<ReturnType<typeof createServiceClient>>) {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: "Não autorizado", status: 401, user: null };
-
-  const { data } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .single();
-
-  const profile = data as { role: string } | null;
-  if (profile?.role !== "ADMIN") return { error: "Acesso negado", status: 403, user: null };
-  return { error: null, status: 200, user };
-}
+const IS_DEMO =
+  !process.env.NEXT_PUBLIC_SUPABASE_URL ||
+  process.env.NEXT_PUBLIC_SUPABASE_URL.includes("SEU_PROJETO");
 
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const supabase = await createServiceClient();
   const { id } = await params;
-
-  const { error, status } = await checkAdmin(supabase);
-  if (error) return NextResponse.json({ error }, { status });
-
   const body = await request.json();
-  const allowedFields = ["role", "is_active", "phone", "full_name"];
-  const updateData: Record<string, unknown> = {};
 
-  for (const field of allowedFields) {
-    if (field in body) {
-      updateData[field] = body[field];
-    }
+  if (IS_DEMO) {
+    return NextResponse.json({ id, ...body });
   }
 
-  // Use raw supabase call to avoid type strictness on dynamic update data
+  const { createServiceClient } = await import("@/lib/supabase/server");
+  const supabase = await createServiceClient();
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+
+  const { data: profileData } = await supabase.from("profiles").select("role").eq("id", user.id).single();
+  const profile = profileData as { role: string } | null;
+  if (profile?.role !== "ADMIN") return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
+
+  const allowedFields = ["role", "is_active", "phone", "full_name"];
+  const updateData: Record<string, unknown> = {};
+  for (const field of allowedFields) {
+    if (field in body) updateData[field] = body[field];
+  }
+
   const supabaseAny = supabase as unknown as {
     from: (table: string) => {
       update: (data: unknown) => {
         eq: (col: string, val: string) => {
-          select: () => { single: () => Promise<{ data: unknown; error: { message: string } | null }> }
-        }
-      }
-    }
+          select: () => { single: () => Promise<{ data: unknown; error: { message: string } | null }> };
+        };
+      };
+    };
   };
   const { data, error: updateError } = await supabaseAny
     .from("profiles")
@@ -61,17 +55,26 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  request: Request,
+  _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const supabase = await createServiceClient();
   const { id } = await params;
 
-  const { error, status } = await checkAdmin(supabase);
-  if (error) return NextResponse.json({ error }, { status });
+  if (IS_DEMO) {
+    return NextResponse.json({ success: true, id });
+  }
+
+  const { createServiceClient } = await import("@/lib/supabase/server");
+  const supabase = await createServiceClient();
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+
+  const { data: profileData } = await supabase.from("profiles").select("role").eq("id", user.id).single();
+  const profile = profileData as { role: string } | null;
+  if (profile?.role !== "ADMIN") return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
 
   const { error: deleteError } = await supabase.auth.admin.deleteUser(id);
-
   if (deleteError) {
     return NextResponse.json({ error: deleteError.message }, { status: 500 });
   }
