@@ -1,4 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
+import { createServerClient } from "@supabase/ssr";
 
 const PUBLIC_ROUTES = ["/login", "/auth/callback", "/unauthorized", "/api/demo-login"];
 
@@ -28,7 +29,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // ---- DEMO MODE (no Supabase) ----
+  // ---- DEMO MODE ----
   if (IS_DEMO) {
     const demoSession = request.cookies.get("v3_demo_session");
     if (!demoSession) {
@@ -55,8 +56,6 @@ export async function middleware(request: NextRequest) {
   }
 
   // ---- PRODUCTION MODE (Supabase) ----
-  const { createServerClient } = await import("@supabase/ssr");
-
   let supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient(
