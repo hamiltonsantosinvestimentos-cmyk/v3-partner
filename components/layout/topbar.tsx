@@ -42,12 +42,12 @@ export function Topbar({ user, onMenuClick, notificationCount = 0 }: TopbarProps
 
   const handleSignOut = async () => {
     document.cookie = "v3_demo_session=; path=/; max-age=0";
-    if (!IS_DEMO) {
-      try {
-        const { createClient } = await import("@/lib/supabase/client");
-        const supabase = createClient();
-        await supabase.auth.signOut();
-      } catch {}
+    try {
+      const { createClient } = await import("@/lib/supabase/client");
+      const supabase = createClient();
+      await supabase.auth.signOut();
+    } catch {
+      // demo mode or supabase not configured — just redirect
     }
     window.location.href = "/login";
   };
