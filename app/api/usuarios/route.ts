@@ -21,14 +21,13 @@ export async function GET() {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json(data);
+  return NextResponse.json(data ?? []);
 }
 
 export async function POST(request: Request) {
   const { email, password, full_name, role, phone } = await request.json();
 
   if (IS_DEMO) {
-    // Demo mode: return a fake user without touching Supabase
     const fakeUser = {
       id: `demo-${Date.now()}`,
       email,
@@ -44,32 +43,12 @@ export async function POST(request: Request) {
   const { createServiceClient } = await import("@/lib/supabase/server");
   const supabase = await createServiceClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
-    return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
-  }
-
-  const { data: profileData } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .single();
-
-  const profile = profileData as { role: string } | null;
-
-  if (profile?.role !== "ADMIN") {
-    return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
-  }
-
-  const { data: authData, error: authError } =
-    await supabase.auth.admin.createUser({
-      email,
-      password,
-      email_confirm: true,
-      user_metadata: { full_name },
-    });
+  const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+    email,
+    password,
+    email_confirm: true,
+    user_metadata: { full_name },
+  });
 
   if (authError) {
     return NextResponse.json({ error: authError.message }, { status: 400 });
@@ -78,7 +57,7 @@ export async function POST(request: Request) {
   const { data: newProfile, error: profileError } = await supabase
     .from("profiles")
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    .update({ role, phone, full_name, created_by: user.id } as any)
+    .update({ role, phone, full_name } as any)
     .eq("id", authData.user.id)
     .select()
     .single();

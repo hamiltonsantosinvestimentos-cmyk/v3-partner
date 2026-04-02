@@ -1,30 +1,41 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import { UsersClient } from "@/components/usuarios/users-client";
-import { DEMO_USERS } from "@/lib/demo-data";
 
 const IS_DEMO =
   !process.env.NEXT_PUBLIC_SUPABASE_URL ||
   process.env.NEXT_PUBLIC_SUPABASE_URL.includes("SEU_PROJETO");
 
-export default async function UsuariosPage() {
-  if (IS_DEMO) {
-    return <UsersClient initialUsers={DEMO_USERS} />;
-  }
+export default function UsuariosPage() {
+  const [users, setUsers] = useState<Parameters<typeof UsersClient>[0]["initialUsers"]>([]);
+  const [loading, setLoading] = useState(true);
 
-  try {
-    const { createClient } = await import("@/lib/supabase/server");
-    const supabase = await createClient();
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("*")
-      .order("created_at", { ascending: false });
-
-    if (error) {
-      console.error("[Usuarios] Supabase error:", error.message);
+  useEffect(() => {
+    if (IS_DEMO) {
+      import("@/lib/demo-data").then(({ DEMO_USERS }) => {
+        setUsers(DEMO_USERS as Parameters<typeof UsersClient>[0]["initialUsers"]);
+        setLoading(false);
+      });
+      return;
     }
 
-    return <UsersClient initialUsers={(data ?? []) as Parameters<typeof UsersClient>[0]["initialUsers"]} />;
-  } catch (err) {
-    console.error("[Usuarios] Unexpected error:", err);
-    return <UsersClient initialUsers={[]} />;
+    fetch("/api/usuarios")
+      .then((r) => r.json())
+      .then((data) => {
+        setUsers(Array.isArray(data) ? data : []);
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-2 border-[#C4922E] border-t-transparent" />
+      </div>
+    );
   }
+
+  return <UsersClient initialUsers={users} />;
 }
