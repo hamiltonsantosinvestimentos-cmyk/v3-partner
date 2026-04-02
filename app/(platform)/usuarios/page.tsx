@@ -7,11 +7,24 @@ const IS_DEMO =
 
 export default async function UsuariosPage() {
   if (IS_DEMO) {
-    return <UsersClient users={DEMO_USERS as Parameters<typeof UsersClient>[0]["users"]} />;
+    return <UsersClient initialUsers={DEMO_USERS} />;
   }
 
-  const { createClient } = await import("@/lib/supabase/server");
-  const supabase = await createClient();
-  const { data } = await supabase.from("profiles").select("*").order("created_at", { ascending: false });
-  return <UsersClient users={(data ?? []) as Parameters<typeof UsersClient>[0]["users"]} />;
+  try {
+    const { createClient } = await import("@/lib/supabase/server");
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.error("[Usuarios] Supabase error:", error.message);
+    }
+
+    return <UsersClient initialUsers={(data ?? []) as Parameters<typeof UsersClient>[0]["initialUsers"]} />;
+  } catch (err) {
+    console.error("[Usuarios] Unexpected error:", err);
+    return <UsersClient initialUsers={[]} />;
+  }
 }

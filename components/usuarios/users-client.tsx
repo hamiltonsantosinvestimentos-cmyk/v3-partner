@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { Users, Plus, Search, UserCheck, UserX, Pencil, Trash2 } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatDate, abbreviateName } from "@/lib/utils";
@@ -35,10 +35,10 @@ interface User {
 }
 
 interface UsersClientProps {
-  users: User[];
+  initialUsers: User[];
 }
 
-export function UsersClient({ users: initialUsers }: UsersClientProps) {
+export function UsersClient({ initialUsers }: UsersClientProps) {
   const [users, setUsers] = useState(initialUsers);
   const [search, setSearch] = useState("");
   const [filterRole, setFilterRole] = useState("");
