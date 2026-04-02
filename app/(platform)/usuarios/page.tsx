@@ -1,20 +1,25 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
-import { UsersClient } from "@/components/usuarios/users-client";
+
+const UsersClient = dynamic(
+  () => import("@/components/usuarios/users-client").then((m) => m.UsersClient),
+  { ssr: false }
+);
 
 const IS_DEMO =
   !process.env.NEXT_PUBLIC_SUPABASE_URL ||
   process.env.NEXT_PUBLIC_SUPABASE_URL.includes("SEU_PROJETO");
 
 export default function UsuariosPage() {
-  const [users, setUsers] = useState<Parameters<typeof UsersClient>[0]["initialUsers"]>([]);
+  const [users, setUsers] = useState<{ id: string; email: string; full_name: string | null; role: string; phone: string | null; is_active: boolean; created_at: string }[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (IS_DEMO) {
       import("@/lib/demo-data").then(({ DEMO_USERS }) => {
-        setUsers(DEMO_USERS as Parameters<typeof UsersClient>[0]["initialUsers"]);
+        setUsers(DEMO_USERS as typeof users);
         setLoading(false);
       });
       return;
