@@ -127,19 +127,38 @@ function KpiCard({ label, value, sub, icon: Icon, color, trend }: {
 // ─── TAB: VISÃO GERAL ─────────────────────────────────────────────────────────
 
 function VisaoGeralTab() {
-  const dreAtual = DEMO_DRE[DEMO_DRE.length - 1];
-  const dreMesAnterior = DEMO_DRE[DEMO_DRE.length - 2];
-  const trendReceita = Math.round(((dreAtual.receitas - dreMesAnterior.receitas) / dreMesAnterior.receitas) * 100);
   const comissoesAPagar = DEMO_COMISSOES.filter(c => c.status === "A_PAGAR").reduce((s, c) => s + c.valorComissao, 0);
   const impostoAPagar = DEMO_IMPOSTOS.filter(i => i.status === "A_PAGAR" || i.status === "PREVISTO").reduce((s, i) => s + i.valor, 0);
   const { bruto } = totalFolha();
-
   const chartData = DEMO_DRE.map(d => ({
     mes: `${MESES_PT[d.mes - 1]}/${String(d.ano).slice(2)}`,
     Receita: d.receitas,
     Despesas: d.custosOperacionais + d.despesasAdmin + d.despesasComerciais + d.despesasFinanceiras,
     Resultado: d.lucroLiquido,
   }));
+
+  const dreAtual = DEMO_DRE[DEMO_DRE.length - 1];
+  const dreMesAnterior = DEMO_DRE[DEMO_DRE.length - 2];
+
+  if (!dreAtual) {
+    return (
+      <div className="space-y-5">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <KpiCard label="Comissões a Pagar" value={formatMoeda(comissoesAPagar)} sub="pendentes" icon={CreditCard} color="#F59E0B" />
+          <KpiCard label="Impostos a Recolher" value={formatMoeda(impostoAPagar)} sub="meses abertos" icon={Receipt} color="#EF4444" />
+          <KpiCard label="Folha do Mês" value={formatMoeda(bruto)} sub={`${DEMO_FUNCIONARIOS.length} colaboradores`} icon={Users} color="#8B5CF6" />
+          <KpiCard label="Despesas Fixas" value={formatMoeda(DESPESAS_FIXAS_TEMPLATES.reduce((s, t) => s + t.valor, 0))} sub="mensais recorrentes" icon={FileText} color="#06B6D4" />
+        </div>
+        <div className="flex items-center justify-center h-40 text-muted-foreground text-sm">
+          Cadastre lançamentos no DRE para visualizar o painel financeiro.
+        </div>
+      </div>
+    );
+  }
+
+  const trendReceita = dreMesAnterior
+    ? Math.round(((dreAtual.receitas - dreMesAnterior.receitas) / dreMesAnterior.receitas) * 100)
+    : 0;
 
   return (
     <div className="space-y-5">
@@ -506,7 +525,7 @@ function NovoColaboradorModal({
 function FolhaTab() {
   const [mes, setMes] = useState(3);
   const [ano, setAno] = useState(2026);
-  const [funcionarios, setFuncionarios] = useState([...DEMO_FUNCIONARIOS]);
+  const [funcionarios, setFuncionarios] = useState<typeof DEMO_FUNCIONARIOS>([]);
   const [showModal, setShowModal] = useState(false);
   const [editandoFunc, setEditandoFunc] = useState<import("@/lib/demo-data-financeiro").Funcionario | null>(null);
 
@@ -892,7 +911,7 @@ function DespesasTab() {
   const [subtab, setSubtab] = useState<"fixas" | "variaveis">("fixas");
   const [showModal, setShowModal] = useState(false);
   const [templates, setTemplates] = useState([...DESPESAS_FIXAS_TEMPLATES]);
-  const [todasVariaveis, setTodasVariaveis] = useState<import("@/lib/demo-data-financeiro").Despesa[]>([...DEMO_DESPESAS_VARIAVEIS]);
+  const [todasVariaveis, setTodasVariaveis] = useState<import("@/lib/demo-data-financeiro").Despesa[]>([]);
   const [editandoFixaTpl, setEditandoFixaTpl] = useState<import("@/lib/demo-data-financeiro").DespesaFixaTemplate | null>(null);
   const [editandoVariavel, setEditandoVariavel] = useState<import("@/lib/demo-data-financeiro").Despesa | null>(null);
 
@@ -1198,9 +1217,17 @@ function ComissoesAdminTab() {
 // ─── TAB: DRE ────────────────────────────────────────────────────────────────
 
 function DRETab() {
-  const [idx, setIdx] = useState(DEMO_DRE.length - 1);
-  const d = DEMO_DRE[idx];
-  const prev = DEMO_DRE[idx - 1];
+  const [idx, setIdx] = useState(0);
+  if (!DEMO_DRE.length) {
+    return (
+      <div className="flex items-center justify-center h-64 text-muted-foreground text-sm">
+        Sem dados de DRE cadastrados. Adicione lançamentos para visualizar.
+      </div>
+    );
+  }
+  const safeIdx = Math.min(idx, DEMO_DRE.length - 1);
+  const d = DEMO_DRE[safeIdx];
+  const prev = DEMO_DRE[safeIdx - 1];
 
   const linhas = [
     { label: "RECEITA BRUTA", valor: d.receitas, destaque: true },
@@ -1568,7 +1595,7 @@ function ImpostosTab() {
   const [mes, setMes] = useState(3);
   const [ano, setAno] = useState(2026);
   const [showModal, setShowModal] = useState(false);
-  const [impostos, setImpostos] = useState<import("@/lib/demo-data-financeiro").Imposto[]>([...DEMO_IMPOSTOS]);
+  const [impostos, setImpostos] = useState<import("@/lib/demo-data-financeiro").Imposto[]>([]);
   const [editandoImp, setEditandoImp] = useState<import("@/lib/demo-data-financeiro").Imposto | null>(null);
 
   const excluirImposto = (id: string, desc: string) => {

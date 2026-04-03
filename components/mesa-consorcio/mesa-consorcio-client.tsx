@@ -129,8 +129,8 @@ function KanbanCardItem({ card, onClick }: { card: ConsorcioCard; onClick: () =>
 // ─── Main Component ───────────────────────────────────────────────────────────
 export function MesaConsorcioClient({ userRole }: { userRole: string }) {
   const [activeTab, setActiveTab] = useState<"kanban" | "operadores" | "pipefy">("kanban");
-  const [cards, setCards] = useState<ConsorcioCard[]>(DEMO_CARDS);
-  const [operators, setOperators] = useState<ConsorcioOperator[]>(DEMO_OPERATORS);
+  const [cards, setCards] = useState<ConsorcioCard[]>([]);
+  const [operators, setOperators] = useState<ConsorcioOperator[]>([]);
   const [selectedCard, setSelectedCard] = useState<ConsorcioCard | null>(null);
   const [showNewCard, setShowNewCard] = useState(false);
   const [showNewOp, setShowNewOp] = useState(false);

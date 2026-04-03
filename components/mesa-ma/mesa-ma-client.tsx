@@ -141,8 +141,8 @@ function KanbanCardItem({ card, onClick }: { card: MaCard; onClick: () => void }
 // ─── Main Component ───────────────────────────────────────────────────────────
 export function MesaMaClient({ userRole }: { userRole: string }) {
   const [activeTab, setActiveTab] = useState<"kanban" | "operadores" | "pipefy">("kanban");
-  const [cards, setCards] = useState<MaCard[]>(DEMO_CARDS);
-  const [operators, setOperators] = useState<MesaOperator[]>(DEMO_OPERATORS);
+  const [cards, setCards] = useState<MaCard[]>([]);
+  const [operators, setOperators] = useState<MesaOperator[]>([]);
   const [selectedCard, setSelectedCard] = useState<MaCard | null>(null);
   const [showNewCard, setShowNewCard] = useState(false);
   const [showNewOp, setShowNewOp] = useState(false);

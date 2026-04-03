@@ -496,7 +496,7 @@ export function CRMClient({ userRole, userName, userId }: { userRole: string; us
   const isAdmin = userRole === "ADMIN";
 
   const [tab, setTab] = useState<"pipeline" | "leads" | "prospeccao" | "relatorios">("pipeline");
-  const [leads, setLeads] = useState<CRMLead[]>(DEMO_LEADS);
+  const [leads, setLeads] = useState<CRMLead[]>([]);
   const [selectedLead, setSelectedLead] = useState<CRMLead | null>(null);
   const [showNewLead, setShowNewLead] = useState(false);
   const [showConvert, setShowConvert] = useState<CRMLead | null>(null);
