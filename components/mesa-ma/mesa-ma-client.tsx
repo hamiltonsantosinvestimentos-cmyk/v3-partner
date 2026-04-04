@@ -35,14 +35,6 @@ type MesaOperator = {
 type MaStage = { id: string; label: string; color: string; bg: string };
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-const MA_STAGES = [
-  { id: "prospeccao",  label: "Prospecção",    color: "#8B5CF6", bg: "rgba(139,92,246,0.1)" },
-  { id: "ioi",         label: "IOI",           color: "#3B82F6", bg: "rgba(59,130,246,0.1)" },
-  { id: "due_dilig",   label: "Due Diligence", color: "#F59E0B", bg: "rgba(245,158,11,0.1)" },
-  { id: "proposta",    label: "Proposta",      color: "#C9A84C", bg: "rgba(196,146,46,0.1)" },
-  { id: "negociacao",  label: "Negociação",    color: "#EF4444", bg: "rgba(239,68,68,0.1)" },
-  { id: "closing",     label: "Closing",       color: "#10B981", bg: "rgba(16,185,129,0.1)" },
-];
 
 const MA_STAGES_DEFAULT: MaStage[] = MA_PIPELINE.map(s => ({
   id: s.id,
@@ -131,7 +123,6 @@ function KanbanCardItem({ card, stages, onClick }: { card: MaCard; stages: MaSta
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 export function MesaMaClient({ userRole, initialDeals = [], userId = "", userName = "" }: { userRole: string; initialDeals?: MaCard[]; userId?: string; userName?: string }) {
-  const router = useRouter();
   const [activeTab, setActiveTab] = useState<"kanban" | "operadores">("kanban");
   const [cards, setCards] = useState<MaCard[]>(initialDeals);
   const [operators, setOperators] = useState<MesaOperator[]>([]);
@@ -140,7 +131,7 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
   const [showNewOp, setShowNewOp] = useState(false);
   const [maStages] = useState<MaStage[]>(MA_STAGES_DEFAULT);
 
-  // Atualiza cards quando initialDeals mudar (após router.refresh)
+  // Atualiza cards quando initialDeals mudar
   useEffect(() => {
     setCards(initialDeals);
   }, [initialDeals]);
