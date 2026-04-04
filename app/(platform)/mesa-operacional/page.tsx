@@ -61,10 +61,16 @@ export default async function MesaOperacionalPage() {
   if (!isAdmin) proposalsQuery = proposalsQuery.eq("partner_id", currentUser.id);
   const { data: proposalsData } = await proposalsQuery;
 
+  const proposals = (proposalsData ?? []).map((p: any) => ({
+    ...p,
+    docs_uploaded: Array.isArray(p.documents) ? p.documents.length : 0,
+    docs_required: 8,
+  }));
+
   return (
     <MesaOpClient
       tickets={(ticketsData ?? []) as Parameters<typeof MesaOpClient>[0]["tickets"]}
-      proposals={(proposalsData ?? []) as Parameters<typeof MesaOpClient>[0]["proposals"]}
+      proposals={proposals as Parameters<typeof MesaOpClient>[0]["proposals"]}
       currentUser={currentUser}
     />
   );

@@ -3,6 +3,8 @@ import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { logAudit } from "@/lib/audit";
 
+export const dynamic = "force-dynamic";
+
 const BUCKET = "credit-documents";
 const SIGNED_URL_EXPIRES = 20 * 24 * 60 * 60; // 20 dias em segundos
 
