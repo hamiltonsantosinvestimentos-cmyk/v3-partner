@@ -412,28 +412,15 @@ export function RankingClient({ userRole, userName, rankingData, period = "mes",
               )}
             </div>
           )}
-        </div>
 
-        {/* Full ranking list */}
-        <div className="xl:col-span-3 bg-[#091221] rounded-2xl border border-[#122036] overflow-hidden">
-          <div className="px-5 py-4 border-b border-[#122036] flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Star className="w-4 h-4 text-[#C9A84C]" />
-              <span className="text-sm font-bold text-white">Classificação Geral</span>
-            </div>
-            <Badge className="text-[10px] bg-[#C9A84C]/10 text-[#E8C97A] border-[#C9A84C]/30">
-              Top {currentData.length} Partners
-            </Badge>
-          </div>
-
-          {/* Full list */}
+          {/* Full ranking list */}
           <div className="xl:col-span-3 bg-[#091221] rounded-2xl border border-[#122036] overflow-hidden">
             <div className="px-5 py-4 border-b border-[#122036] flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Star className="w-4 h-4 text-[#C4922E]" />
+                <Star className="w-4 h-4 text-[#C9A84C]" />
                 <span className="text-sm font-bold text-white">Classificação Geral</span>
               </div>
-              <Badge className="text-[10px] bg-[#C4922E]/10 text-[#E5B96A] border-[#C4922E]/30">
+              <Badge className="text-[10px] bg-[#C9A84C]/10 text-[#E8C97A] border-[#C9A84C]/30">
                 Top {currentData.length} Partners
               </Badge>
             </div>
