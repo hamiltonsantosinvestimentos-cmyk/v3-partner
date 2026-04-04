@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>V3 Partners — Command Center</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: #09081A;
+  color: #F0ECE4;
+  font-family: 'DM Sans', sans-serif;
+  min-height: 100vh;
+  padding: 48px 64px;
+}
+@media (max-width: 900px) { body { padding: 32px 24px; } }
+
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid rgba(201,168,76,0.2);
+  padding-bottom: 24px;
+  margin-bottom: 48px;
+}
+.wordmark { font-size: 11px; font-weight: 700; letter-spacing: 4px; text-transform: uppercase; color: #C9A84C; }
+.wordmark span { display: block; font-weight: 400; font-size: 9px; color: #7A8FA8; letter-spacing: 2px; margin-top: 2px; }
+.header-right { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.header-date { font-size: 9px; color: #7A8FA8; letter-spacing: 2px; text-transform: uppercase; }
+.header-sync { font-size: 8px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: #4ade80; }
+
+.eyebrow { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.eyebrow-line { width: 24px; height: 1px; background: #C9A84C; }
+.eyebrow-text { font-size: 8px; font-weight: 700; letter-spacing: 4px; text-transform: uppercase; color: #C9A84C; opacity: 0.8; }
+
+h1 { font-size: 48px; font-weight: 800; color: #F0ECE4; line-height: 1; margin-bottom: 48px; letter-spacing: -1px; }
+h1 span { color: #C9A84C; }
+
+/* STATUS BAR */
+.status-bar {
+  background: rgba(74,222,128,0.06);
+  border: 1px solid rgba(74,222,128,0.2);
+  border-left: 3px solid #4ade80;
+  border-radius: 8px;
+  padding: 16px 24px;
+  margin-bottom: 48px;
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.status-bar-label { font-size: 8px; font-weight: 700; letter-spacing: 3px; text-transform: uppercase; color: #4ade80; white-space: nowrap; margin-top: 2px; }
+.status-bar-items { display: flex; flex-wrap: wrap; gap: 8px; }
+.status-chip {
+  font-size: 10px; font-weight: 600; letter-spacing: 1px;
+  padding: 4px 12px; border-radius: 3px;
+  background: rgba(74,222,128,0.08);
+  border: 1px solid rgba(74,222,128,0.2);
+  color: #a7f3c0;
+}
+
+/* OWNER BADGES */
+.owner {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 7px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase;
+  padding: 3px 10px; border-radius: 2px;
+  margin-bottom: 10px;
+}
+.owner-joao    { background: rgba(201,168,76,0.12); border: 1px solid rgba(201,168,76,0.3); color: #C9A84C; }
+.owner-hamilton{ background: rgba(122,143,168,0.12); border: 1px solid rgba(122,143,168,0.3); color: #A0B8D0; }
+.owner-ambos   { background: rgba(240,236,228,0.06); border: 1px solid rgba(240,236,228,0.2); color: #F0ECE4; }
+.owner-dot { width: 5px; height: 5px; border-radius: 50%; }
+.owner-joao    .owner-dot { background: #C9A84C; }
+.owner-hamilton .owner-dot { background: #A0B8D0; }
+.owner-ambos   .owner-dot { background: #F0ECE4; }
+
+/* FRENTES */
+.frentes-container { display: flex; flex-direction: column; gap: 32px; margin-bottom: 48px; }
+.frentes-col-label {
+  font-size: 8px; font-weight: 700; letter-spacing: 4px; text-transform: uppercase;
+  padding: 8px 16px; border-radius: 2px; display: inline-block; margin-bottom: 14px;
+}
+.col-joao    { background: rgba(201,168,76,0.08); border: 1px solid rgba(201,168,76,0.2); color: #C9A84C; }
+.col-hamilton{ background: rgba(122,143,168,0.08); border: 1px solid rgba(122,143,168,0.2); color: #A0B8D0; }
+.col-ambos   { background: rgba(240,236,228,0.05); border: 1px solid rgba(240,236,228,0.12); color: #7A8FA8; }
+
+.frentes { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 700px) { .frentes { grid-template-columns: 1fr; } }
+.frente {
+  background: #162744;
+  border: 1px solid rgba(201,168,76,0.12);
+  border-left: 3px solid #C9A84C;
+  padding: 20px 24px;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+  text-decoration: none;
+  display: block;
+}
+.frente.hamilton-frente { border-left-color: #A0B8D0; }
+.frente.ambos-frente    { border-left-color: #F0ECE4; }
+.frente:hover { background: #1e3359; border-color: rgba(201,168,76,0.3); }
+.frente.hamilton-frente:hover { border-color: rgba(160,184,208,0.4); }
+.frente-num { font-size: 8px; font-weight: 700; letter-spacing: 3px; text-transform: uppercase; color: #C9A84C; opacity: 0.7; margin-bottom: 6px; }
+.frente.hamilton-frente .frente-num { color: #A0B8D0; }
+.frente-title { font-size: 15px; font-weight: 700; color: #F0ECE4; margin-bottom: 5px; }
+.frente-desc { font-size: 9.5pt; color: #7A8FA8; line-height: 1.5; margin-bottom: 14px; }
+.frente-cmd {
+  font-size: 8px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase;
+  color: #C9A84C; opacity: 0.6;
+}
+.frente-cmd code {
+  background: rgba(201,168,76,0.08); border: 1px solid rgba(201,168,76,0.2);
+  padding: 4px 10px; font-family: monospace; color: #E8C97A;
+  font-size: 10px; letter-spacing: 0; text-transform: none; font-weight: 400;
+}
+.frente.full { grid-column: span 2; }
+
+/* PLATAFORMA SAAS */
+.platform-card {
+  background: #111F35;
+  border: 1px solid rgba(160,184,208,0.2);
+  border-top: 2px solid #A0B8D0;
+  padding: 28px 32px;
+  margin-bottom: 12px;
+}
+.platform-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; }
+.platform-title { font-size: 18px; font-weight: 700; color: #F0ECE4; }
+.platform-sub { font-size: 9px; color: #7A8FA8; margin-top: 4px; }
+.platform-badge { font-size: 7px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; padding: 4px 12px; border-radius: 2px; background: rgba(74,222,128,0.1); border: 1px solid rgba(74,222,128,0.3); color: #4ade80; }
+.platform-modules { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 20px; }
+@media (max-width: 800px) { .platform-modules { grid-template-columns: repeat(2, 1fr); } }
+.module-chip {
+  background: rgba(22,39,68,0.8); border: 1px solid rgba(201,168,76,0.1);
+  padding: 8px 12px; border-radius: 4px;
+  font-size: 9px; font-weight: 600; color: #7A8FA8;
+}
+.module-chip.done { border-color: rgba(74,222,128,0.2); color: #a7f3c0; }
+.module-chip span { display: block; font-size: 7px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: #4ade80; margin-bottom: 2px; }
+.platform-links { display: flex; flex-wrap: wrap; gap: 10px; }
+.plat-link {
+  font-size: 9px; font-weight: 600; letter-spacing: 1px;
+  padding: 6px 14px; border-radius: 3px; text-decoration: none; transition: opacity 0.2s;
+}
+.plat-link:hover { opacity: 0.75; }
+.plat-link.github { background: rgba(122,143,168,0.1); border: 1px solid rgba(122,143,168,0.25); color: #A0B8D0; }
+.plat-link.local  { background: rgba(201,168,76,0.08); border: 1px solid rgba(201,168,76,0.2); color: #E8C97A; }
+
+/* GIT WORKFLOW */
+.git-bar {
+  background: #111F35; border: 1px solid rgba(240,236,228,0.08);
+  padding: 16px 24px; margin-bottom: 48px;
+  display: flex; align-items: center; gap: 32px; flex-wrap: wrap;
+}
+.git-step { display: flex; align-items: center; gap: 10px; }
+.git-step-num { font-size: 9px; font-weight: 800; color: #C9A84C; background: rgba(201,168,76,0.12); border: 1px solid rgba(201,168,76,0.25); width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; border-radius: 2px; flex-shrink: 0; }
+.git-step-text { font-size: 9px; color: #7A8FA8; }
+.git-step-text strong { color: #F0ECE4; display: block; font-size: 10px; margin-bottom: 1px; }
+.git-arrow { color: rgba(201,168,76,0.4); font-size: 12px; }
+
+/* SQUADS M&A */
+.squads { display: flex; flex-direction: column; gap: 12px; margin-bottom: 48px; }
+.squad-card {
+  background: #111F35;
+  border: 1px solid rgba(201,168,76,0.15);
+  border-left: 3px solid #C9A84C;
+  padding: 20px 28px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 16px;
+  align-items: start;
+}
+.squad-meta { display: flex; flex-direction: column; gap: 6px; }
+.squad-id { font-size: 7px; font-weight: 700; letter-spacing: 3px; text-transform: uppercase; color: #C9A84C; opacity: 0.7; }
+.squad-title { font-size: 15px; font-weight: 700; color: #F0ECE4; }
+.squad-sub { font-size: 9px; color: #7A8FA8; line-height: 1.5; margin-top: 2px; }
+.squad-paths { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.squad-link {
+  font-size: 8px; font-weight: 600; letter-spacing: 1px;
+  padding: 4px 10px; border-radius: 2px; text-decoration: none; transition: opacity 0.2s;
+}
+.squad-link:hover { opacity: 0.8; }
+.squad-link.local  { background: rgba(201,168,76,0.08); border: 1px solid rgba(201,168,76,0.25); color: #E8C97A; }
+.squad-link.github { background: rgba(122,143,168,0.1);  border: 1px solid rgba(122,143,168,0.25); color: #7A8FA8; }
+.squad-link.output { background: rgba(74,222,128,0.08);  border: 1px solid rgba(74,222,128,0.2);  color: #6dbf88; }
+.squad-right { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+.squad-badge { font-size: 7px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; padding: 4px 12px; border-radius: 2px; }
+.squad-badge.ativo   { background: rgba(74,222,128,0.1);  border: 1px solid rgba(74,222,128,0.3);  color: #4ade80; }
+.squad-badge.rascunho { background: rgba(201,168,76,0.1); border: 1px solid rgba(201,168,76,0.3); color: #C9A84C; }
+.squad-outputs { display: flex; flex-direction: column; gap: 4px; align-items: flex-end; }
+.squad-stat { font-size: 8px; color: #7A8FA8; text-align: right; }
+.squad-stat strong { color: #F0ECE4; }
+
+/* OKR TRACKER */
+.okr-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 48px; }
+@media (max-width: 700px) { .okr-grid { grid-template-columns: 1fr; } }
+.okr-card {
+  background: #111F35;
+  border: 1px solid rgba(201,168,76,0.12);
+  padding: 18px 20px;
+  border-radius: 4px;
+}
+.okr-phase  { font-size: 7px; font-weight: 700; letter-spacing: 3px; text-transform: uppercase; color: #C9A84C; opacity: 0.7; margin-bottom: 6px; }
+.okr-period { font-size: 13px; font-weight: 700; color: #F0ECE4; margin-bottom: 4px; }
+.okr-meta   { font-size: 9px; color: #7A8FA8; margin-bottom: 12px; }
+.okr-kr { font-size: 9px; color: #7A8FA8; padding: 6px 0; border-bottom: 1px solid rgba(240,236,228,0.04); display: flex; justify-content: space-between; gap: 8px; }
+.okr-kr:last-child { border-bottom: none; }
+.okr-kr-status { font-size: 7px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; white-space: nowrap; }
+.okr-kr-status.done    { color: #4ade80; }
+.okr-kr-status.active  { color: #E8C97A; }
+.okr-kr-status.pending { color: rgba(122,143,168,0.6); }
+
+/* LINKS RÁPIDOS */
+.links { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 48px; }
+@media (max-width: 800px) { .links { grid-template-columns: repeat(2, 1fr); } }
+.link-card {
+  background: #111F35; border: 1px solid rgba(201,168,76,0.1);
+  padding: 16px 18px; text-decoration: none; transition: background 0.2s;
+}
+.link-card:hover { background: #162744; }
+.link-card.hamilton-link { border-color: rgba(122,143,168,0.15); }
+.link-label { font-size: 8px; font-weight: 700; letter-spacing: 3px; text-transform: uppercase; color: #C9A84C; opacity: 0.7; margin-bottom: 6px; }
+.link-card.hamilton-link .link-label { color: #A0B8D0; }
+.link-name  { font-size: 11px; font-weight: 600; color: #F0ECE4; }
+.link-note  { font-size: 8px; color: #7A8FA8; margin-top: 3px; }
+
+/* AGENTE STATUS */
+.agent-status {
+  background: #111F35; border: 1px solid rgba(201,168,76,0.15);
+  padding: 20px 28px; display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 48px;
+}
+.agent-info .agent-name   { font-size: 12px; font-weight: 700; color: #F0ECE4; }
+.agent-info .agent-detail { font-size: 9px; color: #7A8FA8; letter-spacing: 1px; margin-top: 3px; }
+.agent-badge {
+  background: rgba(74,222,128,0.1); border: 1px solid rgba(74,222,128,0.3);
+  color: #4ade80; font-size: 8px; font-weight: 700; letter-spacing: 3px;
+  text-transform: uppercase; padding: 5px 14px;
+}
+
+footer {
+  border-top: 1px solid rgba(201,168,76,0.1);
+  padding-top: 20px; margin-top: 40px;
+  display: flex; justify-content: space-between;
+}
+footer p { font-size: 8px; color: #7A8FA8; letter-spacing: 1px; text-transform: uppercase; }
+footer .tag { font-size: 8px; font-weight: 700; letter-spacing: 3px; color: #C9A84C; opacity: 0.6; text-transform: uppercase; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wordmark">
+    V3 Partners
+    <span>Securitização · Estruturação · Capital</span>
+  </div>
+  <div class="header-right">
+    <div class="header-date" id="data-hoje"></div>
+    <div class="header-sync">&#9679; GitHub Sincronizado — João + Hamilton</div>
+  </div>
+</header>
+
+<!-- STATUS BAR -->
+<div class="status-bar">
+  <span class="status-bar-label">Entregue hoje</span>
+  <div class="status-bar-items">
+    <span class="status-chip">GITHUB — João + Hamilton conectados</span>
+    <span class="status-chip">BRANDBOOK — DM Sans + Paleta V3 aplicados</span>
+    <span class="status-chip">CLAUDE.md — Contexto unificado no repo</span>
+    <span class="status-chip">18 componentes corrigidos</span>
+    <span class="status-chip">AIOS + 12 Squads instalados</span>
+    <span class="status-chip">SEC — Auditoria OWASP</span>
+    <span class="status-chip">DESIGN — Design System v1.0</span>
+  </div>
+</div>
+
+<div class="eyebrow">
+  <div class="eyebrow-line"></div>
+  <div class="eyebrow-text">Command Center — V3 Partners</div>
+</div>
+<h1>Frentes<br><span>por Dono</span></h1>
+
+<!-- FRENTES JOÃO -->
+<div class="frentes-container">
+
+  <div>
+    <div class="frentes-col-label col-joao">João Lemos Netto — Originação &amp; Intel</div>
+    <div class="frentes">
+      <div class="frente" onclick="abrirTerminal('v3-intel.bat')">
+        <div class="owner owner-joao"><div class="owner-dot"></div>João</div>
+        <div class="frente-num">Frente 01</div>
+        <div class="frente-title">Intel &amp; Relatórios</div>
+        <div class="frente-desc">Inteligência de mercado, relatórios diários, análise de deals, boletins das 4 verticais. Agente 8:17 BRT ativo.</div>
+        <div class="frente-cmd"><code>v3-launchers\v3-intel.bat</code></div>
+      </div>
+      <div class="frente" onclick="abrirTerminal('v3-pipeline.bat')">
+        <div class="owner owner-joao"><div class="owner-dot"></div>João</div>
+        <div class="frente-num">Frente 02</div>
+        <div class="frente-title">Pipeline &amp; Deals</div>
+        <div class="frente-desc">Originação de ativos, qualificação 5 SIMs, CRM, documentos de mandato e NDA. R$4,4B mapeados.</div>
+        <div class="frente-cmd"><code>v3-launchers\v3-pipeline.bat</code></div>
+      </div>
+      <div class="frente" onclick="abrirTerminal('v3-materiais.bat')">
+        <div class="owner owner-joao"><div class="owner-dot"></div>João</div>
+        <div class="frente-num">Frente 03</div>
+        <div class="frente-title">Materiais &amp; Identidade</div>
+        <div class="frente-desc">Apresentações, decks, posts, e-mails, materiais de partners. Arquétipo Mago Soberano aplicado.</div>
+        <div class="frente-cmd"><code>v3-launchers\v3-materiais.bat</code></div>
+      </div>
+      <div class="frente" onclick="abrirSite()">
+        <div class="owner owner-joao"><div class="owner-dot"></div>João</div>
+        <div class="frente-num">Frente 04</div>
+        <div class="frente-title">Site Institucional</div>
+        <div class="frente-desc">v3partners.com.br — Design System v1.0, Copy Mago, 5 páginas, partners.html Grand Slam Offer.</div>
+        <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:10px;">
+          <a href="file:///C:/Users/jlemo/Documents/v3partners-site/index.html" target="_blank" style="font-size:9px; color:#E8C97A; text-decoration:none; border:1px solid rgba(201,168,76,0.25); padding:3px 10px;">&#9654; index.html</a>
+          <a href="file:///C:/Users/jlemo/Documents/v3partners-site/partners.html" target="_blank" style="font-size:9px; color:#E8C97A; text-decoration:none; border:1px solid rgba(201,168,76,0.25); padding:3px 10px;">&#9654; partners.html</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- FRENTES HAMILTON -->
+  <div>
+    <div class="frentes-col-label col-hamilton">Hamilton Santos — Tecnologia &amp; Plataforma</div>
+    <div class="frentes">
+      <div class="frente hamilton-frente" onclick="copiarCaminho('C:\\Users\\hamilton\\v3-partner')">
+        <div class="owner owner-hamilton"><div class="owner-dot"></div>Hamilton</div>
+        <div class="frente-num">Frente 05</div>
+        <div class="frente-title">Plataforma SaaS — v3-partner</div>
+        <div class="frente-desc">Next.js 16 + Supabase. Dashboard, CRM, M&amp;A, Split Fiscal, Mesa Crédito 3 níveis, Academy, IA Partner. 47 commits.</div>
+        <div class="frente-cmd"><code>github.com/hamiltonsantosinvestimentos-cmyk/v3-partner</code></div>
+      </div>
+      <div class="frente hamilton-frente" onclick="copiarCaminho('C:\\Users\\jlemo\\Documents\\v3-partner')">
+        <div class="owner owner-hamilton"><div class="owner-dot"></div>Hamilton · Dev</div>
+        <div class="frente-num">Frente 06</div>
+        <div class="frente-title">Backend &amp; Banco de Dados</div>
+        <div class="frente-desc">Supabase — 9 tabelas, RLS completo, 6 roles (ADMIN, PARTNER_PRO, MESA, GESTAO, FINANCEIRO). Schema SQL versionado.</div>
+        <div class="frente-cmd"><code>v3-partner\supabase-schema.sql</code></div>
+      </div>
+      <div class="frente hamilton-frente">
+        <div class="owner owner-hamilton"><div class="owner-dot"></div>Hamilton</div>
+        <div class="frente-num">Frente 07</div>
+        <div class="frente-title">V3 IA Partner</div>
+        <div class="frente-desc">Anthropic SDK integrado. Chat assistente financeiro com contexto V3. Histórico persistido no Supabase (ai_conversations).</div>
+        <div class="frente-cmd"><code>app/(platform)/ia-assistant</code></div>
+      </div>
+      <div class="frente hamilton-frente">
+        <div class="owner owner-hamilton"><div class="owner-dot"></div>Hamilton</div>
+        <div class="frente-num">Frente 08</div>
+        <div class="frente-title">Deploy &amp; Infraestrutura</div>
+        <div class="frente-desc">Build Next.js, variáveis de ambiente, Supabase credentials, deploy produção. Configurar domínio app.v3partners.com.br.</div>
+        <div class="frente-cmd"><code>npm run build · npm run start</code></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- FRENTES CONJUNTAS -->
+  <div>
+    <div class="frentes-col-label col-ambos">Ambos — Frentes Compartilhadas</div>
+    <div class="frentes">
+      <div class="frente ambos-frente" onclick="abrirTerminal('v3-automacoes.bat')">
+        <div class="owner owner-ambos"><div class="owner-dot"></div>Ambos</div>
+        <div class="frente-num">Frente 09</div>
+        <div class="frente-title">Automações &amp; Agentes</div>
+        <div class="frente-desc">AIOS + 12 Squads, triggers remotos, crons, GitHub Actions. Agente diário 8:17 BRT ativo.</div>
+        <div class="frente-cmd"><code>v3-launchers\v3-automacoes.bat</code></div>
+      </div>
+      <div class="frente ambos-frente full">
+        <div class="owner owner-ambos"><div class="owner-dot"></div>Ambos</div>
+        <div class="frente-num">Frente 10</div>
+        <div class="frente-title">Rede de Partners — Meta 50 (Q2) · 1.000 (Dez/26)</div>
+        <div class="frente-desc">João: originação, materiais, onboarding, Instagram. Hamilton: plataforma de acesso, comissões, dashboard partner, academy.</div>
+        <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:10px;">
+          <span style="font-size:9px; color:#7A8FA8; border:1px solid rgba(240,236,228,0.1); padding:3px 10px;">Partner R$197/mês → role PARTNER → 30% comissão</span>
+          <span style="font-size:9px; color:#E8C97A; border:1px solid rgba(201,168,76,0.2); padding:3px 10px;">Partner PRO R$397/mês → role PARTNER_PRO → 50% + co-branding</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+
+<!-- PLATAFORMA SAAS DETALHE -->
+<div class="eyebrow" style="margin-bottom:16px;">
+  <div class="eyebrow-line"></div>
+  <div class="eyebrow-text">Plataforma v3-partner — Módulos Prontos</div>
+</div>
+<div class="platform-card">
+  <div class="platform-header">
+    <div>
+      <div class="platform-title">v3-partner — Plataforma SaaS V3</div>
+      <div class="platform-sub">Next.js 16 · TypeScript · Tailwind CSS v4 · Supabase · Anthropic SDK · PWA · Brandbook V2.0 aplicado</div>
+    </div>
+    <div class="platform-badge">47 Commits · Ativo</div>
+  </div>
+  <div class="platform-modules">
+    <div class="module-chip done"><span>Pronto</span>Auth + Roles</div>
+    <div class="module-chip done"><span>Pronto</span>Dashboard KPIs</div>
+    <div class="module-chip done"><span>Pronto</span>CRM</div>
+    <div class="module-chip done"><span>Pronto</span>M&amp;A Pipeline</div>
+    <div class="module-chip done"><span>Pronto</span>Split Fiscal</div>
+    <div class="module-chip done"><span>Pronto</span>Mesa Crédito N1/N2/N3</div>
+    <div class="module-chip done"><span>Pronto</span>Mesa Consórcio</div>
+    <div class="module-chip done"><span>Pronto</span>Mesa Operacional</div>
+    <div class="module-chip done"><span>Pronto</span>Academy</div>
+    <div class="module-chip done"><span>Pronto</span>Ranking Partners</div>
+    <div class="module-chip done"><span>Pronto</span>Financeiro</div>
+    <div class="module-chip done"><span>Pronto</span>V3 IA Partner</div>
+    <div class="module-chip done"><span>Pronto</span>Notificações</div>
+    <div class="module-chip done"><span>Pronto</span>Gestão Usuários</div>
+    <div class="module-chip done"><span>Pronto</span>Comissões</div>
+    <div class="module-chip"><span>Pendente</span>Deploy Produção</div>
+  </div>
+  <div class="platform-links">
+    <a class="plat-link github" href="https://github.com/hamiltonsantosinvestimentos-cmyk/v3-partner" target="_blank">&#128279; GitHub — v3-partner</a>
+    <a class="plat-link local" href="#" onclick="copiarCaminho('C:\\Users\\jlemo\\Documents\\v3-partner');return false;">&#128193; Clone local — C:\Users\jlemo\Documents\v3-partner</a>
+    <a class="plat-link local" href="#" onclick="copiarCmd('cd C:\\\\Users\\\\jlemo\\\\Documents\\\\v3-partner && npm run dev');return false;">&#9654; npm run dev</a>
+  </div>
+</div>
+
+
+<!-- GIT WORKFLOW -->
+<div class="eyebrow" style="margin-bottom:16px;">
+  <div class="eyebrow-line"></div>
+  <div class="eyebrow-text">Git Workflow — Colaboração João + Hamilton</div>
+</div>
+<div class="git-bar">
+  <div class="git-step">
+    <div class="git-step-num">1</div>
+    <div class="git-step-text"><strong>Antes de trabalhar</strong>git pull origin main</div>
+  </div>
+  <div class="git-arrow">→</div>
+  <div class="git-step">
+    <div class="git-step-num">2</div>
+    <div class="git-step-text"><strong>Criar branch</strong>git checkout -b feat/nome</div>
+  </div>
+  <div class="git-arrow">→</div>
+  <div class="git-step">
+    <div class="git-step-num">3</div>
+    <div class="git-step-text"><strong>Desenvolver</strong>Cada um na sua frente</div>
+  </div>
+  <div class="git-arrow">→</div>
+  <div class="git-step">
+    <div class="git-step-num">4</div>
+    <div class="git-step-text"><strong>Commit + Push</strong>git push origin feat/nome</div>
+  </div>
+  <div class="git-arrow">→</div>
+  <div class="git-step">
+    <div class="git-step-num">5</div>
+    <div class="git-step-text"><strong>Merge no main</strong>PR revisado pelo outro</div>
+  </div>
+</div>
+
+
+<!-- OKR TRACKER -->
+<div class="eyebrow" style="margin-bottom:16px;">
+  <div class="eyebrow-line"></div>
+  <div class="eyebrow-text">OKR — Meta 1.000 Partners · Dez/2026</div>
+</div>
+<div class="okr-grid">
+  <div class="okr-card">
+    <div class="okr-phase">Q2 · Fundação</div>
+    <div class="okr-period">Abril – Junho 2026</div>
+    <div class="okr-meta">Meta: 50 partners · MRR R$10K</div>
+    <div class="okr-kr"><span>partners.html no ar</span><span class="okr-kr-status done">Feito</span></div>
+    <div class="okr-kr"><span>Design System v1.0</span><span class="okr-kr-status done">Feito</span></div>
+    <div class="okr-kr"><span>GitHub João + Hamilton sync</span><span class="okr-kr-status done">Feito</span></div>
+    <div class="okr-kr"><span>Brandbook plataforma aplicado</span><span class="okr-kr-status done">Feito</span></div>
+    <div class="okr-kr"><span>Deploy plataforma produção</span><span class="okr-kr-status active">Próximo</span></div>
+    <div class="okr-kr"><span>Onboarding email sequence</span><span class="okr-kr-status active">Em aberto</span></div>
+    <div class="okr-kr"><span>20 partners mês 1</span><span class="okr-kr-status pending">Pendente</span></div>
+  </div>
+  <div class="okr-card">
+    <div class="okr-phase">Q3 · Tração</div>
+    <div class="okr-period">Julho – Setembro 2026</div>
+    <div class="okr-meta">Meta: 300 partners · MRR R$60K</div>
+    <div class="okr-kr"><span>Programa de referral</span><span class="okr-kr-status pending">Pendente</span></div>
+    <div class="okr-kr"><span>Webinar mensal ao vivo</span><span class="okr-kr-status pending">Pendente</span></div>
+    <div class="okr-kr"><span>Instagram 10K seguidores</span><span class="okr-kr-status pending">Pendente</span></div>
+    <div class="okr-kr"><span>CRM partners ativo</span><span class="okr-kr-status pending">Pendente</span></div>
+    <div class="okr-kr"><span>Dashboard KPIs partners</span><span class="okr-kr-status pending">Pendente</span></div>
+  </div>
+  <div class="okr-card">
+    <div class="okr-phase">Q4 · Escala</div>
+    <div class="okr-period">Outubro – Dezembro 2026</div>
+    <div class="okr-meta">Meta: 1.000 partners · MRR R$200K</div>
+    <div class="okr-kr"><span>Meta Ads ativo</span><span class="okr-kr-status pending">Pendente</span></div>
+    <div class="okr-kr"><span>Crowdfunding R$500K</span><span class="okr-kr-status pending">Pendente</span></div>
+    <div class="okr-kr"><span>Talent Pool 30 talentos</span><span class="okr-kr-status pending">Pendente</span></div>
+    <div class="okr-kr"><span>Stock Options 10 top partners</span><span class="okr-kr-status pending">Pendente</span></div>
+    <div class="okr-kr"><span>members/dashboard.html</span><span class="okr-kr-status pending">Pendente</span></div>
+  </div>
+</div>
+
+
+<!-- SQUADS M&A -->
+<div class="eyebrow" style="margin-bottom:16px;">
+  <div class="eyebrow-line"></div>
+  <div class="eyebrow-text">Squads Ativos — M&A</div>
+</div>
+<div class="squads">
+  <div class="squad-card">
+    <div class="squad-meta">
+      <div class="owner owner-joao" style="margin-bottom:8px;"><div class="owner-dot"></div>João</div>
+      <div class="squad-id">V3M&A: 1329999015 · Mineração &amp; Commodities</div>
+      <div class="squad-title">Jazida de Esmeraldas — Nova Era, MG</div>
+      <div class="squad-sub">Kit M&A completo · CIM 6 páginas · Teaser Cego · LinkedIn Post + Story · PT-BR e EN · GitHub privado</div>
+      <div class="squad-paths">
+        <a class="squad-link local" href="#" onclick="copiarCaminho('C:\\Users\\jlemo\\Documents\\v3partners\\squad\\jazida-esmeralda');return false;">&#128193; Pasta Local</a>
+        <a class="squad-link github" href="https://github.com/Jlnetto35/kit-estrutura-es-V3-M-A" target="_blank">&#128279; GitHub (privado)</a>
+        <a class="squad-link output" href="file:///C:/Users/jlemo/Documents/v3partners/squad/jazida-esmeralda/output/pt-br/cim-jazida-esmeralda.pdf" target="_blank">&#128196; CIM PT-BR</a>
+        <a class="squad-link output" href="file:///C:/Users/jlemo/Documents/v3partners/squad/jazida-esmeralda/output/en/cim-emerald-mine.pdf" target="_blank">&#128196; CIM EN</a>
+      </div>
+    </div>
+    <div class="squad-right">
+      <div class="squad-badge ativo">Concluído</div>
+      <div class="squad-outputs">
+        <div class="squad-stat"><strong>10</strong> arquivos gerados</div>
+        <div class="squad-stat"><strong>2</strong> idiomas (PT-BR · EN)</div>
+        <div class="squad-stat"><strong>R$ 7.000.000</strong> valor do ativo</div>
+        <div class="squad-stat" style="color:rgba(74,222,128,0.6); margin-top:4px; font-size:7px;">&#128274; Repo privado</div>
+      </div>
+    </div>
+  </div>
+  <div class="squad-card" style="opacity:0.45; border-left-color: rgba(201,168,76,0.3);">
+    <div class="squad-meta">
+      <div class="squad-id">Próximo ativo — aguardando briefing</div>
+      <div class="squad-title">+ Novo Squad M&A</div>
+      <div class="squad-sub">Clonar estrutura jazida-esmeralda · Adaptar HTMLs · Commit GitHub</div>
+    </div>
+    <div class="squad-right">
+      <div class="squad-badge rascunho">Aguardando</div>
+    </div>
+  </div>
+</div>
+
+
+<!-- LINKS RÁPIDOS -->
+<div class="eyebrow" style="margin-bottom:16px;">
+  <div class="eyebrow-line"></div>
+  <div class="eyebrow-text">Links Rápidos</div>
+</div>
+<div class="links">
+  <a class="link-card" href="https://claude.ai/code/scheduled" target="_blank">
+    <div class="link-label">Agentes</div>
+    <div class="link-name">Scheduled Triggers</div>
+    <div class="link-note">CCR 8:17 BRT ativo</div>
+  </a>
+  <a class="link-card" href="file:///C:/Users/jlemo/Documents/v3partners-site/partners.html" target="_blank">
+    <div class="link-label">Grand Slam Offer</div>
+    <div class="link-name">partners.html</div>
+    <div class="link-note">Novo · 04/04/2026</div>
+  </a>
+  <a class="link-card" href="file:///C:/Users/jlemo/Documents/v3partners-site/index.html" target="_blank">
+    <div class="link-label">Dev Local</div>
+    <div class="link-name">Site — index.html</div>
+    <div class="link-note">Copy Mago aplicada</div>
+  </a>
+  <a class="link-card hamilton-link" href="https://github.com/hamiltonsantosinvestimentos-cmyk/v3-partner" target="_blank">
+    <div class="link-label">Plataforma SaaS</div>
+    <div class="link-name">v3-partner — GitHub</div>
+    <div class="link-note">47 commits · Brandbook OK</div>
+  </a>
+  <a class="link-card" href="https://github.com/Jlnetto35/relat-rios-de-intelig-ncia-de-mercado-v3-M-A" target="_blank">
+    <div class="link-label">Relatórios</div>
+    <div class="link-name">GitHub — V3 Reports</div>
+    <div class="link-note">&#128274; Privado</div>
+  </a>
+  <a class="link-card" href="file:///C:/Users/jlemo/Documents/v3partners/reports/v3-report-2026-03-29.html" target="_blank">
+    <div class="link-label">Último Relatório</div>
+    <div class="link-name">V3 Report 29/03</div>
+  </a>
+  <a class="link-card" href="https://github.com/Jlnetto35/-v3-partners--site-intitucional" target="_blank">
+    <div class="link-label">GitHub</div>
+    <div class="link-name">Site Institucional</div>
+  </a>
+  <a class="link-card" href="https://claude.ai/settings/connectors" target="_blank">
+    <div class="link-label">Conectores</div>
+    <div class="link-name">MCP Connectors</div>
+  </a>
+</div>
+
+
+<!-- AGENTE REMOTO -->
+<div class="eyebrow" style="margin-bottom:16px;">
+  <div class="eyebrow-line"></div>
+  <div class="eyebrow-text">Agente Remoto</div>
+</div>
+<div class="agent-status">
+  <div class="agent-info">
+    <div class="agent-name">V3 Partners — Inteligência Diária Completa</div>
+    <div class="agent-detail">Todo dia 8:17 BRT · Scout + Intel + Relatório Semanal (segundas) · Commit automático GitHub · ID: trig_012KDFbEJAwvgC9ie875USc9</div>
+  </div>
+  <div class="agent-badge">Ativo</div>
+</div>
+
+<footer>
+  <p>V3 Partners Soluções Ltda · CNPJ 14.219.287/0001-50 · v3partners.com.br</p>
+  <div class="tag">Structured to Perform</div>
+</footer>
+
+<script>
+  const d = new Date();
+  const opts = { weekday:'long', day:'2-digit', month:'long', year:'numeric' };
+  document.getElementById('data-hoje').textContent = d.toLocaleDateString('pt-BR', opts).toUpperCase();
+
+  function abrirTerminal(bat) {
+    const path = 'C:\\Users\\jlemo\\v3-launchers\\' + bat;
+    navigator.clipboard.writeText(path).catch(() => {});
+    alert('Execute no PowerShell:\n\n' + path + '\n\n(caminho copiado)');
+  }
+
+  function copiarCaminho(caminho) {
+    navigator.clipboard.writeText(caminho).catch(() => {});
+    alert('Caminho copiado:\n\n' + caminho);
+  }
+
+  function copiarCmd(cmd) {
+    navigator.clipboard.writeText(cmd).catch(() => {});
+    alert('Comando copiado:\n\n' + cmd);
+  }
+
+  function abrirSite() {
+    const cmd = 'code "C:\\Users\\jlemo\\Documents\\v3partners-site"';
+    navigator.clipboard.writeText(cmd).catch(() => {});
+    alert('Abrir no VS Code:\n\n' + cmd + '\n\n(copiado)');
+  }
+</script>
+
+</body>
+</html>
