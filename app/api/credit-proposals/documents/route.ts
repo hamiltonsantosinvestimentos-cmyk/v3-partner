@@ -46,22 +46,25 @@ export async function POST(req: NextRequest) {
   }
 
   const svc = serviceClient();
-  const { data: proposal } = await svc
+  const { data: proposal, error: proposalError } = await svc
     .from("credit_desk_proposals")
     .select("id, partner_id, documents")
     .eq("id", proposalId)
     .single();
 
-  if (!proposal) return NextResponse.json({ error: "Proposta não encontrada" }, { status: 404 });
+  if (proposalError || !proposal) {
+    return NextResponse.json({ error: `Proposta não encontrada: ${proposalError?.message ?? ""}` }, { status: 404 });
+  }
 
   const isAdmin = ADMIN_ROLES.includes(profile?.role as typeof ADMIN_ROLES[number]);
   if (!isAdmin && proposal.partner_id !== user.id) {
     return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
   }
 
-  // Sanitiza nome do arquivo e monta caminho
-  const safeName    = file.name.replace(/[^a-zA-Z0-9._-]/g, "_").substring(0, 80);
-  const storagePath = `${proposal.partner_id}/${proposalId}/${docId}_${Date.now()}_${safeName}`;
+  // Usa o partner_id ou o user.id como fallback para montar o caminho
+  const ownerId  = proposal.partner_id ?? user.id;
+  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_").substring(0, 80);
+  const storagePath = `${ownerId}/${proposalId}/${docId}_${Date.now()}_${safeName}`;
 
   // Remove versão anterior do mesmo doc (se existir)
   const existingDocs: DocEntry[] = Array.isArray(proposal.documents) ? proposal.documents : [];
@@ -76,7 +79,9 @@ export async function POST(req: NextRequest) {
     .from(BUCKET)
     .upload(storagePath, bytes, { contentType: file.type, upsert: true });
 
-  if (uploadError) return NextResponse.json({ error: uploadError.message }, { status: 500 });
+  if (uploadError) {
+    return NextResponse.json({ error: `Erro no storage: ${uploadError.message}` }, { status: 500 });
+  }
 
   // Gera signed URL com 20 dias de validade
   const { data: signedData } = await svc.storage
@@ -93,10 +98,16 @@ export async function POST(req: NextRequest) {
   };
   const updatedDocs = [...existingDocs.filter((d) => d.doc_id !== docId), newDoc];
 
-  await svc
+  const { error: updateError } = await svc
     .from("credit_desk_proposals")
-    .update({ documents: updatedDocs, updated_at: new Date().toISOString() })
+    .update({ documents: updatedDocs })
     .eq("id", proposalId);
+
+  if (updateError) {
+    // Remove o arquivo do storage pois não conseguimos salvar o registro
+    await svc.storage.from(BUCKET).remove([storagePath]);
+    return NextResponse.json({ error: `Erro ao salvar no banco: ${updateError.message}` }, { status: 500 });
+  }
 
   logAudit({
     userId: user.id, userName: profile?.full_name,
@@ -122,7 +133,7 @@ export async function GET(req: NextRequest) {
   const svc = serviceClient();
   const { data: proposal } = await svc
     .from("credit_desk_proposals")
-    .select("id, partner_id, documents")
+    .select("id, partner_id, documents, checklist")
     .eq("id", proposalId)
     .single();
 
@@ -145,7 +156,8 @@ export async function GET(req: NextRequest) {
     })
   );
 
-  return NextResponse.json({ documents: docsWithUrls });
+  const checklist = (proposal as any).checklist ?? {};
+  return NextResponse.json({ documents: docsWithUrls, checklist });
 }
 
 // DELETE — remove documento do storage e da proposta

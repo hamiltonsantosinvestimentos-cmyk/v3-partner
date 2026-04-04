@@ -89,17 +89,20 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
     } else {
       fetch(`/api/credit-proposals/documents?proposal_id=${proposal.id}`)
         .then((r) => r.json())
-        .then(({ documents }) => {
-          if (!Array.isArray(documents)) return;
-          const checks: Record<string, boolean> = {};
+        .then(({ documents, checklist }) => {
+          // Carrega checklist salvo (marcações sem arquivo)
+          const savedChecks: Record<string, boolean> = (checklist && typeof checklist === "object") ? checklist : {};
           const files: Record<string, string>   = {};
           const urls: Record<string, string>    = {};
-          documents.forEach((d: { doc_id: string; file_name: string; url: string | null }) => {
-            checks[d.doc_id] = true;
-            files[d.doc_id]  = d.file_name;
-            if (d.url) urls[d.doc_id] = d.url;
-          });
-          setCheckedDocs(checks);
+          // Documentos com arquivo sobrescrevem o checklist
+          if (Array.isArray(documents)) {
+            documents.forEach((d: { doc_id: string; file_name: string; url: string | null }) => {
+              savedChecks[d.doc_id] = true;
+              files[d.doc_id]  = d.file_name;
+              if (d.url) urls[d.doc_id] = d.url;
+            });
+          }
+          setCheckedDocs(savedChecks);
           setUploadedFiles(files);
           setUploadedUrls(urls);
         })
@@ -113,6 +116,12 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
     setCheckedDocs(updated);
     if (IS_DEMO) {
       try { localStorage.setItem(`v3_docs_${proposal.id}`, JSON.stringify(updated)); } catch {}
+    } else {
+      fetch("/api/credit-proposals/checklist", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ proposal_id: proposal.id, checklist: updated }),
+      }).catch(() => {});
     }
   }
 
