@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Building2, Plus, X, ChevronRight,
   BarChart2, Mail, Circle, FileText,
+  Paperclip, Trash2, ExternalLink, Upload, Copy, CheckCheck,
 } from "lucide-react";
 import { ExportButton } from "@/components/financeiro/export-button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -136,9 +137,30 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
     setCards(initialDeals);
   }, [initialDeals]);
 
-  // New card form — stage defaults to first stage dynamically
+  // New card form
   const [newCard, setNewCard] = useState({ company: "", sector: "Fintech", value: "", stage: "", responsible: "", notes: "" });
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [isCreating, setIsCreating] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [newOp, setNewOp] = useState({ name: "", email: "", role: "Analista" });
+
+  // Documentos do card selecionado
+  type DocEntry = { doc_id: string; file_name: string; url: string | null; uploaded_at: string };
+  const [cardDocs, setCardDocs] = useState<DocEntry[]>([]);
+  const [docsLoading, setDocsLoading] = useState(false);
+  const [uploadingDoc, setUploadingDoc] = useState<string | null>(null);
+  const [copiedDoc, setCopiedDoc] = useState<string | null>(null);
+  const detailFileRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!selectedCard) { setCardDocs([]); return; }
+    setDocsLoading(true);
+    fetch(`/api/ma/documents?deal_id=${selectedCard.id}`)
+      .then(r => r.json())
+      .then(({ documents }) => setCardDocs(Array.isArray(documents) ? documents : []))
+      .catch(() => setCardDocs([]))
+      .finally(() => setDocsLoading(false));
+  }, [selectedCard?.id]);
 
   const totalValue = cards.reduce((a, c) => a + c.value, 0);
   const avgProb = cards.length ? Math.round(cards.reduce((a, c) => a + c.probability, 0) / cards.length) : 0;
@@ -154,8 +176,10 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
   const handleCreateCard = async () => {
     if (!newCard.company || !newCard.value) return;
     const defaultStage = newCard.stage || maStages[0]?.id || "prospeccao";
+    setIsCreating(true);
 
-    // Salva no Supabase via API
+    let createdId: string | null = null;
+
     try {
       const res = await fetch("/api/ma-deals", {
         method: "POST",
@@ -165,32 +189,47 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
           sector: newCard.sector,
           value: newCard.value,
           notes: newCard.notes,
+          responsible: newCard.responsible,
         }),
       });
       const json = await res.json();
       if (json.card) {
+        createdId = json.card.id;
         setCards(prev => [...prev, { ...json.card, stage: defaultStage }]);
-        setNewCard({ company: "", sector: "Fintech", value: "", stage: "", responsible: "", notes: "" });
-        setShowNewCard(false);
-        return;
       }
     } catch {}
 
-    // Fallback local (demo)
-    const card: MaCard = {
-      id: `ma-${Date.now()}`,
-      code: `MA-26-${String(cards.length + 1).padStart(3, "0")}`,
-      company: newCard.company,
-      sector: newCard.sector,
-      value: Number(newCard.value),
-      stage: defaultStage,
-      responsible: userName || newCard.responsible,
-      probability: 10,
-      createdAt: new Date().toISOString().split("T")[0],
-      notes: newCard.notes,
-    };
-    setCards(prev => [...prev, card]);
+    // Fallback local se API falhar
+    if (!createdId) {
+      const card: MaCard = {
+        id: `ma-${Date.now()}`,
+        code: `MA-26-${String(cards.length + 1).padStart(3, "0")}`,
+        company: newCard.company,
+        sector: newCard.sector,
+        value: Number(newCard.value),
+        stage: defaultStage,
+        responsible: userName || newCard.responsible,
+        probability: 10,
+        createdAt: new Date().toISOString().split("T")[0],
+        notes: newCard.notes,
+      };
+      setCards(prev => [...prev, card]);
+    }
+
+    // Upload dos arquivos pendentes (se houver deal salvo no banco)
+    if (createdId && pendingFiles.length > 0) {
+      for (const file of pendingFiles) {
+        const form = new FormData();
+        form.append("file", file);
+        form.append("deal_id", createdId);
+        form.append("doc_id", `doc_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`);
+        await fetch("/api/ma/documents", { method: "POST", body: form }).catch(() => {});
+      }
+    }
+
     setNewCard({ company: "", sector: "Fintech", value: "", stage: "", responsible: "", notes: "" });
+    setPendingFiles([]);
+    setIsCreating(false);
     setShowNewCard(false);
   };
 
@@ -435,6 +474,100 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
                   />
                 </div>
 
+                {/* ── Documentos do ativo ── */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs font-semibold text-[#7A8FA8] flex items-center gap-1.5">
+                      <FileText size={13} /> Documentos do Ativo
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => detailFileRef.current?.click()}
+                      className="flex items-center gap-1 text-xs text-[#C9A84C] hover:text-[#E8C97A] transition-colors"
+                    >
+                      <Upload size={12} /> Anexar
+                    </button>
+                  </div>
+                  <input
+                    ref={detailFileRef}
+                    type="file"
+                    multiple
+                    className="hidden"
+                    onChange={async (e) => {
+                      const files = Array.from(e.target.files ?? []);
+                      if (!files.length || !selectedCard) return;
+                      if (detailFileRef.current) detailFileRef.current.value = "";
+                      for (const file of files) {
+                        const docId = `doc_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+                        setUploadingDoc(docId);
+                        const form = new FormData();
+                        form.append("file", file);
+                        form.append("deal_id", selectedCard.id);
+                        form.append("doc_id", docId);
+                        try {
+                          const res = await fetch("/api/ma/documents", { method: "POST", body: form });
+                          const json = await res.json();
+                          if (json.ok && json.document) {
+                            setCardDocs(prev => [...prev, { ...json.document }]);
+                          } else {
+                            alert(json.error ?? "Erro ao enviar arquivo");
+                          }
+                        } catch { alert("Erro ao enviar arquivo"); }
+                        setUploadingDoc(null);
+                      }
+                    }}
+                  />
+                  {docsLoading ? (
+                    <div className="flex items-center gap-2 py-3 text-xs text-[#7A8FA8]">
+                      <div className="w-3 h-3 border-2 border-[#C9A84C]/40 border-t-[#C9A84C] rounded-full animate-spin" />
+                      Carregando documentos...
+                    </div>
+                  ) : cardDocs.length === 0 && !uploadingDoc ? (
+                    <p className="text-xs text-[#5A7490] py-2">Nenhum documento anexado.</p>
+                  ) : (
+                    <div className="space-y-1.5 max-h-40 overflow-y-auto">
+                      {cardDocs.map((doc) => (
+                        <div key={doc.doc_id} className="flex items-center gap-2 px-2.5 py-2 rounded-lg bg-[#0F1E35] border border-[#122036]">
+                          <Paperclip size={12} className="text-[#C9A84C] flex-shrink-0" />
+                          <span className="text-xs text-[#E8EDF5] flex-1 truncate">{doc.file_name}</span>
+                          {doc.url && (
+                            <>
+                              <a href={doc.url} target="_blank" rel="noopener noreferrer" title="Abrir" className="text-[#7A8FA8] hover:text-[#C9A84C] transition-colors">
+                                <ExternalLink size={12} />
+                              </a>
+                              <button
+                                onClick={() => {
+                                  navigator.clipboard.writeText(doc.url!);
+                                  setCopiedDoc(doc.doc_id);
+                                  setTimeout(() => setCopiedDoc(null), 2000);
+                                }}
+                                title="Copiar link" className="text-[#7A8FA8] hover:text-[#C9A84C] transition-colors"
+                              >
+                                {copiedDoc === doc.doc_id ? <CheckCheck size={12} className="text-emerald-400" /> : <Copy size={12} />}
+                              </button>
+                            </>
+                          )}
+                          <button
+                            onClick={async () => {
+                              await fetch(`/api/ma/documents?deal_id=${selectedCard!.id}&doc_id=${encodeURIComponent(doc.doc_id)}`, { method: "DELETE" });
+                              setCardDocs(prev => prev.filter(d => d.doc_id !== doc.doc_id));
+                            }}
+                            className="text-[#7A8FA8] hover:text-red-400 transition-colors"
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
+                      ))}
+                      {uploadingDoc && (
+                        <div className="flex items-center gap-2 px-2.5 py-2 rounded-lg bg-[#0F1E35] border border-dashed border-[#C9A84C]/40">
+                          <div className="w-3 h-3 border-2 border-[#C9A84C]/40 border-t-[#C9A84C] rounded-full animate-spin flex-shrink-0" />
+                          <span className="text-xs text-[#7A8FA8]">Enviando...</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
                 {nextStageData && (
                   <button
                     onClick={() => handleAdvanceStage(selectedCard)}
@@ -523,19 +656,57 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
                 className="w-full rounded-lg border border-[#122036] bg-[#0F1E35] text-[#E8EDF5] text-sm px-3 py-2 placeholder:text-[#7A8FA8] focus:outline-none focus:border-[#C9A84C] transition-colors resize-none"
               />
             </div>
+            {/* Anexos do ativo */}
+            <div>
+              <label className="text-xs text-[#7A8FA8] mb-1.5 block">Documentos do Ativo</label>
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                className="hidden"
+                onChange={e => {
+                  const files = Array.from(e.target.files ?? []);
+                  setPendingFiles(prev => [...prev, ...files]);
+                  if (fileInputRef.current) fileInputRef.current.value = "";
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="w-full flex items-center justify-center gap-2 rounded-lg border border-dashed border-[#C9A84C]/40 bg-[#C9A84C]/5 text-[#C9A84C] text-xs py-3 hover:bg-[#C9A84C]/10 transition-colors"
+              >
+                <Upload size={14} /> Adicionar arquivos
+              </button>
+              {pendingFiles.length > 0 && (
+                <div className="mt-2 space-y-1 max-h-32 overflow-y-auto">
+                  {pendingFiles.map((f, i) => (
+                    <div key={i} className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-[#0F1E35] border border-[#122036]">
+                      <Paperclip size={12} className="text-[#C9A84C] flex-shrink-0" />
+                      <span className="text-xs text-[#E8EDF5] flex-1 truncate">{f.name}</span>
+                      <button onClick={() => setPendingFiles(prev => prev.filter((_, j) => j !== i))}>
+                        <Trash2 size={12} className="text-[#7A8FA8] hover:text-red-400 transition-colors" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
             <div className="flex gap-3 pt-2">
               <button
-                onClick={() => setShowNewCard(false)}
+                onClick={() => { setShowNewCard(false); setPendingFiles([]); }}
                 className="flex-1 rounded-lg border border-[#122036] text-[#7A8FA8] text-sm py-2.5 hover:text-[#E8EDF5] transition-colors"
               >
                 Cancelar
               </button>
               <button
                 onClick={handleCreateCard}
-                disabled={!newCard.company || !newCard.value || !newCard.responsible}
-                className="flex-1 rounded-lg bg-[#C9A84C] text-[#09081A] text-sm font-semibold py-2.5 hover:bg-[#E8C97A] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                disabled={!newCard.company || !newCard.value || !newCard.responsible || isCreating}
+                className="flex-1 rounded-lg bg-[#C9A84C] text-[#09081A] text-sm font-semibold py-2.5 hover:bg-[#E8C97A] transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
-                Criar Operação
+                {isCreating ? (
+                  <><div className="w-4 h-4 border-2 border-[#09081A]/40 border-t-[#09081A] rounded-full animate-spin" /> Criando...</>
+                ) : "Criar Operação"}
               </button>
             </div>
           </div>

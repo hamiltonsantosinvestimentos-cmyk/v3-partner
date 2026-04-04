@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useEffect, useTransition, useCallback, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useRef } from "react";
 import {
-  Building2, Plus, ExternalLink, FileText,
-  TrendingUp, DollarSign, Target, Award, RefreshCw,
+  Building2, Plus, FileText,
+  TrendingUp, DollarSign, Target, Award,
+  Paperclip, Trash2, Upload, X,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 
@@ -88,69 +88,82 @@ function KanbanDealCard({ deal, stage }: { deal: MaDeal & { stage: string }; sta
   );
 }
 
+const SECTORS = ["Fintech", "Real Estate", "Agronegócio", "Varejo", "Logística", "Saúde", "Tecnologia", "Indústria", "Energia", "Outro"];
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 interface MaClientProps {
   deals: MaDeal[];
   userId?: string;
-  pipefyCfg?: { token?: string; pipeId?: string; formUrl?: string } | null;
+  userName?: string;
 }
 
-export function MaClient({ deals, userId = "", pipefyCfg }: MaClientProps) {
-  const router = useRouter();
-  const [isPending, startTransition] = useTransition();
-  const [pipefyFormUrl, setPipefyFormUrl] = useState(pipefyCfg?.formUrl ?? "");
-  const [syncError, setSyncError] = useState<string | null>(null);
-  const syncedOnMount = useRef(false);
+export function MaClient({ deals, userId = "", userName = "" }: MaClientProps) {
+  const [localDeals, setLocalDeals] = useState(deals);
+  const [showNewDeal, setShowNewDeal] = useState(false);
+  const [newDeal, setNewDeal] = useState({ company: "", sector: "Fintech", value: "", stage: "prospeccao", responsible: "", notes: "" });
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [isCreating, setIsCreating] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const syncFromPipefy = useCallback(async (token: string, pipeId: string) => {
-    setSyncError(null);
-    try {
-      const res = await fetch("/api/pipefy", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "sync_ma", token, pipeId, userId }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        startTransition(() => router.refresh());
-      } else {
-        setSyncError(data.error ?? "Erro na sincronização");
-      }
-    } catch (e) {
-      setSyncError(e instanceof Error ? e.message : "Erro na sincronização");
-    }
-  }, [router, userId]);
-
-  // Sync automático no mount — prioridade: prop do servidor > localStorage
-  useEffect(() => {
-    if (syncedOnMount.current) return;
-
-    // 1. Config vinda do servidor (app_config no banco)
-    if (pipefyCfg?.token && pipefyCfg?.pipeId) {
-      syncedOnMount.current = true;
-      syncFromPipefy(pipefyCfg.token, pipefyCfg.pipeId);
-      return;
-    }
-
-    // 2. Fallback: localStorage (para admins que configuraram pelo Mesa M&A)
-    try {
-      const saved = localStorage.getItem("v3_pipefy_mesa_ma");
-      if (saved) {
-        const config = JSON.parse(saved);
-        if (config.formUrl) setPipefyFormUrl(config.formUrl);
-        if (config.token && config.pipeId) {
-          syncedOnMount.current = true;
-          syncFromPipefy(config.token, config.pipeId);
-        }
-      }
-    } catch { /* ignore */ }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const normalizedDeals = deals.map(d => ({ ...d, stage: normalizeStage(d.stage) }));
-  const totalValue = deals.reduce((s, d) => s + (d.deal_value ?? 0), 0);
+  const normalizedDeals = localDeals.map(d => ({ ...d, stage: normalizeStage(d.stage) }));
+  const totalValue = localDeals.reduce((s, d) => s + (d.deal_value ?? 0), 0);
   const activeDeals = normalizedDeals.filter(d => d.stage !== "aprovacao").length;
   const closedDeals = normalizedDeals.filter(d => d.stage === "aprovacao").length;
+
+  const handleCreateDeal = async () => {
+    if (!newDeal.company || !newDeal.value) return;
+    setIsCreating(true);
+    let createdId: string | null = null;
+
+    try {
+      const res = await fetch("/api/ma-deals", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          company: newDeal.company,
+          sector: newDeal.sector,
+          value: newDeal.value,
+          notes: newDeal.notes,
+          responsible: newDeal.responsible || userName,
+        }),
+      });
+      const json = await res.json();
+      if (json.card) {
+        createdId = json.card.id;
+        setLocalDeals(prev => [...prev, { ...json.card, stage: newDeal.stage }]);
+      }
+    } catch {}
+
+    if (!createdId) {
+      const deal: MaDeal = {
+        id: `ma-${Date.now()}`,
+        code: `MA-26-${String(localDeals.length + 1).padStart(3, "0")}`,
+        target_company: newDeal.company,
+        sector: newDeal.sector,
+        deal_value: Number(newDeal.value),
+        stage: newDeal.stage,
+        responsible: newDeal.responsible || userName || null,
+        probability_percent: 10,
+        created_at: new Date().toISOString(),
+      };
+      setLocalDeals(prev => [...prev, deal]);
+    }
+
+    if (createdId && pendingFiles.length > 0) {
+      for (const file of pendingFiles) {
+        const form = new FormData();
+        form.append("file", file);
+        form.append("deal_id", createdId);
+        form.append("doc_id", `doc_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`);
+        await fetch("/api/ma/documents", { method: "POST", body: form }).catch(() => {});
+      }
+    }
+
+    setNewDeal({ company: "", sector: "Fintech", value: "", stage: "prospeccao", responsible: "", notes: "" });
+    setPendingFiles([]);
+    setIsCreating(false);
+    setShowNewDeal(false);
+  };
 
   return (
     <div className="space-y-5 animate-fade-in">
@@ -165,43 +178,19 @@ export function MaClient({ deals, userId = "", pipefyCfg }: MaClientProps) {
             <p className="text-xs text-[#5A7490]">Seus deals no pipeline de fusões e aquisições</p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => {
-              syncedOnMount.current = false;
-              startTransition(() => router.refresh());
-            }}
-            disabled={isPending}
-            className="flex items-center gap-1.5 rounded-lg border border-[#122036] bg-[#091221] text-xs px-3 py-2 text-[#5A7490] hover:text-[#C4922E] hover:border-[#C4922E]/40 transition-colors disabled:opacity-50"
-          >
-            <RefreshCw size={13} className={isPending ? "animate-spin" : ""} />
-            {isPending ? "Atualizando..." : "Atualizar"}
-          </button>
-          <button
-            onClick={() => {
-              if (pipefyFormUrl) {
-                window.open(pipefyFormUrl, "_blank");
-              }
-            }}
-            disabled={!pipefyFormUrl}
-            className="flex items-center gap-2 rounded-lg bg-[#C4922E] text-[#050C18] text-xs font-semibold px-4 py-2 hover:bg-[#E5B96A] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <Plus size={14} />
-            Nova Operação
-          </button>
-        </div>
+        <button
+          onClick={() => setShowNewDeal(true)}
+          className="flex items-center gap-2 rounded-lg bg-[#C4922E] text-[#050C18] text-xs font-semibold px-4 py-2 hover:bg-[#E5B96A] transition-colors"
+        >
+          <Plus size={14} />
+          Nova Operação
+        </button>
       </div>
-
-      {syncError && (
-        <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2 text-xs text-red-400">
-          {syncError}
-        </div>
-      )}
 
       {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {[
-          { label: "Total de Deals", value: deals.length, icon: <Target size={16} />, color: "text-purple-400", accent: "#8B5CF6" },
+          { label: "Total de Deals", value: localDeals.length, icon: <Target size={16} />, color: "text-purple-400", accent: "#8B5CF6" },
           { label: "Volume Total", value: formatCurrency(totalValue), icon: <DollarSign size={16} />, color: "text-[#C4922E]", accent: "#C4922E" },
           { label: "Em Andamento", value: activeDeals, icon: <TrendingUp size={16} />, color: "text-amber-400", accent: "#F59E0B" },
           { label: "Concluídos", value: closedDeals, icon: <Award size={16} />, color: "text-emerald-400", accent: "#10B981" },
@@ -225,17 +214,10 @@ export function MaClient({ deals, userId = "", pipefyCfg }: MaClientProps) {
       {normalizedDeals.length === 0 ? (
         <div className="text-center py-16 rounded-2xl border border-dashed border-[#122036]">
           <Building2 size={32} className="text-[#5A7490] mx-auto mb-3 opacity-40" />
-          <p className="text-[#5A7490] text-sm">Nenhuma operação encontrada.</p>
-          {pipefyFormUrl && (
-            <button onClick={() => window.open(pipefyFormUrl, "_blank")} className="mt-4 text-xs text-[#C4922E] hover:underline">
-              + Submeter nova operação via Pipefy
-            </button>
-          )}
-          {!pipefyCfg?.token && (
-            <p className="mt-2 text-xs text-[#5A7490]">
-              Configure o Pipefy na <span className="text-[#C4922E]">Mesa M&A</span> para sincronizar.
-            </p>
-          )}
+          <p className="text-[#5A7490] text-sm mb-3">Nenhuma operação encontrada.</p>
+          <button onClick={() => setShowNewDeal(true)} className="text-xs text-[#C4922E] hover:underline">
+            + Cadastrar nova operação
+          </button>
         </div>
       ) : (
         <div className="flex gap-4 overflow-x-auto pb-4">
@@ -267,29 +249,100 @@ export function MaClient({ deals, userId = "", pipefyCfg }: MaClientProps) {
         </div>
       )}
 
-      {/* Aviso se formUrl não configurado */}
-      {!pipefyFormUrl && normalizedDeals.length > 0 && (
-        <div className="flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/5 p-4">
-          <FileText size={18} className="text-amber-400 flex-shrink-0 mt-0.5" />
-          <div>
-            <p className="text-sm font-semibold text-amber-400">Formulário Pipefy não configurado</p>
-            <p className="text-xs text-[#5A7490] mt-0.5">
-              Acesse <span className="text-[#C4922E]">Mesa M&A → aba Pipefy</span> e configure o link do formulário público para submeter novos deals.
-            </p>
-          </div>
-        </div>
-      )}
+      {/* ── Modal Nova Operação ── */}
+      {showNewDeal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-[#091221] border border-[#122036] rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-[#122036]">
+              <h3 className="text-sm font-bold text-[#E8EDF5]">Nova Operação M&A</h3>
+              <button onClick={() => { setShowNewDeal(false); setPendingFiles([]); }} className="text-[#7A8FA8] hover:text-[#E8EDF5] transition-colors">
+                <X size={16} />
+              </button>
+            </div>
+            <div className="px-6 py-5 space-y-3">
+              <div>
+                <label className="text-xs text-[#7A8FA8] mb-1.5 block">Empresa *</label>
+                <input value={newDeal.company} onChange={e => setNewDeal(p => ({ ...p, company: e.target.value }))}
+                  placeholder="Nome da empresa alvo"
+                  className="w-full rounded-lg border border-[#122036] bg-[#0F1E35] text-[#E8EDF5] text-sm px-3 py-2.5 placeholder:text-[#7A8FA8] focus:outline-none focus:border-[#C9A84C] transition-colors" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-[#7A8FA8] mb-1.5 block">Setor</label>
+                  <select value={newDeal.sector} onChange={e => setNewDeal(p => ({ ...p, sector: e.target.value }))}
+                    className="w-full rounded-lg border border-[#122036] bg-[#0F1E35] text-[#E8EDF5] text-sm px-3 py-2.5 focus:outline-none focus:border-[#C9A84C] transition-colors">
+                    {SECTORS.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs text-[#7A8FA8] mb-1.5 block">Etapa</label>
+                  <select value={newDeal.stage} onChange={e => setNewDeal(p => ({ ...p, stage: e.target.value }))}
+                    className="w-full rounded-lg border border-[#122036] bg-[#0F1E35] text-[#E8EDF5] text-sm px-3 py-2.5 focus:outline-none focus:border-[#C9A84C] transition-colors">
+                    {MA_PIPELINE.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="text-xs text-[#7A8FA8] mb-1.5 block">Valor Estimado (R$) *</label>
+                <input type="number" value={newDeal.value} onChange={e => setNewDeal(p => ({ ...p, value: e.target.value }))}
+                  placeholder="Ex: 50000000"
+                  className="w-full rounded-lg border border-[#122036] bg-[#0F1E35] text-[#E8EDF5] text-sm px-3 py-2.5 placeholder:text-[#7A8FA8] focus:outline-none focus:border-[#C9A84C] transition-colors" />
+              </div>
+              <div>
+                <label className="text-xs text-[#7A8FA8] mb-1.5 block">Responsável</label>
+                <input value={newDeal.responsible} onChange={e => setNewDeal(p => ({ ...p, responsible: e.target.value }))}
+                  placeholder={userName || "Nome do responsável"}
+                  className="w-full rounded-lg border border-[#122036] bg-[#0F1E35] text-[#E8EDF5] text-sm px-3 py-2.5 placeholder:text-[#7A8FA8] focus:outline-none focus:border-[#C9A84C] transition-colors" />
+              </div>
+              <div>
+                <label className="text-xs text-[#7A8FA8] mb-1.5 block">Observações</label>
+                <textarea value={newDeal.notes} onChange={e => setNewDeal(p => ({ ...p, notes: e.target.value }))} rows={2}
+                  placeholder="Contexto inicial da operação..."
+                  className="w-full rounded-lg border border-[#122036] bg-[#0F1E35] text-[#E8EDF5] text-sm px-3 py-2 placeholder:text-[#7A8FA8] focus:outline-none focus:border-[#C9A84C] transition-colors resize-none" />
+              </div>
 
-      {/* Link externo caso tenha formUrl */}
-      {pipefyFormUrl && normalizedDeals.length > 0 && (
-        <div className="flex justify-end">
-          <button
-            onClick={() => window.open(pipefyFormUrl, "_blank")}
-            className="flex items-center gap-2 text-xs text-[#5A7490] hover:text-[#C4922E] transition-colors"
-          >
-            <ExternalLink size={12} />
-            Submeter nova operação via Pipefy
-          </button>
+              {/* Documentos do ativo */}
+              <div>
+                <label className="text-xs text-[#7A8FA8] mb-1.5 block">Documentos do Ativo</label>
+                <input ref={fileInputRef} type="file" multiple className="hidden"
+                  onChange={e => {
+                    const files = Array.from(e.target.files ?? []);
+                    setPendingFiles(prev => [...prev, ...files]);
+                    if (fileInputRef.current) fileInputRef.current.value = "";
+                  }} />
+                <button type="button" onClick={() => fileInputRef.current?.click()}
+                  className="w-full flex items-center justify-center gap-2 rounded-lg border border-dashed border-[#C9A84C]/40 bg-[#C9A84C]/5 text-[#C9A84C] text-xs py-3 hover:bg-[#C9A84C]/10 transition-colors">
+                  <Upload size={14} /> Adicionar arquivos
+                </button>
+                {pendingFiles.length > 0 && (
+                  <div className="mt-2 space-y-1 max-h-32 overflow-y-auto">
+                    {pendingFiles.map((f, i) => (
+                      <div key={i} className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-[#0F1E35] border border-[#122036]">
+                        <Paperclip size={12} className="text-[#C9A84C] flex-shrink-0" />
+                        <span className="text-xs text-[#E8EDF5] flex-1 truncate">{f.name}</span>
+                        <button onClick={() => setPendingFiles(prev => prev.filter((_, j) => j !== i))}>
+                          <Trash2 size={12} className="text-[#7A8FA8] hover:text-red-400 transition-colors" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button onClick={() => { setShowNewDeal(false); setPendingFiles([]); }}
+                  className="flex-1 rounded-lg border border-[#122036] text-[#7A8FA8] text-sm py-2.5 hover:text-[#E8EDF5] transition-colors">
+                  Cancelar
+                </button>
+                <button onClick={handleCreateDeal} disabled={!newDeal.company || !newDeal.value || isCreating}
+                  className="flex-1 rounded-lg bg-[#C4922E] text-[#09081A] text-sm font-semibold py-2.5 hover:bg-[#E5B96A] transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+                  {isCreating
+                    ? <><div className="w-4 h-4 border-2 border-[#09081A]/40 border-t-[#09081A] rounded-full animate-spin" /> Criando...</>
+                    : "Criar Operação"}
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>
