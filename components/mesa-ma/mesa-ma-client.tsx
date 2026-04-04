@@ -1,12 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback, useRef, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import {
-  TrendingUp, Users, Building2, Plus, X, ChevronRight,
-  BarChart2, Mail, Briefcase, Circle, Search, Filter
+  Building2, Plus, X, ChevronRight,
+  BarChart2, Mail, Circle, ExternalLink, FileText, Webhook, RefreshCw,
 } from "lucide-react";
+import { ExportButton } from "@/components/financeiro/export-button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { PipefyConfig } from "@/components/shared/pipefy-config";
+import { PipefyConfig, type PipefyPhase } from "@/components/shared/pipefy-config";
+import { MA_PIPELINE } from "@/components/ma/ma-client";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type MaCard = {
@@ -31,7 +34,10 @@ type MesaOperator = {
   assignedCards: number;
 };
 
+type MaStage = { id: string; label: string; color: string; bg: string };
+
 // ─── Constants ────────────────────────────────────────────────────────────────
+<<<<<<< Updated upstream
 const MA_STAGES = [
   { id: "prospeccao",  label: "Prospecção",    color: "#8B5CF6", bg: "rgba(139,92,246,0.1)" },
   { id: "ioi",         label: "IOI",           color: "#3B82F6", bg: "rgba(59,130,246,0.1)" },
@@ -39,23 +45,46 @@ const MA_STAGES = [
   { id: "proposta",    label: "Proposta",      color: "#C9A84C", bg: "rgba(196,146,46,0.1)" },
   { id: "negociacao",  label: "Negociação",    color: "#EF4444", bg: "rgba(239,68,68,0.1)" },
   { id: "closing",     label: "Closing",       color: "#10B981", bg: "rgba(16,185,129,0.1)" },
+=======
+const STAGE_COLORS = [
+  { color: "#8B5CF6", bg: "rgba(139,92,246,0.1)" },
+  { color: "#3B82F6", bg: "rgba(59,130,246,0.1)" },
+  { color: "#F59E0B", bg: "rgba(245,158,11,0.1)" },
+  { color: "#C4922E", bg: "rgba(196,146,46,0.1)" },
+  { color: "#EF4444", bg: "rgba(239,68,68,0.1)" },
+  { color: "#10B981", bg: "rgba(16,185,129,0.1)" },
+  { color: "#EC4899", bg: "rgba(236,72,153,0.1)" },
+  { color: "#06B6D4", bg: "rgba(6,182,212,0.1)" },
+>>>>>>> Stashed changes
 ];
 
-const DEMO_CARDS: MaCard[] = [
-  { id: "ma-001", code: "MA-26-001", company: "TechFinance Ltda", sector: "Fintech", value: 45000000, stage: "prospeccao", responsible: "Carlos Andrade", probability: 20, createdAt: "2026-03-01" },
-  { id: "ma-002", code: "MA-26-002", company: "Grupo Imobiliário SP", sector: "Real Estate", value: 120000000, stage: "ioi", responsible: "Ana Lima", probability: 45, createdAt: "2026-03-05" },
-  { id: "ma-003", code: "MA-26-003", company: "Agro Invest MG", sector: "Agronegócio", value: 38000000, stage: "due_dilig", responsible: "Roberto Costa", probability: 65, createdAt: "2026-02-20" },
-  { id: "ma-004", code: "MA-26-004", company: "Retail Express", sector: "Varejo", value: 22000000, stage: "proposta", responsible: "Fernanda Silva", probability: 75, createdAt: "2026-02-15" },
-  { id: "ma-005", code: "MA-26-005", company: "LogTech Brasil", sector: "Logística", value: 55000000, stage: "negociacao", responsible: "Pedro Rocha", probability: 85, createdAt: "2026-02-01" },
-  { id: "ma-006", code: "MA-26-006", company: "MedTech Sul", sector: "Saúde", value: 31000000, stage: "closing", responsible: "Juliana Peres", probability: 95, createdAt: "2026-01-15" },
-];
+const MA_STAGES_DEFAULT: MaStage[] = MA_PIPELINE.map(s => ({
+  id: s.id,
+  label: s.label,
+  color: s.color,
+  bg: s.bg.replace("0.12", "0.1"),
+}));
 
-const DEMO_OPERATORS: MesaOperator[] = [
-  { id: "op-ma-001", name: "Ana Lima", email: "ana.lima@v3partners.com", role: "Analista Sênior", status: "online", assignedCards: 2 },
-  { id: "op-ma-002", name: "Roberto Costa", email: "roberto.costa@v3partners.com", role: "Analista", status: "online", assignedCards: 1 },
-  { id: "op-ma-003", name: "Pedro Rocha", email: "pedro.rocha@v3partners.com", role: "Especialista M&A", status: "away", assignedCards: 2 },
-  { id: "op-ma-004", name: "Fernanda Silva", email: "fernanda.silva@v3partners.com", role: "Analista Jr.", status: "offline", assignedCards: 1 },
-];
+// Mapeia nome da fase do Pipefy para o ID de estágio padrão do pipeline
+function mapPhaseNameToStageId(name: string): string {
+  const n = name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  if (n.includes("prospec")) return "prospeccao";
+  if (n.includes("qualif") || n.includes("qualificacao")) return "qualificacao";
+  if (n.includes("viabil") || n.includes("ioi") || n.includes("intenc")) return "viabilidade";
+  if (n.includes("estrutur") || n.includes("oferta") || n.includes("proposta")) return "estruturacao";
+  if (n.includes("negoc")) return "negociacao";
+  if (n.includes("due") || n.includes("dilig") || n.includes("auditoria")) return "due_diligence";
+  if (n.includes("aprova") || n.includes("fech") || n.includes("closing") || n.includes("conclu") || n.includes("won") || n.includes("ganho")) return "aprovacao";
+  return "prospeccao";
+}
+
+function pipefyPhasesToStages(phases: PipefyPhase[]): MaStage[] {
+  return phases.map((p, i) => ({
+    id: mapPhaseNameToStageId(p.name),
+    label: p.name,
+    ...STAGE_COLORS[i % STAGE_COLORS.length],
+  }));
+}
 
 const SECTORS = ["Fintech", "Real Estate", "Agronegócio", "Varejo", "Logística", "Saúde", "Tecnologia", "Indústria", "Energia", "Outro"];
 const ROLES_MA = ["Analista Jr.", "Analista", "Analista Sênior", "Especialista M&A", "Gestor"];
@@ -73,11 +102,7 @@ function initials(name: string) {
 }
 
 function formatDate(iso: string) {
-  try {
-    return new Date(iso).toLocaleDateString("pt-BR");
-  } catch {
-    return iso;
-  }
+  try { return new Date(iso).toLocaleDateString("pt-BR"); } catch { return iso; }
 }
 
 function probColor(p: number) {
@@ -98,15 +123,15 @@ function statusLabel(s: MesaOperator["status"]) {
   return "Offline";
 }
 
-function nextStage(current: string): string | null {
-  const idx = MA_STAGES.findIndex(s => s.id === current);
-  if (idx === -1 || idx === MA_STAGES.length - 1) return null;
-  return MA_STAGES[idx + 1].id;
+function nextStage(current: string, stages: MaStage[]): string | null {
+  const idx = stages.findIndex(s => s.id === current);
+  if (idx === -1 || idx === stages.length - 1) return null;
+  return stages[idx + 1].id;
 }
 
-// ─── Subcomponents ────────────────────────────────────────────────────────────
-function KanbanCardItem({ card, onClick }: { card: MaCard; onClick: () => void }) {
-  const stage = MA_STAGES.find(s => s.id === card.stage);
+// ─── Kanban Card ──────────────────────────────────────────────────────────────
+function KanbanCardItem({ card, stages, onClick }: { card: MaCard; stages: MaStage[]; onClick: () => void }) {
+  const stage = stages.find(s => s.id === card.stage);
   return (
     <div
       onClick={onClick}
@@ -122,8 +147,12 @@ function KanbanCardItem({ card, onClick }: { card: MaCard; onClick: () => void }
           {card.sector}
         </span>
       </div>
+<<<<<<< Updated upstream
       <p className="text-sm font-bold text-[#C9A84C] mb-2">{formatM(card.value)}</p>
       {/* Probability bar */}
+=======
+      <p className="text-sm font-bold text-[#C4922E] mb-2">{formatM(card.value)}</p>
+>>>>>>> Stashed changes
       <div className="mb-2">
         <div className="flex items-center justify-between mb-1">
           <span className="text-[10px] text-[#7A8FA8]">Probabilidade</span>
@@ -133,52 +162,136 @@ function KanbanCardItem({ card, onClick }: { card: MaCard; onClick: () => void }
           <div className="h-full rounded-full transition-all" style={{ width: `${card.probability}%`, background: probColor(card.probability) }} />
         </div>
       </div>
+<<<<<<< Updated upstream
       <p className="text-[10px] text-[#7A8FA8]">{card.responsible}</p>
+=======
+      {card.responsible && card.responsible !== "—" && (
+        <p className="text-[10px] text-[#5A7490] mt-1 flex items-center gap-1">
+          <span className="w-1.5 h-1.5 rounded-full bg-[#C4922E]/60 inline-block" />
+          {card.responsible}
+        </p>
+      )}
+>>>>>>> Stashed changes
     </div>
   );
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
-export function MesaMaClient({ userRole }: { userRole: string }) {
+export function MesaMaClient({ userRole, initialDeals = [], userId = "", userName = "" }: { userRole: string; initialDeals?: MaCard[]; userId?: string; userName?: string }) {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<"kanban" | "operadores" | "pipefy">("kanban");
-  const [cards, setCards] = useState<MaCard[]>([]);
+  const [cards, setCards] = useState<MaCard[]>(initialDeals);
   const [operators, setOperators] = useState<MesaOperator[]>([]);
   const [selectedCard, setSelectedCard] = useState<MaCard | null>(null);
   const [showNewCard, setShowNewCard] = useState(false);
   const [showNewOp, setShowNewOp] = useState(false);
+  const [showPipefyChoice, setShowPipefyChoice] = useState(false);
+  const [pipefyFormUrl, setPipefyFormUrl] = useState("");
+  const [maStages, setMaStages] = useState<MaStage[]>(MA_STAGES_DEFAULT);
+  const [syncing, setSyncing] = useState(false);
+  const [lastSyncCount, setLastSyncCount] = useState<number | null>(null);
+  const [isPending, startTransition] = useTransition();
+  const syncedOnMount = useRef(false);
 
-  // New card form
-  const [newCard, setNewCard] = useState({ company: "", sector: "Fintech", value: "", stage: "prospeccao", responsible: "", notes: "" });
-  // New operator form
+  const syncFromPipefy = useCallback(async (token: string, pipeId: string, silent = false) => {
+    if (!token || !pipeId) return;
+    if (!silent) setSyncing(true);
+    try {
+      const res = await fetch("/api/pipefy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "sync_ma", token, pipeId, userId }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setLastSyncCount(data.synced ?? 0);
+        // Sempre atualiza — independente de synced > 0
+        startTransition(() => router.refresh());
+      }
+    } catch {}
+    if (!silent) setSyncing(false);
+  }, [router, userId]);
+
+  // Atualiza cards quando initialDeals mudar (após router.refresh)
+  useEffect(() => {
+    setCards(initialDeals);
+  }, [initialDeals]);
+
+  // Load Pipefy config e auto-sync apenas na primeira montagem
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("v3_pipefy_mesa_ma");
+      if (saved) {
+        const config = JSON.parse(saved);
+        if (config.formUrl) setPipefyFormUrl(config.formUrl);
+        if (config.savedPhases?.length) {
+          setMaStages(pipefyPhasesToStages(config.savedPhases));
+        }
+        // Auto-sync apenas uma vez ao montar (evita loop infinito)
+        if (config.token && config.pipeId && !syncedOnMount.current) {
+          syncedOnMount.current = true;
+          syncFromPipefy(config.token, config.pipeId, true);
+        }
+      }
+    } catch {}
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // New card form — stage defaults to first stage dynamically
+  const [newCard, setNewCard] = useState({ company: "", sector: "Fintech", value: "", stage: "", responsible: "", notes: "" });
   const [newOp, setNewOp] = useState({ name: "", email: "", role: "Analista" });
 
-  // KPIs
   const totalValue = cards.reduce((a, c) => a + c.value, 0);
   const avgProb = cards.length ? Math.round(cards.reduce((a, c) => a + c.probability, 0) / cards.length) : 0;
+  const lastStageId = maStages[maStages.length - 1]?.id ?? "closing";
 
   const handleAdvanceStage = (card: MaCard) => {
-    const next = nextStage(card.stage);
+    const next = nextStage(card.stage, maStages);
     if (!next) return;
     setCards(prev => prev.map(c => c.id === card.id ? { ...c, stage: next } : c));
     setSelectedCard(prev => prev ? { ...prev, stage: next } : null);
   };
 
-  const handleCreateCard = () => {
-    if (!newCard.company || !newCard.value || !newCard.responsible) return;
+  const handleCreateCard = async () => {
+    if (!newCard.company || !newCard.value) return;
+    const defaultStage = newCard.stage || maStages[0]?.id || "prospeccao";
+
+    // Salva no Supabase via API
+    try {
+      const res = await fetch("/api/ma-deals", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          company: newCard.company,
+          sector: newCard.sector,
+          value: newCard.value,
+          notes: newCard.notes,
+        }),
+      });
+      const json = await res.json();
+      if (json.card) {
+        setCards(prev => [...prev, { ...json.card, stage: defaultStage }]);
+        setNewCard({ company: "", sector: "Fintech", value: "", stage: "", responsible: "", notes: "" });
+        setShowNewCard(false);
+        return;
+      }
+    } catch {}
+
+    // Fallback local (demo)
     const card: MaCard = {
       id: `ma-${Date.now()}`,
       code: `MA-26-${String(cards.length + 1).padStart(3, "0")}`,
       company: newCard.company,
       sector: newCard.sector,
       value: Number(newCard.value),
-      stage: newCard.stage,
-      responsible: newCard.responsible,
+      stage: defaultStage,
+      responsible: userName || newCard.responsible,
       probability: 10,
       createdAt: new Date().toISOString().split("T")[0],
       notes: newCard.notes,
     };
     setCards(prev => [...prev, card]);
-    setNewCard({ company: "", sector: "Fintech", value: "", stage: "prospeccao", responsible: "", notes: "" });
+    setNewCard({ company: "", sector: "Fintech", value: "", stage: "", responsible: "", notes: "" });
     setShowNewCard(false);
   };
 
@@ -195,6 +308,14 @@ export function MesaMaClient({ userRole }: { userRole: string }) {
     setOperators(prev => [...prev, op]);
     setNewOp({ name: "", email: "", role: "Analista" });
     setShowNewOp(false);
+  };
+
+  const handleNovaOperacao = () => {
+    if (pipefyFormUrl) {
+      setShowPipefyChoice(true);
+    } else {
+      setShowNewCard(true);
+    }
   };
 
   const tabs = [
@@ -214,6 +335,7 @@ export function MesaMaClient({ userRole }: { userRole: string }) {
             </div>
             <div>
               <h1 className="text-base font-bold text-[#E8EDF5]">Mesa M&A</h1>
+<<<<<<< Updated upstream
               <p className="text-xs text-[#7A8FA8]">Fusões & Aquisições</p>
             </div>
           </div>
@@ -225,6 +347,61 @@ export function MesaMaClient({ userRole }: { userRole: string }) {
               <Plus size={14} />
               Nova Operação
             </button>
+=======
+              <p className="text-xs text-[#5A7490]">
+                Fusões & Aquisições
+                {maStages !== MA_STAGES_DEFAULT && (
+                  <span className="ml-2 text-[#C4922E]">· Etapas do Pipefy</span>
+                )}
+              </p>
+            </div>
+          </div>
+          {activeTab === "kanban" && (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => {
+                  try {
+                    const saved = localStorage.getItem("v3_pipefy_mesa_ma");
+                    if (saved) {
+                      const config = JSON.parse(saved);
+                      if (config.token && config.pipeId) {
+                        syncFromPipefy(config.token, config.pipeId, false);
+                        return;
+                      }
+                    }
+                  } catch {}
+                  router.refresh();
+                }}
+                disabled={syncing}
+                className="flex items-center gap-1.5 rounded-lg border border-[#122036] bg-[#0F1E35] text-xs px-3 py-2 text-[#5A7490] hover:text-[#C4922E] hover:border-[#C4922E]/40 transition-colors disabled:opacity-50"
+                title="Sincronizar com Pipefy"
+              >
+                <RefreshCw size={13} className={syncing ? "animate-spin" : ""} />
+                {syncing ? "Sincronizando..." : lastSyncCount !== null ? `Atualizado (${lastSyncCount})` : "Sincronizar"}
+              </button>
+              <ExportButton opts={{
+                titulo: "Pipeline M&A",
+                orientacao: "landscape",
+                colunas: [
+                  { header: "Código", key: "code", width: 14 },
+                  { header: "Empresa", key: "target_company", width: 30 },
+                  { header: "Setor", key: "sector", width: 18 },
+                  { header: "Valor", key: "deal_value", format: "moeda", width: 20 },
+                  { header: "Stage", key: "stage", width: 16 },
+                  { header: "Probabilidade", key: "probability_percent", format: "percent", width: 14 },
+                  { header: "Criado em", key: "created_at", format: "date", width: 14 },
+                ],
+                dados: cards,
+              }} />
+              <button
+                onClick={handleNovaOperacao}
+                className="flex items-center gap-2 rounded-lg bg-[#C4922E] text-[#050C18] text-xs font-semibold px-4 py-2 hover:bg-[#E5B96A] transition-colors"
+              >
+                <Plus size={14} />
+                Nova Operação
+              </button>
+            </div>
+>>>>>>> Stashed changes
           )}
           {activeTab === "operadores" && (
             <button
@@ -270,8 +447,13 @@ export function MesaMaClient({ userRole }: { userRole: string }) {
                 <p className="text-2xl font-bold text-[#C9A84C]">{formatM(totalValue)}</p>
               </div>
               <div className="rounded-xl border border-[#122036] bg-[#091221] p-4">
+<<<<<<< Updated upstream
                 <p className="text-xs text-[#7A8FA8] mb-1">Em Closing</p>
                 <p className="text-2xl font-bold text-emerald-400">{cards.filter(c => c.stage === "closing").length}</p>
+=======
+                <p className="text-xs text-[#5A7490] mb-1">{maStages[maStages.length - 1]?.label ?? "Closing"}</p>
+                <p className="text-2xl font-bold text-emerald-400">{cards.filter(c => c.stage === lastStageId).length}</p>
+>>>>>>> Stashed changes
               </div>
               <div className="rounded-xl border border-[#122036] bg-[#091221] p-4">
                 <p className="text-xs text-[#7A8FA8] mb-1">Prob. Média</p>
@@ -281,11 +463,10 @@ export function MesaMaClient({ userRole }: { userRole: string }) {
 
             {/* Kanban Board */}
             <div className="flex gap-4 overflow-x-auto pb-4">
-              {MA_STAGES.map(stage => {
+              {maStages.map(stage => {
                 const stageCards = cards.filter(c => c.stage === stage.id);
                 return (
                   <div key={stage.id} className="flex-shrink-0 w-64">
-                    {/* Column header */}
                     <div className="flex items-center gap-2 mb-3 px-1">
                       <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: stage.color }} />
                       <span className="text-xs font-semibold text-[#E8EDF5] flex-1">{stage.label}</span>
@@ -294,10 +475,14 @@ export function MesaMaClient({ userRole }: { userRole: string }) {
                         {stageCards.length}
                       </span>
                     </div>
+<<<<<<< Updated upstream
                     {/* Cards */}
                     <div className="space-y-2 min-h-[100px] rounded-xl border border-[#122036]/60 bg-[#09081A]/50 p-2">
+=======
+                    <div className="space-y-2 min-h-[100px] rounded-xl border border-[#122036]/60 bg-[#050C18]/50 p-2">
+>>>>>>> Stashed changes
                       {stageCards.map(card => (
-                        <KanbanCardItem key={card.id} card={card} onClick={() => setSelectedCard(card)} />
+                        <KanbanCardItem key={card.id} card={card} stages={maStages} onClick={() => setSelectedCard(card)} />
                       ))}
                       {stageCards.length === 0 && (
                         <div className="h-16 flex items-center justify-center">
@@ -315,6 +500,7 @@ export function MesaMaClient({ userRole }: { userRole: string }) {
         {/* ── OPERADORES TAB ─────────────────────────────────── */}
         {activeTab === "operadores" && (
           <div>
+<<<<<<< Updated upstream
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               {operators.map(op => (
                 <div key={op.id} className="rounded-xl border border-[#122036] bg-[#091221] p-5 relative group hover:border-[#C9A84C]/40 transition-colors">
@@ -333,13 +519,40 @@ export function MesaMaClient({ userRole }: { userRole: string }) {
                     <div className="relative">
                       <div className="w-11 h-11 rounded-full bg-[#C9A84C]/20 flex items-center justify-center">
                         <span className="text-sm font-bold text-[#C9A84C]">{initials(op.name)}</span>
+=======
+            {operators.length === 0 ? (
+              <div className="text-center py-16 text-[#5A7490] text-sm">
+                Nenhum operador cadastrado. Clique em &quot;Adicionar Operador&quot; para começar.
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {operators.map(op => (
+                  <div key={op.id} className="rounded-xl border border-[#122036] bg-[#091221] p-5 relative group hover:border-[#C4922E]/40 transition-colors">
+                    {userRole === "ADMIN" && (
+                      <button
+                        onClick={() => setOperators(prev => prev.filter(o => o.id !== op.id))}
+                        className="absolute top-3 right-3 text-[#5A7490] hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
+                      >
+                        <X size={14} />
+                      </button>
+                    )}
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className="relative">
+                        <div className="w-11 h-11 rounded-full bg-[#C4922E]/20 flex items-center justify-center">
+                          <span className="text-sm font-bold text-[#C4922E]">{initials(op.name)}</span>
+                        </div>
+                        <div
+                          className={`absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-[#091221] ${op.status === "online" ? "animate-pulse" : ""}`}
+                          style={{ background: statusColor(op.status) }}
+                        />
                       </div>
-                      {/* Status dot */}
-                      <div
-                        className={`absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-[#091221] ${op.status === "online" ? "animate-pulse" : ""}`}
-                        style={{ background: statusColor(op.status) }}
-                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-[#E8EDF5] truncate">{op.name}</p>
+                        <p className="text-xs text-[#5A7490] truncate">{op.role}</p>
+>>>>>>> Stashed changes
+                      </div>
                     </div>
+<<<<<<< Updated upstream
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold text-[#E8EDF5] truncate">{op.name}</p>
                       <p className="text-xs text-[#7A8FA8] truncate">{op.role}</p>
@@ -366,20 +579,51 @@ export function MesaMaClient({ userRole }: { userRole: string }) {
                 </div>
               ))}
             </div>
+=======
+                    <div className="flex items-center gap-1.5 mb-3">
+                      <Circle size={7} fill={statusColor(op.status)} stroke="none" />
+                      <span className="text-xs" style={{ color: statusColor(op.status) }}>{statusLabel(op.status)}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 mb-3">
+                      <Mail size={11} className="text-[#5A7490]" />
+                      <span className="text-[11px] text-[#5A7490] truncate">{op.email}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <BarChart2 size={11} className="text-[#5A7490]" />
+                      <span className="text-xs text-[#5A7490]">{op.assignedCards} card{op.assignedCards !== 1 ? "s" : ""} atribuído{op.assignedCards !== 1 ? "s" : ""}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+>>>>>>> Stashed changes
           </div>
         )}
 
         {/* ── PIPEFY TAB ─────────────────────────────────────── */}
         {activeTab === "pipefy" && (
           <div>
+<<<<<<< Updated upstream
             <div className="mb-4">
               <h3 className="text-sm font-semibold text-[#E8EDF5] mb-1">Integração Pipefy — Mesa M&A</h3>
               <p className="text-xs text-[#7A8FA8]">Configure a sincronização das operações M&A com o Pipefy</p>
+=======
+            <div className="mb-4 flex items-start gap-3 p-4 rounded-xl border border-[#C4922E]/20 bg-[#C4922E]/5">
+              <Webhook size={15} className="text-[#E5B96A] mt-0.5 flex-shrink-0" />
+              <div>
+                <p className="text-sm font-semibold text-[#E5B96A] mb-1">Integração Pipefy — Mesa M&A</p>
+                <p className="text-xs text-[#5A7490]">
+                  Conecte ao seu pipe do Pipefy. As etapas carregadas substituem automaticamente as colunas do Kanban.
+                  Cole a URL do formulário público para agilizar a criação de novas operações.
+                </p>
+              </div>
+>>>>>>> Stashed changes
             </div>
             <PipefyConfig
               mesaName="M&A"
               storageKey="mesa_ma"
-              stageMapping={MA_STAGES.map(s => ({ localStage: s.id, label: s.label }))}
+              stageMapping={maStages.map(s => ({ localStage: s.id, label: s.label }))}
+              syncAction="sync_ma"
             />
           </div>
         )}
@@ -389,15 +633,36 @@ export function MesaMaClient({ userRole }: { userRole: string }) {
       <Dialog open={!!selectedCard} onOpenChange={open => { if (!open) setSelectedCard(null); }}>
         <DialogContent className="bg-[#091221] border border-[#122036] text-[#E8EDF5] max-w-lg">
           <DialogHeader>
+<<<<<<< Updated upstream
             <DialogTitle className="text-[#E8EDF5]">
               {selectedCard?.company}
               <span className="ml-2 text-xs font-normal text-[#7A8FA8]">{selectedCard?.code}</span>
+=======
+            <DialogTitle className="text-[#E8EDF5] flex items-center justify-between">
+              <span>
+                {selectedCard?.company}
+                <span className="ml-2 text-xs font-normal text-[#5A7490]">{selectedCard?.code}</span>
+              </span>
+              {["ADMIN"].includes(userRole) && selectedCard && (
+                <button
+                  onClick={async () => {
+                    if (!confirm(`Excluir permanentemente o deal "${selectedCard.company}"?`)) return;
+                    await fetch(`/api/ma-deals?id=${selectedCard.id}`, { method: "DELETE" });
+                    setCards(prev => prev.filter(c => c.id !== selectedCard.id));
+                    setSelectedCard(null);
+                  }}
+                  className="text-xs text-red-400 hover:text-red-300 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 rounded px-2 py-1 transition-colors"
+                >
+                  Excluir
+                </button>
+              )}
+>>>>>>> Stashed changes
             </DialogTitle>
           </DialogHeader>
           {selectedCard && (() => {
-            const stage = MA_STAGES.find(s => s.id === selectedCard.stage);
-            const next = nextStage(selectedCard.stage);
-            const nextStageData = next ? MA_STAGES.find(s => s.id === next) : null;
+            const stage = maStages.find(s => s.id === selectedCard.stage);
+            const nextId = nextStage(selectedCard.stage, maStages);
+            const nextStageData = nextId ? maStages.find(s => s.id === nextId) : null;
             return (
               <div className="space-y-4 mt-2">
                 <div className="grid grid-cols-2 gap-3">
@@ -412,7 +677,7 @@ export function MesaMaClient({ userRole }: { userRole: string }) {
                   <div className="rounded-lg bg-[#0F1E35] border border-[#122036] p-3">
                     <p className="text-xs text-[#7A8FA8] mb-1">Etapa atual</p>
                     <span className="text-xs px-2 py-0.5 rounded-full" style={{ color: stage?.color, background: stage?.bg }}>
-                      {stage?.label}
+                      {stage?.label ?? selectedCard.stage}
                     </span>
                   </div>
                   <div className="rounded-lg bg-[#0F1E35] border border-[#122036] p-3">
@@ -429,7 +694,6 @@ export function MesaMaClient({ userRole }: { userRole: string }) {
                   </div>
                 </div>
 
-                {/* Notes */}
                 <div>
                   <label className="text-xs text-[#7A8FA8] mb-1.5 block">Observações</label>
                   <textarea
@@ -441,7 +705,6 @@ export function MesaMaClient({ userRole }: { userRole: string }) {
                   />
                 </div>
 
-                {/* Advance stage */}
                 {nextStageData && (
                   <button
                     onClick={() => handleAdvanceStage(selectedCard)}
@@ -453,12 +716,50 @@ export function MesaMaClient({ userRole }: { userRole: string }) {
                 )}
                 {!nextStageData && (
                   <div className="text-center py-2">
-                    <span className="text-xs text-emerald-400">Operação na etapa final (Closing)</span>
+                    <span className="text-xs text-emerald-400">Operação na etapa final — {maStages[maStages.length - 1]?.label}</span>
                   </div>
                 )}
               </div>
             );
           })()}
+        </DialogContent>
+      </Dialog>
+
+      {/* ── PIPEFY CHOICE MODAL ────────────────────────────────── */}
+      <Dialog open={showPipefyChoice} onOpenChange={setShowPipefyChoice}>
+        <DialogContent className="bg-[#091221] border border-[#122036] text-[#E8EDF5] max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-[#E8EDF5]">Nova Operação M&A</DialogTitle>
+          </DialogHeader>
+          <p className="text-xs text-[#5A7490] mt-1 mb-4">Como deseja cadastrar a operação?</p>
+          <div className="flex flex-col gap-3">
+            <button
+              onClick={() => {
+                setShowPipefyChoice(false);
+                window.open(pipefyFormUrl, "_blank");
+              }}
+              className="flex items-center gap-3 rounded-xl border border-[#C4922E]/40 bg-[#C4922E]/10 p-4 hover:bg-[#C4922E]/20 transition-colors text-left"
+            >
+              <ExternalLink size={18} className="text-[#C4922E] flex-shrink-0" />
+              <div>
+                <p className="text-sm font-semibold text-[#E8EDF5]">Formulário Pipefy</p>
+                <p className="text-xs text-[#5A7490]">Abre o formulário público do pipe no Pipefy</p>
+              </div>
+            </button>
+            <button
+              onClick={() => {
+                setShowPipefyChoice(false);
+                setShowNewCard(true);
+              }}
+              className="flex items-center gap-3 rounded-xl border border-[#122036] bg-[#0F1E35] p-4 hover:border-[#C4922E]/30 transition-colors text-left"
+            >
+              <FileText size={18} className="text-[#5A7490] flex-shrink-0" />
+              <div>
+                <p className="text-sm font-semibold text-[#E8EDF5]">Formulário Local</p>
+                <p className="text-xs text-[#5A7490]">Preencha direto na plataforma V3</p>
+              </div>
+            </button>
+          </div>
         </DialogContent>
       </Dialog>
 
@@ -492,11 +793,11 @@ export function MesaMaClient({ userRole }: { userRole: string }) {
               <div>
                 <label className="text-xs text-[#7A8FA8] mb-1.5 block">Etapa</label>
                 <select
-                  value={newCard.stage}
+                  value={newCard.stage || maStages[0]?.id || ""}
                   onChange={e => setNewCard(p => ({ ...p, stage: e.target.value }))}
                   className="w-full rounded-lg border border-[#122036] bg-[#0F1E35] text-[#E8EDF5] text-sm px-3 py-2.5 focus:outline-none focus:border-[#C9A84C] transition-colors"
                 >
-                  {MA_STAGES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+                  {maStages.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
                 </select>
               </div>
             </div>

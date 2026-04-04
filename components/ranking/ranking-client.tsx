@@ -1,52 +1,49 @@
 "use client";
 
 import { useState } from "react";
-import { Trophy, Medal, Crown, TrendingUp, CheckCircle2, DollarSign, Star, Award, Flame, Target } from "lucide-react";
+import { useRouter } from "next/navigation";
+import {
+  Trophy, Medal, Crown, TrendingUp, CheckCircle2, DollarSign,
+  Star, Award, Flame, Target, Zap, Building2,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
-// ─── Demo data ────────────────────────────────────────────────────────────────
-const RANKING_DATA = {
-  propostas: [
-    { id: "1", name: "Rafael Monteiro",     avatar: "RM", role: "Partner",         proposals: 47, growth: +18, region: "SP" },
-    { id: "2", name: "Camila Ferreira",     avatar: "CF", role: "Partner",         proposals: 41, growth: +12, region: "RJ" },
-    { id: "3", name: "Bruno Alves",         avatar: "BA", role: "Partner",         proposals: 38, growth: +9,  region: "MG" },
-    { id: "4", name: "Juliana Costa",       avatar: "JC", role: "Partner",         proposals: 34, growth: +22, region: "SP" },
-    { id: "5", name: "Pedro Henrique",      avatar: "PH", role: "Partner",         proposals: 31, growth: -3,  region: "RS" },
-    { id: "6", name: "Ana Beatriz Lima",    avatar: "AL", role: "Partner",         proposals: 28, growth: +7,  region: "BA" },
-    { id: "7", name: "Lucas Rodrigues",     avatar: "LR", role: "Partner",         proposals: 26, growth: +15, region: "PR" },
-    { id: "8", name: "Fernanda Oliveira",   avatar: "FO", role: "Partner",         proposals: 23, growth: +4,  region: "SC" },
-    { id: "9", name: "Thiago Mendes",       avatar: "TM", role: "Partner",         proposals: 21, growth: -8,  region: "GO" },
-    { id: "10", name: "Mariana Santos",     avatar: "MS", role: "Partner",         proposals: 18, growth: +33, region: "PE" },
-  ],
-  aprovacoes: [
-    { id: "1", name: "Camila Ferreira",     avatar: "CF", role: "Partner",         approved: 34, rate: 83, volume: 8200000 },
-    { id: "2", name: "Rafael Monteiro",     avatar: "RM", role: "Partner",         approved: 31, rate: 66, volume: 12400000 },
-    { id: "3", name: "Juliana Costa",       avatar: "JC", role: "Partner",         approved: 28, rate: 82, volume: 6900000 },
-    { id: "4", name: "Bruno Alves",         avatar: "BA", role: "Partner",         approved: 24, rate: 63, volume: 9800000 },
-    { id: "5", name: "Lucas Rodrigues",     avatar: "LR", role: "Partner",         approved: 20, rate: 77, volume: 5100000 },
-    { id: "6", name: "Ana Beatriz Lima",    avatar: "AL", role: "Partner",         approved: 18, rate: 64, volume: 4400000 },
-    { id: "7", name: "Fernanda Oliveira",   avatar: "FO", role: "Partner",         approved: 16, rate: 70, volume: 3800000 },
-    { id: "8", name: "Pedro Henrique",      avatar: "PH", role: "Partner",         approved: 15, rate: 48, volume: 7200000 },
-    { id: "9", name: "Mariana Santos",      avatar: "MS", role: "Partner",         approved: 11, rate: 61, volume: 2600000 },
-    { id: "10", name: "Thiago Mendes",      avatar: "TM", role: "Partner",         approved: 9,  rate: 43, volume: 1900000 },
-  ],
-  volume: [
-    { id: "1", name: "Rafael Monteiro",     avatar: "RM", role: "Partner",         volume: 12400000, deals: 31, avg: 400000 },
-    { id: "2", name: "Bruno Alves",         avatar: "BA", role: "Partner",         volume: 9800000,  deals: 24, avg: 408333 },
-    { id: "3", name: "Camila Ferreira",     avatar: "CF", role: "Partner",         volume: 8200000,  deals: 34, avg: 241176 },
-    { id: "4", name: "Pedro Henrique",      avatar: "PH", role: "Partner",         volume: 7200000,  deals: 15, avg: 480000 },
-    { id: "5", name: "Juliana Costa",       avatar: "JC", role: "Partner",         volume: 6900000,  deals: 28, avg: 246428 },
-    { id: "6", name: "Lucas Rodrigues",     avatar: "LR", role: "Partner",         volume: 5100000,  deals: 20, avg: 255000 },
-    { id: "7", name: "Ana Beatriz Lima",    avatar: "AL", role: "Partner",         volume: 4400000,  deals: 18, avg: 244444 },
-    { id: "8", name: "Fernanda Oliveira",   avatar: "FO", role: "Partner",         volume: 3800000,  deals: 16, avg: 237500 },
-    { id: "9", name: "Mariana Santos",      avatar: "MS", role: "Partner",         volume: 2600000,  deals: 11, avg: 236363 },
-    { id: "10", name: "Thiago Mendes",      avatar: "TM", role: "Partner",         volume: 1900000,  deals: 9,  avg: 211111 },
-  ],
-};
+// ─── Types ───────────────────────────────────────────────────────────────────
 
-type Tab = "propostas" | "aprovacoes" | "volume";
+export interface RankingScore {
+  id: string; name: string; avatar: string; role: string;
+  score: number; proposals: number; approvals: number; deals: number; volume: number;
+}
+export interface RankingPropostas {
+  id: string; name: string; avatar: string; role: string;
+  proposals: number; growth: number; region: string;
+}
+export interface RankingAprovacoes {
+  id: string; name: string; avatar: string; role: string;
+  approved: number; rate: number; volume: number;
+}
+export interface RankingVolume {
+  id: string; name: string; avatar: string; role: string;
+  volume: number; deals: number; avg: number;
+}
+export interface PartnerGoal {
+  partner_id: string;
+  goal_proposals: number;
+  goal_approvals: number;
+  goal_volume: number;
+  goal_deals: number;
+}
+export interface RankingData {
+  score:      RankingScore[];
+  propostas:  RankingPropostas[];
+  aprovacoes: RankingAprovacoes[];
+  volume:     RankingVolume[];
+}
+
+type Tab = "score" | "propostas" | "aprovacoes" | "volume";
 
 const TABS: { id: Tab; label: string; icon: React.ReactNode; color: string; desc: string }[] = [
+<<<<<<< Updated upstream
   {
     id: "propostas",
     label: "Mais Propostas",
@@ -68,7 +65,17 @@ const TABS: { id: Tab; label: string; icon: React.ReactNode; color: string; desc
     color: "#C9A84C",
     desc: "Parceiros com maior volume financeiro de operações",
   },
+=======
+  { id: "score",     label: "Pontuação",      icon: <Zap className="w-4 h-4" />,          color: "#C4922E", desc: "Score geral: propostas, aprovações, volume M&A e comissões" },
+  { id: "propostas", label: "Mais Propostas",  icon: <Target className="w-4 h-4" />,       color: "#3B82F6", desc: "Parceiros que mais submeteram propostas no período" },
+  { id: "aprovacoes",label: "Mais Aprovações", icon: <CheckCircle2 className="w-4 h-4" />, color: "#10B981", desc: "Parceiros com maior número de operações aprovadas" },
+  { id: "volume",    label: "Maior Volume",    icon: <DollarSign className="w-4 h-4" />,   color: "#8B5CF6", desc: "Parceiros com maior volume financeiro de operações" },
+>>>>>>> Stashed changes
 ];
+
+const PERIOD_LABELS: Record<string, string> = {
+  semana: "7 dias", mes: "Este mês", trim: "Trimestre", ano: "Este ano",
+};
 
 const MEDAL_COLORS = [
   { bg: "from-[#FFD700] to-[#FFA500]", text: "#7A5A00", ring: "#FFD700", label: "Ouro" },
@@ -80,22 +87,24 @@ function formatVolume(v: number) {
   if (v >= 1e9) return `R$ ${(v / 1e9).toFixed(1)}B`;
   if (v >= 1e6) return `R$ ${(v / 1e6).toFixed(1)}M`;
   if (v >= 1e3) return `R$ ${(v / 1e3).toFixed(0)}K`;
-  return `R$ ${v}`;
+  return `R$ ${v.toLocaleString("pt-BR")}`;
 }
 
-// ─── Podium (top 3) ──────────────────────────────────────────────────────────
-function Podium({ tab, data }: { tab: Tab; data: typeof RANKING_DATA.propostas }) {
+// ─── Podium ───────────────────────────────────────────────────────────────────
+type AnyRank = RankingScore | RankingPropostas | RankingAprovacoes | RankingVolume;
+
+function getValue(tab: Tab, item: AnyRank): string {
+  if (tab === "score")      return `${(item as RankingScore).score} pts`;
+  if (tab === "propostas")  return `${(item as RankingPropostas).proposals} propostas`;
+  if (tab === "aprovacoes") return `${(item as RankingAprovacoes).approved} aprovações`;
+  return formatVolume((item as RankingVolume).volume);
+}
+
+function Podium({ tab, data }: { tab: Tab; data: AnyRank[] }) {
   const top3 = data.slice(0, 3);
-  // Reorder: 2nd, 1st, 3rd (classic podium)
   const order = [top3[1], top3[0], top3[2]];
   const heights = ["h-24", "h-36", "h-16"];
   const positions = [2, 1, 3];
-
-  function getValue(item: (typeof RANKING_DATA.propostas)[0] | (typeof RANKING_DATA.aprovacoes)[0] | (typeof RANKING_DATA.volume)[0]) {
-    if (tab === "propostas") return `${(item as typeof RANKING_DATA.propostas[0]).proposals} propostas`;
-    if (tab === "aprovacoes") return `${(item as typeof RANKING_DATA.aprovacoes[0]).approved} aprovações`;
-    return formatVolume((item as typeof RANKING_DATA.volume[0]).volume);
-  }
 
   return (
     <div className="flex items-end justify-center gap-3 pt-4 pb-2">
@@ -105,52 +114,37 @@ function Podium({ tab, data }: { tab: Tab; data: typeof RANKING_DATA.propostas }
         const isFirst = positions[idx] === 1;
         return (
           <div key={item.id} className="flex flex-col items-center gap-2 w-28">
-            {/* Crown for #1 */}
             {isFirst && (
-              <div className="flex flex-col items-center gap-1 animate-fade-in">
+              <div className="flex flex-col items-center gap-1">
                 <Crown className="w-6 h-6" style={{ color: "#FFD700", filter: "drop-shadow(0 0 6px #FFD70088)" }} />
                 <span className="text-[10px] font-bold text-[#FFD700] uppercase tracking-widest">Campeão</span>
               </div>
             )}
-
-            {/* Avatar */}
             <div className="relative">
-              <div
-                className="w-14 h-14 rounded-full flex items-center justify-center text-sm font-black shadow-lg"
+              <div className="w-14 h-14 rounded-full flex items-center justify-center text-sm font-black shadow-lg"
                 style={{
                   background: `linear-gradient(135deg, ${medal.ring}CC, ${medal.ring}88)`,
                   color: medal.text,
                   boxShadow: `0 0 0 3px ${medal.ring}66, 0 8px 24px rgba(0,0,0,0.4)`,
-                }}
-              >
+                }}>
                 {item.avatar}
               </div>
-              <div
-                className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black"
-                style={{ background: medal.ring, color: medal.text, boxShadow: "0 2px 6px rgba(0,0,0,0.3)" }}
-              >
+              <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black"
+                style={{ background: medal.ring, color: medal.text, boxShadow: "0 2px 6px rgba(0,0,0,0.3)" }}>
                 {positions[idx]}
               </div>
             </div>
-
-            {/* Name */}
             <div className="text-center">
-              <p className="text-xs font-bold text-white leading-tight text-center">{item.name.split(" ")[0]}</p>
-              <p className="text-[10px] text-muted-foreground text-center leading-tight">{item.name.split(" ").slice(1).join(" ")}</p>
+              <p className="text-xs font-bold text-white leading-tight">{item.name.split(" ")[0]}</p>
+              <p className="text-[10px] text-muted-foreground leading-tight">{item.name.split(" ").slice(1).join(" ")}</p>
             </div>
-
-            {/* Value */}
-            <p className="text-xs font-bold text-center" style={{ color: medal.ring }}>{getValue(item)}</p>
-
-            {/* Podium base */}
-            <div
-              className={`w-full ${heights[idx]} rounded-t-xl flex items-start justify-center pt-2`}
+            <p className="text-xs font-bold text-center" style={{ color: medal.ring }}>{getValue(tab, item)}</p>
+            <div className={`w-full ${heights[idx]} rounded-t-xl flex items-start justify-center pt-2`}
               style={{
                 background: `linear-gradient(180deg, ${medal.ring}30 0%, ${medal.ring}10 100%)`,
                 border: `1px solid ${medal.ring}40`,
                 borderBottom: "none",
-              }}
-            >
+              }}>
               <span className="text-xl font-black" style={{ color: `${medal.ring}88` }}>{positions[idx]}º</span>
             </div>
           </div>
@@ -160,42 +154,37 @@ function Podium({ tab, data }: { tab: Tab; data: typeof RANKING_DATA.propostas }
   );
 }
 
-// ─── List row ─────────────────────────────────────────────────────────────────
-function RankRow({
-  item, position, tab, maxVal,
-}: {
-  item: typeof RANKING_DATA.propostas[0] | typeof RANKING_DATA.aprovacoes[0] | typeof RANKING_DATA.volume[0];
-  position: number;
-  tab: Tab;
-  maxVal: number;
-}) {
-  function getMainValue() {
-    if (tab === "propostas") return { label: `${(item as typeof RANKING_DATA.propostas[0]).proposals}`, sub: "propostas" };
-    if (tab === "aprovacoes") return { label: `${(item as typeof RANKING_DATA.aprovacoes[0]).approved}`, sub: "aprovadas" };
-    return { label: formatVolume((item as typeof RANKING_DATA.volume[0]).volume), sub: "volume" };
-  }
+// ─── Rank Row ─────────────────────────────────────────────────────────────────
+function RankRow({ item, position, tab, maxVal }: { item: AnyRank; position: number; tab: Tab; maxVal: number }) {
   function getBarVal() {
-    if (tab === "propostas") return (item as typeof RANKING_DATA.propostas[0]).proposals;
-    if (tab === "aprovacoes") return (item as typeof RANKING_DATA.aprovacoes[0]).approved;
-    return (item as typeof RANKING_DATA.volume[0]).volume;
+    if (tab === "score")      return (item as RankingScore).score;
+    if (tab === "propostas")  return (item as RankingPropostas).proposals;
+    if (tab === "aprovacoes") return (item as RankingAprovacoes).approved;
+    return (item as RankingVolume).volume;
   }
   function getExtra() {
-    if (tab === "propostas") {
-      const g = (item as typeof RANKING_DATA.propostas[0]).growth;
+    if (tab === "score") {
+      const s = item as RankingScore;
       return (
-        <span className={`text-xs font-semibold ${g >= 0 ? "text-emerald-400" : "text-red-400"}`}>
-          {g >= 0 ? "+" : ""}{g}%
-        </span>
+        <div className="flex gap-2 text-[10px] text-muted-foreground">
+          <span>{s.proposals}p</span>
+          <span className="text-emerald-400">{s.approvals}✓</span>
+          {s.deals > 0 && <span className="text-purple-400">{s.deals} M&A</span>}
+        </div>
       );
     }
     if (tab === "aprovacoes") {
-      const r = (item as typeof RANKING_DATA.aprovacoes[0]).rate;
+      const r = (item as RankingAprovacoes).rate;
       return <span className="text-xs text-muted-foreground">{r}% aprovação</span>;
     }
-    const avg = (item as typeof RANKING_DATA.volume[0]).avg;
-    return <span className="text-xs text-muted-foreground">média {formatVolume(avg)}</span>;
+    if (tab === "volume") {
+      const avg = (item as RankingVolume).avg;
+      return avg > 0 ? <span className="text-xs text-muted-foreground">média {formatVolume(avg)}</span> : null;
+    }
+    return null;
   }
 
+<<<<<<< Updated upstream
   const barPct = (getBarVal() / maxVal) * 100;
   const tabColors: Record<Tab, string> = {
     propostas: "#3B82F6",
@@ -213,22 +202,23 @@ function RankRow({
       }`}
     >
       {/* Position */}
-      <div className="w-7 flex-shrink-0 text-center">
-        {position === 1 ? (
-          <Crown className="w-5 h-5 mx-auto" style={{ color: "#FFD700" }} />
-        ) : position === 2 ? (
-          <Medal className="w-5 h-5 mx-auto" style={{ color: "#C0C0C0" }} />
-        ) : position === 3 ? (
-          <Medal className="w-5 h-5 mx-auto" style={{ color: "#CD7F32" }} />
-        ) : (
-          <span className="text-sm font-bold text-muted-foreground">{position}º</span>
-        )}
-      </div>
+=======
+  const barPct = maxVal > 0 ? (getBarVal() / maxVal) * 100 : 0;
+  const tabColor: Record<Tab, string> = { score: "#C4922E", propostas: "#3B82F6", aprovacoes: "#10B981", volume: "#8B5CF6" };
+  const isTop3 = position <= 3;
 
-      {/* Avatar */}
-      <div
-        className="w-9 h-9 rounded-full flex-shrink-0 flex items-center justify-center text-xs font-bold"
+  return (
+    <div className={`flex items-center gap-4 px-4 py-3 rounded-xl transition-all ${isTop3 ? "bg-[#0F1E35] border border-[#C4922E]/20" : "hover:bg-[#0F1E35]/50"}`}>
+>>>>>>> Stashed changes
+      <div className="w-7 flex-shrink-0 text-center">
+        {position === 1 ? <Crown className="w-5 h-5 mx-auto" style={{ color: "#FFD700" }} />
+        : position === 2 ? <Medal className="w-5 h-5 mx-auto" style={{ color: "#C0C0C0" }} />
+        : position === 3 ? <Medal className="w-5 h-5 mx-auto" style={{ color: "#CD7F32" }} />
+        : <span className="text-sm font-bold text-muted-foreground">{position}º</span>}
+      </div>
+      <div className="w-9 h-9 rounded-full flex-shrink-0 flex items-center justify-center text-xs font-bold"
         style={{
+<<<<<<< Updated upstream
           background: position <= 3
             ? `linear-gradient(135deg, ${MEDAL_COLORS[position - 1].ring}88, ${MEDAL_COLORS[position - 1].ring}44)`
             : "rgba(196,146,46,0.1)",
@@ -236,10 +226,14 @@ function RankRow({
           border: `1px solid ${position <= 3 ? MEDAL_COLORS[position - 1].ring + "44" : "rgba(196,146,46,0.2)"}`,
         }}
       >
+=======
+          background: position <= 3 ? `linear-gradient(135deg, ${MEDAL_COLORS[position-1].ring}88, ${MEDAL_COLORS[position-1].ring}44)` : "rgba(196,146,46,0.1)",
+          color: position <= 3 ? MEDAL_COLORS[position-1].text : "#C4922E",
+          border: `1px solid ${position <= 3 ? MEDAL_COLORS[position-1].ring + "44" : "rgba(196,146,46,0.2)"}`,
+        }}>
+>>>>>>> Stashed changes
         {item.avatar}
       </div>
-
-      {/* Name + bar */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-1">
           <span className="text-sm font-semibold text-white truncate">{item.name}</span>
@@ -247,19 +241,31 @@ function RankRow({
         </div>
         <div className="flex items-center gap-2">
           <div className="flex-1 h-1.5 bg-[#122036] rounded-full overflow-hidden">
-            <div
-              className="h-full rounded-full transition-all duration-700"
-              style={{ width: `${barPct}%`, background: barColor }}
-            />
+            <div className="h-full rounded-full transition-all duration-700" style={{ width: `${barPct}%`, background: tabColor[tab] }} />
           </div>
           {getExtra()}
         </div>
       </div>
-
-      {/* Value */}
       <div className="text-right flex-shrink-0">
-        <p className="text-base font-black text-white">{mv.label}</p>
-        <p className="text-[10px] text-muted-foreground uppercase tracking-wider">{mv.sub}</p>
+        <p className="text-base font-black text-white">{getValue(tab, item)}</p>
+      </div>
+    </div>
+  );
+}
+
+// ─── Goals Card ───────────────────────────────────────────────────────────────
+function GoalBar({ label, value, goal, color }: { label: string; value: number; goal: number; color: string }) {
+  if (!goal) return null;
+  const pct = Math.min(Math.round((value / goal) * 100), 100);
+  return (
+    <div>
+      <div className="flex justify-between text-xs mb-1">
+        <span className="text-muted-foreground">{label}</span>
+        <span className="font-semibold text-white">{value} / {goal} <span className="text-muted-foreground">({pct}%)</span></span>
+      </div>
+      <div className="h-2 bg-[#122036] rounded-full overflow-hidden">
+        <div className="h-full rounded-full transition-all duration-700"
+          style={{ width: `${pct}%`, background: pct >= 100 ? "#10B981" : color }} />
       </div>
     </div>
   );
@@ -269,29 +275,43 @@ function RankRow({
 interface RankingClientProps {
   userRole: string;
   userName: string;
+  rankingData: RankingData;
+  period?: string;
+  goals?: PartnerGoal[];
 }
 
-export function RankingClient({ userRole, userName }: RankingClientProps) {
-  const [activeTab, setActiveTab] = useState<Tab>("propostas");
-  const [period, setPeriod] = useState("mes");
+export function RankingClient({ userRole, userName, rankingData, period = "mes", goals = [] }: RankingClientProps) {
+  const router = useRouter();
+  const [activeTab, setActiveTab] = useState<Tab>("score");
 
-  const currentData = RANKING_DATA[activeTab] as typeof RANKING_DATA.propostas;
+  function setPeriod(p: string) {
+    const url = new URL(window.location.href);
+    url.searchParams.set("period", p);
+    router.push(url.pathname + url.search);
+  }
+
+  const currentData = rankingData[activeTab] as AnyRank[];
   const activeTabInfo = TABS.find((t) => t.id === activeTab)!;
 
   function getMaxVal() {
-    if (activeTab === "propostas") return Math.max(...RANKING_DATA.propostas.map((x) => x.proposals));
-    if (activeTab === "aprovacoes") return Math.max(...RANKING_DATA.aprovacoes.map((x) => x.approved));
-    return Math.max(...RANKING_DATA.volume.map((x) => x.volume));
+    if (activeTab === "score")      return Math.max(0, ...rankingData.score.map(x => x.score));
+    if (activeTab === "propostas")  return Math.max(0, ...rankingData.propostas.map(x => x.proposals));
+    if (activeTab === "aprovacoes") return Math.max(0, ...rankingData.aprovacoes.map(x => x.approved));
+    return Math.max(0, ...rankingData.volume.map(x => x.volume));
   }
 
-  // Stats summary
-  const totalPropostas = RANKING_DATA.propostas.reduce((s, x) => s + x.proposals, 0);
-  const totalAprovacoes = RANKING_DATA.aprovacoes.reduce((s, x) => s + x.approved, 0);
-  const totalVolume = RANKING_DATA.volume.reduce((s, x) => s + x.volume, 0);
+  const totalScore     = rankingData.score.reduce((s, x) => s + x.score, 0);
+  const totalPropostas = rankingData.propostas.reduce((s, x) => s + x.proposals, 0);
+  const totalAprovacoes = rankingData.aprovacoes.reduce((s, x) => s + x.approved, 0);
+  const totalVolume    = rankingData.volume.reduce((s, x) => s + x.volume, 0);
+
+  // Minha meta (para partners)
+  const isAdmin = ["ADMIN", "GESTAO", "FINANCEIRO", "MESA_OPERACIONAL"].includes(userRole);
+  const myRankEntry = rankingData.score[0]; // simplificação para demo
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* ── Header ── */}
+      {/* Header */}
       <div className="flex items-start justify-between flex-wrap gap-4">
         <div className="flex items-center gap-4">
           <div className="w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg"
@@ -299,44 +319,49 @@ export function RankingClient({ userRole, userName }: RankingClientProps) {
             <Trophy className="w-6 h-6 text-[#09081A]" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-white" style={{ fontFamily: "Outfit, Inter, sans-serif" }}>
-              Ranking de Performance
-            </h1>
+            <h1 className="text-2xl font-bold text-white">Ranking de Performance</h1>
             <p className="text-sm text-muted-foreground mt-0.5">
-              Premiação V3 Partners — {userRole === "ADMIN" ? "Visão Administrador" : `Bem-vindo, ${userName.split(" ")[0]}`}
+              {isAdmin ? "Visão Administrador" : `Bem-vindo, ${userName.split(" ")[0]}`} — {PERIOD_LABELS[period]}
             </p>
           </div>
         </div>
 
         {/* Period selector */}
         <div className="flex gap-1 p-1 rounded-xl bg-[#091221] border border-[#122036]">
-          {[
-            { id: "semana", label: "7 dias" },
-            { id: "mes",    label: "Este mês" },
-            { id: "trim",   label: "Trimestre" },
-            { id: "ano",    label: "Este ano" },
-          ].map((p) => (
-            <button
-              key={p.id}
-              onClick={() => setPeriod(p.id)}
+          {Object.entries(PERIOD_LABELS).map(([id, label]) => (
+            <button key={id} onClick={() => setPeriod(id)}
               className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
+<<<<<<< Updated upstream
               style={period === p.id
                 ? { background: "linear-gradient(120deg,#C9A84C,#E8C97A)", color: "#09081A" }
                 : { color: "#7A8FA8" }
               }
             >
               {p.label}
+=======
+              style={period === id
+                ? { background: "linear-gradient(120deg,#C4922E,#E5B96A)", color: "#050C18" }
+                : { color: "#5A7490" }}>
+              {label}
+>>>>>>> Stashed changes
             </button>
           ))}
         </div>
       </div>
 
-      {/* ── KPI strip ── */}
-      <div className="grid grid-cols-3 gap-4">
+      {/* KPI strip */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
+<<<<<<< Updated upstream
           { label: "Total de Propostas", value: totalPropostas, icon: <Target className="w-4 h-4" />, color: "#3B82F6" },
           { label: "Total de Aprovações", value: totalAprovacoes, icon: <CheckCircle2 className="w-4 h-4" />, color: "#10B981" },
           { label: "Volume Total", value: formatVolume(totalVolume), icon: <DollarSign className="w-4 h-4" />, color: "#C9A84C" },
+=======
+          { label: "Score Total", value: totalScore + " pts", icon: <Zap className="w-4 h-4" />, color: "#C4922E" },
+          { label: "Propostas",   value: totalPropostas,      icon: <Target className="w-4 h-4" />, color: "#3B82F6" },
+          { label: "Aprovações",  value: totalAprovacoes,     icon: <CheckCircle2 className="w-4 h-4" />, color: "#10B981" },
+          { label: "Volume",      value: formatVolume(totalVolume), icon: <DollarSign className="w-4 h-4" />, color: "#8B5CF6" },
+>>>>>>> Stashed changes
         ].map((kpi) => (
           <div key={kpi.label} className="p-4 rounded-xl bg-[#091221] border border-[#122036] flex items-center gap-3 relative overflow-hidden">
             <div className="absolute top-0 left-0 right-0 h-[1px]"
@@ -353,39 +378,49 @@ export function RankingClient({ userRole, userName }: RankingClientProps) {
         ))}
       </div>
 
-      {/* ── Tabs ── */}
-      <div className="flex gap-2">
+      {/* Score legend (only on score tab) */}
+      {activeTab === "score" && (
+        <div className="p-3 rounded-xl bg-[#091221] border border-[#C4922E]/20 flex flex-wrap gap-4 text-xs text-muted-foreground">
+          <span className="font-semibold text-[#C4922E]">Como o score é calculado:</span>
+          <span>Proposta submetida <strong className="text-white">+1pt</strong></span>
+          <span>Operação aprovada <strong className="text-white">+5pt</strong></span>
+          <span>Volume aprovado <strong className="text-white">+1pt/R$100K</strong></span>
+          <span>Deal M&A fechado <strong className="text-white">+10pt</strong></span>
+          <span>Comissão recebida <strong className="text-white">+2pt</strong></span>
+        </div>
+      )}
+
+      {/* Tabs */}
+      <div className="flex gap-2 flex-wrap">
         {TABS.map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
+          <button key={tab.id} onClick={() => setActiveTab(tab.id)}
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all border"
             style={activeTab === tab.id
               ? { background: `${tab.color}18`, color: tab.color, borderColor: `${tab.color}40` }
+<<<<<<< Updated upstream
               : { color: "#7A8FA8", borderColor: "#122036", background: "transparent" }
             }
           >
             {tab.icon}
             {tab.label}
+=======
+              : { color: "#5A7490", borderColor: "#122036", background: "transparent" }}>
+            {tab.icon} {tab.label}
+>>>>>>> Stashed changes
           </button>
         ))}
       </div>
 
-      {/* ── Main content ── */}
-      <div className="grid grid-cols-1 xl:grid-cols-5 gap-5">
-
-        {/* Podium + description */}
-        <div className="xl:col-span-2 bg-[#091221] rounded-2xl border border-[#122036] overflow-hidden">
-          {/* Header */}
-          <div className="px-5 py-4 border-b border-[#122036]">
-            <div className="flex items-center gap-2">
-              <Award className="w-4 h-4" style={{ color: activeTabInfo.color }} />
-              <span className="text-sm font-bold text-white">{activeTabInfo.label}</span>
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">{activeTabInfo.desc}</p>
-          </div>
-
+      {/* Main content */}
+      {currentData.length === 0 ? (
+        <div className="p-12 rounded-2xl bg-[#091221] border border-[#122036] text-center">
+          <Trophy className="w-10 h-10 text-muted-foreground mx-auto mb-3 opacity-40" />
+          <p className="text-muted-foreground text-sm">Nenhum dado disponível no período selecionado.</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 xl:grid-cols-5 gap-5">
           {/* Podium */}
+<<<<<<< Updated upstream
           <div className="px-4 py-4">
             <Podium tab={activeTab} data={currentData as typeof RANKING_DATA.propostas} />
           </div>
@@ -432,22 +467,52 @@ export function RankingClient({ userRole, userName }: RankingClientProps) {
             <Badge className="text-[10px] bg-[#C9A84C]/10 text-[#E8C97A] border-[#C9A84C]/30">
               Top {currentData.length} Partners
             </Badge>
+=======
+          <div className="xl:col-span-2 bg-[#091221] rounded-2xl border border-[#122036] overflow-hidden">
+            <div className="px-5 py-4 border-b border-[#122036]">
+              <div className="flex items-center gap-2">
+                <Award className="w-4 h-4" style={{ color: activeTabInfo.color }} />
+                <span className="text-sm font-bold text-white">{activeTabInfo.label}</span>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">{activeTabInfo.desc}</p>
+            </div>
+            <div className="px-4 py-4">
+              <Podium tab={activeTab} data={currentData} />
+            </div>
+            {currentData[0] && (
+              <div className="mx-4 mb-4 p-3 rounded-xl bg-[#0F1E35] border border-[#C4922E]/20">
+                <div className="flex items-center gap-2 mb-1">
+                  <Crown className="w-3.5 h-3.5 text-[#FFD700]" />
+                  <span className="text-xs font-bold text-[#FFD700]">Líder do período</span>
+                </div>
+                <p className="text-sm font-bold text-white">{currentData[0].name}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">{getValue(activeTab, currentData[0])}</p>
+              </div>
+            )}
+>>>>>>> Stashed changes
           </div>
 
-          <div className="p-3 space-y-1">
-            {currentData.map((item, idx) => (
-              <RankRow
-                key={item.id}
-                item={item}
-                position={idx + 1}
-                tab={activeTab}
-                maxVal={getMaxVal()}
-              />
-            ))}
+          {/* Full list */}
+          <div className="xl:col-span-3 bg-[#091221] rounded-2xl border border-[#122036] overflow-hidden">
+            <div className="px-5 py-4 border-b border-[#122036] flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Star className="w-4 h-4 text-[#C4922E]" />
+                <span className="text-sm font-bold text-white">Classificação Geral</span>
+              </div>
+              <Badge className="text-[10px] bg-[#C4922E]/10 text-[#E5B96A] border-[#C4922E]/30">
+                Top {currentData.length} Partners
+              </Badge>
+            </div>
+            <div className="p-3 space-y-1">
+              {currentData.map((item, idx) => (
+                <RankRow key={item.id} item={item} position={idx + 1} tab={activeTab} maxVal={getMaxVal()} />
+              ))}
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
+<<<<<<< Updated upstream
       {/* ── Premiação notice ── */}
       <div className="p-4 rounded-xl border border-[#C9A84C]/25 bg-[#C9A84C]/5 flex items-start gap-3">
         <Trophy className="w-4 h-4 text-[#E8C97A] mt-0.5 flex-shrink-0" />
@@ -455,9 +520,61 @@ export function RankingClient({ userRole, userName }: RankingClientProps) {
           <p className="text-sm font-semibold text-[#E8C97A] mb-1">
             Programa de Premiação V3 Partners
           </p>
+=======
+      {/* Metas — admin vê todos, partner vê as suas */}
+      {goals.length > 0 && (
+        <div className="bg-[#091221] rounded-2xl border border-[#122036] overflow-hidden">
+          <div className="px-5 py-4 border-b border-[#122036] flex items-center gap-2">
+            <Target className="w-4 h-4 text-[#C4922E]" />
+            <span className="text-sm font-bold text-white">Metas do Mês Atual</span>
+          </div>
+          <div className="p-4 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {goals.map((goal) => {
+              const partner = rankingData.score.find(p => p.id === goal.partner_id);
+              if (!partner && !isAdmin) return null;
+              const name = partner?.name ?? "Partner";
+              return (
+                <div key={goal.partner_id} className="p-4 rounded-xl bg-[#0F1E35] border border-[#122036] space-y-3">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="w-7 h-7 rounded-full bg-[#C4922E]/20 flex items-center justify-center text-xs font-bold text-[#C4922E]">
+                      {name.split(" ").slice(0,2).map(w => w[0]).join("")}
+                    </div>
+                    <span className="text-sm font-semibold text-white truncate">{name}</span>
+                  </div>
+                  <GoalBar
+                    label="Propostas"
+                    value={partner?.proposals ?? 0}
+                    goal={goal.goal_proposals}
+                    color="#3B82F6"
+                  />
+                  <GoalBar
+                    label="Aprovações"
+                    value={partner?.approvals ?? 0}
+                    goal={goal.goal_approvals}
+                    color="#10B981"
+                  />
+                  <GoalBar
+                    label="Deals M&A"
+                    value={partner?.deals ?? 0}
+                    goal={goal.goal_deals}
+                    color="#8B5CF6"
+                  />
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Premiação notice */}
+      <div className="p-4 rounded-xl border border-[#C4922E]/25 bg-[#C4922E]/5 flex items-start gap-3">
+        <Trophy className="w-4 h-4 text-[#E5B96A] mt-0.5 flex-shrink-0" />
+        <div>
+          <p className="text-sm font-semibold text-[#E5B96A] mb-1">Programa de Premiação V3 Partners</p>
+>>>>>>> Stashed changes
           <p className="text-xs text-muted-foreground leading-relaxed">
-            O ranking é atualizado mensalmente. Os top 3 de cada categoria são elegíveis para premiação.
-            {userRole === "ADMIN" && " Como administrador, você pode exportar o ranking completo e definir os critérios de premiação no painel de configurações."}
+            O ranking é atualizado em tempo real. Os top 3 de cada categoria são elegíveis para premiação mensal.
+            {isAdmin && " Como administrador, você pode definir metas individuais via API POST /api/partner-goals."}
           </p>
         </div>
       </div>

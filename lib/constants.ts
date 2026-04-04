@@ -57,6 +57,7 @@ export const CREDIT_DESK_LEVEL_DESCRIPTIONS: Record<CreditDeskLevel, string> = {
 export const CREDIT_DESK_LINES: Record<CreditDeskLevel, string[]> = {
   NIVEL_1: [
     "HOME EQUITY",
+    "HE ESTRESSADO",
     "AVAL",
     "FUNDO CONSTRUÇÃO RESIDENCIAL",
   ],

@@ -1,124 +1,126 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { formatCurrency, formatDate } from "@/lib/utils";
-import { Building2, Plus } from "lucide-react";
+import { MaClient, type MaDeal } from "@/components/ma/ma-client";
+import { createClient as createServiceClient } from "@supabase/supabase-js";
 import { DEMO_DEALS } from "@/lib/demo-data";
 
 const IS_DEMO =
   !process.env.NEXT_PUBLIC_SUPABASE_URL ||
   process.env.NEXT_PUBLIC_SUPABASE_URL.includes("SEU_PROJETO");
 
-const STAGE_COLORS: Record<string, string> = {
-  PROSPECTING: "bg-gray-500/20 text-gray-400 border-gray-500/30",
-  QUALIFICATION: "bg-blue-500/20 text-blue-400 border-blue-500/30",
-  DUE_DILIGENCE: "bg-amber-500/20 text-amber-400 border-amber-500/30",
-  NEGOTIATION: "bg-orange-500/20 text-orange-400 border-orange-500/30",
-  CLOSING: "bg-purple-500/20 text-purple-400 border-purple-500/30",
-  CLOSED_WON: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
-  CLOSED_LOST: "bg-red-500/20 text-red-400 border-red-500/30",
-};
+function serviceClient() {
+  return createServiceClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+}
 
-const STAGE_LABELS: Record<string, string> = {
-  PROSPECTING: "Prospecção", QUALIFICATION: "Qualificação",
-  DUE_DILIGENCE: "Due Diligence", NEGOTIATION: "Negociação",
-  CLOSING: "Fechamento", CLOSED_WON: "Fechado (Ganho)", CLOSED_LOST: "Fechado (Perdido)",
-};
+const SELECT_FIELDS = `
+  id, code, title, target_company, sector,
+  deal_value, ebitda_multiple, stage,
+  probability_percent, created_at, notes,
+  partner:profiles!ma_deals_assigned_to_fkey(id, full_name)
+`;
 
 export default async function MAPage() {
-  let list = DEMO_DEALS;
+  let deals: MaDeal[] = [];
+  let userId = "";
+  let pipefyCfg: { token?: string; pipeId?: string; formUrl?: string } | null = null;
 
-  if (!IS_DEMO) {
+  if (IS_DEMO) {
+    deals = DEMO_DEALS as MaDeal[];
+  } else {
     const { createClient } = await import("@/lib/supabase/server");
     const supabase = await createClient();
-    const { data } = await supabase.from("ma_deals").select("*").order("created_at", { ascending: false });
-    list = (data ?? []) as typeof DEMO_DEALS;
+    const svc = serviceClient();
+
+    const { data: { user } } = await supabase.auth.getUser();
+    userId = user?.id ?? "";
+
+    if (!userId) return <MaClient deals={[]} userId="" pipefyCfg={null} />;
+
+    const { data: profile } = await svc
+      .from("profiles").select("role, full_name").eq("id", userId).single();
+    const isAdmin = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"].includes(profile?.role ?? "");
+    const partnerFullName: string = profile?.full_name ?? "";
+
+    // ── Lê config do Pipefy para passar ao cliente ────────────────────────────
+    try {
+      const { data: cfgRow } = await svc
+        .from("app_config").select("value").eq("key", "pipefy_ma").single();
+      const raw = cfgRow?.value as { token?: string; pipeId?: string; formUrl?: string } | null;
+      if (raw?.token && raw?.pipeId) {
+        pipefyCfg = raw;
+
+        // Sync server-side antes de buscar os deals
+        try {
+          await fetch(
+            `${process.env.NEXT_PUBLIC_APP_URL ?? "https://v3-partner.vercel.app"}/api/pipefy`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                action: "sync_ma",
+                token: raw.token,
+                pipeId: raw.pipeId,
+                userId,
+              }),
+            }
+          );
+        } catch { /* silently skip */ }
+      }
+    } catch { /* app_config não existe ainda */ }
+
+    // ── Busca deals — usa service client para garantir sem bloqueio de RLS ──
+    let rawData: Record<string, unknown>[] = [];
+
+    if (isAdmin) {
+      // Admin vê todos os deals
+      const { data } = await svc
+        .from("ma_deals").select(SELECT_FIELDS)
+        .order("created_at", { ascending: false });
+      rawData = (data ?? []) as Record<string, unknown>[];
+    } else {
+      // Query 1: deals atribuídos ao partner ou criados por ele
+      const { data: d1 } = await svc
+        .from("ma_deals").select(SELECT_FIELDS)
+        .or(`assigned_to.eq.${userId},created_by.eq.${userId}`)
+        .order("created_at", { ascending: false });
+
+      rawData = (d1 ?? []) as Record<string, unknown>[];
+
+      // Query 2: deals onde o nome do partner está nas notes
+      // (cobre quando o UUID não foi atribuído por diferença de grafia)
+      if (partnerFullName) {
+        const { data: d2 } = await svc
+          .from("ma_deals").select(SELECT_FIELDS)
+          .ilike("notes", `%Partner: ${partnerFullName}%`)
+          .order("created_at", { ascending: false });
+
+        if (d2?.length) {
+          const seen = new Set(rawData.map((d) => d.id as string));
+          for (const d of d2 as Record<string, unknown>[]) {
+            if (!seen.has(d.id as string)) rawData.push(d);
+          }
+        }
+      }
+    }
+
+    deals = rawData.map((d) => ({
+      id: d.id as string,
+      code: d.code as string,
+      target_company: (d.target_company ?? d.title ?? "Sem nome") as string,
+      sector: d.sector as string | null,
+      deal_value: d.deal_value as number | null,
+      ebitda_multiple: d.ebitda_multiple as number | null,
+      stage: d.stage as string,
+      probability_percent: d.probability_percent as number | null,
+      created_at: d.created_at as string,
+      responsible: (() => {
+        const p = d.partner;
+        if (Array.isArray(p)) return (p[0] as { full_name?: string })?.full_name ?? null;
+        return (p as { full_name?: string } | null)?.full_name ?? null;
+      })(),
+    }));
   }
 
-  const totalValue = list.reduce((s, d) => s + (d.deal_value ?? 0), 0);
-  const pipelineValue = list
-    .filter((d) => !["CLOSED_WON", "CLOSED_LOST"].includes(d.stage))
-    .reduce((s, d) => s + (d.deal_value ?? 0), 0);
-
-  return (
-    <div className="space-y-5 animate-fade-in">
-      <div className="flex items-start justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center">
-            <Building2 className="w-5 h-5 text-white" />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold text-white">M&A — Fusões e Aquisições</h1>
-            <p className="text-xs text-muted-foreground">Pipeline de deals, due diligence e fechamentos</p>
-          </div>
-        </div>
-        <Button size="sm"><Plus className="w-4 h-4 mr-1.5" />Novo Deal</Button>
-      </div>
-
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        {[
-          { label: "Total de Deals", value: list.length, color: "text-purple-400" },
-          { label: "Valor Total", value: formatCurrency(totalValue), color: "text-white" },
-          { label: "Pipeline Ativo", value: formatCurrency(pipelineValue), color: "text-amber-400" },
-          { label: "Fechados (Ganho)", value: list.filter((d) => d.stage === "CLOSED_WON").length, color: "text-emerald-400" },
-        ].map((kpi) => (
-          <Card key={kpi.label}><CardContent className="p-4">
-            <p className="text-xs text-muted-foreground">{kpi.label}</p>
-            <p className={`text-xl font-bold mt-1 ${kpi.color}`}>{kpi.value}</p>
-          </CardContent></Card>
-        ))}
-      </div>
-
-      <div className="grid grid-cols-3 md:grid-cols-7 gap-2">
-        {Object.entries(STAGE_LABELS).map(([stage, label]) => {
-          const count = list.filter((d) => d.stage === stage).length;
-          return (
-            <div key={stage} className={`p-3 rounded-lg border text-center ${STAGE_COLORS[stage]}`}>
-              <p className="text-lg font-bold">{count}</p>
-              <p className="text-[10px] leading-tight mt-0.5">{label}</p>
-            </div>
-          );
-        })}
-      </div>
-
-      <Card>
-        <CardHeader><CardTitle className="text-sm font-semibold">Todos os Deals</CardTitle></CardHeader>
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border/50">
-                  {["Código", "Empresa Alvo", "Setor", "Valor do Deal", "EBITDA x", "Stage", "Prob."].map((h) => (
-                    <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {list.map((deal) => (
-                  <tr key={deal.id} className="data-table-row cursor-pointer">
-                    <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{deal.code}</td>
-                    <td className="px-4 py-3 font-medium text-foreground">{deal.target_company}</td>
-                    <td className="px-4 py-3 text-muted-foreground text-xs">{deal.sector || "—"}</td>
-                    <td className="px-4 py-3 font-semibold text-white">{deal.deal_value ? formatCurrency(deal.deal_value) : "—"}</td>
-                    <td className="px-4 py-3 text-muted-foreground">{deal.ebitda_multiple ? `${deal.ebitda_multiple}x` : "—"}</td>
-                    <td className="px-4 py-3">
-                      <Badge className={STAGE_COLORS[deal.stage]}>{STAGE_LABELS[deal.stage]}</Badge>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <div className="flex-1 h-1.5 bg-secondary rounded-full overflow-hidden min-w-12">
-                          <div className="h-full bg-purple-500 rounded-full" style={{ width: `${deal.probability_percent}%` }} />
-                        </div>
-                        <span className="text-xs text-muted-foreground">{deal.probability_percent}%</span>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
-  );
+  return <MaClient deals={deals} userId={userId} pipefyCfg={pipefyCfg} />;
 }

@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import {
   X, User, Building2, CheckCircle2, Clock, ArrowRight,
   FileText, CreditCard, Calendar, Link2, Pencil, Check,
-  Percent, TrendingUp, BadgeDollarSign, Upload, Paperclip, Trash2, Home,
+  Percent, TrendingUp, BadgeDollarSign, Upload, Paperclip, Trash2, Home, ExternalLink,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -68,50 +68,105 @@ interface PropostaDetailModalProps {
 
 export function PropostaDetailModal({ open, onClose, proposal, onStageChange, onProposalUpdate, canChangeStage, canEditValorSolicitado }: PropostaDetailModalProps) {
   // ── Checklist state ───────────────────────────────────────────────────────
+  const IS_DEMO = !process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL.includes("SEU_PROJETO");
   const [checkedDocs, setCheckedDocs] = useState<Record<string, boolean>>({});
   const [uploadedFiles, setUploadedFiles] = useState<Record<string, string>>({}); // docId → filename
+  const [uploadedUrls, setUploadedUrls] = useState<Record<string, string>>({}); // docId → signed URL (20 dias)
+  const [isUploading, setIsUploading] = useState<string | null>(null); // docId em upload
 
   useEffect(() => {
     if (!proposal) return;
-    try {
-      const savedChecks = JSON.parse(localStorage.getItem(`v3_docs_${proposal.id}`) ?? "{}");
-      const savedFiles  = JSON.parse(localStorage.getItem(`v3_files_${proposal.id}`) ?? "{}");
-      setCheckedDocs(savedChecks);
-      setUploadedFiles(savedFiles);
-    } catch { setCheckedDocs({}); setUploadedFiles({}); }
+    setCheckedDocs({});
+    setUploadedFiles({});
+    setUploadedUrls({});
+    if (IS_DEMO) {
+      try {
+        const savedChecks = JSON.parse(localStorage.getItem(`v3_docs_${proposal.id}`) ?? "{}");
+        const savedFiles  = JSON.parse(localStorage.getItem(`v3_files_${proposal.id}`) ?? "{}");
+        setCheckedDocs(savedChecks);
+        setUploadedFiles(savedFiles);
+      } catch { /* ignore */ }
+    } else {
+      fetch(`/api/credit-proposals/documents?proposal_id=${proposal.id}`)
+        .then((r) => r.json())
+        .then(({ documents }) => {
+          if (!Array.isArray(documents)) return;
+          const checks: Record<string, boolean> = {};
+          const files: Record<string, string>   = {};
+          const urls: Record<string, string>    = {};
+          documents.forEach((d: { doc_id: string; file_name: string; url: string | null }) => {
+            checks[d.doc_id] = true;
+            files[d.doc_id]  = d.file_name;
+            if (d.url) urls[d.doc_id] = d.url;
+          });
+          setCheckedDocs(checks);
+          setUploadedFiles(files);
+          setUploadedUrls(urls);
+        })
+        .catch(() => {});
+    }
   }, [proposal?.id, open]);
 
   function toggleDoc(docId: string) {
     if (!proposal) return;
     const updated = { ...checkedDocs, [docId]: !checkedDocs[docId] };
     setCheckedDocs(updated);
-    try { localStorage.setItem(`v3_docs_${proposal.id}`, JSON.stringify(updated)); } catch {}
+    if (IS_DEMO) {
+      try { localStorage.setItem(`v3_docs_${proposal.id}`, JSON.stringify(updated)); } catch {}
+    }
   }
 
-  function handleFileUpload(docId: string, file: File) {
+  async function handleFileUpload(docId: string, file: File) {
     if (!proposal) return;
-    // Auto-check the doc and save filename
-    const newChecks = { ...checkedDocs, [docId]: true };
-    const newFiles  = { ...uploadedFiles, [docId]: file.name };
-    setCheckedDocs(newChecks);
-    setUploadedFiles(newFiles);
+    if (IS_DEMO) {
+      const newChecks = { ...checkedDocs, [docId]: true };
+      const newFiles  = { ...uploadedFiles, [docId]: file.name };
+      setCheckedDocs(newChecks);
+      setUploadedFiles(newFiles);
+      try {
+        localStorage.setItem(`v3_docs_${proposal.id}`,  JSON.stringify(newChecks));
+        localStorage.setItem(`v3_files_${proposal.id}`, JSON.stringify(newFiles));
+      } catch {}
+      return;
+    }
+    setIsUploading(docId);
     try {
-      localStorage.setItem(`v3_docs_${proposal.id}`,  JSON.stringify(newChecks));
-      localStorage.setItem(`v3_files_${proposal.id}`, JSON.stringify(newFiles));
-    } catch {}
+      const form = new FormData();
+      form.append("file", file);
+      form.append("proposal_id", proposal.id);
+      form.append("doc_id", docId);
+      const res  = await fetch("/api/credit-proposals/documents", { method: "POST", body: form });
+      const json = await res.json();
+      if (!res.ok) { alert(json.error ?? "Erro ao enviar arquivo"); return; }
+      setCheckedDocs((prev) => ({ ...prev, [docId]: true }));
+      setUploadedFiles((prev) => ({ ...prev, [docId]: file.name }));
+      if (json.document?.url) setUploadedUrls((prev) => ({ ...prev, [docId]: json.document.url }));
+    } finally {
+      setIsUploading(null);
+    }
   }
 
   function removeFile(docId: string) {
     if (!proposal) return;
+    // Atualiza UI imediatamente (optimistic)
     const newFiles  = { ...uploadedFiles };
-    const newChecks = { ...checkedDocs, [docId]: false };
+    const newUrls   = { ...uploadedUrls };
     delete newFiles[docId];
+    delete newUrls[docId];
     setUploadedFiles(newFiles);
-    setCheckedDocs(newChecks);
-    try {
-      localStorage.setItem(`v3_docs_${proposal.id}`,  JSON.stringify(newChecks));
-      localStorage.setItem(`v3_files_${proposal.id}`, JSON.stringify(newFiles));
-    } catch {}
+    setUploadedUrls(newUrls);
+    setCheckedDocs((prev) => ({ ...prev, [docId]: false }));
+    if (IS_DEMO) {
+      try {
+        localStorage.setItem(`v3_docs_${proposal.id}`,  JSON.stringify({ ...checkedDocs, [docId]: false }));
+        localStorage.setItem(`v3_files_${proposal.id}`, JSON.stringify(newFiles));
+      } catch {}
+    } else {
+      fetch(
+        `/api/credit-proposals/documents?proposal_id=${proposal.id}&doc_id=${encodeURIComponent(docId)}`,
+        { method: "DELETE" }
+      ).catch(() => {});
+    }
   }
 
   // ── Commission state ──────────────────────────────────────────────────────
@@ -310,7 +365,7 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
           </div>
 
           {/* Card de Imóvel em Garantia */}
-          {["HOME EQUITY","HOMECASH","CGI","CRI","FUNDO CONSTRUÇÃO RESIDENCIAL","FUNDO CONSTRUÇÃO LOTEAMENTO","FUNDO CONSTRUÇÃO EMPREENDIMENTO"].includes(proposal.credit_line) &&
+          {["HOME EQUITY","HE ESTRESSADO","HOMECASH","CGI","CRI","FUNDO CONSTRUÇÃO RESIDENCIAL","FUNDO CONSTRUÇÃO LOTEAMENTO","FUNDO CONSTRUÇÃO EMPREENDIMENTO"].includes(proposal.credit_line) &&
             (proposal.imovel_valor_medio || proposal.imovel_cidade) && (
             <div className="p-4 rounded-xl border border-amber-500/30 bg-amber-500/5 space-y-2">
               <p className="text-xs font-semibold text-amber-400 flex items-center gap-1.5">
@@ -543,10 +598,26 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
                         </div>
 
                         {/* Row 2: upload area */}
-                        {fileName ? (
+                        {isUploading === doc.id ? (
+                          <div className="flex items-center gap-2 px-2 py-1.5 rounded border border-dashed border-primary/40 bg-primary/5">
+                            <div className="w-3 h-3 rounded-full border-2 border-primary border-t-transparent animate-spin flex-shrink-0" />
+                            <span className="text-[11px] text-muted-foreground">Enviando arquivo...</span>
+                          </div>
+                        ) : fileName ? (
                           <div className="flex items-center gap-2 px-2 py-1 rounded bg-emerald-500/10 border border-emerald-500/30">
                             <Paperclip className="w-3 h-3 text-emerald-400 flex-shrink-0" />
                             <span className="text-[11px] text-emerald-400 flex-1 truncate">{fileName}</span>
+                            {uploadedUrls[doc.id] && (
+                              <a
+                                href={uploadedUrls[doc.id]}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-blue-400 hover:text-blue-300 transition-colors flex-shrink-0"
+                                title="Abrir documento (válido por 20 dias)"
+                              >
+                                <ExternalLink className="w-3 h-3" />
+                              </a>
+                            )}
                             <button
                               onClick={() => removeFile(doc.id)}
                               className="text-muted-foreground hover:text-red-400 transition-colors flex-shrink-0"
@@ -565,9 +636,9 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
                               type="file"
                               accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
                               className="hidden"
-                              onChange={(e) => {
+                              onChange={async (e) => {
                                 const file = e.target.files?.[0];
-                                if (file) handleFileUpload(doc.id, file);
+                                if (file) await handleFileUpload(doc.id, file);
                                 e.target.value = "";
                               }}
                             />

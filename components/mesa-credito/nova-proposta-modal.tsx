@@ -36,6 +36,33 @@ export const CHECKLISTS: Record<string, Record<"PF" | "PJ", { id: string; label:
       { id: "he_pj_10", label: "Comprovante de residência dos sócios", required: true },
     ],
   },
+  "HE ESTRESSADO": {
+    PF: [
+      { id: "hee_pf_1", label: "RG e CPF (ou CNH)", required: true, hint: "Documento de identificação com foto" },
+      { id: "hee_pf_2", label: "Comprovante de renda (3 últimos meses)", required: true, hint: "Holerite, pró-labore ou decore" },
+      { id: "hee_pf_3", label: "Extrato bancário (3 últimos meses)", required: true },
+      { id: "hee_pf_4", label: "Matrícula do imóvel atualizada (máx. 30 dias)", required: true, hint: "Imóvel em situação estressada / alienação" },
+      { id: "hee_pf_5", label: "IPTU do ano corrente", required: true },
+      { id: "hee_pf_6", label: "Imposto de Renda completo + recibo de entrega", required: true },
+      { id: "hee_pf_7", label: "Comprovante de residência (máx. 90 dias)", required: true },
+      { id: "hee_pf_8", label: "Certidão de ônus reais atualizada", required: true, hint: "Fundamental para imóveis estressados" },
+      { id: "hee_pf_9", label: "Documentação do processo / dívida em aberto", required: true, hint: "Ação judicial, protesto ou execução" },
+      { id: "hee_pf_10", label: "Laudo de avaliação do imóvel", required: false, hint: "Avaliação independente" },
+    ],
+    PJ: [
+      { id: "hee_pj_1", label: "Contrato Social + todas as alterações", required: true },
+      { id: "hee_pj_2", label: "Cartão CNPJ atualizado", required: true },
+      { id: "hee_pj_3", label: "Faturamento mensal — últimos 12 meses", required: true },
+      { id: "hee_pj_4", label: "Balanço Patrimonial + DRE (últimos 2 anos)", required: true },
+      { id: "hee_pj_5", label: "Certidão Negativa Federal, Estadual e Municipal", required: true },
+      { id: "hee_pj_6", label: "Matrícula do imóvel atualizada (máx. 30 dias)", required: true },
+      { id: "hee_pj_7", label: "IPTU do ano corrente", required: true },
+      { id: "hee_pj_8", label: "RG e CPF dos sócios e respectivos cônjuges", required: true },
+      { id: "hee_pj_9", label: "Certidão de ônus reais atualizada", required: true, hint: "Fundamental para imóveis estressados" },
+      { id: "hee_pj_10", label: "Documentação do processo / dívida em aberto", required: true, hint: "Ação judicial, protesto ou execução" },
+      { id: "hee_pj_11", label: "Laudo de avaliação do imóvel", required: false },
+    ],
+  },
   "AVAL": {
     PF: [
       { id: "av_pf_1", label: "RG e CPF (ou CNH)", required: true },
@@ -336,7 +363,7 @@ export const DEFAULT_CHECKLIST = {
 
 // ─── Linhas por nível ──────────────────────────────────────────────────────
 const LEVEL_LINES: Record<string, string[]> = {
-  NIVEL_1: ["HOME EQUITY", "AVAL", "FUNDO CONSTRUÇÃO RESIDENCIAL"],
+  NIVEL_1: ["HOME EQUITY", "HE ESTRESSADO", "AVAL", "FUNDO CONSTRUÇÃO RESIDENCIAL"],
   NIVEL_2: ["HOMECASH", "V3GIRO E V3AUTOGIRO", "CGI"],
   NIVEL_3: ["CRI", "CRA", "CPR", "FUNDO INTERNACIONAL CASH COLATERAL", "FUNDO INTERNACIONAL IMOB", "FUNDO CONSTRUÇÃO LOTEAMENTO", "FUNDO CONSTRUÇÃO EMPREENDIMENTO"],
 };

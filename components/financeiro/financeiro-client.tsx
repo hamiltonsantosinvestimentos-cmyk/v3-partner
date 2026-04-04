@@ -523,14 +523,30 @@ function NovoColaboradorModal({
 // ─── TAB: FOLHA DE PAGAMENTO ──────────────────────────────────────────────────
 
 function FolhaTab() {
-  const [mes, setMes] = useState(3);
-  const [ano, setAno] = useState(2026);
+  const [mes, setMes] = useState(new Date().getMonth() + 1);
+  const [ano, setAno] = useState(new Date().getFullYear());
   const [funcionarios, setFuncionarios] = useState<typeof DEMO_FUNCIONARIOS>([]);
   const [showModal, setShowModal] = useState(false);
   const [editandoFunc, setEditandoFunc] = useState<import("@/lib/demo-data-financeiro").Funcionario | null>(null);
 
-  const excluirFuncionario = (id: string, nome: string) => {
+  // Carrega do Supabase na montagem
+  React.useEffect(() => {
+    fetch("/api/financeiro?type=funcionario")
+      .then(r => r.json())
+      .then(json => {
+        if (json.records?.length) {
+          setFuncionarios(json.records.map((r: { id: string; data: typeof DEMO_FUNCIONARIOS[0] }) => ({ ...r.data, _dbId: r.id })));
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const excluirFuncionario = async (id: string, nome: string) => {
     if (!window.confirm(`Excluir "${nome}" da folha de pagamento?`)) return;
+    const func = funcionarios.find(f => f.id === id) as (typeof DEMO_FUNCIONARIOS[0] & { _dbId?: string });
+    if (func?._dbId) {
+      await fetch(`/api/financeiro?id=${func._dbId}`, { method: "DELETE" }).catch(() => {});
+    }
     setFuncionarios(prev => prev.filter(f => f.id !== id));
   };
 
@@ -549,8 +565,21 @@ function FolhaTab() {
         <NovoColaboradorModal
           editando={editandoFunc ?? undefined}
           onClose={() => { setShowModal(false); setEditandoFunc(null); }}
-          onSalvar={(f) => setFuncionarios(prev => [...prev, f])}
-          onEditar={(f) => setFuncionarios(prev => prev.map(x => x.id === f.id ? f : x))}
+          onSalvar={async (f) => {
+            try {
+              const res = await fetch("/api/financeiro", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type: "funcionario", data: f }) });
+              const json = await res.json();
+              if (json.record) { setFuncionarios(prev => [...prev, { ...f, _dbId: json.record.id } as typeof f]); return; }
+            } catch {}
+            setFuncionarios(prev => [...prev, f]);
+          }}
+          onEditar={async (f) => {
+            const existing = funcionarios.find(x => x.id === f.id) as (typeof DEMO_FUNCIONARIOS[0] & { _dbId?: string });
+            if (existing?._dbId) {
+              await fetch("/api/financeiro", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: existing._dbId, data: f }) }).catch(() => {});
+            }
+            setFuncionarios(prev => prev.map(x => x.id === f.id ? { ...f, _dbId: existing?._dbId } as typeof f : x));
+          }}
         />
       )}
 
@@ -906,21 +935,37 @@ function NovaDespesaModal({
 // ─── TAB: DESPESAS ────────────────────────────────────────────────────────────
 
 function DespesasTab() {
-  const [mes, setMes] = useState(3);
-  const [ano, setAno] = useState(2026);
+  const [mes, setMes] = useState(new Date().getMonth() + 1);
+  const [ano, setAno] = useState(new Date().getFullYear());
   const [subtab, setSubtab] = useState<"fixas" | "variaveis">("fixas");
   const [showModal, setShowModal] = useState(false);
-  const [templates, setTemplates] = useState([...DESPESAS_FIXAS_TEMPLATES]);
+  const [templates, setTemplates] = useState<import("@/lib/demo-data-financeiro").DespesaFixaTemplate[]>([]);
   const [todasVariaveis, setTodasVariaveis] = useState<import("@/lib/demo-data-financeiro").Despesa[]>([]);
   const [editandoFixaTpl, setEditandoFixaTpl] = useState<import("@/lib/demo-data-financeiro").DespesaFixaTemplate | null>(null);
   const [editandoVariavel, setEditandoVariavel] = useState<import("@/lib/demo-data-financeiro").Despesa | null>(null);
 
-  const excluirFixa = (tplId: string, desc: string) => {
+  // Carrega do Supabase na montagem
+  React.useEffect(() => {
+    fetch("/api/financeiro?type=despesa_fixa")
+      .then(r => r.json())
+      .then(json => { if (json.records?.length) setTemplates(json.records.map((r: { id: string; data: import("@/lib/demo-data-financeiro").DespesaFixaTemplate }) => ({ ...r.data, _dbId: r.id }))); })
+      .catch(() => {});
+    fetch("/api/financeiro?type=despesa_variavel")
+      .then(r => r.json())
+      .then(json => { if (json.records?.length) setTodasVariaveis(json.records.map((r: { id: string; data: import("@/lib/demo-data-financeiro").Despesa }) => ({ ...r.data, _dbId: r.id }))); })
+      .catch(() => {});
+  }, []);
+
+  const excluirFixa = async (tplId: string, desc: string) => {
     if (!window.confirm(`Excluir despesa fixa "${desc}"? Será removida de todos os meses.`)) return;
+    const tpl = templates.find(t => t.id === tplId) as (import("@/lib/demo-data-financeiro").DespesaFixaTemplate & { _dbId?: string });
+    if (tpl?._dbId) await fetch(`/api/financeiro?id=${tpl._dbId}`, { method: "DELETE" }).catch(() => {});
     setTemplates(prev => prev.filter(t => t.id !== tplId));
   };
-  const excluirVariavel = (id: string, desc: string) => {
+  const excluirVariavel = async (id: string, desc: string) => {
     if (!window.confirm(`Excluir despesa "${desc}"?`)) return;
+    const desp = todasVariaveis.find(d => d.id === id) as (import("@/lib/demo-data-financeiro").Despesa & { _dbId?: string });
+    if (desp?._dbId) await fetch(`/api/financeiro?id=${desp._dbId}`, { method: "DELETE" }).catch(() => {});
     setTodasVariaveis(prev => prev.filter(d => d.id !== id));
   };
 
@@ -960,10 +1005,32 @@ function DespesasTab() {
           editandoFixa={editandoFixaTpl ?? undefined}
           editandoVariavel={editandoVariavel ?? undefined}
           onClose={() => { setShowModal(false); setEditandoFixaTpl(null); setEditandoVariavel(null); }}
-          onSalvarFixa={(t) => setTemplates(prev => [...prev, t])}
-          onEditarFixa={(t) => setTemplates(prev => prev.map(x => x.id === t.id ? t : x))}
-          onSalvarVariavel={(d) => setTodasVariaveis(prev => [...prev, d])}
-          onEditarVariavel={(d) => setTodasVariaveis(prev => prev.map(x => x.id === d.id ? d : x))}
+          onSalvarFixa={async (t) => {
+            try {
+              const res = await fetch("/api/financeiro", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type: "despesa_fixa", data: t }) });
+              const json = await res.json();
+              if (json.record) { setTemplates(prev => [...prev, { ...t, _dbId: json.record.id } as typeof t]); return; }
+            } catch {}
+            setTemplates(prev => [...prev, t]);
+          }}
+          onEditarFixa={async (t) => {
+            const existing = templates.find(x => x.id === t.id) as (import("@/lib/demo-data-financeiro").DespesaFixaTemplate & { _dbId?: string });
+            if (existing?._dbId) await fetch("/api/financeiro", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: existing._dbId, data: t }) }).catch(() => {});
+            setTemplates(prev => prev.map(x => x.id === t.id ? { ...t, _dbId: existing?._dbId } as typeof t : x));
+          }}
+          onSalvarVariavel={async (d) => {
+            try {
+              const res = await fetch("/api/financeiro", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type: "despesa_variavel", data: d }) });
+              const json = await res.json();
+              if (json.record) { setTodasVariaveis(prev => [...prev, { ...d, _dbId: json.record.id } as typeof d]); return; }
+            } catch {}
+            setTodasVariaveis(prev => [...prev, d]);
+          }}
+          onEditarVariavel={async (d) => {
+            const existing = todasVariaveis.find(x => x.id === d.id) as (import("@/lib/demo-data-financeiro").Despesa & { _dbId?: string });
+            if (existing?._dbId) await fetch("/api/financeiro", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: existing._dbId, data: d }) }).catch(() => {});
+            setTodasVariaveis(prev => prev.map(x => x.id === d.id ? { ...d, _dbId: existing?._dbId } as typeof d : x));
+          }}
         />
       )}
 
@@ -1592,14 +1659,24 @@ function NovoImpostoModal({
 // ─── TAB: IMPOSTOS ────────────────────────────────────────────────────────────
 
 function ImpostosTab() {
-  const [mes, setMes] = useState(3);
-  const [ano, setAno] = useState(2026);
+  const [mes, setMes] = useState(new Date().getMonth() + 1);
+  const [ano, setAno] = useState(new Date().getFullYear());
   const [showModal, setShowModal] = useState(false);
   const [impostos, setImpostos] = useState<import("@/lib/demo-data-financeiro").Imposto[]>([]);
   const [editandoImp, setEditandoImp] = useState<import("@/lib/demo-data-financeiro").Imposto | null>(null);
 
-  const excluirImposto = (id: string, desc: string) => {
+  // Carrega do Supabase na montagem
+  React.useEffect(() => {
+    fetch("/api/financeiro?type=imposto")
+      .then(r => r.json())
+      .then(json => { if (json.records?.length) setImpostos(json.records.map((r: { id: string; data: import("@/lib/demo-data-financeiro").Imposto }) => ({ ...r.data, _dbId: r.id }))); })
+      .catch(() => {});
+  }, []);
+
+  const excluirImposto = async (id: string, desc: string) => {
     if (!window.confirm(`Excluir imposto "${desc}"?`)) return;
+    const imp = impostos.find(i => i.id === id) as (import("@/lib/demo-data-financeiro").Imposto & { _dbId?: string });
+    if (imp?._dbId) await fetch(`/api/financeiro?id=${imp._dbId}`, { method: "DELETE" }).catch(() => {});
     setImpostos(prev => prev.filter(i => i.id !== id));
   };
 
@@ -1615,8 +1692,19 @@ function ImpostosTab() {
           mes={mes} ano={ano}
           editando={editandoImp ?? undefined}
           onClose={() => { setShowModal(false); setEditandoImp(null); }}
-          onSalvar={(imp) => setImpostos(prev => [...prev, imp])}
-          onEditar={(imp) => setImpostos(prev => prev.map(x => x.id === imp.id ? imp : x))}
+          onSalvar={async (imp) => {
+            try {
+              const res = await fetch("/api/financeiro", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type: "imposto", data: imp }) });
+              const json = await res.json();
+              if (json.record) { setImpostos(prev => [...prev, { ...imp, _dbId: json.record.id } as typeof imp]); return; }
+            } catch {}
+            setImpostos(prev => [...prev, imp]);
+          }}
+          onEditar={async (imp) => {
+            const existing = impostos.find(x => x.id === imp.id) as (import("@/lib/demo-data-financeiro").Imposto & { _dbId?: string });
+            if (existing?._dbId) await fetch("/api/financeiro", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: existing._dbId, data: imp }) }).catch(() => {});
+            setImpostos(prev => prev.map(x => x.id === imp.id ? { ...imp, _dbId: existing?._dbId } as typeof imp : x));
+          }}
         />
       )}
 

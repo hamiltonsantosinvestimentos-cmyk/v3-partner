@@ -1,15 +1,33 @@
 "use client";
 
 import React, { useState } from "react";
-import { Wallet, TrendingUp, Clock, CheckCircle2, ArrowUpRight, Filter } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { DEMO_COMISSOES, formatMoeda, MESES_PT, type Comissao } from "@/lib/demo-data-financeiro";
+import { Wallet, TrendingUp, Clock, CheckCircle2 } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { formatMoeda } from "@/lib/demo-data-financeiro";
 import { ExportButton } from "@/components/financeiro/export-button";
+
+export interface CommissionRow {
+  id: string;
+  code: string;
+  partner_id: string;
+  operation_type: string;
+  operation_code: string | null;
+  operation_description: string;
+  operation_value: number;
+  commission_percent: number;
+  commission_value: number;
+  status: string;
+  operation_closed_at: string | null;
+  payment_date: string | null;
+  notes: string | null;
+  created_at: string;
+}
 
 interface Props {
   partnerId: string;
   partnerName: string;
   role: string;
+  commissions: CommissionRow[];
 }
 
 function StatusBadge({ status }: { status: string }) {
@@ -40,28 +58,23 @@ function TipoBadge({ tipo }: { tipo: string }) {
   );
 }
 
-export function ComissoesPartnerClient({ partnerId, partnerName, role }: Props) {
-  const [filtroTipo, setFiltroTipo] = useState<"TODOS" | "CREDITO" | "MA" | "CONSORCIO">("TODOS");
+export function ComissoesPartnerClient({ partnerId, partnerName, role, commissions }: Props) {
+  const [filtroTipo, setFiltroTipo] = useState<"TODOS" | "CREDITO" | "MA" | "CONSORCIO" | "SPLIT_FISCAL">("TODOS");
   const [filtroStatus, setFiltroStatus] = useState<"TODOS" | "A_PAGAR" | "PAGA">("TODOS");
 
-  // Admin vê todas, partner vê só as suas
-  const minhasComissoes = role === "ADMIN"
-    ? DEMO_COMISSOES
-    : DEMO_COMISSOES.filter(c => c.partnerId === partnerId);
-
-  const filtradas = minhasComissoes.filter(c =>
-    (filtroTipo === "TODOS" || c.operacaoTipo === filtroTipo) &&
+  const filtradas = commissions.filter(c =>
+    (filtroTipo === "TODOS" || c.operation_type === filtroTipo) &&
     (filtroStatus === "TODOS" || c.status === filtroStatus)
   );
 
-  const aReceber = minhasComissoes.filter(c => c.status === "A_PAGAR").reduce((s, c) => s + c.valorComissao, 0);
-  const recebido = minhasComissoes.filter(c => c.status === "PAGA").reduce((s, c) => s + c.valorComissao, 0);
+  const aReceber = commissions.filter(c => c.status === "A_PAGAR").reduce((s, c) => s + (c.commission_value ?? 0), 0);
+  const recebido = commissions.filter(c => c.status === "PAGA").reduce((s, c) => s + (c.commission_value ?? 0), 0);
   const totalGeral = aReceber + recebido;
 
-  const porTipo = (["CREDITO", "MA", "CONSORCIO"] as const).map(tipo => ({
+  const porTipo = (["CREDITO", "MA", "CONSORCIO", "SPLIT_FISCAL"] as const).map(tipo => ({
     tipo,
-    total: minhasComissoes.filter(c => c.operacaoTipo === tipo).reduce((s, c) => s + c.valorComissao, 0),
-    qtd: minhasComissoes.filter(c => c.operacaoTipo === tipo).length,
+    total: commissions.filter(c => c.operation_type === tipo).reduce((s, c) => s + (c.commission_value ?? 0), 0),
+    qtd: commissions.filter(c => c.operation_type === tipo).length,
   }));
 
   return (
@@ -84,7 +97,7 @@ export function ComissoesPartnerClient({ partnerId, partnerName, role }: Props) 
           </div>
           <p className="text-xl font-bold text-amber-400">{formatMoeda(aReceber)}</p>
           <p className="text-sm font-medium text-foreground mt-0.5">A Receber</p>
-          <p className="text-xs text-muted-foreground">{minhasComissoes.filter(c => c.status === "A_PAGAR").length} pendentes</p>
+          <p className="text-xs text-muted-foreground">{commissions.filter(c => c.status === "A_PAGAR").length} pendentes</p>
         </div>
         <div className="kpi-card">
           <div className="w-9 h-9 rounded-xl bg-emerald-500/20 flex items-center justify-center mb-3">
@@ -92,7 +105,7 @@ export function ComissoesPartnerClient({ partnerId, partnerName, role }: Props) 
           </div>
           <p className="text-xl font-bold text-emerald-400">{formatMoeda(recebido)}</p>
           <p className="text-sm font-medium text-foreground mt-0.5">Já Recebido</p>
-          <p className="text-xs text-muted-foreground">{minhasComissoes.filter(c => c.status === "PAGA").length} liquidadas</p>
+          <p className="text-xs text-muted-foreground">{commissions.filter(c => c.status === "PAGA").length} liquidadas</p>
         </div>
         <div className="kpi-card">
           <div className="w-9 h-9 rounded-xl bg-[#C9A84C]/20 flex items-center justify-center mb-3">
@@ -100,7 +113,7 @@ export function ComissoesPartnerClient({ partnerId, partnerName, role }: Props) 
           </div>
           <p className="text-xl font-bold text-[#C9A84C]">{formatMoeda(totalGeral)}</p>
           <p className="text-sm font-medium text-foreground mt-0.5">Total Gerado</p>
-          <p className="text-xs text-muted-foreground">{minhasComissoes.length} operações</p>
+          <p className="text-xs text-muted-foreground">{commissions.length} operações</p>
         </div>
         <div className="kpi-card">
           <div className="w-9 h-9 rounded-xl bg-blue-500/20 flex items-center justify-center mb-3">
@@ -115,11 +128,11 @@ export function ComissoesPartnerClient({ partnerId, partnerName, role }: Props) 
       </div>
 
       {/* Por tipo */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {porTipo.map(({ tipo, total, qtd }) => {
-          const labels: Record<string, string> = { CREDITO: "Crédito", MA: "M&A", CONSORCIO: "Consórcio" };
-          const colors = { CREDITO: "#3B82F6", MA: "#8B5CF6", CONSORCIO: "#F59E0B" };
-          const icons = { CREDITO: "💳", MA: "🤝", CONSORCIO: "🏆" };
+          const labels: Record<string, string> = { CREDITO: "Crédito", MA: "M&A", CONSORCIO: "Consórcio", SPLIT_FISCAL: "Split Fiscal" };
+          const colors: Record<string, string> = { CREDITO: "#3B82F6", MA: "#8B5CF6", CONSORCIO: "#F59E0B", SPLIT_FISCAL: "#10B981" };
+          const icons: Record<string, string> = { CREDITO: "💳", MA: "🤝", CONSORCIO: "🏆", SPLIT_FISCAL: "📊" };
           return (
             <div key={tipo} className="bg-[#091221] border border-[#122036] rounded-xl p-4">
               <div className="flex items-center gap-2 mb-3">
@@ -136,8 +149,8 @@ export function ComissoesPartnerClient({ partnerId, partnerName, role }: Props) 
       {/* Filtros */}
       <div className="flex items-center gap-3 flex-wrap">
         <div className="flex bg-secondary rounded-lg p-0.5">
-          {(["TODOS", "CREDITO", "MA", "CONSORCIO"] as const).map(t => {
-            const labels = { TODOS: "Todos", CREDITO: "Crédito", MA: "M&A", CONSORCIO: "Consórcio" };
+          {(["TODOS", "CREDITO", "MA", "CONSORCIO", "SPLIT_FISCAL"] as const).map(t => {
+            const labels = { TODOS: "Todos", CREDITO: "Crédito", MA: "M&A", CONSORCIO: "Consórcio", SPLIT_FISCAL: "Split" };
             return (
               <button key={t} onClick={() => setFiltroTipo(t)} className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${filtroTipo === t ? "bg-[#C9A84C] text-white" : "text-muted-foreground hover:text-foreground"}`}>
                 {labels[t]}
@@ -161,19 +174,19 @@ export function ComissoesPartnerClient({ partnerId, partnerName, role }: Props) 
           subtitulo: partnerName,
           orientacao: "landscape",
           colunas: [
-            { header: "Código", key: "codigo", width: 14 },
-            { header: "Operação", key: "operacaoDescricao", width: 30 },
-            { header: "Código Op.", key: "operacaoCodigo", width: 14 },
-            { header: "Tipo", key: "operacaoTipo", width: 12 },
-            { header: "Vlr. Operação", key: "valorOperacao", format: "moeda", width: 18 },
-            { header: "% Comissão", key: "percentualComissao", format: "percent", width: 13 },
-            { header: "Vlr. a Receber", key: "valorComissao", format: "moeda", width: 18 },
-            { header: "Finalizada em", key: "dataOperacaoFinalizada", format: "date", width: 16 },
-            { header: "Previsão Pgto.", key: "dataPagamento", format: "date", width: 16 },
+            { header: "Código", key: "code", width: 14 },
+            { header: "Operação", key: "operation_description", width: 30 },
+            { header: "Código Op.", key: "operation_code", width: 14 },
+            { header: "Tipo", key: "operation_type", width: 12 },
+            { header: "Vlr. Operação", key: "operation_value", format: "moeda", width: 18 },
+            { header: "% Comissão", key: "commission_percent", format: "percent", width: 13 },
+            { header: "Vlr. a Receber", key: "commission_value", format: "moeda", width: 18 },
+            { header: "Finalizada em", key: "operation_closed_at", format: "date", width: 16 },
+            { header: "Previsão Pgto.", key: "payment_date", format: "date", width: 16 },
             { header: "Status", key: "status", width: 12 },
           ],
           dados: filtradas,
-          totais: { label: "TOTAL", valores: { codigo: "TOTAL", valorComissao: filtradas.reduce((s, c) => s + c.valorComissao, 0) } },
+          totais: { label: "TOTAL", valores: { code: "TOTAL", commission_value: filtradas.reduce((s, c) => s + (c.commission_value ?? 0), 0) } },
         }} />
       </div>
 
@@ -199,18 +212,28 @@ export function ComissoesPartnerClient({ partnerId, partnerName, role }: Props) 
                   </tr>
                 ) : filtradas.map((c, i) => (
                   <tr key={c.id} className={`border-b border-border/20 hover:bg-secondary/30 transition-colors ${i % 2 === 0 ? "" : "bg-[#091221]/40"}`}>
-                    <td className="px-4 py-3 font-mono text-muted-foreground">{c.codigo}</td>
+                    <td className="px-4 py-3 font-mono text-muted-foreground">{c.code}</td>
                     <td className="px-4 py-3 text-white max-w-[200px]">
-                      <div className="truncate" title={c.operacaoDescricao}>{c.operacaoDescricao}</div>
-                      <div className="text-[10px] text-muted-foreground">{c.operacaoCodigo}</div>
+                      <div className="truncate" title={c.operation_description}>{c.operation_description}</div>
+                      <div className="text-[10px] text-muted-foreground">{c.operation_code ?? "—"}</div>
                     </td>
+<<<<<<< Updated upstream
                     <td className="px-4 py-3"><TipoBadge tipo={c.operacaoTipo} /></td>
                     <td className="px-4 py-3 text-white">{formatMoeda(c.valorOperacao)}</td>
                     <td className="px-4 py-3 text-[#C9A84C] font-semibold">{c.percentualComissao}%</td>
                     <td className="px-4 py-3 font-bold text-white">{formatMoeda(c.valorComissao)}</td>
                     <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">{new Date(c.dataOperacaoFinalizada).toLocaleDateString("pt-BR")}</td>
+=======
+                    <td className="px-4 py-3"><TipoBadge tipo={c.operation_type} /></td>
+                    <td className="px-4 py-3 text-white">{formatMoeda(c.operation_value)}</td>
+                    <td className="px-4 py-3 text-[#C4922E] font-semibold">{c.commission_percent}%</td>
+                    <td className="px-4 py-3 font-bold text-white">{formatMoeda(c.commission_value ?? 0)}</td>
+>>>>>>> Stashed changes
                     <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
-                      {c.dataPagamento ? new Date(c.dataPagamento).toLocaleDateString("pt-BR") : "—"}
+                      {c.operation_closed_at ? new Date(c.operation_closed_at).toLocaleDateString("pt-BR") : "—"}
+                    </td>
+                    <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
+                      {c.payment_date ? new Date(c.payment_date).toLocaleDateString("pt-BR") : "—"}
                     </td>
                     <td className="px-4 py-3"><StatusBadge status={c.status} /></td>
                   </tr>
@@ -218,10 +241,17 @@ export function ComissoesPartnerClient({ partnerId, partnerName, role }: Props) 
               </tbody>
               {filtradas.length > 0 && (
                 <tfoot>
+<<<<<<< Updated upstream
                   <tr className="bg-[#0F1E35] border-t border-[#C9A84C]/30">
                     <td className="px-4 py-3 font-bold text-[#C9A84C]" colSpan={5}>TOTAL FILTRADO</td>
                     <td className="px-4 py-3 font-bold text-[#C9A84C]">
                       {formatMoeda(filtradas.reduce((s, c) => s + c.valorComissao, 0))}
+=======
+                  <tr className="bg-[#0F1E35] border-t border-[#C4922E]/30">
+                    <td className="px-4 py-3 font-bold text-[#C4922E]" colSpan={5}>TOTAL FILTRADO</td>
+                    <td className="px-4 py-3 font-bold text-[#C4922E]">
+                      {formatMoeda(filtradas.reduce((s, c) => s + (c.commission_value ?? 0), 0))}
+>>>>>>> Stashed changes
                     </td>
                     <td colSpan={3} />
                   </tr>
@@ -232,13 +262,18 @@ export function ComissoesPartnerClient({ partnerId, partnerName, role }: Props) 
         </CardContent>
       </Card>
 
-      {filtradas.some(c => c.observacoes) && (
+      {filtradas.some(c => c.notes) && (
         <div className="space-y-2">
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Observações</p>
-          {filtradas.filter(c => c.observacoes).map(c => (
+          {filtradas.filter(c => c.notes).map(c => (
             <div key={c.id} className="flex gap-2 text-xs p-3 bg-[#091221] border border-[#122036] rounded-lg">
+<<<<<<< Updated upstream
               <span className="text-[#C9A84C] font-mono">{c.codigo}:</span>
               <span className="text-muted-foreground">{c.observacoes}</span>
+=======
+              <span className="text-[#C4922E] font-mono">{c.code}:</span>
+              <span className="text-muted-foreground">{c.notes}</span>
+>>>>>>> Stashed changes
             </div>
           ))}
         </div>

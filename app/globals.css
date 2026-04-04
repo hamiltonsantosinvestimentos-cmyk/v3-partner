@@ -1,6 +1,7 @@
 @import "tailwindcss";
 
 @theme {
+<<<<<<< Updated upstream
   /* ── Core palette — V3 Brandbook V2.0 ── */
   --color-background:          #09081A;   /* Navy Profundo */
   --color-foreground:          #F0ECE4;   /* Cream */
@@ -33,6 +34,47 @@
   --color-brand-gold-light:    #E8C97A;   /* Ouro Claro */
   --color-brand-cream:         #F0ECE4;   /* Cream */
   --color-brand-muted:         #7A8FA8;   /* Muted */
+=======
+  /* ── Core palette ── */
+  /*
+   * AJUSTE VISUAL v2 — reduz fadiga ocular mantendo identidade V3
+   * Princípio: sair do preto-void para navy rico, suavizar branco,
+   * aumentar separação entre camadas de superfície.
+   * Gold #C4922E e Blue #1A4FC4 — SEM ALTERAÇÃO (identidade de marca)
+   */
+
+  --color-background:          #07101E;   /* antes #050C18 — navy base, menos pesado */
+  --color-foreground:          #C8D4E3;   /* antes #E8EDF5 — branco mais suave, reduz fadiga */
+  --color-card:                #0C1929;   /* antes #091221 — claramente distinto do bg */
+  --color-card-foreground:     #C8D4E3;
+  --color-popover:             #0C1929;
+  --color-popover-foreground:  #C8D4E3;
+
+  /* ── Semantic ── */
+  --color-primary:             #C4922E;   /* GOLD — inalterado */
+  --color-primary-foreground:  #07101E;
+  --color-secondary:           #13243D;   /* antes #0F1E35 — terceira camada mais visível */
+  --color-secondary-foreground:#C8D4E3;
+  --color-muted:               #0C1929;
+  --color-muted-foreground:    #7A96AF;   /* antes #5A7490 — mais legível em texto pequeno */
+  --color-accent:              #13243D;
+  --color-accent-foreground:   #C8D4E3;
+  --color-destructive:         #EF4444;
+  --color-destructive-foreground: #FFFFFF;
+  --color-border:              #1B3050;   /* antes #122036 — bordas visíveis, separam cards */
+  --color-input:               #13243D;
+  --color-ring:                #C4922E;
+
+  /* ── Brand — gold e blue INALTERADOS ── */
+  --color-brand-navy:          #07101E;
+  --color-brand-navy-mid:      #0C1929;
+  --color-brand-navy-surface:  #13243D;
+  --color-brand-blue:          #1A4FC4;   /* INALTERADO */
+  --color-brand-blue-light:    #2E67E8;   /* INALTERADO */
+  --color-brand-gold:          #C4922E;   /* INALTERADO */
+  --color-brand-gold-light:    #E5B96A;   /* INALTERADO */
+  --color-brand-gold-pale:     #F5D99A;   /* INALTERADO */
+>>>>>>> Stashed changes
 
   /* ── Status ── */
   --color-success:  #10B981;
@@ -68,8 +110,13 @@ h1, h2, h3 {
 /* ── Scrollbar ── */
 ::-webkit-scrollbar          { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track    { background: var(--color-muted); }
+<<<<<<< Updated upstream
 ::-webkit-scrollbar-thumb    { background: #243A66; border-radius: 4px; }
 ::-webkit-scrollbar-thumb:hover { background: rgba(201,168,76,0.4); }
+=======
+::-webkit-scrollbar-thumb    { background: #1E3658; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #C4922E44; }
+>>>>>>> Stashed changes
 
 /* ════════════════════════════════════
    BRAND UTILITIES
@@ -106,10 +153,17 @@ h1, h2, h3 {
 }
 
 .nav-item-active {
+<<<<<<< Updated upstream
   background: linear-gradient(120deg, rgba(201,168,76,0.15) 0%, rgba(201,168,76,0.05) 100%);
   color: #E8C97A;
   border: 1px solid rgba(201,168,76,0.25);
   box-shadow: inset 0 0 0 1px rgba(201,168,76,0.08);
+=======
+  background: linear-gradient(120deg, rgba(196,146,46,0.14) 0%, rgba(196,146,46,0.04) 100%);
+  color: #E5B96A;
+  border: 1px solid rgba(196,146,46,0.22);
+  box-shadow: inset 0 0 0 1px rgba(196,146,46,0.06);
+>>>>>>> Stashed changes
 }
 
 .nav-item-inactive {
@@ -127,7 +181,11 @@ h1, h2, h3 {
 ════════════════════════════════════ */
 .kpi-card {
   background: var(--color-card);
+<<<<<<< Updated upstream
   border: 1px solid rgba(22,39,68,0.9);
+=======
+  border: 1px solid var(--color-border);
+>>>>>>> Stashed changes
   border-radius: 0.875rem;
   padding: 1.25rem;
   display: flex;
@@ -142,25 +200,39 @@ h1, h2, h3 {
   position: absolute;
   top: 0; left: 0; right: 0;
   height: 1px;
+<<<<<<< Updated upstream
   background: linear-gradient(90deg, transparent, rgba(201,168,76,0.3), transparent);
+=======
+  background: linear-gradient(90deg, transparent, rgba(196,146,46,0.25), transparent);
+>>>>>>> Stashed changes
 }
 
 /* ════════════════════════════════════
    TABLE
 ════════════════════════════════════ */
 .data-table-row {
+<<<<<<< Updated upstream
   border-bottom: 1px solid rgba(22,39,68,0.6);
   transition: background-color 0.12s;
 }
 .data-table-row:hover {
   background: rgba(17,31,53,0.5);
+=======
+  border-bottom: 1px solid var(--color-border);
+  transition: background-color 0.12s;
+}
+.data-table-row:hover {
+  background: rgba(19,36,61,0.6);
+>>>>>>> Stashed changes
 }
 
 /* ════════════════════════════════════
    BACKGROUND EFFECTS
+   Opacidade reduzida — menos ruído visual
 ════════════════════════════════════ */
 .bg-grid {
   background-image:
+<<<<<<< Updated upstream
     linear-gradient(rgba(201,168,76,0.04) 1px, transparent 1px),
     linear-gradient(90deg, rgba(201,168,76,0.04) 1px, transparent 1px);
   background-size: 36px 36px;
@@ -172,6 +244,32 @@ h1, h2, h3 {
     0 0 0 1px rgba(201,168,76,0.12),
     0 4px 32px rgba(0,0,0,0.4),
     0 1px 0 rgba(201,168,76,0.15) inset;
+=======
+    linear-gradient(rgba(196,146,46,0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(196,146,46,0.025) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+.bg-grid-blue {
+  background-image:
+    linear-gradient(rgba(26,79,196,0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(26,79,196,0.04) 1px, transparent 1px);
+  background-size: 36px 36px;
+}
+
+/* Premium card glow */
+.card-glow-gold {
+  box-shadow:
+    0 0 0 1px rgba(196,146,46,0.10),
+    0 4px 28px rgba(0,0,0,0.35),
+    0 1px 0 rgba(196,146,46,0.12) inset;
+}
+
+.card-glow-blue {
+  box-shadow:
+    0 0 0 1px rgba(26,79,196,0.12),
+    0 4px 28px rgba(0,0,0,0.35);
+>>>>>>> Stashed changes
 }
 
 /* ════════════════════════════════════
@@ -197,14 +295,23 @@ h1, h2, h3 {
   100% { background-position:  200% 0; }
 }
 .animate-shimmer {
+<<<<<<< Updated upstream
   background: linear-gradient(90deg, transparent 0%, rgba(201,168,76,0.15) 50%, transparent 100%);
+=======
+  background: linear-gradient(90deg, transparent 0%, rgba(196,146,46,0.12) 50%, transparent 100%);
+>>>>>>> Stashed changes
   background-size: 200% 100%;
   animation: shimmer 2s infinite;
 }
 
 @keyframes pulse-gold {
+<<<<<<< Updated upstream
   0%, 100% { box-shadow: 0 0 0 0 rgba(201,168,76,0.4); }
   50%       { box-shadow: 0 0 0 6px rgba(201,168,76,0); }
+=======
+  0%, 100% { box-shadow: 0 0 0 0 rgba(196,146,46,0.35); }
+  50%       { box-shadow: 0 0 0 6px rgba(196,146,46,0); }
+>>>>>>> Stashed changes
 }
 .animate-pulse-gold { animation: pulse-gold 2s infinite; }
 

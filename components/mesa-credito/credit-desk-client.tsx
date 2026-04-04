@@ -2,6 +2,7 @@
 
 import React, { useState, useCallback, useEffect } from "react";
 import { LayoutGrid, List, Plus, Search, TrendingUp, Zap } from "lucide-react";
+import { ExportButton } from "@/components/financeiro/export-button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -69,6 +70,7 @@ export function CreditDeskClient({ proposals: initial, level, currentUser }: Cre
   const [view, setView] = useState<"table" | "kanban">("table");
 
   useEffect(() => {
+    if (initial.length > 0) return; // dados vêm do servidor em produção
     const stored = loadFromStorage().filter((s) => s.current_level === level);
     if (stored.length === 0) return;
     setProposals((prev) => {
@@ -76,7 +78,7 @@ export function CreditDeskClient({ proposals: initial, level, currentUser }: Cre
       const newOnes = stored.filter((s) => !ids.has(s.id));
       return newOnes.length > 0 ? [...newOnes, ...prev] : prev;
     });
-  }, [level]);
+  }, [level, initial.length]);
 
   const cfg = CONFIG[level];
   const partnerName = currentUser?.full_name ?? "João Partner Silva";
@@ -94,14 +96,34 @@ export function CreditDeskClient({ proposals: initial, level, currentUser }: Cre
 
   const totalValue = filtered.reduce((s, p) => s + p.requested_value, 0);
 
-  const handleNewProposal = useCallback((proposal: Record<string, unknown>) => {
+  const handleNewProposal = useCallback(async (proposal: Record<string, unknown>) => {
     const p = proposal as unknown as Proposal;
+    try {
+      const res = await fetch("/api/credit-proposals", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          code:            p.code,
+          title:           p.title,
+          client_name:     p.client_name,
+          client_cpf_cnpj: p.cpf_cnpj ?? null,
+          credit_line:     p.credit_line,
+          requested_value: p.requested_value,
+          current_level:   level,
+        }),
+      });
+      const json = await res.json();
+      if (json.ok && json.proposal) {
+        setProposals(prev => [{ ...p, id: json.proposal.id, partner_id: json.proposal.partner_id ?? p.partner_id }, ...prev]);
+        return;
+      }
+    } catch {}
     setProposals((prev) => {
       const stored = loadFromStorage().filter((s) => s.id !== p.id);
       saveToStorage([p, ...stored]);
       return [p, ...prev];
     });
-  }, []);
+  }, [level]);
 
   const handleStageChange = useCallback((proposalId: string, newStage: string) => {
     setProposals((prev) => prev.map((p) => p.id === proposalId ? { ...p, stage: newStage } : p));
@@ -164,6 +186,21 @@ export function CreditDeskClient({ proposals: initial, level, currentUser }: Cre
           <option value="APPROVED">Aprovado</option>
           <option value="REJECTED">Reprovado</option>
         </select>
+        <ExportButton opts={{
+          titulo: "Propostas de Crédito",
+          orientacao: "landscape",
+          colunas: [
+            { header: "Código", key: "code", width: 14 },
+            { header: "Cliente", key: "client_name", width: 28 },
+            { header: "Linha", key: "credit_line", width: 18 },
+            { header: "Valor Solicitado", key: "requested_value", format: "moeda", width: 20 },
+            { header: "Valor Aprovado", key: "approved_value", format: "moeda", width: 20 },
+            { header: "Nível", key: "current_level", width: 10 },
+            { header: "Status", key: "status", width: 12 },
+          ],
+          dados: filtered,
+          totais: { label: "TOTAL", valores: { code: "TOTAL", requested_value: filtered.reduce((s, p) => s + p.requested_value, 0) } },
+        }} />
         <div className="flex gap-1 p-1 bg-secondary rounded-lg ml-auto">
           <button
             title="Tabela"

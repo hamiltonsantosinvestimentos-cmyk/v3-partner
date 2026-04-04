@@ -466,6 +466,30 @@ const CONVERT_OPTIONS = [
   { id: "split",              label: "Split Fiscal",        desc: "Split de Receita",                    color: "#C9A84C", bg: "rgba(196,146,46,0.1)", icon: PieChart },
 ];
 
+// Linhas de crédito por produto (igual ao nova-proposta-modal)
+const CREDIT_LINES_BY_PRODUCT: Record<string, { line: string; desc: string }[]> = {
+  credito_varejo: [
+    { line: "HOME EQUITY",                desc: "Imóvel em garantia para crédito pessoal/empresarial" },
+    { line: "HE ESTRESSADO",              desc: "Home Equity com imóvel em situação estressada / dívida ativa" },
+    { line: "AVAL",                       desc: "Crédito com aval de sócio ou fiador" },
+    { line: "FUNDO CONSTRUÇÃO RESIDENCIAL", desc: "Fundo para construção de imóveis residenciais" },
+  ],
+  credito_estruturado: [
+    { line: "HOMECASH",         desc: "Crédito estruturado com garantia imobiliária" },
+    { line: "V3GIRO E V3AUTOGIRO", desc: "Capital de giro e financiamento de frota" },
+    { line: "CGI",              desc: "Crédito com garantia de imóvel empresarial" },
+  ],
+  high_ticket: [
+    { line: "CRI",                              desc: "Certificado de Recebíveis Imobiliários" },
+    { line: "CRA",                              desc: "Certificado de Recebíveis do Agronegócio" },
+    { line: "CPR",                              desc: "Cédula de Produto Rural" },
+    { line: "FUNDO INTERNACIONAL CASH COLATERAL", desc: "Fundo com colateral em ativos internacionais" },
+    { line: "FUNDO INTERNACIONAL IMOB",          desc: "Fundo imobiliário internacional" },
+    { line: "FUNDO CONSTRUÇÃO LOTEAMENTO",       desc: "Fundo para loteamentos e parcelamentos" },
+    { line: "FUNDO CONSTRUÇÃO EMPREENDIMENTO",   desc: "Fundo para grandes empreendimentos" },
+  ],
+};
+
 function getStatusColor(status: string) {
   const s = STAGES.find((x) => x.id === status);
   return s ? s.color : "#7A8FA8";
@@ -492,11 +516,11 @@ const INTERACTION_TYPE_LABELS: Record<string, string> = {
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
-export function CRMClient({ userRole, userName, userId }: { userRole: string; userName: string; userId: string }) {
-  const isAdmin = userRole === "ADMIN";
+export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { userRole: string; userName: string; userId: string; initialLeads?: CRMLead[] }) {
+  const isAdmin = ["ADMIN", "GESTAO"].includes(userRole);
 
   const [tab, setTab] = useState<"pipeline" | "leads" | "prospeccao" | "relatorios">("pipeline");
-  const [leads, setLeads] = useState<CRMLead[]>([]);
+  const [leads, setLeads] = useState<CRMLead[]>(initialLeads);
   const [selectedLead, setSelectedLead] = useState<CRMLead | null>(null);
   const [showNewLead, setShowNewLead] = useState(false);
   const [showConvert, setShowConvert] = useState<CRMLead | null>(null);
@@ -523,6 +547,7 @@ export function CRMClient({ userRole, userName, userId }: { userRole: string; us
 
   // Convert lead selection
   const [selectedConvert, setSelectedConvert] = useState<string>("");
+  const [selectedCreditLine, setSelectedCreditLine] = useState<string>("");
 
   // Filtered leads
   const visibleLeads = leads.filter((l) => {
@@ -575,63 +600,92 @@ export function CRMClient({ userRole, userName, userId }: { userRole: string; us
     setSelectedLead({ ...selectedLead, notes });
   }
 
-  function handleConvert() {
+  async function handleConvert() {
     if (!showConvert || !selectedConvert) return;
     const now = todayISO();
-    const convertedLead = { ...showConvert, convertedTo: selectedConvert as CRMLead["convertedTo"], convertedAt: now, status: "ganho" as const };
-    const updated = leads.map((l) => l.id === showConvert.id ? convertedLead : l);
-    setLeads(updated);
-    if (selectedLead?.id === showConvert.id) {
-      setSelectedLead(convertedLead);
-    }
+    const creditLine = selectedCreditLine || showConvert.creditLine || "";
+    const convertedLead = {
+      ...showConvert,
+      convertedTo: selectedConvert as CRMLead["convertedTo"],
+      convertedAt: now,
+      status: "ganho" as const,
+      creditLine,
+    };
 
-    // ── Envio automático para Mesa de Crédito ──────────────────────────────
-    if (selectedConvert === "credito_varejo" || selectedConvert === "credito_estruturado" || selectedConvert === "high_ticket") {
+    // Atualiza UI imediatamente
+    setLeads(prev => prev.map((l) => l.id === showConvert.id ? convertedLead : l));
+    if (selectedLead?.id === showConvert.id) setSelectedLead(convertedLead);
+
+    // Persiste status "ganho" no Supabase
+    try {
+      await fetch("/api/crm", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id:           showConvert.id,
+          status:       "ganho",
+          converted_to: selectedConvert,
+          converted_at: now,
+          credit_line:  creditLine,
+        }),
+      });
+    } catch {}
+
+    // ── Encaminha para Mesa de Crédito ────────────────────────────────────
+    if (["credito_varejo", "credito_estruturado", "high_ticket"].includes(selectedConvert)) {
       const levelMap: Record<string, string> = {
         credito_varejo: "NIVEL_1",
         credito_estruturado: "NIVEL_2",
         high_ticket: "NIVEL_3",
       };
-      const lineMap: Record<string, string> = {
-        credito_varejo: convertedLead.creditLine || "HOME EQUITY",
-        credito_estruturado: convertedLead.creditLine || "AVAL",
-        high_ticket: convertedLead.creditLine || "CRI",
-      };
+      const line = creditLine || (selectedConvert === "credito_varejo" ? "HOME EQUITY" : selectedConvert === "credito_estruturado" ? "HOMECASH" : "CRI");
       const code = `CRED-26-${String(Date.now()).slice(-6)}`;
-      const creditLine = lineMap[selectedConvert];
-      const proposal = {
-        id: `prop-crm-${showConvert.id}-${Date.now()}`,
+      const proposalPayload = {
         code,
-        title: `${creditLine} — ${showConvert.name}`,
-        client_name: showConvert.name,
-        client_type: showConvert.personType,
-        cpf_cnpj: showConvert.document,
-        email: showConvert.email,
-        telefone: showConvert.phone,
-        credit_line: creditLine,
+        title:           `${line} — ${showConvert.name}`,
+        client_name:     showConvert.name,
+        client_cpf_cnpj: showConvert.document,
+        credit_line:     line,
         requested_value: showConvert.annualRevenue > 0 ? Math.round(showConvert.annualRevenue * 0.3) : 100000,
-        approved_value: null,
-        current_level: levelMap[selectedConvert],
-        status: "PENDING",
-        stage: "RECEBIDO",
-        partner_id: showConvert.partnerId,
-        partner_name: showConvert.partnerName,
-        docs_uploaded: 0,
-        docs_required: 9,
-        created_at: new Date().toISOString(),
+        current_level:   levelMap[selectedConvert],
+        status:          "PENDING",
+        partner_id:      showConvert.partnerId,
+        partner_name:    showConvert.partnerName,
+        created_by:      showConvert.partnerId,
       };
+
+      // Tenta salvar via API no Supabase; fallback localStorage (demo)
+      let saved = false;
       try {
-        const existing: { id: string }[] = JSON.parse(localStorage.getItem("v3_demo_proposals") ?? "[]");
-        if (!existing.some((p) => p.id === proposal.id)) {
-          localStorage.setItem("v3_demo_proposals", JSON.stringify([proposal, ...existing]));
-        }
+        const res = await fetch("/api/credit-proposals", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(proposalPayload),
+        });
+        const json = await res.json();
+        if (json.ok) saved = true;
       } catch {}
-      setMesaSuccess(`✅ Lead encaminhado! Proposta ${code} criada na Mesa de Crédito (${levelMap[selectedConvert].replace("_", " ")}).`);
-      setTimeout(() => setMesaSuccess(null), 6000);
+
+      if (!saved) {
+        try {
+          const existing: { id: string }[] = JSON.parse(localStorage.getItem("v3_demo_proposals") ?? "[]");
+          const local = { ...proposalPayload, id: `prop-crm-${showConvert.id}-${Date.now()}`, stage: "RECEBIDO", docs_uploaded: 0, docs_required: 9, created_at: new Date().toISOString() };
+          if (!existing.some((p) => p.id === local.id)) {
+            localStorage.setItem("v3_demo_proposals", JSON.stringify([local, ...existing]));
+          }
+        } catch {}
+      }
+
+      setMesaSuccess(`✅ Lead encaminhado como "Ganho"! Proposta ${code} criada na Mesa de Crédito — ${line}.`);
+      setTimeout(() => setMesaSuccess(null), 7000);
+    } else {
+      setMesaSuccess(`✅ Lead encaminhado para ${CONVERT_OPTIONS.find(o => o.id === selectedConvert)?.label ?? selectedConvert} e marcado como Ganho.`);
+      setTimeout(() => setMesaSuccess(null), 5000);
     }
 
     setShowConvert(null);
     setSelectedConvert("");
+    setSelectedCreditLine("");
   }
 
   function handleEnviarMesa(lead: CRMLead) {
@@ -673,11 +727,10 @@ export function CRMClient({ userRole, userName, userId }: { userRole: string; us
     setTimeout(() => setMesaSuccess(null), 5000);
   }
 
-  function handleNewLeadSubmit() {
+  async function handleNewLeadSubmit() {
     if (!newLead.name || !newLead.email) return;
     const nextCode = `CRM-26-${String(leads.length + 1).padStart(3, "0")}`;
-    const lead: CRMLead = {
-      id: `crm-${Date.now()}`,
+    const leadPayload = {
       code: nextCode,
       name: newLead.name,
       document: newLead.document,
@@ -702,13 +755,55 @@ export function CRMClient({ userRole, userName, userId }: { userRole: string; us
       createdAt: todayISO(),
       interactions: [],
     };
-    setLeads([...leads, lead]);
+
+    // Tenta salvar via API (Supabase). Se falhar (demo), salva só em state.
+    try {
+      const res = await fetch("/api/crm", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(leadPayload),
+      });
+      const json = await res.json();
+      if (json.lead) {
+        // Normaliza resposta do servidor
+        const saved: CRMLead = {
+          id:              json.lead.id,
+          code:            json.lead.code,
+          name:            json.lead.name,
+          document:        json.lead.document ?? "",
+          personType:      json.lead.person_type as "PF" | "PJ",
+          email:           json.lead.email ?? "",
+          phone:           json.lead.phone ?? "",
+          segment:         json.lead.segment ?? "",
+          annualRevenue:   Number(json.lead.annual_revenue ?? 0),
+          city:            json.lead.city ?? "",
+          state:           json.lead.state ?? "",
+          status:          json.lead.status as CRMLead["status"],
+          source:          json.lead.source as CRMLead["source"],
+          visitDate:       json.lead.visit_date ?? "",
+          nextContact:     json.lead.next_contact ?? "",
+          notes:           json.lead.notes ?? "",
+          convertedTo:     "" as const,
+          convertedAt:     "",
+          productInterest: json.lead.product_interest ?? "",
+          creditLine:      json.lead.credit_line ?? "",
+          partnerId:       json.lead.partner_id ?? userId,
+          partnerName:     json.lead.partner_name ?? userName,
+          createdAt:       json.lead.created_at?.split("T")[0] ?? todayISO(),
+          interactions:    [],
+        };
+        setLeads(prev => [saved, ...prev]);
+        setShowNewLead(false);
+        setNewLead({ personType: "PJ", name: "", document: "", email: "", phone: "", city: "", state: "", segment: "", annualRevenue: "", source: "ativo", notes: "", visitDate: "", nextContact: "", productInterest: "", creditLine: "" });
+        return;
+      }
+    } catch {}
+
+    // Fallback local (modo demo)
+    const lead: CRMLead = { ...leadPayload, id: `crm-${Date.now()}` } as CRMLead;
+    setLeads(prev => [lead, ...prev]);
     setShowNewLead(false);
-    setNewLead({
-      personType: "PJ", name: "", document: "", email: "", phone: "", city: "", state: "",
-      segment: "", annualRevenue: "", source: "ativo", notes: "", visitDate: "", nextContact: "",
-      productInterest: "", creditLine: "",
-    });
+    setNewLead({ personType: "PJ", name: "", document: "", email: "", phone: "", city: "", state: "", segment: "", annualRevenue: "", source: "ativo", notes: "", visitDate: "", nextContact: "", productInterest: "", creditLine: "" });
   }
 
   function handlePrint() {
@@ -1232,9 +1327,77 @@ export function CRMClient({ userRole, userName, userId }: { userRole: string; us
         {/* ── TAB: PROSPECÇÃO ── */}
         {tab === "prospeccao" && (
           <ProspeccaoTab
-            onAddLead={(prefill) => {
-              setNewLead((prev) => ({ ...prev, ...prefill }));
-              setShowNewLead(true);
+            onAddLead={async (prefill) => {
+              const code = `CRM-26-${String(leads.length + 1).padStart(3, "0")}`;
+              const payload = {
+                code,
+                name:            prefill.name ?? "Sem nome",
+                document:        prefill.document ?? "",
+                personType:      prefill.personType ?? "PJ",
+                email:           prefill.email ?? "",
+                phone:           prefill.phone ?? "",
+                segment:         prefill.segment ?? "",
+                city:            prefill.city ?? "",
+                state:           prefill.state ?? "",
+                annualRevenue:   0,
+                status:          "prospect",
+                source:          "ativo",
+                visitDate:       "",
+                nextContact:     "",
+                notes:           "",
+                convertedTo:     "",
+                convertedAt:     "",
+                productInterest: "",
+                creditLine:      "",
+                partnerId:       userId,
+                partnerName:     userName,
+                createdAt:       todayISO(),
+                interactions:    [],
+              };
+
+              try {
+                const res = await fetch("/api/crm", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify(payload),
+                });
+                const json = await res.json();
+                if (json.lead) {
+                  const saved: CRMLead = {
+                    id:              json.lead.id,
+                    code:            json.lead.code,
+                    name:            json.lead.name,
+                    document:        json.lead.document ?? "",
+                    personType:      (json.lead.person_type ?? "PJ") as "PF" | "PJ",
+                    email:           json.lead.email ?? "",
+                    phone:           json.lead.phone ?? "",
+                    segment:         json.lead.segment ?? "",
+                    annualRevenue:   Number(json.lead.annual_revenue ?? 0),
+                    city:            json.lead.city ?? "",
+                    state:           json.lead.state ?? "",
+                    status:          (json.lead.status ?? "prospect") as CRMLead["status"],
+                    source:          (json.lead.source ?? "ativo") as CRMLead["source"],
+                    visitDate:       json.lead.visit_date ?? "",
+                    nextContact:     json.lead.next_contact ?? "",
+                    notes:           json.lead.notes ?? "",
+                    convertedTo:     "" as const,
+                    convertedAt:     "",
+                    productInterest: json.lead.product_interest ?? "",
+                    creditLine:      json.lead.credit_line ?? "",
+                    partnerId:       json.lead.partner_id ?? userId,
+                    partnerName:     json.lead.partner_name ?? userName,
+                    createdAt:       json.lead.created_at?.split("T")[0] ?? todayISO(),
+                    interactions:    [],
+                  };
+                  setLeads(prev => [saved, ...prev]);
+                  setTab("pipeline");
+                  return;
+                }
+              } catch {}
+
+              // Fallback local (demo)
+              setLeads(prev => [{ ...payload, id: `crm-${Date.now()}` } as CRMLead, ...prev]);
+              setTab("pipeline");
             }}
           />
         )}
@@ -1566,9 +1729,27 @@ export function CRMClient({ userRole, userName, userId }: { userRole: string; us
                     </span>
                   </div>
                 </DialogTitle>
+<<<<<<< Updated upstream
                 <div style={{ fontSize: 12, color: "#7A8FA8", marginTop: 4 }}>
                   {selectedLead.code}
                   {isAdmin && ` · ${selectedLead.partnerName}`}
+=======
+                <div style={{ fontSize: 12, color: "#5A7490", marginTop: 4, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <span>{selectedLead.code}{isAdmin && ` · ${selectedLead.partnerName}`}</span>
+                  {isAdmin && (
+                    <button
+                      onClick={async () => {
+                        if (!confirm(`Excluir permanentemente o lead "${selectedLead.name}"?`)) return;
+                        await fetch(`/api/crm?id=${selectedLead.id}`, { method: "DELETE" });
+                        setLeads(prev => prev.filter(l => l.id !== selectedLead.id));
+                        setSelectedLead(null);
+                      }}
+                      style={{ fontSize: 11, color: "#EF4444", background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 6, padding: "3px 10px", cursor: "pointer" }}
+                    >
+                      Excluir Lead
+                    </button>
+                  )}
+>>>>>>> Stashed changes
                 </div>
               </DialogHeader>
 
@@ -1803,17 +1984,26 @@ export function CRMClient({ userRole, userName, userId }: { userRole: string; us
       </Dialog>
 
       {/* ── MODAL: Convert Lead ── */}
-      <Dialog open={!!showConvert} onOpenChange={(open) => { if (!open) { setShowConvert(null); setSelectedConvert(""); } }}>
-        <DialogContent className="max-w-md" style={{ background: "#091221", border: "1px solid #122036" }}>
+      <Dialog open={!!showConvert} onOpenChange={(open) => { if (!open) { setShowConvert(null); setSelectedConvert(""); setSelectedCreditLine(""); } }}>
+        <DialogContent className="max-w-lg" style={{ background: "#091221", border: "1px solid #122036", maxHeight: "90vh", overflowY: "auto" }}>
           {showConvert && (
             <>
               <DialogHeader>
-                <DialogTitle style={{ color: "#E8EDF5" }}>Avançar para qual produto?</DialogTitle>
+                <DialogTitle style={{ color: "#E8EDF5" }}>Encaminhar para qual produto?</DialogTitle>
               </DialogHeader>
+<<<<<<< Updated upstream
               <div style={{ fontSize: 13, color: "#7A8FA8", marginBottom: 16 }}>
                 {showConvert.name}
+=======
+              <div style={{ fontSize: 13, color: "#5A7490", marginBottom: 16 }}>
+                Cliente: <strong style={{ color: "#E8EDF5" }}>{showConvert.name}</strong>
+>>>>>>> Stashed changes
               </div>
 
+              {/* Passo 1: Produto */}
+              <div style={{ fontSize: 11, fontWeight: 700, color: "#C4922E", marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                1. Escolha o produto
+              </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 20 }}>
                 {CONVERT_OPTIONS.map((opt) => {
                   const Icon = opt.icon;
@@ -1821,7 +2011,7 @@ export function CRMClient({ userRole, userName, userId }: { userRole: string; us
                   return (
                     <div
                       key={opt.id}
-                      onClick={() => setSelectedConvert(opt.id)}
+                      onClick={() => { setSelectedConvert(opt.id); setSelectedCreditLine(""); }}
                       style={{
                         background: isSelected ? opt.bg : "#0F1E35",
                         border: `2px solid ${isSelected ? opt.color : "#122036"}`,
@@ -1843,13 +2033,61 @@ export function CRMClient({ userRole, userName, userId }: { userRole: string; us
                 })}
               </div>
 
+              {/* Passo 2: Linha de crédito (somente se produto for crédito) */}
+              {selectedConvert && CREDIT_LINES_BY_PRODUCT[selectedConvert] && (
+                <>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "#C4922E", marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                    2. Escolha a linha de crédito
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 20 }}>
+                    {CREDIT_LINES_BY_PRODUCT[selectedConvert].map((item) => {
+                      const isSelected = selectedCreditLine === item.line;
+                      const opt = CONVERT_OPTIONS.find(o => o.id === selectedConvert)!;
+                      return (
+                        <div
+                          key={item.line}
+                          onClick={() => setSelectedCreditLine(item.line)}
+                          style={{
+                            background: isSelected ? opt.bg : "#0F1E35",
+                            border: `2px solid ${isSelected ? opt.color : "#122036"}`,
+                            borderRadius: 8,
+                            padding: "10px 14px",
+                            cursor: "pointer",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            transition: "all 0.15s",
+                          }}
+                        >
+                          <div>
+                            <div style={{ fontSize: 13, fontWeight: 700, color: isSelected ? opt.color : "#E8EDF5" }}>
+                              {item.line}
+                            </div>
+                            <div style={{ fontSize: 11, color: "#5A7490", marginTop: 2 }}>{item.desc}</div>
+                          </div>
+                          {isSelected && (
+                            <div style={{ width: 16, height: 16, borderRadius: "50%", background: opt.color, flexShrink: 0 }} />
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+
               <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-                <Button variant="outline" onClick={() => { setShowConvert(null); setSelectedConvert(""); }}>
+                <Button variant="outline" onClick={() => { setShowConvert(null); setSelectedConvert(""); setSelectedCreditLine(""); }}>
                   Cancelar
                 </Button>
-                <Button onClick={handleConvert} disabled={!selectedConvert}>
+                <Button
+                  onClick={handleConvert}
+                  disabled={
+                    !selectedConvert ||
+                    (!!CREDIT_LINES_BY_PRODUCT[selectedConvert] && !selectedCreditLine)
+                  }
+                >
                   <ChevronRight className="w-4 h-4 mr-1" />
-                  Confirmar
+                  Confirmar e Encaminhar
                 </Button>
               </div>
             </>
@@ -2145,7 +2383,8 @@ export function CRMClient({ userRole, userName, userId }: { userRole: string; us
 
 // ─── Prospecção Tab ───────────────────────────────────────────────────────────
 
-function ProspeccaoTab({ onAddLead }: { onAddLead: (prefill: Partial<{ personType: "PF"|"PJ"; name: string; document: string; email: string; phone: string; city: string; state: string; segment: string; }>) => void }) {
+function ProspeccaoTab({ onAddLead }: { onAddLead: (prefill: Partial<{ personType: "PF"|"PJ"; name: string; document: string; email: string; phone: string; city: string; state: string; segment: string; }>) => Promise<void> | void }) {
+  const [saving, setSaving] = useState<string | null>(null);
   const [mode, setMode] = useState<"single" | "batch">("single");
   const [cnpjInput, setCnpjInput] = useState("");
   const [batchInput, setBatchInput] = useState("");
@@ -2325,11 +2564,25 @@ function ProspeccaoTab({ onAddLead }: { onAddLead: (prefill: Partial<{ personTyp
                     style={{ background: "transparent", border: "1px solid #122036", borderRadius: 6, padding: "5px 12px", color: "#7A8FA8", fontSize: 11, cursor: "pointer" }}>
                     {isOpen ? "Ocultar" : "Detalhes"}
                   </button>
+<<<<<<< Updated upstream
                   <button onClick={() => onAddLead({ personType: "PJ", name: c.razao_social,
                     document: fmtCnpj(c.cnpj), email: c.email || "", phone: c.telefone || "",
                     city: c.municipio || "", state: c.uf || "", segment: (c.cnae || "").slice(0, 50) })}
                     style={{ ...btnBase, background: "rgba(196,146,46,0.15)", border: "1px solid rgba(196,146,46,0.3)", padding: "5px 14px", color: "#E8C97A", fontSize: 11 }}>
                     + Lead
+=======
+                  <button
+                    disabled={saving === c.cnpj}
+                    onClick={async () => {
+                      setSaving(c.cnpj);
+                      await onAddLead({ personType: "PJ", name: c.razao_social,
+                        document: fmtCnpj(c.cnpj), email: c.email || "", phone: c.telefone || "",
+                        city: c.municipio || "", state: c.uf || "", segment: (c.cnae || "").slice(0, 50) });
+                      setSaving(null);
+                    }}
+                    style={{ ...btnBase, background: saving === c.cnpj ? "rgba(196,146,46,0.05)" : "rgba(196,146,46,0.15)", border: "1px solid rgba(196,146,46,0.3)", padding: "5px 14px", color: "#E5B96A", fontSize: 11, opacity: saving === c.cnpj ? 0.6 : 1 }}>
+                    {saving === c.cnpj ? "Salvando..." : "+ Lead"}
+>>>>>>> Stashed changes
                   </button>
                 </div>
 

@@ -22,7 +22,7 @@ export async function POST(request: NextRequest) {
     maxAge: 86400,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
-    httpOnly: false,
+    httpOnly: true,
   });
 
   return response;

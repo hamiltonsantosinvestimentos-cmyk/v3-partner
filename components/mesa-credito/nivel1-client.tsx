@@ -46,7 +46,7 @@ interface CreditDeskLevel1ClientProps {
   currentUser?: { id: string; full_name: string; role: string };
 }
 
-const CREDIT_LINES = ["HOME EQUITY", "AVAL", "FUNDO CONSTRUÇÃO RESIDENCIAL"];
+const CREDIT_LINES = ["HOME EQUITY", "HE ESTRESSADO", "AVAL", "FUNDO CONSTRUÇÃO RESIDENCIAL"];
 
 const LS_KEY = "v3_demo_proposals";
 
@@ -70,8 +70,10 @@ export function CreditDeskLevel1Client({ proposals: initial, currentUser }: Cred
   const [detailProposal, setDetailProposal] = useState<Proposal | null>(null);
   const [view, setView] = useState<"table" | "kanban">("table");
 
-  // Merge proposals from localStorage (created by partner in other sessions/pages)
+  // Em produção os dados vêm do Supabase via props (initialProps).
+  // Mantemos apenas leitura do localStorage como fallback para modo demo.
   useEffect(() => {
+    if (initial.length > 0) return; // já tem dados do servidor
     const stored = loadFromStorage().filter((s) => s.current_level === "NIVEL_1");
     if (stored.length === 0) return;
     setProposals((prev) => {
@@ -79,7 +81,7 @@ export function CreditDeskLevel1Client({ proposals: initial, currentUser }: Cred
       const newOnes = stored.filter((s) => !existingIds.has(s.id));
       return newOnes.length > 0 ? [...newOnes, ...prev] : prev;
     });
-  }, []);
+  }, [initial.length]);
 
   const partnerName = currentUser?.full_name ?? "João Partner Silva";
   const partnerId = currentUser?.id ?? "demo-partner-001";
@@ -99,14 +101,35 @@ export function CreditDeskLevel1Client({ proposals: initial, currentUser }: Cred
 
   const totalValue = filtered.reduce((sum, p) => sum + p.requested_value, 0);
 
-  const handleNewProposal = useCallback((proposal: Record<string, unknown>) => {
+  const handleNewProposal = useCallback(async (proposal: Record<string, unknown>) => {
     const p = proposal as unknown as Proposal;
-    setProposals((prev) => {
-      const updated = [p, ...prev];
-      // Persist to localStorage so Mesa de Crédito and Mesa Operacional pick it up
-      const stored = loadFromStorage().filter((s) => s.id !== p.id);
+    // Salva no Supabase via API
+    try {
+      const res = await fetch("/api/credit-proposals", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          code:            p.code,
+          title:           p.title,
+          client_name:     p.client_name,
+          client_cpf_cnpj: p.cpf_cnpj ?? null,
+          credit_line:     p.credit_line,
+          requested_value: p.requested_value,
+          current_level:   "NIVEL_1",
+        }),
+      });
+      const json = await res.json();
+      if (json.ok && json.proposal) {
+        const saved = { ...p, id: json.proposal.id, partner_id: json.proposal.partner_id ?? p.partner_id };
+        setProposals(prev => [saved, ...prev]);
+        return;
+      }
+    } catch {}
+    // Fallback local
+    setProposals(prev => {
+      const stored = loadFromStorage().filter(s => s.id !== p.id);
       saveToStorage([p, ...stored]);
-      return updated;
+      return [p, ...prev];
     });
   }, []);
 

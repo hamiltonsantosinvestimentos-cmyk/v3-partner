@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { useRouter } from "next/navigation";
 import {
   TrendingUp,
   Building2,
@@ -8,9 +9,6 @@ import {
   CreditCard,
   ArrowUpRight,
   ArrowDownRight,
-  CircleDot,
-  CheckCircle2,
-  Clock,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -28,22 +26,9 @@ import {
   Bar,
 } from "recharts";
 import { MarketTicker } from "@/components/dashboard/market-ticker";
+import { NotificationBell } from "@/components/dashboard/notification-bell";
 
-const revenueData = [
-  { month: "Out", value: 4200000 },
-  { month: "Nov", value: 5800000 },
-  { month: "Dez", value: 4900000 },
-  { month: "Jan", value: 7100000 },
-  { month: "Fev", value: 6300000 },
-  { month: "Mar", value: 8900000 },
-];
-
-const operationsData = [
-  { name: "Split Fiscal", valor: 42 },
-  { name: "M&A", valor: 18 },
-  { name: "Mesa Crédito", valor: 67 },
-  { name: "Operacional", valor: 31 },
-];
+const revenueData: Array<{ month: string; value: number }> = [];
 
 interface KpiCardProps {
   title: string;
@@ -87,9 +72,17 @@ function KpiCard({ title, value, icon, change, color, subtitle }: KpiCardProps) 
   );
 }
 
+const PERIOD_LABELS: Record<string, string> = {
+  "7d":  "7 dias",
+  "30d": "30 dias",
+  "90d": "90 dias",
+  "all": "Tudo",
+};
+
 interface DashboardClientProps {
   role: string;
   userName: string;
+  period?: string;
   kpis: {
     totalSplits: number;
     totalDeals: number;
@@ -118,13 +111,30 @@ interface DashboardClientProps {
 export function DashboardClient({
   role,
   userName,
+  period = "30d",
   kpis,
   recentSplits,
   recentDeals,
 }: DashboardClientProps) {
+  const router = useRouter();
   const hour = new Date().getHours();
   const greeting =
     hour < 12 ? "Bom dia" : hour < 18 ? "Boa tarde" : "Boa noite";
+
+  function setPeriod(p: string) {
+    const url = new URL(window.location.href);
+    url.searchParams.set("period", p);
+    router.push(url.pathname + url.search);
+  }
+
+  const operationsData = [
+    { name: "Split Fiscal", valor: kpis.totalSplits },
+    { name: "M&A", valor: kpis.totalDeals },
+    { name: "Mesa Crédito", valor: kpis.pendingProposals },
+    { name: "Tickets", valor: kpis.openTickets },
+  ];
+
+  const totalOperacoes = kpis.totalSplits + kpis.totalDeals + kpis.pendingProposals + kpis.openTickets;
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -132,19 +142,43 @@ export function DashboardClient({
       <MarketTicker />
 
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-white">
-          {greeting},{" "}
-          <span className="gradient-text">{userName.split(" ")[0]}</span>
-        </h1>
-        <p className="text-muted-foreground text-sm mt-1">
-          Aqui está o resumo da sua plataforma —{" "}
-          {new Date().toLocaleDateString("pt-BR", {
-            weekday: "long",
-            day: "numeric",
-            month: "long",
-          })}
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-white">
+            {greeting},{" "}
+            <span className="gradient-text">{userName.split(" ")[0]}</span>
+          </h1>
+          <p className="text-muted-foreground text-sm mt-1">
+            Aqui está o resumo da sua plataforma —{" "}
+            {new Date().toLocaleDateString("pt-BR", {
+              weekday: "long",
+              day: "numeric",
+              month: "long",
+            })}
+          </p>
+        </div>
+
+        <div className="flex items-center gap-3 shrink-0">
+          {/* Filtro de período */}
+          <div className="flex items-center gap-1 bg-[#0D1929] border border-border rounded-lg p-1">
+            {Object.entries(PERIOD_LABELS).map(([key, label]) => (
+              <button
+                key={key}
+                onClick={() => setPeriod(key)}
+                className={`px-3 py-1 rounded text-xs font-medium transition-colors ${
+                  period === key
+                    ? "bg-[#C4922E] text-[#070E1A]"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {/* Sino de notificações */}
+          <NotificationBell />
+        </div>
       </div>
 
       {/* KPI Grid */}
@@ -153,7 +187,6 @@ export function DashboardClient({
           title="Split Fiscal"
           value={kpis.totalSplits}
           icon={<TrendingUp className="w-5 h-5 text-blue-400" />}
-          change={12}
           color="bg-blue-500/20"
           subtitle="operações totais"
         />
@@ -161,7 +194,6 @@ export function DashboardClient({
           title="Deals M&A"
           value={kpis.totalDeals}
           icon={<Building2 className="w-5 h-5 text-purple-400" />}
-          change={8}
           color="bg-purple-500/20"
           subtitle="em pipeline"
         />
@@ -169,7 +201,6 @@ export function DashboardClient({
           title="Tickets Abertos"
           value={kpis.openTickets}
           icon={<Headphones className="w-5 h-5 text-amber-400" />}
-          change={-3}
           color="bg-amber-500/20"
           subtitle="pendentes/análise"
         />
@@ -177,7 +208,6 @@ export function DashboardClient({
           title="Propostas Crédito"
           value={kpis.pendingProposals}
           icon={<CreditCard className="w-5 h-5 text-emerald-400" />}
-          change={15}
           color="bg-emerald-500/20"
           subtitle="em análise"
         />
@@ -192,11 +222,10 @@ export function DashboardClient({
               Volume de Operações
             </CardTitle>
             <p className="text-2xl font-bold text-white mt-1">
-              {formatCurrency(8900000)}
+              {totalOperacoes}
             </p>
-            <p className="text-xs text-emerald-400 flex items-center gap-1">
-              <ArrowUpRight className="w-3 h-3" />
-              +41% vs mês anterior
+            <p className="text-xs text-muted-foreground">
+              operações cadastradas na plataforma
             </p>
           </CardHeader>
           <CardContent>

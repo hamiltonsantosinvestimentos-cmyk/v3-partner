@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { Eye, EyeOff, Wifi, WifiOff, RefreshCw, CheckCircle, XCircle, Clock, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -8,9 +9,10 @@ interface PipefyConfigProps {
   mesaName: string;
   storageKey: string;
   stageMapping: Array<{ localStage: string; label: string }>;
+  syncAction?: string; // e.g. "sync_ma" — if provided, Sincronizar Agora faz sync real
 }
 
-interface PipefyPhase {
+export interface PipefyPhase {
   id: string;
   name: string;
 }
@@ -21,26 +23,31 @@ interface SyncLog {
   message: string;
 }
 
-interface PipefyConfigData {
+export interface PipefyConfigData {
   token: string;
   pipeId: string;
+  formUrl: string;
   autoSync: boolean;
   lastSync: string | null;
   phaseMapping: Record<string, string>;
   syncLogs: SyncLog[];
+  savedPhases: PipefyPhase[];
 }
 
 const defaultConfig: PipefyConfigData = {
   token: "",
   pipeId: "",
+  formUrl: "",
   autoSync: false,
   lastSync: null,
   phaseMapping: {},
   syncLogs: [],
+  savedPhases: [],
 };
 
-export function PipefyConfig({ mesaName, storageKey, stageMapping }: PipefyConfigProps) {
+export function PipefyConfig({ mesaName, storageKey, stageMapping, syncAction }: PipefyConfigProps) {
   const lsKey = `v3_pipefy_${storageKey}`;
+  const router = useRouter();
 
   const [config, setConfig] = useState<PipefyConfigData>(defaultConfig);
   const [showToken, setShowToken] = useState(false);
@@ -50,38 +57,65 @@ export function PipefyConfig({ mesaName, storageKey, stageMapping }: PipefyConfi
   const [loadingPhases, setLoadingPhases] = useState(false);
   const [syncing, setSyncing] = useState(false);
 
-  useEffect(() => {
+  // Salva no localStorage apenas dados NÃO sensíveis (sem token/pipeId)
+  const saveToLocalStorage = useCallback((data: PipefyConfigData) => {
     try {
-      const saved = localStorage.getItem(lsKey);
-      if (saved) {
-        const parsed = JSON.parse(saved) as PipefyConfigData;
-        setConfig({ ...defaultConfig, ...parsed });
+      const { token: _t, pipeId: _p, ...safe } = data;
+      localStorage.setItem(lsKey, JSON.stringify(safe));
+    } catch { /* ignore */ }
+  }, [lsKey]);
+
+  // Carrega config: token/pipeId do banco, resto do localStorage
+  useEffect(() => {
+    let mounted = true;
+    const load = async () => {
+      // 1. Dados não-sensíveis do localStorage
+      try {
+        const saved = localStorage.getItem(lsKey);
+        if (saved) {
+          const parsed = JSON.parse(saved) as Partial<PipefyConfigData>;
+          if (mounted) {
+            setConfig(prev => ({ ...prev, ...parsed, token: "", pipeId: "" }));
+            if (parsed.savedPhases?.length) setPhases(parsed.savedPhases);
+          }
+        }
+      } catch { /* ignore */ }
+
+      // 2. Token/pipeId do banco (apenas mesa_ma)
+      if (storageKey === "mesa_ma") {
+        try {
+          const res = await fetch("/api/pipefy-settings");
+          const { config: dbCfg } = await res.json();
+          if (dbCfg?.token && mounted) {
+            setConfig(prev => ({
+              ...prev,
+              token: dbCfg.token ?? "",
+              pipeId: dbCfg.pipeId ?? "",
+              formUrl: dbCfg.formUrl ?? prev.formUrl,
+            }));
+            setConnectionStatus("connected");
+            setConnectedUser("(salvo no banco)");
+          }
+        } catch { /* sem app_config ainda */ }
       }
-    } catch {
-      // ignore parse errors
-    }
+    };
+    load();
+    return () => { mounted = false; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lsKey]);
 
   const saveConfig = useCallback((updated: PipefyConfigData) => {
     setConfig(updated);
-    try {
-      localStorage.setItem(lsKey, JSON.stringify(updated));
-    } catch {
-      // ignore storage errors
-    }
-  }, [lsKey]);
+    saveToLocalStorage(updated);
+  }, [saveToLocalStorage]);
 
   const updateConfig = useCallback((partial: Partial<PipefyConfigData>) => {
     setConfig(prev => {
       const updated = { ...prev, ...partial };
-      try {
-        localStorage.setItem(lsKey, JSON.stringify(updated));
-      } catch {
-        // ignore
-      }
+      saveToLocalStorage(updated);
       return updated;
     });
-  }, [lsKey]);
+  }, [saveToLocalStorage]);
 
   const addLog = useCallback((status: SyncLog["status"], message: string) => {
     const entry: SyncLog = {
@@ -114,7 +148,9 @@ export function PipefyConfig({ mesaName, storageKey, stageMapping }: PipefyConfi
       if (data.success) {
         setConnectionStatus("connected");
         setConnectedUser(data.data?.name ?? "Usuário Pipefy");
-        addLog("success", `Conexão estabelecida com sucesso. Usuário: ${data.data?.name ?? "?"}`);
+        addLog("success", `Conexão estabelecida. Usuário: ${data.data?.name ?? "?"}`);
+        // Persiste token no banco imediatamente ao confirmar conexão
+        saveConfigToDb(config.token, config.pipeId, config.formUrl);
       } else {
         setConnectionStatus("error");
         setConnectedUser(null);
@@ -127,6 +163,18 @@ export function PipefyConfig({ mesaName, storageKey, stageMapping }: PipefyConfi
     }
   };
 
+  // Salva token+pipeId+formUrl no banco (token NUNCA vai para localStorage)
+  const saveConfigToDb = useCallback(async (token: string, pipeId: string, formUrl?: string) => {
+    if (!token || !pipeId || storageKey !== "mesa_ma") return;
+    try {
+      await fetch("/api/pipefy-settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, pipeId, formUrl }),
+      });
+    } catch {}
+  }, [storageKey]);
+
   const handleLoadPhases = async () => {
     if (!config.token || !config.pipeId) return;
     setLoadingPhases(true);
@@ -138,8 +186,11 @@ export function PipefyConfig({ mesaName, storageKey, stageMapping }: PipefyConfi
       });
       const data = await res.json();
       if (data.success) {
-        setPhases(data.data?.phases ?? []);
-        addLog("success", `${data.data?.phases?.length ?? 0} fases carregadas do pipe "${data.data?.name ?? config.pipeId}"`);
+        const loaded: PipefyPhase[] = data.data?.phases ?? [];
+        setPhases(loaded);
+        updateConfig({ savedPhases: loaded });
+        saveConfigToDb(config.token, config.pipeId, config.formUrl);
+        addLog("success", `${loaded.length} fases carregadas do pipe "${data.data?.name ?? config.pipeId}"`);
       } else {
         addLog("error", `Erro ao carregar fases: ${data.error}`);
       }
@@ -152,15 +203,40 @@ export function PipefyConfig({ mesaName, storageKey, stageMapping }: PipefyConfi
 
   const handleSyncNow = async () => {
     setSyncing(true);
-    addLog("info", "Sincronização iniciada (modo demo)");
-    await new Promise(r => setTimeout(r, 1500));
-    const now = new Date().toISOString();
-    addLog("success", "Sincronização concluída com sucesso (modo demo)");
-    setConfig(prev => {
-      const updated = { ...prev, lastSync: now };
-      try { localStorage.setItem(lsKey, JSON.stringify(updated)); } catch { /* ignore */ }
-      return updated;
-    });
+    addLog("info", "Sincronização iniciada...");
+    try {
+      if (syncAction && config.token && config.pipeId) {
+        const res = await fetch("/api/pipefy", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: syncAction, token: config.token, pipeId: config.pipeId }),
+        });
+        const data = await res.json();
+        const now = new Date().toISOString();
+        if (data.success) {
+          addLog("success", `${data.synced} deal(s) sincronizados do Pipefy com sucesso.`);
+          setConfig(prev => {
+            const updated = { ...prev, lastSync: now };
+            try { localStorage.setItem(lsKey, JSON.stringify(updated)); } catch {}
+            return updated;
+          });
+          if ((data.synced ?? 0) > 0) router.refresh();
+        } else {
+          addLog("error", `Erro na sincronização: ${data.error}`);
+        }
+      } else {
+        await new Promise(r => setTimeout(r, 1000));
+        const now = new Date().toISOString();
+        addLog("success", "Configuração salva. Configure o webhook no Pipefy para sincronização automática.");
+        setConfig(prev => {
+          const updated = { ...prev, lastSync: now };
+          try { localStorage.setItem(lsKey, JSON.stringify(updated)); } catch {}
+          return updated;
+        });
+      }
+    } catch {
+      addLog("error", "Erro de rede ao sincronizar.");
+    }
     setSyncing(false);
   };
 
@@ -259,6 +335,32 @@ export function PipefyConfig({ mesaName, storageKey, stageMapping }: PipefyConfi
               />
             </div>
 
+            {/* Form URL */}
+            <div>
+              <label className="text-xs text-[#5A7490] mb-1.5 block">URL do Formulário Público <span className="text-[#5A7490]/60">(opcional)</span></label>
+              <input
+                type="url"
+                value={config.formUrl}
+                onChange={e => updateConfig({ formUrl: e.target.value })}
+                placeholder="https://app.pipefy.com/public/form/..."
+                className="w-full rounded-lg border border-[#122036] bg-[#0F1E35] text-[#E8EDF5] text-xs px-3 py-2.5 placeholder:text-[#5A7490] focus:outline-none focus:border-[#C4922E] transition-colors"
+              />
+              <p className="text-[10px] text-[#5A7490] mt-1">Cole o link do formulário público do pipe para agilizar novas submissões</p>
+            </div>
+
+            {/* Form URL */}
+            <div>
+              <label className="text-xs text-[#5A7490] mb-1.5 block">URL do Formulário Público <span className="text-[#5A7490]/60">(opcional)</span></label>
+              <input
+                type="url"
+                value={config.formUrl}
+                onChange={e => updateConfig({ formUrl: e.target.value })}
+                placeholder="https://app.pipefy.com/public/form/..."
+                className="w-full rounded-lg border border-[#122036] bg-[#0F1E35] text-[#E8EDF5] text-xs px-3 py-2.5 placeholder:text-[#5A7490] focus:outline-none focus:border-[#C4922E] transition-colors"
+              />
+              <p className="text-[10px] text-[#5A7490] mt-1">Cole o link do formulário público do pipe para agilizar novas submissões</p>
+            </div>
+
             {/* Test button */}
             <button
               onClick={handleTestConnection}
@@ -324,6 +426,29 @@ export function PipefyConfig({ mesaName, storageKey, stageMapping }: PipefyConfi
       {/* Sync Settings Card (full width) */}
       <div className="rounded-xl border border-[#122036] bg-[#091221] p-5">
         <h4 className="text-sm font-semibold text-[#E8EDF5] mb-4">Configurações de Sincronização</h4>
+
+        {/* Webhook URL */}
+        <div className="mb-4 p-3 rounded-lg bg-[#0F1E35] border border-[#122036]">
+          <p className="text-xs text-[#5A7490] mb-1.5">URL do Webhook (configure no Pipefy → Automações)</p>
+          <div className="flex items-center gap-2">
+            <code className="flex-1 text-[10px] text-[#C4922E] break-all select-all">
+              {typeof window !== "undefined" ? window.location.origin : "https://v3-partner.vercel.app"}/api/pipefy/webhook
+            </code>
+            <button
+              type="button"
+              onClick={() => {
+                const url = `${window.location.origin}/api/pipefy/webhook`;
+                navigator.clipboard.writeText(url);
+              }}
+              className="flex-shrink-0 text-[10px] text-[#5A7490] hover:text-[#C4922E] transition-colors border border-[#122036] rounded px-2 py-0.5"
+            >
+              Copiar
+            </button>
+          </div>
+          <p className="text-[10px] text-[#5A7490] mt-1.5">
+            No Pipefy: Automações → Webhook → card.create e card.move → cole esta URL
+          </p>
+        </div>
 
         <div className="flex flex-col sm:flex-row sm:items-center gap-4 mb-4">
           {/* Auto sync toggle */}

@@ -41,3 +41,28 @@ yarn-error.log*
 next-env.d.ts
 
 .vercel
+
+# Environment & Secrets (AIOX)
+.env
+.env.local
+.env.*.local
+*.key
+
+# Dependencies (AIOX)
+node_modules/
+
+# Build & Logs (AIOX)
+dist/
+build/
+*.log
+logs/
+
+# IDE & OS (AIOX)
+Thumbs.db
+.idea/
+*.swp
+
+# AIOX Local (AIOX)
+.aiox-core/local/
+.claude/settings.local.json
+.aiox/install-log.txt

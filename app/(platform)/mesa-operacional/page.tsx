@@ -18,29 +18,48 @@ const DEMO_PROPOSALS_WITH_STAGE = DEMO_CREDIT_PROPOSALS.map((p, i) => ({
 }));
 
 export default async function MesaOperacionalPage() {
-  let currentUser = { id: "demo-mesa-001", full_name: "Carlos Mesa Operacional", role: "MESA_OPERACIONAL" };
-
   if (IS_DEMO) {
     const cookieStore = await cookies();
     const session = cookieStore.get("v3_demo_session")?.value;
+    let demoUser = { id: "demo-mesa-001", full_name: "Carlos Mesa Operacional", role: "MESA_OPERACIONAL" };
     if (session) {
-      try { currentUser = JSON.parse(session); } catch {}
+      try { demoUser = JSON.parse(session); } catch {}
     }
     return (
       <MesaOpClient
         tickets={DEMO_TICKETS}
         proposals={DEMO_PROPOSALS_WITH_STAGE as Parameters<typeof MesaOpClient>[0]["proposals"]}
-        currentUser={currentUser}
+        currentUser={demoUser}
       />
     );
   }
 
   const { createClient } = await import("@/lib/supabase/server");
   const supabase = await createClient();
-  const { data: ticketsData } = await supabase
-    .from("operational_tickets").select("*").order("created_at", { ascending: false });
-  const { data: proposalsData } = await supabase
-    .from("credit_desk_proposals").select("*").order("created_at", { ascending: false });
+
+  const { data: { user } } = await supabase.auth.getUser();
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("id, full_name, role")
+    .eq("id", user?.id ?? "")
+    .single();
+  const currentUser = {
+    id: profile?.id ?? user?.id ?? "",
+    full_name: profile?.full_name ?? "Usuário",
+    role: profile?.role ?? "MESA_OPERACIONAL",
+  };
+
+  const isAdmin = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"].includes(currentUser.role);
+
+  // Tickets: admin vê todos, partner vê os próprios
+  let ticketsQuery = supabase.from("operational_tickets").select("*").order("created_at", { ascending: false });
+  if (!isAdmin) ticketsQuery = ticketsQuery.eq("requester_id", currentUser.id);
+  const { data: ticketsData } = await ticketsQuery;
+
+  // Propostas: admin vê todas, partner vê somente as suas
+  let proposalsQuery = supabase.from("credit_desk_proposals").select("*").order("created_at", { ascending: false });
+  if (!isAdmin) proposalsQuery = proposalsQuery.eq("partner_id", currentUser.id);
+  const { data: proposalsData } = await proposalsQuery;
 
   return (
     <MesaOpClient

@@ -6,6 +6,7 @@ import {
   Banknote, Clock, CheckCircle2, AlertCircle, Link2,
   LayoutGrid, List, Search, X, FileText, ArrowRight, Webhook,
 } from "lucide-react";
+import { ExportButton } from "@/components/financeiro/export-button";
 import { PipefyConfig } from "@/components/shared/pipefy-config";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -141,8 +142,9 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
   const [tickets, setTickets] = useState<Ticket[]>(initialTickets);
   const [proposals, setProposals] = useState<ProposalCard[]>(initialProposals);
 
-  // Carregar propostas criadas pelo partner (salvas no localStorage)
+  // Fallback localStorage apenas em modo demo (quando não há props do servidor)
   useEffect(() => {
+    if (initialProposals.length > 0) return;
     try {
       const stored: ProposalCard[] = JSON.parse(localStorage.getItem("v3_demo_proposals") ?? "[]");
       if (stored.length === 0) return;
@@ -154,7 +156,7 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
         return newOnes.length > 0 ? [...newOnes, ...prev] : prev;
       });
     } catch {}
-  }, []);
+  }, [initialProposals.length]);
   const [novoTicket, setNovoTicket] = useState(false);
   const [detailProposal, setDetailProposal] = useState<ProposalCard | null>(null);
   const [search, setSearch] = useState("");
@@ -324,8 +326,22 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
       {/* ── VIEW: TICKETS ── */}
       {view === "tickets" && (
         <Card>
-          <CardHeader className="pb-3">
+          <CardHeader className="pb-3 flex flex-row items-center justify-between">
             <CardTitle className="text-sm font-semibold">Todos os Tickets</CardTitle>
+            <ExportButton opts={{
+              titulo: "Tickets Operacionais",
+              orientacao: "landscape",
+              colunas: [
+                { header: "Código", key: "code", width: 14 },
+                { header: "Título", key: "title", width: 35 },
+                { header: "Categoria", key: "category", width: 14 },
+                { header: "Prioridade", key: "priority", width: 12 },
+                { header: "Status", key: "status", width: 12 },
+                { header: "Vencimento", key: "due_date", format: "date", width: 14 },
+                { header: "Criado em", key: "created_at", format: "date", width: 14 },
+              ],
+              dados: tickets,
+            }} />
           </CardHeader>
           <CardContent className="p-0">
             <div className="overflow-x-auto">
@@ -350,7 +366,7 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
                         <Badge className={STATUS_COLORS[ticket.status as OperationStatus]}>{STATUS_LABELS[ticket.status as OperationStatus]}</Badge>
                       </td>
                       <td className="px-4 py-3 text-xs text-muted-foreground">{ticket.due_date ? formatDateTime(ticket.due_date) : "—"}</td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3 flex items-center gap-2">
                         {ticket.status !== "COMPLETED" && (
                           <button
                             onClick={() => setTickets((prev) => prev.map((t) => t.id === ticket.id ? { ...t, status: t.status === "PENDING" ? "IN_REVIEW" : "COMPLETED" } : t))}
@@ -358,6 +374,18 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
                           >
                             {ticket.status === "PENDING" ? "Iniciar" : "Concluir"}
                             <ArrowRight className="w-3 h-3" />
+                          </button>
+                        )}
+                        {currentUser?.role === "ADMIN" && (
+                          <button
+                            onClick={async () => {
+                              if (!confirm("Excluir este ticket permanentemente?")) return;
+                              await fetch(`/api/tickets?id=${ticket.id}`, { method: "DELETE" });
+                              setTickets(prev => prev.filter(t => t.id !== ticket.id));
+                            }}
+                            className="text-xs text-red-400 hover:text-red-300"
+                          >
+                            Excluir
                           </button>
                         )}
                       </td>
@@ -392,7 +420,19 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
 
       {/* Modais */}
       <NovoTicketModal open={novoTicket} onClose={() => setNovoTicket(false)}
-        onSubmit={(t) => setTickets((prev) => [t, ...prev])} />
+        onSubmit={async (t) => {
+          // Salva no Supabase; fallback local em demo
+          try {
+            const res = await fetch("/api/tickets", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ title: t.title, category: t.category, priority: t.priority, due_date: t.due_date }),
+            });
+            const json = await res.json();
+            if (json.ticket) { setTickets(prev => [json.ticket, ...prev]); return; }
+          } catch {}
+          setTickets(prev => [t, ...prev]);
+        }} />
 
       <PropostaDetailModal
         open={!!detailProposal}
