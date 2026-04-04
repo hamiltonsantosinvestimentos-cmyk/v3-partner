@@ -177,14 +177,14 @@ function RankRow({ item, position, tab, maxVal }: { item: AnyRank; position: num
     return null;
   }
 
-  const barPct = (getBarVal() / maxVal) * 100;
+  const barPct = maxVal > 0 ? (getBarVal() / maxVal) * 100 : 0;
   const tabColors: Record<Tab, string> = {
-    propostas: "#3B82F6",
+    score:      "#C9A84C",
+    propostas:  "#3B82F6",
     aprovacoes: "#10B981",
-    volume: "#C9A84C",
+    volume:     "#C9A84C",
   };
   const barColor = tabColors[tab];
-  const mv = getMainValue();
   const isTop3 = position <= 3;
 
   return (
@@ -218,7 +218,7 @@ function RankRow({ item, position, tab, maxVal }: { item: AnyRank; position: num
         </div>
         <div className="flex items-center gap-2">
           <div className="flex-1 h-1.5 bg-[#122036] rounded-full overflow-hidden">
-            <div className="h-full rounded-full transition-all duration-700" style={{ width: `${barPct}%`, background: tabColor[tab] }} />
+            <div className="h-full rounded-full transition-all duration-700" style={{ width: `${barPct}%`, background: barColor }} />
           </div>
           {getExtra()}
         </div>
@@ -308,12 +308,12 @@ export function RankingClient({ userRole, userName, rankingData, period = "mes",
           {Object.entries(PERIOD_LABELS).map(([id, label]) => (
             <button key={id} onClick={() => setPeriod(id)}
               className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
-              style={period === p.id
+              style={period === id
                 ? { background: "linear-gradient(120deg,#C9A84C,#E8C97A)", color: "#09081A" }
                 : { color: "#7A8FA8" }
               }
             >
-              {p.label}
+              {label}
             </button>
           ))}
         </div>
@@ -379,7 +379,7 @@ export function RankingClient({ userRole, userName, rankingData, period = "mes",
         <div className="grid grid-cols-1 xl:grid-cols-5 gap-5">
           {/* Podium */}
           <div className="px-4 py-4">
-            <Podium tab={activeTab} data={currentData as typeof RANKING_DATA.propostas} />
+            <Podium tab={activeTab} data={currentData} />
           </div>
 
           {/* Mini stats for top 1 */}
@@ -392,22 +392,22 @@ export function RankingClient({ userRole, userName, rankingData, period = "mes",
               <p className="text-sm font-bold text-white">{currentData[0].name}</p>
               {activeTab === "propostas" && (
                 <div className="flex gap-3 mt-1.5">
-                  <span className="text-xs text-muted-foreground">{(currentData[0] as typeof RANKING_DATA.propostas[0]).proposals} propostas</span>
-                  <span className={`text-xs font-semibold ${(currentData[0] as typeof RANKING_DATA.propostas[0]).growth >= 0 ? "text-emerald-400" : "text-red-400"}`}>
-                    {(currentData[0] as typeof RANKING_DATA.propostas[0]).growth >= 0 ? "+" : ""}{(currentData[0] as typeof RANKING_DATA.propostas[0]).growth}% vs mês ant.
+                  <span className="text-xs text-muted-foreground">{(currentData[0] as RankingPropostas).proposals} propostas</span>
+                  <span className={`text-xs font-semibold ${(currentData[0] as RankingPropostas).growth >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+                    {(currentData[0] as RankingPropostas).growth >= 0 ? "+" : ""}{(currentData[0] as RankingPropostas).growth}% vs mês ant.
                   </span>
                 </div>
               )}
               {activeTab === "aprovacoes" && (
                 <div className="flex gap-3 mt-1.5">
-                  <span className="text-xs text-muted-foreground">{(currentData[0] as typeof RANKING_DATA.aprovacoes[0]).approved} aprovadas</span>
-                  <span className="text-xs text-emerald-400">{(currentData[0] as typeof RANKING_DATA.aprovacoes[0]).rate}% de aprovação</span>
+                  <span className="text-xs text-muted-foreground">{(currentData[0] as RankingAprovacoes).approved} aprovadas</span>
+                  <span className="text-xs text-emerald-400">{(currentData[0] as RankingAprovacoes).rate}% de aprovação</span>
                 </div>
               )}
               {activeTab === "volume" && (
                 <div className="flex gap-3 mt-1.5">
-                  <span className="text-xs text-muted-foreground">{formatVolume((currentData[0] as typeof RANKING_DATA.volume[0]).volume)}</span>
-                  <span className="text-xs text-[#E8C97A]">{(currentData[0] as typeof RANKING_DATA.volume[0]).deals} operações</span>
+                  <span className="text-xs text-muted-foreground">{formatVolume((currentData[0] as RankingVolume).volume)}</span>
+                  <span className="text-xs text-[#E8C97A]">{(currentData[0] as RankingVolume).deals} operações</span>
                 </div>
               )}
             </div>
