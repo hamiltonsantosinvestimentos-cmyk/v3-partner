@@ -20,22 +20,28 @@ function TickerItem({
   sublabel?: string;
 }) {
   return (
-    <span className="inline-flex items-center gap-2 px-5 shrink-0">
-      <span className="text-[#7A8FA8] text-xs font-semibold uppercase tracking-widest">{label}</span>
-      <span className="text-white font-bold text-sm">
-        {unit && <span className="text-[#7A8FA8] font-normal mr-0.5">{unit}</span>}
+    <span className="inline-flex items-center gap-1.5 px-4 shrink-0">
+      <span className="text-[#7A8FA8] text-[10px] font-bold uppercase tracking-widest leading-none">
+        {label}
+      </span>
+      <span className="text-[#F0ECE4] font-bold text-xs leading-none">
+        {unit && <span className="text-[#7A8FA8] font-normal mr-0.5 text-[10px]">{unit}</span>}
         {value}
       </span>
       {sublabel && (
-        <span className="text-[#7A8FA8] text-[10px]">{sublabel}</span>
+        <span className="text-[#5A7490] text-[9px] leading-none">{sublabel}</span>
       )}
       {change && (
-        <span className={`flex items-center gap-0.5 text-[11px] font-semibold ${positive ? "text-emerald-400" : "text-red-400"}`}>
-          {positive ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+        <span
+          className={`inline-flex items-center gap-0.5 text-[10px] font-semibold leading-none ${
+            positive ? "text-emerald-400" : "text-red-400"
+          }`}
+        >
+          {positive ? <TrendingUp className="w-2.5 h-2.5" /> : <TrendingDown className="w-2.5 h-2.5" />}
           {change}
         </span>
       )}
-      <span className="text-[#122036] text-base select-none">|</span>
+      <span className="text-[#1E2F4A] text-sm select-none mx-1">·</span>
     </span>
   );
 }
@@ -61,35 +67,35 @@ export function MarketTicker() {
 
   useEffect(() => {
     fetchData();
-    // Refresh every 5 minutes
     const interval = setInterval(fetchData, 5 * 60 * 1000);
     return () => clearInterval(interval);
   }, [fetchData]);
 
   const items = data
     ? [
-        { label: "SELIC Meta", value: data.selic.value, sublabel: "a.a. · COPOM" },
-        { label: "CDI", value: data.cdi.value, sublabel: "a.a." },
-        { label: "USD", value: data.usd.value, unit: "R$", change: data.usd.change, positive: data.usd.positive },
-        { label: "EUR", value: data.eur.value, unit: "R$", change: data.eur.change, positive: data.eur.positive },
+        { label: "SELIC",  value: data.selic.value, sublabel: "a.a. · COPOM" },
+        { label: "CDI",    value: data.cdi.value,   sublabel: "a.a." },
+        { label: "USD",    value: data.usd.value,   unit: "R$", change: data.usd.change, positive: data.usd.positive },
+        { label: "EUR",    value: data.eur.value,   unit: "R$", change: data.eur.change, positive: data.eur.positive },
+        { label: "OURO",   value: data.gold.value,  unit: "R$", sublabel: "B3/g" },
       ]
     : [];
 
-  // Duplicate for seamless loop
+  // Triplica para loop contínuo
   const allItems = [...items, ...items, ...items];
 
   return (
-    <div className="relative flex items-center bg-[#09081A] border border-[#122036] rounded-xl overflow-hidden h-10 mb-5">
-      {/* Left label */}
-      <div className="flex items-center gap-2 px-3 bg-[#C9A84C] h-full shrink-0 z-10">
-        <Activity className="w-3.5 h-3.5 text-white" />
-        <span className="text-white text-[10px] font-bold uppercase tracking-wider whitespace-nowrap">
+    <div className="relative flex items-center bg-[#09081A] border border-[#122036] rounded-xl overflow-hidden h-11 mb-5">
+      {/* Label esquerda */}
+      <div className="flex items-center gap-1.5 px-3 bg-[#C9A84C] h-full shrink-0 z-10 min-w-[110px]">
+        <Activity className="w-3 h-3 text-[#09081A]" />
+        <span className="text-[#09081A] text-[10px] font-bold uppercase tracking-wider whitespace-nowrap">
           Mercado ao vivo
         </span>
       </div>
 
-      {/* Scrolling area */}
-      <div className="flex-1 overflow-hidden relative">
+      {/* Área de scroll */}
+      <div className="flex-1 overflow-hidden relative h-full flex items-center">
         {loading ? (
           <div className="flex items-center gap-2 px-4 text-[#7A8FA8] text-xs animate-pulse">
             <RefreshCw className="w-3 h-3 animate-spin" />
@@ -100,7 +106,7 @@ export function MarketTicker() {
             Cotações indisponíveis no momento
           </div>
         ) : (
-          <div className="flex animate-ticker whitespace-nowrap">
+          <div className="flex animate-ticker whitespace-nowrap items-center h-full">
             {allItems.map((item, i) => (
               <TickerItem key={i} {...item} />
             ))}
@@ -108,25 +114,23 @@ export function MarketTicker() {
         )}
       </div>
 
-      {/* Right: timestamp + refresh */}
+      {/* Timestamp + refresh */}
       {data && !loading && (
-        <div className="flex items-center gap-2 px-3 shrink-0 border-l border-[#122036]">
-          <span className="text-[#7A8FA8] text-[10px]">
-            {data.updatedAt}
-          </span>
+        <div className="flex items-center gap-2 px-3 shrink-0 border-l border-[#122036] h-full">
+          <span className="text-[#5A7490] text-[10px] leading-none">{data.updatedAt}</span>
           <button
             onClick={fetchData}
             title="Atualizar"
-            className="text-[#7A8FA8] hover:text-[#C9A84C] transition-colors"
+            className="text-[#5A7490] hover:text-[#C9A84C] transition-colors"
           >
             <RefreshCw className="w-3 h-3" />
           </button>
         </div>
       )}
 
-      {/* Fade edges */}
-      <div className="absolute left-[112px] top-0 w-6 h-full bg-gradient-to-r from-[#09081A] to-transparent pointer-events-none z-10" />
-      <div className="absolute right-[72px] top-0 w-6 h-full bg-gradient-to-l from-[#09081A] to-transparent pointer-events-none z-10" />
+      {/* Fade nas bordas */}
+      <div className="absolute left-[110px] top-0 w-8 h-full bg-gradient-to-r from-[#09081A] to-transparent pointer-events-none z-10" />
+      <div className="absolute right-[72px] top-0 w-8 h-full bg-gradient-to-l from-[#09081A] to-transparent pointer-events-none z-10" />
     </div>
   );
 }
