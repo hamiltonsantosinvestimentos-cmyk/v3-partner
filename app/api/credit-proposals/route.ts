@@ -36,6 +36,7 @@ const createSchema = z.object({
 
 const patchSchema = z.object({
   id:               z.string().uuid("ID inválido"),
+  stage:            z.enum(["RECEBIDO","TRIAGEM","ANALISE","PENDENCIA","APROVACAO","FINALIZADO"]).optional(),
   status:           z.enum(["PENDING","IN_REVIEW","APPROVED","REJECTED","COMPLETED","CANCELLED"]).optional(),
   approved_value:   z.number().positive().optional().nullable(),
   current_level:    z.enum(["NIVEL_1","NIVEL_2","NIVEL_3"]).optional(),
@@ -45,6 +46,10 @@ const patchSchema = z.object({
   level1_analyst_id: z.string().uuid().optional().nullable(),
   level2_analyst_id: z.string().uuid().optional().nullable(),
   level3_approver_id: z.string().uuid().optional().nullable(),
+  valor_credito_atual:         z.number().positive().optional().nullable(),
+  comissao_mandato_perc:       z.number().min(0).optional().nullable(),
+  comissao_instituicao_perc:   z.number().min(0).optional().nullable(),
+  requested_value:             z.number().positive().optional(),
 });
 
 // GET — lista propostas (partner vê as suas, admin/mesa vê todas)

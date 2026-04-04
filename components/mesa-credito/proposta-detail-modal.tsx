@@ -5,6 +5,7 @@ import {
   X, User, Building2, CheckCircle2, Clock, ArrowRight,
   FileText, CreditCard, Calendar, Link2, Pencil, Check,
   Percent, TrendingUp, BadgeDollarSign, Upload, Paperclip, Trash2, Home, ExternalLink,
+  Package, Copy, CheckCheck,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -56,6 +57,13 @@ export interface ProposalFull {
   imovel_estado?: string;
 }
 
+interface CompiledDoc {
+  doc_id: string;
+  file_name: string;
+  url: string | null;
+  uploaded_at: string;
+}
+
 interface PropostaDetailModalProps {
   open: boolean;
   onClose: () => void;
@@ -64,15 +72,20 @@ interface PropostaDetailModalProps {
   onProposalUpdate?: (proposalId: string, updates: Partial<ProposalFull>) => void;
   canChangeStage?: boolean;
   canEditValorSolicitado?: boolean;
+  canCompileDocuments?: boolean;
 }
 
-export function PropostaDetailModal({ open, onClose, proposal, onStageChange, onProposalUpdate, canChangeStage, canEditValorSolicitado }: PropostaDetailModalProps) {
+export function PropostaDetailModal({ open, onClose, proposal, onStageChange, onProposalUpdate, canChangeStage, canEditValorSolicitado, canCompileDocuments }: PropostaDetailModalProps) {
   // ── Checklist state ───────────────────────────────────────────────────────
   const IS_DEMO = !process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL.includes("SEU_PROJETO");
   const [checkedDocs, setCheckedDocs] = useState<Record<string, boolean>>({});
   const [uploadedFiles, setUploadedFiles] = useState<Record<string, string>>({}); // docId → filename
   const [uploadedUrls, setUploadedUrls] = useState<Record<string, string>>({}); // docId → signed URL (20 dias)
   const [isUploading, setIsUploading] = useState<string | null>(null); // docId em upload
+  const [showCompile, setShowCompile] = useState(false);
+  const [compileLoading, setCompileLoading] = useState(false);
+  const [compileDocs, setCompileDocs] = useState<CompiledDoc[]>([]);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!proposal) return;
@@ -176,6 +189,39 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
         { method: "DELETE" }
       ).catch(() => {});
     }
+  }
+
+  async function compileDocuments() {
+    if (!proposal) return;
+    setCompileLoading(true);
+    setShowCompile(true);
+    try {
+      const res = await fetch(`/api/credit-proposals/documents?proposal_id=${proposal.id}`);
+      const { documents } = await res.json();
+      setCompileDocs(Array.isArray(documents) ? documents : []);
+    } catch {
+      setCompileDocs([]);
+    } finally {
+      setCompileLoading(false);
+    }
+  }
+
+  function copyLink(url: string, id: string) {
+    navigator.clipboard.writeText(url).then(() => {
+      setCopiedId(id);
+      setTimeout(() => setCopiedId(null), 2000);
+    });
+  }
+
+  function copyAllLinks() {
+    const text = compileDocs
+      .filter((d) => d.url)
+      .map((d) => `${d.file_name}: ${d.url}`)
+      .join("\n");
+    navigator.clipboard.writeText(text).then(() => {
+      setCopiedId("__all__");
+      setTimeout(() => setCopiedId(null), 2000);
+    });
   }
 
   // ── Commission state ──────────────────────────────────────────────────────
@@ -670,8 +716,16 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-border flex items-center justify-between">
-          <Button variant="outline" size="sm" onClick={onClose}>Fechar</Button>
+        <div className="px-6 py-4 border-t border-border flex items-center justify-between gap-2 flex-wrap">
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={onClose}>Fechar</Button>
+            {canCompileDocuments && (
+              <Button variant="outline" size="sm" onClick={compileDocuments} className="gap-1.5 border-primary/40 text-primary hover:bg-primary/10">
+                <Package className="w-3.5 h-3.5" />
+                Compilar Documentos
+              </Button>
+            )}
+          </div>
           {canChangeStage && !isFinished && nextStage && (
             <Button size="sm" onClick={advance} className="gap-2">
               Avançar para <span className={nextStage.color}>{nextStage.label}</span>
@@ -685,6 +739,83 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
           )}
         </div>
       </div>
+
+      {/* ── Modal: Compilar Documentos ── */}
+      {showCompile && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+          <div className="bg-card border border-border rounded-2xl w-full max-w-lg animate-fade-in">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+              <div>
+                <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                  <Package className="w-4 h-4 text-primary" />
+                  Documentos Compilados
+                </h3>
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  {proposal?.code} · Links válidos por 20 dias
+                </p>
+              </div>
+              <button onClick={() => setShowCompile(false)} className="w-8 h-8 rounded-lg hover:bg-secondary flex items-center justify-center text-muted-foreground hover:text-white transition-colors">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="px-6 py-5 space-y-3 max-h-96 overflow-y-auto">
+              {compileLoading ? (
+                <div className="flex items-center justify-center py-8 gap-3">
+                  <div className="w-4 h-4 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+                  <span className="text-sm text-muted-foreground">Gerando links...</span>
+                </div>
+              ) : compileDocs.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-8 gap-2">
+                  <FileText className="w-8 h-8 text-muted-foreground/40" />
+                  <p className="text-sm text-muted-foreground">Nenhum documento enviado ainda.</p>
+                </div>
+              ) : (
+                compileDocs.map((doc) => (
+                  <div key={doc.doc_id} className="flex items-center gap-3 p-3 rounded-xl bg-secondary/40 border border-border group">
+                    <Paperclip className="w-3.5 h-3.5 text-primary flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium text-foreground truncate">{doc.file_name}</p>
+                      <p className="text-[10px] text-muted-foreground">
+                        Enviado em {new Date(doc.uploaded_at).toLocaleDateString("pt-BR")}
+                      </p>
+                    </div>
+                    {doc.url ? (
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        <a href={doc.url} target="_blank" rel="noopener noreferrer"
+                          className="w-7 h-7 rounded-lg bg-secondary flex items-center justify-center text-muted-foreground hover:text-primary transition-colors"
+                          title="Abrir documento">
+                          <ExternalLink className="w-3.5 h-3.5" />
+                        </a>
+                        <button onClick={() => copyLink(doc.url!, doc.doc_id)}
+                          className="w-7 h-7 rounded-lg bg-secondary flex items-center justify-center text-muted-foreground hover:text-primary transition-colors"
+                          title="Copiar link">
+                          {copiedId === doc.doc_id
+                            ? <CheckCheck className="w-3.5 h-3.5 text-emerald-400" />
+                            : <Copy className="w-3.5 h-3.5" />}
+                        </button>
+                      </div>
+                    ) : (
+                      <span className="text-[10px] text-muted-foreground">Link indisponível</span>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+
+            {compileDocs.length > 0 && !compileLoading && (
+              <div className="px-6 py-4 border-t border-border flex items-center justify-between">
+                <p className="text-[11px] text-muted-foreground">{compileDocs.length} documento(s) · validade 20 dias</p>
+                <Button size="sm" variant="outline" onClick={copyAllLinks} className="gap-1.5 text-xs">
+                  {copiedId === "__all__"
+                    ? <><CheckCheck className="w-3.5 h-3.5 text-emerald-400" /> Copiado!</>
+                    : <><Copy className="w-3.5 h-3.5" /> Copiar todos os links</>}
+                </Button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

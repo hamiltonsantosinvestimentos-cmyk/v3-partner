@@ -181,6 +181,12 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
     if (detailProposal?.id === proposalId) {
       setDetailProposal((prev) => prev ? { ...prev, stage: newStage } : prev);
     }
+    // Persiste no banco
+    fetch("/api/credit-proposals", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: proposalId, stage: newStage }),
+    }).catch(() => {});
   }, [detailProposal]);
 
   return (
@@ -440,6 +446,7 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
         proposal={detailProposal as ProposalFull | null}
         onStageChange={handleStageChange}
         canChangeStage={canChangeStage}
+        canCompileDocuments={canChangeStage}
       />
     </div>
   );

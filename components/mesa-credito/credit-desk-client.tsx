@@ -126,10 +126,17 @@ export function CreditDeskClient({ proposals: initial, level, currentUser }: Cre
   }, [level]);
 
   const handleStageChange = useCallback((proposalId: string, newStage: string) => {
+    // Atualização otimista imediata
     setProposals((prev) => prev.map((p) => p.id === proposalId ? { ...p, stage: newStage } : p));
     if (detailProposal?.id === proposalId) {
       setDetailProposal((prev) => prev ? { ...prev, stage: newStage } : prev);
     }
+    // Persiste no banco — apenas MESA_OPERACIONAL/ADMIN/GESTAO chegam aqui (canChangeStage=true)
+    fetch("/api/credit-proposals", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: proposalId, stage: newStage }),
+    }).catch(() => {});
   }, [detailProposal]);
 
   const handleProposalUpdate = useCallback((proposalId: string, updates: Partial<Proposal>) => {
