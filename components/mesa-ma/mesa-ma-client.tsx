@@ -1,14 +1,12 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect } from "react";
 import {
   Building2, Plus, X, ChevronRight,
-  BarChart2, Mail, Circle, ExternalLink, FileText, Webhook, RefreshCw,
+  BarChart2, Mail, Circle, FileText,
 } from "lucide-react";
 import { ExportButton } from "@/components/financeiro/export-button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { PipefyConfig, type PipefyPhase } from "@/components/shared/pipefy-config";
 import { MA_PIPELINE } from "@/components/ma/ma-client";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -53,26 +51,6 @@ const MA_STAGES_DEFAULT: MaStage[] = MA_PIPELINE.map(s => ({
   bg: s.bg.replace("0.12", "0.1"),
 }));
 
-// Mapeia nome da fase do Pipefy para o ID de estágio padrão do pipeline
-function mapPhaseNameToStageId(name: string): string {
-  const n = name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-  if (n.includes("prospec")) return "prospeccao";
-  if (n.includes("qualif") || n.includes("qualificacao")) return "qualificacao";
-  if (n.includes("viabil") || n.includes("ioi") || n.includes("intenc")) return "viabilidade";
-  if (n.includes("estrutur") || n.includes("oferta") || n.includes("proposta")) return "estruturacao";
-  if (n.includes("negoc")) return "negociacao";
-  if (n.includes("due") || n.includes("dilig") || n.includes("auditoria")) return "due_diligence";
-  if (n.includes("aprova") || n.includes("fech") || n.includes("closing") || n.includes("conclu") || n.includes("won") || n.includes("ganho")) return "aprovacao";
-  return "prospeccao";
-}
-
-function pipefyPhasesToStages(phases: PipefyPhase[]): MaStage[] {
-  return phases.map((p, i) => ({
-    id: mapPhaseNameToStageId(p.name),
-    label: p.name,
-    ...STAGE_COLORS[i % STAGE_COLORS.length],
-  }));
-}
 
 const SECTORS = ["Fintech", "Real Estate", "Agronegócio", "Varejo", "Logística", "Saúde", "Tecnologia", "Indústria", "Energia", "Outro"];
 const ROLES_MA = ["Analista Jr.", "Analista", "Analista Sênior", "Especialista M&A", "Gestor"];
@@ -154,63 +132,18 @@ function KanbanCardItem({ card, stages, onClick }: { card: MaCard; stages: MaSta
 // ─── Main Component ───────────────────────────────────────────────────────────
 export function MesaMaClient({ userRole, initialDeals = [], userId = "", userName = "" }: { userRole: string; initialDeals?: MaCard[]; userId?: string; userName?: string }) {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<"kanban" | "operadores" | "pipefy">("kanban");
+  const [activeTab, setActiveTab] = useState<"kanban" | "operadores">("kanban");
   const [cards, setCards] = useState<MaCard[]>(initialDeals);
   const [operators, setOperators] = useState<MesaOperator[]>([]);
   const [selectedCard, setSelectedCard] = useState<MaCard | null>(null);
   const [showNewCard, setShowNewCard] = useState(false);
   const [showNewOp, setShowNewOp] = useState(false);
-  const [showPipefyChoice, setShowPipefyChoice] = useState(false);
-  const [pipefyFormUrl, setPipefyFormUrl] = useState("");
-  const [maStages, setMaStages] = useState<MaStage[]>(MA_STAGES_DEFAULT);
-  const [syncing, setSyncing] = useState(false);
-  const [lastSyncCount, setLastSyncCount] = useState<number | null>(null);
-  const [isPending, startTransition] = useTransition();
-  const syncedOnMount = useRef(false);
-
-  const syncFromPipefy = useCallback(async (token: string, pipeId: string, silent = false) => {
-    if (!token || !pipeId) return;
-    if (!silent) setSyncing(true);
-    try {
-      const res = await fetch("/api/pipefy", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "sync_ma", token, pipeId, userId }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        setLastSyncCount(data.synced ?? 0);
-        // Sempre atualiza — independente de synced > 0
-        startTransition(() => router.refresh());
-      }
-    } catch {}
-    if (!silent) setSyncing(false);
-  }, [router, userId]);
+  const [maStages] = useState<MaStage[]>(MA_STAGES_DEFAULT);
 
   // Atualiza cards quando initialDeals mudar (após router.refresh)
   useEffect(() => {
     setCards(initialDeals);
   }, [initialDeals]);
-
-  // Load Pipefy config e auto-sync apenas na primeira montagem
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem("v3_pipefy_mesa_ma");
-      if (saved) {
-        const config = JSON.parse(saved);
-        if (config.formUrl) setPipefyFormUrl(config.formUrl);
-        if (config.savedPhases?.length) {
-          setMaStages(pipefyPhasesToStages(config.savedPhases));
-        }
-        // Auto-sync apenas uma vez ao montar (evita loop infinito)
-        if (config.token && config.pipeId && !syncedOnMount.current) {
-          syncedOnMount.current = true;
-          syncFromPipefy(config.token, config.pipeId, true);
-        }
-      }
-    } catch {}
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   // New card form — stage defaults to first stage dynamically
   const [newCard, setNewCard] = useState({ company: "", sector: "Fintech", value: "", stage: "", responsible: "", notes: "" });
@@ -286,17 +219,12 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
   };
 
   const handleNovaOperacao = () => {
-    if (pipefyFormUrl) {
-      setShowPipefyChoice(true);
-    } else {
-      setShowNewCard(true);
-    }
+    setShowNewCard(true);
   };
 
   const tabs = [
     { id: "kanban" as const, label: "Kanban" },
     { id: "operadores" as const, label: "Operadores" },
-    { id: "pipefy" as const, label: "Pipefy" },
   ];
 
   return (
@@ -459,21 +387,6 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
           </div>
         )}
 
-        {/* ── PIPEFY TAB ─────────────────────────────────────── */}
-        {activeTab === "pipefy" && (
-          <div>
-            <div className="mb-4">
-              <h3 className="text-sm font-semibold text-[#E8EDF5] mb-1">Integração Pipefy — Mesa M&A</h3>
-              <p className="text-xs text-[#7A8FA8]">Configure a sincronização das operações M&A com o Pipefy</p>
-            </div>
-            <PipefyConfig
-              mesaName="M&A"
-              storageKey="mesa_ma"
-              stageMapping={maStages.map(s => ({ localStage: s.id, label: s.label }))}
-              syncAction="sync_ma"
-            />
-          </div>
-        )}
       </div>
 
       {/* ── CARD DETAIL MODAL ──────────────────────────────────── */}
@@ -551,43 +464,6 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
         </DialogContent>
       </Dialog>
 
-      {/* ── PIPEFY CHOICE MODAL ────────────────────────────────── */}
-      <Dialog open={showPipefyChoice} onOpenChange={setShowPipefyChoice}>
-        <DialogContent className="bg-[#091221] border border-[#122036] text-[#E8EDF5] max-w-sm">
-          <DialogHeader>
-            <DialogTitle className="text-[#E8EDF5]">Nova Operação M&A</DialogTitle>
-          </DialogHeader>
-          <p className="text-xs text-[#5A7490] mt-1 mb-4">Como deseja cadastrar a operação?</p>
-          <div className="flex flex-col gap-3">
-            <button
-              onClick={() => {
-                setShowPipefyChoice(false);
-                window.open(pipefyFormUrl, "_blank");
-              }}
-              className="flex items-center gap-3 rounded-xl border border-[#C4922E]/40 bg-[#C4922E]/10 p-4 hover:bg-[#C4922E]/20 transition-colors text-left"
-            >
-              <ExternalLink size={18} className="text-[#C4922E] flex-shrink-0" />
-              <div>
-                <p className="text-sm font-semibold text-[#E8EDF5]">Formulário Pipefy</p>
-                <p className="text-xs text-[#5A7490]">Abre o formulário público do pipe no Pipefy</p>
-              </div>
-            </button>
-            <button
-              onClick={() => {
-                setShowPipefyChoice(false);
-                setShowNewCard(true);
-              }}
-              className="flex items-center gap-3 rounded-xl border border-[#122036] bg-[#0F1E35] p-4 hover:border-[#C4922E]/30 transition-colors text-left"
-            >
-              <FileText size={18} className="text-[#5A7490] flex-shrink-0" />
-              <div>
-                <p className="text-sm font-semibold text-[#E8EDF5]">Formulário Local</p>
-                <p className="text-xs text-[#5A7490]">Preencha direto na plataforma V3</p>
-              </div>
-            </button>
-          </div>
-        </DialogContent>
-      </Dialog>
 
       {/* ── NEW CARD MODAL ─────────────────────────────────────── */}
       <Dialog open={showNewCard} onOpenChange={setShowNewCard}>
