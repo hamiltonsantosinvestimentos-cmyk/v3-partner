@@ -43,7 +43,7 @@ export default async function MesaMaPage() {
     .select(`
       id, code, title, target_company, sector,
       deal_value, ebitda_multiple, stage,
-      probability_percent, created_at, notes,
+      probability_percent, created_at, notes, comments,
       assigned_to,
       partner:profiles!ma_deals_assigned_to_fkey(id, full_name)
     `)
@@ -63,6 +63,7 @@ export default async function MesaMaPage() {
     probability: d.probability_percent ?? 0,
     createdAt: d.created_at?.split("T")[0] ?? "",
     notes: d.notes ?? "",
+    comments: Array.isArray(d.comments) ? d.comments : [],
   }));
 
   return <MesaMaClient userRole={userRole} initialDeals={initialDeals} userId={user?.id ?? ""} userName={profile?.full_name ?? "Mesa"} />;

@@ -5,12 +5,20 @@ import {
   Building2, Plus, X, ChevronRight,
   BarChart2, Mail, Circle, FileText,
   Paperclip, Trash2, ExternalLink, Upload, Copy, CheckCheck,
+  MessageSquare, Send,
 } from "lucide-react";
 import { ExportButton } from "@/components/financeiro/export-button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { MA_PIPELINE } from "@/components/ma/ma-client";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
+type DealComment = {
+  id: string;
+  text: string;
+  author: string;
+  created_at: string;
+};
+
 type MaCard = {
   id: string;
   code: string;
@@ -22,6 +30,7 @@ type MaCard = {
   probability: number;
   createdAt: string;
   notes?: string;
+  comments?: DealComment[];
 };
 
 type MesaOperator = {
@@ -46,6 +55,17 @@ const MA_STAGES_DEFAULT: MaStage[] = MA_PIPELINE.map(s => ({
 
 
 const SECTORS = ["Fintech", "Real Estate", "Agronegócio", "Varejo", "Logística", "Saúde", "Tecnologia", "Indústria", "Energia", "Outro"];
+
+// Mapeia pipeline IDs de volta para ENUM do banco
+const PIPELINE_TO_DB: Record<string, string> = {
+  prospeccao:    "PROSPECTING",
+  qualificacao:  "QUALIFICATION",
+  viabilidade:   "IOI",
+  estruturacao:  "PROPOSAL",
+  negociacao:    "NEGOTIATION",
+  due_diligence: "DUE_DILIGENCE",
+  aprovacao:     "CLOSING",
+};
 const ROLES_MA = ["Analista Jr.", "Analista", "Analista Sênior", "Especialista M&A", "Gestor"];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -152,6 +172,10 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
   const [copiedDoc, setCopiedDoc] = useState<string | null>(null);
   const detailFileRef = useRef<HTMLInputElement>(null);
 
+  // Comentários
+  const [newComment, setNewComment] = useState("");
+  const [savingComment, setSavingComment] = useState(false);
+
   useEffect(() => {
     if (!selectedCard) { setCardDocs([]); return; }
     setDocsLoading(true);
@@ -171,6 +195,42 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
     if (!next) return;
     setCards(prev => prev.map(c => c.id === card.id ? { ...c, stage: next } : c));
     setSelectedCard(prev => prev ? { ...prev, stage: next } : null);
+
+    // Persiste no banco
+    const dbStage = PIPELINE_TO_DB[next];
+    if (dbStage) {
+      fetch("/api/ma-deals", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: card.id, stage: dbStage }),
+      }).catch(() => {});
+    }
+  };
+
+  const handleAddComment = async () => {
+    if (!newComment.trim() || !selectedCard) return;
+    setSavingComment(true);
+    const comment: DealComment = {
+      id: `cmt_${Date.now()}`,
+      text: newComment.trim(),
+      author: userName,
+      created_at: new Date().toISOString(),
+    };
+    const updatedComments = [...(selectedCard.comments ?? []), comment];
+    try {
+      const res = await fetch("/api/ma-deals", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: selectedCard.id, comments: updatedComments }),
+      });
+      const json = await res.json();
+      if (json.ok) {
+        setCards(prev => prev.map(c => c.id === selectedCard.id ? { ...c, comments: updatedComments } : c));
+        setSelectedCard(prev => prev ? { ...prev, comments: updatedComments } : null);
+        setNewComment("");
+      }
+    } catch {}
+    setSavingComment(false);
   };
 
   const handleCreateCard = async () => {
@@ -187,7 +247,7 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
         body: JSON.stringify({
           company: newCard.company,
           sector: newCard.sector,
-          value: newCard.value,
+          value: Number(newCard.value),
           notes: newCard.notes,
           responsible: newCard.responsible,
         }),
@@ -566,6 +626,46 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
                       )}
                     </div>
                   )}
+                </div>
+
+                {/* ── Comentários / Atualizações da Mesa ── */}
+                <div>
+                  <p className="text-xs font-semibold text-[#7A8FA8] mb-2 flex items-center gap-1.5">
+                    <MessageSquare size={13} /> Atualizações da Mesa M&A
+                  </p>
+                  <div className="space-y-2 max-h-40 overflow-y-auto mb-2">
+                    {(selectedCard.comments ?? []).length === 0 ? (
+                      <p className="text-xs text-[#5A7490] py-1">Nenhuma atualização ainda.</p>
+                    ) : (
+                      (selectedCard.comments ?? []).map(c => (
+                        <div key={c.id} className="rounded-lg bg-[#0F1E35] border border-[#122036] p-2.5">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-[10px] font-semibold text-[#C9A84C]">{c.author}</span>
+                            <span className="text-[10px] text-[#5A7490]">{formatDate(c.created_at)}</span>
+                          </div>
+                          <p className="text-xs text-[#E8EDF5] leading-relaxed">{c.text}</p>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                  <div className="flex gap-2">
+                    <textarea
+                      value={newComment}
+                      onChange={e => setNewComment(e.target.value)}
+                      placeholder="Adicionar atualização para o partner..."
+                      rows={2}
+                      className="flex-1 rounded-lg border border-[#122036] bg-[#0F1E35] text-[#E8EDF5] text-xs px-3 py-2 placeholder:text-[#7A8FA8] focus:outline-none focus:border-[#C9A84C] transition-colors resize-none"
+                    />
+                    <button
+                      onClick={handleAddComment}
+                      disabled={!newComment.trim() || savingComment}
+                      className="rounded-lg bg-[#C9A84C]/15 border border-[#C9A84C]/40 text-[#C9A84C] px-3 hover:bg-[#C9A84C]/25 transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center"
+                    >
+                      {savingComment
+                        ? <div className="w-3 h-3 border-2 border-[#C9A84C]/40 border-t-[#C9A84C] rounded-full animate-spin" />
+                        : <Send size={13} />}
+                    </button>
+                  </div>
                 </div>
 
                 {nextStageData && (

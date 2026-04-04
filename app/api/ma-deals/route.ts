@@ -27,14 +27,22 @@ const createSchema = z.object({
   code:    z.string().max(50).optional(),
 });
 
+const dealCommentSchema = z.object({
+  id:         z.string(),
+  text:       z.string().max(2000),
+  author:     z.string().max(100),
+  created_at: z.string(),
+});
+
 const patchSchema = z.object({
   id:                  z.string().uuid("ID inválido"),
   target_company:      z.string().min(1).max(200).optional(),
   sector:              z.string().max(100).optional().nullable(),
   deal_value:          z.number().positive().optional().nullable(),
-  stage:               z.enum(["PROSPECTING","QUALIFICATION","DUE_DILIGENCE","NEGOTIATION","CLOSING","CLOSED_WON","CLOSED_LOST"]).optional(),
+  stage:               z.enum(["PROSPECTING","QUALIFICATION","IOI","PROPOSAL","DUE_DILIGENCE","NEGOTIATION","CLOSING","CLOSED_WON","CLOSED_LOST"]).optional(),
   probability_percent: z.number().int().min(0).max(100).optional().nullable(),
   notes:               z.string().max(2000).optional().nullable(),
+  comments:            z.array(dealCommentSchema).optional(),
   assigned_to:         z.string().uuid().optional().nullable(),
   expected_close_date: z.string().optional().nullable(),
 });
@@ -53,7 +61,7 @@ export async function GET(req: NextRequest) {
     .from("ma_deals")
     .select(`
       id, code, title, target_company, sector, deal_value, ebitda_multiple,
-      stage, probability_percent, expected_close_date, created_at, notes, assigned_to,
+      stage, probability_percent, expected_close_date, created_at, notes, comments, assigned_to,
       partner:profiles!ma_deals_assigned_to_fkey(id, full_name)
     `)
     .order("created_at", { ascending: false });

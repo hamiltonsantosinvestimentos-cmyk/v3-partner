@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import {
   Building2, Plus, FileText,
   TrendingUp, DollarSign, Target, Award,
-  Paperclip, Trash2, Upload, X,
+  Paperclip, Trash2, Upload, X, MessageSquare,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 
@@ -33,10 +33,17 @@ const STAGE_MAP: Record<string, string> = {
 };
 
 function normalizeStage(stage: string): string {
-  return STAGE_MAP[stage] ?? "prospeccao";
+  return STAGE_MAP[stage] ?? stage ?? "prospeccao";
 }
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
+export type DealComment = {
+  id: string;
+  text: string;
+  author: string;
+  created_at: string;
+};
+
 export interface MaDeal {
   id: string;
   code: string;
@@ -49,12 +56,34 @@ export interface MaDeal {
   created_at?: string;
   title?: string;
   responsible?: string | null;
+  notes?: string | null;
+  comments?: DealComment[];
+}
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+function formatDate(iso: string) {
+  try { return new Date(iso).toLocaleDateString("pt-BR"); } catch { return iso; }
+}
+
+function probColor(p: number) {
+  if (p >= 70) return "#10B981";
+  if (p >= 40) return "#F59E0B";
+  return "#EF4444";
 }
 
 // ─── Kanban Card ─────────────────────────────────────────────────────────────
-function KanbanDealCard({ deal, stage }: { deal: MaDeal & { stage: string }; stage: typeof MA_PIPELINE[0] | undefined }) {
+function KanbanDealCard({
+  deal, stage, onClick
+}: {
+  deal: MaDeal & { stage: string };
+  stage: typeof MA_PIPELINE[0] | undefined;
+  onClick: () => void;
+}) {
   return (
-    <div className="rounded-lg border border-[#122036] bg-[#091221] p-3 hover:border-[#C4922E]/50 transition-colors">
+    <div
+      onClick={onClick}
+      className="rounded-lg border border-[#122036] bg-[#091221] p-3 cursor-pointer hover:border-[#C4922E]/50 transition-colors"
+    >
       <div className="flex items-start justify-between gap-2 mb-2">
         <p className="text-xs font-semibold text-[#E8EDF5] leading-tight line-clamp-2">{deal.target_company}</p>
         <span className="text-[10px] text-[#5A7490] flex-shrink-0">{deal.code}</span>
@@ -72,16 +101,22 @@ function KanbanDealCard({ deal, stage }: { deal: MaDeal & { stage: string }; sta
         <div>
           <div className="flex justify-between mb-0.5">
             <span className="text-[10px] text-[#5A7490]">Prob.</span>
-            <span className="text-[10px] font-medium" style={{ color: deal.probability_percent >= 70 ? "#10B981" : deal.probability_percent >= 40 ? "#F59E0B" : "#EF4444" }}>
+            <span className="text-[10px] font-medium" style={{ color: probColor(deal.probability_percent) }}>
               {deal.probability_percent}%
             </span>
           </div>
           <div className="h-1 rounded-full bg-[#122036] overflow-hidden">
             <div className="h-full rounded-full" style={{
               width: `${deal.probability_percent}%`,
-              background: deal.probability_percent >= 70 ? "#10B981" : deal.probability_percent >= 40 ? "#F59E0B" : "#EF4444",
+              background: probColor(deal.probability_percent),
             }} />
           </div>
+        </div>
+      )}
+      {(deal.comments?.length ?? 0) > 0 && (
+        <div className="flex items-center gap-1 mt-2">
+          <MessageSquare size={10} className="text-[#C4922E]" />
+          <span className="text-[10px] text-[#7A8FA8]">{deal.comments!.length} atualização{deal.comments!.length !== 1 ? "s" : ""}</span>
         </div>
       )}
     </div>
@@ -103,7 +138,36 @@ export function MaClient({ deals, userId = "", userName = "" }: MaClientProps) {
   const [newDeal, setNewDeal] = useState({ company: "", sector: "Fintech", value: "", stage: "prospeccao", responsible: "", notes: "" });
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [isCreating, setIsCreating] = useState(false);
+  const [selectedDeal, setSelectedDeal] = useState<MaDeal | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Atualiza dados frescos do banco ao montar
+  useEffect(() => {
+    fetch("/api/ma-deals")
+      .then(r => r.json())
+      .then(({ deals: fresh }) => {
+        if (!Array.isArray(fresh)) return;
+        setLocalDeals(fresh.map((d: Record<string, unknown>) => ({
+          id: d.id as string,
+          code: d.code as string,
+          target_company: (d.target_company ?? d.title ?? "Sem nome") as string,
+          sector: d.sector as string | null,
+          deal_value: d.deal_value as number | null,
+          ebitda_multiple: d.ebitda_multiple as number | null,
+          stage: d.stage as string,
+          probability_percent: d.probability_percent as number | null,
+          created_at: d.created_at as string,
+          notes: d.notes as string | null,
+          comments: Array.isArray(d.comments) ? d.comments as DealComment[] : [],
+          responsible: (() => {
+            const p = d.partner;
+            if (Array.isArray(p as unknown[])) return ((p as {full_name?: string}[])[0])?.full_name ?? null;
+            return (p as { full_name?: string } | null)?.full_name ?? null;
+          })(),
+        })));
+      })
+      .catch(() => {});
+  }, []);
 
   const normalizedDeals = localDeals.map(d => ({ ...d, stage: normalizeStage(d.stage) }));
   const totalValue = localDeals.reduce((s, d) => s + (d.deal_value ?? 0), 0);
@@ -122,7 +186,7 @@ export function MaClient({ deals, userId = "", userName = "" }: MaClientProps) {
         body: JSON.stringify({
           company: newDeal.company,
           sector: newDeal.sector,
-          value: newDeal.value,
+          value: Number(newDeal.value),
           notes: newDeal.notes,
           responsible: newDeal.responsible || userName,
         }),
@@ -130,7 +194,7 @@ export function MaClient({ deals, userId = "", userName = "" }: MaClientProps) {
       const json = await res.json();
       if (json.card) {
         createdId = json.card.id;
-        setLocalDeals(prev => [...prev, { ...json.card, stage: newDeal.stage }]);
+        setLocalDeals(prev => [...prev, { ...json.card, stage: newDeal.stage, comments: [] }]);
       }
     } catch {}
 
@@ -145,6 +209,7 @@ export function MaClient({ deals, userId = "", userName = "" }: MaClientProps) {
         responsible: newDeal.responsible || userName || null,
         probability_percent: 10,
         created_at: new Date().toISOString(),
+        comments: [],
       };
       setLocalDeals(prev => [...prev, deal]);
     }
@@ -235,7 +300,12 @@ export function MaClient({ deals, userId = "", userName = "" }: MaClientProps) {
                 </div>
                 <div className="space-y-2 min-h-[80px] rounded-xl border border-[#122036]/60 bg-[#050C18]/50 p-2">
                   {stageDeals.map(deal => (
-                    <KanbanDealCard key={deal.id} deal={deal} stage={stage} />
+                    <KanbanDealCard
+                      key={deal.id}
+                      deal={deal}
+                      stage={stage}
+                      onClick={() => setSelectedDeal(deal)}
+                    />
                   ))}
                   {stageDeals.length === 0 && (
                     <div className="h-14 flex items-center justify-center">
@@ -248,6 +318,86 @@ export function MaClient({ deals, userId = "", userName = "" }: MaClientProps) {
           })}
         </div>
       )}
+
+      {/* ── Modal Detalhe do Deal (somente leitura para Partner) ── */}
+      {selectedDeal && (() => {
+        const normalizedStage = normalizeStage(selectedDeal.stage);
+        const stageInfo = MA_PIPELINE.find(s => s.id === normalizedStage);
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <div className="bg-[#091221] border border-[#122036] rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between px-6 py-4 border-b border-[#122036]">
+                <div>
+                  <h3 className="text-sm font-bold text-[#E8EDF5]">{selectedDeal.target_company}</h3>
+                  <span className="text-[10px] text-[#7A8FA8]">{selectedDeal.code}</span>
+                </div>
+                <button onClick={() => setSelectedDeal(null)} className="text-[#7A8FA8] hover:text-[#E8EDF5] transition-colors">
+                  <X size={16} />
+                </button>
+              </div>
+              <div className="px-6 py-5 space-y-4">
+                {/* Info grid */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="rounded-lg bg-[#0F1E35] border border-[#122036] p-3">
+                    <p className="text-[10px] text-[#7A8FA8] mb-1">Setor</p>
+                    <p className="text-xs font-medium text-[#E8EDF5]">{selectedDeal.sector ?? "—"}</p>
+                  </div>
+                  <div className="rounded-lg bg-[#0F1E35] border border-[#122036] p-3">
+                    <p className="text-[10px] text-[#7A8FA8] mb-1">Valor</p>
+                    <p className="text-xs font-bold text-[#C4922E]">{selectedDeal.deal_value ? formatCurrency(selectedDeal.deal_value) : "—"}</p>
+                  </div>
+                  <div className="rounded-lg bg-[#0F1E35] border border-[#122036] p-3">
+                    <p className="text-[10px] text-[#7A8FA8] mb-1">Etapa</p>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ color: stageInfo?.color, background: stageInfo?.bg }}>
+                      {stageInfo?.label ?? normalizedStage}
+                    </span>
+                  </div>
+                  <div className="rounded-lg bg-[#0F1E35] border border-[#122036] p-3">
+                    <p className="text-[10px] text-[#7A8FA8] mb-1">Probabilidade</p>
+                    <p className="text-xs font-bold" style={{ color: probColor(selectedDeal.probability_percent ?? 0) }}>
+                      {selectedDeal.probability_percent ?? 0}%
+                    </p>
+                  </div>
+                </div>
+
+                {/* Notes */}
+                {selectedDeal.notes && (
+                  <div>
+                    <p className="text-xs text-[#7A8FA8] mb-1.5 flex items-center gap-1.5">
+                      <FileText size={12} /> Observações
+                    </p>
+                    <p className="text-xs text-[#E8EDF5] bg-[#0F1E35] border border-[#122036] rounded-lg px-3 py-2.5 leading-relaxed">
+                      {selectedDeal.notes}
+                    </p>
+                  </div>
+                )}
+
+                {/* Comentários da Mesa (somente leitura) */}
+                <div>
+                  <p className="text-xs text-[#7A8FA8] mb-2 flex items-center gap-1.5">
+                    <MessageSquare size={12} /> Atualizações da Mesa M&A
+                  </p>
+                  {(selectedDeal.comments?.length ?? 0) === 0 ? (
+                    <p className="text-xs text-[#5A7490] py-1">Nenhuma atualização ainda.</p>
+                  ) : (
+                    <div className="space-y-2 max-h-48 overflow-y-auto">
+                      {selectedDeal.comments!.map(c => (
+                        <div key={c.id} className="rounded-lg bg-[#0F1E35] border border-[#122036] p-3">
+                          <div className="flex items-center justify-between mb-1.5">
+                            <span className="text-[10px] font-semibold text-[#C9A84C]">{c.author}</span>
+                            <span className="text-[10px] text-[#5A7490]">{formatDate(c.created_at)}</span>
+                          </div>
+                          <p className="text-xs text-[#E8EDF5] leading-relaxed">{c.text}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ── Modal Nova Operação ── */}
       {showNewDeal && (

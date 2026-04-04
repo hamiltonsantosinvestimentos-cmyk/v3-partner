@@ -16,14 +16,14 @@ function serviceClient() {
 const SELECT_FIELDS = `
   id, code, title, target_company, sector,
   deal_value, ebitda_multiple, stage,
-  probability_percent, created_at, notes,
+  probability_percent, created_at, notes, comments,
   partner:profiles!ma_deals_assigned_to_fkey(id, full_name)
 `;
 
 export default async function MAPage() {
   let deals: MaDeal[] = [];
   let userId = "";
-  let pipefyCfg: { token?: string; pipeId?: string; formUrl?: string } | null = null;
+  let userName = "";
 
   if (IS_DEMO) {
     deals = DEMO_DEALS as MaDeal[];
@@ -35,66 +35,33 @@ export default async function MAPage() {
     const { data: { user } } = await supabase.auth.getUser();
     userId = user?.id ?? "";
 
-    if (!userId) return <MaClient deals={[]} userId="" pipefyCfg={null} />;
+    if (!userId) return <MaClient deals={[]} userId="" userName="" />;
 
     const { data: profile } = await svc
       .from("profiles").select("role, full_name").eq("id", userId).single();
     const isAdmin = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"].includes(profile?.role ?? "");
     const partnerFullName: string = profile?.full_name ?? "";
+    userName = partnerFullName;
 
-    // ── Lê config do Pipefy para passar ao cliente ────────────────────────────
-    try {
-      const { data: cfgRow } = await svc
-        .from("app_config").select("value").eq("key", "pipefy_ma").single();
-      const raw = cfgRow?.value as { token?: string; pipeId?: string; formUrl?: string } | null;
-      if (raw?.token && raw?.pipeId) {
-        pipefyCfg = raw;
-
-        // Sync server-side antes de buscar os deals
-        try {
-          await fetch(
-            `${process.env.NEXT_PUBLIC_APP_URL ?? "https://v3-partner.vercel.app"}/api/pipefy`,
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                action: "sync_ma",
-                token: raw.token,
-                pipeId: raw.pipeId,
-                userId,
-              }),
-            }
-          );
-        } catch { /* silently skip */ }
-      }
-    } catch { /* app_config não existe ainda */ }
-
-    // ── Busca deals — usa service client para garantir sem bloqueio de RLS ──
     let rawData: Record<string, unknown>[] = [];
 
     if (isAdmin) {
-      // Admin vê todos os deals
       const { data } = await svc
         .from("ma_deals").select(SELECT_FIELDS)
         .order("created_at", { ascending: false });
       rawData = (data ?? []) as Record<string, unknown>[];
     } else {
-      // Query 1: deals atribuídos ao partner ou criados por ele
       const { data: d1 } = await svc
         .from("ma_deals").select(SELECT_FIELDS)
         .or(`assigned_to.eq.${userId},created_by.eq.${userId}`)
         .order("created_at", { ascending: false });
-
       rawData = (d1 ?? []) as Record<string, unknown>[];
 
-      // Query 2: deals onde o nome do partner está nas notes
-      // (cobre quando o UUID não foi atribuído por diferença de grafia)
       if (partnerFullName) {
         const { data: d2 } = await svc
           .from("ma_deals").select(SELECT_FIELDS)
           .ilike("notes", `%Partner: ${partnerFullName}%`)
           .order("created_at", { ascending: false });
-
         if (d2?.length) {
           const seen = new Set(rawData.map((d) => d.id as string));
           for (const d of d2 as Record<string, unknown>[]) {
@@ -114,6 +81,8 @@ export default async function MAPage() {
       stage: d.stage as string,
       probability_percent: d.probability_percent as number | null,
       created_at: d.created_at as string,
+      notes: d.notes as string | null,
+      comments: Array.isArray(d.comments) ? d.comments : [],
       responsible: (() => {
         const p = d.partner;
         if (Array.isArray(p)) return (p[0] as { full_name?: string })?.full_name ?? null;
@@ -122,5 +91,5 @@ export default async function MAPage() {
     }));
   }
 
-  return <MaClient deals={deals} userId={userId} pipefyCfg={pipefyCfg} />;
+  return <MaClient deals={deals} userId={userId} userName={userName} />;
 }
