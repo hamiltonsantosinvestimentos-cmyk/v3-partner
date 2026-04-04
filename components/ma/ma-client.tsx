@@ -5,6 +5,7 @@ import {
   Building2, Plus, FileText,
   TrendingUp, DollarSign, Target, Award,
   Paperclip, Trash2, Upload, X, MessageSquare,
+  ExternalLink, Copy, CheckCheck,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 
@@ -140,6 +141,14 @@ export function MaClient({ deals, userId = "", userName = "" }: MaClientProps) {
   const [isCreating, setIsCreating] = useState(false);
   const [selectedDeal, setSelectedDeal] = useState<MaDeal | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const detailFileRef = useRef<HTMLInputElement>(null);
+
+  // Documentos do deal selecionado
+  type DocEntry = { doc_id: string; file_name: string; url: string | null; uploaded_at: string };
+  const [dealDocs, setDealDocs] = useState<DocEntry[]>([]);
+  const [docsLoading, setDocsLoading] = useState(false);
+  const [uploadingDoc, setUploadingDoc] = useState<string | null>(null);
+  const [copiedDoc, setCopiedDoc] = useState<string | null>(null);
 
   // Atualiza dados frescos do banco ao montar
   useEffect(() => {
@@ -168,6 +177,17 @@ export function MaClient({ deals, userId = "", userName = "" }: MaClientProps) {
       })
       .catch(() => {});
   }, []);
+
+  // Carrega documentos ao abrir detalhe
+  useEffect(() => {
+    if (!selectedDeal) { setDealDocs([]); return; }
+    setDocsLoading(true);
+    fetch(`/api/ma/documents?deal_id=${selectedDeal.id}`)
+      .then(r => r.json())
+      .then(({ documents }) => setDealDocs(Array.isArray(documents) ? documents : []))
+      .catch(() => setDealDocs([]))
+      .finally(() => setDocsLoading(false));
+  }, [selectedDeal?.id]);
 
   const normalizedDeals = localDeals.map(d => ({ ...d, stage: normalizeStage(d.stage) }));
   const totalValue = localDeals.reduce((s, d) => s + (d.deal_value ?? 0), 0);
@@ -319,13 +339,13 @@ export function MaClient({ deals, userId = "", userName = "" }: MaClientProps) {
         </div>
       )}
 
-      {/* ── Modal Detalhe do Deal (somente leitura para Partner) ── */}
+      {/* ── Modal Detalhe do Deal ── */}
       {selectedDeal && (() => {
         const normalizedStage = normalizeStage(selectedDeal.stage);
         const stageInfo = MA_PIPELINE.find(s => s.id === normalizedStage);
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-            <div className="bg-[#091221] border border-[#122036] rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+            <div className="bg-[#091221] border border-[#122036] rounded-2xl w-full max-w-lg max-h-[92vh] overflow-y-auto">
               <div className="flex items-center justify-between px-6 py-4 border-b border-[#122036]">
                 <div>
                   <h3 className="text-sm font-bold text-[#E8EDF5]">{selectedDeal.target_company}</h3>
@@ -336,31 +356,33 @@ export function MaClient({ deals, userId = "", userName = "" }: MaClientProps) {
                 </button>
               </div>
               <div className="px-6 py-5 space-y-4">
-                {/* Info grid */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="rounded-lg bg-[#0F1E35] border border-[#122036] p-3">
-                    <p className="text-[10px] text-[#7A8FA8] mb-1">Setor</p>
-                    <p className="text-xs font-medium text-[#E8EDF5]">{selectedDeal.sector ?? "—"}</p>
-                  </div>
-                  <div className="rounded-lg bg-[#0F1E35] border border-[#122036] p-3">
-                    <p className="text-[10px] text-[#7A8FA8] mb-1">Valor</p>
-                    <p className="text-xs font-bold text-[#C4922E]">{selectedDeal.deal_value ? formatCurrency(selectedDeal.deal_value) : "—"}</p>
-                  </div>
-                  <div className="rounded-lg bg-[#0F1E35] border border-[#122036] p-3">
-                    <p className="text-[10px] text-[#7A8FA8] mb-1">Etapa</p>
+                {/* Info grid completa */}
+                <div className="grid grid-cols-2 gap-2.5">
+                  {[
+                    { label: "Empresa", value: selectedDeal.target_company },
+                    { label: "Setor", value: selectedDeal.sector ?? "—" },
+                    { label: "Valor Estimado", value: selectedDeal.deal_value ? formatCurrency(selectedDeal.deal_value) : "—", gold: true },
+                    { label: "Responsável", value: selectedDeal.responsible ?? "—" },
+                    { label: "Probabilidade", value: `${selectedDeal.probability_percent ?? 0}%`, pct: selectedDeal.probability_percent ?? 0 },
+                    { label: "Cadastrado em", value: selectedDeal.created_at ? formatDate(selectedDeal.created_at) : "—" },
+                  ].map(item => (
+                    <div key={item.label} className="rounded-lg bg-[#0F1E35] border border-[#122036] p-3">
+                      <p className="text-[10px] text-[#7A8FA8] mb-1">{item.label}</p>
+                      <p className={`text-xs font-medium ${item.gold ? "text-[#C4922E] font-bold" : "text-[#E8EDF5]"}`}
+                        style={item.pct !== undefined ? { color: probColor(item.pct) } : undefined}>
+                        {item.value}
+                      </p>
+                    </div>
+                  ))}
+                  <div className="rounded-lg bg-[#0F1E35] border border-[#122036] p-3 col-span-2">
+                    <p className="text-[10px] text-[#7A8FA8] mb-1">Etapa atual</p>
                     <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ color: stageInfo?.color, background: stageInfo?.bg }}>
                       {stageInfo?.label ?? normalizedStage}
                     </span>
                   </div>
-                  <div className="rounded-lg bg-[#0F1E35] border border-[#122036] p-3">
-                    <p className="text-[10px] text-[#7A8FA8] mb-1">Probabilidade</p>
-                    <p className="text-xs font-bold" style={{ color: probColor(selectedDeal.probability_percent ?? 0) }}>
-                      {selectedDeal.probability_percent ?? 0}%
-                    </p>
-                  </div>
                 </div>
 
-                {/* Notes */}
+                {/* Observações */}
                 {selectedDeal.notes && (
                   <div>
                     <p className="text-xs text-[#7A8FA8] mb-1.5 flex items-center gap-1.5">
@@ -372,7 +394,86 @@ export function MaClient({ deals, userId = "", userName = "" }: MaClientProps) {
                   </div>
                 )}
 
-                {/* Comentários da Mesa (somente leitura) */}
+                {/* Documentos — upload e listagem */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs font-semibold text-[#7A8FA8] flex items-center gap-1.5">
+                      <FileText size={12} /> Documentos do Ativo
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => detailFileRef.current?.click()}
+                      className="flex items-center gap-1 text-xs text-[#C4922E] hover:text-[#E5B96A] transition-colors"
+                    >
+                      <Upload size={12} /> Enviar
+                    </button>
+                  </div>
+                  <input
+                    ref={detailFileRef}
+                    type="file"
+                    multiple
+                    className="hidden"
+                    onChange={async (e) => {
+                      const files = Array.from(e.target.files ?? []);
+                      if (!files.length || !selectedDeal) return;
+                      if (detailFileRef.current) detailFileRef.current.value = "";
+                      for (const file of files) {
+                        const docId = `doc_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+                        setUploadingDoc(docId);
+                        const form = new FormData();
+                        form.append("file", file);
+                        form.append("deal_id", selectedDeal.id);
+                        form.append("doc_id", docId);
+                        try {
+                          const res = await fetch("/api/ma/documents", { method: "POST", body: form });
+                          const json = await res.json();
+                          if (json.ok && json.document) {
+                            setDealDocs(prev => [...prev, json.document]);
+                          } else {
+                            alert(json.error ?? "Erro ao enviar arquivo");
+                          }
+                        } catch { alert("Erro ao enviar arquivo"); }
+                        setUploadingDoc(null);
+                      }
+                    }}
+                  />
+                  {docsLoading ? (
+                    <div className="flex items-center gap-2 py-2 text-xs text-[#7A8FA8]">
+                      <div className="w-3 h-3 border-2 border-[#C4922E]/40 border-t-[#C4922E] rounded-full animate-spin" />
+                      Carregando documentos...
+                    </div>
+                  ) : dealDocs.length === 0 && !uploadingDoc ? (
+                    <p className="text-xs text-[#5A7490] py-1">Nenhum documento anexado.</p>
+                  ) : (
+                    <div className="space-y-1.5 max-h-36 overflow-y-auto">
+                      {dealDocs.map(doc => (
+                        <div key={doc.doc_id} className="flex items-center gap-2 px-2.5 py-2 rounded-lg bg-[#0F1E35] border border-[#122036]">
+                          <Paperclip size={12} className="text-[#C4922E] flex-shrink-0" />
+                          <span className="text-xs text-[#E8EDF5] flex-1 truncate">{doc.file_name}</span>
+                          {doc.url && (
+                            <>
+                              <a href={doc.url} target="_blank" rel="noopener noreferrer" className="text-[#7A8FA8] hover:text-[#C4922E] transition-colors">
+                                <ExternalLink size={12} />
+                              </a>
+                              <button onClick={() => { navigator.clipboard.writeText(doc.url!); setCopiedDoc(doc.doc_id); setTimeout(() => setCopiedDoc(null), 2000); }}
+                                className="text-[#7A8FA8] hover:text-[#C4922E] transition-colors">
+                                {copiedDoc === doc.doc_id ? <CheckCheck size={12} className="text-emerald-400" /> : <Copy size={12} />}
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      ))}
+                      {uploadingDoc && (
+                        <div className="flex items-center gap-2 px-2.5 py-2 rounded-lg bg-[#0F1E35] border border-dashed border-[#C4922E]/40">
+                          <div className="w-3 h-3 border-2 border-[#C4922E]/40 border-t-[#C4922E] rounded-full animate-spin flex-shrink-0" />
+                          <span className="text-xs text-[#7A8FA8]">Enviando...</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Atualizações da Mesa (somente leitura) */}
                 <div>
                   <p className="text-xs text-[#7A8FA8] mb-2 flex items-center gap-1.5">
                     <MessageSquare size={12} /> Atualizações da Mesa M&A

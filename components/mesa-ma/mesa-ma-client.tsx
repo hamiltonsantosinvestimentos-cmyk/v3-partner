@@ -176,6 +176,10 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
   const [newComment, setNewComment] = useState("");
   const [savingComment, setSavingComment] = useState(false);
 
+  // Excluir deal
+  const [deletingCard, setDeletingCard] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
   useEffect(() => {
     if (!selectedCard) { setCardDocs([]); return; }
     setDocsLoading(true);
@@ -205,6 +209,17 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
         body: JSON.stringify({ id: card.id, stage: dbStage }),
       }).catch(() => {});
     }
+  };
+
+  const handleDeleteCard = async (card: MaCard) => {
+    setDeletingCard(true);
+    try {
+      await fetch(`/api/ma-deals?id=${card.id}`, { method: "DELETE" });
+      setCards(prev => prev.filter(c => c.id !== card.id));
+      setSelectedCard(null);
+      setConfirmDelete(false);
+    } catch {}
+    setDeletingCard(false);
   };
 
   const handleAddComment = async () => {
@@ -480,7 +495,7 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
       </div>
 
       {/* ── CARD DETAIL MODAL ──────────────────────────────────── */}
-      <Dialog open={!!selectedCard} onOpenChange={open => { if (!open) setSelectedCard(null); }}>
+      <Dialog open={!!selectedCard} onOpenChange={open => { if (!open) { setSelectedCard(null); setConfirmDelete(false); } }}>
         <DialogContent className="bg-[#091221] border border-[#122036] text-[#E8EDF5] max-w-lg">
           <DialogHeader>
             <DialogTitle className="text-[#E8EDF5]">
@@ -682,6 +697,39 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
                     <span className="text-xs text-emerald-400">Operação na etapa final — {maStages[maStages.length - 1]?.label}</span>
                   </div>
                 )}
+
+                {/* Excluir deal */}
+                <div className="pt-1 border-t border-[#122036]">
+                  {!confirmDelete ? (
+                    <button
+                      onClick={() => setConfirmDelete(true)}
+                      className="w-full text-xs text-[#7A8FA8] hover:text-red-400 transition-colors py-1.5 flex items-center justify-center gap-1.5"
+                    >
+                      <Trash2 size={12} /> Excluir esta operação
+                    </button>
+                  ) : (
+                    <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-3 space-y-2">
+                      <p className="text-xs text-red-400 text-center font-medium">Confirmar exclusão permanente?</p>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => setConfirmDelete(false)}
+                          className="flex-1 rounded-lg border border-[#122036] text-[#7A8FA8] text-xs py-2 hover:text-[#E8EDF5] transition-colors"
+                        >
+                          Cancelar
+                        </button>
+                        <button
+                          onClick={() => handleDeleteCard(selectedCard)}
+                          disabled={deletingCard}
+                          className="flex-1 rounded-lg bg-red-500/20 border border-red-500/40 text-red-400 text-xs py-2 hover:bg-red-500/30 transition-colors disabled:opacity-50 flex items-center justify-center gap-1.5"
+                        >
+                          {deletingCard
+                            ? <div className="w-3 h-3 border-2 border-red-400/40 border-t-red-400 rounded-full animate-spin" />
+                            : <><Trash2 size={12} /> Excluir</>}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             );
           })()}
