@@ -23,44 +23,44 @@ interface Message {
 
 const SUGGESTED_QUESTIONS = [
   {
-    icon: <Landmark className="w-4 h-4" />,
-    category: "Crédito",
-    question: "Como funciona o Home Equity e qual o LTV máximo praticado?",
+    icon: <TrendingUp className="w-4 h-4" />,
+    category: "Mercado de Capitais",
+    question: "Explique as diferenças entre CRI, CRA, FIDC e Debêntures Incentivadas para captação corporativa",
   },
   {
     icon: <Building2 className="w-4 h-4" />,
-    category: "Estruturado",
-    question: "Explique a diferença entre FIDC, CRI e CRA para estruturação de crédito",
+    category: "M&A Valuation",
+    question: "Como calcular o múltiplo de EBITDA em um M&A mid-market? Quais os múltiplos setoriais no Brasil?",
+  },
+  {
+    icon: <Landmark className="w-4 h-4" />,
+    category: "Renda Fixa",
+    question: "Qual a diferença entre LTN, NTN-B e NTN-F? Como interpretar a curva de juros para investir?",
+  },
+  {
+    icon: <PieChart className="w-4 h-4" />,
+    category: "Fundos",
+    question: "O que mudou na regulação de fundos com a RCVM 175/2022? Quais os principais impactos?",
   },
   {
     icon: <TrendingUp className="w-4 h-4" />,
     category: "High Ticket",
-    question: "Quais critérios para uma operação High Ticket acima de R$ 5M?",
-  },
-  {
-    icon: <Building2 className="w-4 h-4" />,
-    category: "M&A",
-    question: "Como calcular o múltiplo de EBITDA em um M&A mid-market?",
-  },
-  {
-    icon: <PieChart className="w-4 h-4" />,
-    category: "Split Fiscal",
-    question: "O que é split fiscal e como reduz custos tributários?",
+    question: "Como estruturar um Project Finance com SPE e DSCR? Quais as garantias exigidas?",
   },
   {
     icon: <Scale className="w-4 h-4" />,
-    category: "Compliance",
-    question: "Quais as regras do BACEN para correspondentes bancários em 2025?",
-  },
-  {
-    icon: <TrendingUp className="w-4 h-4" />,
-    category: "Mercado",
-    question: "Qual o impacto da SELIC alta no mercado de crédito imobiliário?",
+    category: "Compliance PLD",
+    question: "Quais as obrigações de PLD/FT para correspondentes bancários? COAF, KYC e monitoramento",
   },
   {
     icon: <BookOpen className="w-4 h-4" />,
-    category: "Produtos",
-    question: "Como funciona o Consórcio de Imóveis e quais as vantagens vs financiamento?",
+    category: "Câmbio & Cross-border",
+    question: "Como funciona a remessa de lucros ao exterior e o hedge cambial para empresas exportadoras?",
+  },
+  {
+    icon: <Building2 className="w-4 h-4" />,
+    category: "Previdência",
+    question: "PGBL vs VGBL: quando indicar cada um? Como funciona a tabela regressiva de IR?",
   },
 ];
 
