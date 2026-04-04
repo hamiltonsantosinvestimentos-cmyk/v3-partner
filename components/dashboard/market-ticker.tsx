@@ -21,13 +21,13 @@ function TickerItem({
 }) {
   return (
     <span className="inline-flex items-center gap-2 px-5 shrink-0">
-      <span className="text-[#5A7490] text-xs font-semibold uppercase tracking-widest">{label}</span>
+      <span className="text-[#7A8FA8] text-xs font-semibold uppercase tracking-widest">{label}</span>
       <span className="text-white font-bold text-sm">
-        {unit && <span className="text-[#5A7490] font-normal mr-0.5">{unit}</span>}
+        {unit && <span className="text-[#7A8FA8] font-normal mr-0.5">{unit}</span>}
         {value}
       </span>
       {sublabel && (
-        <span className="text-[#5A7490] text-[10px]">{sublabel}</span>
+        <span className="text-[#7A8FA8] text-[10px]">{sublabel}</span>
       )}
       {change && (
         <span className={`flex items-center gap-0.5 text-[11px] font-semibold ${positive ? "text-emerald-400" : "text-red-400"}`}>
@@ -79,9 +79,9 @@ export function MarketTicker() {
   const allItems = [...items, ...items, ...items];
 
   return (
-    <div className="relative flex items-center bg-[#050C18] border border-[#122036] rounded-xl overflow-hidden h-10 mb-5">
+    <div className="relative flex items-center bg-[#09081A] border border-[#122036] rounded-xl overflow-hidden h-10 mb-5">
       {/* Left label */}
-      <div className="flex items-center gap-2 px-3 bg-[#C4922E] h-full shrink-0 z-10">
+      <div className="flex items-center gap-2 px-3 bg-[#C9A84C] h-full shrink-0 z-10">
         <Activity className="w-3.5 h-3.5 text-white" />
         <span className="text-white text-[10px] font-bold uppercase tracking-wider whitespace-nowrap">
           Mercado ao vivo
@@ -91,12 +91,12 @@ export function MarketTicker() {
       {/* Scrolling area */}
       <div className="flex-1 overflow-hidden relative">
         {loading ? (
-          <div className="flex items-center gap-2 px-4 text-[#5A7490] text-xs animate-pulse">
+          <div className="flex items-center gap-2 px-4 text-[#7A8FA8] text-xs animate-pulse">
             <RefreshCw className="w-3 h-3 animate-spin" />
             Carregando cotações...
           </div>
         ) : error || !data ? (
-          <div className="flex items-center gap-2 px-4 text-[#5A7490] text-xs">
+          <div className="flex items-center gap-2 px-4 text-[#7A8FA8] text-xs">
             Cotações indisponíveis no momento
           </div>
         ) : (
@@ -111,13 +111,13 @@ export function MarketTicker() {
       {/* Right: timestamp + refresh */}
       {data && !loading && (
         <div className="flex items-center gap-2 px-3 shrink-0 border-l border-[#122036]">
-          <span className="text-[#5A7490] text-[10px]">
+          <span className="text-[#7A8FA8] text-[10px]">
             {data.updatedAt}
           </span>
           <button
             onClick={fetchData}
             title="Atualizar"
-            className="text-[#5A7490] hover:text-[#C4922E] transition-colors"
+            className="text-[#7A8FA8] hover:text-[#C9A84C] transition-colors"
           >
             <RefreshCw className="w-3 h-3" />
           </button>
@@ -125,8 +125,8 @@ export function MarketTicker() {
       )}
 
       {/* Fade edges */}
-      <div className="absolute left-[112px] top-0 w-6 h-full bg-gradient-to-r from-[#050C18] to-transparent pointer-events-none z-10" />
-      <div className="absolute right-[72px] top-0 w-6 h-full bg-gradient-to-l from-[#050C18] to-transparent pointer-events-none z-10" />
+      <div className="absolute left-[112px] top-0 w-6 h-full bg-gradient-to-r from-[#09081A] to-transparent pointer-events-none z-10" />
+      <div className="absolute right-[72px] top-0 w-6 h-full bg-gradient-to-l from-[#09081A] to-transparent pointer-events-none z-10" />
     </div>
   );
 }

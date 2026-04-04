@@ -1,38 +1,38 @@
 @import "tailwindcss";
 
 @theme {
-  /* ── Core palette ── */
-  --color-background:          #050C18;
-  --color-foreground:          #E8EDF5;
-  --color-card:                #091221;
-  --color-card-foreground:     #E8EDF5;
-  --color-popover:             #091221;
-  --color-popover-foreground:  #E8EDF5;
+  /* ── Core palette — V3 Brandbook V2.0 ── */
+  --color-background:          #09081A;   /* Navy Profundo */
+  --color-foreground:          #F0ECE4;   /* Cream */
+  --color-card:                #162744;   /* Navy Card */
+  --color-card-foreground:     #F0ECE4;
+  --color-popover:             #162744;
+  --color-popover-foreground:  #F0ECE4;
 
   /* ── Semantic ── */
-  --color-primary:             #C4922E;
-  --color-primary-foreground:  #050C18;
-  --color-secondary:           #0F1E35;
-  --color-secondary-foreground:#E8EDF5;
-  --color-muted:               #091221;
-  --color-muted-foreground:    #5A7490;
-  --color-accent:              #0F1E35;
-  --color-accent-foreground:   #E8EDF5;
+  --color-primary:             #C9A84C;   /* Ouro V3 */
+  --color-primary-foreground:  #09081A;
+  --color-secondary:           #111F35;   /* Navy Base */
+  --color-secondary-foreground:#F0ECE4;
+  --color-muted:               #111F35;
+  --color-muted-foreground:    #7A8FA8;   /* Muted */
+  --color-accent:              #243A66;   /* Navy Médio */
+  --color-accent-foreground:   #F0ECE4;
   --color-destructive:         #EF4444;
   --color-destructive-foreground: #FFFFFF;
-  --color-border:              #122036;
-  --color-input:               #0F1E35;
-  --color-ring:                #C4922E;
+  --color-border:              #162744;
+  --color-input:               #111F35;
+  --color-ring:                #C9A84C;
 
   /* ── Brand ── */
-  --color-brand-navy:          #050C18;
-  --color-brand-navy-mid:      #091221;
-  --color-brand-navy-surface:  #0F1E35;
-  --color-brand-blue:          #1A4FC4;
-  --color-brand-blue-light:    #2E67E8;
-  --color-brand-gold:          #C4922E;
-  --color-brand-gold-light:    #E5B96A;
-  --color-brand-gold-pale:     #F5D99A;
+  --color-brand-navy:          #09081A;   /* Navy Profundo */
+  --color-brand-navy-base:     #111F35;   /* Navy Base */
+  --color-brand-navy-card:     #162744;   /* Navy Card */
+  --color-brand-navy-mid:      #243A66;   /* Navy Médio */
+  --color-brand-gold:          #C9A84C;   /* Ouro V3 */
+  --color-brand-gold-light:    #E8C97A;   /* Ouro Claro */
+  --color-brand-cream:         #F0ECE4;   /* Cream */
+  --color-brand-muted:         #7A8FA8;   /* Muted */
 
   /* ── Status ── */
   --color-success:  #10B981;
@@ -41,8 +41,8 @@
 
   /* ── Shape / Type ── */
   --radius:         0.75rem;
-  --font-sans:      'Inter', system-ui, sans-serif;
-  --font-display:   'Outfit', 'Inter', system-ui, sans-serif;
+  --font-sans:      'DM Sans', system-ui, sans-serif;
+  --font-display:   'DM Sans', system-ui, sans-serif;
   --font-mono:      'JetBrains Mono', monospace;
 }
 
@@ -68,21 +68,14 @@ h1, h2, h3 {
 /* ── Scrollbar ── */
 ::-webkit-scrollbar          { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track    { background: var(--color-muted); }
-::-webkit-scrollbar-thumb    { background: #1A2F4A; border-radius: 4px; }
-::-webkit-scrollbar-thumb:hover { background: #C4922E44; }
+::-webkit-scrollbar-thumb    { background: #243A66; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(201,168,76,0.4); }
 
 /* ════════════════════════════════════
    BRAND UTILITIES
 ════════════════════════════════════ */
 .gradient-text {
-  background: linear-gradient(120deg, #C4922E 0%, #F5D99A 50%, #C4922E 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-
-.gradient-text-blue {
-  background: linear-gradient(135deg, #2E67E8, #C4922E);
+  background: linear-gradient(120deg, #C9A84C 0%, #E8C97A 50%, #C9A84C 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -90,7 +83,7 @@ h1, h2, h3 {
 
 /* Gold shimmer on hover */
 .gold-shimmer {
-  background: linear-gradient(120deg, #C4922E 0%, #F5D99A 45%, #E5B96A 55%, #C4922E 100%);
+  background: linear-gradient(120deg, #C9A84C 0%, #E8C97A 45%, #C9A84C 55%, #C9A84C 100%);
   background-size: 200% 100%;
   transition: background-position 0.4s;
 }
@@ -113,10 +106,10 @@ h1, h2, h3 {
 }
 
 .nav-item-active {
-  background: linear-gradient(120deg, rgba(196,146,46,0.15) 0%, rgba(196,146,46,0.05) 100%);
-  color: #E5B96A;
-  border: 1px solid rgba(196,146,46,0.25);
-  box-shadow: inset 0 0 0 1px rgba(196,146,46,0.08);
+  background: linear-gradient(120deg, rgba(201,168,76,0.15) 0%, rgba(201,168,76,0.05) 100%);
+  color: #E8C97A;
+  border: 1px solid rgba(201,168,76,0.25);
+  box-shadow: inset 0 0 0 1px rgba(201,168,76,0.08);
 }
 
 .nav-item-inactive {
@@ -134,7 +127,7 @@ h1, h2, h3 {
 ════════════════════════════════════ */
 .kpi-card {
   background: var(--color-card);
-  border: 1px solid rgba(18,32,54,0.9);
+  border: 1px solid rgba(22,39,68,0.9);
   border-radius: 0.875rem;
   padding: 1.25rem;
   display: flex;
@@ -149,18 +142,18 @@ h1, h2, h3 {
   position: absolute;
   top: 0; left: 0; right: 0;
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(196,146,46,0.3), transparent);
+  background: linear-gradient(90deg, transparent, rgba(201,168,76,0.3), transparent);
 }
 
 /* ════════════════════════════════════
    TABLE
 ════════════════════════════════════ */
 .data-table-row {
-  border-bottom: 1px solid rgba(18,32,54,0.6);
+  border-bottom: 1px solid rgba(22,39,68,0.6);
   transition: background-color 0.12s;
 }
 .data-table-row:hover {
-  background: rgba(15,30,53,0.5);
+  background: rgba(17,31,53,0.5);
 }
 
 /* ════════════════════════════════════
@@ -168,37 +161,24 @@ h1, h2, h3 {
 ════════════════════════════════════ */
 .bg-grid {
   background-image:
-    linear-gradient(rgba(196,146,46,0.04) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(196,146,46,0.04) 1px, transparent 1px);
+    linear-gradient(rgba(201,168,76,0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(201,168,76,0.04) 1px, transparent 1px);
   background-size: 36px 36px;
-}
-
-.bg-grid-blue {
-  background-image:
-    linear-gradient(rgba(26,79,196,0.06) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(26,79,196,0.06) 1px, transparent 1px);
-  background-size: 32px 32px;
 }
 
 /* Premium card glow */
 .card-glow-gold {
   box-shadow:
-    0 0 0 1px rgba(196,146,46,0.12),
+    0 0 0 1px rgba(201,168,76,0.12),
     0 4px 32px rgba(0,0,0,0.4),
-    0 1px 0 rgba(196,146,46,0.15) inset;
-}
-
-.card-glow-blue {
-  box-shadow:
-    0 0 0 1px rgba(26,79,196,0.15),
-    0 4px 32px rgba(0,0,0,0.4);
+    0 1px 0 rgba(201,168,76,0.15) inset;
 }
 
 /* ════════════════════════════════════
    SIDEBAR GOLD ACCENT LINE
 ════════════════════════════════════ */
 .sidebar-gold-line {
-  background: linear-gradient(180deg, #C4922E 0%, #E5B96A 50%, #C4922E 100%);
+  background: linear-gradient(180deg, #C9A84C 0%, #E8C97A 50%, #C9A84C 100%);
   width: 2px;
   height: 100%;
 }
@@ -217,14 +197,14 @@ h1, h2, h3 {
   100% { background-position:  200% 0; }
 }
 .animate-shimmer {
-  background: linear-gradient(90deg, transparent 0%, rgba(196,146,46,0.15) 50%, transparent 100%);
+  background: linear-gradient(90deg, transparent 0%, rgba(201,168,76,0.15) 50%, transparent 100%);
   background-size: 200% 100%;
   animation: shimmer 2s infinite;
 }
 
 @keyframes pulse-gold {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(196,146,46,0.4); }
-  50%       { box-shadow: 0 0 0 6px rgba(196,146,46,0); }
+  0%, 100% { box-shadow: 0 0 0 0 rgba(201,168,76,0.4); }
+  50%       { box-shadow: 0 0 0 6px rgba(201,168,76,0); }
 }
 .animate-pulse-gold { animation: pulse-gold 2s infinite; }
 

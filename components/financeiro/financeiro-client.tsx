@@ -32,7 +32,7 @@ interface Props {
 
 // ─── Helpers UI ───────────────────────────────────────────────────────────────
 
-const GOLD = "#C4922E";
+const GOLD = "#C9A84C";
 const NAVY3 = "#0F1E35";
 
 function StatusBadge({ status }: { status: string }) {
@@ -163,14 +163,14 @@ function VisaoGeralTab() {
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <KpiCard label="Receita Bruta" value={formatMoeda(dreAtual.receitas)} sub={`${MESES_PT[dreAtual.mes - 1]}/26`} icon={TrendingUp} color="#C4922E" trend={trendReceita} />
+        <KpiCard label="Receita Bruta" value={formatMoeda(dreAtual.receitas)} sub={`${MESES_PT[dreAtual.mes - 1]}/26`} icon={TrendingUp} color="#C9A84C" trend={trendReceita} />
         <KpiCard label="Lucro Líquido" value={formatMoeda(dreAtual.lucroLiquido)} sub="após IR/CSLL" icon={BarChart3} color="#22C55E" trend={18} />
         <KpiCard label="Comissões a Pagar" value={formatMoeda(comissoesAPagar)} sub={`${DEMO_COMISSOES.filter(c => c.status === "A_PAGAR").length} pendentes`} icon={CreditCard} color="#F59E0B" />
         <KpiCard label="Impostos a Recolher" value={formatMoeda(impostoAPagar)} sub="meses abertos" icon={Receipt} color="#EF4444" />
         <KpiCard label="Folha do Mês" value={formatMoeda(bruto)} sub={`${DEMO_FUNCIONARIOS.length} colaboradores`} icon={Users} color="#8B5CF6" />
         <KpiCard label="Despesas Fixas" value={formatMoeda(DESPESAS_FIXAS_TEMPLATES.reduce((s, t) => s + t.valor, 0))} sub="mensais recorrentes" icon={FileText} color="#06B6D4" />
         <KpiCard label="Margem Líquida" value={`${((dreAtual.lucroLiquido / dreAtual.receitas) * 100).toFixed(1)}%`} sub="lucro / receita bruta" icon={TrendingUp} color="#10B981" />
-        <KpiCard label="EBITDA" value={formatMoeda(dreAtual.ebitda)} sub={MESES_PT[dreAtual.mes - 1]} icon={BarChart3} color="#C4922E" />
+        <KpiCard label="EBITDA" value={formatMoeda(dreAtual.ebitda)} sub={MESES_PT[dreAtual.mes - 1]} icon={BarChart3} color="#C9A84C" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -182,11 +182,11 @@ function VisaoGeralTab() {
             <ResponsiveContainer width="100%" height={220}>
               <BarChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#122036" />
-                <XAxis dataKey="mes" tick={{ fill: "#5A7490", fontSize: 10 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fill: "#5A7490", fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={v => `R$${(v / 1000).toFixed(0)}k`} />
+                <XAxis dataKey="mes" tick={{ fill: "#7A8FA8", fontSize: 10 }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fill: "#7A8FA8", fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={v => `R$${(v / 1000).toFixed(0)}k`} />
                 <Tooltip contentStyle={{ backgroundColor: "#091221", border: "1px solid rgba(196,146,46,0.2)", borderRadius: 10, fontSize: 12 }} formatter={(v: number) => formatMoeda(v)} />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
-                <Bar dataKey="Receita" fill="#C4922E" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="Receita" fill="#C9A84C" radius={[4, 4, 0, 0]} />
                 <Bar dataKey="Despesas" fill="#3B5273" radius={[4, 4, 0, 0]} />
                 <Bar dataKey="Resultado" fill="#22C55E" radius={[4, 4, 0, 0]} />
               </BarChart>
@@ -343,7 +343,7 @@ function NovoColaboradorModal({
   };
 
   const inputCls = (err?: string) =>
-    `w-full h-9 px-3 text-sm rounded-lg border ${err ? "border-red-500/50 bg-red-500/5" : "border-[#122036] bg-[#0F1E35]"} text-white placeholder:text-muted-foreground focus:outline-none focus:border-[#C4922E]/60 transition-colors`;
+    `w-full h-9 px-3 text-sm rounded-lg border ${err ? "border-red-500/50 bg-red-500/5" : "border-[#122036] bg-[#0F1E35]"} text-white placeholder:text-muted-foreground focus:outline-none focus:border-[#C9A84C]/60 transition-colors`;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
@@ -362,13 +362,13 @@ function NovoColaboradorModal({
         <div className="p-5 space-y-5">
           {/* Tipo de Contrato */}
           <div>
-            <p className="text-xs font-semibold text-[#C4922E] uppercase tracking-wider mb-3">Tipo de Contrato</p>
+            <p className="text-xs font-semibold text-[#C9A84C] uppercase tracking-wider mb-3">Tipo de Contrato</p>
             <div className="flex gap-3">
               {(["CLT", "PJ"] as const).map(t => (
                 <button
                   key={t}
                   onClick={() => setForm(f => ({ ...FORM_VAZIO, tipoContrato: t, nome: f.nome, cargo: f.cargo, departamento: f.departamento, admissao: f.admissao, status: f.status }))}
-                  className={`flex-1 h-12 rounded-xl border-2 text-sm font-bold transition-all ${form.tipoContrato === t ? (t === "PJ" ? "border-purple-500 bg-purple-500/10 text-purple-300" : "border-[#C4922E] bg-[#C4922E]/10 text-[#C4922E]") : "border-[#122036] text-muted-foreground hover:border-[#1e3050]"}`}
+                  className={`flex-1 h-12 rounded-xl border-2 text-sm font-bold transition-all ${form.tipoContrato === t ? (t === "PJ" ? "border-purple-500 bg-purple-500/10 text-purple-300" : "border-[#C9A84C] bg-[#C9A84C]/10 text-[#C9A84C]") : "border-[#122036] text-muted-foreground hover:border-[#1e3050]"}`}
                 >
                   {t === "CLT" ? "🏢 CLT" : "🤝 PJ — Pessoa Jurídica"}
                 </button>
@@ -385,7 +385,7 @@ function NovoColaboradorModal({
 
           {/* Dados pessoais */}
           <div>
-            <p className="text-xs font-semibold text-[#C4922E] uppercase tracking-wider mb-3">Dados {isPJ ? "do Prestador" : "Pessoais"}</p>
+            <p className="text-xs font-semibold text-[#C9A84C] uppercase tracking-wider mb-3">Dados {isPJ ? "do Prestador" : "Pessoais"}</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="sm:col-span-2">
                 <label className="text-[10px] text-muted-foreground uppercase tracking-wide block mb-1">Nome {isPJ ? "do Responsável" : "Completo"} *</label>
@@ -437,7 +437,7 @@ function NovoColaboradorModal({
 
           {/* Remuneração */}
           <div>
-            <p className="text-xs font-semibold text-[#C4922E] uppercase tracking-wider mb-3">Remuneração</p>
+            <p className="text-xs font-semibold text-[#C9A84C] uppercase tracking-wider mb-3">Remuneração</p>
             <div>
               <label className="text-[10px] text-muted-foreground uppercase tracking-wide block mb-1">
                 {isPJ ? "Valor Mensal Pago (R$) — Nota Fiscal *" : "Salário Bruto (R$) *"}
@@ -455,7 +455,7 @@ function NovoColaboradorModal({
           {/* Benefícios — apenas CLT */}
           {!isPJ && (
             <div>
-              <p className="text-xs font-semibold text-[#C4922E] uppercase tracking-wider mb-3">Benefícios</p>
+              <p className="text-xs font-semibold text-[#C9A84C] uppercase tracking-wider mb-3">Benefícios</p>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 {([["vt", "Vale Transporte"], ["vr", "Vale Refeição"], ["planoSaude", "Plano de Saúde"], ["outros", "Outros"]] as const).map(([k, lbl]) => (
                   <div key={k}>
@@ -469,8 +469,8 @@ function NovoColaboradorModal({
 
           {/* Preview calculado */}
           {bruto >= 1 && (
-            <div className={`bg-[#050C18] border rounded-xl p-4 ${isPJ ? "border-purple-500/20" : "border-[#C4922E]/20"}`}>
-              <p className={`text-xs font-semibold uppercase tracking-wider mb-3 ${isPJ ? "text-purple-400" : "text-[#C4922E]"}`}>
+            <div className={`bg-[#09081A] border rounded-xl p-4 ${isPJ ? "border-purple-500/20" : "border-[#C9A84C]/20"}`}>
+              <p className={`text-xs font-semibold uppercase tracking-wider mb-3 ${isPJ ? "text-purple-400" : "text-[#C9A84C]"}`}>
                 {isPJ ? "Resumo do Contrato PJ" : "Cálculo Automático"}
               </p>
               {isPJ ? (
@@ -489,7 +489,7 @@ function NovoColaboradorModal({
               ) : bruto >= 1412 ? (
                 <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-center">
                   {[
-                    { label: "Sal. Bruto",   value: formatMoeda(bruto),    color: "#C4922E" },
+                    { label: "Sal. Bruto",   value: formatMoeda(bruto),    color: "#C9A84C" },
                     { label: "INSS (desc.)", value: formatMoeda(inss),     color: "#EF4444" },
                     { label: "FGTS (emp.)",  value: formatMoeda(fgts),     color: "#F59E0B" },
                     { label: "IRRF (desc.)", value: formatMoeda(irrf),     color: "#EF4444" },
@@ -511,7 +511,7 @@ function NovoColaboradorModal({
           <button onClick={onClose} className="flex-1 h-10 rounded-xl border border-border/50 text-sm text-muted-foreground hover:text-foreground hover:border-border transition-all">
             Cancelar
           </button>
-          <button onClick={salvar} className={`flex-1 h-10 rounded-xl text-white text-sm font-semibold transition-all ${isPJ ? "bg-purple-600 hover:bg-purple-500" : "bg-[#C4922E] hover:bg-[#E5B96A]"}`}>
+          <button onClick={salvar} className={`flex-1 h-10 rounded-xl text-white text-sm font-semibold transition-all ${isPJ ? "bg-purple-600 hover:bg-purple-500" : "bg-[#C9A84C] hover:bg-[#E8C97A]"}`}>
             {editando ? "Salvar Alterações" : `Adicionar ${isPJ ? "Prestador PJ" : "Colaborador CLT"}`}
           </button>
         </div>
@@ -583,7 +583,7 @@ function FolhaTab() {
             }} />
             <button
               onClick={() => setShowModal(true)}
-              className="flex items-center gap-1.5 text-xs bg-[#C4922E] text-white px-3 py-1.5 rounded-lg hover:bg-[#E5B96A] transition-all"
+              className="flex items-center gap-1.5 text-xs bg-[#C9A84C] text-white px-3 py-1.5 rounded-lg hover:bg-[#E8C97A] transition-all"
             >
               <Plus className="w-3.5 h-3.5" /> Novo Colaborador
             </button>
@@ -598,7 +598,7 @@ function FolhaTab() {
             <div className="space-y-2">
               <div className="grid grid-cols-3 lg:grid-cols-6 gap-3">
                 {[
-                  { label: "Bruto CLT + NF PJ", value: formatMoeda(totais.bruto), color: "#C4922E" },
+                  { label: "Bruto CLT + NF PJ", value: formatMoeda(totais.bruto), color: "#C9A84C" },
                   { label: "INSS (desc. CLT)", value: formatMoeda(totais.inss), color: "#EF4444" },
                   { label: "FGTS (emp. CLT)", value: formatMoeda(totais.fgts), color: "#F59E0B" },
                   { label: "IRRF (desc. CLT)", value: formatMoeda(totais.irrf), color: "#EF4444" },
@@ -656,7 +656,7 @@ function FolhaTab() {
                         <div className="text-[10px] text-muted-foreground/60">{f.departamento}</div>
                       </td>
                       <td className="px-4 py-3">
-                        <span className={`text-[10px] font-bold border px-2 py-0.5 rounded-full ${pj ? "bg-purple-500/20 text-purple-400 border-purple-500/30" : "bg-[#C4922E]/20 text-[#C4922E] border-[#C4922E]/30"}`}>
+                        <span className={`text-[10px] font-bold border px-2 py-0.5 rounded-full ${pj ? "bg-purple-500/20 text-purple-400 border-purple-500/30" : "bg-[#C9A84C]/20 text-[#C9A84C] border-[#C9A84C]/30"}`}>
                           {pj ? "PJ" : "CLT"}
                         </span>
                       </td>
@@ -672,7 +672,7 @@ function FolhaTab() {
                         <div className="flex gap-1">
                           <button
                             onClick={() => setEditandoFunc(f)}
-                            className="p-1.5 rounded-lg text-muted-foreground hover:text-[#C4922E] hover:bg-[#C4922E]/10 transition-all"
+                            className="p-1.5 rounded-lg text-muted-foreground hover:text-[#C9A84C] hover:bg-[#C9A84C]/10 transition-all"
                             title="Editar"
                           >
                             <Pencil className="w-3.5 h-3.5" />
@@ -691,9 +691,9 @@ function FolhaTab() {
                   })}
                 </tbody>
                 <tfoot>
-                  <tr className="bg-[#0F1E35] border-t border-[#C4922E]/30">
-                    <td className="px-4 py-3 font-bold text-[#C4922E]" colSpan={4}>TOTAIS — {funcionarios.length} colaborador{funcionarios.length !== 1 ? "es" : ""} ({funcionarios.filter(f => f.tipoContrato !== "PJ").length} CLT · {funcionarios.filter(f => f.tipoContrato === "PJ").length} PJ)</td>
-                    <td className="px-4 py-3 font-bold text-[#C4922E]">{formatMoeda(totais.bruto)}</td>
+                  <tr className="bg-[#0F1E35] border-t border-[#C9A84C]/30">
+                    <td className="px-4 py-3 font-bold text-[#C9A84C]" colSpan={4}>TOTAIS — {funcionarios.length} colaborador{funcionarios.length !== 1 ? "es" : ""} ({funcionarios.filter(f => f.tipoContrato !== "PJ").length} CLT · {funcionarios.filter(f => f.tipoContrato === "PJ").length} PJ)</td>
+                    <td className="px-4 py-3 font-bold text-[#C9A84C]">{formatMoeda(totais.bruto)}</td>
                     <td className="px-4 py-3 font-bold text-red-400">{formatMoeda(totais.inss)}</td>
                     <td className="px-4 py-3 font-bold text-amber-400">{formatMoeda(totais.fgts)}</td>
                     <td className="px-4 py-3 font-bold text-red-400">{formatMoeda(totais.irrf)}</td>
@@ -751,9 +751,9 @@ function NovaDespesaModal({
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const inputCls = (err?: string) =>
-    `w-full h-9 px-3 text-sm rounded-lg border ${err ? "border-red-500/50 bg-red-500/5" : "border-[#122036] bg-[#0F1E35]"} text-white placeholder:text-muted-foreground focus:outline-none focus:border-[#C4922E]/60 transition-colors`;
+    `w-full h-9 px-3 text-sm rounded-lg border ${err ? "border-red-500/50 bg-red-500/5" : "border-[#122036] bg-[#0F1E35]"} text-white placeholder:text-muted-foreground focus:outline-none focus:border-[#C9A84C]/60 transition-colors`;
   const selectCls = () =>
-    `w-full h-9 px-3 text-sm rounded-lg border border-[#122036] bg-[#0F1E35] text-white focus:outline-none focus:border-[#C4922E]/60 transition-colors`;
+    `w-full h-9 px-3 text-sm rounded-lg border border-[#122036] bg-[#0F1E35] text-white focus:outline-none focus:border-[#C9A84C]/60 transition-colors`;
 
   const salvarFixa = () => {
     const e: Record<string, string> = {};
@@ -893,7 +893,7 @@ function NovaDespesaModal({
           </button>
           <button
             onClick={isFixa ? salvarFixa : salvarVariavel}
-            className="flex-1 h-10 rounded-xl bg-[#C4922E] text-white text-sm font-semibold hover:bg-[#E5B96A] transition-all"
+            className="flex-1 h-10 rounded-xl bg-[#C9A84C] text-white text-sm font-semibold hover:bg-[#E8C97A] transition-all"
           >
             {editandoFixa || editandoVariavel ? "Salvar Alterações" : isFixa ? "Adicionar Despesa Fixa" : "Adicionar Despesa Variável"}
           </button>
@@ -972,10 +972,10 @@ function DespesasTab() {
           <div className="flex items-center gap-4">
             <MonthSelector mes={mes} ano={ano} onChange={(m, a) => { setMes(m); setAno(a); }} />
             <div className="flex bg-secondary rounded-lg p-0.5">
-              <button onClick={() => setSubtab("fixas")} className={`px-4 py-1.5 rounded-md text-xs font-semibold transition-all ${subtab === "fixas" ? "bg-[#C4922E] text-white" : "text-muted-foreground hover:text-foreground"}`}>
+              <button onClick={() => setSubtab("fixas")} className={`px-4 py-1.5 rounded-md text-xs font-semibold transition-all ${subtab === "fixas" ? "bg-[#C9A84C] text-white" : "text-muted-foreground hover:text-foreground"}`}>
                 Fixas <span className="ml-1 opacity-70">{formatMoeda(totalFixas)}</span>
               </button>
-              <button onClick={() => setSubtab("variaveis")} className={`px-4 py-1.5 rounded-md text-xs font-semibold transition-all ${subtab === "variaveis" ? "bg-[#C4922E] text-white" : "text-muted-foreground hover:text-foreground"}`}>
+              <button onClick={() => setSubtab("variaveis")} className={`px-4 py-1.5 rounded-md text-xs font-semibold transition-all ${subtab === "variaveis" ? "bg-[#C9A84C] text-white" : "text-muted-foreground hover:text-foreground"}`}>
                 Variáveis <span className="ml-1 opacity-70">{formatMoeda(totalVariaveis)}</span>
               </button>
             </div>
@@ -997,7 +997,7 @@ function DespesasTab() {
             }} />
             <button
               onClick={() => setShowModal(true)}
-              className="flex items-center gap-1.5 text-xs bg-[#C4922E] text-white px-3 py-1.5 rounded-lg hover:bg-[#E5B96A] transition-all"
+              className="flex items-center gap-1.5 text-xs bg-[#C9A84C] text-white px-3 py-1.5 rounded-lg hover:bg-[#E8C97A] transition-all"
             >
               <Plus className="w-3.5 h-3.5" /> Nova {subtab === "fixas" ? "Despesa Fixa" : "Despesa Variável"}
             </button>
@@ -1029,7 +1029,7 @@ function DespesasTab() {
                         <div className="flex flex-col items-center gap-2">
                           <Receipt className="w-7 h-7 opacity-20" />
                           <span>Nenhuma despesa {subtab === "fixas" ? "fixa" : "variável"} neste mês</span>
-                          <button onClick={() => setShowModal(true)} className="text-[#C4922E] hover:underline text-xs mt-1">
+                          <button onClick={() => setShowModal(true)} className="text-[#C9A84C] hover:underline text-xs mt-1">
                             + Adicionar agora
                           </button>
                         </div>
@@ -1063,7 +1063,7 @@ function DespesasTab() {
                                 setEditandoVariavel(d);
                               }
                             }}
-                            className="p-1.5 rounded-lg text-muted-foreground hover:text-[#C4922E] hover:bg-[#C4922E]/10 transition-all"
+                            className="p-1.5 rounded-lg text-muted-foreground hover:text-[#C9A84C] hover:bg-[#C9A84C]/10 transition-all"
                             title="Editar"
                           >
                             <Pencil className="w-3.5 h-3.5" />
@@ -1088,9 +1088,9 @@ function DespesasTab() {
                   ))}
                 </tbody>
                 <tfoot>
-                  <tr className="bg-[#0F1E35] border-t border-[#C4922E]/30">
-                    <td className="px-4 py-3 font-bold text-[#C4922E]" colSpan={4}>TOTAL {subtab === "fixas" ? "FIXAS" : "VARIÁVEIS"} — {items.length} item{items.length !== 1 ? "s" : ""}</td>
-                    <td className="px-4 py-3 font-bold text-[#C4922E]">{formatMoeda(subtab === "fixas" ? totalFixas : totalVariaveis)}</td>
+                  <tr className="bg-[#0F1E35] border-t border-[#C9A84C]/30">
+                    <td className="px-4 py-3 font-bold text-[#C9A84C]" colSpan={4}>TOTAL {subtab === "fixas" ? "FIXAS" : "VARIÁVEIS"} — {items.length} item{items.length !== 1 ? "s" : ""}</td>
+                    <td className="px-4 py-3 font-bold text-[#C9A84C]">{formatMoeda(subtab === "fixas" ? totalFixas : totalVariaveis)}</td>
                     <td colSpan={3} />
                   </tr>
                 </tfoot>
@@ -1132,7 +1132,7 @@ function ComissoesAdminTab() {
         </div>
         <div className="bg-[#091221] border border-[#122036] rounded-xl p-4">
           <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Total Geral</p>
-          <p className="text-xl font-bold text-[#C4922E]">{formatMoeda(totalAPagar + totalPago)}</p>
+          <p className="text-xl font-bold text-[#C9A84C]">{formatMoeda(totalAPagar + totalPago)}</p>
           <p className="text-xs text-muted-foreground mt-1">{DEMO_COMISSOES.length} operações com comissão</p>
         </div>
       </div>
@@ -1143,7 +1143,7 @@ function ComissoesAdminTab() {
           {(["TODOS", "CREDITO", "MA", "CONSORCIO"] as const).map(t => {
             const labels = { TODOS: "Todos", CREDITO: "Crédito", MA: "M&A", CONSORCIO: "Consórcio" };
             return (
-              <button key={t} onClick={() => setFiltroTipo(t)} className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${filtroTipo === t ? "bg-[#C4922E] text-white" : "text-muted-foreground hover:text-foreground"}`}>
+              <button key={t} onClick={() => setFiltroTipo(t)} className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${filtroTipo === t ? "bg-[#C9A84C] text-white" : "text-muted-foreground hover:text-foreground"}`}>
                 {labels[t]}
               </button>
             );
@@ -1153,7 +1153,7 @@ function ComissoesAdminTab() {
           {(["TODOS", "A_PAGAR", "PAGA"] as const).map(t => {
             const labels = { TODOS: "Todos", A_PAGAR: "A Pagar", PAGA: "Pago" };
             return (
-              <button key={t} onClick={() => setFiltroStatus(t)} className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${filtroStatus === t ? "bg-[#C4922E] text-white" : "text-muted-foreground hover:text-foreground"}`}>
+              <button key={t} onClick={() => setFiltroStatus(t)} className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${filtroStatus === t ? "bg-[#C9A84C] text-white" : "text-muted-foreground hover:text-foreground"}`}>
                 {labels[t]}
               </button>
             );
@@ -1199,7 +1199,7 @@ function ComissoesAdminTab() {
                     <td className="px-4 py-3 text-muted-foreground max-w-[180px] truncate" title={c.operacaoDescricao}>{c.operacaoDescricao}</td>
                     <td className="px-4 py-3"><TipoComissaoBadge tipo={c.operacaoTipo} /></td>
                     <td className="px-4 py-3 text-white">{formatMoeda(c.valorOperacao)}</td>
-                    <td className="px-4 py-3 text-[#C4922E] font-semibold">{c.percentualComissao}%</td>
+                    <td className="px-4 py-3 text-[#C9A84C] font-semibold">{c.percentualComissao}%</td>
                     <td className="px-4 py-3 font-bold text-white">{formatMoeda(c.valorComissao)}</td>
                     <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">{new Date(c.dataOperacaoFinalizada).toLocaleDateString("pt-BR")}</td>
                     <td className="px-4 py-3"><StatusBadge status={c.status} /></td>
@@ -1290,8 +1290,8 @@ function DRETab() {
                   const diff = prevVal !== null ? ((Math.abs(l.valor) - Math.abs(prevVal)) / Math.abs(prevVal) * 100) : null;
                   return (
                     <tr key={i} className={`border-b border-border/20 ${l.destaque ? "bg-[#0F1E35]" : ""}`}>
-                      <td className={`px-4 py-2.5 ${l.destaque ? "font-bold text-[#C4922E]" : "text-muted-foreground"}`}>{l.label}</td>
-                      <td className={`px-4 py-2.5 text-right font-${l.destaque ? "bold" : "medium"} ${l.valor < 0 ? "text-red-400" : l.destaque ? "text-[#C4922E]" : "text-white"}`}>
+                      <td className={`px-4 py-2.5 ${l.destaque ? "font-bold text-[#C9A84C]" : "text-muted-foreground"}`}>{l.label}</td>
+                      <td className={`px-4 py-2.5 text-right font-${l.destaque ? "bold" : "medium"} ${l.valor < 0 ? "text-red-400" : l.destaque ? "text-[#C9A84C]" : "text-white"}`}>
                         {formatMoeda(l.valor)}
                       </td>
                       <td className="px-4 py-2.5 text-right w-20">
@@ -1318,8 +1318,8 @@ function DRETab() {
               <AreaChart data={DEMO_DRE.map(dr => ({ mes: `${MESES_PT[dr.mes - 1]}/${String(dr.ano).slice(2)}`, Receita: dr.receitas, Lucro: dr.lucroLiquido, EBITDA: dr.ebitda }))}>
                 <defs>
                   <linearGradient id="gradRec" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#C4922E" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#C4922E" stopOpacity={0} />
+                    <stop offset="5%" stopColor="#C9A84C" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="#C9A84C" stopOpacity={0} />
                   </linearGradient>
                   <linearGradient id="gradLuc" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#22C55E" stopOpacity={0.3} />
@@ -1327,11 +1327,11 @@ function DRETab() {
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#122036" />
-                <XAxis dataKey="mes" tick={{ fill: "#5A7490", fontSize: 10 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fill: "#5A7490", fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={v => `R$${(v / 1000).toFixed(0)}k`} />
+                <XAxis dataKey="mes" tick={{ fill: "#7A8FA8", fontSize: 10 }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fill: "#7A8FA8", fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={v => `R$${(v / 1000).toFixed(0)}k`} />
                 <Tooltip contentStyle={{ backgroundColor: "#091221", border: "1px solid rgba(196,146,46,0.2)", borderRadius: 10, fontSize: 12 }} formatter={(v: number) => formatMoeda(v)} />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
-                <Area type="monotone" dataKey="Receita" stroke="#C4922E" fill="url(#gradRec)" strokeWidth={2} />
+                <Area type="monotone" dataKey="Receita" stroke="#C9A84C" fill="url(#gradRec)" strokeWidth={2} />
                 <Area type="monotone" dataKey="Lucro" stroke="#22C55E" fill="url(#gradLuc)" strokeWidth={2} />
               </AreaChart>
             </ResponsiveContainer>
@@ -1374,10 +1374,10 @@ function FluxoCaixaTab() {
       </div>
       <div className="grid grid-cols-4 gap-4">
         {[
-          { label: "Saldo Inicial", value: SALDO_INICIAL_MARCO, color: "#5A7490" },
+          { label: "Saldo Inicial", value: SALDO_INICIAL_MARCO, color: "#7A8FA8" },
           { label: "Total Entradas", value: entradas, color: "#22C55E" },
           { label: "Total Saídas", value: saidas, color: "#EF4444" },
-          { label: "Saldo Final", value: saldoFinal, color: "#C4922E" },
+          { label: "Saldo Final", value: saldoFinal, color: "#C9A84C" },
         ].map(k => (
           <div key={k.label} className="bg-[#091221] border border-[#122036] rounded-xl p-4">
             <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">{k.label}</p>
@@ -1466,9 +1466,9 @@ function NovoImpostoModal({
   const valorFinal = form.calcAuto ? valorCalculado : (parseFloat(form.valor) || 0);
 
   const inputCls = (err?: string) =>
-    `w-full h-9 px-3 text-sm rounded-lg border ${err ? "border-red-500/50 bg-red-500/5" : "border-[#122036] bg-[#0F1E35]"} text-white placeholder:text-muted-foreground focus:outline-none focus:border-[#C4922E]/60 transition-colors`;
+    `w-full h-9 px-3 text-sm rounded-lg border ${err ? "border-red-500/50 bg-red-500/5" : "border-[#122036] bg-[#0F1E35]"} text-white placeholder:text-muted-foreground focus:outline-none focus:border-[#C9A84C]/60 transition-colors`;
   const selectCls = () =>
-    `w-full h-9 px-3 text-sm rounded-lg border border-[#122036] bg-[#0F1E35] text-white focus:outline-none focus:border-[#C4922E]/60 transition-colors`;
+    `w-full h-9 px-3 text-sm rounded-lg border border-[#122036] bg-[#0F1E35] text-white focus:outline-none focus:border-[#C9A84C]/60 transition-colors`;
 
   const salvar = () => {
     const e: Record<string, string> = {};
@@ -1522,9 +1522,9 @@ function NovoImpostoModal({
           {/* Cálculo */}
           <div className="p-3 bg-[#0F1E35] border border-[#122036] rounded-xl space-y-3">
             <div className="flex items-center justify-between">
-              <p className="text-xs font-semibold text-[#C4922E] uppercase tracking-wider">Valor</p>
+              <p className="text-xs font-semibold text-[#C9A84C] uppercase tracking-wider">Valor</p>
               <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
-                <input type="checkbox" checked={form.calcAuto} onChange={e => setForm(f => ({ ...f, calcAuto: e.target.checked }))} className="accent-[#C4922E]" />
+                <input type="checkbox" checked={form.calcAuto} onChange={e => setForm(f => ({ ...f, calcAuto: e.target.checked }))} className="accent-[#C9A84C]" />
                 Calcular automaticamente (base × alíquota)
               </label>
             </div>
@@ -1548,7 +1548,7 @@ function NovoImpostoModal({
             {valorFinal > 0 && (
               <div className="flex items-center justify-between pt-1 border-t border-[#1e3050]">
                 <span className="text-xs text-muted-foreground">Valor do imposto:</span>
-                <span className="text-lg font-bold text-[#C4922E]">{formatMoeda(valorFinal)}</span>
+                <span className="text-lg font-bold text-[#C9A84C]">{formatMoeda(valorFinal)}</span>
               </div>
             )}
             {errors.valor && !form.valor && <p className="text-[10px] text-red-400">{errors.valor}</p>}
@@ -1580,7 +1580,7 @@ function NovoImpostoModal({
           <button onClick={onClose} className="flex-1 h-10 rounded-xl border border-border/50 text-sm text-muted-foreground hover:text-foreground hover:border-border transition-all">
             Cancelar
           </button>
-          <button onClick={salvar} className="flex-1 h-10 rounded-xl bg-[#C4922E] text-white text-sm font-semibold hover:bg-[#E5B96A] transition-all">
+          <button onClick={salvar} className="flex-1 h-10 rounded-xl bg-[#C9A84C] text-white text-sm font-semibold hover:bg-[#E8C97A] transition-all">
             {editando ? "Salvar Alterações" : "Lançar Imposto"}
           </button>
         </div>
@@ -1648,7 +1648,7 @@ function ImpostosTab() {
               }} />
               <button
                 onClick={() => setShowModal(true)}
-                className="flex items-center gap-1.5 text-xs bg-[#C4922E] text-white px-3 py-1.5 rounded-lg hover:bg-[#E5B96A] transition-all"
+                className="flex items-center gap-1.5 text-xs bg-[#C9A84C] text-white px-3 py-1.5 rounded-lg hover:bg-[#E8C97A] transition-all"
               >
                 <Plus className="w-3.5 h-3.5" /> Lançar Imposto
               </button>
@@ -1679,7 +1679,7 @@ function ImpostosTab() {
                         <div className="flex flex-col items-center gap-2">
                           <Receipt className="w-7 h-7 opacity-20" />
                           <span>Nenhum imposto lançado neste período</span>
-                          <button onClick={() => setShowModal(true)} className="text-[#C4922E] hover:underline text-xs mt-1">
+                          <button onClick={() => setShowModal(true)} className="text-[#C9A84C] hover:underline text-xs mt-1">
                             + Lançar agora
                           </button>
                         </div>
@@ -1688,11 +1688,11 @@ function ImpostosTab() {
                   ) : filtrados.map((imp, i) => (
                     <tr key={imp.id} className={`border-b border-border/20 hover:bg-secondary/30 transition-colors ${i % 2 === 0 ? "" : "bg-[#091221]/40"}`}>
                       <td className="px-4 py-3">
-                        <span className="text-[10px] font-bold bg-[#C4922E]/15 text-[#C4922E] border border-[#C4922E]/30 px-2 py-0.5 rounded-full">{imp.tipo}</span>
+                        <span className="text-[10px] font-bold bg-[#C9A84C]/15 text-[#C9A84C] border border-[#C9A84C]/30 px-2 py-0.5 rounded-full">{imp.tipo}</span>
                       </td>
                       <td className="px-4 py-3 text-muted-foreground">{imp.descricao}</td>
                       <td className="px-4 py-3 text-white">{imp.baseCalculo > 0 ? formatMoeda(imp.baseCalculo) : "—"}</td>
-                      <td className="px-4 py-3 text-[#C4922E] font-semibold">{imp.aliquota > 0 ? `${imp.aliquota}%` : "—"}</td>
+                      <td className="px-4 py-3 text-[#C9A84C] font-semibold">{imp.aliquota > 0 ? `${imp.aliquota}%` : "—"}</td>
                       <td className="px-4 py-3 font-bold text-white">{formatMoeda(imp.valor)}</td>
                       <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">{new Date(imp.vencimento + "T00:00:00").toLocaleDateString("pt-BR")}</td>
                       <td className="px-4 py-3 font-mono text-muted-foreground text-[10px]">{imp.guia ?? "—"}</td>
@@ -1701,7 +1701,7 @@ function ImpostosTab() {
                         <div className="flex gap-1">
                           <button
                             onClick={() => setEditandoImp(imp)}
-                            className="p-1.5 rounded-lg text-muted-foreground hover:text-[#C4922E] hover:bg-[#C4922E]/10 transition-all"
+                            className="p-1.5 rounded-lg text-muted-foreground hover:text-[#C9A84C] hover:bg-[#C9A84C]/10 transition-all"
                             title="Editar"
                           >
                             <Pencil className="w-3.5 h-3.5" />
@@ -1720,9 +1720,9 @@ function ImpostosTab() {
                 </tbody>
                 {filtrados.length > 0 && (
                   <tfoot>
-                    <tr className="bg-[#0F1E35] border-t border-[#C4922E]/30">
-                      <td className="px-4 py-3 font-bold text-[#C4922E]" colSpan={4}>TOTAL — {filtrados.length} imposto{filtrados.length !== 1 ? "s" : ""}</td>
-                      <td className="px-4 py-3 font-bold text-[#C4922E]">{formatMoeda(totalMes)}</td>
+                    <tr className="bg-[#0F1E35] border-t border-[#C9A84C]/30">
+                      <td className="px-4 py-3 font-bold text-[#C9A84C]" colSpan={4}>TOTAL — {filtrados.length} imposto{filtrados.length !== 1 ? "s" : ""}</td>
+                      <td className="px-4 py-3 font-bold text-[#C9A84C]">{formatMoeda(totalMes)}</td>
                       <td colSpan={4} />
                     </tr>
                   </tfoot>
@@ -1793,7 +1793,7 @@ export function FinanceiroClient({ role, userName }: Props) {
               onClick={() => setActiveTab(tab.id)}
               className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium whitespace-nowrap border-b-2 transition-all -mb-px ${
                 isActive
-                  ? "border-[#C4922E] text-[#C4922E]"
+                  ? "border-[#C9A84C] text-[#C9A84C]"
                   : "border-transparent text-muted-foreground hover:text-foreground hover:border-border"
               }`}
             >

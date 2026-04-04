@@ -217,9 +217,9 @@ export function Sidebar({ role, onClose }: SidebarProps) {
   );
 
   return (
-    <aside className="flex flex-col h-full w-64 bg-[#060E1C] border-r border-[#122036]/80 relative">
+    <aside className="flex flex-col h-full w-64 bg-[#09081A] border-r border-[#122036]/80 relative">
       {/* Top gold accent line */}
-      <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-[#C4922E] to-transparent opacity-60" />
+      <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-[#C9A84C] to-transparent opacity-60" />
 
       {/* Logo */}
       <div className="flex flex-col items-center px-4 pt-5 pb-4 border-b border-[#122036]/60 relative">
@@ -238,7 +238,7 @@ export function Sidebar({ role, onClose }: SidebarProps) {
             style={{
               width: 148,
               height: 148,
-              background: "#0E2040",
+              background: "#111F35",
               boxShadow: "0 8px 32px rgba(196,146,46,0.18), 0 0 0 1px rgba(196,146,46,0.15)",
             }}
           >
@@ -252,7 +252,7 @@ export function Sidebar({ role, onClose }: SidebarProps) {
             />
           </div>
         </div>
-        <p className="text-[9px] text-[#5A7490] uppercase tracking-[0.18em] mt-2.5">
+        <p className="text-[9px] text-[#7A8FA8] uppercase tracking-[0.18em] mt-2.5">
           Plataforma Financeira
         </p>
       </div>
@@ -303,7 +303,7 @@ export function Sidebar({ role, onClose }: SidebarProps) {
 
               {/* Sub-items */}
               {hasChildren && isExpanded && filteredChildren && (
-                <div className="ml-7 mt-0.5 space-y-0.5 border-l border-[#C4922E]/20 pl-3">
+                <div className="ml-7 mt-0.5 space-y-0.5 border-l border-[#C9A84C]/20 pl-3">
                   {filteredChildren.map((child) => {
                     const childActive = pathname === child.href;
                     return (
@@ -314,7 +314,7 @@ export function Sidebar({ role, onClose }: SidebarProps) {
                         className={cn(
                           "flex items-center gap-2 px-2 py-2 rounded-lg text-xs font-medium transition-all duration-200",
                           childActive
-                            ? "text-[#E5B96A] bg-[#C4922E]/10"
+                            ? "text-[#E8C97A] bg-[#C9A84C]/10"
                             : "text-muted-foreground hover:text-foreground hover:bg-secondary"
                         )}
                       >
@@ -332,11 +332,11 @@ export function Sidebar({ role, onClose }: SidebarProps) {
 
       {/* Role badge */}
       <div className="px-4 py-3 border-t border-[#122036]/60">
-        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#C4922E]/5 border border-[#C4922E]/15">
-          <div className="w-1.5 h-1.5 rounded-full bg-[#C4922E] animate-pulse-gold flex-shrink-0" />
-          <span className="text-[10px] text-[#5A7490] uppercase tracking-wider">Perfil</span>
+        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#C9A84C]/5 border border-[#C9A84C]/15">
+          <div className="w-1.5 h-1.5 rounded-full bg-[#C9A84C] animate-pulse-gold flex-shrink-0" />
+          <span className="text-[10px] text-[#7A8FA8] uppercase tracking-wider">Perfil</span>
           <span className="text-xs font-semibold ml-auto" style={{
-            background: "linear-gradient(120deg, #C4922E, #E5B96A)",
+            background: "linear-gradient(120deg, #C9A84C, #E8C97A)",
             WebkitBackgroundClip: "text",
             WebkitTextFillColor: "transparent",
             backgroundClip: "text",

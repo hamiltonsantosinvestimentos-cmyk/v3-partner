@@ -436,10 +436,10 @@ const DEMO_LEADS: CRMLead[] = [
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const STAGES = [
-  { id: "prospect",    label: "Prospecção",  color: "#5A7490", bg: "rgba(90,116,144,0.1)" },
+  { id: "prospect",    label: "Prospecção",  color: "#7A8FA8", bg: "rgba(90,116,144,0.1)" },
   { id: "qualificado", label: "Qualificado", color: "#3B82F6", bg: "rgba(59,130,246,0.1)" },
   { id: "proposta",    label: "Proposta",    color: "#F59E0B", bg: "rgba(245,158,11,0.1)" },
-  { id: "negociacao",  label: "Negociação",  color: "#C4922E", bg: "rgba(196,146,46,0.1)" },
+  { id: "negociacao",  label: "Negociação",  color: "#C9A84C", bg: "rgba(196,146,46,0.1)" },
   { id: "ganho",       label: "Ganho ✓",    color: "#10B981", bg: "rgba(16,185,129,0.1)" },
   { id: "perdido",     label: "Perdido ✗",  color: "#EF4444", bg: "rgba(239,68,68,0.1)" },
 ];
@@ -463,12 +463,12 @@ const CONVERT_OPTIONS = [
   { id: "high_ticket",        label: "High Ticket",         desc: "CRI, CRA, CPR, Fundos",               color: "#A855F7", bg: "rgba(168,85,247,0.1)", icon: Zap },
   { id: "ma",                 label: "M&A",                 desc: "Fusões e Aquisições",                 color: "#6366F1", bg: "rgba(99,102,241,0.1)", icon: Building2 },
   { id: "consorcio",          label: "Consórcio",           desc: "Imóvel e Veículos",                   color: "#10B981", bg: "rgba(16,185,129,0.1)", icon: Trophy },
-  { id: "split",              label: "Split Fiscal",        desc: "Split de Receita",                    color: "#C4922E", bg: "rgba(196,146,46,0.1)", icon: PieChart },
+  { id: "split",              label: "Split Fiscal",        desc: "Split de Receita",                    color: "#C9A84C", bg: "rgba(196,146,46,0.1)", icon: PieChart },
 ];
 
 function getStatusColor(status: string) {
   const s = STAGES.find((x) => x.id === status);
-  return s ? s.color : "#5A7490";
+  return s ? s.color : "#7A8FA8";
 }
 
 function getInteractionIcon(type: string) {
@@ -721,12 +721,12 @@ export function CRMClient({ userRole, userName, userId }: { userRole: string; us
       <title>CRM Report - V3 Partners</title>
       <style>
         body { font-family: Arial, sans-serif; color: #1a1a1a; padding: 24px; }
-        h1 { color: #C4922E; } h2 { color: #0A1628; border-bottom: 2px solid #C4922E; padding-bottom: 4px; }
+        h1 { color: #C9A84C; } h2 { color: #0A1628; border-bottom: 2px solid #C9A84C; padding-bottom: 4px; }
         table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 12px; }
         th { background: #0A1628; color: white; padding: 8px; text-align: left; }
         td { padding: 6px 8px; border-bottom: 1px solid #e0e0e0; }
         tr:nth-child(even) { background: #f5f5f5; }
-        .stat { display: inline-block; background: #f0f0f0; border-left: 3px solid #C4922E; padding: 8px 16px; margin: 4px; border-radius: 4px; }
+        .stat { display: inline-block; background: #f0f0f0; border-left: 3px solid #C9A84C; padding: 8px 16px; margin: 4px; border-radius: 4px; }
         .stat-label { font-size: 11px; color: #666; } .stat-value { font-size: 20px; font-weight: bold; }
         @media print { body { padding: 0; } }
       </style>
@@ -770,13 +770,13 @@ export function CRMClient({ userRole, userName, userId }: { userRole: string; us
     reportPeriod === "semanal" ? "Semanal" : reportPeriod === "mensal" ? "Mensal" : "Anual";
 
   return (
-    <div style={{ background: "#050C18", minHeight: "100vh", color: "#E8EDF5" }}>
+    <div style={{ background: "#09081A", minHeight: "100vh", color: "#E8EDF5" }}>
       {/* Header */}
       <div style={{ borderBottom: "1px solid #122036", padding: "20px 24px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
           <div>
             <h1 style={{ fontSize: 22, fontWeight: 700, color: "#E8EDF5", margin: 0 }}>CRM</h1>
-            <p style={{ fontSize: 13, color: "#5A7490", margin: "2px 0 0" }}>
+            <p style={{ fontSize: 13, color: "#7A8FA8", margin: "2px 0 0" }}>
               Gestão de Relacionamento com Clientes
             </p>
           </div>
@@ -799,8 +799,8 @@ export function CRMClient({ userRole, userName, userId }: { userRole: string; us
                 cursor: "pointer",
                 fontWeight: 600,
                 fontSize: 13,
-                background: tab === t ? "#C4922E" : "transparent",
-                color: tab === t ? "#050C18" : "#5A7490",
+                background: tab === t ? "#C9A84C" : "transparent",
+                color: tab === t ? "#09081A" : "#7A8FA8",
                 transition: "all 0.15s",
               }}
             >
@@ -838,16 +838,16 @@ export function CRMClient({ userRole, userName, userId }: { userRole: string; us
             {/* KPIs */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 24 }}>
               {[
-                { label: "Total Leads", value: kpiLeads.length, color: "#5A7490" },
+                { label: "Total Leads", value: kpiLeads.length, color: "#7A8FA8" },
                 { label: "Qualificados", value: kpiQualificados, color: "#3B82F6" },
-                { label: "Em Negociação", value: kpiNegociacao, color: "#C4922E" },
+                { label: "Em Negociação", value: kpiNegociacao, color: "#C9A84C" },
                 { label: "Taxa de Conversão", value: `${kpiConversao}%`, color: "#10B981" },
               ].map((kpi) => (
                 <div
                   key={kpi.label}
                   style={{ background: "#091221", border: "1px solid #122036", borderRadius: 12, padding: "16px 20px" }}
                 >
-                  <div style={{ fontSize: 12, color: "#5A7490", marginBottom: 4 }}>{kpi.label}</div>
+                  <div style={{ fontSize: 12, color: "#7A8FA8", marginBottom: 4 }}>{kpi.label}</div>
                   <div style={{ fontSize: 24, fontWeight: 700, color: kpi.color }}>{kpi.value}</div>
                 </div>
               ))}
@@ -884,7 +884,7 @@ export function CRMClient({ userRole, userName, userId }: { userRole: string; us
                       <span
                         style={{
                           background: stage.color,
-                          color: "#050C18",
+                          color: "#09081A",
                           borderRadius: 20,
                           fontSize: 11,
                           fontWeight: 700,
@@ -898,7 +898,7 @@ export function CRMClient({ userRole, userName, userId }: { userRole: string; us
                     {/* Cards */}
                     <div style={{ padding: 8, display: "flex", flexDirection: "column", gap: 8, maxHeight: 520, overflowY: "auto" }}>
                       {stageLeads.length === 0 && (
-                        <div style={{ textAlign: "center", color: "#5A7490", fontSize: 12, padding: "20px 0" }}>
+                        <div style={{ textAlign: "center", color: "#7A8FA8", fontSize: 12, padding: "20px 0" }}>
                           Nenhum lead
                         </div>
                       )}
@@ -936,21 +936,21 @@ export function CRMClient({ userRole, userName, userId }: { userRole: string; us
                               {lead.personType}
                             </span>
                           </div>
-                          <div style={{ fontSize: 11, color: "#5A7490", marginBottom: 4 }}>{lead.segment}</div>
-                          <div style={{ fontSize: 11, color: "#5A7490", display: "flex", alignItems: "center", gap: 4, marginBottom: 4 }}>
+                          <div style={{ fontSize: 11, color: "#7A8FA8", marginBottom: 4 }}>{lead.segment}</div>
+                          <div style={{ fontSize: 11, color: "#7A8FA8", display: "flex", alignItems: "center", gap: 4, marginBottom: 4 }}>
                             <MapPin className="w-3 h-3" />
                             {lead.city}, {lead.state}
                           </div>
                           {lead.personType === "PJ" && lead.annualRevenue > 0 && (
-                            <div style={{ fontSize: 11, color: "#C4922E", marginBottom: 4, fontWeight: 600 }}>
+                            <div style={{ fontSize: 11, color: "#C9A84C", marginBottom: 4, fontWeight: 600 }}>
                               {formatCurrency(lead.annualRevenue)}
                             </div>
                           )}
-                          <div style={{ fontSize: 10, color: "#5A7490", marginBottom: 4 }}>
+                          <div style={{ fontSize: 10, color: "#7A8FA8", marginBottom: 4 }}>
                             Visita: {lead.visitDate ? formatDate(lead.visitDate) : "Sem visita"}
                           </div>
                           {isAdmin && (
-                            <div style={{ fontSize: 10, color: "#5A7490", marginBottom: 4 }}>
+                            <div style={{ fontSize: 10, color: "#7A8FA8", marginBottom: 4 }}>
                               {lead.partnerName}
                             </div>
                           )}
@@ -960,7 +960,7 @@ export function CRMClient({ userRole, userName, userId }: { userRole: string; us
                                 fontSize: 10,
                                 fontWeight: 700,
                                 background: "rgba(196,146,46,0.15)",
-                                color: "#E5B96A",
+                                color: "#E8C97A",
                                 borderRadius: 4,
                                 padding: "2px 6px",
                                 display: "inline-block",
@@ -988,7 +988,7 @@ export function CRMClient({ userRole, userName, userId }: { userRole: string; us
               <div style={{ position: "relative", flex: "1 1 220px" }}>
                 <Search
                   className="w-4 h-4"
-                  style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "#5A7490" }}
+                  style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "#7A8FA8" }}
                 />
                 <input
                   type="text"
@@ -1017,7 +1017,7 @@ export function CRMClient({ userRole, userName, userId }: { userRole: string; us
                   border: "1px solid #122036",
                   borderRadius: 8,
                   padding: "8px 12px",
-                  color: filterStatus === "all" ? "#5A7490" : "#E8EDF5",
+                  color: filterStatus === "all" ? "#7A8FA8" : "#E8EDF5",
                   fontSize: 13,
                   outline: "none",
                 }}
@@ -1036,7 +1036,7 @@ export function CRMClient({ userRole, userName, userId }: { userRole: string; us
                   border: "1px solid #122036",
                   borderRadius: 8,
                   padding: "8px 12px",
-                  color: filterSource === "all" ? "#5A7490" : "#E8EDF5",
+                  color: filterSource === "all" ? "#7A8FA8" : "#E8EDF5",
                   fontSize: 13,
                   outline: "none",
                 }}
@@ -1056,7 +1056,7 @@ export function CRMClient({ userRole, userName, userId }: { userRole: string; us
                     border: "1px solid #122036",
                     borderRadius: 8,
                     padding: "8px 12px",
-                    color: filterPartner === "all" ? "#5A7490" : "#E8EDF5",
+                    color: filterPartner === "all" ? "#7A8FA8" : "#E8EDF5",
                     fontSize: 13,
                     outline: "none",
                   }}
@@ -1075,7 +1075,7 @@ export function CRMClient({ userRole, userName, userId }: { userRole: string; us
                 <thead>
                   <tr style={{ borderBottom: "1px solid #122036" }}>
                     {["Código", "Nome / Razão Social", "Tipo", "Segmento", "Faturamento", "Cidade/UF", "Última Visita", "Próx. Contato", "Status", "Convertido", ...(isAdmin ? ["Partner"] : []), "Ações"].map((col) => (
-                      <th key={col} style={{ padding: "10px 12px", textAlign: "left", color: "#5A7490", fontWeight: 600, whiteSpace: "nowrap" }}>
+                      <th key={col} style={{ padding: "10px 12px", textAlign: "left", color: "#7A8FA8", fontWeight: 600, whiteSpace: "nowrap" }}>
                         {col}
                       </th>
                     ))}
@@ -1084,7 +1084,7 @@ export function CRMClient({ userRole, userName, userId }: { userRole: string; us
                 <tbody>
                   {visibleLeads.length === 0 && (
                     <tr>
-                      <td colSpan={isAdmin ? 12 : 11} style={{ textAlign: "center", padding: 32, color: "#5A7490" }}>
+                      <td colSpan={isAdmin ? 12 : 11} style={{ textAlign: "center", padding: 32, color: "#7A8FA8" }}>
                         Nenhum lead encontrado.
                       </td>
                     </tr>
@@ -1097,7 +1097,7 @@ export function CRMClient({ userRole, userName, userId }: { userRole: string; us
                         background: idx % 2 === 1 ? "rgba(15,30,53,0.4)" : "transparent",
                       }}
                     >
-                      <td style={{ padding: "10px 12px", color: "#5A7490", whiteSpace: "nowrap" }}>{lead.code}</td>
+                      <td style={{ padding: "10px 12px", color: "#7A8FA8", whiteSpace: "nowrap" }}>{lead.code}</td>
                       <td style={{ padding: "10px 12px", color: "#E8EDF5", fontWeight: 600, whiteSpace: "nowrap" }}>{lead.name}</td>
                       <td style={{ padding: "10px 12px" }}>
                         <span
@@ -1113,11 +1113,11 @@ export function CRMClient({ userRole, userName, userId }: { userRole: string; us
                           {lead.personType}
                         </span>
                       </td>
-                      <td style={{ padding: "10px 12px", color: "#5A7490", whiteSpace: "nowrap" }}>{lead.segment}</td>
-                      <td style={{ padding: "10px 12px", color: "#C4922E", whiteSpace: "nowrap" }}>{formatCurrency(lead.annualRevenue)}</td>
-                      <td style={{ padding: "10px 12px", color: "#5A7490", whiteSpace: "nowrap" }}>{lead.city}/{lead.state}</td>
-                      <td style={{ padding: "10px 12px", color: "#5A7490", whiteSpace: "nowrap" }}>{formatDate(lead.visitDate)}</td>
-                      <td style={{ padding: "10px 12px", color: lead.nextContact ? "#E5B96A" : "#5A7490", whiteSpace: "nowrap" }}>
+                      <td style={{ padding: "10px 12px", color: "#7A8FA8", whiteSpace: "nowrap" }}>{lead.segment}</td>
+                      <td style={{ padding: "10px 12px", color: "#C9A84C", whiteSpace: "nowrap" }}>{formatCurrency(lead.annualRevenue)}</td>
+                      <td style={{ padding: "10px 12px", color: "#7A8FA8", whiteSpace: "nowrap" }}>{lead.city}/{lead.state}</td>
+                      <td style={{ padding: "10px 12px", color: "#7A8FA8", whiteSpace: "nowrap" }}>{formatDate(lead.visitDate)}</td>
+                      <td style={{ padding: "10px 12px", color: lead.nextContact ? "#E8C97A" : "#7A8FA8", whiteSpace: "nowrap" }}>
                         {formatDate(lead.nextContact)}
                       </td>
                       <td style={{ padding: "10px 12px", whiteSpace: "nowrap" }}>
@@ -1143,17 +1143,17 @@ export function CRMClient({ userRole, userName, userId }: { userRole: string; us
                               padding: "2px 8px",
                               borderRadius: 4,
                               background: "rgba(196,146,46,0.15)",
-                              color: "#E5B96A",
+                              color: "#E8C97A",
                             }}
                           >
                             {CONVERTED_LABELS[lead.convertedTo]}
                           </span>
                         ) : (
-                          <span style={{ color: "#5A7490" }}>—</span>
+                          <span style={{ color: "#7A8FA8" }}>—</span>
                         )}
                       </td>
                       {isAdmin && (
-                        <td style={{ padding: "10px 12px", color: "#5A7490", whiteSpace: "nowrap" }}>{lead.partnerName}</td>
+                        <td style={{ padding: "10px 12px", color: "#7A8FA8", whiteSpace: "nowrap" }}>{lead.partnerName}</td>
                       )}
                       <td style={{ padding: "10px 12px", whiteSpace: "nowrap" }}>
                         <div style={{ display: "flex", gap: 6 }}>
@@ -1203,7 +1203,7 @@ export function CRMClient({ userRole, userName, userId }: { userRole: string; us
                                 border: "1px solid rgba(196,146,46,0.3)",
                                 borderRadius: 6,
                                 padding: "4px 10px",
-                                color: "#E5B96A",
+                                color: "#E8C97A",
                                 cursor: "pointer",
                                 fontSize: 12,
                                 fontWeight: 600,
@@ -1223,7 +1223,7 @@ export function CRMClient({ userRole, userName, userId }: { userRole: string; us
                 </tbody>
               </table>
             </div>
-            <div style={{ marginTop: 10, fontSize: 12, color: "#5A7490" }}>
+            <div style={{ marginTop: 10, fontSize: 12, color: "#7A8FA8" }}>
               {visibleLeads.length} lead{visibleLeads.length !== 1 ? "s" : ""} encontrado{visibleLeads.length !== 1 ? "s" : ""}
             </div>
           </div>
@@ -1255,8 +1255,8 @@ export function CRMClient({ userRole, userName, userId }: { userRole: string; us
                       cursor: "pointer",
                       fontWeight: 600,
                       fontSize: 13,
-                      background: reportPeriod === p ? "#C4922E" : "transparent",
-                      color: reportPeriod === p ? "#050C18" : "#5A7490",
+                      background: reportPeriod === p ? "#C9A84C" : "transparent",
+                      color: reportPeriod === p ? "#09081A" : "#7A8FA8",
                     }}
                   >
                     {p.charAt(0).toUpperCase() + p.slice(1)}
@@ -1273,7 +1273,7 @@ export function CRMClient({ userRole, userName, userId }: { userRole: string; us
                     border: "1px solid #122036",
                     borderRadius: 8,
                     padding: "8px 12px",
-                    color: reportPartner === "all" ? "#5A7490" : "#E8EDF5",
+                    color: reportPartner === "all" ? "#7A8FA8" : "#E8EDF5",
                     fontSize: 13,
                     outline: "none",
                   }}
@@ -1294,13 +1294,13 @@ export function CRMClient({ userRole, userName, userId }: { userRole: string; us
             {/* Report preview */}
             <div style={{ background: "#091221", border: "1px solid #122036", borderRadius: 12, padding: 24 }}>
               {/* Header */}
-              <div style={{ borderBottom: "2px solid #C4922E", paddingBottom: 16, marginBottom: 20 }}>
+              <div style={{ borderBottom: "2px solid #C9A84C", paddingBottom: 16, marginBottom: 20 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 8 }}>
                   <div>
-                    <div style={{ fontSize: 22, fontWeight: 800, color: "#C4922E", letterSpacing: 1 }}>V3 PARTNERS</div>
+                    <div style={{ fontSize: 22, fontWeight: 800, color: "#C9A84C", letterSpacing: 1 }}>V3 PARTNERS</div>
                     <div style={{ fontSize: 16, fontWeight: 700, color: "#E8EDF5", marginTop: 2 }}>Relatório CRM</div>
                   </div>
-                  <div style={{ textAlign: "right", fontSize: 12, color: "#5A7490" }}>
+                  <div style={{ textAlign: "right", fontSize: 12, color: "#7A8FA8" }}>
                     <div>Período: <strong style={{ color: "#E8EDF5" }}>{periodLabel}</strong></div>
                     <div>Partner: <strong style={{ color: "#E8EDF5" }}>{reportPartnerName}</strong></div>
                     <div>Gerado em: <strong style={{ color: "#E8EDF5" }}>{formatDate(todayISO())}</strong></div>
@@ -1310,15 +1310,15 @@ export function CRMClient({ userRole, userName, userId }: { userRole: string; us
 
               {/* Summary stats */}
               <div style={{ marginBottom: 24 }}>
-                <div style={{ fontSize: 14, fontWeight: 700, color: "#C4922E", marginBottom: 12 }}>Resumo</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: "#C9A84C", marginBottom: 12 }}>Resumo</div>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 10 }}>
                   {[
-                    { label: "Total Leads", value: rTotal, color: "#5A7490" },
+                    { label: "Total Leads", value: rTotal, color: "#7A8FA8" },
                     { label: "Qualificados", value: rQualificados, color: "#3B82F6" },
                     { label: "Ganhos", value: rGanhos, color: "#10B981" },
                     { label: "Perdidos", value: rPerdidos, color: "#EF4444" },
-                    { label: "Taxa Conversão", value: `${rConversao}%`, color: "#C4922E" },
-                    { label: "Vol. Convertido", value: formatCurrency(rVolumeConverted), color: "#E5B96A" },
+                    { label: "Taxa Conversão", value: `${rConversao}%`, color: "#C9A84C" },
+                    { label: "Vol. Convertido", value: formatCurrency(rVolumeConverted), color: "#E8C97A" },
                   ].map((s) => (
                     <div
                       key={s.label}
@@ -1330,7 +1330,7 @@ export function CRMClient({ userRole, userName, userId }: { userRole: string; us
                         padding: "12px 14px",
                       }}
                     >
-                      <div style={{ fontSize: 11, color: "#5A7490", marginBottom: 4 }}>{s.label}</div>
+                      <div style={{ fontSize: 11, color: "#7A8FA8", marginBottom: 4 }}>{s.label}</div>
                       <div style={{ fontSize: 20, fontWeight: 700, color: s.color }}>{s.value}</div>
                     </div>
                   ))}
@@ -1339,7 +1339,7 @@ export function CRMClient({ userRole, userName, userId }: { userRole: string; us
 
               {/* By status */}
               <div style={{ marginBottom: 24 }}>
-                <div style={{ fontSize: 14, fontWeight: 700, color: "#C4922E", marginBottom: 12 }}>Por Status</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: "#C9A84C", marginBottom: 12 }}>Por Status</div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                   {statusCountsReport.map((s) => (
                     <div
@@ -1358,7 +1358,7 @@ export function CRMClient({ userRole, userName, userId }: { userRole: string; us
                       <span
                         style={{
                           background: s.color,
-                          color: "#050C18",
+                          color: "#09081A",
                           borderRadius: 20,
                           fontSize: 11,
                           fontWeight: 700,
@@ -1374,7 +1374,7 @@ export function CRMClient({ userRole, userName, userId }: { userRole: string; us
 
               {/* By destination */}
               <div style={{ marginBottom: 24 }}>
-                <div style={{ fontSize: 14, fontWeight: 700, color: "#C4922E", marginBottom: 12 }}>Por Destino</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: "#C9A84C", marginBottom: 12 }}>Por Destino</div>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10 }}>
                   {destCounts.map((d) => {
                     const Icon = d.icon;
@@ -1404,7 +1404,7 @@ export function CRMClient({ userRole, userName, userId }: { userRole: string; us
 
               {/* Leads table preview */}
               <div style={{ marginBottom: 24 }}>
-                <div style={{ fontSize: 14, fontWeight: 700, color: "#C4922E", marginBottom: 12 }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: "#C9A84C", marginBottom: 12 }}>
                   Leads ({reportLeads.length})
                 </div>
                 <div style={{ overflowX: "auto" }}>
@@ -1412,7 +1412,7 @@ export function CRMClient({ userRole, userName, userId }: { userRole: string; us
                     <thead>
                       <tr style={{ borderBottom: "1px solid #122036" }}>
                         {["Código", "Nome", "Tipo", "Segmento", "Faturamento", "Visita", "Status", "Convertido p/", "Interações"].map((col) => (
-                          <th key={col} style={{ padding: "8px 10px", textAlign: "left", color: "#5A7490", fontWeight: 600, whiteSpace: "nowrap" }}>
+                          <th key={col} style={{ padding: "8px 10px", textAlign: "left", color: "#7A8FA8", fontWeight: 600, whiteSpace: "nowrap" }}>
                             {col}
                           </th>
                         ))}
@@ -1421,25 +1421,25 @@ export function CRMClient({ userRole, userName, userId }: { userRole: string; us
                     <tbody>
                       {reportLeads.map((lead, idx) => (
                         <tr key={lead.id} style={{ borderBottom: "1px solid #122036", background: idx % 2 === 1 ? "rgba(15,30,53,0.4)" : "transparent" }}>
-                          <td style={{ padding: "7px 10px", color: "#5A7490", whiteSpace: "nowrap" }}>{lead.code}</td>
+                          <td style={{ padding: "7px 10px", color: "#7A8FA8", whiteSpace: "nowrap" }}>{lead.code}</td>
                           <td style={{ padding: "7px 10px", color: "#E8EDF5", whiteSpace: "nowrap" }}>{lead.name}</td>
                           <td style={{ padding: "7px 10px" }}>
                             <span style={{ fontSize: 10, fontWeight: 700, padding: "1px 6px", borderRadius: 4, background: lead.personType === "PJ" ? "rgba(59,130,246,0.2)" : "rgba(168,85,247,0.2)", color: lead.personType === "PJ" ? "#3B82F6" : "#A855F7" }}>
                               {lead.personType}
                             </span>
                           </td>
-                          <td style={{ padding: "7px 10px", color: "#5A7490", whiteSpace: "nowrap" }}>{lead.segment}</td>
-                          <td style={{ padding: "7px 10px", color: "#C4922E", whiteSpace: "nowrap" }}>{formatCurrency(lead.annualRevenue)}</td>
-                          <td style={{ padding: "7px 10px", color: "#5A7490", whiteSpace: "nowrap" }}>{formatDate(lead.visitDate)}</td>
+                          <td style={{ padding: "7px 10px", color: "#7A8FA8", whiteSpace: "nowrap" }}>{lead.segment}</td>
+                          <td style={{ padding: "7px 10px", color: "#C9A84C", whiteSpace: "nowrap" }}>{formatCurrency(lead.annualRevenue)}</td>
+                          <td style={{ padding: "7px 10px", color: "#7A8FA8", whiteSpace: "nowrap" }}>{formatDate(lead.visitDate)}</td>
                           <td style={{ padding: "7px 10px", whiteSpace: "nowrap" }}>
                             <span style={{ fontSize: 10, fontWeight: 700, padding: "1px 6px", borderRadius: 4, background: `${getStatusColor(lead.status)}25`, color: getStatusColor(lead.status) }}>
                               {STATUS_LABELS[lead.status]}
                             </span>
                           </td>
-                          <td style={{ padding: "7px 10px", color: "#E5B96A", whiteSpace: "nowrap" }}>
+                          <td style={{ padding: "7px 10px", color: "#E8C97A", whiteSpace: "nowrap" }}>
                             {lead.convertedTo ? CONVERTED_LABELS[lead.convertedTo] : "—"}
                           </td>
-                          <td style={{ padding: "7px 10px", color: "#5A7490", textAlign: "center" }}>
+                          <td style={{ padding: "7px 10px", color: "#7A8FA8", textAlign: "center" }}>
                             {lead.interactions.length}
                           </td>
                         </tr>
@@ -1450,7 +1450,7 @@ export function CRMClient({ userRole, userName, userId }: { userRole: string; us
               </div>
 
               {/* Footer */}
-              <div style={{ borderTop: "1px solid #122036", paddingTop: 12, fontSize: 11, color: "#5A7490", textAlign: "center" }}>
+              <div style={{ borderTop: "1px solid #122036", paddingTop: 12, fontSize: 11, color: "#7A8FA8", textAlign: "center" }}>
                 Relatório gerado em {formatDate(todayISO())} — V3 Partners Plataforma
               </div>
             </div>
@@ -1566,7 +1566,7 @@ export function CRMClient({ userRole, userName, userId }: { userRole: string; us
                     </span>
                   </div>
                 </DialogTitle>
-                <div style={{ fontSize: 12, color: "#5A7490", marginTop: 4 }}>
+                <div style={{ fontSize: 12, color: "#7A8FA8", marginTop: 4 }}>
                   {selectedLead.code}
                   {isAdmin && ` · ${selectedLead.partnerName}`}
                 </div>
@@ -1575,7 +1575,7 @@ export function CRMClient({ userRole, userName, userId }: { userRole: string; us
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginTop: 8 }}>
                 {/* Left: Basic data */}
                 <div>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: "#C4922E", marginBottom: 10, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "#C9A84C", marginBottom: 10, textTransform: "uppercase", letterSpacing: 0.5 }}>
                     Dados Cadastrais
                   </div>
                   {[
@@ -1589,7 +1589,7 @@ export function CRMClient({ userRole, userName, userId }: { userRole: string; us
                     { label: "Cidade / UF", value: `${selectedLead.city}, ${selectedLead.state}` },
                   ].map((row) => (
                     <div key={row.label} style={{ marginBottom: 8 }}>
-                      <div style={{ fontSize: 10, color: "#5A7490", marginBottom: 2 }}>{row.label}</div>
+                      <div style={{ fontSize: 10, color: "#7A8FA8", marginBottom: 2 }}>{row.label}</div>
                       <div style={{ fontSize: 13, color: "#E8EDF5" }}>{row.value}</div>
                     </div>
                   ))}
@@ -1597,7 +1597,7 @@ export function CRMClient({ userRole, userName, userId }: { userRole: string; us
 
                 {/* Right: CRM data */}
                 <div>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: "#C4922E", marginBottom: 10, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "#C9A84C", marginBottom: 10, textTransform: "uppercase", letterSpacing: 0.5 }}>
                     Dados CRM
                   </div>
                   {[
@@ -1616,7 +1616,7 @@ export function CRMClient({ userRole, userName, userId }: { userRole: string; us
                     { label: "Criado em", value: formatDate(selectedLead.createdAt) },
                   ].map((row) => (
                     <div key={row.label} style={{ marginBottom: 8 }}>
-                      <div style={{ fontSize: 10, color: "#5A7490", marginBottom: 2 }}>{row.label}</div>
+                      <div style={{ fontSize: 10, color: "#7A8FA8", marginBottom: 2 }}>{row.label}</div>
                       <div style={{ fontSize: 13, color: "#E8EDF5" }}>{row.value}</div>
                     </div>
                   ))}
@@ -1625,7 +1625,7 @@ export function CRMClient({ userRole, userName, userId }: { userRole: string; us
 
               {/* Notes */}
               <div style={{ marginTop: 16 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: "#C4922E", marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: "#C9A84C", marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.5 }}>
                   Observações
                 </div>
                 <textarea
@@ -1649,12 +1649,12 @@ export function CRMClient({ userRole, userName, userId }: { userRole: string; us
 
               {/* Interactions */}
               <div style={{ marginTop: 16 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: "#C4922E", marginBottom: 10, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: "#C9A84C", marginBottom: 10, textTransform: "uppercase", letterSpacing: 0.5 }}>
                   Histórico de Interações ({selectedLead.interactions.length})
                 </div>
 
                 {selectedLead.interactions.length === 0 && (
-                  <div style={{ color: "#5A7490", fontSize: 13, marginBottom: 12 }}>Nenhuma interação registrada.</div>
+                  <div style={{ color: "#7A8FA8", fontSize: 13, marginBottom: 12 }}>Nenhuma interação registrada.</div>
                 )}
 
                 <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 220, overflowY: "auto", marginBottom: 12 }}>
@@ -1680,7 +1680,7 @@ export function CRMClient({ userRole, userName, userId }: { userRole: string; us
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "center",
-                          color: "#C4922E",
+                          color: "#C9A84C",
                           flexShrink: 0,
                         }}
                       >
@@ -1691,8 +1691,8 @@ export function CRMClient({ userRole, userName, userId }: { userRole: string; us
                           <span style={{ fontSize: 12, fontWeight: 700, color: "#E8EDF5" }}>
                             {INTERACTION_TYPE_LABELS[inter.type] || inter.type}
                           </span>
-                          <span style={{ fontSize: 11, color: "#5A7490" }}>{formatDate(inter.date)}</span>
-                          <span style={{ fontSize: 11, color: "#5A7490" }}>· {inter.author}</span>
+                          <span style={{ fontSize: 11, color: "#7A8FA8" }}>{formatDate(inter.date)}</span>
+                          <span style={{ fontSize: 11, color: "#7A8FA8" }}>· {inter.author}</span>
                         </div>
                         <div style={{ fontSize: 12, color: "#E8EDF5" }}>{inter.notes}</div>
                       </div>
@@ -1702,7 +1702,7 @@ export function CRMClient({ userRole, userName, userId }: { userRole: string; us
 
                 {/* Add interaction */}
                 <div style={{ background: "#0F1E35", border: "1px solid #122036", borderRadius: 8, padding: 12 }}>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: "#5A7490", marginBottom: 8 }}>Adicionar Interação</div>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: "#7A8FA8", marginBottom: 8 }}>Adicionar Interação</div>
                   <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
                     <select
                       value={newInteractionType}
@@ -1757,7 +1757,7 @@ export function CRMClient({ userRole, userName, userId }: { userRole: string; us
                   <Button
                     variant="outline"
                     onClick={() => { window.location.href = "/split-fiscal"; }}
-                    style={{ borderColor: "#C4922E", color: "#E5B96A" }}
+                    style={{ borderColor: "#C9A84C", color: "#E8C97A" }}
                   >
                     <PieChart className="w-4 h-4 mr-2" />
                     Simulador Split Fiscal
@@ -1810,7 +1810,7 @@ export function CRMClient({ userRole, userName, userId }: { userRole: string; us
               <DialogHeader>
                 <DialogTitle style={{ color: "#E8EDF5" }}>Avançar para qual produto?</DialogTitle>
               </DialogHeader>
-              <div style={{ fontSize: 13, color: "#5A7490", marginBottom: 16 }}>
+              <div style={{ fontSize: 13, color: "#7A8FA8", marginBottom: 16 }}>
                 {showConvert.name}
               </div>
 
@@ -1837,7 +1837,7 @@ export function CRMClient({ userRole, userName, userId }: { userRole: string; us
                           {opt.label}
                         </span>
                       </div>
-                      <div style={{ fontSize: 11, color: "#5A7490" }}>{opt.desc}</div>
+                      <div style={{ fontSize: 11, color: "#7A8FA8" }}>{opt.desc}</div>
                     </div>
                   );
                 })}
@@ -1867,7 +1867,7 @@ export function CRMClient({ userRole, userName, userId }: { userRole: string; us
           <div style={{ display: "flex", flexDirection: "column", gap: 20, marginTop: 8 }}>
             {/* Section 1: Dados Pessoais */}
             <div>
-              <div style={{ fontSize: 12, fontWeight: 700, color: "#C4922E", marginBottom: 12, textTransform: "uppercase", letterSpacing: 0.5 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "#C9A84C", marginBottom: 12, textTransform: "uppercase", letterSpacing: 0.5 }}>
                 1. Dados Pessoais
               </div>
 
@@ -1879,10 +1879,10 @@ export function CRMClient({ userRole, userName, userId }: { userRole: string; us
                     onClick={() => setNewLead((p) => ({ ...p, personType: t }))}
                     style={{
                       padding: "6px 20px",
-                      border: `2px solid ${newLead.personType === t ? "#C4922E" : "#122036"}`,
+                      border: `2px solid ${newLead.personType === t ? "#C9A84C" : "#122036"}`,
                       borderRadius: 8,
                       background: newLead.personType === t ? "rgba(196,146,46,0.15)" : "transparent",
-                      color: newLead.personType === t ? "#E5B96A" : "#5A7490",
+                      color: newLead.personType === t ? "#E8C97A" : "#7A8FA8",
                       cursor: "pointer",
                       fontWeight: 700,
                       fontSize: 13,
@@ -1895,7 +1895,7 @@ export function CRMClient({ userRole, userName, userId }: { userRole: string; us
 
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                 <div style={{ gridColumn: "1 / -1" }}>
-                  <label style={{ fontSize: 11, color: "#5A7490", display: "block", marginBottom: 4 }}>
+                  <label style={{ fontSize: 11, color: "#7A8FA8", display: "block", marginBottom: 4 }}>
                     {newLead.personType === "PF" ? "Nome Completo" : "Razão Social"} *
                   </label>
                   <input
@@ -1906,7 +1906,7 @@ export function CRMClient({ userRole, userName, userId }: { userRole: string; us
                   />
                 </div>
                 <div>
-                  <label style={{ fontSize: 11, color: "#5A7490", display: "block", marginBottom: 4 }}>
+                  <label style={{ fontSize: 11, color: "#7A8FA8", display: "block", marginBottom: 4 }}>
                     {newLead.personType === "PF" ? "CPF" : "CNPJ"}
                   </label>
                   <input
@@ -1918,7 +1918,7 @@ export function CRMClient({ userRole, userName, userId }: { userRole: string; us
                   />
                 </div>
                 <div>
-                  <label style={{ fontSize: 11, color: "#5A7490", display: "block", marginBottom: 4 }}>Telefone</label>
+                  <label style={{ fontSize: 11, color: "#7A8FA8", display: "block", marginBottom: 4 }}>Telefone</label>
                   <input
                     type="text"
                     value={newLead.phone}
@@ -1928,7 +1928,7 @@ export function CRMClient({ userRole, userName, userId }: { userRole: string; us
                   />
                 </div>
                 <div style={{ gridColumn: "1 / -1" }}>
-                  <label style={{ fontSize: 11, color: "#5A7490", display: "block", marginBottom: 4 }}>E-mail *</label>
+                  <label style={{ fontSize: 11, color: "#7A8FA8", display: "block", marginBottom: 4 }}>E-mail *</label>
                   <input
                     type="email"
                     value={newLead.email}
@@ -1937,7 +1937,7 @@ export function CRMClient({ userRole, userName, userId }: { userRole: string; us
                   />
                 </div>
                 <div>
-                  <label style={{ fontSize: 11, color: "#5A7490", display: "block", marginBottom: 4 }}>Cidade</label>
+                  <label style={{ fontSize: 11, color: "#7A8FA8", display: "block", marginBottom: 4 }}>Cidade</label>
                   <input
                     type="text"
                     value={newLead.city}
@@ -1946,7 +1946,7 @@ export function CRMClient({ userRole, userName, userId }: { userRole: string; us
                   />
                 </div>
                 <div>
-                  <label style={{ fontSize: 11, color: "#5A7490", display: "block", marginBottom: 4 }}>Estado (UF)</label>
+                  <label style={{ fontSize: 11, color: "#7A8FA8", display: "block", marginBottom: 4 }}>Estado (UF)</label>
                   <input
                     type="text"
                     value={newLead.state}
@@ -1961,12 +1961,12 @@ export function CRMClient({ userRole, userName, userId }: { userRole: string; us
 
             {/* Section 2: Dados Comerciais */}
             <div>
-              <div style={{ fontSize: 12, fontWeight: 700, color: "#C4922E", marginBottom: 12, textTransform: "uppercase", letterSpacing: 0.5 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "#C9A84C", marginBottom: 12, textTransform: "uppercase", letterSpacing: 0.5 }}>
                 2. Dados Comerciais
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                 <div>
-                  <label style={{ fontSize: 11, color: "#5A7490", display: "block", marginBottom: 4 }}>Segmento</label>
+                  <label style={{ fontSize: 11, color: "#7A8FA8", display: "block", marginBottom: 4 }}>Segmento</label>
                   <select
                     value={newLead.segment}
                     onChange={(e) => setNewLead((p) => ({ ...p, segment: e.target.value }))}
@@ -1977,7 +1977,7 @@ export function CRMClient({ userRole, userName, userId }: { userRole: string; us
                   </select>
                 </div>
                 <div>
-                  <label style={{ fontSize: 11, color: "#5A7490", display: "block", marginBottom: 4 }}>Origem</label>
+                  <label style={{ fontSize: 11, color: "#7A8FA8", display: "block", marginBottom: 4 }}>Origem</label>
                   <select
                     value={newLead.source}
                     onChange={(e) => setNewLead((p) => ({ ...p, source: e.target.value as CRMLead["source"] }))}
@@ -1988,7 +1988,7 @@ export function CRMClient({ userRole, userName, userId }: { userRole: string; us
                 </div>
                 {newLead.personType === "PJ" && (
                   <div style={{ gridColumn: "1 / -1" }}>
-                    <label style={{ fontSize: 11, color: "#5A7490", display: "block", marginBottom: 4 }}>
+                    <label style={{ fontSize: 11, color: "#7A8FA8", display: "block", marginBottom: 4 }}>
                       Faturamento Anual (R$)
                     </label>
                     <input
@@ -2001,7 +2001,7 @@ export function CRMClient({ userRole, userName, userId }: { userRole: string; us
                   </div>
                 )}
                 <div style={{ gridColumn: "1 / -1" }}>
-                  <label style={{ fontSize: 11, color: "#5A7490", display: "block", marginBottom: 4 }}>Observações</label>
+                  <label style={{ fontSize: 11, color: "#7A8FA8", display: "block", marginBottom: 4 }}>Observações</label>
                   <textarea
                     value={newLead.notes}
                     onChange={(e) => setNewLead((p) => ({ ...p, notes: e.target.value }))}
@@ -2014,12 +2014,12 @@ export function CRMClient({ userRole, userName, userId }: { userRole: string; us
 
             {/* Section 3: CRM */}
             <div>
-              <div style={{ fontSize: 12, fontWeight: 700, color: "#C4922E", marginBottom: 12, textTransform: "uppercase", letterSpacing: 0.5 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "#C9A84C", marginBottom: 12, textTransform: "uppercase", letterSpacing: 0.5 }}>
                 3. CRM
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                 <div>
-                  <label style={{ fontSize: 11, color: "#5A7490", display: "block", marginBottom: 4 }}>Data da Visita</label>
+                  <label style={{ fontSize: 11, color: "#7A8FA8", display: "block", marginBottom: 4 }}>Data da Visita</label>
                   <input
                     type="date"
                     value={newLead.visitDate}
@@ -2028,7 +2028,7 @@ export function CRMClient({ userRole, userName, userId }: { userRole: string; us
                   />
                 </div>
                 <div>
-                  <label style={{ fontSize: 11, color: "#5A7490", display: "block", marginBottom: 4 }}>Próximo Contato</label>
+                  <label style={{ fontSize: 11, color: "#7A8FA8", display: "block", marginBottom: 4 }}>Próximo Contato</label>
                   <input
                     type="date"
                     value={newLead.nextContact}
@@ -2041,7 +2041,7 @@ export function CRMClient({ userRole, userName, userId }: { userRole: string; us
 
             {/* Section 4: Produto de Interesse */}
             <div>
-              <div style={{ fontSize: 12, fontWeight: 700, color: "#C4922E", marginBottom: 12, textTransform: "uppercase", letterSpacing: 0.5 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "#C9A84C", marginBottom: 12, textTransform: "uppercase", letterSpacing: 0.5 }}>
                 4. Produto de Interesse
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 12 }}>
@@ -2065,7 +2065,7 @@ export function CRMClient({ userRole, userName, userId }: { userRole: string; us
                         <Icon className="w-3.5 h-3.5" style={{ color: opt.color, flexShrink: 0 }} />
                         <span style={{ fontSize: 11, fontWeight: 700, color: sel ? opt.color : "#E8EDF5" }}>{opt.label}</span>
                       </div>
-                      <div style={{ fontSize: 10, color: "#5A7490" }}>{opt.desc}</div>
+                      <div style={{ fontSize: 10, color: "#7A8FA8" }}>{opt.desc}</div>
                     </div>
                   );
                 })}
@@ -2074,7 +2074,7 @@ export function CRMClient({ userRole, userName, userId }: { userRole: string; us
               {/* Credit line sub-selector */}
               {(newLead.productInterest === "credito_varejo" || newLead.productInterest === "credito_estruturado" || newLead.productInterest === "high_ticket") && (
                 <div>
-                  <label style={{ fontSize: 11, color: "#5A7490", display: "block", marginBottom: 6 }}>Linha de Crédito Específica</label>
+                  <label style={{ fontSize: 11, color: "#7A8FA8", display: "block", marginBottom: 6 }}>Linha de Crédito Específica</label>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                     {(newLead.productInterest === "credito_varejo"
                       ? ["HOME EQUITY", "AVAL", "FUNDO CONSTRUÇÃO RESIDENCIAL"]
@@ -2089,9 +2089,9 @@ export function CRMClient({ userRole, userName, userId }: { userRole: string; us
                         style={{
                           padding: "4px 12px",
                           borderRadius: 6,
-                          border: `1px solid ${newLead.creditLine === line ? "#C4922E" : "#122036"}`,
+                          border: `1px solid ${newLead.creditLine === line ? "#C9A84C" : "#122036"}`,
                           background: newLead.creditLine === line ? "rgba(196,146,46,0.15)" : "#0F1E35",
-                          color: newLead.creditLine === line ? "#E5B96A" : "#5A7490",
+                          color: newLead.creditLine === line ? "#E8C97A" : "#7A8FA8",
                           fontSize: 11,
                           cursor: "pointer",
                           fontWeight: newLead.creditLine === line ? 700 : 400,
@@ -2107,7 +2107,7 @@ export function CRMClient({ userRole, userName, userId }: { userRole: string; us
 
               {/* Split note */}
               {newLead.productInterest === "split" && (
-                <div style={{ background: "rgba(196,146,46,0.08)", border: "1px solid rgba(196,146,46,0.25)", borderRadius: 8, padding: "10px 14px", fontSize: 12, color: "#E5B96A" }}>
+                <div style={{ background: "rgba(196,146,46,0.08)", border: "1px solid rgba(196,146,46,0.25)", borderRadius: 8, padding: "10px 14px", fontSize: 12, color: "#E8C97A" }}>
                   💡 Ao avançar este lead, você poderá acessar o <strong>Simulador Monetto</strong> para gerar uma proposta personalizada de Split Fiscal.
                 </div>
               )}
@@ -2228,14 +2228,14 @@ function ProspeccaoTab({ onAddLead }: { onAddLead: (prefill: Partial<{ personTyp
   return (
     <div>
       <div style={{ background: "#091221", border: "1px solid #122036", borderRadius: 12, padding: 20, marginBottom: 16 }}>
-        <div style={{ fontSize: 14, fontWeight: 700, color: "#C4922E", marginBottom: 4 }}>Prospeccao — Consulta CNPJ</div>
-        <div style={{ fontSize: 12, color: "#5A7490", marginBottom: 16 }}>Dados publicos BrasilAPI · Razao social, socios, telefone, e-mail, capital social.</div>
+        <div style={{ fontSize: 14, fontWeight: 700, color: "#C9A84C", marginBottom: 4 }}>Prospeccao — Consulta CNPJ</div>
+        <div style={{ fontSize: 12, color: "#7A8FA8", marginBottom: 16 }}>Dados publicos BrasilAPI · Razao social, socios, telefone, e-mail, capital social.</div>
 
         <div style={{ display: "flex", gap: 6, marginBottom: 16 }}>
           {(["single", "batch"] as const).map((m) => (
             <button key={m} onClick={() => { setMode(m); setResults([]); setError(""); }}
               style={{ ...btnBase, padding: "6px 16px", fontSize: 12,
-                background: mode === m ? "#C4922E" : "#0F1E35", color: mode === m ? "#050C18" : "#5A7490" }}>
+                background: mode === m ? "#C9A84C" : "#0F1E35", color: mode === m ? "#09081A" : "#7A8FA8" }}>
               {m === "single" ? "Busca por CNPJ" : "Importar Lista de CNPJs"}
             </button>
           ))}
@@ -2244,7 +2244,7 @@ function ProspeccaoTab({ onAddLead }: { onAddLead: (prefill: Partial<{ personTyp
         {mode === "single" ? (
           <div style={{ display: "flex", gap: 10, alignItems: "flex-end" }}>
             <div style={{ flex: 1 }}>
-              <label style={{ fontSize: 11, color: "#5A7490", display: "block", marginBottom: 4 }}>CNPJ da Empresa</label>
+              <label style={{ fontSize: 11, color: "#7A8FA8", display: "block", marginBottom: 4 }}>CNPJ da Empresa</label>
               <input type="text" value={cnpjInput}
                 onChange={(e) => setCnpjInput(maskCnpj(e.target.value))}
                 onKeyDown={(e) => e.key === "Enter" && handleSingle()}
@@ -2252,18 +2252,18 @@ function ProspeccaoTab({ onAddLead }: { onAddLead: (prefill: Partial<{ personTyp
                 style={{ ...pInputStyle, letterSpacing: "0.08em", fontSize: 15 }} />
             </div>
             <button onClick={handleSingle} disabled={loading}
-              style={{ ...btnBase, background: loading ? "#5A7490" : "#C4922E", color: "#050C18", padding: "9px 22px", fontSize: 13, cursor: loading ? "not-allowed" : "pointer" }}>
+              style={{ ...btnBase, background: loading ? "#7A8FA8" : "#C9A84C", color: "#09081A", padding: "9px 22px", fontSize: 13, cursor: loading ? "not-allowed" : "pointer" }}>
               <Search className="w-4 h-4" />{loading ? "Consultando..." : "Consultar"}
             </button>
           </div>
         ) : (
           <div>
-            <label style={{ fontSize: 11, color: "#5A7490", display: "block", marginBottom: 4 }}>Lista de CNPJs — um por linha (max. 20)</label>
+            <label style={{ fontSize: 11, color: "#7A8FA8", display: "block", marginBottom: 4 }}>Lista de CNPJs — um por linha (max. 20)</label>
             <textarea value={batchInput} onChange={(e) => setBatchInput(e.target.value)}
               placeholder={"11.222.333/0001-81\n44.555.666/0001-22"} rows={5}
               style={{ ...pInputStyle, resize: "vertical", fontFamily: "monospace", lineHeight: 1.6 }} />
             <button onClick={handleBatch} disabled={loading}
-              style={{ ...btnBase, background: loading ? "#5A7490" : "#C4922E", color: "#050C18", padding: "9px 22px", fontSize: 13, cursor: loading ? "not-allowed" : "pointer", marginTop: 10 }}>
+              style={{ ...btnBase, background: loading ? "#7A8FA8" : "#C9A84C", color: "#09081A", padding: "9px 22px", fontSize: 13, cursor: loading ? "not-allowed" : "pointer", marginTop: 10 }}>
               <Search className="w-4 h-4" />{loading ? `Consultando... (${results.length} ok)` : "Consultar todos"}
             </button>
           </div>
@@ -2276,11 +2276,11 @@ function ProspeccaoTab({ onAddLead }: { onAddLead: (prefill: Partial<{ personTyp
         )}
 
         <div style={{ marginTop: 14, padding: "10px 14px", background: "rgba(196,146,46,0.06)", border: "1px solid rgba(196,146,46,0.15)", borderRadius: 8 }}>
-          <div style={{ fontSize: 11, color: "#C4922E", fontWeight: 700, marginBottom: 3 }}>Como prospectar por cidade/segmento?</div>
-          <div style={{ fontSize: 11, color: "#5A7490", lineHeight: 1.6 }}>
+          <div style={{ fontSize: 11, color: "#C9A84C", fontWeight: 700, marginBottom: 3 }}>Como prospectar por cidade/segmento?</div>
+          <div style={{ fontSize: 11, color: "#7A8FA8", lineHeight: 1.6 }}>
             A Receita Federal nao disponibiliza busca gratuita por nome/cidade. Pesquise em{" "}
-            <a href="https://casadosdados.com.br" target="_blank" rel="noreferrer" style={{ color: "#C4922E" }}>casadosdados.com.br</a>
-            {" ou "}<a href="https://cnpja.com.br" target="_blank" rel="noreferrer" style={{ color: "#C4922E" }}>cnpja.com.br</a>
+            <a href="https://casadosdados.com.br" target="_blank" rel="noreferrer" style={{ color: "#C9A84C" }}>casadosdados.com.br</a>
+            {" ou "}<a href="https://cnpja.com.br" target="_blank" rel="noreferrer" style={{ color: "#C9A84C" }}>cnpja.com.br</a>
             {", copie os CNPJs e importe aqui em lote para buscar socios, telefone e e-mail."}
           </div>
         </div>
@@ -2288,7 +2288,7 @@ function ProspeccaoTab({ onAddLead }: { onAddLead: (prefill: Partial<{ personTyp
 
       {results.length > 1 && (
         <div style={{ display: "flex", gap: 10, marginBottom: 12, alignItems: "center" }}>
-          <span style={{ fontSize: 12, color: "#5A7490" }}>Filtrar:</span>
+          <span style={{ fontSize: 12, color: "#7A8FA8" }}>Filtrar:</span>
           <select value={ufFilter} onChange={(e) => setUfFilter(e.target.value)}
             style={{ ...pInputStyle, width: 80, padding: "5px 8px", fontSize: 12 }}>
             <option value="">Todos UF</option>
@@ -2296,7 +2296,7 @@ function ProspeccaoTab({ onAddLead }: { onAddLead: (prefill: Partial<{ personTyp
           </select>
           <input type="text" value={capitalMin} onChange={(e) => setCapitalMin(e.target.value)}
             placeholder="Capital min. R$" style={{ ...pInputStyle, width: 150, padding: "5px 10px", fontSize: 12 }} />
-          <span style={{ fontSize: 12, color: "#5A7490" }}>{filtered.length}/{results.length} empresa(s)</span>
+          <span style={{ fontSize: 12, color: "#7A8FA8" }}>{filtered.length}/{results.length} empresa(s)</span>
         </div>
       )}
 
@@ -2310,58 +2310,58 @@ function ProspeccaoTab({ onAddLead }: { onAddLead: (prefill: Partial<{ personTyp
                   <div style={{ flex: 1, minWidth: 200 }}>
                     <div style={{ fontSize: 13, fontWeight: 700, color: "#E8EDF5" }}>{c.razao_social}</div>
                     {c.nome_fantasia && c.nome_fantasia !== c.razao_social && (
-                      <div style={{ fontSize: 11, color: "#5A7490" }}>{c.nome_fantasia}</div>
+                      <div style={{ fontSize: 11, color: "#7A8FA8" }}>{c.nome_fantasia}</div>
                     )}
-                    <div style={{ fontSize: 10, color: "#5A7490", marginTop: 2, fontFamily: "monospace" }}>{fmtCnpj(c.cnpj)}</div>
+                    <div style={{ fontSize: 10, color: "#7A8FA8", marginTop: 2, fontFamily: "monospace" }}>{fmtCnpj(c.cnpj)}</div>
                   </div>
-                  <div style={{ fontSize: 12, color: "#5A7490" }}>{c.municipio || "—"}{c.uf ? ` / ${c.uf}` : ""}</div>
-                  <div style={{ fontSize: 13, color: "#C4922E", fontWeight: 700 }}>{fmtCap(c.capital_social)}</div>
+                  <div style={{ fontSize: 12, color: "#7A8FA8" }}>{c.municipio || "—"}{c.uf ? ` / ${c.uf}` : ""}</div>
+                  <div style={{ fontSize: 13, color: "#C9A84C", fontWeight: 700 }}>{fmtCap(c.capital_social)}</div>
                   <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 4,
                     background: c.situacao_cadastral === "ATIVA" ? "rgba(16,185,129,0.15)" : "rgba(239,68,68,0.15)",
                     color: c.situacao_cadastral === "ATIVA" ? "#10B981" : "#EF4444" }}>
                     {c.situacao_cadastral || "—"}
                   </span>
                   <button onClick={() => setExpanded(isOpen ? null : c.cnpj)}
-                    style={{ background: "transparent", border: "1px solid #122036", borderRadius: 6, padding: "5px 12px", color: "#5A7490", fontSize: 11, cursor: "pointer" }}>
+                    style={{ background: "transparent", border: "1px solid #122036", borderRadius: 6, padding: "5px 12px", color: "#7A8FA8", fontSize: 11, cursor: "pointer" }}>
                     {isOpen ? "Ocultar" : "Detalhes"}
                   </button>
                   <button onClick={() => onAddLead({ personType: "PJ", name: c.razao_social,
                     document: fmtCnpj(c.cnpj), email: c.email || "", phone: c.telefone || "",
                     city: c.municipio || "", state: c.uf || "", segment: (c.cnae || "").slice(0, 50) })}
-                    style={{ ...btnBase, background: "rgba(196,146,46,0.15)", border: "1px solid rgba(196,146,46,0.3)", padding: "5px 14px", color: "#E5B96A", fontSize: 11 }}>
+                    style={{ ...btnBase, background: "rgba(196,146,46,0.15)", border: "1px solid rgba(196,146,46,0.3)", padding: "5px 14px", color: "#E8C97A", fontSize: 11 }}>
                     + Lead
                   </button>
                 </div>
 
                 {isOpen && (
-                  <div style={{ padding: "14px 16px 18px", background: "#050C18", borderTop: "1px solid #122036" }}>
+                  <div style={{ padding: "14px 16px 18px", background: "#09081A", borderTop: "1px solid #122036" }}>
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 20 }}>
                       <div>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: "#C4922E", marginBottom: 10, textTransform: "uppercase" }}>Contato</div>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: "#C9A84C", marginBottom: 10, textTransform: "uppercase" }}>Contato</div>
                         {([["Telefone", c.telefone], ["Telefone 2", c.telefone2], ["E-mail", c.email], ["Logradouro", c.logradouro], ["Bairro", c.bairro], ["CEP", c.cep]] as [string,string][]).map(([l, v]) => (
                           <div key={l} style={{ marginBottom: 6 }}>
-                            <div style={{ fontSize: 10, color: "#5A7490" }}>{l}</div>
+                            <div style={{ fontSize: 10, color: "#7A8FA8" }}>{l}</div>
                             <div style={{ fontSize: 12, color: "#E8EDF5" }}>{v || "—"}</div>
                           </div>
                         ))}
                       </div>
                       <div>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: "#C4922E", marginBottom: 10, textTransform: "uppercase" }}>Empresa</div>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: "#C9A84C", marginBottom: 10, textTransform: "uppercase" }}>Empresa</div>
                         {([["Porte", c.porte], ["Capital Social", fmtCap(c.capital_social)], ["CNAE", (c.cnae || "").slice(0, 60)], ["Abertura", c.data_abertura ? new Date(c.data_abertura).toLocaleDateString("pt-BR") : "—"]] as [string,string][]).map(([l, v]) => (
                           <div key={l} style={{ marginBottom: 6 }}>
-                            <div style={{ fontSize: 10, color: "#5A7490" }}>{l}</div>
-                            <div style={{ fontSize: 12, color: l === "Capital Social" ? "#C4922E" : "#E8EDF5", fontWeight: l === "Capital Social" ? 700 : 400 }}>{v || "—"}</div>
+                            <div style={{ fontSize: 10, color: "#7A8FA8" }}>{l}</div>
+                            <div style={{ fontSize: 12, color: l === "Capital Social" ? "#C9A84C" : "#E8EDF5", fontWeight: l === "Capital Social" ? 700 : 400 }}>{v || "—"}</div>
                           </div>
                         ))}
                       </div>
                       <div>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: "#C4922E", marginBottom: 10, textTransform: "uppercase" }}>Socios ({c.socios?.length || 0})</div>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: "#C9A84C", marginBottom: 10, textTransform: "uppercase" }}>Socios ({c.socios?.length || 0})</div>
                         {c.socios && c.socios.length > 0 ? c.socios.slice(0, 6).map((s, i) => (
                           <div key={i} style={{ marginBottom: 8 }}>
                             <div style={{ fontSize: 12, color: "#E8EDF5" }}>{s.nome}</div>
-                            <div style={{ fontSize: 10, color: "#5A7490" }}>{s.qualificacao}{s.entrada ? ` · desde ${new Date(s.entrada).toLocaleDateString("pt-BR")}` : ""}</div>
+                            <div style={{ fontSize: 10, color: "#7A8FA8" }}>{s.qualificacao}{s.entrada ? ` · desde ${new Date(s.entrada).toLocaleDateString("pt-BR")}` : ""}</div>
                           </div>
-                        )) : <div style={{ fontSize: 12, color: "#5A7490" }}>Sem socios registrados</div>}
+                        )) : <div style={{ fontSize: 12, color: "#7A8FA8" }}>Sem socios registrados</div>}
                       </div>
                     </div>
                   </div>

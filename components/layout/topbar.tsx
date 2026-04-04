@@ -55,9 +55,9 @@ export function Topbar({ user, onMenuClick, notificationCount = 0 }: TopbarProps
   const initials = abbreviateName(user.full_name || user.email);
 
   return (
-    <header className="h-14 border-b border-[#122036]/80 bg-[#060E1C]/90 backdrop-blur-md flex items-center px-4 gap-4 relative">
+    <header className="h-14 border-b border-[#122036]/80 bg-[#09081A]/90 backdrop-blur-md flex items-center px-4 gap-4 relative">
       {/* Bottom gold accent */}
-      <div className="absolute bottom-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-[#C4922E]/20 to-transparent" />
+      <div className="absolute bottom-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-[#C9A84C]/20 to-transparent" />
       {/* Mobile menu button */}
       <button
         onClick={onMenuClick}
@@ -92,7 +92,7 @@ export function Topbar({ user, onMenuClick, notificationCount = 0 }: TopbarProps
         >
           <Bell className="w-5 h-5 text-muted-foreground" />
           {notificationCount > 0 && (
-            <span className="absolute top-1 right-1 w-2 h-2 bg-[#C4922E] rounded-full" />
+            <span className="absolute top-1 right-1 w-2 h-2 bg-[#C9A84C] rounded-full" />
           )}
         </Link>
 
@@ -100,7 +100,7 @@ export function Topbar({ user, onMenuClick, notificationCount = 0 }: TopbarProps
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button className="flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-secondary transition-colors">
-              <div className="w-7 h-7 rounded-full bg-gradient-to-br from-[#C4922E] to-[#E5B96A] flex items-center justify-center text-[#050C18] text-xs font-bold flex-shrink-0">
+              <div className="w-7 h-7 rounded-full bg-gradient-to-br from-[#C9A84C] to-[#E8C97A] flex items-center justify-center text-[#09081A] text-xs font-bold flex-shrink-0">
                 {user.avatar_url ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img

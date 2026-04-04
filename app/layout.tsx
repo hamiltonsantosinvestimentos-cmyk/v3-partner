@@ -24,16 +24,16 @@ export default function RootLayout({
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;500;600;700;800;900&display=swap" />
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" />
         <link rel="manifest" href="/manifest.json" />
-        <meta name="theme-color" content="#C4922E" />
+        <meta name="theme-color" content="#C9A84C" />
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="apple-mobile-web-app-title" content="V3 Partners" />
         <link rel="apple-touch-icon" href="/icon-192.png" />
       </head>
-      <body className="min-h-full bg-[#050C18]">
+      <body className="min-h-full bg-[#09081A]">
         <PWARegister />
         {children}
       </body>

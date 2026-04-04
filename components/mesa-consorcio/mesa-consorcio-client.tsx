@@ -36,7 +36,7 @@ const CONSORCIO_STAGES = [
   { id: "lead",         label: "Lead",         color: "#3B82F6", bg: "rgba(59,130,246,0.1)" },
   { id: "qualificacao", label: "Qualificação",  color: "#8B5CF6", bg: "rgba(139,92,246,0.1)" },
   { id: "simulacao",    label: "Simulação",     color: "#F59E0B", bg: "rgba(245,158,11,0.1)" },
-  { id: "proposta",     label: "Proposta",      color: "#C4922E", bg: "rgba(196,146,46,0.1)" },
+  { id: "proposta",     label: "Proposta",      color: "#C9A84C", bg: "rgba(196,146,46,0.1)" },
   { id: "documentacao", label: "Documentação",  color: "#EF4444", bg: "rgba(239,68,68,0.1)" },
   { id: "contemplado",  label: "Contemplado",   color: "#10B981", bg: "rgba(16,185,129,0.1)" },
 ];
@@ -79,7 +79,7 @@ function formatDate(iso: string) {
 function statusColor(s: ConsorcioOperator["status"]) {
   if (s === "online") return "#10B981";
   if (s === "away") return "#F59E0B";
-  return "#5A7490";
+  return "#7A8FA8";
 }
 
 function statusLabel(s: ConsorcioOperator["status"]) {
@@ -106,11 +106,11 @@ function KanbanCardItem({ card, onClick }: { card: ConsorcioCard; onClick: () =>
   return (
     <div
       onClick={onClick}
-      className="rounded-lg border border-[#122036] bg-[#091221] p-3 cursor-pointer hover:border-[#C4922E]/60 hover:shadow-lg transition-all group"
+      className="rounded-lg border border-[#122036] bg-[#091221] p-3 cursor-pointer hover:border-[#C9A84C]/60 hover:shadow-lg transition-all group"
     >
       <div className="flex items-start justify-between mb-2">
-        <p className="text-xs font-semibold text-[#E8EDF5] leading-tight group-hover:text-[#C4922E] transition-colors">{card.client}</p>
-        <span className="text-[10px] text-[#5A7490] flex-shrink-0 ml-1">{card.code}</span>
+        <p className="text-xs font-semibold text-[#E8EDF5] leading-tight group-hover:text-[#C9A84C] transition-colors">{card.client}</p>
+        <span className="text-[10px] text-[#7A8FA8] flex-shrink-0 ml-1">{card.code}</span>
       </div>
       <div className="flex items-center gap-1 mb-2">
         <span className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full border"
@@ -119,9 +119,9 @@ function KanbanCardItem({ card, onClick }: { card: ConsorcioCard; onClick: () =>
           {card.type}
         </span>
       </div>
-      <p className="text-sm font-bold text-[#C4922E] mb-1">{formatM(card.value)}</p>
-      <p className="text-[10px] text-[#5A7490] mb-2">{card.quota}</p>
-      <p className="text-[10px] text-[#5A7490]">{card.responsible}</p>
+      <p className="text-sm font-bold text-[#C9A84C] mb-1">{formatM(card.value)}</p>
+      <p className="text-[10px] text-[#7A8FA8] mb-2">{card.quota}</p>
+      <p className="text-[10px] text-[#7A8FA8]">{card.responsible}</p>
     </div>
   );
 }
@@ -193,23 +193,23 @@ export function MesaConsorcioClient({ userRole }: { userRole: string }) {
   ];
 
   return (
-    <div className="min-h-screen bg-[#050C18] text-[#E8EDF5]">
+    <div className="min-h-screen bg-[#09081A] text-[#E8EDF5]">
       {/* Header */}
       <div className="border-b border-[#122036] bg-[#091221] px-6 py-4">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-[#C4922E]/15 flex items-center justify-center">
-              <Home size={18} className="text-[#C4922E]" />
+            <div className="w-9 h-9 rounded-lg bg-[#C9A84C]/15 flex items-center justify-center">
+              <Home size={18} className="text-[#C9A84C]" />
             </div>
             <div>
               <h1 className="text-base font-bold text-[#E8EDF5]">Mesa Consórcio</h1>
-              <p className="text-xs text-[#5A7490]">Gestão de Cotas & Contemplações</p>
+              <p className="text-xs text-[#7A8FA8]">Gestão de Cotas & Contemplações</p>
             </div>
           </div>
           {activeTab === "kanban" && (
             <button
               onClick={() => setShowNewCard(true)}
-              className="flex items-center gap-2 rounded-lg bg-[#C4922E] text-[#050C18] text-xs font-semibold px-4 py-2 hover:bg-[#E5B96A] transition-colors"
+              className="flex items-center gap-2 rounded-lg bg-[#C9A84C] text-[#09081A] text-xs font-semibold px-4 py-2 hover:bg-[#E8C97A] transition-colors"
             >
               <Plus size={14} />
               Nova Cota
@@ -218,7 +218,7 @@ export function MesaConsorcioClient({ userRole }: { userRole: string }) {
           {activeTab === "operadores" && (
             <button
               onClick={() => setShowNewOp(true)}
-              className="flex items-center gap-2 rounded-lg border border-[#122036] bg-[#0F1E35] text-xs font-medium px-4 py-2 hover:border-[#C4922E]/50 hover:text-[#C4922E] transition-colors"
+              className="flex items-center gap-2 rounded-lg border border-[#122036] bg-[#0F1E35] text-xs font-medium px-4 py-2 hover:border-[#C9A84C]/50 hover:text-[#C9A84C] transition-colors"
             >
               <Plus size={14} />
               Adicionar Operador
@@ -234,8 +234,8 @@ export function MesaConsorcioClient({ userRole }: { userRole: string }) {
               onClick={() => setActiveTab(tab.id)}
               className={`px-5 py-2 text-sm font-medium border-b-2 transition-colors ${
                 activeTab === tab.id
-                  ? "border-[#C4922E] text-[#C4922E]"
-                  : "border-transparent text-[#5A7490] hover:text-[#E8EDF5]"
+                  ? "border-[#C9A84C] text-[#C9A84C]"
+                  : "border-transparent text-[#7A8FA8] hover:text-[#E8EDF5]"
               }`}
             >
               {tab.label}
@@ -251,19 +251,19 @@ export function MesaConsorcioClient({ userRole }: { userRole: string }) {
             {/* KPIs */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
               <div className="rounded-xl border border-[#122036] bg-[#091221] p-4">
-                <p className="text-xs text-[#5A7490] mb-1">Total de Cotas</p>
+                <p className="text-xs text-[#7A8FA8] mb-1">Total de Cotas</p>
                 <p className="text-2xl font-bold text-[#E8EDF5]">{cards.length}</p>
               </div>
               <div className="rounded-xl border border-[#122036] bg-[#091221] p-4">
-                <p className="text-xs text-[#5A7490] mb-1">Volume Total</p>
-                <p className="text-2xl font-bold text-[#C4922E]">{formatM(totalValue)}</p>
+                <p className="text-xs text-[#7A8FA8] mb-1">Volume Total</p>
+                <p className="text-2xl font-bold text-[#C9A84C]">{formatM(totalValue)}</p>
               </div>
               <div className="rounded-xl border border-[#122036] bg-[#091221] p-4">
-                <p className="text-xs text-[#5A7490] mb-1">Contemplados</p>
+                <p className="text-xs text-[#7A8FA8] mb-1">Contemplados</p>
                 <p className="text-2xl font-bold text-emerald-400">{contemplados}</p>
               </div>
               <div className="rounded-xl border border-[#122036] bg-[#091221] p-4">
-                <p className="text-xs text-[#5A7490] mb-1">Cotas Imóvel</p>
+                <p className="text-xs text-[#7A8FA8] mb-1">Cotas Imóvel</p>
                 <p className="text-2xl font-bold text-blue-400">{imoveis}</p>
               </div>
             </div>
@@ -284,13 +284,13 @@ export function MesaConsorcioClient({ userRole }: { userRole: string }) {
                       </span>
                     </div>
                     {/* Cards */}
-                    <div className="space-y-2 min-h-[100px] rounded-xl border border-[#122036]/60 bg-[#050C18]/50 p-2">
+                    <div className="space-y-2 min-h-[100px] rounded-xl border border-[#122036]/60 bg-[#09081A]/50 p-2">
                       {stageCards.map(card => (
                         <KanbanCardItem key={card.id} card={card} onClick={() => setSelectedCard(card)} />
                       ))}
                       {stageCards.length === 0 && (
                         <div className="h-16 flex items-center justify-center">
-                          <p className="text-[11px] text-[#5A7490]">Sem cotas</p>
+                          <p className="text-[11px] text-[#7A8FA8]">Sem cotas</p>
                         </div>
                       )}
                     </div>
@@ -306,11 +306,11 @@ export function MesaConsorcioClient({ userRole }: { userRole: string }) {
           <div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               {operators.map(op => (
-                <div key={op.id} className="rounded-xl border border-[#122036] bg-[#091221] p-5 relative group hover:border-[#C4922E]/40 transition-colors">
+                <div key={op.id} className="rounded-xl border border-[#122036] bg-[#091221] p-5 relative group hover:border-[#C9A84C]/40 transition-colors">
                   {userRole === "admin" && (
                     <button
                       onClick={() => setOperators(prev => prev.filter(o => o.id !== op.id))}
-                      className="absolute top-3 right-3 text-[#5A7490] hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
+                      className="absolute top-3 right-3 text-[#7A8FA8] hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
                     >
                       <X size={14} />
                     </button>
@@ -318,8 +318,8 @@ export function MesaConsorcioClient({ userRole }: { userRole: string }) {
 
                   <div className="flex items-center gap-3 mb-4">
                     <div className="relative">
-                      <div className="w-11 h-11 rounded-full bg-[#C4922E]/20 flex items-center justify-center">
-                        <span className="text-sm font-bold text-[#C4922E]">{initials(op.name)}</span>
+                      <div className="w-11 h-11 rounded-full bg-[#C9A84C]/20 flex items-center justify-center">
+                        <span className="text-sm font-bold text-[#C9A84C]">{initials(op.name)}</span>
                       </div>
                       <div
                         className={`absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-[#091221] ${op.status === "online" ? "animate-pulse" : ""}`}
@@ -328,7 +328,7 @@ export function MesaConsorcioClient({ userRole }: { userRole: string }) {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold text-[#E8EDF5] truncate">{op.name}</p>
-                      <p className="text-xs text-[#5A7490] truncate">{op.role}</p>
+                      <p className="text-xs text-[#7A8FA8] truncate">{op.role}</p>
                     </div>
                   </div>
 
@@ -338,13 +338,13 @@ export function MesaConsorcioClient({ userRole }: { userRole: string }) {
                   </div>
 
                   <div className="flex items-center gap-1.5 mb-3">
-                    <Mail size={11} className="text-[#5A7490]" />
-                    <span className="text-[11px] text-[#5A7490] truncate">{op.email}</span>
+                    <Mail size={11} className="text-[#7A8FA8]" />
+                    <span className="text-[11px] text-[#7A8FA8] truncate">{op.email}</span>
                   </div>
 
                   <div className="flex items-center gap-1.5">
-                    <BarChart2 size={11} className="text-[#5A7490]" />
-                    <span className="text-xs text-[#5A7490]">{op.assignedCards} cota{op.assignedCards !== 1 ? "s" : ""} atribuída{op.assignedCards !== 1 ? "s" : ""}</span>
+                    <BarChart2 size={11} className="text-[#7A8FA8]" />
+                    <span className="text-xs text-[#7A8FA8]">{op.assignedCards} cota{op.assignedCards !== 1 ? "s" : ""} atribuída{op.assignedCards !== 1 ? "s" : ""}</span>
                   </div>
                 </div>
               ))}
@@ -357,7 +357,7 @@ export function MesaConsorcioClient({ userRole }: { userRole: string }) {
           <div>
             <div className="mb-4">
               <h3 className="text-sm font-semibold text-[#E8EDF5] mb-1">Integração Pipefy — Mesa Consórcio</h3>
-              <p className="text-xs text-[#5A7490]">Configure a sincronização das cotas com o Pipefy</p>
+              <p className="text-xs text-[#7A8FA8]">Configure a sincronização das cotas com o Pipefy</p>
             </div>
             <PipefyConfig
               mesaName="Consórcio"
@@ -374,7 +374,7 @@ export function MesaConsorcioClient({ userRole }: { userRole: string }) {
           <DialogHeader>
             <DialogTitle className="text-[#E8EDF5]">
               {selectedCard?.client}
-              <span className="ml-2 text-xs font-normal text-[#5A7490]">{selectedCard?.code}</span>
+              <span className="ml-2 text-xs font-normal text-[#7A8FA8]">{selectedCard?.code}</span>
             </DialogTitle>
           </DialogHeader>
           {selectedCard && (() => {
@@ -385,42 +385,42 @@ export function MesaConsorcioClient({ userRole }: { userRole: string }) {
               <div className="space-y-4 mt-2">
                 <div className="grid grid-cols-2 gap-3">
                   <div className="rounded-lg bg-[#0F1E35] border border-[#122036] p-3">
-                    <p className="text-xs text-[#5A7490] mb-1">Tipo</p>
+                    <p className="text-xs text-[#7A8FA8] mb-1">Tipo</p>
                     <p className="text-sm font-medium text-[#E8EDF5]">{selectedCard.type}</p>
                   </div>
                   <div className="rounded-lg bg-[#0F1E35] border border-[#122036] p-3">
-                    <p className="text-xs text-[#5A7490] mb-1">Valor da Carta</p>
-                    <p className="text-sm font-bold text-[#C4922E]">{formatM(selectedCard.value)}</p>
+                    <p className="text-xs text-[#7A8FA8] mb-1">Valor da Carta</p>
+                    <p className="text-sm font-bold text-[#C9A84C]">{formatM(selectedCard.value)}</p>
                   </div>
                   <div className="rounded-lg bg-[#0F1E35] border border-[#122036] p-3">
-                    <p className="text-xs text-[#5A7490] mb-1">Etapa atual</p>
+                    <p className="text-xs text-[#7A8FA8] mb-1">Etapa atual</p>
                     <span className="text-xs px-2 py-0.5 rounded-full" style={{ color: stage?.color, background: stage?.bg }}>
                       {stage?.label}
                     </span>
                   </div>
                   <div className="rounded-lg bg-[#0F1E35] border border-[#122036] p-3">
-                    <p className="text-xs text-[#5A7490] mb-1">Responsável</p>
+                    <p className="text-xs text-[#7A8FA8] mb-1">Responsável</p>
                     <p className="text-sm text-[#E8EDF5]">{selectedCard.responsible}</p>
                   </div>
                   <div className="rounded-lg bg-[#0F1E35] border border-[#122036] p-3">
-                    <p className="text-xs text-[#5A7490] mb-1">Cota</p>
+                    <p className="text-xs text-[#7A8FA8] mb-1">Cota</p>
                     <p className="text-sm text-[#E8EDF5]">{selectedCard.quota}</p>
                   </div>
                   <div className="rounded-lg bg-[#0F1E35] border border-[#122036] p-3">
-                    <p className="text-xs text-[#5A7490] mb-1">Data de entrada</p>
+                    <p className="text-xs text-[#7A8FA8] mb-1">Data de entrada</p>
                     <p className="text-sm text-[#E8EDF5]">{formatDate(selectedCard.createdAt)}</p>
                   </div>
                 </div>
 
                 {/* Notes */}
                 <div>
-                  <label className="text-xs text-[#5A7490] mb-1.5 block">Observações</label>
+                  <label className="text-xs text-[#7A8FA8] mb-1.5 block">Observações</label>
                   <textarea
                     value={selectedCard.notes ?? ""}
                     onChange={e => setSelectedCard(prev => prev ? { ...prev, notes: e.target.value } : null)}
                     rows={3}
                     placeholder="Adicione observações sobre a cota..."
-                    className="w-full rounded-lg border border-[#122036] bg-[#0F1E35] text-[#E8EDF5] text-xs px-3 py-2 placeholder:text-[#5A7490] focus:outline-none focus:border-[#C4922E] transition-colors resize-none"
+                    className="w-full rounded-lg border border-[#122036] bg-[#0F1E35] text-[#E8EDF5] text-xs px-3 py-2 placeholder:text-[#7A8FA8] focus:outline-none focus:border-[#C9A84C] transition-colors resize-none"
                   />
                 </div>
 
@@ -428,7 +428,7 @@ export function MesaConsorcioClient({ userRole }: { userRole: string }) {
                 {nextStageData && (
                   <button
                     onClick={() => handleAdvanceStage(selectedCard)}
-                    className="w-full flex items-center justify-center gap-2 rounded-lg bg-[#C4922E]/15 border border-[#C4922E]/40 text-[#C4922E] text-sm font-medium py-2.5 hover:bg-[#C4922E]/25 transition-colors"
+                    className="w-full flex items-center justify-center gap-2 rounded-lg bg-[#C9A84C]/15 border border-[#C9A84C]/40 text-[#C9A84C] text-sm font-medium py-2.5 hover:bg-[#C9A84C]/25 transition-colors"
                   >
                     Avançar para {nextStageData.label}
                     <ChevronRight size={16} />
@@ -453,85 +453,85 @@ export function MesaConsorcioClient({ userRole }: { userRole: string }) {
           </DialogHeader>
           <div className="space-y-3 mt-2">
             <div>
-              <label className="text-xs text-[#5A7490] mb-1.5 block">Cliente *</label>
+              <label className="text-xs text-[#7A8FA8] mb-1.5 block">Cliente *</label>
               <input
                 value={newCard.client}
                 onChange={e => setNewCard(p => ({ ...p, client: e.target.value }))}
                 placeholder="Nome do cliente"
-                className="w-full rounded-lg border border-[#122036] bg-[#0F1E35] text-[#E8EDF5] text-sm px-3 py-2.5 placeholder:text-[#5A7490] focus:outline-none focus:border-[#C4922E] transition-colors"
+                className="w-full rounded-lg border border-[#122036] bg-[#0F1E35] text-[#E8EDF5] text-sm px-3 py-2.5 placeholder:text-[#7A8FA8] focus:outline-none focus:border-[#C9A84C] transition-colors"
               />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-xs text-[#5A7490] mb-1.5 block">Tipo de Bem *</label>
+                <label className="text-xs text-[#7A8FA8] mb-1.5 block">Tipo de Bem *</label>
                 <select
                   value={newCard.type}
                   onChange={e => setNewCard(p => ({ ...p, type: e.target.value }))}
-                  className="w-full rounded-lg border border-[#122036] bg-[#0F1E35] text-[#E8EDF5] text-sm px-3 py-2.5 focus:outline-none focus:border-[#C4922E] transition-colors"
+                  className="w-full rounded-lg border border-[#122036] bg-[#0F1E35] text-[#E8EDF5] text-sm px-3 py-2.5 focus:outline-none focus:border-[#C9A84C] transition-colors"
                 >
                   {CARD_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
                 </select>
               </div>
               <div>
-                <label className="text-xs text-[#5A7490] mb-1.5 block">Etapa</label>
+                <label className="text-xs text-[#7A8FA8] mb-1.5 block">Etapa</label>
                 <select
                   value={newCard.stage}
                   onChange={e => setNewCard(p => ({ ...p, stage: e.target.value }))}
-                  className="w-full rounded-lg border border-[#122036] bg-[#0F1E35] text-[#E8EDF5] text-sm px-3 py-2.5 focus:outline-none focus:border-[#C4922E] transition-colors"
+                  className="w-full rounded-lg border border-[#122036] bg-[#0F1E35] text-[#E8EDF5] text-sm px-3 py-2.5 focus:outline-none focus:border-[#C9A84C] transition-colors"
                 >
                   {CONSORCIO_STAGES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
                 </select>
               </div>
             </div>
             <div>
-              <label className="text-xs text-[#5A7490] mb-1.5 block">Valor da Carta (R$) *</label>
+              <label className="text-xs text-[#7A8FA8] mb-1.5 block">Valor da Carta (R$) *</label>
               <input
                 type="number"
                 value={newCard.value}
                 onChange={e => setNewCard(p => ({ ...p, value: e.target.value }))}
                 placeholder="Ex: 250000"
-                className="w-full rounded-lg border border-[#122036] bg-[#0F1E35] text-[#E8EDF5] text-sm px-3 py-2.5 placeholder:text-[#5A7490] focus:outline-none focus:border-[#C4922E] transition-colors"
+                className="w-full rounded-lg border border-[#122036] bg-[#0F1E35] text-[#E8EDF5] text-sm px-3 py-2.5 placeholder:text-[#7A8FA8] focus:outline-none focus:border-[#C9A84C] transition-colors"
               />
             </div>
             <div>
-              <label className="text-xs text-[#5A7490] mb-1.5 block">Responsável *</label>
+              <label className="text-xs text-[#7A8FA8] mb-1.5 block">Responsável *</label>
               <input
                 value={newCard.responsible}
                 onChange={e => setNewCard(p => ({ ...p, responsible: e.target.value }))}
                 placeholder="Nome do responsável"
-                className="w-full rounded-lg border border-[#122036] bg-[#0F1E35] text-[#E8EDF5] text-sm px-3 py-2.5 placeholder:text-[#5A7490] focus:outline-none focus:border-[#C4922E] transition-colors"
+                className="w-full rounded-lg border border-[#122036] bg-[#0F1E35] text-[#E8EDF5] text-sm px-3 py-2.5 placeholder:text-[#7A8FA8] focus:outline-none focus:border-[#C9A84C] transition-colors"
               />
             </div>
             <div>
-              <label className="text-xs text-[#5A7490] mb-1.5 block">Identificação da Cota</label>
+              <label className="text-xs text-[#7A8FA8] mb-1.5 block">Identificação da Cota</label>
               <input
                 value={newCard.quota}
                 onChange={e => setNewCard(p => ({ ...p, quota: e.target.value }))}
                 placeholder="Ex: Carta 250K"
-                className="w-full rounded-lg border border-[#122036] bg-[#0F1E35] text-[#E8EDF5] text-sm px-3 py-2.5 placeholder:text-[#5A7490] focus:outline-none focus:border-[#C4922E] transition-colors"
+                className="w-full rounded-lg border border-[#122036] bg-[#0F1E35] text-[#E8EDF5] text-sm px-3 py-2.5 placeholder:text-[#7A8FA8] focus:outline-none focus:border-[#C9A84C] transition-colors"
               />
             </div>
             <div>
-              <label className="text-xs text-[#5A7490] mb-1.5 block">Observações</label>
+              <label className="text-xs text-[#7A8FA8] mb-1.5 block">Observações</label>
               <textarea
                 value={newCard.notes}
                 onChange={e => setNewCard(p => ({ ...p, notes: e.target.value }))}
                 rows={2}
                 placeholder="Observações iniciais..."
-                className="w-full rounded-lg border border-[#122036] bg-[#0F1E35] text-[#E8EDF5] text-sm px-3 py-2 placeholder:text-[#5A7490] focus:outline-none focus:border-[#C4922E] transition-colors resize-none"
+                className="w-full rounded-lg border border-[#122036] bg-[#0F1E35] text-[#E8EDF5] text-sm px-3 py-2 placeholder:text-[#7A8FA8] focus:outline-none focus:border-[#C9A84C] transition-colors resize-none"
               />
             </div>
             <div className="flex gap-3 pt-2">
               <button
                 onClick={() => setShowNewCard(false)}
-                className="flex-1 rounded-lg border border-[#122036] text-[#5A7490] text-sm py-2.5 hover:text-[#E8EDF5] transition-colors"
+                className="flex-1 rounded-lg border border-[#122036] text-[#7A8FA8] text-sm py-2.5 hover:text-[#E8EDF5] transition-colors"
               >
                 Cancelar
               </button>
               <button
                 onClick={handleCreateCard}
                 disabled={!newCard.client || !newCard.value || !newCard.responsible}
-                className="flex-1 rounded-lg bg-[#C4922E] text-[#050C18] text-sm font-semibold py-2.5 hover:bg-[#E5B96A] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                className="flex-1 rounded-lg bg-[#C9A84C] text-[#09081A] text-sm font-semibold py-2.5 hover:bg-[#E8C97A] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 Criar Cota
               </button>
@@ -548,30 +548,30 @@ export function MesaConsorcioClient({ userRole }: { userRole: string }) {
           </DialogHeader>
           <div className="space-y-3 mt-2">
             <div>
-              <label className="text-xs text-[#5A7490] mb-1.5 block">Nome completo *</label>
+              <label className="text-xs text-[#7A8FA8] mb-1.5 block">Nome completo *</label>
               <input
                 value={newOp.name}
                 onChange={e => setNewOp(p => ({ ...p, name: e.target.value }))}
                 placeholder="Nome do operador"
-                className="w-full rounded-lg border border-[#122036] bg-[#0F1E35] text-[#E8EDF5] text-sm px-3 py-2.5 placeholder:text-[#5A7490] focus:outline-none focus:border-[#C4922E] transition-colors"
+                className="w-full rounded-lg border border-[#122036] bg-[#0F1E35] text-[#E8EDF5] text-sm px-3 py-2.5 placeholder:text-[#7A8FA8] focus:outline-none focus:border-[#C9A84C] transition-colors"
               />
             </div>
             <div>
-              <label className="text-xs text-[#5A7490] mb-1.5 block">Email *</label>
+              <label className="text-xs text-[#7A8FA8] mb-1.5 block">Email *</label>
               <input
                 type="email"
                 value={newOp.email}
                 onChange={e => setNewOp(p => ({ ...p, email: e.target.value }))}
                 placeholder="email@v3partners.com"
-                className="w-full rounded-lg border border-[#122036] bg-[#0F1E35] text-[#E8EDF5] text-sm px-3 py-2.5 placeholder:text-[#5A7490] focus:outline-none focus:border-[#C4922E] transition-colors"
+                className="w-full rounded-lg border border-[#122036] bg-[#0F1E35] text-[#E8EDF5] text-sm px-3 py-2.5 placeholder:text-[#7A8FA8] focus:outline-none focus:border-[#C9A84C] transition-colors"
               />
             </div>
             <div>
-              <label className="text-xs text-[#5A7490] mb-1.5 block">Função</label>
+              <label className="text-xs text-[#7A8FA8] mb-1.5 block">Função</label>
               <select
                 value={newOp.role}
                 onChange={e => setNewOp(p => ({ ...p, role: e.target.value }))}
-                className="w-full rounded-lg border border-[#122036] bg-[#0F1E35] text-[#E8EDF5] text-sm px-3 py-2.5 focus:outline-none focus:border-[#C4922E] transition-colors"
+                className="w-full rounded-lg border border-[#122036] bg-[#0F1E35] text-[#E8EDF5] text-sm px-3 py-2.5 focus:outline-none focus:border-[#C9A84C] transition-colors"
               >
                 {ROLES_CS.map(r => <option key={r} value={r}>{r}</option>)}
               </select>
@@ -579,14 +579,14 @@ export function MesaConsorcioClient({ userRole }: { userRole: string }) {
             <div className="flex gap-3 pt-2">
               <button
                 onClick={() => setShowNewOp(false)}
-                className="flex-1 rounded-lg border border-[#122036] text-[#5A7490] text-sm py-2.5 hover:text-[#E8EDF5] transition-colors"
+                className="flex-1 rounded-lg border border-[#122036] text-[#7A8FA8] text-sm py-2.5 hover:text-[#E8EDF5] transition-colors"
               >
                 Cancelar
               </button>
               <button
                 onClick={handleCreateOp}
                 disabled={!newOp.name || !newOp.email}
-                className="flex-1 rounded-lg bg-[#C4922E] text-[#050C18] text-sm font-semibold py-2.5 hover:bg-[#E5B96A] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                className="flex-1 rounded-lg bg-[#C9A84C] text-[#09081A] text-sm font-semibold py-2.5 hover:bg-[#E8C97A] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 Adicionar
               </button>

@@ -36,7 +36,7 @@ const MA_STAGES = [
   { id: "prospeccao",  label: "Prospecção",    color: "#8B5CF6", bg: "rgba(139,92,246,0.1)" },
   { id: "ioi",         label: "IOI",           color: "#3B82F6", bg: "rgba(59,130,246,0.1)" },
   { id: "due_dilig",   label: "Due Diligence", color: "#F59E0B", bg: "rgba(245,158,11,0.1)" },
-  { id: "proposta",    label: "Proposta",      color: "#C4922E", bg: "rgba(196,146,46,0.1)" },
+  { id: "proposta",    label: "Proposta",      color: "#C9A84C", bg: "rgba(196,146,46,0.1)" },
   { id: "negociacao",  label: "Negociação",    color: "#EF4444", bg: "rgba(239,68,68,0.1)" },
   { id: "closing",     label: "Closing",       color: "#10B981", bg: "rgba(16,185,129,0.1)" },
 ];
@@ -89,7 +89,7 @@ function probColor(p: number) {
 function statusColor(s: MesaOperator["status"]) {
   if (s === "online") return "#10B981";
   if (s === "away") return "#F59E0B";
-  return "#5A7490";
+  return "#7A8FA8";
 }
 
 function statusLabel(s: MesaOperator["status"]) {
@@ -110,11 +110,11 @@ function KanbanCardItem({ card, onClick }: { card: MaCard; onClick: () => void }
   return (
     <div
       onClick={onClick}
-      className="rounded-lg border border-[#122036] bg-[#091221] p-3 cursor-pointer hover:border-[#C4922E]/60 hover:shadow-lg transition-all group"
+      className="rounded-lg border border-[#122036] bg-[#091221] p-3 cursor-pointer hover:border-[#C9A84C]/60 hover:shadow-lg transition-all group"
     >
       <div className="flex items-start justify-between mb-2">
-        <p className="text-xs font-semibold text-[#E8EDF5] leading-tight group-hover:text-[#C4922E] transition-colors">{card.company}</p>
-        <span className="text-[10px] text-[#5A7490] flex-shrink-0 ml-1">{card.code}</span>
+        <p className="text-xs font-semibold text-[#E8EDF5] leading-tight group-hover:text-[#C9A84C] transition-colors">{card.company}</p>
+        <span className="text-[10px] text-[#7A8FA8] flex-shrink-0 ml-1">{card.code}</span>
       </div>
       <div className="flex items-center gap-1.5 mb-2">
         <span className="text-[10px] px-1.5 py-0.5 rounded-full border"
@@ -122,18 +122,18 @@ function KanbanCardItem({ card, onClick }: { card: MaCard; onClick: () => void }
           {card.sector}
         </span>
       </div>
-      <p className="text-sm font-bold text-[#C4922E] mb-2">{formatM(card.value)}</p>
+      <p className="text-sm font-bold text-[#C9A84C] mb-2">{formatM(card.value)}</p>
       {/* Probability bar */}
       <div className="mb-2">
         <div className="flex items-center justify-between mb-1">
-          <span className="text-[10px] text-[#5A7490]">Probabilidade</span>
+          <span className="text-[10px] text-[#7A8FA8]">Probabilidade</span>
           <span className="text-[10px] font-medium" style={{ color: probColor(card.probability) }}>{card.probability}%</span>
         </div>
         <div className="h-1 rounded-full bg-[#122036] overflow-hidden">
           <div className="h-full rounded-full transition-all" style={{ width: `${card.probability}%`, background: probColor(card.probability) }} />
         </div>
       </div>
-      <p className="text-[10px] text-[#5A7490]">{card.responsible}</p>
+      <p className="text-[10px] text-[#7A8FA8]">{card.responsible}</p>
     </div>
   );
 }
@@ -204,23 +204,23 @@ export function MesaMaClient({ userRole }: { userRole: string }) {
   ];
 
   return (
-    <div className="min-h-screen bg-[#050C18] text-[#E8EDF5]">
+    <div className="min-h-screen bg-[#09081A] text-[#E8EDF5]">
       {/* Header */}
       <div className="border-b border-[#122036] bg-[#091221] px-6 py-4">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-[#C4922E]/15 flex items-center justify-center">
-              <Building2 size={18} className="text-[#C4922E]" />
+            <div className="w-9 h-9 rounded-lg bg-[#C9A84C]/15 flex items-center justify-center">
+              <Building2 size={18} className="text-[#C9A84C]" />
             </div>
             <div>
               <h1 className="text-base font-bold text-[#E8EDF5]">Mesa M&A</h1>
-              <p className="text-xs text-[#5A7490]">Fusões & Aquisições</p>
+              <p className="text-xs text-[#7A8FA8]">Fusões & Aquisições</p>
             </div>
           </div>
           {activeTab === "kanban" && (
             <button
               onClick={() => setShowNewCard(true)}
-              className="flex items-center gap-2 rounded-lg bg-[#C4922E] text-[#050C18] text-xs font-semibold px-4 py-2 hover:bg-[#E5B96A] transition-colors"
+              className="flex items-center gap-2 rounded-lg bg-[#C9A84C] text-[#09081A] text-xs font-semibold px-4 py-2 hover:bg-[#E8C97A] transition-colors"
             >
               <Plus size={14} />
               Nova Operação
@@ -229,7 +229,7 @@ export function MesaMaClient({ userRole }: { userRole: string }) {
           {activeTab === "operadores" && (
             <button
               onClick={() => setShowNewOp(true)}
-              className="flex items-center gap-2 rounded-lg border border-[#122036] bg-[#0F1E35] text-xs font-medium px-4 py-2 hover:border-[#C4922E]/50 hover:text-[#C4922E] transition-colors"
+              className="flex items-center gap-2 rounded-lg border border-[#122036] bg-[#0F1E35] text-xs font-medium px-4 py-2 hover:border-[#C9A84C]/50 hover:text-[#C9A84C] transition-colors"
             >
               <Plus size={14} />
               Adicionar Operador
@@ -245,8 +245,8 @@ export function MesaMaClient({ userRole }: { userRole: string }) {
               onClick={() => setActiveTab(tab.id)}
               className={`px-5 py-2 text-sm font-medium border-b-2 transition-colors ${
                 activeTab === tab.id
-                  ? "border-[#C4922E] text-[#C4922E]"
-                  : "border-transparent text-[#5A7490] hover:text-[#E8EDF5]"
+                  ? "border-[#C9A84C] text-[#C9A84C]"
+                  : "border-transparent text-[#7A8FA8] hover:text-[#E8EDF5]"
               }`}
             >
               {tab.label}
@@ -262,19 +262,19 @@ export function MesaMaClient({ userRole }: { userRole: string }) {
             {/* KPIs */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
               <div className="rounded-xl border border-[#122036] bg-[#091221] p-4">
-                <p className="text-xs text-[#5A7490] mb-1">Total de Operações</p>
+                <p className="text-xs text-[#7A8FA8] mb-1">Total de Operações</p>
                 <p className="text-2xl font-bold text-[#E8EDF5]">{cards.length}</p>
               </div>
               <div className="rounded-xl border border-[#122036] bg-[#091221] p-4">
-                <p className="text-xs text-[#5A7490] mb-1">Volume Total</p>
-                <p className="text-2xl font-bold text-[#C4922E]">{formatM(totalValue)}</p>
+                <p className="text-xs text-[#7A8FA8] mb-1">Volume Total</p>
+                <p className="text-2xl font-bold text-[#C9A84C]">{formatM(totalValue)}</p>
               </div>
               <div className="rounded-xl border border-[#122036] bg-[#091221] p-4">
-                <p className="text-xs text-[#5A7490] mb-1">Em Closing</p>
+                <p className="text-xs text-[#7A8FA8] mb-1">Em Closing</p>
                 <p className="text-2xl font-bold text-emerald-400">{cards.filter(c => c.stage === "closing").length}</p>
               </div>
               <div className="rounded-xl border border-[#122036] bg-[#091221] p-4">
-                <p className="text-xs text-[#5A7490] mb-1">Prob. Média</p>
+                <p className="text-xs text-[#7A8FA8] mb-1">Prob. Média</p>
                 <p className="text-2xl font-bold" style={{ color: probColor(avgProb) }}>{avgProb}%</p>
               </div>
             </div>
@@ -295,13 +295,13 @@ export function MesaMaClient({ userRole }: { userRole: string }) {
                       </span>
                     </div>
                     {/* Cards */}
-                    <div className="space-y-2 min-h-[100px] rounded-xl border border-[#122036]/60 bg-[#050C18]/50 p-2">
+                    <div className="space-y-2 min-h-[100px] rounded-xl border border-[#122036]/60 bg-[#09081A]/50 p-2">
                       {stageCards.map(card => (
                         <KanbanCardItem key={card.id} card={card} onClick={() => setSelectedCard(card)} />
                       ))}
                       {stageCards.length === 0 && (
                         <div className="h-16 flex items-center justify-center">
-                          <p className="text-[11px] text-[#5A7490]">Sem operações</p>
+                          <p className="text-[11px] text-[#7A8FA8]">Sem operações</p>
                         </div>
                       )}
                     </div>
@@ -317,12 +317,12 @@ export function MesaMaClient({ userRole }: { userRole: string }) {
           <div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               {operators.map(op => (
-                <div key={op.id} className="rounded-xl border border-[#122036] bg-[#091221] p-5 relative group hover:border-[#C4922E]/40 transition-colors">
+                <div key={op.id} className="rounded-xl border border-[#122036] bg-[#091221] p-5 relative group hover:border-[#C9A84C]/40 transition-colors">
                   {/* Remove button (admin) */}
                   {userRole === "admin" && (
                     <button
                       onClick={() => setOperators(prev => prev.filter(o => o.id !== op.id))}
-                      className="absolute top-3 right-3 text-[#5A7490] hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
+                      className="absolute top-3 right-3 text-[#7A8FA8] hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
                     >
                       <X size={14} />
                     </button>
@@ -331,8 +331,8 @@ export function MesaMaClient({ userRole }: { userRole: string }) {
                   {/* Avatar */}
                   <div className="flex items-center gap-3 mb-4">
                     <div className="relative">
-                      <div className="w-11 h-11 rounded-full bg-[#C4922E]/20 flex items-center justify-center">
-                        <span className="text-sm font-bold text-[#C4922E]">{initials(op.name)}</span>
+                      <div className="w-11 h-11 rounded-full bg-[#C9A84C]/20 flex items-center justify-center">
+                        <span className="text-sm font-bold text-[#C9A84C]">{initials(op.name)}</span>
                       </div>
                       {/* Status dot */}
                       <div
@@ -342,7 +342,7 @@ export function MesaMaClient({ userRole }: { userRole: string }) {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold text-[#E8EDF5] truncate">{op.name}</p>
-                      <p className="text-xs text-[#5A7490] truncate">{op.role}</p>
+                      <p className="text-xs text-[#7A8FA8] truncate">{op.role}</p>
                     </div>
                   </div>
 
@@ -354,14 +354,14 @@ export function MesaMaClient({ userRole }: { userRole: string }) {
 
                   {/* Email */}
                   <div className="flex items-center gap-1.5 mb-3">
-                    <Mail size={11} className="text-[#5A7490]" />
-                    <span className="text-[11px] text-[#5A7490] truncate">{op.email}</span>
+                    <Mail size={11} className="text-[#7A8FA8]" />
+                    <span className="text-[11px] text-[#7A8FA8] truncate">{op.email}</span>
                   </div>
 
                   {/* Cards count */}
                   <div className="flex items-center gap-1.5">
-                    <BarChart2 size={11} className="text-[#5A7490]" />
-                    <span className="text-xs text-[#5A7490]">{op.assignedCards} card{op.assignedCards !== 1 ? "s" : ""} atribuído{op.assignedCards !== 1 ? "s" : ""}</span>
+                    <BarChart2 size={11} className="text-[#7A8FA8]" />
+                    <span className="text-xs text-[#7A8FA8]">{op.assignedCards} card{op.assignedCards !== 1 ? "s" : ""} atribuído{op.assignedCards !== 1 ? "s" : ""}</span>
                   </div>
                 </div>
               ))}
@@ -374,7 +374,7 @@ export function MesaMaClient({ userRole }: { userRole: string }) {
           <div>
             <div className="mb-4">
               <h3 className="text-sm font-semibold text-[#E8EDF5] mb-1">Integração Pipefy — Mesa M&A</h3>
-              <p className="text-xs text-[#5A7490]">Configure a sincronização das operações M&A com o Pipefy</p>
+              <p className="text-xs text-[#7A8FA8]">Configure a sincronização das operações M&A com o Pipefy</p>
             </div>
             <PipefyConfig
               mesaName="M&A"
@@ -391,7 +391,7 @@ export function MesaMaClient({ userRole }: { userRole: string }) {
           <DialogHeader>
             <DialogTitle className="text-[#E8EDF5]">
               {selectedCard?.company}
-              <span className="ml-2 text-xs font-normal text-[#5A7490]">{selectedCard?.code}</span>
+              <span className="ml-2 text-xs font-normal text-[#7A8FA8]">{selectedCard?.code}</span>
             </DialogTitle>
           </DialogHeader>
           {selectedCard && (() => {
@@ -402,42 +402,42 @@ export function MesaMaClient({ userRole }: { userRole: string }) {
               <div className="space-y-4 mt-2">
                 <div className="grid grid-cols-2 gap-3">
                   <div className="rounded-lg bg-[#0F1E35] border border-[#122036] p-3">
-                    <p className="text-xs text-[#5A7490] mb-1">Setor</p>
+                    <p className="text-xs text-[#7A8FA8] mb-1">Setor</p>
                     <p className="text-sm font-medium text-[#E8EDF5]">{selectedCard.sector}</p>
                   </div>
                   <div className="rounded-lg bg-[#0F1E35] border border-[#122036] p-3">
-                    <p className="text-xs text-[#5A7490] mb-1">Valor</p>
-                    <p className="text-sm font-bold text-[#C4922E]">{formatM(selectedCard.value)}</p>
+                    <p className="text-xs text-[#7A8FA8] mb-1">Valor</p>
+                    <p className="text-sm font-bold text-[#C9A84C]">{formatM(selectedCard.value)}</p>
                   </div>
                   <div className="rounded-lg bg-[#0F1E35] border border-[#122036] p-3">
-                    <p className="text-xs text-[#5A7490] mb-1">Etapa atual</p>
+                    <p className="text-xs text-[#7A8FA8] mb-1">Etapa atual</p>
                     <span className="text-xs px-2 py-0.5 rounded-full" style={{ color: stage?.color, background: stage?.bg }}>
                       {stage?.label}
                     </span>
                   </div>
                   <div className="rounded-lg bg-[#0F1E35] border border-[#122036] p-3">
-                    <p className="text-xs text-[#5A7490] mb-1">Responsável</p>
+                    <p className="text-xs text-[#7A8FA8] mb-1">Responsável</p>
                     <p className="text-sm text-[#E8EDF5]">{selectedCard.responsible}</p>
                   </div>
                   <div className="rounded-lg bg-[#0F1E35] border border-[#122036] p-3">
-                    <p className="text-xs text-[#5A7490] mb-1">Probabilidade</p>
+                    <p className="text-xs text-[#7A8FA8] mb-1">Probabilidade</p>
                     <p className="text-sm font-bold" style={{ color: probColor(selectedCard.probability) }}>{selectedCard.probability}%</p>
                   </div>
                   <div className="rounded-lg bg-[#0F1E35] border border-[#122036] p-3">
-                    <p className="text-xs text-[#5A7490] mb-1">Data de entrada</p>
+                    <p className="text-xs text-[#7A8FA8] mb-1">Data de entrada</p>
                     <p className="text-sm text-[#E8EDF5]">{formatDate(selectedCard.createdAt)}</p>
                   </div>
                 </div>
 
                 {/* Notes */}
                 <div>
-                  <label className="text-xs text-[#5A7490] mb-1.5 block">Observações</label>
+                  <label className="text-xs text-[#7A8FA8] mb-1.5 block">Observações</label>
                   <textarea
                     value={selectedCard.notes ?? ""}
                     onChange={e => setSelectedCard(prev => prev ? { ...prev, notes: e.target.value } : null)}
                     rows={3}
                     placeholder="Adicione observações sobre a operação..."
-                    className="w-full rounded-lg border border-[#122036] bg-[#0F1E35] text-[#E8EDF5] text-xs px-3 py-2 placeholder:text-[#5A7490] focus:outline-none focus:border-[#C4922E] transition-colors resize-none"
+                    className="w-full rounded-lg border border-[#122036] bg-[#0F1E35] text-[#E8EDF5] text-xs px-3 py-2 placeholder:text-[#7A8FA8] focus:outline-none focus:border-[#C9A84C] transition-colors resize-none"
                   />
                 </div>
 
@@ -445,7 +445,7 @@ export function MesaMaClient({ userRole }: { userRole: string }) {
                 {nextStageData && (
                   <button
                     onClick={() => handleAdvanceStage(selectedCard)}
-                    className="w-full flex items-center justify-center gap-2 rounded-lg bg-[#C4922E]/15 border border-[#C4922E]/40 text-[#C4922E] text-sm font-medium py-2.5 hover:bg-[#C4922E]/25 transition-colors"
+                    className="w-full flex items-center justify-center gap-2 rounded-lg bg-[#C9A84C]/15 border border-[#C9A84C]/40 text-[#C9A84C] text-sm font-medium py-2.5 hover:bg-[#C9A84C]/25 transition-colors"
                   >
                     Avançar para {nextStageData.label}
                     <ChevronRight size={16} />
@@ -470,76 +470,76 @@ export function MesaMaClient({ userRole }: { userRole: string }) {
           </DialogHeader>
           <div className="space-y-3 mt-2">
             <div>
-              <label className="text-xs text-[#5A7490] mb-1.5 block">Empresa *</label>
+              <label className="text-xs text-[#7A8FA8] mb-1.5 block">Empresa *</label>
               <input
                 value={newCard.company}
                 onChange={e => setNewCard(p => ({ ...p, company: e.target.value }))}
                 placeholder="Nome da empresa alvo"
-                className="w-full rounded-lg border border-[#122036] bg-[#0F1E35] text-[#E8EDF5] text-sm px-3 py-2.5 placeholder:text-[#5A7490] focus:outline-none focus:border-[#C4922E] transition-colors"
+                className="w-full rounded-lg border border-[#122036] bg-[#0F1E35] text-[#E8EDF5] text-sm px-3 py-2.5 placeholder:text-[#7A8FA8] focus:outline-none focus:border-[#C9A84C] transition-colors"
               />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-xs text-[#5A7490] mb-1.5 block">Setor *</label>
+                <label className="text-xs text-[#7A8FA8] mb-1.5 block">Setor *</label>
                 <select
                   value={newCard.sector}
                   onChange={e => setNewCard(p => ({ ...p, sector: e.target.value }))}
-                  className="w-full rounded-lg border border-[#122036] bg-[#0F1E35] text-[#E8EDF5] text-sm px-3 py-2.5 focus:outline-none focus:border-[#C4922E] transition-colors"
+                  className="w-full rounded-lg border border-[#122036] bg-[#0F1E35] text-[#E8EDF5] text-sm px-3 py-2.5 focus:outline-none focus:border-[#C9A84C] transition-colors"
                 >
                   {SECTORS.map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
               </div>
               <div>
-                <label className="text-xs text-[#5A7490] mb-1.5 block">Etapa</label>
+                <label className="text-xs text-[#7A8FA8] mb-1.5 block">Etapa</label>
                 <select
                   value={newCard.stage}
                   onChange={e => setNewCard(p => ({ ...p, stage: e.target.value }))}
-                  className="w-full rounded-lg border border-[#122036] bg-[#0F1E35] text-[#E8EDF5] text-sm px-3 py-2.5 focus:outline-none focus:border-[#C4922E] transition-colors"
+                  className="w-full rounded-lg border border-[#122036] bg-[#0F1E35] text-[#E8EDF5] text-sm px-3 py-2.5 focus:outline-none focus:border-[#C9A84C] transition-colors"
                 >
                   {MA_STAGES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
                 </select>
               </div>
             </div>
             <div>
-              <label className="text-xs text-[#5A7490] mb-1.5 block">Valor Estimado (R$) *</label>
+              <label className="text-xs text-[#7A8FA8] mb-1.5 block">Valor Estimado (R$) *</label>
               <input
                 type="number"
                 value={newCard.value}
                 onChange={e => setNewCard(p => ({ ...p, value: e.target.value }))}
                 placeholder="Ex: 50000000"
-                className="w-full rounded-lg border border-[#122036] bg-[#0F1E35] text-[#E8EDF5] text-sm px-3 py-2.5 placeholder:text-[#5A7490] focus:outline-none focus:border-[#C4922E] transition-colors"
+                className="w-full rounded-lg border border-[#122036] bg-[#0F1E35] text-[#E8EDF5] text-sm px-3 py-2.5 placeholder:text-[#7A8FA8] focus:outline-none focus:border-[#C9A84C] transition-colors"
               />
             </div>
             <div>
-              <label className="text-xs text-[#5A7490] mb-1.5 block">Responsável *</label>
+              <label className="text-xs text-[#7A8FA8] mb-1.5 block">Responsável *</label>
               <input
                 value={newCard.responsible}
                 onChange={e => setNewCard(p => ({ ...p, responsible: e.target.value }))}
                 placeholder="Nome do responsável"
-                className="w-full rounded-lg border border-[#122036] bg-[#0F1E35] text-[#E8EDF5] text-sm px-3 py-2.5 placeholder:text-[#5A7490] focus:outline-none focus:border-[#C4922E] transition-colors"
+                className="w-full rounded-lg border border-[#122036] bg-[#0F1E35] text-[#E8EDF5] text-sm px-3 py-2.5 placeholder:text-[#7A8FA8] focus:outline-none focus:border-[#C9A84C] transition-colors"
               />
             </div>
             <div>
-              <label className="text-xs text-[#5A7490] mb-1.5 block">Observações</label>
+              <label className="text-xs text-[#7A8FA8] mb-1.5 block">Observações</label>
               <textarea
                 value={newCard.notes}
                 onChange={e => setNewCard(p => ({ ...p, notes: e.target.value }))}
                 rows={2}
                 placeholder="Observações iniciais..."
-                className="w-full rounded-lg border border-[#122036] bg-[#0F1E35] text-[#E8EDF5] text-sm px-3 py-2 placeholder:text-[#5A7490] focus:outline-none focus:border-[#C4922E] transition-colors resize-none"
+                className="w-full rounded-lg border border-[#122036] bg-[#0F1E35] text-[#E8EDF5] text-sm px-3 py-2 placeholder:text-[#7A8FA8] focus:outline-none focus:border-[#C9A84C] transition-colors resize-none"
               />
             </div>
             <div className="flex gap-3 pt-2">
               <button
                 onClick={() => setShowNewCard(false)}
-                className="flex-1 rounded-lg border border-[#122036] text-[#5A7490] text-sm py-2.5 hover:text-[#E8EDF5] transition-colors"
+                className="flex-1 rounded-lg border border-[#122036] text-[#7A8FA8] text-sm py-2.5 hover:text-[#E8EDF5] transition-colors"
               >
                 Cancelar
               </button>
               <button
                 onClick={handleCreateCard}
                 disabled={!newCard.company || !newCard.value || !newCard.responsible}
-                className="flex-1 rounded-lg bg-[#C4922E] text-[#050C18] text-sm font-semibold py-2.5 hover:bg-[#E5B96A] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                className="flex-1 rounded-lg bg-[#C9A84C] text-[#09081A] text-sm font-semibold py-2.5 hover:bg-[#E8C97A] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 Criar Operação
               </button>
@@ -556,30 +556,30 @@ export function MesaMaClient({ userRole }: { userRole: string }) {
           </DialogHeader>
           <div className="space-y-3 mt-2">
             <div>
-              <label className="text-xs text-[#5A7490] mb-1.5 block">Nome completo *</label>
+              <label className="text-xs text-[#7A8FA8] mb-1.5 block">Nome completo *</label>
               <input
                 value={newOp.name}
                 onChange={e => setNewOp(p => ({ ...p, name: e.target.value }))}
                 placeholder="Nome do operador"
-                className="w-full rounded-lg border border-[#122036] bg-[#0F1E35] text-[#E8EDF5] text-sm px-3 py-2.5 placeholder:text-[#5A7490] focus:outline-none focus:border-[#C4922E] transition-colors"
+                className="w-full rounded-lg border border-[#122036] bg-[#0F1E35] text-[#E8EDF5] text-sm px-3 py-2.5 placeholder:text-[#7A8FA8] focus:outline-none focus:border-[#C9A84C] transition-colors"
               />
             </div>
             <div>
-              <label className="text-xs text-[#5A7490] mb-1.5 block">Email *</label>
+              <label className="text-xs text-[#7A8FA8] mb-1.5 block">Email *</label>
               <input
                 type="email"
                 value={newOp.email}
                 onChange={e => setNewOp(p => ({ ...p, email: e.target.value }))}
                 placeholder="email@v3partners.com"
-                className="w-full rounded-lg border border-[#122036] bg-[#0F1E35] text-[#E8EDF5] text-sm px-3 py-2.5 placeholder:text-[#5A7490] focus:outline-none focus:border-[#C4922E] transition-colors"
+                className="w-full rounded-lg border border-[#122036] bg-[#0F1E35] text-[#E8EDF5] text-sm px-3 py-2.5 placeholder:text-[#7A8FA8] focus:outline-none focus:border-[#C9A84C] transition-colors"
               />
             </div>
             <div>
-              <label className="text-xs text-[#5A7490] mb-1.5 block">Função</label>
+              <label className="text-xs text-[#7A8FA8] mb-1.5 block">Função</label>
               <select
                 value={newOp.role}
                 onChange={e => setNewOp(p => ({ ...p, role: e.target.value }))}
-                className="w-full rounded-lg border border-[#122036] bg-[#0F1E35] text-[#E8EDF5] text-sm px-3 py-2.5 focus:outline-none focus:border-[#C4922E] transition-colors"
+                className="w-full rounded-lg border border-[#122036] bg-[#0F1E35] text-[#E8EDF5] text-sm px-3 py-2.5 focus:outline-none focus:border-[#C9A84C] transition-colors"
               >
                 {ROLES_MA.map(r => <option key={r} value={r}>{r}</option>)}
               </select>
@@ -587,14 +587,14 @@ export function MesaMaClient({ userRole }: { userRole: string }) {
             <div className="flex gap-3 pt-2">
               <button
                 onClick={() => setShowNewOp(false)}
-                className="flex-1 rounded-lg border border-[#122036] text-[#5A7490] text-sm py-2.5 hover:text-[#E8EDF5] transition-colors"
+                className="flex-1 rounded-lg border border-[#122036] text-[#7A8FA8] text-sm py-2.5 hover:text-[#E8EDF5] transition-colors"
               >
                 Cancelar
               </button>
               <button
                 onClick={handleCreateOp}
                 disabled={!newOp.name || !newOp.email}
-                className="flex-1 rounded-lg bg-[#C4922E] text-[#050C18] text-sm font-semibold py-2.5 hover:bg-[#E5B96A] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                className="flex-1 rounded-lg bg-[#C9A84C] text-[#09081A] text-sm font-semibold py-2.5 hover:bg-[#E8C97A] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 Adicionar
               </button>

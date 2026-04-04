@@ -190,7 +190,7 @@ export function PipefyConfig({ mesaName, storageKey, stageMapping }: PipefyConfi
       );
     }
     return (
-      <span className="flex items-center gap-1.5 text-xs px-2 py-1 rounded-full bg-[#122036] text-[#5A7490] border border-[#122036]">
+      <span className="flex items-center gap-1.5 text-xs px-2 py-1 rounded-full bg-[#122036] text-[#7A8FA8] border border-[#122036]">
         <AlertCircle size={11} />
         Não testado
       </span>
@@ -219,7 +219,7 @@ export function PipefyConfig({ mesaName, storageKey, stageMapping }: PipefyConfi
         <div className="rounded-xl border border-[#122036] bg-[#091221] p-5">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
-              <Wifi size={15} className="text-[#C4922E]" />
+              <Wifi size={15} className="text-[#C9A84C]" />
               <h4 className="text-sm font-semibold text-[#E8EDF5]">Credenciais — Mesa {mesaName}</h4>
             </div>
             {statusBadge()}
@@ -228,19 +228,19 @@ export function PipefyConfig({ mesaName, storageKey, stageMapping }: PipefyConfi
           <div className="space-y-3">
             {/* Token */}
             <div>
-              <label className="text-xs text-[#5A7490] mb-1.5 block">API Token Pipefy</label>
+              <label className="text-xs text-[#7A8FA8] mb-1.5 block">API Token Pipefy</label>
               <div className="relative">
                 <input
                   type={showToken ? "text" : "password"}
                   value={config.token}
                   onChange={e => updateConfig({ token: e.target.value })}
                   placeholder="Cole seu Personal Access Token aqui"
-                  className="w-full rounded-lg border border-[#122036] bg-[#0F1E35] text-[#E8EDF5] text-xs px-3 py-2.5 pr-10 placeholder:text-[#5A7490] focus:outline-none focus:border-[#C4922E] transition-colors"
+                  className="w-full rounded-lg border border-[#122036] bg-[#0F1E35] text-[#E8EDF5] text-xs px-3 py-2.5 pr-10 placeholder:text-[#7A8FA8] focus:outline-none focus:border-[#C9A84C] transition-colors"
                 />
                 <button
                   type="button"
                   onClick={() => setShowToken(v => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#5A7490] hover:text-[#E8EDF5] transition-colors"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#7A8FA8] hover:text-[#E8EDF5] transition-colors"
                 >
                   {showToken ? <EyeOff size={14} /> : <Eye size={14} />}
                 </button>
@@ -249,13 +249,13 @@ export function PipefyConfig({ mesaName, storageKey, stageMapping }: PipefyConfi
 
             {/* Pipe ID */}
             <div>
-              <label className="text-xs text-[#5A7490] mb-1.5 block">Pipe ID</label>
+              <label className="text-xs text-[#7A8FA8] mb-1.5 block">Pipe ID</label>
               <input
                 type="number"
                 value={config.pipeId}
                 onChange={e => updateConfig({ pipeId: e.target.value })}
                 placeholder="Ex: 302745281"
-                className="w-full rounded-lg border border-[#122036] bg-[#0F1E35] text-[#E8EDF5] text-xs px-3 py-2.5 placeholder:text-[#5A7490] focus:outline-none focus:border-[#C4922E] transition-colors"
+                className="w-full rounded-lg border border-[#122036] bg-[#0F1E35] text-[#E8EDF5] text-xs px-3 py-2.5 placeholder:text-[#7A8FA8] focus:outline-none focus:border-[#C9A84C] transition-colors"
               />
             </div>
 
@@ -263,7 +263,7 @@ export function PipefyConfig({ mesaName, storageKey, stageMapping }: PipefyConfi
             <button
               onClick={handleTestConnection}
               disabled={!config.token || connectionStatus === "testing"}
-              className="w-full flex items-center justify-center gap-2 rounded-lg border border-[#C4922E]/50 bg-[#C4922E]/10 text-[#C4922E] text-xs font-medium py-2.5 hover:bg-[#C4922E]/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              className="w-full flex items-center justify-center gap-2 rounded-lg border border-[#C9A84C]/50 bg-[#C9A84C]/10 text-[#C9A84C] text-xs font-medium py-2.5 hover:bg-[#C9A84C]/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {connectionStatus === "testing" ? (
                 <RefreshCw size={13} className="animate-spin" />
@@ -282,7 +282,7 @@ export function PipefyConfig({ mesaName, storageKey, stageMapping }: PipefyConfi
             <button
               onClick={handleLoadPhases}
               disabled={!config.token || !config.pipeId || loadingPhases}
-              className="flex items-center gap-1.5 text-xs text-[#5A7490] hover:text-[#C4922E] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              className="flex items-center gap-1.5 text-xs text-[#7A8FA8] hover:text-[#C9A84C] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <RefreshCw size={12} className={loadingPhases ? "animate-spin" : ""} />
               Carregar Fases
@@ -293,14 +293,14 @@ export function PipefyConfig({ mesaName, storageKey, stageMapping }: PipefyConfi
             {stageMapping.map(({ localStage, label }) => (
               <div key={localStage} className="flex items-center gap-2">
                 <span className="text-xs text-[#E8EDF5] w-28 flex-shrink-0 truncate" title={label}>{label}</span>
-                <span className="text-[#5A7490] text-xs">→</span>
+                <span className="text-[#7A8FA8] text-xs">→</span>
                 <select
                   value={config.phaseMapping[localStage] ?? ""}
                   onChange={e => {
                     const updated = { ...config.phaseMapping, [localStage]: e.target.value };
                     updateConfig({ phaseMapping: updated });
                   }}
-                  className="flex-1 rounded-md border border-[#122036] bg-[#0F1E35] text-[#E8EDF5] text-xs px-2 py-1.5 focus:outline-none focus:border-[#C4922E] transition-colors"
+                  className="flex-1 rounded-md border border-[#122036] bg-[#0F1E35] text-[#E8EDF5] text-xs px-2 py-1.5 focus:outline-none focus:border-[#C9A84C] transition-colors"
                 >
                   <option value="">Não sincronizar</option>
                   {phases.map(p => (
@@ -312,7 +312,7 @@ export function PipefyConfig({ mesaName, storageKey, stageMapping }: PipefyConfi
           </div>
 
           {phases.length === 0 && (
-            <p className="text-xs text-[#5A7490] mt-3 text-center">
+            <p className="text-xs text-[#7A8FA8] mt-3 text-center">
               {config.token && config.pipeId
                 ? "Clique em \"Carregar Fases\" para buscar as etapas do pipe"
                 : "Configure o Token e Pipe ID para carregar as fases"}
@@ -331,7 +331,7 @@ export function PipefyConfig({ mesaName, storageKey, stageMapping }: PipefyConfi
             <div
               onClick={() => updateConfig({ autoSync: !config.autoSync })}
               className={`relative w-10 h-5 rounded-full transition-colors cursor-pointer ${
-                config.autoSync ? "bg-[#C4922E]" : "bg-[#122036]"
+                config.autoSync ? "bg-[#C9A84C]" : "bg-[#122036]"
               }`}
             >
               <div
@@ -347,7 +347,7 @@ export function PipefyConfig({ mesaName, storageKey, stageMapping }: PipefyConfi
           <button
             onClick={handleSyncNow}
             disabled={syncing}
-            className="flex items-center gap-2 rounded-lg border border-[#122036] bg-[#0F1E35] text-[#E8EDF5] text-xs font-medium px-4 py-2 hover:border-[#C4922E]/50 hover:text-[#C4922E] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex items-center gap-2 rounded-lg border border-[#122036] bg-[#0F1E35] text-[#E8EDF5] text-xs font-medium px-4 py-2 hover:border-[#C9A84C]/50 hover:text-[#C9A84C] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <RefreshCw size={13} className={syncing ? "animate-spin" : ""} />
             Sincronizar Agora
@@ -355,7 +355,7 @@ export function PipefyConfig({ mesaName, storageKey, stageMapping }: PipefyConfi
 
           {/* Last sync */}
           {config.lastSync && (
-            <div className="flex items-center gap-1.5 text-xs text-[#5A7490]">
+            <div className="flex items-center gap-1.5 text-xs text-[#7A8FA8]">
               <Clock size={12} />
               Última sync: {formatLogTime(config.lastSync)}
             </div>
@@ -365,12 +365,12 @@ export function PipefyConfig({ mesaName, storageKey, stageMapping }: PipefyConfi
         {/* Sync logs */}
         {config.syncLogs.length > 0 && (
           <div className="border-t border-[#122036] pt-3 mt-3">
-            <p className="text-xs text-[#5A7490] mb-2">Últimos eventos</p>
+            <p className="text-xs text-[#7A8FA8] mb-2">Últimos eventos</p>
             <div className="space-y-1.5">
               {config.syncLogs.map((log, i) => (
                 <div key={i} className="flex items-start gap-2 text-xs">
                   {logIcon(log.status)}
-                  <span className="text-[#5A7490] flex-shrink-0">{formatLogTime(log.timestamp)}</span>
+                  <span className="text-[#7A8FA8] flex-shrink-0">{formatLogTime(log.timestamp)}</span>
                   <span className={
                     log.status === "success" ? "text-emerald-400" :
                     log.status === "error" ? "text-red-400" : "text-blue-400"
@@ -382,7 +382,7 @@ export function PipefyConfig({ mesaName, storageKey, stageMapping }: PipefyConfi
         )}
 
         {config.syncLogs.length === 0 && (
-          <p className="text-xs text-[#5A7490] text-center py-2">Nenhum evento de sincronização registrado</p>
+          <p className="text-xs text-[#7A8FA8] text-center py-2">Nenhum evento de sincronização registrado</p>
         )}
       </div>
     </div>

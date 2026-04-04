@@ -65,7 +65,7 @@ const TABS: { id: Tab; label: string; icon: React.ReactNode; color: string; desc
     id: "volume",
     label: "Maior Volume",
     icon: <DollarSign className="w-4 h-4" />,
-    color: "#C4922E",
+    color: "#C9A84C",
     desc: "Parceiros com maior volume financeiro de operações",
   },
 ];
@@ -200,7 +200,7 @@ function RankRow({
   const tabColors: Record<Tab, string> = {
     propostas: "#3B82F6",
     aprovacoes: "#10B981",
-    volume: "#C4922E",
+    volume: "#C9A84C",
   };
   const barColor = tabColors[tab];
   const mv = getMainValue();
@@ -209,7 +209,7 @@ function RankRow({
   return (
     <div
       className={`flex items-center gap-4 px-4 py-3 rounded-xl transition-all group ${
-        isTop3 ? "bg-[#0F1E35] border border-[#C4922E]/20" : "hover:bg-[#0F1E35]/50"
+        isTop3 ? "bg-[#0F1E35] border border-[#C9A84C]/20" : "hover:bg-[#0F1E35]/50"
       }`}
     >
       {/* Position */}
@@ -232,7 +232,7 @@ function RankRow({
           background: position <= 3
             ? `linear-gradient(135deg, ${MEDAL_COLORS[position - 1].ring}88, ${MEDAL_COLORS[position - 1].ring}44)`
             : "rgba(196,146,46,0.1)",
-          color: position <= 3 ? MEDAL_COLORS[position - 1].text : "#C4922E",
+          color: position <= 3 ? MEDAL_COLORS[position - 1].text : "#C9A84C",
           border: `1px solid ${position <= 3 ? MEDAL_COLORS[position - 1].ring + "44" : "rgba(196,146,46,0.2)"}`,
         }}
       >
@@ -295,8 +295,8 @@ export function RankingClient({ userRole, userName }: RankingClientProps) {
       <div className="flex items-start justify-between flex-wrap gap-4">
         <div className="flex items-center gap-4">
           <div className="w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg"
-            style={{ background: "linear-gradient(135deg, #C4922E, #E5B96A)", boxShadow: "0 8px 24px rgba(196,146,46,0.3)" }}>
-            <Trophy className="w-6 h-6 text-[#050C18]" />
+            style={{ background: "linear-gradient(135deg, #C9A84C, #E8C97A)", boxShadow: "0 8px 24px rgba(196,146,46,0.3)" }}>
+            <Trophy className="w-6 h-6 text-[#09081A]" />
           </div>
           <div>
             <h1 className="text-2xl font-bold text-white" style={{ fontFamily: "Outfit, Inter, sans-serif" }}>
@@ -321,8 +321,8 @@ export function RankingClient({ userRole, userName }: RankingClientProps) {
               onClick={() => setPeriod(p.id)}
               className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
               style={period === p.id
-                ? { background: "linear-gradient(120deg,#C4922E,#E5B96A)", color: "#050C18" }
-                : { color: "#5A7490" }
+                ? { background: "linear-gradient(120deg,#C9A84C,#E8C97A)", color: "#09081A" }
+                : { color: "#7A8FA8" }
               }
             >
               {p.label}
@@ -336,7 +336,7 @@ export function RankingClient({ userRole, userName }: RankingClientProps) {
         {[
           { label: "Total de Propostas", value: totalPropostas, icon: <Target className="w-4 h-4" />, color: "#3B82F6" },
           { label: "Total de Aprovações", value: totalAprovacoes, icon: <CheckCircle2 className="w-4 h-4" />, color: "#10B981" },
-          { label: "Volume Total", value: formatVolume(totalVolume), icon: <DollarSign className="w-4 h-4" />, color: "#C4922E" },
+          { label: "Volume Total", value: formatVolume(totalVolume), icon: <DollarSign className="w-4 h-4" />, color: "#C9A84C" },
         ].map((kpi) => (
           <div key={kpi.label} className="p-4 rounded-xl bg-[#091221] border border-[#122036] flex items-center gap-3 relative overflow-hidden">
             <div className="absolute top-0 left-0 right-0 h-[1px]"
@@ -362,7 +362,7 @@ export function RankingClient({ userRole, userName }: RankingClientProps) {
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all border"
             style={activeTab === tab.id
               ? { background: `${tab.color}18`, color: tab.color, borderColor: `${tab.color}40` }
-              : { color: "#5A7490", borderColor: "#122036", background: "transparent" }
+              : { color: "#7A8FA8", borderColor: "#122036", background: "transparent" }
             }
           >
             {tab.icon}
@@ -392,7 +392,7 @@ export function RankingClient({ userRole, userName }: RankingClientProps) {
 
           {/* Mini stats for top 1 */}
           {currentData[0] && (
-            <div className="mx-4 mb-4 p-3 rounded-xl bg-[#0F1E35] border border-[#C4922E]/20">
+            <div className="mx-4 mb-4 p-3 rounded-xl bg-[#0F1E35] border border-[#C9A84C]/20">
               <div className="flex items-center gap-2 mb-2">
                 <Crown className="w-3.5 h-3.5 text-[#FFD700]" />
                 <span className="text-xs font-bold text-[#FFD700]">Líder do período</span>
@@ -415,7 +415,7 @@ export function RankingClient({ userRole, userName }: RankingClientProps) {
               {activeTab === "volume" && (
                 <div className="flex gap-3 mt-1.5">
                   <span className="text-xs text-muted-foreground">{formatVolume((currentData[0] as typeof RANKING_DATA.volume[0]).volume)}</span>
-                  <span className="text-xs text-[#E5B96A]">{(currentData[0] as typeof RANKING_DATA.volume[0]).deals} operações</span>
+                  <span className="text-xs text-[#E8C97A]">{(currentData[0] as typeof RANKING_DATA.volume[0]).deals} operações</span>
                 </div>
               )}
             </div>
@@ -426,10 +426,10 @@ export function RankingClient({ userRole, userName }: RankingClientProps) {
         <div className="xl:col-span-3 bg-[#091221] rounded-2xl border border-[#122036] overflow-hidden">
           <div className="px-5 py-4 border-b border-[#122036] flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <Star className="w-4 h-4 text-[#C4922E]" />
+              <Star className="w-4 h-4 text-[#C9A84C]" />
               <span className="text-sm font-bold text-white">Classificação Geral</span>
             </div>
-            <Badge className="text-[10px] bg-[#C4922E]/10 text-[#E5B96A] border-[#C4922E]/30">
+            <Badge className="text-[10px] bg-[#C9A84C]/10 text-[#E8C97A] border-[#C9A84C]/30">
               Top {currentData.length} Partners
             </Badge>
           </div>
@@ -449,10 +449,10 @@ export function RankingClient({ userRole, userName }: RankingClientProps) {
       </div>
 
       {/* ── Premiação notice ── */}
-      <div className="p-4 rounded-xl border border-[#C4922E]/25 bg-[#C4922E]/5 flex items-start gap-3">
-        <Trophy className="w-4 h-4 text-[#E5B96A] mt-0.5 flex-shrink-0" />
+      <div className="p-4 rounded-xl border border-[#C9A84C]/25 bg-[#C9A84C]/5 flex items-start gap-3">
+        <Trophy className="w-4 h-4 text-[#E8C97A] mt-0.5 flex-shrink-0" />
         <div>
-          <p className="text-sm font-semibold text-[#E5B96A] mb-1">
+          <p className="text-sm font-semibold text-[#E8C97A] mb-1">
             Programa de Premiação V3 Partners
           </p>
           <p className="text-xs text-muted-foreground leading-relaxed">

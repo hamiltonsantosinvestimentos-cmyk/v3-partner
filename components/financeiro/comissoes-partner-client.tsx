@@ -95,10 +95,10 @@ export function ComissoesPartnerClient({ partnerId, partnerName, role }: Props) 
           <p className="text-xs text-muted-foreground">{minhasComissoes.filter(c => c.status === "PAGA").length} liquidadas</p>
         </div>
         <div className="kpi-card">
-          <div className="w-9 h-9 rounded-xl bg-[#C4922E]/20 flex items-center justify-center mb-3">
-            <Wallet className="w-4 h-4 text-[#C4922E]" />
+          <div className="w-9 h-9 rounded-xl bg-[#C9A84C]/20 flex items-center justify-center mb-3">
+            <Wallet className="w-4 h-4 text-[#C9A84C]" />
           </div>
-          <p className="text-xl font-bold text-[#C4922E]">{formatMoeda(totalGeral)}</p>
+          <p className="text-xl font-bold text-[#C9A84C]">{formatMoeda(totalGeral)}</p>
           <p className="text-sm font-medium text-foreground mt-0.5">Total Gerado</p>
           <p className="text-xs text-muted-foreground">{minhasComissoes.length} operações</p>
         </div>
@@ -139,7 +139,7 @@ export function ComissoesPartnerClient({ partnerId, partnerName, role }: Props) 
           {(["TODOS", "CREDITO", "MA", "CONSORCIO"] as const).map(t => {
             const labels = { TODOS: "Todos", CREDITO: "Crédito", MA: "M&A", CONSORCIO: "Consórcio" };
             return (
-              <button key={t} onClick={() => setFiltroTipo(t)} className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${filtroTipo === t ? "bg-[#C4922E] text-white" : "text-muted-foreground hover:text-foreground"}`}>
+              <button key={t} onClick={() => setFiltroTipo(t)} className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${filtroTipo === t ? "bg-[#C9A84C] text-white" : "text-muted-foreground hover:text-foreground"}`}>
                 {labels[t]}
               </button>
             );
@@ -149,7 +149,7 @@ export function ComissoesPartnerClient({ partnerId, partnerName, role }: Props) 
           {(["TODOS", "A_PAGAR", "PAGA"] as const).map(t => {
             const labels = { TODOS: "Todos", A_PAGAR: "A Receber", PAGA: "Recebido" };
             return (
-              <button key={t} onClick={() => setFiltroStatus(t)} className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${filtroStatus === t ? "bg-[#C4922E] text-white" : "text-muted-foreground hover:text-foreground"}`}>
+              <button key={t} onClick={() => setFiltroStatus(t)} className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${filtroStatus === t ? "bg-[#C9A84C] text-white" : "text-muted-foreground hover:text-foreground"}`}>
                 {labels[t]}
               </button>
             );
@@ -206,7 +206,7 @@ export function ComissoesPartnerClient({ partnerId, partnerName, role }: Props) 
                     </td>
                     <td className="px-4 py-3"><TipoBadge tipo={c.operacaoTipo} /></td>
                     <td className="px-4 py-3 text-white">{formatMoeda(c.valorOperacao)}</td>
-                    <td className="px-4 py-3 text-[#C4922E] font-semibold">{c.percentualComissao}%</td>
+                    <td className="px-4 py-3 text-[#C9A84C] font-semibold">{c.percentualComissao}%</td>
                     <td className="px-4 py-3 font-bold text-white">{formatMoeda(c.valorComissao)}</td>
                     <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">{new Date(c.dataOperacaoFinalizada).toLocaleDateString("pt-BR")}</td>
                     <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
@@ -218,9 +218,9 @@ export function ComissoesPartnerClient({ partnerId, partnerName, role }: Props) 
               </tbody>
               {filtradas.length > 0 && (
                 <tfoot>
-                  <tr className="bg-[#0F1E35] border-t border-[#C4922E]/30">
-                    <td className="px-4 py-3 font-bold text-[#C4922E]" colSpan={5}>TOTAL FILTRADO</td>
-                    <td className="px-4 py-3 font-bold text-[#C4922E]">
+                  <tr className="bg-[#0F1E35] border-t border-[#C9A84C]/30">
+                    <td className="px-4 py-3 font-bold text-[#C9A84C]" colSpan={5}>TOTAL FILTRADO</td>
+                    <td className="px-4 py-3 font-bold text-[#C9A84C]">
                       {formatMoeda(filtradas.reduce((s, c) => s + c.valorComissao, 0))}
                     </td>
                     <td colSpan={3} />
@@ -237,7 +237,7 @@ export function ComissoesPartnerClient({ partnerId, partnerName, role }: Props) 
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Observações</p>
           {filtradas.filter(c => c.observacoes).map(c => (
             <div key={c.id} className="flex gap-2 text-xs p-3 bg-[#091221] border border-[#122036] rounded-lg">
-              <span className="text-[#C4922E] font-mono">{c.codigo}:</span>
+              <span className="text-[#C9A84C] font-mono">{c.codigo}:</span>
               <span className="text-muted-foreground">{c.observacoes}</span>
             </div>
           ))}

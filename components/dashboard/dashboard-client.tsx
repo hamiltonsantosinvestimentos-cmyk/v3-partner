@@ -204,19 +204,19 @@ export function DashboardClient({
               <AreaChart data={revenueData}>
                 <defs>
                   <linearGradient id="goldGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#C4922E" stopOpacity={0.35} />
-                    <stop offset="95%" stopColor="#C4922E" stopOpacity={0} />
+                    <stop offset="5%" stopColor="#C9A84C" stopOpacity={0.35} />
+                    <stop offset="95%" stopColor="#C9A84C" stopOpacity={0} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#122036" />
                 <XAxis
                   dataKey="month"
-                  tick={{ fill: "#5A7490", fontSize: 11 }}
+                  tick={{ fill: "#7A8FA8", fontSize: 11 }}
                   axisLine={false}
                   tickLine={false}
                 />
                 <YAxis
-                  tick={{ fill: "#5A7490", fontSize: 11 }}
+                  tick={{ fill: "#7A8FA8", fontSize: 11 }}
                   axisLine={false}
                   tickLine={false}
                   tickFormatter={(v) => `R$${(v / 1000000).toFixed(1)}M`}
@@ -234,7 +234,7 @@ export function DashboardClient({
                 <Area
                   type="monotone"
                   dataKey="value"
-                  stroke="#C4922E"
+                  stroke="#C9A84C"
                   strokeWidth={2}
                   fill="url(#goldGrad)"
                 />
@@ -256,7 +256,7 @@ export function DashboardClient({
                 <CartesianGrid strokeDasharray="3 3" stroke="#122036" horizontal={false} />
                 <XAxis
                   type="number"
-                  tick={{ fill: "#5A7490", fontSize: 10 }}
+                  tick={{ fill: "#7A8FA8", fontSize: 10 }}
                   axisLine={false}
                   tickLine={false}
                 />
@@ -277,7 +277,7 @@ export function DashboardClient({
                     fontSize: "12px",
                   }}
                 />
-                <Bar dataKey="valor" fill="#C4922E" radius={[0, 4, 4, 0]} />
+                <Bar dataKey="valor" fill="#C9A84C" radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
@@ -291,7 +291,7 @@ export function DashboardClient({
           <CardHeader>
             <CardTitle className="text-sm font-semibold flex items-center justify-between">
               <span>Últimas Operações Split Fiscal</span>
-              <a href="/split-fiscal" className="text-xs text-[#C4922E] hover:text-[#E5B96A] transition-colors">
+              <a href="/split-fiscal" className="text-xs text-[#C9A84C] hover:text-[#E8C97A] transition-colors">
                 Ver todas →
               </a>
             </CardTitle>
@@ -336,7 +336,7 @@ export function DashboardClient({
           <CardHeader>
             <CardTitle className="text-sm font-semibold flex items-center justify-between">
               <span>Pipeline M&A</span>
-              <a href="/ma" className="text-xs text-[#C4922E] hover:text-[#E5B96A] transition-colors">
+              <a href="/ma" className="text-xs text-[#C9A84C] hover:text-[#E8C97A] transition-colors">
                 Ver pipeline →
               </a>
             </CardTitle>

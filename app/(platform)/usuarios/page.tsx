@@ -37,7 +37,7 @@ export default function UsuariosPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-2 border-[#C4922E] border-t-transparent" />
+        <div className="animate-spin rounded-full h-8 w-8 border-2 border-[#C9A84C] border-t-transparent" />
       </div>
     );
   }

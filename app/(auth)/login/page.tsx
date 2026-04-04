@@ -62,7 +62,7 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center relative overflow-hidden"
-      style={{ backgroundColor: "#050C18" }}>
+      style={{ backgroundColor: "#09081A" }}>
 
       {/* Background layers */}
       <div style={{
@@ -86,7 +86,7 @@ export default function LoginPage() {
       {/* Card */}
       <div style={{ position: "relative", width: "100%", maxWidth: 420, margin: "0 20px" }}>
         <div style={{
-          background: "linear-gradient(160deg, #091221 0%, #060E1C 100%)",
+          background: "linear-gradient(160deg, #091221 0%, #09081A 100%)",
           border: "1px solid rgba(196,146,46,0.15)",
           borderRadius: 20,
           padding: "40px 36px",
@@ -120,7 +120,7 @@ export default function LoginPage() {
                 priority
               />
             </div>
-            <p style={{ fontSize: 10, color: "#5A7490", letterSpacing: "0.18em", textTransform: "uppercase", marginTop: 14 }}>
+            <p style={{ fontSize: 10, color: "#7A8FA8", letterSpacing: "0.18em", textTransform: "uppercase", marginTop: 14 }}>
               Plataforma Financeira
             </p>
           </div>
@@ -129,12 +129,12 @@ export default function LoginPage() {
           <form onSubmit={handleLogin} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <div>
               <label style={{
-                fontSize: 10, fontWeight: 700, color: "#5A7490",
+                fontSize: 10, fontWeight: 700, color: "#7A8FA8",
                 textTransform: "uppercase", letterSpacing: "0.1em",
                 display: "block", marginBottom: 7
               }}>E-mail</label>
               <div style={{ position: "relative" }}>
-                <Mail style={{ position: "absolute", left: 13, top: "50%", transform: "translateY(-50%)", width: 15, height: 15, color: "#5A7490" }} />
+                <Mail style={{ position: "absolute", left: 13, top: "50%", transform: "translateY(-50%)", width: 15, height: 15, color: "#7A8FA8" }} />
                 <input
                   type="email" value={email}
                   onChange={(e) => setEmail(e.target.value)}
@@ -153,12 +153,12 @@ export default function LoginPage() {
 
             <div>
               <label style={{
-                fontSize: 10, fontWeight: 700, color: "#5A7490",
+                fontSize: 10, fontWeight: 700, color: "#7A8FA8",
                 textTransform: "uppercase", letterSpacing: "0.1em",
                 display: "block", marginBottom: 7
               }}>Senha</label>
               <div style={{ position: "relative" }}>
-                <Lock style={{ position: "absolute", left: 13, top: "50%", transform: "translateY(-50%)", width: 15, height: 15, color: "#5A7490" }} />
+                <Lock style={{ position: "absolute", left: 13, top: "50%", transform: "translateY(-50%)", width: 15, height: 15, color: "#7A8FA8" }} />
                 <input
                   type={showPassword ? "text" : "password"} value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -175,7 +175,7 @@ export default function LoginPage() {
                 <button type="button" onClick={() => setShowPassword(!showPassword)}
                   style={{
                     position: "absolute", right: 13, top: "50%", transform: "translateY(-50%)",
-                    background: "none", border: "none", cursor: "pointer", color: "#5A7490", padding: 0
+                    background: "none", border: "none", cursor: "pointer", color: "#7A8FA8", padding: 0
                   }}>
                   {showPassword ? <EyeOff style={{ width: 15, height: 15 }} /> : <Eye style={{ width: 15, height: 15 }} />}
                 </button>
@@ -196,9 +196,9 @@ export default function LoginPage() {
               marginTop: 4, height: 48,
               background: loading
                 ? "rgba(196,146,46,0.4)"
-                : "linear-gradient(120deg, #C4922E 0%, #E5B96A 50%, #C4922E 100%)",
+                : "linear-gradient(120deg, #C9A84C 0%, #E8C97A 50%, #C9A84C 100%)",
               backgroundSize: "200% 100%",
-              color: "#050C18", border: "none", borderRadius: 12,
+              color: "#09081A", border: "none", borderRadius: 12,
               fontSize: 14, fontWeight: 700, letterSpacing: "0.04em",
               cursor: loading ? "not-allowed" : "pointer",
               display: "flex", alignItems: "center", justifyContent: "center", gap: 8,

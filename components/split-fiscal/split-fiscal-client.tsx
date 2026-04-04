@@ -510,7 +510,7 @@ export function SplitFiscalClient({ list }: SplitFiscalClientProps) {
             onClick={() => setTab(id as typeof tab)}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold transition-all whitespace-nowrap ${
               tab === id
-                ? "bg-[#C4922E]/15 text-[#E5B96A] border border-[#C4922E]/30"
+                ? "bg-[#C9A84C]/15 text-[#E8C97A] border border-[#C9A84C]/30"
                 : "text-muted-foreground hover:text-foreground hover:bg-secondary"
             }`}
           >
@@ -575,7 +575,7 @@ function LeadsTab({
                       <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{lead.cnpj || "—"}</td>
                       <td className="px-4 py-3 font-semibold text-white">{formatCurrency(lead.tpv)}</td>
                       <td className="px-4 py-3 font-semibold text-emerald-400">{formatCurrency(lead.economiaMensal)}</td>
-                      <td className="px-4 py-3 font-semibold text-[#E5B96A]">{formatCurrency(lead.economiaAnual)}</td>
+                      <td className="px-4 py-3 font-semibold text-[#E8C97A]">{formatCurrency(lead.economiaAnual)}</td>
                       <td className="px-4 py-3 text-xs text-muted-foreground">{lead.created_at}</td>
                     </tr>
                   ))}
@@ -603,7 +603,7 @@ function RebateTab({ selectedPlan, setSelectedPlan }: { selectedPlan: number; se
             onClick={() => setSelectedPlan(i)}
             className={`px-4 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
               selectedPlan === i
-                ? "bg-[#C4922E]/15 text-[#E5B96A] border-[#C4922E]/40"
+                ? "bg-[#C9A84C]/15 text-[#E8C97A] border-[#C9A84C]/40"
                 : "bg-secondary text-muted-foreground border-border hover:text-foreground"
             }`}
           >
@@ -648,7 +648,7 @@ function RebateTab({ selectedPlan, setSelectedPlan }: { selectedPlan: number; se
 
         {/* Rebate table */}
         <Card>
-          <CardHeader><CardTitle className="text-sm font-semibold text-[#E5B96A]">Rebates — {plan.name}</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-sm font-semibold text-[#E8C97A]">Rebates — {plan.name}</CardTitle></CardHeader>
           <CardContent className="p-0">
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
@@ -666,10 +666,10 @@ function RebateTab({ selectedPlan, setSelectedPlan }: { selectedPlan: number; se
                     return (
                       <tr key={mod} className="border-b border-border/20 hover:bg-secondary/40 transition-colors">
                         <td className="px-3 py-1.5 font-medium text-foreground">{mod}</td>
-                        <td className="px-3 py-1.5 font-semibold text-[#E5B96A]">{pct(row.visa)}</td>
-                        <td className="px-3 py-1.5 font-semibold text-[#E5B96A]">{pct(row.master)}</td>
-                        <td className="px-3 py-1.5 font-semibold text-[#E5B96A]">{pct(row.elo)}</td>
-                        <td className="px-3 py-1.5 font-semibold text-[#E5B96A]">{pct(row.amex)}</td>
+                        <td className="px-3 py-1.5 font-semibold text-[#E8C97A]">{pct(row.visa)}</td>
+                        <td className="px-3 py-1.5 font-semibold text-[#E8C97A]">{pct(row.master)}</td>
+                        <td className="px-3 py-1.5 font-semibold text-[#E8C97A]">{pct(row.elo)}</td>
+                        <td className="px-3 py-1.5 font-semibold text-[#E8C97A]">{pct(row.amex)}</td>
                       </tr>
                     );
                   })}
@@ -680,10 +680,10 @@ function RebateTab({ selectedPlan, setSelectedPlan }: { selectedPlan: number; se
         </Card>
       </div>
 
-      <Card className="border-[#C4922E]/20">
+      <Card className="border-[#C9A84C]/20">
         <CardContent className="p-4">
           <p className="text-xs text-muted-foreground">
-            <span className="text-[#E5B96A] font-semibold">Rebate</span> é a comissão paga pela Monetto ao parceiro sobre o volume transacionado.
+            <span className="text-[#E8C97A] font-semibold">Rebate</span> é a comissão paga pela Monetto ao parceiro sobre o volume transacionado.
             Os valores acima são percentuais sobre o faturamento bruto por modalidade.
             Taxas e rebates variam conforme bandeira (Visa, Mastercard, Elo, Amex).
           </p>
@@ -734,7 +734,7 @@ function ComissaoTab({ selectedPlan, setSelectedPlan }: { selectedPlan: number; 
           {PLANS.map((p, i) => (
             <button key={i} onClick={() => setSelectedPlan(i)}
               className={`px-3 py-1 rounded-lg text-xs font-semibold border transition-all ${
-                selectedPlan === i ? "bg-[#C4922E]/15 text-[#E5B96A] border-[#C4922E]/40" : "bg-secondary text-muted-foreground border-border hover:text-foreground"
+                selectedPlan === i ? "bg-[#C9A84C]/15 text-[#E8C97A] border-[#C9A84C]/40" : "bg-secondary text-muted-foreground border-border hover:text-foreground"
               }`}>
               {p.name}
             </button>
@@ -765,7 +765,7 @@ function ComissaoTab({ selectedPlan, setSelectedPlan }: { selectedPlan: number; 
                 {rows.map((row) => (
                   <tr key={row.label} className="border-b border-border/20">
                     <td className="px-4 py-3 text-foreground font-medium text-xs">{row.label}</td>
-                    <td className="px-4 py-3 text-[#E5B96A] font-mono text-xs">
+                    <td className="px-4 py-3 text-[#E8C97A] font-mono text-xs">
                       {(row.rate * 100).toFixed(4).replace(".", ",")}%
                     </td>
                     <td className="px-4 py-2">
@@ -775,7 +775,7 @@ function ComissaoTab({ selectedPlan, setSelectedPlan }: { selectedPlan: number; 
                           type="text"
                           value={values[row.label] ?? ""}
                           onChange={(e) => setValues((prev) => ({ ...prev, [row.label]: e.target.value }))}
-                          className="w-36 h-8 pl-8 pr-2 text-xs bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-1 focus:ring-[#C4922E]/50 text-right"
+                          className="w-36 h-8 pl-8 pr-2 text-xs bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-1 focus:ring-[#C9A84C]/50 text-right"
                         />
                       </div>
                     </td>
@@ -786,8 +786,8 @@ function ComissaoTab({ selectedPlan, setSelectedPlan }: { selectedPlan: number; 
                 ))}
               </tbody>
               <tfoot>
-                <tr className="border-t-2 border-[#C4922E]/30 bg-[#C4922E]/5">
-                  <td className="px-4 py-3 font-bold text-[#E5B96A]">TOTAL</td>
+                <tr className="border-t-2 border-[#C9A84C]/30 bg-[#C9A84C]/5">
+                  <td className="px-4 py-3 font-bold text-[#E8C97A]">TOTAL</td>
                   <td className="px-4 py-3" />
                   <td className="px-4 py-3 font-bold text-white">{formatCurrency(totalFat)}</td>
                   <td className="px-4 py-3 font-bold text-emerald-400 text-base">{formatCurrency(totalComm)}</td>
@@ -805,10 +805,10 @@ function ComissaoTab({ selectedPlan, setSelectedPlan }: { selectedPlan: number; 
             <p className="text-2xl font-bold text-emerald-400 mt-1">{formatCurrency(totalComm)}</p>
           </CardContent>
         </Card>
-        <Card className="border-[#C4922E]/20">
+        <Card className="border-[#C9A84C]/20">
           <CardContent className="p-4">
             <p className="text-xs text-muted-foreground">Comissão Anual Estimada</p>
-            <p className="text-2xl font-bold text-[#E5B96A] mt-1">{formatCurrency(totalComm * 12)}</p>
+            <p className="text-2xl font-bold text-[#E8C97A] mt-1">{formatCurrency(totalComm * 12)}</p>
           </CardContent>
         </Card>
       </div>
@@ -915,25 +915,25 @@ function PropostaTab({ onAddLead }: { onAddLead: (lead: Lead) => void }) {
     @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&display=swap');
     *{margin:0;padding:0;box-sizing:border-box;}
     body{font-family:'Outfit',sans-serif;background:#fff;color:#1a1a2e;padding:40px;}
-    .header{display:flex;align-items:center;justify-content:space-between;padding-bottom:24px;border-bottom:3px solid #C4922E;margin-bottom:32px;}
-    .brand-name{font-size:22px;font-weight:800;background:linear-gradient(120deg,#C4922E,#E5B96A);-webkit-background-clip:text;-webkit-text-fill-color:transparent;letter-spacing:2px;}
+    .header{display:flex;align-items:center;justify-content:space-between;padding-bottom:24px;border-bottom:3px solid #C9A84C;margin-bottom:32px;}
+    .brand-name{font-size:22px;font-weight:800;background:linear-gradient(120deg,#C9A84C,#E8C97A);-webkit-background-clip:text;-webkit-text-fill-color:transparent;letter-spacing:2px;}
     .brand-sub{font-size:10px;color:#666;text-transform:uppercase;letter-spacing:3px;margin-top:2px;}
     .doc-title{text-align:right;}
     .doc-title h1{font-size:18px;font-weight:700;color:#1a1a2e;}
     .doc-title p{font-size:11px;color:#666;margin-top:2px;}
-    .gold-bar{height:4px;background:linear-gradient(90deg,#C4922E,#E5B96A,#C4922E);border-radius:2px;margin-bottom:32px;}
-    .section-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:2px;color:#C4922E;margin-bottom:12px;padding-bottom:6px;border-bottom:1px solid #f0e6d3;}
+    .gold-bar{height:4px;background:linear-gradient(90deg,#C9A84C,#E8C97A,#C9A84C);border-radius:2px;margin-bottom:32px;}
+    .section-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:2px;color:#C9A84C;margin-bottom:12px;padding-bottom:6px;border-bottom:1px solid #f0e6d3;}
     .grid2{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:28px;}
     .card{background:#f8f6f2;border-radius:12px;padding:20px;border:1px solid #f0e6d3;}
     .card-label{font-size:10px;color:#888;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;}
-    .card-value{font-size:22px;font-weight:800;color:#C4922E;}
+    .card-value{font-size:22px;font-weight:800;color:#C9A84C;}
     .card-value.green{color:#16a34a;}
     table{width:100%;border-collapse:collapse;margin-bottom:28px;}
     th{background:#f8f6f2;padding:10px 14px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#888;border-bottom:2px solid #f0e6d3;}
     td{padding:10px 14px;font-size:12px;border-bottom:1px solid #f5f0ea;}
     .td-right{text-align:right;}
     .red{color:#dc2626;font-weight:600;}
-    .gold{color:#C4922E;font-weight:700;}
+    .gold{color:#C9A84C;font-weight:700;}
     .total-row td{font-weight:700;background:#fdf8f0;font-size:13px;}
     .savings-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:28px;}
     .saving-card{background:#f0fdf4;border:2px solid #bbf7d0;border-radius:12px;padding:18px;text-align:center;}
@@ -941,12 +941,12 @@ function PropostaTab({ onAddLead }: { onAddLead: (lead: Lead) => void }) {
     .saving-card.blue-card{background:#eff6ff;border-color:#bfdbfe;}
     .saving-label{font-size:10px;color:#888;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;}
     .saving-value{font-size:20px;font-weight:800;color:#16a34a;}
-    .saving-value.gold{color:#C4922E;}
+    .saving-value.gold{color:#C9A84C;}
     .saving-value.blue{color:#2563eb;}
     .info-box{background:#fdf8f0;border:1px solid #f0e6d3;border-radius:10px;padding:16px;margin-bottom:28px;font-size:11px;color:#666;line-height:1.6;}
     .footer{border-top:2px solid #f0e6d3;padding-top:16px;display:flex;justify-content:space-between;align-items:center;margin-top:20px;}
     .footer-left{font-size:10px;color:#999;}
-    .footer-brand{font-size:11px;font-weight:700;color:#C4922E;letter-spacing:1px;}
+    .footer-brand{font-size:11px;font-weight:700;color:#C9A84C;letter-spacing:1px;}
     @media print{body{padding:20px;}}
   </style>
 </head>
@@ -1049,7 +1049,7 @@ function PropostaTab({ onAddLead }: { onAddLead: (lead: Lead) => void }) {
       <div className="relative flex items-center">
         {prefix && <span className="absolute left-3 text-xs text-muted-foreground">{prefix}</span>}
         <input value={value} onChange={(e) => set(e.target.value)}
-          className={`w-full h-8 ${prefix ? "pl-8" : "pl-3"} ${suffix ? "pr-8" : "pr-3"} text-xs bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-1 focus:ring-[#C4922E]/50 text-right`}
+          className={`w-full h-8 ${prefix ? "pl-8" : "pl-3"} ${suffix ? "pr-8" : "pr-3"} text-xs bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-1 focus:ring-[#C9A84C]/50 text-right`}
         />
         {suffix && <span className="absolute right-3 text-xs text-muted-foreground">{suffix}</span>}
       </div>
@@ -1077,7 +1077,7 @@ function PropostaTab({ onAddLead }: { onAddLead: (lead: Lead) => void }) {
             {inp("TPV com Monetto (R$/mês)", tpvMonetto, setTpvMonetto, "R$")}
             <div className="pt-1 border-t border-border/30">
               <p className="text-xs text-muted-foreground">TPV Monetto</p>
-              <p className="text-lg font-bold text-[#E5B96A]">{formatCurrency(calc.tpv)}</p>
+              <p className="text-lg font-bold text-[#E8C97A]">{formatCurrency(calc.tpv)}</p>
             </div>
           </CardContent>
         </Card>
@@ -1094,11 +1094,11 @@ function PropostaTab({ onAddLead }: { onAddLead: (lead: Lead) => void }) {
                   <div className="flex gap-2 items-center">
                     <div className="relative flex items-center flex-1">
                       <input value={v} onChange={(e) => setPct(e.target.value)} placeholder="0"
-                        className="w-full h-8 pl-3 pr-7 text-xs bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-1 focus:ring-[#C4922E]/50 text-right" />
+                        className="w-full h-8 pl-3 pr-7 text-xs bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-1 focus:ring-[#C9A84C]/50 text-right" />
                       <span className="absolute right-2.5 text-xs text-muted-foreground">%</span>
                     </div>
                     <span className="text-xs font-semibold w-28 text-right shrink-0">
-                      {fat > 0 ? <span className="text-[#E5B96A]">{formatCurrency(fat)}</span> : <span className="text-muted-foreground/40">—</span>}
+                      {fat > 0 ? <span className="text-[#E8C97A]">{formatCurrency(fat)}</span> : <span className="text-muted-foreground/40">—</span>}
                     </span>
                   </div>
                 </div>
@@ -1113,16 +1113,16 @@ function PropostaTab({ onAddLead }: { onAddLead: (lead: Lead) => void }) {
           <CardContent className="space-y-3">
             {/* Plano Monetto selector */}
             <div>
-              <p className="text-[10px] text-[#E5B96A] uppercase tracking-wider font-bold mb-2">Plano Monetto — selecione para preencher automático</p>
+              <p className="text-[10px] text-[#E8C97A] uppercase tracking-wider font-bold mb-2">Plano Monetto — selecione para preencher automático</p>
               <div className="flex flex-wrap gap-1.5 mb-3">
                 {PLANS.map((p, i) => (
                   <button key={i} onClick={() => setPropostaPlan(i)}
-                    className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-all ${propostaPlan === i ? "bg-[#C4922E] border-[#C4922E] text-white" : "border-border text-muted-foreground hover:border-[#C4922E]/50"}`}>
+                    className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-all ${propostaPlan === i ? "bg-[#C9A84C] border-[#C9A84C] text-white" : "border-border text-muted-foreground hover:border-[#C9A84C]/50"}`}>
                     {p.name.replace("Plano ", "P")}
                   </button>
                 ))}
                 <button onClick={() => setPropostaPlan(null)}
-                  className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-all ${propostaPlan === null ? "bg-[#C4922E] border-[#C4922E] text-white" : "border-border text-muted-foreground hover:border-[#C4922E]/50"}`}>
+                  className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-all ${propostaPlan === null ? "bg-[#C9A84C] border-[#C9A84C] text-white" : "border-border text-muted-foreground hover:border-[#C9A84C]/50"}`}>
                   Manual
                 </button>
               </div>
@@ -1130,7 +1130,7 @@ function PropostaTab({ onAddLead }: { onAddLead: (lead: Lead) => void }) {
 
             {/* Monetto taxas por modalidade */}
             <div className="space-y-1.5">
-              <p className="text-[9px] text-[#C4922E] uppercase tracking-wider font-semibold">Monetto — taxas por modalidade</p>
+              <p className="text-[9px] text-[#C9A84C] uppercase tracking-wider font-semibold">Monetto — taxas por modalidade</p>
               {[
                 { label: "PIX",            val: monTaxaPix,      set: setMonTaxaPix },
                 { label: "Débito",         val: monTaxaDebito,   set: setMonTaxaDebito },
@@ -1143,7 +1143,7 @@ function PropostaTab({ onAddLead }: { onAddLead: (lead: Lead) => void }) {
                   <span className="text-[10px] text-muted-foreground w-24 shrink-0">{label}</span>
                   <div className="relative flex items-center flex-1">
                     <input value={val} onChange={(e) => set(e.target.value)} readOnly={propostaPlan !== null}
-                      className={`w-full h-7 pl-2 pr-6 text-[11px] border rounded text-right focus:outline-none focus:ring-1 focus:ring-[#C4922E]/50 ${propostaPlan !== null ? "bg-[#C4922E]/10 border-[#C4922E]/30 text-[#E5B96A] cursor-default" : "bg-secondary border-border text-foreground"}`} />
+                      className={`w-full h-7 pl-2 pr-6 text-[11px] border rounded text-right focus:outline-none focus:ring-1 focus:ring-[#C9A84C]/50 ${propostaPlan !== null ? "bg-[#C9A84C]/10 border-[#C9A84C]/30 text-[#E8C97A] cursor-default" : "bg-secondary border-border text-foreground"}`} />
                     <span className="absolute right-2 text-[10px] text-muted-foreground">%</span>
                   </div>
                 </div>
@@ -1163,7 +1163,7 @@ function PropostaTab({ onAddLead }: { onAddLead: (lead: Lead) => void }) {
                   <span className="text-[10px] text-muted-foreground w-24 shrink-0">{label}</span>
                   <div className="relative flex items-center flex-1">
                     <input value={val} onChange={(e) => set(e.target.value)}
-                      className="w-full h-7 pl-2 pr-6 text-[11px] bg-secondary border border-border rounded text-foreground text-right focus:outline-none focus:ring-1 focus:ring-[#C4922E]/50" />
+                      className="w-full h-7 pl-2 pr-6 text-[11px] bg-secondary border border-border rounded text-foreground text-right focus:outline-none focus:ring-1 focus:ring-[#C9A84C]/50" />
                     <span className="absolute right-2 text-[10px] text-muted-foreground">%</span>
                   </div>
                 </div>
@@ -1189,7 +1189,7 @@ function PropostaTab({ onAddLead }: { onAddLead: (lead: Lead) => void }) {
           <CardHeader><CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Custo Mensal: Concorrente vs Monetto</CardTitle></CardHeader>
           <CardContent className="space-y-1.5 text-xs">
             <div className="grid grid-cols-3 gap-2 border-b border-border/30 pb-2 text-[10px] font-semibold text-muted-foreground uppercase">
-              <span>Modalidade</span><span className="text-right">Concorrente</span><span className="text-right text-[#E5B96A]">Monetto</span>
+              <span>Modalidade</span><span className="text-right">Concorrente</span><span className="text-right text-[#E8C97A]">Monetto</span>
             </div>
             {calc.rows.map((r) => (
               <div key={r.label} className={`grid grid-cols-3 gap-2 ${r.pct === 0 ? "opacity-30" : ""}`}>
@@ -1213,10 +1213,10 @@ function PropostaTab({ onAddLead }: { onAddLead: (lead: Lead) => void }) {
               <span className="text-right text-red-400">{formatCurrency(n(mensalidadeAtual))}</span>
               <span className="text-right text-emerald-400">{formatCurrency(n(mensalidadeNova))}</span>
             </div>
-            <div className="grid grid-cols-3 gap-2 border-t-2 border-[#C4922E]/30 pt-2 font-bold">
+            <div className="grid grid-cols-3 gap-2 border-t-2 border-[#C9A84C]/30 pt-2 font-bold">
               <span className="text-foreground text-[11px]">TOTAL</span>
               <span className="text-right text-red-400">{formatCurrency(calc.concTotal)}</span>
-              <span className="text-right text-[#E5B96A]">{formatCurrency(calc.monTotal)}</span>
+              <span className="text-right text-[#E8C97A]">{formatCurrency(calc.monTotal)}</span>
             </div>
           </CardContent>
         </Card>
@@ -1233,10 +1233,10 @@ function PropostaTab({ onAddLead }: { onAddLead: (lead: Lead) => void }) {
             {calc.economiaMensal < 0 && <p className="text-[10px] text-red-400 mt-0.5">custo maior</p>}
           </CardContent>
         </Card>
-        <Card className="border-[#C4922E]/30 bg-[#C4922E]/5">
+        <Card className="border-[#C9A84C]/30 bg-[#C9A84C]/5">
           <CardContent className="p-5 text-center">
             <p className="text-xs text-muted-foreground">Economia Anual</p>
-            <p className={`text-2xl font-bold mt-1 ${calc.economiaMensal >= 0 ? "text-[#E5B96A]" : "text-red-400"}`}>
+            <p className={`text-2xl font-bold mt-1 ${calc.economiaMensal >= 0 ? "text-[#E8C97A]" : "text-red-400"}`}>
               {formatCurrency(Math.abs(calc.economiaAnual))}
             </p>
           </CardContent>
@@ -1253,17 +1253,17 @@ function PropostaTab({ onAddLead }: { onAddLead: (lead: Lead) => void }) {
 
       {/* Dica + PDF */}
       <div className="flex items-start gap-4">
-        <Card className="flex-1 border-[#C4922E]/20 bg-[#C4922E]/5">
+        <Card className="flex-1 border-[#C9A84C]/20 bg-[#C9A84C]/5">
           <CardContent className="p-3">
             <p className="text-xs text-muted-foreground">
-              <span className="text-[#E5B96A] font-semibold">Dica:</span>{" "}
+              <span className="text-[#E8C97A] font-semibold">Dica:</span>{" "}
               Selecione um Plano (P1–P7) para preencher as taxas Monetto automaticamente pela média Visa.
               No mix, deixe 0% nas modalidades que o cliente não usa — elas ficam zeradas e não entram no cálculo.
               Fórmula: <span className="text-foreground/70">TPV × mix% × taxa = custo da modalidade.</span>
             </p>
           </CardContent>
         </Card>
-        <Button onClick={handlePrint} size="sm" className="gap-2 bg-[#C4922E] hover:bg-[#E5B96A] text-white shrink-0 self-center">
+        <Button onClick={handlePrint} size="sm" className="gap-2 bg-[#C9A84C] hover:bg-[#E8C97A] text-white shrink-0 self-center">
           <FileDown className="w-4 h-4" /> Gerar Proposta PDF
         </Button>
       </div>
