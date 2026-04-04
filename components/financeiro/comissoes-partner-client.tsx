@@ -217,18 +217,11 @@ export function ComissoesPartnerClient({ partnerId, partnerName, role, commissio
                       <div className="truncate" title={c.operation_description}>{c.operation_description}</div>
                       <div className="text-[10px] text-muted-foreground">{c.operation_code ?? "—"}</div>
                     </td>
-<<<<<<< Updated upstream
                     <td className="px-4 py-3"><TipoBadge tipo={c.operacaoTipo} /></td>
                     <td className="px-4 py-3 text-white">{formatMoeda(c.valorOperacao)}</td>
                     <td className="px-4 py-3 text-[#C9A84C] font-semibold">{c.percentualComissao}%</td>
                     <td className="px-4 py-3 font-bold text-white">{formatMoeda(c.valorComissao)}</td>
                     <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">{new Date(c.dataOperacaoFinalizada).toLocaleDateString("pt-BR")}</td>
-=======
-                    <td className="px-4 py-3"><TipoBadge tipo={c.operation_type} /></td>
-                    <td className="px-4 py-3 text-white">{formatMoeda(c.operation_value)}</td>
-                    <td className="px-4 py-3 text-[#C4922E] font-semibold">{c.commission_percent}%</td>
-                    <td className="px-4 py-3 font-bold text-white">{formatMoeda(c.commission_value ?? 0)}</td>
->>>>>>> Stashed changes
                     <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
                       {c.operation_closed_at ? new Date(c.operation_closed_at).toLocaleDateString("pt-BR") : "—"}
                     </td>
@@ -241,17 +234,10 @@ export function ComissoesPartnerClient({ partnerId, partnerName, role, commissio
               </tbody>
               {filtradas.length > 0 && (
                 <tfoot>
-<<<<<<< Updated upstream
                   <tr className="bg-[#0F1E35] border-t border-[#C9A84C]/30">
                     <td className="px-4 py-3 font-bold text-[#C9A84C]" colSpan={5}>TOTAL FILTRADO</td>
                     <td className="px-4 py-3 font-bold text-[#C9A84C]">
                       {formatMoeda(filtradas.reduce((s, c) => s + c.valorComissao, 0))}
-=======
-                  <tr className="bg-[#0F1E35] border-t border-[#C4922E]/30">
-                    <td className="px-4 py-3 font-bold text-[#C4922E]" colSpan={5}>TOTAL FILTRADO</td>
-                    <td className="px-4 py-3 font-bold text-[#C4922E]">
-                      {formatMoeda(filtradas.reduce((s, c) => s + (c.commission_value ?? 0), 0))}
->>>>>>> Stashed changes
                     </td>
                     <td colSpan={3} />
                   </tr>
@@ -267,13 +253,8 @@ export function ComissoesPartnerClient({ partnerId, partnerName, role, commissio
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Observações</p>
           {filtradas.filter(c => c.notes).map(c => (
             <div key={c.id} className="flex gap-2 text-xs p-3 bg-[#091221] border border-[#122036] rounded-lg">
-<<<<<<< Updated upstream
               <span className="text-[#C9A84C] font-mono">{c.codigo}:</span>
               <span className="text-muted-foreground">{c.observacoes}</span>
-=======
-              <span className="text-[#C4922E] font-mono">{c.code}:</span>
-              <span className="text-muted-foreground">{c.notes}</span>
->>>>>>> Stashed changes
             </div>
           ))}
         </div>

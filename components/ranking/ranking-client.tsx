@@ -43,7 +43,6 @@ export interface RankingData {
 type Tab = "score" | "propostas" | "aprovacoes" | "volume";
 
 const TABS: { id: Tab; label: string; icon: React.ReactNode; color: string; desc: string }[] = [
-<<<<<<< Updated upstream
   {
     id: "propostas",
     label: "Mais Propostas",
@@ -65,12 +64,6 @@ const TABS: { id: Tab; label: string; icon: React.ReactNode; color: string; desc
     color: "#C9A84C",
     desc: "Parceiros com maior volume financeiro de operações",
   },
-=======
-  { id: "score",     label: "Pontuação",      icon: <Zap className="w-4 h-4" />,          color: "#C4922E", desc: "Score geral: propostas, aprovações, volume M&A e comissões" },
-  { id: "propostas", label: "Mais Propostas",  icon: <Target className="w-4 h-4" />,       color: "#3B82F6", desc: "Parceiros que mais submeteram propostas no período" },
-  { id: "aprovacoes",label: "Mais Aprovações", icon: <CheckCircle2 className="w-4 h-4" />, color: "#10B981", desc: "Parceiros com maior número de operações aprovadas" },
-  { id: "volume",    label: "Maior Volume",    icon: <DollarSign className="w-4 h-4" />,   color: "#8B5CF6", desc: "Parceiros com maior volume financeiro de operações" },
->>>>>>> Stashed changes
 ];
 
 const PERIOD_LABELS: Record<string, string> = {
@@ -184,7 +177,6 @@ function RankRow({ item, position, tab, maxVal }: { item: AnyRank; position: num
     return null;
   }
 
-<<<<<<< Updated upstream
   const barPct = (getBarVal() / maxVal) * 100;
   const tabColors: Record<Tab, string> = {
     propostas: "#3B82F6",
@@ -202,14 +194,6 @@ function RankRow({ item, position, tab, maxVal }: { item: AnyRank; position: num
       }`}
     >
       {/* Position */}
-=======
-  const barPct = maxVal > 0 ? (getBarVal() / maxVal) * 100 : 0;
-  const tabColor: Record<Tab, string> = { score: "#C4922E", propostas: "#3B82F6", aprovacoes: "#10B981", volume: "#8B5CF6" };
-  const isTop3 = position <= 3;
-
-  return (
-    <div className={`flex items-center gap-4 px-4 py-3 rounded-xl transition-all ${isTop3 ? "bg-[#0F1E35] border border-[#C4922E]/20" : "hover:bg-[#0F1E35]/50"}`}>
->>>>>>> Stashed changes
       <div className="w-7 flex-shrink-0 text-center">
         {position === 1 ? <Crown className="w-5 h-5 mx-auto" style={{ color: "#FFD700" }} />
         : position === 2 ? <Medal className="w-5 h-5 mx-auto" style={{ color: "#C0C0C0" }} />
@@ -218,7 +202,6 @@ function RankRow({ item, position, tab, maxVal }: { item: AnyRank; position: num
       </div>
       <div className="w-9 h-9 rounded-full flex-shrink-0 flex items-center justify-center text-xs font-bold"
         style={{
-<<<<<<< Updated upstream
           background: position <= 3
             ? `linear-gradient(135deg, ${MEDAL_COLORS[position - 1].ring}88, ${MEDAL_COLORS[position - 1].ring}44)`
             : "rgba(196,146,46,0.1)",
@@ -226,12 +209,6 @@ function RankRow({ item, position, tab, maxVal }: { item: AnyRank; position: num
           border: `1px solid ${position <= 3 ? MEDAL_COLORS[position - 1].ring + "44" : "rgba(196,146,46,0.2)"}`,
         }}
       >
-=======
-          background: position <= 3 ? `linear-gradient(135deg, ${MEDAL_COLORS[position-1].ring}88, ${MEDAL_COLORS[position-1].ring}44)` : "rgba(196,146,46,0.1)",
-          color: position <= 3 ? MEDAL_COLORS[position-1].text : "#C4922E",
-          border: `1px solid ${position <= 3 ? MEDAL_COLORS[position-1].ring + "44" : "rgba(196,146,46,0.2)"}`,
-        }}>
->>>>>>> Stashed changes
         {item.avatar}
       </div>
       <div className="flex-1 min-w-0">
@@ -331,19 +308,12 @@ export function RankingClient({ userRole, userName, rankingData, period = "mes",
           {Object.entries(PERIOD_LABELS).map(([id, label]) => (
             <button key={id} onClick={() => setPeriod(id)}
               className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
-<<<<<<< Updated upstream
               style={period === p.id
                 ? { background: "linear-gradient(120deg,#C9A84C,#E8C97A)", color: "#09081A" }
                 : { color: "#7A8FA8" }
               }
             >
               {p.label}
-=======
-              style={period === id
-                ? { background: "linear-gradient(120deg,#C4922E,#E5B96A)", color: "#050C18" }
-                : { color: "#5A7490" }}>
-              {label}
->>>>>>> Stashed changes
             </button>
           ))}
         </div>
@@ -352,16 +322,9 @@ export function RankingClient({ userRole, userName, rankingData, period = "mes",
       {/* KPI strip */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-<<<<<<< Updated upstream
           { label: "Total de Propostas", value: totalPropostas, icon: <Target className="w-4 h-4" />, color: "#3B82F6" },
           { label: "Total de Aprovações", value: totalAprovacoes, icon: <CheckCircle2 className="w-4 h-4" />, color: "#10B981" },
           { label: "Volume Total", value: formatVolume(totalVolume), icon: <DollarSign className="w-4 h-4" />, color: "#C9A84C" },
-=======
-          { label: "Score Total", value: totalScore + " pts", icon: <Zap className="w-4 h-4" />, color: "#C4922E" },
-          { label: "Propostas",   value: totalPropostas,      icon: <Target className="w-4 h-4" />, color: "#3B82F6" },
-          { label: "Aprovações",  value: totalAprovacoes,     icon: <CheckCircle2 className="w-4 h-4" />, color: "#10B981" },
-          { label: "Volume",      value: formatVolume(totalVolume), icon: <DollarSign className="w-4 h-4" />, color: "#8B5CF6" },
->>>>>>> Stashed changes
         ].map((kpi) => (
           <div key={kpi.label} className="p-4 rounded-xl bg-[#091221] border border-[#122036] flex items-center gap-3 relative overflow-hidden">
             <div className="absolute top-0 left-0 right-0 h-[1px]"
@@ -397,16 +360,11 @@ export function RankingClient({ userRole, userName, rankingData, period = "mes",
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all border"
             style={activeTab === tab.id
               ? { background: `${tab.color}18`, color: tab.color, borderColor: `${tab.color}40` }
-<<<<<<< Updated upstream
               : { color: "#7A8FA8", borderColor: "#122036", background: "transparent" }
             }
           >
             {tab.icon}
             {tab.label}
-=======
-              : { color: "#5A7490", borderColor: "#122036", background: "transparent" }}>
-            {tab.icon} {tab.label}
->>>>>>> Stashed changes
           </button>
         ))}
       </div>
@@ -420,7 +378,6 @@ export function RankingClient({ userRole, userName, rankingData, period = "mes",
       ) : (
         <div className="grid grid-cols-1 xl:grid-cols-5 gap-5">
           {/* Podium */}
-<<<<<<< Updated upstream
           <div className="px-4 py-4">
             <Podium tab={activeTab} data={currentData as typeof RANKING_DATA.propostas} />
           </div>
@@ -467,29 +424,6 @@ export function RankingClient({ userRole, userName, rankingData, period = "mes",
             <Badge className="text-[10px] bg-[#C9A84C]/10 text-[#E8C97A] border-[#C9A84C]/30">
               Top {currentData.length} Partners
             </Badge>
-=======
-          <div className="xl:col-span-2 bg-[#091221] rounded-2xl border border-[#122036] overflow-hidden">
-            <div className="px-5 py-4 border-b border-[#122036]">
-              <div className="flex items-center gap-2">
-                <Award className="w-4 h-4" style={{ color: activeTabInfo.color }} />
-                <span className="text-sm font-bold text-white">{activeTabInfo.label}</span>
-              </div>
-              <p className="text-xs text-muted-foreground mt-1">{activeTabInfo.desc}</p>
-            </div>
-            <div className="px-4 py-4">
-              <Podium tab={activeTab} data={currentData} />
-            </div>
-            {currentData[0] && (
-              <div className="mx-4 mb-4 p-3 rounded-xl bg-[#0F1E35] border border-[#C4922E]/20">
-                <div className="flex items-center gap-2 mb-1">
-                  <Crown className="w-3.5 h-3.5 text-[#FFD700]" />
-                  <span className="text-xs font-bold text-[#FFD700]">Líder do período</span>
-                </div>
-                <p className="text-sm font-bold text-white">{currentData[0].name}</p>
-                <p className="text-xs text-muted-foreground mt-0.5">{getValue(activeTab, currentData[0])}</p>
-              </div>
-            )}
->>>>>>> Stashed changes
           </div>
 
           {/* Full list */}
@@ -512,7 +446,6 @@ export function RankingClient({ userRole, userName, rankingData, period = "mes",
         </div>
       )}
 
-<<<<<<< Updated upstream
       {/* ── Premiação notice ── */}
       <div className="p-4 rounded-xl border border-[#C9A84C]/25 bg-[#C9A84C]/5 flex items-start gap-3">
         <Trophy className="w-4 h-4 text-[#E8C97A] mt-0.5 flex-shrink-0" />
@@ -520,58 +453,6 @@ export function RankingClient({ userRole, userName, rankingData, period = "mes",
           <p className="text-sm font-semibold text-[#E8C97A] mb-1">
             Programa de Premiação V3 Partners
           </p>
-=======
-      {/* Metas — admin vê todos, partner vê as suas */}
-      {goals.length > 0 && (
-        <div className="bg-[#091221] rounded-2xl border border-[#122036] overflow-hidden">
-          <div className="px-5 py-4 border-b border-[#122036] flex items-center gap-2">
-            <Target className="w-4 h-4 text-[#C4922E]" />
-            <span className="text-sm font-bold text-white">Metas do Mês Atual</span>
-          </div>
-          <div className="p-4 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            {goals.map((goal) => {
-              const partner = rankingData.score.find(p => p.id === goal.partner_id);
-              if (!partner && !isAdmin) return null;
-              const name = partner?.name ?? "Partner";
-              return (
-                <div key={goal.partner_id} className="p-4 rounded-xl bg-[#0F1E35] border border-[#122036] space-y-3">
-                  <div className="flex items-center gap-2 mb-2">
-                    <div className="w-7 h-7 rounded-full bg-[#C4922E]/20 flex items-center justify-center text-xs font-bold text-[#C4922E]">
-                      {name.split(" ").slice(0,2).map(w => w[0]).join("")}
-                    </div>
-                    <span className="text-sm font-semibold text-white truncate">{name}</span>
-                  </div>
-                  <GoalBar
-                    label="Propostas"
-                    value={partner?.proposals ?? 0}
-                    goal={goal.goal_proposals}
-                    color="#3B82F6"
-                  />
-                  <GoalBar
-                    label="Aprovações"
-                    value={partner?.approvals ?? 0}
-                    goal={goal.goal_approvals}
-                    color="#10B981"
-                  />
-                  <GoalBar
-                    label="Deals M&A"
-                    value={partner?.deals ?? 0}
-                    goal={goal.goal_deals}
-                    color="#8B5CF6"
-                  />
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Premiação notice */}
-      <div className="p-4 rounded-xl border border-[#C4922E]/25 bg-[#C4922E]/5 flex items-start gap-3">
-        <Trophy className="w-4 h-4 text-[#E5B96A] mt-0.5 flex-shrink-0" />
-        <div>
-          <p className="text-sm font-semibold text-[#E5B96A] mb-1">Programa de Premiação V3 Partners</p>
->>>>>>> Stashed changes
           <p className="text-xs text-muted-foreground leading-relaxed">
             O ranking é atualizado em tempo real. Os top 3 de cada categoria são elegíveis para premiação mensal.
             {isAdmin && " Como administrador, você pode definir metas individuais via API POST /api/partner-goals."}

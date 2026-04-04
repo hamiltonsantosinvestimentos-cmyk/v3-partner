@@ -1729,27 +1729,9 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
                     </span>
                   </div>
                 </DialogTitle>
-<<<<<<< Updated upstream
                 <div style={{ fontSize: 12, color: "#7A8FA8", marginTop: 4 }}>
                   {selectedLead.code}
                   {isAdmin && ` · ${selectedLead.partnerName}`}
-=======
-                <div style={{ fontSize: 12, color: "#5A7490", marginTop: 4, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                  <span>{selectedLead.code}{isAdmin && ` · ${selectedLead.partnerName}`}</span>
-                  {isAdmin && (
-                    <button
-                      onClick={async () => {
-                        if (!confirm(`Excluir permanentemente o lead "${selectedLead.name}"?`)) return;
-                        await fetch(`/api/crm?id=${selectedLead.id}`, { method: "DELETE" });
-                        setLeads(prev => prev.filter(l => l.id !== selectedLead.id));
-                        setSelectedLead(null);
-                      }}
-                      style={{ fontSize: 11, color: "#EF4444", background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 6, padding: "3px 10px", cursor: "pointer" }}
-                    >
-                      Excluir Lead
-                    </button>
-                  )}
->>>>>>> Stashed changes
                 </div>
               </DialogHeader>
 
@@ -1991,13 +1973,8 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
               <DialogHeader>
                 <DialogTitle style={{ color: "#E8EDF5" }}>Encaminhar para qual produto?</DialogTitle>
               </DialogHeader>
-<<<<<<< Updated upstream
               <div style={{ fontSize: 13, color: "#7A8FA8", marginBottom: 16 }}>
                 {showConvert.name}
-=======
-              <div style={{ fontSize: 13, color: "#5A7490", marginBottom: 16 }}>
-                Cliente: <strong style={{ color: "#E8EDF5" }}>{showConvert.name}</strong>
->>>>>>> Stashed changes
               </div>
 
               {/* Passo 1: Produto */}
@@ -2564,25 +2541,11 @@ function ProspeccaoTab({ onAddLead }: { onAddLead: (prefill: Partial<{ personTyp
                     style={{ background: "transparent", border: "1px solid #122036", borderRadius: 6, padding: "5px 12px", color: "#7A8FA8", fontSize: 11, cursor: "pointer" }}>
                     {isOpen ? "Ocultar" : "Detalhes"}
                   </button>
-<<<<<<< Updated upstream
                   <button onClick={() => onAddLead({ personType: "PJ", name: c.razao_social,
                     document: fmtCnpj(c.cnpj), email: c.email || "", phone: c.telefone || "",
                     city: c.municipio || "", state: c.uf || "", segment: (c.cnae || "").slice(0, 50) })}
                     style={{ ...btnBase, background: "rgba(196,146,46,0.15)", border: "1px solid rgba(196,146,46,0.3)", padding: "5px 14px", color: "#E8C97A", fontSize: 11 }}>
                     + Lead
-=======
-                  <button
-                    disabled={saving === c.cnpj}
-                    onClick={async () => {
-                      setSaving(c.cnpj);
-                      await onAddLead({ personType: "PJ", name: c.razao_social,
-                        document: fmtCnpj(c.cnpj), email: c.email || "", phone: c.telefone || "",
-                        city: c.municipio || "", state: c.uf || "", segment: (c.cnae || "").slice(0, 50) });
-                      setSaving(null);
-                    }}
-                    style={{ ...btnBase, background: saving === c.cnpj ? "rgba(196,146,46,0.05)" : "rgba(196,146,46,0.15)", border: "1px solid rgba(196,146,46,0.3)", padding: "5px 14px", color: "#E5B96A", fontSize: 11, opacity: saving === c.cnpj ? 0.6 : 1 }}>
-                    {saving === c.cnpj ? "Salvando..." : "+ Lead"}
->>>>>>> Stashed changes
                   </button>
                 </div>
 
