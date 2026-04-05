@@ -5,13 +5,20 @@ import {
   X, User, Building2, CheckCircle2, Clock, ArrowRight,
   FileText, CreditCard, Calendar, Link2, Pencil, Check,
   Percent, TrendingUp, BadgeDollarSign, Upload, Paperclip, Trash2, Home, ExternalLink,
-  Package, Copy, CheckCheck,
+  Package, Copy, CheckCheck, MessageSquare, Send,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { STATUS_LABELS, STATUS_COLORS, type OperationStatus } from "@/lib/constants";
 import { CHECKLISTS, DEFAULT_CHECKLIST } from "./nova-proposta-modal";
+
+export type MesaComment = {
+  id: string;
+  text: string;
+  author: string;
+  created_at: string;
+};
 
 // Taxa de impostos sobre comissões (ISS 2% + PIS 0,65% + COFINS 3%) — sincronizado com aba Financeiro
 const TAXA_IMPOSTOS_COMISSAO = 5.65;
@@ -55,6 +62,7 @@ export interface ProposalFull {
   imovel_valor_medio?: number;
   imovel_cidade?: string;
   imovel_estado?: string;
+  mesa_comments?: MesaComment[];
 }
 
 interface CompiledDoc {
@@ -92,6 +100,8 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
     setCheckedDocs({});
     setUploadedFiles({});
     setUploadedUrls({});
+    setMesaComments(Array.isArray(proposal.mesa_comments) ? proposal.mesa_comments : []);
+    setNewComment("");
     if (IS_DEMO) {
       try {
         const savedChecks = JSON.parse(localStorage.getItem(`v3_docs_${proposal.id}`) ?? "{}");
@@ -102,7 +112,7 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
     } else {
       fetch(`/api/credit-proposals/documents?proposal_id=${proposal.id}`)
         .then((r) => r.json())
-        .then(({ documents, checklist }) => {
+        .then(({ documents, checklist, mesa_comments }) => {
           // Carrega checklist salvo (marcações sem arquivo)
           const savedChecks: Record<string, boolean> = (checklist && typeof checklist === "object") ? checklist : {};
           const files: Record<string, string>   = {};
@@ -118,6 +128,7 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
           setCheckedDocs(savedChecks);
           setUploadedFiles(files);
           setUploadedUrls(urls);
+          if (Array.isArray(mesa_comments)) setMesaComments(mesa_comments);
         })
         .catch(() => {});
     }
@@ -224,6 +235,11 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
     });
   }
 
+  // ── Mesa Comments state ───────────────────────────────────────────────────
+  const [mesaComments, setMesaComments] = useState<MesaComment[]>([]);
+  const [newComment, setNewComment] = useState("");
+  const [savingComment, setSavingComment] = useState(false);
+
   // ── Commission state ──────────────────────────────────────────────────────
   const [valorCredito, setValorCredito] = useState(0);
   const [valorCreditoEdit, setValorCreditoEdit] = useState("");
@@ -296,6 +312,25 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
     setValorSolicitado(v);
     setEditandoValorSolicitado(false);
     onProposalUpdate?.(proposal!.id, { requested_value: v });
+  }
+
+  async function handleAddComment() {
+    if (!proposal || !newComment.trim() || savingComment) return;
+    setSavingComment(true);
+    try {
+      const res = await fetch("/api/credit-proposals/comments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ proposal_id: proposal.id, text: newComment.trim() }),
+      });
+      const json = await res.json();
+      if (res.ok && json.comment) {
+        setMesaComments((prev) => [...prev, json.comment]);
+        setNewComment("");
+      }
+    } finally {
+      setSavingComment(false);
+    }
   }
 
   const currentStageIdx = PIPELINE_STAGES.findIndex((s) => s.key === (proposal.stage ?? "RECEBIDO"));
@@ -712,6 +747,65 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <Calendar className="w-3.5 h-3.5" />
             Criado em {formatDate(proposal.created_at)}
+          </div>
+
+          {/* ── Mensagens da Mesa ── */}
+          <div className="p-4 rounded-xl border border-border bg-secondary/30 space-y-3">
+            <p className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
+              <MessageSquare className="w-3.5 h-3.5" /> Mensagens da Mesa
+              {mesaComments.length > 0 && (
+                <span className="ml-auto text-[10px] bg-primary/15 text-primary px-2 py-0.5 rounded-full font-semibold">
+                  {mesaComments.length}
+                </span>
+              )}
+            </p>
+
+            {/* Lista de comentários */}
+            <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+              {mesaComments.length === 0 ? (
+                <p className="text-xs text-muted-foreground text-center py-3 italic">
+                  Nenhuma mensagem ainda.
+                </p>
+              ) : (
+                mesaComments.map((c) => (
+                  <div key={c.id} className="p-2.5 rounded-lg bg-secondary/50 border border-border space-y-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[10px] font-semibold text-primary">{c.author}</span>
+                      <span className="text-[10px] text-muted-foreground">
+                        {new Date(c.created_at).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                      </span>
+                    </div>
+                    <p className="text-xs text-foreground leading-relaxed">{c.text}</p>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* Campo de escrita — apenas para Mesa */}
+            {canChangeStage && (
+              <div className="flex gap-2 pt-1">
+                <textarea
+                  value={newComment}
+                  onChange={(e) => setNewComment(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleAddComment(); } }}
+                  placeholder="Escreva uma mensagem para o partner..."
+                  rows={2}
+                  className="flex-1 text-xs px-3 py-2 bg-secondary border border-border rounded-lg text-foreground placeholder:text-muted-foreground resize-none focus:outline-none focus:ring-1 focus:ring-primary/50"
+                />
+                <button
+                  onClick={handleAddComment}
+                  disabled={!newComment.trim() || savingComment}
+                  className="w-9 h-9 rounded-lg bg-primary hover:bg-primary/80 flex items-center justify-center flex-shrink-0 disabled:opacity-40 disabled:cursor-not-allowed transition-colors self-end"
+                >
+                  {savingComment
+                    ? <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    : <Send className="w-3.5 h-3.5 text-white" />}
+                </button>
+              </div>
+            )}
+            {!canChangeStage && (
+              <p className="text-[10px] text-muted-foreground italic text-center">Somente a Mesa pode adicionar mensagens.</p>
+            )}
           </div>
         </div>
 

@@ -4,7 +4,7 @@ import React, { useState, useCallback, useEffect } from "react";
 import {
   Headphones, Plus, ChevronRight, User, Building2,
   Banknote, Clock, CheckCircle2, AlertCircle, Link2,
-  LayoutGrid, List, Search, X, FileText, ArrowRight,
+  LayoutGrid, List, Search, X, FileText, ArrowRight, MessageSquare,
 } from "lucide-react";
 import { ExportButton } from "@/components/financeiro/export-button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -35,6 +35,7 @@ interface ProposalCard {
   approved_value?: number | null;
   prazo?: string; finalidade?: string;
   current_level?: string;
+  mesa_comments_count?: number;
 }
 
 interface MesaOpClientProps {
@@ -297,6 +298,12 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
                                 style={{ width: `${Math.min(100, ((p.docs_uploaded ?? 0) / (p.docs_required || 1)) * 100)}%` }} />
                             </div>
                             <span className="text-[10px] text-muted-foreground">{p.docs_uploaded}/{p.docs_required}</span>
+                          </div>
+                        )}
+                        {(p.mesa_comments_count ?? 0) > 0 && (
+                          <div className="mt-1 flex items-center gap-1">
+                            <MessageSquare className="w-2.5 h-2.5 text-primary" />
+                            <span className="text-[10px] text-primary font-semibold">{p.mesa_comments_count} msg</span>
                           </div>
                         )}
                       </button>

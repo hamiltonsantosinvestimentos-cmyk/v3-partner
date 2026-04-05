@@ -65,6 +65,7 @@ export default async function MesaOperacionalPage() {
     ...p,
     docs_uploaded: Array.isArray(p.documents) ? p.documents.length : 0,
     docs_required: 8,
+    mesa_comments_count: Array.isArray(p.mesa_comments) ? p.mesa_comments.length : 0,
   }));
 
   return (

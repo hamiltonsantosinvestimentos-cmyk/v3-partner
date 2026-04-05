@@ -133,7 +133,7 @@ export async function GET(req: NextRequest) {
   const svc = serviceClient();
   const { data: proposal } = await svc
     .from("credit_desk_proposals")
-    .select("id, partner_id, documents, checklist")
+    .select("id, partner_id, documents, checklist, mesa_comments")
     .eq("id", proposalId)
     .single();
 
@@ -157,7 +157,8 @@ export async function GET(req: NextRequest) {
   );
 
   const checklist = (proposal as any).checklist ?? {};
-  return NextResponse.json({ documents: docsWithUrls, checklist });
+  const mesa_comments = Array.isArray((proposal as any).mesa_comments) ? (proposal as any).mesa_comments : [];
+  return NextResponse.json({ documents: docsWithUrls, checklist, mesa_comments });
 }
 
 // DELETE — remove documento do storage e da proposta
