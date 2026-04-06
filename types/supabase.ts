@@ -25,6 +25,28 @@ export type DealStage =
   | "CLOSED_LOST";
 export type TicketPriority = "LOW" | "MEDIUM" | "HIGH" | "URGENT";
 export type CreditDeskLevel = "NIVEL_1" | "NIVEL_2" | "NIVEL_3";
+export type CreativeJobStatus = "PENDING" | "PROCESSING" | "DONE" | "ERROR";
+export type CreativeFileType = "cim" | "teaser" | "linkedin_post" | "linkedin_story";
+export type CreativeLanguage = "pt-br" | "en";
+export type CreativeFormat = "pdf" | "png" | "jpg";
+
+// Estrutura do campo asset_data (JSONB) em ma_deals
+export interface AssetData {
+  descricao_ptbr?: string;
+  descricao_en?: string;
+  tese_investimento?: string;
+  tese_investimento_en?: string;
+  processo_regulatorio?: string;
+  processo_v3?: string;
+  metricas?: Array<{ label: string; value: string; sub?: string }>;
+  diferenciais?: string[];
+  riscos?: Array<{ nivel: "baixo" | "medio" | "alto"; descricao: string; mitigacao: string }>;
+  fotos?: Array<{ url: string; caption: string }>;
+  confidencialidade?: string;
+  valor_ativo_total?: string;
+  tir_estimada?: string;
+  prazo_retorno?: string;
+}
 
 export interface Database {
   public: {
@@ -134,6 +156,11 @@ export interface Database {
           documents: Json;
           tags: string[];
           notes: string | null;
+          // Colunas adicionadas pela migration supabase-schema-criativos.sql
+          slug: string | null;
+          location: string | null;
+          cover_photo_url: string | null;
+          asset_data: AssetData;
           created_at: string;
           updated_at: string;
         };
@@ -156,6 +183,10 @@ export interface Database {
           created_by: string;
           status?: OperationStatus;
           notes?: string | null;
+          slug?: string | null;
+          location?: string | null;
+          cover_photo_url?: string | null;
+          asset_data?: AssetData;
         };
         Update: {
           title?: string;
@@ -165,6 +196,66 @@ export interface Database {
           assigned_to?: string | null;
           status?: OperationStatus;
           notes?: string | null;
+          slug?: string | null;
+          location?: string | null;
+          cover_photo_url?: string | null;
+          asset_data?: AssetData;
+        };
+      };
+      creative_jobs: {
+        Row: {
+          id: string;
+          deal_id: string;
+          status: CreativeJobStatus;
+          progress: number;
+          error_message: string | null;
+          started_at: string | null;
+          completed_at: string | null;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          deal_id: string;
+          status?: CreativeJobStatus;
+          progress?: number;
+          error_message?: string | null;
+          created_by?: string | null;
+        };
+        Update: {
+          status?: CreativeJobStatus;
+          progress?: number;
+          error_message?: string | null;
+          started_at?: string | null;
+          completed_at?: string | null;
+        };
+      };
+      creative_files: {
+        Row: {
+          id: string;
+          deal_id: string;
+          job_id: string | null;
+          file_type: CreativeFileType;
+          language: CreativeLanguage;
+          format: CreativeFormat;
+          storage_path: string;
+          public_url: string | null;
+          file_size_kb: number | null;
+          created_at: string;
+        };
+        Insert: {
+          deal_id: string;
+          job_id?: string | null;
+          file_type: CreativeFileType;
+          language: CreativeLanguage;
+          format: CreativeFormat;
+          storage_path: string;
+          public_url?: string | null;
+          file_size_kb?: number | null;
+        };
+        Update: {
+          public_url?: string | null;
+          file_size_kb?: number | null;
         };
       };
       operational_tickets: {

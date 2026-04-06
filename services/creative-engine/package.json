@@ -1,0 +1,15 @@
+{
+  "name": "v3-creative-engine",
+  "version": "1.0.0",
+  "description": "V3 Partners — Serviço de geração de criativos M&A (Puppeteer + Supabase)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.100.1",
+    "express": "^4.19.2",
+    "puppeteer": "^22.0.0"
+  }
+}
