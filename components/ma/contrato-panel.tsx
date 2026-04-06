@@ -106,7 +106,7 @@ interface ContratoPanelProps {
   isDemo?: boolean;
 }
 
-export default function ContratoPanel({ deal, dealCode, isDemo = false }: ContratoPanelProps) {
+export function ContratoPanel({ deal, dealCode, isDemo = false }: ContratoPanelProps) {
   const [selectedTipo, setSelectedTipo] = useState<DocType | null>(null);
   const [states, setStates] = useState<Record<DocType, ContratoState>>({
     nda: { ...INITIAL_STATE },

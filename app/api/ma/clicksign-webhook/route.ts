@@ -62,11 +62,13 @@ export async function POST(request: NextRequest) {
     const supabase = await createClient();
 
     // Busca o deal pelo envelopeId (documentKey do ClickSign)
-    const { data: deal, error: findError } = await supabase
+    const { data: dealRows, error: findError } = await supabase
       .from("ma_deals")
       .select("id, stage")
       .eq("clicksign_envelope_id", document.key)
-      .single();
+      .limit(1);
+
+    const deal = dealRows?.[0] as { id: string; stage: string } | undefined;
 
     if (findError || !deal) {
       console.warn(
@@ -78,7 +80,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Atualiza o status do contrato e avança o stage se necessário
-    const updates: Record<string, unknown> = {
+    const updates: Record<string, string> = {
       contract_status: "SIGNED",
       contract_signed_at: new Date().toISOString(),
     };
@@ -88,7 +90,8 @@ export async function POST(request: NextRequest) {
       updates.stage = "QUALIFICATION";
     }
 
-    const { error: updateError } = await supabase
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error: updateError } = await (supabase as any)
       .from("ma_deals")
       .update(updates)
       .eq("id", deal.id);
@@ -100,7 +103,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Registra histórico
-    await supabase.from("ma_deal_history").insert({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (supabase as any).from("ma_deal_history").insert({
       deal_id: deal.id,
       event_type: "CONTRACT_SIGNED",
       description: `Contrato assinado via ClickSign — envelope ${document.key}`,
