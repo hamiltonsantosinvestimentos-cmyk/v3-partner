@@ -1,15 +1,11 @@
 import { MesaMaClient } from "@/components/mesa-ma/mesa-ma-client";
-import { createClient } from "@/lib/supabase/server";
-import { createClient as createServiceClient } from "@supabase/supabase-js";
+import { cookies } from "next/headers";
 
 export const dynamic = "force-dynamic";
 
-function serviceClient() {
-  return createServiceClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
-}
+const IS_DEMO =
+  !process.env.NEXT_PUBLIC_SUPABASE_URL ||
+  process.env.NEXT_PUBLIC_SUPABASE_URL.includes("SEU_PROJETO");
 
 // Mapeia o deal_stage ENUM do Supabase para os IDs internos do pipeline
 const STAGE_TO_PIPELINE: Record<string, string> = {
@@ -25,9 +21,29 @@ const STAGE_TO_PIPELINE: Record<string, string> = {
 };
 
 export default async function MesaMaPage() {
+  // ── DEMO MODE ──────────────────────────────────────────────────────────────
+  if (IS_DEMO) {
+    const cookieStore = await cookies();
+    let userRole = "GESTAO";
+    try {
+      const session = cookieStore.get("v3_demo_session")?.value;
+      if (session) userRole = JSON.parse(session).role ?? "GESTAO";
+    } catch {}
+    return (
+      <MesaMaClient
+        userRole={userRole}
+        initialDeals={[]}
+        userId="demo-admin-001"
+        userName="Admin V3"
+      />
+    );
+  }
+
+  // ── PRODUÇÃO ───────────────────────────────────────────────────────────────
+  const { createClient } = await import("@/lib/supabase/server");
+  const { createClient: createServiceClient } = await import("@supabase/supabase-js");
   const supabase = await createClient();
 
-  // Usuário logado
   const { data: { user } } = await supabase.auth.getUser();
   const { data: profile } = await supabase
     .from("profiles")
@@ -36,8 +52,10 @@ export default async function MesaMaPage() {
     .single();
   const userRole = profile?.role ?? "GESTAO";
 
-  // Busca todos os deals com service client (sem RLS, sem cache)
-  const svc = serviceClient();
+  const svc = createServiceClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
   const { data: deals } = await svc
     .from("ma_deals")
     .select(`
@@ -49,7 +67,6 @@ export default async function MesaMaPage() {
     `)
     .order("created_at", { ascending: false });
 
-  // Converte para o formato MaCard usado pelo cliente
   const initialDeals = (deals ?? []).map((d) => ({
     id: d.id,
     code: d.code,
@@ -66,5 +83,12 @@ export default async function MesaMaPage() {
     comments: Array.isArray(d.comments) ? d.comments : [],
   }));
 
-  return <MesaMaClient userRole={userRole} initialDeals={initialDeals} userId={user?.id ?? ""} userName={profile?.full_name ?? "Mesa"} />;
+  return (
+    <MesaMaClient
+      userRole={userRole}
+      initialDeals={initialDeals}
+      userId={user?.id ?? ""}
+      userName={(profile as { full_name?: string } | null)?.full_name ?? "Mesa"}
+    />
+  );
 }

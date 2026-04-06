@@ -8,18 +8,32 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
-import { createClient } from "@/lib/supabase/server";
+import { cookies } from "next/headers";
+
+const IS_DEMO =
+  !process.env.NEXT_PUBLIC_SUPABASE_URL ||
+  process.env.NEXT_PUBLIC_SUPABASE_URL.includes("SEU_PROJETO");
 
 export default async function MesaCreditoPage() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  const { data: profileData } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", user?.id ?? "")
-    .single();
+  let role = "ADMIN";
 
-  const role = (profileData as { role: string } | null)?.role || "PARTNER";
+  if (IS_DEMO) {
+    try {
+      const cookieStore = await cookies();
+      const session = cookieStore.get("v3_demo_session")?.value;
+      if (session) role = JSON.parse(session).role ?? "ADMIN";
+    } catch {}
+  } else {
+    const { createClient } = await import("@/lib/supabase/server");
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    const { data: profileData } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user?.id ?? "")
+      .single();
+    role = (profileData as { role: string } | null)?.role || "PARTNER";
+  }
 
   const levels = [
     {
