@@ -118,17 +118,17 @@ const NAV_ITEMS: NavItem[] = [
     href: "/mesa-credito",
     label: "Mesa de Crédito",
     icon: "CreditCard",
-    roles: ["ADMIN", "MESA_OPERACIONAL", "GESTAO", "PARTNER", "PARTNER_PRO"],
+    roles: ["ADMIN", "GESTAO", "PARTNER", "PARTNER_PRO"],
     children: [
       {
         href: "/mesa-credito/nivel-1",
         label: "N1 — Crédito Varejo",
-        roles: ["ADMIN", "MESA_OPERACIONAL", "GESTAO", "PARTNER", "PARTNER_PRO"],
+        roles: ["ADMIN", "GESTAO", "PARTNER", "PARTNER_PRO"],
       },
       {
         href: "/mesa-credito/nivel-2",
         label: "N2 — Crédito Estruturado",
-        roles: ["ADMIN", "MESA_OPERACIONAL", "GESTAO", "PARTNER", "PARTNER_PRO"],
+        roles: ["ADMIN", "GESTAO", "PARTNER", "PARTNER_PRO"],
       },
       {
         href: "/mesa-credito/nivel-3",
@@ -141,7 +141,7 @@ const NAV_ITEMS: NavItem[] = [
     href: "/mesa-ma",
     label: "Mesa M&A",
     icon: "Handshake",
-    roles: ["ADMIN", "GESTAO"],
+    roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL"],
   },
   {
     href: "/consorcio",
