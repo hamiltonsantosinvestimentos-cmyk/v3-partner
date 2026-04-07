@@ -1,5 +1,7 @@
 import Link from "next/link";
-import { Globe, Users, TrendingUp, Handshake, DollarSign, Package, CheckCircle } from "lucide-react";
+import { Suspense } from "react";
+import { Globe, Users, Handshake, DollarSign, Package, CheckCircle } from "lucide-react";
+import { SuccessBanner } from "@/components/comunidade/success-banner";
 
 const IS_DEMO =
   !process.env.NEXT_PUBLIC_SUPABASE_URL ||
@@ -61,6 +63,11 @@ export default function ComunidadePage() {
   return (
     <div className="min-h-screen bg-[#09081A]">
       <div className="max-w-7xl mx-auto px-6 py-10 space-y-12">
+
+        {/* Banner de sucesso pós-submit */}
+        <Suspense fallback={null}>
+          <SuccessBanner />
+        </Suspense>
 
         {/* Header */}
         <div className="text-center space-y-4">

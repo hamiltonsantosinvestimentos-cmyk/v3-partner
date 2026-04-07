@@ -1,4 +1,3 @@
-import { cookies } from "next/headers";
 import { FormularioAtivo } from "@/components/comunidade/formulario-ativo";
 
 const IS_DEMO =
@@ -10,9 +9,8 @@ export default async function AtivoPage() {
 
   if (!IS_DEMO) {
     try {
-      const cookieStore = await cookies();
       const { createClient } = await import("@/lib/supabase/server");
-      const supabase = createClient(cookieStore);
+      const supabase = await createClient();
       const { data: { user } } = await supabase.auth.getUser();
       userId = user?.id ?? "demo-user";
     } catch {

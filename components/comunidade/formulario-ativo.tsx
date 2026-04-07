@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useForm } from "react-hook-form";
+import { useForm, Controller } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@/components/ui/button";
@@ -320,6 +320,7 @@ export function FormularioAtivo({ isDemo, userId }: FormularioAtivoProps) {
     handleSubmit,
     watch,
     setValue,
+    control,
     trigger,
     formState: { errors },
   } = useForm<FormData>({
@@ -695,24 +696,23 @@ export function FormularioAtivo({ isDemo, userId }: FormularioAtivoProps) {
                 </FieldGroup>
 
                 <FieldGroup label="Estado de Conservação">
-                  <Select
-                    onValueChange={(v) =>
-                      setValue(
-                        "estado_conservacao",
-                        v as FormData["estado_conservacao"]
-                      )
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="novo">Novo</SelectItem>
-                      <SelectItem value="seminovo">Seminovo</SelectItem>
-                      <SelectItem value="bom">Bom</SelectItem>
-                      <SelectItem value="regular">Regular</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <Controller
+                    control={control}
+                    name="estado_conservacao"
+                    render={({ field }) => (
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="novo">Novo</SelectItem>
+                          <SelectItem value="seminovo">Seminovo</SelectItem>
+                          <SelectItem value="bom">Bom</SelectItem>
+                          <SelectItem value="regular">Regular</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    )}
+                  />
                 </FieldGroup>
 
                 <FieldGroup label="Documentação">
@@ -763,22 +763,24 @@ export function FormularioAtivo({ isDemo, userId }: FormularioAtivoProps) {
             </div>
 
             <FieldGroup label="Tipo de Operação" required>
-              <Select
-                onValueChange={(v) =>
-                  setValue("tipo_operacao", v as FormData["tipo_operacao"])
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione o tipo" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="venda_total">Venda Total</SelectItem>
-                  <SelectItem value="venda_parcial">Venda Parcial</SelectItem>
-                  <SelectItem value="parceria">Parceria Operacional</SelectItem>
-                  <SelectItem value="joint_venture">Joint Venture</SelectItem>
-                  <SelectItem value="captacao">Captação de Capital</SelectItem>
-                </SelectContent>
-              </Select>
+              <Controller
+                control={control}
+                name="tipo_operacao"
+                render={({ field }) => (
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione o tipo" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="venda_total">Venda Total</SelectItem>
+                      <SelectItem value="venda_parcial">Venda Parcial</SelectItem>
+                      <SelectItem value="parceria">Parceria Operacional</SelectItem>
+                      <SelectItem value="joint_venture">Joint Venture</SelectItem>
+                      <SelectItem value="captacao">Captação de Capital</SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
+              />
               {errors.tipo_operacao && (
                 <p className="text-xs text-red-400 mt-1">
                   {errors.tipo_operacao.message}
@@ -791,7 +793,7 @@ export function FormularioAtivo({ isDemo, userId }: FormularioAtivoProps) {
                 name="exclusividade"
                 value={watchExclusividade}
                 onChange={(v) =>
-                  setValue("exclusividade", v as FormData["exclusividade"])
+                  setValue("exclusividade", v as FormData["exclusividade"], { shouldValidate: true })
                 }
                 options={[
                   { value: "sim", label: "Sim" },
@@ -815,24 +817,26 @@ export function FormularioAtivo({ isDemo, userId }: FormularioAtivoProps) {
         return (
           <div className="space-y-5">
             <FieldGroup label="Situação Legal" required>
-              <Select
-                onValueChange={(v) =>
-                  setValue("situacao_legal", v as FormData["situacao_legal"])
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="regular">Totalmente Regular</SelectItem>
-                  <SelectItem value="pendencias_menores">
-                    Pendências Menores
-                  </SelectItem>
-                  <SelectItem value="pendencias_relevantes">
-                    Pendências Relevantes
-                  </SelectItem>
-                </SelectContent>
-              </Select>
+              <Controller
+                control={control}
+                name="situacao_legal"
+                render={({ field }) => (
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="regular">Totalmente Regular</SelectItem>
+                      <SelectItem value="pendencias_menores">
+                        Pendências Menores
+                      </SelectItem>
+                      <SelectItem value="pendencias_relevantes">
+                        Pendências Relevantes
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
+              />
               {errors.situacao_legal && (
                 <p className="text-xs text-red-400 mt-1">
                   {errors.situacao_legal.message}
@@ -845,7 +849,7 @@ export function FormularioAtivo({ isDemo, userId }: FormularioAtivoProps) {
                 name="tem_litigios"
                 value={watchTemLitigios}
                 onChange={(v) =>
-                  setValue("tem_litigios", v as FormData["tem_litigios"])
+                  setValue("tem_litigios", v as FormData["tem_litigios"], { shouldValidate: true })
                 }
                 options={[
                   { value: "sim", label: "Sim" },
@@ -857,9 +861,11 @@ export function FormularioAtivo({ isDemo, userId }: FormularioAtivoProps) {
             <FieldGroup label="Documentação Disponível">
               <div className="grid grid-cols-1 gap-2">
                 {DOCS_DISPONIVEIS.map((doc) => (
-                  <label
+                  <button
                     key={doc}
-                    className={`flex items-center gap-3 px-4 py-2.5 rounded-lg border cursor-pointer text-sm transition-all ${
+                    type="button"
+                    onClick={() => toggleDoc(doc)}
+                    className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg border cursor-pointer text-sm transition-all text-left ${
                       watchDocumentacao.includes(doc)
                         ? "border-[#C9A84C] bg-[#C9A84C]/10 text-[#F0ECE4]"
                         : "border-[#243A66] bg-[#162744] text-[#7A8FA8]"
@@ -876,8 +882,8 @@ export function FormularioAtivo({ isDemo, userId }: FormularioAtivoProps) {
                         <CheckCircle className="w-3 h-3 text-[#09081A]" />
                       )}
                     </div>
-                    <span onClick={() => toggleDoc(doc)}>{doc}</span>
-                  </label>
+                    <span>{doc}</span>
+                  </button>
                 ))}
               </div>
             </FieldGroup>
@@ -949,27 +955,29 @@ export function FormularioAtivo({ isDemo, userId }: FormularioAtivoProps) {
             </div>
 
             <FieldGroup label="Relação com o Ativo" required>
-              <Select
-                onValueChange={(v) =>
-                  setValue("relacao_ativo", v as FormData["relacao_ativo"])
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="proprietario">
-                    Proprietário Direto
-                  </SelectItem>
-                  <SelectItem value="representante">
-                    Representante Legal
-                  </SelectItem>
-                  <SelectItem value="corretor">
-                    Corretor / Intermediário
-                  </SelectItem>
-                  <SelectItem value="outro">Outro</SelectItem>
-                </SelectContent>
-              </Select>
+              <Controller
+                control={control}
+                name="relacao_ativo"
+                render={({ field }) => (
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="proprietario">
+                        Proprietário Direto
+                      </SelectItem>
+                      <SelectItem value="representante">
+                        Representante Legal
+                      </SelectItem>
+                      <SelectItem value="corretor">
+                        Corretor / Intermediário
+                      </SelectItem>
+                      <SelectItem value="outro">Outro</SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
+              />
               {errors.relacao_ativo && (
                 <p className="text-xs text-red-400 mt-1">
                   {errors.relacao_ativo.message}
