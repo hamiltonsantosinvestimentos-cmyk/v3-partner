@@ -414,3 +414,57 @@ export const DEMO_NOTIFICATIONS = [
   { id: "n2", title: "Proposta de crédito", message: "Nova proposta High Ticket aguardando aprovação", type: "warning", read: false, created_at: "2026-03-26T15:00:00Z" },
   { id: "n3", title: "Ticket urgente", message: "Documentação vencida - ação necessária", type: "error", read: false, created_at: "2026-03-25T14:00:00Z" },
 ];
+
+export const DEMO_PROSPECTS_ATIVO = [
+  {
+    id: "ativo-001", code: "PROS-26-300001", tipo: "ativo",
+    segmento: "commodities", sub_segmento: "minerio_ferro",
+    titulo: "Reserva de Minério de Ferro — Norte Brasil",
+    valor_min: 45000000, valor_max: 60000000,
+    localizacao: "Pará · Brasil", stage: "QUALIFICADO",
+    created_at: "2026-04-01T10:00:00Z",
+  },
+  {
+    id: "ativo-002", code: "PROS-26-300002", tipo: "ativo",
+    segmento: "commodities", sub_segmento: "ouro_prata",
+    titulo: "Jazida de Ouro e Prata — Centro-Oeste",
+    valor_min: 8000000, valor_max: 12000000,
+    localizacao: "Mato Grosso · Brasil", stage: "PENDENTE",
+    created_at: "2026-04-02T14:00:00Z",
+  },
+  {
+    id: "ativo-003", code: "PROS-26-300003", tipo: "ativo",
+    segmento: "mobilidade", sub_segmento: "aeronaves",
+    titulo: "Frota Executiva — 3 Aeronaves",
+    valor_min: 18000000, valor_max: 25000000,
+    localizacao: "São Paulo · Brasil", stage: "QUALIFICADO",
+    created_at: "2026-04-03T09:00:00Z",
+  },
+  {
+    id: "ativo-004", code: "PROS-26-300004", tipo: "ativo",
+    segmento: "mobilidade", sub_segmento: "embarcacoes",
+    titulo: "Marina e Frota de Embarcações — Sul",
+    valor_min: 6000000, valor_max: 9000000,
+    localizacao: "Santa Catarina · Brasil", stage: "PENDENTE",
+    created_at: "2026-04-04T11:00:00Z",
+  },
+];
+
+export const DEMO_PROSPECTS_INVESTIDOR = [
+  {
+    id: "inv-001", code: "PROS-26-400001", tipo: "investidor",
+    nome_fantasia: "Family Office Confidencial A",
+    ticket_min: 5000000, ticket_max: 50000000,
+    segmentos: ["commodities", "mobilidade"],
+    perfil: "financeiro", stage: "ATIVO",
+    created_at: "2026-03-15T10:00:00Z",
+  },
+  {
+    id: "inv-002", code: "PROS-26-400002", tipo: "investidor",
+    nome_fantasia: "Fundo Estratégico B",
+    ticket_min: 1000000, ticket_max: 10000000,
+    segmentos: ["mobilidade"],
+    perfil: "estrategico", stage: "ATIVO",
+    created_at: "2026-03-20T14:00:00Z",
+  },
+];

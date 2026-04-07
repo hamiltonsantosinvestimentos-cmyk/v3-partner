@@ -23,6 +23,7 @@ import {
   ContactRound,
   DollarSign,
   Wallet,
+  Globe,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { UserRole } from "@/lib/constants";
@@ -43,6 +44,7 @@ const iconMap = {
   ContactRound,
   DollarSign,
   Wallet,
+  Globe,
 };
 
 interface NavSubItem {
@@ -113,6 +115,12 @@ const NAV_ITEMS: NavItem[] = [
     label: "M&A",
     icon: "Building2",
     roles: ["ADMIN", "GESTAO", "PARTNER", "PARTNER_PRO"],
+  },
+  {
+    href: "/comunidade",
+    label: "Comunidade",
+    icon: "Globe",
+    roles: ["ADMIN", "PARTNER", "PARTNER_PRO", "GESTAO", "MESA_OPERACIONAL"],
   },
   {
     href: "/mesa-credito",
