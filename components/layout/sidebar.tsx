@@ -24,6 +24,7 @@ import {
   DollarSign,
   Wallet,
   Globe,
+  Shield,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { UserRole } from "@/lib/constants";
@@ -45,6 +46,7 @@ const iconMap = {
   DollarSign,
   Wallet,
   Globe,
+  Shield,
 };
 
 interface NavSubItem {
@@ -85,6 +87,12 @@ const NAV_ITEMS: NavItem[] = [
     label: "Usuários",
     icon: "Users",
     roles: ["ADMIN"],
+  },
+  {
+    href: "/kyc",
+    label: "KYC Engine",
+    icon: "Shield",
+    roles: ["ADMIN", "GESTAO"],
   },
   {
     href: "/ia-assistant",
