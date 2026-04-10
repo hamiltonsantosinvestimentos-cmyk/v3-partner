@@ -67,9 +67,10 @@ export async function GET(req: NextRequest) {
     .from("credit_desk_proposals")
     .select(`
       id, code, title, client_name, client_cpf_cnpj, credit_line,
-      requested_value, approved_value, current_level, status,
+      requested_value, approved_value, current_level, status, stage,
       level1_notes, level2_notes, level3_notes,
       level1_at, level2_at, level3_at, created_at,
+      valor_credito_atual, comissao_mandato_perc, comissao_instituicao_perc,
       partner:profiles!credit_desk_proposals_partner_id_fkey(id, full_name)
     `)
     .order("created_at", { ascending: false });
@@ -107,7 +108,7 @@ export async function POST(req: NextRequest) {
     .from("credit_desk_proposals").select("*", { count: "exact", head: true });
   const code = d.code ?? `CRED-26-${String((count ?? 0) + 1).padStart(4, "0")}`;
 
-  const { data, error } = await supabase.from("credit_desk_proposals").insert({
+  const { data, error } = await serviceClient().from("credit_desk_proposals").insert({
     code,
     title:           d.title,
     client_name:     d.client_name,
@@ -116,6 +117,7 @@ export async function POST(req: NextRequest) {
     requested_value: d.requested_value,
     current_level:   d.current_level,
     status:          "PENDING",
+    stage:           "RECEBIDO",
     partner_id:      user.id,
     created_by:      user.id,
   }).select().single();

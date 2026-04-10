@@ -1,10 +1,9 @@
 import { MesaOpClient } from "@/components/mesa-operacional/mesa-op-client";
 import { DEMO_TICKETS, DEMO_CREDIT_PROPOSALS } from "@/lib/demo-data";
 import { cookies } from "next/headers";
+import { createClient as sc } from "@supabase/supabase-js";
 
-const IS_DEMO =
-  !process.env.NEXT_PUBLIC_SUPABASE_URL ||
-  process.env.NEXT_PUBLIC_SUPABASE_URL.includes("SEU_PROJETO");
+const IS_DEMO = false;
 
 // Enrich demo proposals with stage info
 const DEMO_PROPOSALS_WITH_STAGE = DEMO_CREDIT_PROPOSALS.map((p, i) => ({
@@ -56,8 +55,9 @@ export default async function MesaOperacionalPage() {
   if (!isAdmin) ticketsQuery = ticketsQuery.eq("requester_id", currentUser.id);
   const { data: ticketsData } = await ticketsQuery;
 
-  // Propostas: admin vê todas, partner vê somente as suas
-  let proposalsQuery = supabase.from("credit_desk_proposals").select("*").order("created_at", { ascending: false });
+  // Propostas: admin vê todas, partner vê somente as suas (usa service client p/ bypassar RLS)
+  const svc = sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+  let proposalsQuery = svc.from("credit_desk_proposals").select("*").order("created_at", { ascending: false });
   if (!isAdmin) proposalsQuery = proposalsQuery.eq("partner_id", currentUser.id);
   const { data: proposalsData } = await proposalsQuery;
 
