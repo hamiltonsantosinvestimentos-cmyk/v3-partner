@@ -25,6 +25,7 @@ import {
   Wallet,
   Globe,
   Shield,
+  ShieldCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { UserRole } from "@/lib/constants";
@@ -47,6 +48,7 @@ const iconMap = {
   Wallet,
   Globe,
   Shield,
+  ShieldCheck,
 };
 
 interface NavSubItem {
@@ -193,6 +195,12 @@ const NAV_ITEMS: NavItem[] = [
     label: "Mesa Operacional",
     icon: "Headphones",
     roles: ["ADMIN", "MESA_OPERACIONAL", "GESTAO"],
+  },
+  {
+    href: "/kyc",
+    label: "KYC",
+    icon: "ShieldCheck",
+    roles: ["ADMIN", "MESA_OPERACIONAL"],
   },
   {
     href: "/academy",
