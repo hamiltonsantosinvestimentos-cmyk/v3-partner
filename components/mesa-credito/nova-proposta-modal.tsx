@@ -22,6 +22,8 @@ export const CHECKLISTS: Record<string, Record<"PF" | "PJ", { id: string; label:
       { id: "he_pf_7", label: "Comprovante de residência (máx. 90 dias)", required: true },
       { id: "he_pf_8", label: "Certidão de casamento / divórcio", required: false, hint: "Se aplicável" },
       { id: "he_pf_9", label: "Certidão negativa de débitos cartoriais", required: false },
+      { id: "he_pf_10", label: "3 fotos internas do imóvel", required: true, hint: "Ambientes principais: sala, quartos, cozinha" },
+      { id: "he_pf_11", label: "3 fotos externas do imóvel", required: true, hint: "Fachada, lateral e área externa" },
     ],
     PJ: [
       { id: "he_pj_1", label: "Contrato Social + todas as alterações", required: true },
@@ -34,6 +36,8 @@ export const CHECKLISTS: Record<string, Record<"PF" | "PJ", { id: string; label:
       { id: "he_pj_8", label: "RG e CPF dos sócios e respectivos cônjuges", required: true },
       { id: "he_pj_9", label: "Imposto de Renda PJ (DIPJ) + recibo", required: true },
       { id: "he_pj_10", label: "Comprovante de residência dos sócios", required: true },
+      { id: "he_pj_11", label: "3 fotos internas do imóvel", required: true, hint: "Ambientes principais: sala, quartos, cozinha" },
+      { id: "he_pj_12", label: "3 fotos externas do imóvel", required: true, hint: "Fachada, lateral e área externa" },
     ],
   },
   "HE ESTRESSADO": {
@@ -48,6 +52,8 @@ export const CHECKLISTS: Record<string, Record<"PF" | "PJ", { id: string; label:
       { id: "hee_pf_8", label: "Certidão de ônus reais atualizada", required: true, hint: "Fundamental para imóveis estressados" },
       { id: "hee_pf_9", label: "Documentação do processo / dívida em aberto", required: true, hint: "Ação judicial, protesto ou execução" },
       { id: "hee_pf_10", label: "Laudo de avaliação do imóvel", required: false, hint: "Avaliação independente" },
+      { id: "hee_pf_11", label: "3 fotos internas do imóvel", required: true, hint: "Ambientes principais: sala, quartos, cozinha" },
+      { id: "hee_pf_12", label: "3 fotos externas do imóvel", required: true, hint: "Fachada, lateral e área externa" },
     ],
     PJ: [
       { id: "hee_pj_1", label: "Contrato Social + todas as alterações", required: true },
@@ -61,6 +67,8 @@ export const CHECKLISTS: Record<string, Record<"PF" | "PJ", { id: string; label:
       { id: "hee_pj_9", label: "Certidão de ônus reais atualizada", required: true, hint: "Fundamental para imóveis estressados" },
       { id: "hee_pj_10", label: "Documentação do processo / dívida em aberto", required: true, hint: "Ação judicial, protesto ou execução" },
       { id: "hee_pj_11", label: "Laudo de avaliação do imóvel", required: false },
+      { id: "hee_pj_12", label: "3 fotos internas do imóvel", required: true, hint: "Ambientes principais: sala, quartos, cozinha" },
+      { id: "hee_pj_13", label: "3 fotos externas do imóvel", required: true, hint: "Fachada, lateral e área externa" },
     ],
   },
   "AVAL": {
@@ -105,6 +113,8 @@ export const CHECKLISTS: Record<string, Record<"PF" | "PJ", { id: string; label:
       { id: "cri_pf_3", label: "Matrícula do imóvel vinculado", required: true },
       { id: "cri_pf_4", label: "IPTU do ano corrente", required: true },
       { id: "cri_pf_5", label: "Imposto de Renda + recibo", required: true },
+      { id: "cri_pf_6", label: "3 fotos internas do imóvel", required: true, hint: "Ambientes principais: sala, quartos, cozinha" },
+      { id: "cri_pf_7", label: "3 fotos externas do imóvel", required: true, hint: "Fachada, lateral e área externa" },
     ],
     PJ: [
       { id: "cri_pj_1", label: "Contrato Social + alterações", required: true },
@@ -114,6 +124,8 @@ export const CHECKLISTS: Record<string, Record<"PF" | "PJ", { id: string; label:
       { id: "cri_pj_5", label: "Laudo de avaliação imobiliária (CRECI)", required: true },
       { id: "cri_pj_6", label: "Memorial descritivo do empreendimento", required: true },
       { id: "cri_pj_7", label: "Certidões Negativas completas", required: true },
+      { id: "cri_pj_8", label: "3 fotos internas do imóvel", required: true, hint: "Ambientes principais: sala, quartos, cozinha" },
+      { id: "cri_pj_9", label: "3 fotos externas do imóvel", required: true, hint: "Fachada, lateral e área externa" },
     ],
   },
   "CRA": {
@@ -177,6 +189,8 @@ export const CHECKLISTS: Record<string, Record<"PF" | "PJ", { id: string; label:
       { id: "fcr_pf_7", label: "Orçamento da obra detalhado", required: true },
       { id: "fcr_pf_8", label: "Imposto de Renda completo + recibo", required: true },
       { id: "fcr_pf_9", label: "Certidão de casamento / divórcio", required: false },
+      { id: "fcr_pf_10", label: "3 fotos internas do imóvel / obra", required: true, hint: "Estado atual da construção ou ambientes internos" },
+      { id: "fcr_pf_11", label: "3 fotos externas do imóvel / obra", required: true, hint: "Fachada, terreno e área externa" },
     ],
     PJ: [
       { id: "fcr_pj_1", label: "Contrato Social + todas as alterações", required: true },
@@ -189,6 +203,8 @@ export const CHECKLISTS: Record<string, Record<"PF" | "PJ", { id: string; label:
       { id: "fcr_pj_8", label: "Memorial descritivo da construção", required: true },
       { id: "fcr_pj_9", label: "Certidões Negativas completas", required: true },
       { id: "fcr_pj_10", label: "RG e CPF dos sócios", required: true },
+      { id: "fcr_pj_11", label: "3 fotos internas do imóvel / obra", required: true, hint: "Estado atual da construção ou ambientes internos" },
+      { id: "fcr_pj_12", label: "3 fotos externas do imóvel / obra", required: true, hint: "Fachada, terreno e área externa" },
     ],
   },
   "HOMECASH": {
@@ -202,6 +218,8 @@ export const CHECKLISTS: Record<string, Record<"PF" | "PJ", { id: string; label:
       { id: "hc_pf_7", label: "Imposto de Renda completo + recibo", required: true },
       { id: "hc_pf_8", label: "Comprovante de residência (máx. 90 dias)", required: true },
       { id: "hc_pf_9", label: "Certidão de casamento / divórcio", required: false },
+      { id: "hc_pf_10", label: "3 fotos internas do imóvel", required: true, hint: "Ambientes principais: sala, quartos, cozinha" },
+      { id: "hc_pf_11", label: "3 fotos externas do imóvel", required: true, hint: "Fachada, lateral e área externa" },
     ],
     PJ: [
       { id: "hc_pj_1", label: "Contrato Social + todas as alterações", required: true },
@@ -213,6 +231,8 @@ export const CHECKLISTS: Record<string, Record<"PF" | "PJ", { id: string; label:
       { id: "hc_pj_7", label: "IPTU do ano corrente", required: true },
       { id: "hc_pj_8", label: "Certidões Negativas completas", required: true },
       { id: "hc_pj_9", label: "RG e CPF dos sócios e cônjuges", required: true },
+      { id: "hc_pj_10", label: "3 fotos internas do imóvel", required: true, hint: "Ambientes principais: sala, quartos, cozinha" },
+      { id: "hc_pj_11", label: "3 fotos externas do imóvel", required: true, hint: "Fachada, lateral e área externa" },
     ],
   },
   "V3GIRO E V3AUTOGIRO": {
@@ -242,6 +262,8 @@ export const CHECKLISTS: Record<string, Record<"PF" | "PJ", { id: string; label:
       { id: "cgi_pf_5", label: "Laudo de avaliação do imóvel (CRECI)", required: true },
       { id: "cgi_pf_6", label: "Imposto de Renda completo + recibo", required: true },
       { id: "cgi_pf_7", label: "Extrato bancário (6 últimos meses)", required: true },
+      { id: "cgi_pf_8", label: "3 fotos internas do imóvel em garantia", required: true, hint: "Ambientes principais: sala, quartos, cozinha" },
+      { id: "cgi_pf_9", label: "3 fotos externas do imóvel em garantia", required: true, hint: "Fachada, lateral e área externa" },
     ],
     PJ: [
       { id: "cgi_pj_1", label: "Contrato Social + alterações", required: true },
@@ -253,6 +275,8 @@ export const CHECKLISTS: Record<string, Record<"PF" | "PJ", { id: string; label:
       { id: "cgi_pj_7", label: "Faturamento mensal — últimos 12 meses", required: true },
       { id: "cgi_pj_8", label: "Certidões Negativas completas", required: true },
       { id: "cgi_pj_9", label: "RG e CPF dos sócios", required: true },
+      { id: "cgi_pj_10", label: "3 fotos internas do imóvel em garantia", required: true, hint: "Ambientes principais: sala, quartos, cozinha" },
+      { id: "cgi_pj_11", label: "3 fotos externas do imóvel em garantia", required: true, hint: "Fachada, lateral e área externa" },
     ],
   },
   "CPR": {
@@ -370,6 +394,36 @@ const LEVEL_LINES: Record<string, string[]> = {
 
 type Tab = "cliente" | "operacao" | "documentos";
 
+interface ImovelItem {
+  endereco: string;
+  valor: string;
+  cidade: string;
+  estado: string;
+  valorMedio: string;
+  proprietarioMesmoTitular: boolean;
+  proprietarioNome: string;
+  zona: "" | "URBANO" | "RURAL";
+  padrao: string;
+  estilo: string;
+  areaRural: string;
+}
+
+function defaultImovel(): ImovelItem {
+  return {
+    endereco: "",
+    valor: "",
+    cidade: "",
+    estado: "",
+    valorMedio: "",
+    proprietarioMesmoTitular: true,
+    proprietarioNome: "",
+    zona: "",
+    padrao: "",
+    estilo: "",
+    areaRural: "",
+  };
+}
+
 interface UploadedFile {
   docId: string;
   name: string;
@@ -408,16 +462,15 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
   const [enderecoCity, setEnderecoCity] = useState("");
   const [enderecoUf, setEnderecoUf] = useState("");
 
+  // Restrição do cliente
+  const [restricao, setRestricao] = useState<"" | "SIM" | "NAO">("");
+
   // Dados da operação
   const [creditLine, setCreditLine] = useState(LEVEL_LINES[level]?.[0] ?? "");
   const [valorSolicitado, setValorSolicitado] = useState("");
   const [prazo, setPrazo] = useState("");
   const [finalidade, setFinalidade] = useState("");
-  const [imovelEndereco, setImovelEndereco] = useState("");
-  const [imovelValor, setImovelValor] = useState("");
-  const [imovelCidade, setImovelCidade] = useState("");
-  const [imovelEstado, setImovelEstado] = useState("");
-  const [imovelValorMedio, setImovelValorMedio] = useState("");
+  const [imoveis, setImoveis] = useState<ImovelItem[]>([defaultImovel()]);
   const [observacoes, setObservacoes] = useState("");
 
   // Documentos
@@ -429,6 +482,10 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
   const uploadedIds = uploadedFiles.filter((f) => f.status === "done").map((f) => f.docId);
   const requiredDocs = checklist.filter((d) => d.required);
   const completedRequired = requiredDocs.filter((d) => uploadedIds.includes(d.id)).length;
+
+  function updateImovel(index: number, field: keyof ImovelItem, value: string | boolean) {
+    setImoveis(prev => prev.map((im, i) => i === index ? { ...im, [field]: value } : im));
+  }
 
   function simulateUpload(docId: string, fileName: string) {
     const fake: UploadedFile = { docId, name: fileName, size: Math.floor(Math.random() * 900 + 100), status: "uploading" };
@@ -471,10 +528,18 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
       docs_uploaded: uploadedIds.length,
       docs_required: requiredDocs.length,
       created_at: new Date().toISOString(),
-      imovel_endereco: imovelEndereco || undefined,
-      imovel_valor_medio: parseFloat(imovelValorMedio.replace(/\D/g, "")) || undefined,
-      imovel_cidade: imovelCidade || undefined,
-      imovel_estado: imovelEstado || undefined,
+      restricao_cliente: restricao || undefined,
+      imoveis: imoveis.map(im => ({
+        endereco: im.endereco || undefined,
+        valor_medio: parseFloat(im.valorMedio.replace(/\D/g, "")) || undefined,
+        cidade: im.cidade || undefined,
+        estado: im.estado || undefined,
+        zona: im.zona || undefined,
+        padrao: im.padrao || undefined,
+        estilo: im.estilo || undefined,
+        area_rural: im.areaRural || undefined,
+        proprietario: im.proprietarioMesmoTitular ? "MESMO_TITULAR" : (im.proprietarioNome || undefined),
+      })),
     };
     onSubmit(proposal);
     setSubmitted(true);
@@ -485,7 +550,8 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
     setTab("cliente");
     setNome(""); setCpfCnpj(""); setEmail(""); setTelefone("");
     setValorSolicitado(""); setPrazo(""); setFinalidade("");
-    setImovelCidade(""); setImovelEstado(""); setImovelValorMedio("");
+    setRestricao("");
+    setImoveis([defaultImovel()]);
     setUploadedFiles([]);
     onClose();
   }
@@ -601,6 +667,28 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
                   </div>
                   <Field label="Endereço" value={enderecoRua} onChange={setEnderecoRua} placeholder="Rua, número, bairro" />
                   <Field label="Cidade" value={enderecoCity} onChange={setEnderecoCity} placeholder="São Paulo" />
+                  <div>
+                    <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Restrição cadastral / financeira *</label>
+                    <div className="flex gap-2">
+                      {[{ val: "NAO", label: "Sem restrição", color: "emerald" }, { val: "SIM", label: "Com restrição", color: "red" }].map(opt => (
+                        <button key={opt.val} type="button"
+                          onClick={() => setRestricao(opt.val as "SIM" | "NAO")}
+                          className={`flex-1 py-2 rounded-lg text-xs font-bold border transition-colors ${
+                            restricao === opt.val
+                              ? opt.color === "emerald"
+                                ? "bg-emerald-500/15 border-emerald-500/50 text-emerald-400"
+                                : "bg-red-500/15 border-red-500/50 text-red-400"
+                              : "bg-transparent border-border text-muted-foreground hover:border-primary/40"
+                          }`}
+                        >{opt.label}</button>
+                      ))}
+                    </div>
+                    {restricao === "SIM" && (
+                      <p className="text-[10px] text-red-400 mt-1.5 flex items-center gap-1">
+                        <AlertCircle className="w-3 h-3" /> Cliente possui restrição — detalhar em Observações
+                      </p>
+                    )}
+                  </div>
                 </>
               ) : (
                 <>
@@ -622,6 +710,28 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
                   </div>
                   <Field label="Endereço da Empresa" value={enderecoRua} onChange={setEnderecoRua} placeholder="Rua, número, bairro" />
                   <Field label="Cidade" value={enderecoCity} onChange={setEnderecoCity} placeholder="São Paulo" />
+                  <div>
+                    <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Restrição cadastral / financeira *</label>
+                    <div className="flex gap-2">
+                      {[{ val: "NAO", label: "Sem restrição", color: "emerald" }, { val: "SIM", label: "Com restrição", color: "red" }].map(opt => (
+                        <button key={opt.val} type="button"
+                          onClick={() => setRestricao(opt.val as "SIM" | "NAO")}
+                          className={`flex-1 py-2 rounded-lg text-xs font-bold border transition-colors ${
+                            restricao === opt.val
+                              ? opt.color === "emerald"
+                                ? "bg-emerald-500/15 border-emerald-500/50 text-emerald-400"
+                                : "bg-red-500/15 border-red-500/50 text-red-400"
+                              : "bg-transparent border-border text-muted-foreground hover:border-primary/40"
+                          }`}
+                        >{opt.label}</button>
+                      ))}
+                    </div>
+                    {restricao === "SIM" && (
+                      <p className="text-[10px] text-red-400 mt-1.5 flex items-center gap-1">
+                        <AlertCircle className="w-3 h-3" /> Empresa possui restrição — detalhar em Observações
+                      </p>
+                    )}
+                  </div>
                 </>
               )}
             </div>
@@ -655,36 +765,171 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
               </div>
 
               {(creditLine === "HOME EQUITY" || creditLine === "CRI" || creditLine === "HOMECASH" || creditLine === "CGI" || creditLine === "FUNDO CONSTRUÇÃO RESIDENCIAL" || creditLine === "FUNDO CONSTRUÇÃO LOTEAMENTO" || creditLine === "FUNDO CONSTRUÇÃO EMPREENDIMENTO") && (
-                <div className="p-4 rounded-xl border border-amber-500/20 bg-amber-500/5 space-y-3">
-                  <p className="text-xs font-semibold text-amber-400 flex items-center gap-1">
-                    <Home className="w-3.5 h-3.5" /> Dados do Imóvel em Garantia
-                  </p>
-                  <Field label="Endereço do Imóvel" value={imovelEndereco} onChange={setImovelEndereco} placeholder="Rua, número, bairro" />
-                  <div className="grid grid-cols-2 gap-3">
-                    <Field label="Cidade do Imóvel *" value={imovelCidade} onChange={setImovelCidade} placeholder="Ex: São Paulo" />
-                    <SelectField
-                      label="Estado (UF) *"
-                      value={imovelEstado}
-                      onChange={setImovelEstado}
-                      options={["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"]}
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <Field label="Valor Médio de Avaliação (R$) *" value={imovelValorMedio} onChange={setImovelValorMedio} placeholder="0,00" />
-                    <Field label="Valor Estimado pelo Cliente (R$)" value={imovelValor} onChange={setImovelValor} placeholder="0,00" />
-                  </div>
-                  {(imovelValorMedio || imovelValor) && valorSolicitado && (
-                    <div className="text-xs text-muted-foreground">
-                      LTV estimado:{" "}
-                      <span className={`font-bold ${
-                        (parseFloat(valorSolicitado.replace(/\D/g, "")) / parseFloat((imovelValorMedio || imovelValor).replace(/\D/g, ""))) > 0.7
-                          ? "text-red-400" : "text-emerald-400"
-                      }`}>
-                        {((parseFloat(valorSolicitado.replace(/\D/g, "")) / parseFloat((imovelValorMedio || imovelValor).replace(/\D/g, ""))) * 100).toFixed(1)}%
-                      </span>
-                      <span className="ml-1 text-muted-foreground">(máx. 70%)</span>
+                <div className="space-y-3">
+                  {imoveis.map((im, idx) => (
+                    <div key={idx} className="p-4 rounded-xl border border-amber-500/20 bg-amber-500/5 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs font-semibold text-amber-400 flex items-center gap-1">
+                          <Home className="w-3.5 h-3.5" /> {imoveis.length > 1 ? `Imóvel ${idx + 1}` : "Dados do Imóvel em Garantia"}
+                        </p>
+                        {imoveis.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => setImoveis(prev => prev.filter((_, i) => i !== idx))}
+                            className="text-xs text-red-400 hover:text-red-300 transition-colors flex items-center gap-1"
+                          >
+                            <X className="w-3 h-3" /> Remover
+                          </button>
+                        )}
+                      </div>
+                      <Field label="Endereço do Imóvel" value={im.endereco} onChange={v => updateImovel(idx, "endereco", v)} placeholder="Rua, número, bairro" />
+                      <div className="grid grid-cols-2 gap-3">
+                        <Field label="Cidade do Imóvel *" value={im.cidade} onChange={v => updateImovel(idx, "cidade", v)} placeholder="Ex: São Paulo" />
+                        <SelectField
+                          label="Estado (UF) *"
+                          value={im.estado}
+                          onChange={v => updateImovel(idx, "estado", v)}
+                          options={["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"]}
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <Field label="Valor Médio de Avaliação (R$) *" value={im.valorMedio} onChange={v => updateImovel(idx, "valorMedio", v)} placeholder="0,00" />
+                        <Field label="Valor Estimado pelo Cliente (R$)" value={im.valor} onChange={v => updateImovel(idx, "valor", v)} placeholder="0,00" />
+                      </div>
+                      {(im.valorMedio || im.valor) && valorSolicitado && (
+                        <div className="text-xs text-muted-foreground">
+                          LTV estimado:{" "}
+                          <span className={`font-bold ${
+                            (parseFloat(valorSolicitado.replace(/\D/g, "")) / parseFloat((im.valorMedio || im.valor).replace(/\D/g, ""))) > 0.7
+                              ? "text-red-400" : "text-emerald-400"
+                          }`}>
+                            {((parseFloat(valorSolicitado.replace(/\D/g, "")) / parseFloat((im.valorMedio || im.valor).replace(/\D/g, ""))) * 100).toFixed(1)}%
+                          </span>
+                          <span className="ml-1 text-muted-foreground">(máx. 70%)</span>
+                        </div>
+                      )}
+
+                      {/* Zona / Tipo / Padrão */}
+                      <div className="border-t border-amber-500/20 pt-3 space-y-3">
+                        <p className="text-xs font-semibold text-amber-400">Características do Imóvel</p>
+
+                        {/* Urbano / Rural */}
+                        <div>
+                          <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Localização *</label>
+                          <div className="flex gap-2">
+                            {[{ val: "URBANO", label: "Imóvel Urbano" }, { val: "RURAL", label: "Imóvel Rural" }].map(opt => (
+                              <button key={opt.val} type="button"
+                                onClick={() => {
+                                  updateImovel(idx, "zona", opt.val as "URBANO" | "RURAL");
+                                  updateImovel(idx, "estilo", "");
+                                  updateImovel(idx, "padrao", "");
+                                  updateImovel(idx, "areaRural", "");
+                                }}
+                                className={`flex-1 py-2 rounded-lg text-xs font-bold border transition-colors ${
+                                  im.zona === opt.val
+                                    ? "bg-amber-500/15 border-amber-500/50 text-amber-400"
+                                    : "bg-transparent border-border text-muted-foreground hover:border-primary/40"
+                                }`}
+                              >{opt.label}</button>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* URBANO: padrão + estilo */}
+                        {im.zona === "URBANO" && (
+                          <>
+                            <div>
+                              <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Padrão do Imóvel *</label>
+                              <div className="flex gap-2">
+                                {[
+                                  { val: "BAIXO", label: "Baixo Padrão" },
+                                  { val: "MEDIO", label: "Médio Padrão" },
+                                  { val: "ALTO", label: "Alto Padrão" },
+                                ].map(opt => (
+                                  <button key={opt.val} type="button"
+                                    onClick={() => updateImovel(idx, "padrao", opt.val)}
+                                    className={`flex-1 py-2 rounded-lg text-xs font-bold border transition-colors ${
+                                      im.padrao === opt.val
+                                        ? "bg-primary/15 border-primary/40 text-primary"
+                                        : "bg-transparent border-border text-muted-foreground hover:border-primary/40"
+                                    }`}
+                                  >{opt.label}</button>
+                                ))}
+                              </div>
+                            </div>
+
+                            <div>
+                              <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Tipo / Estilo do Imóvel *</label>
+                              <div className="grid grid-cols-2 gap-2">
+                                {[
+                                  "Casa de Rua",
+                                  "Apartamento",
+                                  "Casa em Condomínio",
+                                  "Sala Comercial",
+                                  "Terreno",
+                                  "Imóvel Operacional",
+                                ].map(opt => (
+                                  <button key={opt} type="button"
+                                    onClick={() => updateImovel(idx, "estilo", opt)}
+                                    className={`py-2 rounded-lg text-xs font-bold border transition-colors ${
+                                      im.estilo === opt
+                                        ? "bg-primary/15 border-primary/40 text-primary"
+                                        : "bg-transparent border-border text-muted-foreground hover:border-primary/40"
+                                    }`}
+                                  >{opt}</button>
+                                ))}
+                              </div>
+                            </div>
+                          </>
+                        )}
+
+                        {/* RURAL: tamanho da propriedade */}
+                        {im.zona === "RURAL" && (
+                          <Field
+                            label="Tamanho da Propriedade Rural *"
+                            value={im.areaRural}
+                            onChange={v => updateImovel(idx, "areaRural", v)}
+                            placeholder="Ex: 150 hectares, 500 alqueires..."
+                          />
+                        )}
+                      </div>
+
+                      {/* Proprietário na matrícula */}
+                      <div className="border-t border-amber-500/20 pt-3 space-y-2">
+                        <p className="text-xs font-semibold text-amber-400 flex items-center gap-1">
+                          <Shield className="w-3.5 h-3.5" /> Proprietário conforme Matrícula
+                        </p>
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={im.proprietarioMesmoTitular}
+                            onChange={e => {
+                              updateImovel(idx, "proprietarioMesmoTitular", e.target.checked);
+                              if (e.target.checked) updateImovel(idx, "proprietarioNome", "");
+                            }}
+                            className="w-4 h-4 accent-amber-400"
+                          />
+                          <span className="text-xs text-white">Mesmo titular da operação</span>
+                        </label>
+                        {!im.proprietarioMesmoTitular && (
+                          <Field
+                            label="Nome do proprietário conforme matrícula *"
+                            value={im.proprietarioNome}
+                            onChange={v => updateImovel(idx, "proprietarioNome", v)}
+                            placeholder="Nome exato conforme consta na matrícula do imóvel"
+                          />
+                        )}
+                      </div>
                     </div>
-                  )}
+                  ))}
+
+                  <button
+                    type="button"
+                    onClick={() => setImoveis(prev => [...prev, defaultImovel()])}
+                    className="w-full py-2.5 rounded-xl border border-dashed border-amber-500/40 text-xs font-bold text-amber-400 hover:bg-amber-500/5 transition-colors flex items-center justify-center gap-2"
+                  >
+                    + Adicionar Imóvel
+                  </button>
                 </div>
               )}
 
