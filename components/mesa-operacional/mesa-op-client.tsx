@@ -133,21 +133,37 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
   const [tickets, setTickets] = useState<Ticket[]>(initialTickets);
   const [proposals, setProposals] = useState<ProposalCard[]>(initialProposals);
 
-  // Fallback localStorage apenas em modo demo (quando não há props do servidor)
+  // Busca dados frescos da API ao montar (reflete atualizações de outras abas)
   useEffect(() => {
-    if (initialProposals.length > 0) return;
-    try {
-      const stored: ProposalCard[] = JSON.parse(localStorage.getItem("v3_demo_proposals") ?? "[]");
-      if (stored.length === 0) return;
-      setProposals((prev) => {
-        const ids = new Set(prev.map((p) => p.id));
-        const newOnes = stored
-          .filter((s) => !ids.has(s.id))
-          .map((s) => ({ ...s, stage: s.stage ?? "RECEBIDO" }));
-        return newOnes.length > 0 ? [...newOnes, ...prev] : prev;
-      });
-    } catch {}
-  }, [initialProposals.length]);
+    fetch("/api/credit-proposals")
+      .then(r => r.json())
+      .then(({ proposals: fresh }) => {
+        if (!Array.isArray(fresh) || fresh.length === 0) return;
+        setProposals(fresh.map((p: Record<string, unknown>) => ({
+          id: p.id as string,
+          code: p.code as string,
+          title: p.title as string,
+          client_name: p.client_name as string,
+          client_type: (p.metadata as Record<string, unknown> | null)?.client_type as string | undefined ?? p.client_type as string | undefined,
+          cpf_cnpj: p.client_cpf_cnpj as string | undefined,
+          credit_line: p.credit_line as string,
+          requested_value: p.requested_value as number,
+          approved_value: (p.approved_value as number | null) ?? null,
+          current_level: p.current_level as string,
+          status: p.status as string,
+          stage: (p.stage as string | undefined) ?? "RECEBIDO",
+          partner_id: (p.partner as { id?: string } | null)?.id,
+          partner_name: (p.partner as { full_name?: string } | null)?.full_name,
+          created_at: p.created_at as string,
+          valor_credito_atual: p.valor_credito_atual as number | undefined,
+          comissao_mandato_perc: p.comissao_mandato_perc as number | undefined,
+          comissao_instituicao_perc: p.comissao_instituicao_perc as number | undefined,
+          metadata: p.metadata as Record<string, unknown> | undefined,
+        })));
+      })
+      .catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [novoTicket, setNovoTicket] = useState(false);
   const [detailProposal, setDetailProposal] = useState<ProposalCard | null>(null);
   const [search, setSearch] = useState("");

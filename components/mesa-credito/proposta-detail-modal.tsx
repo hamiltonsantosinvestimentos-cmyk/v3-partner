@@ -5,7 +5,8 @@ import {
   X, User, Building2, CheckCircle2, Clock, ArrowRight,
   FileText, CreditCard, Calendar, Link2, Pencil, Check,
   Percent, TrendingUp, BadgeDollarSign, Upload, Paperclip, Trash2, Home, ExternalLink,
-  Package, Copy, CheckCheck, MessageSquare, Send,
+  Package, Copy, CheckCheck, MessageSquare, Send, Search, AlertTriangle, ShieldCheck,
+  Phone, Mail, MapPin, Banknote,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -31,6 +32,28 @@ export const PIPELINE_STAGES = [
   { key: "APROVACAO", label: "Em Aprovação", color: "text-purple-400", bg: "bg-purple-500/20" },
   { key: "FINALIZADO", label: "Finalizado", color: "text-emerald-400", bg: "bg-emerald-500/20" },
 ];
+
+export interface ImovelMeta {
+  endereco?: string;
+  valor_medio?: number;
+  cidade?: string;
+  estado?: string;
+  zona?: string;
+  padrao?: string;
+  estilo?: string;
+  area_rural?: string;
+  proprietario?: string;
+}
+
+export interface ProposalMeta {
+  client_type?: string;
+  email?: string;
+  telefone?: string;
+  prazo?: string;
+  finalidade?: string;
+  restricao_cliente?: string;
+  imoveis?: ImovelMeta[];
+}
 
 export interface ProposalFull {
   id: string;
@@ -63,6 +86,27 @@ export interface ProposalFull {
   imovel_cidade?: string;
   imovel_estado?: string;
   mesa_comments?: MesaComment[];
+  metadata?: ProposalMeta;
+}
+
+interface EscavadorProcesso {
+  numero_cnj: string;
+  polo_ativo: string | null;
+  polo_passivo: string | null;
+  data_inicio: string | null;
+  data_ultima_movimentacao: string | null;
+  estado: string | null;
+  tribunal: string | null;
+  grau: string | null;
+  status: string | null;
+  valor_causa: number | null;
+}
+
+interface EscavadorResult {
+  total_processos: number;
+  match_tipo: string | null;
+  processos: EscavadorProcesso[];
+  error?: string;
 }
 
 interface CompiledDoc {
@@ -85,7 +129,7 @@ interface PropostaDetailModalProps {
 
 export function PropostaDetailModal({ open, onClose, proposal, onStageChange, onProposalUpdate, canChangeStage, canEditValorSolicitado, canCompileDocuments }: PropostaDetailModalProps) {
   // ── Checklist state ───────────────────────────────────────────────────────
-  const IS_DEMO = !process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL.includes("SEU_PROJETO");
+  const IS_DEMO = false;
   const [checkedDocs, setCheckedDocs] = useState<Record<string, boolean>>({});
   const [uploadedFiles, setUploadedFiles] = useState<Record<string, string>>({}); // docId → filename
   const [uploadedUrls, setUploadedUrls] = useState<Record<string, string>>({}); // docId → signed URL (20 dias)
@@ -254,9 +298,40 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
   const [valorSolicitadoEdit, setValorSolicitadoEdit] = useState("");
   const [editandoValorSolicitado, setEditandoValorSolicitado] = useState(false);
 
+  // ── Escavador state ──────────────────────────────────────────────────────
+  const [escavadorLoading, setEscavadorLoading] = useState(false);
+  const [escavadorResult, setEscavadorResult] = useState<EscavadorResult | null>(null);
+  const [showEscavador, setShowEscavador] = useState(false);
+
+  async function consultarEscavador() {
+    if (!proposal) return;
+    const cpfCnpj = proposal.cpf_cnpj?.replace(/\D/g, "");
+    const nome = proposal.client_name;
+    const tipo = cpfCnpj ? (cpfCnpj.length === 11 ? "cpf" : "cnpj") : "nome";
+    const valor = cpfCnpj || nome;
+    setEscavadorLoading(true);
+    setEscavadorResult(null);
+    setShowEscavador(true);
+    try {
+      const res = await fetch("/api/kyc/escavador", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tipo, valor }),
+      });
+      const json = await res.json();
+      setEscavadorResult(json);
+    } catch {
+      setEscavadorResult({ total_processos: 0, match_tipo: null, processos: [], error: "Erro de comunicação com Escavador." });
+    } finally {
+      setEscavadorLoading(false);
+    }
+  }
+
   // Sync state when proposal changes
   useEffect(() => {
     if (!proposal) return;
+    setEscavadorResult(null);
+    setShowEscavador(false);
     const vc = proposal.valor_credito_atual ?? proposal.requested_value;
     setValorCredito(vc);
     setValorCreditoEdit(String(vc));
@@ -282,12 +357,21 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
   const totalComissao = comissaoMandato + comissaoInstituicao;
   const comissaoLicenciado = totalComissao * ((50 - TAXA_IMPOSTOS_COMISSAO) / 100);
 
+  function persistPatch(updates: Record<string, unknown>) {
+    fetch("/api/credit-proposals", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: proposal!.id, ...updates }),
+    }).catch(() => {});
+  }
+
   function salvarValorCredito() {
     const v = parseFloat(valorCreditoEdit.replace(",", "."));
     if (isNaN(v) || v <= 0) return;
     setValorCredito(v);
     setEditandoValor(false);
     onProposalUpdate?.(proposal!.id, { valor_credito_atual: v });
+    persistPatch({ valor_credito_atual: v });
   }
 
   function salvarMandato() {
@@ -296,6 +380,7 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
     setPercMandato(v);
     setEditandoMandato(false);
     onProposalUpdate?.(proposal!.id, { comissao_mandato_perc: v });
+    persistPatch({ comissao_mandato_perc: v });
   }
 
   function salvarInstituicao() {
@@ -304,6 +389,7 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
     setPercInstituicao(v);
     setEditandoInstituicao(false);
     onProposalUpdate?.(proposal!.id, { comissao_instituicao_perc: v });
+    persistPatch({ comissao_instituicao_perc: v });
   }
 
   function salvarValorSolicitado() {
@@ -312,6 +398,7 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
     setValorSolicitado(v);
     setEditandoValorSolicitado(false);
     onProposalUpdate?.(proposal!.id, { requested_value: v });
+    persistPatch({ requested_value: v });
   }
 
   async function handleAddComment() {
@@ -402,98 +489,268 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
           </div>
 
           {/* ── Dados do Cliente ── */}
-          <div className="grid grid-cols-2 gap-4">
-            <InfoSection title="Cliente" icon={proposal.client_type === "PJ" ? <Building2 className="w-4 h-4" /> : <User className="w-4 h-4" />}>
-              <InfoRow label="Nome" value={proposal.client_name} />
-              {proposal.cpf_cnpj && <InfoRow label={proposal.client_type === "PJ" ? "CNPJ" : "CPF"} value={proposal.cpf_cnpj} />}
-              {proposal.email && <InfoRow label="E-mail" value={proposal.email} />}
-              {proposal.telefone && <InfoRow label="Telefone" value={proposal.telefone} />}
-              <InfoRow label="Tipo" value={proposal.client_type === "PJ" ? "Pessoa Jurídica" : "Pessoa Física"} />
-            </InfoSection>
+          {(() => {
+            const meta = proposal.metadata ?? {};
+            const clientType = (meta.client_type ?? proposal.client_type ?? "PF") as "PF" | "PJ";
+            const email = meta.email ?? proposal.email;
+            const telefone = meta.telefone ?? proposal.telefone;
+            const restricao = meta.restricao_cliente;
+            return (
+              <div className="space-y-3">
+                {/* Header with Escavador button */}
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                    {clientType === "PJ" ? <Building2 className="w-3.5 h-3.5" /> : <User className="w-3.5 h-3.5" />}
+                    Dados do Cliente
+                  </p>
+                  <button
+                    onClick={consultarEscavador}
+                    disabled={escavadorLoading}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-500/15 text-blue-400 border border-blue-500/30 hover:bg-blue-500/25 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {escavadorLoading
+                      ? <div className="w-3 h-3 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+                      : <Search className="w-3 h-3" />}
+                    {escavadorLoading ? "Consultando..." : "Consultar Processos Judiciais"}
+                  </button>
+                </div>
 
-            <InfoSection title="Operação" icon={<CreditCard className="w-4 h-4" />}>
-              <InfoRow label="Linha" value={proposal.credit_line} highlight />
-              {/* Valor Solicitado editável */}
-              <div className="flex items-start justify-between gap-2">
-                <span className="text-xs text-muted-foreground flex-shrink-0">Valor Solicitado</span>
-                {(canChangeStage || canEditValorSolicitado) && editandoValorSolicitado ? (
-                  <div className="flex items-center gap-1">
-                    <span className="text-xs text-muted-foreground">R$</span>
-                    <input
-                      type="number"
-                      value={valorSolicitadoEdit}
-                      onChange={(e) => setValorSolicitadoEdit(e.target.value)}
-                      onKeyDown={(e) => e.key === "Enter" && salvarValorSolicitado()}
-                      className="w-28 h-5 text-xs px-2 bg-secondary border border-primary/50 rounded text-white focus:outline-none"
-                      autoFocus
-                    />
-                    <button onClick={salvarValorSolicitado} className="w-5 h-5 rounded flex items-center justify-center bg-emerald-500/20 hover:bg-emerald-500/40 text-emerald-400">
-                      <Check className="w-3 h-3" />
-                    </button>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-1">
-                    <span className="text-xs font-medium text-foreground">{formatCurrency(valorSolicitado || proposal.requested_value)}</span>
-                    {(canChangeStage || canEditValorSolicitado) && (
-                      <button
-                        onClick={() => { setValorSolicitadoEdit(String(valorSolicitado || proposal.requested_value)); setEditandoValorSolicitado(true); }}
-                        className="w-4 h-4 rounded flex items-center justify-center hover:bg-secondary text-muted-foreground hover:text-white"
-                        title="Editar valor solicitado"
-                      >
-                        <Pencil className="w-2.5 h-2.5" />
-                      </button>
+                {/* Client info card */}
+                <div className="p-4 rounded-xl border border-border bg-secondary/20 space-y-2">
+                  <div className="grid grid-cols-2 gap-x-6 gap-y-2">
+                    <InfoRow label="Nome" value={proposal.client_name} />
+                    <InfoRow label="Tipo" value={clientType === "PJ" ? "Pessoa Jurídica" : "Pessoa Física"} />
+                    {proposal.cpf_cnpj && <InfoRow label={clientType === "PJ" ? "CNPJ" : "CPF"} value={proposal.cpf_cnpj} />}
+                    {email && (
+                      <div className="flex items-start justify-between gap-2">
+                        <span className="text-xs text-muted-foreground flex-shrink-0 flex items-center gap-1"><Mail className="w-3 h-3" /> E-mail</span>
+                        <span className="text-xs font-medium text-foreground text-right break-all">{email}</span>
+                      </div>
+                    )}
+                    {telefone && (
+                      <div className="flex items-start justify-between gap-2">
+                        <span className="text-xs text-muted-foreground flex-shrink-0 flex items-center gap-1"><Phone className="w-3 h-3" /> Telefone</span>
+                        <span className="text-xs font-medium text-foreground text-right">{telefone}</span>
+                      </div>
+                    )}
+                    {restricao && (
+                      <div className="flex items-start justify-between gap-2">
+                        <span className="text-xs text-muted-foreground flex-shrink-0">Restrição</span>
+                        <span className={`text-xs font-semibold ${restricao === "SIM" ? "text-red-400" : "text-emerald-400"}`}>
+                          {restricao === "SIM" ? "Possui restrições" : "Sem restrições"}
+                        </span>
+                      </div>
                     )}
                   </div>
-                )}
-              </div>
-              {proposal.approved_value && (
-                <InfoRow label="Valor Aprovado" value={formatCurrency(proposal.approved_value)} success />
-              )}
-              {proposal.prazo && <InfoRow label="Prazo" value={proposal.prazo} />}
-              {proposal.finalidade && <InfoRow label="Finalidade" value={proposal.finalidade} />}
-            </InfoSection>
-          </div>
+                </div>
 
-          {/* Card de Imóvel em Garantia */}
-          {["HOME EQUITY","HE ESTRESSADO","HOMECASH","CGI","CRI","FUNDO CONSTRUÇÃO RESIDENCIAL","FUNDO CONSTRUÇÃO LOTEAMENTO","FUNDO CONSTRUÇÃO EMPREENDIMENTO"].includes(proposal.credit_line) &&
-            (proposal.imovel_valor_medio || proposal.imovel_cidade) && (
-            <div className="p-4 rounded-xl border border-amber-500/30 bg-amber-500/5 space-y-2">
-              <p className="text-xs font-semibold text-amber-400 flex items-center gap-1.5">
-                <Home className="w-3.5 h-3.5" /> Imóvel em Garantia
-              </p>
-              {proposal.imovel_endereco && (
-                <div className="flex items-start justify-between gap-2">
-                  <span className="text-xs text-muted-foreground flex-shrink-0">Endereço</span>
-                  <span className="text-xs font-medium text-foreground text-right">{proposal.imovel_endereco}</span>
+                {/* Operação */}
+                <div className="p-4 rounded-xl border border-border bg-secondary/20 space-y-2">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5 mb-2">
+                    <CreditCard className="w-3.5 h-3.5" /> Operação
+                  </p>
+                  <div className="grid grid-cols-2 gap-x-6 gap-y-2">
+                    <InfoRow label="Linha de Crédito" value={proposal.credit_line} highlight />
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="text-xs text-muted-foreground flex-shrink-0">Valor Solicitado</span>
+                      {(canChangeStage || canEditValorSolicitado) && editandoValorSolicitado ? (
+                        <div className="flex items-center gap-1">
+                          <span className="text-xs text-muted-foreground">R$</span>
+                          <input type="number" value={valorSolicitadoEdit}
+                            onChange={(e) => setValorSolicitadoEdit(e.target.value)}
+                            onKeyDown={(e) => e.key === "Enter" && salvarValorSolicitado()}
+                            className="w-28 h-5 text-xs px-2 bg-secondary border border-primary/50 rounded text-white focus:outline-none" autoFocus />
+                          <button onClick={salvarValorSolicitado} className="w-5 h-5 rounded flex items-center justify-center bg-emerald-500/20 hover:bg-emerald-500/40 text-emerald-400">
+                            <Check className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1">
+                          <span className="text-xs font-medium text-foreground">{formatCurrency(valorSolicitado || proposal.requested_value)}</span>
+                          {(canChangeStage || canEditValorSolicitado) && (
+                            <button onClick={() => { setValorSolicitadoEdit(String(valorSolicitado || proposal.requested_value)); setEditandoValorSolicitado(true); }}
+                              className="w-4 h-4 rounded flex items-center justify-center hover:bg-secondary text-muted-foreground hover:text-white" title="Editar">
+                              <Pencil className="w-2.5 h-2.5" />
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    {proposal.approved_value && <InfoRow label="Valor Aprovado" value={formatCurrency(proposal.approved_value)} success />}
+                    {(meta.prazo ?? proposal.prazo) && <InfoRow label="Prazo" value={meta.prazo ?? proposal.prazo ?? ""} />}
+                    {(meta.finalidade ?? proposal.finalidade) && <InfoRow label="Finalidade" value={meta.finalidade ?? proposal.finalidade ?? ""} />}
+                  </div>
                 </div>
-              )}
-              {(proposal.imovel_cidade || proposal.imovel_estado) && (
-                <div className="flex items-start justify-between gap-2">
-                  <span className="text-xs text-muted-foreground flex-shrink-0">Localização</span>
-                  <span className="text-xs font-medium text-foreground text-right">
-                    {[proposal.imovel_cidade, proposal.imovel_estado].filter(Boolean).join(" — ")}
-                  </span>
+              </div>
+            );
+          })()}
+
+          {/* ── Escavador Results ── */}
+          {showEscavador && (
+            <div className="p-4 rounded-xl border border-blue-500/30 bg-blue-500/5 space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-semibold text-blue-400 flex items-center gap-1.5">
+                  <Search className="w-3.5 h-3.5" /> Processos Judiciais — Escavador
+                </p>
+                <button onClick={() => setShowEscavador(false)} className="w-5 h-5 rounded flex items-center justify-center hover:bg-secondary text-muted-foreground hover:text-white">
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+
+              {escavadorLoading ? (
+                <div className="flex items-center gap-2 py-3">
+                  <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+                  <span className="text-xs text-muted-foreground">Consultando base de processos judiciais...</span>
                 </div>
-              )}
-              {proposal.imovel_valor_medio && (
-                <div className="flex items-start justify-between gap-2">
-                  <span className="text-xs text-muted-foreground flex-shrink-0">Valor Médio de Avaliação</span>
-                  <span className="text-xs font-bold text-amber-300">{formatCurrency(proposal.imovel_valor_medio)}</span>
+              ) : escavadorResult?.error ? (
+                <div className="flex items-center gap-2 py-2 text-red-400">
+                  <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+                  <span className="text-xs">{escavadorResult.error}</span>
                 </div>
-              )}
-              {proposal.imovel_valor_medio && (
-                <div className="flex items-center justify-between text-xs pt-1 border-t border-amber-500/20">
-                  <span className="text-muted-foreground">LTV estimado</span>
-                  <span className={`font-bold ${
-                    (proposal.requested_value / proposal.imovel_valor_medio) > 0.7 ? "text-red-400" : "text-emerald-400"
+              ) : escavadorResult ? (
+                <div className="space-y-3">
+                  {/* Summary badge */}
+                  <div className={`flex items-center gap-2 p-2.5 rounded-lg border ${
+                    escavadorResult.total_processos === 0
+                      ? "bg-emerald-500/10 border-emerald-500/30"
+                      : escavadorResult.total_processos <= 3
+                      ? "bg-amber-500/10 border-amber-500/30"
+                      : "bg-red-500/10 border-red-500/30"
                   }`}>
-                    {((proposal.requested_value / proposal.imovel_valor_medio) * 100).toFixed(1)}%
-                    <span className="font-normal text-muted-foreground ml-1">(máx. 70%)</span>
-                  </span>
+                    {escavadorResult.total_processos === 0
+                      ? <ShieldCheck className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                      : <AlertTriangle className="w-4 h-4 text-amber-400 flex-shrink-0" />}
+                    <div>
+                      <p className={`text-xs font-semibold ${
+                        escavadorResult.total_processos === 0 ? "text-emerald-400"
+                        : escavadorResult.total_processos <= 3 ? "text-amber-400" : "text-red-400"
+                      }`}>
+                        {escavadorResult.total_processos === 0
+                          ? "Nenhum processo judicial encontrado"
+                          : `${escavadorResult.total_processos} processo(s) judicial(is) encontrado(s)`}
+                      </p>
+                      {escavadorResult.match_tipo && (
+                        <p className="text-[10px] text-muted-foreground">Busca por: {escavadorResult.match_tipo}</p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Process list */}
+                  {escavadorResult.processos.length > 0 && (
+                    <div className="space-y-2 max-h-64 overflow-y-auto">
+                      {escavadorResult.processos.map((p, i) => (
+                        <div key={i} className="p-3 rounded-lg bg-secondary/40 border border-border space-y-1.5">
+                          <div className="flex items-start justify-between gap-2">
+                            <span className="font-mono text-[10px] text-blue-400 font-semibold">{p.numero_cnj}</span>
+                            {p.valor_causa && (
+                              <span className="text-[10px] font-bold text-amber-300 flex-shrink-0">{formatCurrency(p.valor_causa)}</span>
+                            )}
+                          </div>
+                          <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-[10px] text-muted-foreground">
+                            {p.polo_ativo && <span>Ativo: <span className="text-foreground">{p.polo_ativo}</span></span>}
+                            {p.polo_passivo && <span>Passivo: <span className="text-foreground">{p.polo_passivo}</span></span>}
+                            {p.tribunal && <span>Tribunal: <span className="text-foreground">{p.tribunal}</span>{p.grau ? ` (${p.grau}º)` : ""}</span>}
+                            {p.estado && <span>Estado: <span className="text-foreground">{p.estado}</span></span>}
+                            {p.data_inicio && <span>Início: <span className="text-foreground">{new Date(p.data_inicio).toLocaleDateString("pt-BR")}</span></span>}
+                            {p.data_ultima_movimentacao && <span>Última mov: <span className="text-foreground">{new Date(p.data_ultima_movimentacao).toLocaleDateString("pt-BR")}</span></span>}
+                          </div>
+                          {p.status && (
+                            <span className="inline-block text-[9px] font-bold px-1.5 py-0.5 rounded bg-secondary border border-border text-muted-foreground uppercase tracking-wider">
+                              {p.status}
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                      {escavadorResult.total_processos > escavadorResult.processos.length && (
+                        <p className="text-[10px] text-muted-foreground text-center py-1">
+                          Exibindo {escavadorResult.processos.length} de {escavadorResult.total_processos} processos
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </div>
-              )}
+              ) : null}
             </div>
           )}
+
+          {/* ── Imóveis em Garantia ── */}
+          {(() => {
+            const meta = proposal.metadata ?? {};
+            const imoveis: ImovelMeta[] = (meta.imoveis && meta.imoveis.length > 0)
+              ? meta.imoveis
+              : (proposal.imovel_cidade || proposal.imovel_endereco)
+                ? [{ endereco: proposal.imovel_endereco, valor_medio: proposal.imovel_valor_medio, cidade: proposal.imovel_cidade, estado: proposal.imovel_estado }]
+                : [];
+            const linhasComImovel = ["HOME EQUITY","HE ESTRESSADO","HOMECASH","CGI","CRI","FUNDO CONSTRUÇÃO RESIDENCIAL","FUNDO CONSTRUÇÃO LOTEAMENTO","FUNDO CONSTRUÇÃO EMPREENDIMENTO"];
+            if (!linhasComImovel.includes(proposal.credit_line) || imoveis.length === 0) return null;
+            return (
+              <div className="space-y-2">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                  <Home className="w-3.5 h-3.5" /> Imóveis em Garantia ({imoveis.length})
+                </p>
+                {imoveis.map((im, idx) => (
+                  <div key={idx} className="p-4 rounded-xl border border-amber-500/30 bg-amber-500/5 space-y-2">
+                    <p className="text-[10px] font-bold text-amber-400 uppercase tracking-wider">Imóvel {imoveis.length > 1 ? `#${idx + 1}` : ""}</p>
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
+                      {im.endereco && (
+                        <div className="col-span-2 flex items-start gap-1.5">
+                          <MapPin className="w-3 h-3 text-amber-400 flex-shrink-0 mt-0.5" />
+                          <span className="text-xs text-foreground">{im.endereco}</span>
+                        </div>
+                      )}
+                      {(im.cidade || im.estado) && (
+                        <div className="flex items-start justify-between gap-2">
+                          <span className="text-xs text-muted-foreground">Cidade/UF</span>
+                          <span className="text-xs font-medium text-foreground">{[im.cidade, im.estado].filter(Boolean).join(" — ")}</span>
+                        </div>
+                      )}
+                      {im.zona && (
+                        <div className="flex items-start justify-between gap-2">
+                          <span className="text-xs text-muted-foreground">Zona</span>
+                          <span className="text-xs font-medium text-foreground">{im.zona}</span>
+                        </div>
+                      )}
+                      {im.padrao && (
+                        <div className="flex items-start justify-between gap-2">
+                          <span className="text-xs text-muted-foreground">Padrão</span>
+                          <span className="text-xs font-medium text-foreground">{im.padrao}</span>
+                        </div>
+                      )}
+                      {im.estilo && (
+                        <div className="flex items-start justify-between gap-2">
+                          <span className="text-xs text-muted-foreground">Estilo</span>
+                          <span className="text-xs font-medium text-foreground">{im.estilo}</span>
+                        </div>
+                      )}
+                      {im.proprietario && (
+                        <div className="flex items-start justify-between gap-2">
+                          <span className="text-xs text-muted-foreground">Proprietário</span>
+                          <span className="text-xs font-medium text-foreground">
+                            {im.proprietario === "MESMO_TITULAR" ? "Mesmo Titular" : im.proprietario}
+                          </span>
+                        </div>
+                      )}
+                      {im.valor_medio && (
+                        <div className="col-span-2 flex items-center justify-between pt-1.5 border-t border-amber-500/20">
+                          <span className="text-xs text-muted-foreground flex items-center gap-1"><Banknote className="w-3 h-3" /> Valor Médio de Avaliação</span>
+                          <span className="text-xs font-bold text-amber-300">{formatCurrency(im.valor_medio)}</span>
+                        </div>
+                      )}
+                      {im.valor_medio && (
+                        <div className="col-span-2 flex items-center justify-between text-xs">
+                          <span className="text-muted-foreground">LTV estimado</span>
+                          <span className={`font-bold ${(proposal.requested_value / im.valor_medio) > 0.7 ? "text-red-400" : "text-emerald-400"}`}>
+                            {((proposal.requested_value / im.valor_medio) * 100).toFixed(1)}%
+                            <span className="font-normal text-muted-foreground ml-1">(máx. 70%)</span>
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
 
           {/* Partner vinculado */}
           {proposal.partner_name && (

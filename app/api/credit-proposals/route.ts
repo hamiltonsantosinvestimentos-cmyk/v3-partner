@@ -32,6 +32,7 @@ const createSchema = z.object({
   requested_value: z.number().positive("Valor deve ser positivo"),
   current_level:   z.enum(["NIVEL_1","NIVEL_2","NIVEL_3"]),
   notes:           z.string().max(2000).optional().nullable(),
+  metadata:        z.record(z.unknown()).optional().nullable(),
 });
 
 const patchSchema = z.object({
@@ -71,6 +72,7 @@ export async function GET(req: NextRequest) {
       level1_notes, level2_notes, level3_notes,
       level1_at, level2_at, level3_at, created_at,
       valor_credito_atual, comissao_mandato_perc, comissao_instituicao_perc,
+      metadata,
       partner:profiles!credit_desk_proposals_partner_id_fkey(id, full_name)
     `)
     .order("created_at", { ascending: false });
@@ -120,6 +122,7 @@ export async function POST(req: NextRequest) {
     stage:           "RECEBIDO",
     partner_id:      user.id,
     created_by:      user.id,
+    metadata:        d.metadata ?? {},
   }).select().single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
