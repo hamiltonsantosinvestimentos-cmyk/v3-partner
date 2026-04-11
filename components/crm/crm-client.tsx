@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   MapPin,
   Phone,
@@ -23,6 +23,12 @@ import {
   User,
   Briefcase,
   Star,
+  Link2,
+  Copy,
+  Check,
+  ToggleLeft,
+  ToggleRight,
+  RefreshCw,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -63,6 +69,15 @@ type CRMLead = {
   partnerName: string;
   createdAt: string;
   interactions: Interaction[];
+};
+
+type CaptacaoLink = {
+  id: string;
+  token: string;
+  partner_name: string;
+  active: boolean;
+  uses_count: number;
+  created_at: string;
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -519,7 +534,7 @@ const INTERACTION_TYPE_LABELS: Record<string, string> = {
 export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { userRole: string; userName: string; userId: string; initialLeads?: CRMLead[] }) {
   const isAdmin = ["ADMIN", "GESTAO"].includes(userRole);
 
-  const [tab, setTab] = useState<"pipeline" | "leads" | "prospeccao" | "relatorios">("pipeline");
+  const [tab, setTab] = useState<"pipeline" | "leads" | "prospeccao" | "relatorios" | "captacao">("pipeline");
   const [leads, setLeads] = useState<CRMLead[]>(initialLeads);
   const [selectedLead, setSelectedLead] = useState<CRMLead | null>(null);
   const [showNewLead, setShowNewLead] = useState(false);
@@ -531,6 +546,57 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
   const [searchQuery, setSearchQuery] = useState("");
   const [reportPeriod, setReportPeriod] = useState<"semanal" | "mensal" | "anual">("mensal");
   const [reportPartner, setReportPartner] = useState("all");
+
+  // Captacao links state
+  const [captacaoLinks, setCaptacaoLinks] = useState<CaptacaoLink[]>([]);
+  const [captacaoLoading, setCaptacaoLoading] = useState(false);
+  const [captacaoGenerating, setCaptacaoGenerating] = useState(false);
+  const [copiedToken, setCopiedToken] = useState<string | null>(null);
+
+  const loadCaptacaoLinks = useCallback(async () => {
+    setCaptacaoLoading(true);
+    try {
+      const res = await fetch("/api/captacao/links");
+      const json = await res.json();
+      if (json.links) setCaptacaoLinks(json.links);
+    } catch {}
+    setCaptacaoLoading(false);
+  }, []);
+
+  useEffect(() => {
+    if (tab === "captacao") loadCaptacaoLinks();
+  }, [tab, loadCaptacaoLinks]);
+
+  async function handleGerarLink() {
+    setCaptacaoGenerating(true);
+    try {
+      const res = await fetch("/api/captacao", { method: "POST" });
+      const json = await res.json();
+      if (json.ok) {
+        await loadCaptacaoLinks();
+      }
+    } catch {}
+    setCaptacaoGenerating(false);
+  }
+
+  async function handleToggleLink(id: string, active: boolean) {
+    try {
+      await fetch("/api/captacao", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, active }),
+      });
+      setCaptacaoLinks(prev => prev.map(l => l.id === id ? { ...l, active } : l));
+    } catch {}
+  }
+
+  function handleCopyLink(token: string) {
+    const url = `${window.location.origin}/c/${token}`;
+    navigator.clipboard.writeText(url).then(() => {
+      setCopiedToken(token);
+      setTimeout(() => setCopiedToken(null), 2000);
+    });
+  }
 
   // New lead form state
   const [newLead, setNewLead] = useState({
@@ -883,7 +949,7 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
 
         {/* Tabs */}
         <div style={{ display: "flex", gap: 4, marginTop: 16, flexWrap: "wrap" }}>
-          {(["pipeline", "leads", "prospeccao", "relatorios"] as const).map((t) => (
+          {(["pipeline", "leads", "prospeccao", "relatorios", "captacao"] as const).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -899,7 +965,7 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
                 transition: "all 0.15s",
               }}
             >
-              {t === "pipeline" ? "Pipeline" : t === "leads" ? "Leads" : t === "prospeccao" ? "🔍 Prospecção" : "Relatórios"}
+              {t === "pipeline" ? "Pipeline" : t === "leads" ? "Leads" : t === "prospeccao" ? "🔍 Prospecção" : t === "relatorios" ? "Relatórios" : "🔗 Link de Captação"}
             </button>
           ))}
         </div>
@@ -1016,20 +1082,26 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
                             <span style={{ fontWeight: 700, fontSize: 12, color: "#E8EDF5", lineHeight: 1.3, flex: 1 }}>
                               {lead.name}
                             </span>
-                            <span
-                              style={{
-                                fontSize: 10,
-                                fontWeight: 700,
-                                padding: "1px 6px",
-                                borderRadius: 4,
-                                background: lead.personType === "PJ" ? "rgba(59,130,246,0.2)" : "rgba(168,85,247,0.2)",
-                                color: lead.personType === "PJ" ? "#3B82F6" : "#A855F7",
-                                marginLeft: 4,
-                                whiteSpace: "nowrap",
-                              }}
-                            >
-                              {lead.personType}
-                            </span>
+                            <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+                              {lead.source === "digital" && (
+                                <span style={{ fontSize: 9, fontWeight: 700, padding: "1px 5px", borderRadius: 4, background: "rgba(59,130,246,0.15)", color: "#60A5FA", border: "1px solid rgba(59,130,246,0.25)", whiteSpace: "nowrap" }}>
+                                  🔗 Digital
+                                </span>
+                              )}
+                              <span
+                                style={{
+                                  fontSize: 10,
+                                  fontWeight: 700,
+                                  padding: "1px 6px",
+                                  borderRadius: 4,
+                                  background: lead.personType === "PJ" ? "rgba(59,130,246,0.2)" : "rgba(168,85,247,0.2)",
+                                  color: lead.personType === "PJ" ? "#3B82F6" : "#A855F7",
+                                  whiteSpace: "nowrap",
+                                }}
+                              >
+                                {lead.personType}
+                              </span>
+                            </div>
                           </div>
                           <div style={{ fontSize: 11, color: "#7A8FA8", marginBottom: 4 }}>{lead.segment}</div>
                           <div style={{ fontSize: 11, color: "#7A8FA8", display: "flex", alignItems: "center", gap: 4, marginBottom: 4 }}>
@@ -1193,7 +1265,16 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
                       }}
                     >
                       <td style={{ padding: "10px 12px", color: "#7A8FA8", whiteSpace: "nowrap" }}>{lead.code}</td>
-                      <td style={{ padding: "10px 12px", color: "#E8EDF5", fontWeight: 600, whiteSpace: "nowrap" }}>{lead.name}</td>
+                      <td style={{ padding: "10px 12px", color: "#E8EDF5", fontWeight: 600, whiteSpace: "nowrap" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          {lead.name}
+                          {lead.source === "digital" && (
+                            <span style={{ fontSize: 9, fontWeight: 700, padding: "1px 5px", borderRadius: 4, background: "rgba(59,130,246,0.15)", color: "#60A5FA", border: "1px solid rgba(59,130,246,0.25)", whiteSpace: "nowrap" }}>
+                              🔗 Digital
+                            </span>
+                          )}
+                        </div>
+                      </td>
                       <td style={{ padding: "10px 12px" }}>
                         <span
                           style={{
@@ -1617,6 +1698,141 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
                 Relatório gerado em {formatDate(todayISO())} — V3 Partners Plataforma
               </div>
             </div>
+          </div>
+        )}
+
+        {/* ── TAB: LINK DE CAPTAÇÃO ── */}
+        {tab === "captacao" && (
+          <div style={{ padding: "24px 0" }}>
+            {/* Header section */}
+            <div style={{ marginBottom: 24, padding: "20px 24px", borderRadius: 12, border: "1px solid rgba(201,168,76,0.2)", background: "rgba(201,168,76,0.04)" }}>
+              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+                <div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                    <Link2 style={{ width: 18, height: 18, color: "#C9A84C" }} />
+                    <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: "#F0ECE4" }}>Link de Captação Digital</h2>
+                  </div>
+                  <p style={{ margin: 0, fontSize: 13, color: "#7A8FA8", maxWidth: 520, lineHeight: 1.5 }}>
+                    Gere um link personalizado para enviar ao cliente. Ele preenche os dados e a solicitação vai direto para o seu CRM com todos os campos preenchidos.
+                  </p>
+                </div>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button
+                    onClick={loadCaptacaoLinks}
+                    disabled={captacaoLoading}
+                    style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 8, border: "1px solid rgba(201,168,76,0.2)", background: "transparent", color: "#7A8FA8", cursor: "pointer", fontSize: 13 }}
+                  >
+                    <RefreshCw style={{ width: 14, height: 14 }} className={captacaoLoading ? "animate-spin" : ""} />
+                    Atualizar
+                  </button>
+                  <button
+                    onClick={handleGerarLink}
+                    disabled={captacaoGenerating}
+                    style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 20px", borderRadius: 8, border: "none", background: captacaoGenerating ? "#7A8FA8" : "linear-gradient(135deg, #C9A84C, #E8C97A)", color: "#09081A", fontWeight: 700, fontSize: 13, cursor: captacaoGenerating ? "not-allowed" : "pointer" }}
+                  >
+                    <Plus style={{ width: 16, height: 16 }} />
+                    {captacaoGenerating ? "Gerando..." : "Gerar Novo Link"}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* How it works */}
+            <div style={{ display: "flex", gap: 12, marginBottom: 24, flexWrap: "wrap" }}>
+              {[
+                { num: "1", title: "Gere o link", desc: "Clique em \"Gerar Novo Link\" acima" },
+                { num: "2", title: "Envie ao cliente", desc: "Copie e compartilhe via WhatsApp, e-mail ou SMS" },
+                { num: "3", title: "Cliente preenche", desc: "Formulário com seus dados e produto de interesse" },
+                { num: "4", title: "Lead no CRM", desc: "Aparece aqui com badge \"Digital\" para você direcionar" },
+              ].map((step) => (
+                <div key={step.num} style={{ flex: "1 1 180px", padding: "14px 16px", borderRadius: 10, border: "1px solid #122036", background: "rgba(255,255,255,0.02)" }}>
+                  <div style={{ width: 24, height: 24, borderRadius: "50%", background: "rgba(201,168,76,0.15)", border: "1px solid rgba(201,168,76,0.3)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 800, color: "#C9A84C", marginBottom: 8 }}>{step.num}</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "#F0ECE4", marginBottom: 3 }}>{step.title}</div>
+                  <div style={{ fontSize: 12, color: "#7A8FA8" }}>{step.desc}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Links list */}
+            {captacaoLoading ? (
+              <div style={{ textAlign: "center", padding: "48px 0", color: "#7A8FA8", fontSize: 14 }}>
+                <RefreshCw style={{ width: 20, height: 20, margin: "0 auto 8px", display: "block" }} className="animate-spin" />
+                Carregando links...
+              </div>
+            ) : captacaoLinks.length === 0 ? (
+              <div style={{ textAlign: "center", padding: "48px 0", border: "1px dashed rgba(201,168,76,0.2)", borderRadius: 12 }}>
+                <Link2 style={{ width: 32, height: 32, color: "#7A8FA8", margin: "0 auto 12px", display: "block" }} />
+                <p style={{ color: "#7A8FA8", fontSize: 14, margin: 0 }}>Nenhum link gerado ainda.</p>
+                <p style={{ color: "#7A8FA8", fontSize: 12, margin: "4px 0 0" }}>Clique em "Gerar Novo Link" para começar.</p>
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {captacaoLinks.map((link) => {
+                  const url = `${typeof window !== "undefined" ? window.location.origin : ""}/c/${link.token}`;
+                  const isCopied = copiedToken === link.token;
+                  return (
+                    <div key={link.id} style={{ padding: "16px 20px", borderRadius: 12, border: `1px solid ${link.active ? "rgba(201,168,76,0.2)" : "rgba(122,143,168,0.15)"}`, background: link.active ? "rgba(201,168,76,0.03)" : "rgba(255,255,255,0.01)", display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+                      {/* Status dot */}
+                      <div style={{ width: 8, height: 8, borderRadius: "50%", background: link.active ? "#10B981" : "#7A8FA8", flexShrink: 0 }} />
+
+                      {/* Link info */}
+                      <div style={{ flex: 1, minWidth: 200 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                          <span style={{ fontSize: 12, fontFamily: "monospace", color: "#C9A84C", background: "rgba(201,168,76,0.1)", padding: "2px 8px", borderRadius: 4 }}>
+                            /c/{link.token.slice(0, 12)}...
+                          </span>
+                          {link.active ? (
+                            <span style={{ fontSize: 10, fontWeight: 700, color: "#10B981", background: "rgba(16,185,129,0.1)", padding: "2px 8px", borderRadius: 4, border: "1px solid rgba(16,185,129,0.2)" }}>ATIVO</span>
+                          ) : (
+                            <span style={{ fontSize: 10, fontWeight: 700, color: "#7A8FA8", background: "rgba(122,143,168,0.1)", padding: "2px 8px", borderRadius: 4, border: "1px solid rgba(122,143,168,0.2)" }}>INATIVO</span>
+                          )}
+                        </div>
+                        <div style={{ fontSize: 12, color: "#7A8FA8" }}>
+                          {link.uses_count} {link.uses_count === 1 ? "resposta" : "respostas"} · Criado em {new Date(link.created_at).toLocaleDateString("pt-BR")}
+                        </div>
+                      </div>
+
+                      {/* URL preview */}
+                      <div style={{ fontSize: 11, color: "#7A8FA8", fontFamily: "monospace", background: "#0D1B2A", padding: "6px 12px", borderRadius: 6, border: "1px solid #122036", maxWidth: 300, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 2 }}>
+                        {url}
+                      </div>
+
+                      {/* Actions */}
+                      <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+                        <button
+                          onClick={() => handleCopyLink(link.token)}
+                          style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: 8, border: `1px solid ${isCopied ? "rgba(16,185,129,0.4)" : "rgba(201,168,76,0.3)"}`, background: isCopied ? "rgba(16,185,129,0.1)" : "rgba(201,168,76,0.08)", color: isCopied ? "#10B981" : "#C9A84C", cursor: "pointer", fontSize: 12, fontWeight: 600 }}
+                        >
+                          {isCopied ? <Check style={{ width: 13, height: 13 }} /> : <Copy style={{ width: 13, height: 13 }} />}
+                          {isCopied ? "Copiado!" : "Copiar"}
+                        </button>
+                        <button
+                          onClick={() => handleToggleLink(link.id, !link.active)}
+                          style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: 8, border: "1px solid rgba(122,143,168,0.2)", background: "transparent", color: "#7A8FA8", cursor: "pointer", fontSize: 12, fontWeight: 600 }}
+                        >
+                          {link.active
+                            ? <ToggleRight style={{ width: 14, height: 14, color: "#10B981" }} />
+                            : <ToggleLeft style={{ width: 14, height: 14 }} />}
+                          {link.active ? "Desativar" : "Ativar"}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Digital leads notice */}
+            {visibleLeads.filter(l => l.source === "digital").length > 0 && (
+              <div style={{ marginTop: 28, padding: "16px 20px", borderRadius: 12, border: "1px solid rgba(59,130,246,0.2)", background: "rgba(59,130,246,0.04)" }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: "#60A5FA", marginBottom: 6 }}>
+                  📥 {visibleLeads.filter(l => l.source === "digital").length} lead(s) Digital no seu CRM
+                </div>
+                <p style={{ margin: 0, fontSize: 12, color: "#7A8FA8" }}>
+                  Leads com badge "Digital" na aba Leads chegaram via link de captação. Vá para a aba Leads para direcioná-los.
+                </p>
+              </div>
+            )}
           </div>
         )}
       </div>
