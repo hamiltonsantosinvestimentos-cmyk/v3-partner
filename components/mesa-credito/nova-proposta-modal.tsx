@@ -506,6 +506,40 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
   function handleSubmit() {
     const code = `CRED-26-${String(Date.now()).slice(-6)}`;
     const clientName = clientType === "PF" ? nome : (razaoSocial || nomeFantasia);
+    const imoveisData = imoveis.map(im => ({
+      endereco: im.endereco || undefined,
+      valor_medio: parseFloat(im.valorMedio.replace(/\D/g, "")) || undefined,
+      cidade: im.cidade || undefined,
+      estado: im.estado || undefined,
+      zona: im.zona || undefined,
+      padrao: im.padrao || undefined,
+      estilo: im.estilo || undefined,
+      area_rural: im.areaRural || undefined,
+      proprietario: im.proprietarioMesmoTitular ? "MESMO_TITULAR" : (im.proprietarioNome || undefined),
+    }));
+    const metadata = {
+      client_type: clientType,
+      email: email || undefined,
+      telefone: telefone || undefined,
+      prazo: prazo || undefined,
+      finalidade: finalidade || undefined,
+      restricao_cliente: restricao || undefined,
+      imoveis: imoveisData,
+      // Dados PF
+      rg: rg || undefined,
+      nascimento: nascimento || undefined,
+      estado_civil: estadoCivil || undefined,
+      renda_mensal: renda ? parseFloat(renda.replace(/\D/g, "")) || undefined : undefined,
+      // Dados PJ
+      razao_social: razaoSocial || undefined,
+      nome_fantasia: nomeFantasia || undefined,
+      socio_responsavel: socioResponsavel || undefined,
+      faturamento_mensal: faturamento ? parseFloat(faturamento.replace(/\D/g, "")) || undefined : undefined,
+      // Endereço
+      endereco_rua: enderecoRua || undefined,
+      endereco_cidade: enderecoCity || undefined,
+      endereco_uf: enderecoUf || undefined,
+    };
     const proposal = {
       id: `new-${Date.now()}`,
       code,
@@ -529,17 +563,8 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
       docs_required: requiredDocs.length,
       created_at: new Date().toISOString(),
       restricao_cliente: restricao || undefined,
-      imoveis: imoveis.map(im => ({
-        endereco: im.endereco || undefined,
-        valor_medio: parseFloat(im.valorMedio.replace(/\D/g, "")) || undefined,
-        cidade: im.cidade || undefined,
-        estado: im.estado || undefined,
-        zona: im.zona || undefined,
-        padrao: im.padrao || undefined,
-        estilo: im.estilo || undefined,
-        area_rural: im.areaRural || undefined,
-        proprietario: im.proprietarioMesmoTitular ? "MESMO_TITULAR" : (im.proprietarioNome || undefined),
-      })),
+      imoveis: imoveisData,
+      metadata,
     };
     onSubmit(proposal);
     setSubmitted(true);

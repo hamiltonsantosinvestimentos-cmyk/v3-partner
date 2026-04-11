@@ -36,6 +36,10 @@ interface ProposalCard {
   prazo?: string; finalidade?: string;
   current_level?: string;
   mesa_comments_count?: number;
+  valor_credito_atual?: number;
+  comissao_mandato_perc?: number;
+  comissao_instituicao_perc?: number;
+  metadata?: Record<string, unknown>;
 }
 
 interface MesaOpClientProps {
@@ -139,27 +143,34 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
       .then(r => r.json())
       .then(({ proposals: fresh }) => {
         if (!Array.isArray(fresh) || fresh.length === 0) return;
-        setProposals(fresh.map((p: Record<string, unknown>) => ({
-          id: p.id as string,
-          code: p.code as string,
-          title: p.title as string,
-          client_name: p.client_name as string,
-          client_type: (p.metadata as Record<string, unknown> | null)?.client_type as string | undefined ?? p.client_type as string | undefined,
-          cpf_cnpj: p.client_cpf_cnpj as string | undefined,
-          credit_line: p.credit_line as string,
-          requested_value: p.requested_value as number,
-          approved_value: (p.approved_value as number | null) ?? null,
-          current_level: p.current_level as string,
-          status: p.status as string,
-          stage: (p.stage as string | undefined) ?? "RECEBIDO",
-          partner_id: (p.partner as { id?: string } | null)?.id,
-          partner_name: (p.partner as { full_name?: string } | null)?.full_name,
-          created_at: p.created_at as string,
-          valor_credito_atual: p.valor_credito_atual as number | undefined,
-          comissao_mandato_perc: p.comissao_mandato_perc as number | undefined,
-          comissao_instituicao_perc: p.comissao_instituicao_perc as number | undefined,
-          metadata: p.metadata as Record<string, unknown> | undefined,
-        })));
+        setProposals(fresh.map((p: Record<string, unknown>) => {
+          const meta = p.metadata as Record<string, unknown> | null;
+          return {
+            id: p.id as string,
+            code: p.code as string,
+            title: p.title as string,
+            client_name: p.client_name as string,
+            client_type: (meta?.client_type as string | undefined) ?? p.client_type as string | undefined,
+            cpf_cnpj: p.client_cpf_cnpj as string | undefined,
+            email: meta?.email as string | undefined,
+            telefone: meta?.telefone as string | undefined,
+            prazo: meta?.prazo as string | undefined,
+            finalidade: meta?.finalidade as string | undefined,
+            credit_line: p.credit_line as string,
+            requested_value: p.requested_value as number,
+            approved_value: (p.approved_value as number | null) ?? null,
+            current_level: p.current_level as string,
+            status: p.status as string,
+            stage: (p.stage as string | undefined) ?? "RECEBIDO",
+            partner_id: (p.partner as { id?: string } | null)?.id,
+            partner_name: (p.partner as { full_name?: string } | null)?.full_name,
+            created_at: p.created_at as string,
+            valor_credito_atual: p.valor_credito_atual as number | undefined,
+            comissao_mandato_perc: p.comissao_mandato_perc as number | undefined,
+            comissao_instituicao_perc: p.comissao_instituicao_perc as number | undefined,
+            metadata: meta ?? undefined,
+          };
+        }));
       })
       .catch(() => {});
   // eslint-disable-next-line react-hooks/exhaustive-deps

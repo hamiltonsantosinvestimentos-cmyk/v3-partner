@@ -533,9 +533,38 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
                         <span className="text-xs font-medium text-foreground text-right">{telefone}</span>
                       </div>
                     )}
-                    {restricao && (
+                    {/* Dados PF */}
+                    {clientType === "PF" && meta.nascimento && <InfoRow label="Nascimento" value={meta.nascimento as string} />}
+                    {clientType === "PF" && meta.estado_civil && <InfoRow label="Estado Civil" value={meta.estado_civil as string} />}
+                    {clientType === "PF" && meta.rg && <InfoRow label="RG" value={meta.rg as string} />}
+                    {clientType === "PF" && meta.renda_mensal && (
                       <div className="flex items-start justify-between gap-2">
-                        <span className="text-xs text-muted-foreground flex-shrink-0">Restrição</span>
+                        <span className="text-xs text-muted-foreground flex-shrink-0 flex items-center gap-1"><Banknote className="w-3 h-3" /> Renda Mensal</span>
+                        <span className="text-xs font-semibold text-emerald-400">{formatCurrency(meta.renda_mensal as number)}</span>
+                      </div>
+                    )}
+                    {/* Dados PJ */}
+                    {clientType === "PJ" && meta.razao_social && <InfoRow label="Razão Social" value={meta.razao_social as string} />}
+                    {clientType === "PJ" && meta.nome_fantasia && <InfoRow label="Nome Fantasia" value={meta.nome_fantasia as string} />}
+                    {clientType === "PJ" && meta.socio_responsavel && <InfoRow label="Sócio Responsável" value={meta.socio_responsavel as string} />}
+                    {clientType === "PJ" && meta.faturamento_mensal && (
+                      <div className="flex items-start justify-between gap-2">
+                        <span className="text-xs text-muted-foreground flex-shrink-0 flex items-center gap-1"><Banknote className="w-3 h-3" /> Faturamento Mensal</span>
+                        <span className="text-xs font-semibold text-emerald-400">{formatCurrency(meta.faturamento_mensal as number)}</span>
+                      </div>
+                    )}
+                    {/* Endereço residencial */}
+                    {(meta.endereco_rua || meta.endereco_cidade) && (
+                      <div className="col-span-2 flex items-start gap-1.5 pt-1 border-t border-border/50">
+                        <MapPin className="w-3 h-3 text-muted-foreground flex-shrink-0 mt-0.5" />
+                        <span className="text-xs text-foreground">
+                          {[meta.endereco_rua, meta.endereco_cidade, meta.endereco_uf].filter(Boolean).join(", ")}
+                        </span>
+                      </div>
+                    )}
+                    {restricao && (
+                      <div className="col-span-2 flex items-center justify-between gap-2 pt-1 border-t border-border/50">
+                        <span className="text-xs text-muted-foreground">Restrição cadastral</span>
                         <span className={`text-xs font-semibold ${restricao === "SIM" ? "text-red-400" : "text-emerald-400"}`}>
                           {restricao === "SIM" ? "Possui restrições" : "Sem restrições"}
                         </span>

@@ -28,6 +28,7 @@ interface Proposal {
   imovel_valor_medio?: number;
   imovel_cidade?: string;
   imovel_estado?: string;
+  metadata?: Record<string, unknown>;
 }
 
 interface CreditDeskClientProps {
@@ -81,6 +82,11 @@ export function CreditDeskClient({ proposals: initial, level, currentUser }: Cre
           title: p.title as string,
           client_name: p.client_name as string,
           cpf_cnpj: p.client_cpf_cnpj as string | undefined,
+          client_type: (p.metadata as Record<string, unknown> | null)?.client_type as string | undefined,
+          email: (p.metadata as Record<string, unknown> | null)?.email as string | undefined,
+          telefone: (p.metadata as Record<string, unknown> | null)?.telefone as string | undefined,
+          prazo: (p.metadata as Record<string, unknown> | null)?.prazo as string | undefined,
+          finalidade: (p.metadata as Record<string, unknown> | null)?.finalidade as string | undefined,
           credit_line: p.credit_line as string,
           requested_value: p.requested_value as number,
           approved_value: (p.approved_value as number | null) ?? null,
@@ -93,6 +99,7 @@ export function CreditDeskClient({ proposals: initial, level, currentUser }: Cre
           valor_credito_atual: p.valor_credito_atual as number | undefined,
           comissao_mandato_perc: p.comissao_mandato_perc as number | undefined,
           comissao_instituicao_perc: p.comissao_instituicao_perc as number | undefined,
+          metadata: p.metadata as Record<string, unknown> | undefined,
         })));
       })
       .catch(() => {});
@@ -119,6 +126,16 @@ export function CreditDeskClient({ proposals: initial, level, currentUser }: Cre
     const p = proposal as unknown as Proposal;
     try {
       const raw = proposal as Record<string, unknown>;
+      // Usa metadata se já vier montado pelo nova-proposta-modal, senão constrói
+      const metadata = (raw.metadata as Record<string, unknown>) ?? {
+        client_type:       raw.client_type,
+        email:             raw.email,
+        telefone:          raw.telefone,
+        prazo:             raw.prazo,
+        finalidade:        raw.finalidade,
+        restricao_cliente: raw.restricao_cliente,
+        imoveis:           raw.imoveis,
+      };
       const res = await fetch("/api/credit-proposals", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -130,20 +147,18 @@ export function CreditDeskClient({ proposals: initial, level, currentUser }: Cre
           credit_line:     p.credit_line,
           requested_value: p.requested_value,
           current_level:   level,
-          metadata: {
-            client_type:      raw.client_type,
-            email:            raw.email,
-            telefone:         raw.telefone,
-            prazo:            raw.prazo,
-            finalidade:       raw.finalidade,
-            restricao_cliente: raw.restricao_cliente,
-            imoveis:          raw.imoveis,
-          },
+          metadata,
         }),
       });
       const json = await res.json();
       if (json.ok && json.proposal) {
-        setProposals(prev => [{ ...p, id: json.proposal.id, partner_id: json.proposal.partner_id ?? p.partner_id }, ...prev]);
+        // Usa o objeto retornado pelo banco (contém metadata completo)
+        setProposals(prev => [{
+          ...p,
+          id: json.proposal.id,
+          partner_id: json.proposal.partner_id ?? p.partner_id,
+          metadata: json.proposal.metadata ?? metadata,
+        }, ...prev]);
         return;
       }
     } catch {}
