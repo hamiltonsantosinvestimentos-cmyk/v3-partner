@@ -23,9 +23,6 @@ import {
   ContactRound,
   DollarSign,
   Wallet,
-  Globe,
-  Shield,
-  ShieldCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { UserRole } from "@/lib/constants";
@@ -46,9 +43,6 @@ const iconMap = {
   ContactRound,
   DollarSign,
   Wallet,
-  Globe,
-  Shield,
-  ShieldCheck,
 };
 
 interface NavSubItem {

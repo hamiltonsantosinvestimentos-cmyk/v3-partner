@@ -86,7 +86,7 @@ export async function GET(req: NextRequest) {
 
 // POST — cria nova proposta de crédito
 export async function POST(req: NextRequest) {
-  const { user, supabase } = await getAuthedUser();
+  const { user, supabase, profile } = await getAuthedUser();
   if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
   const body = await req.json();
