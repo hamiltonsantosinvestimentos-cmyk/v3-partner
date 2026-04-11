@@ -1,12 +1,3 @@
 {
-  "experimentalServices": {
-    "frontend": {
-      "routePrefix": "/",
-      "framework": "nextjs"
-    },
-    "creative-engine": {
-      "entrypoint": "services/creative-engine",
-      "routePrefix": "/_/creative-engine"
-    }
-  }
+  "framework": "nextjs"
 }
