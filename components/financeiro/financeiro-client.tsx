@@ -1281,20 +1281,195 @@ function ComissoesAdminTab() {
   );
 }
 
+// ─── Modal: Novo Lançamento DRE ──────────────────────────────────────────────
+
+function NovoDREModal({ open, onClose, onSalvar }: {
+  open: boolean;
+  onClose: () => void;
+  onSalvar: (d: import("@/lib/demo-data-financeiro").DREMes) => void;
+}) {
+  const hoje = new Date();
+  const [mes, setMes] = useState(String(hoje.getMonth() + 1));
+  const [ano, setAno] = useState(String(hoje.getFullYear()));
+  const [receitas, setReceitas] = useState("");
+  const [deducoes, setDeducoes] = useState("");
+  const [custosOp, setCustosOp] = useState("");
+  const [despAdmin, setDespAdmin] = useState("");
+  const [despCom, setDespCom] = useState("");
+  const [despFin, setDespFin] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  function parse(v: string) { return parseFloat(v.replace(/\D/g, "").replace(",", ".")) || 0; }
+
+  const r = parse(receitas);
+  const ded = parse(deducoes);
+  const cop = parse(custosOp);
+  const da = parse(despAdmin);
+  const dc = parse(despCom);
+  const df = parse(despFin);
+  const recLiq = r - ded;
+  const lucroBruto = recLiq - cop;
+  const ebitda = lucroBruto - da - dc - df;
+  const irpj = ebitda > 0 ? ebitda * 0.15 : 0;
+  const csll = ebitda > 0 ? ebitda * 0.09 : 0;
+  const lucroLiq = ebitda - irpj - csll;
+
+  async function handleSalvar() {
+    if (!r) return;
+    setSaving(true);
+    const entry: import("@/lib/demo-data-financeiro").DREMes = {
+      mes: parseInt(mes), ano: parseInt(ano),
+      receitas: r, deducoes: ded, receitaLiquida: recLiq,
+      custosOperacionais: cop, lucroBruto,
+      despesasAdmin: da, despesasComerciais: dc, despesasFinanceiras: df,
+      ebitda, irpj, csll, lucroLiquido: lucroLiq,
+    };
+    try {
+      await fetch("/api/financeiro", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "dre", data: entry }),
+      });
+    } catch {}
+    onSalvar(entry);
+    setSaving(false);
+    onClose();
+    setReceitas(""); setDeducoes(""); setCustosOp(""); setDespAdmin(""); setDespCom(""); setDespFin("");
+  }
+
+  if (!open) return null;
+
+  const Field = ({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) => (
+    <div>
+      <label className="block text-xs font-semibold text-muted-foreground mb-1">{label}</label>
+      <input value={value} onChange={e => onChange(e.target.value)} placeholder="0,00"
+        className="w-full h-9 px-3 text-sm bg-secondary border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50" />
+    </div>
+  );
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      <div className="bg-card border border-border rounded-2xl w-full max-w-lg animate-fade-in">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+          <h2 className="text-base font-bold text-white">Novo Lançamento DRE</h2>
+          <button onClick={onClose} className="w-8 h-8 rounded-lg hover:bg-secondary flex items-center justify-center text-muted-foreground hover:text-white transition-colors">
+            <ChevronRight className="w-4 h-4 rotate-180" />
+          </button>
+        </div>
+        <div className="px-6 py-5 space-y-4 max-h-[70vh] overflow-y-auto">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-muted-foreground mb-1">Mês *</label>
+              <select value={mes} onChange={e => setMes(e.target.value)}
+                className="w-full h-9 px-3 text-sm bg-secondary border border-border rounded-lg text-foreground focus:outline-none">
+                {MESES_PT.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-muted-foreground mb-1">Ano *</label>
+              <select value={ano} onChange={e => setAno(e.target.value)}
+                className="w-full h-9 px-3 text-sm bg-secondary border border-border rounded-lg text-foreground focus:outline-none">
+                {[2024, 2025, 2026, 2027].map(a => <option key={a} value={a}>{a}</option>)}
+              </select>
+            </div>
+          </div>
+
+          <div className="border-t border-border pt-3 space-y-3">
+            <p className="text-xs font-bold text-[#C9A84C] uppercase tracking-wider">Receitas</p>
+            <Field label="Receita Bruta (R$) *" value={receitas} onChange={setReceitas} />
+            <Field label="(-) Impostos sobre Receita (R$)" value={deducoes} onChange={setDeducoes} />
+          </div>
+
+          <div className="border-t border-border pt-3 space-y-3">
+            <p className="text-xs font-bold text-[#C9A84C] uppercase tracking-wider">Custos e Despesas</p>
+            <Field label="(-) Custos Operacionais (R$)" value={custosOp} onChange={setCustosOp} />
+            <Field label="(-) Despesas Administrativas (R$)" value={despAdmin} onChange={setDespAdmin} />
+            <Field label="(-) Despesas Comerciais / Comissões (R$)" value={despCom} onChange={setDespCom} />
+            <Field label="(-) Despesas Financeiras (R$)" value={despFin} onChange={setDespFin} />
+          </div>
+
+          {r > 0 && (
+            <div className="border-t border-border pt-3 space-y-2 bg-secondary/30 rounded-xl p-3">
+              <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Prévia calculada</p>
+              {[
+                { label: "Receita Líquida", valor: recLiq },
+                { label: "Lucro Bruto", valor: lucroBruto },
+                { label: "EBITDA", valor: ebitda },
+                { label: "IRPJ (15%)", valor: -irpj },
+                { label: "CSLL (9%)", valor: -csll },
+                { label: "Lucro Líquido", valor: lucroLiq, bold: true },
+              ].map(row => (
+                <div key={row.label} className="flex justify-between text-xs">
+                  <span className={`text-muted-foreground ${row.bold ? "font-bold text-white" : ""}`}>{row.label}</span>
+                  <span className={`font-medium ${row.valor < 0 ? "text-red-400" : row.bold ? "text-emerald-400" : "text-white"}`}>{formatMoeda(row.valor)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="px-6 py-4 border-t border-border flex gap-2 justify-end">
+          <button onClick={onClose} className="px-4 py-2 text-sm text-muted-foreground hover:text-white transition-colors">Cancelar</button>
+          <button onClick={handleSalvar} disabled={!r || saving}
+            className="px-4 py-2 text-sm font-bold bg-primary text-[#09081A] rounded-lg hover:bg-primary/90 disabled:opacity-40 transition-colors">
+            {saving ? "Salvando..." : "Salvar Lançamento"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── TAB: DRE ────────────────────────────────────────────────────────────────
 
 function DRETab() {
+  const [registros, setRegistros] = useState<import("@/lib/demo-data-financeiro").DREMes[]>([]);
   const [idx, setIdx] = useState(0);
-  if (!DEMO_DRE.length) {
+  const [modalOpen, setModalOpen] = useState(false);
+  const [carregando, setCarregando] = useState(true);
+
+  React.useEffect(() => {
+    fetch("/api/financeiro?type=dre")
+      .then(r => r.json())
+      .then(json => {
+        if (json.records?.length) {
+          const dados = json.records.map((r: { data: import("@/lib/demo-data-financeiro").DREMes }) => r.data);
+          dados.sort((a: import("@/lib/demo-data-financeiro").DREMes, b: import("@/lib/demo-data-financeiro").DREMes) => a.ano !== b.ano ? a.ano - b.ano : a.mes - b.mes);
+          setRegistros(dados);
+          setIdx(dados.length - 1);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setCarregando(false));
+  }, []);
+
+  function handleSalvar(entry: import("@/lib/demo-data-financeiro").DREMes) {
+    setRegistros(prev => {
+      const novo = [...prev, entry].sort((a, b) => a.ano !== b.ano ? a.ano - b.ano : a.mes - b.mes);
+      setIdx(novo.length - 1);
+      return novo;
+    });
+  }
+
+  if (carregando) {
+    return <div className="flex items-center justify-center h-64 text-muted-foreground text-sm">Carregando...</div>;
+  }
+
+  if (!registros.length) {
     return (
-      <div className="flex items-center justify-center h-64 text-muted-foreground text-sm">
-        Sem dados de DRE cadastrados. Adicione lançamentos para visualizar.
+      <div className="flex flex-col items-center justify-center h-64 gap-4">
+        <p className="text-muted-foreground text-sm">Nenhum lançamento DRE cadastrado.</p>
+        <button onClick={() => setModalOpen(true)}
+          className="flex items-center gap-2 px-4 py-2 text-sm font-bold bg-primary text-[#09081A] rounded-lg hover:bg-primary/90 transition-colors">
+          <Plus className="w-4 h-4" /> Novo Lançamento
+        </button>
+        <NovoDREModal open={modalOpen} onClose={() => setModalOpen(false)} onSalvar={handleSalvar} />
       </div>
     );
   }
-  const safeIdx = Math.min(idx, DEMO_DRE.length - 1);
-  const d = DEMO_DRE[safeIdx];
-  const prev = DEMO_DRE[safeIdx - 1];
+
+  const safeIdx = Math.min(idx, registros.length - 1);
+  const d = registros[safeIdx];
+  const prev = registros[safeIdx - 1];
 
   const linhas = [
     { label: "RECEITA BRUTA", valor: d.receitas, destaque: true },
@@ -1313,6 +1488,8 @@ function DRETab() {
 
   return (
     <div className="space-y-4">
+      <NovoDREModal open={modalOpen} onClose={() => setModalOpen(false)} onSalvar={handleSalvar} />
+
       <div className="flex items-center gap-4">
         <div className="flex items-center gap-2">
           <button onClick={() => setIdx(Math.max(0, idx - 1))} disabled={idx === 0} className="p-1 rounded-lg hover:bg-secondary disabled:opacity-40 transition-colors">
@@ -1321,12 +1498,16 @@ function DRETab() {
           <span className="text-sm font-semibold text-white min-w-[120px] text-center">
             {MESES_PT[d.mes - 1]} / {d.ano}
           </span>
-          <button onClick={() => setIdx(Math.min(DEMO_DRE.length - 1, idx + 1))} disabled={idx === DEMO_DRE.length - 1} className="p-1 rounded-lg hover:bg-secondary disabled:opacity-40 transition-colors">
+          <button onClick={() => setIdx(Math.min(registros.length - 1, idx + 1))} disabled={idx === registros.length - 1} className="p-1 rounded-lg hover:bg-secondary disabled:opacity-40 transition-colors">
             <ChevronRight className="w-4 h-4 text-muted-foreground" />
           </button>
         </div>
         {prev && <span className="text-xs text-muted-foreground">vs {MESES_PT[prev.mes - 1]}/{prev.ano}</span>}
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-2">
+          <button onClick={() => setModalOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-primary text-[#09081A] rounded-lg hover:bg-primary/90 transition-colors">
+            <Plus className="w-3.5 h-3.5" /> Novo Lançamento
+          </button>
           <ExportButton opts={{
             titulo: "DRE",
             mes: `${MESES_PT[d.mes - 1]} / ${d.ano}`,
@@ -1354,7 +1535,7 @@ function DRETab() {
                     const prevLinhas = [prev.receitas, -prev.deducoes, prev.receitaLiquida, -prev.custosOperacionais, prev.lucroBruto, -prev.despesasAdmin, -prev.despesasComerciais, -prev.despesasFinanceiras, prev.ebitda, -prev.irpj, -prev.csll, prev.lucroLiquido];
                     return prevLinhas[i];
                   })() : null;
-                  const diff = prevVal !== null ? ((Math.abs(l.valor) - Math.abs(prevVal)) / Math.abs(prevVal) * 100) : null;
+                  const diff = prevVal !== null && prevVal !== 0 ? ((Math.abs(l.valor) - Math.abs(prevVal)) / Math.abs(prevVal) * 100) : null;
                   return (
                     <tr key={i} className={`border-b border-border/20 ${l.destaque ? "bg-[#0F1E35]" : ""}`}>
                       <td className={`px-4 py-2.5 ${l.destaque ? "font-bold text-[#C9A84C]" : "text-muted-foreground"}`}>{l.label}</td>
@@ -1378,11 +1559,11 @@ function DRETab() {
 
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Evolução 6 Meses</CardTitle>
+            <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Evolução — Todos os Meses</CardTitle>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={280}>
-              <AreaChart data={DEMO_DRE.map(dr => ({ mes: `${MESES_PT[dr.mes - 1]}/${String(dr.ano).slice(2)}`, Receita: dr.receitas, Lucro: dr.lucroLiquido, EBITDA: dr.ebitda }))}>
+              <AreaChart data={registros.map(dr => ({ mes: `${MESES_PT[dr.mes - 1]}/${String(dr.ano).slice(2)}`, Receita: dr.receitas, Lucro: dr.lucroLiquido, EBITDA: dr.ebitda }))}>
                 <defs>
                   <linearGradient id="gradRec" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#C9A84C" stopOpacity={0.3} />
