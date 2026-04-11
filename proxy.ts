@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
-const PUBLIC_ROUTES = ["/login", "/auth/callback", "/unauthorized", "/api/demo-login", "/api/auth/login"];
+const PUBLIC_ROUTES = ["/login", "/auth/callback", "/unauthorized", "/api/demo-login", "/api/auth/login", "/c/", "/api/captacao/"];
 
 const ROLE_ROUTES: Record<string, string[]> = {
   "/usuarios": ["ADMIN"],
@@ -9,13 +9,12 @@ const ROLE_ROUTES: Record<string, string[]> = {
   "/split-fiscal": ["ADMIN", "PARTNER", "PARTNER_PRO", "GESTAO"],
   "/mesa-credito/nivel-3": ["ADMIN", "GESTAO", "PARTNER_PRO"],
   "/mesa-operacional": ["ADMIN", "MESA_OPERACIONAL", "GESTAO"],
+  "/kyc": ["ADMIN", "MESA_OPERACIONAL"],
   "/financeiro": ["ADMIN", "FINANCEIRO"],
   "/comissoes": ["ADMIN", "PARTNER", "PARTNER_PRO", "FINANCEIRO"],
 };
 
-const IS_DEMO =
-  !process.env.NEXT_PUBLIC_SUPABASE_URL ||
-  process.env.NEXT_PUBLIC_SUPABASE_URL.includes("SEU_PROJETO");
+const IS_DEMO = false;
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
