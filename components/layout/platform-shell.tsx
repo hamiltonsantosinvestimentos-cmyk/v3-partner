@@ -47,7 +47,10 @@ export function PlatformShell({ user, notificationCount, children }: PlatformShe
           onMenuClick={() => setSidebarOpen(true)}
           notificationCount={notificationCount}
         />
-        <main className="flex-1 overflow-y-auto p-5 lg:p-6">
+        <main className="flex-1 overflow-y-auto p-5 lg:p-6 relative"
+          style={{
+            background: "radial-gradient(ellipse 80% 50% at 50% 0%, rgba(201,168,76,0.03) 0%, transparent 60%)",
+          }}>
           {children}
         </main>
       </div>

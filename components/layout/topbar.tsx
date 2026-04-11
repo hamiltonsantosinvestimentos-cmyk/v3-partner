@@ -1,18 +1,18 @@
 "use client";
 
-import React, { useState } from "react";
+import React from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import {
   Bell,
-  Search,
   Menu,
   LogOut,
   User,
   Settings,
   ChevronDown,
+  Zap,
 } from "lucide-react";
-const IS_DEMO = !process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL.includes("SEU_PROJETO");
+const IS_DEMO = false;
 import { abbreviateName } from "@/lib/utils";
 import {
   DropdownMenu,
@@ -23,7 +23,28 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ROLE_LABELS, type UserRole } from "@/lib/constants";
-import { ThemeToggle } from "./theme-toggle";
+
+/* ── Page label map ── */
+const PAGE_LABELS: Record<string, string> = {
+  "/dashboard": "Dashboard",
+  "/crm": "CRM",
+  "/ranking": "Ranking",
+  "/mesa-credito": "Mesa de Crédito",
+  "/mesa-credito/nivel-1": "Crédito Varejo",
+  "/mesa-credito/nivel-2": "Crédito Estruturado",
+  "/mesa-credito/nivel-3": "High Ticket",
+  "/mesa-ma": "Mesa M&A",
+  "/mesa-operacional": "Mesa Operacional",
+  "/mesa-consorcio-op": "Mesa Consórcio",
+  "/split-fiscal": "Split Fiscal",
+  "/ma": "M&A",
+  "/consorcio": "Consórcio",
+  "/ia-assistant": "V3 IA Partner",
+  "/financeiro": "Financeiro",
+  "/comissoes": "Comissões",
+  "/academy": "V3 Academy",
+  "/usuarios": "Usuários",
+};
 
 interface TopbarProps {
   user: {
@@ -38,7 +59,7 @@ interface TopbarProps {
 }
 
 export function Topbar({ user, onMenuClick, notificationCount = 0 }: TopbarProps) {
-  const router = useRouter();
+  const pathname = usePathname();
 
   const handleSignOut = async () => {
     document.cookie = "v3_demo_session=; path=/; max-age=0";
@@ -54,102 +75,130 @@ export function Topbar({ user, onMenuClick, notificationCount = 0 }: TopbarProps
 
   const initials = abbreviateName(user.full_name || user.email);
 
+  /* Resolve current page label */
+  const pageLabel =
+    PAGE_LABELS[pathname] ??
+    Object.entries(PAGE_LABELS)
+      .filter(([k]) => pathname.startsWith(k + "/"))
+      .sort((a, b) => b[0].length - a[0].length)[0]?.[1] ??
+    "Plataforma";
+
   return (
-    <header className="h-14 border-b border-[#122036]/80 bg-[#09081A]/90 backdrop-blur-md flex items-center px-4 gap-4 relative">
-      {/* Bottom gold accent */}
-      <div className="absolute bottom-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-[#C9A84C]/20 to-transparent" />
-      {/* Mobile menu button */}
+    <header className="h-14 flex items-center px-4 gap-3 relative"
+      style={{
+        background: "linear-gradient(180deg, rgba(9,8,26,0.98) 0%, rgba(9,8,26,0.95) 100%)",
+        borderBottom: "1px solid rgba(201,168,76,0.08)",
+        backdropFilter: "blur(12px)",
+        boxShadow: "0 1px 0 rgba(201,168,76,0.04), 0 4px 24px rgba(0,0,0,0.3)",
+      }}>
+
+      {/* Bottom gold shimmer line */}
+      <div className="absolute bottom-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-[#C9A84C]/25 to-transparent pointer-events-none" />
+
+      {/* Left edge accent */}
+      <div className="absolute top-3 bottom-3 left-0 w-[1px] bg-gradient-to-b from-transparent via-[#C9A84C]/20 to-transparent pointer-events-none" />
+
+      {/* Mobile menu */}
       <button
         onClick={onMenuClick}
-        className="p-1.5 rounded-lg hover:bg-secondary transition-colors lg:hidden"
-      >
-        <Menu className="w-5 h-5 text-muted-foreground" />
+        className="p-1.5 rounded-lg hover:bg-white/[0.05] transition-colors lg:hidden flex-shrink-0">
+        <Menu className="w-5 h-5 text-[#7A8FA8]" />
       </button>
 
-      {/* Search */}
-      <div className="flex-1 max-w-md hidden sm:flex">
-        <div className="relative w-full">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <input
-            type="text"
-            placeholder="Buscar operações, partners..."
-            className="w-full h-8 pl-9 pr-4 text-sm bg-secondary rounded-lg border border-border/50 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 transition-all"
-          />
+      {/* ── Page indicator ── */}
+      <div className="flex items-center gap-2 flex-1 min-w-0">
+        {/* Brand mark on desktop */}
+        <div className="hidden lg:flex items-center gap-2">
+          <div className="w-1 h-4 rounded-full bg-gradient-to-b from-[#C9A84C] to-[#E8C97A]" />
+          <span className="text-[11px] font-bold tracking-[0.18em] text-[#C9A84C] uppercase select-none">
+            V3 Partners
+          </span>
+          <span className="text-[#7A8FA8]/30 text-sm select-none">/</span>
         </div>
+        <span className="text-sm font-semibold text-[#F0ECE4] truncate">{pageLabel}</span>
       </div>
 
-      <div className="flex-1 lg:hidden" />
+      {/* ── Right controls ── */}
+      <div className="flex items-center gap-1.5 flex-shrink-0">
 
-      {/* Right side */}
-      <div className="flex items-center gap-2">
-        {/* Theme toggle */}
-        <ThemeToggle />
+        {/* Live indicator */}
+        <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/[0.04] border border-white/[0.06]">
+          <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+          <span className="text-[9px] font-bold tracking-[0.12em] text-[#7A8FA8] uppercase">Live</span>
+        </div>
 
-        {/* Notifications */}
+        {/* Notification bell */}
         <Link
           href="/notificacoes"
-          className="relative p-1.5 rounded-lg hover:bg-secondary transition-colors"
-        >
-          <Bell className="w-5 h-5 text-muted-foreground" />
+          className="relative p-1.5 rounded-lg hover:bg-white/[0.05] transition-colors group">
+          <Bell className="w-4 h-4 text-[#7A8FA8] group-hover:text-[#F0ECE4] transition-colors" />
           {notificationCount > 0 && (
-            <span className="absolute top-1 right-1 w-2 h-2 bg-[#C9A84C] rounded-full" />
+            <span className="absolute top-1 right-1 w-1.5 h-1.5 bg-[#C9A84C] rounded-full shadow-[0_0_6px_rgba(201,168,76,0.6)]" />
           )}
         </Link>
 
-        {/* User menu */}
+        {/* Divider */}
+        <div className="w-px h-5 bg-white/[0.08] mx-0.5" />
+
+        {/* User dropdown */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button className="flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-secondary transition-colors">
-              <div className="w-7 h-7 rounded-full bg-gradient-to-br from-[#C9A84C] to-[#E8C97A] flex items-center justify-center text-[#09081A] text-xs font-bold flex-shrink-0">
+            <button className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-white/[0.05] transition-all border border-transparent hover:border-white/[0.06] group">
+              {/* Avatar */}
+              <div className="relative w-7 h-7 rounded-lg bg-gradient-to-br from-[#C9A84C]/80 to-[#E8C97A]/60 flex items-center justify-center flex-shrink-0 overflow-hidden"
+                style={{ boxShadow: "0 0 0 1px rgba(201,168,76,0.25), 0 2px 8px rgba(0,0,0,0.4)" }}>
                 {user.avatar_url ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={user.avatar_url}
-                    alt={user.full_name || ""}
-                    className="w-full h-full rounded-full object-cover"
-                  />
+                  <img src={user.avatar_url} alt={user.full_name || ""} className="w-full h-full object-cover" />
                 ) : (
-                  initials
+                  <span className="text-[#09081A] text-[10px] font-black tracking-tight">{initials}</span>
                 )}
               </div>
-              <div className="hidden sm:flex flex-col items-start">
-                <span className="text-xs font-medium text-foreground leading-none">
+              {/* Name + role */}
+              <div className="hidden sm:flex flex-col items-start leading-none">
+                <span className="text-[11px] font-semibold text-[#F0ECE4] group-hover:text-white transition-colors">
                   {user.full_name?.split(" ")[0] || "Usuário"}
                 </span>
-                <span className="text-[10px] text-muted-foreground leading-none mt-0.5">
+                <span className="text-[9px] text-[#C9A84C] font-bold tracking-[0.08em] mt-0.5">
                   {ROLE_LABELS[user.role]}
                 </span>
               </div>
-              <ChevronDown className="w-3.5 h-3.5 text-muted-foreground hidden sm:block" />
+              <ChevronDown className="w-3 h-3 text-[#7A8FA8] hidden sm:block group-hover:text-[#F0ECE4] transition-colors" />
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-52">
+
+          <DropdownMenuContent align="end" className="w-56 border-[#1E3050] bg-[#0E1A2D]"
+            style={{ boxShadow: "0 8px 32px rgba(0,0,0,0.5), 0 0 0 1px rgba(201,168,76,0.1)" }}>
             <DropdownMenuLabel>
-              <div className="flex flex-col space-y-0.5">
-                <p className="text-sm font-medium">{user.full_name || "Usuário"}</p>
-                <p className="text-xs text-muted-foreground truncate">{user.email}</p>
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#C9A84C]/80 to-[#E8C97A]/60 flex items-center justify-center flex-shrink-0">
+                  <Zap className="w-4 h-4 text-[#09081A]" />
+                </div>
+                <div className="flex flex-col min-w-0">
+                  <p className="text-[11px] font-bold text-[#F0ECE4] truncate">{user.full_name || "Usuário"}</p>
+                  <p className="text-[9px] text-[#7A8FA8] truncate">{user.email}</p>
+                </div>
               </div>
             </DropdownMenuLabel>
-            <DropdownMenuSeparator />
+            <DropdownMenuSeparator className="bg-white/[0.06]" />
             <DropdownMenuItem asChild>
-              <Link href="/perfil" className="cursor-pointer">
-                <User className="mr-2 h-4 w-4" />
-                Meu Perfil
+              <Link href="/perfil" className="cursor-pointer text-[#7A8FA8] hover:text-[#F0ECE4] focus:text-[#F0ECE4]">
+                <User className="mr-2 h-3.5 w-3.5" />
+                <span className="text-xs">Meu Perfil</span>
               </Link>
             </DropdownMenuItem>
             <DropdownMenuItem asChild>
-              <Link href="/configuracoes" className="cursor-pointer">
-                <Settings className="mr-2 h-4 w-4" />
-                Configurações
+              <Link href="/configuracoes" className="cursor-pointer text-[#7A8FA8] hover:text-[#F0ECE4] focus:text-[#F0ECE4]">
+                <Settings className="mr-2 h-3.5 w-3.5" />
+                <span className="text-xs">Configurações</span>
               </Link>
             </DropdownMenuItem>
-            <DropdownMenuSeparator />
+            <DropdownMenuSeparator className="bg-white/[0.06]" />
             <DropdownMenuItem
               onClick={handleSignOut}
-              className="text-destructive focus:text-destructive cursor-pointer"
-            >
-              <LogOut className="mr-2 h-4 w-4" />
-              Sair
+              className="text-red-400 focus:text-red-300 cursor-pointer">
+              <LogOut className="mr-2 h-3.5 w-3.5" />
+              <span className="text-xs">Sair</span>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
