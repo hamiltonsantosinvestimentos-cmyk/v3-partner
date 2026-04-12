@@ -396,6 +396,7 @@ type Tab = "cliente" | "operacao" | "documentos";
 
 interface ImovelItem {
   endereco: string;
+  cep: string;
   valor: string;
   cidade: string;
   estado: string;
@@ -411,6 +412,7 @@ interface ImovelItem {
 function defaultImovel(): ImovelItem {
   return {
     endereco: "",
+    cep: "",
     valor: "",
     cidade: "",
     estado: "",
@@ -461,6 +463,7 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
   const [enderecoRua, setEnderecoRua] = useState("");
   const [enderecoCity, setEnderecoCity] = useState("");
   const [enderecoUf, setEnderecoUf] = useState("");
+  const [enderecoCep, setEnderecoCep] = useState("");
 
   // Restrição do cliente
   const [restricao, setRestricao] = useState<"" | "SIM" | "NAO">("");
@@ -508,6 +511,7 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
     const clientName = clientType === "PF" ? nome : (razaoSocial || nomeFantasia);
     const imoveisData = imoveis.map(im => ({
       endereco: im.endereco || undefined,
+      cep: im.cep || undefined,
       valor_medio: parseFloat(im.valorMedio.replace(/\D/g, "")) || undefined,
       cidade: im.cidade || undefined,
       estado: im.estado || undefined,
@@ -539,6 +543,7 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
       endereco_rua: enderecoRua || undefined,
       endereco_cidade: enderecoCity || undefined,
       endereco_uf: enderecoUf || undefined,
+      endereco_cep: enderecoCep || undefined,
     };
     const proposal = {
       id: `new-${Date.now()}`,
@@ -575,7 +580,7 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
     setTab("cliente");
     setNome(""); setCpfCnpj(""); setEmail(""); setTelefone("");
     setValorSolicitado(""); setPrazo(""); setFinalidade("");
-    setRestricao("");
+    setRestricao(""); setEnderecoCep("");
     setImoveis([defaultImovel()]);
     setUploadedFiles([]);
     onClose();
@@ -690,7 +695,10 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
                     <Field label="Renda Mensal (R$) *" value={renda} onChange={setRenda} placeholder="0,00" />
                     <Field label="UF" value={enderecoUf} onChange={setEnderecoUf} placeholder="SP" />
                   </div>
-                  <Field label="Endereço" value={enderecoRua} onChange={setEnderecoRua} placeholder="Rua, número, bairro" />
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field label="Endereço" value={enderecoRua} onChange={setEnderecoRua} placeholder="Rua, número, bairro" />
+                    <Field label="CEP" value={enderecoCep} onChange={setEnderecoCep} placeholder="00000-000" />
+                  </div>
                   <Field label="Cidade" value={enderecoCity} onChange={setEnderecoCity} placeholder="São Paulo" />
                   <div>
                     <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Restrição cadastral / financeira *</label>
@@ -733,7 +741,10 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
                     <Field label="Faturamento Anual (R$) *" value={faturamento} onChange={setFaturamento} placeholder="0,00" />
                     <Field label="UF" value={enderecoUf} onChange={setEnderecoUf} placeholder="SP" />
                   </div>
-                  <Field label="Endereço da Empresa" value={enderecoRua} onChange={setEnderecoRua} placeholder="Rua, número, bairro" />
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field label="Endereço da Empresa" value={enderecoRua} onChange={setEnderecoRua} placeholder="Rua, número, bairro" />
+                    <Field label="CEP" value={enderecoCep} onChange={setEnderecoCep} placeholder="00000-000" />
+                  </div>
                   <Field label="Cidade" value={enderecoCity} onChange={setEnderecoCity} placeholder="São Paulo" />
                   <div>
                     <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Restrição cadastral / financeira *</label>
@@ -807,7 +818,10 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
                           </button>
                         )}
                       </div>
-                      <Field label="Endereço do Imóvel" value={im.endereco} onChange={v => updateImovel(idx, "endereco", v)} placeholder="Rua, número, bairro" />
+                      <div className="grid grid-cols-2 gap-3">
+                        <Field label="Endereço do Imóvel" value={im.endereco} onChange={v => updateImovel(idx, "endereco", v)} placeholder="Rua, número, bairro" />
+                        <Field label="CEP do Imóvel" value={im.cep} onChange={v => updateImovel(idx, "cep", v)} placeholder="00000-000" />
+                      </div>
                       <div className="grid grid-cols-2 gap-3">
                         <Field label="Cidade do Imóvel *" value={im.cidade} onChange={v => updateImovel(idx, "cidade", v)} placeholder="Ex: São Paulo" />
                         <SelectField

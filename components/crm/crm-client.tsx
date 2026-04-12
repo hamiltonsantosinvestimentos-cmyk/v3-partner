@@ -29,6 +29,7 @@ import {
   ToggleLeft,
   ToggleRight,
   RefreshCw,
+  Trash2,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -69,6 +70,7 @@ type CRMLead = {
   partnerName: string;
   createdAt: string;
   interactions: Interaction[];
+  metadata?: Record<string, unknown>;
 };
 
 type CaptacaoLink = {
@@ -754,39 +756,72 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
     setSelectedCreditLine("");
   }
 
-  function handleEnviarMesa(lead: CRMLead) {
-    const code = `CRED-26-${String(Date.now()).slice(-6)}`;
+  async function handleEnviarMesa(lead: CRMLead) {
+    const meta = lead.metadata ?? {};
     const creditLine =
       lead.creditLine ||
+      (meta.creditLine as string) ||
       (lead.productInterest === "credito_estruturado" ? "AVAL" :
-       lead.productInterest === "high_ticket" ? "FUNDO CONSTRUÇÃO RESIDENCIAL" :
+       lead.productInterest === "high_ticket" ? "HIGH TICKET" :
        "HOME EQUITY");
-    const proposal = {
-      id: `prop-crm-${lead.id}-${Date.now()}`,
-      code,
-      title: `${creditLine} - ${lead.name}`,
-      client_name: lead.name,
-      client_type: lead.personType,
-      cpf_cnpj: lead.document,
-      email: lead.email,
-      telefone: lead.phone,
-      credit_line: creditLine,
-      requested_value: lead.annualRevenue > 0 ? Math.round(lead.annualRevenue * 0.3) : 100000,
-      approved_value: null,
-      current_level: "NIVEL_1",
-      status: "PENDING",
-      stage: "RECEBIDO",
-      partner_id: lead.partnerId,
-      partner_name: lead.partnerName,
-      docs_uploaded: 0,
-      docs_required: 5,
-      created_at: new Date().toISOString(),
+
+    // Valor: prefere valorSolicitado do metadata, senão 30% do faturamento anual
+    const parseMeta = (v: unknown) => {
+      if (typeof v === "number") return v;
+      if (typeof v === "string") return parseFloat(v.replace(/\D/g, "")) || 0;
+      return 0;
     };
+    const requestedValue = parseMeta(meta.valorSolicitado) || (lead.annualRevenue > 0 ? Math.round(lead.annualRevenue * 0.3) : 100000);
+
+    const level = requestedValue >= 5_000_000 ? "NIVEL_3" : requestedValue >= 500_000 ? "NIVEL_2" : "NIVEL_1";
+
+    try {
+      const res = await fetch("/api/credit-proposals", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: `${creditLine} - ${lead.name}`,
+          client_name: lead.name,
+          client_cpf_cnpj: lead.document || (meta.cpfCnpj as string) || null,
+          credit_line: creditLine,
+          requested_value: requestedValue,
+          current_level: level,
+          notes: lead.notes || (meta.observacoes as string) || null,
+          metadata: {
+            ...meta,
+            crm_lead_id: lead.id,
+            crm_lead_code: lead.code,
+            client_type: lead.personType,
+            email: lead.email || (meta.email as string),
+            telefone: lead.phone || (meta.phone as string),
+            endereco: meta.enderecoRua,
+            cep: meta.cep,
+            cidade: lead.city || (meta.city as string),
+            estado: lead.state || (meta.state as string),
+            restricao_cliente: meta.restricao,
+            prazo: meta.prazo,
+            finalidade: meta.finalidade,
+            imoveis: meta.imoveis,
+            documentos: meta.documentos,
+            captacao_origin: true,
+          },
+        }),
+      });
+      const json = await res.json();
+      if (res.ok && json.proposal) {
+        setMesaSuccess(`Proposta ${json.proposal.code} enviada para a Mesa de Crédito com sucesso!`);
+        setTimeout(() => setMesaSuccess(null), 5000);
+        return;
+      }
+    } catch {}
+
+    // Fallback demo: salva no localStorage
+    const code = `CRED-26-${String(Date.now()).slice(-6)}`;
     try {
       const existing: { id: string; title: string }[] = JSON.parse(localStorage.getItem("v3_demo_proposals") ?? "[]");
-      const alreadySent = existing.some((p) => p.title === proposal.title);
-      if (!alreadySent) {
-        localStorage.setItem("v3_demo_proposals", JSON.stringify([proposal, ...existing]));
+      const title = `${creditLine} - ${lead.name}`;
+      if (!existing.some((p) => p.title === title)) {
+        localStorage.setItem("v3_demo_proposals", JSON.stringify([{ id: `prop-crm-${Date.now()}`, code, title }, ...existing]));
       }
     } catch {}
     setMesaSuccess(`Proposta ${code} enviada para a Mesa de Crédito com sucesso!`);
@@ -857,6 +892,7 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
           partnerName:     json.lead.partner_name ?? userName,
           createdAt:       json.lead.created_at?.split("T")[0] ?? todayISO(),
           interactions:    [],
+          metadata:        (json.lead.metadata ?? {}) as Record<string, unknown>,
         };
         setLeads(prev => [saved, ...prev]);
         setShowNewLead(false);
@@ -1137,6 +1173,35 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
                               {CONVERTED_LABELS[lead.convertedTo]}
                             </div>
                           )}
+                          {isAdmin && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (!confirm(`Excluir lead "${lead.name}"? Esta ação não pode ser desfeita.`)) return;
+                                fetch(`/api/crm?id=${lead.id}`, { method: "DELETE" })
+                                  .then(() => setLeads(prev => prev.filter(x => x.id !== lead.id)))
+                                  .catch(() => alert("Erro ao excluir lead."));
+                              }}
+                              style={{
+                                marginTop: 8,
+                                width: "100%",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                gap: 4,
+                                background: "rgba(239,68,68,0.1)",
+                                border: "1px solid rgba(239,68,68,0.25)",
+                                borderRadius: 6,
+                                padding: "4px 0",
+                                color: "#F87171",
+                                cursor: "pointer",
+                                fontSize: 11,
+                                fontWeight: 600,
+                              }}
+                            >
+                              <Trash2 style={{ width: 11, height: 11 }} /> Excluir
+                            </button>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -1392,6 +1457,33 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
                               Avançar
                             </button>
                           )}
+                          {isAdmin && (
+                            <button
+                              onClick={() => {
+                                if (!confirm(`Excluir lead "${lead.name}"? Esta ação não pode ser desfeita.`)) return;
+                                fetch(`/api/crm?id=${lead.id}`, { method: "DELETE" })
+                                  .then(() => setLeads(prev => prev.filter(x => x.id !== lead.id)))
+                                  .catch(() => alert("Erro ao excluir lead."));
+                              }}
+                              style={{
+                                background: "rgba(239,68,68,0.1)",
+                                border: "1px solid rgba(239,68,68,0.25)",
+                                borderRadius: 6,
+                                padding: "4px 8px",
+                                color: "#F87171",
+                                cursor: "pointer",
+                                fontSize: 12,
+                                fontWeight: 600,
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 4,
+                              }}
+                              title="Excluir lead"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                              Excluir
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -1469,6 +1561,7 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
                     partnerName:     json.lead.partner_name ?? userName,
                     createdAt:       json.lead.created_at?.split("T")[0] ?? todayISO(),
                     interactions:    [],
+                    metadata:        (json.lead.metadata ?? {}) as Record<string, unknown>,
                   };
                   setLeads(prev => [saved, ...prev]);
                   setTab("pipeline");
@@ -2001,6 +2094,83 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
                   ))}
                 </div>
               </div>
+
+              {/* Dados do formulário de captação (metadata) */}
+              {selectedLead.metadata && Object.keys(selectedLead.metadata).length > 0 && (() => {
+                const m = selectedLead.metadata!;
+                const fmt = (v: unknown) => (v == null || v === "" ? null : String(v));
+                const hasAddress = fmt(m.enderecoRua) || fmt(m.cep) || fmt(m.city);
+                const hasFinanceiro = fmt(m.renda) || fmt(m.faturamento) || fmt(m.estadoCivil) || fmt(m.restricao);
+                const hasProduto = fmt(m.valorSolicitado) || fmt(m.prazo) || fmt(m.finalidade) || fmt(m.observacoes);
+                const imoveis = Array.isArray(m.imoveis) ? m.imoveis : [];
+                const docs = Array.isArray(m.documentos) ? m.documentos as { label: string; name: string; url: string }[] : [];
+                if (!hasAddress && !hasFinanceiro && !hasProduto && imoveis.length === 0 && docs.length === 0) return null;
+                return (
+                  <div style={{ marginTop: 16, padding: "14px 16px", borderRadius: 10, background: "rgba(17,31,53,0.5)", border: "1px solid rgba(22,39,68,0.8)" }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: "#C9A84C", marginBottom: 12, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                      Dados do Formulário de Captação
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                      {/* Endereço */}
+                      {hasAddress && (
+                        <div>
+                          <div style={{ fontSize: 10, color: "#7A8FA8", marginBottom: 4, fontWeight: 700, textTransform: "uppercase" }}>Endereço do Cliente</div>
+                          {fmt(m.enderecoRua) && <div style={{ fontSize: 12, color: "#E8EDF5" }}>{fmt(m.enderecoRua)}</div>}
+                          {fmt(m.cep) && <div style={{ fontSize: 12, color: "#E8EDF5" }}>CEP: {fmt(m.cep)}</div>}
+                          {(fmt(m.city) || fmt(m.state)) && <div style={{ fontSize: 12, color: "#E8EDF5" }}>{[fmt(m.city), fmt(m.state)].filter(Boolean).join(", ")}</div>}
+                        </div>
+                      )}
+                      {/* Financeiro */}
+                      {hasFinanceiro && (
+                        <div>
+                          <div style={{ fontSize: 10, color: "#7A8FA8", marginBottom: 4, fontWeight: 700, textTransform: "uppercase" }}>Dados Financeiros</div>
+                          {fmt(m.renda) && <div style={{ fontSize: 12, color: "#E8EDF5" }}>Renda: {fmt(m.renda)}</div>}
+                          {fmt(m.faturamento) && <div style={{ fontSize: 12, color: "#E8EDF5" }}>Faturamento: {fmt(m.faturamento)}</div>}
+                          {fmt(m.estadoCivil) && <div style={{ fontSize: 12, color: "#E8EDF5" }}>Estado Civil: {fmt(m.estadoCivil)}</div>}
+                          {fmt(m.restricao) && <div style={{ fontSize: 12, color: fmt(m.restricao) === "SIM" ? "#EF4444" : "#10B981" }}>Restrição: {fmt(m.restricao)}</div>}
+                        </div>
+                      )}
+                      {/* Produto */}
+                      {hasProduto && (
+                        <div>
+                          <div style={{ fontSize: 10, color: "#7A8FA8", marginBottom: 4, fontWeight: 700, textTransform: "uppercase" }}>Produto Solicitado</div>
+                          {fmt(m.valorSolicitado) && <div style={{ fontSize: 12, color: "#E8EDF5" }}>Valor: {fmt(m.valorSolicitado)}</div>}
+                          {fmt(m.prazo) && <div style={{ fontSize: 12, color: "#E8EDF5" }}>Prazo: {fmt(m.prazo)}</div>}
+                          {fmt(m.finalidade) && <div style={{ fontSize: 12, color: "#E8EDF5" }}>Finalidade: {fmt(m.finalidade)}</div>}
+                          {fmt(m.observacoes) && <div style={{ fontSize: 12, color: "#7A8FA8", fontStyle: "italic" }}>Obs: {fmt(m.observacoes)}</div>}
+                        </div>
+                      )}
+                      {/* Imóveis */}
+                      {imoveis.length > 0 && imoveis.map((im: Record<string, unknown>, idx: number) => (
+                        <div key={idx}>
+                          <div style={{ fontSize: 10, color: "#7A8FA8", marginBottom: 4, fontWeight: 700, textTransform: "uppercase" }}>Imóvel em Garantia {imoveis.length > 1 ? idx + 1 : ""}</div>
+                          {fmt(im.endereco) && <div style={{ fontSize: 12, color: "#E8EDF5" }}>{fmt(im.endereco)}</div>}
+                          {fmt(im.cep) && <div style={{ fontSize: 12, color: "#E8EDF5" }}>CEP: {fmt(im.cep)}</div>}
+                          {(fmt(im.cidade) || fmt(im.estado)) && <div style={{ fontSize: 12, color: "#E8EDF5" }}>{[fmt(im.cidade), fmt(im.estado)].filter(Boolean).join(", ")}</div>}
+                          {fmt(im.valor_medio) && <div style={{ fontSize: 12, color: "#E8EDF5" }}>Valor: R$ {Number(im.valor_medio).toLocaleString("pt-BR")}</div>}
+                          {fmt(im.zona) && <div style={{ fontSize: 12, color: "#E8EDF5" }}>Zona: {fmt(im.zona)}</div>}
+                        </div>
+                      ))}
+                    </div>
+                    {/* Documentos */}
+                    {docs.length > 0 && (
+                      <div style={{ marginTop: 12 }}>
+                        <div style={{ fontSize: 10, color: "#7A8FA8", marginBottom: 6, fontWeight: 700, textTransform: "uppercase" }}>Documentos Enviados ({docs.length})</div>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                          {docs.map((doc, idx) => (
+                            <div key={idx} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "6px 10px", borderRadius: 6, background: "rgba(16,185,129,0.06)", border: "1px solid rgba(16,185,129,0.2)" }}>
+                              <span style={{ fontSize: 11, color: "#10B981" }}>{doc.label}</span>
+                              <a href={doc.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11, color: "#C9A84C", textDecoration: "none" }}>
+                                {doc.name} ↗
+                              </a>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
 
               {/* Notes */}
               <div style={{ marginTop: 16 }}>

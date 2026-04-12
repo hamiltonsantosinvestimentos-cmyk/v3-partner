@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState } from "react";
-import { ChevronRight, ChevronLeft, CheckCircle2, Home, User, Building2, AlertTriangle } from "lucide-react";
+import React, { useState, useRef } from "react";
+import { ChevronRight, ChevronLeft, CheckCircle2, Home, User, Building2, AlertTriangle, Upload, FileText, X, Check } from "lucide-react";
 
 const CREDIT_LINES = [
   { value: "HOME EQUITY", label: "Home Equity (Garantia de Imóvel)" },
@@ -23,6 +23,24 @@ const IMOVEL_LINES = ["HOME EQUITY", "HE ESTRESSADO", "CGI", "CRI"];
 const UFS = ["AC","AL","AM","AP","BA","CE","DF","ES","GO","MA","MG","MS","MT","PA","PB","PE","PI","PR","RJ","RN","RO","RR","RS","SC","SE","SP","TO"];
 
 const LGPD_TEXT = `Autorizo a V3 Partners Soluções Ltda (CNPJ 14.219.287/0001-50) a coletar, processar e armazenar meus dados pessoais e documentos para fins de análise e estruturação de operações financeiras, em conformidade com a Lei Geral de Proteção de Dados (LGPD — Lei nº 13.709/2018). Os dados poderão ser compartilhados com parceiros e instituições financeiras exclusivamente para a finalidade informada. Tenho ciência de que esta autorização pode ser revogada a qualquer momento mediante solicitação formal ao e-mail: compliance@v3partners.com.br.`;
+
+// Checklist de documentos por linha de crédito
+const DOC_CHECKLIST: Record<string, string[]> = {
+  "HOME EQUITY": ["RG ou CNH", "Comprovante de Renda (3 últimos meses)", "Comprovante de Residência", "Certidão de Matrícula do Imóvel", "Declaração do Imposto de Renda (2 anos)", "Extratos Bancários (3 meses)"],
+  "HE ESTRESSADO": ["RG ou CNH", "Comprovante de Renda (3 últimos meses)", "Comprovante de Residência", "Certidão de Matrícula do Imóvel", "Declaração do Imposto de Renda"],
+  "AVAL": ["RG ou CNH", "Comprovante de Renda (3 últimos meses)", "Comprovante de Residência", "Extratos Bancários (3 meses)", "Declaração do Imposto de Renda"],
+  "FIDC": ["Contrato Social Atualizado", "Balanço Patrimonial (2 últimos anos)", "DRE (2 últimos anos)", "Certidão Negativa de Débitos Federais", "Extratos Bancários PJ (6 meses)", "Declaração de Faturamento"],
+  "CRI": ["Contrato Social", "Certidão de Matrícula do Imóvel", "Balanço Patrimonial", "Projeto de Viabilidade Econômica", "Declaração do Imposto de Renda"],
+  "CRA": ["Contrato Social", "Nota Fiscal Agroindustrial", "DAR/ITR do Imóvel Rural", "Matrícula do Imóvel Rural", "Declaração de Produção Agroindustrial"],
+  "HIGH TICKET": ["Documentos Pessoais (RG/CNH)", "Comprovante de Patrimônio", "Declaração do Imposto de Renda (2 anos)", "Extratos Bancários (6 meses)", "Carta de Intenção da Operação"],
+  "PROJECT FINANCE": ["Plano de Negócios", "Estudo de Viabilidade Econômica", "Documentos Societários", "Licenças e Alvarás", "Orçamento e Cronograma da Obra"],
+  "CGI": ["RG ou CNH", "Comprovante de Renda (3 meses)", "Comprovante de Residência", "Certidão de Matrícula do Imóvel", "Extratos Bancários (3 meses)"],
+  "M&A": ["NDA Assinado", "Balanço Patrimonial (3 últimos anos)", "DRE (3 últimos anos)", "Lista de Ativos e Passivos", "Contrato Social Atualizado"],
+  "CONSORCIO": ["RG ou CNH", "CPF", "Comprovante de Renda (3 meses)", "Comprovante de Residência"],
+  "SPLIT FISCAL": ["Contrato Social Atualizado", "Balanço Patrimonial", "Nota Fiscal Demonstrativa", "Certidão Negativa de Débitos"],
+};
+
+const DEFAULT_CHECKLIST = ["Documento de Identidade (RG ou CNH)", "CPF/CNPJ", "Comprovante de Endereço", "Comprovante de Renda ou Faturamento"];
 
 const inputStyle: React.CSSProperties = {
   width: "100%",
@@ -86,6 +104,7 @@ export function CaptacaoForm({ token, partnerName }: CaptacaoFormProps) {
   const [city, setCity] = useState("");
   const [state, setState] = useState("");
   const [enderecoRua, setEnderecoRua] = useState("");
+  const [cep, setCep] = useState("");
   const [restricao, setRestricao] = useState<"" | "SIM" | "NAO">("");
 
   // Step 3 — Produto
@@ -97,23 +116,32 @@ export function CaptacaoForm({ token, partnerName }: CaptacaoFormProps) {
 
   // Step 4 — Imóvel (condicional)
   const [imovelEndereco, setImovelEndereco] = useState("");
+  const [imovelCep, setImovelCep] = useState("");
   const [imovelCidade, setImovelCidade] = useState("");
   const [imovelEstado, setImovelEstado] = useState("");
   const [imovelValor, setImovelValor] = useState("");
   const [imovelZona, setImovelZona] = useState<"" | "URBANO" | "RURAL">("");
   const [imovelProprio, setImovelProprio] = useState(true);
 
-  // Step 5 — LGPD
+  // Step Documentos
+  const [uploadedDocs, setUploadedDocs] = useState<Record<string, { name: string; url: string }>>({});
+  const [uploading, setUploading] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [pendingLabel, setPendingLabel] = useState("");
+
+  // Step final — LGPD
   const [lgpdConsent, setLgpdConsent] = useState(false);
 
   const needsImovel = IMOVEL_LINES.includes(creditLine);
-  const totalSteps = needsImovel ? 5 : 4;
+  const totalSteps = needsImovel ? 6 : 5;
+  const docsStep = needsImovel ? 5 : 4;
 
   function stepLabel(s: number) {
     if (s === 1) return "Identificação";
     if (s === 2) return "Dados Financeiros";
     if (s === 3) return "Produto de Interesse";
     if (needsImovel && s === 4) return "Imóvel em Garantia";
+    if (s === docsStep) return "Documentos";
     return "Autorização";
   }
 
@@ -122,7 +150,27 @@ export function CaptacaoForm({ token, partnerName }: CaptacaoFormProps) {
     if (step === 2) return city.trim() && state;
     if (step === 3) return creditLine && valorSolicitado.trim();
     if (needsImovel && step === 4) return imovelCidade.trim();
+    if (step === docsStep) return true; // documentos são opcionais
     return lgpdConsent;
+  }
+
+  async function handleDocUpload(docLabel: string, file: File) {
+    setUploading(docLabel);
+    try {
+      const fd = new FormData();
+      fd.append("token", token);
+      fd.append("file", file);
+      fd.append("label", docLabel);
+      const res = await fetch("/api/captacao/documents", { method: "POST", body: fd });
+      const json = await res.json();
+      if (res.ok && json.url) {
+        setUploadedDocs(prev => ({ ...prev, [docLabel]: { name: file.name, url: json.url } }));
+      }
+    } catch {
+      // silently ignore — docs are optional
+    } finally {
+      setUploading(null);
+    }
   }
 
   async function handleSubmit() {
@@ -130,6 +178,7 @@ export function CaptacaoForm({ token, partnerName }: CaptacaoFormProps) {
     setSubmitting(true);
     setError("");
     try {
+      const docsArray = Object.entries(uploadedDocs).map(([label, doc]) => ({ label, ...doc }));
       const payload = {
         token,
         personType,
@@ -147,6 +196,7 @@ export function CaptacaoForm({ token, partnerName }: CaptacaoFormProps) {
         city,
         state,
         enderecoRua,
+        cep,
         restricao,
         creditLine,
         productInterest: creditLine,
@@ -156,12 +206,14 @@ export function CaptacaoForm({ token, partnerName }: CaptacaoFormProps) {
         observacoes,
         imoveis: needsImovel ? [{
           endereco: imovelEndereco,
+          cep: imovelCep,
           cidade: imovelCidade,
           estado: imovelEstado,
           valor_medio: parseFloat(imovelValor.replace(/\D/g, "")) || undefined,
           zona: imovelZona || undefined,
           proprietario: imovelProprio ? "MESMO_TITULAR" : undefined,
         }] : [],
+        documentos: docsArray,
         lgpdConsent: true,
       };
       const res = await fetch("/api/captacao/submit", {
@@ -215,6 +267,8 @@ export function CaptacaoForm({ token, partnerName }: CaptacaoFormProps) {
     padding: 28,
     backdropFilter: "blur(8px)",
   };
+
+  const checklist = DOC_CHECKLIST[creditLine] ?? DEFAULT_CHECKLIST;
 
   return (
     <div>
@@ -338,9 +392,16 @@ export function CaptacaoForm({ token, partnerName }: CaptacaoFormProps) {
               </>
             )}
 
-            <Field label="Endereço (rua, número)">
-              <input style={inputStyle} value={enderecoRua} onChange={e => setEnderecoRua(e.target.value)} placeholder="Rua, número, bairro" />
-            </Field>
+            <div className="grid grid-cols-3 gap-3">
+              <div style={{ gridColumn: "span 2" }}>
+                <Field label="Endereço (rua, número)">
+                  <input style={inputStyle} value={enderecoRua} onChange={e => setEnderecoRua(e.target.value)} placeholder="Rua, número, bairro" />
+                </Field>
+              </div>
+              <Field label="CEP">
+                <input style={inputStyle} value={cep} onChange={e => setCep(e.target.value)} placeholder="00000-000" maxLength={9} />
+              </Field>
+            </div>
 
             <div className="grid grid-cols-3 gap-3">
               <div style={{ gridColumn: "span 2" }}>
@@ -434,10 +495,17 @@ export function CaptacaoForm({ token, partnerName }: CaptacaoFormProps) {
               Informe os dados do imóvel que será utilizado como garantia na operação.
             </p>
 
-            <Field label="Endereço do Imóvel">
-              <input style={inputStyle} value={imovelEndereco} onChange={e => setImovelEndereco(e.target.value)}
-                placeholder="Rua, número, bairro" />
-            </Field>
+            <div className="grid grid-cols-3 gap-3">
+              <div style={{ gridColumn: "span 2" }}>
+                <Field label="Endereço do Imóvel">
+                  <input style={inputStyle} value={imovelEndereco} onChange={e => setImovelEndereco(e.target.value)}
+                    placeholder="Rua, número, bairro" />
+                </Field>
+              </div>
+              <Field label="CEP do Imóvel">
+                <input style={inputStyle} value={imovelCep} onChange={e => setImovelCep(e.target.value)} placeholder="00000-000" maxLength={9} />
+              </Field>
+            </div>
 
             <div className="grid grid-cols-3 gap-3">
               <div style={{ gridColumn: "span 2" }}>
@@ -486,6 +554,110 @@ export function CaptacaoForm({ token, partnerName }: CaptacaoFormProps) {
           </div>
         )}
 
+        {/* ─── STEP DOCUMENTOS ─── */}
+        {step === docsStep && (
+          <div className="space-y-5">
+            <div className="flex items-center gap-2 mb-1">
+              <FileText style={{ width: 18, height: 18, color: "#C9A84C" }} />
+              <h2 style={{ fontSize: 16, fontWeight: 700, color: "#F0ECE4", margin: 0 }}>Documentos do Checklist</h2>
+            </div>
+            <p style={{ fontSize: 12, color: "#7A8FA8", marginTop: 0 }}>
+              Envie os documentos abaixo para agilizar a análise. Todos são opcionais agora — você pode enviá-los depois.
+            </p>
+
+            {/* Checklist */}
+            <div className="space-y-2">
+              {checklist.map((docLabel) => {
+                const uploaded = uploadedDocs[docLabel];
+                const isUploading = uploading === docLabel;
+                return (
+                  <div key={docLabel} style={{
+                    display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
+                    padding: "10px 14px", borderRadius: 10,
+                    background: uploaded ? "rgba(16,185,129,0.06)" : "rgba(17,31,53,0.8)",
+                    border: `1px solid ${uploaded ? "rgba(16,185,129,0.3)" : "rgba(22,39,68,0.9)"}`,
+                  }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 0 }}>
+                      {uploaded ? (
+                        <Check style={{ width: 14, height: 14, color: "#10B981", flexShrink: 0 }} />
+                      ) : (
+                        <div style={{ width: 14, height: 14, borderRadius: "50%", border: "2px solid rgba(22,39,68,0.9)", flexShrink: 0 }} />
+                      )}
+                      <div style={{ minWidth: 0 }}>
+                        <p style={{ fontSize: 12, color: uploaded ? "#10B981" : "#F0ECE4", margin: 0, fontWeight: 600 }}>{docLabel}</p>
+                        {uploaded && (
+                          <p style={{ fontSize: 10, color: "#7A8FA8", margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {uploaded.name}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                      {uploaded ? (
+                        <button
+                          onClick={() => setUploadedDocs(prev => { const n = { ...prev }; delete n[docLabel]; return n; })}
+                          style={{ padding: "4px 8px", borderRadius: 6, border: "1px solid rgba(239,68,68,0.3)", background: "rgba(239,68,68,0.08)", color: "#EF4444", cursor: "pointer", fontSize: 11 }}>
+                          <X style={{ width: 12, height: 12 }} />
+                        </button>
+                      ) : (
+                        <button
+                          disabled={isUploading}
+                          onClick={() => {
+                            setPendingLabel(docLabel);
+                            fileInputRef.current?.click();
+                          }}
+                          style={{
+                            display: "flex", alignItems: "center", gap: 4,
+                            padding: "5px 10px", borderRadius: 6,
+                            border: "1px solid rgba(201,168,76,0.3)",
+                            background: "rgba(201,168,76,0.08)",
+                            color: isUploading ? "#7A8FA8" : "#C9A84C",
+                            cursor: isUploading ? "not-allowed" : "pointer",
+                            fontSize: 11, fontWeight: 600,
+                          }}>
+                          {isUploading ? (
+                            <div style={{ width: 12, height: 12, border: "2px solid #C9A84C", borderTopColor: "transparent", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
+                          ) : (
+                            <Upload style={{ width: 12, height: 12 }} />
+                          )}
+                          {isUploading ? "Enviando..." : "Anexar"}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Hidden file input */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+              style={{ display: "none" }}
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                if (file && pendingLabel) {
+                  await handleDocUpload(pendingLabel, file);
+                }
+                e.target.value = "";
+              }}
+            />
+
+            {Object.keys(uploadedDocs).length > 0 && (
+              <div style={{ padding: "10px 14px", borderRadius: 10, background: "rgba(16,185,129,0.06)", border: "1px solid rgba(16,185,129,0.2)" }}>
+                <p style={{ fontSize: 12, color: "#10B981", margin: 0, fontWeight: 600 }}>
+                  {Object.keys(uploadedDocs).length} documento(s) enviado(s) com sucesso
+                </p>
+              </div>
+            )}
+
+            <p style={{ fontSize: 11, color: "#7A8FA8", marginTop: 4 }}>
+              Formatos aceitos: PDF, JPG, PNG, DOC, DOCX · Tamanho máximo: 10 MB por arquivo
+            </p>
+          </div>
+        )}
+
         {/* ─── STEP FINAL: LGPD ─── */}
         {step === totalSteps && (
           <div className="space-y-5">
@@ -502,6 +674,7 @@ export function CaptacaoForm({ token, partnerName }: CaptacaoFormProps) {
                 { label: "Telefone", value: phone },
                 { label: "Produto", value: CREDIT_LINES.find(l => l.value === creditLine)?.label ?? creditLine },
                 { label: "Valor", value: valorSolicitado },
+                { label: "Documentos", value: Object.keys(uploadedDocs).length > 0 ? `${Object.keys(uploadedDocs).length} arquivo(s) anexado(s)` : undefined },
                 { label: "Partner", value: partnerName },
               ].map(({ label, value }) => value ? (
                 <div key={label} style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>

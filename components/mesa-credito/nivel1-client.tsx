@@ -39,6 +39,7 @@ interface Proposal {
   imovel_valor_medio?: number;
   imovel_cidade?: string;
   imovel_estado?: string;
+  metadata?: Record<string, unknown>;
 }
 
 interface CreditDeskLevel1ClientProps {
@@ -70,18 +71,44 @@ export function CreditDeskLevel1Client({ proposals: initial, currentUser }: Cred
   const [detailProposal, setDetailProposal] = useState<Proposal | null>(null);
   const [view, setView] = useState<"table" | "kanban">("table");
 
-  // Em produção os dados vêm do Supabase via props (initialProps).
-  // Mantemos apenas leitura do localStorage como fallback para modo demo.
+  // Busca dados frescos da API ao montar (reflete atualizações da Mesa Operacional)
   useEffect(() => {
-    if (initial.length > 0) return; // já tem dados do servidor
-    const stored = loadFromStorage().filter((s) => s.current_level === "NIVEL_1");
-    if (stored.length === 0) return;
-    setProposals((prev) => {
-      const existingIds = new Set(prev.map((p) => p.id));
-      const newOnes = stored.filter((s) => !existingIds.has(s.id));
-      return newOnes.length > 0 ? [...newOnes, ...prev] : prev;
-    });
-  }, [initial.length]);
+    fetch("/api/credit-proposals?level=NIVEL_1")
+      .then(r => r.json())
+      .then(({ proposals: fresh }) => {
+        if (!Array.isArray(fresh) || fresh.length === 0) return;
+        setProposals(fresh.map((p: Record<string, unknown>) => {
+          const meta = p.metadata as Record<string, unknown> | null;
+          return {
+            id: p.id as string,
+            code: p.code as string,
+            title: p.title as string,
+            client_name: p.client_name as string,
+            cpf_cnpj: p.client_cpf_cnpj as string | undefined,
+            client_type: (meta?.client_type as string | undefined) ?? p.client_type as string | undefined,
+            email: meta?.email as string | undefined,
+            telefone: meta?.telefone as string | undefined,
+            prazo: meta?.prazo as string | undefined,
+            finalidade: meta?.finalidade as string | undefined,
+            credit_line: p.credit_line as string,
+            requested_value: p.requested_value as number,
+            approved_value: (p.approved_value as number | null) ?? null,
+            current_level: p.current_level as string,
+            status: p.status as string,
+            stage: p.stage as string | undefined,
+            partner_id: (p.partner as { id?: string } | null)?.id,
+            partner_name: (p.partner as { full_name?: string } | null)?.full_name,
+            created_at: p.created_at as string,
+            valor_credito_atual: p.valor_credito_atual as number | undefined,
+            comissao_mandato_perc: p.comissao_mandato_perc as number | undefined,
+            comissao_instituicao_perc: p.comissao_instituicao_perc as number | undefined,
+            metadata: meta ?? undefined,
+          };
+        }));
+      })
+      .catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const partnerName = currentUser?.full_name ?? "João Partner Silva";
   const partnerId = currentUser?.id ?? "demo-partner-001";
@@ -103,8 +130,18 @@ export function CreditDeskLevel1Client({ proposals: initial, currentUser }: Cred
 
   const handleNewProposal = useCallback(async (proposal: Record<string, unknown>) => {
     const p = proposal as unknown as Proposal;
-    // Salva no Supabase via API
     try {
+      const raw = proposal as Record<string, unknown>;
+      // Usa metadata se já vier montado pelo nova-proposta-modal, senão constrói
+      const metadata = (raw.metadata as Record<string, unknown>) ?? {
+        client_type:       raw.client_type,
+        email:             raw.email,
+        telefone:          raw.telefone,
+        prazo:             raw.prazo,
+        finalidade:        raw.finalidade,
+        restricao_cliente: raw.restricao_cliente,
+        imoveis:           raw.imoveis,
+      };
       const res = await fetch("/api/credit-proposals", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -116,12 +153,17 @@ export function CreditDeskLevel1Client({ proposals: initial, currentUser }: Cred
           credit_line:     p.credit_line,
           requested_value: p.requested_value,
           current_level:   "NIVEL_1",
+          metadata,
         }),
       });
       const json = await res.json();
       if (json.ok && json.proposal) {
-        const saved = { ...p, id: json.proposal.id, partner_id: json.proposal.partner_id ?? p.partner_id };
-        setProposals(prev => [saved, ...prev]);
+        setProposals(prev => [{
+          ...p,
+          id: json.proposal.id,
+          partner_id: json.proposal.partner_id ?? p.partner_id,
+          metadata: json.proposal.metadata ?? metadata,
+        }, ...prev]);
         return;
       }
     } catch {}

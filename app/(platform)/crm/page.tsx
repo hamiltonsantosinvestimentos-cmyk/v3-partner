@@ -1,8 +1,6 @@
 import { CRMClient } from "@/components/crm/crm-client";
 
-const IS_DEMO =
-  !process.env.NEXT_PUBLIC_SUPABASE_URL ||
-  process.env.NEXT_PUBLIC_SUPABASE_URL.includes("SEU_PROJETO");
+const IS_DEMO = false;
 
 export default async function CRMPage() {
   if (IS_DEMO) {
@@ -58,6 +56,7 @@ export default async function CRMPage() {
     partnerName:     l.partner_name ?? "",
     createdAt:       l.created_at?.split("T")[0] ?? "",
     interactions:    Array.isArray(l.interactions) ? l.interactions : [],
+    metadata:        (l.metadata ?? {}) as Record<string, unknown>,
   }));
 
   return <CRMClient userRole={userRole} userName={userName} userId={userId} initialLeads={initialLeads} />;

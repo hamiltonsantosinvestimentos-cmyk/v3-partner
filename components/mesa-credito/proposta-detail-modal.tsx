@@ -35,6 +35,7 @@ export const PIPELINE_STAGES = [
 
 export interface ImovelMeta {
   endereco?: string;
+  cep?: string;
   valor_medio?: number;
   cidade?: string;
   estado?: string;
@@ -53,6 +54,7 @@ export interface ProposalMeta {
   finalidade?: string;
   restricao_cliente?: string;
   imoveis?: ImovelMeta[];
+  endereco_cep?: string;
 }
 
 export interface ProposalFull {
@@ -554,11 +556,12 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
                       </div>
                     )}
                     {/* Endereço residencial */}
-                    {(meta.endereco_rua || meta.endereco_cidade) && (
+                    {(meta.endereco_rua || meta.endereco_cidade || meta.endereco_cep) && (
                       <div className="col-span-2 flex items-start gap-1.5 pt-1 border-t border-border/50">
                         <MapPin className="w-3 h-3 text-muted-foreground flex-shrink-0 mt-0.5" />
                         <span className="text-xs text-foreground">
                           {[meta.endereco_rua, meta.endereco_cidade, meta.endereco_uf].filter(Boolean).join(", ")}
+                          {meta.endereco_cep && <span className="ml-1 text-muted-foreground">— CEP: {meta.endereco_cep}</span>}
                         </span>
                       </div>
                     )}
@@ -721,10 +724,13 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
                   <div key={idx} className="p-4 rounded-xl border border-amber-500/30 bg-amber-500/5 space-y-2">
                     <p className="text-[10px] font-bold text-amber-400 uppercase tracking-wider">Imóvel {imoveis.length > 1 ? `#${idx + 1}` : ""}</p>
                     <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
-                      {im.endereco && (
+                      {(im.endereco || im.cep) && (
                         <div className="col-span-2 flex items-start gap-1.5">
                           <MapPin className="w-3 h-3 text-amber-400 flex-shrink-0 mt-0.5" />
-                          <span className="text-xs text-foreground">{im.endereco}</span>
+                          <span className="text-xs text-foreground">
+                            {im.endereco}
+                            {im.cep && <span className="ml-1 text-muted-foreground">— CEP: {im.cep}</span>}
+                          </span>
                         </div>
                       )}
                       {(im.cidade || im.estado) && (
