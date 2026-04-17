@@ -142,7 +142,7 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
     fetch("/api/credit-proposals")
       .then(r => r.json())
       .then(({ proposals: fresh }) => {
-        if (!Array.isArray(fresh) || fresh.length === 0) return;
+        if (!Array.isArray(fresh)) return;
         setProposals(fresh.map((p: Record<string, unknown>) => {
           const meta = p.metadata as Record<string, unknown> | null;
           return {
@@ -466,6 +466,7 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
         proposal={detailProposal as ProposalFull | null}
         onStageChange={handleStageChange}
         canChangeStage={canChangeStage}
+        canEditValorSolicitado={canChangeStage}
         canCompileDocuments={canChangeStage}
       />
     </div>

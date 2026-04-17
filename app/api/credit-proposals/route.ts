@@ -47,10 +47,18 @@ const patchSchema = z.object({
   level1_analyst_id: z.string().uuid().optional().nullable(),
   level2_analyst_id: z.string().uuid().optional().nullable(),
   level3_approver_id: z.string().uuid().optional().nullable(),
+  level1_at: z.string().optional().nullable(),
+  level2_at: z.string().optional().nullable(),
+  level3_at: z.string().optional().nullable(),
   valor_credito_atual:         z.number().positive().optional().nullable(),
   comissao_mandato_perc:       z.number().min(0).optional().nullable(),
   comissao_instituicao_perc:   z.number().min(0).optional().nullable(),
   requested_value:             z.number().positive().optional(),
+  // Campos editáveis por partner/partner_pro
+  title:           z.string().min(1).max(200).optional(),
+  client_name:     z.string().min(1).max(200).optional(),
+  client_cpf_cnpj: z.string().max(20).optional().nullable(),
+  metadata:        z.record(z.unknown()).optional().nullable(),
 });
 
 // GET — lista propostas (partner vê as suas, admin/mesa vê todas)
@@ -73,7 +81,7 @@ export async function GET(req: NextRequest) {
       level1_at, level2_at, level3_at, created_at,
       valor_credito_atual, comissao_mandato_perc, comissao_instituicao_perc,
       metadata,
-      partner:profiles!credit_desk_proposals_partner_id_fkey(id, full_name)
+      partner:profiles!partner_id(id, full_name)
     `)
     .order("created_at", { ascending: false });
 
@@ -88,73 +96,83 @@ export async function GET(req: NextRequest) {
 
 // POST — cria nova proposta de crédito
 export async function POST(req: NextRequest) {
-  const { user, supabase, profile } = await getAuthedUser();
-  if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+  try {
+    const { user, supabase, profile } = await getAuthedUser();
+    if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
-  const body = await req.json();
-  const parsed = createSchema.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.flatten().fieldErrors }, { status: 400 });
+    const body = await req.json();
+    const parsed = createSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json({ error: parsed.error.flatten().fieldErrors }, { status: 400 });
+    }
+    const d = parsed.data;
+
+    // Valida valor mínimo N3
+    if (d.current_level === "NIVEL_3" && d.requested_value < 5_000_000) {
+      return NextResponse.json(
+        { error: { requested_value: ["Nível 3 exige valor mínimo de R$ 5.000.000"] } },
+        { status: 400 }
+      );
+    }
+
+    const { count } = await supabase
+      .from("credit_desk_proposals").select("*", { count: "exact", head: true });
+    const code = d.code ?? `CRED-26-${String((count ?? 0) + 1).padStart(4, "0")}`;
+
+    const { data, error } = await serviceClient().from("credit_desk_proposals").insert({
+      code,
+      title:           d.title,
+      client_name:     d.client_name,
+      client_cpf_cnpj: d.client_cpf_cnpj ?? null,
+      credit_line:     d.credit_line,
+      requested_value: d.requested_value,
+      current_level:   d.current_level,
+      status:          "PENDING",
+      stage:           "RECEBIDO",
+      partner_id:      user.id,
+      created_by:      user.id,
+      metadata:        d.metadata ?? {},
+    }).select().single();
+
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+    // Notifica admin por e-mail — isolado para não crashar o handler
+    try {
+      const adminEmail = process.env.EMAIL_ADMIN;
+      if (adminEmail) {
+        notifyNovaProposta({
+          adminEmail,
+          partnerName:    profile?.full_name ?? "Partner",
+          proposalCode:   data.code,
+          proposalTitle:  data.title,
+          clientName:     data.client_name,
+          creditLine:     data.credit_line,
+          requestedValue: d.requested_value,
+        });
+      }
+    } catch { /* notificação é opcional, nunca bloqueia a resposta */ }
+
+    return NextResponse.json({ ok: true, proposal: data });
+  } catch (err) {
+    console.error("[credit-proposals POST]", err);
+    return NextResponse.json({ error: "Erro interno ao criar proposta." }, { status: 500 });
   }
-  const d = parsed.data;
-
-  // Valida valor mínimo N3
-  if (d.current_level === "NIVEL_3" && d.requested_value < 5_000_000) {
-    return NextResponse.json(
-      { error: { requested_value: ["Nível 3 exige valor mínimo de R$ 5.000.000"] } },
-      { status: 400 }
-    );
-  }
-
-  const { count } = await supabase
-    .from("credit_desk_proposals").select("*", { count: "exact", head: true });
-  const code = d.code ?? `CRED-26-${String((count ?? 0) + 1).padStart(4, "0")}`;
-
-  const { data, error } = await serviceClient().from("credit_desk_proposals").insert({
-    code,
-    title:           d.title,
-    client_name:     d.client_name,
-    client_cpf_cnpj: d.client_cpf_cnpj ?? null,
-    credit_line:     d.credit_line,
-    requested_value: d.requested_value,
-    current_level:   d.current_level,
-    status:          "PENDING",
-    stage:           "RECEBIDO",
-    partner_id:      user.id,
-    created_by:      user.id,
-    metadata:        d.metadata ?? {},
-  }).select().single();
-
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-
-  // Notifica admin por e-mail (fire and forget)
-  const adminEmail = process.env.EMAIL_ADMIN;
-  if (adminEmail) {
-    const svcEmail = serviceClient();
-    const { data: partnerUser } = await svcEmail.auth.admin.getUserById(user.id);
-    notifyNovaProposta({
-      adminEmail,
-      partnerName:    profile?.full_name ?? "Partner",
-      proposalCode:   data.code,
-      proposalTitle:  data.title,
-      clientName:     data.client_name,
-      creditLine:     data.credit_line,
-      requestedValue: d.requested_value,
-    });
-    void partnerUser; // evita lint warning
-  }
-
-  return NextResponse.json({ ok: true, proposal: data });
 }
 
-// PATCH — atualiza proposta (status, análise por nível) — admin/mesa only
+const PARTNER_ROLES = ["PARTNER", "PARTNER_PRO"] as const;
+// Campos que um partner pode editar nas próprias propostas
+const PARTNER_ALLOWED_FIELDS = new Set(["title", "client_name", "client_cpf_cnpj", "requested_value", "metadata"]);
+
+// PATCH — atualiza proposta (admin/mesa: tudo; partner/partner_pro: campos de cadastro das próprias propostas)
 export async function PATCH(req: NextRequest) {
   const { user, profile } = await getAuthedUser();
   if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
   const isAdmin = ADMIN_ROLES.includes(profile?.role as typeof ADMIN_ROLES[number]);
-  if (!isAdmin) {
-    return NextResponse.json({ error: "Apenas analistas podem atualizar propostas" }, { status: 403 });
+  const isPartner = PARTNER_ROLES.includes(profile?.role as typeof PARTNER_ROLES[number]);
+
+  if (!isAdmin && !isPartner) {
+    return NextResponse.json({ error: "Sem permissão para atualizar propostas" }, { status: 403 });
   }
 
   const body = await req.json();
@@ -164,6 +182,21 @@ export async function PATCH(req: NextRequest) {
   }
 
   const { id, ...fields } = parsed.data;
+
+  // Partners só podem editar campos permitidos nas próprias propostas
+  if (isPartner && !isAdmin) {
+    const forbiddenFields = Object.keys(fields).filter(k => !PARTNER_ALLOWED_FIELDS.has(k));
+    if (forbiddenFields.length > 0) {
+      return NextResponse.json({ error: "Partner não pode alterar: " + forbiddenFields.join(", ") }, { status: 403 });
+    }
+    // Verifica que a proposta pertence ao partner
+    const { data: own } = await serviceClient()
+      .from("credit_desk_proposals").select("partner_id").eq("id", id).single();
+    if (own?.partner_id !== user.id) {
+      return NextResponse.json({ error: "Sem permissão para editar esta proposta" }, { status: 403 });
+    }
+  }
+
   const updateData: Record<string, unknown> = { ...fields, updated_at: new Date().toISOString() };
 
   // Registra timestamp do nível se informado

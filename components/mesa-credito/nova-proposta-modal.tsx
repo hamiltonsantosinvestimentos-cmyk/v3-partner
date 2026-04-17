@@ -40,7 +40,7 @@ export const CHECKLISTS: Record<string, Record<"PF" | "PJ", { id: string; label:
       { id: "he_pj_12", label: "3 fotos externas do imóvel", required: true, hint: "Fachada, lateral e área externa" },
     ],
   },
-  "HE ESTRESSADO": {
+  "HOME EQUITY ESTRESSADO": {
     PF: [
       { id: "hee_pf_1", label: "RG e CPF (ou CNH)", required: true, hint: "Documento de identificação com foto" },
       { id: "hee_pf_2", label: "Comprovante de renda (3 últimos meses)", required: true, hint: "Holerite, pró-labore ou decore" },
@@ -387,7 +387,7 @@ export const DEFAULT_CHECKLIST = {
 
 // ─── Linhas por nível ──────────────────────────────────────────────────────
 const LEVEL_LINES: Record<string, string[]> = {
-  NIVEL_1: ["HOME EQUITY", "HE ESTRESSADO", "AVAL", "FUNDO CONSTRUÇÃO RESIDENCIAL"],
+  NIVEL_1: ["HOME EQUITY", "HOME EQUITY ESTRESSADO", "AVAL", "FUNDO CONSTRUÇÃO RESIDENCIAL"],
   NIVEL_2: ["HOMECASH", "V3GIRO E V3AUTOGIRO", "CGI"],
   NIVEL_3: ["CRI", "CRA", "CPR", "FUNDO INTERNACIONAL CASH COLATERAL", "FUNDO INTERNACIONAL IMOB", "FUNDO CONSTRUÇÃO LOTEAMENTO", "FUNDO CONSTRUÇÃO EMPREENDIMENTO"],
 };
@@ -529,6 +529,7 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
       finalidade: finalidade || undefined,
       restricao_cliente: restricao || undefined,
       imoveis: imoveisData,
+      observacoes: observacoes || undefined,
       // Dados PF
       rg: rg || undefined,
       nascimento: nascimento || undefined,
