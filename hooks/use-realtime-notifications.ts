@@ -5,108 +5,93 @@ import { createClient } from "@/lib/supabase/client";
 
 export interface Notification {
   id: string;
-  type: "ticket" | "proposal" | "deal";
+  type: "deal" | "proposal" | "ticket" | "commission" | "split" | "info";
   title: string;
   message: string;
   timestamp: Date;
   read: boolean;
+  action_url?: string | null;
 }
 
 export function useRealtimeNotifications() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [loaded, setLoaded] = useState(false);
   const supabaseRef = useRef<ReturnType<typeof createClient> | null>(null);
   if (!supabaseRef.current) {
     try { supabaseRef.current = createClient(); } catch { supabaseRef.current = null; }
   }
 
-  const dismiss = useCallback((id: string) => {
-    setNotifications((prev) =>
-      prev.map((n) => (n.id === id ? { ...n, read: true } : n))
-    );
+  // Carrega notificações do banco na montagem
+  useEffect(() => {
+    fetch("/api/notifications")
+      .then((r) => r.json())
+      .then(({ notifications: rows }) => {
+        if (!Array.isArray(rows)) return;
+        setNotifications(
+          rows.map((r: Record<string, unknown>) => ({
+            id:         r.id as string,
+            type:       (r.type as Notification["type"]) ?? "info",
+            title:      r.title as string,
+            message:    (r.message as string) ?? "",
+            timestamp:  new Date(r.created_at as string),
+            read:       r.read as boolean,
+            action_url: r.action_url as string | null,
+          }))
+        );
+        setLoaded(true);
+      })
+      .catch(() => setLoaded(true));
   }, []);
 
+  // Marca uma notificação como lida no banco + estado local
+  const dismiss = useCallback((id: string) => {
+    setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
+    fetch(`/api/notifications/${id}`, { method: "PATCH" }).catch(() => {});
+  }, []);
+
+  // Marca todas como lidas no banco + estado local
   const dismissAll = useCallback(() => {
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    fetch("/api/notifications", { method: "PATCH" }).catch(() => {});
   }, []);
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 
+  // Escuta novos INSERTs na tabela notifications do próprio usuário (realtime)
   useEffect(() => {
+    if (!loaded) return;
     const supabase = supabaseRef.current;
     if (!supabase) return;
 
-    const ticketChannel = supabase
-      .channel("realtime-tickets")
+    const channel = supabase
+      .channel("realtime-own-notifications")
       .on(
         "postgres_changes",
-        { event: "INSERT", schema: "public", table: "operational_tickets" },
+        { event: "INSERT", schema: "public", table: "notifications" },
         (payload) => {
-          const row = payload.new as { id: string; title: string; priority: string; code: string };
-          setNotifications((prev) => [
-            {
-              id: `ticket-${row.id}`,
-              type: "ticket",
-              title: "Novo Ticket",
-              message: `${row.code}: ${row.title}`,
-              timestamp: new Date(),
-              read: false,
-            },
-            ...prev.slice(0, 19),
-          ]);
+          const row = payload.new as Record<string, unknown>;
+          setNotifications((prev) => {
+            // Evita duplicatas
+            if (prev.some((n) => n.id === row.id)) return prev;
+            return [
+              {
+                id:         row.id as string,
+                type:       (row.type as Notification["type"]) ?? "info",
+                title:      row.title as string,
+                message:    (row.message as string) ?? "",
+                timestamp:  new Date(row.created_at as string ?? Date.now()),
+                read:       false,
+                action_url: row.action_url as string | null,
+              },
+              ...prev.slice(0, 49),
+            ];
+          });
         }
       )
       .subscribe();
 
-    const proposalChannel = supabase
-      .channel("realtime-proposals")
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "credit_desk_proposals" },
-        (payload) => {
-          const row = payload.new as { id: string; title: string; code: string; client_name: string };
-          setNotifications((prev) => [
-            {
-              id: `proposal-${row.id}`,
-              type: "proposal",
-              title: "Nova Proposta de Crédito",
-              message: `${row.code}: ${row.client_name}`,
-              timestamp: new Date(),
-              read: false,
-            },
-            ...prev.slice(0, 19),
-          ]);
-        }
-      )
-      .subscribe();
-
-    const dealChannel = supabase
-      .channel("realtime-deals")
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "ma_deals" },
-        (payload) => {
-          const row = payload.new as { id: string; target_company: string; code: string };
-          setNotifications((prev) => [
-            {
-              id: `deal-${row.id}`,
-              type: "deal",
-              title: "Novo Deal M&A",
-              message: `${row.code}: ${row.target_company}`,
-              timestamp: new Date(),
-              read: false,
-            },
-            ...prev.slice(0, 19),
-          ]);
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(ticketChannel);
-      supabase.removeChannel(proposalChannel);
-      supabase.removeChannel(dealChannel);
-    };
-  }, []);
+    return () => { supabase.removeChannel(channel); };
+  }, [loaded]);
 
   return { notifications, unreadCount, dismiss, dismissAll };
 }

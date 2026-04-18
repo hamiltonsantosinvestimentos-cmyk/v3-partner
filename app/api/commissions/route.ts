@@ -4,6 +4,7 @@ import { createClient as sc } from "@supabase/supabase-js";
 import { z } from "zod";
 import { logAudit } from "@/lib/audit";
 import { notifyNovaComissao, notifyComissaoPaga } from "@/lib/email";
+import { createNotification } from "@/lib/notify";
 
 function serviceClient() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -130,6 +131,17 @@ export async function POST(req: NextRequest) {
     });
   }
 
+  // Notificação in-app para o partner (nova comissão registrada)
+  const commValue = data.commission_value ?? (d.operation_value * d.commission_percent / 100);
+  const formatted = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(commValue);
+  createNotification({
+    user_id: d.partner_id,
+    type: "commission",
+    title: "Nova comissão registrada",
+    message: `${data.code} — ${d.operation_description} · ${formatted}`,
+    action_url: "/comissoes",
+  });
+
   return NextResponse.json({ ok: true, commission: data });
 }
 
@@ -184,6 +196,15 @@ export async function PATCH(req: NextRequest) {
           commissionValue:      commission.commission_value ?? 0,
         });
       }
+      // Notificação in-app para o partner
+      const valFormatted = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(commission.commission_value ?? 0);
+      createNotification({
+        user_id: commission.partner_id,
+        type: "commission",
+        title: "Comissão paga 💰",
+        message: `${commission.code} — ${commission.operation_description} · ${valFormatted}`,
+        action_url: "/comissoes",
+      });
     }
   }
 

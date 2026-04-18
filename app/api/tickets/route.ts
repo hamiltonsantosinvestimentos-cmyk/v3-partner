@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { z } from "zod";
 import { logAudit } from "@/lib/audit";
+import { createNotification, notifyByRoles } from "@/lib/notify";
 
 function serviceClient() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -99,6 +100,25 @@ export async function POST(req: NextRequest) {
   }).select().single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // Notificações in-app (fire-and-forget)
+  const priorityLabel: Record<string, string> = { LOW: "Baixa", MEDIUM: "Média", HIGH: "Alta", URGENT: "Urgente" };
+  // Confirmação para o solicitante
+  createNotification({
+    user_id: user.id,
+    type: "ticket",
+    title: "Ticket registrado",
+    message: `${code} — ${d.title} (${priorityLabel[d.priority] ?? d.priority})`,
+    action_url: "/mesa-operacional",
+  });
+  // Alerta para equipe operacional
+  notifyByRoles(["ADMIN", "GESTAO", "MESA_OPERACIONAL"], {
+    type: "ticket",
+    title: `Novo Ticket ${d.priority === "URGENT" ? "🚨 URGENTE" : ""} — ${code}`,
+    message: d.title,
+    action_url: "/mesa-operacional",
+  });
+
   return NextResponse.json({ ok: true, ticket: data });
 }
 
@@ -144,6 +164,18 @@ export async function PATCH(req: NextRequest) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   logAudit({ userId: user.id!, userName: profile?.full_name, action: "UPDATE", entity: "operational_tickets", entityId: id, newData: fields as Record<string, unknown> });
+
+  // Notifica solicitante quando ticket é resolvido
+  if ((fields.status === "COMPLETED" || fields.status === "CANCELLED") && data?.requester_id && data.requester_id !== user.id) {
+    const statusLabel = fields.status === "COMPLETED" ? "resolvido" : "cancelado";
+    createNotification({
+      user_id: data.requester_id,
+      type: "ticket",
+      title: `Ticket ${statusLabel}`,
+      message: `${data.code ?? ""} — ${data.title ?? ""}`,
+      action_url: "/mesa-operacional",
+    });
+  }
 
   return NextResponse.json({ ok: true, ticket: data });
 }

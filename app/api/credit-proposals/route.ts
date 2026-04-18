@@ -4,6 +4,7 @@ import { createClient as sc } from "@supabase/supabase-js";
 import { z } from "zod";
 import { logAudit } from "@/lib/audit";
 import { notifyNovaProposta, notifyPropostaAtualizada } from "@/lib/email";
+import { createNotification, notifyByRoles } from "@/lib/notify";
 
 function serviceClient() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -29,17 +30,17 @@ const createSchema = z.object({
   client_name:     z.string().min(2, "Nome do cliente obrigatório").max(200),
   client_cpf_cnpj: z.string().max(20).optional().nullable(),
   credit_line:     z.string().min(1, "Linha de crédito obrigatória"),
-  requested_value: z.number().positive("Valor deve ser positivo"),
+  requested_value: z.number().gt(0, "Valor deve ser positivo"),
   current_level:   z.enum(["NIVEL_1","NIVEL_2","NIVEL_3"]),
   notes:           z.string().max(2000).optional().nullable(),
-  metadata:        z.record(z.unknown()).optional().nullable(),
+  metadata:        z.record(z.string(), z.unknown()).optional().nullable(),
 });
 
 const patchSchema = z.object({
   id:               z.string().uuid("ID inválido"),
   stage:            z.enum(["RECEBIDO","TRIAGEM","ANALISE","PENDENCIA","APROVACAO","FINALIZADO"]).optional(),
   status:           z.enum(["PENDING","IN_REVIEW","APPROVED","REJECTED","COMPLETED","CANCELLED"]).optional(),
-  approved_value:   z.number().positive().optional().nullable(),
+  approved_value:   z.number().gt(0).optional().nullable(),
   current_level:    z.enum(["NIVEL_1","NIVEL_2","NIVEL_3"]).optional(),
   level1_notes:     z.string().max(2000).optional().nullable(),
   level2_notes:     z.string().max(2000).optional().nullable(),
@@ -50,15 +51,15 @@ const patchSchema = z.object({
   level1_at: z.string().optional().nullable(),
   level2_at: z.string().optional().nullable(),
   level3_at: z.string().optional().nullable(),
-  valor_credito_atual:         z.number().positive().optional().nullable(),
+  valor_credito_atual:         z.number().gt(0).optional().nullable(),
   comissao_mandato_perc:       z.number().min(0).optional().nullable(),
   comissao_instituicao_perc:   z.number().min(0).optional().nullable(),
-  requested_value:             z.number().positive().optional(),
+  requested_value:             z.number().gt(0).optional(),
   // Campos editáveis por partner/partner_pro
   title:           z.string().min(1).max(200).optional(),
   client_name:     z.string().min(1).max(200).optional(),
   client_cpf_cnpj: z.string().max(20).optional().nullable(),
-  metadata:        z.record(z.unknown()).optional().nullable(),
+  metadata:        z.record(z.string(), z.unknown()).optional().nullable(),
 });
 
 // GET — lista propostas (partner vê as suas, admin/mesa vê todas)
@@ -152,10 +153,29 @@ export async function POST(req: NextRequest) {
       }
     } catch { /* notificação é opcional, nunca bloqueia a resposta */ }
 
+    // Notificações in-app (fire-and-forget)
+    const partnerName = profile?.full_name ?? "Partner";
+    // Confirmação para o próprio partner
+    createNotification({
+      user_id: user.id,
+      type: "proposal",
+      title: "Proposta de crédito enviada",
+      message: `${code} — ${d.client_name} · ${d.credit_line}`,
+      action_url: "/mesa-credito",
+    });
+    // Alerta para a mesa
+    notifyByRoles(["ADMIN", "GESTAO", "MESA_OPERACIONAL"], {
+      type: "proposal",
+      title: `Nova Proposta — ${code}`,
+      message: `${partnerName}: ${d.client_name} · ${d.credit_line} · ${new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(d.requested_value)}`,
+      action_url: `/mesa-credito/${d.current_level.toLowerCase().replace("_", "-")}`,
+    });
+
     return NextResponse.json({ ok: true, proposal: data });
   } catch (err) {
-    console.error("[credit-proposals POST]", err);
-    return NextResponse.json({ error: "Erro interno ao criar proposta." }, { status: 500 });
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[credit-proposals POST]", msg, err);
+    return NextResponse.json({ error: `Erro ao criar proposta: ${msg}` }, { status: 500 });
   }
 }
 
@@ -237,6 +257,19 @@ export async function PATCH(req: NextRequest) {
           novoStatus:     fields.status,
         });
       }
+      // Notificação in-app para o partner
+      const statusLabels: Record<string, string> = {
+        APPROVED: "aprovada ✓", REJECTED: "reprovada ✗",
+        IN_REVIEW: "em análise", COMPLETED: "concluída ✓", CANCELLED: "cancelada",
+      };
+      const label = statusLabels[fields.status] ?? fields.status;
+      createNotification({
+        user_id: proposal.partner_id,
+        type: "proposal",
+        title: `Proposta ${label}`,
+        message: `${proposal.code} — ${proposal.title}`,
+        action_url: "/mesa-credito",
+      });
     }
   }
 
