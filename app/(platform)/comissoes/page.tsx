@@ -5,9 +5,7 @@ import { DEMO_COMISSOES } from "@/lib/demo-data-financeiro";
 
 export const dynamic = "force-dynamic";
 
-const IS_DEMO =
-  !process.env.NEXT_PUBLIC_SUPABASE_URL ||
-  process.env.NEXT_PUBLIC_SUPABASE_URL.includes("SEU_PROJETO");
+const IS_DEMO = false;
 
 export default async function ComissoesPage() {
   if (IS_DEMO) {

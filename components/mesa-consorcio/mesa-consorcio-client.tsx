@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Users, Plus, X, ChevronRight, BarChart2,
-  Mail, Circle, Home, Car, Building
+  Mail, Circle, Home, Car, Building, Trash2, Loader2
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { PipefyConfig } from "@/components/shared/pipefy-config";
@@ -39,22 +39,6 @@ const CONSORCIO_STAGES = [
   { id: "proposta",     label: "Proposta",      color: "#C9A84C", bg: "rgba(196,146,46,0.1)" },
   { id: "documentacao", label: "Documentação",  color: "#EF4444", bg: "rgba(239,68,68,0.1)" },
   { id: "contemplado",  label: "Contemplado",   color: "#10B981", bg: "rgba(16,185,129,0.1)" },
-];
-
-const DEMO_CARDS: ConsorcioCard[] = [
-  { id: "cs-001", code: "CS-26-001", client: "José Santos", type: "Imóvel", value: 250000, stage: "lead", responsible: "Marcos Vieira", quota: "Carta 250K", createdAt: "2026-03-10" },
-  { id: "cs-002", code: "CS-26-002", client: "Maria Oliveira", type: "Veículo", value: 85000, stage: "qualificacao", responsible: "Patrícia Lima", quota: "Carta 85K", createdAt: "2026-03-08" },
-  { id: "cs-003", code: "CS-26-003", client: "Carlos Empresa Ltda", type: "Imóvel Comercial", value: 800000, stage: "simulacao", responsible: "Marcos Vieira", quota: "Carta 800K", createdAt: "2026-03-01" },
-  { id: "cs-004", code: "CS-26-004", client: "Ana Paula Ferreira", type: "Imóvel", value: 320000, stage: "proposta", responsible: "Beatriz Costa", quota: "Carta 320K", createdAt: "2026-02-20" },
-  { id: "cs-005", code: "CS-26-005", client: "Ricardo Alves", type: "Veículo", value: 120000, stage: "documentacao", responsible: "Patrícia Lima", quota: "Carta 120K", createdAt: "2026-02-10" },
-  { id: "cs-006", code: "CS-26-006", client: "Investimentos SP Ltda", type: "Imóvel", value: 1200000, stage: "contemplado", responsible: "Beatriz Costa", quota: "Carta 1.2M", createdAt: "2026-01-20" },
-];
-
-const DEMO_OPERATORS: ConsorcioOperator[] = [
-  { id: "op-cs-001", name: "Marcos Vieira", email: "marcos.vieira@v3partners.com", role: "Especialista Consórcio", status: "online", assignedCards: 2 },
-  { id: "op-cs-002", name: "Patrícia Lima", email: "patricia.lima@v3partners.com", role: "Analista", status: "online", assignedCards: 2 },
-  { id: "op-cs-003", name: "Beatriz Costa", email: "beatriz.costa@v3partners.com", role: "Consultora", status: "away", assignedCards: 2 },
-  { id: "op-cs-004", name: "Felipe Mendes", email: "felipe.mendes@v3partners.com", role: "Analista Jr.", status: "offline", assignedCards: 0 },
 ];
 
 const CARD_TYPES = ["Imóvel", "Imóvel Comercial", "Veículo", "Outros Bens", "Serviços"];
@@ -134,41 +118,100 @@ export function MesaConsorcioClient({ userRole }: { userRole: string }) {
   const [selectedCard, setSelectedCard] = useState<ConsorcioCard | null>(null);
   const [showNewCard, setShowNewCard] = useState(false);
   const [showNewOp, setShowNewOp] = useState(false);
+  const [deletingCard, setDeletingCard] = useState<string | null>(null);
 
   // New card form
   const [newCard, setNewCard] = useState({ client: "", type: "Imóvel", value: "", stage: "lead", responsible: "", quota: "", notes: "" });
   // New operator form
   const [newOp, setNewOp] = useState({ name: "", email: "", role: "Analista" });
 
+  const ADMIN_ROLES_MC = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"];
+  const isAdmin = ADMIN_ROLES_MC.includes(userRole);
+
+  useEffect(() => {
+    fetch("/api/consorcio/leads")
+      .then(r => r.json())
+      .then(data => {
+        if (Array.isArray(data.leads)) {
+          setCards(data.leads.map((l: Record<string, unknown>) => ({
+            id: l.id as string,
+            code: l.code as string,
+            client: l.client as string,
+            type: l.type as string,
+            value: l.value as number,
+            stage: l.stage as string,
+            responsible: l.responsible as string,
+            quota: (l.quota as string) ?? "",
+            createdAt: l.created_at as string,
+            notes: (l.notes as string) ?? undefined,
+          })));
+        }
+      })
+      .catch(() => {/* not admin or not authenticated, leave empty */});
+  }, []);
+
   // KPIs
   const totalValue = cards.reduce((a, c) => a + c.value, 0);
   const contemplados = cards.filter(c => c.stage === "contemplado").length;
   const imoveis = cards.filter(c => c.type.includes("Imóvel")).length;
 
-  const handleAdvanceStage = (card: ConsorcioCard) => {
+  const handleAdvanceStage = async (card: ConsorcioCard) => {
     const next = nextStage(card.stage);
     if (!next) return;
     setCards(prev => prev.map(c => c.id === card.id ? { ...c, stage: next } : c));
     setSelectedCard(prev => prev ? { ...prev, stage: next } : null);
+    await fetch("/api/consorcio/leads", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: card.id, stage: next }),
+    }).catch(() => {/* optimistic, ignore error */});
   };
 
-  const handleCreateCard = () => {
+  const handleCreateCard = async () => {
     if (!newCard.client || !newCard.value || !newCard.responsible) return;
-    const card: ConsorcioCard = {
-      id: `cs-${Date.now()}`,
-      code: `CS-26-${String(cards.length + 1).padStart(3, "0")}`,
-      client: newCard.client,
-      type: newCard.type,
-      value: Number(newCard.value),
-      stage: newCard.stage,
-      responsible: newCard.responsible,
-      quota: newCard.quota || `Carta ${formatM(Number(newCard.value)).replace("R$ ", "")}`,
-      createdAt: new Date().toISOString().split("T")[0],
-      notes: newCard.notes,
-    };
-    setCards(prev => [...prev, card]);
+    const res = await fetch("/api/consorcio/leads", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        client: newCard.client,
+        type: newCard.type,
+        value: Number(newCard.value),
+        stage: newCard.stage,
+        responsible: newCard.responsible,
+        quota: newCard.quota || `Carta ${formatM(Number(newCard.value)).replace("R$ ", "")}`,
+        notes: newCard.notes || null,
+      }),
+    });
+    const json = await res.json();
+    if (json.lead) {
+      const lead = json.lead as Record<string, unknown>;
+      const card: ConsorcioCard = {
+        id: lead.id as string,
+        code: lead.code as string,
+        client: lead.client as string,
+        type: lead.type as string,
+        value: lead.value as number,
+        stage: lead.stage as string,
+        responsible: lead.responsible as string,
+        quota: (lead.quota as string) ?? "",
+        createdAt: lead.created_at as string,
+        notes: (lead.notes as string) ?? undefined,
+      };
+      setCards(prev => [...prev, card]);
+    }
     setNewCard({ client: "", type: "Imóvel", value: "", stage: "lead", responsible: "", quota: "", notes: "" });
     setShowNewCard(false);
+  };
+
+  const handleDeleteCard = async (id: string) => {
+    if (!confirm("Excluir esta cota?")) return;
+    setDeletingCard(id);
+    const res = await fetch(`/api/consorcio/leads?id=${id}`, { method: "DELETE" });
+    if (res.ok) {
+      setCards(prev => prev.filter(c => c.id !== id));
+      setSelectedCard(null);
+    }
+    setDeletingCard(null);
   };
 
   const handleCreateOp = () => {
@@ -438,6 +481,18 @@ export function MesaConsorcioClient({ userRole }: { userRole: string }) {
                   <div className="text-center py-2">
                     <span className="text-xs text-emerald-400">Cota Contemplada</span>
                   </div>
+                )}
+
+                {/* Delete (admin only) */}
+                {isAdmin && (
+                  <button
+                    onClick={() => handleDeleteCard(selectedCard.id)}
+                    disabled={deletingCard === selectedCard.id}
+                    className="w-full flex items-center justify-center gap-2 rounded-lg border border-red-500/30 text-red-400/70 text-sm py-2 hover:text-red-400 hover:border-red-500/60 transition-colors"
+                  >
+                    {deletingCard === selectedCard.id ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                    Excluir Cota
+                  </button>
                 )}
               </div>
             );

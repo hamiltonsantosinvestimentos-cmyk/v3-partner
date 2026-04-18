@@ -7,9 +7,7 @@ import { DEMO_DEALS, DEMO_CREDIT_PROPOSALS } from "@/lib/demo-data";
 
 export const dynamic = "force-dynamic";
 
-const IS_DEMO =
-  !process.env.NEXT_PUBLIC_SUPABASE_URL ||
-  process.env.NEXT_PUBLIC_SUPABASE_URL.includes("SEU_PROJETO");
+const IS_DEMO = false;
 
 type Period = "semana" | "mes" | "trim" | "ano";
 

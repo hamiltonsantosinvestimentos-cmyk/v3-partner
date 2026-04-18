@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
   FileText, Image, Download, RefreshCw, Zap, CheckCircle,
-  Clock, AlertCircle, Globe, Flag
+  Clock, AlertCircle, Globe, Flag, Eye, EyeOff
 } from "lucide-react";
 
 type CreativeJob = {
@@ -73,13 +73,19 @@ interface CriativosPanelProps {
   dealId: string;
   dealName: string;
   isDemo?: boolean;
+  isAdmin?: boolean;
+  kitFilesAvailable?: Record<string, boolean>;
+  onAvailabilityChange?: (key: string, val: boolean) => void;
 }
 
-export function CriativosPanel({ dealId, dealName, isDemo = false }: CriativosPanelProps) {
+export function CriativosPanel({ dealId, dealName, isDemo = false, isAdmin = false, kitFilesAvailable = {}, onAvailabilityChange }: CriativosPanelProps) {
   const [latestJob, setLatestJob] = useState<CreativeJob | null>(null);
   const [files, setFiles] = useState<CreativeFile[]>([]);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
+  const [resetting, setResetting] = useState(false);
+  const [togglingKey, setTogglingKey] = useState<string | null>(null);
+  const [localAvailable, setLocalAvailable] = useState<Record<string, boolean>>(kitFilesAvailable);
 
   const loadData = useCallback(async () => {
     if (isDemo) {
@@ -120,6 +126,42 @@ export function CriativosPanel({ dealId, dealName, isDemo = false }: CriativosPa
     return () => clearInterval(interval);
   }, [latestJob?.status, loadData]);
 
+  const handleToggleAvailable = async (fileType: string, language: string) => {
+    const key = `${fileType}_${language}`;
+    const current = localAvailable[key] ?? false;
+    setTogglingKey(key);
+    try {
+      const res = await fetch("/api/ma/kit-disponibilizar", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ deal_id: dealId, file_key: key, available: !current }),
+      });
+      if (res.ok) {
+        const newAvail = { ...localAvailable, [key]: !current };
+        setLocalAvailable(newAvail);
+        if (onAvailabilityChange) onAvailabilityChange(key, !current);
+      }
+    } catch (e) {
+      console.error("handleToggleAvailable error:", e);
+    } finally {
+      setTogglingKey(null);
+    }
+  };
+
+  const handleReset = async () => {
+    if (!latestJob) return;
+    setResetting(true);
+    try {
+      const supabase = createClient();
+      await supabase.from("creative_jobs").update({ status: "ERROR", error_message: "Cancelado manualmente" }).eq("id", latestJob.id);
+      await loadData();
+    } catch (e) {
+      console.error("handleReset error:", e);
+    } finally {
+      setResetting(false);
+    }
+  };
+
   const handleGenerate = async () => {
     if (isDemo) {
       alert("Modo demo — conecte o Supabase para disparar a geração real.");
@@ -127,53 +169,46 @@ export function CriativosPanel({ dealId, dealName, isDemo = false }: CriativosPa
     }
     setGenerating(true);
     try {
-      const supabase = createClient();
-
-      const { data: { user } } = await supabase.auth.getUser();
-      const { data: job, error } = await supabase
-        .from("creative_jobs")
-        .insert({ deal_id: dealId, created_by: user?.id ?? null })
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      // Notifica o Creative Engine (Railway) via fetch
-      const engineUrl = process.env.NEXT_PUBLIC_CREATIVE_ENGINE_URL;
-      if (engineUrl) {
-        await fetch(`${engineUrl}/generate`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ job_id: job.id, deal_id: dealId }),
-        });
+      const res = await fetch("/api/ma/gerar-kit-ia", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ deal_id: dealId }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error ?? `HTTP ${res.status}`);
       }
-
-      setLatestJob(job as CreativeJob);
     } catch (e) {
       console.error("handleGenerate error:", e);
+      alert(`Erro ao gerar KIT: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
       setGenerating(false);
       await loadData();
     }
   };
 
+  // Para partners: filtrar apenas arquivos disponibilizados
+  const visibleFiles = isAdmin
+    ? files
+    : files.filter(f => localAvailable[`${f.file_type}_${f.language}`] === true);
+
   // Agrupar arquivos por tipo + idioma
   const groupedFiles: Record<string, Record<string, CreativeFile[]>> = {};
   for (const ft of FILE_ORDER) {
     groupedFiles[ft] = {};
     for (const lang of LANG_ORDER) {
-      groupedFiles[ft][lang] = files.filter(f => f.file_type === ft && f.language === lang);
+      groupedFiles[ft][lang] = visibleFiles.filter(f => f.file_type === ft && f.language === lang);
     }
   }
 
-  const hasFiles = files.length > 0;
+  const hasFiles = visibleFiles.length > 0;
   const jobStatus = latestJob?.status;
 
   return (
     <div className="space-y-4">
 
-      {/* Status + ação */}
-      <Card className={jobStatus === "DONE" ? "border-emerald-500/20 bg-emerald-500/5" : jobStatus === "ERROR" ? "border-red-500/20 bg-red-500/5" : "border-[#C9A84C]/20 bg-[#C9A84C]/5"}>
+      {/* Status + ação — apenas admins veem controles de geração */}
+      {isAdmin && <Card className={jobStatus === "DONE" ? "border-emerald-500/20 bg-emerald-500/5" : jobStatus === "ERROR" ? "border-red-500/20 bg-red-500/5" : "border-[#C9A84C]/20 bg-[#C9A84C]/5"}>
         <CardContent className="p-5">
           <div className="flex items-center justify-between gap-4">
             <div>
@@ -210,6 +245,17 @@ export function CriativosPanel({ dealId, dealName, isDemo = false }: CriativosPa
               >
                 <RefreshCw className="w-3.5 h-3.5" />
               </Button>
+              {jobStatus === "PROCESSING" && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleReset}
+                  disabled={resetting}
+                  className="border-red-500/30 text-red-400 hover:bg-red-500/10 text-xs"
+                >
+                  {resetting ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : "Cancelar"}
+                </Button>
+              )}
               <Button
                 size="sm"
                 onClick={handleGenerate}
@@ -217,7 +263,7 @@ export function CriativosPanel({ dealId, dealName, isDemo = false }: CriativosPa
                 className="bg-[#C9A84C] hover:bg-[#E8C97A] text-[#09081A] font-bold flex items-center gap-1.5"
               >
                 <Zap className="w-3.5 h-3.5" />
-                {jobStatus === "DONE" ? "Regenerar Kit" : "Gerar Kit Completo"}
+                {generating ? "Gerando..." : jobStatus === "DONE" ? "Regenerar Kit" : "Gerar Kit Completo"}
               </Button>
             </div>
           </div>
@@ -232,7 +278,7 @@ export function CriativosPanel({ dealId, dealName, isDemo = false }: CriativosPa
             </div>
           )}
         </CardContent>
-      </Card>
+      </Card>}
 
       {/* Arquivos gerados */}
       {hasFiles ? (
@@ -259,15 +305,21 @@ export function CriativosPanel({ dealId, dealName, isDemo = false }: CriativosPa
                             {LANG_FLAGS[lang as "pt-br" | "en"]}
                             {LANG_LABELS[lang as "pt-br" | "en"]}
                           </div>
-                          {langFiles.map((f) => (
+                          {langFiles.map((f) => {
+                            const fileKey = `${f.file_type}_${f.language}`;
+                            const isAvailable = localAvailable[fileKey] ?? false;
+                            const isToggling = togglingKey === fileKey;
+                            return (
                             <div key={f.id} className="flex items-center justify-between gap-2 py-1.5 border-b border-[#162744] last:border-0">
                               <div className="flex items-center gap-2 min-w-0">
                                 <Badge className={`text-[9px] px-1.5 py-0 ${FORMAT_COLORS[f.format]}`}>
                                   {f.format.toUpperCase()}
                                 </Badge>
-                                <span className="text-xs text-muted-foreground truncate">
-                                  {f.file_size_kb ? `${f.file_size_kb} KB` : "—"}
-                                </span>
+                                {isAvailable && (
+                                  <Badge className="text-[9px] px-1.5 py-0 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                                    Disponível
+                                  </Badge>
+                                )}
                               </div>
                               <div className="flex items-center gap-1.5">
                                 <a
@@ -279,16 +331,39 @@ export function CriativosPanel({ dealId, dealName, isDemo = false }: CriativosPa
                                     Preview
                                   </Button>
                                 </a>
-                                {f.public_url && (
-                                  <a href={f.public_url} target="_blank" rel="noopener noreferrer">
-                                    <Button size="sm" variant="outline" className="h-7 text-xs border-[#C9A84C]/30 text-[#C9A84C] hover:bg-[#C9A84C]/10">
-                                      <Download className="w-3 h-3 mr-1" />Baixar
-                                    </Button>
-                                  </a>
+                                <a href={`/api/ma/preview-criativo?dealId=${dealId}&type=${f.file_type}&lang=${f.language}&format=pdf`} target="_blank" rel="noopener noreferrer">
+                                  <Button size="sm" variant="outline" className="h-7 text-[10px] border-red-500/30 text-red-400 hover:bg-red-500/10">
+                                    <Download className="w-3 h-3 mr-1" />PDF
+                                  </Button>
+                                </a>
+                                <a href={`/api/ma/preview-criativo?dealId=${dealId}&type=${f.file_type}&lang=${f.language}&format=jpg`} target="_blank" rel="noopener noreferrer">
+                                  <Button size="sm" variant="outline" className="h-7 text-[10px] border-amber-500/30 text-amber-400 hover:bg-amber-500/10">
+                                    <Download className="w-3 h-3 mr-1" />JPEG
+                                  </Button>
+                                </a>
+                                {isAdmin && (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => handleToggleAvailable(f.file_type, f.language)}
+                                    disabled={isToggling}
+                                    className={isAvailable
+                                      ? "h-7 text-[10px] border-emerald-500/30 text-emerald-400 hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/30"
+                                      : "h-7 text-[10px] border-[#C9A84C]/30 text-[#C9A84C] hover:bg-[#C9A84C]/10"}
+                                  >
+                                    {isToggling ? (
+                                      <RefreshCw className="w-3 h-3 animate-spin" />
+                                    ) : isAvailable ? (
+                                      <><EyeOff className="w-3 h-3 mr-1" />Ocultar</>
+                                    ) : (
+                                      <><Eye className="w-3 h-3 mr-1" />Disponibilizar</>
+                                    )}
+                                  </Button>
                                 )}
                               </div>
                             </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       );
                     })}
@@ -305,26 +380,32 @@ export function CriativosPanel({ dealId, dealName, isDemo = false }: CriativosPa
               <div className="w-12 h-12 rounded-xl bg-[#162744] border border-[#243A66] flex items-center justify-center mx-auto mb-3">
                 <FileText className="w-5 h-5 text-muted-foreground" />
               </div>
-              <p className="text-sm font-medium text-foreground mb-1">Nenhum criativo gerado</p>
-              <p className="text-xs text-muted-foreground max-w-xs mx-auto mb-5">
-                Use o preview para visualizar o layout de cada peça com os dados deste deal.
+              <p className="text-sm font-medium text-foreground mb-1">
+                {isAdmin ? "Nenhum criativo gerado" : "Nenhum criativo disponível"}
               </p>
-              <div className="flex flex-wrap gap-2 justify-center">
-                {(["cim","teaser","linkedin_post","linkedin_story"] as const).map(type =>
-                  (["pt-br","en"] as const).map(lang => (
-                    <a
-                      key={`${type}-${lang}`}
-                      href={`/api/ma/preview-criativo?dealId=${dealId}&type=${type}&lang=${lang}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      <Button size="sm" variant="outline" className="h-7 text-[10px] border-[#243A66] text-muted-foreground hover:text-[#C9A84C] hover:border-[#C9A84C]/30">
-                        {type === "cim" ? "CIM" : type === "teaser" ? "Teaser" : type === "linkedin_post" ? "Post" : "Story"} · {lang.toUpperCase()}
-                      </Button>
-                    </a>
-                  ))
-                )}
-              </div>
+              <p className="text-xs text-muted-foreground max-w-xs mx-auto mb-5">
+                {isAdmin
+                  ? "Use o preview para visualizar o layout de cada peça com os dados deste deal."
+                  : "A Mesa M&A ainda não disponibilizou criativos para este deal."}
+              </p>
+              {isAdmin && (
+                <div className="flex flex-wrap gap-2 justify-center">
+                  {(["cim","teaser","linkedin_post","linkedin_story"] as const).map(type =>
+                    (["pt-br","en"] as const).map(lang => (
+                      <a
+                        key={`${type}-${lang}`}
+                        href={`/api/ma/preview-criativo?dealId=${dealId}&type=${type}&lang=${lang}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        <Button size="sm" variant="outline" className="h-7 text-[10px] border-[#243A66] text-muted-foreground hover:text-[#C9A84C] hover:border-[#C9A84C]/30">
+                          {type === "cim" ? "CIM" : type === "teaser" ? "Teaser" : type === "linkedin_post" ? "Post" : "Story"} · {lang.toUpperCase()}
+                        </Button>
+                      </a>
+                    ))
+                  )}
+                </div>
+              )}
             </CardContent>
           </Card>
         )

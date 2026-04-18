@@ -2,9 +2,9 @@ import { CreditDeskClient } from "@/components/mesa-credito/credit-desk-client";
 import { DEMO_CREDIT_PROPOSALS } from "@/lib/demo-data";
 import { cookies } from "next/headers";
 
-const IS_DEMO =
-  !process.env.NEXT_PUBLIC_SUPABASE_URL ||
-  process.env.NEXT_PUBLIC_SUPABASE_URL.includes("SEU_PROJETO");
+export const dynamic = "force-dynamic";
+
+const IS_DEMO = false;
 
 export default async function Nivel2Page() {
   if (IS_DEMO) {

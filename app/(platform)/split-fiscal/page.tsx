@@ -3,9 +3,7 @@ import { DEMO_SPLITS } from "@/lib/demo-data";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
-const IS_DEMO =
-  !process.env.NEXT_PUBLIC_SUPABASE_URL ||
-  process.env.NEXT_PUBLIC_SUPABASE_URL.includes("SEU_PROJETO");
+const IS_DEMO = false;
 
 export default async function SplitFiscalPage() {
   const cookieStore = await cookies();

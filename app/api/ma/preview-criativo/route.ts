@@ -1,9 +1,7 @@
 import { NextResponse } from "next/server";
 import { DEMO_DEALS } from "@/lib/demo-data";
 
-const IS_DEMO =
-  !process.env.NEXT_PUBLIC_SUPABASE_URL ||
-  process.env.NEXT_PUBLIC_SUPABASE_URL.includes("SEU_PROJETO");
+const IS_DEMO = false;
 
 const FONT = `https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800;1,9..40,400&display=swap`;
 
@@ -534,11 +532,40 @@ body{background:#09081A}
 </body></html>`;
 }
 
+function injectFormat(html: string, format: string, type: string): string {
+  if (format === "pdf") {
+    // Auto-abre diálogo de impressão para salvar como PDF
+    const script = `<script>window.onload=function(){window.print();}<\/script>`;
+    const style = `<style>
+      @media screen { .format-banner{display:flex;align-items:center;justify-content:space-between;background:#C9A84C;color:#09081A;padding:10px 20px;font-family:'DM Sans',sans-serif;font-size:12px;font-weight:700;position:fixed;top:0;left:0;right:0;z-index:9999;}
+      .format-banner button{background:#09081A;color:#C9A84C;border:none;padding:6px 14px;border-radius:6px;font-weight:700;cursor:pointer;font-size:11px;}
+      body{padding-top:42px;} }
+      @media print{.format-banner{display:none!important;} body{padding-top:0;}}
+    <\/style>`;
+    const banner = `<div class="format-banner"><span>📄 Salvar como PDF — use Ctrl+P ou o botão abaixo</span><button onclick="window.print()">Imprimir / Salvar PDF</button></div>`;
+    return html.replace("</head>", style + script + "</head>").replace("<body>", `<body>${banner}`);
+  }
+  if (format === "jpg" || format === "jpeg") {
+    // Layout otimizado para captura de tela / salvar como imagem
+    const isLinkedIn = type.startsWith("linkedin");
+    const width = isLinkedIn ? "1080px" : "1200px";
+    const style = `<style>
+      @media screen { .format-banner{display:flex;align-items:center;justify-content:space-between;background:#243A66;color:#F0ECE4;padding:10px 20px;font-family:'DM Sans',sans-serif;font-size:12px;position:fixed;top:0;left:0;right:0;z-index:9999;}
+      .format-banner strong{color:#C9A84C;}
+      body{padding-top:42px;max-width:${width}!important;margin:0 auto!important;} }
+    <\/style>`;
+    const banner = `<div class="format-banner"><span>🖼️ Para salvar como <strong>JPEG</strong>: pressione <strong>F12</strong> → aba <strong>Capture screenshot</strong> ou use Ctrl+Shift+S no Chrome</span></div>`;
+    return html.replace("</head>", style + "</head>").replace("<body>", `<body>${banner}`);
+  }
+  return html;
+}
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const dealId = searchParams.get("dealId");
   const type = searchParams.get("type") ?? "cim";
   const lang = searchParams.get("lang") ?? "pt-br";
+  const format = searchParams.get("format") ?? "";
 
   if (!dealId) {
     return NextResponse.json({ error: "dealId obrigatório" }, { status: 400 });
@@ -567,6 +594,8 @@ export async function GET(request: Request) {
     case "linkedin_story":html = buildLinkedInStory(deal, lang); break;
     default:              html = buildCIM(deal, lang);
   }
+
+  if (format) html = injectFormat(html, format, type);
 
   return new Response(html, {
     headers: { "Content-Type": "text/html; charset=utf-8" },

@@ -439,13 +439,15 @@ interface NovaPropostaModalProps {
   level: string;
   partnerName: string;
   partnerId: string;
-  onSubmit: (proposal: Record<string, unknown>) => void;
+  onSubmit: (proposal: Record<string, unknown>) => Promise<void> | void;
 }
 
 export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId, onSubmit }: NovaPropostaModalProps) {
   const [tab, setTab] = useState<Tab>("cliente");
   const [clientType, setClientType] = useState<"PF" | "PJ">("PF");
   const [submitted, setSubmitted] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   // Dados do cliente
   const [nome, setNome] = useState("");
@@ -506,7 +508,9 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
     e.target.value = "";
   }
 
-  function handleSubmit() {
+  async function handleSubmit() {
+    setSaving(true);
+    setSaveError(null);
     const code = `CRED-26-${String(Date.now()).slice(-6)}`;
     const clientName = clientType === "PF" ? nome : (razaoSocial || nomeFantasia);
     const imoveisData = imoveis.map(im => ({
@@ -572,8 +576,14 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
       imoveis: imoveisData,
       metadata,
     };
-    onSubmit(proposal);
-    setSubmitted(true);
+    try {
+      await onSubmit(proposal);
+      setSubmitted(true);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : "Erro ao salvar proposta. Tente novamente.");
+    } finally {
+      setSaving(false);
+    }
   }
 
   function handleClose() {
@@ -1073,15 +1083,29 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
                 Próximo <ChevronRight className="w-4 h-4 ml-1" />
               </Button>
             ) : (
-              <Button
-                size="sm"
-                onClick={handleSubmit}
-                disabled={!nome && !razaoSocial}
-                className="bg-emerald-600 hover:bg-emerald-500"
-              >
-                <Zap className="w-4 h-4 mr-1.5" />
-                Enviar Proposta
-              </Button>
+              <div className="flex flex-col items-end gap-1">
+                {saveError && (
+                  <p className="text-xs text-red-400 max-w-xs text-right">{saveError}</p>
+                )}
+                <Button
+                  size="sm"
+                  onClick={handleSubmit}
+                  disabled={(!nome && !razaoSocial) || saving}
+                  className="bg-emerald-600 hover:bg-emerald-500"
+                >
+                  {saving ? (
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      Salvando...
+                    </span>
+                  ) : (
+                    <>
+                      <Zap className="w-4 h-4 mr-1.5" />
+                      Enviar Proposta
+                    </>
+                  )}
+                </Button>
+              </div>
             )}
           </div>
         </div>

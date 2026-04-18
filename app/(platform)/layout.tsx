@@ -2,9 +2,7 @@ import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { PlatformShell } from "@/components/layout/platform-shell";
 
-const IS_DEMO =
-  !process.env.NEXT_PUBLIC_SUPABASE_URL ||
-  process.env.NEXT_PUBLIC_SUPABASE_URL.includes("SEU_PROJETO");
+const IS_DEMO = false;
 
 export default async function PlatformLayout({
   children,

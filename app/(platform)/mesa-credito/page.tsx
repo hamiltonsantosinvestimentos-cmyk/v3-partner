@@ -10,9 +10,7 @@ import {
 import { Card, CardContent } from "@/components/ui/card";
 import { cookies } from "next/headers";
 
-const IS_DEMO =
-  !process.env.NEXT_PUBLIC_SUPABASE_URL ||
-  process.env.NEXT_PUBLIC_SUPABASE_URL.includes("SEU_PROJETO");
+const IS_DEMO = false;
 
 export default async function MesaCreditoPage() {
   let role = "ADMIN";

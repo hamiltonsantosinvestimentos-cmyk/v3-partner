@@ -54,13 +54,6 @@ const CONFIG = {
   },
 };
 
-const LS_KEY = "v3_demo_proposals";
-function loadFromStorage(): Proposal[] {
-  try { return JSON.parse(localStorage.getItem(LS_KEY) ?? "[]"); } catch { return []; }
-}
-function saveToStorage(all: Proposal[]) {
-  try { localStorage.setItem(LS_KEY, JSON.stringify(all)); } catch {}
-}
 
 export function CreditDeskClient({ proposals: initial, level, currentUser }: CreditDeskClientProps) {
   const [proposals, setProposals] = useState<Proposal[]>(initial);
@@ -75,7 +68,7 @@ export function CreditDeskClient({ proposals: initial, level, currentUser }: Cre
     fetch(`/api/credit-proposals?level=${level}`)
       .then(r => r.json())
       .then(({ proposals: fresh }) => {
-        if (!Array.isArray(fresh) || fresh.length === 0) return;
+        if (!Array.isArray(fresh)) return;
         setProposals(fresh.map((p: Record<string, unknown>) => ({
           id: p.id as string,
           code: p.code as string,
@@ -161,12 +154,15 @@ export function CreditDeskClient({ proposals: initial, level, currentUser }: Cre
         }, ...prev]);
         return;
       }
-    } catch {}
-    setProposals((prev) => {
-      const stored = loadFromStorage().filter((s) => s.id !== p.id);
-      saveToStorage([p, ...stored]);
-      return [p, ...prev];
-    });
+      // API retornou erro — lança para o modal exibir
+      const errMsg = typeof json.error === "string"
+        ? json.error
+        : JSON.stringify(json.error ?? "Erro desconhecido");
+      throw new Error(errMsg);
+    } catch (err) {
+      // Re-throw para que o modal exiba o erro ao usuário
+      throw err instanceof Error ? err : new Error("Erro ao salvar proposta. Verifique sua conexão e tente novamente.");
+    }
   }, [level]);
 
   const handleStageChange = useCallback((proposalId: string, newStage: string) => {

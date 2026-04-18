@@ -1,8 +1,6 @@
 import { NextResponse } from "next/server";
 
-const IS_DEMO =
-  !process.env.NEXT_PUBLIC_SUPABASE_URL ||
-  process.env.NEXT_PUBLIC_SUPABASE_URL.includes("SEU_PROJETO");
+const IS_DEMO = false;
 
 export async function PATCH(
   request: Request,
@@ -25,7 +23,7 @@ export async function PATCH(
   const profile = profileData as { role: string } | null;
   if (profile?.role !== "ADMIN") return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
 
-  const allowedFields = ["role", "is_active", "phone", "full_name"];
+  const allowedFields = ["role", "is_active", "phone", "full_name", "document_cpf"];
   const updateData: Record<string, unknown> = {};
   for (const field of allowedFields) {
     if (field in body) updateData[field] = body[field];

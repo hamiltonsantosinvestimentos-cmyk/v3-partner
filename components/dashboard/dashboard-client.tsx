@@ -9,6 +9,9 @@ import {
   CreditCard,
   ArrowUpRight,
   ArrowDownRight,
+  Clock,
+  AlertTriangle,
+  ShieldOff,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -79,10 +82,79 @@ const PERIOD_LABELS: Record<string, string> = {
   "all": "Tudo",
 };
 
+// ─── Trial Banner (30 dias) ───────────────────────────────────────────────────
+const TRIAL_DAYS = 30;
+
+function getDaysLeft(createdAt: string): number {
+  const elapsed = Math.floor((Date.now() - new Date(createdAt).getTime()) / 86400000);
+  return Math.max(TRIAL_DAYS - elapsed, 0);
+}
+
+function TrialBanner({ createdAt, role }: { createdAt: string; role: string }) {
+  const partnerRoles = ["PARTNER", "PARTNER_PRO"];
+  if (!partnerRoles.includes(role)) return null;
+
+  const daysLeft = getDaysLeft(createdAt);
+  const pct = Math.round((daysLeft / TRIAL_DAYS) * 100);
+  const expired = daysLeft === 0;
+
+  if (expired) {
+    return (
+      <div className="flex items-center gap-4 px-5 py-4 rounded-xl border border-red-500/30 bg-red-500/8">
+        <div className="w-10 h-10 rounded-xl bg-red-500/15 flex items-center justify-center flex-shrink-0">
+          <ShieldOff className="w-5 h-5 text-red-400" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-bold text-red-400">Seu período de acesso expirou.</p>
+          <p className="text-xs text-red-400/70 mt-0.5">
+            Entre em contato com o administrador para reativar sua conta.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  const isUrgent = daysLeft <= 5;
+  const isWarning = daysLeft <= 10 && daysLeft > 5;
+  const barColor = isUrgent ? "bg-red-500" : isWarning ? "bg-amber-400" : "bg-emerald-500";
+  const borderColor = isUrgent ? "border-red-500/30" : isWarning ? "border-amber-400/30" : "border-emerald-500/20";
+  const bgColor = isUrgent ? "bg-red-500/8" : isWarning ? "bg-amber-400/8" : "bg-emerald-500/8";
+  const iconColor = isUrgent ? "text-red-400" : isWarning ? "text-amber-400" : "text-emerald-400";
+  const textColor = isUrgent ? "text-red-400" : isWarning ? "text-amber-400" : "text-emerald-400";
+  const Icon = isUrgent ? AlertTriangle : Clock;
+
+  return (
+    <div className={`flex items-center gap-4 px-5 py-4 rounded-xl border ${borderColor} ${bgColor}`}>
+      <div className={`w-10 h-10 rounded-xl ${isUrgent ? "bg-red-500/15" : isWarning ? "bg-amber-400/15" : "bg-emerald-500/15"} flex items-center justify-center flex-shrink-0`}>
+        <Icon className={`w-5 h-5 ${iconColor}`} />
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center justify-between mb-1.5">
+          <p className={`text-sm font-bold ${textColor}`}>
+            {isUrgent
+              ? `⚠️ Apenas ${daysLeft} ${daysLeft === 1 ? "dia" : "dias"} restantes no seu bônus de 30 dias!`
+              : `Faltam ${daysLeft} dias para o seu bônus de 30 dias acabar.`}
+          </p>
+          <span className={`text-xs font-semibold ${textColor} ml-4 flex-shrink-0`}>{pct}%</span>
+        </div>
+        <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
+          <div className={`h-full rounded-full transition-all ${barColor}`} style={{ width: `${pct}%` }} />
+        </div>
+        <p className="text-xs text-muted-foreground mt-1.5">
+          Expira em {new Date(new Date(createdAt).getTime() + TRIAL_DAYS * 86400000).toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" })}
+          {" · "}Fale com seu administrador para renovar o acesso.
+        </p>
+      </div>
+    </div>
+  );
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 interface DashboardClientProps {
   role: string;
   userName: string;
   period?: string;
+  userCreatedAt?: string | null;
   kpis: {
     totalSplits: number;
     totalDeals: number;
@@ -112,6 +184,7 @@ export function DashboardClient({
   role,
   userName,
   period = "30d",
+  userCreatedAt,
   kpis,
   recentSplits,
   recentDeals,
@@ -140,6 +213,11 @@ export function DashboardClient({
     <div className="space-y-6 animate-fade-in">
       {/* Market Ticker */}
       <MarketTicker />
+
+      {/* Trial Banner — apenas para PARTNER e PARTNER_PRO */}
+      {userCreatedAt && (
+        <TrialBanner createdAt={userCreatedAt} role={role} />
+      )}
 
       {/* Header */}
       <div className="flex items-start justify-between gap-4">

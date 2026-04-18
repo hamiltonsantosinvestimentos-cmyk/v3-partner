@@ -47,20 +47,8 @@ interface CreditDeskLevel1ClientProps {
   currentUser?: { id: string; full_name: string; role: string };
 }
 
-const CREDIT_LINES = ["HOME EQUITY", "HE ESTRESSADO", "AVAL", "FUNDO CONSTRUÇÃO RESIDENCIAL"];
+const CREDIT_LINES = ["HOME EQUITY", "HOME EQUITY ESTRESSADO", "AVAL", "FUNDO CONSTRUÇÃO RESIDENCIAL"];
 
-const LS_KEY = "v3_demo_proposals";
-
-function loadFromStorage(): Proposal[] {
-  try {
-    const raw = localStorage.getItem(LS_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch { return []; }
-}
-
-function saveToStorage(proposals: Proposal[]) {
-  try { localStorage.setItem(LS_KEY, JSON.stringify(proposals)); } catch {}
-}
 
 export function CreditDeskLevel1Client({ proposals: initial, currentUser }: CreditDeskLevel1ClientProps) {
   const [proposals, setProposals] = useState<Proposal[]>(initial);
@@ -76,7 +64,7 @@ export function CreditDeskLevel1Client({ proposals: initial, currentUser }: Cred
     fetch("/api/credit-proposals?level=NIVEL_1")
       .then(r => r.json())
       .then(({ proposals: fresh }) => {
-        if (!Array.isArray(fresh) || fresh.length === 0) return;
+        if (!Array.isArray(fresh)) return;
         setProposals(fresh.map((p: Record<string, unknown>) => {
           const meta = p.metadata as Record<string, unknown> | null;
           return {
@@ -166,13 +154,13 @@ export function CreditDeskLevel1Client({ proposals: initial, currentUser }: Cred
         }, ...prev]);
         return;
       }
-    } catch {}
-    // Fallback local
-    setProposals(prev => {
-      const stored = loadFromStorage().filter(s => s.id !== p.id);
-      saveToStorage([p, ...stored]);
-      return [p, ...prev];
-    });
+      const errMsg = typeof json.error === "string"
+        ? json.error
+        : JSON.stringify(json.error ?? "Erro desconhecido");
+      throw new Error(errMsg);
+    } catch (err) {
+      throw err instanceof Error ? err : new Error("Erro ao salvar proposta. Verifique sua conexão e tente novamente.");
+    }
   }, []);
 
   const handleStageChange = useCallback((proposalId: string, newStage: string) => {

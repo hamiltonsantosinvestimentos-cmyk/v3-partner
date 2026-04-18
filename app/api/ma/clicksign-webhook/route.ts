@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const IS_DEMO =
-  !process.env.NEXT_PUBLIC_SUPABASE_URL ||
-  process.env.NEXT_PUBLIC_SUPABASE_URL.includes("SEU_PROJETO");
+const IS_DEMO = false;
 
 interface ClickSignWebhookPayload {
   event: {

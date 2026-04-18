@@ -8,12 +8,10 @@ const UsersClient = dynamic(
   { ssr: false }
 );
 
-const IS_DEMO =
-  !process.env.NEXT_PUBLIC_SUPABASE_URL ||
-  process.env.NEXT_PUBLIC_SUPABASE_URL.includes("SEU_PROJETO");
+const IS_DEMO = false;
 
 export default function UsuariosPage() {
-  const [users, setUsers] = useState<{ id: string; email: string; full_name: string | null; role: string; phone: string | null; is_active: boolean; created_at: string }[]>([]);
+  const [users, setUsers] = useState<{ id: string; email: string; full_name: string | null; role: string; phone: string | null; document_cpf: string | null; is_active: boolean; created_at: string }[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {

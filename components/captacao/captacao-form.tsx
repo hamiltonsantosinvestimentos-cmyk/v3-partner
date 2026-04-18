@@ -5,7 +5,7 @@ import { ChevronRight, ChevronLeft, CheckCircle2, Home, User, Building2, AlertTr
 
 const CREDIT_LINES = [
   { value: "HOME EQUITY", label: "Home Equity (Garantia de Imóvel)" },
-  { value: "HE ESTRESSADO", label: "Home Equity Estressado" },
+  { value: "HOME EQUITY ESTRESSADO", label: "Home Equity Estressado (Garantia de Imóvel)" },
   { value: "AVAL", label: "Crédito com Aval" },
   { value: "FIDC", label: "FIDC — Fundo de Investimento" },
   { value: "CRI", label: "CRI — Certificado de Recebíveis Imobiliários" },
@@ -18,7 +18,7 @@ const CREDIT_LINES = [
   { value: "SPLIT FISCAL", label: "Split Fiscal" },
 ];
 
-const IMOVEL_LINES = ["HOME EQUITY", "HE ESTRESSADO", "CGI", "CRI"];
+const IMOVEL_LINES = ["HOME EQUITY", "HOME EQUITY ESTRESSADO", "CGI", "CRI"];
 
 const UFS = ["AC","AL","AM","AP","BA","CE","DF","ES","GO","MA","MG","MS","MT","PA","PB","PE","PI","PR","RJ","RN","RO","RR","RS","SC","SE","SP","TO"];
 
@@ -27,7 +27,7 @@ const LGPD_TEXT = `Autorizo a V3 Partners Soluções Ltda (CNPJ 14.219.287/0001-
 // Checklist de documentos por linha de crédito
 const DOC_CHECKLIST: Record<string, string[]> = {
   "HOME EQUITY": ["RG ou CNH", "Comprovante de Renda (3 últimos meses)", "Comprovante de Residência", "Certidão de Matrícula do Imóvel", "Declaração do Imposto de Renda (2 anos)", "Extratos Bancários (3 meses)"],
-  "HE ESTRESSADO": ["RG ou CNH", "Comprovante de Renda (3 últimos meses)", "Comprovante de Residência", "Certidão de Matrícula do Imóvel", "Declaração do Imposto de Renda"],
+  "HOME EQUITY ESTRESSADO": ["RG ou CNH", "Comprovante de Renda (3 últimos meses)", "Comprovante de Residência", "Certidão de Matrícula do Imóvel", "Declaração do Imposto de Renda"],
   "AVAL": ["RG ou CNH", "Comprovante de Renda (3 últimos meses)", "Comprovante de Residência", "Extratos Bancários (3 meses)", "Declaração do Imposto de Renda"],
   "FIDC": ["Contrato Social Atualizado", "Balanço Patrimonial (2 últimos anos)", "DRE (2 últimos anos)", "Certidão Negativa de Débitos Federais", "Extratos Bancários PJ (6 meses)", "Declaração de Faturamento"],
   "CRI": ["Contrato Social", "Certidão de Matrícula do Imóvel", "Balanço Patrimonial", "Projeto de Viabilidade Econômica", "Declaração do Imposto de Renda"],

@@ -1032,7 +1032,7 @@ function PropostaTab({ onAddLead }: { onAddLead: (lead: Lead) => void }) {
     win.focus();
     setTimeout(() => win.print(), 800);
 
-    onAddLead({
+    const leadLocal = {
       id: Date.now().toString(),
       razao_social: razaoSocial || "Cliente sem nome",
       cnpj,
@@ -1040,7 +1040,38 @@ function PropostaTab({ onAddLead }: { onAddLead: (lead: Lead) => void }) {
       economiaMensal: calc.economiaMensal,
       economiaAnual: calc.economiaAnual,
       created_at: new Date().toLocaleDateString("pt-BR"),
-    });
+    };
+    onAddLead(leadLocal);
+
+    // Envia lead ao CRM automaticamente com a simulação em notas
+    const simulacaoNota = [
+      `[Split Fiscal — Simulação Automática]`,
+      `Plano: ${propostaPlan !== null ? `Plano ${propostaPlan + 1}` : "Manual"}`,
+      `TPV Mensal: R$ ${calc.tpv.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`,
+      `Custo Atual (concorrente): R$ ${calc.concTotal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`,
+      `Custo Monetto: R$ ${calc.monTotal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`,
+      `Economia Mensal: R$ ${calc.economiaMensal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`,
+      `Economia Anual: R$ ${calc.economiaAnual.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`,
+      `Economia em 2 anos: R$ ${(calc.economiaAnual * 2).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`,
+      `Mix: PIX ${pixPct}% | Débito ${debitoPct}% | Créd 1x ${cred1xPct}% | Créd 2-6x ${cred2a6Pct}% | Créd 7-12x ${cred7a12Pct}% | Créd 13-21x ${cred13a21Pct}%`,
+    ].join("\n");
+
+    fetch("/api/crm", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        code: `SF-${Date.now().toString().slice(-6)}`,
+        name: razaoSocial || "Cliente sem nome",
+        document: cnpj || null,
+        personType: "PJ",
+        segment: "Split Fiscal / Maquininha",
+        annualRevenue: Math.round(calc.tpv * 12),
+        status: "prospect",
+        source: "ativo",
+        productInterest: "Split Fiscal",
+        notes: simulacaoNota,
+      }),
+    }).catch(() => {}); // silencia erro — não bloqueia o fluxo
   };
 
   const inp = (label: string, value: string, set: (v: string) => void, prefix = "", suffix = "") => (
