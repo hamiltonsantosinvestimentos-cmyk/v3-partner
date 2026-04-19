@@ -5,7 +5,6 @@ import { createServerClient } from "@supabase/ssr";
 const PUBLIC_API_ROUTES = [
   "/api/captacao/",
   "/api/market-data",
-  "/api/pipefy/webhook",
   "/api/ma/clicksign-webhook",
   "/api/ma/clicksign-status",
 ];
@@ -70,7 +69,7 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    "/api/((?!captacao/|market-data|pipefy/webhook|ma/clicksign).*)$",
+    "/api/((?!captacao/|market-data|ma/clicksign).*)$",
     "/(platform)/:path*",
   ],
 };

@@ -6,8 +6,6 @@ import {
   Mail, Circle, Home, Car, Building, Trash2, Loader2
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { PipefyConfig } from "@/components/shared/pipefy-config";
-
 // ─── Types ────────────────────────────────────────────────────────────────────
 type ConsorcioCard = {
   id: string;
@@ -112,7 +110,7 @@ function KanbanCardItem({ card, onClick }: { card: ConsorcioCard; onClick: () =>
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 export function MesaConsorcioClient({ userRole }: { userRole: string }) {
-  const [activeTab, setActiveTab] = useState<"kanban" | "operadores" | "pipefy">("kanban");
+  const [activeTab, setActiveTab] = useState<"kanban" | "operadores">("kanban");
   const [cards, setCards] = useState<ConsorcioCard[]>([]);
   const [operators, setOperators] = useState<ConsorcioOperator[]>([]);
   const [selectedCard, setSelectedCard] = useState<ConsorcioCard | null>(null);
@@ -232,7 +230,6 @@ export function MesaConsorcioClient({ userRole }: { userRole: string }) {
   const tabs = [
     { id: "kanban" as const, label: "Kanban" },
     { id: "operadores" as const, label: "Operadores" },
-    { id: "pipefy" as const, label: "Pipefy" },
   ];
 
   return (
@@ -395,20 +392,7 @@ export function MesaConsorcioClient({ userRole }: { userRole: string }) {
           </div>
         )}
 
-        {/* ── PIPEFY TAB ─────────────────────────────────────── */}
-        {activeTab === "pipefy" && (
-          <div>
-            <div className="mb-4">
-              <h3 className="text-sm font-semibold text-[#E8EDF5] mb-1">Integração Pipefy — Mesa Consórcio</h3>
-              <p className="text-xs text-[#7A8FA8]">Configure a sincronização das cotas com o Pipefy</p>
-            </div>
-            <PipefyConfig
-              mesaName="Consórcio"
-              storageKey="mesa_consorcio"
-              stageMapping={CONSORCIO_STAGES.map(s => ({ localStage: s.id, label: s.label }))}
-            />
-          </div>
-        )}
+
       </div>
 
       {/* ── CARD DETAIL MODAL ──────────────────────────────────── */}
