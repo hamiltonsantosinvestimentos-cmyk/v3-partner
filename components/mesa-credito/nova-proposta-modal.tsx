@@ -516,7 +516,7 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
     const imoveisData = imoveis.map(im => ({
       endereco: im.endereco || undefined,
       cep: im.cep || undefined,
-      valor_medio: parseFloat(im.valorMedio.replace(/\D/g, "")) || undefined,
+      valor_medio: parseBRL(im.valorMedio) || undefined,
       cidade: im.cidade || undefined,
       estado: im.estado || undefined,
       zona: im.zona || undefined,
@@ -538,12 +538,12 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
       rg: rg || undefined,
       nascimento: nascimento || undefined,
       estado_civil: estadoCivil || undefined,
-      renda_mensal: renda ? parseFloat(renda.replace(/\D/g, "")) || undefined : undefined,
+      renda_mensal: renda ? parseBRL(renda) || undefined : undefined,
       // Dados PJ
       razao_social: razaoSocial || undefined,
       nome_fantasia: nomeFantasia || undefined,
       socio_responsavel: socioResponsavel || undefined,
-      faturamento_mensal: faturamento ? parseFloat(faturamento.replace(/\D/g, "")) || undefined : undefined,
+      faturamento_mensal: faturamento ? parseBRL(faturamento) || undefined : undefined,
       // Endereço
       endereco_rua: enderecoRua || undefined,
       endereco_cidade: enderecoCity || undefined,
@@ -560,7 +560,7 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
       email,
       telefone,
       credit_line: creditLine,
-      requested_value: parseFloat(valorSolicitado.replace(/\D/g, "")) || 0,
+      requested_value: parseBRL(valorSolicitado),
       approved_value: null,
       prazo,
       finalidade,
@@ -703,7 +703,7 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
                   <div className="grid grid-cols-3 gap-3">
                     <SelectField label="Estado Civil" value={estadoCivil} onChange={setEstadoCivil}
                       options={["Solteiro(a)", "Casado(a)", "Divorciado(a)", "Viúvo(a)", "União Estável"]} />
-                    <Field label="Renda Mensal (R$) *" value={renda} onChange={setRenda} placeholder="0,00" />
+                    <CurrencyField label="Renda Mensal (R$) *" value={renda} onChange={setRenda} />
                     <Field label="UF" value={enderecoUf} onChange={setEnderecoUf} placeholder="SP" />
                   </div>
                   <div className="grid grid-cols-2 gap-3">
@@ -749,7 +749,7 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
                     <Field label="Telefone *" value={telefone} onChange={setTelefone} placeholder="(11) 3000-0000" />
                   </div>
                   <div className="grid grid-cols-2 gap-3">
-                    <Field label="Faturamento Anual (R$) *" value={faturamento} onChange={setFaturamento} placeholder="0,00" />
+                    <CurrencyField label="Faturamento Anual (R$) *" value={faturamento} onChange={setFaturamento} />
                     <Field label="UF" value={enderecoUf} onChange={setEnderecoUf} placeholder="SP" />
                   </div>
                   <div className="grid grid-cols-2 gap-3">
@@ -794,7 +794,7 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
                   onChange={setCreditLine}
                   options={lines}
                 />
-                <Field label="Valor Solicitado (R$) *" value={valorSolicitado} onChange={setValorSolicitado} placeholder="0,00" />
+                <CurrencyField label="Valor Solicitado (R$) *" value={valorSolicitado} onChange={setValorSolicitado} />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <SelectField
@@ -843,17 +843,17 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
                         />
                       </div>
                       <div className="grid grid-cols-2 gap-3">
-                        <Field label="Valor Médio de Avaliação (R$) *" value={im.valorMedio} onChange={v => updateImovel(idx, "valorMedio", v)} placeholder="0,00" />
-                        <Field label="Valor Estimado pelo Cliente (R$)" value={im.valor} onChange={v => updateImovel(idx, "valor", v)} placeholder="0,00" />
+                        <CurrencyField label="Valor Médio de Avaliação (R$) *" value={im.valorMedio} onChange={v => updateImovel(idx, "valorMedio", v)} />
+                        <CurrencyField label="Valor Estimado pelo Cliente (R$)" value={im.valor} onChange={v => updateImovel(idx, "valor", v)} />
                       </div>
                       {(im.valorMedio || im.valor) && valorSolicitado && (
                         <div className="text-xs text-muted-foreground">
                           LTV estimado:{" "}
                           <span className={`font-bold ${
-                            (parseFloat(valorSolicitado.replace(/\D/g, "")) / parseFloat((im.valorMedio || im.valor).replace(/\D/g, ""))) > 0.7
+                            (parseBRL(valorSolicitado) / parseBRL(im.valorMedio || im.valor)) > 0.7
                               ? "text-red-400" : "text-emerald-400"
                           }`}>
-                            {((parseFloat(valorSolicitado.replace(/\D/g, "")) / parseFloat((im.valorMedio || im.valor).replace(/\D/g, ""))) * 100).toFixed(1)}%
+                            {((parseBRL(valorSolicitado) / parseBRL(im.valorMedio || im.valor)) * 100).toFixed(1)}%
                           </span>
                           <span className="ml-1 text-muted-foreground">(máx. 70%)</span>
                         </div>
@@ -1115,6 +1115,18 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
+function parseBRL(v: string): number {
+  if (!v) return 0;
+  return parseFloat(v.replace(/\./g, "").replace(",", ".")) || 0;
+}
+
+function applyBRLMask(raw: string): string {
+  const digits = raw.replace(/\D/g, "");
+  if (!digits) return "";
+  const num = parseInt(digits, 10);
+  return (num / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
 function Field({ label, value, onChange, placeholder, type = "text" }: {
   label: string; value: string; onChange: (v: string) => void; placeholder?: string; type?: string;
 }) {
@@ -1128,6 +1140,27 @@ function Field({ label, value, onChange, placeholder, type = "text" }: {
         placeholder={placeholder}
         className="w-full h-9 px-3 text-sm bg-secondary border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
       />
+    </div>
+  );
+}
+
+function CurrencyField({ label, value, onChange, placeholder }: {
+  label: string; value: string; onChange: (v: string) => void; placeholder?: string;
+}) {
+  return (
+    <div>
+      <label className="block text-xs font-semibold text-muted-foreground mb-1.5">{label}</label>
+      <div className="relative">
+        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground select-none pointer-events-none">R$</span>
+        <input
+          type="text"
+          inputMode="numeric"
+          value={value}
+          onChange={(e) => onChange(applyBRLMask(e.target.value))}
+          placeholder={placeholder ?? "0,00"}
+          className="w-full h-9 pl-8 pr-3 text-sm bg-secondary border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
+        />
+      </div>
     </div>
   );
 }

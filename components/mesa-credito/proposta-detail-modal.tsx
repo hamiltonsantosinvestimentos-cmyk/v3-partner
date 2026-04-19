@@ -330,6 +330,50 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
   const [editFinalidade, setEditFinalidade] = useState("");
   const [editObservacoes, setEditObservacoes] = useState("");
 
+  // ── Valor Médio inline edit ───────────────────────────────────────────────
+  const [editingVmIdx, setEditingVmIdx] = useState<number | null>(null);
+  const [vmEditValue, setVmEditValue] = useState("");
+  const [vmSaving, setVmSaving] = useState(false);
+
+  function applyBRLMask(raw: string): string {
+    const digits = raw.replace(/\D/g, "");
+    if (!digits) return "";
+    return (parseInt(digits, 10) / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
+  function startEditVm(idx: number, current: number | undefined) {
+    setVmEditValue(current ? current.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "");
+    setEditingVmIdx(idx);
+  }
+
+  async function saveVm(idx: number) {
+    if (!proposal) return;
+    setVmSaving(true);
+    const parsed = parseFloat(vmEditValue.replace(/\./g, "").replace(",", ".")) || 0;
+    const meta = { ...(proposal.metadata ?? {}) };
+    const imoveis: ImovelMeta[] = Array.isArray(meta.imoveis) ? meta.imoveis.map((im: ImovelMeta, i: number) =>
+      i === idx ? { ...im, valor_medio: parsed || undefined } : im
+    ) : [];
+    meta.imoveis = imoveis;
+    try {
+      const res = await fetch("/api/credit-proposals", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: proposal.id, metadata: meta }),
+      });
+      if (res.ok) {
+        setEditingVmIdx(null);
+        onProposalUpdate?.(proposal.id, { metadata: meta as ProposalMeta });
+      } else {
+        alert("Erro ao salvar valor médio.");
+      }
+    } catch {
+      alert("Erro de conexão.");
+    } finally {
+      setVmSaving(false);
+    }
+  }
+
   function startEdit() {
     if (!proposal) return;
     const meta = proposal.metadata ?? {};
@@ -925,12 +969,54 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
                           </span>
                         </div>
                       )}
-                      {im.valor_medio && (
-                        <div className="col-span-2 flex items-center justify-between pt-1.5 border-t border-amber-500/20">
-                          <span className="text-xs text-muted-foreground flex items-center gap-1"><Banknote className="w-3 h-3" /> Valor Médio de Avaliação</span>
-                          <span className="text-xs font-bold text-amber-300">{formatCurrency(im.valor_medio)}</span>
-                        </div>
-                      )}
+                      <div className="col-span-2 pt-1.5 border-t border-amber-500/20">
+                        {editingVmIdx === idx ? (
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-muted-foreground flex items-center gap-1 shrink-0"><Banknote className="w-3 h-3" /> Valor Médio</span>
+                            <div className="flex-1 flex items-center gap-1.5">
+                              <div className="relative flex-1">
+                                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">R$</span>
+                                <input
+                                  type="text" inputMode="numeric"
+                                  value={vmEditValue}
+                                  onChange={e => setVmEditValue(applyBRLMask(e.target.value))}
+                                  className="w-full h-7 pl-7 pr-2 text-xs bg-secondary border border-amber-500/50 rounded text-foreground focus:outline-none focus:ring-1 focus:ring-amber-500/50"
+                                  autoFocus
+                                />
+                              </div>
+                              <button
+                                onClick={() => saveVm(idx)}
+                                disabled={vmSaving}
+                                className="h-7 px-2 rounded bg-amber-500/20 border border-amber-500/40 text-amber-400 hover:bg-amber-500/30 transition-colors"
+                              >
+                                <Check className="w-3 h-3" />
+                              </button>
+                              <button
+                                onClick={() => setEditingVmIdx(null)}
+                                className="h-7 px-2 rounded border border-border text-muted-foreground hover:text-white transition-colors"
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs text-muted-foreground flex items-center gap-1"><Banknote className="w-3 h-3" /> Valor Médio de Avaliação</span>
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-xs font-bold text-amber-300">
+                                {im.valor_medio ? formatCurrency(im.valor_medio) : <span className="text-muted-foreground italic">não informado</span>}
+                              </span>
+                              <button
+                                onClick={() => startEditVm(idx, im.valor_medio)}
+                                className="p-0.5 rounded hover:bg-amber-500/15 text-muted-foreground hover:text-amber-400 transition-colors"
+                                title="Editar valor médio"
+                              >
+                                <Pencil className="w-3 h-3" />
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
                       {im.valor_medio && (
                         <div className="col-span-2 flex items-center justify-between text-xs">
                           <span className="text-muted-foreground">LTV estimado</span>
