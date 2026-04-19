@@ -229,6 +229,20 @@ export function MaClient({ deals, userId = "", userName = "" }: MaClientProps) {
       .finally(() => setDocsLoading(false));
   }, [selectedDeal?.id]);
 
+  // Refresh asset_data ao abrir detalhe (garante kit_liberado atualizado)
+  useEffect(() => {
+    if (!selectedDeal) return;
+    fetch(`/api/ma-deals?id=${selectedDeal.id}`)
+      .then(r => r.json())
+      .then(({ deal }) => {
+        if (!deal) return;
+        const fresh = (deal.asset_data ?? {}) as Record<string, unknown>;
+        setSelectedDeal(prev => prev ? { ...prev, asset_data: fresh } : prev);
+        setLocalDeals(prev => prev.map(d => d.id === deal.id ? { ...d, asset_data: fresh } : d));
+      })
+      .catch(() => {});
+  }, [selectedDeal?.id]);
+
   const normalizedDeals = localDeals.map(d => ({ ...d, stage: normalizeStage(d.stage) }));
   const totalValue = localDeals.reduce((s, d) => s + (d.deal_value ?? 0), 0);
   const activeDeals = normalizedDeals.filter(d => d.stage !== "aprovacao").length;
