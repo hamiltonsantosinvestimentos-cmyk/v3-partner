@@ -2,9 +2,7 @@ import { ArrowLeft, Plus } from "lucide-react";
 import Link from "next/link";
 import { NovoDealForm } from "@/components/ma/novo-deal-form";
 
-const IS_DEMO =
-  !process.env.NEXT_PUBLIC_SUPABASE_URL ||
-  process.env.NEXT_PUBLIC_SUPABASE_URL.includes("SEU_PROJETO");
+const IS_DEMO = false;
 
 export default async function NovoDealPage() {
   let userId = "demo-user";

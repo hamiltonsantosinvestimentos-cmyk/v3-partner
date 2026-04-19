@@ -21,6 +21,7 @@ import {
 const schema = z.object({
   // Step 1 — Identificação
   target_company:     z.string().min(2, "Obrigatório"),
+  tipo_participante:  z.enum(["Vendedor", "Investidor"]),
   sector:             z.string().min(1, "Selecione o setor"),
   deal_type:          z.string().min(1, "Selecione o tipo"),
   location:           z.string().min(2, "Ex: São Paulo · SP"),
@@ -204,9 +205,11 @@ function StepIndicator({ current }: { current: number }) {
 interface NovoDealFormProps {
   isDemo: boolean;
   userId: string;
+  onSuccess?: (dealId: string, code: string) => void;
+  onCancel?: () => void;
 }
 
-export function NovoDealForm({ isDemo, userId }: NovoDealFormProps) {
+export function NovoDealForm({ isDemo, userId, onSuccess, onCancel }: NovoDealFormProps) {
   const router = useRouter();
   const [step, setStep] = useState(1);
   const [saving, setSaving] = useState(false);
@@ -218,14 +221,14 @@ export function NovoDealForm({ isDemo, userId }: NovoDealFormProps) {
 
   const { register, handleSubmit, watch, setValue, trigger, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
-    defaultValues: { tem_processos: "nao", tem_pendencias: "nao" },
+    defaultValues: { tem_processos: "nao", tem_pendencias: "nao", tipo_participante: "Vendedor" },
   });
 
   const temProcessos = watch("tem_processos");
 
   // ── Validação por step ──
   const STEP_FIELDS: Record<number, (keyof FormData)[]> = {
-    1: ["target_company", "sector", "deal_type", "location"],
+    1: ["target_company", "tipo_participante", "sector", "deal_type", "location"],
     2: ["descricao", "produtos_servicos"],
     3: ["deal_value"],
     4: ["tem_processos", "tem_pendencias"],
@@ -302,26 +305,41 @@ export function NovoDealForm({ isDemo, userId }: NovoDealFormProps) {
     const dealCode = generateCode();
 
     const assetData = {
-      descricao_ptbr: data.descricao,
+      // Step 1 — Identificação
+      tipo_participante: data.tipo_participante,
+      tipoOperacao:      data.deal_type,
+      cnpj:              data.cnpj ?? "",
+      founding_year:     data.founding_year ?? "",
+
+      // Step 2 — Descrição
+      descricao_ptbr:    data.descricao,
+      produtos_servicos: data.produtos_servicos,
       tese_investimento: data.diferenciais ?? "",
-      diferenciais: data.diferenciais?.split("\n").filter(Boolean) ?? [],
-      processo_v3: dealCode,
-      metricas: [
-        ...(data.receita_2025 ? [{ label: "Receita 2025", value: `R$ ${data.receita_2025}`, sub: "Receita bruta" }] : []),
-        ...(data.ebitda_2025  ? [{ label: "EBITDA 2025",  value: `R$ ${data.ebitda_2025}`,  sub: "Margem operacional" }] : []),
-        ...(data.divida_total ? [{ label: "Dívida Total", value: `R$ ${data.divida_total}`, sub: "Posição atual" }] : []),
-      ],
+      diferenciais:      data.diferenciais?.split("\n").filter(Boolean) ?? [],
+      mercado_atendido:  data.mercado_atendido ?? "",
+
+      // Step 3 — Financeiro
       financeiro: {
         receita: { 2023: data.receita_2023, 2024: data.receita_2024, 2025: data.receita_2025 },
         ebitda:  { 2023: data.ebitda_2023,  2024: data.ebitda_2024,  2025: data.ebitda_2025  },
         lucro:   { 2023: data.lucro_2023,   2024: data.lucro_2024,   2025: data.lucro_2025   },
       },
+      divida_total: data.divida_total ?? "",
+      metricas: [
+        ...(data.receita_2025 ? [{ label: "Receita 2025", value: `R$ ${data.receita_2025}`, sub: "Receita bruta" }] : []),
+        ...(data.ebitda_2025  ? [{ label: "EBITDA 2025",  value: `R$ ${data.ebitda_2025}`,  sub: "Margem operacional" }] : []),
+        ...(data.divida_total ? [{ label: "Dívida Total", value: `R$ ${data.divida_total}`, sub: "Posição atual" }] : []),
+      ],
+
+      // Step 4 — Jurídico
       juridico: {
         licencas:           data.licencas ?? "",
         tem_processos:      data.tem_processos === "sim",
         detalhes_processos: data.detalhes_processos ?? "",
         tem_pendencias:     data.tem_pendencias === "sim",
       },
+
+      // Step 5 — Contato
       contato: {
         nome:     data.contato_nome,
         email:    data.contato_email,
@@ -329,9 +347,11 @@ export function NovoDealForm({ isDemo, userId }: NovoDealFormProps) {
       },
       comissionamento: data.comissionamento ?? "",
       info_adicionais: data.info_adicionais ?? "",
-      produtos_servicos: data.produtos_servicos,
-      mercado_atendido:  data.mercado_atendido ?? "",
+
+      // Step 6 — Documentos
       documentos: uploadedFiles.map(f => ({ nome: f.name, tamanho: f.size, tipo: f.type })),
+
+      processo_v3: dealCode,
     };
 
     const dealPayload = {
@@ -352,21 +372,49 @@ export function NovoDealForm({ isDemo, userId }: NovoDealFormProps) {
 
     if (isDemo) {
       await new Promise(r => setTimeout(r, 1500));
-      router.push(`/ma?novo=${dealCode}`);
+      if (onSuccess) { onSuccess("demo-id", dealCode); return; }
+      router.push("/mesa-ma");
       return;
     }
 
     try {
-      const { createClient } = await import("@/lib/supabase/client");
-      const supabase = createClient();
-      const { data: deal, error: err } = await supabase
-        .from("ma_deals")
-        .insert(dealPayload)
-        .select("id")
-        .single();
+      const res = await fetch("/api/ma-deals", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          company:             data.target_company,
+          title:               `${data.deal_type} — ${data.target_company}`,
+          sector:              data.sector,
+          value:               parseMoney(data.deal_value),
+          notes:               data.info_adicionais ?? "",
+          code:                dealCode,
+          tipo_participante:   data.tipo_participante,
+          location:            data.location,
+          asset_data:          assetData,
+          probability_percent: 10,
+        }),
+      });
+      const text = await res.text();
+      let json: Record<string, unknown> = {};
+      try { json = JSON.parse(text); } catch { /* resposta não-JSON */ }
+      if (!res.ok || !(json.card as Record<string, unknown>)?.id) {
+        throw new Error(typeof json.error === "string" ? json.error : `Erro ao salvar (${res.status}). Tente novamente.`);
+      }
+      const dealId = (json.card as Record<string, unknown>).id as string;
 
-      if (err) throw err;
-      router.push(`/ma/${deal.id}`);
+      // Upload dos arquivos do step 6
+      if (uploadedFiles.length > 0) {
+        for (const file of uploadedFiles) {
+          const form = new FormData();
+          form.append("file", file);
+          form.append("deal_id", dealId);
+          form.append("doc_id", `doc_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`);
+          await fetch("/api/ma/documents", { method: "POST", body: form }).catch(() => {});
+        }
+      }
+
+      if (onSuccess) { onSuccess(dealId, dealCode); return; }
+      router.push("/mesa-ma");
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Erro ao salvar. Tente novamente.");
       setSaving(false);
@@ -385,6 +433,39 @@ export function NovoDealForm({ isDemo, userId }: NovoDealFormProps) {
               <FieldGroup label="Razão Social / Nome do Ativo *">
                 <Input {...register("target_company")} placeholder="Ex: TechFinance Ltda" />
                 {errors.target_company && <p className="text-xs text-red-400 mt-1">{errors.target_company.message}</p>}
+              </FieldGroup>
+            </div>
+
+            <div className="md:col-span-2">
+              <FieldGroup label="Tipo de Participante *">
+                <div className="flex gap-3 mt-1">
+                  {([
+                    { value: "Vendedor", label: "Vendedor", desc: "Quero vender / captar investimento para meu ativo" },
+                    { value: "Investidor", label: "Investidor", desc: "Estou buscando ativos para comprar / investir" },
+                  ] as const).map(opt => {
+                    const current = watch("tipo_participante");
+                    return (
+                      <label
+                        key={opt.value}
+                        className={`flex-1 flex flex-col gap-1 p-3 rounded-lg border-2 cursor-pointer transition-all ${
+                          current === opt.value
+                            ? "border-[#C9A84C] bg-[#C9A84C]/10"
+                            : "border-[#243A66] bg-[#162744] hover:border-[#C9A84C]/40"
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          value={opt.value}
+                          {...register("tipo_participante")}
+                          className="hidden"
+                        />
+                        <span className={`text-sm font-bold ${current === opt.value ? "text-[#C9A84C]" : "text-[#F0ECE4]"}`}>{opt.label}</span>
+                        <span className="text-[10px] text-[#7A8FA8] leading-relaxed">{opt.desc}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+                {errors.tipo_participante && <p className="text-xs text-red-400 mt-1">{errors.tipo_participante.message}</p>}
               </FieldGroup>
             </div>
 
@@ -773,7 +854,7 @@ export function NovoDealForm({ isDemo, userId }: NovoDealFormProps) {
         <Button
           type="button"
           variant="outline"
-          onClick={step === 1 ? () => router.push("/ma") : prevStep}
+          onClick={step === 1 ? (onCancel ?? (() => router.push("/ma"))) : prevStep}
           className="border-[#243A66] text-[#7A8FA8] hover:text-[#F0ECE4]"
         >
           <ChevronLeft className="w-4 h-4 mr-1" />

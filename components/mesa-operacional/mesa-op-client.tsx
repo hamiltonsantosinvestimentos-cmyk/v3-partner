@@ -4,7 +4,7 @@ import React, { useState, useCallback, useEffect } from "react";
 import {
   Headphones, Plus, ChevronRight, User, Building2,
   Banknote, Clock, CheckCircle2, AlertCircle, Link2,
-  LayoutGrid, List, Search, X, FileText, ArrowRight, MessageSquare,
+  LayoutGrid, List, Search, X, FileText, ArrowRight, MessageSquare, Trash2,
 } from "lucide-react";
 import { ExportButton } from "@/components/financeiro/export-button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -142,7 +142,7 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
     fetch("/api/credit-proposals")
       .then(r => r.json())
       .then(({ proposals: fresh }) => {
-        if (!Array.isArray(fresh) || fresh.length === 0) return;
+        if (!Array.isArray(fresh)) return;
         setProposals(fresh.map((p: Record<string, unknown>) => {
           const meta = p.metadata as Record<string, unknown> | null;
           return {
@@ -168,6 +168,7 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
             valor_credito_atual: p.valor_credito_atual as number | undefined,
             comissao_mandato_perc: p.comissao_mandato_perc as number | undefined,
             comissao_instituicao_perc: p.comissao_instituicao_perc as number | undefined,
+            // Garante que metadata completo (com imoveis, endereço, cep, etc.) é passado
             metadata: meta ?? undefined,
           };
         }));
@@ -298,11 +299,29 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
                   {/* Cards */}
                   <div className="flex flex-col gap-2 min-h-24">
                     {stageProposals.map((p) => (
-                      <button key={p.id} onClick={() => setDetailProposal(p)}
-                        className="w-full text-left p-3 rounded-xl bg-card border border-border hover:border-primary/40 hover:bg-secondary/50 transition-all group">
+                      <div key={p.id}
+                        className="relative w-full text-left p-3 rounded-xl bg-card border border-border hover:border-primary/40 hover:bg-secondary/50 transition-all group cursor-pointer"
+                        onClick={() => setDetailProposal(p)}>
                         <div className="flex items-start justify-between gap-1 mb-2">
                           <span className="font-mono text-[10px] text-muted-foreground">{p.code}</span>
-                          <ChevronRight className="w-3 h-3 text-muted-foreground group-hover:text-primary transition-colors flex-shrink-0" />
+                          <div className="flex items-center gap-1">
+                            {currentUser?.role === "ADMIN" && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (!confirm(`Excluir proposta ${p.code} de ${p.client_name}? Esta ação não pode ser desfeita.`)) return;
+                                  fetch(`/api/credit-proposals?id=${p.id}`, { method: "DELETE" })
+                                    .then(() => setProposals(prev => prev.filter(x => x.id !== p.id)))
+                                    .catch(() => alert("Erro ao excluir proposta."));
+                                }}
+                                className="w-5 h-5 rounded flex items-center justify-center text-muted-foreground hover:text-red-400 hover:bg-red-500/15 transition-colors opacity-0 group-hover:opacity-100"
+                                title="Excluir proposta"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </button>
+                            )}
+                            <ChevronRight className="w-3 h-3 text-muted-foreground group-hover:text-primary transition-colors flex-shrink-0" />
+                          </div>
                         </div>
                         <p className="text-xs font-semibold text-foreground leading-tight mb-1.5 line-clamp-2">{p.client_name}</p>
                         <div className="flex items-center gap-1 mb-1.5">
@@ -333,7 +352,7 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
                             <span className="text-[10px] text-primary font-semibold">{p.mesa_comments_count} msg</span>
                           </div>
                         )}
-                      </button>
+                      </div>
                     ))}
 
                     {stageProposals.length === 0 && (
@@ -447,6 +466,7 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
         proposal={detailProposal as ProposalFull | null}
         onStageChange={handleStageChange}
         canChangeStage={canChangeStage}
+        canEditValorSolicitado={canChangeStage}
         canCompileDocuments={canChangeStage}
       />
     </div>

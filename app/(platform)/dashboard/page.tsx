@@ -6,9 +6,7 @@ import {
 
 export const dynamic = "force-dynamic";
 
-const IS_DEMO =
-  !process.env.NEXT_PUBLIC_SUPABASE_URL ||
-  process.env.NEXT_PUBLIC_SUPABASE_URL.includes("SEU_PROJETO");
+const IS_DEMO = false;
 
 type Period = "7d" | "30d" | "90d" | "all";
 
@@ -71,41 +69,60 @@ export default async function DashboardPage({
   if (!user) return null;
 
   const { data: profileData } = await supabase
-    .from("profiles").select("role, full_name").eq("id", user.id).single() as {
-      data: { role: string; full_name: string | null } | null
+    .from("profiles").select("role, full_name, created_at").eq("id", user.id).single() as {
+      data: { role: string; full_name: string | null; created_at: string | null } | null
     };
 
   const role = profileData?.role || "PARTNER";
   const since = periodToDate(period);
+  const adminRoles = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"];
+  const isAdmin = adminRoles.includes(role);
+  const uid = user.id;
 
-  const addPeriod = <T extends ReturnType<typeof supabase.from>>(q: T) =>
-    since ? (q as unknown as { gte: (col: string, val: string) => T }).gte("created_at", since) : q;
+  // Usa serviceClient para garantir leitura mesmo com RLS restritivo
+  const { createClient: sc } = await import("@supabase/supabase-js");
+  const svc = sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+
+  // Contadores — partner vê só os seus, admin vê todos
+  let splitCountQ = svc.from("split_fiscal").select("*", { count: "exact", head: true });
+  let dealCountQ  = svc.from("ma_deals").select("*", { count: "exact", head: true });
+  let propCountQ  = svc.from("credit_desk_proposals").select("*", { count: "exact", head: true }).in("status", ["PENDING", "IN_REVIEW"]);
+  let ticketCountQ = svc.from("operational_tickets").select("*", { count: "exact", head: true }).in("status", ["PENDING", "IN_REVIEW"]);
+
+  if (!isAdmin) {
+    splitCountQ = splitCountQ.or(`created_by.eq.${uid},partner_id.eq.${uid}`) as typeof splitCountQ;
+    dealCountQ  = dealCountQ.or(`created_by.eq.${uid},assigned_to.eq.${uid}`) as typeof dealCountQ;
+    propCountQ  = propCountQ.eq("partner_id", uid) as typeof propCountQ;
+    ticketCountQ = ticketCountQ.eq("created_by", uid) as typeof ticketCountQ;
+  }
+  if (since) {
+    splitCountQ  = splitCountQ.gte("created_at", since) as typeof splitCountQ;
+    dealCountQ   = dealCountQ.gte("created_at", since) as typeof dealCountQ;
+    propCountQ   = propCountQ.gte("created_at", since) as typeof propCountQ;
+  }
 
   const [
     { count: totalSplits },
     { count: totalDeals },
     { count: totalTickets },
     { count: totalProposals },
-  ] = await Promise.all([
-    addPeriod(supabase.from("split_fiscal").select("*", { count: "exact", head: true })),
-    addPeriod(supabase.from("ma_deals").select("*", { count: "exact", head: true })),
-    supabase.from("operational_tickets").select("*", { count: "exact", head: true }).in("status", ["PENDING", "IN_REVIEW"]),
-    supabase.from("credit_desk_proposals").select("*", { count: "exact", head: true }).in("status", ["PENDING", "IN_REVIEW"]),
-  ]);
+  ] = await Promise.all([splitCountQ, dealCountQ, ticketCountQ, propCountQ]);
 
-  const recentQuery = supabase
-    .from("split_fiscal").select("id, code, title, status, total_value, created_at")
-    .order("created_at", { ascending: false }).limit(5);
-  const { data: recentSplits } = since
-    ? await recentQuery.gte("created_at", since)
-    : await recentQuery;
+  // Recentes — mesmo filtro
+  let splitsQ = svc.from("split_fiscal").select("id, code, title, status, total_value, created_at").order("created_at", { ascending: false }).limit(5);
+  let dealsQ  = svc.from("ma_deals").select("id, code, title, stage, deal_value, target_company, created_at").order("created_at", { ascending: false }).limit(5);
 
-  const dealQuery = supabase
-    .from("ma_deals").select("id, code, title, stage, deal_value, target_company, created_at")
-    .order("created_at", { ascending: false }).limit(5);
-  const { data: recentDeals } = since
-    ? await dealQuery.gte("created_at", since)
-    : await dealQuery;
+  if (!isAdmin) {
+    splitsQ = splitsQ.or(`created_by.eq.${uid},partner_id.eq.${uid}`) as typeof splitsQ;
+    dealsQ  = dealsQ.or(`created_by.eq.${uid},assigned_to.eq.${uid}`) as typeof dealsQ;
+  }
+  if (since) {
+    splitsQ = splitsQ.gte("created_at", since) as typeof splitsQ;
+    dealsQ  = dealsQ.gte("created_at", since) as typeof dealsQ;
+  }
+
+  const { data: recentSplits } = await splitsQ;
+  const { data: recentDeals }  = await dealsQ;
 
   return (
     <DashboardClient
@@ -120,6 +137,7 @@ export default async function DashboardPage({
       }}
       recentSplits={(recentSplits ?? []) as Parameters<typeof DashboardClient>[0]["recentSplits"]}
       recentDeals={(recentDeals ?? []) as Parameters<typeof DashboardClient>[0]["recentDeals"]}
+      userCreatedAt={profileData?.created_at ?? null}
     />
   );
 }

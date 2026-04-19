@@ -56,7 +56,7 @@ const NAV_SECTIONS: NavSection[] = [
     label: "PRODUTOS",
     items: [
       { href: "/split-fiscal", label: "Split Fiscal", icon: "PieChart", roles: ["ADMIN", "PARTNER", "PARTNER_PRO", "GESTAO"] },
-      { href: "/ma", label: "M&A", icon: "Building2", roles: ["ADMIN", "GESTAO", "PARTNER", "PARTNER_PRO"] },
+      { href: "/ma", label: "M&A", icon: "Building2", roles: ["ADMIN", "GESTAO", "PARTNER", "PARTNER_PRO", "MESA_OPERACIONAL"] },
       {
         href: "/consorcio", label: "Consórcio", icon: "Trophy",
         roles: ["ADMIN", "PARTNER", "PARTNER_PRO", "MESA_OPERACIONAL", "GESTAO"],

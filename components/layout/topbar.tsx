@@ -60,6 +60,18 @@ interface TopbarProps {
 
 export function Topbar({ user, onMenuClick, notificationCount = 0 }: TopbarProps) {
   const pathname = usePathname();
+  const [avatarUrl, setAvatarUrl] = React.useState(user.avatar_url);
+
+  // Atualiza avatar quando o perfil é alterado (sem reload da página)
+  React.useEffect(() => {
+    const handler = () => {
+      fetch("/api/profile").then(r => r.json()).then(({ profile }) => {
+        if (profile?.avatar_url !== undefined) setAvatarUrl(profile.avatar_url);
+      }).catch(() => {});
+    };
+    window.addEventListener("v3:avatar-updated", handler);
+    return () => window.removeEventListener("v3:avatar-updated", handler);
+  }, []);
 
   const handleSignOut = async () => {
     document.cookie = "v3_demo_session=; path=/; max-age=0";
@@ -147,9 +159,9 @@ export function Topbar({ user, onMenuClick, notificationCount = 0 }: TopbarProps
               {/* Avatar */}
               <div className="relative w-7 h-7 rounded-lg bg-gradient-to-br from-[#C9A84C]/80 to-[#E8C97A]/60 flex items-center justify-center flex-shrink-0 overflow-hidden"
                 style={{ boxShadow: "0 0 0 1px rgba(201,168,76,0.25), 0 2px 8px rgba(0,0,0,0.4)" }}>
-                {user.avatar_url ? (
+                {avatarUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={user.avatar_url} alt={user.full_name || ""} className="w-full h-full object-cover" />
+                  <img src={avatarUrl} alt={user.full_name || ""} className="w-full h-full object-cover" />
                 ) : (
                   <span className="text-[#09081A] text-[10px] font-black tracking-tight">{initials}</span>
                 )}

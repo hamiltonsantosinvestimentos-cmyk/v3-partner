@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { DEMO_DEALS } from "@/lib/demo-data";
 
-const IS_DEMO =
-  !process.env.NEXT_PUBLIC_SUPABASE_URL ||
-  process.env.NEXT_PUBLIC_SUPABASE_URL.includes("SEU_PROJETO");
+const IS_DEMO = false;
 
 const FONT = `https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap`;
 

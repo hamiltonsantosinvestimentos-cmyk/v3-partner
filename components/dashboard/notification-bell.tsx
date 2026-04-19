@@ -1,25 +1,39 @@
 "use client";
 
 import { useState } from "react";
-import { Bell, X, Check, Headphones, Building2, CreditCard } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Bell, X, Check, Headphones, Building2, CreditCard, DollarSign, GitBranch, Info } from "lucide-react";
 import { useRealtimeNotifications, type Notification } from "@/hooks/use-realtime-notifications";
 
 function NotificationIcon({ type }: { type: Notification["type"] }) {
-  if (type === "ticket")   return <Headphones className="w-4 h-4 text-amber-400" />;
-  if (type === "proposal") return <CreditCard  className="w-4 h-4 text-emerald-400" />;
-  return                          <Building2   className="w-4 h-4 text-purple-400" />;
+  if (type === "ticket")     return <Headphones  className="w-4 h-4 text-amber-400" />;
+  if (type === "proposal")   return <CreditCard   className="w-4 h-4 text-emerald-400" />;
+  if (type === "deal")       return <Building2    className="w-4 h-4 text-purple-400" />;
+  if (type === "commission") return <DollarSign   className="w-4 h-4 text-[#C9A84C]" />;
+  if (type === "split")      return <GitBranch    className="w-4 h-4 text-blue-400" />;
+  return                            <Info         className="w-4 h-4 text-[#7A8FA8]" />;
 }
 
 function timeAgo(date: Date) {
   const s = Math.floor((Date.now() - date.getTime()) / 1000);
-  if (s < 60)   return "agora";
-  if (s < 3600) return `${Math.floor(s / 60)}min atrás`;
-  return `${Math.floor(s / 3600)}h atrás`;
+  if (s < 60)    return "agora";
+  if (s < 3600)  return `${Math.floor(s / 60)}min atrás`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h atrás`;
+  return `${Math.floor(s / 86400)}d atrás`;
 }
 
 export function NotificationBell() {
   const { notifications, unreadCount, dismiss, dismissAll } = useRealtimeNotifications();
   const [open, setOpen] = useState(false);
+  const router = useRouter();
+
+  function handleClickNotification(n: Notification) {
+    if (!n.read) dismiss(n.id);
+    if (n.action_url) {
+      setOpen(false);
+      router.push(n.action_url);
+    }
+  }
 
   return (
     <div className="relative">
@@ -72,23 +86,26 @@ export function NotificationBell() {
                 notifications.map((n) => (
                   <div
                     key={n.id}
+                    onClick={() => handleClickNotification(n)}
                     className={`flex items-start gap-3 px-4 py-3 border-b border-border/50 last:border-0 transition-colors ${
                       n.read ? "opacity-50" : "bg-white/[0.02]"
-                    }`}
+                    } ${n.action_url ? "cursor-pointer hover:bg-white/[0.05]" : ""}`}
                   >
                     <div className="mt-0.5 shrink-0">
                       <NotificationIcon type={n.type} />
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-semibold text-foreground">{n.title}</p>
-                      <p className="text-xs text-muted-foreground truncate">{n.message}</p>
+                      {n.message && (
+                        <p className="text-xs text-muted-foreground truncate">{n.message}</p>
+                      )}
                       <p className="text-[10px] text-muted-foreground/60 mt-0.5">
                         {timeAgo(n.timestamp)}
                       </p>
                     </div>
                     {!n.read && (
                       <button
-                        onClick={() => dismiss(n.id)}
+                        onClick={(e) => { e.stopPropagation(); dismiss(n.id); }}
                         className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
                       >
                         <X className="w-3.5 h-3.5" />

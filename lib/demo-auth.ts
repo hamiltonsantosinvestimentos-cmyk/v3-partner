@@ -1,8 +1,7 @@
 import { DEMO_USERS } from "./demo-data";
 
 export const DEMO_COOKIE = "v3_demo_session";
-export const IS_DEMO_MODE = !process.env.NEXT_PUBLIC_SUPABASE_URL ||
-  process.env.NEXT_PUBLIC_SUPABASE_URL.includes("SEU_PROJETO");
+export const IS_DEMO_MODE = false;
 
 export function demoLogin(email: string, password: string) {
   const user = DEMO_USERS.find(

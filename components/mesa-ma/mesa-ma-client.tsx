@@ -5,11 +5,16 @@ import {
   Building2, Plus, X, ChevronRight,
   BarChart2, Mail, Circle, FileText,
   Paperclip, Trash2, ExternalLink, Upload, Copy, CheckCheck,
-  MessageSquare, Send,
+  MessageSquare, Send, Zap, FileImage, FileSignature,
+  ArrowLeftRight, Pencil, Check,
 } from "lucide-react";
 import { ExportButton } from "@/components/financeiro/export-button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { MA_PIPELINE } from "@/components/ma/ma-client";
+import { ForjaPanel } from "@/components/ma/forja-panel";
+import { ContratoPanel } from "@/components/ma/contrato-panel";
+import { NovoDealForm } from "@/components/ma/novo-deal-form";
+import { DealFormEditorClient } from "@/components/ma/deal-form-editor-client";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type DealComment = {
@@ -26,11 +31,16 @@ type MaCard = {
   sector: string;
   value: number;
   stage: string;
+  dbStage?: string;
   responsible: string;
+  assigned_to_id?: string;
   probability: number;
   createdAt: string;
   notes?: string;
   comments?: DealComment[];
+  asset_data?: Record<string, unknown>;
+  location?: string;
+  tipo_participante?: string;
 };
 
 type MesaOperator = {
@@ -111,6 +121,7 @@ function nextStage(current: string, stages: MaStage[]): string | null {
 // ─── Kanban Card ──────────────────────────────────────────────────────────────
 function KanbanCardItem({ card, stages, onClick }: { card: MaCard; stages: MaStage[]; onClick: () => void }) {
   const stage = stages.find(s => s.id === card.stage);
+  const isInvestidor = card.tipo_participante === "Investidor";
   return (
     <div
       onClick={onClick}
@@ -120,11 +131,20 @@ function KanbanCardItem({ card, stages, onClick }: { card: MaCard; stages: MaSta
         <p className="text-xs font-semibold text-[#E8EDF5] leading-tight group-hover:text-[#C9A84C] transition-colors">{card.company}</p>
         <span className="text-[10px] text-[#7A8FA8] flex-shrink-0 ml-1">{card.code}</span>
       </div>
-      <div className="flex items-center gap-1.5 mb-2">
+      <div className="flex items-center gap-1.5 mb-2 flex-wrap">
         <span className="text-[10px] px-1.5 py-0.5 rounded-full border"
           style={{ color: stage?.color, borderColor: `${stage?.color}40`, background: stage?.bg }}>
           {card.sector}
         </span>
+        {card.tipo_participante && (
+          <span className={`text-[10px] px-1.5 py-0.5 rounded-full border font-semibold ${
+            isInvestidor
+              ? "text-emerald-400 border-emerald-500/40 bg-emerald-500/10"
+              : "text-[#C9A84C] border-[#C9A84C]/40 bg-[#C9A84C]/10"
+          }`}>
+            {isInvestidor ? "Investidor" : "Vendedor"}
+          </span>
+        )}
       </div>
       <p className="text-sm font-bold text-[#C9A84C] mb-2">{formatM(card.value)}</p>
       {/* Probability bar */}
@@ -138,24 +158,99 @@ function KanbanCardItem({ card, stages, onClick }: { card: MaCard; stages: MaSta
         </div>
       </div>
       <p className="text-[10px] text-[#7A8FA8]">{card.responsible}</p>
+      {/* FORJA + KIT status badges */}
+      <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+        {(() => {
+          const forjaStatus = card.asset_data?.forja_status as string | undefined;
+          if (!forjaStatus) return <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-[#122036] text-[#7A8FA8]">FORJA Pendente</span>;
+          if (forjaStatus === "APROVADO") return <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400">⚡ FORJA OK</span>;
+          if (forjaStatus === "APROVADO_COM_RESSALVAS") return <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-400">⚡ FORJA Res.</span>;
+          if (forjaStatus === "BLOQUEADO") return <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-red-500/15 text-red-400">⚡ Bloqueado</span>;
+          return <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-orange-500/15 text-orange-400">⚡ Pendente</span>;
+        })()}
+        {Boolean(card.asset_data?.kit_liberado) && (
+          <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-[#C9A84C]/15 text-[#C9A84C]">KIT ✓</span>
+        )}
+      </div>
     </div>
   );
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 export function MesaMaClient({ userRole, initialDeals = [], userId = "", userName = "" }: { userRole: string; initialDeals?: MaCard[]; userId?: string; userName?: string }) {
-  const [activeTab, setActiveTab] = useState<"kanban" | "operadores">("kanban");
+  const [activeTab, setActiveTab] = useState<"kanban" | "conexoes" | "operadores">("kanban");
   const [cards, setCards] = useState<MaCard[]>(initialDeals);
   const [operators, setOperators] = useState<MesaOperator[]>([]);
   const [selectedCard, setSelectedCard] = useState<MaCard | null>(null);
+  const [detailTab, setDetailTab] = useState<"detalhes" | "forja" | "criativos" | "contrato">("detalhes");
   const [showNewCard, setShowNewCard] = useState(false);
+  const [showFullForm, setShowFullForm] = useState(false);
   const [showNewOp, setShowNewOp] = useState(false);
   const [maStages] = useState<MaStage[]>(MA_STAGES_DEFAULT);
+  // Edit state
+  const [editingCard, setEditingCard] = useState(false);
+  const [editData, setEditData] = useState({ sector: "", value: "", probability: "", notes: "", assigned_to: "" });
+  const [editSaving, setEditSaving] = useState(false);
+  const [editSuccess, setEditSuccess] = useState(false);
 
-  // Atualiza cards quando initialDeals mudar
+  // Partners disponíveis para atribuição
+  const [partners, setPartners] = useState<{ id: string; name: string; role: string }[]>([]);
+
+  // Busca dados do banco ao montar — mesma lógica do MaClient que funciona
   useEffect(() => {
-    setCards(initialDeals);
-  }, [initialDeals]);
+    fetch("/api/ma-deals")
+      .then(r => r.json())
+      .then(({ deals: fresh }) => {
+        if (!Array.isArray(fresh)) return;
+        setCards(fresh.map((d: Record<string, unknown>) => {
+          const STAGE_MAP: Record<string, string> = {
+            PROSPECTING: "prospeccao", QUALIFICATION: "qualificacao",
+            IOI: "viabilidade", DUE_DILIGENCE: "due_diligence",
+            PROPOSAL: "estruturacao", NEGOTIATION: "negociacao",
+            CLOSING: "aprovacao", CLOSED_WON: "aprovacao", CLOSED_LOST: "aprovacao",
+          };
+          const rawStage = d.stage as string;
+          const assetData = (d.asset_data ?? {}) as Record<string, unknown>;
+          return {
+            id: d.id as string,
+            code: d.code as string,
+            company: (d.target_company ?? d.title ?? "Sem nome") as string,
+            sector: (d.sector ?? "") as string,
+            value: (d.deal_value ?? 0) as number,
+            stage: STAGE_MAP[rawStage] ?? rawStage ?? "prospeccao",
+            dbStage: rawStage,
+            responsible: (() => {
+              const p = d.partner;
+              if (Array.isArray(p as unknown[])) return ((p as {full_name?: string}[])[0])?.full_name ?? userName;
+              return (p as { full_name?: string } | null)?.full_name ?? userName;
+            })(),
+            assigned_to_id: (d.assigned_to as string) ?? undefined,
+            probability: (d.probability_percent ?? 0) as number,
+            createdAt: ((d.created_at as string) ?? "").split("T")[0],
+            notes: (d.notes ?? "") as string,
+            comments: Array.isArray(d.comments) ? d.comments as DealComment[] : [],
+            asset_data: assetData,
+            location: (d.location ?? "") as string,
+            tipo_participante: assetData?.tipo_participante as string | undefined,
+          };
+        }));
+      })
+      .catch(() => {});
+
+    // Busca partners disponíveis para atribuição
+    fetch("/api/usuarios")
+      .then(r => r.json())
+      .then((data: { id: string; full_name: string | null; role: string }[]) => {
+        if (!Array.isArray(data)) return;
+        setPartners(
+          data
+            .filter(u => ["PARTNER", "PARTNER_PRO", "ADMIN", "GESTAO"].includes(u.role))
+            .map(u => ({ id: u.id, name: u.full_name ?? u.id, role: u.role }))
+        );
+      })
+      .catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // New card form
   const [newCard, setNewCard] = useState({ company: "", sector: "Fintech", value: "", stage: "", responsible: "", notes: "" });
@@ -181,14 +276,62 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   useEffect(() => {
-    if (!selectedCard) { setCardDocs([]); return; }
+    if (!selectedCard) { setCardDocs([]); setDetailTab("detalhes"); setEditingCard(false); return; }
     setDocsLoading(true);
     fetch(`/api/ma/documents?deal_id=${selectedCard.id}`)
       .then(r => r.json())
       .then(({ documents }) => setCardDocs(Array.isArray(documents) ? documents : []))
       .catch(() => setCardDocs([]))
       .finally(() => setDocsLoading(false));
+    setEditData({
+      sector: selectedCard.sector ?? "",
+      value: selectedCard.value ? String(selectedCard.value) : "",
+      probability: selectedCard.probability ? String(selectedCard.probability) : "",
+      notes: selectedCard.notes ?? "",
+      assigned_to: selectedCard.assigned_to_id ?? "",
+    });
   }, [selectedCard?.id]);
+
+  const handleSaveEdit = async () => {
+    if (!selectedCard) return;
+    setEditSaving(true);
+    const payload: Record<string, unknown> = { id: selectedCard.id };
+    if (editData.sector) payload.sector = editData.sector;
+    if (editData.value) payload.deal_value = Number(editData.value);
+    if (editData.probability) payload.probability_percent = Number(editData.probability);
+    payload.notes = editData.notes;
+    if (editData.assigned_to) payload.assigned_to = editData.assigned_to;
+    const newResponsible = partners.find(p => p.id === editData.assigned_to)?.name ?? selectedCard.responsible;
+    try {
+      await fetch("/api/ma-deals", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      setCards(prev => prev.map(c => c.id === selectedCard.id ? {
+        ...c,
+        sector: editData.sector || c.sector,
+        value: editData.value ? Number(editData.value) : c.value,
+        probability: editData.probability ? Number(editData.probability) : c.probability,
+        notes: editData.notes,
+        responsible: editData.assigned_to ? newResponsible : c.responsible,
+        assigned_to_id: editData.assigned_to || c.assigned_to_id,
+      } : c));
+      setSelectedCard(prev => prev ? {
+        ...prev,
+        sector: editData.sector || prev.sector,
+        value: editData.value ? Number(editData.value) : prev.value,
+        probability: editData.probability ? Number(editData.probability) : prev.probability,
+        notes: editData.notes,
+        responsible: editData.assigned_to ? newResponsible : prev.responsible,
+        assigned_to_id: editData.assigned_to || prev.assigned_to_id,
+      } : null);
+      setEditSuccess(true);
+      setEditingCard(false);
+      setTimeout(() => setEditSuccess(false), 3000);
+    } catch {}
+    setEditSaving(false);
+  };
 
   const totalValue = cards.reduce((a, c) => a + c.value, 0);
   const avgProb = cards.length ? Math.round(cards.reduce((a, c) => a + c.probability, 0) / cards.length) : 0;
@@ -329,6 +472,7 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
 
   const tabs = [
     { id: "kanban" as const, label: "Kanban" },
+    { id: "conexoes" as const, label: "Conexões / Match" },
     { id: "operadores" as const, label: "Operadores" },
   ];
 
@@ -346,14 +490,23 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
               <p className="text-xs text-[#7A8FA8]">Fusões & Aquisições</p>
             </div>
           </div>
-          {activeTab === "kanban" && (
-            <button
-              onClick={() => setShowNewCard(true)}
-              className="flex items-center gap-2 rounded-lg bg-[#C9A84C] text-[#09081A] text-xs font-semibold px-4 py-2 hover:bg-[#E8C97A] transition-colors"
-            >
-              <Plus size={14} />
-              Nova Operação
-            </button>
+          {(activeTab === "kanban" || activeTab === "conexoes") && (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowNewCard(true)}
+                className="flex items-center gap-2 rounded-lg border border-[#C9A84C]/40 text-[#C9A84C] text-xs font-semibold px-3 py-2 hover:bg-[#C9A84C]/10 transition-colors"
+              >
+                <Plus size={14} />
+                Rápido
+              </button>
+              <button
+                onClick={() => setShowFullForm(true)}
+                className="flex items-center gap-2 rounded-lg bg-[#C9A84C] text-[#09081A] text-xs font-semibold px-4 py-2 hover:bg-[#E8C97A] transition-colors"
+              >
+                <Plus size={14} />
+                Novo Deal Completo
+              </button>
+            </div>
           )}
           {activeTab === "operadores" && (
             <button
@@ -440,6 +593,74 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
           </div>
         )}
 
+        {/* ── CONEXÕES / MATCH TAB ───────────────────────────── */}
+        {activeTab === "conexoes" && (() => {
+          const vendedores = cards.filter(c => c.tipo_participante === "Vendedor");
+          const investidores = cards.filter(c => c.tipo_participante === "Investidor");
+          const matches: { investidor: MaCard; vendedor: MaCard }[] = [];
+          for (const inv of investidores) {
+            for (const vend of vendedores) {
+              if (inv.sector && vend.sector && inv.sector === vend.sector) {
+                matches.push({ investidor: inv, vendedor: vend });
+              }
+            }
+          }
+          return (
+            <div className="space-y-6">
+              <div className="flex items-center gap-2 p-4 rounded-xl border border-[#C9A84C]/20 bg-[#C9A84C]/5">
+                <ArrowLeftRight size={16} className="text-[#C9A84C]" />
+                <div>
+                  <p className="text-sm font-bold text-[#E8EDF5]">Conexões por Segmento</p>
+                  <p className="text-xs text-[#7A8FA8]">Match automático entre Investidores e Vendedores no mesmo setor</p>
+                </div>
+                <div className="ml-auto flex gap-3 text-center">
+                  <div><p className="text-lg font-bold text-emerald-400">{investidores.length}</p><p className="text-[10px] text-[#7A8FA8]">Investidores</p></div>
+                  <div><p className="text-lg font-bold text-[#C9A84C]">{vendedores.length}</p><p className="text-[10px] text-[#7A8FA8]">Vendedores</p></div>
+                  <div><p className="text-lg font-bold text-purple-400">{matches.length}</p><p className="text-[10px] text-[#7A8FA8]">Matches</p></div>
+                </div>
+              </div>
+              {matches.length === 0 ? (
+                <div className="text-center py-16 rounded-xl border border-dashed border-[#122036]">
+                  <ArrowLeftRight size={28} className="text-[#5A7490] mx-auto mb-3 opacity-40" />
+                  <p className="text-[#5A7490] text-sm">Nenhum match encontrado ainda.</p>
+                  <p className="text-[#5A7490] text-xs mt-1">Cadastre deals como Investidor ou Vendedor no mesmo setor para gerar conexões.</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {matches.map((m, i) => (
+                    <div key={i} className="rounded-xl border border-[#122036] bg-[#091221] p-4">
+                      <div className="flex items-center gap-2 mb-3">
+                        <span className="text-[10px] font-bold tracking-widest uppercase px-2 py-0.5 rounded-full bg-[#C9A84C]/15 text-[#C9A84C]">
+                          {m.investidor.sector}
+                        </span>
+                        <span className="text-[10px] text-[#5A7490]">Match #{i + 1}</span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3">
+                          <p className="text-[10px] font-bold text-emerald-400 mb-1 flex items-center gap-1">
+                            <ArrowLeftRight size={9} /> INVESTIDOR
+                          </p>
+                          <p className="text-xs font-semibold text-[#E8EDF5]">{m.investidor.company}</p>
+                          <p className="text-xs text-[#C9A84C] font-bold mt-1">{formatM(m.investidor.value)}</p>
+                          <p className="text-[10px] text-[#7A8FA8] mt-1">{m.investidor.code}</p>
+                        </div>
+                        <div className="rounded-lg border border-[#C9A84C]/20 bg-[#C9A84C]/5 p-3">
+                          <p className="text-[10px] font-bold text-[#C9A84C] mb-1 flex items-center gap-1">
+                            <Building2 size={9} /> VENDEDOR
+                          </p>
+                          <p className="text-xs font-semibold text-[#E8EDF5]">{m.vendedor.company}</p>
+                          <p className="text-xs text-[#C9A84C] font-bold mt-1">{formatM(m.vendedor.value)}</p>
+                          <p className="text-[10px] text-[#7A8FA8] mt-1">{m.vendedor.code}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
         {/* ── OPERADORES TAB ─────────────────────────────────── */}
         {activeTab === "operadores" && (
           <div>
@@ -495,20 +716,233 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
       </div>
 
       {/* ── CARD DETAIL MODAL ──────────────────────────────────── */}
-      <Dialog open={!!selectedCard} onOpenChange={open => { if (!open) { setSelectedCard(null); setConfirmDelete(false); } }}>
-        <DialogContent className="bg-[#091221] border border-[#122036] text-[#E8EDF5] max-w-lg">
+      <Dialog open={!!selectedCard} onOpenChange={open => { if (!open) { setSelectedCard(null); setConfirmDelete(false); setEditingCard(false); } }}>
+        <DialogContent className="bg-[#091221] border border-[#122036] text-[#E8EDF5] max-w-2xl max-h-[92vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="text-[#E8EDF5]">
+            <DialogTitle className="text-[#E8EDF5] flex items-center gap-2 flex-wrap">
               {selectedCard?.company}
-              <span className="ml-2 text-xs font-normal text-[#7A8FA8]">{selectedCard?.code}</span>
+              <span className="text-xs font-normal text-[#7A8FA8]">{selectedCard?.code}</span>
+              {selectedCard?.tipo_participante && (
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                  selectedCard.tipo_participante === "Investidor"
+                    ? "bg-emerald-500/15 text-emerald-400"
+                    : "bg-[#C9A84C]/15 text-[#C9A84C]"
+                }`}>{selectedCard.tipo_participante}</span>
+              )}
             </DialogTitle>
           </DialogHeader>
+
+          {/* Tabs do detalhe */}
+          {selectedCard && (
+            <div className="flex gap-0 border-b border-[#122036] mb-2 overflow-x-auto flex-shrink-0">
+              {([
+                { id: "detalhes" as const, label: "Detalhes", icon: <FileText size={12} /> },
+                { id: "forja" as const, label: "FORJA", icon: <Zap size={12} /> },
+                { id: "criativos" as const, label: "Criativos", icon: <FileImage size={12} /> },
+                { id: "contrato" as const, label: "NDA / Mandato", icon: <FileSignature size={12} /> },
+              ]).map(tab => (
+                <button
+                  key={tab.id}
+                  onClick={() => setDetailTab(tab.id)}
+                  className={`flex items-center gap-1.5 px-4 py-2 text-xs font-medium border-b-2 transition-colors flex-shrink-0 ${
+                    detailTab === tab.id
+                      ? "border-[#C9A84C] text-[#C9A84C]"
+                      : "border-transparent text-[#7A8FA8] hover:text-[#E8EDF5]"
+                  }`}
+                >
+                  {tab.icon}{tab.label}
+                </button>
+              ))}
+            </div>
+          )}
+
           {selectedCard && (() => {
             const stage = maStages.find(s => s.id === selectedCard.stage);
             const nextId = nextStage(selectedCard.stage, maStages);
             const nextStageData = nextId ? maStages.find(s => s.id === nextId) : null;
+
+            // Objeto deal completo para ForjaPanel e ContratoPanel
+            const dealObj = {
+              id: selectedCard.id,
+              code: selectedCard.code,
+              target_company: selectedCard.company,
+              sector: selectedCard.sector,
+              deal_value: selectedCard.value,
+              probability_percent: selectedCard.probability,
+              stage: selectedCard.dbStage ?? selectedCard.stage,
+              location: selectedCard.location ?? "",
+              notes: selectedCard.notes ?? "",
+              asset_data: selectedCard.asset_data ?? {},
+              comments: selectedCard.comments ?? [],
+            };
+
+            if (detailTab === "forja") {
+              const forjaStatus = (selectedCard.asset_data?.forja_status as string) ?? null;
+              const kitLiberado = !!(selectedCard.asset_data?.kit_liberado);
+              const forjaAprovado = forjaStatus === "APROVADO" || forjaStatus === "APROVADO_COM_RESSALVAS";
+              return (
+                <div className="mt-2 space-y-4">
+                  <ForjaPanel
+                    deal={dealObj}
+                    dealId={selectedCard.id}
+                    savedResult={(selectedCard.asset_data?.forja_result ?? null) as never}
+                    onSaved={(result) => {
+                      const newAssetData = {
+                        ...(selectedCard.asset_data ?? {}),
+                        forja_result: result,
+                        forja_status: result.recommendation,
+                        forja_score: result.score,
+                      };
+                      setCards(prev => prev.map(c => c.id === selectedCard.id ? { ...c, asset_data: newAssetData } : c));
+                      setSelectedCard(prev => prev ? { ...prev, asset_data: newAssetData } : null);
+                    }}
+                  />
+                  {/* Liberar / Bloquear KIT — aparece após FORJA validada */}
+                  {forjaAprovado && (
+                    <div className="p-4 rounded-xl border border-[#122036] bg-[#091221]">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-xs font-semibold text-[#E8EDF5] flex items-center gap-1.5">
+                            <FileImage size={13} className="text-[#C9A84C]" /> Kit de Criativos
+                          </p>
+                          <p className="text-[10px] text-[#7A8FA8] mt-0.5">
+                            {kitLiberado ? "Liberado para o partner" : "Libera acesso ao kit de divulgação na aba M&A do parceiro"}
+                          </p>
+                        </div>
+                        {kitLiberado ? (
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-semibold text-emerald-400 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20">
+                              ✓ Liberado
+                            </span>
+                            <button
+                              onClick={async () => {
+                                if (!selectedCard) return;
+                                await fetch("/api/ma/forja-kit", {
+                                  method: "POST",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({ deal_id: selectedCard.id, action: "bloquear_kit" }),
+                                }).catch(() => {});
+                                const newAssetData = { ...(selectedCard.asset_data ?? {}), kit_liberado: false };
+                                setCards(prev => prev.map(c => c.id === selectedCard.id ? { ...c, asset_data: newAssetData } : c));
+                                setSelectedCard(prev => prev ? { ...prev, asset_data: newAssetData } : null);
+                              }}
+                              className="text-[10px] text-red-400 px-2.5 py-1 rounded-lg border border-red-500/30 hover:bg-red-500/10 transition-colors"
+                            >
+                              Bloquear
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={async () => {
+                              if (!selectedCard) return;
+                              await fetch("/api/ma/forja-kit", {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ deal_id: selectedCard.id, action: "liberar_kit" }),
+                              }).catch(() => {});
+                              const newAssetData = { ...(selectedCard.asset_data ?? {}), kit_liberado: true };
+                              setCards(prev => prev.map(c => c.id === selectedCard.id ? { ...c, asset_data: newAssetData } : c));
+                              setSelectedCard(prev => prev ? { ...prev, asset_data: newAssetData } : null);
+                            }}
+                            className="text-[10px] font-semibold text-[#C9A84C] px-3 py-1.5 rounded-lg border border-[#C9A84C]/40 bg-[#C9A84C]/10 hover:bg-[#C9A84C]/20 transition-colors"
+                          >
+                            Liberar KIT
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            }
+
+            if (detailTab === "criativos") {
+              return (
+                <div className="mt-2 space-y-4">
+                  <div className="rounded-xl border border-[#C9A84C]/20 bg-[#C9A84C]/5 p-4">
+                    <p className="text-xs font-bold text-[#C9A84C] mb-1 flex items-center gap-1.5"><FileImage size={13} /> Kit de Criativos</p>
+                    <p className="text-xs text-[#7A8FA8] mb-3">Gerar CIM · Teaser · LinkedIn Post · Story — PT-BR e EN</p>
+                    <a
+                      href={`/ma/${selectedCard.id}/criativos`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 rounded-lg bg-[#C9A84C] text-[#09081A] text-xs font-bold px-4 py-2 hover:bg-[#E8C97A] transition-colors"
+                    >
+                      <FileImage size={13} /> Acessar Criativos
+                    </a>
+                  </div>
+                  {/* Documentos anexados ao deal */}
+                  <div>
+                    <p className="text-xs font-semibold text-[#7A8FA8] mb-2 flex items-center gap-1.5"><Paperclip size={12} /> Documentos Anexados</p>
+                    {cardDocs.length === 0 ? (
+                      <p className="text-xs text-[#5A7490]">Nenhum documento anexado ainda.</p>
+                    ) : (
+                      <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                        {cardDocs.map(doc => (
+                          <div key={doc.doc_id} className="flex items-center gap-2 px-2.5 py-2 rounded-lg bg-[#0F1E35] border border-[#122036]">
+                            <Paperclip size={12} className="text-[#C9A84C] flex-shrink-0" />
+                            <span className="text-xs text-[#E8EDF5] flex-1 truncate">{doc.file_name}</span>
+                            {doc.url && (
+                              <a href={doc.url} target="_blank" rel="noopener noreferrer" className="text-[#7A8FA8] hover:text-[#C9A84C] transition-colors">
+                                <ExternalLink size={12} />
+                              </a>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            }
+
+            if (detailTab === "contrato") {
+              return (
+                <div className="mt-2 space-y-4">
+                  <ContratoPanel deal={dealObj} dealCode={selectedCard.code} isDemo={false} />
+                  {/* Liberar Kit de Criativos */}
+                  <div className="p-4 rounded-xl border border-[#122036] bg-[#091221]">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-xs font-semibold text-[#E8EDF5]">Kit de Criativos</p>
+                        <p className="text-[10px] text-[#7A8FA8] mt-0.5">Libera acesso ao kit de divulgação na aba M&A do parceiro</p>
+                      </div>
+                      {(selectedCard?.asset_data as Record<string, unknown>)?.kit_liberado ? (
+                        <span className="text-[10px] font-semibold text-emerald-400 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20">
+                          ✓ Liberado
+                        </span>
+                      ) : (
+                        <button
+                          onClick={async () => {
+                            if (!selectedCard) return;
+                            const newAssetData = { ...(selectedCard.asset_data ?? {}), kit_liberado: true };
+                            await fetch("/api/ma-deals", {
+                              method: "PATCH",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ id: selectedCard.id, asset_data: newAssetData }),
+                            }).catch(() => {});
+                            setCards(prev => prev.map(c => c.id === selectedCard.id ? { ...c, asset_data: newAssetData } : c));
+                            setSelectedCard(prev => prev ? { ...prev, asset_data: newAssetData } : null);
+                          }}
+                          className="text-[10px] font-semibold text-[#C9A84C] px-3 py-1.5 rounded-lg border border-[#C9A84C]/40 bg-[#C9A84C]/10 hover:bg-[#C9A84C]/20 transition-colors"
+                        >
+                          Liberar Kit
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            }
+
+            // ── TAB DETALHES ──
             return (
               <div className="space-y-4 mt-2">
+                {editSuccess && (
+                  <div className="flex items-center gap-2 p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-xs text-emerald-400">
+                    <Check size={12} /> Informações atualizadas com sucesso!
+                  </div>
+                )}
                 <div className="grid grid-cols-2 gap-3">
                   <div className="rounded-lg bg-[#0F1E35] border border-[#122036] p-3">
                     <p className="text-xs text-[#7A8FA8] mb-1">Setor</p>
@@ -538,16 +972,248 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
                   </div>
                 </div>
 
-                <div>
-                  <label className="text-xs text-[#7A8FA8] mb-1.5 block">Observações</label>
-                  <textarea
-                    value={selectedCard.notes ?? ""}
-                    onChange={e => setSelectedCard(prev => prev ? { ...prev, notes: e.target.value } : null)}
-                    rows={3}
-                    placeholder="Adicione observações sobre a operação..."
-                    className="w-full rounded-lg border border-[#122036] bg-[#0F1E35] text-[#E8EDF5] text-xs px-3 py-2 placeholder:text-[#7A8FA8] focus:outline-none focus:border-[#C9A84C] transition-colors resize-none"
-                  />
-                </div>
+                {/* ── Dados do Formulário M&A — 6 Passos ── */}
+                {(() => {
+                  type AdTyped = {
+                    tipo_participante?: string; tipoOperacao?: string; cnpj?: string; founding_year?: string;
+                    descricao_ptbr?: string; produtos_servicos?: string; diferenciais?: string[]; mercado_atendido?: string;
+                    financeiro?: { receita?: Record<string, string>; ebitda?: Record<string, string>; lucro?: Record<string, string> };
+                    divida_total?: string;
+                    juridico?: { licencas?: string; tem_processos?: boolean; detalhes_processos?: string; tem_pendencias?: boolean };
+                    contato?: { nome?: string; email?: string; telefone?: string };
+                    comissionamento?: string; info_adicionais?: string;
+                    documentos?: { nome: string; tamanho: number }[];
+                  };
+                  const ad = (selectedCard.asset_data ?? {}) as AdTyped;
+                  const fin = ad.financeiro;
+                  const anos = ["2023", "2024", "2025"];
+                  const hasFin = fin && anos.some(a => fin.receita?.[a] || fin.ebitda?.[a] || fin.lucro?.[a]);
+                  const fmtV = (v?: string) => v ? `R$ ${v}` : "—";
+                  const jur = ad.juridico;
+                  const ct = ad.contato;
+                  const difArr = Array.isArray(ad.diferenciais) ? ad.diferenciais : [];
+
+                  return (
+                    <div className="space-y-3">
+                      <p className="text-[10px] font-bold tracking-widest uppercase text-[#C9A84C]">Dados do Formulário</p>
+
+                      {/* Identificação */}
+                      <div className="rounded-xl border border-[#122036] bg-[#0F1E35] p-3">
+                        <p className="text-[10px] font-bold tracking-widest uppercase text-[#7A8FA8] mb-3">Identificação</p>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div><p className="text-[10px] text-[#7A8FA8] mb-0.5">Empresa / Ativo</p><p className="text-xs text-[#E8EDF5]">{selectedCard.company}</p></div>
+                          {Boolean(ad.tipo_participante) && <div><p className="text-[10px] text-[#7A8FA8] mb-0.5">Tipo de Participante</p><p className="text-xs text-[#E8EDF5]">{String(ad.tipo_participante)}</p></div>}
+                          <div><p className="text-[10px] text-[#7A8FA8] mb-0.5">Setor</p><p className="text-xs text-[#E8EDF5]">{selectedCard.sector || "—"}</p></div>
+                          {Boolean(ad.tipoOperacao) && <div><p className="text-[10px] text-[#7A8FA8] mb-0.5">Tipo de Operação</p><p className="text-xs text-[#E8EDF5]">{String(ad.tipoOperacao)}</p></div>}
+                          {Boolean(selectedCard.location) && <div><p className="text-[10px] text-[#7A8FA8] mb-0.5">Localização</p><p className="text-xs text-[#E8EDF5]">{selectedCard.location}</p></div>}
+                          {Boolean(ad.cnpj) && <div><p className="text-[10px] text-[#7A8FA8] mb-0.5">CNPJ</p><p className="text-xs text-[#E8EDF5]">{String(ad.cnpj)}</p></div>}
+                          {Boolean(ad.founding_year) && <div><p className="text-[10px] text-[#7A8FA8] mb-0.5">Ano de Fundação</p><p className="text-xs text-[#E8EDF5]">{String(ad.founding_year)}</p></div>}
+                        </div>
+                      </div>
+
+                      {/* Passo 2 — Descrição */}
+                      {(ad.descricao_ptbr || ad.produtos_servicos || difArr.length > 0 || ad.mercado_atendido) && (
+                        <div className="rounded-xl border border-[#122036] bg-[#0F1E35] p-3 space-y-3">
+                          <p className="text-[10px] font-bold tracking-widest uppercase text-[#7A8FA8]">Descrição</p>
+                          {Boolean(ad.descricao_ptbr) && (
+                            <div>
+                              <p className="text-[10px] text-[#7A8FA8] mb-1">Descrição</p>
+                              <p className="text-xs text-[#E8EDF5] leading-relaxed">{String(ad.descricao_ptbr)}</p>
+                            </div>
+                          )}
+                          {Boolean(ad.produtos_servicos) && (
+                            <div>
+                              <p className="text-[10px] text-[#7A8FA8] mb-1">Produtos / Serviços</p>
+                              <p className="text-xs text-[#E8EDF5] leading-relaxed">{String(ad.produtos_servicos)}</p>
+                            </div>
+                          )}
+                          {difArr.length > 0 && (
+                            <div>
+                              <p className="text-[10px] text-[#7A8FA8] mb-1">Diferenciais</p>
+                              <ul className="space-y-1">
+                                {difArr.map((d, i) => (
+                                  <li key={i} className="flex items-start gap-2 text-xs text-[#E8EDF5]">
+                                    <span className="text-[#C9A84C] mt-0.5">▸</span>{d}
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                          {Boolean(ad.mercado_atendido) && (
+                            <div>
+                              <p className="text-[10px] text-[#7A8FA8] mb-1">Mercado Atendido</p>
+                              <p className="text-xs text-[#E8EDF5] leading-relaxed">{String(ad.mercado_atendido)}</p>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Passo 3 — Financeiro */}
+                      <div className="rounded-xl border border-[#122036] bg-[#0F1E35] p-3">
+                        <p className="text-[10px] font-bold tracking-widest uppercase text-[#7A8FA8] mb-3">Financeiro</p>
+                        <div className="grid grid-cols-2 gap-2 mb-3">
+                          <div>
+                            <p className="text-[10px] text-[#7A8FA8] mb-0.5">Valor Pretendido</p>
+                            <p className="text-xs font-bold text-[#C9A84C]">{formatM(selectedCard.value)}</p>
+                          </div>
+                          {Boolean(ad.divida_total) && (
+                            <div>
+                              <p className="text-[10px] text-[#7A8FA8] mb-0.5">Dívida Total</p>
+                              <p className="text-xs text-[#E8EDF5]">R$ {String(ad.divida_total)}</p>
+                            </div>
+                          )}
+                        </div>
+                        {hasFin && fin && (
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-xs">
+                              <thead>
+                                <tr>
+                                  <th className="text-left text-[10px] font-semibold text-[#7A8FA8] pb-2 pr-3 w-16"></th>
+                                  {anos.map(a => <th key={a} className="text-right text-[10px] font-semibold text-[#7A8FA8] pb-2 px-2">{a}</th>)}
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-[#122036]">
+                                {fin.receita && anos.some(a => fin.receita![a]) && (
+                                  <tr>
+                                    <td className="py-1.5 pr-3 font-medium text-[#E8EDF5]">Receita</td>
+                                    {anos.map(a => <td key={a} className="py-1.5 px-2 text-right text-[#C9A84C] font-semibold">{fmtV(fin.receita?.[a])}</td>)}
+                                  </tr>
+                                )}
+                                {fin.ebitda && anos.some(a => fin.ebitda![a]) && (
+                                  <tr>
+                                    <td className="py-1.5 pr-3 font-medium text-[#E8EDF5]">EBITDA</td>
+                                    {anos.map(a => <td key={a} className="py-1.5 px-2 text-right text-[#C9A84C] font-semibold">{fmtV(fin.ebitda?.[a])}</td>)}
+                                  </tr>
+                                )}
+                                {fin.lucro && anos.some(a => fin.lucro![a]) && (
+                                  <tr>
+                                    <td className="py-1.5 pr-3 font-medium text-[#E8EDF5]">Lucro</td>
+                                    {anos.map(a => <td key={a} className="py-1.5 px-2 text-right text-[#C9A84C] font-semibold">{fmtV(fin.lucro?.[a])}</td>)}
+                                  </tr>
+                                )}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                        {!hasFin && !ad.divida_total && (
+                          <p className="text-[10px] text-[#7A8FA8] italic">Dados financeiros não informados.</p>
+                        )}
+                      </div>
+
+                      {/* Passo 4 — Jurídico */}
+                      <div className="rounded-xl border border-[#122036] bg-[#0F1E35] p-3">
+                        <p className="text-[10px] font-bold tracking-widest uppercase text-[#7A8FA8] mb-3">Jurídico</p>
+                        {jur ? (
+                          <>
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <p className="text-[10px] text-[#7A8FA8] mb-0.5">Processos Judiciais</p>
+                                <p className={`text-xs font-semibold ${jur.tem_processos ? "text-red-400" : "text-emerald-400"}`}>
+                                  {jur.tem_processos ? "Sim" : "Não"}
+                                </p>
+                              </div>
+                              <div>
+                                <p className="text-[10px] text-[#7A8FA8] mb-0.5">Pendências Fiscais</p>
+                                <p className={`text-xs font-semibold ${jur.tem_pendencias ? "text-red-400" : "text-emerald-400"}`}>
+                                  {jur.tem_pendencias ? "Sim" : "Não"}
+                                </p>
+                              </div>
+                              {jur.licencas && (
+                                <div className="col-span-2">
+                                  <p className="text-[10px] text-[#7A8FA8] mb-0.5">Licenças / Alvarás</p>
+                                  <p className="text-xs text-[#E8EDF5]">{jur.licencas}</p>
+                                </div>
+                              )}
+                            </div>
+                            {jur.tem_processos && jur.detalhes_processos && (
+                              <div className="mt-2 pt-2 border-t border-[#122036]">
+                                <p className="text-[10px] text-[#7A8FA8] mb-1">Detalhes dos Processos</p>
+                                <p className="text-xs text-[#E8EDF5] leading-relaxed">{jur.detalhes_processos}</p>
+                              </div>
+                            )}
+                          </>
+                        ) : (
+                          <p className="text-[10px] text-[#7A8FA8] italic">Situação jurídica não informada.</p>
+                        )}
+                      </div>
+
+                      {/* Contato */}
+                      <div className="rounded-xl border border-[#122036] bg-[#0F1E35] p-3">
+                        <p className="text-[10px] font-bold tracking-widest uppercase text-[#7A8FA8] mb-3">Contato</p>
+                        {ct ? (
+                          <>
+                            <div className="grid grid-cols-2 gap-2">
+                              {ct.nome && <div><p className="text-[10px] text-[#7A8FA8] mb-0.5">Nome</p><p className="text-xs text-[#E8EDF5]">{ct.nome}</p></div>}
+                              {ct.email && <div><p className="text-[10px] text-[#7A8FA8] mb-0.5">E-mail</p><p className="text-xs text-[#E8EDF5]">{ct.email}</p></div>}
+                              {ct.telefone && <div><p className="text-[10px] text-[#7A8FA8] mb-0.5">Telefone / WhatsApp</p><p className="text-xs text-[#E8EDF5]">{ct.telefone}</p></div>}
+                              {Boolean(ad.comissionamento) && <div><p className="text-[10px] text-[#7A8FA8] mb-0.5">Comissionamento (%)</p><p className="text-xs text-[#E8EDF5]">{String(ad.comissionamento)}%</p></div>}
+                            </div>
+                            {Boolean(ad.info_adicionais) && (
+                              <div className="mt-2 pt-2 border-t border-[#122036]">
+                                <p className="text-[10px] text-[#7A8FA8] mb-1">Informações Adicionais</p>
+                                <p className="text-xs text-[#E8EDF5] leading-relaxed">{String(ad.info_adicionais)}</p>
+                              </div>
+                            )}
+                          </>
+                        ) : (
+                          <p className="text-[10px] text-[#7A8FA8] italic">Contato não informado.</p>
+                        )}
+                      </div>
+
+                      {/* Documentos */}
+                      {Array.isArray(ad.documentos) && (ad.documentos as unknown[]).length > 0 && (
+                        <div className="rounded-xl border border-[#122036] bg-[#0F1E35] p-3">
+                          <p className="text-[10px] font-bold tracking-widest uppercase text-[#7A8FA8] mb-2">
+                            Documentos ({(ad.documentos as unknown[]).length})
+                          </p>
+                          <div className="space-y-1.5">
+                            {(ad.documentos as { nome: string; tamanho: number }[]).map((doc, i) => (
+                              <div key={i} className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-[#091221] border border-[#122036]">
+                                <span className="text-xs text-[#E8EDF5] truncate">{doc.nome}</span>
+                                <span className="text-[10px] text-[#7A8FA8] ml-2 flex-shrink-0">{(doc.tamanho / 1024 / 1024).toFixed(1)} MB</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+
+                {/* ── Editor completo dos 6 passos ── */}
+                <DealFormEditorClient
+                  dealId={selectedCard.id}
+                  dealData={{
+                    target_company:      selectedCard.company,
+                    sector:              selectedCard.sector,
+                    location:            selectedCard.location ?? "",
+                    deal_value:          selectedCard.value,
+                    probability_percent: selectedCard.probability,
+                    notes:               selectedCard.notes ?? null,
+                    asset_data:          (selectedCard.asset_data ?? {}) as Parameters<typeof DealFormEditorClient>[0]["dealData"]["asset_data"],
+                  }}
+                  compact={true}
+                  onSaved={(updated) => {
+                    setCards(prev => prev.map(c => c.id === selectedCard.id ? {
+                      ...c,
+                      company:   updated.target_company,
+                      sector:    updated.sector,
+                      location:  updated.location,
+                      value:     updated.deal_value ?? c.value,
+                      notes:     updated.notes ?? c.notes,
+                      asset_data: updated.asset_data,
+                    } : c));
+                    setSelectedCard(prev => prev ? {
+                      ...prev,
+                      company:    updated.target_company,
+                      sector:     updated.sector,
+                      location:   updated.location,
+                      value:      updated.deal_value ?? prev.value,
+                      notes:      updated.notes ?? prev.notes,
+                      asset_data: updated.asset_data,
+                    } : null);
+                  }}
+                />
 
                 {/* ── Documentos do ativo ── */}
                 <div>
@@ -857,6 +1523,64 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
                 ) : "Criar Operação"}
               </button>
             </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── FULL DEAL FORM MODAL ────────────────────────────────── */}
+      <Dialog open={showFullForm} onOpenChange={setShowFullForm}>
+        <DialogContent className="bg-[#091221] border border-[#122036] text-[#E8EDF5] max-w-3xl max-h-[95vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-[#E8EDF5]">Novo Deal M&A — Formulário Completo</DialogTitle>
+          </DialogHeader>
+          <div className="mt-2">
+            <NovoDealForm
+              isDemo={false}
+              userId={userId}
+              onCancel={() => setShowFullForm(false)}
+              onSuccess={(dealId, code) => {
+                setShowFullForm(false);
+                // Adiciona o novo deal à lista localmente
+                const newDealCard: MaCard = {
+                  id: dealId,
+                  code,
+                  company: "",
+                  sector: "",
+                  value: 0,
+                  stage: "prospeccao",
+                  responsible: userName,
+                  probability: 10,
+                  createdAt: new Date().toISOString().split("T")[0],
+                };
+                setCards(prev => [...prev, newDealCard]);
+                // Recarrega deals do banco
+                fetch("/api/ma-deals")
+                  .then(r => r.json())
+                  .then(({ deals: fresh }) => {
+                    if (!Array.isArray(fresh)) return;
+                    setCards(fresh.map((d: Record<string, unknown>) => ({
+                      id: d.id as string,
+                      code: d.code as string,
+                      company: (d.target_company ?? d.title ?? "Sem nome") as string,
+                      sector: (d.sector ?? "") as string,
+                      value: (d.deal_value ?? 0) as number,
+                      stage: (d.stage as string) ?? "prospeccao",
+                      responsible: (() => {
+                        const p = d.partner;
+                        if (Array.isArray(p as unknown[])) return ((p as {full_name?: string}[])[0])?.full_name ?? userName;
+                        return (p as { full_name?: string } | null)?.full_name ?? userName;
+                      })(),
+                      probability: (d.probability_percent ?? 10) as number,
+                      createdAt: ((d.created_at as string) ?? "").split("T")[0],
+                      notes: (d.notes ?? "") as string,
+                      comments: Array.isArray(d.comments) ? d.comments as DealComment[] : [],
+                      asset_data: (d.asset_data ?? {}) as Record<string, unknown>,
+                      tipo_participante: ((d.asset_data ?? {}) as Record<string, unknown>)?.tipo_participante as string | undefined,
+                    })));
+                  })
+                  .catch(() => {});
+              }}
+            />
           </div>
         </DialogContent>
       </Dialog>

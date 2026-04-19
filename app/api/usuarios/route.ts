@@ -1,8 +1,6 @@
 import { NextResponse } from "next/server";
 
-const IS_DEMO =
-  !process.env.NEXT_PUBLIC_SUPABASE_URL ||
-  process.env.NEXT_PUBLIC_SUPABASE_URL.includes("SEU_PROJETO");
+const IS_DEMO = false;
 
 export async function GET() {
   if (IS_DEMO) {
@@ -25,7 +23,7 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const { email, password, full_name, role, phone } = await request.json();
+  const { email, password, full_name, role, phone, document_cpf } = await request.json();
 
   if (IS_DEMO) {
     const fakeUser = {
@@ -34,6 +32,7 @@ export async function POST(request: Request) {
       full_name,
       role,
       phone: phone || null,
+      document_cpf: document_cpf || null,
       is_active: true,
       created_at: new Date().toISOString(),
     };
@@ -57,7 +56,7 @@ export async function POST(request: Request) {
   const { data: newProfile, error: profileError } = await supabase
     .from("profiles")
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    .update({ role, phone, full_name } as any)
+    .update({ role, phone, full_name, document_cpf: document_cpf || null } as any)
     .eq("id", authData.user.id)
     .select()
     .single();

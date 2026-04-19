@@ -38,13 +38,16 @@ const PRIORITY_COLORS = {
 interface ForjaPanelProps {
   deal: Record<string, unknown>;
   dealId: string;
+  savedResult?: ForjaResult | null;
+  onSaved?: (result: ForjaResult) => void;
 }
 
-export function ForjaPanel({ deal, dealId }: ForjaPanelProps) {
-  const [result, setResult] = useState<ForjaResult | null>(null);
+export function ForjaPanel({ deal, dealId, savedResult, onSaved }: ForjaPanelProps) {
+  const [result, setResult] = useState<ForjaResult | null>(savedResult ?? null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showNarrative, setShowNarrative] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   const handleValidate = async () => {
     setLoading(true);
@@ -56,11 +59,28 @@ export function ForjaPanel({ deal, dealId }: ForjaPanelProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ deal }),
       });
-      if (!res.ok) throw new Error("Erro na API FORJA");
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error ?? `HTTP ${res.status}`);
+      }
       const data = await res.json();
       setResult(data);
+      // Salva resultado no Supabase sempre que dealId existir
+      if (dealId) {
+        setSaving(true);
+        try {
+          await fetch("/api/ma/forja-kit", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ deal_id: dealId, action: "save_forja", forja_result: data }),
+          });
+          if (onSaved) onSaved(data);
+        } catch {}
+        setSaving(false);
+      }
     } catch (e) {
-      setError("Falha na validação. Tente novamente.");
+      const msg = e instanceof Error ? e.message : String(e);
+      setError(`Falha na validação: ${msg}`);
       console.error(e);
     } finally {
       setLoading(false);
@@ -116,6 +136,8 @@ export function ForjaPanel({ deal, dealId }: ForjaPanelProps) {
               >
                 {loading ? (
                   <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />Validando...</>
+                ) : saving ? (
+                  <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />Salvando...</>
                 ) : result ? (
                   "Revalidar"
                 ) : (

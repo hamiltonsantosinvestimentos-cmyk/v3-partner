@@ -1,10 +1,6 @@
 import { NextResponse } from "next/server";
 
-const IS_DEMO =
-  !process.env.ANTHROPIC_API_KEY ||
-  process.env.ANTHROPIC_API_KEY.includes("SUA_API_KEY") ||
-  process.env.ANTHROPIC_API_KEY.includes("sk-ant-api03-...") ||
-  process.env.NEXT_PUBLIC_SUPABASE_URL?.includes("SEU_PROJETO");
+const IS_DEMO = false;
 
 const SYSTEM_PROMPT = `Você é o **V3 IA Partner**, o assistente financeiro mais avançado e completo do mercado brasileiro, integrado à plataforma V3 PARTNER — boutique institucional multiproduto de securitização e estruturação financeira.
 

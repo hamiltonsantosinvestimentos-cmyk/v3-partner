@@ -40,7 +40,7 @@ export const CHECKLISTS: Record<string, Record<"PF" | "PJ", { id: string; label:
       { id: "he_pj_12", label: "3 fotos externas do imóvel", required: true, hint: "Fachada, lateral e área externa" },
     ],
   },
-  "HE ESTRESSADO": {
+  "HOME EQUITY ESTRESSADO": {
     PF: [
       { id: "hee_pf_1", label: "RG e CPF (ou CNH)", required: true, hint: "Documento de identificação com foto" },
       { id: "hee_pf_2", label: "Comprovante de renda (3 últimos meses)", required: true, hint: "Holerite, pró-labore ou decore" },
@@ -387,7 +387,7 @@ export const DEFAULT_CHECKLIST = {
 
 // ─── Linhas por nível ──────────────────────────────────────────────────────
 const LEVEL_LINES: Record<string, string[]> = {
-  NIVEL_1: ["HOME EQUITY", "HE ESTRESSADO", "AVAL", "FUNDO CONSTRUÇÃO RESIDENCIAL"],
+  NIVEL_1: ["HOME EQUITY", "HOME EQUITY ESTRESSADO", "AVAL", "FUNDO CONSTRUÇÃO RESIDENCIAL"],
   NIVEL_2: ["HOMECASH", "V3GIRO E V3AUTOGIRO", "CGI"],
   NIVEL_3: ["CRI", "CRA", "CPR", "FUNDO INTERNACIONAL CASH COLATERAL", "FUNDO INTERNACIONAL IMOB", "FUNDO CONSTRUÇÃO LOTEAMENTO", "FUNDO CONSTRUÇÃO EMPREENDIMENTO"],
 };
@@ -396,6 +396,7 @@ type Tab = "cliente" | "operacao" | "documentos";
 
 interface ImovelItem {
   endereco: string;
+  cep: string;
   valor: string;
   cidade: string;
   estado: string;
@@ -411,6 +412,7 @@ interface ImovelItem {
 function defaultImovel(): ImovelItem {
   return {
     endereco: "",
+    cep: "",
     valor: "",
     cidade: "",
     estado: "",
@@ -437,13 +439,15 @@ interface NovaPropostaModalProps {
   level: string;
   partnerName: string;
   partnerId: string;
-  onSubmit: (proposal: Record<string, unknown>) => void;
+  onSubmit: (proposal: Record<string, unknown>) => Promise<void> | void;
 }
 
 export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId, onSubmit }: NovaPropostaModalProps) {
   const [tab, setTab] = useState<Tab>("cliente");
   const [clientType, setClientType] = useState<"PF" | "PJ">("PF");
   const [submitted, setSubmitted] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   // Dados do cliente
   const [nome, setNome] = useState("");
@@ -461,6 +465,7 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
   const [enderecoRua, setEnderecoRua] = useState("");
   const [enderecoCity, setEnderecoCity] = useState("");
   const [enderecoUf, setEnderecoUf] = useState("");
+  const [enderecoCep, setEnderecoCep] = useState("");
 
   // Restrição do cliente
   const [restricao, setRestricao] = useState<"" | "SIM" | "NAO">("");
@@ -503,11 +508,14 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
     e.target.value = "";
   }
 
-  function handleSubmit() {
+  async function handleSubmit() {
+    setSaving(true);
+    setSaveError(null);
     const code = `CRED-26-${String(Date.now()).slice(-6)}`;
     const clientName = clientType === "PF" ? nome : (razaoSocial || nomeFantasia);
     const imoveisData = imoveis.map(im => ({
       endereco: im.endereco || undefined,
+      cep: im.cep || undefined,
       valor_medio: parseFloat(im.valorMedio.replace(/\D/g, "")) || undefined,
       cidade: im.cidade || undefined,
       estado: im.estado || undefined,
@@ -525,6 +533,7 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
       finalidade: finalidade || undefined,
       restricao_cliente: restricao || undefined,
       imoveis: imoveisData,
+      observacoes: observacoes || undefined,
       // Dados PF
       rg: rg || undefined,
       nascimento: nascimento || undefined,
@@ -539,6 +548,7 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
       endereco_rua: enderecoRua || undefined,
       endereco_cidade: enderecoCity || undefined,
       endereco_uf: enderecoUf || undefined,
+      endereco_cep: enderecoCep || undefined,
     };
     const proposal = {
       id: `new-${Date.now()}`,
@@ -566,8 +576,14 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
       imoveis: imoveisData,
       metadata,
     };
-    onSubmit(proposal);
-    setSubmitted(true);
+    try {
+      await onSubmit(proposal);
+      setSubmitted(true);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : "Erro ao salvar proposta. Tente novamente.");
+    } finally {
+      setSaving(false);
+    }
   }
 
   function handleClose() {
@@ -575,7 +591,7 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
     setTab("cliente");
     setNome(""); setCpfCnpj(""); setEmail(""); setTelefone("");
     setValorSolicitado(""); setPrazo(""); setFinalidade("");
-    setRestricao("");
+    setRestricao(""); setEnderecoCep("");
     setImoveis([defaultImovel()]);
     setUploadedFiles([]);
     onClose();
@@ -690,7 +706,10 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
                     <Field label="Renda Mensal (R$) *" value={renda} onChange={setRenda} placeholder="0,00" />
                     <Field label="UF" value={enderecoUf} onChange={setEnderecoUf} placeholder="SP" />
                   </div>
-                  <Field label="Endereço" value={enderecoRua} onChange={setEnderecoRua} placeholder="Rua, número, bairro" />
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field label="Endereço" value={enderecoRua} onChange={setEnderecoRua} placeholder="Rua, número, bairro" />
+                    <Field label="CEP" value={enderecoCep} onChange={setEnderecoCep} placeholder="00000-000" />
+                  </div>
                   <Field label="Cidade" value={enderecoCity} onChange={setEnderecoCity} placeholder="São Paulo" />
                   <div>
                     <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Restrição cadastral / financeira *</label>
@@ -733,7 +752,10 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
                     <Field label="Faturamento Anual (R$) *" value={faturamento} onChange={setFaturamento} placeholder="0,00" />
                     <Field label="UF" value={enderecoUf} onChange={setEnderecoUf} placeholder="SP" />
                   </div>
-                  <Field label="Endereço da Empresa" value={enderecoRua} onChange={setEnderecoRua} placeholder="Rua, número, bairro" />
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field label="Endereço da Empresa" value={enderecoRua} onChange={setEnderecoRua} placeholder="Rua, número, bairro" />
+                    <Field label="CEP" value={enderecoCep} onChange={setEnderecoCep} placeholder="00000-000" />
+                  </div>
                   <Field label="Cidade" value={enderecoCity} onChange={setEnderecoCity} placeholder="São Paulo" />
                   <div>
                     <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Restrição cadastral / financeira *</label>
@@ -807,7 +829,10 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
                           </button>
                         )}
                       </div>
-                      <Field label="Endereço do Imóvel" value={im.endereco} onChange={v => updateImovel(idx, "endereco", v)} placeholder="Rua, número, bairro" />
+                      <div className="grid grid-cols-2 gap-3">
+                        <Field label="Endereço do Imóvel" value={im.endereco} onChange={v => updateImovel(idx, "endereco", v)} placeholder="Rua, número, bairro" />
+                        <Field label="CEP do Imóvel" value={im.cep} onChange={v => updateImovel(idx, "cep", v)} placeholder="00000-000" />
+                      </div>
                       <div className="grid grid-cols-2 gap-3">
                         <Field label="Cidade do Imóvel *" value={im.cidade} onChange={v => updateImovel(idx, "cidade", v)} placeholder="Ex: São Paulo" />
                         <SelectField
@@ -1058,15 +1083,29 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
                 Próximo <ChevronRight className="w-4 h-4 ml-1" />
               </Button>
             ) : (
-              <Button
-                size="sm"
-                onClick={handleSubmit}
-                disabled={!nome && !razaoSocial}
-                className="bg-emerald-600 hover:bg-emerald-500"
-              >
-                <Zap className="w-4 h-4 mr-1.5" />
-                Enviar Proposta
-              </Button>
+              <div className="flex flex-col items-end gap-1">
+                {saveError && (
+                  <p className="text-xs text-red-400 max-w-xs text-right">{saveError}</p>
+                )}
+                <Button
+                  size="sm"
+                  onClick={handleSubmit}
+                  disabled={(!nome && !razaoSocial) || saving}
+                  className="bg-emerald-600 hover:bg-emerald-500"
+                >
+                  {saving ? (
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      Salvando...
+                    </span>
+                  ) : (
+                    <>
+                      <Zap className="w-4 h-4 mr-1.5" />
+                      Enviar Proposta
+                    </>
+                  )}
+                </Button>
+              </div>
             )}
           </div>
         </div>

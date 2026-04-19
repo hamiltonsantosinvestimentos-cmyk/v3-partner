@@ -3,6 +3,8 @@ import { DEMO_TICKETS, DEMO_CREDIT_PROPOSALS } from "@/lib/demo-data";
 import { cookies } from "next/headers";
 import { createClient as sc } from "@supabase/supabase-js";
 
+export const dynamic = "force-dynamic";
+
 const IS_DEMO = false;
 
 // Enrich demo proposals with stage info

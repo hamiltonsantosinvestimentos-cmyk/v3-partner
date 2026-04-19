@@ -13,9 +13,7 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const IS_DEMO =
-    !process.env.NEXT_PUBLIC_SUPABASE_URL ||
-    process.env.NEXT_PUBLIC_SUPABASE_URL.includes("SEU_PROJETO");
+  const IS_DEMO = false;
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();

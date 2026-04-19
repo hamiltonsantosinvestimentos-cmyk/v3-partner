@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import {
   MapPin,
   Phone,
@@ -23,10 +24,19 @@ import {
   User,
   Briefcase,
   Star,
+  Link2,
+  Copy,
+  Check,
+  ToggleLeft,
+  ToggleRight,
+  RefreshCw,
+  Trash2,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { NovaPropostaModal } from "@/components/mesa-credito/nova-proposta-modal";
+import { NovoDealForm } from "@/components/ma/novo-deal-form";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -63,6 +73,25 @@ type CRMLead = {
   partnerName: string;
   createdAt: string;
   interactions: Interaction[];
+  metadata?: Record<string, unknown>;
+};
+
+type CaptacaoLink = {
+  id: string;
+  token: string;
+  partner_name: string;
+  active: boolean;
+  uses_count: number;
+  created_at: string;
+};
+
+type MaCaptacaoLink = {
+  id: string;
+  token: string;
+  partner_name: string;
+  active: boolean;
+  uses_count: number;
+  created_at: string;
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -470,7 +499,7 @@ const CONVERT_OPTIONS = [
 const CREDIT_LINES_BY_PRODUCT: Record<string, { line: string; desc: string }[]> = {
   credito_varejo: [
     { line: "HOME EQUITY",                desc: "Imóvel em garantia para crédito pessoal/empresarial" },
-    { line: "HE ESTRESSADO",              desc: "Home Equity com imóvel em situação estressada / dívida ativa" },
+    { line: "HOME EQUITY ESTRESSADO",      desc: "Home Equity com imóvel em situação estressada / dívida ativa (garantia de imóvel)" },
     { line: "AVAL",                       desc: "Crédito com aval de sócio ou fiador" },
     { line: "FUNDO CONSTRUÇÃO RESIDENCIAL", desc: "Fundo para construção de imóveis residenciais" },
   ],
@@ -517,20 +546,219 @@ const INTERACTION_TYPE_LABELS: Record<string, string> = {
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { userRole: string; userName: string; userId: string; initialLeads?: CRMLead[] }) {
+  const router = useRouter();
   const isAdmin = ["ADMIN", "GESTAO"].includes(userRole);
 
-  const [tab, setTab] = useState<"pipeline" | "leads" | "prospeccao" | "relatorios">("pipeline");
+  const [tab, setTab] = useState<"pipeline" | "leads" | "prospeccao" | "relatorios" | "captacao">("pipeline");
   const [leads, setLeads] = useState<CRMLead[]>(initialLeads);
   const [selectedLead, setSelectedLead] = useState<CRMLead | null>(null);
   const [showNewLead, setShowNewLead] = useState(false);
   const [showConvert, setShowConvert] = useState<CRMLead | null>(null);
   const [mesaSuccess, setMesaSuccess] = useState<string | null>(null);
+  const [mesaError, setMesaError] = useState<string | null>(null);
   const [filterPartner, setFilterPartner] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterSource, setFilterSource] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [reportPeriod, setReportPeriod] = useState<"semanal" | "mensal" | "anual">("mensal");
   const [reportPartner, setReportPartner] = useState("all");
+
+  // Estados para formulários especializados via CRM
+  const [showCreditoForm, setShowCreditoForm] = useState(false);
+  const [creditoFormLevel, setCreditoFormLevel] = useState<"NIVEL_1" | "NIVEL_2" | "NIVEL_3">("NIVEL_1");
+  const [showMaForm, setShowMaForm] = useState(false);
+
+  // Captacao links state
+  const [captacaoLinks, setCaptacaoLinks] = useState<CaptacaoLink[]>([]);
+  const [captacaoLoading, setCaptacaoLoading] = useState(false);
+  const [captacaoGenerating, setCaptacaoGenerating] = useState(false);
+  const [copiedToken, setCopiedToken] = useState<string | null>(null);
+
+  // M&A Captacao links state
+  const [maCaptacaoLinks, setMaCaptacaoLinks] = useState<MaCaptacaoLink[]>([]);
+  const [maCaptacaoLoading, setMaCaptacaoLoading] = useState(false);
+  const [maCaptacaoGenerating, setMaCaptacaoGenerating] = useState(false);
+  const [maCopiedToken, setMaCopiedToken] = useState<string | null>(null);
+
+  const loadCaptacaoLinks = useCallback(async () => {
+    setCaptacaoLoading(true);
+    try {
+      const res = await fetch("/api/captacao/links");
+      const json = await res.json();
+      if (json.links) setCaptacaoLinks(json.links);
+    } catch {}
+    setCaptacaoLoading(false);
+  }, []);
+
+  const loadMaCaptacaoLinks = useCallback(async () => {
+    setMaCaptacaoLoading(true);
+    try {
+      const res = await fetch("/api/ma-captacao/links");
+      const json = await res.json();
+      if (json.links) setMaCaptacaoLinks(json.links);
+    } catch {}
+    setMaCaptacaoLoading(false);
+  }, []);
+
+  useEffect(() => {
+    if (tab === "captacao") {
+      loadCaptacaoLinks();
+      loadMaCaptacaoLinks();
+    }
+  }, [tab, loadCaptacaoLinks, loadMaCaptacaoLinks]);
+
+  async function handleGerarLink() {
+    setCaptacaoGenerating(true);
+    try {
+      const res = await fetch("/api/captacao", { method: "POST" });
+      const json = await res.json();
+      if (json.ok) {
+        await loadCaptacaoLinks();
+      }
+    } catch {}
+    setCaptacaoGenerating(false);
+  }
+
+  async function handleGerarMaLink() {
+    setMaCaptacaoGenerating(true);
+    try {
+      const res = await fetch("/api/ma-captacao", { method: "POST" });
+      const json = await res.json();
+      if (json.ok) {
+        await loadMaCaptacaoLinks();
+      }
+    } catch {}
+    setMaCaptacaoGenerating(false);
+  }
+
+  async function handleToggleLink(id: string, active: boolean) {
+    try {
+      await fetch("/api/captacao", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, active }),
+      });
+      setCaptacaoLinks(prev => prev.map(l => l.id === id ? { ...l, active } : l));
+    } catch {}
+  }
+
+  async function handleToggleMaLink(id: string, active: boolean) {
+    try {
+      await fetch("/api/ma-captacao", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, active }),
+      });
+      setMaCaptacaoLinks(prev => prev.map(l => l.id === id ? { ...l, active } : l));
+    } catch {}
+  }
+
+  function handleCopyLink(token: string) {
+    const url = `${window.location.origin}/c/${token}`;
+    navigator.clipboard.writeText(url).then(() => {
+      setCopiedToken(token);
+      setTimeout(() => setCopiedToken(null), 2000);
+    });
+  }
+
+  function handleCopyMaLink(token: string) {
+    const url = `${window.location.origin}/mf/${token}`;
+    navigator.clipboard.writeText(url).then(() => {
+      setMaCopiedToken(token);
+      setTimeout(() => setMaCopiedToken(null), 2000);
+    });
+  }
+
+  async function handleEnviarMesaMA(lead: CRMLead) {
+    const meta = lead.metadata ?? {};
+    const empresa = lead.name;
+    const setor = (meta.setor as string) || lead.segment || "M&A";
+    const faturamento = lead.annualRevenue || 0;
+    const parseMoney = (v: string) => parseFloat(v.replace(/[^\d,]/g, "").replace(",", ".")) || 0;
+    const valorPretendido = parseMoney((meta.valorPretendido as string) ?? "");
+    const faturamentoNum = parseMoney((meta.faturamento as string) ?? "") || faturamento;
+    const descricao = (meta.descricao as string) || lead.notes || null;
+
+    // Monta asset_data compatível com o formulário interno M&A (novo-deal-form.tsx)
+    const assetData = {
+      // Rastreabilidade
+      crm_lead_id:       lead.id,
+      crm_lead_code:     lead.code,
+      captacao_origin:   true,
+      tipo_participante: "Vendedor",
+      // Identificação
+      cnpj:              lead.document || (meta.cnpj as string) || "",
+      cidade:            lead.city  || (meta.cidade as string) || "",
+      estado:            lead.state || (meta.estado as string) || "",
+      cargo:             (meta.cargo as string) || "",
+      tipoOperacao:      (meta.tipoOperacao as string) || "",
+      // Sobre o negócio
+      descricao_ptbr:    descricao ?? "",
+      diferenciais:      typeof meta.diferenciais === "string"
+                           ? (meta.diferenciais as string).split("\n").filter(Boolean)
+                           : [],
+      tese_investimento: (meta.diferenciais as string) ?? "",
+      mercado_atendido:  "",
+      produtos_servicos: "",
+      // Financeiro — mesmo padrão do novo-deal-form (receita/ebitda/lucro por ano)
+      financeiro: {
+        receita: { "2025": (meta.faturamento as string) ?? "" },
+        ebitda:  { "2025": (meta.ebitda as string) ?? "" },
+        lucro:   {},
+      },
+      // Contato
+      contato: {
+        nome:     (meta.nome as string) || "",
+        email:    lead.email || (meta.email as string) || "",
+        telefone: lead.phone || (meta.telefone as string) || "",
+      },
+      // Métricas visuais no card
+      metricas: [
+        ...((meta.faturamento as string) ? [{ label: "Faturamento", value: meta.faturamento as string, sub: "Faturamento anual" }] : []),
+        ...((meta.ebitda as string)      ? [{ label: "EBITDA",      value: meta.ebitda as string,      sub: "Margem operacional" }] : []),
+        ...((meta.valorPretendido as string) ? [{ label: "Valor Pretendido", value: meta.valorPretendido as string, sub: "Expectativa do vendedor" }] : []),
+      ],
+    };
+
+    try {
+      const res = await fetch("/api/ma-deals", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          company:     empresa,
+          sector:      setor,
+          value:       valorPretendido || (faturamentoNum > 0 ? Math.round(faturamentoNum * 0.8) : null),
+          notes:       descricao,
+          location:    lead.city && lead.state ? `${lead.city} · ${lead.state}` : (lead.city || lead.state || null),
+          asset_data:  assetData,
+          // Deal vinculado ao partner dono do lead (fallback para userId do usuário logado)
+          assigned_to: lead.partnerId || userId || undefined,
+        }),
+      });
+      const json = await res.json();
+      if (res.ok && json.ok) {
+        const now = todayISO();
+        const convertedLead = { ...lead, convertedTo: "ma" as CRMLead["convertedTo"], convertedAt: now, status: "ganho" as const };
+        setLeads(prev => prev.map(l => l.id === lead.id ? convertedLead : l));
+        if (selectedLead?.id === lead.id) setSelectedLead(convertedLead);
+        await fetch("/api/crm", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: lead.id, status: "ganho", converted_to: "ma", converted_at: now }),
+        });
+        // Invalida cache do Next.js para que /ma e /mesa-ma mostrem o deal recém-criado
+        router.refresh();
+        setMesaSuccess(`✅ Deal ${json.card?.code ?? ""} criado! Acesse a aba M&A ou Mesa M&A para visualizar.`);
+        setTimeout(() => setMesaSuccess(null), 8000);
+        return;
+      }
+      setMesaSuccess(`❌ Erro: ${json.error ?? "Tente novamente."}`);
+      setTimeout(() => setMesaSuccess(null), 12000);
+    } catch {
+      setMesaSuccess("❌ Erro de conexão ao encaminhar para Mesa M&A.");
+      setTimeout(() => setMesaSuccess(null), 5000);
+    }
+  }
 
   // New lead form state
   const [newLead, setNewLead] = useState({
@@ -600,6 +828,18 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
     setSelectedLead({ ...selectedLead, notes });
   }
 
+  async function handleMoveToStage(leadId: string, newStatus: CRMLead["status"]) {
+    setLeads(prev => prev.map(l => l.id === leadId ? { ...l, status: newStatus } : l));
+    setSelectedLead(prev => prev ? { ...prev, status: newStatus } : prev);
+    try {
+      await fetch("/api/crm", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: leadId, status: newStatus }),
+      });
+    } catch {}
+  }
+
   async function handleConvert() {
     if (!showConvert || !selectedConvert) return;
     const now = todayISO();
@@ -640,22 +880,46 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
       };
       const line = creditLine || (selectedConvert === "credito_varejo" ? "HOME EQUITY" : selectedConvert === "credito_estruturado" ? "HOMECASH" : "CRI");
       const code = `CRED-26-${String(Date.now()).slice(-6)}`;
+      const meta = showConvert.metadata ?? {};
+      const parseMeta = (v: unknown) => {
+        if (typeof v === "number") return v;
+        if (typeof v === "string") return parseFloat(v.replace(/\D/g, "")) || 0;
+        return 0;
+      };
+      const baseValue = parseMeta(meta.valorSolicitado) || (showConvert.annualRevenue > 0 ? Math.round(showConvert.annualRevenue * 0.3) : 100000);
+      // NIVEL_3 exige mínimo de R$ 5.000.000
+      const requestedValue = levelMap[selectedConvert] === "NIVEL_3" ? Math.max(baseValue, 5_000_000) : baseValue;
       const proposalPayload = {
         code,
         title:           `${line} — ${showConvert.name}`,
         client_name:     showConvert.name,
-        client_cpf_cnpj: showConvert.document,
+        client_cpf_cnpj: showConvert.document || (meta.cpfCnpj as string) || null,
         credit_line:     line,
-        requested_value: showConvert.annualRevenue > 0 ? Math.round(showConvert.annualRevenue * 0.3) : 100000,
+        requested_value: requestedValue,
         current_level:   levelMap[selectedConvert],
         status:          "PENDING",
         partner_id:      showConvert.partnerId,
         partner_name:    showConvert.partnerName,
         created_by:      showConvert.partnerId,
+        metadata: {
+          ...meta,
+          crm_lead_id:       showConvert.id,
+          crm_lead_code:     showConvert.code,
+          client_type:       showConvert.personType,
+          email:             showConvert.email || (meta.email as string),
+          telefone:          showConvert.phone || (meta.phone as string),
+          cidade:            showConvert.city  || (meta.city  as string),
+          estado:            showConvert.state || (meta.state as string),
+          restricao_cliente: meta.restricao,
+          prazo:             meta.prazo,
+          finalidade:        meta.finalidade,
+          imoveis:           meta.imoveis,
+          documentos:        (meta.documentos as unknown[]) ?? [],
+          captacao_origin:   !!(meta.captacao_token),
+        },
       };
 
-      // Tenta salvar via API no Supabase; fallback localStorage (demo)
-      let saved = false;
+      // Salva via API no Supabase
       try {
         const res = await fetch("/api/credit-proposals", {
           method: "POST",
@@ -663,17 +927,20 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
           body: JSON.stringify(proposalPayload),
         });
         const json = await res.json();
-        if (json.ok) saved = true;
-      } catch {}
-
-      if (!saved) {
-        try {
-          const existing: { id: string }[] = JSON.parse(localStorage.getItem("v3_demo_proposals") ?? "[]");
-          const local = { ...proposalPayload, id: `prop-crm-${showConvert.id}-${Date.now()}`, stage: "RECEBIDO", docs_uploaded: 0, docs_required: 9, created_at: new Date().toISOString() };
-          if (!existing.some((p) => p.id === local.id)) {
-            localStorage.setItem("v3_demo_proposals", JSON.stringify([local, ...existing]));
-          }
-        } catch {}
+        if (!json.ok) {
+          const errMsg = typeof json.error === "string"
+            ? json.error
+            : typeof json.error === "object" && json.error !== null
+              ? Object.values(json.error as Record<string, string[]>).flat().join(" | ")
+              : "Tente novamente.";
+          setMesaError(`Erro ao criar proposta na Mesa de Crédito: ${errMsg}`);
+          setTimeout(() => setMesaError(null), 10000);
+          return;
+        }
+      } catch {
+        setMesaError("Erro de conexão ao salvar proposta. Verifique sua internet e tente novamente.");
+        setTimeout(() => setMesaError(null), 10000);
+        return;
       }
 
       setMesaSuccess(`✅ Lead encaminhado como "Ganho"! Proposta ${code} criada na Mesa de Crédito — ${line}.`);
@@ -688,39 +955,73 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
     setSelectedCreditLine("");
   }
 
-  function handleEnviarMesa(lead: CRMLead) {
-    const code = `CRED-26-${String(Date.now()).slice(-6)}`;
+  async function handleEnviarMesa(lead: CRMLead) {
+    const meta = lead.metadata ?? {};
     const creditLine =
       lead.creditLine ||
+      (meta.creditLine as string) ||
       (lead.productInterest === "credito_estruturado" ? "AVAL" :
-       lead.productInterest === "high_ticket" ? "FUNDO CONSTRUÇÃO RESIDENCIAL" :
+       lead.productInterest === "high_ticket" ? "HIGH TICKET" :
        "HOME EQUITY");
-    const proposal = {
-      id: `prop-crm-${lead.id}-${Date.now()}`,
-      code,
-      title: `${creditLine} - ${lead.name}`,
-      client_name: lead.name,
-      client_type: lead.personType,
-      cpf_cnpj: lead.document,
-      email: lead.email,
-      telefone: lead.phone,
-      credit_line: creditLine,
-      requested_value: lead.annualRevenue > 0 ? Math.round(lead.annualRevenue * 0.3) : 100000,
-      approved_value: null,
-      current_level: "NIVEL_1",
-      status: "PENDING",
-      stage: "RECEBIDO",
-      partner_id: lead.partnerId,
-      partner_name: lead.partnerName,
-      docs_uploaded: 0,
-      docs_required: 5,
-      created_at: new Date().toISOString(),
+
+    // Valor: prefere valorSolicitado do metadata, senão 30% do faturamento anual
+    const parseMeta = (v: unknown) => {
+      if (typeof v === "number") return v;
+      if (typeof v === "string") return parseFloat(v.replace(/\D/g, "")) || 0;
+      return 0;
     };
+    const baseVal = parseMeta(meta.valorSolicitado) || (lead.annualRevenue > 0 ? Math.round(lead.annualRevenue * 0.3) : 100000);
+    const level = baseVal >= 5_000_000 ? "NIVEL_3" : baseVal >= 500_000 ? "NIVEL_2" : "NIVEL_1";
+    // NIVEL_3 exige mínimo de R$ 5.000.000
+    const requestedValue = level === "NIVEL_3" ? Math.max(baseVal, 5_000_000) : baseVal;
+
+    try {
+      const res = await fetch("/api/credit-proposals", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: `${creditLine} - ${lead.name}`,
+          client_name: lead.name,
+          client_cpf_cnpj: lead.document || (meta.cpfCnpj as string) || null,
+          credit_line: creditLine,
+          requested_value: requestedValue,
+          current_level: level,
+          notes: lead.notes || (meta.observacoes as string) || null,
+          metadata: {
+            ...meta,
+            crm_lead_id: lead.id,
+            crm_lead_code: lead.code,
+            client_type: lead.personType,
+            email: lead.email || (meta.email as string),
+            telefone: lead.phone || (meta.phone as string),
+            endereco: meta.enderecoRua,
+            cep: meta.cep,
+            cidade: lead.city || (meta.city as string),
+            estado: lead.state || (meta.state as string),
+            restricao_cliente: meta.restricao,
+            prazo: meta.prazo,
+            finalidade: meta.finalidade,
+            imoveis: meta.imoveis,
+            documentos: meta.documentos,
+            captacao_origin: true,
+          },
+        }),
+      });
+      const json = await res.json();
+      if (res.ok && json.proposal) {
+        setMesaSuccess(`Proposta ${json.proposal.code} enviada para a Mesa de Crédito com sucesso!`);
+        setTimeout(() => setMesaSuccess(null), 5000);
+        return;
+      }
+    } catch {}
+
+    // Fallback demo: salva no localStorage
+    const code = `CRED-26-${String(Date.now()).slice(-6)}`;
     try {
       const existing: { id: string; title: string }[] = JSON.parse(localStorage.getItem("v3_demo_proposals") ?? "[]");
-      const alreadySent = existing.some((p) => p.title === proposal.title);
-      if (!alreadySent) {
-        localStorage.setItem("v3_demo_proposals", JSON.stringify([proposal, ...existing]));
+      const title = `${creditLine} - ${lead.name}`;
+      if (!existing.some((p) => p.title === title)) {
+        localStorage.setItem("v3_demo_proposals", JSON.stringify([{ id: `prop-crm-${Date.now()}`, code, title }, ...existing]));
       }
     } catch {}
     setMesaSuccess(`Proposta ${code} enviada para a Mesa de Crédito com sucesso!`);
@@ -791,6 +1092,7 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
           partnerName:     json.lead.partner_name ?? userName,
           createdAt:       json.lead.created_at?.split("T")[0] ?? todayISO(),
           interactions:    [],
+          metadata:        (json.lead.metadata ?? {}) as Record<string, unknown>,
         };
         setLeads(prev => [saved, ...prev]);
         setShowNewLead(false);
@@ -883,7 +1185,7 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
 
         {/* Tabs */}
         <div style={{ display: "flex", gap: 4, marginTop: 16, flexWrap: "wrap" }}>
-          {(["pipeline", "leads", "prospeccao", "relatorios"] as const).map((t) => (
+          {(["pipeline", "leads", "prospeccao", "relatorios", "captacao"] as const).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -899,11 +1201,31 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
                 transition: "all 0.15s",
               }}
             >
-              {t === "pipeline" ? "Pipeline" : t === "leads" ? "Leads" : t === "prospeccao" ? "🔍 Prospecção" : "Relatórios"}
+              {t === "pipeline" ? "Pipeline" : t === "leads" ? "Leads" : t === "prospeccao" ? "🔍 Prospecção" : t === "relatorios" ? "Relatórios" : "🔗 Link de Captação"}
             </button>
           ))}
         </div>
       </div>
+
+      {/* Error toast */}
+      {mesaError && (
+        <div style={{
+          position: "fixed", bottom: 24, right: 24, zIndex: 9999,
+          background: "#2A0F0F", border: "1px solid #EF4444", borderRadius: 10,
+          padding: "14px 20px", color: "#EF4444", fontSize: 14, fontWeight: 600,
+          boxShadow: "0 4px 24px rgba(0,0,0,0.4)", maxWidth: 380,
+          display: "flex", alignItems: "center", gap: 10,
+        }}>
+          <span style={{ fontSize: 18 }}>✗</span>
+          <span>{mesaError}</span>
+          <button
+            onClick={() => setMesaError(null)}
+            style={{ marginLeft: "auto", background: "none", border: "none", color: "#EF4444", cursor: "pointer", fontSize: 16 }}
+          >
+            ×
+          </button>
+        </div>
+      )}
 
       {/* Success toast */}
       {mesaSuccess && (
@@ -1016,20 +1338,26 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
                             <span style={{ fontWeight: 700, fontSize: 12, color: "#E8EDF5", lineHeight: 1.3, flex: 1 }}>
                               {lead.name}
                             </span>
-                            <span
-                              style={{
-                                fontSize: 10,
-                                fontWeight: 700,
-                                padding: "1px 6px",
-                                borderRadius: 4,
-                                background: lead.personType === "PJ" ? "rgba(59,130,246,0.2)" : "rgba(168,85,247,0.2)",
-                                color: lead.personType === "PJ" ? "#3B82F6" : "#A855F7",
-                                marginLeft: 4,
-                                whiteSpace: "nowrap",
-                              }}
-                            >
-                              {lead.personType}
-                            </span>
+                            <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+                              {lead.source === "digital" && (
+                                <span style={{ fontSize: 9, fontWeight: 700, padding: "1px 5px", borderRadius: 4, background: "rgba(59,130,246,0.15)", color: "#60A5FA", border: "1px solid rgba(59,130,246,0.25)", whiteSpace: "nowrap" }}>
+                                  🔗 Digital
+                                </span>
+                              )}
+                              <span
+                                style={{
+                                  fontSize: 10,
+                                  fontWeight: 700,
+                                  padding: "1px 6px",
+                                  borderRadius: 4,
+                                  background: lead.personType === "PJ" ? "rgba(59,130,246,0.2)" : "rgba(168,85,247,0.2)",
+                                  color: lead.personType === "PJ" ? "#3B82F6" : "#A855F7",
+                                  whiteSpace: "nowrap",
+                                }}
+                              >
+                                {lead.personType}
+                              </span>
+                            </div>
                           </div>
                           <div style={{ fontSize: 11, color: "#7A8FA8", marginBottom: 4 }}>{lead.segment}</div>
                           <div style={{ fontSize: 11, color: "#7A8FA8", display: "flex", alignItems: "center", gap: 4, marginBottom: 4 }}>
@@ -1064,6 +1392,35 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
                             >
                               {CONVERTED_LABELS[lead.convertedTo]}
                             </div>
+                          )}
+                          {isAdmin && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (!confirm(`Excluir lead "${lead.name}"? Esta ação não pode ser desfeita.`)) return;
+                                fetch(`/api/crm?id=${lead.id}`, { method: "DELETE" })
+                                  .then(() => setLeads(prev => prev.filter(x => x.id !== lead.id)))
+                                  .catch(() => alert("Erro ao excluir lead."));
+                              }}
+                              style={{
+                                marginTop: 8,
+                                width: "100%",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                gap: 4,
+                                background: "rgba(239,68,68,0.1)",
+                                border: "1px solid rgba(239,68,68,0.25)",
+                                borderRadius: 6,
+                                padding: "4px 0",
+                                color: "#F87171",
+                                cursor: "pointer",
+                                fontSize: 11,
+                                fontWeight: 600,
+                              }}
+                            >
+                              <Trash2 style={{ width: 11, height: 11 }} /> Excluir
+                            </button>
                           )}
                         </div>
                       ))}
@@ -1193,7 +1550,16 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
                       }}
                     >
                       <td style={{ padding: "10px 12px", color: "#7A8FA8", whiteSpace: "nowrap" }}>{lead.code}</td>
-                      <td style={{ padding: "10px 12px", color: "#E8EDF5", fontWeight: 600, whiteSpace: "nowrap" }}>{lead.name}</td>
+                      <td style={{ padding: "10px 12px", color: "#E8EDF5", fontWeight: 600, whiteSpace: "nowrap" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          {lead.name}
+                          {lead.source === "digital" && (
+                            <span style={{ fontSize: 9, fontWeight: 700, padding: "1px 5px", borderRadius: 4, background: "rgba(59,130,246,0.15)", color: "#60A5FA", border: "1px solid rgba(59,130,246,0.25)", whiteSpace: "nowrap" }}>
+                              🔗 Digital
+                            </span>
+                          )}
+                        </div>
+                      </td>
                       <td style={{ padding: "10px 12px" }}>
                         <span
                           style={{
@@ -1267,7 +1633,7 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
                           >
                             Ver
                           </button>
-                          {(lead.status === "proposta" || lead.status === "negociacao") && (
+                          {(lead.status === "proposta" || lead.status === "negociacao") && lead.creditLine !== "M&A" && (lead.metadata as Record<string, unknown>)?.form_type !== "ma" && (
                             <button
                               onClick={() => handleEnviarMesa(lead)}
                               style={{
@@ -1290,6 +1656,29 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
                               Mesa
                             </button>
                           )}
+                          {(lead.creditLine === "M&A" || (lead.metadata as Record<string, unknown>)?.form_type === "ma") && lead.status !== "ganho" && lead.status !== "perdido" && (
+                            <button
+                              onClick={() => handleEnviarMesaMA(lead)}
+                              style={{
+                                background: "rgba(99,102,241,0.15)",
+                                border: "1px solid rgba(99,102,241,0.4)",
+                                borderRadius: 6,
+                                padding: "4px 10px",
+                                color: "#818CF8",
+                                cursor: "pointer",
+                                fontSize: 12,
+                                fontWeight: 600,
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 4,
+                                whiteSpace: "nowrap",
+                              }}
+                              title="Enviar para Mesa M&A"
+                            >
+                              <Building2 className="w-3 h-3" />
+                              Mesa M&A
+                            </button>
+                          )}
                           {lead.status !== "ganho" && lead.status !== "perdido" && (
                             <button
                               onClick={() => { setShowConvert(lead); setSelectedConvert(""); }}
@@ -1309,6 +1698,33 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
                             >
                               <ArrowRight className="w-3 h-3" />
                               Avançar
+                            </button>
+                          )}
+                          {isAdmin && (
+                            <button
+                              onClick={() => {
+                                if (!confirm(`Excluir lead "${lead.name}"? Esta ação não pode ser desfeita.`)) return;
+                                fetch(`/api/crm?id=${lead.id}`, { method: "DELETE" })
+                                  .then(() => setLeads(prev => prev.filter(x => x.id !== lead.id)))
+                                  .catch(() => alert("Erro ao excluir lead."));
+                              }}
+                              style={{
+                                background: "rgba(239,68,68,0.1)",
+                                border: "1px solid rgba(239,68,68,0.25)",
+                                borderRadius: 6,
+                                padding: "4px 8px",
+                                color: "#F87171",
+                                cursor: "pointer",
+                                fontSize: 12,
+                                fontWeight: 600,
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 4,
+                              }}
+                              title="Excluir lead"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                              Excluir
                             </button>
                           )}
                         </div>
@@ -1388,6 +1804,7 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
                     partnerName:     json.lead.partner_name ?? userName,
                     createdAt:       json.lead.created_at?.split("T")[0] ?? todayISO(),
                     interactions:    [],
+                    metadata:        (json.lead.metadata ?? {}) as Record<string, unknown>,
                   };
                   setLeads(prev => [saved, ...prev]);
                   setTab("pipeline");
@@ -1619,6 +2036,277 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
             </div>
           </div>
         )}
+
+        {/* ── TAB: LINK DE CAPTAÇÃO ── */}
+        {tab === "captacao" && (
+          <div style={{ padding: "24px 0" }}>
+            {/* Header section */}
+            <div style={{ marginBottom: 24, padding: "20px 24px", borderRadius: 12, border: "1px solid rgba(201,168,76,0.2)", background: "rgba(201,168,76,0.04)" }}>
+              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+                <div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                    <Link2 style={{ width: 18, height: 18, color: "#C9A84C" }} />
+                    <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: "#F0ECE4" }}>Link de Captação Digital</h2>
+                  </div>
+                  <p style={{ margin: 0, fontSize: 13, color: "#7A8FA8", maxWidth: 520, lineHeight: 1.5 }}>
+                    Gere um link personalizado para enviar ao cliente. Ele preenche os dados e a solicitação vai direto para o seu CRM com todos os campos preenchidos.
+                  </p>
+                </div>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button
+                    onClick={loadCaptacaoLinks}
+                    disabled={captacaoLoading}
+                    style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 8, border: "1px solid rgba(201,168,76,0.2)", background: "transparent", color: "#7A8FA8", cursor: "pointer", fontSize: 13 }}
+                  >
+                    <RefreshCw style={{ width: 14, height: 14 }} className={captacaoLoading ? "animate-spin" : ""} />
+                    Atualizar
+                  </button>
+                  <button
+                    onClick={handleGerarLink}
+                    disabled={captacaoGenerating}
+                    style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 20px", borderRadius: 8, border: "none", background: captacaoGenerating ? "#7A8FA8" : "linear-gradient(135deg, #C9A84C, #E8C97A)", color: "#09081A", fontWeight: 700, fontSize: 13, cursor: captacaoGenerating ? "not-allowed" : "pointer" }}
+                  >
+                    <Plus style={{ width: 16, height: 16 }} />
+                    {captacaoGenerating ? "Gerando..." : "Gerar Novo Link"}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* How it works */}
+            <div style={{ display: "flex", gap: 12, marginBottom: 24, flexWrap: "wrap" }}>
+              {[
+                { num: "1", title: "Gere o link", desc: "Clique em \"Gerar Novo Link\" acima" },
+                { num: "2", title: "Envie ao cliente", desc: "Copie e compartilhe via WhatsApp, e-mail ou SMS" },
+                { num: "3", title: "Cliente preenche", desc: "Formulário com seus dados e produto de interesse" },
+                { num: "4", title: "Lead no CRM", desc: "Aparece aqui com badge \"Digital\" para você direcionar" },
+              ].map((step) => (
+                <div key={step.num} style={{ flex: "1 1 180px", padding: "14px 16px", borderRadius: 10, border: "1px solid #122036", background: "rgba(255,255,255,0.02)" }}>
+                  <div style={{ width: 24, height: 24, borderRadius: "50%", background: "rgba(201,168,76,0.15)", border: "1px solid rgba(201,168,76,0.3)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 800, color: "#C9A84C", marginBottom: 8 }}>{step.num}</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "#F0ECE4", marginBottom: 3 }}>{step.title}</div>
+                  <div style={{ fontSize: 12, color: "#7A8FA8" }}>{step.desc}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Links list */}
+            {captacaoLoading ? (
+              <div style={{ textAlign: "center", padding: "48px 0", color: "#7A8FA8", fontSize: 14 }}>
+                <RefreshCw style={{ width: 20, height: 20, margin: "0 auto 8px", display: "block" }} className="animate-spin" />
+                Carregando links...
+              </div>
+            ) : captacaoLinks.length === 0 ? (
+              <div style={{ textAlign: "center", padding: "48px 0", border: "1px dashed rgba(201,168,76,0.2)", borderRadius: 12 }}>
+                <Link2 style={{ width: 32, height: 32, color: "#7A8FA8", margin: "0 auto 12px", display: "block" }} />
+                <p style={{ color: "#7A8FA8", fontSize: 14, margin: 0 }}>Nenhum link gerado ainda.</p>
+                <p style={{ color: "#7A8FA8", fontSize: 12, margin: "4px 0 0" }}>Clique em "Gerar Novo Link" para começar.</p>
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {captacaoLinks.map((link) => {
+                  const url = `${typeof window !== "undefined" ? window.location.origin : ""}/c/${link.token}`;
+                  const isCopied = copiedToken === link.token;
+                  return (
+                    <div key={link.id} style={{ padding: "16px 20px", borderRadius: 12, border: `1px solid ${link.active ? "rgba(201,168,76,0.2)" : "rgba(122,143,168,0.15)"}`, background: link.active ? "rgba(201,168,76,0.03)" : "rgba(255,255,255,0.01)", display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+                      {/* Status dot */}
+                      <div style={{ width: 8, height: 8, borderRadius: "50%", background: link.active ? "#10B981" : "#7A8FA8", flexShrink: 0 }} />
+
+                      {/* Link info */}
+                      <div style={{ flex: 1, minWidth: 200 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                          <span style={{ fontSize: 12, fontFamily: "monospace", color: "#C9A84C", background: "rgba(201,168,76,0.1)", padding: "2px 8px", borderRadius: 4 }}>
+                            /c/{link.token.slice(0, 12)}...
+                          </span>
+                          {link.active ? (
+                            <span style={{ fontSize: 10, fontWeight: 700, color: "#10B981", background: "rgba(16,185,129,0.1)", padding: "2px 8px", borderRadius: 4, border: "1px solid rgba(16,185,129,0.2)" }}>ATIVO</span>
+                          ) : (
+                            <span style={{ fontSize: 10, fontWeight: 700, color: "#7A8FA8", background: "rgba(122,143,168,0.1)", padding: "2px 8px", borderRadius: 4, border: "1px solid rgba(122,143,168,0.2)" }}>INATIVO</span>
+                          )}
+                        </div>
+                        <div style={{ fontSize: 12, color: "#7A8FA8" }}>
+                          {link.uses_count} {link.uses_count === 1 ? "resposta" : "respostas"} · Criado em {new Date(link.created_at).toLocaleDateString("pt-BR")}
+                        </div>
+                      </div>
+
+                      {/* URL preview */}
+                      <div style={{ fontSize: 11, color: "#7A8FA8", fontFamily: "monospace", background: "#0D1B2A", padding: "6px 12px", borderRadius: 6, border: "1px solid #122036", maxWidth: 300, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 2 }}>
+                        {url}
+                      </div>
+
+                      {/* Actions */}
+                      <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+                        <button
+                          onClick={() => handleCopyLink(link.token)}
+                          style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: 8, border: `1px solid ${isCopied ? "rgba(16,185,129,0.4)" : "rgba(201,168,76,0.3)"}`, background: isCopied ? "rgba(16,185,129,0.1)" : "rgba(201,168,76,0.08)", color: isCopied ? "#10B981" : "#C9A84C", cursor: "pointer", fontSize: 12, fontWeight: 600 }}
+                        >
+                          {isCopied ? <Check style={{ width: 13, height: 13 }} /> : <Copy style={{ width: 13, height: 13 }} />}
+                          {isCopied ? "Copiado!" : "Copiar"}
+                        </button>
+                        <button
+                          onClick={() => handleToggleLink(link.id, !link.active)}
+                          style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: 8, border: "1px solid rgba(122,143,168,0.2)", background: "transparent", color: "#7A8FA8", cursor: "pointer", fontSize: 12, fontWeight: 600 }}
+                        >
+                          {link.active
+                            ? <ToggleRight style={{ width: 14, height: 14, color: "#10B981" }} />
+                            : <ToggleLeft style={{ width: 14, height: 14 }} />}
+                          {link.active ? "Desativar" : "Ativar"}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Digital leads notice */}
+            {visibleLeads.filter(l => l.source === "digital").length > 0 && (
+              <div style={{ marginTop: 28, padding: "16px 20px", borderRadius: 12, border: "1px solid rgba(59,130,246,0.2)", background: "rgba(59,130,246,0.04)" }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: "#60A5FA", marginBottom: 6 }}>
+                  📥 {visibleLeads.filter(l => l.source === "digital").length} lead(s) Digital no seu CRM
+                </div>
+                <p style={{ margin: 0, fontSize: 12, color: "#7A8FA8" }}>
+                  Leads com badge "Digital" na aba Leads chegaram via link de captação. Vá para a aba Leads para direcioná-los.
+                </p>
+              </div>
+            )}
+
+            {/* ── SEÇÃO M&A ── */}
+            <div style={{ marginTop: 40 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
+                <div style={{ flex: 1, height: 1, background: "rgba(201,168,76,0.1)" }} />
+                <span style={{ fontSize: 11, fontWeight: 700, color: "#C9A84C", letterSpacing: "0.12em", textTransform: "uppercase" }}>
+                  Link de Captação M&A
+                </span>
+                <div style={{ flex: 1, height: 1, background: "rgba(201,168,76,0.1)" }} />
+              </div>
+
+              <div style={{ marginBottom: 24, padding: "20px 24px", borderRadius: 12, border: "1px solid rgba(99,102,241,0.2)", background: "rgba(99,102,241,0.04)" }}>
+                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+                  <div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                      <Building2 style={{ width: 18, height: 18, color: "#818CF8" }} />
+                      <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: "#F0ECE4" }}>Formulário M&A Digital</h2>
+                    </div>
+                    <p style={{ margin: 0, fontSize: 13, color: "#7A8FA8", maxWidth: 520, lineHeight: 1.5 }}>
+                      Gere um link personalizado para o cliente preencher os dados da empresa para uma operação de M&A (venda, fusão, captação de capital etc.). O lead vai direto para sua aba Leads.
+                    </p>
+                  </div>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button
+                      onClick={loadMaCaptacaoLinks}
+                      disabled={maCaptacaoLoading}
+                      style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 8, border: "1px solid rgba(99,102,241,0.2)", background: "transparent", color: "#7A8FA8", cursor: "pointer", fontSize: 13 }}
+                    >
+                      <RefreshCw style={{ width: 14, height: 14 }} className={maCaptacaoLoading ? "animate-spin" : ""} />
+                      Atualizar
+                    </button>
+                    <button
+                      onClick={handleGerarMaLink}
+                      disabled={maCaptacaoGenerating}
+                      style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 20px", borderRadius: 8, border: "none", background: maCaptacaoGenerating ? "#7A8FA8" : "linear-gradient(135deg, #6366F1, #818CF8)", color: "#fff", fontWeight: 700, fontSize: 13, cursor: maCaptacaoGenerating ? "not-allowed" : "pointer" }}
+                    >
+                      <Plus style={{ width: 16, height: 16 }} />
+                      {maCaptacaoGenerating ? "Gerando..." : "Gerar Link M&A"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* How it works — M&A */}
+              <div style={{ display: "flex", gap: 12, marginBottom: 24, flexWrap: "wrap" }}>
+                {[
+                  { num: "1", title: "Gere o link", desc: "Clique em \"Gerar Link M&A\" acima" },
+                  { num: "2", title: "Envie ao cliente", desc: "Compartilhe via WhatsApp, e-mail ou SMS" },
+                  { num: "3", title: "Cliente preenche", desc: "Empresa, setor, financeiro e tipo de operação" },
+                  { num: "4", title: "Lead no CRM", desc: "Aparece na aba Leads com badge M&A para encaminhar" },
+                ].map((step) => (
+                  <div key={step.num} style={{ flex: "1 1 180px", padding: "14px 16px", borderRadius: 10, border: "1px solid #122036", background: "rgba(255,255,255,0.02)" }}>
+                    <div style={{ width: 24, height: 24, borderRadius: "50%", background: "rgba(99,102,241,0.15)", border: "1px solid rgba(99,102,241,0.3)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 800, color: "#818CF8", marginBottom: 8 }}>{step.num}</div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: "#F0ECE4", marginBottom: 3 }}>{step.title}</div>
+                    <div style={{ fontSize: 12, color: "#7A8FA8" }}>{step.desc}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* M&A links list */}
+              {maCaptacaoLoading ? (
+                <div style={{ textAlign: "center", padding: "48px 0", color: "#7A8FA8", fontSize: 14 }}>
+                  <RefreshCw style={{ width: 20, height: 20, margin: "0 auto 8px", display: "block" }} className="animate-spin" />
+                  Carregando links M&A...
+                </div>
+              ) : maCaptacaoLinks.length === 0 ? (
+                <div style={{ textAlign: "center", padding: "36px 0", border: "1px dashed rgba(99,102,241,0.2)", borderRadius: 12 }}>
+                  <Building2 style={{ width: 32, height: 32, color: "#7A8FA8", margin: "0 auto 12px", display: "block" }} />
+                  <p style={{ color: "#7A8FA8", fontSize: 14, margin: 0 }}>Nenhum link M&A gerado ainda.</p>
+                  <p style={{ color: "#7A8FA8", fontSize: 12, margin: "4px 0 0" }}>Clique em "Gerar Link M&A" para começar.</p>
+                </div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  {maCaptacaoLinks.map((link) => {
+                    const url = `${typeof window !== "undefined" ? window.location.origin : ""}/mf/${link.token}`;
+                    const isCopied = maCopiedToken === link.token;
+                    return (
+                      <div key={link.id} style={{ padding: "16px 20px", borderRadius: 12, border: `1px solid ${link.active ? "rgba(99,102,241,0.25)" : "rgba(122,143,168,0.15)"}`, background: link.active ? "rgba(99,102,241,0.04)" : "rgba(255,255,255,0.01)", display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+                        <div style={{ width: 8, height: 8, borderRadius: "50%", background: link.active ? "#818CF8" : "#7A8FA8", flexShrink: 0 }} />
+
+                        <div style={{ flex: 1, minWidth: 200 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                            <span style={{ fontSize: 12, fontFamily: "monospace", color: "#818CF8", background: "rgba(99,102,241,0.1)", padding: "2px 8px", borderRadius: 4 }}>
+                              /mf/{link.token.slice(0, 12)}...
+                            </span>
+                            {link.active ? (
+                              <span style={{ fontSize: 10, fontWeight: 700, color: "#818CF8", background: "rgba(99,102,241,0.1)", padding: "2px 8px", borderRadius: 4, border: "1px solid rgba(99,102,241,0.25)" }}>ATIVO</span>
+                            ) : (
+                              <span style={{ fontSize: 10, fontWeight: 700, color: "#7A8FA8", background: "rgba(122,143,168,0.1)", padding: "2px 8px", borderRadius: 4, border: "1px solid rgba(122,143,168,0.2)" }}>INATIVO</span>
+                            )}
+                          </div>
+                          <div style={{ fontSize: 12, color: "#7A8FA8" }}>
+                            {link.uses_count} {link.uses_count === 1 ? "resposta" : "respostas"} · Criado em {new Date(link.created_at).toLocaleDateString("pt-BR")}
+                          </div>
+                        </div>
+
+                        <div style={{ fontSize: 11, color: "#7A8FA8", fontFamily: "monospace", background: "#0D1B2A", padding: "6px 12px", borderRadius: 6, border: "1px solid #122036", maxWidth: 300, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 2 }}>
+                          {url}
+                        </div>
+
+                        <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+                          <button
+                            onClick={() => handleCopyMaLink(link.token)}
+                            style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: 8, border: `1px solid ${isCopied ? "rgba(16,185,129,0.4)" : "rgba(99,102,241,0.3)"}`, background: isCopied ? "rgba(16,185,129,0.1)" : "rgba(99,102,241,0.08)", color: isCopied ? "#10B981" : "#818CF8", cursor: "pointer", fontSize: 12, fontWeight: 600 }}
+                          >
+                            {isCopied ? <Check style={{ width: 13, height: 13 }} /> : <Copy style={{ width: 13, height: 13 }} />}
+                            {isCopied ? "Copiado!" : "Copiar"}
+                          </button>
+                          <button
+                            onClick={() => handleToggleMaLink(link.id, !link.active)}
+                            style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: 8, border: "1px solid rgba(122,143,168,0.2)", background: "transparent", color: "#7A8FA8", cursor: "pointer", fontSize: 12, fontWeight: 600 }}
+                          >
+                            {link.active
+                              ? <ToggleRight style={{ width: 14, height: 14, color: "#818CF8" }} />
+                              : <ToggleLeft style={{ width: 14, height: 14 }} />}
+                            {link.active ? "Desativar" : "Ativar"}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* M&A leads notice */}
+              {visibleLeads.filter(l => l.creditLine === "M&A" || (l.metadata as Record<string, unknown>)?.form_type === "ma").length > 0 && (
+                <div style={{ marginTop: 28, padding: "16px 20px", borderRadius: 12, border: "1px solid rgba(99,102,241,0.2)", background: "rgba(99,102,241,0.04)" }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "#818CF8", marginBottom: 6 }}>
+                    🏢 {visibleLeads.filter(l => l.creditLine === "M&A" || (l.metadata as Record<string, unknown>)?.form_type === "ma").length} lead(s) M&A no seu CRM
+                  </div>
+                  <p style={{ margin: 0, fontSize: 12, color: "#7A8FA8" }}>
+                    Leads M&A aguardam na aba Leads. Clique em &quot;Mesa M&A&quot; para encaminhar para a mesa especializada.
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ── HIDDEN PDF REPORT ── */}
@@ -1786,6 +2474,168 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
                 </div>
               </div>
 
+              {/* Dados do formulário de captação (metadata) */}
+              {selectedLead.metadata && Object.keys(selectedLead.metadata).length > 0 && (() => {
+                const m = selectedLead.metadata!;
+                const fmt = (v: unknown) => (v == null || v === "" ? null : String(v));
+
+                // ── Formulário M&A (captação via link) ──
+                if (m.form_type === "ma") {
+                  const hasNegocio = fmt(m.descricao) || fmt(m.diferenciais);
+                  const hasFin = fmt(m.faturamento) || fmt(m.ebitda) || fmt(m.valorPretendido);
+                  const hasResp = fmt(m.nome) || fmt(m.cargo);
+                  return (
+                    <div style={{ marginTop: 16, padding: "14px 16px", borderRadius: 10, background: "rgba(17,31,53,0.5)", border: "1px solid rgba(201,168,76,0.2)" }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: "#C9A84C", marginBottom: 12, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                        Formulário M&amp;A — Captação
+                      </div>
+
+                      {/* Identificação */}
+                      <div style={{ marginBottom: 12 }}>
+                        <div style={{ fontSize: 10, color: "#7A8FA8", marginBottom: 6, fontWeight: 700, textTransform: "uppercase" }}>Identificação da Empresa</div>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                          {fmt(m.empresa) && <div><span style={{ fontSize: 10, color: "#7A8FA8" }}>Empresa: </span><span style={{ fontSize: 12, color: "#E8EDF5" }}>{fmt(m.empresa)}</span></div>}
+                          {fmt(m.cnpj) && <div><span style={{ fontSize: 10, color: "#7A8FA8" }}>CNPJ: </span><span style={{ fontSize: 12, color: "#E8EDF5" }}>{fmt(m.cnpj)}</span></div>}
+                          {fmt(m.setor) && <div><span style={{ fontSize: 10, color: "#7A8FA8" }}>Setor: </span><span style={{ fontSize: 12, color: "#E8EDF5" }}>{fmt(m.setor)}</span></div>}
+                          {(fmt(m.cidade) || fmt(m.estado)) && <div><span style={{ fontSize: 10, color: "#7A8FA8" }}>Localização: </span><span style={{ fontSize: 12, color: "#E8EDF5" }}>{[fmt(m.cidade), fmt(m.estado)].filter(Boolean).join(" · ")}</span></div>}
+                          {fmt(m.tipoOperacao) && <div style={{ gridColumn: "span 2" }}><span style={{ fontSize: 10, color: "#7A8FA8" }}>Tipo de Operação: </span><span style={{ fontSize: 12, color: "#E8EDF5" }}>{fmt(m.tipoOperacao)}</span></div>}
+                        </div>
+                      </div>
+
+                      {/* Sobre o Negócio */}
+                      {hasNegocio && (
+                        <div style={{ marginBottom: 12, paddingTop: 10, borderTop: "1px solid rgba(36,58,102,0.6)" }}>
+                          <div style={{ fontSize: 10, color: "#7A8FA8", marginBottom: 6, fontWeight: 700, textTransform: "uppercase" }}>Sobre o Negócio</div>
+                          {fmt(m.descricao) && (
+                            <div style={{ marginBottom: 6 }}>
+                              <div style={{ fontSize: 10, color: "#7A8FA8", marginBottom: 2 }}>Descrição:</div>
+                              <div style={{ fontSize: 12, color: "#E8EDF5", lineHeight: 1.6 }}>{fmt(m.descricao)}</div>
+                            </div>
+                          )}
+                          {fmt(m.diferenciais) && (
+                            <div>
+                              <div style={{ fontSize: 10, color: "#7A8FA8", marginBottom: 2 }}>Diferenciais:</div>
+                              <div style={{ fontSize: 12, color: "#E8EDF5", lineHeight: 1.6 }}>{fmt(m.diferenciais)}</div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Dados Financeiros */}
+                      {hasFin && (
+                        <div style={{ marginBottom: 12, paddingTop: 10, borderTop: "1px solid rgba(36,58,102,0.6)" }}>
+                          <div style={{ fontSize: 10, color: "#7A8FA8", marginBottom: 8, fontWeight: 700, textTransform: "uppercase" }}>Dados Financeiros</div>
+                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
+                            {fmt(m.faturamento) && (
+                              <div style={{ background: "rgba(201,168,76,0.06)", border: "1px solid rgba(201,168,76,0.15)", borderRadius: 8, padding: "8px 10px" }}>
+                                <div style={{ fontSize: 10, color: "#7A8FA8", marginBottom: 2 }}>Faturamento</div>
+                                <div style={{ fontSize: 12, color: "#E8C97A", fontWeight: 600 }}>{fmt(m.faturamento)}</div>
+                              </div>
+                            )}
+                            {fmt(m.ebitda) && (
+                              <div style={{ background: "rgba(201,168,76,0.06)", border: "1px solid rgba(201,168,76,0.15)", borderRadius: 8, padding: "8px 10px" }}>
+                                <div style={{ fontSize: 10, color: "#7A8FA8", marginBottom: 2 }}>EBITDA</div>
+                                <div style={{ fontSize: 12, color: "#E8C97A", fontWeight: 600 }}>{fmt(m.ebitda)}</div>
+                              </div>
+                            )}
+                            {fmt(m.valorPretendido) && (
+                              <div style={{ background: "rgba(201,168,76,0.06)", border: "1px solid rgba(201,168,76,0.15)", borderRadius: 8, padding: "8px 10px" }}>
+                                <div style={{ fontSize: 10, color: "#7A8FA8", marginBottom: 2 }}>Valor Pretendido</div>
+                                <div style={{ fontSize: 12, color: "#E8C97A", fontWeight: 600 }}>{fmt(m.valorPretendido)}</div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Responsável */}
+                      {hasResp && (
+                        <div style={{ paddingTop: 10, borderTop: "1px solid rgba(36,58,102,0.6)" }}>
+                          <div style={{ fontSize: 10, color: "#7A8FA8", marginBottom: 6, fontWeight: 700, textTransform: "uppercase" }}>Responsável</div>
+                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                            {fmt(m.nome) && <div><span style={{ fontSize: 10, color: "#7A8FA8" }}>Nome: </span><span style={{ fontSize: 12, color: "#E8EDF5" }}>{fmt(m.nome)}</span></div>}
+                            {fmt(m.cargo) && <div><span style={{ fontSize: 10, color: "#7A8FA8" }}>Cargo: </span><span style={{ fontSize: 12, color: "#E8EDF5" }}>{fmt(m.cargo)}</span></div>}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                }
+
+                // ── Formulário genérico CRM (crédito, consórcio, etc.) ──
+                const hasAddress = fmt(m.enderecoRua) || fmt(m.cep) || fmt(m.city);
+                const hasFinanceiro = fmt(m.renda) || fmt(m.faturamento) || fmt(m.estadoCivil) || fmt(m.restricao);
+                const hasProduto = fmt(m.valorSolicitado) || fmt(m.prazo) || fmt(m.finalidade) || fmt(m.observacoes);
+                const imoveis = Array.isArray(m.imoveis) ? m.imoveis : [];
+                const docs = Array.isArray(m.documentos) ? m.documentos as { label: string; name: string; url: string }[] : [];
+                if (!hasAddress && !hasFinanceiro && !hasProduto && imoveis.length === 0 && docs.length === 0) return null;
+                return (
+                  <div style={{ marginTop: 16, padding: "14px 16px", borderRadius: 10, background: "rgba(17,31,53,0.5)", border: "1px solid rgba(22,39,68,0.8)" }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: "#C9A84C", marginBottom: 12, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                      Dados do Formulário de Captação
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                      {/* Endereço */}
+                      {hasAddress && (
+                        <div>
+                          <div style={{ fontSize: 10, color: "#7A8FA8", marginBottom: 4, fontWeight: 700, textTransform: "uppercase" }}>Endereço do Cliente</div>
+                          {fmt(m.enderecoRua) && <div style={{ fontSize: 12, color: "#E8EDF5" }}>{fmt(m.enderecoRua)}</div>}
+                          {fmt(m.cep) && <div style={{ fontSize: 12, color: "#E8EDF5" }}>CEP: {fmt(m.cep)}</div>}
+                          {(fmt(m.city) || fmt(m.state)) && <div style={{ fontSize: 12, color: "#E8EDF5" }}>{[fmt(m.city), fmt(m.state)].filter(Boolean).join(", ")}</div>}
+                        </div>
+                      )}
+                      {/* Financeiro */}
+                      {hasFinanceiro && (
+                        <div>
+                          <div style={{ fontSize: 10, color: "#7A8FA8", marginBottom: 4, fontWeight: 700, textTransform: "uppercase" }}>Dados Financeiros</div>
+                          {fmt(m.renda) && <div style={{ fontSize: 12, color: "#E8EDF5" }}>Renda: {fmt(m.renda)}</div>}
+                          {fmt(m.faturamento) && <div style={{ fontSize: 12, color: "#E8EDF5" }}>Faturamento: {fmt(m.faturamento)}</div>}
+                          {fmt(m.estadoCivil) && <div style={{ fontSize: 12, color: "#E8EDF5" }}>Estado Civil: {fmt(m.estadoCivil)}</div>}
+                          {fmt(m.restricao) && <div style={{ fontSize: 12, color: fmt(m.restricao) === "SIM" ? "#EF4444" : "#10B981" }}>Restrição: {fmt(m.restricao)}</div>}
+                        </div>
+                      )}
+                      {/* Produto */}
+                      {hasProduto && (
+                        <div>
+                          <div style={{ fontSize: 10, color: "#7A8FA8", marginBottom: 4, fontWeight: 700, textTransform: "uppercase" }}>Produto Solicitado</div>
+                          {fmt(m.valorSolicitado) && <div style={{ fontSize: 12, color: "#E8EDF5" }}>Valor: {fmt(m.valorSolicitado)}</div>}
+                          {fmt(m.prazo) && <div style={{ fontSize: 12, color: "#E8EDF5" }}>Prazo: {fmt(m.prazo)}</div>}
+                          {fmt(m.finalidade) && <div style={{ fontSize: 12, color: "#E8EDF5" }}>Finalidade: {fmt(m.finalidade)}</div>}
+                          {fmt(m.observacoes) && <div style={{ fontSize: 12, color: "#7A8FA8", fontStyle: "italic" }}>Obs: {fmt(m.observacoes)}</div>}
+                        </div>
+                      )}
+                      {/* Imóveis */}
+                      {imoveis.length > 0 && imoveis.map((im: Record<string, unknown>, idx: number) => (
+                        <div key={idx}>
+                          <div style={{ fontSize: 10, color: "#7A8FA8", marginBottom: 4, fontWeight: 700, textTransform: "uppercase" }}>Imóvel em Garantia {imoveis.length > 1 ? idx + 1 : ""}</div>
+                          {fmt(im.endereco) && <div style={{ fontSize: 12, color: "#E8EDF5" }}>{fmt(im.endereco)}</div>}
+                          {fmt(im.cep) && <div style={{ fontSize: 12, color: "#E8EDF5" }}>CEP: {fmt(im.cep)}</div>}
+                          {(fmt(im.cidade) || fmt(im.estado)) && <div style={{ fontSize: 12, color: "#E8EDF5" }}>{[fmt(im.cidade), fmt(im.estado)].filter(Boolean).join(", ")}</div>}
+                          {fmt(im.valor_medio) && <div style={{ fontSize: 12, color: "#E8EDF5" }}>Valor: R$ {Number(im.valor_medio).toLocaleString("pt-BR")}</div>}
+                          {fmt(im.zona) && <div style={{ fontSize: 12, color: "#E8EDF5" }}>Zona: {fmt(im.zona)}</div>}
+                        </div>
+                      ))}
+                    </div>
+                    {/* Documentos */}
+                    {docs.length > 0 && (
+                      <div style={{ marginTop: 12 }}>
+                        <div style={{ fontSize: 10, color: "#7A8FA8", marginBottom: 6, fontWeight: 700, textTransform: "uppercase" }}>Documentos Enviados ({docs.length})</div>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                          {docs.map((doc, idx) => (
+                            <div key={idx} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "6px 10px", borderRadius: 6, background: "rgba(16,185,129,0.06)", border: "1px solid rgba(16,185,129,0.2)" }}>
+                              <span style={{ fontSize: 11, color: "#10B981" }}>{doc.label}</span>
+                              <a href={doc.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11, color: "#C9A84C", textDecoration: "none" }}>
+                                {doc.name} ↗
+                              </a>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
               {/* Notes */}
               <div style={{ marginTop: 16 }}>
                 <div style={{ fontSize: 12, fontWeight: 700, color: "#C9A84C", marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.5 }}>
@@ -1911,6 +2761,37 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
                 </div>
               </div>
 
+              {/* ── Mover para Fase ── */}
+              <div style={{ marginTop: 16, padding: "12px 14px", borderRadius: 10, background: "rgba(9,8,26,0.5)", border: "1px solid rgba(22,39,68,0.8)" }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: "#7A8FA8", marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                  Mover para Fase
+                </div>
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  {STAGES.map((stage) => {
+                    const isActive = selectedLead.status === stage.id;
+                    return (
+                      <button
+                        key={stage.id}
+                        onClick={() => !isActive && handleMoveToStage(selectedLead.id, stage.id as CRMLead["status"])}
+                        style={{
+                          padding: "5px 13px",
+                          borderRadius: 20,
+                          border: `1px solid ${isActive ? stage.color : "rgba(22,39,68,0.9)"}`,
+                          background: isActive ? stage.bg : "transparent",
+                          color: isActive ? stage.color : "#7A8FA8",
+                          fontSize: 11,
+                          fontWeight: 700,
+                          cursor: isActive ? "default" : "pointer",
+                          transition: "all 0.15s",
+                        }}
+                      >
+                        {stage.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
               {/* Footer */}
               <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16, flexWrap: "wrap" }}>
                 <Button variant="outline" onClick={() => setSelectedLead(null)}>
@@ -1936,7 +2817,8 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
                     Simulador Consórcio
                   </Button>
                 )}
-                {(selectedLead.status === "proposta" || selectedLead.status === "negociacao") && (
+                {(selectedLead.status === "proposta" || selectedLead.status === "negociacao" ||
+                  (selectedLead.status === "ganho" && ["credito_varejo","credito_estruturado","high_ticket"].includes(selectedLead.convertedTo))) && (
                   <Button
                     onClick={() => {
                       handleEnviarMesa(selectedLead);
@@ -2072,14 +2954,81 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
         </DialogContent>
       </Dialog>
 
-      {/* ── MODAL: New Lead ── */}
-      <Dialog open={showNewLead} onOpenChange={setShowNewLead}>
+      {/* ── MODAL: New Lead — Passo 1: Selecionar Produto ── */}
+      <Dialog open={showNewLead && newLead.productInterest === ""} onOpenChange={(open) => { if (!open) setShowNewLead(false); }}>
+        <DialogContent className="max-w-md" style={{ background: "#09081A", border: "1px solid #1E3A5F" }}>
+          <DialogHeader>
+            <DialogTitle style={{ color: "#E8EDF5", fontSize: 18 }}>Novo Lead — Selecione o Produto</DialogTitle>
+          </DialogHeader>
+          <p style={{ fontSize: 12, color: "#7A8FA8", marginBottom: 16, marginTop: 4 }}>
+            Escolha o produto de interesse do cliente para abrir o formulário correto.
+          </p>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            {CONVERT_OPTIONS.map((opt) => {
+              const Icon = opt.icon;
+              return (
+                <button
+                  key={opt.id}
+                  onClick={() => {
+                    if (opt.id === "credito_varejo" || opt.id === "credito_estruturado" || opt.id === "high_ticket") {
+                      const lvl = opt.id === "credito_varejo" ? "NIVEL_1" : opt.id === "credito_estruturado" ? "NIVEL_2" : "NIVEL_3";
+                      setCreditoFormLevel(lvl as "NIVEL_1" | "NIVEL_2" | "NIVEL_3");
+                      setShowNewLead(false);
+                      setTimeout(() => setShowCreditoForm(true), 80);
+                    } else if (opt.id === "ma") {
+                      setShowNewLead(false);
+                      setTimeout(() => setShowMaForm(true), 80);
+                    } else {
+                      setNewLead((p) => ({ ...p, productInterest: opt.id, creditLine: "" }));
+                    }
+                  }}
+                  style={{
+                    background: "#0F1E35", border: `1px solid ${opt.color}30`,
+                    borderRadius: 10, padding: "14px 12px", cursor: "pointer",
+                    textAlign: "left", transition: "all 0.15s",
+                  }}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = opt.bg; (e.currentTarget as HTMLButtonElement).style.borderColor = opt.color; }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "#0F1E35"; (e.currentTarget as HTMLButtonElement).style.borderColor = `${opt.color}30`; }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                    <Icon style={{ width: 16, height: 16, color: opt.color, flexShrink: 0 }} />
+                    <span style={{ fontSize: 13, fontWeight: 700, color: "#E8EDF5" }}>{opt.label}</span>
+                  </div>
+                  <div style={{ fontSize: 11, color: "#7A8FA8" }}>{opt.desc}</div>
+                  {(opt.id === "credito_varejo" || opt.id === "credito_estruturado" || opt.id === "high_ticket" || opt.id === "ma") && (
+                    <div style={{ marginTop: 6, fontSize: 10, color: opt.color, fontWeight: 600 }}>
+                      → Abre formulário especializado
+                    </div>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 16 }}>
+            <Button variant="outline" onClick={() => setShowNewLead(false)}>Cancelar</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── MODAL: New Lead — Passo 2: Formulário Simples (Consórcio / Split / outros) ── */}
+      <Dialog open={showNewLead && newLead.productInterest !== ""} onOpenChange={(open) => { if (!open) { setShowNewLead(false); setNewLead((p) => ({ ...p, productInterest: "", creditLine: "" })); } }}>
         <DialogContent className="max-w-lg" style={{ background: "#091221", border: "1px solid #122036", maxHeight: "90vh", overflowY: "auto" }}>
           <DialogHeader>
-            <DialogTitle style={{ color: "#E8EDF5" }}>Novo Lead</DialogTitle>
+            <DialogTitle style={{ color: "#E8EDF5" }}>
+              Novo Lead —{" "}
+              <span style={{ color: CONVERT_OPTIONS.find(o => o.id === newLead.productInterest)?.color ?? "#C9A84C" }}>
+                {CONVERT_OPTIONS.find(o => o.id === newLead.productInterest)?.label ?? ""}
+              </span>
+            </DialogTitle>
           </DialogHeader>
+          <button
+            onClick={() => setNewLead((p) => ({ ...p, productInterest: "", creditLine: "" }))}
+            style={{ fontSize: 11, color: "#7A8FA8", background: "none", border: "none", cursor: "pointer", padding: 0, marginBottom: 4, textDecoration: "underline" }}
+          >
+            ← Trocar produto
+          </button>
 
-          <div style={{ display: "flex", flexDirection: "column", gap: 20, marginTop: 8 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 20, marginTop: 4 }}>
             {/* Section 1: Dados Pessoais */}
             <div>
               <div style={{ fontSize: 12, fontWeight: 700, color: "#C9A84C", marginBottom: 12, textTransform: "uppercase", letterSpacing: 0.5 }}>
@@ -2254,97 +3203,21 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
               </div>
             </div>
 
-            {/* Section 4: Produto de Interesse */}
-            <div>
-              <div style={{ fontSize: 12, fontWeight: 700, color: "#C9A84C", marginBottom: 12, textTransform: "uppercase", letterSpacing: 0.5 }}>
-                4. Produto de Interesse
+            {/* Nota informativa para Consórcio / Split */}
+            {newLead.productInterest === "split" && (
+              <div style={{ background: "rgba(196,146,46,0.08)", border: "1px solid rgba(196,146,46,0.25)", borderRadius: 8, padding: "10px 14px", fontSize: 12, color: "#E8C97A" }}>
+                💡 Após criar o lead, acesse o <strong>Simulador Monetto</strong> para gerar proposta de Split Fiscal.
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 12 }}>
-                {CONVERT_OPTIONS.map((opt) => {
-                  const Icon = opt.icon;
-                  const sel = newLead.productInterest === opt.id;
-                  return (
-                    <div
-                      key={opt.id}
-                      onClick={() => setNewLead((p) => ({ ...p, productInterest: sel ? "" : opt.id, creditLine: "" }))}
-                      style={{
-                        background: sel ? opt.bg : "#0F1E35",
-                        border: `2px solid ${sel ? opt.color : "#122036"}`,
-                        borderRadius: 8,
-                        padding: "10px 12px",
-                        cursor: "pointer",
-                        transition: "all 0.15s",
-                      }}
-                    >
-                      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
-                        <Icon className="w-3.5 h-3.5" style={{ color: opt.color, flexShrink: 0 }} />
-                        <span style={{ fontSize: 11, fontWeight: 700, color: sel ? opt.color : "#E8EDF5" }}>{opt.label}</span>
-                      </div>
-                      <div style={{ fontSize: 10, color: "#7A8FA8" }}>{opt.desc}</div>
-                    </div>
-                  );
-                })}
+            )}
+            {newLead.productInterest === "consorcio" && (
+              <div style={{ background: "rgba(16,185,129,0.08)", border: "1px solid rgba(16,185,129,0.25)", borderRadius: 8, padding: "10px 14px", fontSize: 12, color: "#10B981" }}>
+                💡 Após criar o lead, acesse o <strong>Simulador de Consórcio</strong> para calcular parcelas.
               </div>
-
-              {/* Credit line sub-selector */}
-              {(newLead.productInterest === "credito_varejo" || newLead.productInterest === "credito_estruturado" || newLead.productInterest === "high_ticket") && (
-                <div>
-                  <label style={{ fontSize: 11, color: "#7A8FA8", display: "block", marginBottom: 6 }}>Linha de Crédito Específica</label>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                    {(newLead.productInterest === "credito_varejo"
-                      ? ["HOME EQUITY", "AVAL", "FUNDO CONSTRUÇÃO RESIDENCIAL"]
-                      : newLead.productInterest === "credito_estruturado"
-                      ? ["HOMECASH", "V3GIRO E V3AUTOGIRO", "CGI"]
-                      : ["CRI", "CRA", "CPR", "FUNDO INTERNACIONAL CASH COLATERAL", "FUNDO INTERNACIONAL IMOB", "FUNDO CONSTRUÇÃO LOTEAMENTO", "FUNDO CONSTRUÇÃO EMPREENDIMENTO"]
-                    ).map((line) => (
-                      <button
-                        key={line}
-                        type="button"
-                        onClick={() => setNewLead((p) => ({ ...p, creditLine: p.creditLine === line ? "" : line }))}
-                        style={{
-                          padding: "4px 12px",
-                          borderRadius: 6,
-                          border: `1px solid ${newLead.creditLine === line ? "#C9A84C" : "#122036"}`,
-                          background: newLead.creditLine === line ? "rgba(196,146,46,0.15)" : "#0F1E35",
-                          color: newLead.creditLine === line ? "#E8C97A" : "#7A8FA8",
-                          fontSize: 11,
-                          cursor: "pointer",
-                          fontWeight: newLead.creditLine === line ? 700 : 400,
-                          transition: "all 0.15s",
-                        }}
-                      >
-                        {line}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Split note */}
-              {newLead.productInterest === "split" && (
-                <div style={{ background: "rgba(196,146,46,0.08)", border: "1px solid rgba(196,146,46,0.25)", borderRadius: 8, padding: "10px 14px", fontSize: 12, color: "#E8C97A" }}>
-                  💡 Ao avançar este lead, você poderá acessar o <strong>Simulador Monetto</strong> para gerar uma proposta personalizada de Split Fiscal.
-                </div>
-              )}
-
-              {/* Consórcio note */}
-              {newLead.productInterest === "consorcio" && (
-                <div style={{ background: "rgba(16,185,129,0.08)", border: "1px solid rgba(16,185,129,0.25)", borderRadius: 8, padding: "10px 14px", fontSize: 12, color: "#10B981" }}>
-                  💡 Ao avançar este lead, você poderá acessar o <strong>Simulador de Consórcio</strong> para calcular parcelas e carta de crédito.
-                </div>
-              )}
-
-              {/* M&A note */}
-              {newLead.productInterest === "ma" && (
-                <div style={{ background: "rgba(99,102,241,0.08)", border: "1px solid rgba(99,102,241,0.25)", borderRadius: 8, padding: "10px 14px", fontSize: 12, color: "#818CF8" }}>
-                  💡 Lead será encaminhado para a <strong>Mesa M&A</strong> para avaliação e structuring da operação.
-                </div>
-              )}
-            </div>
+            )}
           </div>
 
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 20 }}>
-            <Button variant="outline" onClick={() => setShowNewLead(false)}>
+            <Button variant="outline" onClick={() => { setShowNewLead(false); setNewLead((p) => ({ ...p, productInterest: "", creditLine: "" })); }}>
               Cancelar
             </Button>
             <Button onClick={handleNewLeadSubmit} disabled={!newLead.name || !newLead.email}>
@@ -2354,6 +3227,66 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* ── MODAL FORMULÁRIO DE CRÉDITO (Mesa de Crédito) ── */}
+      <NovaPropostaModal
+        open={showCreditoForm}
+        onClose={() => setShowCreditoForm(false)}
+        level={creditoFormLevel}
+        partnerName={userName}
+        partnerId={userId}
+        onSubmit={async (proposal) => {
+          // Salva na Mesa de Crédito
+          const metadata = (proposal.metadata as Record<string, unknown>) ?? {};
+          const res = await fetch("/api/credit-proposals", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              title:           proposal.title,
+              client_name:     proposal.client_name,
+              client_cpf_cnpj: (proposal.cpf_cnpj as string) ?? null,
+              credit_line:     proposal.credit_line,
+              requested_value: proposal.requested_value,
+              current_level:   creditoFormLevel,
+              metadata,
+            }),
+          });
+          const json = await res.json();
+          if (!json.ok) {
+            throw new Error(typeof json.error === "string" ? json.error : "Erro ao salvar na Mesa de Crédito");
+          }
+          setShowCreditoForm(false);
+        }}
+      />
+
+      {/* ── MODAL FORMULÁRIO M&A ── */}
+      {showMaForm && (
+        <div
+          style={{
+            position: "fixed", inset: 0, zIndex: 50, background: "rgba(0,0,0,0.7)",
+            display: "flex", alignItems: "center", justifyContent: "center", padding: 16,
+            overflowY: "auto",
+          }}
+          onClick={(e) => { if (e.target === e.currentTarget) setShowMaForm(false); }}
+        >
+          <div style={{
+            background: "#09081A", border: "1px solid #1E3A5F", borderRadius: 16,
+            padding: 32, width: "100%", maxWidth: 760, maxHeight: "90vh", overflowY: "auto",
+          }}>
+            <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 16 }}>
+              <Button variant="ghost" size="sm" onClick={() => setShowMaForm(false)}>
+                Fechar
+              </Button>
+            </div>
+            <NovoDealForm
+              isDemo={false}
+              userId={userId}
+              onSuccess={() => setShowMaForm(false)}
+              onCancel={() => setShowMaForm(false)}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

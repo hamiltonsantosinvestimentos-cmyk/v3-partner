@@ -35,6 +35,7 @@ export const PIPELINE_STAGES = [
 
 export interface ImovelMeta {
   endereco?: string;
+  cep?: string;
   valor_medio?: number;
   cidade?: string;
   estado?: string;
@@ -53,6 +54,26 @@ export interface ProposalMeta {
   finalidade?: string;
   restricao_cliente?: string;
   imoveis?: ImovelMeta[];
+  endereco_cep?: string;
+  // Dados PF
+  rg?: string;
+  nascimento?: string;
+  estado_civil?: string;
+  renda_mensal?: number;
+  // Dados PJ
+  razao_social?: string;
+  nome_fantasia?: string;
+  socio_responsavel?: string;
+  faturamento_mensal?: number;
+  // Endereço
+  endereco_rua?: string;
+  endereco_cidade?: string;
+  endereco_uf?: string;
+  observacoes?: string;
+  // Documentos anexados pelo cliente via captação
+  documentos?: Array<{ label: string; name: string; url: string }>;
+  captacao_origin?: boolean;
+  [key: string]: unknown;
 }
 
 export interface ProposalFull {
@@ -284,6 +305,116 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
   const [newComment, setNewComment] = useState("");
   const [savingComment, setSavingComment] = useState(false);
 
+  // ── Edit proposal state ───────────────────────────────────────────────────
+  const [showEdit, setShowEdit] = useState(false);
+  const [editSaving, setEditSaving] = useState(false);
+  const [editClientType, setEditClientType] = useState<"PF"|"PJ">("PF");
+  const [editNome, setEditNome] = useState("");
+  const [editCpfCnpj, setEditCpfCnpj] = useState("");
+  const [editEmail, setEditEmail] = useState("");
+  const [editTelefone, setEditTelefone] = useState("");
+  const [editRg, setEditRg] = useState("");
+  const [editNascimento, setEditNascimento] = useState("");
+  const [editEstadoCivil, setEditEstadoCivil] = useState("");
+  const [editRenda, setEditRenda] = useState("");
+  const [editRazaoSocial, setEditRazaoSocial] = useState("");
+  const [editNomeFantasia, setEditNomeFantasia] = useState("");
+  const [editSocioResp, setEditSocioResp] = useState("");
+  const [editFaturamento, setEditFaturamento] = useState("");
+  const [editEndRua, setEditEndRua] = useState("");
+  const [editEndCidade, setEditEndCidade] = useState("");
+  const [editEndUf, setEditEndUf] = useState("");
+  const [editEndCep, setEditEndCep] = useState("");
+  const [editRestricao, setEditRestricao] = useState<""|"SIM"|"NAO">("");
+  const [editPrazo, setEditPrazo] = useState("");
+  const [editFinalidade, setEditFinalidade] = useState("");
+  const [editObservacoes, setEditObservacoes] = useState("");
+
+  function startEdit() {
+    if (!proposal) return;
+    const meta = proposal.metadata ?? {};
+    const ct = (meta.client_type ?? proposal.client_type ?? "PF") as "PF" | "PJ";
+    setEditClientType(ct);
+    setEditNome(proposal.client_name ?? "");
+    setEditCpfCnpj(proposal.cpf_cnpj ?? "");
+    setEditEmail((meta.email ?? proposal.email ?? "") as string);
+    setEditTelefone((meta.telefone ?? proposal.telefone ?? "") as string);
+    setEditRg((meta.rg ?? "") as string);
+    setEditNascimento((meta.nascimento ?? "") as string);
+    setEditEstadoCivil((meta.estado_civil ?? meta.estadoCivil ?? "") as string);
+    const rm = meta.renda_mensal ?? meta.renda;
+    setEditRenda(rm ? String(rm) : "");
+    setEditRazaoSocial((meta.razao_social ?? meta.razaoSocial ?? "") as string);
+    setEditNomeFantasia((meta.nome_fantasia ?? meta.nomeFantasia ?? "") as string);
+    setEditSocioResp((meta.socio_responsavel ?? meta.socioResponsavel ?? "") as string);
+    const fm = meta.faturamento_mensal ?? meta.faturamento;
+    setEditFaturamento(fm ? String(fm) : "");
+    setEditEndRua((meta.endereco_rua ?? meta.enderecoRua ?? "") as string);
+    setEditEndCidade((meta.endereco_cidade ?? meta.cidade ?? meta.city ?? "") as string);
+    setEditEndUf((meta.endereco_uf ?? meta.estado ?? meta.state ?? "") as string);
+    setEditEndCep((meta.endereco_cep ?? meta.cep ?? "") as string);
+    setEditRestricao((meta.restricao_cliente ?? meta.restricao ?? "") as "" | "SIM" | "NAO");
+    setEditPrazo((meta.prazo ?? proposal.prazo ?? "") as string);
+    setEditFinalidade((meta.finalidade ?? proposal.finalidade ?? "") as string);
+    setEditObservacoes((meta.observacoes ?? "") as string);
+    setShowEdit(true);
+  }
+
+  async function handleSaveEdit() {
+    if (!proposal) return;
+    setEditSaving(true);
+    const newMeta: Record<string, unknown> = {
+      ...proposal.metadata,
+      client_type: editClientType,
+      email: editEmail || undefined,
+      telefone: editTelefone || undefined,
+      prazo: editPrazo || undefined,
+      finalidade: editFinalidade || undefined,
+      restricao_cliente: editRestricao || undefined,
+      observacoes: editObservacoes || undefined,
+      rg: editRg || undefined,
+      nascimento: editNascimento || undefined,
+      estado_civil: editEstadoCivil || undefined,
+      renda_mensal: editRenda ? parseFloat(editRenda) || undefined : undefined,
+      razao_social: editRazaoSocial || undefined,
+      nome_fantasia: editNomeFantasia || undefined,
+      socio_responsavel: editSocioResp || undefined,
+      faturamento_mensal: editFaturamento ? parseFloat(editFaturamento) || undefined : undefined,
+      endereco_rua: editEndRua || undefined,
+      endereco_cidade: editEndCidade || undefined,
+      endereco_uf: editEndUf || undefined,
+      endereco_cep: editEndCep || undefined,
+    };
+    try {
+      const clientName = editClientType === "PF" ? editNome : (editRazaoSocial || editNome);
+      const res = await fetch("/api/credit-proposals", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: proposal.id,
+          client_name: clientName || undefined,
+          client_cpf_cnpj: editCpfCnpj || undefined,
+          metadata: newMeta,
+        }),
+      });
+      if (res.ok) {
+        setShowEdit(false);
+        onProposalUpdate?.(proposal.id, {
+          client_name: clientName || proposal.client_name,
+          cpf_cnpj: editCpfCnpj || proposal.cpf_cnpj,
+          metadata: newMeta as ProposalMeta,
+        });
+      } else {
+        const json = await res.json().catch(() => ({}));
+        alert(typeof json.error === "string" ? json.error : "Erro ao salvar alterações.");
+      }
+    } catch {
+      alert("Erro de conexão ao salvar alterações.");
+    } finally {
+      setEditSaving(false);
+    }
+  }
+
   // ── Commission state ──────────────────────────────────────────────────────
   const [valorCredito, setValorCredito] = useState(0);
   const [valorCreditoEdit, setValorCreditoEdit] = useState("");
@@ -330,6 +461,7 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
   // Sync state when proposal changes
   useEffect(() => {
     if (!proposal) return;
+    setShowEdit(false);
     setEscavadorResult(null);
     setShowEscavador(false);
     const vc = proposal.valor_credito_atual ?? proposal.requested_value;
@@ -491,18 +623,46 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
           {/* ── Dados do Cliente ── */}
           {(() => {
             const meta = proposal.metadata ?? {};
-            const clientType = (meta.client_type ?? proposal.client_type ?? "PF") as "PF" | "PJ";
-            const email = meta.email ?? proposal.email;
-            const telefone = meta.telefone ?? proposal.telefone;
-            const restricao = meta.restricao_cliente;
+            // Normaliza campos — suporta tanto snake_case (entrada manual) quanto camelCase (captação)
+            const clientType = (meta.client_type ?? meta.personType ?? proposal.client_type ?? "PF") as "PF" | "PJ";
+            const email     = (meta.email ?? proposal.email ?? "") as string;
+            const telefone  = (meta.telefone ?? meta.phone ?? proposal.telefone ?? "") as string;
+            const restricao = (meta.restricao_cliente ?? meta.restricao ?? "") as string;
+            // PF
+            const nascimento   = (meta.nascimento ?? "") as string;
+            const estadoCivil  = (meta.estado_civil ?? meta.estadoCivil ?? "") as string;
+            const rg           = (meta.rg ?? "") as string;
+            const rendaRaw     = meta.renda_mensal ?? meta.renda;
+            const rendaMensal  = rendaRaw ? parseFloat(String(rendaRaw).replace(/\D/g, "")) || 0 : 0;
+            // PJ
+            const razaoSocial      = (meta.razao_social ?? meta.razaoSocial ?? "") as string;
+            const nomeFantasia     = (meta.nome_fantasia ?? meta.nomeFantasia ?? "") as string;
+            const socioResponsavel = (meta.socio_responsavel ?? meta.socioResponsavel ?? "") as string;
+            const fatRaw           = meta.faturamento_mensal ?? meta.faturamento;
+            const faturamentoMensal = fatRaw ? parseFloat(String(fatRaw).replace(/\D/g, "")) || 0 : 0;
+            // Endereço
+            const endRua    = (meta.endereco_rua  ?? meta.endereco    ?? meta.enderecoRua ?? "") as string;
+            const endCidade = (meta.endereco_cidade ?? meta.cidade    ?? meta.city        ?? "") as string;
+            const endUF     = (meta.endereco_uf   ?? meta.estado      ?? meta.state       ?? "") as string;
+            const endCep    = (meta.endereco_cep  ?? meta.cep         ?? "") as string;
+            const temEndereco = !!(endRua || endCidade || endCep);
             return (
               <div className="space-y-3">
-                {/* Header with Escavador button */}
-                <div className="flex items-center justify-between">
+                {/* Header with Escavador + Edit buttons */}
+                <div className="flex items-center justify-between gap-2">
                   <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
                     {clientType === "PJ" ? <Building2 className="w-3.5 h-3.5" /> : <User className="w-3.5 h-3.5" />}
                     Dados do Cliente
                   </p>
+                  <div className="flex items-center gap-1.5">
+                    {canEditValorSolicitado && (
+                      <button
+                        onClick={startEdit}
+                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-primary/10 text-primary border border-primary/30 hover:bg-primary/20 transition-all"
+                      >
+                        <Pencil className="w-3 h-3" /> Editar Proposta
+                      </button>
+                    )}
                   <button
                     onClick={consultarEscavador}
                     disabled={escavadorLoading}
@@ -513,6 +673,7 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
                       : <Search className="w-3 h-3" />}
                     {escavadorLoading ? "Consultando..." : "Consultar Processos Judiciais"}
                   </button>
+                  </div>
                 </div>
 
                 {/* Client info card */}
@@ -534,31 +695,32 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
                       </div>
                     )}
                     {/* Dados PF */}
-                    {clientType === "PF" && meta.nascimento && <InfoRow label="Nascimento" value={meta.nascimento as string} />}
-                    {clientType === "PF" && meta.estado_civil && <InfoRow label="Estado Civil" value={meta.estado_civil as string} />}
-                    {clientType === "PF" && meta.rg && <InfoRow label="RG" value={meta.rg as string} />}
-                    {clientType === "PF" && meta.renda_mensal && (
+                    {clientType === "PF" && nascimento    && <InfoRow label="Nascimento"  value={nascimento} />}
+                    {clientType === "PF" && estadoCivil   && <InfoRow label="Estado Civil" value={estadoCivil} />}
+                    {clientType === "PF" && rg            && <InfoRow label="RG"          value={rg} />}
+                    {clientType === "PF" && rendaMensal > 0 && (
                       <div className="flex items-start justify-between gap-2">
                         <span className="text-xs text-muted-foreground flex-shrink-0 flex items-center gap-1"><Banknote className="w-3 h-3" /> Renda Mensal</span>
-                        <span className="text-xs font-semibold text-emerald-400">{formatCurrency(meta.renda_mensal as number)}</span>
+                        <span className="text-xs font-semibold text-emerald-400">{formatCurrency(rendaMensal)}</span>
                       </div>
                     )}
                     {/* Dados PJ */}
-                    {clientType === "PJ" && meta.razao_social && <InfoRow label="Razão Social" value={meta.razao_social as string} />}
-                    {clientType === "PJ" && meta.nome_fantasia && <InfoRow label="Nome Fantasia" value={meta.nome_fantasia as string} />}
-                    {clientType === "PJ" && meta.socio_responsavel && <InfoRow label="Sócio Responsável" value={meta.socio_responsavel as string} />}
-                    {clientType === "PJ" && meta.faturamento_mensal && (
+                    {clientType === "PJ" && razaoSocial      && <InfoRow label="Razão Social"       value={razaoSocial} />}
+                    {clientType === "PJ" && nomeFantasia     && <InfoRow label="Nome Fantasia"      value={nomeFantasia} />}
+                    {clientType === "PJ" && socioResponsavel && <InfoRow label="Sócio Responsável"  value={socioResponsavel} />}
+                    {clientType === "PJ" && faturamentoMensal > 0 && (
                       <div className="flex items-start justify-between gap-2">
                         <span className="text-xs text-muted-foreground flex-shrink-0 flex items-center gap-1"><Banknote className="w-3 h-3" /> Faturamento Mensal</span>
-                        <span className="text-xs font-semibold text-emerald-400">{formatCurrency(meta.faturamento_mensal as number)}</span>
+                        <span className="text-xs font-semibold text-emerald-400">{formatCurrency(faturamentoMensal)}</span>
                       </div>
                     )}
-                    {/* Endereço residencial */}
-                    {(meta.endereco_rua || meta.endereco_cidade) && (
+                    {/* Endereço */}
+                    {temEndereco && (
                       <div className="col-span-2 flex items-start gap-1.5 pt-1 border-t border-border/50">
                         <MapPin className="w-3 h-3 text-muted-foreground flex-shrink-0 mt-0.5" />
                         <span className="text-xs text-foreground">
-                          {[meta.endereco_rua, meta.endereco_cidade, meta.endereco_uf].filter(Boolean).join(", ")}
+                          {[endRua, endCidade, endUF].filter(Boolean).join(", ")}
+                          {endCep && <span className="ml-1 text-muted-foreground">— CEP: {endCep}</span>}
                         </span>
                       </div>
                     )}
@@ -606,8 +768,9 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
                       )}
                     </div>
                     {proposal.approved_value && <InfoRow label="Valor Aprovado" value={formatCurrency(proposal.approved_value)} success />}
-                    {(meta.prazo ?? proposal.prazo) && <InfoRow label="Prazo" value={meta.prazo ?? proposal.prazo ?? ""} />}
-                    {(meta.finalidade ?? proposal.finalidade) && <InfoRow label="Finalidade" value={meta.finalidade ?? proposal.finalidade ?? ""} />}
+                    {(meta.prazo ?? proposal.prazo) && <InfoRow label="Prazo" value={(meta.prazo ?? proposal.prazo ?? "") as string} />}
+                    {(meta.finalidade ?? proposal.finalidade) && <InfoRow label="Finalidade" value={(meta.finalidade ?? proposal.finalidade ?? "") as string} />}
+                    {(meta.observacoes) && <InfoRow label="Observações" value={meta.observacoes as string} />}
                   </div>
                 </div>
               </div>
@@ -710,7 +873,7 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
               : (proposal.imovel_cidade || proposal.imovel_endereco)
                 ? [{ endereco: proposal.imovel_endereco, valor_medio: proposal.imovel_valor_medio, cidade: proposal.imovel_cidade, estado: proposal.imovel_estado }]
                 : [];
-            const linhasComImovel = ["HOME EQUITY","HE ESTRESSADO","HOMECASH","CGI","CRI","FUNDO CONSTRUÇÃO RESIDENCIAL","FUNDO CONSTRUÇÃO LOTEAMENTO","FUNDO CONSTRUÇÃO EMPREENDIMENTO"];
+            const linhasComImovel = ["HOME EQUITY","HOME EQUITY ESTRESSADO","HOMECASH","CGI","CRI","FUNDO CONSTRUÇÃO RESIDENCIAL","FUNDO CONSTRUÇÃO LOTEAMENTO","FUNDO CONSTRUÇÃO EMPREENDIMENTO"];
             if (!linhasComImovel.includes(proposal.credit_line) || imoveis.length === 0) return null;
             return (
               <div className="space-y-2">
@@ -721,10 +884,13 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
                   <div key={idx} className="p-4 rounded-xl border border-amber-500/30 bg-amber-500/5 space-y-2">
                     <p className="text-[10px] font-bold text-amber-400 uppercase tracking-wider">Imóvel {imoveis.length > 1 ? `#${idx + 1}` : ""}</p>
                     <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
-                      {im.endereco && (
+                      {(im.endereco || im.cep) && (
                         <div className="col-span-2 flex items-start gap-1.5">
                           <MapPin className="w-3 h-3 text-amber-400 flex-shrink-0 mt-0.5" />
-                          <span className="text-xs text-foreground">{im.endereco}</span>
+                          <span className="text-xs text-foreground">
+                            {im.endereco}
+                            {im.cep && <span className="ml-1 text-muted-foreground">— CEP: {im.cep}</span>}
+                          </span>
                         </div>
                       )}
                       {(im.cidade || im.estado) && (
@@ -926,6 +1092,41 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
               <p className="text-[10px] text-muted-foreground text-center italic">Somente analistas e administradores podem editar os campos de comissão.</p>
             )}
           </div>
+
+          {/* ── Documentos Enviados pelo Cliente (Captação) ── */}
+          {(() => {
+            const meta = proposal.metadata ?? {};
+            const captDocs = (meta.documentos as Array<{ label: string; name: string; url: string }> | undefined) ?? [];
+            if (captDocs.length === 0) return null;
+            return (
+              <div className="p-4 rounded-xl border border-emerald-500/30 bg-emerald-500/5 space-y-3">
+                <p className="text-xs font-semibold text-emerald-400 flex items-center gap-1.5">
+                  <Paperclip className="w-3.5 h-3.5" /> Documentos Enviados pelo Cliente ({captDocs.length})
+                </p>
+                <div className="space-y-2">
+                  {captDocs.map((doc, idx) => (
+                    <div key={idx} className="flex items-center justify-between gap-3 px-3 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <FileText className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
+                        <div className="min-w-0">
+                          <p className="text-xs font-semibold text-emerald-300 truncate">{doc.label}</p>
+                          <p className="text-[10px] text-muted-foreground truncate">{doc.name}</p>
+                        </div>
+                      </div>
+                      <a
+                        href={doc.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-1 px-2 py-1 rounded text-xs font-medium bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/35 transition-colors flex-shrink-0"
+                      >
+                        <ExternalLink className="w-3 h-3" /> Abrir
+                      </a>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
 
           {/* ── Checklist de Documentos ── */}
           {(() => {
@@ -1196,6 +1397,134 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
           </div>
         </div>
       )}
+
+      {/* ── Modal: Editar Proposta ── */}
+      {showEdit && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+          <div className="bg-card border border-border rounded-2xl w-full max-w-2xl max-h-[90vh] flex flex-col animate-fade-in">
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+              <div>
+                <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                  <Pencil className="w-4 h-4 text-primary" /> Editar Proposta
+                </h3>
+                <p className="text-[11px] text-muted-foreground mt-0.5">{proposal?.code} — {proposal?.client_name}</p>
+              </div>
+              <button onClick={() => setShowEdit(false)} className="w-8 h-8 rounded-lg hover:bg-secondary flex items-center justify-center text-muted-foreground hover:text-white transition-colors">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* PF/PJ Toggle */}
+            <div className="px-6 pt-4 flex gap-2">
+              {(["PF","PJ"] as const).map((t) => (
+                <button key={t} onClick={() => setEditClientType(t)}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all border ${editClientType === t ? "bg-primary/15 border-primary/40 text-primary" : "border-border text-muted-foreground hover:bg-secondary"}`}>
+                  {t === "PF" ? <User className="w-4 h-4" /> : <Building2 className="w-4 h-4" />}
+                  {t === "PF" ? "Pessoa Física" : "Pessoa Jurídica"}
+                </button>
+              ))}
+            </div>
+
+            {/* Body */}
+            <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+              {/* Dados do Cliente */}
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Dados do Cliente</p>
+              {editClientType === "PF" ? (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <EField label="Nome completo *" value={editNome} onChange={setEditNome} placeholder="João da Silva" />
+                    <EField label="CPF" value={editCpfCnpj} onChange={setEditCpfCnpj} placeholder="000.000.000-00" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <EField label="E-mail" value={editEmail} onChange={setEditEmail} placeholder="joao@email.com" type="email" />
+                    <EField label="Telefone" value={editTelefone} onChange={setEditTelefone} placeholder="(11) 99999-0000" />
+                  </div>
+                  <div className="grid grid-cols-3 gap-3">
+                    <EField label="RG" value={editRg} onChange={setEditRg} placeholder="00.000.000-0" />
+                    <EField label="Data de Nascimento" value={editNascimento} onChange={setEditNascimento} type="date" />
+                    <ESelectField label="Estado Civil" value={editEstadoCivil} onChange={setEditEstadoCivil}
+                      options={["Solteiro(a)","Casado(a)","Divorciado(a)","Viúvo(a)","União Estável"]} />
+                  </div>
+                  <div className="grid grid-cols-3 gap-3">
+                    <EField label="Renda Mensal (R$)" value={editRenda} onChange={setEditRenda} placeholder="0,00" />
+                    <EField label="Endereço" value={editEndRua} onChange={setEditEndRua} placeholder="Rua, número, bairro" />
+                    <EField label="CEP" value={editEndCep} onChange={setEditEndCep} placeholder="00000-000" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <EField label="Cidade" value={editEndCidade} onChange={setEditEndCidade} placeholder="São Paulo" />
+                    <EField label="UF" value={editEndUf} onChange={setEditEndUf} placeholder="SP" />
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <EField label="Razão Social *" value={editRazaoSocial} onChange={setEditRazaoSocial} placeholder="Empresa Ltda" />
+                    <EField label="CNPJ" value={editCpfCnpj} onChange={setEditCpfCnpj} placeholder="00.000.000/0001-00" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <EField label="Nome Fantasia" value={editNomeFantasia} onChange={setEditNomeFantasia} placeholder="Nome fantasia" />
+                    <EField label="Sócio Responsável" value={editSocioResp} onChange={setEditSocioResp} placeholder="Nome do sócio" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <EField label="E-mail" value={editEmail} onChange={setEditEmail} placeholder="contato@empresa.com" type="email" />
+                    <EField label="Telefone" value={editTelefone} onChange={setEditTelefone} placeholder="(11) 3000-0000" />
+                  </div>
+                  <div className="grid grid-cols-3 gap-3">
+                    <EField label="Faturamento Anual (R$)" value={editFaturamento} onChange={setEditFaturamento} placeholder="0,00" />
+                    <EField label="Endereço" value={editEndRua} onChange={setEditEndRua} placeholder="Rua, número, bairro" />
+                    <EField label="CEP" value={editEndCep} onChange={setEditEndCep} placeholder="00000-000" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <EField label="Cidade" value={editEndCidade} onChange={setEditEndCidade} placeholder="São Paulo" />
+                    <EField label="UF" value={editEndUf} onChange={setEditEndUf} placeholder="SP" />
+                  </div>
+                </div>
+              )}
+
+              {/* Restrição */}
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Restrição cadastral / financeira</label>
+                <div className="flex gap-2">
+                  {[{ val: "NAO", label: "Sem restrição", color: "emerald" }, { val: "SIM", label: "Com restrição", color: "red" }].map(opt => (
+                    <button key={opt.val} type="button" onClick={() => setEditRestricao(opt.val as "SIM"|"NAO")}
+                      className={`flex-1 py-2 rounded-lg text-xs font-bold border transition-colors ${
+                        editRestricao === opt.val
+                          ? opt.color === "emerald" ? "bg-emerald-500/15 border-emerald-500/50 text-emerald-400" : "bg-red-500/15 border-red-500/50 text-red-400"
+                          : "bg-transparent border-border text-muted-foreground hover:border-primary/40"
+                      }`}>{opt.label}</button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Operação */}
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider pt-2 border-t border-border">Operação</p>
+              <div className="grid grid-cols-2 gap-3">
+                <ESelectField label="Prazo desejado" value={editPrazo} onChange={setEditPrazo}
+                  options={["12 meses","24 meses","36 meses","48 meses","60 meses","84 meses","120 meses","180 meses","240 meses"]} />
+                <ESelectField label="Finalidade" value={editFinalidade} onChange={setEditFinalidade}
+                  options={["Capital de Giro","Investimento","Refinanciamento","Aquisição","Expansão","Outro"]} />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Observações</label>
+                <textarea value={editObservacoes} onChange={(e) => setEditObservacoes(e.target.value)} rows={3}
+                  placeholder="Informações relevantes sobre a operação..."
+                  className="w-full px-3 py-2 text-sm bg-secondary border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 resize-none" />
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-4 border-t border-border flex items-center justify-end gap-3">
+              <Button variant="outline" size="sm" onClick={() => setShowEdit(false)} disabled={editSaving}>Cancelar</Button>
+              <Button size="sm" onClick={handleSaveEdit} disabled={editSaving} className="gap-2 bg-emerald-600 hover:bg-emerald-500">
+                {editSaving
+                  ? <><div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" /> Salvando...</>
+                  : <><Check className="w-3.5 h-3.5" /> Salvar Alterações</>}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1217,6 +1546,33 @@ function InfoRow({ label, value, highlight, success }: { label: string; value: s
       <span className={`text-xs font-medium text-right ${success ? "text-emerald-400" : highlight ? "text-primary" : "text-foreground"}`}>
         {value}
       </span>
+    </div>
+  );
+}
+
+function EField({ label, value, onChange, placeholder, type = "text" }: {
+  label: string; value: string; onChange: (v: string) => void; placeholder?: string; type?: string;
+}) {
+  return (
+    <div>
+      <label className="block text-xs font-semibold text-muted-foreground mb-1.5">{label}</label>
+      <input type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder}
+        className="w-full h-9 px-3 text-sm bg-secondary border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50" />
+    </div>
+  );
+}
+
+function ESelectField({ label, value, onChange, options }: {
+  label: string; value: string; onChange: (v: string) => void; options: string[];
+}) {
+  return (
+    <div>
+      <label className="block text-xs font-semibold text-muted-foreground mb-1.5">{label}</label>
+      <select value={value} onChange={(e) => onChange(e.target.value)}
+        className="w-full h-9 px-3 text-sm bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50">
+        <option value="">Selecione...</option>
+        {options.map((o) => <option key={o} value={o}>{o}</option>)}
+      </select>
     </div>
   );
 }

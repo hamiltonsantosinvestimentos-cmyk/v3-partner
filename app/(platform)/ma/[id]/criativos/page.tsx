@@ -4,30 +4,43 @@ import Link from "next/link";
 import { CriativosPanel } from "@/components/ma/criativos-panel";
 import { DEMO_DEALS } from "@/lib/demo-data";
 
-const IS_DEMO =
-  !process.env.NEXT_PUBLIC_SUPABASE_URL ||
-  process.env.NEXT_PUBLIC_SUPABASE_URL.includes("SEU_PROJETO");
+const IS_DEMO = false;
+const ADMIN_ROLES = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"];
+
+export const dynamic = "force-dynamic";
 
 export default async function CriativosPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let deal: any = null;
+  let isAdmin = false;
 
   if (IS_DEMO) {
     deal = DEMO_DEALS.find((d) => d.id === id) ?? null;
   } else {
     const { createClient } = await import("@/lib/supabase/server");
     const supabase = await createClient();
-    const { data } = await supabase
-      .from("ma_deals")
-      .select("id, code, title, target_company, sector, location, slug")
-      .eq("id", id)
-      .single();
-    deal = data;
+    const [dealRes, userRes] = await Promise.all([
+      supabase.from("ma_deals").select("id, code, title, target_company, sector, location, slug, asset_data").eq("id", id).single(),
+      supabase.auth.getUser(),
+    ]);
+    deal = dealRes.data;
+
+    if (userRes.data.user) {
+      // Usa o cliente do próprio usuário para ler seu perfil (RLS: id = auth.uid())
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", userRes.data.user.id)
+        .single();
+      isAdmin = ADMIN_ROLES.includes(profile?.role ?? "");
+    }
   }
 
   if (!deal) notFound();
+
+  const kitFilesAvailable = (deal.asset_data?.kit_files_available ?? {}) as Record<string, boolean>;
 
   return (
     <div className="space-y-5 animate-fade-in">
@@ -82,6 +95,8 @@ export default async function CriativosPage({ params }: { params: Promise<{ id: 
         dealId={deal.id}
         dealName={deal.target_company}
         isDemo={IS_DEMO}
+        isAdmin={isAdmin}
+        kitFilesAvailable={kitFilesAvailable}
       />
 
       {/* Instrução engine */}

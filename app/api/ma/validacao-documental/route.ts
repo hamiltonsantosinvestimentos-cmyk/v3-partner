@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const IS_DEMO = process.env.NEXT_PUBLIC_DEMO_MODE === "true" || !process.env.ANTHROPIC_API_KEY;
+const IS_DEMO = false;
 
 const DEMO_RESULT = {
   score: 72,
