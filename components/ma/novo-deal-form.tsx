@@ -14,7 +14,7 @@ import {
 import {
   Building2, MapPin, FileText, TrendingUp, Scale, Users, Paperclip, Send,
   ChevronRight, ChevronLeft, CheckCircle, AlertCircle, Loader2, X, Upload,
-  Instagram, Linkedin, Globe,
+  AtSign, Briefcase, Globe,
 } from "lucide-react";
 
 // ── Schema ────────────────────────────────────────────────────────────────────
@@ -534,7 +534,7 @@ export function NovoDealForm({ isDemo, userId, onSuccess, onCancel }: NovoDealFo
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <FieldGroup label="Instagram">
                   <div className="relative">
-                    <Instagram className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#C9A84C]" />
+                    <AtSign className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#C9A84C]" />
                     <input
                       {...register("instagram")}
                       placeholder="@empresa ou URL"
@@ -544,7 +544,7 @@ export function NovoDealForm({ isDemo, userId, onSuccess, onCancel }: NovoDealFo
                 </FieldGroup>
                 <FieldGroup label="LinkedIn">
                   <div className="relative">
-                    <Linkedin className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#C9A84C]" />
+                    <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#C9A84C]" />
                     <input
                       {...register("linkedin")}
                       placeholder="linkedin.com/company/..."
