@@ -14,6 +14,7 @@ import {
 import {
   Building2, MapPin, FileText, TrendingUp, Scale, Users, Paperclip, Send,
   ChevronRight, ChevronLeft, CheckCircle, AlertCircle, Loader2, X, Upload,
+  Instagram, Linkedin, Globe,
 } from "lucide-react";
 
 // ── Schema ────────────────────────────────────────────────────────────────────
@@ -27,6 +28,9 @@ const schema = z.object({
   location:           z.string().min(2, "Ex: São Paulo · SP"),
   cnpj:               z.string().optional(),
   founding_year:      z.string().optional(),
+  instagram:          z.string().optional(),
+  linkedin:           z.string().optional(),
+  website_url:        z.string().optional(),
 
   // Step 2 — Descrição
   descricao:          z.string().min(30, "Mínimo 30 caracteres"),
@@ -361,6 +365,13 @@ export function NovoDealForm({ isDemo, userId, onSuccess, onCancel }: NovoDealFo
       comissionamento: data.comissionamento ?? "",
       info_adicionais: data.info_adicionais ?? "",
 
+      // Redes Sociais
+      redes_sociais: {
+        instagram:   data.instagram ?? "",
+        linkedin:    data.linkedin ?? "",
+        website_url: data.website_url ?? "",
+      },
+
       // Step 6 — Documentos
       documentos: uploadedFiles.map(f => ({ nome: f.name, tamanho: f.size, tipo: f.type })),
 
@@ -514,6 +525,45 @@ export function NovoDealForm({ isDemo, userId, onSuccess, onCancel }: NovoDealFo
             <FieldGroup label="Ano de Fundação">
               <Input {...register("founding_year")} placeholder="Ex: 2018" />
             </FieldGroup>
+
+            {/* Redes Sociais */}
+            <div className="md:col-span-2">
+              <p className="text-[10px] font-bold tracking-widest uppercase text-[#C9A84C] mb-3 mt-1">
+                Redes Sociais &amp; Presença Digital
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <FieldGroup label="Instagram">
+                  <div className="relative">
+                    <Instagram className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#C9A84C]" />
+                    <input
+                      {...register("instagram")}
+                      placeholder="@empresa ou URL"
+                      className="w-full h-9 rounded-lg border border-[#243A66] bg-[#162744] pl-9 pr-3 text-sm text-[#F0ECE4] placeholder:text-[#7A8FA8] focus:outline-none focus:ring-2 focus:ring-[#C9A84C]/50 transition"
+                    />
+                  </div>
+                </FieldGroup>
+                <FieldGroup label="LinkedIn">
+                  <div className="relative">
+                    <Linkedin className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#C9A84C]" />
+                    <input
+                      {...register("linkedin")}
+                      placeholder="linkedin.com/company/..."
+                      className="w-full h-9 rounded-lg border border-[#243A66] bg-[#162744] pl-9 pr-3 text-sm text-[#F0ECE4] placeholder:text-[#7A8FA8] focus:outline-none focus:ring-2 focus:ring-[#C9A84C]/50 transition"
+                    />
+                  </div>
+                </FieldGroup>
+                <FieldGroup label="Website">
+                  <div className="relative">
+                    <Globe className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#C9A84C]" />
+                    <input
+                      {...register("website_url")}
+                      placeholder="www.empresa.com.br"
+                      className="w-full h-9 rounded-lg border border-[#243A66] bg-[#162744] pl-9 pr-3 text-sm text-[#F0ECE4] placeholder:text-[#7A8FA8] focus:outline-none focus:ring-2 focus:ring-[#C9A84C]/50 transition"
+                    />
+                  </div>
+                </FieldGroup>
+              </div>
+            </div>
           </div>
         </div>
       );
