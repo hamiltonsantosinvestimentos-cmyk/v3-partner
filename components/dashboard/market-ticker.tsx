@@ -87,8 +87,8 @@ export function MarketTicker() {
   return (
     <div className="relative flex items-center bg-[#09081A] border border-[#122036] rounded-xl overflow-hidden h-11 mb-5">
       {/* Label esquerda */}
-      <div className="flex items-center gap-1.5 px-3 bg-[#C9A84C] h-full shrink-0 z-10 min-w-[110px]">
-        <Activity className="w-3 h-3 text-[#09081A]" />
+      <div className="flex items-center gap-1.5 px-3 bg-[#C9A84C] h-full shrink-0 z-10">
+        <Activity className="w-3 h-3 text-[#09081A] shrink-0" />
         <span className="text-[#09081A] text-[10px] font-bold uppercase tracking-wider whitespace-nowrap">
           Mercado ao vivo
         </span>
@@ -128,8 +128,7 @@ export function MarketTicker() {
         </div>
       )}
 
-      {/* Fade nas bordas */}
-      <div className="absolute left-[110px] top-0 w-8 h-full bg-gradient-to-r from-[#09081A] to-transparent pointer-events-none z-10" />
+      {/* Fade na borda direita (antes do timestamp) */}
       <div className="absolute right-[72px] top-0 w-8 h-full bg-gradient-to-l from-[#09081A] to-transparent pointer-events-none z-10" />
     </div>
   );
