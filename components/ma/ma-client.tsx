@@ -661,12 +661,14 @@ export function MaClient({ deals, userId = "", userName = "" }: MaClientProps) {
                     linkedin_post: "LinkedIn Post", linkedin_story: "LinkedIn Story",
                   };
                   const availableEntries = Object.entries(kitFiles).filter(([, v]) => v);
+                  // Considera liberado se flag explícito OU se já há arquivos disponibilizados
+                  const efetivamenteLiberado = kitLiberado || availableEntries.length > 0;
                   return (
                     <div>
                       <p className="text-xs text-[#7A8FA8] mb-2 flex items-center gap-1.5">
                         <FileImage size={12} /> Kit de Criativos
                       </p>
-                      {!kitLiberado ? (
+                      {!efetivamenteLiberado ? (
                         <div className="px-3 py-2.5 rounded-lg bg-[#0F1E35] border border-dashed border-[#243A66] text-center">
                           <p className="text-[11px] text-[#5A7490]">🔒 Disponível após validação FORJA pela Mesa M&A</p>
                         </div>

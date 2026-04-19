@@ -31,12 +31,20 @@ export async function PATCH(req: NextRequest) {
 
   const updated = { ...current, [file_key]: available };
 
+  // Se pelo menos um arquivo está disponível, kit_liberado = true automaticamente
+  const anyAvailable = Object.values(updated).some(Boolean);
+  const newAssetData: Record<string, unknown> = {
+    ...ad,
+    kit_files_available: updated,
+    kit_liberado: anyAvailable ? true : (ad.kit_liberado ?? false),
+  };
+
   const { error } = await svc.from("ma_deals").update({
-    asset_data: { ...ad, kit_files_available: updated },
+    asset_data: newAssetData,
     updated_at: new Date().toISOString(),
   }).eq("id", deal_id);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  return NextResponse.json({ ok: true, kit_files_available: updated });
+  return NextResponse.json({ ok: true, kit_files_available: updated, kit_liberado: newAssetData.kit_liberado });
 }
