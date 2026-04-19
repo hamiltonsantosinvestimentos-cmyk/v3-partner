@@ -7,16 +7,25 @@ export async function GET() {
     return NextResponse.json([]);
   }
 
-  const { createServiceClient } = await import("@/lib/supabase/server");
-  const supabase = await createServiceClient();
+  // Verifica autenticação e role ADMIN antes de expor todos os perfis
+  const { createClient, createServiceClient } = await import("@/lib/supabase/server");
+  const authClient = await createClient();
+  const { data: { user } } = await authClient.auth.getUser();
+  if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
-  const { data, error } = await supabase
+  const svc = await createServiceClient();
+  const { data: caller } = await svc.from("profiles").select("role").eq("id", user.id).single();
+  if (caller?.role !== "ADMIN") {
+    return NextResponse.json({ error: "Acesso restrito a administradores" }, { status: 403 });
+  }
+
+  const { data, error } = await svc
     .from("profiles")
     .select("*")
     .order("created_at", { ascending: false });
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: "Erro ao buscar usuários" }, { status: 500 });
   }
 
   return NextResponse.json(data ?? []);

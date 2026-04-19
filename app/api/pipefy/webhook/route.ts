@@ -14,13 +14,15 @@ export async function POST(req: NextRequest) {
   try {
     // ── Validação de autenticidade do webhook Pipefy ──────────────────────────
     const webhookSecret = process.env.PIPEFY_WEBHOOK_SECRET;
-    if (webhookSecret) {
-      const incomingToken =
-        req.headers.get("x-pipefy-webhook-token") ??
-        req.headers.get("authorization")?.replace("Bearer ", "");
-      if (!incomingToken || incomingToken !== webhookSecret) {
-        return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
-      }
+    if (!webhookSecret) {
+      console.error("[pipefy-webhook] PIPEFY_WEBHOOK_SECRET não configurado — rejeitando request");
+      return NextResponse.json({ ok: false, error: "Webhook não configurado" }, { status: 503 });
+    }
+    const incomingToken =
+      req.headers.get("x-pipefy-webhook-token") ??
+      req.headers.get("authorization")?.replace("Bearer ", "");
+    if (!incomingToken || incomingToken !== webhookSecret) {
+      return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
     }
 
     const body = await req.json();

@@ -315,6 +315,20 @@ function getDemoResponse(message: string): string {
 }
 
 export async function POST(request: Request) {
+  // Verificação de autenticação — impede uso não autorizado da API Anthropic
+  if (!IS_DEMO) {
+    try {
+      const { createClient } = await import("@/lib/supabase/server");
+      const supabase = await createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+      }
+    } catch {
+      return NextResponse.json({ error: "Erro de autenticação" }, { status: 401 });
+    }
+  }
+
   if (IS_DEMO) {
     const { messages } = await request.json();
     const lastMessage = messages[messages.length - 1]?.content || "";
@@ -335,7 +349,16 @@ export async function POST(request: Request) {
   }
 
   // Production: Anthropic Claude
-  const { messages } = await request.json();
+  const body = await request.json();
+  const rawMessages = body.messages;
+  if (!Array.isArray(rawMessages)) {
+    return NextResponse.json({ error: "Payload inválido" }, { status: 400 });
+  }
+  // Limita a 50 mensagens e 100k chars totais para prevenir abuso
+  const messages = rawMessages.slice(-50).map((m: Record<string, unknown>) => ({
+    role: m.role,
+    content: typeof m.content === "string" ? m.content.slice(0, 8000) : m.content,
+  }));
 
   try {
     const Anthropic = (await import("@anthropic-ai/sdk")).default;

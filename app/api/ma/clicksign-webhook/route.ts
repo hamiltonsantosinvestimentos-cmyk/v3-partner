@@ -22,10 +22,8 @@ export async function POST(request: NextRequest) {
       request.headers.get("x-clicksign-hmac-sha256") ??
       request.headers.get("x-webhook-secret");
     if (receivedSecret !== webhookSecret) {
-      // Retorna 200 mesmo em caso de falha de autenticação para evitar retry
-      // mas não processa o payload
-      console.warn("[clicksign-webhook] Webhook secret inválido — ignorado");
-      return NextResponse.json({ ok: true, ignored: true });
+      console.warn("[clicksign-webhook] Webhook secret inválido — rejeitado");
+      return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
     }
   }
 

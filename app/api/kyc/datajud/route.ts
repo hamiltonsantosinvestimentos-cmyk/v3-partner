@@ -6,9 +6,7 @@ export const maxDuration = 60;
 
 const ALLOWED_ROLES = ["ADMIN", "MESA_OPERACIONAL"];
 
-const DATAJUD_KEY =
-  process.env.DATAJUD_API_KEY ??
-  "cDZHYzlZa0JadVREZDJCendQbXY6SkJlTzNjLV9TRENyQk1RdnFKZGRQdw==";
+const DATAJUD_KEY = process.env.DATAJUD_API_KEY ?? "";
 
 const TRIBUNAIS_PRINCIPAIS = [
   "api_publica_tjsp",
