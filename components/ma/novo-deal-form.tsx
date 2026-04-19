@@ -69,9 +69,22 @@ type FormData = z.infer<typeof schema>;
 // ── Constantes ────────────────────────────────────────────────────────────────
 
 const SETORES = [
-  "Fintech", "Crédito Estruturado", "Real Estate", "Mineração · Pedras Preciosas",
-  "Mineração · Metais", "Agropecuária", "Infraestrutura", "Asset Management",
-  "Corretagem", "Seguros", "Saúde", "Educação", "Varejo", "Indústria", "Outro",
+  "Agropecuária",
+  "Asset Management",
+  "Corretagem",
+  "Crédito Estruturado",
+  "Educação",
+  "Energia Solar",
+  "Fintech",
+  "Indústria",
+  "Infraestrutura",
+  "Mineração · Metais",
+  "Mineração · Pedras Preciosas",
+  "Real Estate",
+  "Saúde",
+  "Seguros",
+  "Varejo",
+  "Outro",
 ];
 
 const TIPOS_DEAL = [
@@ -872,8 +885,9 @@ export function NovoDealForm({ isDemo, userId, onSuccess, onCancel }: NovoDealFo
           </Button>
         ) : (
           <Button
-            type="submit"
+            type="button"
             disabled={saving}
+            onClick={() => handleSubmit(onSubmit)()}
             className="bg-[#C9A84C] hover:bg-[#E8C97A] text-[#09081A] font-bold min-w-40"
           >
             {saving ? (
