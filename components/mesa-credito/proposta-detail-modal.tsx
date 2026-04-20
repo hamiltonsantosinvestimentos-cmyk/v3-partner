@@ -330,6 +330,50 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
   const [editFinalidade, setEditFinalidade] = useState("");
   const [editObservacoes, setEditObservacoes] = useState("");
 
+  // ── Contrato ──────────────────────────────────────────────────────────────
+  const [sendingContrato, setSendingContrato] = useState(false);
+  const [contratoStatus, setContratoStatus] = useState<"idle" | "sent" | "error">("idle");
+  const [contratoMsg, setContratoMsg] = useState("");
+  const [contratoInfo, setContratoInfo] = useState<{
+    status: string; token: string; signed_at?: string | null;
+    v3_signed_at?: string | null; v3_signer_name?: string | null;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!proposal?.id || !open) return;
+    fetch(`/api/contratos/status?proposal_id=${proposal.id}`)
+      .then(r => r.json())
+      .then(({ contrato }) => setContratoInfo(contrato ?? null))
+      .catch(() => {});
+  }, [proposal?.id, open]);
+
+  async function handleEnviarContrato() {
+    if (!proposal) return;
+    setSendingContrato(true);
+    setContratoStatus("idle");
+    setContratoMsg("");
+    try {
+      const res = await fetch("/api/contratos/enviar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ proposal_id: proposal.id }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setContratoStatus("error");
+        setContratoMsg(json.error ?? "Erro ao enviar contrato.");
+      } else {
+        setContratoStatus("sent");
+        setContratoMsg(`Contrato enviado para ${proposal.email ?? "o cliente"}!`);
+      }
+    } catch {
+      setContratoStatus("error");
+      setContratoMsg("Erro de conexão. Tente novamente.");
+    } finally {
+      setSendingContrato(false);
+    }
+  }
+
   // ── Valor Médio inline edit ───────────────────────────────────────────────
   const [editingVmIdx, setEditingVmIdx] = useState<number | null>(null);
   const [vmEditValue, setVmEditValue] = useState("");
@@ -1383,13 +1427,62 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-border flex items-center justify-between gap-2 flex-wrap">
+        <div className="px-6 py-4 border-t border-border space-y-2">
+          {contratoStatus !== "idle" && (
+            <div className={`text-xs px-3 py-2 rounded-lg ${contratoStatus === "sent" ? "bg-emerald-500/15 text-emerald-400" : "bg-red-500/15 text-red-400"}`}>
+              {contratoMsg}
+            </div>
+          )}
+          {contratoInfo && (
+            <div className={`flex items-center justify-between gap-2 px-3 py-2 rounded-lg text-xs ${
+              contratoInfo.status === "ASSINADO" ? "bg-emerald-500/10 border border-emerald-500/30" :
+              contratoInfo.status === "AGUARDANDO_V3" ? "bg-amber-500/10 border border-amber-500/30" :
+              contratoInfo.status === "AGUARDANDO_TESTEMUNHA" ? "bg-purple-500/10 border border-purple-500/30" :
+              "bg-blue-500/10 border border-blue-500/30"
+            }`}>
+              <div className="flex items-center gap-2">
+                <FileText className="w-3.5 h-3.5 text-muted-foreground" />
+                <span className={
+                  contratoInfo.status === "ASSINADO" ? "text-emerald-400 font-semibold" :
+                  contratoInfo.status === "AGUARDANDO_V3" ? "text-amber-400 font-semibold" :
+                  contratoInfo.status === "AGUARDANDO_TESTEMUNHA" ? "text-purple-400 font-semibold" :
+                  "text-blue-400 font-semibold"
+                }>
+                  {contratoInfo.status === "PENDENTE" && "Contrato enviado — aguardando cliente"}
+                  {contratoInfo.status === "AGUARDANDO_V3" && `✅ Cliente assinou — aguarda V3 (${contratoInfo.signed_at ? new Date(contratoInfo.signed_at).toLocaleDateString("pt-BR") : ""})`}
+                  {contratoInfo.status === "AGUARDANDO_TESTEMUNHA" && `✅ V3 assinou — aguardando testemunha (parceiro)`}
+                  {contratoInfo.status === "ASSINADO" && `✅ Contrato finalizado — ${contratoInfo.v3_signer_name ?? ""}`}
+                </span>
+              </div>
+              <a href={`/assinar/${contratoInfo.token}`} target="_blank" rel="noopener noreferrer"
+                className="text-muted-foreground hover:text-white underline text-[10px]">
+                Ver contrato
+              </a>
+            </div>
+          )}
+          <div className="flex items-center justify-between gap-2 flex-wrap">
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" onClick={onClose}>Fechar</Button>
             {canCompileDocuments && (
               <Button variant="outline" size="sm" onClick={compileDocuments} className="gap-1.5 border-primary/40 text-primary hover:bg-primary/10">
                 <Package className="w-3.5 h-3.5" />
                 Compilar Documentos
+              </Button>
+            )}
+            {canChangeStage && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleEnviarContrato}
+                disabled={sendingContrato}
+                className="gap-1.5 border-[#C9A84C]/40 text-[#C9A84C] hover:bg-[#C9A84C]/10"
+              >
+                {sendingContrato ? (
+                  <span className="w-3.5 h-3.5 rounded-full border-2 border-[#C9A84C] border-t-transparent animate-spin" />
+                ) : (
+                  <Send className="w-3.5 h-3.5" />
+                )}
+                Enviar Contrato
               </Button>
             )}
           </div>
@@ -1404,6 +1497,7 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
               <CheckCircle2 className="w-3 h-3 mr-1" /> Proposta Finalizada
             </Badge>
           )}
+          </div>
         </div>
       </div>
 

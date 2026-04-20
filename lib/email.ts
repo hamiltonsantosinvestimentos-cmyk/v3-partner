@@ -185,6 +185,237 @@ export async function notifyNovaComissao(opts: {
   );
 }
 
+/** Cliente: contrato enviado para assinatura via token */
+export async function notifyContratoCliente(opts: {
+  clientEmail: string;
+  clientName: string;
+  proposalCode: string;
+  creditLine: string;
+  requestedValue: number;
+  signingUrl: string;
+  expiresAt: string;
+}) {
+  const body = `
+    <p style="color:#7A96AF;font-size:14px;margin:0 0 20px;">
+      Olá, <strong style="color:#C8D4E3;">${opts.clientName}</strong>!
+      Sua proposta de crédito está pronta para assinatura do Mandato de Representação.
+    </p>
+    ${row("Código da Proposta", opts.proposalCode)}
+    ${row("Linha de Crédito", opts.creditLine)}
+    ${highlight("Valor Solicitado", moeda(opts.requestedValue), "#C4922E")}
+    <p style="color:#7A96AF;font-size:13px;margin-top:20px;">
+      Clique no botão abaixo para ler e assinar o contrato digitalmente.
+      O link expira em <strong style="color:#E5B96A;">${new Date(opts.expiresAt).toLocaleDateString("pt-BR")}</strong>.
+    </p>
+    <p style="color:#7A96AF;font-size:12px;margin-top:8px;">
+      Após a assinatura, nossa equipe dará continuidade à análise da sua operação.
+    </p>
+  `;
+  await send(
+    opts.clientEmail,
+    `📋 Assine seu contrato — V3 Partners · ${opts.proposalCode}`,
+    template("Contrato Pronto para Assinatura", body, {
+      label: "Assinar Contrato",
+      url: opts.signingUrl,
+    })
+  );
+}
+
+/** V3 Rep: contrato enviado para assinatura */
+export async function notifyContratoV3Rep(opts: {
+  repEmail: string;
+  clientName: string;
+  clientEmail: string;
+  proposalCode: string;
+  creditLine: string;
+  requestedValue: number;
+  commissionPerc: number;
+  signingUrl: string;
+}) {
+  const body = `
+    <p style="color:#7A96AF;font-size:14px;margin:0 0 20px;">
+      Contrato de mandato enviado ao cliente para assinatura eletrônica.
+    </p>
+    ${row("Código", opts.proposalCode)}
+    ${row("Cliente", opts.clientName)}
+    ${row("E-mail do Cliente", opts.clientEmail)}
+    ${row("Linha de Crédito", opts.creditLine)}
+    ${row("Comissão V3", `${opts.commissionPerc}%`)}
+    ${highlight("Valor da Operação", moeda(opts.requestedValue), "#C4922E")}
+    <p style="color:#7A96AF;font-size:13px;margin-top:16px;">
+      Acompanhe o status de assinatura na Mesa Operacional.
+    </p>
+  `;
+  await send(
+    opts.repEmail,
+    `📤 Contrato enviado — ${opts.clientName} · ${opts.proposalCode}`,
+    template("Mandato Enviado para Assinatura", body, {
+      label: "Ver na Mesa Operacional",
+      url: "https://v3-partner.vercel.app/mesa-operacional",
+    })
+  );
+}
+
+/** Cliente: confirmação de assinatura + aviso que aguarda V3 */
+export async function notifyContratoAssinado(opts: {
+  clientEmail: string;
+  clientName: string;
+  proposalCode: string;
+  creditLine: string;
+  signedAt: string;
+}) {
+  const dateStr = new Date(opts.signedAt).toLocaleString("pt-BR");
+  const body = `
+    <p style="color:#7A96AF;font-size:14px;margin:0 0 20px;">
+      Olá, <strong style="color:#C8D4E3;">${opts.clientName}</strong>!
+      Sua assinatura foi registrada com sucesso.
+    </p>
+    ${row("Código", opts.proposalCode)}
+    ${row("Linha de Crédito", opts.creditLine)}
+    ${row("Assinado em", dateStr)}
+    <div style="margin-top:16px;padding:14px 18px;background:#0A2018;border-radius:8px;border-left:3px solid #10B981;">
+      <p style="margin:0 0 4px;font-size:11px;color:#7A96AF;">Status</p>
+      <p style="margin:0;font-size:20px;font-weight:800;color:#10B981;">✅ Assinatura Registrada</p>
+    </div>
+    <p style="color:#7A96AF;font-size:13px;margin-top:16px;">
+      Aguardando a contra-assinatura da V3 Partners. Você receberá o contrato
+      finalizado assim que nossa equipe concluir a assinatura.
+    </p>
+  `;
+  await send(
+    opts.clientEmail,
+    `✅ Assinatura registrada — V3 Partners · ${opts.proposalCode}`,
+    template("Assinatura Registrada", body)
+  );
+}
+
+/** V3 Rep: link para contra-assinar após cliente assinar */
+export async function notifyV3ParaAssinar(opts: {
+  repEmail: string;
+  clientName: string;
+  clientEmail: string;
+  proposalCode: string;
+  creditLine: string;
+  signedAt: string;
+  v3SigningUrl: string;
+}) {
+  const dateStr = new Date(opts.signedAt).toLocaleString("pt-BR");
+  const body = `
+    <p style="color:#7A96AF;font-size:14px;margin:0 0 20px;">
+      O cliente assinou o mandato e aguarda a contra-assinatura da V3 Partners.
+    </p>
+    ${row("Código", opts.proposalCode)}
+    ${row("Cliente", opts.clientName)}
+    ${row("E-mail", opts.clientEmail)}
+    ${row("Linha de Crédito", opts.creditLine)}
+    ${row("Assinado pelo cliente em", dateStr)}
+    <p style="color:#7A96AF;font-size:13px;margin-top:16px;">
+      Clique no botão abaixo para revisar e assinar o contrato como representante da V3 Partners.
+    </p>
+  `;
+  await send(
+    opts.repEmail,
+    `✍️ Contra-assinatura necessária — ${opts.clientName} · ${opts.proposalCode}`,
+    template("Cliente Assinou — Sua Assinatura é Necessária", body, {
+      label: "Assinar como V3 Partners",
+      url: opts.v3SigningUrl,
+    })
+  );
+}
+
+/** Ambos: contrato totalmente assinado */
+export async function notifyContratoCompleto(opts: {
+  clientEmail: string;
+  clientName: string;
+  repEmail: string;
+  proposalCode: string;
+  creditLine: string;
+  clientSignedAt: string;
+  v3SignedAt: string;
+  v3SignerName: string;
+}) {
+  const clientDate = new Date(opts.clientSignedAt).toLocaleString("pt-BR");
+  const v3Date = new Date(opts.v3SignedAt).toLocaleString("pt-BR");
+
+  const clientBody = `
+    <p style="color:#7A96AF;font-size:14px;margin:0 0 20px;">
+      Olá, <strong style="color:#C8D4E3;">${opts.clientName}</strong>!
+      O contrato está totalmente assinado por ambas as partes.
+    </p>
+    ${row("Código", opts.proposalCode)}
+    ${row("Linha de Crédito", opts.creditLine)}
+    ${row("Assinado por você em", clientDate)}
+    ${row("Assinado pela V3 Partners em", v3Date)}
+    <div style="margin-top:16px;padding:14px 18px;background:#0A2018;border-radius:8px;border-left:3px solid #10B981;">
+      <p style="margin:0;font-size:20px;font-weight:800;color:#10B981;">✅ Contrato Finalizado</p>
+    </div>
+    <p style="color:#7A96AF;font-size:13px;margin-top:16px;">
+      Nossa equipe já está trabalhando na estruturação da sua operação de crédito.
+      Em breve entraremos em contato. Obrigado pela confiança na V3 Partners!
+    </p>
+  `;
+  await send(
+    opts.clientEmail,
+    `✅ Contrato finalizado — V3 Partners · ${opts.proposalCode}`,
+    template("Contrato Totalmente Assinado", clientBody)
+  );
+
+  const repBody = `
+    <p style="color:#7A96AF;font-size:14px;margin:0 0 20px;">
+      Contrato totalmente assinado por ambas as partes.
+    </p>
+    ${row("Código", opts.proposalCode)}
+    ${row("Cliente", opts.clientName)}
+    ${row("Linha de Crédito", opts.creditLine)}
+    ${row("Assinatura do cliente", clientDate)}
+    ${row("Contra-assinatura V3", v3Date)}
+    ${row("Representante V3", opts.v3SignerName)}
+    <div style="margin-top:16px;padding:14px 18px;background:#0A2018;border-radius:8px;border-left:3px solid #10B981;">
+      <p style="margin:0;font-size:20px;font-weight:800;color:#10B981;">✅ Mandato Finalizado</p>
+    </div>
+  `;
+  await send(
+    opts.repEmail,
+    `✅ Mandato finalizado — ${opts.clientName} · ${opts.proposalCode}`,
+    template("Contrato Totalmente Assinado", repBody, {
+      label: "Ver na Mesa Operacional",
+      url: "https://v3-partner.vercel.app/mesa-operacional",
+    })
+  );
+}
+
+/** Testemunha (partner): link para assinar como testemunha após V3 assinar */
+export async function notifyTestemunhaParaAssinar(opts: {
+  testemunhaEmail: string;
+  testemunhaNome: string;
+  clientName: string;
+  proposalCode: string;
+  creditLine: string;
+  testemunhaUrl: string;
+}) {
+  const body = `
+    <p style="color:#7A96AF;font-size:14px;margin:0 0 20px;">
+      Olá, <strong style="color:#C8D4E3;">${opts.testemunhaNome}</strong>!
+      O contrato referente ao seu cliente foi assinado pelas partes e aguarda
+      a sua assinatura como <strong style="color:#E5B96A;">testemunha</strong>.
+    </p>
+    ${row("Código", opts.proposalCode)}
+    ${row("Cliente", opts.clientName)}
+    ${row("Linha de Crédito", opts.creditLine)}
+    <p style="color:#7A96AF;font-size:13px;margin-top:16px;">
+      Clique no botão abaixo para assinar como testemunha do contrato.
+    </p>
+  `;
+  await send(
+    opts.testemunhaEmail,
+    `✍️ Assine como testemunha — ${opts.clientName} · ${opts.proposalCode}`,
+    template("Assinatura de Testemunha Necessária", body, {
+      label: "Assinar como Testemunha",
+      url: opts.testemunhaUrl,
+    })
+  );
+}
+
 /** Partner: comissão marcada como paga */
 export async function notifyComissaoPaga(opts: {
   partnerEmail: string;
