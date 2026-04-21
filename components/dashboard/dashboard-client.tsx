@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   TrendingUp,
@@ -85,6 +85,7 @@ const PERIOD_LABELS: Record<string, string> = {
 const TRIAL_DAYS = 30;
 
 function getDaysLeft(createdAt: string): number {
+  if (typeof window === "undefined") return TRIAL_DAYS; // SSR: valor neutro
   const elapsed = Math.floor((Date.now() - new Date(createdAt).getTime()) / 86400000);
   return Math.max(TRIAL_DAYS - elapsed, 0);
 }
@@ -191,9 +192,16 @@ export function DashboardClient({
   recentDeals,
 }: DashboardClientProps) {
   const router = useRouter();
-  const hour = new Date().getHours();
-  const greeting =
-    hour < 12 ? "Bom dia" : hour < 18 ? "Boa tarde" : "Boa noite";
+  const [greeting, setGreeting] = useState("Olá");
+  const [dateStr, setDateStr] = useState("");
+
+  useEffect(() => {
+    const hour = new Date().getHours();
+    setGreeting(hour < 12 ? "Bom dia" : hour < 18 ? "Boa tarde" : "Boa noite");
+    setDateStr(new Date().toLocaleDateString("pt-BR", {
+      weekday: "long", day: "numeric", month: "long",
+    }));
+  }, []);
 
   function setPeriod(p: string) {
     const url = new URL(window.location.href);
@@ -229,11 +237,7 @@ export function DashboardClient({
           </h1>
           <p className="text-muted-foreground text-sm mt-1">
             Aqui está o resumo da sua plataforma —{" "}
-            {new Date().toLocaleDateString("pt-BR", {
-              weekday: "long",
-              day: "numeric",
-              month: "long",
-            })}
+            {dateStr}
           </p>
         </div>
 
