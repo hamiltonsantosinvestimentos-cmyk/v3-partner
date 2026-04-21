@@ -124,11 +124,50 @@ export default async function DashboardPage({
   const { data: recentSplits } = await splitsQ;
   const { data: recentDeals }  = await dealsQ;
 
+  // Busca propostas dos últimos 12 meses para montar o gráfico de volume
+  const dozeAtras = new Date();
+  dozeAtras.setMonth(dozeAtras.getMonth() - 11);
+  dozeAtras.setDate(1);
+  dozeAtras.setHours(0, 0, 0, 0);
+
+  let revenueQ = svc
+    .from("credit_desk_proposals")
+    .select("created_at, requested_value")
+    .gte("created_at", dozeAtras.toISOString())
+    .order("created_at", { ascending: true });
+
+  if (!isAdmin) revenueQ = revenueQ.eq("partner_id", uid) as typeof revenueQ;
+
+  const { data: revenueRaw } = await revenueQ;
+
+  // Agrupa por mês e soma o requested_value
+  const monthMap: Record<string, number> = {};
+  const mesesPT = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date();
+    d.setMonth(d.getMonth() - i);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    monthMap[key] = 0;
+  }
+
+  for (const row of revenueRaw ?? []) {
+    const d = new Date(row.created_at as string);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    if (key in monthMap) monthMap[key] += (row.requested_value as number) ?? 0;
+  }
+
+  const revenueData = Object.entries(monthMap).map(([key, value]) => {
+    const [, m] = key.split("-");
+    return { month: mesesPT[parseInt(m) - 1], value };
+  });
+
   return (
     <DashboardClient
       role={role}
       userName={profileData?.full_name || "Usuário"}
       period={period}
+      revenueData={revenueData}
       kpis={{
         totalSplits: totalSplits ?? 0,
         totalDeals: totalDeals ?? 0,

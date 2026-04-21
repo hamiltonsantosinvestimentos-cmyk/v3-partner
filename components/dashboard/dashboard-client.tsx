@@ -31,7 +31,6 @@ import {
 import { MarketTicker } from "@/components/dashboard/market-ticker";
 import { NotificationBell } from "@/components/dashboard/notification-bell";
 
-const revenueData: Array<{ month: string; value: number }> = [];
 
 interface KpiCardProps {
   title: string;
@@ -155,6 +154,7 @@ interface DashboardClientProps {
   userName: string;
   period?: string;
   userCreatedAt?: string | null;
+  revenueData?: Array<{ month: string; value: number }>;
   kpis: {
     totalSplits: number;
     totalDeals: number;
@@ -185,6 +185,7 @@ export function DashboardClient({
   userName,
   period = "30d",
   userCreatedAt,
+  revenueData = [],
   kpis,
   recentSplits,
   recentDeals,
@@ -307,6 +308,11 @@ export function DashboardClient({
             </p>
           </CardHeader>
           <CardContent>
+            {revenueData.every(d => d.value === 0) ? (
+              <div className="h-[180px] flex items-center justify-center text-muted-foreground text-sm">
+                Nenhuma operação registrada no período
+              </div>
+            ) : (
             <ResponsiveContainer width="100%" height={180}>
               <AreaChart data={revenueData}>
                 <defs>
@@ -347,6 +353,7 @@ export function DashboardClient({
                 />
               </AreaChart>
             </ResponsiveContainer>
+            )}
           </CardContent>
         </Card>
 
