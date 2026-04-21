@@ -87,25 +87,26 @@ export function AssinarClient({ token, contrato }: { token: string; contrato: Co
     setCpfError("");
     setCpfResult(null);
     if (!cpf.trim()) { setCpfError("Informe o CPF/CNPJ."); return; }
-    if (!birthDate && cpf.replace(/\D/g,"").length === 11) {
-      setCpfError("Preencha a data de nascimento nos Dados do Contratante antes de validar."); return;
-    }
     setCpfLoading(true);
     try {
       const res = await fetch("/api/cpf-validate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cpf, birthDate }),
+        body: JSON.stringify({ cpf }),
       });
       const json = await res.json();
       if (!res.ok) { setCpfError(json.error ?? "Erro ao validar CPF."); return; }
+      // Para CNPJ: preenche com razão social. Para CPF: usuário mantém seu nome.
       const rfNome: string = json.nome ?? "";
-      const rfNomeTitle = toTitleCase(rfNome);
-      const nomeAtual = nomeAssinatura.trim();
-      const nomeCorrigido = nomeAtual !== "" && normName(rfNome) !== normName(nomeAtual);
-      // Sempre atualiza o campo com o nome exato da RF
-      setNomeAssinatura(rfNomeTitle);
-      setCpfResult({ tipo: json.tipo, nome: rfNome, situacao: json.situacao, nomeCorrigido });
+      if (rfNome && json.tipo === "CNPJ") {
+        const rfNomeTitle = toTitleCase(rfNome);
+        const nomeAtual = nomeAssinatura.trim();
+        const nomeCorrigido = nomeAtual !== "" && normName(rfNome) !== normName(nomeAtual);
+        setNomeAssinatura(rfNomeTitle);
+        setCpfResult({ tipo: json.tipo, nome: rfNome, situacao: json.situacao, nomeCorrigido });
+      } else {
+        setCpfResult({ tipo: json.tipo, nome: rfNome, situacao: json.situacao, nomeCorrigido: false });
+      }
     } catch {
       setCpfError("Erro de conexão. Tente novamente.");
     } finally {
@@ -549,13 +550,14 @@ export function AssinarClient({ token, contrato }: { token: string; contrato: Co
           <div className="flex items-center gap-2">
             <h3 className="text-sm font-bold text-white">Confirmação de Identidade</h3>
             {cpfResult && (
-              <span className={`text-[11px] px-2 py-0.5 rounded-full font-semibold ${cpfResult.nameMatch ? "bg-emerald-500/20 text-emerald-400" : "bg-amber-500/20 text-amber-400"}`}>
-                {cpfResult.nameMatch ? "✓ Nome e CPF validados" : "⚠ Nome ajustado pela RF"}
+              <span className={`text-[11px] px-2 py-0.5 rounded-full font-semibold ${!cpfResult.nomeCorrigido ? "bg-emerald-500/20 text-emerald-400" : "bg-amber-500/20 text-amber-400"}`}>
+                {!cpfResult.nomeCorrigido ? "✓ Nome e CPF validados" : "⚠ Nome ajustado pela RF"}
               </span>
             )}
           </div>
           <p className="text-[12px] text-[#7A8FA8]">
-            Informe seu CPF/CNPJ. O sistema consulta a Receita Federal e confirma o nome cadastrado.
+            Informe seu CPF/CNPJ. O sistema valida os dígitos verificadores.
+            Para CNPJ, também retorna a razão social cadastrada.
           </p>
           <div>
             <label className="block text-[11px] font-semibold text-[#7A8FA8] mb-1">CPF / CNPJ *</label>
@@ -572,14 +574,14 @@ export function AssinarClient({ token, contrato }: { token: string; contrato: Co
             className="w-full h-9 rounded-lg bg-[#13243D] border border-[#C9A84C]/40 hover:border-[#C9A84C] disabled:opacity-40 disabled:cursor-not-allowed text-[#C9A84C] font-semibold text-sm transition-colors flex items-center justify-center gap-2"
           >
             {cpfLoading
-              ? <><span className="w-3.5 h-3.5 rounded-full border-2 border-[#C9A84C] border-t-transparent animate-spin" />Consultando Receita Federal...</>
-              : "🔍 Validar CPF na Receita Federal"}
+              ? <><span className="w-3.5 h-3.5 rounded-full border-2 border-[#C9A84C] border-t-transparent animate-spin" />Validando...</>
+              : "🔍 Validar CPF / CNPJ"}
           </button>
           {cpfResult && (
             <div className="space-y-2">
               <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-4 space-y-1">
-                <p className="text-[11px] font-bold text-emerald-400 uppercase tracking-wider">✅ {cpfResult.tipo} Válido — Receita Federal</p>
-                <p className="text-sm font-semibold text-white">{toTitleCase(cpfResult.nome)}</p>
+                <p className="text-[11px] font-bold text-emerald-400 uppercase tracking-wider">✅ {cpfResult.tipo} Válido — Dígitos verificados</p>
+                {cpfResult.nome && <p className="text-sm font-semibold text-white">{toTitleCase(cpfResult.nome)}</p>}
                 <p className="text-[11px] text-[#7A8FA8]">Situação: {cpfResult.situacao}</p>
               </div>
               {cpfResult.nomeCorrigido && (

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-interface ContratoTestemunha {
+interface ContratoTestemunha2 {
   id: string;
   status: string;
   client_name: string;
@@ -17,6 +17,9 @@ interface ContratoTestemunha {
   v3_signer_name: string | null;
   testemunha_nome: string | null;
   testemunha_signed_at: string | null;
+  testemunha2_nome: string | null;
+  testemunha2_cpf: string | null;
+  testemunha2_signed_at: string | null;
   endereco_cadastrado: string | null;
   bairro_cadastrado: string | null;
   municipio_cadastrado: string | null;
@@ -37,16 +40,21 @@ function percExtenso(v: number) {
   return EXTENSO[v] ? `${v}% (${EXTENSO[v]} por cento)` : `${v}%`;
 }
 
-export function TestemunhaClient({ token, contrato }: { token: string; contrato: ContratoTestemunha }) {
-  const [nomeAssinatura, setNomeAssinatura] = useState(contrato.testemunha_nome ?? "");
+// Dados fixos da segunda testemunha
+const TESTEMUNHA2_CPF = "012.494.610-06";
+const TESTEMUNHA2_BIRTHDATE = "1987-06-24"; // 24/06/1987
+
+export function Testemunha2Client({ token, contrato }: { token: string; contrato: ContratoTestemunha2 }) {
+  const nomeInicial = contrato.testemunha2_nome ?? "Aline Rodrigues dos Santos";
+  const [nomeAssinatura, setNomeAssinatura] = useState(nomeInicial);
   const [leu, setLeu] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [assinado, setAssinado] = useState(contrato.status === "ASSINADO" && !!contrato.testemunha_signed_at);
+  const [assinado, setAssinado] = useState(contrato.status === "ASSINADO" && !!contrato.testemunha2_signed_at);
   const [error, setError] = useState("");
 
-  // CPF / Receita Federal
-  const [cpf, setCpf] = useState("");
-  const [birthDate, setBirthDate] = useState("");
+  // CPF / Receita Federal — pré-preenchido com dados da Aline
+  const [cpf, setCpf] = useState(contrato.testemunha2_cpf ?? TESTEMUNHA2_CPF);
+  const [birthDate, setBirthDate] = useState(TESTEMUNHA2_BIRTHDATE);
   const [address, setAddress] = useState("");
   const [cpfLoading, setCpfLoading] = useState(false);
   const [cpfResult, setCpfResult] = useState<{ tipo: string; nome: string; situacao: string; nomeCorrigido: boolean } | null>(null);
@@ -76,16 +84,7 @@ export function TestemunhaClient({ token, contrato }: { token: string; contrato:
       });
       const json = await res.json();
       if (!res.ok) { setCpfError(json.error ?? "Erro ao validar CPF."); return; }
-      const rfNome: string = json.nome ?? "";
-      if (rfNome && json.tipo === "CNPJ") {
-        const rfNomeTitle = toTitleCase(rfNome);
-        const nomeAtual = nomeAssinatura.trim();
-        const nomeCorrigido = nomeAtual !== "" && normName(rfNome) !== normName(nomeAtual);
-        setNomeAssinatura(rfNomeTitle);
-        setCpfResult({ tipo: json.tipo, nome: rfNome, situacao: json.situacao, nomeCorrigido });
-      } else {
-        setCpfResult({ tipo: json.tipo, nome: rfNome, situacao: json.situacao, nomeCorrigido: false });
-      }
+      setCpfResult({ tipo: json.tipo, nome: json.nome ?? "", situacao: json.situacao, nomeCorrigido: false });
     } catch {
       setCpfError("Erro de conexão. Tente novamente.");
     } finally {
@@ -94,12 +93,9 @@ export function TestemunhaClient({ token, contrato }: { token: string; contrato:
   }
 
   const hoje = new Date().toLocaleDateString("pt-BR");
-  const clienteAssinou = contrato.signed_at
-    ? new Date(contrato.signed_at).toLocaleString("pt-BR")
-    : "—";
-  const v3Assinou = contrato.v3_signed_at
-    ? new Date(contrato.v3_signed_at).toLocaleString("pt-BR")
-    : "—";
+  const clienteAssinou = contrato.signed_at ? new Date(contrato.signed_at).toLocaleString("pt-BR") : "—";
+  const v3Assinou = contrato.v3_signed_at ? new Date(contrato.v3_signed_at).toLocaleString("pt-BR") : "—";
+  const t1Assinou = contrato.testemunha_signed_at ? new Date(contrato.testemunha_signed_at).toLocaleString("pt-BR") : "—";
   const perc = percExtenso(contrato.commission_perc);
 
   const enderecoCliente = [
@@ -116,12 +112,12 @@ export function TestemunhaClient({ token, contrato }: { token: string; contrato:
     if (!nomeAssinatura.trim()) { setError("Digite seu nome completo."); return; }
     if (!cpfResult) { setError("Valide seu CPF na Receita Federal antes de assinar."); return; }
     if (!leu) { setError("Confirme que leu e revisou o contrato."); return; }
-    if (contrato.status !== "AGUARDANDO_TESTEMUNHA") {
-      setError("Este contrato não está aguardando assinatura de testemunha."); return;
+    if (contrato.status !== "AGUARDANDO_TESTEMUNHA2") {
+      setError("Este contrato não está aguardando assinatura da segunda testemunha."); return;
     }
     setSaving(true);
     try {
-      const res = await fetch(`/api/contratos/testemunha/${token}`, {
+      const res = await fetch(`/api/contratos/testemunha2/${token}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ nome_assinatura: nomeAssinatura, cpf, birthdate: birthDate, address }),
@@ -143,11 +139,10 @@ export function TestemunhaClient({ token, contrato }: { token: string; contrato:
           <div className="w-20 h-20 rounded-2xl bg-emerald-500/20 flex items-center justify-center mx-auto">
             <span className="text-4xl">✅</span>
           </div>
-          <h1 className="text-2xl font-bold text-white">Testemunho Registrado!</h1>
+          <h1 className="text-2xl font-bold text-white">Contrato Finalizado!</h1>
           <p className="text-[#7A8FA8] text-sm">
-            Sua assinatura como testemunha foi registrada. O contrato está agora
-            totalmente finalizado com{" "}
-            <strong className="text-white">{contrato.client_name}</strong>.
+            Sua assinatura como segunda testemunha foi registrada. O contrato com{" "}
+            <strong className="text-white">{contrato.client_name}</strong> está totalmente assinado por todas as partes.
           </p>
           <div className="pt-4 border-t border-[#1B3050]">
             <span className="text-[11px] text-[#7A8FA8]">V3 Partners · {contrato.proposal_code}</span>
@@ -157,7 +152,7 @@ export function TestemunhaClient({ token, contrato }: { token: string; contrato:
     );
   }
 
-  if (contrato.status !== "AGUARDANDO_TESTEMUNHA") {
+  if (contrato.status !== "AGUARDANDO_TESTEMUNHA2") {
     return (
       <div className="min-h-screen bg-[#09081A] flex items-center justify-center p-6">
         <div className="max-w-md w-full text-center space-y-4">
@@ -165,12 +160,12 @@ export function TestemunhaClient({ token, contrato }: { token: string; contrato:
             <span className="text-3xl">⚠️</span>
           </div>
           <h1 className="text-xl font-bold text-white">
-            {contrato.status === "ASSINADO" ? "Contrato já finalizado" : "Link inválido"}
+            {contrato.status === "ASSINADO" ? "Contrato já finalizado" : "Link indisponível"}
           </h1>
           <p className="text-[#7A8FA8] text-sm">
             {contrato.status === "ASSINADO"
               ? "Este contrato já foi assinado por todas as partes."
-              : "Este link não está disponível para assinatura."}
+              : "Este link ainda não está disponível para assinatura. Aguarde as etapas anteriores."}
           </p>
         </div>
       </div>
@@ -187,41 +182,45 @@ export function TestemunhaClient({ token, contrato }: { token: string; contrato:
             <span className="text-lg font-black text-[#09081A]">V3</span>
           </div>
           <div>
-            <h1 className="text-base font-bold text-white">V3 PARTNERS — Assinatura de Testemunha</h1>
-            <p className="text-[11px] text-[#7A8FA8]">Parceiro Testemunha · {contrato.proposal_code}</p>
+            <h1 className="text-base font-bold text-white">V3 PARTNERS — 2ª Testemunha</h1>
+            <p className="text-[11px] text-[#7A8FA8]">Testemunha Institucional · {contrato.proposal_code}</p>
           </div>
         </div>
 
-        {/* Status assinaturas */}
+        {/* Status das assinaturas anteriores */}
         <div className="space-y-2">
-          <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl px-4 py-3 flex items-center gap-3">
-            <span className="text-lg">✅</span>
-            <div>
-              <p className="text-xs font-semibold text-emerald-400">Cliente assinou</p>
-              <p className="text-[11px] text-[#7A8FA8]">{contrato.client_name} · {clienteAssinou}</p>
+          {[
+            { label: "Cliente assinou", nome: contrato.client_name, data: clienteAssinou },
+            { label: "V3 Partners assinou", nome: contrato.v3_signer_name ?? "V3 Partners", data: v3Assinou },
+            { label: "1ª Testemunha (Parceiro) assinou", nome: contrato.testemunha_nome ?? "Parceiro", data: t1Assinou },
+          ].map((item) => (
+            <div key={item.label} className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl px-4 py-3 flex items-center gap-3">
+              <span className="text-lg">✅</span>
+              <div>
+                <p className="text-xs font-semibold text-emerald-400">{item.label}</p>
+                <p className="text-[11px] text-[#7A8FA8]">{item.nome} · {item.data}</p>
+              </div>
             </div>
-          </div>
-          <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl px-4 py-3 flex items-center gap-3">
-            <span className="text-lg">✅</span>
+          ))}
+          <div className="bg-[#C9A84C]/10 border border-[#C9A84C]/40 rounded-xl px-4 py-3 flex items-center gap-3">
+            <span className="text-lg">✍️</span>
             <div>
-              <p className="text-xs font-semibold text-emerald-400">V3 Partners assinou</p>
-              <p className="text-[11px] text-[#7A8FA8]">{contrato.v3_signer_name ?? "V3 Partners"} · {v3Assinou}</p>
+              <p className="text-xs font-semibold text-[#E8C97A]">Aguardando: 2ª Testemunha</p>
+              <p className="text-[11px] text-[#7A8FA8]">Aline Rodrigues dos Santos · financeiro@v3partners.com.br</p>
             </div>
           </div>
         </div>
 
-        {/* Contrato */}
+        {/* Resumo do contrato */}
         <div className="bg-[#0C1929] border border-[#1B3050] rounded-2xl overflow-hidden">
           <div className="px-6 py-5 border-b border-[#1B3050] bg-[#07101E] text-center">
             <h2 className="text-sm font-bold text-white tracking-widest uppercase">
               Contrato de Prestação de Serviços Financeiros
             </h2>
-            <p className="text-[11px] text-[#7A8FA8] mt-1">Mandato de Representação · Assinatura de Testemunha</p>
+            <p className="text-[11px] text-[#7A8FA8] mt-1">Mandato de Representação · 2ª Assinatura de Testemunha</p>
           </div>
 
           <div className="px-6 py-6 space-y-5 text-[12.5px] text-[#7A8FA8] leading-relaxed">
-
-            {/* Partes */}
             <div className="space-y-3">
               <h3 className="text-xs font-bold text-white uppercase tracking-wider">Das Partes</h3>
               <div className="bg-[#13243D] rounded-xl p-4">
@@ -240,7 +239,6 @@ export function TestemunhaClient({ token, contrato }: { token: string; contrato:
               </div>
             </div>
 
-            {/* Resumo */}
             <div className="space-y-2">
               <h3 className="text-xs font-bold text-white uppercase tracking-wider">Resumo da Operação</h3>
               <div className="grid grid-cols-2 gap-2">
@@ -259,17 +257,20 @@ export function TestemunhaClient({ token, contrato }: { token: string; contrato:
             </div>
 
             <p className="text-[11px] text-center text-[#7A8FA8]">
-              Contrato integral disponível. Cláusulas 1 a 12 conforme instrumento assinado pelas partes.
+              Cláusulas 1 a 12 conforme instrumento já assinado pelas partes e primeira testemunha.
             </p>
             <p className="text-[11px] text-center">Rio de Janeiro, {hoje}</p>
           </div>
         </div>
 
-        {/* Confirmação de identidade testemunha */}
+        {/* Identificação */}
         <div className="bg-[#0C1929] border border-[#1B3050] rounded-2xl p-6 space-y-4">
           <div className="flex items-center gap-2">
-            <h3 className="text-sm font-bold text-white">Identificação da Testemunha</h3>
+            <h3 className="text-sm font-bold text-white">Identificação da 2ª Testemunha</h3>
             {cpfResult && <span className="text-[11px] bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full font-semibold">✓ Validado</span>}
+          </div>
+          <div className="bg-[#13243D] rounded-xl px-4 py-3 text-[12px] text-[#7A8FA8]">
+            Seus dados estão pré-preenchidos. Clique em <strong className="text-white">Validar CPF</strong> para confirmar sua identidade e liberar a assinatura.
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="col-span-2 sm:col-span-1">
@@ -284,7 +285,7 @@ export function TestemunhaClient({ token, contrato }: { token: string; contrato:
                 className="w-full h-9 px-3 text-sm bg-[#13243D] border border-[#1B3050] rounded-lg text-white focus:outline-none focus:ring-1 focus:ring-[#C9A84C]/50" />
             </div>
             <div className="col-span-2">
-              <label className="block text-[11px] font-semibold text-[#7A8FA8] mb-1">Endereço Completo *</label>
+              <label className="block text-[11px] font-semibold text-[#7A8FA8] mb-1">Endereço Completo</label>
               <input value={address} onChange={(e) => setAddress(e.target.value)}
                 placeholder="Rua, nº, Bairro, Cidade – UF, CEP"
                 className="w-full h-9 px-3 text-sm bg-[#13243D] border border-[#1B3050] rounded-lg text-white placeholder:text-[#7A8FA8] focus:outline-none focus:ring-1 focus:ring-[#C9A84C]/50" />
@@ -294,7 +295,7 @@ export function TestemunhaClient({ token, contrato }: { token: string; contrato:
             className="w-full h-9 rounded-lg bg-[#13243D] border border-[#C9A84C]/40 hover:border-[#C9A84C] disabled:opacity-40 disabled:cursor-not-allowed text-[#C9A84C] font-semibold text-sm transition-colors flex items-center justify-center gap-2">
             {cpfLoading
               ? <><span className="w-3.5 h-3.5 rounded-full border-2 border-[#C9A84C] border-t-transparent animate-spin" />Validando...</>
-              : "🔍 Validar CPF / CNPJ"}
+              : "🔍 Validar CPF"}
           </button>
           {cpfResult && (
             <div className="space-y-2">
@@ -315,12 +316,12 @@ export function TestemunhaClient({ token, contrato }: { token: string; contrato:
           )}
         </div>
 
-        {/* Assinatura Testemunha */}
+        {/* Assinatura */}
         <div className="bg-[#0C1929] border border-[#1B3050] rounded-2xl p-6 space-y-4">
-          <h3 className="text-sm font-bold text-white">Assinatura de Testemunha</h3>
+          <h3 className="text-sm font-bold text-white">Assinatura de Testemunha Institucional</h3>
           <p className="text-[12px] text-[#7A8FA8]">
-            Como parceiro que originou esta proposta, você atua como testemunha do contrato
-            assinado entre o cliente e a V3 Partners.
+            Como representante do setor financeiro da V3 Partners, você atua como segunda testemunha
+            e confere validade institucional ao instrumento de mandato.
           </p>
           <div>
             <label className="block text-[11px] font-semibold text-[#7A8FA8] mb-1">Seu Nome Completo *</label>
@@ -331,16 +332,12 @@ export function TestemunhaClient({ token, contrato }: { token: string; contrato:
             />
           </div>
           <label className="flex items-start gap-3 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={leu}
-              onChange={(e) => setLeu(e.target.checked)}
-              className="mt-0.5 w-4 h-4 accent-[#C9A84C] flex-shrink-0"
-            />
+            <input type="checkbox" checked={leu} onChange={(e) => setLeu(e.target.checked)}
+              className="mt-0.5 w-4 h-4 accent-[#C9A84C] flex-shrink-0" />
             <span className="text-[12px] text-[#7A8FA8]">
-              Declaro que li e revisou o Contrato de Prestação de Serviços Financeiros referente ao cliente{" "}
-              <strong className="text-white">{contrato.client_name}</strong> e assino como testemunha
-              do instrumento firmado entre o contratante e a V3 Partners Soluções Ltda.
+              Declaro que revisei o Contrato de Prestação de Serviços Financeiros referente ao cliente{" "}
+              <strong className="text-white">{contrato.client_name}</strong> e assino como segunda testemunha
+              institucional do instrumento firmado entre o contratante e a V3 Partners Soluções Ltda.
             </span>
           </label>
           {error && (
@@ -353,7 +350,7 @@ export function TestemunhaClient({ token, contrato }: { token: string; contrato:
           >
             {saving ? (
               <><span className="w-4 h-4 rounded-full border-2 border-[#09081A] border-t-transparent animate-spin" />Registrando...</>
-            ) : "✍️ Assinar como Testemunha"}
+            ) : "✍️ Assinar como 2ª Testemunha"}
           </button>
         </div>
 

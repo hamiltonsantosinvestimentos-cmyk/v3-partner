@@ -94,6 +94,11 @@ export async function POST(req: NextRequest) {
           cep_cadastrado: cepMeta || null,
           testemunha_nome: testemunhaNome,
           testemunha_email: testemunhaEmail,
+          // Testemunha 2 — fixa: Aline Rodrigues dos Santos
+          testemunha2_nome:  "Aline Rodrigues dos Santos",
+          testemunha2_email: "financeiro@v3partners.com.br",
+          testemunha2_cpf:   "012.494.610-06",
+          v3_email:          process.env.EMAIL_V3_SIGNER ?? "joao.lemos@v3partners.com.br",
           expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
         })
         .select("token")

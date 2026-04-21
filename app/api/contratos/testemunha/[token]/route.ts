@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { notifyContratoCompleto } from "@/lib/email";
+import { notifyContratoCompleto, notifyTestemunha2ParaAssinar } from "@/lib/email";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -17,7 +17,7 @@ export async function GET(
 
   const { data, error } = await supabase
     .from("contratos_mandato")
-    .select("id, status, client_name, client_cpf, client_email, commission_perc, deal_value, credit_line, proposal_code, signed_at, v3_signed_at, v3_signer_name, testemunha_nome, testemunha_email, testemunha_signed_at, endereco_cadastrado, bairro_cadastrado, municipio_cadastrado, estado_cadastrado, cep_cadastrado, telefone")
+    .select("id, status, client_name, client_cpf, client_email, commission_perc, deal_value, credit_line, proposal_code, signed_at, v3_signed_at, v3_signer_name, testemunha_nome, testemunha_email, testemunha_signed_at, testemunha2_signed_at, endereco_cadastrado, bairro_cadastrado, municipio_cadastrado, estado_cadastrado, cep_cadastrado, telefone")
     .eq("testemunha_token", token)
     .single();
 
@@ -41,7 +41,7 @@ export async function POST(
 
   const { data, error } = await supabase
     .from("contratos_mandato")
-    .select("id, status, client_name, client_email, credit_line, proposal_code, signed_at, v3_signed_at, v3_signer_name")
+    .select("id, status, client_name, client_email, credit_line, proposal_code, signed_at, v3_signed_at, v3_signer_name, testemunha2_email, testemunha2_nome, testemunha2_token")
     .eq("testemunha_token", token)
     .single();
 
@@ -54,16 +54,22 @@ export async function POST(
   }
 
   const testemunhaSignedAt = new Date().toISOString();
+  const temTestemunha2 = !!(data.testemunha2_email && data.testemunha2_token);
+  const novoStatus = temTestemunha2 ? "AGUARDANDO_TESTEMUNHA2" : "ASSINADO";
+
+  const ipRaw = req.headers.get("x-forwarded-for") ?? req.headers.get("x-real-ip") ?? "desconhecido";
+  const t1Ip = ipRaw.split(",")[0].trim();
 
   const { error: updateErr } = await supabase
     .from("contratos_mandato")
     .update({
-      status: "ASSINADO",
+      status: novoStatus,
       testemunha_signed_at: testemunhaSignedAt,
       testemunha_nome: nome_assinatura.trim(),
       testemunha_cpf: cpf ?? null,
       testemunha_birthdate: birthdate ?? null,
       testemunha_address: address ?? null,
+      testemunha_ip_address: t1Ip,
     })
     .eq("testemunha_token", token);
 
@@ -71,16 +77,30 @@ export async function POST(
     return NextResponse.json({ error: "Erro ao registrar assinatura" }, { status: 500 });
   }
 
-  await notifyContratoCompleto({
-    clientEmail: data.client_email,
-    clientName: data.client_name,
-    repEmail: V3_REP_EMAIL,
-    proposalCode: data.proposal_code ?? "",
-    creditLine: data.credit_line ?? "",
-    clientSignedAt: data.signed_at ?? testemunhaSignedAt,
-    v3SignedAt: data.v3_signed_at ?? testemunhaSignedAt,
-    v3SignerName: data.v3_signer_name ?? "",
-  });
+  const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://v3-partner.vercel.app";
+
+  if (temTestemunha2) {
+    const testemunha2Url = `${APP_URL}/assinar/testemunha2/${data.testemunha2_token}`;
+    await notifyTestemunha2ParaAssinar({
+      testemunhaEmail: data.testemunha2_email as string,
+      testemunhaNome: (data.testemunha2_nome as string) ?? "Aline Rodrigues dos Santos",
+      clientName: data.client_name,
+      proposalCode: data.proposal_code ?? "",
+      creditLine: data.credit_line ?? "",
+      testemunhaUrl: testemunha2Url,
+    });
+  } else {
+    await notifyContratoCompleto({
+      clientEmail: data.client_email,
+      clientName: data.client_name,
+      repEmail: V3_REP_EMAIL,
+      proposalCode: data.proposal_code ?? "",
+      creditLine: data.credit_line ?? "",
+      clientSignedAt: data.signed_at ?? testemunhaSignedAt,
+      v3SignedAt: data.v3_signed_at ?? testemunhaSignedAt,
+      v3SignerName: data.v3_signer_name ?? "",
+    });
+  }
 
   return NextResponse.json({ ok: true, testemunha_signed_at: testemunhaSignedAt });
 }

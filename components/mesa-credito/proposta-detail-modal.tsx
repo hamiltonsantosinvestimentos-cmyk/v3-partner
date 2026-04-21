@@ -337,6 +337,7 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
   const [contratoInfo, setContratoInfo] = useState<{
     status: string; token: string; signed_at?: string | null;
     v3_signed_at?: string | null; v3_signer_name?: string | null;
+    contrato_url?: string | null;
   } | null>(null);
 
   useEffect(() => {
@@ -1435,29 +1436,39 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
           )}
           {contratoInfo && (
             <div className={`flex items-center justify-between gap-2 px-3 py-2 rounded-lg text-xs ${
-              contratoInfo.status === "ASSINADO" ? "bg-emerald-500/10 border border-emerald-500/30" :
-              contratoInfo.status === "AGUARDANDO_V3" ? "bg-amber-500/10 border border-amber-500/30" :
+              contratoInfo.status === "ASSINADO"              ? "bg-emerald-500/10 border border-emerald-500/30" :
+              contratoInfo.status === "AGUARDANDO_V3"        ? "bg-amber-500/10 border border-amber-500/30" :
               contratoInfo.status === "AGUARDANDO_TESTEMUNHA" ? "bg-purple-500/10 border border-purple-500/30" :
+              contratoInfo.status === "AGUARDANDO_TESTEMUNHA2" ? "bg-orange-500/10 border border-orange-500/30" :
               "bg-blue-500/10 border border-blue-500/30"
             }`}>
               <div className="flex items-center gap-2">
                 <FileText className="w-3.5 h-3.5 text-muted-foreground" />
                 <span className={
-                  contratoInfo.status === "ASSINADO" ? "text-emerald-400 font-semibold" :
-                  contratoInfo.status === "AGUARDANDO_V3" ? "text-amber-400 font-semibold" :
-                  contratoInfo.status === "AGUARDANDO_TESTEMUNHA" ? "text-purple-400 font-semibold" :
+                  contratoInfo.status === "ASSINADO"               ? "text-emerald-400 font-semibold" :
+                  contratoInfo.status === "AGUARDANDO_V3"         ? "text-amber-400 font-semibold" :
+                  contratoInfo.status === "AGUARDANDO_TESTEMUNHA"  ? "text-purple-400 font-semibold" :
+                  contratoInfo.status === "AGUARDANDO_TESTEMUNHA2" ? "text-orange-400 font-semibold" :
                   "text-blue-400 font-semibold"
                 }>
                   {contratoInfo.status === "PENDENTE" && "Contrato enviado — aguardando cliente"}
                   {contratoInfo.status === "AGUARDANDO_V3" && `✅ Cliente assinou — aguarda V3 (${contratoInfo.signed_at ? new Date(contratoInfo.signed_at).toLocaleDateString("pt-BR") : ""})`}
-                  {contratoInfo.status === "AGUARDANDO_TESTEMUNHA" && `✅ V3 assinou — aguardando testemunha (parceiro)`}
+                  {contratoInfo.status === "AGUARDANDO_TESTEMUNHA" && "✅ V3 assinou — aguardando 1ª testemunha (parceiro)"}
+                  {contratoInfo.status === "AGUARDANDO_TESTEMUNHA2" && "✅ Parceiro assinou — aguardando 2ª testemunha (Aline)"}
                   {contratoInfo.status === "ASSINADO" && `✅ Contrato finalizado — ${contratoInfo.v3_signer_name ?? ""}`}
                 </span>
               </div>
-              <a href={`/assinar/${contratoInfo.token}`} target="_blank" rel="noopener noreferrer"
-                className="text-muted-foreground hover:text-white underline text-[10px]">
-                Ver contrato
-              </a>
+              {contratoInfo.status === "ASSINADO" && contratoInfo.contrato_url ? (
+                <a href={contratoInfo.contrato_url} target="_blank" rel="noopener noreferrer"
+                  className="text-[#C9A84C] hover:text-[#E8C97A] underline text-[10px] font-semibold">
+                  ⬇ Baixar Certificado de Assinatura
+                </a>
+              ) : (
+                <a href={`/assinar/${contratoInfo.token}`} target="_blank" rel="noopener noreferrer"
+                  className="text-muted-foreground hover:text-white underline text-[10px]">
+                  Ver contrato
+                </a>
+              )}
             </div>
           )}
           <div className="flex items-center justify-between gap-2 flex-wrap">

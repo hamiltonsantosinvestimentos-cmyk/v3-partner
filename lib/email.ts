@@ -384,6 +384,100 @@ export async function notifyContratoCompleto(opts: {
   );
 }
 
+/** Todos os envolvidos: contrato 100% assinado — cópia com dados de assinatura */
+export async function notifyContratoFinalizado(opts: {
+  proposalCode: string;
+  creditLine: string;
+  contratoUrl: string | null;
+  // Assinantes
+  clientName: string;    clientEmail: string;    clientData: string | null;  clientIp: string | null;
+  v3Nome: string;        v3Email: string;         v3Data: string | null;      v3Ip: string | null;
+  t1Nome: string | null; t1Email: string | null;  t1Data: string | null;      t1Ip: string | null;
+  t2Nome: string | null; t2Email: string | null;  t2Data: string | null;      t2Ip: string | null;
+}) {
+  const fmt = (iso: string | null | undefined) =>
+    iso ? new Date(iso).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" }) : "—";
+
+  const assinRow = (papel: string, nome: string, email: string, data: string | null, ip: string | null) => `
+    <div style="margin-bottom:12px;padding:12px 16px;background:#13243D;border-radius:10px;border-left:3px solid #C9A84C;">
+      <div style="font-size:10px;font-weight:700;color:#C9A84C;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">${papel}</div>
+      <div style="font-size:13px;font-weight:600;color:#C8D4E3;">${nome}</div>
+      <div style="font-size:12px;color:#7A96AF;">${email}</div>
+      <div style="margin-top:6px;display:flex;gap:16px;flex-wrap:wrap;">
+        <span style="font-size:11px;color:#7A96AF;">📅 ${fmt(data)}</span>
+        <span style="font-size:11px;color:#7A96AF;font-family:monospace;">🌐 ${ip ?? "—"}</span>
+      </div>
+    </div>`;
+
+  const body = `
+    <p style="color:#7A96AF;font-size:14px;margin:0 0 20px;">
+      O Contrato de Mandato foi <strong style="color:#10B981;">totalmente assinado</strong> por todas as partes.
+      Abaixo estão os registros completos de cada assinatura eletrônica.
+    </p>
+    ${row("Proposta", opts.proposalCode)}
+    ${row("Linha de Crédito", opts.creditLine)}
+    <div style="margin-top:20px;margin-bottom:8px;">
+      <span style="font-size:11px;font-weight:700;color:#7A96AF;text-transform:uppercase;letter-spacing:1px;">Assinaturas registradas</span>
+    </div>
+    ${assinRow("Contratante (Cliente)", opts.clientName, opts.clientEmail, opts.clientData, opts.clientIp)}
+    ${assinRow("Contratada — V3 Partners", opts.v3Nome, opts.v3Email, opts.v3Data, opts.v3Ip)}
+    ${opts.t1Nome ? assinRow("1ª Testemunha (Parceiro Originador)", opts.t1Nome, opts.t1Email ?? "—", opts.t1Data, opts.t1Ip) : ""}
+    ${opts.t2Nome ? assinRow("2ª Testemunha (Institucional)", opts.t2Nome, opts.t2Email ?? "—", opts.t2Data, opts.t2Ip) : ""}
+    <p style="color:#7A96AF;font-size:12px;margin-top:16px;">
+      Assinaturas com plena validade jurídica nos termos da MP 2.200-2/2001 e Lei 14.063/2020.
+    </p>
+  `;
+
+  const subject = `✅ Contrato assinado — ${opts.clientName} · ${opts.proposalCode}`;
+  const cta = opts.contratoUrl ? { label: "Baixar Certificado de Assinatura", url: opts.contratoUrl } : undefined;
+
+  const destinatarios = [
+    opts.clientEmail,
+    opts.v3Email,
+    opts.t1Email,
+    opts.t2Email,
+  ].filter((e): e is string => !!e && e.length > 0);
+
+  await Promise.allSettled(
+    destinatarios.map((to) =>
+      send(to, subject, template("Contrato Totalmente Assinado", body, cta))
+    )
+  );
+}
+
+/** Testemunha2 (Aline/financeiro): link para assinar após testemunha1 assinar */
+export async function notifyTestemunha2ParaAssinar(opts: {
+  testemunhaEmail: string;
+  testemunhaNome: string;
+  clientName: string;
+  proposalCode: string;
+  creditLine: string;
+  testemunhaUrl: string;
+}) {
+  const body = `
+    <p style="color:#7A96AF;font-size:14px;margin:0 0 20px;">
+      Olá, <strong style="color:#C8D4E3;">${opts.testemunhaNome}</strong>!
+      O contrato do cliente abaixo foi assinado pelo contratante, pela V3 Partners e pelo
+      parceiro originador. Aguarda agora a sua assinatura como
+      <strong style="color:#E5B96A;">segunda testemunha</strong>.
+    </p>
+    ${row("Código", opts.proposalCode)}
+    ${row("Cliente", opts.clientName)}
+    ${row("Linha de Crédito", opts.creditLine)}
+    <p style="color:#7A96AF;font-size:13px;margin-top:16px;">
+      Clique no botão abaixo para revisar e assinar como testemunha do contrato.
+    </p>
+  `;
+  await send(
+    opts.testemunhaEmail,
+    `✍️ Sua assinatura como testemunha — ${opts.clientName} · ${opts.proposalCode}`,
+    template("Assinatura de Testemunha Necessária (2ª)", body, {
+      label: "Assinar como Testemunha",
+      url: opts.testemunhaUrl,
+    })
+  );
+}
+
 /** Testemunha (partner): link para assinar como testemunha após V3 assinar */
 export async function notifyTestemunhaParaAssinar(opts: {
   testemunhaEmail: string;

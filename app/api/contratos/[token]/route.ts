@@ -8,7 +8,8 @@ const supabase = createClient(
 );
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://v3-partner.vercel.app";
-const V3_REP_EMAIL = process.env.EMAIL_MESA_OPERACIONAL ?? process.env.EMAIL_ADMIN ?? "mesa@v3partners.com.br";
+// Email do representante V3 que assina o contrato (João Lemos)
+const V3_REP_EMAIL = process.env.EMAIL_V3_SIGNER ?? "joao.lemos@v3partners.com.br";
 
 export async function GET(
   _req: NextRequest,

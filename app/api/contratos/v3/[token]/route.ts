@@ -58,6 +58,9 @@ export async function POST(
   const temTestemunha = !!(data.testemunha_email && data.testemunha_token);
   const novoStatus = temTestemunha ? "AGUARDANDO_TESTEMUNHA" : "ASSINADO";
 
+  const ipRaw = req.headers.get("x-forwarded-for") ?? req.headers.get("x-real-ip") ?? "desconhecido";
+  const v3Ip = ipRaw.split(",")[0].trim();
+
   const { error: updateErr } = await supabase
     .from("contratos_mandato")
     .update({
@@ -67,6 +70,7 @@ export async function POST(
       v3_cpf: cpf ?? null,
       v3_birthdate: birthdate ?? null,
       v3_address: address ?? null,
+      v3_ip_address: v3Ip,
     })
     .eq("v3_token", token);
 
