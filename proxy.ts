@@ -5,15 +5,15 @@ const PUBLIC_ROUTES = ["/login", "/auth/callback", "/auth/update-password", "/un
 
 const IS_DEMO = false;
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Allow public routes
+  // Rotas públicas — sem verificação de sessão
   if (PUBLIC_ROUTES.some((r) => pathname.startsWith(r))) {
     return NextResponse.next();
   }
 
-  // Demo mode — cookie only
+  // Demo mode
   if (IS_DEMO) {
     const demoSession = request.cookies.get("v3_demo_session");
     if (!demoSession) {
@@ -25,7 +25,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Production: refresh session cookies so they stay valid
+  // Produção: renova cookies de sessão e verifica autenticação
   let supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient(
@@ -47,12 +47,10 @@ export async function middleware(request: NextRequest) {
     }
   );
 
-  // Verify session — redirects unauthenticated users to login
   const { data: { user } } = await supabase.auth.getUser();
 
   if (!user) {
     const redirect = NextResponse.redirect(new URL("/login", request.url));
-    // Forward any refreshed cookies to the redirect response
     supabaseResponse.cookies.getAll().forEach(({ name, value }) => {
       redirect.cookies.set(name, value);
     });
