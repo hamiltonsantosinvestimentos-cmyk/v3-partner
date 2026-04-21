@@ -3,17 +3,6 @@ import { createServerClient } from "@supabase/ssr";
 
 const PUBLIC_ROUTES = ["/login", "/auth/callback", "/auth/update-password", "/unauthorized", "/api/demo-login", "/api/auth/login", "/c/", "/api/captacao/", "/mf/", "/api/ma-captacao/", "/api/migrate-ma-captacao", "/assinar/", "/api/contratos/", "/api/cpf-validate"];
 
-const ROLE_ROUTES: Record<string, string[]> = {
-  "/usuarios": ["ADMIN"],
-  "/ma": ["ADMIN", "GESTAO", "PARTNER", "PARTNER_PRO", "MESA_OPERACIONAL"],
-  "/split-fiscal": ["ADMIN", "PARTNER", "PARTNER_PRO", "GESTAO"],
-  "/mesa-credito/nivel-3": ["ADMIN", "GESTAO", "PARTNER_PRO"],
-  "/mesa-operacional": ["ADMIN", "MESA_OPERACIONAL", "GESTAO"],
-  "/kyc": ["ADMIN", "MESA_OPERACIONAL"],
-  "/financeiro": ["ADMIN", "FINANCEIRO"],
-  "/comissoes": ["ADMIN", "PARTNER", "PARTNER_PRO", "FINANCEIRO"],
-};
-
 const IS_DEMO = false;
 
 export async function middleware(request: NextRequest) {
@@ -21,40 +10,22 @@ export async function middleware(request: NextRequest) {
 
   // Allow public routes
   if (PUBLIC_ROUTES.some((r) => pathname.startsWith(r))) {
-    const demoSession = request.cookies.get("v3_demo_session");
-    if (demoSession && pathname === "/login") {
-      return NextResponse.redirect(new URL("/dashboard", request.url));
-    }
     return NextResponse.next();
   }
 
-  // ---- DEMO MODE ----
+  // Demo mode — cookie only
   if (IS_DEMO) {
     const demoSession = request.cookies.get("v3_demo_session");
     if (!demoSession) {
       return NextResponse.redirect(new URL("/login", request.url));
     }
-
-    try {
-      const session = JSON.parse(demoSession.value);
-      const role = session.role as string;
-
-      for (const [route, allowedRoles] of Object.entries(ROLE_ROUTES)) {
-        if (pathname.startsWith(route) && !allowedRoles.includes(role)) {
-          return NextResponse.redirect(new URL("/unauthorized", request.url));
-        }
-      }
-
-      if (pathname === "/") {
-        return NextResponse.redirect(new URL("/dashboard", request.url));
-      }
-    } catch {
-      return NextResponse.redirect(new URL("/login", request.url));
+    if (pathname === "/") {
+      return NextResponse.redirect(new URL("/dashboard", request.url));
     }
     return NextResponse.next();
   }
 
-  // ---- PRODUCTION MODE (Supabase) ----
+  // Production: refresh session cookies so they stay valid
   let supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient(
@@ -76,40 +47,21 @@ export async function middleware(request: NextRequest) {
     }
   );
 
+  // Verify session — redirects unauthenticated users to login
   const { data: { user } } = await supabase.auth.getUser();
 
   if (!user) {
-    const redirectResponse = NextResponse.redirect(new URL("/login", request.url));
+    const redirect = NextResponse.redirect(new URL("/login", request.url));
+    // Forward any refreshed cookies to the redirect response
     supabaseResponse.cookies.getAll().forEach(({ name, value }) => {
-      redirectResponse.cookies.set(name, value);
+      redirect.cookies.set(name, value);
     });
-    return redirectResponse;
+    return redirect;
   }
 
-  const { data } = await supabase
-    .from("profiles")
-    .select("role, is_active")
-    .eq("id", user.id)
-    .single();
-
-  const profile = data as { role: string; is_active: boolean } | null;
-
-  if (!profile || !profile.is_active) {
-    await supabase.auth.signOut();
-    const redirectResponse = NextResponse.redirect(new URL("/login", request.url));
-    supabaseResponse.cookies.getAll().forEach(({ name, value }) => {
-      redirectResponse.cookies.set(name, value);
-    });
-    return redirectResponse;
+  if (pathname === "/") {
+    return NextResponse.redirect(new URL("/dashboard", request.url));
   }
-
-  for (const [route, allowedRoles] of Object.entries(ROLE_ROUTES)) {
-    if (pathname.startsWith(route) && !allowedRoles.includes(profile.role)) {
-      return NextResponse.redirect(new URL("/unauthorized", request.url));
-    }
-  }
-
-  if (pathname === "/") return NextResponse.redirect(new URL("/dashboard", request.url));
 
   return supabaseResponse;
 }

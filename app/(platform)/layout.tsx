@@ -65,7 +65,8 @@ export default async function PlatformLayout({
     .from("notifications")
     .select("*", { count: "exact", head: true })
     .eq("user_id", user.id)
-    .eq("read", false);
+    .eq("read", false)
+    .catch(() => ({ count: 0 })) as { count: number | null };
 
   return (
     <PlatformShell
