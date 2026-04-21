@@ -16,7 +16,7 @@ const ROLE_ROUTES: Record<string, string[]> = {
 
 const IS_DEMO = false;
 
-export async function proxy(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Allow public routes
@@ -78,7 +78,13 @@ export async function proxy(request: NextRequest) {
 
   const { data: { user } } = await supabase.auth.getUser();
 
-  if (!user) return NextResponse.redirect(new URL("/login", request.url));
+  if (!user) {
+    const redirectResponse = NextResponse.redirect(new URL("/login", request.url));
+    supabaseResponse.cookies.getAll().forEach(({ name, value }) => {
+      redirectResponse.cookies.set(name, value);
+    });
+    return redirectResponse;
+  }
 
   const { data } = await supabase
     .from("profiles")
@@ -90,7 +96,11 @@ export async function proxy(request: NextRequest) {
 
   if (!profile || !profile.is_active) {
     await supabase.auth.signOut();
-    return NextResponse.redirect(new URL("/login", request.url));
+    const redirectResponse = NextResponse.redirect(new URL("/login", request.url));
+    supabaseResponse.cookies.getAll().forEach(({ name, value }) => {
+      redirectResponse.cookies.set(name, value);
+    });
+    return redirectResponse;
   }
 
   for (const [route, allowedRoles] of Object.entries(ROLE_ROUTES)) {

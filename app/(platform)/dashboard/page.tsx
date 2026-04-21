@@ -106,7 +106,9 @@ export default async function DashboardPage({
     { count: totalDeals },
     { count: totalTickets },
     { count: totalProposals },
-  ] = await Promise.all([splitCountQ, dealCountQ, ticketCountQ, propCountQ]);
+  ] = await Promise.all([splitCountQ, dealCountQ, ticketCountQ, propCountQ]).catch(() => [
+    { count: 0 }, { count: 0 }, { count: 0 }, { count: 0 },
+  ]);
 
   // Recentes — mesmo filtro
   let splitsQ = svc.from("split_fiscal").select("id, code, title, status, total_value, created_at").order("created_at", { ascending: false }).limit(5);
@@ -121,8 +123,8 @@ export default async function DashboardPage({
     dealsQ  = dealsQ.gte("created_at", since) as typeof dealsQ;
   }
 
-  const { data: recentSplits } = await splitsQ;
-  const { data: recentDeals }  = await dealsQ;
+  const { data: recentSplits } = await splitsQ.catch(() => ({ data: [] }));
+  const { data: recentDeals }  = await dealsQ.catch(() => ({ data: [] }));
 
   // Busca propostas dos últimos 12 meses para montar o gráfico de volume
   const dozeAtras = new Date();
@@ -138,7 +140,7 @@ export default async function DashboardPage({
 
   if (!isAdmin) revenueQ = revenueQ.eq("partner_id", uid) as typeof revenueQ;
 
-  const { data: revenueRaw } = await revenueQ;
+  const { data: revenueRaw } = await revenueQ.catch(() => ({ data: [] }));
 
   // Agrupa por mês e soma o requested_value
   const monthMap: Record<string, number> = {};
