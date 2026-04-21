@@ -65,6 +65,11 @@ export function AssinarClient({ token, contrato }: { token: string; contrato: Co
   const [assinado, setAssinado] = useState(contrato.status === "ASSINADO");
   const [error, setError] = useState("");
 
+  // Foto do documento
+  const [docFile, setDocFile] = useState<File | null>(null);
+  const [docPreview, setDocPreview] = useState<string | null>(null);
+  const [docBase64, setDocBase64] = useState<string | null>(null);
+
   // CPF / Receita Federal
   const [cpf, setCpf] = useState(contrato.client_cpf ?? "");
   const [birthDate, setBirthDate] = useState("");
@@ -114,6 +119,29 @@ export function AssinarClient({ token, contrato }: { token: string; contrato: Co
     }
   }
 
+  async function handleDocFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setDocFile(file);
+    // Redimensiona para max 1200px e converte para JPEG base64
+    const resized = await new Promise<string>((resolve) => {
+      const canvas = document.createElement("canvas");
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        const scale = Math.min(1, 1200 / Math.max(img.width, img.height));
+        canvas.width = Math.round(img.width * scale);
+        canvas.height = Math.round(img.height * scale);
+        canvas.getContext("2d")?.drawImage(img, 0, 0, canvas.width, canvas.height);
+        URL.revokeObjectURL(url);
+        resolve(canvas.toDataURL("image/jpeg", 0.82));
+      };
+      img.src = url;
+    });
+    setDocPreview(resized);
+    setDocBase64(resized);
+  }
+
   const jaAssinado = contrato.status === "ASSINADO";
   const expirado = contrato.status === "EXPIRADO" || contrato.status === "CANCELADO";
   const dataExpira = new Date(contrato.expires_at).toLocaleDateString("pt-BR");
@@ -130,7 +158,7 @@ export function AssinarClient({ token, contrato }: { token: string; contrato: Co
       const res = await fetch(`/api/contratos/${token}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nome_assinatura: nomeAssinatura, endereco, bairro, municipio, estado, cep, birthdate: birthDate }),
+        body: JSON.stringify({ nome_assinatura: nomeAssinatura, endereco, bairro, municipio, estado, cep, birthdate: birthDate, doc_image: docBase64 }),
       });
       const json = await res.json();
       if (!res.ok) { setError(json.error ?? "Erro ao registrar assinatura."); return; }
@@ -159,7 +187,13 @@ export function AssinarClient({ token, contrato }: { token: string; contrato: Co
             Você receberá uma confirmação no e-mail{" "}
             <strong className="text-[#C9A84C]">{contrato.client_email}</strong>.
           </p>
-          <div className="pt-4 border-t border-[#1B3050]">
+          <a
+            href={`/meus-contratos/${token}`}
+            className="inline-block w-full py-2.5 rounded-xl border border-[#C9A84C]/40 text-[#C9A84C] text-sm font-semibold hover:bg-[#C9A84C]/10 transition-colors"
+          >
+            📄 Ver status e baixar certificado
+          </a>
+          <div className="pt-2 border-t border-[#1B3050]">
             <span className="text-[11px] text-[#7A8FA8]">V3 Partners · {contrato.proposal_code}</span>
           </div>
         </div>
@@ -595,6 +629,44 @@ export function AssinarClient({ token, contrato }: { token: string; contrato: Co
           )}
           {cpfError && (
             <div className="bg-red-500/15 border border-red-500/30 rounded-lg px-4 py-3 text-sm text-red-400">{cpfError}</div>
+          )}
+        </div>
+
+        {/* ── FOTO DO DOCUMENTO ── */}
+        <div className="bg-[#0C1929] border border-[#1B3050] rounded-2xl p-6 space-y-4">
+          <div>
+            <h3 className="text-sm font-bold text-white">Foto do Documento <span className="text-[#7A8FA8] font-normal">(opcional)</span></h3>
+            <p className="text-[12px] text-[#7A8FA8] mt-1">
+              Envie uma foto do seu CPF, CNH ou RG para reforçar a validade da assinatura.
+            </p>
+          </div>
+          <label className="flex flex-col items-center justify-center gap-2 border-2 border-dashed border-[#1B3050] rounded-xl p-5 cursor-pointer hover:border-[#C9A84C]/40 transition-colors">
+            {docPreview ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={docPreview} alt="Preview documento" className="max-h-40 rounded-lg object-contain" />
+            ) : (
+              <>
+                <span className="text-2xl">📷</span>
+                <span className="text-[12px] text-[#7A8FA8] text-center">
+                  Toque para tirar foto ou escolher arquivo<br />
+                  <span className="text-[10px]">JPG, PNG ou HEIC — até 10 MB</span>
+                </span>
+              </>
+            )}
+            <input
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="hidden"
+              onChange={handleDocFile}
+            />
+          </label>
+          {docFile && (
+            <div className="flex items-center justify-between text-[11px] text-[#7A8FA8]">
+              <span>✅ {docFile.name}</span>
+              <button onClick={() => { setDocFile(null); setDocPreview(null); setDocBase64(null); }}
+                className="text-red-400 hover:text-red-300">Remover</button>
+            </div>
           )}
         </div>
 

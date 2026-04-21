@@ -41,7 +41,7 @@ export async function POST(
 ) {
   const { token } = await params;
   const body = await req.json();
-  const { endereco, bairro, municipio, estado, cep, nome_assinatura, birthdate } = body;
+  const { endereco, bairro, municipio, estado, cep, nome_assinatura, birthdate, doc_image } = body;
 
   if (!nome_assinatura?.trim()) {
     return NextResponse.json({ error: "Nome para assinatura obrigatório" }, { status: 400 });
@@ -70,6 +70,27 @@ export async function POST(
   const ip = ipRaw.split(",")[0].trim();
   const signedAt = new Date().toISOString();
 
+  // Upload da foto do documento (opcional)
+  let clientDocUrl: string | null = null;
+  if (doc_image && typeof doc_image === "string" && doc_image.startsWith("data:image")) {
+    try {
+      const base64Data = doc_image.replace(/^data:image\/\w+;base64,/, "");
+      const buffer = Buffer.from(base64Data, "base64");
+      const docPath = `documentos/${token}/doc.jpg`;
+      const { error: docErr } = await supabase.storage
+        .from("contratos")
+        .upload(docPath, buffer, { contentType: "image/jpeg", upsert: true });
+      if (!docErr) {
+        const { data: docSigned } = await supabase.storage
+          .from("contratos")
+          .createSignedUrl(docPath, 60 * 60 * 24 * 365);
+        clientDocUrl = docSigned?.signedUrl ?? null;
+      }
+    } catch {
+      // foto é opcional — não bloqueia a assinatura
+    }
+  }
+
   const { error: updateErr } = await supabase
     .from("contratos_mandato")
     .update({
@@ -82,6 +103,7 @@ export async function POST(
       estado: estado ?? null,
       cep: cep ?? null,
       client_birthdate: birthdate ?? null,
+      client_doc_url: clientDocUrl,
     })
     .eq("token", token);
 

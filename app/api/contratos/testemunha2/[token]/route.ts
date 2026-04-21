@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { notifyContratoFinalizado } from "@/lib/email";
 import { gerarCertificadoHTML } from "@/lib/contrato-html";
+import { gerarCertificadoPDF } from "@/lib/contrato-pdf";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -74,10 +75,10 @@ export async function POST(
     return NextResponse.json({ error: "Erro ao registrar assinatura" }, { status: 500 });
   }
 
-  // Gera e faz upload do certificado HTML
+  // Gera e faz upload dos certificados (HTML + PDF)
   let contratoUrl: string | null = null;
   try {
-    const htmlContent = gerarCertificadoHTML({
+    const certData = {
       proposal_code: data.proposal_code,
       client_name: data.client_name,
       client_email: data.client_email,
@@ -101,26 +102,54 @@ export async function POST(
       testemunha2_cpf: cpf ?? data.testemunha2_cpf,
       testemunha2_signed_at: testemunha2SignedAt,
       testemunha2_ip_address: t2Ip,
-    });
+    };
+    const htmlContent = gerarCertificadoHTML(certData);
 
-    const fileName = `${data.proposal_code ?? data.id}/${token}.html`;
-    const { error: uploadErr } = await supabase.storage
+    const prefix = `${data.proposal_code ?? data.id}/${token}`;
+
+    // Upload HTML
+    const { error: htmlErr } = await supabase.storage
       .from("contratos")
-      .upload(fileName, Buffer.from(htmlContent, "utf-8"), {
+      .upload(`${prefix}.html`, Buffer.from(htmlContent, "utf-8"), {
         contentType: "text/html",
         upsert: true,
       });
 
-    if (!uploadErr) {
+    let contratoPdfUrl: string | null = null;
+
+    // Upload PDF
+    try {
+      const pdfBuffer = await gerarCertificadoPDF(certData);
+      const { error: pdfErr } = await supabase.storage
+        .from("contratos")
+        .upload(`${prefix}.pdf`, pdfBuffer, {
+          contentType: "application/pdf",
+          upsert: true,
+        });
+
+      if (!pdfErr) {
+        const { data: pdfSigned } = await supabase.storage
+          .from("contratos")
+          .createSignedUrl(`${prefix}.pdf`, 60 * 60 * 24 * 365);
+        contratoPdfUrl = pdfSigned?.signedUrl ?? null;
+      }
+    } catch (pdfGenErr) {
+      console.error("Erro ao gerar PDF:", pdfGenErr);
+    }
+
+    if (!htmlErr) {
       const { data: signedData } = await supabase.storage
         .from("contratos")
-        .createSignedUrl(fileName, 60 * 60 * 24 * 365); // 1 ano
+        .createSignedUrl(`${prefix}.html`, 60 * 60 * 24 * 365);
 
       if (signedData?.signedUrl) {
         contratoUrl = signedData.signedUrl;
         await supabase
           .from("contratos_mandato")
-          .update({ contrato_url: contratoUrl })
+          .update({
+            contrato_url: contratoUrl,
+            contrato_pdf_url: contratoPdfUrl,
+          })
           .eq("testemunha2_token", token);
       }
     }
