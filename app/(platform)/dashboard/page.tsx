@@ -65,8 +65,8 @@ export default async function DashboardPage({
   // Production mode
   const { createClient } = await import("@/lib/supabase/server");
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return null;
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  if (authError || !user) return null;
 
   const { data: profileData } = await supabase
     .from("profiles").select("role, full_name, created_at").eq("id", user.id).single() as {
@@ -101,14 +101,11 @@ export default async function DashboardPage({
     propCountQ   = propCountQ.gte("created_at", since) as typeof propCountQ;
   }
 
-  const [
-    { count: totalSplits },
-    { count: totalDeals },
-    { count: totalTickets },
-    { count: totalProposals },
-  ] = await Promise.all([splitCountQ, dealCountQ, ticketCountQ, propCountQ]).catch(() => [
-    { count: 0 }, { count: 0 }, { count: 0 }, { count: 0 },
-  ]);
+  const countsResult = await Promise.allSettled([splitCountQ, dealCountQ, ticketCountQ, propCountQ]);
+  const totalSplits   = countsResult[0].status === "fulfilled" ? (countsResult[0].value.count ?? 0) : 0;
+  const totalDeals    = countsResult[1].status === "fulfilled" ? (countsResult[1].value.count ?? 0) : 0;
+  const totalTickets  = countsResult[2].status === "fulfilled" ? (countsResult[2].value.count ?? 0) : 0;
+  const totalProposals = countsResult[3].status === "fulfilled" ? (countsResult[3].value.count ?? 0) : 0;
 
   // Recentes — mesmo filtro
   let splitsQ = svc.from("split_fiscal").select("id, code, title, status, total_value, created_at").order("created_at", { ascending: false }).limit(5);
@@ -123,8 +120,9 @@ export default async function DashboardPage({
     dealsQ  = dealsQ.gte("created_at", since) as typeof dealsQ;
   }
 
-  const { data: recentSplits } = await splitsQ.catch(() => ({ data: [] }));
-  const { data: recentDeals }  = await dealsQ.catch(() => ({ data: [] }));
+  const [splitsResult, dealsResult] = await Promise.allSettled([splitsQ, dealsQ]);
+  const recentSplits = splitsResult.status === "fulfilled" ? (splitsResult.value.data ?? []) : [];
+  const recentDeals  = dealsResult.status === "fulfilled"  ? (dealsResult.value.data ?? [])  : [];
 
   // Busca propostas dos últimos 12 meses para montar o gráfico de volume
   const dozeAtras = new Date();
@@ -140,7 +138,8 @@ export default async function DashboardPage({
 
   if (!isAdmin) revenueQ = revenueQ.eq("partner_id", uid) as typeof revenueQ;
 
-  const { data: revenueRaw } = await revenueQ.catch(() => ({ data: [] }));
+  const revenueResult = await Promise.allSettled([revenueQ]);
+  const revenueRaw = revenueResult[0].status === "fulfilled" ? (revenueResult[0].value.data ?? []) : [];
 
   // Agrupa por mês e soma o requested_value
   const monthMap: Record<string, number> = {};
@@ -153,7 +152,7 @@ export default async function DashboardPage({
     monthMap[key] = 0;
   }
 
-  for (const row of revenueRaw ?? []) {
+  for (const row of revenueRaw) {
     const d = new Date(row.created_at as string);
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
     if (key in monthMap) monthMap[key] += (row.requested_value as number) ?? 0;
@@ -171,13 +170,13 @@ export default async function DashboardPage({
       period={period}
       revenueData={revenueData}
       kpis={{
-        totalSplits: totalSplits ?? 0,
-        totalDeals: totalDeals ?? 0,
-        openTickets: totalTickets ?? 0,
-        pendingProposals: totalProposals ?? 0,
+        totalSplits: totalSplits,
+        totalDeals: totalDeals,
+        openTickets: totalTickets,
+        pendingProposals: totalProposals,
       }}
-      recentSplits={(recentSplits ?? []) as Parameters<typeof DashboardClient>[0]["recentSplits"]}
-      recentDeals={(recentDeals ?? []) as Parameters<typeof DashboardClient>[0]["recentDeals"]}
+      recentSplits={recentSplits as Parameters<typeof DashboardClient>[0]["recentSplits"]}
+      recentDeals={recentDeals as Parameters<typeof DashboardClient>[0]["recentDeals"]}
       userCreatedAt={profileData?.created_at ?? null}
     />
   );

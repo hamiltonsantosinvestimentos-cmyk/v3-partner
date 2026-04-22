@@ -6,7 +6,7 @@ import {
   FileText, CreditCard, Calendar, Link2, Pencil, Check,
   Percent, TrendingUp, BadgeDollarSign, Upload, Paperclip, Trash2, Home, ExternalLink,
   Package, Copy, CheckCheck, MessageSquare, Send, Search, AlertTriangle, ShieldCheck,
-  Phone, Mail, MapPin, Banknote,
+  Phone, Mail, MapPin, Banknote, Download,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -695,6 +695,169 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
   const currentStageIdx = PIPELINE_STAGES.findIndex((s) => s.key === (proposal.stage ?? "RECEBIDO"));
   const activeIdx = currentStageIdx >= 0 ? currentStageIdx : 0;
 
+  function handleExportPDF() {
+    if (!proposal) return;
+    const meta = proposal.metadata ?? {};
+    const clientType = (meta.client_type ?? meta.personType ?? proposal.client_type ?? "PF") as string;
+    const email     = (meta.email ?? proposal.email ?? "") as string;
+    const telefone  = (meta.telefone ?? meta.phone ?? proposal.telefone ?? "") as string;
+    const stageName = PIPELINE_STAGES.find(s => s.key === (proposal.stage ?? "RECEBIDO"))?.label ?? "Recebido";
+
+    const fmt = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+    const fmtDate = (d: string) => d ? new Date(d).toLocaleDateString("pt-BR") : "-";
+
+    const comments = (mesaComments.length > 0 ? mesaComments : (proposal.mesa_comments ?? []));
+
+    const html = `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<title>Proposta ${proposal.code}</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 12px; color: #1a1a2e; background: #fff; }
+  .header { background: linear-gradient(135deg, #09081A 0%, #111F35 100%); color: #F0ECE4; padding: 24px 32px; display: flex; justify-content: space-between; align-items: center; }
+  .header h1 { font-size: 20px; font-weight: 700; color: #C9A84C; }
+  .header .sub { font-size: 11px; color: #7A8FA8; margin-top: 2px; }
+  .header .code { font-size: 13px; font-weight: 600; color: #E8C97A; }
+  .badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 10px; font-weight: 700; background: #C9A84C20; color: #C9A84C; border: 1px solid #C9A84C40; margin-left: 8px; }
+  .content { padding: 24px 32px; }
+  .section { margin-bottom: 20px; }
+  .section-title { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em; color: #7A8FA8; border-bottom: 1px solid #e5e7eb; padding-bottom: 6px; margin-bottom: 12px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 24px; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px 16px; }
+  .field label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: #9ca3af; display: block; }
+  .field span { font-size: 12px; color: #1a1a2e; font-weight: 500; }
+  .highlight { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 12px 16px; }
+  .highlight label { color: #166534; }
+  .highlight span { color: #15803d; font-size: 16px; font-weight: 700; }
+  .pipeline { display: flex; align-items: center; gap: 0; margin: 8px 0; }
+  .stage-item { text-align: center; flex: 1; }
+  .stage-dot { width: 24px; height: 24px; border-radius: 50%; border: 2px solid #d1d5db; background: #f9fafb; margin: 0 auto 4px; display: flex; align-items: center; justify-content: center; font-size: 10px; }
+  .stage-dot.done { background: #10b981; border-color: #10b981; color: white; }
+  .stage-dot.active { background: #C9A84C20; border-color: #C9A84C; color: #C9A84C; font-weight: 700; }
+  .stage-label { font-size: 9px; color: #6b7280; }
+  .stage-label.active { color: #C9A84C; font-weight: 700; }
+  .stage-label.done { color: #10b981; }
+  .stage-line { flex: 1; height: 2px; background: #d1d5db; margin-bottom: 16px; }
+  .stage-line.done { background: #10b981; }
+  .comment { background: #f9fafb; border-left: 3px solid #C9A84C; padding: 8px 12px; margin-bottom: 8px; border-radius: 0 6px 6px 0; }
+  .comment .author { font-size: 10px; font-weight: 700; color: #374151; }
+  .comment .date { font-size: 9px; color: #9ca3af; margin-left: 6px; }
+  .comment .text { font-size: 11px; color: #4b5563; margin-top: 4px; }
+  .footer { margin-top: 32px; padding-top: 12px; border-top: 1px solid #e5e7eb; text-align: center; font-size: 9px; color: #9ca3af; }
+  @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+</style>
+</head>
+<body>
+<div class="header">
+  <div>
+    <div class="code">${proposal.code} <span class="badge">${stageName}</span></div>
+    <h1>${proposal.title}</h1>
+    <div class="sub">${proposal.credit_line} · Gerado em ${new Date().toLocaleDateString("pt-BR")} às ${new Date().toLocaleTimeString("pt-BR")}</div>
+  </div>
+  <div style="text-align:right">
+    <div style="font-size:11px;color:#7A8FA8;">V3 Partners</div>
+    <div style="font-size:10px;color:#C9A84C;">Plataforma Institucional</div>
+  </div>
+</div>
+<div class="content">
+
+  <!-- Pipeline -->
+  <div class="section">
+    <div class="section-title">Etapas da Proposta</div>
+    <div class="pipeline">
+      ${PIPELINE_STAGES.map((s, i) => {
+        const done = i < activeIdx;
+        const active = i === activeIdx;
+        const line = i < PIPELINE_STAGES.length - 1;
+        return `<div class="stage-item">
+          <div class="stage-dot ${done ? "done" : active ? "active" : ""}">${done ? "✓" : i + 1}</div>
+          <div class="stage-label ${done ? "done" : active ? "active" : ""}">${s.label}</div>
+        </div>${line ? `<div class="stage-line ${done ? "done" : ""}"></div>` : ""}`;
+      }).join("")}
+    </div>
+  </div>
+
+  <!-- Dados Financeiros -->
+  <div class="section">
+    <div class="section-title">Dados Financeiros</div>
+    <div class="grid-3">
+      <div class="field highlight">
+        <label>Valor Solicitado</label>
+        <span>${fmt(valorSolicitado)}</span>
+      </div>
+      <div class="field">
+        <label>Valor de Crédito</label>
+        <span>${fmt(valorCredito)}</span>
+      </div>
+      <div class="field">
+        <label>Linha de Crédito</label>
+        <span>${proposal.credit_line}</span>
+      </div>
+      ${proposal.prazo ? `<div class="field"><label>Prazo</label><span>${proposal.prazo}</span></div>` : ""}
+      ${proposal.finalidade ? `<div class="field"><label>Finalidade</label><span>${proposal.finalidade}</span></div>` : ""}
+      <div class="field"><label>Data de Criação</label><span>${fmtDate(proposal.created_at)}</span></div>
+    </div>
+  </div>
+
+  <!-- Cliente -->
+  <div class="section">
+    <div class="section-title">Dados do Cliente (${clientType})</div>
+    <div class="grid">
+      <div class="field"><label>Nome / Razão Social</label><span>${proposal.client_name}</span></div>
+      ${proposal.cpf_cnpj ? `<div class="field"><label>${clientType === "PJ" ? "CNPJ" : "CPF"}</label><span>${proposal.cpf_cnpj}</span></div>` : ""}
+      ${email ? `<div class="field"><label>E-mail</label><span>${email}</span></div>` : ""}
+      ${telefone ? `<div class="field"><label>Telefone</label><span>${telefone}</span></div>` : ""}
+      ${(meta.renda_mensal || meta.renda) ? `<div class="field"><label>Renda Mensal</label><span>${fmt(parseFloat(String(meta.renda_mensal ?? meta.renda ?? 0).replace(/\D/g, "")) || 0)}</span></div>` : ""}
+      ${(meta.faturamento_mensal || meta.faturamento) ? `<div class="field"><label>Faturamento Mensal</label><span>${fmt(parseFloat(String(meta.faturamento_mensal ?? meta.faturamento ?? 0).replace(/\D/g, "")) || 0)}</span></div>` : ""}
+    </div>
+  </div>
+
+  ${proposal.partner_name ? `
+  <!-- Parceiro -->
+  <div class="section">
+    <div class="section-title">Parceiro Responsável</div>
+    <div class="field"><label>Nome</label><span>${proposal.partner_name}</span></div>
+  </div>` : ""}
+
+  ${(percMandato > 0 || percInstituicao > 0) ? `
+  <!-- Comissões -->
+  <div class="section">
+    <div class="section-title">Estrutura de Comissões</div>
+    <div class="grid-3">
+      <div class="field"><label>Comissão Mandato</label><span>${percMandato.toFixed(2)}% — ${fmt(comissaoMandato)}</span></div>
+      <div class="field"><label>Comissão Instituição</label><span>${percInstituicao.toFixed(2)}% — ${fmt(comissaoInstituicao)}</span></div>
+      <div class="field"><label>Total Comissão</label><span>${fmt(totalComissao)}</span></div>
+    </div>
+  </div>` : ""}
+
+  ${comments.length > 0 ? `
+  <!-- Comentários Mesa -->
+  <div class="section">
+    <div class="section-title">Notas da Mesa de Crédito</div>
+    ${comments.map(c => `
+    <div class="comment">
+      <div><span class="author">${c.author}</span><span class="date">${fmtDate(c.created_at)}</span></div>
+      <div class="text">${c.text}</div>
+    </div>`).join("")}
+  </div>` : ""}
+
+</div>
+<div class="footer">
+  V3 Partners · CNPJ 14.219.287/0001-50 · v3partners.com.br · Documento gerado automaticamente pela plataforma institucional
+</div>
+<script>window.onload = () => window.print();</script>
+</body>
+</html>`;
+
+    const win = window.open("", "_blank", "width=900,height=700");
+    if (win) {
+      win.document.write(html);
+      win.document.close();
+    }
+  }
+
   function advance() {
     if (!proposal || activeIdx >= PIPELINE_STAGES.length - 1) return;
     onStageChange?.(proposal.id, PIPELINE_STAGES[activeIdx + 1].key);
@@ -717,9 +880,18 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
             </div>
             <h2 className="text-base font-bold text-white">{proposal.title}</h2>
           </div>
-          <button onClick={onClose} className="w-8 h-8 rounded-lg hover:bg-secondary flex items-center justify-center text-muted-foreground hover:text-white transition-colors ml-4 flex-shrink-0">
-            <X className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-1.5 ml-4 flex-shrink-0">
+            <button
+              onClick={handleExportPDF}
+              title="Exportar PDF"
+              className="flex items-center gap-1.5 h-8 px-2.5 rounded-lg bg-[#C9A84C]/10 border border-[#C9A84C]/30 text-[#C9A84C] hover:bg-[#C9A84C]/20 transition-colors text-xs font-semibold">
+              <Download className="w-3.5 h-3.5" />
+              PDF
+            </button>
+            <button onClick={onClose} className="w-8 h-8 rounded-lg hover:bg-secondary flex items-center justify-center text-muted-foreground hover:text-white transition-colors">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
         {/* Body */}

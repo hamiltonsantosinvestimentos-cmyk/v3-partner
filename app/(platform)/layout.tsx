@@ -44,42 +44,56 @@ export default async function PlatformLayout({
   }
 
   // ---- PRODUCTION MODE ----
-  const { createClient } = await import("@/lib/supabase/server");
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  try {
+    const { createClient } = await import("@/lib/supabase/server");
+    const supabase = await createClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
 
-  if (!user) redirect("/login");
+    if (authError || !user) redirect("/login");
 
-  const { data: profileData } = await supabase
-    .from("profiles").select("*").eq("id", user.id).single();
+    const { data: profileData, error: profileError } = await supabase
+      .from("profiles").select("*").eq("id", user.id).single();
 
-  if (!profileData) redirect("/login");
+    if (profileError || !profileData) redirect("/login");
 
-  const profile = profileData as {
-    id: string; email: string; full_name: string | null;
-    role: "ADMIN" | "PARTNER" | "MESA_OPERACIONAL" | "GESTAO" | "FINANCEIRO";
-    avatar_url: string | null;
-  };
+    const profile = profileData as {
+      id: string; email: string; full_name: string | null;
+      role: "ADMIN" | "PARTNER" | "MESA_OPERACIONAL" | "GESTAO" | "FINANCEIRO";
+      avatar_url: string | null;
+    };
 
-  const { count } = await supabase
-    .from("notifications")
-    .select("*", { count: "exact", head: true })
-    .eq("user_id", user.id)
-    .eq("read", false)
-    .catch(() => ({ count: 0 })) as { count: number | null };
+    let notificationCount = 0;
+    try {
+      const { count } = await supabase
+        .from("notifications")
+        .select("*", { count: "exact", head: true })
+        .eq("user_id", user.id)
+        .eq("read", false);
+      notificationCount = count ?? 0;
+    } catch {
+      // silently ignore notification errors
+    }
 
-  return (
-    <PlatformShell
-      user={{
-        id: profile.id,
-        full_name: profile.full_name,
-        email: profile.email,
-        role: profile.role,
-        avatar_url: profile.avatar_url,
-      }}
-      notificationCount={count ?? 0}
-    >
-      {children}
-    </PlatformShell>
-  );
+    return (
+      <PlatformShell
+        user={{
+          id: profile.id,
+          full_name: profile.full_name,
+          email: profile.email,
+          role: profile.role,
+          avatar_url: profile.avatar_url,
+        }}
+        notificationCount={notificationCount}
+      >
+        {children}
+      </PlatformShell>
+    );
+  } catch (err) {
+    // Re-throw redirect errors (used internally pelo Next.js)
+    const digest = (err as { digest?: string })?.digest;
+    if (digest?.startsWith("NEXT_REDIRECT") || digest?.startsWith("NEXT_NOT_FOUND")) {
+      throw err;
+    }
+    redirect("/login");
+  }
 }

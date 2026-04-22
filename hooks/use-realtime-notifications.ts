@@ -63,34 +63,54 @@ export function useRealtimeNotifications() {
     const supabase = supabaseRef.current;
     if (!supabase) return;
 
-    const channel = supabase
-      .channel("realtime-own-notifications")
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "notifications" },
-        (payload) => {
-          const row = payload.new as Record<string, unknown>;
-          setNotifications((prev) => {
-            // Evita duplicatas
-            if (prev.some((n) => n.id === row.id)) return prev;
-            return [
-              {
-                id:         row.id as string,
-                type:       (row.type as Notification["type"]) ?? "info",
-                title:      row.title as string,
-                message:    (row.message as string) ?? "",
-                timestamp:  new Date(row.created_at as string ?? Date.now()),
-                read:       false,
-                action_url: row.action_url as string | null,
-              },
-              ...prev.slice(0, 49),
-            ];
-          });
-        }
-      )
-      .subscribe();
+    // Verifica se WebSocket está disponível (iOS Safari pode bloquear)
+    if (typeof WebSocket === "undefined") return;
 
-    return () => { supabase.removeChannel(channel); };
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+
+    try {
+      channel = supabase
+        .channel("realtime-own-notifications")
+        .on(
+          "postgres_changes",
+          { event: "INSERT", schema: "public", table: "notifications" },
+          (payload) => {
+            const row = payload.new as Record<string, unknown>;
+            setNotifications((prev) => {
+              // Evita duplicatas
+              if (prev.some((n) => n.id === row.id)) return prev;
+              return [
+                {
+                  id:         row.id as string,
+                  type:       (row.type as Notification["type"]) ?? "info",
+                  title:      row.title as string,
+                  message:    (row.message as string) ?? "",
+                  timestamp:  new Date(row.created_at as string ?? Date.now()),
+                  read:       false,
+                  action_url: row.action_url as string | null,
+                },
+                ...prev.slice(0, 49),
+              ];
+            });
+          }
+        )
+        .subscribe((status, err) => {
+          if (err) {
+            // WebSocket indisponível — remove canal silenciosamente
+            try { supabase.removeChannel(channel!); } catch { /* noop */ }
+            channel = null;
+          }
+        });
+    } catch {
+      // WebSocket bloqueado pelo browser (ex: iOS Safari) — sem realtime
+      channel = null;
+    }
+
+    return () => {
+      if (channel) {
+        try { supabase.removeChannel(channel); } catch { /* noop */ }
+      }
+    };
   }, [loaded]);
 
   return { notifications, unreadCount, dismiss, dismissAll };

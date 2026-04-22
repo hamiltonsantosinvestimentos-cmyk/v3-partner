@@ -26,42 +26,50 @@ export async function proxy(request: NextRequest) {
   }
 
   // Produção: renova cookies de sessão e verifica autenticação
-  let supabaseResponse = NextResponse.next({ request });
+  try {
+    let supabaseResponse = NextResponse.next({ request });
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() { return request.cookies.getAll(); },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) =>
-            request.cookies.set(name, value)
-          );
-          supabaseResponse = NextResponse.next({ request });
-          cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, options)
-          );
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          getAll() { return request.cookies.getAll(); },
+          setAll(cookiesToSet) {
+            cookiesToSet.forEach(({ name, value }) =>
+              request.cookies.set(name, value)
+            );
+            supabaseResponse = NextResponse.next({ request });
+            cookiesToSet.forEach(({ name, value, options }) =>
+              supabaseResponse.cookies.set(name, value, options)
+            );
+          },
         },
-      },
+      }
+    );
+
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+      const redirect = NextResponse.redirect(new URL("/login", request.url));
+      supabaseResponse.cookies.getAll().forEach(({ name, value }) => {
+        redirect.cookies.set(name, value);
+      });
+      return redirect;
     }
-  );
 
-  const { data: { user } } = await supabase.auth.getUser();
+    if (pathname === "/") {
+      return NextResponse.redirect(new URL("/dashboard", request.url));
+    }
 
-  if (!user) {
-    const redirect = NextResponse.redirect(new URL("/login", request.url));
-    supabaseResponse.cookies.getAll().forEach(({ name, value }) => {
-      redirect.cookies.set(name, value);
-    });
-    return redirect;
+    return supabaseResponse;
+  } catch {
+    // Se o middleware falhar (ex: Supabase indisponível), deixa a página tratar
+    if (pathname === "/") {
+      return NextResponse.redirect(new URL("/dashboard", request.url));
+    }
+    return NextResponse.next();
   }
-
-  if (pathname === "/") {
-    return NextResponse.redirect(new URL("/dashboard", request.url));
-  }
-
-  return supabaseResponse;
 }
 
 export const config = {
