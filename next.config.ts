@@ -15,7 +15,7 @@ const securityHeaders = [
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com",
       "img-src 'self' data: blob: https://avatars.githubusercontent.com https://lh3.googleusercontent.com https://img.youtube.com https://feosfhqlofkfuwdsyeaq.supabase.co",
-      "connect-src 'self' https://feosfhqlofkfuwdsyeaq.supabase.co wss://feosfhqlofkfuwdsyeaq.supabase.co https://api.anthropic.com https://brasilapi.com.br https://receitaws.com.br https://publica.cnj.jus.br",
+      "connect-src 'self' https://feosfhqlofkfuwdsyeaq.supabase.co wss://feosfhqlofkfuwdsyeaq.supabase.co https://api.anthropic.com https://brasilapi.com.br https://receitaws.com.br https://publica.cnj.jus.br https://viacep.com.br",
       "frame-ancestors 'none'",
       "base-uri 'self'",
       "form-action 'self'",
