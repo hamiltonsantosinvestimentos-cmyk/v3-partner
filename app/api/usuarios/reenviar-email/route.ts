@@ -111,23 +111,32 @@ export async function POST(req: NextRequest) {
     .eq("id", userId)
     .single();
 
-  // Redefine senha para 12345678
-  const { data: pwData, error: pwErr } = await svc.auth.admin.updateUserById(userId, {
-    password: "12345678",
+  // Redefine senha para 12345678 via REST API diretamente (mais confiável que o SDK)
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+  const serviceKey  = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+
+  const resetRes = await fetch(`${supabaseUrl}/auth/v1/admin/users/${userId}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${serviceKey}`,
+      "apikey": serviceKey,
+    },
+    body: JSON.stringify({ password: "12345678" }),
   });
 
-  if (pwErr) {
-    console.error("[reenviar-email] Erro ao redefinir senha:", pwErr.message);
-    return NextResponse.json({ error: `Erro ao redefinir senha: ${pwErr.message}` }, { status: 500 });
-  }
-  if (!pwData?.user) {
-    console.error("[reenviar-email] updateUserById retornou vazio para userId:", userId);
-    return NextResponse.json({ error: "Falha ao redefinir senha: usuário não atualizado" }, { status: 500 });
+  if (!resetRes.ok) {
+    const resetErr = await resetRes.json().catch(() => ({}));
+    console.error("[reenviar-email] Erro REST ao redefinir senha:", resetErr);
+    return NextResponse.json(
+      { error: `Erro ao redefinir senha: ${resetErr?.message ?? `HTTP ${resetRes.status}`}` },
+      { status: 500 }
+    );
   }
 
-  // Ativa flag de troca obrigatória (separado para não interferir na senha)
+  // Ativa flag de troca obrigatória
   await svc.auth.admin.updateUserById(userId, {
-    app_metadata: { ...pwData.user.app_metadata, must_change_password: true },
+    app_metadata: { must_change_password: true },
   });
 
   // Envia e-mail de boas-vindas
