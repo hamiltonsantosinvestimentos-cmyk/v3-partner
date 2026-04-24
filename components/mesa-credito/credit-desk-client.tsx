@@ -74,14 +74,18 @@ export function CreditDeskClient({ proposals: initial, level, currentUser }: Cre
   const [view, setView] = useState<"table" | "kanban">("table");
 
   useEffect(() => {
+    let isMounted = true;
     fetch(`/api/credit-proposals?level=${level}`)
-      .then(r => r.json())
+      .then(r => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
       .then(({ proposals: fresh }) => {
-        if (!Array.isArray(fresh)) return;
+        if (!isMounted || !Array.isArray(fresh)) return;
         setProposals(fresh.map((p: Record<string, unknown>) => ({
           id: p.id as string, code: p.code as string, title: p.title as string,
           client_name: p.client_name as string,
-          cpf_cnpj: p.client_cpf_cnpj as string | undefined,
+          cpf_cnpj: (p.client_cpf_cnpj ?? (p.metadata as Record<string, unknown> | null)?.cpf_cnpj) as string | undefined,
           client_type: (p.metadata as Record<string, unknown> | null)?.client_type as string | undefined,
           email: (p.metadata as Record<string, unknown> | null)?.email as string | undefined,
           telefone: (p.metadata as Record<string, unknown> | null)?.telefone as string | undefined,
@@ -102,7 +106,8 @@ export function CreditDeskClient({ proposals: initial, level, currentUser }: Cre
           metadata: p.metadata as Record<string, unknown> | undefined,
         })));
       })
-      .catch(() => {});
+      .catch(err => console.error("[credit-proposals load]", err));
+    return () => { isMounted = false; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [level]);
 
@@ -136,10 +141,22 @@ export function CreditDeskClient({ proposals: initial, level, currentUser }: Cre
         current_level: level, metadata,
       }),
     });
-    const json = await res.json();
+    let json: Record<string, unknown>;
+    try {
+      json = await res.json();
+    } catch {
+      throw new Error(`Erro de comunicação com o servidor (HTTP ${res.status})`);
+    }
     if (json.ok && json.proposal) {
-      setProposals(prev => [{ ...p, id: json.proposal.id, partner_id: json.proposal.partner_id ?? p.partner_id, metadata: json.proposal.metadata ?? metadata }, ...prev]);
+      const saved = json.proposal as Record<string, unknown>;
+      setProposals(prev => [{ ...p, id: saved.id as string, partner_id: (saved.partner_id ?? p.partner_id) as string | undefined, metadata: (saved.metadata ?? metadata) as Record<string, unknown> }, ...prev]);
       return;
+    }
+    if (json.error && typeof json.error === "object") {
+      const msgs = Object.entries(json.error as Record<string, string[]>)
+        .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(", ") : v}`)
+        .join(" | ");
+      throw new Error(msgs || "Erro de validação.");
     }
     throw new Error(typeof json.error === "string" ? json.error : "Erro ao salvar proposta.");
   }, [level]);

@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
     }
 
     const meta = (proposal.metadata as Record<string, unknown>) ?? {};
-    const clientEmail = (meta.email as string) ?? "";
+    const clientEmail = typeof meta.email === "string" && meta.email.trim() ? meta.email.trim() : null;
 
     if (!clientEmail) {
       return NextResponse.json({ error: "E-mail do cliente não cadastrado na proposta" }, { status: 422 });
@@ -69,11 +69,11 @@ export async function POST(req: NextRequest) {
     } else {
       const commissionPerc = (proposal.comissao_mandato_perc as number) ?? 6.0;
       const telefone = (meta.telefone as string) ?? null;
-      const enderecoRua = (meta.endereco_rua ?? meta.enderecoRua ?? meta.endereco ?? "") as string;
-      const bairroMeta = (meta.bairro ?? "") as string;
-      const municipioMeta = (meta.endereco_cidade ?? meta.cidade ?? meta.city ?? "") as string;
-      const estadoMeta = (meta.endereco_uf ?? meta.uf ?? meta.state ?? "") as string;
-      const cepMeta = (meta.endereco_cep ?? meta.cep ?? "") as string;
+      const enderecoRua   = (meta.endereco_rua   ?? "") as string;
+      const bairroMeta    = (meta.bairro          ?? "") as string;
+      const municipioMeta = (meta.endereco_cidade ?? "") as string;
+      const estadoMeta    = (meta.endereco_uf     ?? "") as string;
+      const cepMeta       = (meta.endereco_cep    ?? "") as string;
 
       const { data: contrato, error: insertErr } = await supabase
         .from("contratos_mandato")
@@ -94,10 +94,10 @@ export async function POST(req: NextRequest) {
           cep_cadastrado: cepMeta || null,
           testemunha_nome: testemunhaNome,
           testemunha_email: testemunhaEmail,
-          // Testemunha 2 — fixa: Aline Rodrigues dos Santos
-          testemunha2_nome:  "Aline Rodrigues dos Santos",
-          testemunha2_email: "financeiro@v3partners.com.br",
-          testemunha2_cpf:   "012.494.610-06",
+          // Testemunha 2 — configurada via variável de ambiente
+          testemunha2_nome:  process.env.WITNESS2_NAME  ?? "Representante V3 Partners",
+          testemunha2_email: process.env.WITNESS2_EMAIL ?? "financeiro@v3partners.com.br",
+          testemunha2_cpf:   process.env.WITNESS2_CPF   ?? null,
           v3_email:          process.env.EMAIL_V3_SIGNER ?? "joao.lemos@v3partners.com.br",
           expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
         })

@@ -104,7 +104,11 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const parsed = createSchema.safeParse(body);
     if (!parsed.success) {
-      return NextResponse.json({ error: parsed.error.flatten().fieldErrors }, { status: 400 });
+      const fieldErrors = parsed.error.flatten().fieldErrors;
+      const msg = Object.entries(fieldErrors)
+        .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(", ") : v}`)
+        .join(" | ");
+      return NextResponse.json({ error: msg || "Dados inválidos" }, { status: 400 });
     }
     const d = parsed.data;
 
@@ -116,8 +120,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { count } = await supabase
-      .from("credit_desk_proposals").select("*", { count: "exact", head: true });
+    const { count } = await serviceClient()
+      .from("credit_desk_proposals").select("id", { count: "exact", head: true });
     const code = d.code ?? `CRED-26-${String((count ?? 0) + 1).padStart(4, "0")}`;
 
     const { data, error } = await serviceClient().from("credit_desk_proposals").insert({
@@ -198,7 +202,11 @@ export async function PATCH(req: NextRequest) {
   const body = await req.json();
   const parsed = patchSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.flatten().fieldErrors }, { status: 400 });
+    const fieldErrors = parsed.error.flatten().fieldErrors;
+    const msg = Object.entries(fieldErrors)
+      .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(", ") : v}`)
+      .join(" | ");
+    return NextResponse.json({ error: msg || "Dados inválidos" }, { status: 400 });
   }
 
   const { id, ...fields } = parsed.data;

@@ -588,10 +588,21 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
 
   function handleClose() {
     setSubmitted(false);
+    setSaving(false);
+    setSaveError(null);
     setTab("cliente");
+    setClientType("PF");
+    // Dados PF
     setNome(""); setCpfCnpj(""); setEmail(""); setTelefone("");
+    setRg(""); setNascimento(""); setEstadoCivil(""); setRenda("");
+    // Dados PJ
+    setRazaoSocial(""); setNomeFantasia(""); setSocioResponsavel(""); setFaturamento("");
+    // Endereço
+    setEnderecoRua(""); setEnderecoCity(""); setEnderecoUf(""); setEnderecoCep("");
+    // Operação
+    setCreditLine(LEVEL_LINES[level]?.[0] ?? "");
     setValorSolicitado(""); setPrazo(""); setFinalidade("");
-    setRestricao(""); setEnderecoCep("");
+    setRestricao(""); setObservacoes("");
     setImoveis([defaultImovel()]);
     setUploadedFiles([]);
     onClose();
@@ -846,18 +857,23 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
                         <CurrencyField label="Valor Médio de Avaliação (R$) *" value={im.valorMedio} onChange={v => updateImovel(idx, "valorMedio", v)} />
                         <CurrencyField label="Valor Estimado pelo Cliente (R$)" value={im.valor} onChange={v => updateImovel(idx, "valor", v)} />
                       </div>
-                      {(im.valorMedio || im.valor) && valorSolicitado && (
-                        <div className="text-xs text-muted-foreground">
-                          LTV estimado:{" "}
-                          <span className={`font-bold ${
-                            (parseBRL(valorSolicitado) / parseBRL(im.valorMedio || im.valor)) > 0.7
-                              ? "text-red-400" : "text-emerald-400"
-                          }`}>
-                            {((parseBRL(valorSolicitado) / parseBRL(im.valorMedio || im.valor)) * 100).toFixed(1)}%
-                          </span>
-                          <span className="ml-1 text-muted-foreground">(máx. 70%)</span>
-                        </div>
-                      )}
+                      {(() => {
+                        const baseVal = parseBRL(im.valorMedio || im.valor);
+                        const solVal  = parseBRL(valorSolicitado);
+                        if (baseVal > 0 && solVal > 0) {
+                          const ltv = (solVal / baseVal) * 100;
+                          return (
+                            <div className="text-xs text-muted-foreground">
+                              LTV estimado:{" "}
+                              <span className={`font-bold ${ltv > 70 ? "text-red-400" : "text-emerald-400"}`}>
+                                {ltv.toFixed(1)}%
+                              </span>
+                              <span className="ml-1 text-muted-foreground">(máx. 70%)</span>
+                            </div>
+                          );
+                        }
+                        return null;
+                      })()}
 
                       {/* Zona / Tipo / Padrão */}
                       <div className="border-t border-amber-500/20 pt-3 space-y-3">
@@ -870,10 +886,9 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
                             {[{ val: "URBANO", label: "Imóvel Urbano" }, { val: "RURAL", label: "Imóvel Rural" }].map(opt => (
                               <button key={opt.val} type="button"
                                 onClick={() => {
-                                  updateImovel(idx, "zona", opt.val as "URBANO" | "RURAL");
-                                  updateImovel(idx, "estilo", "");
-                                  updateImovel(idx, "padrao", "");
-                                  updateImovel(idx, "areaRural", "");
+                                  setImoveis(prev => prev.map((im2, i2) =>
+                                    i2 === idx ? { ...im2, zona: opt.val as "URBANO" | "RURAL", estilo: "", padrao: "", areaRural: "" } : im2
+                                  ));
                                 }}
                                 className={`flex-1 py-2 rounded-lg text-xs font-bold border transition-colors ${
                                   im.zona === opt.val

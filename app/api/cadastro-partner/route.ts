@@ -18,6 +18,15 @@ export async function POST(req: NextRequest) {
     if (!plano || !tipoPessoa || !email || !telefone) {
       return NextResponse.json({ error: "Campos obrigatórios faltando" }, { status: 400 });
     }
+    if (!["PARTNER", "PARTNER_PRO"].includes(plano)) {
+      return NextResponse.json({ error: "Plano inválido" }, { status: 400 });
+    }
+    if (!["PF", "PJ"].includes(tipoPessoa)) {
+      return NextResponse.json({ error: "Tipo de pessoa inválido" }, { status: 400 });
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return NextResponse.json({ error: "E-mail inválido" }, { status: 400 });
+    }
 
     const svc = serviceClient();
 
