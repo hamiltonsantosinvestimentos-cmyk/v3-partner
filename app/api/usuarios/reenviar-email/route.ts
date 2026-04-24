@@ -61,6 +61,8 @@ async function enviarBoasVindas(email: string, nome: string, role: string) {
 </body>
 </html>`;
 
+  const FROM = process.env.EMAIL_FROM || "V3 Partners <onboarding@resend.dev>";
+
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: {
@@ -68,14 +70,17 @@ async function enviarBoasVindas(email: string, nome: string, role: string) {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      from: "V3 Partners <onboarding@resend.dev>",
+      from: FROM,
       to: [email],
       subject: "Seus dados de acesso — V3 Partners",
       html,
     }),
   });
 
-  return res.ok ? { ok: true } : { ok: false, motivo: "Falha ao enviar via Resend" };
+  const resBody = await res.json().catch(() => ({}));
+  return res.ok
+    ? { ok: true }
+    : { ok: false, motivo: resBody?.message ?? resBody?.name ?? `HTTP ${res.status}` };
 }
 
 export async function POST(req: NextRequest) {
@@ -92,25 +97,41 @@ export async function POST(req: NextRequest) {
 
   const svc = serviceClient();
 
-  // Busca dados do usuário
+  // Busca e-mail direto do auth.users (profiles.email pode estar null)
+  const { data: authData, error: authErr } = await svc.auth.admin.getUserById(userId);
+  if (authErr || !authData?.user) return NextResponse.json({ error: "Usuário não encontrado" }, { status: 404 });
+
+  const email = authData.user.email;
+  if (!email) return NextResponse.json({ error: "Usuário sem e-mail cadastrado" }, { status: 400 });
+
+  // Busca nome e role do perfil
   const { data: profile } = await svc
     .from("profiles")
-    .select("email, full_name, role")
+    .select("full_name, role")
     .eq("id", userId)
     .single();
 
-  if (!profile) return NextResponse.json({ error: "Usuário não encontrado" }, { status: 404 });
-
-  // Redefine senha para 12345678 e ativa flag de troca obrigatória
-  const { error: pwErr } = await svc.auth.admin.updateUserById(userId, {
+  // Redefine senha para 12345678
+  const { data: pwData, error: pwErr } = await svc.auth.admin.updateUserById(userId, {
     password: "12345678",
-    app_metadata: { must_change_password: true },
   });
 
-  if (pwErr) return NextResponse.json({ error: `Erro ao redefinir senha: ${pwErr.message}` }, { status: 500 });
+  if (pwErr) {
+    console.error("[reenviar-email] Erro ao redefinir senha:", pwErr.message);
+    return NextResponse.json({ error: `Erro ao redefinir senha: ${pwErr.message}` }, { status: 500 });
+  }
+  if (!pwData?.user) {
+    console.error("[reenviar-email] updateUserById retornou vazio para userId:", userId);
+    return NextResponse.json({ error: "Falha ao redefinir senha: usuário não atualizado" }, { status: 500 });
+  }
+
+  // Ativa flag de troca obrigatória (separado para não interferir na senha)
+  await svc.auth.admin.updateUserById(userId, {
+    app_metadata: { ...pwData.user.app_metadata, must_change_password: true },
+  });
 
   // Envia e-mail de boas-vindas
-  const emailResult = await enviarBoasVindas(profile.email, profile.full_name ?? "Parceiro", profile.role);
+  const emailResult = await enviarBoasVindas(email, profile?.full_name ?? "Parceiro", profile?.role ?? "PARTNER");
 
-  return NextResponse.json({ ok: true, email: emailResult });
+  return NextResponse.json({ ok: true, emailEnviado: email, email: emailResult });
 }
