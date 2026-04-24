@@ -548,6 +548,48 @@ export async function notifyTestemunhaParaAssinar(opts: {
   );
 }
 
+/** Partner: relatório mensal de comissões e operações */
+export async function sendMonthlyReport(opts: {
+  partnerEmail: string;
+  partnerName: string;
+  plano: string;
+  mes: string;
+  totalRecebido: number;
+  totalPendente: number;
+  totalOperacoes: number;
+  totalComissoes: number;
+}): Promise<void> {
+  const semMovimento = opts.totalComissoes === 0 && opts.totalOperacoes === 0;
+  const body = `
+    <p style="color:#7A96AF;font-size:14px;margin:0 0 20px;">
+      Olá, <strong style="color:#C8D4E3;">${opts.partnerName}</strong>!
+      Aqui está o resumo das suas atividades em <strong style="color:#E5B96A;">${opts.mes}</strong>.
+    </p>
+    ${row("Plano", opts.plano)}
+    ${row("Total de Operações", String(opts.totalOperacoes))}
+    ${row("Total de Comissões", String(opts.totalComissoes))}
+    ${highlight("Comissões Recebidas", moeda(opts.totalRecebido), "#10B981")}
+    ${opts.totalPendente > 0 ? highlight("Comissões a Receber", moeda(opts.totalPendente), "#F59E0B") : ""}
+    ${semMovimento ? `
+    <div style="margin-top:16px;padding:14px 18px;background:#13243D;border-radius:8px;border-left:3px solid #7A96AF;">
+      <p style="margin:0;font-size:13px;color:#7A96AF;">
+        Nenhuma operação registrada este mês. Que tal indicar novos clientes para aumentar suas comissões?
+      </p>
+    </div>` : ""}
+    <p style="color:#7A96AF;font-size:12px;margin-top:20px;">
+      Acesse a plataforma para ver o extrato completo e os detalhes das suas operações.
+    </p>
+  `;
+  await send(
+    opts.partnerEmail,
+    `📊 Seu relatório mensal V3 — ${opts.mes}`,
+    template(`Relatório de ${opts.mes}`, body, {
+      label: "Ver Detalhes na Plataforma",
+      url: "https://v3-partner.vercel.app/minha-assinatura",
+    })
+  );
+}
+
 /** Partner: comissão marcada como paga */
 export async function notifyComissaoPaga(opts: {
   partnerEmail: string;

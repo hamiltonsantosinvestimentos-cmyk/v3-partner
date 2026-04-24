@@ -98,6 +98,7 @@ const NAV_SECTIONS: NavSection[] = [
   {
     label: "SISTEMA",
     items: [
+      { href: "/admin-dashboard",  label: "Painel Admin",    icon: "LayoutDashboard", roles: ["ADMIN"] },
       { href: "/admin-cadastros", label: "Cadastros",      icon: "UserPlus", roles: ["ADMIN"] },
       { href: "/usuarios",       label: "Usuários",       icon: "Users",    roles: ["ADMIN"] },
       { href: "/configuracoes",  label: "Configurações",  icon: "Settings2", roles: ["ADMIN", "PARTNER", "PARTNER_PRO", "GESTAO", "MESA_OPERACIONAL", "FINANCEIRO"] },

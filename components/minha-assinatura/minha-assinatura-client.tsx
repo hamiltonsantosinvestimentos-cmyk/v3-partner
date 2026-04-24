@@ -1,6 +1,7 @@
 "use client";
 
-import { CheckCircle2, Clock, AlertCircle, FileText, Wallet, TrendingUp, Crown, Shield } from "lucide-react";
+import { useState } from "react";
+import { CheckCircle2, Clock, AlertCircle, FileText, Wallet, TrendingUp, Crown, Shield, RefreshCw, ArrowUpCircle, Loader2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 
 interface Profile {
@@ -59,6 +60,9 @@ export function MinhaAssinaturaClient({ profile, contract, commissions }: Props)
   const comissaoPct = profile.role === "PARTNER_PRO" ? "50%" : "30%";
   const trialStatus = getTrialStatus(profile);
 
+  const [renovacaoStatus, setRenovacaoStatus] = useState<"idle" | "loading" | "ok" | "err">("idle");
+  const [upgradeStatus, setUpgradeStatus]     = useState<"idle" | "loading" | "ok" | "err">("idle");
+
   const totalRecebido = commissions.filter(c => c.status === "PAGA").reduce((s, c) => s + c.commission_value, 0);
   const totalPendente = commissions.filter(c => c.status === "A_PAGAR").reduce((s, c) => s + c.commission_value, 0);
   const totalGeral = totalRecebido + totalPendente;
@@ -66,6 +70,28 @@ export function MinhaAssinaturaClient({ profile, contract, commissions }: Props)
   const expiresDate = profile.trial_expires_at
     ? new Date(profile.trial_expires_at)
     : new Date(new Date(profile.created_at).getTime() + 30 * 86400000);
+
+  const showRenovar = trialStatus.daysLeft <= 15 || trialStatus.daysLeft === 0;
+
+  async function handleRenovar() {
+    setRenovacaoStatus("loading");
+    try {
+      const res = await fetch("/api/assinatura/solicitar-renovacao", { method: "POST" });
+      setRenovacaoStatus(res.ok ? "ok" : "err");
+    } catch {
+      setRenovacaoStatus("err");
+    }
+  }
+
+  async function handleUpgrade() {
+    setUpgradeStatus("loading");
+    try {
+      const res = await fetch("/api/assinatura/solicitar-upgrade", { method: "POST" });
+      setUpgradeStatus(res.ok ? "ok" : "err");
+    } catch {
+      setUpgradeStatus("err");
+    }
+  }
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -114,6 +140,37 @@ export function MinhaAssinaturaClient({ profile, contract, commissions }: Props)
               <p className="text-sm font-semibold text-[#F0ECE4] mt-0.5">{item.value}</p>
             </div>
           ))}
+        </div>
+
+        {/* Ações */}
+        <div className="mt-5 pt-5 border-t border-[#243A66] flex flex-wrap gap-3">
+          {/* Botão renovar — aparece quando faltam ≤ 15 dias */}
+          {showRenovar && (
+            <button
+              onClick={handleRenovar}
+              disabled={renovacaoStatus === "loading" || renovacaoStatus === "ok"}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold bg-amber-500/15 border border-amber-500/30 text-amber-400 hover:bg-amber-500/25 transition-all disabled:opacity-60"
+            >
+              {renovacaoStatus === "loading"
+                ? <Loader2 className="w-4 h-4 animate-spin" />
+                : <RefreshCw className="w-4 h-4" />}
+              {renovacaoStatus === "ok" ? "Solicitação enviada!" : renovacaoStatus === "err" ? "Erro — tente novamente" : "Solicitar Renovação"}
+            </button>
+          )}
+
+          {/* Botão upgrade — apenas para PARTNER (não PRO) */}
+          {profile.role === "PARTNER" && (
+            <button
+              onClick={handleUpgrade}
+              disabled={upgradeStatus === "loading" || upgradeStatus === "ok"}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold bg-[#C9A84C]/15 border border-[#C9A84C]/30 text-[#C9A84C] hover:bg-[#C9A84C]/25 transition-all disabled:opacity-60"
+            >
+              {upgradeStatus === "loading"
+                ? <Loader2 className="w-4 h-4 animate-spin" />
+                : <ArrowUpCircle className="w-4 h-4" />}
+              {upgradeStatus === "ok" ? "Solicitação enviada!" : upgradeStatus === "err" ? "Erro — tente novamente" : "Fazer Upgrade para PRO"}
+            </button>
+          )}
         </div>
       </div>
 

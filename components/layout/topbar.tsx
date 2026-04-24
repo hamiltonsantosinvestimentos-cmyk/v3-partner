@@ -46,6 +46,7 @@ const PAGE_LABELS: Record<string, string> = {
   "/academy": "V3 Academy",
   "/usuarios": "Usuários",
   "/minha-assinatura": "Minha Assinatura",
+  "/admin-dashboard": "Painel Administrativo",
   "/configuracoes": "Configurações",
   "/admin-cadastros": "Cadastros",
   "/metas": "Metas & Performance",
