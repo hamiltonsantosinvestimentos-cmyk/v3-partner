@@ -427,6 +427,7 @@ function defaultImovel(): ImovelItem {
 }
 
 interface UploadedFile {
+  fileKey: string;
   docId: string;
   name: string;
   size: number;
@@ -488,7 +489,7 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
   const lines = LEVEL_LINES[level] ?? [];
   const checklist = (CHECKLISTS[creditLine]?.[clientType]) ?? DEFAULT_CHECKLIST[clientType];
 
-  const uploadedIds = uploadedFiles.filter((f) => f.status === "done").map((f) => f.docId);
+  const uploadedIds = [...new Set(uploadedFiles.filter((f) => f.status === "done").map((f) => f.docId))];
   const requiredDocs = checklist.filter((d) => d.required);
   const completedRequired = requiredDocs.filter((d) => uploadedIds.includes(d.id)).length;
 
@@ -497,13 +498,18 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
   }
 
   function simulateUpload(docId: string, fileName: string) {
-    const fake: UploadedFile = { docId, name: fileName, size: Math.floor(Math.random() * 900 + 100), status: "uploading" };
-    setUploadedFiles((prev) => [...prev.filter((f) => f.docId !== docId), fake]);
+    const fileKey = `${docId}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    const fake: UploadedFile = { fileKey, docId, name: fileName, size: Math.floor(Math.random() * 900 + 100), status: "uploading" };
+    setUploadedFiles((prev) => [...prev, fake]);
     setTimeout(() => {
       setUploadedFiles((prev) =>
-        prev.map((f) => f.docId === docId ? { ...f, status: "done" } : f)
+        prev.map((f) => f.fileKey === fileKey ? { ...f, status: "done" } : f)
       );
     }, 1200);
+  }
+
+  function removeFile(fileKey: string) {
+    setUploadedFiles((prev) => prev.filter((f) => f.fileKey !== fileKey));
   }
 
   async function buscarCep(cep: string) {
@@ -557,8 +563,10 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
   }
 
   function handleFileChange(docId: string, e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (file) simulateUpload(docId, file.name);
+    const files = e.target.files;
+    if (files) {
+      Array.from(files).forEach((file) => simulateUpload(docId, file.name));
+    }
     e.target.value = "";
   }
 
@@ -1089,43 +1097,65 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
                 <p className="text-sm text-muted-foreground text-center py-8">Selecione a linha de crédito na aba Operação.</p>
               ) : (
                 checklist.map((doc) => {
-                  const uploaded = uploadedFiles.find((f) => f.docId === doc.id);
+                  const docFiles = uploadedFiles.filter((f) => f.docId === doc.id);
+                  const hasUploading = docFiles.some((f) => f.status === "uploading");
+                  const hasDone = docFiles.some((f) => f.status === "done");
                   return (
-                    <div key={doc.id} className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${
-                      uploaded?.status === "done"
+                    <div key={doc.id} className={`p-3 rounded-xl border transition-all ${
+                      hasDone
                         ? "border-emerald-500/30 bg-emerald-500/5"
-                        : "border-border bg-secondary/30 hover:bg-secondary/60"
+                        : "border-border bg-secondary/30"
                     }`}>
-                      <div className="flex-shrink-0">
-                        {uploaded?.status === "done" ? (
-                          <CheckCircle2 className="w-5 h-5 text-emerald-400" />
-                        ) : uploaded?.status === "uploading" ? (
-                          <div className="w-5 h-5 rounded-full border-2 border-primary border-t-transparent animate-spin" />
-                        ) : (
-                          <Circle className={`w-5 h-5 ${doc.required ? "text-amber-400" : "text-muted-foreground"}`} />
-                        )}
+                      <div className="flex items-start gap-3">
+                        <div className="flex-shrink-0 mt-0.5">
+                          {hasDone ? (
+                            <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+                          ) : hasUploading ? (
+                            <div className="w-5 h-5 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+                          ) : (
+                            <Circle className={`w-5 h-5 ${doc.required ? "text-amber-400" : "text-muted-foreground"}`} />
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className={`text-sm font-medium ${hasDone ? "text-emerald-300" : "text-foreground"}`}>
+                            {doc.label}
+                            {doc.required && <span className="text-red-400 ml-1">*</span>}
+                          </p>
+                          {doc.hint && <p className="text-xs text-muted-foreground">{doc.hint}</p>}
+                          {docFiles.length > 0 && (
+                            <div className="mt-1.5 space-y-1">
+                              {docFiles.map((f) => (
+                                <div key={f.fileKey} className="flex items-center gap-2">
+                                  {f.status === "uploading" ? (
+                                    <div className="w-3 h-3 rounded-full border-2 border-primary border-t-transparent animate-spin flex-shrink-0" />
+                                  ) : (
+                                    <CheckCircle2 className="w-3 h-3 text-emerald-400 flex-shrink-0" />
+                                  )}
+                                  <span className="text-xs text-muted-foreground truncate flex-1">{f.name} — {f.size} KB</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => removeFile(f.fileKey)}
+                                    className="text-muted-foreground hover:text-red-400 transition-colors flex-shrink-0"
+                                  >
+                                    <X className="w-3 h-3" />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                        <label className="flex-shrink-0 cursor-pointer">
+                          <input type="file" multiple className="hidden" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" onChange={(e) => handleFileChange(doc.id, e)} />
+                          <span className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                            hasDone
+                              ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30"
+                              : "bg-secondary border border-border text-muted-foreground hover:text-white hover:border-primary/50"
+                          }`}>
+                            <Upload className="w-3 h-3" />
+                            {hasDone ? "+ Adicionar" : "Upload"}
+                          </span>
+                        </label>
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <p className={`text-sm font-medium ${uploaded?.status === "done" ? "text-emerald-300" : "text-foreground"}`}>
-                          {doc.label}
-                          {doc.required && <span className="text-red-400 ml-1">*</span>}
-                        </p>
-                        {doc.hint && <p className="text-xs text-muted-foreground">{doc.hint}</p>}
-                        {uploaded?.status === "done" && (
-                          <p className="text-xs text-muted-foreground">{uploaded.name} — {uploaded.size} KB</p>
-                        )}
-                      </div>
-                      <label className="flex-shrink-0 cursor-pointer">
-                        <input type="file" className="hidden" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" onChange={(e) => handleFileChange(doc.id, e)} />
-                        <span className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                          uploaded?.status === "done"
-                            ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30"
-                            : "bg-secondary border border-border text-muted-foreground hover:text-white hover:border-primary/50"
-                        }`}>
-                          <Upload className="w-3 h-3" />
-                          {uploaded?.status === "done" ? "Substituir" : "Upload"}
-                        </span>
-                      </label>
                     </div>
                   );
                 })
