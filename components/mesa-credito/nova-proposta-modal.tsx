@@ -481,6 +481,10 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
   // Documentos
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
 
+  // CEP loading
+  const [cepLoading, setCepLoading] = useState(false);
+  const [cepLoadingIdx, setCepLoadingIdx] = useState<number | null>(null);
+
   const lines = LEVEL_LINES[level] ?? [];
   const checklist = (CHECKLISTS[creditLine]?.[clientType]) ?? DEFAULT_CHECKLIST[clientType];
 
@@ -500,6 +504,56 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
         prev.map((f) => f.docId === docId ? { ...f, status: "done" } : f)
       );
     }, 1200);
+  }
+
+  async function buscarCep(cep: string) {
+    const digits = cep.replace(/\D/g, "");
+    if (digits.length !== 8) return null;
+    try {
+      const res = await fetch(`https://viacep.com.br/ws/${digits}/json/`);
+      if (!res.ok) return null;
+      const data = await res.json();
+      return data.erro ? null : data as { logradouro: string; bairro: string; localidade: string; uf: string };
+    } catch { return null; }
+  }
+
+  function maskCep(v: string) {
+    const d = v.replace(/\D/g, "").slice(0, 8);
+    return d.length > 5 ? `${d.slice(0, 5)}-${d.slice(5)}` : d;
+  }
+
+  async function handleEnderecoCepChange(value: string) {
+    const masked = maskCep(value);
+    setEnderecoCep(masked);
+    if (value.replace(/\D/g, "").length === 8) {
+      setCepLoading(true);
+      const addr = await buscarCep(value);
+      setCepLoading(false);
+      if (addr) {
+        setEnderecoRua(addr.logradouro ? `${addr.logradouro}${addr.bairro ? `, ${addr.bairro}` : ""}` : "");
+        setEnderecoCity(addr.localidade ?? "");
+        setEnderecoUf(addr.uf ?? "");
+      }
+    }
+  }
+
+  async function handleImovelCepChange(idx: number, value: string) {
+    const masked = maskCep(value);
+    updateImovel(idx, "cep", masked);
+    if (value.replace(/\D/g, "").length === 8) {
+      setCepLoadingIdx(idx);
+      const addr = await buscarCep(value);
+      setCepLoadingIdx(null);
+      if (addr) {
+        setImoveis(prev => prev.map((im, i) => i !== idx ? im : {
+          ...im,
+          cep: masked,
+          endereco: addr.logradouro ? `${addr.logradouro}${addr.bairro ? `, ${addr.bairro}` : ""}` : im.endereco,
+          cidade: addr.localidade ?? im.cidade,
+          estado: addr.uf ?? im.estado,
+        }));
+      }
+    }
   }
 
   function handleFileChange(docId: string, e: React.ChangeEvent<HTMLInputElement>) {
@@ -711,17 +765,19 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
                     <Field label="E-mail *" value={email} onChange={setEmail} placeholder="joao@email.com" type="email" />
                     <Field label="Telefone *" value={telefone} onChange={setTelefone} placeholder="(11) 99999-0000" />
                   </div>
-                  <div className="grid grid-cols-3 gap-3">
+                  <div className="grid grid-cols-2 gap-3">
                     <SelectField label="Estado Civil" value={estadoCivil} onChange={setEstadoCivil}
                       options={["Solteiro(a)", "Casado(a)", "Divorciado(a)", "Viúvo(a)", "União Estável"]} />
                     <CurrencyField label="Renda Mensal (R$) *" value={renda} onChange={setRenda} />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <CepField label="CEP" value={enderecoCep} onChange={handleEnderecoCepChange} loading={cepLoading} />
                     <Field label="UF" value={enderecoUf} onChange={setEnderecoUf} placeholder="SP" />
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <Field label="Endereço" value={enderecoRua} onChange={setEnderecoRua} placeholder="Rua, número, bairro" />
-                    <Field label="CEP" value={enderecoCep} onChange={setEnderecoCep} placeholder="00000-000" />
+                    <Field label="Cidade" value={enderecoCity} onChange={setEnderecoCity} placeholder="São Paulo" />
                   </div>
-                  <Field label="Cidade" value={enderecoCity} onChange={setEnderecoCity} placeholder="São Paulo" />
                   <div>
                     <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Restrição cadastral / financeira *</label>
                     <div className="flex gap-2">
@@ -759,15 +815,15 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
                     <Field label="E-mail *" value={email} onChange={setEmail} placeholder="contato@empresa.com" type="email" />
                     <Field label="Telefone *" value={telefone} onChange={setTelefone} placeholder="(11) 3000-0000" />
                   </div>
+                  <CurrencyField label="Faturamento Anual (R$) *" value={faturamento} onChange={setFaturamento} />
                   <div className="grid grid-cols-2 gap-3">
-                    <CurrencyField label="Faturamento Anual (R$) *" value={faturamento} onChange={setFaturamento} />
+                    <CepField label="CEP da Empresa" value={enderecoCep} onChange={handleEnderecoCepChange} loading={cepLoading} />
                     <Field label="UF" value={enderecoUf} onChange={setEnderecoUf} placeholder="SP" />
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <Field label="Endereço da Empresa" value={enderecoRua} onChange={setEnderecoRua} placeholder="Rua, número, bairro" />
-                    <Field label="CEP" value={enderecoCep} onChange={setEnderecoCep} placeholder="00000-000" />
+                    <Field label="Cidade" value={enderecoCity} onChange={setEnderecoCity} placeholder="São Paulo" />
                   </div>
-                  <Field label="Cidade" value={enderecoCity} onChange={setEnderecoCity} placeholder="São Paulo" />
                   <div>
                     <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Restrição cadastral / financeira *</label>
                     <div className="flex gap-2">
@@ -841,8 +897,8 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
                         )}
                       </div>
                       <div className="grid grid-cols-2 gap-3">
+                        <CepField label="CEP do Imóvel" value={im.cep} onChange={v => handleImovelCepChange(idx, v)} loading={cepLoadingIdx === idx} />
                         <Field label="Endereço do Imóvel" value={im.endereco} onChange={v => updateImovel(idx, "endereco", v)} placeholder="Rua, número, bairro" />
-                        <Field label="CEP do Imóvel" value={im.cep} onChange={v => updateImovel(idx, "cep", v)} placeholder="00000-000" />
                       </div>
                       <div className="grid grid-cols-2 gap-3">
                         <Field label="Cidade do Imóvel *" value={im.cidade} onChange={v => updateImovel(idx, "cidade", v)} placeholder="Ex: São Paulo" />
@@ -1155,6 +1211,33 @@ function Field({ label, value, onChange, placeholder, type = "text" }: {
         placeholder={placeholder}
         className="w-full h-9 px-3 text-sm bg-secondary border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
       />
+    </div>
+  );
+}
+
+function CepField({ label, value, onChange, loading }: {
+  label: string; value: string; onChange: (v: string) => void; loading?: boolean;
+}) {
+  return (
+    <div>
+      <label className="block text-xs font-semibold text-muted-foreground mb-1.5">{label}</label>
+      <div className="relative">
+        <input
+          type="text"
+          inputMode="numeric"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="00000-000"
+          maxLength={9}
+          className="w-full h-9 px-3 text-sm bg-secondary border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
+        />
+        {loading && (
+          <div className="absolute right-3 top-1/2 -translate-y-1/2">
+            <div className="w-3.5 h-3.5 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+          </div>
+        )}
+      </div>
+      {loading && <p className="text-[10px] text-muted-foreground mt-1">Buscando endereço...</p>}
     </div>
   );
 }
