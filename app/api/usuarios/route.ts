@@ -144,7 +144,7 @@ export async function POST(request: Request) {
         </div>
         <div>
           <p style="font-size:11px;color:#7A8FA8;margin:0 0 4px;">Senha temporária</p>
-          <p style="font-size:20px;color:#C9A84C;font-weight:700;font-family:monospace;letter-spacing:4px;margin:0;">12345678</p>
+          <p style="font-size:20px;color:#C9A84C;font-weight:700;font-family:monospace;letter-spacing:4px;margin:0;">${password}</p>
         </div>
       </div>
       <div style="text-align:center;margin-bottom:20px;">
