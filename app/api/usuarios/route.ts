@@ -179,7 +179,7 @@ export async function POST(request: Request) {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          from: "V3 Partners <onboarding@resend.dev>",
+          from: process.env.EMAIL_FROM || "V3 Partners <onboarding@resend.dev>",
           to: [email],
           subject: `Seus dados de acesso — V3 Partners`,
           html,
