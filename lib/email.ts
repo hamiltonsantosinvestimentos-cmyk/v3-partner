@@ -70,6 +70,44 @@ function highlight(label: string, value: string, color: string): string {
 const moeda = (v: number) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 
+/** Partner: confirmação de assinatura do contrato de parceria */
+export async function notifyContratoParceriaAssinado(opts: {
+  partnerEmail: string;
+  partnerName: string;
+  plano: string;
+  valorMensal: string;
+  dataAssinatura: string;
+}): Promise<void> {
+  const planoLabel = opts.plano === "PARTNER_PRO" ? "Partner PRO" : "Partner";
+  const body = `
+    <p style="color:#C8D4E3;font-size:14px;margin-bottom:20px;">
+      Olá, <strong>${opts.partnerName}</strong>!<br><br>
+      Seu contrato de parceria com a V3 Partners foi assinado com sucesso.
+      Bem-vindo ao ecossistema V3!
+    </p>
+    ${row("Plano contratado", planoLabel)}
+    ${row("Mensalidade", opts.valorMensal)}
+    ${row("Data da assinatura", opts.dataAssinatura)}
+    ${row("Validade", "12 meses")}
+    <div style="margin-top:20px;padding:14px 18px;background:#0A2018;border-radius:8px;border-left:3px solid #10B981;">
+      <p style="margin:0;font-size:13px;color:#10B981;font-weight:600;">
+        ✅ Contrato registrado eletronicamente conforme Lei nº 14.063/2020
+      </p>
+    </div>
+    <p style="color:#7A96AF;font-size:13px;margin-top:16px;">
+      Você já pode acessar a plataforma e começar a operar. Em caso de dúvidas, entre em contato com nossa equipe.
+    </p>
+  `;
+  await send(
+    opts.partnerEmail,
+    `✅ Contrato V3 ${planoLabel} assinado com sucesso`,
+    template(`Bem-vindo à V3, ${opts.partnerName}!`, body, {
+      label: "Acessar Plataforma",
+      url: "https://v3-partner.vercel.app/dashboard",
+    })
+  );
+}
+
 const dataLocal = (iso: string) =>
   new Date(iso).toLocaleDateString("pt-BR");
 

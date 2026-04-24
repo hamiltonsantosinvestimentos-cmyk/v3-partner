@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Users, Plus, Search, UserCheck, UserX, Pencil, Trash2, Clock, ShieldOff, ShieldCheck } from "lucide-react";
+import { Users, Plus, Search, UserCheck, UserX, Pencil, Trash2, Clock, ShieldOff, ShieldCheck, Mail, Loader2, FileText, CalendarPlus } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -27,21 +27,28 @@ import {
 // ─── Temporizador de 30 dias ─────────────────────────────────────────────────
 const TRIAL_DAYS = 30;
 
-function getDaysLeft(createdAt: string): number {
+function getDaysLeft(createdAt: string, trialExpiresAt?: string | null): number {
+  if (trialExpiresAt) {
+    const expires = new Date(trialExpiresAt).getTime();
+    const diff = Math.floor((expires - Date.now()) / (1000 * 60 * 60 * 24));
+    return Math.max(diff, 0);
+  }
   const created = new Date(createdAt).getTime();
   const now = Date.now();
   const elapsed = Math.floor((now - created) / (1000 * 60 * 60 * 24));
   return Math.max(TRIAL_DAYS - elapsed, 0);
 }
 
-function isExpired(createdAt: string): boolean {
-  return getDaysLeft(createdAt) === 0;
+function isExpired(createdAt: string, trialExpiresAt?: string | null): boolean {
+  return getDaysLeft(createdAt, trialExpiresAt) === 0;
 }
 
-function TrialBadge({ createdAt, isActive }: { createdAt: string; isActive: boolean }) {
-  const daysLeft = getDaysLeft(createdAt);
+function TrialBadge({ createdAt, trialExpiresAt, isActive }: { createdAt: string; trialExpiresAt?: string | null; isActive: boolean }) {
+  const daysLeft = getDaysLeft(createdAt, trialExpiresAt);
   const pct = Math.round((daysLeft / TRIAL_DAYS) * 100);
-  const expireDate = new Date(new Date(createdAt).getTime() + TRIAL_DAYS * 86400000).toLocaleDateString("pt-BR");
+  const expireDate = trialExpiresAt
+    ? new Date(trialExpiresAt).toLocaleDateString("pt-BR")
+    : new Date(new Date(createdAt).getTime() + TRIAL_DAYS * 86400000).toLocaleDateString("pt-BR");
 
   if (daysLeft === 0) {
     return (
@@ -90,6 +97,7 @@ interface User {
   document_cpf: string | null;
   is_active: boolean;
   created_at: string;
+  trial_expires_at?: string | null;
 }
 
 interface UsersClientProps {
@@ -116,7 +124,7 @@ export function UsersClient({ initialUsers }: UsersClientProps) {
 
   // Auto-bloqueia usuários com trial expirado
   useEffect(() => {
-    const expired = users.filter((u) => u.is_active && isExpired(u.created_at));
+    const expired = users.filter((u) => u.is_active && isExpired(u.created_at, u.trial_expires_at));
     if (expired.length === 0) return;
     expired.forEach(async (u) => {
       const res = await fetch(`/api/usuarios/${u.id}`, {
@@ -179,6 +187,79 @@ export function UsersClient({ initialUsers }: UsersClientProps) {
     }
   };
 
+  const [sendingEmail, setSendingEmail] = useState<string | null>(null);
+  const [loadingContract, setLoadingContract] = useState<string | null>(null);
+  const [renewalUser, setRenewalUser] = useState<User | null>(null);
+  const [renewalDate, setRenewalDate] = useState("");
+  const [renewingTrial, setRenewingTrial] = useState(false);
+
+  const handleRenovarTrial = async () => {
+    if (!renewalUser || !renewalDate) return;
+    setRenewingTrial(true);
+    try {
+      const res = await fetch(`/api/usuarios/${renewalUser.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ trial_expires_at: new Date(renewalDate).toISOString() }),
+      });
+      if (res.ok) {
+        setUsers(prev => prev.map(u => u.id === renewalUser.id ? { ...u, trial_expires_at: new Date(renewalDate).toISOString() } : u));
+        setRenewalUser(null);
+        setRenewalDate("");
+      } else {
+        const d = await res.json();
+        alert(d.error ?? "Erro ao renovar trial.");
+      }
+    } catch {
+      alert("Erro de rede. Tente novamente.");
+    } finally {
+      setRenewingTrial(false);
+    }
+  };
+
+  const handleVerContrato = async (user: User) => {
+    setLoadingContract(user.id);
+    try {
+      const res = await fetch(`/api/contratos/parceria?userId=${user.id}`);
+      const data = await res.json();
+      if (!data.found || !data.contract?.contract_html) {
+        alert("Contrato não encontrado para este usuário.");
+        return;
+      }
+      const win = window.open("", "_blank");
+      if (win) {
+        win.document.write(data.contract.contract_html);
+        win.document.close();
+      }
+    } catch {
+      alert("Erro ao buscar contrato. Tente novamente.");
+    } finally {
+      setLoadingContract(null);
+    }
+  };
+
+  const handleReenviarEmail = async (user: User) => {
+    if (!confirm(`Reenviar e-mail de boas-vindas para ${user.email}?\n\nIsso também redefinirá a senha para 12345678.`)) return;
+    setSendingEmail(user.id);
+    try {
+      const res = await fetch("/api/usuarios/reenviar-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: user.id }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        alert(`E-mail enviado com sucesso para ${user.email}!`);
+      } else {
+        alert(`Erro: ${data.error}`);
+      }
+    } catch {
+      alert("Erro ao enviar e-mail. Tente novamente.");
+    } finally {
+      setSendingEmail(null);
+    }
+  };
+
   const [editForm, setEditForm] = useState({ role: "" as UserRole, document_cpf: "" });
 
   const handleUpdateRole = async (userId: string, newRole: UserRole) => {
@@ -228,8 +309,8 @@ export function UsersClient({ initialUsers }: UsersClientProps) {
   const activeCount = users.filter((u) => u.is_active).length;
   const partnerCount = users.filter((u) => u.role === "PARTNER").length;
   const partnerProCount = users.filter((u) => u.role === "PARTNER_PRO").length;
-  const expiredCount = users.filter((u) => isExpired(u.created_at)).length;
-  const expiringCount = users.filter((u) => !isExpired(u.created_at) && getDaysLeft(u.created_at) <= 5).length;
+  const expiredCount = users.filter((u) => isExpired(u.created_at, u.trial_expires_at)).length;
+  const expiringCount = users.filter((u) => !isExpired(u.created_at, u.trial_expires_at) && getDaysLeft(u.created_at, u.trial_expires_at) <= 5).length;
 
   return (
     <div className="space-y-5 animate-fade-in">
@@ -337,7 +418,7 @@ export function UsersClient({ initialUsers }: UsersClientProps) {
                       {formatDate(user.created_at)}
                     </td>
                     <td className="px-4 py-3">
-                      <TrialBadge createdAt={user.created_at} isActive={user.is_active} />
+                      <TrialBadge createdAt={user.created_at} trialExpiresAt={user.trial_expires_at} isActive={user.is_active} />
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1">
@@ -349,7 +430,7 @@ export function UsersClient({ initialUsers }: UsersClientProps) {
                           <Pencil className="w-3.5 h-3.5" />
                         </button>
                         {/* Botão de desbloqueio — só aparece se expirado/inativo */}
-                        {!user.is_active && isExpired(user.created_at) ? (
+                        {!user.is_active && isExpired(user.created_at, user.trial_expires_at) ? (
                           <button
                             onClick={() => handleToggleActive(user)}
                             className="p-1.5 rounded hover:bg-secondary transition-colors text-emerald-400 hover:text-emerald-300"
@@ -374,6 +455,33 @@ export function UsersClient({ initialUsers }: UsersClientProps) {
                             )}
                           </button>
                         )}
+                        <button
+                          onClick={() => { setRenewalUser(user); setRenewalDate(""); }}
+                          className="p-1.5 rounded hover:bg-secondary transition-colors text-emerald-400 hover:text-emerald-300"
+                          title="Renovar / Estender trial"
+                        >
+                          <CalendarPlus className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => handleReenviarEmail(user)}
+                          disabled={sendingEmail === user.id}
+                          className="p-1.5 rounded hover:bg-secondary transition-colors text-blue-400 hover:text-blue-300 disabled:opacity-50"
+                          title="Reenviar e-mail de boas-vindas"
+                        >
+                          {sendingEmail === user.id
+                            ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            : <Mail className="w-3.5 h-3.5" />}
+                        </button>
+                        <button
+                          onClick={() => handleVerContrato(user)}
+                          disabled={loadingContract === user.id}
+                          className="p-1.5 rounded hover:bg-secondary transition-colors text-[#C9A84C] hover:text-[#E8C97A] disabled:opacity-50"
+                          title="Ver contrato assinado"
+                        >
+                          {loadingContract === user.id
+                            ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            : <FileText className="w-3.5 h-3.5" />}
+                        </button>
                         <button
                           onClick={() => handleDelete(user)}
                           className="p-1.5 rounded hover:bg-secondary transition-colors text-red-500 hover:text-red-400"
@@ -532,6 +640,45 @@ export function UsersClient({ initialUsers }: UsersClientProps) {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+      )}
+
+      {/* Modal Renovar Trial */}
+      {renewalUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setRenewalUser(null)} />
+          <div className="relative w-full max-w-sm bg-[#111F35] border border-[#243A66] rounded-2xl shadow-2xl p-6 z-10">
+            <h2 className="text-base font-bold text-[#F0ECE4] mb-1">Renovar / Estender Trial</h2>
+            <p className="text-xs text-[#7A8FA8] mb-4">
+              Definir nova data de expiração para <strong className="text-[#F0ECE4]">{renewalUser.full_name || renewalUser.email}</strong>
+            </p>
+            <div className="mb-4">
+              <label className="block text-xs font-semibold text-[#7A8FA8] mb-1.5">Nova data de expiração</label>
+              <input
+                type="date"
+                value={renewalDate}
+                min={new Date().toISOString().slice(0, 10)}
+                onChange={(e) => setRenewalDate(e.target.value)}
+                className="w-full h-10 px-3 text-sm rounded-lg border bg-[#0A1628] border-[#243A66] text-[#F0ECE4] focus:outline-none focus:ring-1 focus:ring-[#C9A84C]/50"
+              />
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setRenewalUser(null)}
+                className="flex-1 h-10 rounded-lg border border-[#243A66] text-[#7A8FA8] hover:text-[#F0ECE4] text-sm transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleRenovarTrial}
+                disabled={!renewalDate || renewingTrial}
+                className="flex-1 h-10 rounded-lg bg-[#C9A84C] hover:bg-[#E8C97A] text-[#09081A] text-sm font-bold transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
+              >
+                {renewingTrial && <Loader2 className="w-4 h-4 animate-spin" />}
+                Salvar
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

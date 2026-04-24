@@ -15,6 +15,10 @@ interface Profile {
   role: string;
   phone: string;
   document_cpf: string;
+  cobranding_slug?: string | null;
+  cobranding_bio?: string | null;
+  cobranding_whatsapp?: string | null;
+  cobranding_instagram?: string | null;
 }
 
 interface CaptacaoLink {
@@ -38,7 +42,7 @@ interface Props {
   systemStats: SystemStats | null;
 }
 
-type Tab = "captacao" | "notificacoes" | "sistema" | "integracoes";
+type Tab = "captacao" | "notificacoes" | "sistema" | "integracoes" | "cobranding";
 
 const IS_PARTNER = (role: string) => ["PARTNER", "PARTNER_PRO", "ADMIN", "GESTAO"].includes(role);
 const IS_ADMIN   = (role: string) => ["ADMIN", "GESTAO"].includes(role);
@@ -132,9 +136,102 @@ function IntegrationCard({ name, desc, icon, status, detail }: {
   );
 }
 
+function CobrandingTab({ profile }: { profile: Profile }) {
+  const [form, setForm] = useState({
+    cobranding_slug:      profile.cobranding_slug ?? "",
+    cobranding_bio:       profile.cobranding_bio ?? "",
+    cobranding_whatsapp:  profile.cobranding_whatsapp ?? "",
+    cobranding_instagram: profile.cobranding_instagram ?? "",
+  });
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved]   = useState(false);
+  const [err, setErr]       = useState("");
+
+  const baseUrl = typeof window !== "undefined" ? window.location.origin : "https://v3-partner.vercel.app";
+  const previewUrl = form.cobranding_slug ? `${baseUrl}/p/${form.cobranding_slug}` : null;
+
+  const inputCls = "w-full h-10 px-3 text-sm rounded-lg border bg-[#0A1628] border-[#243A66] text-[#F0ECE4] placeholder:text-[#3A5070] focus:outline-none focus:ring-1 focus:ring-[#C9A84C]/50";
+  const labelCls = "block text-xs font-semibold text-[#7A8FA8] mb-1.5";
+
+  async function handleSave(e: React.FormEvent) {
+    e.preventDefault();
+    setErr(""); setSaving(true);
+    const slug = form.cobranding_slug.trim().toLowerCase().replace(/[^a-z0-9-]/g, "");
+    if (!slug) { setErr("Informe um link personalizado."); setSaving(false); return; }
+    const res = await fetch("/api/profile", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cobranding_slug: slug, cobranding_bio: form.cobranding_bio || null, cobranding_whatsapp: form.cobranding_whatsapp || null, cobranding_instagram: form.cobranding_instagram || null }),
+    });
+    const data = await res.json();
+    if (!res.ok) { setErr(data.error ?? "Erro ao salvar."); setSaving(false); return; }
+    setSaved(true); setSaving(false);
+    setTimeout(() => setSaved(false), 3000);
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="p-4 rounded-xl bg-[#C9A84C]/5 border border-[#C9A84C]/20 flex gap-3">
+        <Globe className="w-4 h-4 text-[#C9A84C] flex-shrink-0 mt-0.5" />
+        <div>
+          <p className="text-xs font-semibold text-[#C9A84C]">Co-branding exclusivo Partner PRO</p>
+          <p className="text-xs text-[#7A8FA8] mt-0.5">Crie sua landing page personalizada com logo V3 + seu perfil. Compartilhe com clientes e indique oportunidades.</p>
+        </div>
+      </div>
+      <form onSubmit={handleSave} className="p-6 rounded-2xl border border-[#1E3050] bg-[#0A1628]/60 space-y-4">
+        <div>
+          <label className={labelCls}>Seu link personalizado</label>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-[#7A8FA8] whitespace-nowrap">{baseUrl}/p/</span>
+            <input
+              value={form.cobranding_slug}
+              onChange={e => setForm(f => ({ ...f, cobranding_slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "") }))}
+              placeholder="seu-nome"
+              className={inputCls}
+            />
+          </div>
+          {previewUrl && (
+            <a href={previewUrl} target="_blank" rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 mt-1.5 text-[10px] text-[#C9A84C] hover:underline">
+              <ExternalLink className="w-3 h-3" /> Ver página
+            </a>
+          )}
+        </div>
+        <div>
+          <label className={labelCls}>Sua bio (exibida na página)</label>
+          <textarea
+            value={form.cobranding_bio}
+            onChange={e => setForm(f => ({ ...f, cobranding_bio: e.target.value }))}
+            placeholder="Especialista em soluções financeiras estruturadas..."
+            rows={3}
+            className="w-full px-3 py-2.5 text-sm rounded-lg border bg-[#0A1628] border-[#243A66] text-[#F0ECE4] placeholder:text-[#3A5070] focus:outline-none focus:ring-1 focus:ring-[#C9A84C]/50 resize-none"
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className={labelCls}>WhatsApp (com DDD)</label>
+            <input value={form.cobranding_whatsapp} onChange={e => setForm(f => ({ ...f, cobranding_whatsapp: e.target.value }))} placeholder="11999999999" className={inputCls} />
+          </div>
+          <div>
+            <label className={labelCls}>Instagram (sem @)</label>
+            <input value={form.cobranding_instagram} onChange={e => setForm(f => ({ ...f, cobranding_instagram: e.target.value }))} placeholder="seuperfil" className={inputCls} />
+          </div>
+        </div>
+        {err && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{err}</p>}
+        <button type="submit" disabled={saving}
+          className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-[#C9A84C] hover:bg-[#E8C97A] text-[#09081A] text-sm font-bold transition-colors disabled:opacity-60">
+          {saving ? <RefreshCw className="w-4 h-4 animate-spin" /> : saved ? <Check className="w-4 h-4" /> : null}
+          {saving ? "Salvando..." : saved ? "Salvo!" : "Salvar Co-branding"}
+        </button>
+      </form>
+    </div>
+  );
+}
+
 export function ConfiguracoesClient({ profile, initialLinks, systemStats }: Props) {
   const tabs = ([
     { key: "captacao"    as Tab, label: "Links de Captação", icon: <Link2 className="w-4 h-4" />,   show: IS_PARTNER(profile.role) },
+    { key: "cobranding"  as Tab, label: "Co-branding PRO",   icon: <Globe className="w-4 h-4" />,   show: profile.role === "PARTNER_PRO" },
     { key: "notificacoes" as Tab, label: "Notificações",      icon: <Bell className="w-4 h-4" />,    show: true },
     { key: "sistema"     as Tab, label: "Sistema",            icon: <Shield className="w-4 h-4" />, show: IS_ADMIN(profile.role) },
     { key: "integracoes" as Tab, label: "Integrações",        icon: <Zap className="w-4 h-4" />,    show: IS_ADMIN_ONLY(profile.role) },
@@ -358,6 +455,11 @@ export function ConfiguracoesClient({ profile, initialLinks, systemStats }: Prop
             </div>
           )}
         </div>
+      )}
+
+      {/* ── TAB: CO-BRANDING PRO ── */}
+      {tab === "cobranding" && profile.role === "PARTNER_PRO" && (
+        <CobrandingTab profile={profile} />
       )}
 
       {/* ── TAB: NOTIFICAÇÕES ── */}

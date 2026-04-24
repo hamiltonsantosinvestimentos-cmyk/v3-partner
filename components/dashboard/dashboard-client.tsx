@@ -30,6 +30,7 @@ import {
 } from "recharts";
 import { MarketTicker } from "@/components/dashboard/market-ticker";
 import { NotificationBell } from "@/components/dashboard/notification-bell";
+import { OnboardingBanner } from "@/components/onboarding/onboarding-banner";
 
 
 interface KpiCardProps {
@@ -222,6 +223,9 @@ export function DashboardClient({
     <div className="space-y-6 animate-fade-in">
       {/* Market Ticker */}
       <MarketTicker />
+
+      {/* Onboarding Guiado — primeiros passos para partners */}
+      <OnboardingBanner role={role} hasFullName={!!userName && userName !== "Usuário"} />
 
       {/* Trial Banner — apenas para PARTNER e PARTNER_PRO */}
       {userCreatedAt && (

@@ -23,7 +23,7 @@ export async function PATCH(
   const profile = profileData as { role: string } | null;
   if (profile?.role !== "ADMIN") return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
 
-  const allowedFields = ["role", "is_active", "phone", "full_name", "document_cpf"];
+  const allowedFields = ["role", "is_active", "phone", "full_name", "document_cpf", "trial_expires_at"];
   const updateData: Record<string, unknown> = {};
   for (const field of allowedFields) {
     if (field in body) updateData[field] = body[field];

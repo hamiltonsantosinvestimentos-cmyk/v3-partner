@@ -21,8 +21,7 @@ export function useRealtimeNotifications() {
     try { supabaseRef.current = createClient(); } catch { supabaseRef.current = null; }
   }
 
-  // Carrega notificações do banco na montagem
-  useEffect(() => {
+  const fetchNotifications = useCallback(() => {
     fetch("/api/notifications")
       .then((r) => r.json())
       .then(({ notifications: rows }) => {
@@ -42,6 +41,17 @@ export function useRealtimeNotifications() {
       })
       .catch(() => setLoaded(true));
   }, []);
+
+  // Carrega notificações do banco na montagem
+  useEffect(() => {
+    fetchNotifications();
+  }, [fetchNotifications]);
+
+  // Polling a cada 30s como fallback ao realtime
+  useEffect(() => {
+    const interval = setInterval(fetchNotifications, 30_000);
+    return () => clearInterval(interval);
+  }, [fetchNotifications]);
 
   // Marca uma notificação como lida no banco + estado local
   const dismiss = useCallback((id: string) => {

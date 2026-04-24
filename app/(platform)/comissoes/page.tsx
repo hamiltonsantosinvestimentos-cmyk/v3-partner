@@ -55,6 +55,8 @@ export default async function ComissoesPage() {
   if (!profile || !["ADMIN", "PARTNER", "PARTNER_PRO", "FINANCEIRO", "GESTAO"].includes(profile.role)) redirect("/unauthorized");
 
   const svc = sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+  const isAdmin = ["ADMIN", "GESTAO", "FINANCEIRO"].includes(profile.role);
+
   let query = svc
     .from("commissions")
     .select(`
@@ -64,11 +66,23 @@ export default async function ComissoesPage() {
     `)
     .order("created_at", { ascending: false });
 
-  if (!["ADMIN", "GESTAO", "FINANCEIRO"].includes(profile.role)) {
+  if (!isAdmin) {
     query = query.eq("partner_id", user.id);
   }
 
   const { data: commissions } = await query;
+
+  // Para admin: busca lista de partners para criar comissões
+  let partners: { id: string; full_name: string | null; email: string; role: string }[] = [];
+  if (isAdmin) {
+    const { data: partnerRows } = await svc
+      .from("profiles")
+      .select("id, full_name, email, role")
+      .in("role", ["PARTNER", "PARTNER_PRO"])
+      .eq("is_active", true)
+      .order("full_name");
+    partners = partnerRows ?? [];
+  }
 
   return (
     <ComissoesPartnerClient
@@ -76,6 +90,7 @@ export default async function ComissoesPage() {
       partnerName={profile.full_name ?? ""}
       role={profile.role}
       commissions={(commissions ?? []) as Parameters<typeof ComissoesPartnerClient>[0]["commissions"]}
+      partners={partners}
     />
   );
 }

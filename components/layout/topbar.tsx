@@ -42,8 +42,15 @@ const PAGE_LABELS: Record<string, string> = {
   "/ia-assistant": "V3 IA Partner",
   "/financeiro": "Financeiro",
   "/comissoes": "Comissões",
+  "/minhas-operacoes": "Minhas Operações",
   "/academy": "V3 Academy",
   "/usuarios": "Usuários",
+  "/minha-assinatura": "Minha Assinatura",
+  "/configuracoes": "Configurações",
+  "/admin-cadastros": "Cadastros",
+  "/metas": "Metas & Performance",
+  "/compliance": "Compliance",
+  "/simulador-home-equity": "Simuladores",
 };
 
 interface TopbarProps {

@@ -8,7 +8,7 @@ import {
   LayoutDashboard, Users, BrainCircuit, PieChart, Building2,
   CreditCard, Headphones, ChevronDown, ChevronRight, X,
   Trophy, GraduationCap, Handshake, Settings2, Medal,
-  ContactRound, DollarSign, Wallet, Zap,
+  ContactRound, DollarSign, Wallet, Zap, Target, ShieldCheck, Calculator, UserPlus, ClipboardList, BadgeCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { UserRole } from "@/lib/constants";
@@ -17,6 +17,7 @@ const iconMap = {
   LayoutDashboard, Users, BrainCircuit, PieChart, Building2,
   CreditCard, Headphones, Trophy, GraduationCap, Handshake,
   Settings2, Medal, ContactRound, DollarSign, Wallet, Zap,
+  Target, ShieldCheck, Calculator, UserPlus, ClipboardList, BadgeCheck,
 };
 
 interface NavSubItem { href: string; label: string; roles: string[]; }
@@ -32,6 +33,7 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { href: "/dashboard", label: "Dashboard", icon: "LayoutDashboard", roles: ["ADMIN", "PARTNER", "PARTNER_PRO", "MESA_OPERACIONAL", "GESTAO"] },
       { href: "/crm", label: "CRM", icon: "ContactRound", roles: ["ADMIN", "PARTNER", "PARTNER_PRO"] },
+      { href: "/minhas-operacoes", label: "Minhas Operações", icon: "ClipboardList", roles: ["PARTNER", "PARTNER_PRO"] },
       { href: "/ranking", label: "Ranking", icon: "Medal", roles: ["ADMIN", "PARTNER", "PARTNER_PRO"] },
     ],
   },
@@ -55,6 +57,7 @@ const NAV_SECTIONS: NavSection[] = [
   {
     label: "PRODUTOS",
     items: [
+      { href: "/simulador-home-equity", label: "Simuladores", icon: "Calculator", roles: ["ADMIN", "GESTAO", "PARTNER", "PARTNER_PRO", "MESA_OPERACIONAL"] },
       { href: "/split-fiscal", label: "Split Fiscal", icon: "PieChart", roles: ["ADMIN", "PARTNER", "PARTNER_PRO", "GESTAO"] },
       { href: "/ma", label: "M&A", icon: "Building2", roles: ["ADMIN", "GESTAO", "PARTNER", "PARTNER_PRO", "MESA_OPERACIONAL"] },
       {
@@ -72,8 +75,11 @@ const NAV_SECTIONS: NavSection[] = [
     label: "PLATAFORMA",
     items: [
       { href: "/ia-assistant", label: "V3 IA Partner", icon: "BrainCircuit", roles: ["ADMIN", "PARTNER", "PARTNER_PRO", "MESA_OPERACIONAL", "GESTAO", "FINANCEIRO"] },
+      { href: "/metas", label: "Metas & Performance", icon: "Target", roles: ["ADMIN", "GESTAO", "PARTNER", "PARTNER_PRO"] },
+      { href: "/compliance", label: "Compliance", icon: "ShieldCheck", roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL"] },
       { href: "/financeiro", label: "Financeiro", icon: "DollarSign", roles: ["ADMIN", "FINANCEIRO"] },
       { href: "/comissoes", label: "Comissões", icon: "Wallet", roles: ["ADMIN", "PARTNER", "PARTNER_PRO", "FINANCEIRO"] },
+      { href: "/minha-assinatura", label: "Minha Assinatura", icon: "BadgeCheck", roles: ["PARTNER", "PARTNER_PRO"] },
       {
         href: "/academy", label: "V3 Academy", icon: "GraduationCap",
         roles: ["ADMIN", "PARTNER", "PARTNER_PRO", "MESA_OPERACIONAL", "GESTAO"],
@@ -92,6 +98,7 @@ const NAV_SECTIONS: NavSection[] = [
   {
     label: "SISTEMA",
     items: [
+      { href: "/admin-cadastros", label: "Cadastros",      icon: "UserPlus", roles: ["ADMIN"] },
       { href: "/usuarios",       label: "Usuários",       icon: "Users",    roles: ["ADMIN"] },
       { href: "/configuracoes",  label: "Configurações",  icon: "Settings2", roles: ["ADMIN", "PARTNER", "PARTNER_PRO", "GESTAO", "MESA_OPERACIONAL", "FINANCEIRO"] },
     ],

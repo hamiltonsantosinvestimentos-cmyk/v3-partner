@@ -51,6 +51,16 @@ export default async function PlatformLayout({
 
     if (authError || !user) redirect("/login");
 
+    // Força troca de senha no primeiro acesso
+    if (user.app_metadata?.must_change_password) {
+      redirect("/auth/update-password?required=true");
+    }
+
+    // Força assinatura do contrato de parceria
+    if (!user.app_metadata?.contract_signed) {
+      redirect("/contrato-parceria");
+    }
+
     const { data: profileData, error: profileError } = await supabase
       .from("profiles").select("*").eq("id", user.id).single();
 

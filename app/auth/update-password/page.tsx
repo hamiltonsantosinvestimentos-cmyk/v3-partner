@@ -1,13 +1,15 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Lock, Eye, EyeOff, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
 import Image from "next/image";
 
-export default function UpdatePasswordPage() {
+function UpdatePasswordForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const isRequired = searchParams.get("required") === "true";
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [showPw, setShowPw] = useState(false);
@@ -50,17 +52,24 @@ export default function UpdatePasswordPage() {
     }
 
     setLoading(true);
-    const supabase = createClient();
-    const { error: updateError } = await supabase.auth.updateUser({ password });
 
-    if (updateError) {
-      setError(updateError.message);
+    // Usa API server-side (service role) para evitar restrições do cliente
+    const res = await fetch("/api/auth/change-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password }),
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      setError(data.error || "Erro ao salvar senha. Tente novamente.");
       setLoading(false);
       return;
     }
 
     setSuccess(true);
-    setTimeout(() => router.push("/perfil"), 2500);
+    setTimeout(() => router.push(isRequired ? "/dashboard" : "/perfil"), 2500);
   }
 
   return (
@@ -84,8 +93,14 @@ export default function UpdatePasswordPage() {
             <Lock className="w-5 h-5 text-[#C9A84C]" />
             <h1 className="text-lg font-bold text-[#F0ECE4]">Nova Senha</h1>
           </div>
+          {isRequired && (
+            <div className="flex items-start gap-2 p-3 rounded-lg bg-[#C9A84C10] border border-[#C9A84C35] mb-4">
+              <AlertCircle className="w-4 h-4 text-[#C9A84C] flex-shrink-0 mt-0.5" />
+              <p className="text-xs text-[#C9A84C]">Por segurança, defina sua senha pessoal antes de continuar.</p>
+            </div>
+          )}
           <p className="text-xs text-[#7A8FA8] mb-6">
-            Defina sua nova senha de acesso à plataforma.
+            {isRequired ? "Crie uma senha forte para proteger sua conta." : "Defina sua nova senha de acesso à plataforma."}
           </p>
 
           {success ? (
@@ -172,5 +187,17 @@ export default function UpdatePasswordPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function UpdatePasswordPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-[#09081A] flex items-center justify-center">
+        <Loader2 className="w-6 h-6 animate-spin text-[#C9A84C]" />
+      </div>
+    }>
+      <UpdatePasswordForm />
+    </Suspense>
   );
 }
