@@ -2,6 +2,35 @@ import { NextRequest, NextResponse } from "next/server";
 
 export const maxDuration = 60;
 
+// Remove campos nulos/vazios e irrelevantes para análise M&A antes de enviar à IA.
+// Reduz tokens de entrada em ~60%, liberando espaço para output completo sem caps.
+function sanitizeDeal(deal: Record<string, unknown>): Record<string, unknown> {
+  const EXCLUDE_KEYS = new Set([
+    "id", "dbStage", "createdAt", "assigned_to_id", "responsible",
+    "comments", "probability", "stage",
+  ]);
+
+  function stripEmpty(obj: unknown): unknown {
+    if (obj === null || obj === undefined || obj === "") return undefined;
+    if (Array.isArray(obj)) {
+      const arr = obj.map(stripEmpty).filter(v => v !== undefined);
+      return arr.length ? arr : undefined;
+    }
+    if (typeof obj === "object") {
+      const result: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(obj as Record<string, unknown>)) {
+        if (EXCLUDE_KEYS.has(k)) continue;
+        const cleaned = stripEmpty(v);
+        if (cleaned !== undefined) result[k] = cleaned;
+      }
+      return Object.keys(result).length ? result : undefined;
+    }
+    return obj;
+  }
+
+  return (stripEmpty(deal) ?? {}) as Record<string, unknown>;
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -18,6 +47,8 @@ export async function POST(req: NextRequest) {
     const { default: Anthropic } = await import("@anthropic-ai/sdk");
     const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
+    const cleanDeal = sanitizeDeal(deal);
+
     const message = await client.messages.create({
       model: "claude-sonnet-4-6",
       max_tokens: 3000,
@@ -26,28 +57,28 @@ export async function POST(req: NextRequest) {
         "Analise os dados do deal fornecido e retorne APENAS um JSON válido, sem markdown, com esta estrutura exata:\n" +
         "{\n" +
         '  "score": <número 0-100>,\n' +
-        '  "validated": [ { "field": "<campo>", "value": "<valor resumido em até 60 chars>", "note": "<opcional, até 80 chars>" } ],\n' +
-        '  "corrected": [ { "field": "<campo>", "original": "<valor original>", "corrected": "<valor corrigido>", "reason": "<motivo até 80 chars>" } ],\n' +
-        '  "missing": [ { "field": "<campo>", "impact": "<impacto até 80 chars>", "priority": "ALTA" | "MEDIA" | "BAIXA" } ],\n' +
-        '  "narrative_pt": "<narrativa em português — máximo 3 frases curtas>",\n' +
-        '  "narrative_en": "<investment narrative — maximum 3 short sentences>",\n' +
+        '  "validated": [ { "field": "<campo>", "value": "<valor>", "note": "<observação opcional>" } ],\n' +
+        '  "corrected": [ { "field": "<campo>", "original": "<valor original>", "corrected": "<valor corrigido>", "reason": "<motivo>" } ],\n' +
+        '  "missing": [ { "field": "<campo>", "impact": "<impacto>", "priority": "ALTA" | "MEDIA" | "BAIXA" } ],\n' +
+        '  "narrative_pt": "<narrativa de investimento em português — máximo 3 frases>",\n' +
+        '  "narrative_en": "<investment narrative in english — maximum 3 sentences>",\n' +
         '  "recommendation": "APROVADO" | "APROVADO_COM_RESSALVAS" | "PENDENTE" | "BLOQUEADO",\n' +
-        '  "recommendation_note": "<justificativa — máximo 2 frases>"\n' +
+        '  "recommendation_note": "<justificativa da recomendação>"\n' +
         "}\n\n" +
-        "Regras OBRIGATÓRIAS de tamanho — respeite para não truncar o JSON:\n" +
-        "- validated: máximo 12 campos mais relevantes para M&A\n" +
-        "- corrected: máximo 8 itens\n" +
-        "- missing: máximo 8 itens\n" +
-        "- Todos os valores de string: máximo 80 caracteres (exceto narrativas)\n" +
+        "Regras:\n" +
+        "- Liste TODOS os campos presentes em validated e TODOS os ausentes em missing\n" +
         "- score >= 80 e dados completos → APROVADO\n" +
         "- score 60-79 ou poucos dados ausentes não críticos → APROVADO_COM_RESSALVAS\n" +
         "- score 40-59 ou campos importantes ausentes → PENDENTE\n" +
         "- score < 40 ou dados insuficientes para análise → BLOQUEADO\n" +
+        "- validated: campos que existem e estão corretos\n" +
+        "- corrected: campos com erros de formatação ou valores inconsistentes\n" +
+        "- missing: campos obrigatórios para um deal M&A completo que estão ausentes\n" +
         "- Retorne APENAS o JSON, sem texto adicional.",
       messages: [
         {
           role: "user",
-          content: `Analise este deal M&A:\n\n${JSON.stringify(deal, null, 2)}`,
+          content: `Analise este deal M&A:\n\n${JSON.stringify(cleanDeal, null, 2)}`,
         },
       ],
     });
