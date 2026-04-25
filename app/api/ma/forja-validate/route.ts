@@ -126,7 +126,9 @@ export async function POST(req: NextRequest) {
       '  "recommendation_note": "<justificativa da recomendação>"\n' +
       "}\n\n" +
       "Regras:\n" +
-      "- Liste TODOS os campos presentes em validated e TODOS os ausentes em missing\n" +
+      "- validated: liste os 15 campos mais relevantes para M&A (score e recomendação consideram todos)\n" +
+      "- missing: liste TODOS os campos obrigatórios ausentes — sem omitir nenhum\n" +
+      "- corrected: liste TODAS as inconsistências encontradas\n" +
       "- score >= 80 e dados completos → APROVADO\n" +
       "- score 60-79 ou poucos dados ausentes não críticos → APROVADO_COM_RESSALVAS\n" +
       "- score 40-59 ou campos importantes ausentes → PENDENTE\n" +
@@ -155,13 +157,13 @@ export async function POST(req: NextRequest) {
 
     const message = await client.messages.create({
       model: "claude-sonnet-4-6",
-      max_tokens: 3000,
+      max_tokens: 3500,
       system: systemPrompt,
       messages: [{ role: "user", content: hasDocs ? userContent : userContent[0].text }],
     });
 
     if (message.stop_reason === "max_tokens") {
-      throw new Error("Resposta da IA truncada — reduza o número de documentos e tente novamente");
+      throw new Error("Resposta da IA truncada — deal com muitos campos. Tente revalidar.");
     }
 
     const content = message.content[0];
