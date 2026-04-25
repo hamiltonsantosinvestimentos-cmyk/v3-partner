@@ -1,32 +1,50 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle, AlertTriangle, XCircle, Zap, ChevronDown, ChevronUp, FileImage, Loader2 } from "lucide-react";
+import {
+  CheckCircle, AlertTriangle, XCircle, Zap, ChevronDown, ChevronUp,
+  FileImage, Loader2, FileText, CheckSquare, Square, ShieldCheck,
+} from "lucide-react";
 import Link from "next/link";
 
-type ValidatedField = { field: string; value: string; note?: string };
-type CorrectedField = { field: string; original: string; corrected: string; reason: string };
-type MissingField = { field: string; impact: string; priority: "ALTA" | "MEDIA" | "BAIXA" };
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+type ValidatedField = { field: string; value: string; note?: string; doc_confirmed?: boolean };
+type CorrectedField = { field: string; original: string; corrected: string; reason: string; doc_source?: string };
+type MissingField   = { field: string; impact: string; priority: "ALTA" | "MEDIA" | "BAIXA" };
+type DocInsight     = { doc: string; finding: string };
 
 type ForjaResult = {
   score: number;
   validated: ValidatedField[];
   corrected: CorrectedField[];
   missing: MissingField[];
+  doc_insights?: DocInsight[];
   narrative_pt: string;
   narrative_en: string;
   recommendation: "APROVADO" | "APROVADO_COM_RESSALVAS" | "PENDENTE" | "BLOQUEADO";
   recommendation_note: string;
+  docs_analyzed?: number;
 };
 
+type DocEntry = {
+  doc_id: string;
+  file_name: string;
+  storage_path: string;
+  uploaded_at: string;
+  url?: string | null;
+};
+
+// ─── Config ───────────────────────────────────────────────────────────────────
+
 const REC_CONFIG = {
-  APROVADO:               { label: "Aprovado", color: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30", bar: "bg-emerald-500" },
-  APROVADO_COM_RESSALVAS: { label: "Aprovado com Ressalvas", color: "bg-amber-500/20 text-amber-400 border-amber-500/30", bar: "bg-amber-500" },
-  PENDENTE:               { label: "Pendente", color: "bg-orange-500/20 text-orange-400 border-orange-500/30", bar: "bg-orange-500" },
-  BLOQUEADO:              { label: "Bloqueado", color: "bg-red-500/20 text-red-400 border-red-500/30", bar: "bg-red-500" },
+  APROVADO:               { label: "Aprovado",               color: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30", bar: "bg-emerald-500" },
+  APROVADO_COM_RESSALVAS: { label: "Aprovado com Ressalvas", color: "bg-amber-500/20 text-amber-400 border-amber-500/30",   bar: "bg-amber-500"   },
+  PENDENTE:               { label: "Pendente",               color: "bg-orange-500/20 text-orange-400 border-orange-500/30", bar: "bg-orange-500"  },
+  BLOQUEADO:              { label: "Bloqueado",               color: "bg-red-500/20 text-red-400 border-red-500/30",         bar: "bg-red-500"     },
 };
 
 const PRIORITY_COLORS = {
@@ -35,6 +53,8 @@ const PRIORITY_COLORS = {
   BAIXA: "bg-blue-500/20 text-blue-400 border-blue-500/30",
 };
 
+// ─── Props ────────────────────────────────────────────────────────────────────
+
 interface ForjaPanelProps {
   deal: Record<string, unknown>;
   dealId: string;
@@ -42,12 +62,35 @@ interface ForjaPanelProps {
   onSaved?: (result: ForjaResult) => void;
 }
 
+// ─── Component ────────────────────────────────────────────────────────────────
+
 export function ForjaPanel({ deal, dealId, savedResult, onSaved }: ForjaPanelProps) {
-  const [result, setResult] = useState<ForjaResult | null>(savedResult ?? null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [result, setResult]               = useState<ForjaResult | null>(savedResult ?? null);
+  const [loading, setLoading]             = useState(false);
+  const [error, setError]                 = useState<string | null>(null);
   const [showNarrative, setShowNarrative] = useState(false);
-  const [saving, setSaving] = useState(false);
+  const [saving, setSaving]               = useState(false);
+
+  const [docs, setDocs]                 = useState<DocEntry[]>([]);
+  const [docsLoading, setDocsLoading]   = useState(false);
+  const [selectedDocIds, setSelectedDocIds] = useState<string[]>([]);
+  const [showDocs, setShowDocs]         = useState(false);
+
+  // Carrega documentos do deal
+  useEffect(() => {
+    if (!dealId) return;
+    setDocsLoading(true);
+    fetch(`/api/ma/documents?deal_id=${dealId}`)
+      .then((r) => r.json())
+      .then((data) => setDocs(Array.isArray(data.documents) ? data.documents : []))
+      .catch(() => setDocs([]))
+      .finally(() => setDocsLoading(false));
+  }, [dealId]);
+
+  const toggleDoc = (id: string) =>
+    setSelectedDocIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
 
   const handleValidate = async () => {
     setLoading(true);
@@ -57,15 +100,18 @@ export function ForjaPanel({ deal, dealId, savedResult, onSaved }: ForjaPanelPro
       const res = await fetch("/api/ma/forja-validate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ deal }),
+        body: JSON.stringify({
+          deal: { ...deal, id: dealId },
+          doc_ids: selectedDocIds.length > 0 ? selectedDocIds : undefined,
+        }),
       });
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.error ?? `HTTP ${res.status}`);
+        throw new Error((errData as { error?: string }).error ?? `HTTP ${res.status}`);
       }
-      const data = await res.json();
+      const data: ForjaResult = await res.json();
       setResult(data);
-      // Salva resultado no Supabase sempre que dealId existir
+
       if (dealId) {
         setSaving(true);
         try {
@@ -75,25 +121,25 @@ export function ForjaPanel({ deal, dealId, savedResult, onSaved }: ForjaPanelPro
             body: JSON.stringify({ deal_id: dealId, action: "save_forja", forja_result: data }),
           });
           if (onSaved) onSaved(data);
-        } catch {}
+        } catch { /* silencioso — resultado já exibido */ }
         setSaving(false);
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       setError(`Falha na validação: ${msg}`);
-      console.error(e);
     } finally {
       setLoading(false);
     }
   };
 
-  const rec = result ? REC_CONFIG[result.recommendation] : null;
-  const canProceed = result && (result.recommendation === "APROVADO" || result.recommendation === "APROVADO_COM_RESSALVAS");
+  const rec         = result ? REC_CONFIG[result.recommendation] : null;
+  const canProceed  = result && (result.recommendation === "APROVADO" || result.recommendation === "APROVADO_COM_RESSALVAS");
+  const docsLabel   = selectedDocIds.length > 0 ? `com ${selectedDocIds.length} doc${selectedDocIds.length > 1 ? "s" : ""}` : null;
 
   return (
     <div className="space-y-4">
 
-      {/* Header card do FORJA */}
+      {/* Header card */}
       <Card className="border-[#C9A84C]/30 bg-gradient-to-br from-[#162744] to-[#111F35]">
         <CardContent className="p-5">
           <div className="flex items-start justify-between gap-4">
@@ -110,7 +156,7 @@ export function ForjaPanel({ deal, dealId, savedResult, onSaved }: ForjaPanelPro
                 </p>
                 <p className="text-xs text-muted-foreground mt-0.5">
                   {result
-                    ? `${result.validated.length} validados · ${result.corrected.length} corrigidos · ${result.missing.length} ausentes`
+                    ? `${result.validated.length} validados · ${result.corrected.length} corrigidos · ${result.missing.length} ausentes${result.docs_analyzed ? ` · ${result.docs_analyzed} doc${result.docs_analyzed > 1 ? "s" : ""} analisado${result.docs_analyzed > 1 ? "s" : ""}` : ""}`
                     : "Analisa e valida todos os dados antes de gerar os criativos"}
                 </p>
               </div>
@@ -135,13 +181,19 @@ export function ForjaPanel({ deal, dealId, savedResult, onSaved }: ForjaPanelPro
                   : "bg-[#C9A84C] hover:bg-[#E8C97A] text-[#09081A] font-bold"}
               >
                 {loading ? (
-                  <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />Validando...</>
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                    {docsLabel ? `Validando ${docsLabel}...` : "Validando..."}
+                  </>
                 ) : saving ? (
                   <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />Salvando...</>
                 ) : result ? (
-                  "Revalidar"
+                  docsLabel ? `Revalidar ${docsLabel}` : "Revalidar"
                 ) : (
-                  <><Zap className="w-3.5 h-3.5 mr-1.5" />Validar com FORJA</>
+                  <>
+                    <Zap className="w-3.5 h-3.5 mr-1.5" />
+                    {docsLabel ? `Validar ${docsLabel}` : "Validar com FORJA"}
+                  </>
                 )}
               </Button>
             </div>
@@ -155,25 +207,30 @@ export function ForjaPanel({ deal, dealId, savedResult, onSaved }: ForjaPanelPro
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-bold text-white">{result.score}/100</span>
                   <Badge className={rec!.color}>{rec!.label}</Badge>
+                  {result.docs_analyzed ? (
+                    <Badge className="bg-[#C9A84C]/10 text-[#C9A84C] border-[#C9A84C]/30 flex items-center gap-1">
+                      <ShieldCheck className="w-2.5 h-2.5" />
+                      {result.docs_analyzed} doc{result.docs_analyzed > 1 ? "s" : ""}
+                    </Badge>
+                  ) : null}
                 </div>
               </div>
               <div className="h-2 bg-[#09081A] rounded-full overflow-hidden">
-                <div
-                  className={`h-full ${rec!.bar} rounded-full transition-all duration-700`}
-                  style={{ width: `${result.score}%` }}
-                />
+                <div className={`h-full ${rec!.bar} rounded-full transition-all duration-700`} style={{ width: `${result.score}%` }} />
               </div>
               <p className="text-xs text-muted-foreground">{result.recommendation_note}</p>
             </div>
           )}
 
-          {/* Loading state */}
+          {/* Loading */}
           {loading && !result && (
             <div className="mt-4">
               <div className="h-1.5 bg-[#09081A] rounded-full overflow-hidden">
                 <div className="h-full bg-gradient-to-r from-[#C9A84C] to-[#E8C97A] rounded-full animate-pulse" style={{ width: "60%" }} />
               </div>
-              <p className="text-xs text-muted-foreground mt-2">Analisando dados do ativo...</p>
+              <p className="text-xs text-muted-foreground mt-2">
+                {docsLabel ? `Analisando dados + ${docsLabel}...` : "Analisando dados do ativo..."}
+              </p>
             </div>
           )}
 
@@ -184,6 +241,88 @@ export function ForjaPanel({ deal, dealId, savedResult, onSaved }: ForjaPanelPro
           )}
         </CardContent>
       </Card>
+
+      {/* Seleção de documentos */}
+      {!docsLoading && (
+        <Card className="border-[#243A66]">
+          <CardHeader className="pb-2 pt-3">
+            <button
+              onClick={() => setShowDocs(!showDocs)}
+              className="flex items-center justify-between w-full text-left"
+            >
+              <CardTitle className="text-xs font-bold tracking-widest uppercase text-[#7A8FA8] flex items-center gap-2">
+                <FileText className="w-3.5 h-3.5" />
+                Documentos para Validação
+                {docs.length > 0 && (
+                  <span className="text-[#C9A84C]">({docs.length})</span>
+                )}
+                {selectedDocIds.length > 0 && (
+                  <Badge className="bg-[#C9A84C]/10 text-[#C9A84C] border-[#C9A84C]/30 text-[9px]">
+                    {selectedDocIds.length} selecionado{selectedDocIds.length > 1 ? "s" : ""}
+                  </Badge>
+                )}
+              </CardTitle>
+              {showDocs ? <ChevronUp className="w-3.5 h-3.5 text-muted-foreground" /> : <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />}
+            </button>
+          </CardHeader>
+          {showDocs && (
+            <CardContent className="pb-4">
+              {docs.length === 0 ? (
+                <p className="text-xs text-muted-foreground py-2">
+                  Nenhum documento enviado. Faça upload na aba de detalhes do deal.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  <p className="text-[10px] text-muted-foreground mb-3">
+                    Selecione os documentos que o FORJA deve ler e validar contra os dados do deal.
+                  </p>
+                  {docs.map((doc) => {
+                    const selected = selectedDocIds.includes(doc.doc_id);
+                    return (
+                      <button
+                        key={doc.doc_id}
+                        onClick={() => toggleDoc(doc.doc_id)}
+                        className={`w-full flex items-center gap-3 p-2.5 rounded-lg border transition-colors text-left ${
+                          selected
+                            ? "border-[#C9A84C]/40 bg-[#C9A84C]/5"
+                            : "border-[#243A66] bg-[#111F35] hover:border-[#243A66]/80"
+                        }`}
+                      >
+                        {selected
+                          ? <CheckSquare className="w-3.5 h-3.5 text-[#C9A84C] flex-shrink-0" />
+                          : <Square className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                        }
+                        <FileText className="w-3 h-3 text-muted-foreground flex-shrink-0" />
+                        <span className="text-xs text-[#F0ECE4] flex-1 truncate">{doc.file_name}</span>
+                        <span className="text-[10px] text-muted-foreground flex-shrink-0">
+                          {new Date(doc.uploaded_at).toLocaleDateString("pt-BR")}
+                        </span>
+                      </button>
+                    );
+                  })}
+                  {docs.length > 0 && (
+                    <div className="flex gap-2 pt-1">
+                      <button
+                        onClick={() => setSelectedDocIds(docs.map((d) => d.doc_id))}
+                        className="text-[10px] text-[#C9A84C] hover:underline"
+                      >
+                        Selecionar todos
+                      </button>
+                      <span className="text-muted-foreground text-[10px]">·</span>
+                      <button
+                        onClick={() => setSelectedDocIds([])}
+                        className="text-[10px] text-muted-foreground hover:underline"
+                      >
+                        Limpar
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          )}
+        </Card>
+      )}
 
       {/* Resultados */}
       {result && (
@@ -200,7 +339,12 @@ export function ForjaPanel({ deal, dealId, savedResult, onSaved }: ForjaPanelPro
             <CardContent className="pb-4 space-y-2">
               {result.validated.map((v, i) => (
                 <div key={i} className="p-2.5 bg-emerald-500/5 border border-emerald-500/10 rounded-lg">
-                  <p className="text-[10px] font-bold tracking-widest uppercase text-emerald-500/70 mb-0.5">{v.field}</p>
+                  <div className="flex items-center justify-between mb-0.5">
+                    <p className="text-[10px] font-bold tracking-widest uppercase text-emerald-500/70">{v.field}</p>
+                    {v.doc_confirmed && (
+                      <ShieldCheck className="w-3 h-3 text-[#C9A84C]" title="Confirmado em documento" />
+                    )}
+                  </div>
                   <p className="text-xs text-[#F0ECE4] font-medium">{v.value}</p>
                   {v.note && <p className="text-[10px] text-muted-foreground mt-0.5">{v.note}</p>}
                 </div>
@@ -225,6 +369,11 @@ export function ForjaPanel({ deal, dealId, savedResult, onSaved }: ForjaPanelPro
                   <p className="text-[10px] text-muted-foreground line-through mb-0.5">{c.original}</p>
                   <p className="text-xs text-amber-300 font-medium">{c.corrected}</p>
                   <p className="text-[10px] text-muted-foreground mt-1 leading-relaxed">{c.reason}</p>
+                  {c.doc_source && (
+                    <p className="text-[9px] text-[#C9A84C] mt-0.5 flex items-center gap-1">
+                      <FileText className="w-2.5 h-2.5" />{c.doc_source}
+                    </p>
+                  )}
                 </div>
               ))}
             </CardContent>
@@ -252,8 +401,29 @@ export function ForjaPanel({ deal, dealId, savedResult, onSaved }: ForjaPanelPro
               ))}
             </CardContent>
           </Card>
-
         </div>
+      )}
+
+      {/* Doc Insights — só aparece quando PDFs foram analisados */}
+      {result?.doc_insights && result.doc_insights.length > 0 && (
+        <Card className="border-[#C9A84C]/20">
+          <CardHeader className="pb-2 pt-4">
+            <CardTitle className="text-xs font-bold tracking-widest uppercase flex items-center gap-2 text-[#C9A84C]">
+              <ShieldCheck className="w-3.5 h-3.5" />
+              Dados Extraídos dos Documentos ({result.doc_insights.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pb-4 space-y-2">
+            {result.doc_insights.map((ins, i) => (
+              <div key={i} className="p-2.5 bg-[#C9A84C]/5 border border-[#C9A84C]/10 rounded-lg">
+                <p className="text-[9px] font-bold tracking-widest uppercase text-[#C9A84C]/70 mb-0.5 flex items-center gap-1">
+                  <FileText className="w-2.5 h-2.5" />{ins.doc}
+                </p>
+                <p className="text-xs text-[#F0ECE4]">{ins.finding}</p>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
       )}
 
       {/* Narrativa */}
@@ -265,9 +435,11 @@ export function ForjaPanel({ deal, dealId, savedResult, onSaved }: ForjaPanelPro
               className="flex items-center justify-between w-full text-left"
             >
               <CardTitle className="text-xs font-bold tracking-widest uppercase text-[#C9A84C]">
-                Narrativa de Investimento Gerada pelo FORJA
+                Narrativa de Investimento
               </CardTitle>
-              {showNarrative ? <ChevronUp className="w-3.5 h-3.5 text-muted-foreground" /> : <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />}
+              {showNarrative
+                ? <ChevronUp className="w-3.5 h-3.5 text-muted-foreground" />
+                : <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />}
             </button>
           </CardHeader>
           {showNarrative && (
@@ -284,7 +456,6 @@ export function ForjaPanel({ deal, dealId, savedResult, onSaved }: ForjaPanelPro
           )}
         </Card>
       )}
-
     </div>
   );
 }
