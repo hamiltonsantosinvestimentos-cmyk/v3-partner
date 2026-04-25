@@ -271,6 +271,11 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
     return matchSearch && matchStage;
   });
 
+  const handleProposalUpdate = useCallback((proposalId: string, updates: Partial<ProposalCard>) => {
+    setProposals(prev => prev.map(p => p.id === proposalId ? { ...p, ...updates } : p));
+    if (detailProposal?.id === proposalId) setDetailProposal(prev => prev ? { ...prev, ...updates } : prev);
+  }, [detailProposal]);
+
   const handleStageChange = useCallback((proposalId: string, newStage: string) => {
     setProposals((prev) => prev.map((p) => p.id === proposalId ? { ...p, stage: newStage } : p));
     if (detailProposal?.id === proposalId) {
@@ -683,6 +688,7 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
         onClose={() => setDetailProposal(null)}
         proposal={detailProposal as ProposalFull | null}
         onStageChange={handleStageChange}
+        onProposalUpdate={handleProposalUpdate as (id: string, updates: Partial<ProposalFull>) => void}
         canChangeStage={canChangeStage}
         canEditValorSolicitado={canChangeStage}
         canCompileDocuments={canChangeStage}
