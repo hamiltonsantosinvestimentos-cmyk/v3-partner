@@ -6,7 +6,7 @@ import {
   FileText, CreditCard, Calendar, Link2, Pencil, Check,
   Percent, TrendingUp, BadgeDollarSign, Upload, Paperclip, Trash2, Home, ExternalLink,
   Package, Copy, CheckCheck, MessageSquare, Send, Search, AlertTriangle, ShieldCheck,
-  Phone, Mail, MapPin, Banknote, Download,
+  Phone, Mail, MapPin, Banknote, Download, Loader2,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
