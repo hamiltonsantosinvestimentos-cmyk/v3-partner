@@ -672,6 +672,43 @@ export async function sendMonthlyReport(opts: {
   );
 }
 
+/** Partner: novo comentário da mesa em sua proposta */
+export async function notifyComentarioProposta(opts: {
+  partnerEmail: string;
+  partnerName: string;
+  proposalCode: string;
+  proposalTitle: string;
+  creditLine: string;
+  autor: string;
+  comentario: string;
+}): Promise<void> {
+  const body = `
+    <p style="color:#7A96AF;font-size:14px;margin:0 0 20px;">
+      Olá, <strong style="color:#C8D4E3;">${opts.partnerName}</strong>!
+      A Mesa Operacional adicionou um comentário na sua proposta.
+    </p>
+    ${row("Código", opts.proposalCode)}
+    ${row("Título", opts.proposalTitle)}
+    ${row("Linha de Crédito", opts.creditLine)}
+    ${row("Enviado por", opts.autor)}
+    <div style="margin-top:16px;padding:16px 18px;background:#13243D;border-radius:8px;border-left:3px solid #C4922E;">
+      <p style="margin:0 0 6px;font-size:11px;color:#7A96AF;text-transform:uppercase;letter-spacing:1px;">Mensagem</p>
+      <p style="margin:0;font-size:14px;color:#C8D4E3;line-height:1.6;">${opts.comentario}</p>
+    </div>
+    <p style="color:#7A96AF;font-size:12px;margin-top:16px;">
+      Acesse a plataforma para ver todos os comentários e responder se necessário.
+    </p>
+  `;
+  await send(
+    opts.partnerEmail,
+    `💬 Novo comentário na proposta ${opts.proposalCode}`,
+    template("Comentário da Mesa Operacional", body, {
+      label: "Ver Proposta",
+      url: `${process.env.NEXT_PUBLIC_SITE_URL ?? "https://v3-partner.vercel.app"}/mesa-credito`,
+    })
+  );
+}
+
 /** Partner: comissão marcada como paga */
 export async function notifyComissaoPaga(opts: {
   partnerEmail: string;
