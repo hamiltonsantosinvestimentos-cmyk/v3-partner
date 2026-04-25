@@ -41,6 +41,7 @@ interface ProposalCard {
   comissao_mandato_perc?: number;
   comissao_instituicao_perc?: number;
   metadata?: Record<string, unknown>;
+  instituicao_encaminhada?: string | null;
 }
 
 interface MesaOpClientProps {
@@ -171,6 +172,7 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
             comissao_instituicao_perc: p.comissao_instituicao_perc as number | undefined,
             // Garante que metadata completo (com imoveis, endereço, cep, etc.) é passado
             metadata: meta ?? undefined,
+            instituicao_encaminhada: p.instituicao_encaminhada as string | null | undefined,
           };
         }));
       })
@@ -437,6 +439,20 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
                             <span className="text-[10px] text-primary font-semibold">{p.mesa_comments_count} msg</span>
                           </div>
                         )}
+                        {p.instituicao_encaminhada && (() => {
+                          let insts: string[] = [];
+                          try { const a = JSON.parse(p.instituicao_encaminhada); insts = Array.isArray(a) ? a : [p.instituicao_encaminhada]; }
+                          catch { insts = [p.instituicao_encaminhada]; }
+                          return insts.length > 0 ? (
+                            <div className="mt-1.5 flex flex-wrap gap-1">
+                              {insts.map((inst, i) => (
+                                <span key={i} className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-[#C9A84C]/15 border border-[#C9A84C]/30 text-[#C9A84C] text-[9px] font-semibold">
+                                  <Building2 className="w-2.5 h-2.5 flex-shrink-0" />{inst}
+                                </span>
+                              ))}
+                            </div>
+                          ) : null;
+                        })()}
                       </div>
                     ))}
 

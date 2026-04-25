@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useCallback, useEffect } from "react";
-import { LayoutGrid, List, Plus, TrendingUp, Zap } from "lucide-react";
+import { LayoutGrid, List, Plus, TrendingUp, Zap, Building2 } from "lucide-react";
 import { ExportButton } from "@/components/financeiro/export-button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -30,6 +30,7 @@ interface Proposal {
   imovel_endereco?: string; imovel_valor_medio?: number;
   imovel_cidade?: string; imovel_estado?: string;
   metadata?: Record<string, unknown>;
+  instituicao_encaminhada?: string | null;
 }
 
 interface CreditDeskClientProps {
@@ -104,6 +105,7 @@ export function CreditDeskClient({ proposals: initial, level, currentUser }: Cre
           comissao_mandato_perc: p.comissao_mandato_perc as number | undefined,
           comissao_instituicao_perc: p.comissao_instituicao_perc as number | undefined,
           metadata: p.metadata as Record<string, unknown> | undefined,
+          instituicao_encaminhada: p.instituicao_encaminhada as string | null | undefined,
         })));
       })
       .catch(err => console.error("[credit-proposals load]", err));
@@ -289,6 +291,20 @@ export function CreditDeskClient({ proposals: initial, level, currentUser }: Cre
                               ⚠ SLA: {days} dia{days !== 1 ? "s" : ""} em aberto
                             </div>
                           )}
+                          {p.instituicao_encaminhada && (() => {
+                            let insts: string[] = [];
+                            try { const a = JSON.parse(p.instituicao_encaminhada!); insts = Array.isArray(a) ? a : [p.instituicao_encaminhada!]; }
+                            catch { insts = [p.instituicao_encaminhada!]; }
+                            return insts.length > 0 ? (
+                              <div className="flex flex-wrap gap-1 mt-1">
+                                {insts.map((inst, i) => (
+                                  <span key={i} className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-[#C9A84C]/15 border border-[#C9A84C]/30 text-[#C9A84C] text-[9px] font-semibold">
+                                    <Building2 className="w-2.5 h-2.5 flex-shrink-0" />{inst}
+                                  </span>
+                                ))}
+                              </div>
+                            ) : null;
+                          })()}
                         </div>
                       );
                     })
