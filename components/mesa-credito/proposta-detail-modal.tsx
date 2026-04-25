@@ -81,6 +81,7 @@ export interface ProposalFull {
   code: string;
   title: string;
   client_name: string;
+  client_cpf_cnpj?: string | null;
   client_type?: string;
   cpf_cnpj?: string;
   email?: string;
@@ -98,6 +99,12 @@ export interface ProposalFull {
   docs_uploaded?: number;
   docs_required?: number;
   created_at: string;
+  level1_notes?: string | null;
+  level2_notes?: string | null;
+  level3_notes?: string | null;
+  level1_at?: string | null;
+  level2_at?: string | null;
+  level3_at?: string | null;
   // Campos de comissão (editáveis apenas por MESA_OPERACIONAL/ADMIN)
   valor_credito_atual?: number;
   comissao_mandato_perc?: number;
@@ -162,31 +169,44 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
   const [compileDocs, setCompileDocs] = useState<CompiledDoc[]>([]);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
-  // Instituição encaminhada (apenas mesa/admin)
+  // Instituição encaminhada (apenas mesa/admin) — suporta múltiplas
   const INSTITUICOES = [
     "BTG Pactual","Itaú BBA","Bradesco BBI","Santander","Caixa Econômica Federal",
     "Banco do Brasil","Daycoval","Mercantil do Brasil","Omni","Creditas",
     "BV Financeira","Safra","ABC Brasil","Fibra","Outra",
   ];
-  const [instituicao, setInstituicao] = useState<string>("");
-  const [instituicaoCustom, setInstituicaoCustom] = useState<string>("");
+  const [instituicoesList, setInstituicoesList] = useState<string[]>([]);
+  const [addingInst, setAddingInst] = useState<string>("");
+  const [addingInstCustom, setAddingInstCustom] = useState<string>("");
   const [savingInstituicao, setSavingInstituicao] = useState(false);
   const [instituicaoSaved, setInstituicaoSaved] = useState(false);
 
+  function handleAddInstituicao() {
+    const nome = addingInst === "Outra" ? addingInstCustom.trim() : addingInst;
+    if (!nome || instituicoesList.includes(nome)) return;
+    setInstituicoesList(prev => [...prev, nome]);
+    setAddingInst("");
+    setAddingInstCustom("");
+  }
+
   async function handleSaveInstituicao() {
     if (!proposal) return;
-    const valor = instituicao === "Outra" ? instituicaoCustom.trim() : instituicao;
-    if (!valor) return;
     setSavingInstituicao(true);
     try {
-      await fetch("/api/credit-proposals", {
+      const valor = JSON.stringify(instituicoesList);
+      const res = await fetch("/api/credit-proposals", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: proposal.id, instituicao_encaminhada: valor }),
       });
+      if (!res.ok) {
+        const e = await res.json();
+        console.error("[handleSaveInstituicao]", e);
+        return;
+      }
       onProposalUpdate?.(proposal.id, { instituicao_encaminhada: valor });
       setInstituicaoSaved(true);
-      setTimeout(() => setInstituicaoSaved(false), 2000);
+      setTimeout(() => setInstituicaoSaved(false), 2500);
     } finally {
       setSavingInstituicao(false);
     }
@@ -197,14 +217,19 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
     setCheckedDocs({});
     setUploadedFiles({});
     setUploadedUrls({});
-    const inst = proposal.instituicao_encaminhada ?? "";
-    if (inst && !INSTITUICOES.slice(0, -1).includes(inst)) {
-      setInstituicao("Outra");
-      setInstituicaoCustom(inst);
-    } else {
-      setInstituicao(inst);
-      setInstituicaoCustom("");
+    const instRaw = proposal.instituicao_encaminhada ?? "";
+    let parsedInsts: string[] = [];
+    if (instRaw) {
+      try {
+        const arr = JSON.parse(instRaw);
+        parsedInsts = Array.isArray(arr) ? arr : [instRaw];
+      } catch {
+        parsedInsts = [instRaw];
+      }
     }
+    setInstituicoesList(parsedInsts);
+    setAddingInst("");
+    setAddingInstCustom("");
     setMesaComments(Array.isArray(proposal.mesa_comments) ? proposal.mesa_comments : []);
     setNewComment("");
     if (IS_DEMO) {
@@ -742,11 +767,24 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
     const email     = (meta.email ?? proposal.email ?? "") as string;
     const telefone  = (meta.telefone ?? meta.phone ?? proposal.telefone ?? "") as string;
     const stageName = PIPELINE_STAGES.find(s => s.key === (proposal.stage ?? "RECEBIDO"))?.label ?? "Recebido";
+    const cpfCnpj   = proposal.client_cpf_cnpj ?? (meta.cpf ?? meta.cnpj ?? "") as string;
 
     const fmt = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
     const fmtDate = (d: string) => d ? new Date(d).toLocaleDateString("pt-BR") : "-";
+    const fmtNum  = (v: unknown) => { const n = parseFloat(String(v ?? "").replace(/\D/g, "")); return isNaN(n) || n === 0 ? "" : fmt(n); };
 
     const comments = (mesaComments.length > 0 ? mesaComments : (proposal.mesa_comments ?? []));
+
+    // Instituições encaminhadas (parse JSON ou string legada)
+    let instsList: string[] = [];
+    const instRaw = proposal.instituicao_encaminhada ?? "";
+    if (instRaw) {
+      try { const arr = JSON.parse(instRaw); instsList = Array.isArray(arr) ? arr : [instRaw]; }
+      catch { instsList = [instRaw]; }
+    }
+
+    const levelLabels: Record<string, string> = { NIVEL_1: "Nível 1 — Varejo", NIVEL_2: "Nível 2 — Estruturado", NIVEL_3: "Nível 3 — High Ticket" };
+    const statusLabels: Record<string, string> = { PENDING: "Pendente", IN_REVIEW: "Em Análise", APPROVED: "Aprovado", REJECTED: "Reprovado", COMPLETED: "Concluído", CANCELLED: "Cancelado" };
 
     const html = `<!DOCTYPE html>
 <html lang="pt-BR">
@@ -846,19 +884,69 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
     <div class="section-title">Dados do Cliente (${clientType})</div>
     <div class="grid">
       <div class="field"><label>Nome / Razão Social</label><span>${proposal.client_name}</span></div>
-      ${proposal.cpf_cnpj ? `<div class="field"><label>${clientType === "PJ" ? "CNPJ" : "CPF"}</label><span>${proposal.cpf_cnpj}</span></div>` : ""}
+      ${cpfCnpj ? `<div class="field"><label>${clientType === "PJ" ? "CNPJ" : "CPF"}</label><span>${cpfCnpj}</span></div>` : ""}
       ${email ? `<div class="field"><label>E-mail</label><span>${email}</span></div>` : ""}
       ${telefone ? `<div class="field"><label>Telefone</label><span>${telefone}</span></div>` : ""}
-      ${(meta.renda_mensal || meta.renda) ? `<div class="field"><label>Renda Mensal</label><span>${fmt(parseFloat(String(meta.renda_mensal ?? meta.renda ?? 0).replace(/\D/g, "")) || 0)}</span></div>` : ""}
-      ${(meta.faturamento_mensal || meta.faturamento) ? `<div class="field"><label>Faturamento Mensal</label><span>${fmt(parseFloat(String(meta.faturamento_mensal ?? meta.faturamento ?? 0).replace(/\D/g, "")) || 0)}</span></div>` : ""}
+      ${fmtNum(meta.renda_mensal ?? meta.renda) ? `<div class="field"><label>Renda Mensal</label><span>${fmtNum(meta.renda_mensal ?? meta.renda)}</span></div>` : ""}
+      ${fmtNum(meta.faturamento_mensal ?? meta.faturamento) ? `<div class="field"><label>Faturamento Mensal</label><span>${fmtNum(meta.faturamento_mensal ?? meta.faturamento)}</span></div>` : ""}
+      ${meta.cep ? `<div class="field"><label>CEP</label><span>${meta.cep}</span></div>` : ""}
+      ${meta.endereco ? `<div class="field"><label>Endereço</label><span>${meta.endereco}${meta.numero ? `, ${meta.numero}` : ""}${meta.complemento ? ` ${meta.complemento}` : ""}</span></div>` : ""}
+      ${meta.bairro ? `<div class="field"><label>Bairro</label><span>${meta.bairro}</span></div>` : ""}
+      ${(meta.cidade || meta.estado) ? `<div class="field"><label>Cidade / Estado</label><span>${[meta.cidade, meta.estado].filter(Boolean).join(" / ")}</span></div>` : ""}
     </div>
   </div>
+
+  ${(proposal.imovel_endereco || proposal.imovel_valor_medio) ? `
+  <!-- Imóvel -->
+  <div class="section">
+    <div class="section-title">Dados do Imóvel (Garantia)</div>
+    <div class="grid">
+      ${proposal.imovel_endereco ? `<div class="field"><label>Endereço</label><span>${proposal.imovel_endereco}</span></div>` : ""}
+      ${(proposal.imovel_cidade || proposal.imovel_estado) ? `<div class="field"><label>Cidade / Estado</label><span>${[proposal.imovel_cidade, proposal.imovel_estado].filter(Boolean).join(" / ")}</span></div>` : ""}
+      ${proposal.imovel_valor_medio ? `<div class="field"><label>Valor Estimado</label><span>${fmt(proposal.imovel_valor_medio)}</span></div>` : ""}
+    </div>
+  </div>` : ""}
+
+  ${(meta.observacoes || meta.notes) ? `
+  <!-- Observações -->
+  <div class="section">
+    <div class="section-title">Observações</div>
+    <p style="font-size:12px;color:#374151;line-height:1.6;">${meta.observacoes ?? meta.notes}</p>
+  </div>` : ""}
 
   ${proposal.partner_name ? `
   <!-- Parceiro -->
   <div class="section">
     <div class="section-title">Parceiro Responsável</div>
     <div class="field"><label>Nome</label><span>${proposal.partner_name}</span></div>
+  </div>` : ""}
+
+  <!-- Status e Nível -->
+  <div class="section">
+    <div class="section-title">Status da Proposta</div>
+    <div class="grid-3">
+      <div class="field"><label>Status</label><span>${statusLabels[proposal.status] ?? proposal.status}</span></div>
+      <div class="field"><label>Nível</label><span>${levelLabels[proposal.current_level] ?? proposal.current_level}</span></div>
+      <div class="field"><label>Etapa</label><span>${stageName}</span></div>
+    </div>
+  </div>
+
+  ${(proposal.level1_notes || proposal.level2_notes || proposal.level3_notes) ? `
+  <!-- Notas por Nível -->
+  <div class="section">
+    <div class="section-title">Análise por Nível</div>
+    ${proposal.level1_notes ? `<div style="margin-bottom:8px;"><div style="font-size:9px;font-weight:700;text-transform:uppercase;color:#9ca3af;margin-bottom:4px;">Nível 1${proposal.level1_at ? ` — ${fmtDate(proposal.level1_at)}` : ""}</div><p style="font-size:12px;color:#374151;">${proposal.level1_notes}</p></div>` : ""}
+    ${proposal.level2_notes ? `<div style="margin-bottom:8px;"><div style="font-size:9px;font-weight:700;text-transform:uppercase;color:#9ca3af;margin-bottom:4px;">Nível 2${proposal.level2_at ? ` — ${fmtDate(proposal.level2_at)}` : ""}</div><p style="font-size:12px;color:#374151;">${proposal.level2_notes}</p></div>` : ""}
+    ${proposal.level3_notes ? `<div style="margin-bottom:8px;"><div style="font-size:9px;font-weight:700;text-transform:uppercase;color:#9ca3af;margin-bottom:4px;">Nível 3${proposal.level3_at ? ` — ${fmtDate(proposal.level3_at)}` : ""}</div><p style="font-size:12px;color:#374151;">${proposal.level3_notes}</p></div>` : ""}
+  </div>` : ""}
+
+  ${instsList.length > 0 ? `
+  <!-- Instituições Encaminhadas -->
+  <div class="section">
+    <div class="section-title">Instituições Encaminhadas</div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;">
+      ${instsList.map(i => `<span style="display:inline-block;padding:4px 12px;border-radius:20px;background:#C9A84C20;border:1px solid #C9A84C40;color:#C9A84C;font-size:11px;font-weight:700;">${i}</span>`).join("")}
+    </div>
   </div>` : ""}
 
   ${(percMandato > 0 || percInstituicao > 0) ? `
@@ -1126,52 +1214,67 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
                   </div>
                 </div>
 
-                {/* Instituição encaminhada — apenas mesa/admin */}
+                {/* Instituições encaminhadas — apenas mesa/admin */}
                 {canEditInstituicao && (
                   <div className="p-4 rounded-xl border border-[#C9A84C]/20 bg-[#C9A84C]/5 space-y-3">
                     <p className="text-xs font-semibold text-[#C9A84C] uppercase tracking-wider flex items-center gap-1.5">
-                      <Building2 className="w-3.5 h-3.5" /> Instituição Encaminhada
+                      <Building2 className="w-3.5 h-3.5" /> Instituições Encaminhadas
                     </p>
-                    {proposal.instituicao_encaminhada && instituicao !== "" && !savingInstituicao ? (
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#C9A84C]/15 border border-[#C9A84C]/30 text-[#C9A84C] text-xs font-semibold">
-                          <Building2 className="w-3 h-3" />
-                          {proposal.instituicao_encaminhada}
-                        </span>
-                        <button onClick={() => setInstituicao(proposal.instituicao_encaminhada && !INSTITUICOES.slice(0,-1).includes(proposal.instituicao_encaminhada ?? "") ? "Outra" : (proposal.instituicao_encaminhada ?? ""))}
-                          className="text-xs text-muted-foreground hover:text-white transition-colors underline">
-                          Alterar
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="space-y-2">
-                        <select
-                          value={instituicao}
-                          onChange={(e) => { setInstituicao(e.target.value); setInstituicaoCustom(""); }}
-                          className="w-full h-8 px-3 text-xs bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-1 focus:ring-[#C9A84C]/50"
-                        >
-                          <option value="">Selecione a instituição...</option>
-                          {INSTITUICOES.map(i => <option key={i} value={i}>{i}</option>)}
-                        </select>
-                        {instituicao === "Outra" && (
-                          <input
-                            type="text"
-                            value={instituicaoCustom}
-                            onChange={(e) => setInstituicaoCustom(e.target.value)}
-                            placeholder="Nome da instituição"
-                            className="w-full h-8 px-3 text-xs bg-secondary border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-[#C9A84C]/50"
-                          />
-                        )}
-                        <button
-                          onClick={handleSaveInstituicao}
-                          disabled={savingInstituicao || !instituicao || (instituicao === "Outra" && !instituicaoCustom.trim())}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#C9A84C]/15 hover:bg-[#C9A84C]/25 border border-[#C9A84C]/30 text-[#C9A84C] text-xs font-semibold disabled:opacity-50 transition-colors"
-                        >
-                          {savingInstituicao ? <Loader2 className="w-3 h-3 animate-spin" /> : instituicaoSaved ? <Check className="w-3 h-3" /> : <Check className="w-3 h-3" />}
-                          {instituicaoSaved ? "Salvo!" : "Salvar"}
-                        </button>
+
+                    {/* Chips das instituições já adicionadas */}
+                    {instituicoesList.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {instituicoesList.map((inst, i) => (
+                          <span key={i} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#C9A84C]/15 border border-[#C9A84C]/30 text-[#C9A84C] text-xs font-semibold">
+                            <Building2 className="w-3 h-3 flex-shrink-0" />
+                            {inst}
+                            <button
+                              onClick={() => setInstituicoesList(prev => prev.filter((_, j) => j !== i))}
+                              className="ml-0.5 hover:text-red-400 transition-colors"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </span>
+                        ))}
                       </div>
                     )}
+
+                    {/* Adicionar nova instituição */}
+                    <div className="flex gap-2">
+                      <select
+                        value={addingInst}
+                        onChange={(e) => { setAddingInst(e.target.value); setAddingInstCustom(""); }}
+                        className="flex-1 h-8 px-3 text-xs bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-1 focus:ring-[#C9A84C]/50"
+                      >
+                        <option value="">+ Adicionar instituição...</option>
+                        {INSTITUICOES.map(i => <option key={i} value={i}>{i}</option>)}
+                      </select>
+                      <button
+                        onClick={handleAddInstituicao}
+                        disabled={!addingInst || (addingInst === "Outra" && !addingInstCustom.trim())}
+                        className="h-8 px-3 rounded-lg bg-[#C9A84C]/15 hover:bg-[#C9A84C]/25 border border-[#C9A84C]/30 text-[#C9A84C] text-xs font-bold disabled:opacity-50 transition-colors"
+                      >
+                        +
+                      </button>
+                    </div>
+                    {addingInst === "Outra" && (
+                      <input
+                        type="text"
+                        value={addingInstCustom}
+                        onChange={(e) => setAddingInstCustom(e.target.value)}
+                        placeholder="Nome da instituição"
+                        className="w-full h-8 px-3 text-xs bg-secondary border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-[#C9A84C]/50"
+                      />
+                    )}
+
+                    <button
+                      onClick={handleSaveInstituicao}
+                      disabled={savingInstituicao || instituicoesList.length === 0}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#C9A84C]/15 hover:bg-[#C9A84C]/25 border border-[#C9A84C]/30 text-[#C9A84C] text-xs font-semibold disabled:opacity-50 transition-colors"
+                    >
+                      {savingInstituicao ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+                      {instituicaoSaved ? "Salvo!" : "Salvar"}
+                    </button>
                   </div>
                 )}
               </div>

@@ -60,8 +60,8 @@ const patchSchema = z.object({
   client_name:     z.string().min(1).max(200).optional(),
   client_cpf_cnpj: z.string().max(20).optional().nullable(),
   metadata:        z.record(z.string(), z.unknown()).optional().nullable(),
-  // Campo exclusivo mesa/admin
-  instituicao_encaminhada: z.string().max(100).optional().nullable(),
+  // Campo exclusivo mesa/admin (armazena JSON array de instituições)
+  instituicao_encaminhada: z.string().max(1000).optional().nullable(),
 });
 
 // GET — lista propostas (partner vê as suas, admin/mesa vê todas)
