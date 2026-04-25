@@ -1,11 +1,12 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect, useCallback } from "react";
 import {
   DollarSign, Users, FileText, TrendingUp, BarChart3,
   CreditCard, Receipt, ChevronLeft, ChevronRight,
   ArrowUpRight, ArrowDownRight, CheckCircle2, Clock,
   AlertCircle, RefreshCw, Plus, Download, Eye, Trash2, Pencil,
+  Crown, ShieldCheck, XCircle, Loader2, Ban, RotateCcw,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ExportButton } from "@/components/financeiro/export-button";
@@ -23,7 +24,7 @@ import {
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
-type Tab = "visao-geral" | "folha" | "despesas" | "comissoes" | "dre" | "fluxo" | "impostos";
+type Tab = "visao-geral" | "folha" | "despesas" | "comissoes" | "dre" | "fluxo" | "impostos" | "assinaturas";
 
 interface Props {
   role: string;
@@ -1175,11 +1176,33 @@ function DespesasTab() {
 function ComissoesAdminTab() {
   const [filtroTipo, setFiltroTipo] = useState<"TODOS" | "CREDITO" | "MA" | "CONSORCIO">("TODOS");
   const [filtroStatus, setFiltroStatus] = useState<"TODOS" | "A_PAGAR" | "PAGA">("TODOS");
+  const [filtroPartner, setFiltroPartner] = useState<string>("TODOS");
+  const [buscaPartner, setBuscaPartner] = useState("");
+
+  // Lista única de partners presentes nas comissões
+  const parceiros = useMemo(() => {
+    const nomes = Array.from(new Set(DEMO_COMISSOES.map(c => c.partnerNome))).sort();
+    return nomes;
+  }, []);
 
   const filtradas = DEMO_COMISSOES.filter(c =>
     (filtroTipo === "TODOS" || c.operacaoTipo === filtroTipo) &&
-    (filtroStatus === "TODOS" || c.status === filtroStatus)
+    (filtroStatus === "TODOS" || c.status === filtroStatus) &&
+    (filtroPartner === "TODOS" || c.partnerNome === filtroPartner) &&
+    (!buscaPartner || c.partnerNome.toLowerCase().includes(buscaPartner.toLowerCase()) || c.operacaoDescricao.toLowerCase().includes(buscaPartner.toLowerCase()))
   );
+
+  // Extrato por partner selecionado
+  const extratoPartner = filtroPartner !== "TODOS" ? {
+    totalPago: filtradas.filter(c => c.status === "PAGA").reduce((s, c) => s + c.valorComissao, 0),
+    totalPendente: filtradas.filter(c => c.status === "A_PAGAR").reduce((s, c) => s + c.valorComissao, 0),
+    totalOperacoes: filtradas.length,
+    mediaMensal: (() => {
+      const meses = new Set(filtradas.map(c => `${c.ano}-${c.mes}`));
+      const total = filtradas.reduce((s, c) => s + c.valorComissao, 0);
+      return meses.size > 0 ? total / meses.size : 0;
+    })(),
+  } : null;
 
   const totalAPagar = DEMO_COMISSOES.filter(c => c.status === "A_PAGAR").reduce((s, c) => s + c.valorComissao, 0);
   const totalPago = DEMO_COMISSOES.filter(c => c.status === "PAGA").reduce((s, c) => s + c.valorComissao, 0);
@@ -1203,6 +1226,49 @@ function ComissoesAdminTab() {
           <p className="text-xs text-muted-foreground mt-1">{DEMO_COMISSOES.length} operações com comissão</p>
         </div>
       </div>
+
+      {/* Seletor de partner para extrato individual */}
+      <div className="flex flex-wrap items-center gap-3">
+        <input
+          type="text"
+          placeholder="Buscar partner ou operação..."
+          value={buscaPartner}
+          onChange={e => setBuscaPartner(e.target.value)}
+          className="bg-card border border-border/40 rounded-lg px-3 py-1.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:ring-1 focus:ring-[#C9A84C]/40 w-56"
+        />
+        <select
+          value={filtroPartner}
+          onChange={e => setFiltroPartner(e.target.value)}
+          className="bg-card border border-border/40 rounded-lg px-3 py-1.5 text-sm text-foreground outline-none focus:ring-1 focus:ring-[#C9A84C]/40"
+        >
+          <option value="TODOS">Todos os partners</option>
+          {parceiros.map(p => <option key={p} value={p}>{p}</option>)}
+        </select>
+      </div>
+
+      {/* Extrato do partner selecionado */}
+      {extratoPartner && (
+        <div className="grid grid-cols-4 gap-3 bg-[#C9A84C]/5 border border-[#C9A84C]/20 rounded-xl p-4">
+          <div>
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Extrato — {filtroPartner}</p>
+            <p className="text-lg font-bold text-[#C9A84C]">{formatMoeda(extratoPartner.totalPago + extratoPartner.totalPendente)}</p>
+            <p className="text-xs text-muted-foreground">total acumulado</p>
+          </div>
+          <div>
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Recebido</p>
+            <p className="text-lg font-bold text-emerald-400">{formatMoeda(extratoPartner.totalPago)}</p>
+          </div>
+          <div>
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Pendente</p>
+            <p className="text-lg font-bold text-amber-400">{formatMoeda(extratoPartner.totalPendente)}</p>
+          </div>
+          <div>
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Média / Mês</p>
+            <p className="text-lg font-bold text-white">{formatMoeda(extratoPartner.mediaMensal)}</p>
+            <p className="text-xs text-muted-foreground">{extratoPartner.totalOperacoes} operações</p>
+          </div>
+        </div>
+      )}
 
       <div className="flex items-center gap-3 flex-wrap justify-between">
         <div className="flex items-center gap-3 flex-wrap">
@@ -2005,6 +2071,480 @@ function ImpostosTab() {
   );
 }
 
+// ─── TAB: ASSINATURAS ─────────────────────────────────────────────────────────
+
+interface PartnerRow {
+  id: string;
+  full_name: string | null;
+  email: string;
+  role: string;
+  created_at: string;
+  trial_expires_at: string | null;
+  is_active: boolean;
+}
+
+interface PaymentRecord {
+  id: string;
+  data: {
+    partnerId: string;
+    partnerNome: string;
+    partnerRole: string;
+    valor: number;
+    mes: number;
+    ano: number;
+    observacoes: string;
+    dataPagamento: string;
+  };
+  created_at: string;
+}
+
+interface PendingNotif {
+  message: string;
+  type: string;
+  created_at: string;
+}
+
+function calcStatus(p: PartnerRow): { label: string; color: string; dias: number } {
+  if (!p.is_active) return { label: "Suspensa", color: "text-red-400", dias: 0 };
+  const expires = p.trial_expires_at
+    ? new Date(p.trial_expires_at).getTime()
+    : new Date(p.created_at).getTime() + 30 * 86400000;
+  const dias = Math.max(Math.floor((expires - Date.now()) / 86400000), 0);
+  if (dias === 0) return { label: "Vencida", color: "text-red-400", dias: 0 };
+  if (dias <= 7) return { label: `Vence em ${dias}d`, color: "text-amber-400", dias };
+  if (dias <= 15) return { label: `Vence em ${dias}d`, color: "text-yellow-400", dias };
+  return { label: "Ativa", color: "text-emerald-400", dias };
+}
+
+function PlanBadge({ role }: { role: string }) {
+  if (role === "PARTNER_PRO")
+    return (
+      <span className="flex items-center gap-1 text-[10px] font-semibold border px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border-amber-500/30">
+        <Crown className="w-3 h-3" /> PRO
+      </span>
+    );
+  return (
+    <span className="flex items-center gap-1 text-[10px] font-semibold border px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border-blue-500/30">
+      <ShieldCheck className="w-3 h-3" /> Partner
+    </span>
+  );
+}
+
+function AssinaturasTab() {
+  const [partners, setPartners] = useState<PartnerRow[]>([]);
+  const [payments, setPayments] = useState<PaymentRecord[]>([]);
+  const [pendingNotifs, setPendingNotifs] = useState<PendingNotif[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+
+  // Modal de pagamento
+  const [showPayModal, setShowPayModal] = useState(false);
+  const [payPartner, setPayPartner] = useState<PartnerRow | null>(null);
+  const [payObs, setPayObs] = useState("");
+  const [payLoading, setPayLoading] = useState(false);
+
+  // Filtro/busca
+  const [search, setSearch] = useState("");
+  const [filterStatus, setFilterStatus] = useState<"todos" | "ativas" | "vencendo" | "vencidas" | "suspensas">("todos");
+
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/financeiro/assinaturas");
+      if (res.ok) {
+        const d = await res.json();
+        setPartners(d.partners ?? []);
+        setPayments(d.payments ?? []);
+        setPendingNotifs(d.pendingNotifs ?? []);
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { fetchData(); }, [fetchData]);
+
+  async function doAction(partnerId: string, action: string) {
+    setActionLoading(partnerId + action);
+    try {
+      await fetch("/api/financeiro/assinaturas", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ partnerId, action }),
+      });
+      await fetchData();
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
+  async function handlePagar() {
+    if (!payPartner) return;
+    setPayLoading(true);
+    const now = new Date();
+    const valor = payPartner.role === "PARTNER_PRO" ? 397 : 197;
+    try {
+      await fetch("/api/financeiro/assinaturas", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          partnerId: payPartner.id,
+          partnerNome: payPartner.full_name ?? payPartner.email,
+          partnerRole: payPartner.role,
+          valor,
+          mes: now.getMonth() + 1,
+          ano: now.getFullYear(),
+          observacoes: payObs,
+        }),
+      });
+      setShowPayModal(false);
+      setPayObs("");
+      await fetchData();
+    } finally {
+      setPayLoading(false);
+    }
+  }
+
+  // KPIs
+  const totalPartners = partners.length;
+  const totalPRO = partners.filter(p => p.role === "PARTNER_PRO").length;
+  const ativos = partners.filter(p => {
+    const s = calcStatus(p);
+    return p.is_active && s.dias > 0;
+  });
+  const mrr = ativos.reduce((s, p) => s + (p.role === "PARTNER_PRO" ? 397 : 197), 0);
+  const vencendo = partners.filter(p => { const s = calcStatus(p); return s.dias > 0 && s.dias <= 15; }).length;
+  const inadimplentes = partners.filter(p => { const s = calcStatus(p); return !p.is_active || s.dias === 0; }).length;
+
+  // Gráfico MRR mensal (últimos 6 meses simulados a partir de pagamentos)
+  const mrrChart = useMemo(() => {
+    const now = new Date();
+    return Array.from({ length: 6 }, (_, i) => {
+      const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1);
+      const m = d.getMonth() + 1;
+      const a = d.getFullYear();
+      const total = payments
+        .filter(p => p.data.mes === m && p.data.ano === a)
+        .reduce((s, p) => s + p.data.valor, 0);
+      return { mes: `${MESES_PT[m - 1]}/${String(a).slice(2)}`, Receita: total };
+    });
+  }, [payments]);
+
+  // Filtro de partners
+  const filtered = useMemo(() => {
+    return partners.filter(p => {
+      const s = calcStatus(p);
+      const nome = (p.full_name ?? p.email).toLowerCase();
+      if (search && !nome.includes(search.toLowerCase())) return false;
+      if (filterStatus === "ativas") return p.is_active && s.dias > 15;
+      if (filterStatus === "vencendo") return s.dias > 0 && s.dias <= 15;
+      if (filterStatus === "vencidas") return p.is_active && s.dias === 0;
+      if (filterStatus === "suspensas") return !p.is_active;
+      return true;
+    });
+  }, [partners, search, filterStatus]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-48 gap-2 text-muted-foreground">
+        <Loader2 className="w-5 h-5 animate-spin" />
+        Carregando assinaturas...
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-5">
+
+      {/* KPIs */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <KpiCard label="MRR" value={formatMoeda(mrr)} sub={`${ativos.length} ativos`} icon={DollarSign} color="#C9A84C" />
+        <KpiCard label="Partners PRO" value={String(totalPRO)} sub={`de ${totalPartners} total`} icon={Crown} color="#F59E0B" />
+        <KpiCard label="Vencendo em 15d" value={String(vencendo)} sub="necessitam renovação" icon={Clock} color="#EF4444" />
+        <KpiCard label="Inadimplentes" value={String(inadimplentes)} sub="vencidos ou suspensos" icon={AlertCircle} color="#6B7280" />
+      </div>
+
+      {/* Alertas de pendências */}
+      {pendingNotifs.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-semibold text-amber-400 uppercase tracking-wider flex items-center gap-2">
+              <AlertCircle className="w-4 h-4" /> Solicitações Pendentes ({pendingNotifs.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {pendingNotifs.slice(0, 5).map((n, i) => (
+              <div key={i} className="flex items-start justify-between text-xs bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
+                <span className="text-amber-200">{n.message}</span>
+                <span className="text-muted-foreground ml-4 whitespace-nowrap">
+                  {new Date(n.created_at).toLocaleDateString("pt-BR")}
+                </span>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Gráfico de receita mensal de assinaturas */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+            Receita de Assinaturas — Últimos 6 Meses
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ResponsiveContainer width="100%" height={180}>
+            <BarChart data={mrrChart}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#122036" />
+              <XAxis dataKey="mes" tick={{ fill: "#7A8FA8", fontSize: 10 }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fill: "#7A8FA8", fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={v => `R$${(v / 1000).toFixed(0)}k`} />
+              <Tooltip
+                contentStyle={{ backgroundColor: "#091221", border: "1px solid rgba(196,146,46,0.2)", borderRadius: 10, fontSize: 12 }}
+                formatter={(v: number) => formatMoeda(v)}
+              />
+              <Bar dataKey="Receita" fill="#C9A84C" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </CardContent>
+      </Card>
+
+      {/* Filtros e busca */}
+      <div className="flex flex-wrap items-center gap-3">
+        <input
+          type="text"
+          placeholder="Buscar partner..."
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          className="bg-card border border-border/40 rounded-lg px-3 py-1.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:ring-1 focus:ring-[#C9A84C]/40 w-52"
+        />
+        {(["todos", "ativas", "vencendo", "vencidas", "suspensas"] as const).map(f => (
+          <button
+            key={f}
+            onClick={() => setFilterStatus(f)}
+            className={`text-xs font-medium px-3 py-1.5 rounded-full border transition-all capitalize ${
+              filterStatus === f
+                ? "border-[#C9A84C] text-[#C9A84C] bg-[#C9A84C]/10"
+                : "border-border/40 text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {f}
+          </button>
+        ))}
+        <button
+          onClick={fetchData}
+          className="ml-auto flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground border border-border/40 px-3 py-1.5 rounded-lg transition-colors"
+        >
+          <RefreshCw className="w-3 h-3" /> Atualizar
+        </button>
+      </div>
+
+      {/* Tabela de partners */}
+      <Card>
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border/40">
+                  <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-3">Partner</th>
+                  <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-3">Plano</th>
+                  <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-3">Mensalidade</th>
+                  <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-3">Status</th>
+                  <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-3">Vencimento</th>
+                  <th className="text-right text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-3">Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="text-center text-muted-foreground py-10 text-sm">
+                      Nenhum partner encontrado.
+                    </td>
+                  </tr>
+                )}
+                {filtered.map(p => {
+                  const status = calcStatus(p);
+                  const valor = p.role === "PARTNER_PRO" ? 397 : 197;
+                  const expDate = p.trial_expires_at
+                    ? new Date(p.trial_expires_at).toLocaleDateString("pt-BR")
+                    : new Date(new Date(p.created_at).getTime() + 30 * 86400000).toLocaleDateString("pt-BR");
+                  const isLoadingAny = actionLoading?.startsWith(p.id);
+
+                  return (
+                    <tr key={p.id} className="border-b border-border/20 hover:bg-white/[0.02] transition-colors">
+                      <td className="px-4 py-3">
+                        <div className="font-medium text-foreground">{p.full_name ?? "—"}</div>
+                        <div className="text-xs text-muted-foreground">{p.email}</div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <PlanBadge role={p.role} />
+                      </td>
+                      <td className="px-4 py-3 font-medium text-[#C9A84C]">
+                        {formatMoeda(valor)}<span className="text-xs text-muted-foreground">/mês</span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={`text-xs font-semibold ${status.color}`}>{status.label}</span>
+                      </td>
+                      <td className="px-4 py-3 text-xs text-muted-foreground">{expDate}</td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center justify-end gap-1.5">
+                          {/* Registrar pagamento */}
+                          <button
+                            onClick={() => { setPayPartner(p); setShowPayModal(true); }}
+                            title="Registrar pagamento"
+                            className="flex items-center gap-1 text-[11px] font-medium px-2.5 py-1 rounded-lg bg-[#C9A84C]/10 text-[#C9A84C] border border-[#C9A84C]/30 hover:bg-[#C9A84C]/20 transition-colors"
+                          >
+                            <Plus className="w-3 h-3" /> Pagar
+                          </button>
+
+                          {/* Renovar */}
+                          <button
+                            onClick={() => doAction(p.id, "renovar")}
+                            title="Renovar +30 dias"
+                            disabled={!!isLoadingAny}
+                            className="p-1.5 rounded-lg text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/10 transition-colors disabled:opacity-40"
+                          >
+                            {actionLoading === p.id + "renovar"
+                              ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              : <RotateCcw className="w-3.5 h-3.5" />}
+                          </button>
+
+                          {/* Upgrade para PRO (só para PARTNER) */}
+                          {p.role === "PARTNER" && (
+                            <button
+                              onClick={() => doAction(p.id, "upgrade")}
+                              title="Upgrade para PRO"
+                              disabled={!!isLoadingAny}
+                              className="p-1.5 rounded-lg text-amber-400 border border-amber-500/20 hover:bg-amber-500/10 transition-colors disabled:opacity-40"
+                            >
+                              {actionLoading === p.id + "upgrade"
+                                ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                : <Crown className="w-3.5 h-3.5" />}
+                            </button>
+                          )}
+
+                          {/* Suspender / Reativar */}
+                          {p.is_active ? (
+                            <button
+                              onClick={() => doAction(p.id, "suspender")}
+                              title="Suspender acesso"
+                              disabled={!!isLoadingAny}
+                              className="p-1.5 rounded-lg text-red-400 border border-red-500/20 hover:bg-red-500/10 transition-colors disabled:opacity-40"
+                            >
+                              {actionLoading === p.id + "suspender"
+                                ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                : <Ban className="w-3.5 h-3.5" />}
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => doAction(p.id, "reativar")}
+                              title="Reativar acesso"
+                              disabled={!!isLoadingAny}
+                              className="p-1.5 rounded-lg text-blue-400 border border-blue-500/20 hover:bg-blue-500/10 transition-colors disabled:opacity-40"
+                            >
+                              {actionLoading === p.id + "reativar"
+                                ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                : <CheckCircle2 className="w-3.5 h-3.5" />}
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Histórico de pagamentos recentes */}
+      {payments.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+              Histórico de Pagamentos Registrados
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border/40">
+                    <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2">Partner</th>
+                    <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2">Plano</th>
+                    <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2">Valor</th>
+                    <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2">Ref.</th>
+                    <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2">Data</th>
+                    <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2">Obs.</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {payments.slice(0, 20).map(pay => (
+                    <tr key={pay.id} className="border-b border-border/20 hover:bg-white/[0.02]">
+                      <td className="px-4 py-2 text-foreground">{pay.data.partnerNome}</td>
+                      <td className="px-4 py-2"><PlanBadge role={pay.data.partnerRole} /></td>
+                      <td className="px-4 py-2 font-medium text-emerald-400">{formatMoeda(pay.data.valor)}</td>
+                      <td className="px-4 py-2 text-muted-foreground">{MESES_PT[pay.data.mes - 1]}/{pay.data.ano}</td>
+                      <td className="px-4 py-2 text-muted-foreground">{new Date(pay.data.dataPagamento).toLocaleDateString("pt-BR")}</td>
+                      <td className="px-4 py-2 text-muted-foreground text-xs">{pay.data.observacoes || "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Modal de pagamento */}
+      {showPayModal && payPartner && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-[#111F35] border border-border/40 rounded-2xl p-6 w-full max-w-md shadow-2xl space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-base font-bold text-white">Registrar Pagamento</h2>
+              <button onClick={() => setShowPayModal(false)} className="text-muted-foreground hover:text-foreground">
+                <XCircle className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="space-y-1 text-sm">
+              <p className="text-muted-foreground">Partner: <span className="text-foreground font-medium">{payPartner.full_name ?? payPartner.email}</span></p>
+              <p className="text-muted-foreground">Plano: <span className="text-foreground font-medium">{payPartner.role === "PARTNER_PRO" ? "Partner PRO" : "Partner"}</span></p>
+              <p className="text-muted-foreground">Valor: <span className="text-[#C9A84C] font-bold">{formatMoeda(payPartner.role === "PARTNER_PRO" ? 397 : 197)}</span></p>
+            </div>
+            <div>
+              <label className="block text-xs text-muted-foreground mb-1">Observações (opcional)</label>
+              <input
+                type="text"
+                value={payObs}
+                onChange={e => setPayObs(e.target.value)}
+                placeholder="Ex: Pix recebido em 24/04"
+                className="w-full bg-card border border-border/40 rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:ring-1 focus:ring-[#C9A84C]/40"
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">O acesso do partner será renovado por +30 dias automaticamente.</p>
+            <div className="flex gap-2 pt-1">
+              <button
+                onClick={() => setShowPayModal(false)}
+                className="flex-1 border border-border/40 text-muted-foreground rounded-lg py-2 text-sm hover:text-foreground transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handlePagar}
+                disabled={payLoading}
+                className="flex-1 bg-[#C9A84C] text-[#09081A] font-bold rounded-lg py-2 text-sm hover:bg-[#E8C97A] transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {payLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                Confirmar Pagamento
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── COMPONENTE PRINCIPAL ─────────────────────────────────────────────────────
 
 const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
@@ -2015,6 +2555,7 @@ const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
   { id: "dre", label: "DRE", icon: TrendingUp },
   { id: "fluxo", label: "Fluxo de Caixa", icon: DollarSign },
   { id: "impostos", label: "Impostos", icon: Receipt },
+  { id: "assinaturas", label: "Assinaturas", icon: Crown },
 ];
 
 export function FinanceiroClient({ role, userName }: Props) {
@@ -2029,6 +2570,7 @@ export function FinanceiroClient({ role, userName }: Props) {
       case "dre": return <DRETab />;
       case "fluxo": return <FluxoCaixaTab />;
       case "impostos": return <ImpostosTab />;
+      case "assinaturas": return <AssinaturasTab />;
     }
   };
 

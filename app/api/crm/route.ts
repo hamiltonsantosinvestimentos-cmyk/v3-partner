@@ -72,8 +72,8 @@ export async function PATCH(req: NextRequest) {
   if (!id) return NextResponse.json({ error: "ID obrigatório" }, { status: 400 });
 
   const isAdmin = ["ADMIN", "GESTAO"].includes(profile?.role ?? "");
-  const query = supabase.from("crm_leads").update(updates).eq("id", id);
-  if (!isAdmin) query.eq("partner_id", user.id);
+  let query = supabase.from("crm_leads").update(updates).eq("id", id);
+  if (!isAdmin) query = query.eq("partner_id", user.id);
 
   const { error } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

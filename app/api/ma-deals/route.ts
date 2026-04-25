@@ -72,7 +72,17 @@ export async function GET(req: NextRequest) {
   const svc = serviceClient();
   const { searchParams } = new URL(req.url);
   const stage = searchParams.get("stage");
+  const id = searchParams.get("id");
   const isAdmin = ADMIN_ROLES.includes(profile?.role as typeof ADMIN_ROLES[number]);
+
+  // Busca deal único por ID (para refresh de asset_data)
+  if (id) {
+    let q = svc.from("ma_deals").select(DEAL_SELECT).eq("id", id);
+    if (!isAdmin) q = q.or(`assigned_to.eq.${user.id},created_by.eq.${user.id}`);
+    const { data, error } = await q.single();
+    if (error) return NextResponse.json({ error: error.message }, { status: 404 });
+    return NextResponse.json({ deal: data });
+  }
 
   let query = svc.from("ma_deals").select(DEAL_SELECT).order("created_at", { ascending: false });
 

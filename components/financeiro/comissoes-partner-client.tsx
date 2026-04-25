@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Wallet, TrendingUp, Clock, CheckCircle2 } from "lucide-react";
+import { Wallet, TrendingUp, Clock, CheckCircle2, Plus, X, Loader2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatMoeda } from "@/lib/demo-data-financeiro";
 import { ExportButton } from "@/components/financeiro/export-button";
@@ -23,11 +23,19 @@ export interface CommissionRow {
   created_at: string;
 }
 
+interface Partner {
+  id: string;
+  full_name: string | null;
+  email: string;
+  role: string;
+}
+
 interface Props {
   partnerId: string;
   partnerName: string;
   role: string;
   commissions: CommissionRow[];
+  partners?: Partner[];
 }
 
 function StatusBadge({ status }: { status: string }) {
@@ -49,8 +57,9 @@ function TipoBadge({ tipo }: { tipo: string }) {
     CREDITO: "bg-blue-500/20 text-blue-400 border-blue-500/30",
     MA: "bg-purple-500/20 text-purple-400 border-purple-500/30",
     CONSORCIO: "bg-amber-500/20 text-amber-400 border-amber-500/30",
+    SPLIT_FISCAL: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
   };
-  const labels: Record<string, string> = { CREDITO: "Crédito", MA: "M&A", CONSORCIO: "Consórcio" };
+  const labels: Record<string, string> = { CREDITO: "Crédito", MA: "M&A", CONSORCIO: "Consórcio", SPLIT_FISCAL: "Split" };
   return (
     <span className={`text-[10px] font-semibold border px-2 py-0.5 rounded-full ${map[tipo] ?? ""}`}>
       {labels[tipo] ?? tipo}
@@ -58,9 +67,76 @@ function TipoBadge({ tipo }: { tipo: string }) {
   );
 }
 
-export function ComissoesPartnerClient({ partnerId, partnerName, role, commissions }: Props) {
+const inputCls = "w-full h-9 px-3 text-sm rounded-lg border bg-[#0A1628] border-[#243A66] text-[#F0ECE4] placeholder:text-[#3A5070] focus:outline-none focus:ring-1 focus:ring-[#C9A84C]/50";
+const labelCls = "block text-xs font-semibold text-[#7A8FA8] mb-1";
+
+export function ComissoesPartnerClient({ partnerId, partnerName, role, commissions: initialCommissions, partners = [] }: Props) {
+  const [commissions, setCommissions] = useState<CommissionRow[]>(initialCommissions);
   const [filtroTipo, setFiltroTipo] = useState<"TODOS" | "CREDITO" | "MA" | "CONSORCIO" | "SPLIT_FISCAL">("TODOS");
   const [filtroStatus, setFiltroStatus] = useState<"TODOS" | "A_PAGAR" | "PAGA">("TODOS");
+
+  const isAdmin = ["ADMIN", "GESTAO", "FINANCEIRO"].includes(role);
+
+  // ── Nova comissão ──
+  const [modalAberto, setModalAberto] = useState(false);
+  const [criando, setCriando] = useState(false);
+  const [erroModal, setErroModal] = useState("");
+  const [form, setForm] = useState({
+    partner_id: "",
+    operation_type: "CREDITO" as "CREDITO" | "MA" | "CONSORCIO" | "SPLIT_FISCAL",
+    operation_description: "",
+    operation_code: "",
+    operation_value: "",
+    commission_percent: "30",
+    operation_closed_at: new Date().toISOString().slice(0, 10),
+    notes: "",
+  });
+
+  // Auto-preenche % comissão ao selecionar partner
+  function handleSelectPartner(id: string) {
+    const p = partners.find(x => x.id === id);
+    setForm(f => ({
+      ...f,
+      partner_id: id,
+      commission_percent: p?.role === "PARTNER_PRO" ? "50" : "30",
+    }));
+  }
+
+  async function handleCriarComissao(e: React.FormEvent) {
+    e.preventDefault();
+    setErroModal("");
+    if (!form.partner_id) { setErroModal("Selecione um partner."); return; }
+    if (!form.operation_description) { setErroModal("Informe a descrição da operação."); return; }
+    if (!form.operation_value || isNaN(Number(form.operation_value.replace(",", ".")))) {
+      setErroModal("Informe o valor da operação."); return;
+    }
+    setCriando(true);
+    try {
+      const res = await fetch("/api/commissions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          partner_id: form.partner_id,
+          operation_type: form.operation_type,
+          operation_description: form.operation_description,
+          operation_code: form.operation_code || null,
+          operation_value: Number(form.operation_value.replace(",", ".")),
+          commission_percent: Number(form.commission_percent),
+          operation_closed_at: form.operation_closed_at || null,
+          notes: form.notes || null,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setErroModal(data.error || "Erro ao criar comissão."); return; }
+      setCommissions(prev => [data.commission, ...prev]);
+      setModalAberto(false);
+      setForm({ partner_id: "", operation_type: "CREDITO", operation_description: "", operation_code: "", operation_value: "", commission_percent: "30", operation_closed_at: new Date().toISOString().slice(0, 10), notes: "" });
+    } catch {
+      setErroModal("Erro de rede. Tente novamente.");
+    } finally {
+      setCriando(false);
+    }
+  }
 
   const filtradas = commissions.filter(c =>
     (filtroTipo === "TODOS" || c.operation_type === filtroTipo) &&
@@ -80,13 +156,24 @@ export function ComissoesPartnerClient({ partnerId, partnerName, role, commissio
   return (
     <div className="space-y-5 animate-fade-in">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-white">
-          Comissões — <span className="gradient-text">A Receber</span>
-        </h1>
-        <p className="text-muted-foreground text-sm mt-1">
-          {role === "ADMIN" ? "Todas as comissões da plataforma" : `Operações finalizadas vinculadas a ${partnerName}`}
-        </p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-white">
+            Comissões — <span className="gradient-text">A Receber</span>
+          </h1>
+          <p className="text-muted-foreground text-sm mt-1">
+            {isAdmin ? "Todas as comissões da plataforma" : `Operações finalizadas vinculadas a ${partnerName}`}
+          </p>
+        </div>
+        {isAdmin && (
+          <button
+            onClick={() => setModalAberto(true)}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[#C9A84C] hover:bg-[#E8C97A] text-[#09081A] text-sm font-bold transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            Nova Comissão
+          </button>
+        )}
       </div>
 
       {/* KPI cards */}
@@ -152,7 +239,7 @@ export function ComissoesPartnerClient({ partnerId, partnerName, role, commissio
           {(["TODOS", "CREDITO", "MA", "CONSORCIO", "SPLIT_FISCAL"] as const).map(t => {
             const labels = { TODOS: "Todos", CREDITO: "Crédito", MA: "M&A", CONSORCIO: "Consórcio", SPLIT_FISCAL: "Split" };
             return (
-              <button key={t} onClick={() => setFiltroTipo(t)} className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${filtroTipo === t ? "bg-[#C9A84C] text-white" : "text-muted-foreground hover:text-foreground"}`}>
+              <button key={t} onClick={() => setFiltroTipo(t)} className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${filtroTipo === t ? "bg-[#C9A84C] text-[#09081A]" : "text-muted-foreground hover:text-foreground"}`}>
                 {labels[t]}
               </button>
             );
@@ -162,7 +249,7 @@ export function ComissoesPartnerClient({ partnerId, partnerName, role, commissio
           {(["TODOS", "A_PAGAR", "PAGA"] as const).map(t => {
             const labels = { TODOS: "Todos", A_PAGAR: "A Receber", PAGA: "Recebido" };
             return (
-              <button key={t} onClick={() => setFiltroStatus(t)} className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${filtroStatus === t ? "bg-[#C9A84C] text-white" : "text-muted-foreground hover:text-foreground"}`}>
+              <button key={t} onClick={() => setFiltroStatus(t)} className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${filtroStatus === t ? "bg-[#C9A84C] text-[#09081A]" : "text-muted-foreground hover:text-foreground"}`}>
                 {labels[t]}
               </button>
             );
@@ -217,11 +304,10 @@ export function ComissoesPartnerClient({ partnerId, partnerName, role, commissio
                       <div className="truncate" title={c.operation_description}>{c.operation_description}</div>
                       <div className="text-[10px] text-muted-foreground">{c.operation_code ?? "—"}</div>
                     </td>
-                    <td className="px-4 py-3"><TipoBadge tipo={c.operacaoTipo} /></td>
-                    <td className="px-4 py-3 text-white">{formatMoeda(c.valorOperacao)}</td>
-                    <td className="px-4 py-3 text-[#C9A84C] font-semibold">{c.percentualComissao}%</td>
-                    <td className="px-4 py-3 font-bold text-white">{formatMoeda(c.valorComissao)}</td>
-                    <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">{new Date(c.dataOperacaoFinalizada).toLocaleDateString("pt-BR")}</td>
+                    <td className="px-4 py-3"><TipoBadge tipo={c.operation_type} /></td>
+                    <td className="px-4 py-3 text-white">{formatMoeda(c.operation_value)}</td>
+                    <td className="px-4 py-3 text-[#C9A84C] font-semibold">{c.commission_percent}%</td>
+                    <td className="px-4 py-3 font-bold text-white">{formatMoeda(c.commission_value)}</td>
                     <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
                       {c.operation_closed_at ? new Date(c.operation_closed_at).toLocaleDateString("pt-BR") : "—"}
                     </td>
@@ -237,7 +323,7 @@ export function ComissoesPartnerClient({ partnerId, partnerName, role, commissio
                   <tr className="bg-[#0F1E35] border-t border-[#C9A84C]/30">
                     <td className="px-4 py-3 font-bold text-[#C9A84C]" colSpan={5}>TOTAL FILTRADO</td>
                     <td className="px-4 py-3 font-bold text-[#C9A84C]">
-                      {formatMoeda(filtradas.reduce((s, c) => s + c.valorComissao, 0))}
+                      {formatMoeda(filtradas.reduce((s, c) => s + (c.commission_value ?? 0), 0))}
                     </td>
                     <td colSpan={3} />
                   </tr>
@@ -253,10 +339,136 @@ export function ComissoesPartnerClient({ partnerId, partnerName, role, commissio
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Observações</p>
           {filtradas.filter(c => c.notes).map(c => (
             <div key={c.id} className="flex gap-2 text-xs p-3 bg-[#091221] border border-[#122036] rounded-lg">
-              <span className="text-[#C9A84C] font-mono">{c.codigo}:</span>
-              <span className="text-muted-foreground">{c.observacoes}</span>
+              <span className="text-[#C9A84C] font-mono">{c.code}:</span>
+              <span className="text-muted-foreground">{c.notes}</span>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Modal Nova Comissão */}
+      {modalAberto && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setModalAberto(false)} />
+          <div className="relative w-full max-w-lg bg-[#111F35] border border-[#243A66] rounded-2xl shadow-2xl p-6 z-10">
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="text-base font-bold text-[#F0ECE4]">Nova Comissão</h2>
+              <button onClick={() => setModalAberto(false)} className="text-[#7A8FA8] hover:text-[#F0ECE4]">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <form onSubmit={handleCriarComissao} className="space-y-4">
+              <div>
+                <label className={labelCls}>Partner *</label>
+                <select
+                  value={form.partner_id}
+                  onChange={e => handleSelectPartner(e.target.value)}
+                  className={inputCls}
+                  required
+                >
+                  <option value="">Selecione um partner...</option>
+                  {partners.map(p => (
+                    <option key={p.id} value={p.id}>
+                      {p.full_name || p.email} ({p.role === "PARTNER_PRO" ? "PRO · 50%" : "30%"})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={labelCls}>Tipo de Operação *</label>
+                  <select
+                    value={form.operation_type}
+                    onChange={e => setForm(f => ({ ...f, operation_type: e.target.value as typeof f.operation_type }))}
+                    className={inputCls}
+                  >
+                    <option value="CREDITO">Crédito</option>
+                    <option value="MA">M&A</option>
+                    <option value="CONSORCIO">Consórcio</option>
+                    <option value="SPLIT_FISCAL">Split Fiscal</option>
+                  </select>
+                </div>
+                <div>
+                  <label className={labelCls}>Código da Op. (opcional)</label>
+                  <input
+                    value={form.operation_code}
+                    onChange={e => setForm(f => ({ ...f, operation_code: e.target.value }))}
+                    placeholder="Ex: CRED-2026-001"
+                    className={inputCls}
+                  />
+                </div>
+              </div>
+              <div>
+                <label className={labelCls}>Descrição da Operação *</label>
+                <input
+                  value={form.operation_description}
+                  onChange={e => setForm(f => ({ ...f, operation_description: e.target.value }))}
+                  placeholder="Ex: Home Equity - Cliente João Silva"
+                  className={inputCls}
+                  required
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={labelCls}>Valor da Operação (R$) *</label>
+                  <input
+                    value={form.operation_value}
+                    onChange={e => setForm(f => ({ ...f, operation_value: e.target.value }))}
+                    placeholder="Ex: 150000"
+                    className={inputCls}
+                    required
+                  />
+                </div>
+                <div>
+                  <label className={labelCls}>% Comissão</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="0.1"
+                    value={form.commission_percent}
+                    onChange={e => setForm(f => ({ ...f, commission_percent: e.target.value }))}
+                    className={inputCls}
+                  />
+                </div>
+              </div>
+              <div>
+                <label className={labelCls}>Data de Fechamento</label>
+                <input
+                  type="date"
+                  value={form.operation_closed_at}
+                  onChange={e => setForm(f => ({ ...f, operation_closed_at: e.target.value }))}
+                  className={inputCls}
+                />
+              </div>
+              <div>
+                <label className={labelCls}>Observações (opcional)</label>
+                <input
+                  value={form.notes}
+                  onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
+                  placeholder="Informações adicionais..."
+                  className={inputCls}
+                />
+              </div>
+              {erroModal && (
+                <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{erroModal}</p>
+              )}
+              {form.operation_value && !isNaN(Number(form.operation_value.replace(",", "."))) && Number(form.operation_value.replace(",", ".")) > 0 && (
+                <div className="bg-[#C9A84C]/10 border border-[#C9A84C]/30 rounded-lg px-3 py-2 text-xs text-[#C9A84C]">
+                  Comissão estimada:{" "}
+                  <strong>{formatMoeda(Number(form.operation_value.replace(",", ".")) * Number(form.commission_percent) / 100)}</strong>
+                </div>
+              )}
+              <button
+                type="submit"
+                disabled={criando}
+                className="w-full h-10 rounded-lg bg-[#C9A84C] hover:bg-[#E8C97A] text-[#09081A] text-sm font-bold transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
+              >
+                {criando && <Loader2 className="w-4 h-4 animate-spin" />}
+                {criando ? "Criando..." : "Criar Comissão"}
+              </button>
+            </form>
+          </div>
         </div>
       )}
     </div>

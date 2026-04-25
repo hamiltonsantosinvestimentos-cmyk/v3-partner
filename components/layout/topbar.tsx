@@ -4,7 +4,6 @@ import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  Bell,
   Menu,
   LogOut,
   User,
@@ -12,6 +11,7 @@ import {
   ChevronDown,
   Zap,
 } from "lucide-react";
+import { NotificationBell } from "@/components/dashboard/notification-bell";
 const IS_DEMO = false;
 import { abbreviateName } from "@/lib/utils";
 import {
@@ -42,8 +42,16 @@ const PAGE_LABELS: Record<string, string> = {
   "/ia-assistant": "V3 IA Partner",
   "/financeiro": "Financeiro",
   "/comissoes": "Comissões",
+  "/minhas-operacoes": "Minhas Operações",
   "/academy": "V3 Academy",
   "/usuarios": "Usuários",
+  "/minha-assinatura": "Minha Assinatura",
+  "/admin-dashboard": "Painel Administrativo",
+  "/configuracoes": "Configurações",
+  "/admin-cadastros": "Cadastros",
+  "/metas": "Metas & Performance",
+  "/compliance": "Compliance",
+  "/simulador-home-equity": "Simuladores",
 };
 
 interface TopbarProps {
@@ -140,14 +148,7 @@ export function Topbar({ user, onMenuClick, notificationCount = 0 }: TopbarProps
         </div>
 
         {/* Notification bell */}
-        <Link
-          href="/notificacoes"
-          className="relative p-1.5 rounded-lg hover:bg-white/[0.05] transition-colors group">
-          <Bell className="w-4 h-4 text-[#7A8FA8] group-hover:text-[#F0ECE4] transition-colors" />
-          {notificationCount > 0 && (
-            <span className="absolute top-1 right-1 w-1.5 h-1.5 bg-[#C9A84C] rounded-full shadow-[0_0_6px_rgba(201,168,76,0.6)]" />
-          )}
-        </Link>
+        <NotificationBell />
 
         {/* Divider */}
         <div className="w-px h-5 bg-white/[0.08] mx-0.5" />

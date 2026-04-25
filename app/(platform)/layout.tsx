@@ -18,7 +18,7 @@ export default async function PlatformLayout({
 
     let session: {
       id: string; email: string; full_name: string;
-      role: "ADMIN" | "PARTNER" | "MESA_OPERACIONAL" | "GESTAO" | "FINANCEIRO";
+      role: "ADMIN" | "PARTNER" | "PARTNER_PRO" | "MESA_OPERACIONAL" | "GESTAO" | "FINANCEIRO";
     };
 
     try {
@@ -44,41 +44,66 @@ export default async function PlatformLayout({
   }
 
   // ---- PRODUCTION MODE ----
-  const { createClient } = await import("@/lib/supabase/server");
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  try {
+    const { createClient } = await import("@/lib/supabase/server");
+    const supabase = await createClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
 
-  if (!user) redirect("/login");
+    if (authError || !user) redirect("/login");
 
-  const { data: profileData } = await supabase
-    .from("profiles").select("*").eq("id", user.id).single();
+    // Força troca de senha no primeiro acesso
+    if (user.app_metadata?.must_change_password) {
+      redirect("/auth/update-password?required=true");
+    }
 
-  if (!profileData) redirect("/login");
+    // Força assinatura do contrato de parceria
+    if (!user.app_metadata?.contract_signed) {
+      redirect("/contrato-parceria");
+    }
 
-  const profile = profileData as {
-    id: string; email: string; full_name: string | null;
-    role: "ADMIN" | "PARTNER" | "MESA_OPERACIONAL" | "GESTAO" | "FINANCEIRO";
-    avatar_url: string | null;
-  };
+    const { data: profileData, error: profileError } = await supabase
+      .from("profiles").select("*").eq("id", user.id).single();
 
-  const { count } = await supabase
-    .from("notifications")
-    .select("*", { count: "exact", head: true })
-    .eq("user_id", user.id)
-    .eq("read", false);
+    if (profileError || !profileData) redirect("/login");
 
-  return (
-    <PlatformShell
-      user={{
-        id: profile.id,
-        full_name: profile.full_name,
-        email: profile.email,
-        role: profile.role,
-        avatar_url: profile.avatar_url,
-      }}
-      notificationCount={count ?? 0}
-    >
-      {children}
-    </PlatformShell>
-  );
+    const profile = profileData as {
+      id: string; email: string; full_name: string | null;
+      role: "ADMIN" | "PARTNER" | "PARTNER_PRO" | "MESA_OPERACIONAL" | "GESTAO" | "FINANCEIRO";
+      avatar_url: string | null;
+    };
+
+    let notificationCount = 0;
+    try {
+      const { count } = await supabase
+        .from("notifications")
+        .select("*", { count: "exact", head: true })
+        .eq("user_id", user.id)
+        .eq("read", false);
+      notificationCount = count ?? 0;
+    } catch {
+      // silently ignore notification errors
+    }
+
+    return (
+      <PlatformShell
+        user={{
+          id: profile.id,
+          full_name: profile.full_name,
+          email: profile.email,
+          role: profile.role,
+          avatar_url: profile.avatar_url,
+        }}
+        notificationCount={notificationCount}
+      >
+        {children}
+      </PlatformShell>
+    );
+  } catch (err) {
+    // Re-throw redirect errors (used internally pelo Next.js)
+    const digest = (err as { digest?: string })?.digest;
+    if (digest?.startsWith("NEXT_REDIRECT") || digest?.startsWith("NEXT_NOT_FOUND")) {
+      throw err;
+    }
+    redirect("/login");
+  }
 }

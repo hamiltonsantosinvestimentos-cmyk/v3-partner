@@ -137,11 +137,16 @@ export async function POST(req: Request) {
   const svc = await createServiceClient();
   let blacklist_match = null;
 
-  const { data: blRows } = await svc
-    .from("kyc_blacklist")
-    .select("*")
-    .eq("active", true)
-    .or(`doc.eq.${cleanDoc},name.ilike.%${searchName}%`);
+  const { data: blByDoc } = await svc.from("kyc_blacklist").select("*").eq("active", true).eq("doc", cleanDoc);
+  const { data: blByName } = await svc.from("kyc_blacklist").select("*").eq("active", true).ilike("name", `%${searchName}%`);
+  const seen = new Set<string>();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const blRows = [...((blByDoc ?? []) as any[]), ...((blByName ?? []) as any[])].filter((r: Record<string, unknown>) => {
+    const id = r.id as string;
+    if (seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  });
 
   if (blRows && blRows.length > 0) {
     blacklist_match = blRows[0];

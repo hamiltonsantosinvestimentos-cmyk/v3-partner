@@ -6,7 +6,7 @@ import {
   FileText, CreditCard, Calendar, Link2, Pencil, Check,
   Percent, TrendingUp, BadgeDollarSign, Upload, Paperclip, Trash2, Home, ExternalLink,
   Package, Copy, CheckCheck, MessageSquare, Send, Search, AlertTriangle, ShieldCheck,
-  Phone, Mail, MapPin, Banknote,
+  Phone, Mail, MapPin, Banknote, Download, Loader2,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -81,6 +81,7 @@ export interface ProposalFull {
   code: string;
   title: string;
   client_name: string;
+  client_cpf_cnpj?: string | null;
   client_type?: string;
   cpf_cnpj?: string;
   email?: string;
@@ -98,6 +99,12 @@ export interface ProposalFull {
   docs_uploaded?: number;
   docs_required?: number;
   created_at: string;
+  level1_notes?: string | null;
+  level2_notes?: string | null;
+  level3_notes?: string | null;
+  level1_at?: string | null;
+  level2_at?: string | null;
+  level3_at?: string | null;
   // Campos de comissão (editáveis apenas por MESA_OPERACIONAL/ADMIN)
   valor_credito_atual?: number;
   comissao_mandato_perc?: number;
@@ -108,6 +115,7 @@ export interface ProposalFull {
   imovel_estado?: string;
   mesa_comments?: MesaComment[];
   metadata?: ProposalMeta;
+  instituicao_encaminhada?: string | null;
 }
 
 interface EscavadorProcesso {
@@ -146,9 +154,10 @@ interface PropostaDetailModalProps {
   canChangeStage?: boolean;
   canEditValorSolicitado?: boolean;
   canCompileDocuments?: boolean;
+  canEditInstituicao?: boolean;
 }
 
-export function PropostaDetailModal({ open, onClose, proposal, onStageChange, onProposalUpdate, canChangeStage, canEditValorSolicitado, canCompileDocuments }: PropostaDetailModalProps) {
+export function PropostaDetailModal({ open, onClose, proposal, onStageChange, onProposalUpdate, canChangeStage, canEditValorSolicitado, canCompileDocuments, canEditInstituicao }: PropostaDetailModalProps) {
   // ── Checklist state ───────────────────────────────────────────────────────
   const IS_DEMO = false;
   const [checkedDocs, setCheckedDocs] = useState<Record<string, boolean>>({});
@@ -160,11 +169,72 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
   const [compileDocs, setCompileDocs] = useState<CompiledDoc[]>([]);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
+  // Instituição encaminhada (apenas mesa/admin) — suporta múltiplas
+  const INSTITUICOES = [
+    "BTG Pactual","Itaú BBA","Bradesco BBI","Santander","Caixa Econômica Federal",
+    "Banco do Brasil","Daycoval","Mercantil do Brasil","Omni","Creditas",
+    "BV Financeira","Safra","ABC Brasil","Fibra","Outra",
+  ];
+  const [instituicoesList, setInstituicoesList] = useState<string[]>([]);
+  const [addingInst, setAddingInst] = useState<string>("");
+  const [addingInstCustom, setAddingInstCustom] = useState<string>("");
+  const [savingInstituicao, setSavingInstituicao] = useState(false);
+  const [instituicaoSaved, setInstituicaoSaved] = useState(false);
+  const [instituicaoError, setInstituicaoError] = useState<string | null>(null);
+
+  function handleAddInstituicao() {
+    const nome = addingInst === "Outra" ? addingInstCustom.trim() : addingInst;
+    if (!nome || instituicoesList.includes(nome)) return;
+    setInstituicoesList(prev => [...prev, nome]);
+    setAddingInst("");
+    setAddingInstCustom("");
+  }
+
+  async function handleSaveInstituicao() {
+    if (!proposal) return;
+    setSavingInstituicao(true);
+    setInstituicaoError(null);
+    try {
+      const valor = JSON.stringify(instituicoesList);
+      const res = await fetch("/api/credit-proposals", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: proposal.id, instituicao_encaminhada: valor }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        const msg = json?.error ?? `Erro ${res.status}`;
+        setInstituicaoError(typeof msg === "string" ? msg : JSON.stringify(msg));
+        return;
+      }
+      onProposalUpdate?.(proposal.id, { instituicao_encaminhada: valor });
+      setInstituicaoSaved(true);
+      setTimeout(() => setInstituicaoSaved(false), 2500);
+    } catch (err) {
+      setInstituicaoError(err instanceof Error ? err.message : "Erro desconhecido");
+    } finally {
+      setSavingInstituicao(false);
+    }
+  }
+
   useEffect(() => {
     if (!proposal) return;
     setCheckedDocs({});
     setUploadedFiles({});
     setUploadedUrls({});
+    const instRaw = proposal.instituicao_encaminhada ?? "";
+    let parsedInsts: string[] = [];
+    if (instRaw) {
+      try {
+        const arr = JSON.parse(instRaw);
+        parsedInsts = Array.isArray(arr) ? arr : [instRaw];
+      } catch {
+        parsedInsts = [instRaw];
+      }
+    }
+    setInstituicoesList(parsedInsts);
+    setAddingInst("");
+    setAddingInstCustom("");
     setMesaComments(Array.isArray(proposal.mesa_comments) ? proposal.mesa_comments : []);
     setNewComment("");
     if (IS_DEMO) {
@@ -329,6 +399,146 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
   const [editPrazo, setEditPrazo] = useState("");
   const [editFinalidade, setEditFinalidade] = useState("");
   const [editObservacoes, setEditObservacoes] = useState("");
+
+  // ── Contrato ──────────────────────────────────────────────────────────────
+  const [sendingContrato, setSendingContrato] = useState(false);
+  const [contratoStatus, setContratoStatus] = useState<"idle" | "sent" | "error">("idle");
+  const [contratoMsg, setContratoMsg] = useState("");
+  const [contratoInfo, setContratoInfo] = useState<{
+    status: string; token: string; signed_at?: string | null;
+    v3_signed_at?: string | null; v3_signer_name?: string | null;
+    contrato_url?: string | null;
+  } | null>(null);
+  const [reenviando, setReenviando] = useState(false);
+  const [cancelando, setCancelando] = useState(false);
+  const [contratoAcaoMsg, setContratoAcaoMsg] = useState("");
+
+  useEffect(() => {
+    if (!proposal?.id || !open) return;
+    fetch(`/api/contratos/status?proposal_id=${proposal.id}`)
+      .then(r => r.json())
+      .then(({ contrato }) => setContratoInfo(contrato ?? null))
+      .catch(() => {});
+  }, [proposal?.id, open]);
+
+  async function handleReenviarContrato() {
+    if (!proposal) return;
+    setReenviando(true);
+    setContratoAcaoMsg("");
+    try {
+      const res = await fetch("/api/contratos/reenviar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ proposal_id: proposal.id }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setContratoAcaoMsg(`Erro: ${json.error ?? "não foi possível reenviar"}`);
+      } else {
+        setContratoAcaoMsg(`✅ Link reenviado para ${json.reenviado_para ?? "o destinatário"}`);
+      }
+    } catch {
+      setContratoAcaoMsg("Erro de conexão. Tente novamente.");
+    } finally {
+      setReenviando(false);
+    }
+  }
+
+  async function handleCancelarContrato() {
+    if (!proposal) return;
+    if (!confirm("Cancelar este contrato? O link de assinatura deixará de funcionar.")) return;
+    setCancelando(true);
+    setContratoAcaoMsg("");
+    try {
+      const res = await fetch("/api/contratos/cancelar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ proposal_id: proposal.id }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setContratoAcaoMsg(`Erro: ${json.error ?? "não foi possível cancelar"}`);
+      } else {
+        setContratoAcaoMsg("Contrato cancelado.");
+        setContratoInfo(prev => prev ? { ...prev, status: "CANCELADO" } : prev);
+      }
+    } catch {
+      setContratoAcaoMsg("Erro de conexão. Tente novamente.");
+    } finally {
+      setCancelando(false);
+    }
+  }
+
+  async function handleEnviarContrato() {
+    if (!proposal) return;
+    setSendingContrato(true);
+    setContratoStatus("idle");
+    setContratoMsg("");
+    try {
+      const res = await fetch("/api/contratos/enviar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ proposal_id: proposal.id }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setContratoStatus("error");
+        setContratoMsg(json.error ?? "Erro ao enviar contrato.");
+      } else {
+        setContratoStatus("sent");
+        setContratoMsg(`Contrato enviado para ${proposal.email ?? "o cliente"}!`);
+      }
+    } catch {
+      setContratoStatus("error");
+      setContratoMsg("Erro de conexão. Tente novamente.");
+    } finally {
+      setSendingContrato(false);
+    }
+  }
+
+  // ── Valor Médio inline edit ───────────────────────────────────────────────
+  const [editingVmIdx, setEditingVmIdx] = useState<number | null>(null);
+  const [vmEditValue, setVmEditValue] = useState("");
+  const [vmSaving, setVmSaving] = useState(false);
+
+  function applyBRLMask(raw: string): string {
+    const digits = raw.replace(/\D/g, "");
+    if (!digits) return "";
+    return (parseInt(digits, 10) / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
+  function startEditVm(idx: number, current: number | undefined) {
+    setVmEditValue(current ? current.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "");
+    setEditingVmIdx(idx);
+  }
+
+  async function saveVm(idx: number) {
+    if (!proposal) return;
+    setVmSaving(true);
+    const parsed = parseFloat(vmEditValue.replace(/\./g, "").replace(",", ".")) || 0;
+    const meta = { ...(proposal.metadata ?? {}) };
+    const imoveis: ImovelMeta[] = Array.isArray(meta.imoveis) ? meta.imoveis.map((im: ImovelMeta, i: number) =>
+      i === idx ? { ...im, valor_medio: parsed || undefined } : im
+    ) : [];
+    meta.imoveis = imoveis;
+    try {
+      const res = await fetch("/api/credit-proposals", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: proposal.id, metadata: meta }),
+      });
+      if (res.ok) {
+        setEditingVmIdx(null);
+        onProposalUpdate?.(proposal.id, { metadata: meta as ProposalMeta });
+      } else {
+        alert("Erro ao salvar valor médio.");
+      }
+    } catch {
+      alert("Erro de conexão.");
+    } finally {
+      setVmSaving(false);
+    }
+  }
 
   function startEdit() {
     if (!proposal) return;
@@ -555,6 +765,232 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
   const currentStageIdx = PIPELINE_STAGES.findIndex((s) => s.key === (proposal.stage ?? "RECEBIDO"));
   const activeIdx = currentStageIdx >= 0 ? currentStageIdx : 0;
 
+  function handleExportPDF() {
+    if (!proposal) return;
+    const meta = proposal.metadata ?? {};
+    const clientType = (meta.client_type ?? meta.personType ?? proposal.client_type ?? "PF") as string;
+    const email     = (meta.email ?? proposal.email ?? "") as string;
+    const telefone  = (meta.telefone ?? meta.phone ?? proposal.telefone ?? "") as string;
+    const stageName = PIPELINE_STAGES.find(s => s.key === (proposal.stage ?? "RECEBIDO"))?.label ?? "Recebido";
+    const cpfCnpj   = proposal.client_cpf_cnpj ?? (meta.cpf ?? meta.cnpj ?? "") as string;
+
+    const fmt = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+    const fmtDate = (d: string) => d ? new Date(d).toLocaleDateString("pt-BR") : "-";
+    const fmtNum  = (v: unknown) => { const n = parseFloat(String(v ?? "").replace(/\D/g, "")); return isNaN(n) || n === 0 ? "" : fmt(n); };
+
+    const comments = (mesaComments.length > 0 ? mesaComments : (proposal.mesa_comments ?? []));
+
+    // Instituições encaminhadas (parse JSON ou string legada)
+    let instsList: string[] = [];
+    const instRaw = proposal.instituicao_encaminhada ?? "";
+    if (instRaw) {
+      try { const arr = JSON.parse(instRaw); instsList = Array.isArray(arr) ? arr : [instRaw]; }
+      catch { instsList = [instRaw]; }
+    }
+
+    const levelLabels: Record<string, string> = { NIVEL_1: "Nível 1 — Varejo", NIVEL_2: "Nível 2 — Estruturado", NIVEL_3: "Nível 3 — High Ticket" };
+    const statusLabels: Record<string, string> = { PENDING: "Pendente", IN_REVIEW: "Em Análise", APPROVED: "Aprovado", REJECTED: "Reprovado", COMPLETED: "Concluído", CANCELLED: "Cancelado" };
+
+    const html = `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<title>Proposta ${proposal.code}</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 12px; color: #1a1a2e; background: #fff; }
+  .header { background: linear-gradient(135deg, #09081A 0%, #111F35 100%); color: #F0ECE4; padding: 24px 32px; display: flex; justify-content: space-between; align-items: center; }
+  .header h1 { font-size: 20px; font-weight: 700; color: #C9A84C; }
+  .header .sub { font-size: 11px; color: #7A8FA8; margin-top: 2px; }
+  .header .code { font-size: 13px; font-weight: 600; color: #E8C97A; }
+  .badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 10px; font-weight: 700; background: #C9A84C20; color: #C9A84C; border: 1px solid #C9A84C40; margin-left: 8px; }
+  .content { padding: 24px 32px; }
+  .section { margin-bottom: 20px; }
+  .section-title { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em; color: #7A8FA8; border-bottom: 1px solid #e5e7eb; padding-bottom: 6px; margin-bottom: 12px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 24px; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px 16px; }
+  .field label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: #9ca3af; display: block; }
+  .field span { font-size: 12px; color: #1a1a2e; font-weight: 500; }
+  .highlight { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 12px 16px; }
+  .highlight label { color: #166534; }
+  .highlight span { color: #15803d; font-size: 16px; font-weight: 700; }
+  .pipeline { display: flex; align-items: center; gap: 0; margin: 8px 0; }
+  .stage-item { text-align: center; flex: 1; }
+  .stage-dot { width: 24px; height: 24px; border-radius: 50%; border: 2px solid #d1d5db; background: #f9fafb; margin: 0 auto 4px; display: flex; align-items: center; justify-content: center; font-size: 10px; }
+  .stage-dot.done { background: #10b981; border-color: #10b981; color: white; }
+  .stage-dot.active { background: #C9A84C20; border-color: #C9A84C; color: #C9A84C; font-weight: 700; }
+  .stage-label { font-size: 9px; color: #6b7280; }
+  .stage-label.active { color: #C9A84C; font-weight: 700; }
+  .stage-label.done { color: #10b981; }
+  .stage-line { flex: 1; height: 2px; background: #d1d5db; margin-bottom: 16px; }
+  .stage-line.done { background: #10b981; }
+  .comment { background: #f9fafb; border-left: 3px solid #C9A84C; padding: 8px 12px; margin-bottom: 8px; border-radius: 0 6px 6px 0; }
+  .comment .author { font-size: 10px; font-weight: 700; color: #374151; }
+  .comment .date { font-size: 9px; color: #9ca3af; margin-left: 6px; }
+  .comment .text { font-size: 11px; color: #4b5563; margin-top: 4px; }
+  .footer { margin-top: 32px; padding-top: 12px; border-top: 1px solid #e5e7eb; text-align: center; font-size: 9px; color: #9ca3af; }
+  @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+</style>
+</head>
+<body>
+<div class="header">
+  <div>
+    <div class="code">${proposal.code} <span class="badge">${stageName}</span></div>
+    <h1>${proposal.title}</h1>
+    <div class="sub">${proposal.credit_line} · Gerado em ${new Date().toLocaleDateString("pt-BR")} às ${new Date().toLocaleTimeString("pt-BR")}</div>
+  </div>
+  <div style="text-align:right">
+    <div style="font-size:11px;color:#7A8FA8;">V3 Partners</div>
+    <div style="font-size:10px;color:#C9A84C;">Plataforma Institucional</div>
+  </div>
+</div>
+<div class="content">
+
+  <!-- Pipeline -->
+  <div class="section">
+    <div class="section-title">Etapas da Proposta</div>
+    <div class="pipeline">
+      ${PIPELINE_STAGES.map((s, i) => {
+        const done = i < activeIdx;
+        const active = i === activeIdx;
+        const line = i < PIPELINE_STAGES.length - 1;
+        return `<div class="stage-item">
+          <div class="stage-dot ${done ? "done" : active ? "active" : ""}">${done ? "✓" : i + 1}</div>
+          <div class="stage-label ${done ? "done" : active ? "active" : ""}">${s.label}</div>
+        </div>${line ? `<div class="stage-line ${done ? "done" : ""}"></div>` : ""}`;
+      }).join("")}
+    </div>
+  </div>
+
+  <!-- Dados Financeiros -->
+  <div class="section">
+    <div class="section-title">Dados Financeiros</div>
+    <div class="grid-3">
+      <div class="field highlight">
+        <label>Valor Solicitado</label>
+        <span>${fmt(valorSolicitado)}</span>
+      </div>
+      <div class="field">
+        <label>Valor de Crédito</label>
+        <span>${fmt(valorCredito)}</span>
+      </div>
+      <div class="field">
+        <label>Linha de Crédito</label>
+        <span>${proposal.credit_line}</span>
+      </div>
+      ${proposal.prazo ? `<div class="field"><label>Prazo</label><span>${proposal.prazo}</span></div>` : ""}
+      ${proposal.finalidade ? `<div class="field"><label>Finalidade</label><span>${proposal.finalidade}</span></div>` : ""}
+      <div class="field"><label>Data de Criação</label><span>${fmtDate(proposal.created_at)}</span></div>
+    </div>
+  </div>
+
+  <!-- Cliente -->
+  <div class="section">
+    <div class="section-title">Dados do Cliente (${clientType})</div>
+    <div class="grid">
+      <div class="field"><label>Nome / Razão Social</label><span>${proposal.client_name}</span></div>
+      ${cpfCnpj ? `<div class="field"><label>${clientType === "PJ" ? "CNPJ" : "CPF"}</label><span>${cpfCnpj}</span></div>` : ""}
+      ${email ? `<div class="field"><label>E-mail</label><span>${email}</span></div>` : ""}
+      ${telefone ? `<div class="field"><label>Telefone</label><span>${telefone}</span></div>` : ""}
+      ${fmtNum(meta.renda_mensal ?? meta.renda) ? `<div class="field"><label>Renda Mensal</label><span>${fmtNum(meta.renda_mensal ?? meta.renda)}</span></div>` : ""}
+      ${fmtNum(meta.faturamento_mensal ?? meta.faturamento) ? `<div class="field"><label>Faturamento Mensal</label><span>${fmtNum(meta.faturamento_mensal ?? meta.faturamento)}</span></div>` : ""}
+      ${meta.cep ? `<div class="field"><label>CEP</label><span>${meta.cep}</span></div>` : ""}
+      ${meta.endereco ? `<div class="field"><label>Endereço</label><span>${meta.endereco}${meta.numero ? `, ${meta.numero}` : ""}${meta.complemento ? ` ${meta.complemento}` : ""}</span></div>` : ""}
+      ${meta.bairro ? `<div class="field"><label>Bairro</label><span>${meta.bairro}</span></div>` : ""}
+      ${(meta.cidade || meta.estado) ? `<div class="field"><label>Cidade / Estado</label><span>${[meta.cidade, meta.estado].filter(Boolean).join(" / ")}</span></div>` : ""}
+    </div>
+  </div>
+
+  ${(proposal.imovel_endereco || proposal.imovel_valor_medio) ? `
+  <!-- Imóvel -->
+  <div class="section">
+    <div class="section-title">Dados do Imóvel (Garantia)</div>
+    <div class="grid">
+      ${proposal.imovel_endereco ? `<div class="field"><label>Endereço</label><span>${proposal.imovel_endereco}</span></div>` : ""}
+      ${(proposal.imovel_cidade || proposal.imovel_estado) ? `<div class="field"><label>Cidade / Estado</label><span>${[proposal.imovel_cidade, proposal.imovel_estado].filter(Boolean).join(" / ")}</span></div>` : ""}
+      ${proposal.imovel_valor_medio ? `<div class="field"><label>Valor Estimado</label><span>${fmt(proposal.imovel_valor_medio)}</span></div>` : ""}
+    </div>
+  </div>` : ""}
+
+  ${(meta.observacoes || meta.notes) ? `
+  <!-- Observações -->
+  <div class="section">
+    <div class="section-title">Observações</div>
+    <p style="font-size:12px;color:#374151;line-height:1.6;">${meta.observacoes ?? meta.notes}</p>
+  </div>` : ""}
+
+  ${proposal.partner_name ? `
+  <!-- Parceiro -->
+  <div class="section">
+    <div class="section-title">Parceiro Responsável</div>
+    <div class="field"><label>Nome</label><span>${proposal.partner_name}</span></div>
+  </div>` : ""}
+
+  <!-- Status e Nível -->
+  <div class="section">
+    <div class="section-title">Status da Proposta</div>
+    <div class="grid-3">
+      <div class="field"><label>Status</label><span>${statusLabels[proposal.status] ?? proposal.status}</span></div>
+      <div class="field"><label>Nível</label><span>${levelLabels[proposal.current_level] ?? proposal.current_level}</span></div>
+      <div class="field"><label>Etapa</label><span>${stageName}</span></div>
+    </div>
+  </div>
+
+  ${(proposal.level1_notes || proposal.level2_notes || proposal.level3_notes) ? `
+  <!-- Notas por Nível -->
+  <div class="section">
+    <div class="section-title">Análise por Nível</div>
+    ${proposal.level1_notes ? `<div style="margin-bottom:8px;"><div style="font-size:9px;font-weight:700;text-transform:uppercase;color:#9ca3af;margin-bottom:4px;">Nível 1${proposal.level1_at ? ` — ${fmtDate(proposal.level1_at)}` : ""}</div><p style="font-size:12px;color:#374151;">${proposal.level1_notes}</p></div>` : ""}
+    ${proposal.level2_notes ? `<div style="margin-bottom:8px;"><div style="font-size:9px;font-weight:700;text-transform:uppercase;color:#9ca3af;margin-bottom:4px;">Nível 2${proposal.level2_at ? ` — ${fmtDate(proposal.level2_at)}` : ""}</div><p style="font-size:12px;color:#374151;">${proposal.level2_notes}</p></div>` : ""}
+    ${proposal.level3_notes ? `<div style="margin-bottom:8px;"><div style="font-size:9px;font-weight:700;text-transform:uppercase;color:#9ca3af;margin-bottom:4px;">Nível 3${proposal.level3_at ? ` — ${fmtDate(proposal.level3_at)}` : ""}</div><p style="font-size:12px;color:#374151;">${proposal.level3_notes}</p></div>` : ""}
+  </div>` : ""}
+
+  ${instsList.length > 0 ? `
+  <!-- Instituições Encaminhadas -->
+  <div class="section">
+    <div class="section-title">Instituições Encaminhadas</div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;">
+      ${instsList.map(i => `<span style="display:inline-block;padding:4px 12px;border-radius:20px;background:#C9A84C20;border:1px solid #C9A84C40;color:#C9A84C;font-size:11px;font-weight:700;">${i}</span>`).join("")}
+    </div>
+  </div>` : ""}
+
+  ${(percMandato > 0 || percInstituicao > 0) ? `
+  <!-- Comissões -->
+  <div class="section">
+    <div class="section-title">Estrutura de Comissões</div>
+    <div class="grid-3">
+      <div class="field"><label>Comissão Mandato</label><span>${percMandato.toFixed(2)}% — ${fmt(comissaoMandato)}</span></div>
+      <div class="field"><label>Comissão Instituição</label><span>${percInstituicao.toFixed(2)}% — ${fmt(comissaoInstituicao)}</span></div>
+      <div class="field"><label>Total Comissão</label><span>${fmt(totalComissao)}</span></div>
+    </div>
+  </div>` : ""}
+
+  ${comments.length > 0 ? `
+  <!-- Comentários Mesa -->
+  <div class="section">
+    <div class="section-title">Notas da Mesa de Crédito</div>
+    ${comments.map(c => `
+    <div class="comment">
+      <div><span class="author">${c.author}</span><span class="date">${fmtDate(c.created_at)}</span></div>
+      <div class="text">${c.text}</div>
+    </div>`).join("")}
+  </div>` : ""}
+
+</div>
+<div class="footer">
+  V3 Partners · CNPJ 14.219.287/0001-50 · v3partners.com.br · Documento gerado automaticamente pela plataforma institucional
+</div>
+<script>window.onload = () => window.print();</script>
+</body>
+</html>`;
+
+    const win = window.open("", "_blank", "width=900,height=700");
+    if (win) {
+      win.document.write(html);
+      win.document.close();
+    }
+  }
+
   function advance() {
     if (!proposal || activeIdx >= PIPELINE_STAGES.length - 1) return;
     onStageChange?.(proposal.id, PIPELINE_STAGES[activeIdx + 1].key);
@@ -577,9 +1013,18 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
             </div>
             <h2 className="text-base font-bold text-white">{proposal.title}</h2>
           </div>
-          <button onClick={onClose} className="w-8 h-8 rounded-lg hover:bg-secondary flex items-center justify-center text-muted-foreground hover:text-white transition-colors ml-4 flex-shrink-0">
-            <X className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-1.5 ml-4 flex-shrink-0">
+            <button
+              onClick={handleExportPDF}
+              title="Exportar PDF"
+              className="flex items-center gap-1.5 h-8 px-2.5 rounded-lg bg-[#C9A84C]/10 border border-[#C9A84C]/30 text-[#C9A84C] hover:bg-[#C9A84C]/20 transition-colors text-xs font-semibold">
+              <Download className="w-3.5 h-3.5" />
+              PDF
+            </button>
+            <button onClick={onClose} className="w-8 h-8 rounded-lg hover:bg-secondary flex items-center justify-center text-muted-foreground hover:text-white transition-colors">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
         {/* Body */}
@@ -773,6 +1218,78 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
                     {(meta.observacoes) && <InfoRow label="Observações" value={meta.observacoes as string} />}
                   </div>
                 </div>
+
+                {/* Instituições encaminhadas — apenas mesa/admin */}
+                {canEditInstituicao && (
+                  <div className="p-4 rounded-xl border border-[#C9A84C]/20 bg-[#C9A84C]/5 space-y-3">
+                    <p className="text-xs font-semibold text-[#C9A84C] uppercase tracking-wider flex items-center gap-1.5">
+                      <Building2 className="w-3.5 h-3.5" /> Instituições Encaminhadas
+                    </p>
+
+                    {/* Chips das instituições já adicionadas */}
+                    {instituicoesList.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {instituicoesList.map((inst, i) => (
+                          <span key={i} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#C9A84C]/15 border border-[#C9A84C]/30 text-[#C9A84C] text-xs font-semibold">
+                            <Building2 className="w-3 h-3 flex-shrink-0" />
+                            {inst}
+                            <button
+                              onClick={() => setInstituicoesList(prev => prev.filter((_, j) => j !== i))}
+                              className="ml-0.5 hover:text-red-400 transition-colors"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Adicionar nova instituição — selecionar já adiciona à lista */}
+                    <select
+                      value=""
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (!val || val === "Outra") { setAddingInst(val); return; }
+                        if (!instituicoesList.includes(val)) setInstituicoesList(prev => [...prev, val]);
+                        setAddingInst("");
+                      }}
+                      className="w-full h-8 px-3 text-xs bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-1 focus:ring-[#C9A84C]/50"
+                    >
+                      <option value="">+ Selecionar instituição...</option>
+                      {INSTITUICOES.map(i => <option key={i} value={i}>{i}</option>)}
+                    </select>
+                    {addingInst === "Outra" && (
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={addingInstCustom}
+                          onChange={(e) => setAddingInstCustom(e.target.value)}
+                          placeholder="Nome da instituição"
+                          className="flex-1 h-8 px-3 text-xs bg-secondary border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-[#C9A84C]/50"
+                        />
+                        <button
+                          onClick={handleAddInstituicao}
+                          disabled={!addingInstCustom.trim()}
+                          className="h-8 px-3 rounded-lg bg-[#C9A84C]/15 hover:bg-[#C9A84C]/25 border border-[#C9A84C]/30 text-[#C9A84C] text-xs font-bold disabled:opacity-50 transition-colors"
+                        >
+                          +
+                        </button>
+                      </div>
+                    )}
+
+                    <button
+                      onClick={handleSaveInstituicao}
+                      disabled={savingInstituicao || instituicoesList.length === 0}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#C9A84C]/15 hover:bg-[#C9A84C]/25 border border-[#C9A84C]/30 text-[#C9A84C] text-xs font-semibold disabled:opacity-50 transition-colors"
+                    >
+                      {savingInstituicao ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+                      {instituicaoSaved ? "Salvo!" : "Salvar"}
+                    </button>
+                    {instituicaoError && (
+                      <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{instituicaoError}</p>
+                    )}
+                  </div>
+                )}
               </div>
             );
           })()}
@@ -925,12 +1442,54 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
                           </span>
                         </div>
                       )}
-                      {im.valor_medio && (
-                        <div className="col-span-2 flex items-center justify-between pt-1.5 border-t border-amber-500/20">
-                          <span className="text-xs text-muted-foreground flex items-center gap-1"><Banknote className="w-3 h-3" /> Valor Médio de Avaliação</span>
-                          <span className="text-xs font-bold text-amber-300">{formatCurrency(im.valor_medio)}</span>
-                        </div>
-                      )}
+                      <div className="col-span-2 pt-1.5 border-t border-amber-500/20">
+                        {editingVmIdx === idx ? (
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-muted-foreground flex items-center gap-1 shrink-0"><Banknote className="w-3 h-3" /> Valor Médio</span>
+                            <div className="flex-1 flex items-center gap-1.5">
+                              <div className="relative flex-1">
+                                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">R$</span>
+                                <input
+                                  type="text" inputMode="numeric"
+                                  value={vmEditValue}
+                                  onChange={e => setVmEditValue(applyBRLMask(e.target.value))}
+                                  className="w-full h-7 pl-7 pr-2 text-xs bg-secondary border border-amber-500/50 rounded text-foreground focus:outline-none focus:ring-1 focus:ring-amber-500/50"
+                                  autoFocus
+                                />
+                              </div>
+                              <button
+                                onClick={() => saveVm(idx)}
+                                disabled={vmSaving}
+                                className="h-7 px-2 rounded bg-amber-500/20 border border-amber-500/40 text-amber-400 hover:bg-amber-500/30 transition-colors"
+                              >
+                                <Check className="w-3 h-3" />
+                              </button>
+                              <button
+                                onClick={() => setEditingVmIdx(null)}
+                                className="h-7 px-2 rounded border border-border text-muted-foreground hover:text-white transition-colors"
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs text-muted-foreground flex items-center gap-1"><Banknote className="w-3 h-3" /> Valor Médio de Avaliação</span>
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-xs font-bold text-amber-300">
+                                {im.valor_medio ? formatCurrency(im.valor_medio) : <span className="text-muted-foreground italic">não informado</span>}
+                              </span>
+                              <button
+                                onClick={() => startEditVm(idx, im.valor_medio)}
+                                className="p-0.5 rounded hover:bg-amber-500/15 text-muted-foreground hover:text-amber-400 transition-colors"
+                                title="Editar valor médio"
+                              >
+                                <Pencil className="w-3 h-3" />
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
                       {im.valor_medio && (
                         <div className="col-span-2 flex items-center justify-between text-xs">
                           <span className="text-muted-foreground">LTV estimado</span>
@@ -1297,13 +1856,103 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-border flex items-center justify-between gap-2 flex-wrap">
+        <div className="px-6 py-4 border-t border-border space-y-2">
+          {contratoStatus !== "idle" && (
+            <div className={`text-xs px-3 py-2 rounded-lg ${contratoStatus === "sent" ? "bg-emerald-500/15 text-emerald-400" : "bg-red-500/15 text-red-400"}`}>
+              {contratoMsg}
+            </div>
+          )}
+          {contratoInfo && (
+            <div className="space-y-2">
+              <div className={`flex items-center justify-between gap-2 px-3 py-2 rounded-lg text-xs ${
+                contratoInfo.status === "ASSINADO"               ? "bg-emerald-500/10 border border-emerald-500/30" :
+                contratoInfo.status === "AGUARDANDO_V3"          ? "bg-amber-500/10 border border-amber-500/30" :
+                contratoInfo.status === "AGUARDANDO_TESTEMUNHA"  ? "bg-purple-500/10 border border-purple-500/30" :
+                contratoInfo.status === "AGUARDANDO_TESTEMUNHA2" ? "bg-orange-500/10 border border-orange-500/30" :
+                contratoInfo.status === "CANCELADO"              ? "bg-red-500/10 border border-red-500/30" :
+                contratoInfo.status === "EXPIRADO"               ? "bg-gray-500/10 border border-gray-500/30" :
+                "bg-blue-500/10 border border-blue-500/30"
+              }`}>
+                <div className="flex items-center gap-2">
+                  <FileText className="w-3.5 h-3.5 text-muted-foreground" />
+                  <span className={
+                    contratoInfo.status === "ASSINADO"               ? "text-emerald-400 font-semibold" :
+                    contratoInfo.status === "AGUARDANDO_V3"          ? "text-amber-400 font-semibold" :
+                    contratoInfo.status === "AGUARDANDO_TESTEMUNHA"  ? "text-purple-400 font-semibold" :
+                    contratoInfo.status === "AGUARDANDO_TESTEMUNHA2" ? "text-orange-400 font-semibold" :
+                    contratoInfo.status === "CANCELADO"              ? "text-red-400 font-semibold" :
+                    contratoInfo.status === "EXPIRADO"               ? "text-gray-400 font-semibold" :
+                    "text-blue-400 font-semibold"
+                  }>
+                    {contratoInfo.status === "PENDENTE"               && "Contrato enviado — aguardando cliente"}
+                    {contratoInfo.status === "AGUARDANDO_V3"          && `✅ Cliente assinou — aguarda V3 (${contratoInfo.signed_at ? new Date(contratoInfo.signed_at).toLocaleDateString("pt-BR") : ""})`}
+                    {contratoInfo.status === "AGUARDANDO_TESTEMUNHA"  && "✅ V3 assinou — aguardando 1ª testemunha (parceiro)"}
+                    {contratoInfo.status === "AGUARDANDO_TESTEMUNHA2" && "✅ Parceiro assinou — aguardando 2ª testemunha (Aline)"}
+                    {contratoInfo.status === "ASSINADO"               && `✅ Contrato finalizado — ${contratoInfo.v3_signer_name ?? ""}`}
+                    {contratoInfo.status === "CANCELADO"              && "⛔ Contrato cancelado"}
+                    {contratoInfo.status === "EXPIRADO"               && "⌛ Contrato expirado — reenvie para reativar"}
+                  </span>
+                </div>
+                {contratoInfo.status === "ASSINADO" && contratoInfo.contrato_url ? (
+                  <a href={contratoInfo.contrato_url} target="_blank" rel="noopener noreferrer"
+                    className="text-[#C9A84C] hover:text-[#E8C97A] underline text-[10px] font-semibold">
+                    ⬇ Baixar Certificado
+                  </a>
+                ) : !["ASSINADO","CANCELADO"].includes(contratoInfo.status) ? (
+                  <a href={`/assinar/${contratoInfo.token}`} target="_blank" rel="noopener noreferrer"
+                    className="text-muted-foreground hover:text-white underline text-[10px]">
+                    Ver contrato
+                  </a>
+                ) : null}
+              </div>
+
+              {/* Ações operacionais */}
+              {!["ASSINADO","CANCELADO"].includes(contratoInfo.status) && (
+                <div className="flex items-center gap-2 flex-wrap">
+                  <button
+                    onClick={handleReenviarContrato}
+                    disabled={reenviando}
+                    className="text-[10px] px-2.5 py-1 rounded border border-[#C9A84C]/40 text-[#C9A84C] hover:bg-[#C9A84C]/10 disabled:opacity-50 transition-colors"
+                  >
+                    {reenviando ? "Reenviando…" : "↺ Reenviar link"}
+                  </button>
+                  <button
+                    onClick={handleCancelarContrato}
+                    disabled={cancelando}
+                    className="text-[10px] px-2.5 py-1 rounded border border-red-500/30 text-red-400 hover:bg-red-500/10 disabled:opacity-50 transition-colors"
+                  >
+                    {cancelando ? "Cancelando…" : "⛔ Cancelar contrato"}
+                  </button>
+                  {contratoAcaoMsg && (
+                    <span className="text-[10px] text-muted-foreground">{contratoAcaoMsg}</span>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+          <div className="flex items-center justify-between gap-2 flex-wrap">
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" onClick={onClose}>Fechar</Button>
             {canCompileDocuments && (
               <Button variant="outline" size="sm" onClick={compileDocuments} className="gap-1.5 border-primary/40 text-primary hover:bg-primary/10">
                 <Package className="w-3.5 h-3.5" />
                 Compilar Documentos
+              </Button>
+            )}
+            {canChangeStage && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleEnviarContrato}
+                disabled={sendingContrato}
+                className="gap-1.5 border-[#C9A84C]/40 text-[#C9A84C] hover:bg-[#C9A84C]/10"
+              >
+                {sendingContrato ? (
+                  <span className="w-3.5 h-3.5 rounded-full border-2 border-[#C9A84C] border-t-transparent animate-spin" />
+                ) : (
+                  <Send className="w-3.5 h-3.5" />
+                )}
+                Enviar Contrato
               </Button>
             )}
           </div>
@@ -1318,6 +1967,7 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
               <CheckCircle2 className="w-3 h-3 mr-1" /> Proposta Finalizada
             </Badge>
           )}
+          </div>
         </div>
       </div>
 

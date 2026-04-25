@@ -5,6 +5,7 @@ import {
   Headphones, Plus, ChevronRight, User, Building2,
   Banknote, Clock, CheckCircle2, AlertCircle, Link2,
   LayoutGrid, List, Search, X, FileText, ArrowRight, MessageSquare, Trash2,
+  ScrollText, RefreshCw, XCircle, Download,
 } from "lucide-react";
 import { ExportButton } from "@/components/financeiro/export-button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -40,6 +41,7 @@ interface ProposalCard {
   comissao_mandato_perc?: number;
   comissao_instituicao_perc?: number;
   metadata?: Record<string, unknown>;
+  instituicao_encaminhada?: string | null;
 }
 
 interface MesaOpClientProps {
@@ -133,7 +135,7 @@ function NovoTicketModal({ open, onClose, onSubmit }: {
 
 // ─── Main Component ────────────────────────────────────────────────────────
 export function MesaOpClient({ tickets: initialTickets, proposals: initialProposals, currentUser }: MesaOpClientProps) {
-  const [view, setView] = useState<"kanban" | "tickets">("kanban");
+  const [view, setView] = useState<"kanban" | "tickets" | "contratos">("kanban");
   const [tickets, setTickets] = useState<Ticket[]>(initialTickets);
   const [proposals, setProposals] = useState<ProposalCard[]>(initialProposals);
 
@@ -170,6 +172,7 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
             comissao_instituicao_perc: p.comissao_instituicao_perc as number | undefined,
             // Garante que metadata completo (com imoveis, endereço, cep, etc.) é passado
             metadata: meta ?? undefined,
+            instituicao_encaminhada: p.instituicao_encaminhada as string | null | undefined,
           };
         }));
       })
@@ -183,6 +186,81 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
 
   const canChangeStage = (currentUser?.role === "MESA_OPERACIONAL" || currentUser?.role === "ADMIN" || currentUser?.role === "GESTAO");
 
+  // ─── Painel de Contratos ─────────────────────────────────────────────────
+  type ContratoItem = {
+    id: string; token: string; status: string; proposal_code: string | null;
+    client_name: string; client_email: string; credit_line: string | null;
+    deal_value: number | null; commission_perc: number; expires_at: string;
+    created_at: string; signed_at: string | null; v3_signed_at: string | null;
+    v3_signer_name: string | null; testemunha_nome: string | null;
+    testemunha_signed_at: string | null; testemunha2_nome: string | null;
+    testemunha2_signed_at: string | null; contrato_url: string | null;
+  };
+  const [contratos, setContratos] = useState<ContratoItem[]>([]);
+  const [contratosLoading, setContratosLoading] = useState(false);
+  const [contratosSearch, setContratosSearch] = useState("");
+  const [contratosFiltroStatus, setContratosFiltroStatus] = useState("TODOS");
+  const [contratosAcao, setContratosAcao] = useState<Record<string, string>>({});
+
+  function fetchContratos() {
+    setContratosLoading(true);
+    fetch(`/api/contratos/list?status=${contratosFiltroStatus}&q=${encodeURIComponent(contratosSearch)}`)
+      .then(r => r.json())
+      .then(({ contratos: data }) => setContratos(data ?? []))
+      .catch(() => {})
+      .finally(() => setContratosLoading(false));
+  }
+
+  useEffect(() => {
+    if (view === "contratos") fetchContratos();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view, contratosFiltroStatus]);
+
+  async function handleContratosReenviar(id: string, proposalCode: string) {
+    setContratosAcao(prev => ({ ...prev, [id]: "reenviando" }));
+    try {
+      const res = await fetch("/api/contratos/reenviar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contrato_id: id }),
+      });
+      const json = await res.json();
+      setContratosAcao(prev => ({ ...prev, [id]: json.ok ? "reenviado" : "erro" }));
+      setTimeout(() => setContratosAcao(prev => { const n = { ...prev }; delete n[id]; return n; }), 3000);
+    } catch {
+      setContratosAcao(prev => ({ ...prev, [id]: "erro" }));
+    }
+  }
+
+  async function handleContratosCancelar(id: string) {
+    if (!confirm("Cancelar este contrato?")) return;
+    setContratosAcao(prev => ({ ...prev, [id]: "cancelando" }));
+    try {
+      const res = await fetch("/api/contratos/cancelar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contrato_id: id }),
+      });
+      const json = await res.json();
+      if (json.ok) {
+        setContratos(prev => prev.map(c => c.id === id ? { ...c, status: "CANCELADO" } : c));
+      }
+      setContratosAcao(prev => { const n = { ...prev }; delete n[id]; return n; });
+    } catch {
+      setContratosAcao(prev => { const n = { ...prev }; delete n[id]; return n; });
+    }
+  }
+
+  const CONTRATO_STATUS_CFG: Record<string, { label: string; color: string; bg: string }> = {
+    PENDENTE:               { label: "Aguardando Cliente",     color: "text-blue-400",    bg: "bg-blue-500/10" },
+    AGUARDANDO_V3:          { label: "Aguardando V3",          color: "text-amber-400",   bg: "bg-amber-500/10" },
+    AGUARDANDO_TESTEMUNHA:  { label: "Aguardando Parceiro",    color: "text-purple-400",  bg: "bg-purple-500/10" },
+    AGUARDANDO_TESTEMUNHA2: { label: "Aguardando Aline",       color: "text-orange-400",  bg: "bg-orange-500/10" },
+    ASSINADO:               { label: "Assinado",               color: "text-emerald-400", bg: "bg-emerald-500/10" },
+    CANCELADO:              { label: "Cancelado",              color: "text-red-400",     bg: "bg-red-500/10" },
+    EXPIRADO:               { label: "Expirado",               color: "text-gray-400",    bg: "bg-gray-500/10" },
+  };
+
   const openCount = tickets.filter((t) => ["PENDING", "IN_REVIEW"].includes(t.status)).length;
   const urgentCount = tickets.filter((t) => t.priority === "URGENT").length;
 
@@ -194,6 +272,11 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
     const matchStage = !selectedStage || p.stage === selectedStage;
     return matchSearch && matchStage;
   });
+
+  const handleProposalUpdate = useCallback((proposalId: string, updates: Partial<ProposalCard>) => {
+    setProposals(prev => prev.map(p => p.id === proposalId ? { ...p, ...updates } : p));
+    if (detailProposal?.id === proposalId) setDetailProposal(prev => prev ? { ...prev, ...updates } : prev);
+  }, [detailProposal]);
 
   const handleStageChange = useCallback((proposalId: string, newStage: string) => {
     setProposals((prev) => prev.map((p) => p.id === proposalId ? { ...p, stage: newStage } : p));
@@ -230,6 +313,10 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
             <button onClick={() => setView("tickets")}
               className={`px-3 py-1.5 text-xs font-medium flex items-center gap-1.5 transition-colors ${view === "tickets" ? "bg-[#C9A84C]/15 text-[#E8C97A]" : "text-muted-foreground hover:text-white hover:bg-secondary"}`}>
               <List className="w-3.5 h-3.5" /> Tickets
+            </button>
+            <button onClick={() => setView("contratos")}
+              className={`px-3 py-1.5 text-xs font-medium flex items-center gap-1.5 transition-colors ${view === "contratos" ? "bg-[#C9A84C]/15 text-[#E8C97A]" : "text-muted-foreground hover:text-white hover:bg-secondary"}`}>
+              <ScrollText className="w-3.5 h-3.5" /> Contratos
             </button>
           </div>
           <Button size="sm" onClick={() => setNovoTicket(true)}>
@@ -352,6 +439,20 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
                             <span className="text-[10px] text-primary font-semibold">{p.mesa_comments_count} msg</span>
                           </div>
                         )}
+                        {p.instituicao_encaminhada && (() => {
+                          let insts: string[] = [];
+                          try { const a = JSON.parse(p.instituicao_encaminhada); insts = Array.isArray(a) ? a : [p.instituicao_encaminhada]; }
+                          catch { insts = [p.instituicao_encaminhada]; }
+                          return insts.length > 0 ? (
+                            <div className="mt-1.5 flex flex-wrap gap-1">
+                              {insts.map((inst, i) => (
+                                <span key={i} className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-[#C9A84C]/15 border border-[#C9A84C]/30 text-[#C9A84C] text-[9px] font-semibold">
+                                  <Building2 className="w-2.5 h-2.5 flex-shrink-0" />{inst}
+                                </span>
+                              ))}
+                            </div>
+                          ) : null;
+                        })()}
                       </div>
                     ))}
 
@@ -444,6 +545,144 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
       )}
 
 
+      {/* ── VIEW: CONTRATOS ── */}
+      {view === "contratos" && (
+        <div className="space-y-4">
+          {/* Filtros */}
+          <div className="flex gap-2 flex-wrap items-center">
+            <div className="relative flex-1 min-w-52">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <input
+                value={contratosSearch}
+                onChange={(e) => setContratosSearch(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && fetchContratos()}
+                placeholder="Buscar por cliente, código, e-mail..."
+                className="w-full h-9 pl-9 pr-4 text-sm bg-secondary border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
+              />
+            </div>
+            <div className="flex gap-1 flex-wrap">
+              {["TODOS", "PENDENTE", "AGUARDANDO_V3", "AGUARDANDO_TESTEMUNHA", "AGUARDANDO_TESTEMUNHA2", "ASSINADO", "CANCELADO", "EXPIRADO"].map((s) => {
+                const cfg = CONTRATO_STATUS_CFG[s] ?? { label: "Todos", color: "text-white", bg: "bg-white/10" };
+                return (
+                  <button key={s} onClick={() => setContratosFiltroStatus(s)}
+                    className={`px-2.5 py-1 rounded-lg text-[10px] font-semibold transition-all border ${
+                      contratosFiltroStatus === s
+                        ? `${cfg.bg} ${cfg.color} border-current/30`
+                        : "border-border text-muted-foreground hover:bg-secondary"
+                    }`}>
+                    {s === "TODOS" ? "Todos" : cfg.label}
+                  </button>
+                );
+              })}
+            </div>
+            <button onClick={fetchContratos} className="p-2 rounded-lg border border-border text-muted-foreground hover:text-white hover:bg-secondary transition-colors">
+              <RefreshCw className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Tabela */}
+          <Card>
+            <CardContent className="p-0">
+              {contratosLoading ? (
+                <div className="py-16 text-center text-muted-foreground text-sm">Carregando contratos…</div>
+              ) : contratos.length === 0 ? (
+                <div className="py-16 text-center text-muted-foreground text-sm">Nenhum contrato encontrado.</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-border/50">
+                        {["Proposta", "Cliente", "Linha", "Status", "Assinaturas", "Expira", "Ações"].map((h) => (
+                          <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider whitespace-nowrap">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {contratos.map((c) => {
+                        const cfg = CONTRATO_STATUS_CFG[c.status] ?? CONTRATO_STATUS_CFG["EXPIRADO"];
+                        const acao = contratosAcao[c.id];
+                        const podeAgir = !["ASSINADO", "CANCELADO"].includes(c.status);
+                        const fmt = (iso: string | null) => iso ? new Date(iso).toLocaleDateString("pt-BR") : "—";
+                        const signatarios = [
+                          c.signed_at            && "Cliente",
+                          c.v3_signed_at         && "V3",
+                          c.testemunha_signed_at  && "Parceiro",
+                          c.testemunha2_signed_at && "Aline",
+                        ].filter(Boolean);
+
+                        return (
+                          <tr key={c.id} className="border-b border-border/30 hover:bg-secondary/30 transition-colors">
+                            <td className="px-4 py-3 font-mono text-xs text-[#C9A84C] whitespace-nowrap">{c.proposal_code ?? "—"}</td>
+                            <td className="px-4 py-3 max-w-[160px]">
+                              <p className="font-medium text-foreground truncate text-xs">{c.client_name}</p>
+                              <p className="text-[10px] text-muted-foreground truncate">{c.client_email}</p>
+                            </td>
+                            <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">{c.credit_line ?? "—"}</td>
+                            <td className="px-4 py-3">
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold ${cfg.bg} ${cfg.color} border border-current/20`}>
+                                {cfg.label}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3">
+                              <div className="flex gap-1 flex-wrap">
+                                {signatarios.length === 0 ? (
+                                  <span className="text-[10px] text-muted-foreground">Nenhuma</span>
+                                ) : signatarios.map((s) => (
+                                  <span key={s} className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">{s}</span>
+                                ))}
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">{fmt(c.expires_at)}</td>
+                            <td className="px-4 py-3">
+                              <div className="flex items-center gap-2">
+                                {c.status === "ASSINADO" && c.contrato_url && (
+                                  <a href={c.contrato_url} target="_blank" rel="noopener noreferrer"
+                                    className="p-1.5 rounded border border-[#C9A84C]/30 text-[#C9A84C] hover:bg-[#C9A84C]/10 transition-colors" title="Baixar certificado">
+                                    <Download className="w-3.5 h-3.5" />
+                                  </a>
+                                )}
+                                {podeAgir && (
+                                  <>
+                                    <button
+                                      onClick={() => handleContratosReenviar(c.id, c.proposal_code ?? "")}
+                                      disabled={!!acao}
+                                      className="p-1.5 rounded border border-border text-muted-foreground hover:text-[#C9A84C] hover:border-[#C9A84C]/40 disabled:opacity-40 transition-colors"
+                                      title="Reenviar link"
+                                    >
+                                      {acao === "reenviando" ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                                    </button>
+                                    <button
+                                      onClick={() => handleContratosCancelar(c.id)}
+                                      disabled={!!acao}
+                                      className="p-1.5 rounded border border-border text-muted-foreground hover:text-red-400 hover:border-red-500/30 disabled:opacity-40 transition-colors"
+                                      title="Cancelar contrato"
+                                    >
+                                      <XCircle className="w-3.5 h-3.5" />
+                                    </button>
+                                  </>
+                                )}
+                                {acao === "reenviado" && <span className="text-[9px] text-emerald-400">✅ Enviado</span>}
+                                {acao === "erro"      && <span className="text-[9px] text-red-400">Erro</span>}
+                                {!c.status.includes("ASSINADO") && (
+                                  <a href={`/assinar/${c.token}`} target="_blank" rel="noopener noreferrer"
+                                    className="text-[10px] text-muted-foreground hover:text-white underline" title="Ver contrato">
+                                    Ver
+                                  </a>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
       {/* Modais */}
       <NovoTicketModal open={novoTicket} onClose={() => setNovoTicket(false)}
         onSubmit={async (t) => {
@@ -465,9 +704,11 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
         onClose={() => setDetailProposal(null)}
         proposal={detailProposal as ProposalFull | null}
         onStageChange={handleStageChange}
+        onProposalUpdate={handleProposalUpdate as (id: string, updates: Partial<ProposalFull>) => void}
         canChangeStage={canChangeStage}
         canEditValorSolicitado={canChangeStage}
         canCompileDocuments={canChangeStage}
+        canEditInstituicao={canChangeStage}
       />
     </div>
   );

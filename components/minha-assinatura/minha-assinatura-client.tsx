@@ -1,0 +1,269 @@
+"use client";
+
+import { useState } from "react";
+import { CheckCircle2, Clock, AlertCircle, FileText, Wallet, TrendingUp, Crown, Shield, RefreshCw, ArrowUpCircle, Loader2 } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+
+interface Profile {
+  id: string;
+  full_name: string | null;
+  role: string;
+  email: string;
+  created_at: string;
+  trial_expires_at: string | null;
+  is_active: boolean;
+}
+
+interface Contract {
+  plano: string;
+  valor_mensal: string | null;
+  accepted_at: string;
+  contract_version: string;
+  email: string;
+  nome_representante: string | null;
+}
+
+interface Commission {
+  commission_value: number;
+  status: string;
+  created_at: string;
+}
+
+interface Props {
+  profile: Profile;
+  contract: Contract | null;
+  commissions: Commission[];
+}
+
+const moeda = (v: number) =>
+  new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
+
+const dataFmt = (d: string) =>
+  new Date(d).toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" });
+
+function getTrialStatus(profile: Profile) {
+  const now = Date.now();
+  const expires = profile.trial_expires_at
+    ? new Date(profile.trial_expires_at).getTime()
+    : new Date(profile.created_at).getTime() + 30 * 86400000;
+  const daysLeft = Math.max(Math.floor((expires - now) / 86400000), 0);
+
+  if (!profile.is_active) return { label: "Inativa", color: "text-red-400", bg: "bg-red-500/20", icon: <AlertCircle className="w-4 h-4" />, daysLeft: 0 };
+  if (daysLeft === 0) return { label: "Expirada", color: "text-red-400", bg: "bg-red-500/20", icon: <AlertCircle className="w-4 h-4" />, daysLeft: 0 };
+  if (daysLeft <= 7) return { label: `Vence em ${daysLeft}d`, color: "text-amber-400", bg: "bg-amber-500/20", icon: <Clock className="w-4 h-4" />, daysLeft };
+  return { label: "Ativa", color: "text-emerald-400", bg: "bg-emerald-500/20", icon: <CheckCircle2 className="w-4 h-4" />, daysLeft };
+}
+
+export function MinhaAssinaturaClient({ profile, contract, commissions }: Props) {
+  const planoLabel = profile.role === "PARTNER_PRO" ? "Partner PRO" : "Partner";
+  const valorMensal = profile.role === "PARTNER_PRO" ? "R$ 397,00" : "R$ 197,00";
+  const comissaoPct = profile.role === "PARTNER_PRO" ? "50%" : "30%";
+  const trialStatus = getTrialStatus(profile);
+
+  const [renovacaoStatus, setRenovacaoStatus] = useState<"idle" | "loading" | "ok" | "err">("idle");
+  const [upgradeStatus, setUpgradeStatus]     = useState<"idle" | "loading" | "ok" | "err">("idle");
+
+  const totalRecebido = commissions.filter(c => c.status === "PAGA").reduce((s, c) => s + c.commission_value, 0);
+  const totalPendente = commissions.filter(c => c.status === "A_PAGAR").reduce((s, c) => s + c.commission_value, 0);
+  const totalGeral = totalRecebido + totalPendente;
+
+  const expiresDate = profile.trial_expires_at
+    ? new Date(profile.trial_expires_at)
+    : new Date(new Date(profile.created_at).getTime() + 30 * 86400000);
+
+  const showRenovar = trialStatus.daysLeft <= 15 || trialStatus.daysLeft === 0;
+
+  async function handleRenovar() {
+    setRenovacaoStatus("loading");
+    try {
+      const res = await fetch("/api/assinatura/solicitar-renovacao", { method: "POST" });
+      setRenovacaoStatus(res.ok ? "ok" : "err");
+    } catch {
+      setRenovacaoStatus("err");
+    }
+  }
+
+  async function handleUpgrade() {
+    setUpgradeStatus("loading");
+    try {
+      const res = await fetch("/api/assinatura/solicitar-upgrade", { method: "POST" });
+      setUpgradeStatus(res.ok ? "ok" : "err");
+    } catch {
+      setUpgradeStatus("err");
+    }
+  }
+
+  return (
+    <div className="space-y-6 animate-fade-in">
+      {/* Header */}
+      <div>
+        <h1 className="text-2xl font-bold text-white">Minha Assinatura</h1>
+        <p className="text-sm text-muted-foreground mt-1">Detalhes do seu plano e histórico financeiro</p>
+      </div>
+
+      {/* Plano atual */}
+      <div className="bg-[#111F35] border border-[#243A66] rounded-2xl p-6"
+        style={{ boxShadow: "0 0 0 1px rgba(201,168,76,0.08), 0 8px 32px rgba(0,0,0,0.3)" }}>
+        <div className="flex items-start justify-between flex-wrap gap-4">
+          <div className="flex items-center gap-4">
+            <div className={`w-14 h-14 rounded-xl flex items-center justify-center ${profile.role === "PARTNER_PRO" ? "bg-[#C9A84C]/20" : "bg-blue-500/20"}`}>
+              {profile.role === "PARTNER_PRO"
+                ? <Crown className="w-7 h-7 text-[#C9A84C]" />
+                : <Shield className="w-7 h-7 text-blue-400" />}
+            </div>
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <h2 className="text-xl font-bold text-[#F0ECE4]">V3 {planoLabel}</h2>
+                <span className={`flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full ${trialStatus.bg} ${trialStatus.color}`}>
+                  {trialStatus.icon} {trialStatus.label}
+                </span>
+              </div>
+              <p className="text-sm text-[#7A8FA8]">{valorMensal}/mês · {comissaoPct} de comissão</p>
+            </div>
+          </div>
+          <div className="text-right">
+            <p className="text-xs text-[#7A8FA8]">Acesso até</p>
+            <p className="text-sm font-bold text-[#F0ECE4]">{dataFmt(expiresDate.toISOString())}</p>
+          </div>
+        </div>
+
+        {/* Detalhes do plano */}
+        <div className="mt-5 grid grid-cols-2 md:grid-cols-4 gap-3 pt-5 border-t border-[#243A66]">
+          {[
+            { label: "Plano", value: planoLabel },
+            { label: "Mensalidade", value: valorMensal },
+            { label: "Comissão", value: comissaoPct },
+            { label: "Membro desde", value: new Date(profile.created_at).toLocaleDateString("pt-BR") },
+          ].map(item => (
+            <div key={item.label}>
+              <p className="text-[10px] text-[#7A8FA8] uppercase tracking-wide">{item.label}</p>
+              <p className="text-sm font-semibold text-[#F0ECE4] mt-0.5">{item.value}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* Ações */}
+        <div className="mt-5 pt-5 border-t border-[#243A66] flex flex-wrap gap-3">
+          {/* Botão renovar — aparece quando faltam ≤ 15 dias */}
+          {showRenovar && (
+            <button
+              onClick={handleRenovar}
+              disabled={renovacaoStatus === "loading" || renovacaoStatus === "ok"}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold bg-amber-500/15 border border-amber-500/30 text-amber-400 hover:bg-amber-500/25 transition-all disabled:opacity-60"
+            >
+              {renovacaoStatus === "loading"
+                ? <Loader2 className="w-4 h-4 animate-spin" />
+                : <RefreshCw className="w-4 h-4" />}
+              {renovacaoStatus === "ok" ? "Solicitação enviada!" : renovacaoStatus === "err" ? "Erro — tente novamente" : "Solicitar Renovação"}
+            </button>
+          )}
+
+          {/* Botão upgrade — apenas para PARTNER (não PRO) */}
+          {profile.role === "PARTNER" && (
+            <button
+              onClick={handleUpgrade}
+              disabled={upgradeStatus === "loading" || upgradeStatus === "ok"}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold bg-[#C9A84C]/15 border border-[#C9A84C]/30 text-[#C9A84C] hover:bg-[#C9A84C]/25 transition-all disabled:opacity-60"
+            >
+              {upgradeStatus === "loading"
+                ? <Loader2 className="w-4 h-4 animate-spin" />
+                : <ArrowUpCircle className="w-4 h-4" />}
+              {upgradeStatus === "ok" ? "Solicitação enviada!" : upgradeStatus === "err" ? "Erro — tente novamente" : "Fazer Upgrade para PRO"}
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* KPIs financeiros */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {[
+          { label: "Comissões Recebidas", value: totalRecebido, icon: <CheckCircle2 className="w-4 h-4 text-emerald-400" />, bg: "bg-emerald-500/20", color: "text-emerald-400" },
+          { label: "Comissões Pendentes", value: totalPendente, icon: <Clock className="w-4 h-4 text-amber-400" />,          bg: "bg-amber-500/20",  color: "text-amber-400" },
+          { label: "Total Gerado",         value: totalGeral,    icon: <TrendingUp className="w-4 h-4 text-[#C9A84C]" />,    bg: "bg-[#C9A84C]/20",  color: "text-[#C9A84C]" },
+        ].map(kpi => (
+          <div key={kpi.label} className="kpi-card">
+            <div className={`w-9 h-9 rounded-xl ${kpi.bg} flex items-center justify-center mb-3`}>{kpi.icon}</div>
+            <p className={`text-xl font-bold ${kpi.color}`}>{moeda(kpi.value)}</p>
+            <p className="text-sm font-medium text-foreground mt-0.5">{kpi.label}</p>
+            <p className="text-xs text-muted-foreground">{commissions.filter(c => kpi.label.includes("Recebida") ? c.status === "PAGA" : kpi.label.includes("Pendente") ? c.status === "A_PAGAR" : true).length} operações</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Contrato assinado */}
+      {contract && (
+        <Card>
+          <CardContent className="p-5">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-9 h-9 rounded-lg bg-[#C9A84C]/15 flex items-center justify-center">
+                <FileText className="w-4 h-4 text-[#C9A84C]" />
+              </div>
+              <div>
+                <p className="text-sm font-bold text-[#F0ECE4]">Contrato de Parceria Assinado</p>
+                <p className="text-xs text-[#7A8FA8]">Versão {contract.contract_version} · Aceite eletrônico</p>
+              </div>
+              <div className="ml-auto flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/25">
+                <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                <span className="text-[10px] font-semibold text-emerald-400">Assinado</span>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-xs">
+              {[
+                { label: "Plano", value: contract.plano },
+                { label: "Valor mensal", value: contract.valor_mensal ?? valorMensal },
+                { label: "Data de assinatura", value: dataFmt(contract.accepted_at) },
+                { label: "Signatário", value: contract.nome_representante ?? profile.full_name ?? "—" },
+                { label: "E-mail", value: contract.email },
+              ].map(f => (
+                <div key={f.label} className="bg-[#09081A] rounded-lg p-3">
+                  <p className="text-[10px] text-[#7A8FA8] uppercase tracking-wide mb-1">{f.label}</p>
+                  <p className="font-semibold text-[#F0ECE4] truncate">{f.value}</p>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Histórico de comissões */}
+      {commissions.length > 0 && (
+        <Card>
+          <CardContent className="p-0">
+            <div className="px-5 py-4 border-b border-border/40 flex items-center gap-2">
+              <Wallet className="w-4 h-4 text-[#C9A84C]" />
+              <span className="text-sm font-bold text-[#F0ECE4]">Histórico de Comissões</span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-border/30">
+                    {["Data", "Valor", "Status"].map(h => (
+                      <th key={h} className="text-left px-5 py-2.5 text-muted-foreground font-semibold uppercase tracking-wide text-[10px]">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {commissions.slice(0, 10).map((c, i) => (
+                    <tr key={i} className="border-b border-border/20 hover:bg-secondary/20">
+                      <td className="px-5 py-2.5 text-muted-foreground">{new Date(c.created_at).toLocaleDateString("pt-BR")}</td>
+                      <td className="px-5 py-2.5 font-semibold text-[#F0ECE4]">{moeda(c.commission_value)}</td>
+                      <td className="px-5 py-2.5">
+                        <span className={`text-[10px] font-semibold border px-2 py-0.5 rounded-full ${
+                          c.status === "PAGA" ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
+                            : c.status === "A_PAGAR" ? "bg-amber-500/20 text-amber-400 border-amber-500/30"
+                            : "bg-gray-500/20 text-gray-400 border-gray-500/30"
+                        }`}>
+                          {c.status === "PAGA" ? "Recebida" : c.status === "A_PAGAR" ? "A Receber" : "Cancelada"}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}

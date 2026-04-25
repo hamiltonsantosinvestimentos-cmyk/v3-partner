@@ -427,6 +427,7 @@ function defaultImovel(): ImovelItem {
 }
 
 interface UploadedFile {
+  fileKey: string;
   docId: string;
   name: string;
   size: number;
@@ -481,10 +482,14 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
   // Documentos
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
 
+  // CEP loading
+  const [cepLoading, setCepLoading] = useState(false);
+  const [cepLoadingIdx, setCepLoadingIdx] = useState<number | null>(null);
+
   const lines = LEVEL_LINES[level] ?? [];
   const checklist = (CHECKLISTS[creditLine]?.[clientType]) ?? DEFAULT_CHECKLIST[clientType];
 
-  const uploadedIds = uploadedFiles.filter((f) => f.status === "done").map((f) => f.docId);
+  const uploadedIds = [...new Set(uploadedFiles.filter((f) => f.status === "done").map((f) => f.docId))];
   const requiredDocs = checklist.filter((d) => d.required);
   const completedRequired = requiredDocs.filter((d) => uploadedIds.includes(d.id)).length;
 
@@ -493,18 +498,75 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
   }
 
   function simulateUpload(docId: string, fileName: string) {
-    const fake: UploadedFile = { docId, name: fileName, size: Math.floor(Math.random() * 900 + 100), status: "uploading" };
-    setUploadedFiles((prev) => [...prev.filter((f) => f.docId !== docId), fake]);
+    const fileKey = `${docId}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    const fake: UploadedFile = { fileKey, docId, name: fileName, size: Math.floor(Math.random() * 900 + 100), status: "uploading" };
+    setUploadedFiles((prev) => [...prev, fake]);
     setTimeout(() => {
       setUploadedFiles((prev) =>
-        prev.map((f) => f.docId === docId ? { ...f, status: "done" } : f)
+        prev.map((f) => f.fileKey === fileKey ? { ...f, status: "done" } : f)
       );
     }, 1200);
   }
 
+  function removeFile(fileKey: string) {
+    setUploadedFiles((prev) => prev.filter((f) => f.fileKey !== fileKey));
+  }
+
+  async function buscarCep(cep: string) {
+    const digits = cep.replace(/\D/g, "");
+    if (digits.length !== 8) return null;
+    try {
+      const res = await fetch(`https://viacep.com.br/ws/${digits}/json/`);
+      if (!res.ok) return null;
+      const data = await res.json();
+      return data.erro ? null : data as { logradouro: string; bairro: string; localidade: string; uf: string };
+    } catch { return null; }
+  }
+
+  function maskCep(v: string) {
+    const d = v.replace(/\D/g, "").slice(0, 8);
+    return d.length > 5 ? `${d.slice(0, 5)}-${d.slice(5)}` : d;
+  }
+
+  async function handleEnderecoCepChange(value: string) {
+    const masked = maskCep(value);
+    setEnderecoCep(masked);
+    if (value.replace(/\D/g, "").length === 8) {
+      setCepLoading(true);
+      const addr = await buscarCep(value);
+      setCepLoading(false);
+      if (addr) {
+        setEnderecoRua(addr.logradouro ? `${addr.logradouro}${addr.bairro ? `, ${addr.bairro}` : ""}` : "");
+        setEnderecoCity(addr.localidade ?? "");
+        setEnderecoUf(addr.uf ?? "");
+      }
+    }
+  }
+
+  async function handleImovelCepChange(idx: number, value: string) {
+    const masked = maskCep(value);
+    updateImovel(idx, "cep", masked);
+    if (value.replace(/\D/g, "").length === 8) {
+      setCepLoadingIdx(idx);
+      const addr = await buscarCep(value);
+      setCepLoadingIdx(null);
+      if (addr) {
+        setImoveis(prev => prev.map((im, i) => i !== idx ? im : {
+          ...im,
+          cep: masked,
+          endereco: addr.logradouro ? `${addr.logradouro}${addr.bairro ? `, ${addr.bairro}` : ""}` : im.endereco,
+          cidade: addr.localidade ?? im.cidade,
+          estado: addr.uf ?? im.estado,
+        }));
+      }
+    }
+  }
+
   function handleFileChange(docId: string, e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (file) simulateUpload(docId, file.name);
+    const files = e.target.files;
+    if (files) {
+      Array.from(files).forEach((file) => simulateUpload(docId, file.name));
+    }
     e.target.value = "";
   }
 
@@ -516,7 +578,7 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
     const imoveisData = imoveis.map(im => ({
       endereco: im.endereco || undefined,
       cep: im.cep || undefined,
-      valor_medio: parseFloat(im.valorMedio.replace(/\D/g, "")) || undefined,
+      valor_medio: parseBRL(im.valorMedio) || undefined,
       cidade: im.cidade || undefined,
       estado: im.estado || undefined,
       zona: im.zona || undefined,
@@ -538,12 +600,12 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
       rg: rg || undefined,
       nascimento: nascimento || undefined,
       estado_civil: estadoCivil || undefined,
-      renda_mensal: renda ? parseFloat(renda.replace(/\D/g, "")) || undefined : undefined,
+      renda_mensal: renda ? parseBRL(renda) || undefined : undefined,
       // Dados PJ
       razao_social: razaoSocial || undefined,
       nome_fantasia: nomeFantasia || undefined,
       socio_responsavel: socioResponsavel || undefined,
-      faturamento_mensal: faturamento ? parseFloat(faturamento.replace(/\D/g, "")) || undefined : undefined,
+      faturamento_mensal: faturamento ? parseBRL(faturamento) || undefined : undefined,
       // Endereço
       endereco_rua: enderecoRua || undefined,
       endereco_cidade: enderecoCity || undefined,
@@ -560,7 +622,7 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
       email,
       telefone,
       credit_line: creditLine,
-      requested_value: parseFloat(valorSolicitado.replace(/\D/g, "")) || 0,
+      requested_value: parseBRL(valorSolicitado),
       approved_value: null,
       prazo,
       finalidade,
@@ -588,10 +650,21 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
 
   function handleClose() {
     setSubmitted(false);
+    setSaving(false);
+    setSaveError(null);
     setTab("cliente");
+    setClientType("PF");
+    // Dados PF
     setNome(""); setCpfCnpj(""); setEmail(""); setTelefone("");
+    setRg(""); setNascimento(""); setEstadoCivil(""); setRenda("");
+    // Dados PJ
+    setRazaoSocial(""); setNomeFantasia(""); setSocioResponsavel(""); setFaturamento("");
+    // Endereço
+    setEnderecoRua(""); setEnderecoCity(""); setEnderecoUf(""); setEnderecoCep("");
+    // Operação
+    setCreditLine(LEVEL_LINES[level]?.[0] ?? "");
     setValorSolicitado(""); setPrazo(""); setFinalidade("");
-    setRestricao(""); setEnderecoCep("");
+    setRestricao(""); setObservacoes("");
     setImoveis([defaultImovel()]);
     setUploadedFiles([]);
     onClose();
@@ -700,17 +773,19 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
                     <Field label="E-mail *" value={email} onChange={setEmail} placeholder="joao@email.com" type="email" />
                     <Field label="Telefone *" value={telefone} onChange={setTelefone} placeholder="(11) 99999-0000" />
                   </div>
-                  <div className="grid grid-cols-3 gap-3">
+                  <div className="grid grid-cols-2 gap-3">
                     <SelectField label="Estado Civil" value={estadoCivil} onChange={setEstadoCivil}
                       options={["Solteiro(a)", "Casado(a)", "Divorciado(a)", "Viúvo(a)", "União Estável"]} />
-                    <Field label="Renda Mensal (R$) *" value={renda} onChange={setRenda} placeholder="0,00" />
+                    <CurrencyField label="Renda Mensal (R$) *" value={renda} onChange={setRenda} />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <CepField label="CEP" value={enderecoCep} onChange={handleEnderecoCepChange} loading={cepLoading} />
                     <Field label="UF" value={enderecoUf} onChange={setEnderecoUf} placeholder="SP" />
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <Field label="Endereço" value={enderecoRua} onChange={setEnderecoRua} placeholder="Rua, número, bairro" />
-                    <Field label="CEP" value={enderecoCep} onChange={setEnderecoCep} placeholder="00000-000" />
+                    <Field label="Cidade" value={enderecoCity} onChange={setEnderecoCity} placeholder="São Paulo" />
                   </div>
-                  <Field label="Cidade" value={enderecoCity} onChange={setEnderecoCity} placeholder="São Paulo" />
                   <div>
                     <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Restrição cadastral / financeira *</label>
                     <div className="flex gap-2">
@@ -748,15 +823,15 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
                     <Field label="E-mail *" value={email} onChange={setEmail} placeholder="contato@empresa.com" type="email" />
                     <Field label="Telefone *" value={telefone} onChange={setTelefone} placeholder="(11) 3000-0000" />
                   </div>
+                  <CurrencyField label="Faturamento Anual (R$) *" value={faturamento} onChange={setFaturamento} />
                   <div className="grid grid-cols-2 gap-3">
-                    <Field label="Faturamento Anual (R$) *" value={faturamento} onChange={setFaturamento} placeholder="0,00" />
+                    <CepField label="CEP da Empresa" value={enderecoCep} onChange={handleEnderecoCepChange} loading={cepLoading} />
                     <Field label="UF" value={enderecoUf} onChange={setEnderecoUf} placeholder="SP" />
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <Field label="Endereço da Empresa" value={enderecoRua} onChange={setEnderecoRua} placeholder="Rua, número, bairro" />
-                    <Field label="CEP" value={enderecoCep} onChange={setEnderecoCep} placeholder="00000-000" />
+                    <Field label="Cidade" value={enderecoCity} onChange={setEnderecoCity} placeholder="São Paulo" />
                   </div>
-                  <Field label="Cidade" value={enderecoCity} onChange={setEnderecoCity} placeholder="São Paulo" />
                   <div>
                     <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Restrição cadastral / financeira *</label>
                     <div className="flex gap-2">
@@ -794,7 +869,7 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
                   onChange={setCreditLine}
                   options={lines}
                 />
-                <Field label="Valor Solicitado (R$) *" value={valorSolicitado} onChange={setValorSolicitado} placeholder="0,00" />
+                <CurrencyField label="Valor Solicitado (R$) *" value={valorSolicitado} onChange={setValorSolicitado} />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <SelectField
@@ -830,8 +905,8 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
                         )}
                       </div>
                       <div className="grid grid-cols-2 gap-3">
+                        <CepField label="CEP do Imóvel" value={im.cep} onChange={v => handleImovelCepChange(idx, v)} loading={cepLoadingIdx === idx} />
                         <Field label="Endereço do Imóvel" value={im.endereco} onChange={v => updateImovel(idx, "endereco", v)} placeholder="Rua, número, bairro" />
-                        <Field label="CEP do Imóvel" value={im.cep} onChange={v => updateImovel(idx, "cep", v)} placeholder="00000-000" />
                       </div>
                       <div className="grid grid-cols-2 gap-3">
                         <Field label="Cidade do Imóvel *" value={im.cidade} onChange={v => updateImovel(idx, "cidade", v)} placeholder="Ex: São Paulo" />
@@ -843,21 +918,26 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
                         />
                       </div>
                       <div className="grid grid-cols-2 gap-3">
-                        <Field label="Valor Médio de Avaliação (R$) *" value={im.valorMedio} onChange={v => updateImovel(idx, "valorMedio", v)} placeholder="0,00" />
-                        <Field label="Valor Estimado pelo Cliente (R$)" value={im.valor} onChange={v => updateImovel(idx, "valor", v)} placeholder="0,00" />
+                        <CurrencyField label="Valor Médio de Avaliação (R$) *" value={im.valorMedio} onChange={v => updateImovel(idx, "valorMedio", v)} />
+                        <CurrencyField label="Valor Estimado pelo Cliente (R$)" value={im.valor} onChange={v => updateImovel(idx, "valor", v)} />
                       </div>
-                      {(im.valorMedio || im.valor) && valorSolicitado && (
-                        <div className="text-xs text-muted-foreground">
-                          LTV estimado:{" "}
-                          <span className={`font-bold ${
-                            (parseFloat(valorSolicitado.replace(/\D/g, "")) / parseFloat((im.valorMedio || im.valor).replace(/\D/g, ""))) > 0.7
-                              ? "text-red-400" : "text-emerald-400"
-                          }`}>
-                            {((parseFloat(valorSolicitado.replace(/\D/g, "")) / parseFloat((im.valorMedio || im.valor).replace(/\D/g, ""))) * 100).toFixed(1)}%
-                          </span>
-                          <span className="ml-1 text-muted-foreground">(máx. 70%)</span>
-                        </div>
-                      )}
+                      {(() => {
+                        const baseVal = parseBRL(im.valorMedio || im.valor);
+                        const solVal  = parseBRL(valorSolicitado);
+                        if (baseVal > 0 && solVal > 0) {
+                          const ltv = (solVal / baseVal) * 100;
+                          return (
+                            <div className="text-xs text-muted-foreground">
+                              LTV estimado:{" "}
+                              <span className={`font-bold ${ltv > 70 ? "text-red-400" : "text-emerald-400"}`}>
+                                {ltv.toFixed(1)}%
+                              </span>
+                              <span className="ml-1 text-muted-foreground">(máx. 70%)</span>
+                            </div>
+                          );
+                        }
+                        return null;
+                      })()}
 
                       {/* Zona / Tipo / Padrão */}
                       <div className="border-t border-amber-500/20 pt-3 space-y-3">
@@ -870,10 +950,9 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
                             {[{ val: "URBANO", label: "Imóvel Urbano" }, { val: "RURAL", label: "Imóvel Rural" }].map(opt => (
                               <button key={opt.val} type="button"
                                 onClick={() => {
-                                  updateImovel(idx, "zona", opt.val as "URBANO" | "RURAL");
-                                  updateImovel(idx, "estilo", "");
-                                  updateImovel(idx, "padrao", "");
-                                  updateImovel(idx, "areaRural", "");
+                                  setImoveis(prev => prev.map((im2, i2) =>
+                                    i2 === idx ? { ...im2, zona: opt.val as "URBANO" | "RURAL", estilo: "", padrao: "", areaRural: "" } : im2
+                                  ));
                                 }}
                                 className={`flex-1 py-2 rounded-lg text-xs font-bold border transition-colors ${
                                   im.zona === opt.val
@@ -1018,43 +1097,65 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
                 <p className="text-sm text-muted-foreground text-center py-8">Selecione a linha de crédito na aba Operação.</p>
               ) : (
                 checklist.map((doc) => {
-                  const uploaded = uploadedFiles.find((f) => f.docId === doc.id);
+                  const docFiles = uploadedFiles.filter((f) => f.docId === doc.id);
+                  const hasUploading = docFiles.some((f) => f.status === "uploading");
+                  const hasDone = docFiles.some((f) => f.status === "done");
                   return (
-                    <div key={doc.id} className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${
-                      uploaded?.status === "done"
+                    <div key={doc.id} className={`p-3 rounded-xl border transition-all ${
+                      hasDone
                         ? "border-emerald-500/30 bg-emerald-500/5"
-                        : "border-border bg-secondary/30 hover:bg-secondary/60"
+                        : "border-border bg-secondary/30"
                     }`}>
-                      <div className="flex-shrink-0">
-                        {uploaded?.status === "done" ? (
-                          <CheckCircle2 className="w-5 h-5 text-emerald-400" />
-                        ) : uploaded?.status === "uploading" ? (
-                          <div className="w-5 h-5 rounded-full border-2 border-primary border-t-transparent animate-spin" />
-                        ) : (
-                          <Circle className={`w-5 h-5 ${doc.required ? "text-amber-400" : "text-muted-foreground"}`} />
-                        )}
+                      <div className="flex items-start gap-3">
+                        <div className="flex-shrink-0 mt-0.5">
+                          {hasDone ? (
+                            <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+                          ) : hasUploading ? (
+                            <div className="w-5 h-5 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+                          ) : (
+                            <Circle className={`w-5 h-5 ${doc.required ? "text-amber-400" : "text-muted-foreground"}`} />
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className={`text-sm font-medium ${hasDone ? "text-emerald-300" : "text-foreground"}`}>
+                            {doc.label}
+                            {doc.required && <span className="text-red-400 ml-1">*</span>}
+                          </p>
+                          {doc.hint && <p className="text-xs text-muted-foreground">{doc.hint}</p>}
+                          {docFiles.length > 0 && (
+                            <div className="mt-1.5 space-y-1">
+                              {docFiles.map((f) => (
+                                <div key={f.fileKey} className="flex items-center gap-2">
+                                  {f.status === "uploading" ? (
+                                    <div className="w-3 h-3 rounded-full border-2 border-primary border-t-transparent animate-spin flex-shrink-0" />
+                                  ) : (
+                                    <CheckCircle2 className="w-3 h-3 text-emerald-400 flex-shrink-0" />
+                                  )}
+                                  <span className="text-xs text-muted-foreground truncate flex-1">{f.name} — {f.size} KB</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => removeFile(f.fileKey)}
+                                    className="text-muted-foreground hover:text-red-400 transition-colors flex-shrink-0"
+                                  >
+                                    <X className="w-3 h-3" />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                        <label className="flex-shrink-0 cursor-pointer">
+                          <input type="file" multiple className="hidden" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" onChange={(e) => handleFileChange(doc.id, e)} />
+                          <span className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                            hasDone
+                              ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30"
+                              : "bg-secondary border border-border text-muted-foreground hover:text-white hover:border-primary/50"
+                          }`}>
+                            <Upload className="w-3 h-3" />
+                            {hasDone ? "+ Adicionar" : "Upload"}
+                          </span>
+                        </label>
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <p className={`text-sm font-medium ${uploaded?.status === "done" ? "text-emerald-300" : "text-foreground"}`}>
-                          {doc.label}
-                          {doc.required && <span className="text-red-400 ml-1">*</span>}
-                        </p>
-                        {doc.hint && <p className="text-xs text-muted-foreground">{doc.hint}</p>}
-                        {uploaded?.status === "done" && (
-                          <p className="text-xs text-muted-foreground">{uploaded.name} — {uploaded.size} KB</p>
-                        )}
-                      </div>
-                      <label className="flex-shrink-0 cursor-pointer">
-                        <input type="file" className="hidden" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" onChange={(e) => handleFileChange(doc.id, e)} />
-                        <span className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                          uploaded?.status === "done"
-                            ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30"
-                            : "bg-secondary border border-border text-muted-foreground hover:text-white hover:border-primary/50"
-                        }`}>
-                          <Upload className="w-3 h-3" />
-                          {uploaded?.status === "done" ? "Substituir" : "Upload"}
-                        </span>
-                      </label>
                     </div>
                   );
                 })
@@ -1115,6 +1216,18 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
+function parseBRL(v: string): number {
+  if (!v) return 0;
+  return parseFloat(v.replace(/\./g, "").replace(",", ".")) || 0;
+}
+
+function applyBRLMask(raw: string): string {
+  const digits = raw.replace(/\D/g, "");
+  if (!digits) return "";
+  const num = parseInt(digits, 10);
+  return (num / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
 function Field({ label, value, onChange, placeholder, type = "text" }: {
   label: string; value: string; onChange: (v: string) => void; placeholder?: string; type?: string;
 }) {
@@ -1128,6 +1241,54 @@ function Field({ label, value, onChange, placeholder, type = "text" }: {
         placeholder={placeholder}
         className="w-full h-9 px-3 text-sm bg-secondary border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
       />
+    </div>
+  );
+}
+
+function CepField({ label, value, onChange, loading }: {
+  label: string; value: string; onChange: (v: string) => void; loading?: boolean;
+}) {
+  return (
+    <div>
+      <label className="block text-xs font-semibold text-muted-foreground mb-1.5">{label}</label>
+      <div className="relative">
+        <input
+          type="text"
+          inputMode="numeric"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="00000-000"
+          maxLength={9}
+          className="w-full h-9 px-3 text-sm bg-secondary border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
+        />
+        {loading && (
+          <div className="absolute right-3 top-1/2 -translate-y-1/2">
+            <div className="w-3.5 h-3.5 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+          </div>
+        )}
+      </div>
+      {loading && <p className="text-[10px] text-muted-foreground mt-1">Buscando endereço...</p>}
+    </div>
+  );
+}
+
+function CurrencyField({ label, value, onChange, placeholder }: {
+  label: string; value: string; onChange: (v: string) => void; placeholder?: string;
+}) {
+  return (
+    <div>
+      <label className="block text-xs font-semibold text-muted-foreground mb-1.5">{label}</label>
+      <div className="relative">
+        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground select-none pointer-events-none">R$</span>
+        <input
+          type="text"
+          inputMode="numeric"
+          value={value}
+          onChange={(e) => onChange(applyBRLMask(e.target.value))}
+          placeholder={placeholder ?? "0,00"}
+          className="w-full h-9 pl-8 pr-3 text-sm bg-secondary border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
+        />
+      </div>
     </div>
   );
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useCallback, useEffect } from "react";
-import { LayoutGrid, List, Plus, Search, TrendingUp, Zap } from "lucide-react";
+import { LayoutGrid, List, Plus, TrendingUp, Zap, Building2 } from "lucide-react";
 import { ExportButton } from "@/components/financeiro/export-button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -10,6 +10,10 @@ import { formatCurrency, formatDate } from "@/lib/utils";
 import { STATUS_LABELS, STATUS_COLORS, type OperationStatus } from "@/lib/constants";
 import { NovaPropostaModal } from "./nova-proposta-modal";
 import { PropostaDetailModal, type ProposalFull } from "./proposta-detail-modal";
+import {
+  AdvancedFilters, applyFilters, getSLAInfo, SLABadge,
+  EMPTY_FILTERS, type FilterState,
+} from "./advanced-filters";
 
 interface Proposal {
   id: string; code: string; title: string;
@@ -22,13 +26,11 @@ interface Proposal {
   docs_uploaded?: number; docs_required?: number;
   created_at: string;
   valor_credito_atual?: number;
-  comissao_mandato_perc?: number;
-  comissao_instituicao_perc?: number;
-  imovel_endereco?: string;
-  imovel_valor_medio?: number;
-  imovel_cidade?: string;
-  imovel_estado?: string;
+  comissao_mandato_perc?: number; comissao_instituicao_perc?: number;
+  imovel_endereco?: string; imovel_valor_medio?: number;
+  imovel_cidade?: string; imovel_estado?: string;
   metadata?: Record<string, unknown>;
+  instituicao_encaminhada?: string | null;
 }
 
 interface CreditDeskClientProps {
@@ -44,6 +46,7 @@ const CONFIG = {
     gradient: "from-amber-500 to-orange-600",
     color: "text-amber-400",
     badgeVariant: "warning" as const,
+    creditLines: ["FIDC", "CRI", "CRA", "DEBÊNTURES", "V3GIRO", "V3AUTOGIRO", "CGI", "HOMECASH", "CAPITAL DE GIRO ESTRUTURADO"],
   },
   NIVEL_3: {
     title: "Nível 3 — High Ticket",
@@ -51,30 +54,39 @@ const CONFIG = {
     gradient: "from-purple-500 to-indigo-600",
     color: "text-purple-400",
     badgeVariant: "default" as const,
+    creditLines: ["PROJECT FINANCE", "INFRASTRUCTURE", "REAL ESTATE", "CPR", "FUNDO CONSTRUÇÃO RESIDENCIAL", "FUNDO CONSTRUÇÃO COMERCIAL", "FUNDO INTERNACIONAL", "FUSÕES & AQUISIÇÕES"],
   },
 };
 
+const KANBAN_STAGES = [
+  { key: "RECEBIDO",   label: "Recebido",          borderColor: "border-slate-500/40",   headerColor: "text-slate-400",   bg: "bg-slate-500/5"  },
+  { key: "TRIAGEM",    label: "Triagem",            borderColor: "border-blue-500/40",    headerColor: "text-blue-400",    bg: "bg-blue-500/5"   },
+  { key: "ANALISE",    label: "Análise de Crédito", borderColor: "border-amber-500/40",   headerColor: "text-amber-400",   bg: "bg-amber-500/5"  },
+  { key: "PENDENCIA",  label: "Pendência de Docs",  borderColor: "border-orange-500/40",  headerColor: "text-orange-400",  bg: "bg-orange-500/5" },
+  { key: "APROVACAO",  label: "Em Aprovação",       borderColor: "border-purple-500/40",  headerColor: "text-purple-400",  bg: "bg-purple-500/5" },
+  { key: "FINALIZADO", label: "Finalizado",         borderColor: "border-emerald-500/40", headerColor: "text-emerald-400", bg: "bg-emerald-500/5"},
+];
 
 export function CreditDeskClient({ proposals: initial, level, currentUser }: CreditDeskClientProps) {
   const [proposals, setProposals] = useState<Proposal[]>(initial);
-  const [search, setSearch] = useState("");
-  const [filterStatus, setFilterStatus] = useState("");
-  const [newOpen, setNewOpen] = useState(false);
+  const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS);
+  const [newOpen, setNewOpen]   = useState(false);
   const [detailProposal, setDetailProposal] = useState<Proposal | null>(null);
   const [view, setView] = useState<"table" | "kanban">("table");
 
-  // Busca dados frescos da API ao montar (reflete atualizações da Mesa Operacional)
   useEffect(() => {
+    let isMounted = true;
     fetch(`/api/credit-proposals?level=${level}`)
-      .then(r => r.json())
+      .then(r => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
       .then(({ proposals: fresh }) => {
-        if (!Array.isArray(fresh)) return;
+        if (!isMounted || !Array.isArray(fresh)) return;
         setProposals(fresh.map((p: Record<string, unknown>) => ({
-          id: p.id as string,
-          code: p.code as string,
-          title: p.title as string,
+          id: p.id as string, code: p.code as string, title: p.title as string,
           client_name: p.client_name as string,
-          cpf_cnpj: p.client_cpf_cnpj as string | undefined,
+          cpf_cnpj: (p.client_cpf_cnpj ?? (p.metadata as Record<string, unknown> | null)?.cpf_cnpj) as string | undefined,
           client_type: (p.metadata as Record<string, unknown> | null)?.client_type as string | undefined,
           email: (p.metadata as Record<string, unknown> | null)?.email as string | undefined,
           telefone: (p.metadata as Record<string, unknown> | null)?.telefone as string | undefined,
@@ -93,85 +105,67 @@ export function CreditDeskClient({ proposals: initial, level, currentUser }: Cre
           comissao_mandato_perc: p.comissao_mandato_perc as number | undefined,
           comissao_instituicao_perc: p.comissao_instituicao_perc as number | undefined,
           metadata: p.metadata as Record<string, unknown> | undefined,
+          instituicao_encaminhada: p.instituicao_encaminhada as string | null | undefined,
         })));
       })
-      .catch(() => {});
+      .catch(err => console.error("[credit-proposals load]", err));
+    return () => { isMounted = false; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [level]);
 
   const cfg = CONFIG[level];
-  const partnerName = currentUser?.full_name ?? "João Partner Silva";
-  const partnerId = currentUser?.id ?? "demo-partner-001";
-  const canChangeStage = currentUser?.role === "MESA_OPERACIONAL" || currentUser?.role === "ADMIN" || currentUser?.role === "GESTAO";
-  const canEditValorSolicitado = canChangeStage || currentUser?.role === "PARTNER" || currentUser?.role === "PARTNER_PRO";
+  const isAdmin = ["MESA_OPERACIONAL", "ADMIN", "GESTAO"].includes(currentUser?.role ?? "");
+  const canChangeStage = isAdmin;
+  const canEditValorSolicitado = isAdmin || currentUser?.role === "PARTNER" || currentUser?.role === "PARTNER_PRO";
+  const partnerName = currentUser?.full_name ?? "Partner";
+  const partnerId   = currentUser?.id ?? "";
 
-  const filtered = proposals.filter((p) => {
-    const matchSearch = !search ||
-      p.client_name.toLowerCase().includes(search.toLowerCase()) ||
-      p.code.toLowerCase().includes(search.toLowerCase());
-    const matchStatus = !filterStatus || p.status === filterStatus;
-    return matchSearch && matchStatus;
-  });
-
+  const filtered = applyFilters(proposals, filters);
   const totalValue = filtered.reduce((s, p) => s + p.requested_value, 0);
+  const slaCritical = filtered.filter(p => getSLAInfo(p).sla === "critical").length;
+  const slaWarning  = filtered.filter(p => getSLAInfo(p).sla === "warning").length;
 
   const handleNewProposal = useCallback(async (proposal: Record<string, unknown>) => {
     const p = proposal as unknown as Proposal;
+    const raw = proposal as Record<string, unknown>;
+    const metadata = (raw.metadata as Record<string, unknown>) ?? {
+      client_type: raw.client_type, email: raw.email, telefone: raw.telefone,
+      prazo: raw.prazo, finalidade: raw.finalidade,
+      restricao_cliente: raw.restricao_cliente, imoveis: raw.imoveis,
+    };
+    const res = await fetch("/api/credit-proposals", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        code: p.code, title: p.title, client_name: p.client_name,
+        client_cpf_cnpj: p.cpf_cnpj ?? null,
+        credit_line: p.credit_line, requested_value: p.requested_value,
+        current_level: level, metadata,
+      }),
+    });
+    let json: Record<string, unknown>;
     try {
-      const raw = proposal as Record<string, unknown>;
-      // Usa metadata se já vier montado pelo nova-proposta-modal, senão constrói
-      const metadata = (raw.metadata as Record<string, unknown>) ?? {
-        client_type:       raw.client_type,
-        email:             raw.email,
-        telefone:          raw.telefone,
-        prazo:             raw.prazo,
-        finalidade:        raw.finalidade,
-        restricao_cliente: raw.restricao_cliente,
-        imoveis:           raw.imoveis,
-      };
-      const res = await fetch("/api/credit-proposals", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          code:            p.code,
-          title:           p.title,
-          client_name:     p.client_name,
-          client_cpf_cnpj: p.cpf_cnpj ?? null,
-          credit_line:     p.credit_line,
-          requested_value: p.requested_value,
-          current_level:   level,
-          metadata,
-        }),
-      });
-      const json = await res.json();
-      if (json.ok && json.proposal) {
-        // Usa o objeto retornado pelo banco (contém metadata completo)
-        setProposals(prev => [{
-          ...p,
-          id: json.proposal.id,
-          partner_id: json.proposal.partner_id ?? p.partner_id,
-          metadata: json.proposal.metadata ?? metadata,
-        }, ...prev]);
-        return;
-      }
-      // API retornou erro — lança para o modal exibir
-      const errMsg = typeof json.error === "string"
-        ? json.error
-        : JSON.stringify(json.error ?? "Erro desconhecido");
-      throw new Error(errMsg);
-    } catch (err) {
-      // Re-throw para que o modal exiba o erro ao usuário
-      throw err instanceof Error ? err : new Error("Erro ao salvar proposta. Verifique sua conexão e tente novamente.");
+      json = await res.json();
+    } catch {
+      throw new Error(`Erro de comunicação com o servidor (HTTP ${res.status})`);
     }
+    if (json.ok && json.proposal) {
+      const saved = json.proposal as Record<string, unknown>;
+      setProposals(prev => [{ ...p, id: saved.id as string, partner_id: (saved.partner_id ?? p.partner_id) as string | undefined, metadata: (saved.metadata ?? metadata) as Record<string, unknown> }, ...prev]);
+      return;
+    }
+    if (json.error && typeof json.error === "object") {
+      const msgs = Object.entries(json.error as Record<string, string[]>)
+        .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(", ") : v}`)
+        .join(" | ");
+      throw new Error(msgs || "Erro de validação.");
+    }
+    throw new Error(typeof json.error === "string" ? json.error : "Erro ao salvar proposta.");
   }, [level]);
 
   const handleStageChange = useCallback((proposalId: string, newStage: string) => {
-    // Atualização otimista imediata
-    setProposals((prev) => prev.map((p) => p.id === proposalId ? { ...p, stage: newStage } : p));
-    if (detailProposal?.id === proposalId) {
-      setDetailProposal((prev) => prev ? { ...prev, stage: newStage } : prev);
-    }
-    // Persiste no banco — apenas MESA_OPERACIONAL/ADMIN/GESTAO chegam aqui (canChangeStage=true)
+    setProposals(prev => prev.map(p => p.id === proposalId ? { ...p, stage: newStage } : p));
+    if (detailProposal?.id === proposalId) setDetailProposal(prev => prev ? { ...prev, stage: newStage } : prev);
     fetch("/api/credit-proposals", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -180,16 +174,15 @@ export function CreditDeskClient({ proposals: initial, level, currentUser }: Cre
   }, [detailProposal]);
 
   const handleProposalUpdate = useCallback((proposalId: string, updates: Partial<Proposal>) => {
-    setProposals((prev) => prev.map((p) => p.id === proposalId ? { ...p, ...updates } : p));
-    if (detailProposal?.id === proposalId) {
-      setDetailProposal((prev) => prev ? { ...prev, ...updates } : prev);
-    }
+    setProposals(prev => prev.map(p => p.id === proposalId ? { ...p, ...updates } : p));
+    if (detailProposal?.id === proposalId) setDetailProposal(prev => prev ? { ...prev, ...updates } : prev);
   }, [detailProposal]);
 
   const Icon = level === "NIVEL_3" ? Zap : TrendingUp;
 
   return (
     <div className="space-y-5 animate-fade-in">
+      {/* Header */}
       <div className="flex items-start justify-between">
         <div className="flex items-center gap-3">
           <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${cfg.gradient} flex items-center justify-center`}>
@@ -205,96 +198,83 @@ export function CreditDeskClient({ proposals: initial, level, currentUser }: Cre
         </Button>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      {/* KPIs */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         {[
-          { label: "Total", value: filtered.length, color: cfg.color },
-          { label: "Volume", value: formatCurrency(totalValue), color: "text-white" },
-          { label: "Aprovadas", value: filtered.filter((p) => p.status === "APPROVED").length, color: "text-emerald-400" },
-          { label: "Em Análise", value: filtered.filter((p) => p.status === "IN_REVIEW").length, color: "text-blue-400" },
+          { label: "Total",       value: filtered.length,                                               color: cfg.color },
+          { label: "Volume",      value: formatCurrency(totalValue),                                    color: "text-white" },
+          { label: "Aprovadas",   value: filtered.filter(p => p.status === "APPROVED").length,         color: "text-emerald-400" },
+          { label: "Em Análise",  value: filtered.filter(p => p.status === "IN_REVIEW").length,        color: "text-blue-400" },
+          { label: "SLA vencido", value: slaCritical > 0 ? `${slaCritical} crítico${slaCritical > 1 ? "s" : ""}` : slaWarning > 0 ? `${slaWarning} alerta${slaWarning > 1 ? "s" : ""}` : "OK",
+            color: slaCritical > 0 ? "text-red-400" : slaWarning > 0 ? "text-amber-400" : "text-emerald-400" },
         ].map((kpi) => (
           <Card key={kpi.label}><CardContent className="p-4">
             <p className="text-xs text-muted-foreground">{kpi.label}</p>
-            <p className={`text-xl font-bold mt-1 ${kpi.color}`}>{kpi.value}</p>
+            <p className={`text-lg font-bold mt-1 ${kpi.color}`}>{kpi.value}</p>
           </CardContent></Card>
         ))}
       </div>
 
-      <div className="flex gap-2">
-        <div className="relative flex-1 min-w-48">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar por cliente, código..."
-            className="w-full h-9 pl-9 pr-4 text-sm bg-secondary border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50" />
-        </div>
-        <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}
-          className="h-9 px-3 text-sm bg-secondary border border-border rounded-lg text-foreground focus:outline-none">
-          <option value="">Todos os status</option>
-          <option value="PENDING">Pendente</option>
-          <option value="IN_REVIEW">Em Análise</option>
-          <option value="APPROVED">Aprovado</option>
-          <option value="REJECTED">Reprovado</option>
-        </select>
+      {/* Filtros avançados */}
+      <AdvancedFilters
+        filters={filters}
+        onChange={setFilters}
+        creditLines={cfg.creditLines}
+        isAdmin={isAdmin}
+      />
+
+      {/* Barra de ação: export + toggle */}
+      <div className="flex items-center justify-between gap-2">
         <ExportButton opts={{
-          titulo: "Propostas de Crédito",
+          titulo: `Propostas ${cfg.title}`,
           orientacao: "landscape",
           colunas: [
-            { header: "Código", key: "code", width: 14 },
-            { header: "Cliente", key: "client_name", width: 28 },
-            { header: "Linha", key: "credit_line", width: 18 },
+            { header: "Código",           key: "code",            width: 14 },
+            { header: "Cliente",          key: "client_name",     width: 28 },
+            { header: "Linha",            key: "credit_line",     width: 22 },
             { header: "Valor Solicitado", key: "requested_value", format: "moeda", width: 20 },
-            { header: "Valor Aprovado", key: "approved_value", format: "moeda", width: 20 },
-            { header: "Nível", key: "current_level", width: 10 },
-            { header: "Status", key: "status", width: 12 },
+            { header: "Valor Aprovado",   key: "approved_value",  format: "moeda", width: 20 },
+            { header: "Etapa",            key: "stage",           width: 14 },
+            { header: "Status",           key: "status",          width: 12 },
+            { header: "Parceiro",         key: "partner_name",    width: 20 },
           ],
           dados: filtered,
-          totais: { label: "TOTAL", valores: { code: "TOTAL", requested_value: filtered.reduce((s, p) => s + p.requested_value, 0) } },
+          totais: { label: "TOTAL", valores: { code: "TOTAL", requested_value: totalValue } },
         }} />
-        <div className="flex gap-1 p-1 bg-secondary rounded-lg ml-auto">
-          <button
-            title="Tabela"
-            onClick={() => setView("table")}
-            className={`p-1.5 rounded transition-colors ${view === "table" ? "bg-primary/20 text-primary" : "text-muted-foreground hover:text-white"}`}
-          >
+        <div className="flex gap-1 p-1 bg-secondary rounded-lg">
+          <button title="Tabela" onClick={() => setView("table")}
+            className={`p-1.5 rounded transition-colors ${view === "table" ? "bg-primary/20 text-primary" : "text-muted-foreground hover:text-white"}`}>
             <List className="w-4 h-4" />
           </button>
-          <button
-            title="Kanban"
-            onClick={() => setView("kanban")}
-            className={`p-1.5 rounded transition-colors ${view === "kanban" ? "bg-primary/20 text-primary" : "text-muted-foreground hover:text-white"}`}
-          >
+          <button title="Kanban" onClick={() => setView("kanban")}
+            className={`p-1.5 rounded transition-colors ${view === "kanban" ? "bg-primary/20 text-primary" : "text-muted-foreground hover:text-white"}`}>
             <LayoutGrid className="w-4 h-4" />
           </button>
         </div>
       </div>
 
-      {(() => {
-        const KANBAN_STAGES = [
-          { key: "RECEBIDO",   label: "Recebido",          borderColor: "border-slate-500/40",   headerColor: "text-slate-400",   bg: "bg-slate-500/5"  },
-          { key: "TRIAGEM",    label: "Triagem",            borderColor: "border-blue-500/40",    headerColor: "text-blue-400",    bg: "bg-blue-500/5"   },
-          { key: "ANALISE",    label: "Análise de Crédito", borderColor: "border-amber-500/40",   headerColor: "text-amber-400",   bg: "bg-amber-500/5"  },
-          { key: "PENDENCIA",  label: "Pendência de Docs",  borderColor: "border-orange-500/40",  headerColor: "text-orange-400",  bg: "bg-orange-500/5" },
-          { key: "APROVACAO",  label: "Em Aprovação",       borderColor: "border-purple-500/40",  headerColor: "text-purple-400",  bg: "bg-purple-500/5" },
-          { key: "FINALIZADO", label: "Finalizado",         borderColor: "border-emerald-500/40", headerColor: "text-emerald-400", bg: "bg-emerald-500/5"},
-        ];
-        if (view === "kanban") return (
-          <div className="overflow-x-auto pb-2">
-            <div className="flex gap-3 min-w-max">
-              {KANBAN_STAGES.map((stage) => {
-                const stageCards = filtered.filter((p) => (p.stage ?? "RECEBIDO") === stage.key);
-                return (
-                  <div key={stage.key} className={`w-56 flex-shrink-0 rounded-xl border ${stage.borderColor} ${stage.bg} p-3 flex flex-col gap-2`}>
-                    <div className="flex items-center justify-between mb-1">
-                      <span className={`text-[11px] font-bold uppercase tracking-wide ${stage.headerColor}`}>{stage.label}</span>
-                      <span className="text-[10px] text-muted-foreground bg-secondary/80 rounded px-1.5 py-0.5 font-semibold">{stageCards.length}</span>
-                    </div>
-                    {stageCards.length === 0 ? (
-                      <div className="flex items-center justify-center py-8 text-[11px] text-muted-foreground/40">Vazio</div>
-                    ) : (
-                      stageCards.map((p) => (
-                        <div
-                          key={p.id}
-                          onClick={() => setDetailProposal(p)}
-                          className="bg-card border border-border/60 rounded-lg p-3 cursor-pointer hover:border-primary/40 hover:bg-card/80 transition-all space-y-2 group"
-                        >
+      {/* Kanban */}
+      {view === "kanban" && (
+        <div className="overflow-x-auto pb-2">
+          <div className="flex gap-3 min-w-max">
+            {KANBAN_STAGES.map((stage) => {
+              const cards = filtered.filter(p => (p.stage ?? "RECEBIDO") === stage.key);
+              return (
+                <div key={stage.key} className={`w-56 flex-shrink-0 rounded-xl border ${stage.borderColor} ${stage.bg} p-3 flex flex-col gap-2`}>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className={`text-[11px] font-bold uppercase tracking-wide ${stage.headerColor}`}>{stage.label}</span>
+                    <span className="text-[10px] text-muted-foreground bg-secondary/80 rounded px-1.5 py-0.5 font-semibold">{cards.length}</span>
+                  </div>
+                  {cards.length === 0 ? (
+                    <div className="flex items-center justify-center py-8 text-[11px] text-muted-foreground/40">Vazio</div>
+                  ) : (
+                    cards.map((p) => {
+                      const { days, sla } = getSLAInfo(p);
+                      return (
+                        <div key={p.id} onClick={() => setDetailProposal(p)}
+                          className={`bg-card border rounded-lg p-3 cursor-pointer hover:border-primary/40 hover:bg-card/80 transition-all space-y-2 group ${
+                            sla === "critical" ? "border-red-500/40" : sla === "warning" ? "border-amber-500/40" : "border-border/60"
+                          }`}>
                           <div className="flex items-center justify-between gap-1">
                             <span className="font-mono text-[9px] text-muted-foreground truncate">{p.code}</span>
                             <Badge className={`${STATUS_COLORS[p.status as OperationStatus]} text-[9px] px-1.5 py-0 leading-4`}>
@@ -306,18 +286,37 @@ export function CreditDeskClient({ proposals: initial, level, currentUser }: Cre
                             <Badge variant={cfg.badgeVariant} className="text-[9px] truncate max-w-[100px]">{p.credit_line}</Badge>
                             <span className="text-[10px] font-bold text-emerald-400 flex-shrink-0">{formatCurrency(p.requested_value)}</span>
                           </div>
+                          {sla !== "ok" && (
+                            <div className={`text-[9px] font-bold flex items-center gap-1 ${sla === "critical" ? "text-red-400" : "text-amber-400"}`}>
+                              ⚠ SLA: {days} dia{days !== 1 ? "s" : ""} em aberto
+                            </div>
+                          )}
+                          {p.instituicao_encaminhada && (() => {
+                            let insts: string[] = [];
+                            try { const a = JSON.parse(p.instituicao_encaminhada!); insts = Array.isArray(a) ? a : [p.instituicao_encaminhada!]; }
+                            catch { insts = [p.instituicao_encaminhada!]; }
+                            return insts.length > 0 ? (
+                              <div className="flex flex-wrap gap-1 mt-1">
+                                {insts.map((inst, i) => (
+                                  <span key={i} className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-[#C9A84C]/15 border border-[#C9A84C]/30 text-[#C9A84C] text-[9px] font-semibold">
+                                    <Building2 className="w-2.5 h-2.5 flex-shrink-0" />{inst}
+                                  </span>
+                                ))}
+                              </div>
+                            ) : null;
+                          })()}
                         </div>
-                      ))
-                    )}
-                  </div>
-                );
-              })}
-            </div>
+                      );
+                    })
+                  )}
+                </div>
+              );
+            })}
           </div>
-        );
-        return null;
-      })()}
+        </div>
+      )}
 
+      {/* Tabela */}
       <Card className={view === "kanban" ? "hidden" : ""}>
         <CardContent className="p-0">
           {filtered.length === 0 ? (
@@ -333,27 +332,43 @@ export function CreditDeskClient({ proposals: initial, level, currentUser }: Cre
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border/50">
-                    {["Código", "Cliente", "Tipo", "Instrumento", "Valor Solicitado", "Valor Aprovado", "Etapa", "Status", "Data"].map((h) => (
+                    {["Código", "Cliente", "Tipo", "Instrumento", "Valor Solicitado", "Valor Aprovado", "Etapa", "SLA", "Status", "Data"].map(h => (
                       <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((p) => (
-                    <tr key={p.id} className="data-table-row cursor-pointer" onClick={() => setDetailProposal(p)}>
-                      <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{p.code}</td>
-                      <td className="px-4 py-3 font-medium text-foreground max-w-36 truncate">{p.client_name}</td>
-                      <td className="px-4 py-3 text-xs text-muted-foreground">{p.client_type ?? "PJ"}</td>
-                      <td className="px-4 py-3"><Badge variant={cfg.badgeVariant}>{p.credit_line}</Badge></td>
-                      <td className="px-4 py-3 text-right font-semibold text-white">{formatCurrency(p.requested_value)}</td>
-                      <td className="px-4 py-3 text-right font-semibold text-emerald-400">{p.approved_value ? formatCurrency(p.approved_value) : "—"}</td>
-                      <td className="px-4 py-3 text-xs text-muted-foreground">{p.stage ?? "RECEBIDO"}</td>
-                      <td className="px-4 py-3">
-                        <Badge className={STATUS_COLORS[p.status as OperationStatus]}>{STATUS_LABELS[p.status as OperationStatus]}</Badge>
-                      </td>
-                      <td className="px-4 py-3 text-xs text-muted-foreground">{formatDate(p.created_at)}</td>
-                    </tr>
-                  ))}
+                  {filtered.map((p) => {
+                    const { days, sla } = getSLAInfo(p);
+                    return (
+                      <tr key={p.id}
+                        className={`border-b border-border/30 cursor-pointer transition-colors ${
+                          sla === "critical" ? "bg-red-500/5 hover:bg-red-500/10"
+                          : sla === "warning" ? "bg-amber-500/5 hover:bg-amber-500/10"
+                          : "hover:bg-secondary/50"
+                        }`}
+                        onClick={() => setDetailProposal(p)}>
+                        <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{p.code}</td>
+                        <td className="px-4 py-3 font-medium text-foreground max-w-36 truncate">{p.client_name}</td>
+                        <td className="px-4 py-3 text-xs text-muted-foreground">{p.client_type ?? "PJ"}</td>
+                        <td className="px-4 py-3"><Badge variant={cfg.badgeVariant}>{p.credit_line}</Badge></td>
+                        <td className="px-4 py-3 text-right font-semibold text-white">{formatCurrency(p.requested_value)}</td>
+                        <td className="px-4 py-3 text-right font-semibold text-emerald-400">{p.approved_value ? formatCurrency(p.approved_value) : "—"}</td>
+                        <td className="px-4 py-3 text-xs text-muted-foreground">{p.stage ?? "RECEBIDO"}</td>
+                        <td className="px-4 py-3">
+                          {sla === "ok" ? (
+                            <span className="text-xs text-muted-foreground">{days}d</span>
+                          ) : (
+                            <SLABadge days={days} sla={sla} />
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
+                          <Badge className={STATUS_COLORS[p.status as OperationStatus]}>{STATUS_LABELS[p.status as OperationStatus]}</Badge>
+                        </td>
+                        <td className="px-4 py-3 text-xs text-muted-foreground">{formatDate(p.created_at)}</td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -361,23 +376,14 @@ export function CreditDeskClient({ proposals: initial, level, currentUser }: Cre
         </CardContent>
       </Card>
 
-      <NovaPropostaModal
-        open={newOpen}
-        onClose={() => setNewOpen(false)}
-        level={level}
-        partnerName={partnerName}
-        partnerId={partnerId}
-        onSubmit={handleNewProposal}
-      />
+      <NovaPropostaModal open={newOpen} onClose={() => setNewOpen(false)} level={level}
+        partnerName={partnerName} partnerId={partnerId} onSubmit={handleNewProposal} />
 
       <PropostaDetailModal
-        open={!!detailProposal}
-        onClose={() => setDetailProposal(null)}
+        open={!!detailProposal} onClose={() => setDetailProposal(null)}
         proposal={detailProposal as ProposalFull | null}
-        onStageChange={handleStageChange}
-        onProposalUpdate={handleProposalUpdate}
-        canChangeStage={canChangeStage}
-        canEditValorSolicitado={canEditValorSolicitado}
+        onStageChange={handleStageChange} onProposalUpdate={handleProposalUpdate}
+        canChangeStage={canChangeStage} canEditValorSolicitado={canEditValorSolicitado} canEditInstituicao={isAdmin}
       />
     </div>
   );

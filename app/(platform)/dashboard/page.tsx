@@ -65,8 +65,8 @@ export default async function DashboardPage({
   // Production mode
   const { createClient } = await import("@/lib/supabase/server");
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return null;
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  if (authError || !user) return null;
 
   const { data: profileData } = await supabase
     .from("profiles").select("role, full_name, created_at").eq("id", user.id).single() as {
@@ -101,12 +101,11 @@ export default async function DashboardPage({
     propCountQ   = propCountQ.gte("created_at", since) as typeof propCountQ;
   }
 
-  const [
-    { count: totalSplits },
-    { count: totalDeals },
-    { count: totalTickets },
-    { count: totalProposals },
-  ] = await Promise.all([splitCountQ, dealCountQ, ticketCountQ, propCountQ]);
+  const countsResult = await Promise.allSettled([splitCountQ, dealCountQ, ticketCountQ, propCountQ]);
+  const totalSplits   = countsResult[0].status === "fulfilled" ? (countsResult[0].value.count ?? 0) : 0;
+  const totalDeals    = countsResult[1].status === "fulfilled" ? (countsResult[1].value.count ?? 0) : 0;
+  const totalTickets  = countsResult[2].status === "fulfilled" ? (countsResult[2].value.count ?? 0) : 0;
+  const totalProposals = countsResult[3].status === "fulfilled" ? (countsResult[3].value.count ?? 0) : 0;
 
   // Recentes — mesmo filtro
   let splitsQ = svc.from("split_fiscal").select("id, code, title, status, total_value, created_at").order("created_at", { ascending: false }).limit(5);
@@ -121,22 +120,105 @@ export default async function DashboardPage({
     dealsQ  = dealsQ.gte("created_at", since) as typeof dealsQ;
   }
 
-  const { data: recentSplits } = await splitsQ;
-  const { data: recentDeals }  = await dealsQ;
+  const [splitsResult, dealsResult] = await Promise.allSettled([splitsQ, dealsQ]);
+  const recentSplits = splitsResult.status === "fulfilled" ? (splitsResult.value.data ?? []) : [];
+  const recentDeals  = dealsResult.status === "fulfilled"  ? (dealsResult.value.data ?? [])  : [];
+
+  // Busca propostas dos últimos 12 meses para montar o gráfico de volume
+  const dozeAtras = new Date();
+  dozeAtras.setMonth(dozeAtras.getMonth() - 11);
+  dozeAtras.setDate(1);
+  dozeAtras.setHours(0, 0, 0, 0);
+
+  let revenueQ = svc
+    .from("credit_desk_proposals")
+    .select("created_at, requested_value")
+    .gte("created_at", dozeAtras.toISOString())
+    .order("created_at", { ascending: true });
+
+  if (!isAdmin) revenueQ = revenueQ.eq("partner_id", uid) as typeof revenueQ;
+
+  const revenueResult = await Promise.allSettled([revenueQ]);
+  const revenueRaw = revenueResult[0].status === "fulfilled" ? (revenueResult[0].value.data ?? []) : [];
+
+  // Agrupa por mês e soma o requested_value
+  const monthMap: Record<string, number> = {};
+  const mesesPT = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date();
+    d.setMonth(d.getMonth() - i);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    monthMap[key] = 0;
+  }
+
+  for (const row of revenueRaw) {
+    const d = new Date(row.created_at as string);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    if (key in monthMap) monthMap[key] += (row.requested_value as number) ?? 0;
+  }
+
+  const revenueData = Object.entries(monthMap).map(([key, value]) => {
+    const [, m] = key.split("-");
+    return { month: mesesPT[parseInt(m) - 1], value };
+  });
+
+  // Saúde da rede — só para ADMIN/GESTAO/FINANCEIRO
+  let redeHealth = null;
+  if (["ADMIN", "GESTAO", "FINANCEIRO"].includes(role)) {
+    try {
+      const [partnersRes, comissoesRes] = await Promise.allSettled([
+        svc.from("profiles").select("id, role, trial_expires_at, created_at, is_active").in("role", ["PARTNER", "PARTNER_PRO"]),
+        svc.from("commissions").select("commission_value, status").eq("status", "A_PAGAR"),
+      ]);
+
+      const partners = partnersRes.status === "fulfilled" ? (partnersRes.value.data ?? []) : [];
+      const comissoes = comissoesRes.status === "fulfilled" ? (comissoesRes.value.data ?? []) : [];
+
+      const now = Date.now();
+      const ativos = partners.filter((p: { is_active: boolean; trial_expires_at: string | null; created_at: string }) => {
+        if (!p.is_active) return false;
+        const exp = p.trial_expires_at
+          ? new Date(p.trial_expires_at).getTime()
+          : new Date(p.created_at).getTime() + 30 * 86400000;
+        return exp > now;
+      });
+      const vencendo7d = partners.filter((p: { is_active: boolean; trial_expires_at: string | null; created_at: string }) => {
+        if (!p.is_active) return false;
+        const exp = p.trial_expires_at
+          ? new Date(p.trial_expires_at).getTime()
+          : new Date(p.created_at).getTime() + 30 * 86400000;
+        const dias = Math.floor((exp - now) / 86400000);
+        return dias >= 0 && dias <= 7;
+      }).length;
+
+      redeHealth = {
+        partnersAtivos: ativos.length,
+        partnersPRO: ativos.filter((p: { role: string }) => p.role === "PARTNER_PRO").length,
+        mrr: ativos.reduce((s: number, p: { role: string }) => s + (p.role === "PARTNER_PRO" ? 397 : 197), 0),
+        comissoesPendentes: comissoes.reduce((s: number, c: { commission_value: number }) => s + c.commission_value, 0),
+        vencendo7d,
+      };
+    } catch {
+      redeHealth = null;
+    }
+  }
 
   return (
     <DashboardClient
       role={role}
       userName={profileData?.full_name || "Usuário"}
       period={period}
+      revenueData={revenueData}
+      redeHealth={redeHealth}
       kpis={{
-        totalSplits: totalSplits ?? 0,
-        totalDeals: totalDeals ?? 0,
-        openTickets: totalTickets ?? 0,
-        pendingProposals: totalProposals ?? 0,
+        totalSplits: totalSplits,
+        totalDeals: totalDeals,
+        openTickets: totalTickets,
+        pendingProposals: totalProposals,
       }}
-      recentSplits={(recentSplits ?? []) as Parameters<typeof DashboardClient>[0]["recentSplits"]}
-      recentDeals={(recentDeals ?? []) as Parameters<typeof DashboardClient>[0]["recentDeals"]}
+      recentSplits={recentSplits as Parameters<typeof DashboardClient>[0]["recentSplits"]}
+      recentDeals={recentDeals as Parameters<typeof DashboardClient>[0]["recentDeals"]}
       userCreatedAt={profileData?.created_at ?? null}
     />
   );

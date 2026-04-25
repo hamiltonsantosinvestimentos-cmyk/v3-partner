@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   TrendingUp,
@@ -12,6 +12,10 @@ import {
   Clock,
   AlertTriangle,
   ShieldOff,
+  Users,
+  DollarSign,
+  Crown,
+  AlertCircle,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -30,8 +34,8 @@ import {
 } from "recharts";
 import { MarketTicker } from "@/components/dashboard/market-ticker";
 import { NotificationBell } from "@/components/dashboard/notification-bell";
+import { OnboardingBanner } from "@/components/onboarding/onboarding-banner";
 
-const revenueData: Array<{ month: string; value: number }> = [];
 
 interface KpiCardProps {
   title: string;
@@ -86,6 +90,7 @@ const PERIOD_LABELS: Record<string, string> = {
 const TRIAL_DAYS = 30;
 
 function getDaysLeft(createdAt: string): number {
+  if (typeof window === "undefined") return TRIAL_DAYS; // SSR: valor neutro
   const elapsed = Math.floor((Date.now() - new Date(createdAt).getTime()) / 86400000);
   return Math.max(TRIAL_DAYS - elapsed, 0);
 }
@@ -150,11 +155,21 @@ function TrialBanner({ createdAt, role }: { createdAt: string; role: string }) {
 }
 // ─────────────────────────────────────────────────────────────────────────────
 
+interface RedeHealth {
+  partnersAtivos: number;
+  partnersPRO: number;
+  mrr: number;
+  comissoesPendentes: number;
+  vencendo7d: number;
+}
+
 interface DashboardClientProps {
   role: string;
   userName: string;
   period?: string;
   userCreatedAt?: string | null;
+  revenueData?: Array<{ month: string; value: number }>;
+  redeHealth?: RedeHealth | null;
   kpis: {
     totalSplits: number;
     totalDeals: number;
@@ -185,14 +200,23 @@ export function DashboardClient({
   userName,
   period = "30d",
   userCreatedAt,
+  revenueData = [],
+  redeHealth,
   kpis,
   recentSplits,
   recentDeals,
 }: DashboardClientProps) {
   const router = useRouter();
-  const hour = new Date().getHours();
-  const greeting =
-    hour < 12 ? "Bom dia" : hour < 18 ? "Boa tarde" : "Boa noite";
+  const [greeting, setGreeting] = useState("Olá");
+  const [dateStr, setDateStr] = useState("");
+
+  useEffect(() => {
+    const hour = new Date().getHours();
+    setGreeting(hour < 12 ? "Bom dia" : hour < 18 ? "Boa tarde" : "Boa noite");
+    setDateStr(new Date().toLocaleDateString("pt-BR", {
+      weekday: "long", day: "numeric", month: "long",
+    }));
+  }, []);
 
   function setPeriod(p: string) {
     const url = new URL(window.location.href);
@@ -214,6 +238,9 @@ export function DashboardClient({
       {/* Market Ticker */}
       <MarketTicker />
 
+      {/* Onboarding Guiado — primeiros passos para partners */}
+      <OnboardingBanner role={role} hasFullName={!!userName && userName !== "Usuário"} />
+
       {/* Trial Banner — apenas para PARTNER e PARTNER_PRO */}
       {userCreatedAt && (
         <TrialBanner createdAt={userCreatedAt} role={role} />
@@ -228,11 +255,7 @@ export function DashboardClient({
           </h1>
           <p className="text-muted-foreground text-sm mt-1">
             Aqui está o resumo da sua plataforma —{" "}
-            {new Date().toLocaleDateString("pt-BR", {
-              weekday: "long",
-              day: "numeric",
-              month: "long",
-            })}
+            {dateStr}
           </p>
         </div>
 
@@ -291,6 +314,60 @@ export function DashboardClient({
         />
       </div>
 
+      {/* Saúde da Rede — só para ADMIN/GESTAO */}
+      {redeHealth && ["ADMIN", "GESTAO", "FINANCEIRO"].includes(role) && (
+        <div className="rounded-xl border border-[#C9A84C]/20 bg-[#C9A84C]/5 p-4">
+          <p className="text-[10px] font-bold text-[#C9A84C] uppercase tracking-widest mb-3">Saúde da Rede de Partners</p>
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center flex-shrink-0">
+                <Users className="w-4 h-4 text-emerald-400" />
+              </div>
+              <div>
+                <p className="text-lg font-bold text-white">{redeHealth.partnersAtivos}</p>
+                <p className="text-[10px] text-muted-foreground">Partners Ativos</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-amber-500/20 flex items-center justify-center flex-shrink-0">
+                <Crown className="w-4 h-4 text-amber-400" />
+              </div>
+              <div>
+                <p className="text-lg font-bold text-white">{redeHealth.partnersPRO}</p>
+                <p className="text-[10px] text-muted-foreground">Partners PRO</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-[#C9A84C]/20 flex items-center justify-center flex-shrink-0">
+                <DollarSign className="w-4 h-4 text-[#C9A84C]" />
+              </div>
+              <div>
+                <p className="text-lg font-bold text-[#C9A84C]">{new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }).format(redeHealth.mrr)}</p>
+                <p className="text-[10px] text-muted-foreground">MRR</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center flex-shrink-0">
+                <CreditCard className="w-4 h-4 text-blue-400" />
+              </div>
+              <div>
+                <p className="text-lg font-bold text-white">{new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }).format(redeHealth.comissoesPendentes)}</p>
+                <p className="text-[10px] text-muted-foreground">Comissões Pendentes</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2.5">
+              <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${redeHealth.vencendo7d > 0 ? "bg-red-500/20" : "bg-secondary"}`}>
+                <AlertCircle className={`w-4 h-4 ${redeHealth.vencendo7d > 0 ? "text-red-400" : "text-muted-foreground"}`} />
+              </div>
+              <div>
+                <p className={`text-lg font-bold ${redeHealth.vencendo7d > 0 ? "text-red-400" : "text-white"}`}>{redeHealth.vencendo7d}</p>
+                <p className="text-[10px] text-muted-foreground">Vencendo em 7d</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Revenue Chart */}
@@ -307,6 +384,11 @@ export function DashboardClient({
             </p>
           </CardHeader>
           <CardContent>
+            {revenueData.every(d => d.value === 0) ? (
+              <div className="h-[180px] flex items-center justify-center text-muted-foreground text-sm">
+                Nenhuma operação registrada no período
+              </div>
+            ) : (
             <ResponsiveContainer width="100%" height={180}>
               <AreaChart data={revenueData}>
                 <defs>
@@ -347,6 +429,7 @@ export function DashboardClient({
                 />
               </AreaChart>
             </ResponsiveContainer>
+            )}
           </CardContent>
         </Card>
 

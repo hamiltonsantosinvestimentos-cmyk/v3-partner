@@ -60,6 +60,8 @@ const patchSchema = z.object({
   client_name:     z.string().min(1).max(200).optional(),
   client_cpf_cnpj: z.string().max(20).optional().nullable(),
   metadata:        z.record(z.string(), z.unknown()).optional().nullable(),
+  // Campo exclusivo mesa/admin (armazena JSON array de instituições)
+  instituicao_encaminhada: z.string().max(1000).optional().nullable(),
 });
 
 // GET — lista propostas (partner vê as suas, admin/mesa vê todas)
@@ -81,6 +83,7 @@ export async function GET(req: NextRequest) {
       level1_notes, level2_notes, level3_notes,
       level1_at, level2_at, level3_at, created_at,
       valor_credito_atual, comissao_mandato_perc, comissao_instituicao_perc,
+      instituicao_encaminhada,
       metadata,
       partner:profiles!partner_id(id, full_name)
     `)
@@ -104,7 +107,11 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const parsed = createSchema.safeParse(body);
     if (!parsed.success) {
-      return NextResponse.json({ error: parsed.error.flatten().fieldErrors }, { status: 400 });
+      const fieldErrors = parsed.error.flatten().fieldErrors;
+      const msg = Object.entries(fieldErrors)
+        .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(", ") : v}`)
+        .join(" | ");
+      return NextResponse.json({ error: msg || "Dados inválidos" }, { status: 400 });
     }
     const d = parsed.data;
 
@@ -116,8 +123,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { count } = await supabase
-      .from("credit_desk_proposals").select("*", { count: "exact", head: true });
+    const { count } = await serviceClient()
+      .from("credit_desk_proposals").select("id", { count: "exact", head: true });
     const code = d.code ?? `CRED-26-${String((count ?? 0) + 1).padStart(4, "0")}`;
 
     const { data, error } = await serviceClient().from("credit_desk_proposals").insert({
@@ -198,7 +205,11 @@ export async function PATCH(req: NextRequest) {
   const body = await req.json();
   const parsed = patchSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.flatten().fieldErrors }, { status: 400 });
+    const fieldErrors = parsed.error.flatten().fieldErrors;
+    const msg = Object.entries(fieldErrors)
+      .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(", ") : v}`)
+      .join(" | ");
+    return NextResponse.json({ error: msg || "Dados inválidos" }, { status: 400 });
   }
 
   const { id, ...fields } = parsed.data;

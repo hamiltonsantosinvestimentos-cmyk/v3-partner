@@ -1,6 +1,100 @@
 import { NextResponse } from "next/server";
+import { createClient as sc } from "@supabase/supabase-js";
 
 const IS_DEMO = false;
+
+function serviceClient() {
+  return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+}
+
+async function buildUserContext(userId: string): Promise<string> {
+  const svc = serviceClient();
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth() + 1;
+
+  const [
+    { data: profile },
+    { data: proposals },
+    { data: deals },
+    { data: goal },
+    { data: commissions },
+  ] = await Promise.all([
+    svc.from("profiles").select("full_name, role").eq("id", userId).single(),
+    svc.from("credit_desk_proposals")
+      .select("requested_value, approved_value, status, credit_level, created_at")
+      .eq("partner_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(20),
+    svc.from("ma_deals")
+      .select("company_name, deal_value, stage, created_at")
+      .eq("assigned_to", userId)
+      .order("created_at", { ascending: false })
+      .limit(10),
+    svc.from("partner_goals")
+      .select("goal_proposals, goal_approvals, goal_volume, goal_deals")
+      .eq("partner_id", userId)
+      .eq("year", currentYear)
+      .eq("month", currentMonth)
+      .maybeSingle(),
+    svc.from("commissions")
+      .select("commission_value, status, created_at")
+      .eq("partner_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(10),
+  ]);
+
+  const approved = (proposals ?? []).filter(
+    (p) => (p.approved_value && p.approved_value > 0) || (p.status ?? "").toUpperCase().includes("APROV")
+  );
+  const totalVolume = approved.reduce((s, p) => s + (p.approved_value ?? 0), 0);
+  const pending = (proposals ?? []).filter((p) =>
+    ["PENDING", "IN_REVIEW", "DRAFT"].includes(p.status ?? "")
+  );
+  const activeDeals = (deals ?? []).filter(
+    (d) => !["CLOSED_WON", "CLOSED_LOST"].includes(d.stage ?? "")
+  );
+  const closedDeals = (deals ?? []).filter((d) => d.stage === "CLOSED_WON");
+  const paidCommissions = (commissions ?? [])
+    .filter((c) => c.status === "PAGA")
+    .reduce((s, c) => s + (c.commission_value ?? 0), 0);
+  const pendingCommissions = (commissions ?? []).filter((c) => c.status !== "PAGA");
+
+  const monthName = now.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+
+  let ctx = `\n---\n## CONTEXTO DO PARCEIRO LOGADO\n`;
+  ctx += `**Nome:** ${profile?.full_name ?? "Parceiro"} | **Role:** ${profile?.role ?? "PARTNER"} | **Data:** ${monthName}\n\n`;
+
+  ctx += `### Propostas de Crédito (últimas 20)\n`;
+  ctx += `- Submetidas: ${proposals?.length ?? 0} | Aprovadas: ${approved.length} | Em análise: ${pending.length}\n`;
+  ctx += `- Volume aprovado: R$ ${totalVolume.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}\n\n`;
+
+  ctx += `### Pipeline M&A\n`;
+  ctx += `- Deals ativos: ${activeDeals.length} | Fechados (won): ${closedDeals.length}\n`;
+  if (activeDeals.length > 0) {
+    ctx += `- Em andamento: ${activeDeals.slice(0, 3).map((d) => `${d.company_name ?? "Deal"} (${d.stage})`).join(", ")}\n`;
+  }
+  ctx += "\n";
+
+  ctx += `### Metas — ${monthName}\n`;
+  if (goal) {
+    const pct = (real: number, meta: number) =>
+      meta > 0 ? `${Math.round((real / meta) * 100)}%` : "sem meta";
+    ctx += `- Propostas: ${proposals?.length ?? 0}/${goal.goal_proposals} (${pct(proposals?.length ?? 0, goal.goal_proposals)})\n`;
+    ctx += `- Aprovações: ${approved.length}/${goal.goal_approvals} (${pct(approved.length, goal.goal_approvals)})\n`;
+    ctx += `- Volume: R$ ${(totalVolume / 1e6).toFixed(1)}M / R$ ${(goal.goal_volume / 1e6).toFixed(1)}M (${pct(totalVolume, goal.goal_volume)})\n`;
+    ctx += `- Deals M&A: ${closedDeals.length}/${goal.goal_deals} (${pct(closedDeals.length, goal.goal_deals)})\n`;
+  } else {
+    ctx += `- Metas não definidas para este mês\n`;
+  }
+  ctx += "\n";
+
+  ctx += `### Comissões\n`;
+  ctx += `- Pendentes: ${pendingCommissions.length} | Total pago: R$ ${paidCommissions.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}\n`;
+  ctx += `\n> Quando o usuário perguntar sobre "meu desempenho", "minhas propostas", "meus deals", "minha meta" etc., use os dados acima.\n---\n\n`;
+
+  return ctx;
+}
 
 const SYSTEM_PROMPT = `Você é o **V3 IA Partner**, o assistente financeiro mais avançado e completo do mercado brasileiro, integrado à plataforma V3 PARTNER — boutique institucional multiproduto de securitização e estruturação financeira.
 
@@ -315,6 +409,22 @@ function getDemoResponse(message: string): string {
 }
 
 export async function POST(request: Request) {
+  // Verificação de autenticação — impede uso não autorizado da API Anthropic
+  let authenticatedUserId: string | null = null;
+  if (!IS_DEMO) {
+    try {
+      const { createClient } = await import("@/lib/supabase/server");
+      const supabase = await createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+      }
+      authenticatedUserId = user.id;
+    } catch {
+      return NextResponse.json({ error: "Erro de autenticação" }, { status: 401 });
+    }
+  }
+
   if (IS_DEMO) {
     const { messages } = await request.json();
     const lastMessage = messages[messages.length - 1]?.content || "";
@@ -335,16 +445,36 @@ export async function POST(request: Request) {
   }
 
   // Production: Anthropic Claude
-  const { messages } = await request.json();
+  const body = await request.json();
+  const rawMessages = body.messages;
+  if (!Array.isArray(rawMessages)) {
+    return NextResponse.json({ error: "Payload inválido" }, { status: 400 });
+  }
+  // Limita a 50 mensagens e 100k chars totais para prevenir abuso
+  const messages = rawMessages.slice(-50).map((m: Record<string, unknown>) => ({
+    role: m.role,
+    content: typeof m.content === "string" ? m.content.slice(0, 8000) : m.content,
+  }));
 
   try {
     const Anthropic = (await import("@anthropic-ai/sdk")).default;
     const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
+    // Injeta contexto real do usuário no system prompt
+    let dynamicSystemPrompt = SYSTEM_PROMPT;
+    if (authenticatedUserId) {
+      try {
+        const userContext = await buildUserContext(authenticatedUserId);
+        dynamicSystemPrompt = userContext + SYSTEM_PROMPT;
+      } catch {
+        // falha silenciosa — continua sem contexto
+      }
+    }
+
     const stream = await anthropic.messages.stream({
       model: "claude-opus-4-6",
       max_tokens: 8096,
-      system: SYSTEM_PROMPT,
+      system: dynamicSystemPrompt,
       messages,
     });
 
