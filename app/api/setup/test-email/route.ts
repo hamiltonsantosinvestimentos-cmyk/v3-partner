@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      from: "V3 Partners <onboarding@resend.dev>",
+      from: process.env.EMAIL_FROM || "V3 Partners <onboarding@resend.dev>",
       to: [to],
       subject: "Teste de E-mail — V3 Partners",
       html: "<p>Este é um e-mail de teste da plataforma V3 Partners.</p>",

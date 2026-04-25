@@ -82,7 +82,7 @@ async function enviarBoasVindas(email: string, nome: string, plano: string) {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        from: "V3 Partners <onboarding@resend.dev>",
+        from: process.env.EMAIL_FROM || "V3 Partners <onboarding@resend.dev>",
         to: [email],
         subject: `Bem-vindo à V3 Partners — Cadastro Aprovado!`,
         html,
