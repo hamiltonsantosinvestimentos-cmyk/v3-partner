@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   CheckCircle, AlertTriangle, XCircle, Zap, ChevronDown, ChevronUp,
   FileImage, Loader2, FileText, CheckSquare, Square, ShieldCheck,
+  Download, Send, CheckCheck,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -71,6 +72,10 @@ export function ForjaPanel({ deal, dealId, savedResult, onSaved }: ForjaPanelPro
   const [showNarrative, setShowNarrative] = useState(false);
   const [saving, setSaving]               = useState(false);
 
+  const [exporting, setExporting]   = useState(false);
+  const [exported, setExported]     = useState<{ url: string; emails: number } | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
+
   const [docs, setDocs]                 = useState<DocEntry[]>([]);
   const [docsLoading, setDocsLoading]   = useState(false);
   const [selectedDocIds, setSelectedDocIds] = useState<string[]>([]);
@@ -129,6 +134,28 @@ export function ForjaPanel({ deal, dealId, savedResult, onSaved }: ForjaPanelPro
       setError(`Falha na validação: ${msg}`);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleExport = async () => {
+    if (!result) return;
+    setExporting(true);
+    setExportError(null);
+    setExported(null);
+    try {
+      const res = await fetch("/api/ma/forja-report", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ deal_id: dealId, deal: { ...deal, id: dealId }, forja_result: result }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error((data as { error?: string }).error ?? `HTTP ${res.status}`);
+      setExported({ url: data.report_url, emails: data.emails_sent ?? 0 });
+      if (data.report_url) window.open(data.report_url, "_blank");
+    } catch (e) {
+      setExportError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -238,6 +265,40 @@ export function ForjaPanel({ deal, dealId, savedResult, onSaved }: ForjaPanelPro
             <p className="mt-3 text-xs text-red-400 flex items-center gap-1.5">
               <XCircle className="w-3.5 h-3.5" />{error}
             </p>
+          )}
+
+          {/* Exportar / Notificar — só aparece quando há resultado */}
+          {result && (
+            <div className="mt-4 pt-4 border-t border-[#243A66] flex items-center gap-3 flex-wrap">
+              <Button
+                size="sm"
+                onClick={handleExport}
+                disabled={exporting}
+                variant="outline"
+                className="border-[#243A66] text-[#F0ECE4] hover:bg-[#162744] flex items-center gap-1.5"
+              >
+                {exporting ? (
+                  <><Loader2 className="w-3.5 h-3.5 animate-spin" />Gerando...</>
+                ) : exported ? (
+                  <><CheckCheck className="w-3.5 h-3.5 text-emerald-400" />Relatório Gerado</>
+                ) : (
+                  <><Download className="w-3.5 h-3.5" />Exportar Relatório</>
+                )}
+              </Button>
+
+              {exported && (
+                <span className="text-xs text-muted-foreground flex items-center gap-1.5">
+                  <Send className="w-3 h-3 text-[#C9A84C]" />
+                  {exported.emails > 0
+                    ? `Notificado — ${exported.emails} email${exported.emails > 1 ? "s" : ""} enviado${exported.emails > 1 ? "s" : ""}`
+                    : "Notificações criadas na plataforma"}
+                </span>
+              )}
+
+              {exportError && (
+                <span className="text-xs text-red-400">{exportError}</span>
+              )}
+            </div>
           )}
         </CardContent>
       </Card>
