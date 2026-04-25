@@ -267,39 +267,48 @@ export function ForjaPanel({ deal, dealId, savedResult, onSaved }: ForjaPanelPro
             </p>
           )}
 
-          {/* Exportar / Notificar — só aparece quando há resultado */}
-          {result && (
-            <div className="mt-4 pt-4 border-t border-[#243A66] flex items-center gap-3 flex-wrap">
-              <Button
-                size="sm"
-                onClick={handleExport}
-                disabled={exporting}
-                variant="outline"
-                className="border-[#243A66] text-[#F0ECE4] hover:bg-[#162744] flex items-center gap-1.5"
-              >
-                {exporting ? (
-                  <><Loader2 className="w-3.5 h-3.5 animate-spin" />Gerando...</>
-                ) : exported ? (
-                  <><CheckCheck className="w-3.5 h-3.5 text-emerald-400" />Relatório Gerado</>
-                ) : (
-                  <><Download className="w-3.5 h-3.5" />Exportar Relatório</>
-                )}
-              </Button>
-
-              {exported && (
-                <span className="text-xs text-muted-foreground flex items-center gap-1.5">
-                  <Send className="w-3 h-3 text-[#C9A84C]" />
-                  {exported.emails > 0
-                    ? `Notificado — ${exported.emails} email${exported.emails > 1 ? "s" : ""} enviado${exported.emails > 1 ? "s" : ""}`
-                    : "Notificações criadas na plataforma"}
-                </span>
+          {/* Exportar Relatório — sempre visível, desabilitado sem resultado */}
+          <div className="mt-4 pt-4 border-t border-[#243A66] flex items-center gap-3 flex-wrap">
+            <Button
+              size="sm"
+              onClick={handleExport}
+              disabled={exporting || !result}
+              variant="outline"
+              title={!result ? "Execute a validação FORJA primeiro" : undefined}
+              className={`flex items-center gap-1.5 transition-all ${
+                result
+                  ? "border-[#243A66] text-[#F0ECE4] hover:bg-[#162744]"
+                  : "border-[#243A66]/40 text-[#7A8FA8] cursor-not-allowed opacity-50"
+              }`}
+            >
+              {exporting ? (
+                <><Loader2 className="w-3.5 h-3.5 animate-spin" />Gerando...</>
+              ) : exported ? (
+                <><CheckCheck className="w-3.5 h-3.5 text-emerald-400" />Relatório Gerado</>
+              ) : (
+                <><Download className="w-3.5 h-3.5" />Exportar Relatório</>
               )}
+            </Button>
 
-              {exportError && (
-                <span className="text-xs text-red-400">{exportError}</span>
-              )}
-            </div>
-          )}
+            {!result && !loading && (
+              <span className="text-[10px] text-muted-foreground">
+                Execute a validação para liberar o relatório
+              </span>
+            )}
+
+            {exported && (
+              <span className="text-xs text-muted-foreground flex items-center gap-1.5">
+                <Send className="w-3 h-3 text-[#C9A84C]" />
+                {exported.emails > 0
+                  ? `Notificado — ${exported.emails} email${exported.emails > 1 ? "s" : ""} enviado${exported.emails > 1 ? "s" : ""}`
+                  : "Notificações criadas na plataforma"}
+              </span>
+            )}
+
+            {exportError && (
+              <span className="text-xs text-red-400">{exportError}</span>
+            )}
+          </div>
         </CardContent>
       </Card>
 
