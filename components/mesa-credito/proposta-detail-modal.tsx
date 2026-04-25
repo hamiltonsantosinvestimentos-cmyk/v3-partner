@@ -1239,32 +1239,37 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
                       </div>
                     )}
 
-                    {/* Adicionar nova instituição */}
-                    <div className="flex gap-2">
-                      <select
-                        value={addingInst}
-                        onChange={(e) => { setAddingInst(e.target.value); setAddingInstCustom(""); }}
-                        className="flex-1 h-8 px-3 text-xs bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-1 focus:ring-[#C9A84C]/50"
-                      >
-                        <option value="">+ Adicionar instituição...</option>
-                        {INSTITUICOES.map(i => <option key={i} value={i}>{i}</option>)}
-                      </select>
-                      <button
-                        onClick={handleAddInstituicao}
-                        disabled={!addingInst || (addingInst === "Outra" && !addingInstCustom.trim())}
-                        className="h-8 px-3 rounded-lg bg-[#C9A84C]/15 hover:bg-[#C9A84C]/25 border border-[#C9A84C]/30 text-[#C9A84C] text-xs font-bold disabled:opacity-50 transition-colors"
-                      >
-                        +
-                      </button>
-                    </div>
+                    {/* Adicionar nova instituição — selecionar já adiciona à lista */}
+                    <select
+                      value=""
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (!val || val === "Outra") { setAddingInst(val); return; }
+                        if (!instituicoesList.includes(val)) setInstituicoesList(prev => [...prev, val]);
+                        setAddingInst("");
+                      }}
+                      className="w-full h-8 px-3 text-xs bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-1 focus:ring-[#C9A84C]/50"
+                    >
+                      <option value="">+ Selecionar instituição...</option>
+                      {INSTITUICOES.map(i => <option key={i} value={i}>{i}</option>)}
+                    </select>
                     {addingInst === "Outra" && (
-                      <input
-                        type="text"
-                        value={addingInstCustom}
-                        onChange={(e) => setAddingInstCustom(e.target.value)}
-                        placeholder="Nome da instituição"
-                        className="w-full h-8 px-3 text-xs bg-secondary border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-[#C9A84C]/50"
-                      />
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={addingInstCustom}
+                          onChange={(e) => setAddingInstCustom(e.target.value)}
+                          placeholder="Nome da instituição"
+                          className="flex-1 h-8 px-3 text-xs bg-secondary border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-[#C9A84C]/50"
+                        />
+                        <button
+                          onClick={handleAddInstituicao}
+                          disabled={!addingInstCustom.trim()}
+                          className="h-8 px-3 rounded-lg bg-[#C9A84C]/15 hover:bg-[#C9A84C]/25 border border-[#C9A84C]/30 text-[#C9A84C] text-xs font-bold disabled:opacity-50 transition-colors"
+                        >
+                          +
+                        </button>
+                      </div>
                     )}
 
                     <button
