@@ -78,16 +78,25 @@ export async function POST(req: NextRequest) {
         read: false,
       }).then(() => {}, () => {});
 
-      // E-mail para o partner
-      notifyComentarioProposta({
-        partnerEmail: partnerProfile.email,
-        partnerName: partnerProfile.full_name ?? "Parceiro",
-        proposalCode: proposal.code ?? proposal_id,
-        proposalTitle: proposal.title ?? "",
-        creditLine: proposal.credit_line ?? "",
-        autor,
-        comentario: text.trim(),
-      });
+      // E-mail — profiles.email pode ser null, busca em auth.users
+      const emailFinal: string | null = partnerProfile.email ?? null;
+      let resolvedEmail = emailFinal;
+      if (!resolvedEmail) {
+        const { data: authUser } = await svc.auth.admin.getUserById(partnerProfile.id);
+        resolvedEmail = authUser?.user?.email ?? null;
+      }
+
+      if (resolvedEmail) {
+        notifyComentarioProposta({
+          partnerEmail: resolvedEmail,
+          partnerName: partnerProfile.full_name ?? "Parceiro",
+          proposalCode: proposal.code ?? proposal_id,
+          proposalTitle: proposal.title ?? "",
+          creditLine: proposal.credit_line ?? "",
+          autor,
+          comentario: text.trim(),
+        });
+      }
     }
   }
 

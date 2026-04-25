@@ -621,7 +621,7 @@ export async function sendWelcomePartner(opts: {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        from: "V3 Partners <onboarding@resend.dev>",
+        from: process.env.EMAIL_FROM || "V3 Partners <onboarding@resend.dev>",
         to: [opts.partnerEmail],
         subject: `Bem-vindo(a) à V3 Partners — ${opts.plano}`,
         html,
