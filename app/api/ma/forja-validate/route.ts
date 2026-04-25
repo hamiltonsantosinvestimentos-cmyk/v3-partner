@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
 
     const message = await client.messages.create({
       model: "claude-sonnet-4-6",
-      max_tokens: 4096,
+      max_tokens: 1500,
       system:
         "Você é o FORJA, validador inteligente de dados de deals M&A da V3 Partners. " +
         "Analise os dados do deal fornecido e retorne APENAS um JSON válido, sem markdown, com esta estrutura exata:\n" +
