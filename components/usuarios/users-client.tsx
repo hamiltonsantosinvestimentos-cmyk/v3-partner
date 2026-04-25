@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Users, Plus, Search, UserCheck, UserX, Pencil, Trash2, Clock, ShieldOff, ShieldCheck, Mail, Loader2, FileText, CalendarPlus } from "lucide-react";
+import { Users, Plus, Search, UserCheck, UserX, Pencil, Trash2, Clock, ShieldOff, ShieldCheck, Mail, Loader2, FileText, CalendarPlus, History } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -260,7 +260,7 @@ export function UsersClient({ initialUsers }: UsersClientProps) {
     }
   };
 
-  const [editForm, setEditForm] = useState({ role: "" as UserRole, document_cpf: "" });
+  const [editForm, setEditForm] = useState({ role: "" as UserRole, document_cpf: "", email: "", full_name: "", phone: "" });
 
   const handleUpdateRole = async (userId: string, newRole: UserRole) => {
     const res = await fetch(`/api/usuarios/${userId}`, {
@@ -275,24 +275,53 @@ export function UsersClient({ initialUsers }: UsersClientProps) {
     }
   };
 
+  const [editError, setEditError] = useState("");
+  const [auditLogs, setAuditLogs] = useState<{ action: string; user_name: string; created_at: string }[]>([]);
+  const [loadingAudit, setLoadingAudit] = useState(false);
+  const [showAudit, setShowAudit] = useState(false);
+
+  async function fetchAudit(userId: string) {
+    setLoadingAudit(true);
+    try {
+      const res = await fetch(`/api/audit-logs?entity=profiles&entity_id=${userId}&limit=20`);
+      if (res.ok) {
+        const d = await res.json();
+        setAuditLogs(d.logs ?? []);
+      }
+    } finally {
+      setLoadingAudit(false);
+    }
+  }
+
   const handleSaveEdit = async () => {
     if (!editUser) return;
     setLoading(true);
+    setEditError("");
+    const payload: Record<string, unknown> = {
+      role: editForm.role,
+      document_cpf: editForm.document_cpf || null,
+      full_name: editForm.full_name.trim() || null,
+      phone: editForm.phone.trim() || null,
+    };
+    // Só envia email se foi alterado
+    if (editForm.email && editForm.email !== editUser.email) {
+      payload.email = editForm.email.trim().toLowerCase();
+    }
     const res = await fetch(`/api/usuarios/${editUser.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        role: editForm.role,
-        document_cpf: editForm.document_cpf || null,
-      }),
+      body: JSON.stringify(payload),
     });
     if (res.ok) {
       setUsers(users.map((u) =>
         u.id === editUser.id
-          ? { ...u, role: editForm.role, document_cpf: editForm.document_cpf || null }
+          ? { ...u, role: editForm.role, document_cpf: editForm.document_cpf || null, email: payload.email as string ?? u.email, full_name: payload.full_name as string ?? u.full_name, phone: payload.phone as string ?? u.phone }
           : u
       ));
       setEditUser(null);
+    } else {
+      const d = await res.json();
+      setEditError(d.error ?? "Erro ao salvar.");
     }
     setLoading(false);
   };
@@ -423,7 +452,7 @@ export function UsersClient({ initialUsers }: UsersClientProps) {
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1">
                         <button
-                          onClick={() => { setEditUser(user); setEditForm({ role: user.role, document_cpf: user.document_cpf || "" }); }}
+                          onClick={() => { setEditUser(user); setEditForm({ role: user.role, document_cpf: user.document_cpf || "", email: user.email, full_name: user.full_name || "", phone: user.phone || "" }); setShowAudit(false); setAuditLogs([]); }}
                           className="p-1.5 rounded hover:bg-secondary transition-colors text-muted-foreground hover:text-foreground"
                           title="Editar perfil"
                         >
@@ -591,7 +620,7 @@ export function UsersClient({ initialUsers }: UsersClientProps) {
 
       {/* Edit User Dialog */}
       {editUser && (
-        <Dialog open={!!editUser} onOpenChange={() => setEditUser(null)}>
+        <Dialog open={!!editUser} onOpenChange={() => { setEditUser(null); setEditError(""); }}>
           <DialogContent className="max-w-sm">
             <DialogHeader>
               <DialogTitle>Editar Usuário</DialogTitle>
@@ -603,6 +632,36 @@ export function UsersClient({ initialUsers }: UsersClientProps) {
                   {editUser.full_name || editUser.email}
                 </strong>
               </p>
+              <div className="space-y-1.5">
+                <Label>Nome Completo</Label>
+                <Input
+                  value={editForm.full_name}
+                  onChange={(e) => setEditForm({ ...editForm, full_name: e.target.value })}
+                  placeholder="Nome do partner"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Telefone</Label>
+                <Input
+                  value={editForm.phone}
+                  onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
+                  placeholder="(11) 99999-9999"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>E-mail</Label>
+                <Input
+                  type="email"
+                  value={editForm.email}
+                  onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
+                  placeholder="email@exemplo.com"
+                />
+                {editForm.email !== editUser.email && editForm.email && (
+                  <p className="text-[11px] text-amber-400">
+                    E-mail será alterado de <strong>{editUser.email}</strong> para <strong>{editForm.email}</strong>
+                  </p>
+                )}
+              </div>
               <div className="space-y-1.5">
                 <Label>Perfil de Acesso</Label>
                 <Select
@@ -629,9 +688,41 @@ export function UsersClient({ initialUsers }: UsersClientProps) {
                   placeholder="000.000.000-00 ou 00.000.000/0001-00"
                 />
               </div>
+              {/* Histórico de auditoria */}
+              <div className="border-t border-border/40 pt-3">
+                <button
+                  type="button"
+                  onClick={() => { setShowAudit(v => !v); if (!showAudit && editUser) fetchAudit(editUser.id); }}
+                  className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <History className="w-3.5 h-3.5" />
+                  {showAudit ? "Ocultar histórico" : "Ver histórico de ações"}
+                </button>
+                {showAudit && (
+                  <div className="mt-2 max-h-36 overflow-y-auto space-y-1">
+                    {loadingAudit && <p className="text-xs text-muted-foreground">Carregando...</p>}
+                    {!loadingAudit && auditLogs.length === 0 && (
+                      <p className="text-xs text-muted-foreground">Nenhuma ação registrada.</p>
+                    )}
+                    {auditLogs.map((log, i) => (
+                      <div key={i} className="flex items-center justify-between text-[11px] bg-secondary/40 rounded px-2 py-1">
+                        <span className="text-foreground font-medium">{log.action.replace(/_/g, " ")}</span>
+                        <span className="text-muted-foreground ml-2">{log.user_name}</span>
+                        <span className="text-muted-foreground ml-2 whitespace-nowrap">{new Date(log.created_at).toLocaleString("pt-BR")}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {editError && (
+                <p className="text-sm text-red-400 bg-red-500/10 border border-red-500/20 px-3 py-2 rounded-lg">
+                  {editError}
+                </p>
+              )}
             </div>
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setEditUser(null)}>
+              <Button type="button" variant="outline" onClick={() => { setEditUser(null); setEditError(""); setShowAudit(false); }}>
                 Cancelar
               </Button>
               <Button type="button" loading={loading} onClick={handleSaveEdit}>

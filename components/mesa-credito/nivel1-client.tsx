@@ -126,7 +126,16 @@ export function CreditDeskLevel1Client({ proposals: initial, currentUser }: Cred
       setProposals(prev => [{ ...p, id: json.proposal.id, partner_id: json.proposal.partner_id ?? p.partner_id, metadata: json.proposal.metadata ?? metadata }, ...prev]);
       return;
     }
-    throw new Error(typeof json.error === "string" ? json.error : "Erro ao salvar proposta.");
+    if (typeof json.error === "string") {
+      throw new Error(json.error);
+    }
+    if (json.error && typeof json.error === "object") {
+      const msgs = Object.entries(json.error as Record<string, string[]>)
+        .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(", ") : v}`)
+        .join(" | ");
+      throw new Error(msgs || "Erro de validação ao salvar proposta.");
+    }
+    throw new Error("Erro ao salvar proposta. Tente novamente.");
   }, []);
 
   const handleStageChange = useCallback((proposalId: string, newStage: string) => {

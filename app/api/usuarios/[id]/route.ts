@@ -1,4 +1,9 @@
 import { NextResponse } from "next/server";
+import { createClient as sc } from "@supabase/supabase-js";
+
+function svcClient() {
+  return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+}
 
 const IS_DEMO = false;
 
@@ -19,11 +24,19 @@ export async function PATCH(
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
-  const { data: profileData } = await supabase.from("profiles").select("role").eq("id", user.id).single();
-  const profile = profileData as { role: string } | null;
+  const { data: profileData } = await supabase.from("profiles").select("role, full_name, email").eq("id", user.id).single();
+  const profile = profileData as { role: string; full_name: string | null; email: string } | null;
   if (profile?.role !== "ADMIN") return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
 
-  const allowedFields = ["role", "is_active", "phone", "full_name", "document_cpf", "trial_expires_at"];
+  // Se enviou novo e-mail, atualiza no Supabase Auth primeiro
+  if (body.email) {
+    const { error: authEmailError } = await supabase.auth.admin.updateUserById(id, { email: body.email });
+    if (authEmailError) {
+      return NextResponse.json({ error: authEmailError.message }, { status: 500 });
+    }
+  }
+
+  const allowedFields = ["role", "is_active", "phone", "full_name", "document_cpf", "trial_expires_at", "email"];
   const updateData: Record<string, unknown> = {};
   for (const field of allowedFields) {
     if (field in body) updateData[field] = body[field];
@@ -48,6 +61,25 @@ export async function PATCH(
   if (updateError) {
     return NextResponse.json({ error: updateError.message }, { status: 500 });
   }
+
+  // Grava auditoria (fire-and-forget)
+  const actionLabel = body.email ? "EDITAR_EMAIL"
+    : body.role ? "EDITAR_ROLE"
+    : body.is_active === false ? "SUSPENDER"
+    : body.is_active === true ? "REATIVAR"
+    : body.trial_expires_at ? "RENOVAR_TRIAL"
+    : "EDITAR_PERFIL";
+
+  svcClient().from("audit_logs").insert({
+    user_id: user.id,
+    user_name: profile?.full_name ?? profile?.email ?? user.email,
+    action: actionLabel,
+    entity: "profiles",
+    entity_id: id,
+    new_data: updateData,
+    old_data: null,
+    ip_address: null,
+  }).then(() => {}).catch(() => {});
 
   return NextResponse.json(data);
 }

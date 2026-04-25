@@ -1,6 +1,6 @@
 import { Resend } from "resend";
 
-const FROM = process.env.EMAIL_FROM ?? "V3 Partners <noreply@v3partners.com.br>";
+const FROM = process.env.EMAIL_FROM || "V3 Partners <onboarding@resend.dev>";
 
 // Envia e-mail — nunca bloqueia a operação principal
 // Resend é instanciado em runtime (não em build time) para evitar erro de chave ausente
@@ -546,6 +546,88 @@ export async function notifyTestemunhaParaAssinar(opts: {
       url: opts.testemunhaUrl,
     })
   );
+}
+
+/** Partner: e-mail de boas-vindas ao ser cadastrado */
+export async function sendWelcomePartner(opts: {
+  partnerEmail: string;
+  partnerName: string;
+  plano: string;
+  loginUrl: string;
+  contratoUrl: string;
+}): Promise<void> {
+  const resendKey = process.env.RESEND_API_KEY;
+  if (!resendKey || !opts.partnerEmail) return;
+
+  const comissao = opts.plano === "Partner PRO" ? "50%" : "30%";
+
+  const html = `<!DOCTYPE html>
+<html lang="pt-BR">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#09081A;font-family:'Helvetica Neue',Arial,sans-serif;">
+  <div style="max-width:560px;margin:0 auto;padding:40px 20px;">
+    <div style="text-align:center;margin-bottom:32px;">
+      <p style="font-size:22px;font-weight:800;letter-spacing:4px;color:#C9A84C;margin:0;">V3 PARTNERS</p>
+      <p style="font-size:11px;color:#7A8FA8;margin:4px 0 0;letter-spacing:1px;">PLATAFORMA FINANCEIRA</p>
+    </div>
+    <div style="background:#111F35;border:1px solid #243A66;border-radius:16px;padding:32px;margin-bottom:16px;">
+      <p style="font-size:11px;font-weight:700;letter-spacing:2px;color:#C9A84C;text-transform:uppercase;margin:0 0 12px;">Bem-vindo(a)!</p>
+      <h1 style="font-size:22px;font-weight:700;color:#F0ECE4;margin:0 0 8px;">Olá, ${opts.partnerName}!</h1>
+      <p style="font-size:14px;color:#7A8FA8;margin:0 0 28px;line-height:1.6;">
+        Sua conta <strong style="color:#C9A84C;">${opts.plano}</strong> foi criada com sucesso.
+        Com ela você acessa operações com até <strong style="color:#C9A84C;">${comissao}</strong> de comissionamento.
+      </p>
+      <div style="background:#0A1628;border:1px solid #243A66;border-radius:12px;padding:20px;margin-bottom:24px;">
+        <p style="font-size:10px;font-weight:700;letter-spacing:2px;color:#7A8FA8;text-transform:uppercase;margin:0 0 16px;">Seus dados de acesso</p>
+        <div style="margin-bottom:12px;">
+          <p style="font-size:11px;color:#7A8FA8;margin:0 0 4px;">E-mail</p>
+          <p style="font-size:15px;color:#F0ECE4;font-weight:600;margin:0;">${opts.partnerEmail}</p>
+        </div>
+        <div>
+          <p style="font-size:11px;color:#7A8FA8;margin:0 0 4px;">Senha temporária</p>
+          <p style="font-size:20px;color:#C9A84C;font-weight:700;font-family:monospace;letter-spacing:4px;margin:0;">12345678</p>
+        </div>
+      </div>
+      <div style="text-align:center;margin-bottom:20px;">
+        <a href="${opts.loginUrl}"
+           style="display:inline-block;background:#C9A84C;color:#09081A;font-size:14px;font-weight:700;padding:14px 36px;border-radius:10px;text-decoration:none;">
+          Acessar Plataforma →
+        </a>
+      </div>
+      <div style="background:#C9A84C10;border:1px solid #C9A84C35;border-radius:8px;padding:14px;margin-bottom:16px;">
+        <p style="font-size:13px;color:#C9A84C;margin:0;line-height:1.5;">
+          <strong>Próximo passo:</strong> Assine o contrato de parceria para liberar todas as funcionalidades.
+        </p>
+      </div>
+      <div style="text-align:center;">
+        <a href="${opts.contratoUrl}"
+           style="display:inline-block;border:1px solid #C9A84C;color:#C9A84C;font-size:13px;font-weight:600;padding:10px 28px;border-radius:10px;text-decoration:none;">
+          Assinar Contrato de Parceria
+        </a>
+      </div>
+    </div>
+    <p style="font-size:11px;color:#3A5070;text-align:center;margin:0;">
+      © 2026 V3 Partners · E-mail automático, não responda.
+    </p>
+  </div>
+</body>
+</html>`;
+
+  try {
+    await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${resendKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from: "V3 Partners <onboarding@resend.dev>",
+        to: [opts.partnerEmail],
+        subject: `Bem-vindo(a) à V3 Partners — ${opts.plano}`,
+        html,
+      }),
+    });
+  } catch { /* silent */ }
 }
 
 /** Partner: relatório mensal de comissões e operações */

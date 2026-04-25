@@ -163,12 +163,54 @@ export default async function DashboardPage({
     return { month: mesesPT[parseInt(m) - 1], value };
   });
 
+  // Saúde da rede — só para ADMIN/GESTAO/FINANCEIRO
+  let redeHealth = null;
+  if (["ADMIN", "GESTAO", "FINANCEIRO"].includes(role)) {
+    try {
+      const [partnersRes, comissoesRes] = await Promise.allSettled([
+        svc.from("profiles").select("id, role, trial_expires_at, created_at, is_active").in("role", ["PARTNER", "PARTNER_PRO"]),
+        svc.from("commissions").select("commission_value, status").eq("status", "A_PAGAR"),
+      ]);
+
+      const partners = partnersRes.status === "fulfilled" ? (partnersRes.value.data ?? []) : [];
+      const comissoes = comissoesRes.status === "fulfilled" ? (comissoesRes.value.data ?? []) : [];
+
+      const now = Date.now();
+      const ativos = partners.filter((p: { is_active: boolean; trial_expires_at: string | null; created_at: string }) => {
+        if (!p.is_active) return false;
+        const exp = p.trial_expires_at
+          ? new Date(p.trial_expires_at).getTime()
+          : new Date(p.created_at).getTime() + 30 * 86400000;
+        return exp > now;
+      });
+      const vencendo7d = partners.filter((p: { is_active: boolean; trial_expires_at: string | null; created_at: string }) => {
+        if (!p.is_active) return false;
+        const exp = p.trial_expires_at
+          ? new Date(p.trial_expires_at).getTime()
+          : new Date(p.created_at).getTime() + 30 * 86400000;
+        const dias = Math.floor((exp - now) / 86400000);
+        return dias >= 0 && dias <= 7;
+      }).length;
+
+      redeHealth = {
+        partnersAtivos: ativos.length,
+        partnersPRO: ativos.filter((p: { role: string }) => p.role === "PARTNER_PRO").length,
+        mrr: ativos.reduce((s: number, p: { role: string }) => s + (p.role === "PARTNER_PRO" ? 397 : 197), 0),
+        comissoesPendentes: comissoes.reduce((s: number, c: { commission_value: number }) => s + c.commission_value, 0),
+        vencendo7d,
+      };
+    } catch {
+      redeHealth = null;
+    }
+  }
+
   return (
     <DashboardClient
       role={role}
       userName={profileData?.full_name || "Usuário"}
       period={period}
       revenueData={revenueData}
+      redeHealth={redeHealth}
       kpis={{
         totalSplits: totalSplits,
         totalDeals: totalDeals,
