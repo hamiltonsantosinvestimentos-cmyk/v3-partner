@@ -686,6 +686,7 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
         canChangeStage={canChangeStage}
         canEditValorSolicitado={canChangeStage}
         canCompileDocuments={canChangeStage}
+        canEditInstituicao={canChangeStage}
       />
     </div>
   );
