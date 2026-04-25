@@ -1,0 +1,176 @@
+import { NextRequest, NextResponse } from "next/server";
+import { createClient } from "@/lib/supabase/server";
+import { createClient as sc } from "@supabase/supabase-js";
+
+function svc() {
+  return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+}
+
+async function getAuthedAdmin() {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { user: null, profile: null };
+  const { data: profile } = await svc()
+    .from("profiles")
+    .select("id, role")
+    .eq("id", user.id)
+    .single();
+  return { user, profile };
+}
+
+// GET — lista todos os partners com dados de assinatura
+export async function GET() {
+  const { user, profile } = await getAuthedAdmin();
+  if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+  if (!["ADMIN", "FINANCEIRO"].includes(profile?.role ?? "")) {
+    return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
+  }
+
+  const { data: partners, error } = await svc()
+    .from("profiles")
+    .select("id, full_name, email, role, created_at, is_active, trial_expires_at")
+    .in("role", ["PARTNER", "PARTNER_PRO"])
+    .order("created_at", { ascending: false });
+
+  // Se trial_expires_at não existir ainda, tenta sem a coluna
+  let finalPartners = partners;
+  if (error) {
+    const { data: partnersFallback } = await svc()
+      .from("profiles")
+      .select("id, full_name, email, role, created_at, is_active")
+      .in("role", ["PARTNER", "PARTNER_PRO"])
+      .order("created_at", { ascending: false });
+    finalPartners = partnersFallback;
+  }
+
+  // Notificações pendentes de renovação/upgrade
+  const { data: pendingNotifs } = await svc()
+    .from("notifications")
+    .select("message, type, created_at")
+    .in("type", ["RENEWAL_REQUEST", "UPGRADE_REQUEST"])
+    .eq("read", false)
+    .order("created_at", { ascending: false });
+
+  // Histórico de pagamentos (tabela pode não existir ainda)
+  let payments: unknown[] = [];
+  try {
+    const { data: payData } = await svc()
+      .from("financeiro_records")
+      .select("*")
+      .eq("type", "ASSINATURA_PAGAMENTO")
+      .order("created_at", { ascending: false });
+    payments = payData ?? [];
+  } catch { payments = []; }
+
+  return NextResponse.json({
+    partners: finalPartners ?? [],
+    pendingNotifs: pendingNotifs ?? [],
+    payments,
+  });
+}
+
+// PATCH — renovar (+30d), upgrade para PRO, suspender, reativar
+export async function PATCH(req: NextRequest) {
+  const { user, profile } = await getAuthedAdmin();
+  if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+  if (!["ADMIN", "FINANCEIRO"].includes(profile?.role ?? "")) {
+    return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
+  }
+
+  const body = await req.json();
+  const { partnerId, action } = body as { partnerId: string; action: string };
+
+  if (!partnerId || !action) {
+    return NextResponse.json({ error: "Parâmetros inválidos" }, { status: 400 });
+  }
+
+  if (action === "renovar") {
+    const novaExpiracao = new Date();
+    novaExpiracao.setDate(novaExpiracao.getDate() + 30);
+    const { error } = await svc()
+      .from("profiles")
+      .update({ trial_expires_at: novaExpiracao.toISOString(), is_active: true })
+      .eq("id", partnerId);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  } else if (action === "upgrade") {
+    const { error } = await svc()
+      .from("profiles")
+      .update({ role: "PARTNER_PRO" })
+      .eq("id", partnerId);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  } else if (action === "suspender") {
+    const { error } = await svc()
+      .from("profiles")
+      .update({ is_active: false })
+      .eq("id", partnerId);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  } else if (action === "reativar") {
+    const novaExpiracao = new Date();
+    novaExpiracao.setDate(novaExpiracao.getDate() + 30);
+    const { error } = await svc()
+      .from("profiles")
+      .update({ is_active: true, trial_expires_at: novaExpiracao.toISOString() })
+      .eq("id", partnerId);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  } else {
+    return NextResponse.json({ error: "Ação inválida" }, { status: 400 });
+  }
+
+  return NextResponse.json({ ok: true });
+}
+
+// POST — registrar pagamento manual (salva em financeiro_records + renova acesso +30d)
+export async function POST(req: NextRequest) {
+  const { user, profile } = await getAuthedAdmin();
+  if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+  if (!["ADMIN", "FINANCEIRO"].includes(profile?.role ?? "")) {
+    return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
+  }
+
+  const body = await req.json();
+  const { partnerId, partnerNome, partnerRole, valor, mes, ano, observacoes } = body as {
+    partnerId: string;
+    partnerNome: string;
+    partnerRole: string;
+    valor: number;
+    mes: number;
+    ano: number;
+    observacoes?: string;
+  };
+
+  if (!partnerId || !valor) {
+    return NextResponse.json({ error: "Parâmetros inválidos" }, { status: 400 });
+  }
+
+  const { error: payErr } = await svc()
+    .from("financeiro_records")
+    .insert({
+      type: "ASSINATURA_PAGAMENTO",
+      data: {
+        partnerId,
+        partnerNome,
+        partnerRole,
+        valor,
+        mes,
+        ano,
+        observacoes: observacoes ?? "",
+        dataPagamento: new Date().toISOString(),
+      },
+    });
+
+  if (payErr) return NextResponse.json({ error: payErr.message }, { status: 500 });
+
+  // Renova acesso +30 dias a partir de hoje
+  const novaExpiracao = new Date();
+  novaExpiracao.setDate(novaExpiracao.getDate() + 30);
+  await svc()
+    .from("profiles")
+    .update({ trial_expires_at: novaExpiracao.toISOString(), is_active: true })
+    .eq("id", partnerId);
+
+  return NextResponse.json({ ok: true });
+}
