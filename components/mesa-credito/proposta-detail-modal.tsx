@@ -180,6 +180,7 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
   const [addingInstCustom, setAddingInstCustom] = useState<string>("");
   const [savingInstituicao, setSavingInstituicao] = useState(false);
   const [instituicaoSaved, setInstituicaoSaved] = useState(false);
+  const [instituicaoError, setInstituicaoError] = useState<string | null>(null);
 
   function handleAddInstituicao() {
     const nome = addingInst === "Outra" ? addingInstCustom.trim() : addingInst;
@@ -192,6 +193,7 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
   async function handleSaveInstituicao() {
     if (!proposal) return;
     setSavingInstituicao(true);
+    setInstituicaoError(null);
     try {
       const valor = JSON.stringify(instituicoesList);
       const res = await fetch("/api/credit-proposals", {
@@ -199,14 +201,17 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: proposal.id, instituicao_encaminhada: valor }),
       });
+      const json = await res.json();
       if (!res.ok) {
-        const e = await res.json();
-        console.error("[handleSaveInstituicao]", e);
+        const msg = json?.error ?? `Erro ${res.status}`;
+        setInstituicaoError(typeof msg === "string" ? msg : JSON.stringify(msg));
         return;
       }
       onProposalUpdate?.(proposal.id, { instituicao_encaminhada: valor });
       setInstituicaoSaved(true);
       setTimeout(() => setInstituicaoSaved(false), 2500);
+    } catch (err) {
+      setInstituicaoError(err instanceof Error ? err.message : "Erro desconhecido");
     } finally {
       setSavingInstituicao(false);
     }
@@ -1280,6 +1285,9 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
                       {savingInstituicao ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
                       {instituicaoSaved ? "Salvo!" : "Salvar"}
                     </button>
+                    {instituicaoError && (
+                      <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{instituicaoError}</p>
+                    )}
                   </div>
                 )}
               </div>
