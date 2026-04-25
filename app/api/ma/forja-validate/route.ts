@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
 
     const message = await client.messages.create({
       model: "claude-sonnet-4-6",
-      max_tokens: 1500,
+      max_tokens: 2500,
       system:
         "Você é o FORJA, validador inteligente de dados de deals M&A da V3 Partners. " +
         "Analise os dados do deal fornecido e retorne APENAS um JSON válido, sem markdown, com esta estrutura exata:\n" +
@@ -29,10 +29,10 @@ export async function POST(req: NextRequest) {
         '  "validated": [ { "field": "<campo>", "value": "<valor>", "note": "<observação opcional>" } ],\n' +
         '  "corrected": [ { "field": "<campo>", "original": "<valor original>", "corrected": "<valor corrigido>", "reason": "<motivo>" } ],\n' +
         '  "missing": [ { "field": "<campo>", "impact": "<impacto de não ter este campo>", "priority": "ALTA" | "MEDIA" | "BAIXA" } ],\n' +
-        '  "narrative_pt": "<narrativa de investimento em português>",\n' +
-        '  "narrative_en": "<investment narrative in english>",\n' +
+        '  "narrative_pt": "<narrativa de investimento em português — máximo 3 frases>",\n' +
+        '  "narrative_en": "<investment narrative in english — maximum 3 sentences>",\n' +
         '  "recommendation": "APROVADO" | "APROVADO_COM_RESSALVAS" | "PENDENTE" | "BLOQUEADO",\n' +
-        '  "recommendation_note": "<justificativa da recomendação>"\n' +
+        '  "recommendation_note": "<justificativa da recomendação — máximo 2 frases>"\n' +
         "}\n\n" +
         "Regras:\n" +
         "- score >= 80 e dados completos → APROVADO\n" +
@@ -50,6 +50,10 @@ export async function POST(req: NextRequest) {
         },
       ],
     });
+
+    if (message.stop_reason === "max_tokens") {
+      throw new Error("Resposta da IA truncada — tente novamente com menos dados no deal");
+    }
 
     const content = message.content[0];
     if (content.type !== "text") {
