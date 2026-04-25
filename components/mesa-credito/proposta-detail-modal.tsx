@@ -108,6 +108,7 @@ export interface ProposalFull {
   imovel_estado?: string;
   mesa_comments?: MesaComment[];
   metadata?: ProposalMeta;
+  instituicao_encaminhada?: string | null;
 }
 
 interface EscavadorProcesso {
@@ -146,9 +147,10 @@ interface PropostaDetailModalProps {
   canChangeStage?: boolean;
   canEditValorSolicitado?: boolean;
   canCompileDocuments?: boolean;
+  canEditInstituicao?: boolean;
 }
 
-export function PropostaDetailModal({ open, onClose, proposal, onStageChange, onProposalUpdate, canChangeStage, canEditValorSolicitado, canCompileDocuments }: PropostaDetailModalProps) {
+export function PropostaDetailModal({ open, onClose, proposal, onStageChange, onProposalUpdate, canChangeStage, canEditValorSolicitado, canCompileDocuments, canEditInstituicao }: PropostaDetailModalProps) {
   // ── Checklist state ───────────────────────────────────────────────────────
   const IS_DEMO = false;
   const [checkedDocs, setCheckedDocs] = useState<Record<string, boolean>>({});
@@ -160,11 +162,49 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
   const [compileDocs, setCompileDocs] = useState<CompiledDoc[]>([]);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
+  // Instituição encaminhada (apenas mesa/admin)
+  const INSTITUICOES = [
+    "BTG Pactual","Itaú BBA","Bradesco BBI","Santander","Caixa Econômica Federal",
+    "Banco do Brasil","Daycoval","Mercantil do Brasil","Omni","Creditas",
+    "BV Financeira","Safra","ABC Brasil","Fibra","Outra",
+  ];
+  const [instituicao, setInstituicao] = useState<string>("");
+  const [instituicaoCustom, setInstituicaoCustom] = useState<string>("");
+  const [savingInstituicao, setSavingInstituicao] = useState(false);
+  const [instituicaoSaved, setInstituicaoSaved] = useState(false);
+
+  async function handleSaveInstituicao() {
+    if (!proposal) return;
+    const valor = instituicao === "Outra" ? instituicaoCustom.trim() : instituicao;
+    if (!valor) return;
+    setSavingInstituicao(true);
+    try {
+      await fetch("/api/credit-proposals", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: proposal.id, instituicao_encaminhada: valor }),
+      });
+      onProposalUpdate?.(proposal.id, { instituicao_encaminhada: valor });
+      setInstituicaoSaved(true);
+      setTimeout(() => setInstituicaoSaved(false), 2000);
+    } finally {
+      setSavingInstituicao(false);
+    }
+  }
+
   useEffect(() => {
     if (!proposal) return;
     setCheckedDocs({});
     setUploadedFiles({});
     setUploadedUrls({});
+    const inst = proposal.instituicao_encaminhada ?? "";
+    if (inst && !INSTITUICOES.slice(0, -1).includes(inst)) {
+      setInstituicao("Outra");
+      setInstituicaoCustom(inst);
+    } else {
+      setInstituicao(inst);
+      setInstituicaoCustom("");
+    }
     setMesaComments(Array.isArray(proposal.mesa_comments) ? proposal.mesa_comments : []);
     setNewComment("");
     if (IS_DEMO) {
@@ -1085,6 +1125,55 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
                     {(meta.observacoes) && <InfoRow label="Observações" value={meta.observacoes as string} />}
                   </div>
                 </div>
+
+                {/* Instituição encaminhada — apenas mesa/admin */}
+                {canEditInstituicao && (
+                  <div className="p-4 rounded-xl border border-[#C9A84C]/20 bg-[#C9A84C]/5 space-y-3">
+                    <p className="text-xs font-semibold text-[#C9A84C] uppercase tracking-wider flex items-center gap-1.5">
+                      <Building2 className="w-3.5 h-3.5" /> Instituição Encaminhada
+                    </p>
+                    {proposal.instituicao_encaminhada && instituicao !== "" && !savingInstituicao ? (
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#C9A84C]/15 border border-[#C9A84C]/30 text-[#C9A84C] text-xs font-semibold">
+                          <Building2 className="w-3 h-3" />
+                          {proposal.instituicao_encaminhada}
+                        </span>
+                        <button onClick={() => setInstituicao(proposal.instituicao_encaminhada && !INSTITUICOES.slice(0,-1).includes(proposal.instituicao_encaminhada ?? "") ? "Outra" : (proposal.instituicao_encaminhada ?? ""))}
+                          className="text-xs text-muted-foreground hover:text-white transition-colors underline">
+                          Alterar
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <select
+                          value={instituicao}
+                          onChange={(e) => { setInstituicao(e.target.value); setInstituicaoCustom(""); }}
+                          className="w-full h-8 px-3 text-xs bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-1 focus:ring-[#C9A84C]/50"
+                        >
+                          <option value="">Selecione a instituição...</option>
+                          {INSTITUICOES.map(i => <option key={i} value={i}>{i}</option>)}
+                        </select>
+                        {instituicao === "Outra" && (
+                          <input
+                            type="text"
+                            value={instituicaoCustom}
+                            onChange={(e) => setInstituicaoCustom(e.target.value)}
+                            placeholder="Nome da instituição"
+                            className="w-full h-8 px-3 text-xs bg-secondary border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-[#C9A84C]/50"
+                          />
+                        )}
+                        <button
+                          onClick={handleSaveInstituicao}
+                          disabled={savingInstituicao || !instituicao || (instituicao === "Outra" && !instituicaoCustom.trim())}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#C9A84C]/15 hover:bg-[#C9A84C]/25 border border-[#C9A84C]/30 text-[#C9A84C] text-xs font-semibold disabled:opacity-50 transition-colors"
+                        >
+                          {savingInstituicao ? <Loader2 className="w-3 h-3 animate-spin" /> : instituicaoSaved ? <Check className="w-3 h-3" /> : <Check className="w-3 h-3" />}
+                          {instituicaoSaved ? "Salvo!" : "Salvar"}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             );
           })()}

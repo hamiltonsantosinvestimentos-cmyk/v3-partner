@@ -367,7 +367,7 @@ export function CreditDeskClient({ proposals: initial, level, currentUser }: Cre
         open={!!detailProposal} onClose={() => setDetailProposal(null)}
         proposal={detailProposal as ProposalFull | null}
         onStageChange={handleStageChange} onProposalUpdate={handleProposalUpdate}
-        canChangeStage={canChangeStage} canEditValorSolicitado={canEditValorSolicitado}
+        canChangeStage={canChangeStage} canEditValorSolicitado={canEditValorSolicitado} canEditInstituicao={isAdmin}
       />
     </div>
   );
