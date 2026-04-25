@@ -28,7 +28,19 @@ export async function GET() {
     return NextResponse.json({ error: "Erro ao buscar usuários" }, { status: 500 });
   }
 
-  return NextResponse.json(data ?? []);
+  // Busca quem assinou contrato de parceria
+  const { data: contracts } = await svc
+    .from("partner_contracts")
+    .select("user_id");
+
+  const signedIds = new Set((contracts ?? []).map((c: { user_id: string }) => c.user_id));
+
+  const usersWithContract = (data ?? []).map((u: Record<string, unknown>) => ({
+    ...u,
+    contract_signed: signedIds.has(u.id as string),
+  }));
+
+  return NextResponse.json(usersWithContract);
 }
 
 export async function POST(request: Request) {

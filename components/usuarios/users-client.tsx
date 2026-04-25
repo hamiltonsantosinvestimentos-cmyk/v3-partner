@@ -98,6 +98,7 @@ interface User {
   is_active: boolean;
   created_at: string;
   trial_expires_at?: string | null;
+  contract_signed?: boolean;
 }
 
 interface UsersClientProps {
@@ -412,7 +413,7 @@ export function UsersClient({ initialUsers }: UsersClientProps) {
             <table className="min-w-full text-sm">
               <thead>
                 <tr className="border-b border-border/50">
-                  {["Usuário", "E-mail", "Perfil", "Status", "Criado em", "Trial 30 dias", "Ações"].map((h) => (
+                  {["Usuário", "E-mail", "Perfil", "Status", "Contrato", "Criado em", "Trial 30 dias", "Ações"].map((h) => (
                     <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider whitespace-nowrap">
                       {h}
                     </th>
@@ -442,6 +443,14 @@ export function UsersClient({ initialUsers }: UsersClientProps) {
                       <Badge variant={user.is_active ? "success" : "danger"}>
                         {user.is_active ? "Ativo" : "Inativo"}
                       </Badge>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-1.5">
+                        <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${user.contract_signed ? "bg-emerald-400" : "bg-red-500"}`} />
+                        <span className={`text-xs font-medium ${user.contract_signed ? "text-emerald-400" : "text-red-400"}`}>
+                          {user.contract_signed ? "Assinado" : "Pendente"}
+                        </span>
+                      </div>
                     </td>
                     <td className="px-4 py-3 text-xs text-muted-foreground">
                       {formatDate(user.created_at)}
