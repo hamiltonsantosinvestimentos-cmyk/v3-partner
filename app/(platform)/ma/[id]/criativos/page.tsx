@@ -41,6 +41,7 @@ export default async function CriativosPage({ params }: { params: Promise<{ id: 
   if (!deal) notFound();
 
   const kitFilesAvailable = (deal.asset_data?.kit_files_available ?? {}) as Record<string, boolean>;
+  const kitGeneratedAt   = (deal.asset_data?.kit_gerado_at as string) ?? null;
 
   return (
     <div className="space-y-5 animate-fade-in">
@@ -97,6 +98,7 @@ export default async function CriativosPage({ params }: { params: Promise<{ id: 
         isDemo={IS_DEMO}
         isAdmin={isAdmin}
         kitFilesAvailable={kitFilesAvailable}
+        kitGeneratedAt={kitGeneratedAt}
       />
 
       {/* Instrução engine */}

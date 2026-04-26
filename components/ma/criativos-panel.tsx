@@ -75,10 +75,11 @@ interface CriativosPanelProps {
   isDemo?: boolean;
   isAdmin?: boolean;
   kitFilesAvailable?: Record<string, boolean>;
+  kitGeneratedAt?: string | null;
   onAvailabilityChange?: (key: string, val: boolean) => void;
 }
 
-export function CriativosPanel({ dealId, dealName, isDemo = false, isAdmin = false, kitFilesAvailable = {}, onAvailabilityChange }: CriativosPanelProps) {
+export function CriativosPanel({ dealId, dealName, isDemo = false, isAdmin = false, kitFilesAvailable = {}, kitGeneratedAt, onAvailabilityChange }: CriativosPanelProps) {
   const [latestJob, setLatestJob] = useState<CreativeJob | null>(null);
   const [files, setFiles] = useState<CreativeFile[]>([]);
   const [loading, setLoading] = useState(true);
@@ -201,7 +202,9 @@ export function CriativosPanel({ dealId, dealName, isDemo = false, isAdmin = fal
     }
   }
 
-  const hasFiles = visibleFiles.length > 0;
+  // Kit gerado via asset_data mesmo sem creative_files na tabela
+  const kitReady = !!kitGeneratedAt;
+  const hasFiles = visibleFiles.length > 0 || kitReady;
   const jobStatus = latestJob?.status;
 
   return (
@@ -263,7 +266,7 @@ export function CriativosPanel({ dealId, dealName, isDemo = false, isAdmin = fal
                 className="bg-[#C9A84C] hover:bg-[#E8C97A] text-[#09081A] font-bold flex items-center gap-1.5"
               >
                 <Zap className="w-3.5 h-3.5" />
-                {generating ? "Gerando..." : jobStatus === "DONE" ? "Regenerar Kit" : "Gerar Kit Completo"}
+                {generating ? "Gerando..." : (jobStatus === "DONE" || kitReady) ? "Regenerar Kit" : "Gerar Kit Completo"}
               </Button>
             </div>
           </div>
@@ -280,8 +283,60 @@ export function CriativosPanel({ dealId, dealName, isDemo = false, isAdmin = fal
         </CardContent>
       </Card>}
 
-      {/* Arquivos gerados */}
-      {hasFiles ? (
+      {/* ── Arquivos gerados ──────────────────────────────────────────── */}
+      {/* Caso A: kit gerado em asset_data, creative_files ainda vazio (tabelas pendentes no Supabase) */}
+      {!loading && kitReady && visibleFiles.length === 0 && (
+        <div className="space-y-3">
+          <div className="flex items-center gap-2 px-1 mb-1">
+            <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />
+            <span className="text-xs text-emerald-400 font-semibold">
+              Kit gerado em {kitGeneratedAt ? new Date(kitGeneratedAt).toLocaleDateString("pt-BR") : ""}
+            </span>
+          </div>
+          {FILE_ORDER.map((ft) => (
+            <Card key={ft}>
+              <CardHeader className="pb-2 pt-4">
+                <CardTitle className="text-xs font-bold tracking-widest uppercase text-[#C9A84C] flex items-center gap-2">
+                  {FILE_TYPE_ICONS[ft]}
+                  {FILE_TYPE_LABELS[ft]}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pb-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {LANG_ORDER.map((lang) => (
+                    <div key={lang} className="border border-[#243A66] rounded-lg p-3">
+                      <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-3">
+                        {LANG_FLAGS[lang as "pt-br" | "en"]}
+                        {LANG_LABELS[lang as "pt-br" | "en"]}
+                      </div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <a href={`/api/ma/preview-criativo?dealId=${dealId}&type=${ft}&lang=${lang}`} target="_blank" rel="noopener noreferrer">
+                          <Button size="sm" variant="outline" className="h-7 text-xs border-[#243A66] text-muted-foreground hover:text-[#C9A84C] hover:border-[#C9A84C]/30">
+                            <Eye className="w-3 h-3 mr-1" />Preview
+                          </Button>
+                        </a>
+                        <a href={`/api/ma/preview-criativo?dealId=${dealId}&type=${ft}&lang=${lang}&format=pdf`} target="_blank" rel="noopener noreferrer">
+                          <Button size="sm" variant="outline" className="h-7 text-[10px] border-red-500/30 text-red-400 hover:bg-red-500/10">
+                            <Download className="w-3 h-3 mr-1" />PDF
+                          </Button>
+                        </a>
+                        <a href={`/api/ma/preview-criativo?dealId=${dealId}&type=${ft}&lang=${lang}&format=jpg`} target="_blank" rel="noopener noreferrer">
+                          <Button size="sm" variant="outline" className="h-7 text-[10px] border-amber-500/30 text-amber-400 hover:bg-amber-500/10">
+                            <Download className="w-3 h-3 mr-1" />JPEG
+                          </Button>
+                        </a>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* Caso B: creative_files populado (tabelas existem) */}
+      {visibleFiles.length > 0 ? (
         <div className="space-y-3">
           {FILE_ORDER.map((ft) => {
             const hasAny = LANG_ORDER.some(l => groupedFiles[ft][l].length > 0);
@@ -374,7 +429,8 @@ export function CriativosPanel({ dealId, dealName, isDemo = false, isAdmin = fal
           })}
         </div>
       ) : (
-        !loading && (
+        /* Caso C: nenhum kit gerado ainda */
+        !loading && !kitReady && (
           <Card className="border-dashed border-[#243A66]">
             <CardContent className="p-8 text-center">
               <div className="w-12 h-12 rounded-xl bg-[#162744] border border-[#243A66] flex items-center justify-center mx-auto mb-3">
@@ -385,7 +441,7 @@ export function CriativosPanel({ dealId, dealName, isDemo = false, isAdmin = fal
               </p>
               <p className="text-xs text-muted-foreground max-w-xs mx-auto mb-5">
                 {isAdmin
-                  ? "Use o preview para visualizar o layout de cada peça com os dados deste deal."
+                  ? "Clique em \"Gerar Kit Completo\" para criar CIM, Teaser e posts LinkedIn."
                   : "A Mesa M&A ainda não disponibilizou criativos para este deal."}
               </p>
               {isAdmin && (
