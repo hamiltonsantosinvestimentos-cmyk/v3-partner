@@ -418,15 +418,15 @@ function buildLinkedInPost(deal: any, lang: string): string {
 <link href="${FONT}" rel="stylesheet">
 <style>
 ${CSS_BASE}
-@page{size:1080px 1350px;margin:0}
 /* Canvas social media: 1080×1350px (proporção 4:5 LinkedIn) */
 html,body{width:1080px;height:1350px;overflow:hidden;margin:0;padding:0}
 body{background:#09081A;display:flex;align-items:stretch}
 .wrap{flex:1;background:linear-gradient(160deg,#09081A 40%,#111F35);padding:72px 80px;display:flex;flex-direction:column;position:relative;overflow:hidden}
+@page{size:A4 portrait;margin:0}
 @media print{
-  @page{size:1080px 1350px;margin:0}
-  html,body{width:1080px!important;height:1350px!important;overflow:hidden!important;}
-  .wrap{width:1080px!important;height:1350px!important;overflow:hidden!important;}
+  html,body{width:210mm!important;height:297mm!important;overflow:hidden!important;}
+  body{display:flex!important;align-items:stretch!important;}
+  .wrap{width:100%!important;height:100%!important;flex:1!important;padding:54px 60px!important;}
 }
 .wrap::before{content:"";position:absolute;top:-200px;right:-200px;width:600px;height:600px;background:radial-gradient(circle,#C9A84C08 0%,transparent 70%)}
 .top{display:flex;align-items:center;justify-content:space-between;margin-bottom:56px}
@@ -508,15 +508,15 @@ function buildLinkedInStory(deal: any, lang: string): string {
 <link href="${FONT}" rel="stylesheet">
 <style>
 ${CSS_BASE}
-@page{size:1080px 1920px;margin:0}
 /* Canvas social media: 1080×1920px (proporção 9:16 LinkedIn Story) */
 html,body{width:1080px;height:1920px;overflow:hidden;margin:0;padding:0}
 body{background:#09081A}
 .wrap{width:1080px;height:1920px;background:linear-gradient(190deg,#09081A 30%,#111F35 70%,#162744);padding:100px 80px;display:flex;flex-direction:column;position:relative;overflow:hidden}
+@page{size:A4 portrait;margin:0}
 @media print{
-  @page{size:1080px 1920px;margin:0}
-  html,body{width:1080px!important;height:1920px!important;overflow:hidden!important;}
-  .wrap{width:1080px!important;height:1920px!important;overflow:hidden!important;}
+  html,body{width:210mm!important;height:297mm!important;overflow:hidden!important;}
+  .wrap{width:100%!important;height:100%!important;padding:72px 56px!important;}
+  .glow,.glow2{display:none!important;}
 }
 .glow{position:absolute;top:0;left:50%;transform:translateX(-50%);width:700px;height:700px;background:radial-gradient(circle,#C9A84C0A 0%,transparent 70%);pointer-events:none}
 .glow2{position:absolute;bottom:0;right:0;width:500px;height:500px;background:radial-gradient(circle,#C9A84C06 0%,transparent 70%);pointer-events:none}
@@ -584,20 +584,33 @@ function injectFormat(html: string, format: string, type: string): string {
   const isLinkedIn = type.startsWith("linkedin");
 
   if (format === "pdf") {
-    const script = `<script>window.onload=function(){setTimeout(function(){window.print();},600);}<\/script>`;
+    // Aguarda 800ms para garantir carregamento das fontes antes de disparar o print
+    const script = `<script>window.onload=function(){setTimeout(function(){window.print();},800);}<\/script>`;
+
+    // CRÍTICO: não adicionar padding-top no LinkedIn (overflow:hidden corta o conteúdo)
+    const bodyPadding = isLinkedIn ? "" : "body{padding-top:48px!important;}";
+
     const style = `<style>
       @media screen{
         .fmt-bar{
           display:flex;align-items:center;justify-content:space-between;gap:12px;
-          background:#C9A84C;color:#09081A;padding:10px 20px;
-          font-family:'DM Sans',Arial,sans-serif;font-size:12px;font-weight:700;
-          position:fixed;top:0;left:0;right:0;z-index:9999;
+          background:#C9A84C;color:#09081A;
+          padding:12px 20px;
+          font-family:'DM Sans',Arial,sans-serif;font-size:11px;font-weight:700;
+          position:fixed;top:0;left:0;right:0;z-index:99999;
+          box-shadow:0 2px 8px rgba(0,0,0,0.4);
+        }
+        .fmt-bar .fmt-steps{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+        .fmt-bar .fmt-step{
+          background:rgba(0,0,0,0.15);border-radius:4px;
+          padding:3px 8px;font-size:10px;font-weight:700;
         }
         .fmt-bar button{
           background:#09081A;color:#C9A84C;border:none;
-          padding:6px 16px;border-radius:6px;font-weight:700;cursor:pointer;font-size:11px;white-space:nowrap;
+          padding:8px 16px;border-radius:6px;font-weight:700;
+          cursor:pointer;font-size:11px;white-space:nowrap;flex-shrink:0;
         }
-        body{padding-top:44px;}
+        ${bodyPadding}
       }
       @media print{
         .fmt-bar{display:none!important;}
@@ -605,30 +618,51 @@ function injectFormat(html: string, format: string, type: string): string {
           -webkit-print-color-adjust:exact!important;
           print-color-adjust:exact!important;
           padding:0!important;margin:0!important;
-          background:#09081A!important;
         }
       }
     <\/style>`;
-    const orientLabel = isLinkedIn ? (type === "linkedin_story" ? "9:16 (Story)" : "4:5 (Post)") : "A4 · Sem margens";
-    const banner = `<div class="fmt-bar"><span>📄 PDF — ${orientLabel} · Ctrl+P → selecione "Sem margens" na impressora</span><button onclick="window.print()">🖨️ Salvar PDF</button></div>`;
+
+    // Instrução completa e clara — o passo "Gráficos de fundo" é obrigatório para fundos navy
+    const banner = `<div class="fmt-bar">
+      <div class="fmt-steps">
+        <span>Salvar como PDF:</span>
+        <span class="fmt-step">1. Ctrl+P</span>
+        <span class="fmt-step">2. Mais configurações</span>
+        <span class="fmt-step">3. ✅ Gráficos de fundo</span>
+        <span class="fmt-step">4. Margens: Nenhuma</span>
+        <span class="fmt-step">5. Salvar como PDF</span>
+      </div>
+      <button onclick="window.print()">🖨️ Imprimir / PDF</button>
+    </div>`;
+
     return html.replace("</head>", style + script + "</head>").replace("<body>", `<body>${banner}`);
   }
 
   if (format === "jpg" || format === "jpeg") {
+    const bodyPadding = isLinkedIn ? "" : "body{padding-top:48px!important;}";
+    const sizeLabel = type === "linkedin_story" ? "1080×1920 px" : type === "linkedin_post" ? "1080×1350 px" : "794×1123 px";
+
     const style = `<style>
       @media screen{
         .fmt-bar{
           display:flex;align-items:center;gap:10px;
-          background:#162744;color:#F0ECE4;padding:10px 20px;
-          font-family:'DM Sans',Arial,sans-serif;font-size:12px;
-          position:fixed;top:0;left:0;right:0;z-index:9999;
+          background:#162744;color:#F0ECE4;
+          padding:10px 20px;
+          font-family:'DM Sans',Arial,sans-serif;font-size:11px;
+          position:fixed;top:0;left:0;right:0;z-index:99999;
+          border-bottom:2px solid #C9A84C;
         }
         .fmt-bar strong{color:#C9A84C;}
-        body{padding-top:44px;}
+        .fmt-bar code{background:#09081A;padding:2px 6px;border-radius:4px;font-size:10px;color:#E8C97A;}
+        ${bodyPadding}
       }
     <\/style>`;
-    const sizeLabel = isLinkedIn ? (type === "linkedin_story" ? "1080×1920px" : "1080×1350px") : "794×1123px";
-    const banner = `<div class="fmt-bar"><span>🖼️ <strong>JPEG ${sizeLabel}</strong> → Chrome: F12 → Ctrl+Shift+P → "Capture full size screenshot"</span></div>`;
+
+    const banner = `<div class="fmt-bar">
+      🖼️ JPEG <strong>${sizeLabel}</strong> →
+      Chrome: <code>F12</code> → <code>Ctrl+Shift+P</code> → digita <strong>"screenshot"</strong> → <code>Capture full size screenshot</code>
+    </div>`;
+
     return html.replace("</head>", style + "</head>").replace("<body>", `<body>${banner}`);
   }
 
