@@ -12,7 +12,9 @@ const CSS_BASE = `
   .card{background:#162744;border:1px solid #243A66;border-radius:12px;padding:24px}
   .label{font-size:9px;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:#C9A84C}
   .divider{height:1px;background:linear-gradient(90deg,#C9A84C33,transparent);margin:20px 0}
-  @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+  @media print{
+    html,body{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;margin:0!important;padding:0!important;}
+  }
 `;
 
 function formatBRL(v: number) {
@@ -95,10 +97,16 @@ function buildCIM(deal: any, lang: string): string {
 <link href="${FONT}" rel="stylesheet">
 <style>
 ${CSS_BASE}
+@page{size:A4 portrait;margin:0}
 body{max-width:860px;margin:0 auto;padding:0}
 .page{min-height:100vh;padding:60px 56px;position:relative;page-break-after:always}
 .page-cover{background:linear-gradient(160deg,#09081A 60%,#162744);display:flex;flex-direction:column;justify-content:space-between}
 .page-inner{background:#111F35}
+@media print{
+  body{max-width:210mm!important;width:210mm!important;padding:0!important;}
+  .page{width:210mm!important;min-height:297mm!important;padding:40px 48px!important;page-break-after:always!important;page-break-inside:avoid;}
+  .page-cover,.page-inner{width:210mm!important;}
+}
 .cover-logo{display:flex;align-items:center;gap:12px}
 .cover-logo-box{height:44px;width:auto}
 .cover-title{font-size:42px;font-weight:800;line-height:1.1;color:#F0ECE4;margin-top:auto;margin-bottom:8px}
@@ -281,8 +289,13 @@ function buildTeaser(deal: any, lang: string): string {
 <link href="${FONT}" rel="stylesheet">
 <style>
 ${CSS_BASE}
+@page{size:A4 portrait;margin:0}
 body{max-width:860px;margin:0 auto;padding:0;min-height:100vh}
 .wrap{min-height:100vh;padding:56px;background:linear-gradient(160deg,#09081A 50%,#111F35);display:flex;flex-direction:column}
+@media print{
+  body{max-width:210mm!important;width:210mm!important;padding:0!important;}
+  .wrap{width:210mm!important;min-height:297mm!important;padding:40px 48px!important;}
+}
 .top{display:flex;align-items:center;justify-content:space-between;margin-bottom:48px}
 .logo-box{display:inline-block}
 .v3-name{font-size:12px;font-weight:700;color:#F0ECE4;margin-left:10px}
@@ -384,9 +397,16 @@ function buildLinkedInPost(deal: any, lang: string): string {
 <link href="${FONT}" rel="stylesheet">
 <style>
 ${CSS_BASE}
+@page{size:A4 landscape;margin:0}
 html,body{width:1080px;height:1350px;overflow:hidden}
 body{background:#09081A;display:flex;align-items:stretch}
 .wrap{flex:1;background:linear-gradient(160deg,#09081A 40%,#111F35);padding:72px 80px;display:flex;flex-direction:column;position:relative;overflow:hidden}
+@media print{
+  @page{size:A4 landscape;margin:0}
+  html,body{width:297mm!important;height:210mm!important;overflow:visible!important;}
+  .wrap{width:297mm!important;height:210mm!important;padding:48px 64px!important;overflow:visible!important;}
+  .metrics{display:grid!important;grid-template-columns:repeat(2,1fr)!important;}
+}
 .wrap::before{content:"";position:absolute;top:-200px;right:-200px;width:600px;height:600px;background:radial-gradient(circle,#C9A84C08 0%,transparent 70%)}
 .top{display:flex;align-items:center;justify-content:space-between;margin-bottom:56px}
 .logo{display:flex;align-items:center;gap:12px}
@@ -467,9 +487,17 @@ function buildLinkedInStory(deal: any, lang: string): string {
 <link href="${FONT}" rel="stylesheet">
 <style>
 ${CSS_BASE}
+@page{size:A4 portrait;margin:0}
 html,body{width:1080px;height:1920px;overflow:hidden}
 body{background:#09081A}
 .wrap{width:1080px;height:1920px;background:linear-gradient(190deg,#09081A 30%,#111F35 70%,#162744);padding:100px 80px;display:flex;flex-direction:column;position:relative;overflow:hidden}
+@media print{
+  @page{size:A4 portrait;margin:0}
+  html,body{width:210mm!important;height:297mm!important;overflow:visible!important;}
+  .wrap{width:210mm!important;height:297mm!important;padding:48px 40px!important;overflow:visible!important;}
+  .metrics{display:grid!important;grid-template-columns:repeat(2,1fr)!important;}
+  .glow,.glow2{display:none!important;}
+}
 .glow{position:absolute;top:0;left:50%;transform:translateX(-50%);width:700px;height:700px;background:radial-gradient(circle,#C9A84C0A 0%,transparent 70%);pointer-events:none}
 .glow2{position:absolute;bottom:0;right:0;width:500px;height:500px;background:radial-gradient(circle,#C9A84C06 0%,transparent 70%);pointer-events:none}
 .top{display:flex;align-items:center;justify-content:space-between;margin-bottom:80px}
@@ -534,27 +562,40 @@ body{background:#09081A}
 
 function injectFormat(html: string, format: string, type: string): string {
   if (format === "pdf") {
-    // Auto-abre diálogo de impressão para salvar como PDF
-    const script = `<script>window.onload=function(){window.print();}<\/script>`;
+    const isLinkedIn = type.startsWith("linkedin");
+    const script = `<script>window.onload=function(){setTimeout(function(){window.print();},400);}<\/script>`;
     const style = `<style>
-      @media screen { .format-banner{display:flex;align-items:center;justify-content:space-between;background:#C9A84C;color:#09081A;padding:10px 20px;font-family:'DM Sans',sans-serif;font-size:12px;font-weight:700;position:fixed;top:0;left:0;right:0;z-index:9999;}
-      .format-banner button{background:#09081A;color:#C9A84C;border:none;padding:6px 14px;border-radius:6px;font-weight:700;cursor:pointer;font-size:11px;}
-      body{padding-top:42px;} }
-      @media print{.format-banner{display:none!important;} body{padding-top:0;}}
+      @media screen {
+        .format-banner{display:flex;align-items:center;justify-content:space-between;background:#C9A84C;color:#09081A;padding:10px 20px;font-family:'DM Sans',sans-serif;font-size:12px;font-weight:700;position:fixed;top:0;left:0;right:0;z-index:9999;}
+        .format-banner button{background:#09081A;color:#C9A84C;border:none;padding:6px 14px;border-radius:6px;font-weight:700;cursor:pointer;font-size:11px;}
+        body{padding-top:42px;}
+      }
+      @media print{
+        .format-banner{display:none!important;}
+        html,body{
+          -webkit-print-color-adjust:exact!important;
+          print-color-adjust:exact!important;
+          padding:0!important;
+          margin:0!important;
+          ${isLinkedIn ? "width:100%!important;height:auto!important;overflow:visible!important;" : ""}
+        }
+        ${isLinkedIn ? ".wrap{width:100%!important;height:auto!important;min-height:100vh!important;overflow:visible!important;}" : ""}
+      }
     <\/style>`;
-    const banner = `<div class="format-banner"><span>📄 Salvar como PDF — use Ctrl+P ou o botão abaixo</span><button onclick="window.print()">Imprimir / Salvar PDF</button></div>`;
+    const banner = `<div class="format-banner"><span>📄 Salvar como PDF: use o botão abaixo ou Ctrl+P → "Sem margens"</span><button onclick="window.print()">🖨️ Imprimir / Salvar PDF</button></div>`;
     return html.replace("</head>", style + script + "</head>").replace("<body>", `<body>${banner}`);
   }
   if (format === "jpg" || format === "jpeg") {
-    // Layout otimizado para captura de tela / salvar como imagem
     const isLinkedIn = type.startsWith("linkedin");
-    const width = isLinkedIn ? "1080px" : "1200px";
+    const canvasW = type === "linkedin_story" ? "1080px" : type === "linkedin_post" ? "1080px" : "860px";
     const style = `<style>
-      @media screen { .format-banner{display:flex;align-items:center;justify-content:space-between;background:#243A66;color:#F0ECE4;padding:10px 20px;font-family:'DM Sans',sans-serif;font-size:12px;position:fixed;top:0;left:0;right:0;z-index:9999;}
-      .format-banner strong{color:#C9A84C;}
-      body{padding-top:42px;max-width:${width}!important;margin:0 auto!important;} }
+      @media screen {
+        .format-banner{display:flex;align-items:center;justify-content:space-between;background:#243A66;color:#F0ECE4;padding:10px 20px;font-family:'DM Sans',sans-serif;font-size:12px;position:fixed;top:0;left:0;right:0;z-index:9999;}
+        .format-banner strong{color:#C9A84C;}
+        body{padding-top:42px;${isLinkedIn ? "" : `max-width:${canvasW}!important;margin:0 auto!important;`}}
+      }
     <\/style>`;
-    const banner = `<div class="format-banner"><span>🖼️ Para salvar como <strong>JPEG</strong>: pressione <strong>F12</strong> → aba <strong>Capture screenshot</strong> ou use Ctrl+Shift+S no Chrome</span></div>`;
+    const banner = `<div class="format-banner"><span>🖼️ Salvar como <strong>JPEG</strong>: F12 → Console → <strong>screenshot</strong> ou Ctrl+Shift+S no Chrome</span></div>`;
     return html.replace("</head>", style + "</head>").replace("<body>", `<body>${banner}`);
   }
   return html;

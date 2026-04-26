@@ -115,7 +115,24 @@ function buildReportHtml(deal: DealInfo, result: ForjaResult, partnerName: strin
     .insight-row { display: flex; gap: 8px; padding: 8px 14px; border-bottom: 1px solid #162744; }
     .insight-row:last-child { border-bottom: none; }
     .no-print-hint { display: block; text-align: center; padding: 8px; font-size: 10px; color: #7A8FA8; background: #162744; }
-    @media print { .no-print-hint { display: none; } body { background: #111F35; } }
+    @media print {
+      .no-print-hint { display: none !important; }
+      html, body {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+        background: #111F35 !important;
+        padding: 0 !important;
+        margin: 0 !important;
+      }
+      .page {
+        width: 210mm !important;
+        margin: 0 auto !important;
+        page-break-after: always;
+        page-break-inside: avoid;
+      }
+      .body { padding: 16px 24px 24px !important; }
+      .two-col { gap: 10px !important; }
+    }
   </style>
 </head>
 <body>
