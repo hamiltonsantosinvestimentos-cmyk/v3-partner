@@ -82,8 +82,9 @@ function buildReportHtml(deal: DealInfo, result: ForjaResult, partnerName: strin
   <style>
     @page { size: A4 portrait; margin: 0; }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: 'DM Sans', Arial, sans-serif; background: #09081A; color: #F0ECE4; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    .page { width: 210mm; min-height: 297mm; background: #111F35; margin: 0 auto; position: relative; }
+    body { font-family: 'DM Sans', Arial, sans-serif; background: #09081A; color: #F0ECE4; -webkit-print-color-adjust: exact; print-color-adjust: exact; padding: 32px 0; }
+    /* A4 em tela: 794px × 1123px a 96 DPI */
+    .page { width: 794px; min-height: 1123px; background: #111F35; margin: 0 auto 24px; position: relative; box-shadow: 0 4px 40px rgba(0,0,0,0.7); }
     .stripe { height: 4px; background: linear-gradient(to right, #09081A, #C9A84C, #E8C97A, #C9A84C, #09081A); }
     .header { background: #09081A; padding: 18px 28px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(201,168,76,0.2); }
     .header-left { display: flex; align-items: center; gap: 14px; }
@@ -120,17 +121,15 @@ function buildReportHtml(deal: DealInfo, result: ForjaResult, partnerName: strin
       html, body {
         -webkit-print-color-adjust: exact !important;
         print-color-adjust: exact !important;
-        background: #111F35 !important;
-        padding: 0 !important;
-        margin: 0 !important;
+        background: #09081A !important;
+        padding: 0 !important; margin: 0 !important;
       }
       .page {
-        width: 210mm !important;
-        margin: 0 auto !important;
-        page-break-after: always;
-        page-break-inside: avoid;
+        width: 210mm !important; min-height: 297mm !important;
+        margin: 0 !important; box-shadow: none !important;
+        page-break-after: always; page-break-inside: avoid;
       }
-      .body { padding: 16px 24px 24px !important; }
+      .body { padding: 14px 22px 22px !important; }
       .two-col { gap: 10px !important; }
     }
   </style>

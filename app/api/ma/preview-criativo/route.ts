@@ -98,14 +98,24 @@ function buildCIM(deal: any, lang: string): string {
 <style>
 ${CSS_BASE}
 @page{size:A4 portrait;margin:0}
-body{max-width:860px;margin:0 auto;padding:0}
-.page{min-height:100vh;padding:60px 56px;position:relative;page-break-after:always}
+body{background:#09081A;padding:32px 0;min-height:100vh}
+/* A4 exato em tela: 210mm × 297mm a 96 DPI = 794px × 1123px */
+.page{
+  width:794px;min-height:1123px;
+  margin:0 auto 24px;padding:48px 56px;
+  position:relative;page-break-after:always;
+  box-shadow:0 4px 40px rgba(0,0,0,0.7);
+}
 .page-cover{background:linear-gradient(160deg,#09081A 60%,#162744);display:flex;flex-direction:column;justify-content:space-between}
 .page-inner{background:#111F35}
 @media print{
-  body{max-width:210mm!important;width:210mm!important;padding:0!important;}
-  .page{width:210mm!important;min-height:297mm!important;padding:40px 48px!important;page-break-after:always!important;page-break-inside:avoid;}
-  .page-cover,.page-inner{width:210mm!important;}
+  body{padding:0!important;background:#09081A!important;}
+  .page{
+    width:210mm!important;min-height:297mm!important;
+    padding:15mm 18mm!important;
+    margin:0!important;box-shadow:none!important;
+    page-break-after:always;page-break-inside:avoid;
+  }
 }
 .cover-logo{display:flex;align-items:center;gap:12px}
 .cover-logo-box{height:44px;width:auto}
@@ -290,11 +300,22 @@ function buildTeaser(deal: any, lang: string): string {
 <style>
 ${CSS_BASE}
 @page{size:A4 portrait;margin:0}
-body{max-width:860px;margin:0 auto;padding:0;min-height:100vh}
-.wrap{min-height:100vh;padding:56px;background:linear-gradient(160deg,#09081A 50%,#111F35);display:flex;flex-direction:column}
+body{background:#09081A;padding:32px 0;display:flex;justify-content:center;min-height:100vh}
+/* A4 exato em tela: 794px × 1123px */
+.wrap{
+  width:794px;min-height:1123px;
+  padding:56px 64px;
+  background:linear-gradient(160deg,#09081A 50%,#111F35);
+  display:flex;flex-direction:column;
+  box-shadow:0 4px 40px rgba(0,0,0,0.7);
+}
 @media print{
-  body{max-width:210mm!important;width:210mm!important;padding:0!important;}
-  .wrap{width:210mm!important;min-height:297mm!important;padding:40px 48px!important;}
+  body{padding:0!important;}
+  .wrap{
+    width:210mm!important;min-height:297mm!important;
+    padding:15mm 18mm!important;
+    box-shadow:none!important;
+  }
 }
 .top{display:flex;align-items:center;justify-content:space-between;margin-bottom:48px}
 .logo-box{display:inline-block}
@@ -397,15 +418,15 @@ function buildLinkedInPost(deal: any, lang: string): string {
 <link href="${FONT}" rel="stylesheet">
 <style>
 ${CSS_BASE}
-@page{size:A4 landscape;margin:0}
-html,body{width:1080px;height:1350px;overflow:hidden}
+@page{size:1080px 1350px;margin:0}
+/* Canvas social media: 1080×1350px (proporção 4:5 LinkedIn) */
+html,body{width:1080px;height:1350px;overflow:hidden;margin:0;padding:0}
 body{background:#09081A;display:flex;align-items:stretch}
 .wrap{flex:1;background:linear-gradient(160deg,#09081A 40%,#111F35);padding:72px 80px;display:flex;flex-direction:column;position:relative;overflow:hidden}
 @media print{
-  @page{size:A4 landscape;margin:0}
-  html,body{width:297mm!important;height:210mm!important;overflow:visible!important;}
-  .wrap{width:297mm!important;height:210mm!important;padding:48px 64px!important;overflow:visible!important;}
-  .metrics{display:grid!important;grid-template-columns:repeat(2,1fr)!important;}
+  @page{size:1080px 1350px;margin:0}
+  html,body{width:1080px!important;height:1350px!important;overflow:hidden!important;}
+  .wrap{width:1080px!important;height:1350px!important;overflow:hidden!important;}
 }
 .wrap::before{content:"";position:absolute;top:-200px;right:-200px;width:600px;height:600px;background:radial-gradient(circle,#C9A84C08 0%,transparent 70%)}
 .top{display:flex;align-items:center;justify-content:space-between;margin-bottom:56px}
@@ -487,16 +508,15 @@ function buildLinkedInStory(deal: any, lang: string): string {
 <link href="${FONT}" rel="stylesheet">
 <style>
 ${CSS_BASE}
-@page{size:A4 portrait;margin:0}
-html,body{width:1080px;height:1920px;overflow:hidden}
+@page{size:1080px 1920px;margin:0}
+/* Canvas social media: 1080×1920px (proporção 9:16 LinkedIn Story) */
+html,body{width:1080px;height:1920px;overflow:hidden;margin:0;padding:0}
 body{background:#09081A}
 .wrap{width:1080px;height:1920px;background:linear-gradient(190deg,#09081A 30%,#111F35 70%,#162744);padding:100px 80px;display:flex;flex-direction:column;position:relative;overflow:hidden}
 @media print{
-  @page{size:A4 portrait;margin:0}
-  html,body{width:210mm!important;height:297mm!important;overflow:visible!important;}
-  .wrap{width:210mm!important;height:297mm!important;padding:48px 40px!important;overflow:visible!important;}
-  .metrics{display:grid!important;grid-template-columns:repeat(2,1fr)!important;}
-  .glow,.glow2{display:none!important;}
+  @page{size:1080px 1920px;margin:0}
+  html,body{width:1080px!important;height:1920px!important;overflow:hidden!important;}
+  .wrap{width:1080px!important;height:1920px!important;overflow:hidden!important;}
 }
 .glow{position:absolute;top:0;left:50%;transform:translateX(-50%);width:700px;height:700px;background:radial-gradient(circle,#C9A84C0A 0%,transparent 70%);pointer-events:none}
 .glow2{position:absolute;bottom:0;right:0;width:500px;height:500px;background:radial-gradient(circle,#C9A84C06 0%,transparent 70%);pointer-events:none}
@@ -561,43 +581,57 @@ body{background:#09081A}
 }
 
 function injectFormat(html: string, format: string, type: string): string {
+  const isLinkedIn = type.startsWith("linkedin");
+
   if (format === "pdf") {
-    const isLinkedIn = type.startsWith("linkedin");
-    const script = `<script>window.onload=function(){setTimeout(function(){window.print();},400);}<\/script>`;
+    const script = `<script>window.onload=function(){setTimeout(function(){window.print();},600);}<\/script>`;
     const style = `<style>
-      @media screen {
-        .format-banner{display:flex;align-items:center;justify-content:space-between;background:#C9A84C;color:#09081A;padding:10px 20px;font-family:'DM Sans',sans-serif;font-size:12px;font-weight:700;position:fixed;top:0;left:0;right:0;z-index:9999;}
-        .format-banner button{background:#09081A;color:#C9A84C;border:none;padding:6px 14px;border-radius:6px;font-weight:700;cursor:pointer;font-size:11px;}
-        body{padding-top:42px;}
+      @media screen{
+        .fmt-bar{
+          display:flex;align-items:center;justify-content:space-between;gap:12px;
+          background:#C9A84C;color:#09081A;padding:10px 20px;
+          font-family:'DM Sans',Arial,sans-serif;font-size:12px;font-weight:700;
+          position:fixed;top:0;left:0;right:0;z-index:9999;
+        }
+        .fmt-bar button{
+          background:#09081A;color:#C9A84C;border:none;
+          padding:6px 16px;border-radius:6px;font-weight:700;cursor:pointer;font-size:11px;white-space:nowrap;
+        }
+        body{padding-top:44px;}
       }
       @media print{
-        .format-banner{display:none!important;}
+        .fmt-bar{display:none!important;}
         html,body{
           -webkit-print-color-adjust:exact!important;
           print-color-adjust:exact!important;
-          padding:0!important;
-          margin:0!important;
-          ${isLinkedIn ? "width:100%!important;height:auto!important;overflow:visible!important;" : ""}
+          padding:0!important;margin:0!important;
+          background:#09081A!important;
         }
-        ${isLinkedIn ? ".wrap{width:100%!important;height:auto!important;min-height:100vh!important;overflow:visible!important;}" : ""}
       }
     <\/style>`;
-    const banner = `<div class="format-banner"><span>📄 Salvar como PDF: use o botão abaixo ou Ctrl+P → "Sem margens"</span><button onclick="window.print()">🖨️ Imprimir / Salvar PDF</button></div>`;
+    const orientLabel = isLinkedIn ? (type === "linkedin_story" ? "9:16 (Story)" : "4:5 (Post)") : "A4 · Sem margens";
+    const banner = `<div class="fmt-bar"><span>📄 PDF — ${orientLabel} · Ctrl+P → selecione "Sem margens" na impressora</span><button onclick="window.print()">🖨️ Salvar PDF</button></div>`;
     return html.replace("</head>", style + script + "</head>").replace("<body>", `<body>${banner}`);
   }
+
   if (format === "jpg" || format === "jpeg") {
-    const isLinkedIn = type.startsWith("linkedin");
-    const canvasW = type === "linkedin_story" ? "1080px" : type === "linkedin_post" ? "1080px" : "860px";
     const style = `<style>
-      @media screen {
-        .format-banner{display:flex;align-items:center;justify-content:space-between;background:#243A66;color:#F0ECE4;padding:10px 20px;font-family:'DM Sans',sans-serif;font-size:12px;position:fixed;top:0;left:0;right:0;z-index:9999;}
-        .format-banner strong{color:#C9A84C;}
-        body{padding-top:42px;${isLinkedIn ? "" : `max-width:${canvasW}!important;margin:0 auto!important;`}}
+      @media screen{
+        .fmt-bar{
+          display:flex;align-items:center;gap:10px;
+          background:#162744;color:#F0ECE4;padding:10px 20px;
+          font-family:'DM Sans',Arial,sans-serif;font-size:12px;
+          position:fixed;top:0;left:0;right:0;z-index:9999;
+        }
+        .fmt-bar strong{color:#C9A84C;}
+        body{padding-top:44px;}
       }
     <\/style>`;
-    const banner = `<div class="format-banner"><span>🖼️ Salvar como <strong>JPEG</strong>: F12 → Console → <strong>screenshot</strong> ou Ctrl+Shift+S no Chrome</span></div>`;
+    const sizeLabel = isLinkedIn ? (type === "linkedin_story" ? "1080×1920px" : "1080×1350px") : "794×1123px";
+    const banner = `<div class="fmt-bar"><span>🖼️ <strong>JPEG ${sizeLabel}</strong> → Chrome: F12 → Ctrl+Shift+P → "Capture full size screenshot"</span></div>`;
     return html.replace("</head>", style + "</head>").replace("<body>", `<body>${banner}`);
   }
+
   return html;
 }
 
