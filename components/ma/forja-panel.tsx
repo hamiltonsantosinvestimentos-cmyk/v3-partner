@@ -301,6 +301,27 @@ export function ForjaPanel({ deal, dealId, savedResult, onSaved }: ForjaPanelPro
               )}
             </Button>
 
+            {/* Abrir último relatório salvo no Storage */}
+            {(() => {
+              const reports = (deal?.asset_data as Record<string, unknown> | undefined)
+                ?.forja_reports as Array<{ url: string; generated_at: string }> | undefined;
+              const last = reports?.[0];
+              if (!last?.url) return null;
+              const date = new Date(last.generated_at).toLocaleDateString("pt-BR");
+              return (
+                <a
+                  href={last.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1 text-[11px] text-[#C9A84C] hover:underline"
+                  title={`Gerado em ${date} — válido por 7 dias`}
+                >
+                  <FileText className="w-3 h-3" />
+                  Abrir último ({date})
+                </a>
+              );
+            })()}
+
             {!result && !loading && (
               <span className="text-[10px] text-muted-foreground">
                 Execute a validação para liberar o relatório
