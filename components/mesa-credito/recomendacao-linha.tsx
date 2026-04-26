@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo } from "react";
-import { Sparkles, CheckCircle2, AlertCircle, XCircle, ChevronRight, Info } from "lucide-react";
+import { useMemo, useState, useEffect } from "react";
+import { Sparkles, CheckCircle2, AlertCircle, XCircle, ChevronRight, Info, Loader2 } from "lucide-react";
 import type { ProposalFull, ProposalMeta } from "./proposta-detail-modal";
+import type { RegraDB } from "./editor-regras-linhas";
 
 // ─── Tipos ───────────────────────────────────────────────────────────────────
 
@@ -524,8 +525,8 @@ function buildCtx(proposal: ProposalFull): AnaliseCtx {
     : (typeof meta.faturamento_mensal === "number" ? meta.faturamento_mensal : 0);
   const imoveis = Array.isArray(meta.imoveis) ? meta.imoveis : [];
   const temImovel = imoveis.length > 0 || !!proposal.imovel_endereco;
-  const valorImovel = imoveis.reduce((s: number, im: { valor_medio?: number }) => s + (im.valor_medio ?? 0), 0)
-    || proposal.imovel_valor_medio ?? 0;
+  const valorImovel = (imoveis.reduce((s: number, im: { valor_medio?: number }) => s + (im.valor_medio ?? 0), 0)
+    || proposal.imovel_valor_medio) ?? 0;
   const restricao = (meta.restricao_cliente ?? "").toLowerCase().includes("sim");
   const finalidade = (meta.finalidade ?? proposal.finalidade ?? meta.observacoes ?? "") as string;
 
@@ -553,9 +554,51 @@ interface Resultado {
   restricoes: string[];
 }
 
-function analisar(proposal: ProposalFull): Resultado[] {
+// ─── Merge DB params into LINHAS scoring ──────────────────────────────────────
+
+function mergeDBParams(linhas: RegraLinha[], dbRules: RegraDB[]): RegraLinha[] {
+  if (!dbRules || dbRules.length === 0) return linhas;
+  return linhas.map(l => {
+    const db = dbRules.find(r => r.id === l.id);
+    if (!db) return l;
+    return {
+      ...l,
+      nome: db.nome || l.nome,
+      descricao: db.descricao || l.descricao,
+      categoria: db.categoria || l.categoria,
+      cor: db.cor || l.cor,
+      emoji: db.emoji || l.emoji,
+      // Override score with DB score_base as the new base value
+      score: (ctx: AnaliseCtx) => {
+        // Run original scoring to get multiplier/bonuses, then re-base
+        const orig = l.score(ctx);
+        if (orig === 0) return 0;
+        // Scale: keep relative bonus but shift base to DB score_base
+        const origBase = l.score({ ...ctx, temImovel: true, restricao: false, renda: 1, valor: db.valor_minimo || 10000, faturamentoAnual: (db.min_faturamento_mensal || 0) * 12, temRecebíveis: true });
+        const bonus = Math.max(0, orig - (origBase > 0 ? origBase * 0.6 : 30));
+        return Math.min(100, db.score_base + bonus);
+      },
+      restricoes: (ctx: AnaliseCtx) => {
+        const orig = l.restricoes(ctx);
+        const extra: string[] = [];
+        if (db.requer_imovel && !ctx.temImovel) extra.push("Imóvel obrigatório para esta linha");
+        if (db.bloqueia_restricao && ctx.restricao) extra.push("Restrições no CPF/CNPJ bloqueiam esta linha");
+        if (db.valor_minimo > 0 && ctx.valor < db.valor_minimo) extra.push(`Valor mínimo: ${_fmt(db.valor_minimo)}`);
+        if (db.valor_maximo && ctx.valor > db.valor_maximo) extra.push(`Valor máximo: ${_fmt(db.valor_maximo)}`);
+        if (db.min_faturamento_mensal > 0 && ctx.faturamentoAnual / 12 < db.min_faturamento_mensal)
+          extra.push(`Faturamento mínimo: ${_fmt(db.min_faturamento_mensal)}/mês`);
+        // Merge, dedup
+        const all = [...orig, ...extra];
+        return [...new Set(all)];
+      },
+    };
+  });
+}
+
+function analisar(proposal: ProposalFull, dbRules: RegraDB[] = []): Resultado[] {
   const ctx = buildCtx(proposal);
-  return LINHAS
+  const linhas = mergeDBParams(LINHAS, dbRules);
+  return linhas
     .map(l => ({
       linha: l,
       score: l.score(ctx),
@@ -571,10 +614,31 @@ function analisar(proposal: ProposalFull): Resultado[] {
 
 interface RecomendacaoLinhaProps {
   proposal: ProposalFull;
+  rulesKey?: number; // increment to force refetch
 }
 
-export function RecomendacaoLinha({ proposal }: RecomendacaoLinhaProps) {
-  const resultados = useMemo(() => analisar(proposal), [proposal]);
+export function RecomendacaoLinha({ proposal, rulesKey }: RecomendacaoLinhaProps) {
+  const [dbRules, setDbRules] = useState<RegraDB[]>([]);
+  const [loadingRules, setLoadingRules] = useState(true);
+
+  useEffect(() => {
+    setLoadingRules(true);
+    fetch("/api/regras-linhas")
+      .then(r => r.json())
+      .then(({ regras }) => setDbRules(regras ?? []))
+      .catch(() => {/* use hardcoded fallback */})
+      .finally(() => setLoadingRules(false));
+  }, [rulesKey]);
+
+  const resultados = useMemo(() => analisar(proposal, dbRules), [proposal, dbRules]);
+
+  if (loadingRules) {
+    return (
+      <div className="flex items-center justify-center py-8">
+        <Loader2 className="w-5 h-5 animate-spin text-[#C9A84C]" />
+      </div>
+    );
+  }
 
   if (resultados.length === 0) {
     return (

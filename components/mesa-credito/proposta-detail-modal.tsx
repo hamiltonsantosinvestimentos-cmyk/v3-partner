@@ -14,6 +14,7 @@ import { formatCurrency, formatDate } from "@/lib/utils";
 import { STATUS_LABELS, STATUS_COLORS, type OperationStatus } from "@/lib/constants";
 import { CHECKLISTS, DEFAULT_CHECKLIST } from "./nova-proposta-modal";
 import { RecomendacaoLinha } from "./recomendacao-linha";
+import { EditorRegrasLinhas } from "./editor-regras-linhas";
 
 export type MesaComment = {
   id: string;
@@ -162,6 +163,8 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
   // ── Modal tab ─────────────────────────────────────────────────────────────
   type ModalTab = "detalhes" | "recomendacao" | "documentos" | "comentarios";
   const [modalTab, setModalTab] = useState<ModalTab>("detalhes");
+  const [showEditorRegras, setShowEditorRegras] = useState(false);
+  const [rulesKey, setRulesKey] = useState(0);
 
   // ── Checklist state ───────────────────────────────────────────────────────
   const IS_DEMO = false;
@@ -1094,7 +1097,6 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
 
           {/* ── Dados do Cliente ── */}
           {(() => {
-          {(() => {
             const meta = proposal.metadata ?? {};
             // Normaliza campos — suporta tanto snake_case (entrada manual) quanto camelCase (captação)
             const clientType = (meta.client_type ?? meta.personType ?? proposal.client_type ?? "PF") as "PF" | "PJ";
@@ -1682,8 +1684,21 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
 
           {/* ── Aba Recomendação ── */}
           {modalTab === "recomendacao" && (
-            <div className="p-4 rounded-xl border border-[#C9A84C]/20 bg-[#C9A84C]/5">
-              <RecomendacaoLinha proposal={proposal} />
+            <div className="space-y-3">
+              {canChangeStage && (
+                <div className="flex justify-end">
+                  <button
+                    onClick={() => setShowEditorRegras(true)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#C9A84C]/30 bg-[#C9A84C]/10 text-[11px] font-semibold text-[#C9A84C] hover:bg-[#C9A84C]/20 transition-colors"
+                  >
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><circle cx="12" cy="12" r="3" /></svg>
+                    Editar Regras das Linhas
+                  </button>
+                </div>
+              )}
+              <div className="p-4 rounded-xl border border-[#C9A84C]/20 bg-[#C9A84C]/5">
+                <RecomendacaoLinha proposal={proposal} rulesKey={rulesKey} />
+              </div>
             </div>
           )}
 
@@ -1691,7 +1706,6 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
 
           {/* ── Documentos Enviados pelo Cliente (Captação) ── */}
           {modalTab === "documentos" && (() => {
-          {(() => {
             const meta = proposal.metadata ?? {};
             const captDocs = (meta.documentos as Array<{ label: string; name: string; url: string }> | undefined) ?? [];
             if (captDocs.length === 0) return null;
@@ -2087,6 +2101,13 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
           </div>
         </div>
       )}
+
+      {/* ── Editor de Regras de Linhas ── */}
+      <EditorRegrasLinhas
+        open={showEditorRegras}
+        onClose={() => setShowEditorRegras(false)}
+        onSaved={() => setRulesKey(k => k + 1)}
+      />
 
       {/* ── Modal: Editar Proposta ── */}
       {showEdit && (
