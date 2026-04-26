@@ -99,51 +99,60 @@ function buildCIM(deal: any, lang: string): string {
 <style>
 ${CSS_BASE}
 @page{size:A4 portrait;margin:0}
-body{background:#09081A;padding:32px 0;min-height:100vh}
-/* A4 exato em tela: 210mm × 297mm a 96 DPI = 794px × 1123px */
+/* ── WRAPPER: fundo escuro com páginas A4 centralizadas ── */
+body{background:#060515;padding:40px 0;min-height:100vh}
+/* ── PÁGINA A4: 794×1123px a 96dpi. Borda gold sutil + sombra visível ── */
 .page{
   width:794px;min-height:1123px;
-  margin:0 auto 24px;padding:48px 56px;
+  margin:0 auto 32px;padding:52px 60px;
   position:relative;page-break-after:always;
-  box-shadow:0 4px 40px rgba(0,0,0,0.7);
+  border:1px solid rgba(201,168,76,0.18);
+  box-shadow:0 2px 0 0 rgba(201,168,76,0.4),0 8px 48px rgba(0,0,0,0.8),0 0 0 1px rgba(201,168,76,0.06);
+  overflow:hidden;
 }
-.page-cover{background:linear-gradient(160deg,#09081A 60%,#162744);display:flex;flex-direction:column;justify-content:space-between}
-.page-inner{background:#111F35}
+.page-cover{background:linear-gradient(155deg,#09081A 55%,#111F35 100%);display:flex;flex-direction:column;height:1123px}
+.page-inner{background:#111F35;min-height:1123px}
+/* ── FAIXA OURO NO TOPO DE CADA PÁGINA ── */
+.page::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,transparent,#C9A84C,#E8C97A 50%,#C9A84C,transparent)}
 @media print{
   body{padding:0!important;background:#09081A!important;}
   .page{
-    width:210mm!important;min-height:297mm!important;
-    padding:15mm 18mm!important;
-    margin:0!important;box-shadow:none!important;
-    page-break-after:always;page-break-inside:avoid;
+    width:210mm!important;height:297mm!important;min-height:297mm!important;
+    padding:14mm 18mm!important;border:none!important;
+    margin:0!important;box-shadow:none!important;overflow:visible!important;
+    page-break-after:always;
   }
+  .page-cover{height:297mm!important;}
+  .page::before{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
 }
-.cover-logo{display:flex;align-items:center;gap:12px}
-.cover-logo-box{height:44px;width:auto}
-.cover-title{font-size:42px;font-weight:800;line-height:1.1;color:#F0ECE4;margin-top:auto;margin-bottom:8px}
-.cover-sub{font-size:14px;color:#7A8FA8;margin-bottom:48px}
-.cover-bar{height:3px;background:linear-gradient(90deg,#C9A84C,#E8C97A,transparent);border-radius:2px;margin-bottom:32px}
-.cover-meta{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
-.cover-meta-item p:first-child{font-size:9px;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:#C9A84C;margin-bottom:4px}
-.cover-meta-item p:last-child{font-size:16px;font-weight:700;color:#F0ECE4}
-.cover-confidential{font-size:9px;font-weight:700;letter-spacing:4px;text-transform:uppercase;color:#C9A84C;border:1px solid #C9A84C44;padding:6px 14px;border-radius:4px;display:inline-block}
-.page-num{position:absolute;bottom:32px;right:56px;font-size:10px;color:#7A8FA8}
-.section-title{font-size:22px;font-weight:700;color:#F0ECE4;margin-bottom:6px}
-.section-sub{font-size:12px;color:#7A8FA8;margin-bottom:28px}
-.metric-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin-top:20px}
-.metric-item{background:#162744;border:1px solid #243A66;border-radius:10px;padding:20px;border-top:2px solid #C9A84C}
-.metric-item .val{font-size:22px;font-weight:800;color:#E8C97A;margin:6px 0 2px}
+/* ── CAPA ── */
+.cover-logo{display:flex;align-items:center;gap:14px;margin-bottom:auto}
+.cover-title{font-size:40px;font-weight:800;line-height:1.1;color:#F0ECE4;margin-bottom:10px}
+.cover-sub{font-size:13px;color:#7A8FA8;margin-bottom:40px;line-height:1.5}
+.cover-bar{width:60px;height:3px;background:linear-gradient(90deg,#C9A84C,#E8C97A);border-radius:2px;margin-bottom:28px}
+.cover-meta{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:32px}
+.cover-meta-item{background:rgba(22,39,68,0.6);border:1px solid rgba(201,168,76,0.15);border-radius:6px;padding:14px 16px}
+.cover-meta-item p:first-child{font-size:8px;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:#C9A84C;margin-bottom:6px}
+.cover-meta-item p:last-child{font-size:18px;font-weight:800;color:#E8C97A}
+.cover-confidential{font-size:8px;font-weight:700;letter-spacing:4px;text-transform:uppercase;color:rgba(201,168,76,0.6);border:1px solid rgba(201,168,76,0.2);padding:5px 12px;border-radius:3px;display:inline-block}
+.page-num{position:absolute;bottom:28px;right:52px;font-size:9px;color:rgba(122,143,168,0.5);letter-spacing:1px}
+/* ── PÁGINAS INTERNAS ── */
+.section-title{font-size:20px;font-weight:700;color:#F0ECE4;margin-bottom:6px}
+.section-sub{font-size:11px;color:#7A8FA8;margin-bottom:24px;line-height:1.6}
+.metric-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin-top:16px}
+.metric-item{background:#162744;border:1px solid #243A66;border-radius:8px;padding:18px;border-top:2px solid #C9A84C}
+.metric-item .val{font-size:20px;font-weight:800;color:#E8C97A;margin:5px 0 2px}
 .metric-item .sub{font-size:10px;color:#7A8FA8}
-.diff-item{display:flex;align-items:flex-start;gap:12px;padding:14px;background:#162744;border:1px solid #243A66;border-radius:8px;margin-bottom:10px}
-.diff-dot{width:6px;height:6px;border-radius:50%;background:#C9A84C;margin-top:5px;flex-shrink:0}
-.diff-text{font-size:12px;color:#7A8FA8;line-height:1.5}
-.risk-item{border:1px solid #243A66;border-radius:8px;padding:14px;margin-bottom:10px;display:flex;gap:14px;align-items:flex-start}
-.risk-badge{padding:3px 8px;border-radius:4px;font-size:9px;font-weight:700;text-transform:uppercase;white-space:nowrap;flex-shrink:0;margin-top:1px}
-.data-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px}
-.data-item dt{font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#C9A84C;margin-bottom:3px}
+.diff-item{display:flex;align-items:flex-start;gap:12px;padding:12px 14px;background:#162744;border:1px solid #243A66;border-radius:6px;margin-bottom:8px}
+.diff-dot{width:5px;height:5px;border-radius:50%;background:#C9A84C;margin-top:6px;flex-shrink:0}
+.diff-text{font-size:12px;color:#7A8FA8;line-height:1.6}
+.risk-item{border:1px solid #243A66;border-radius:6px;padding:12px 14px;margin-bottom:8px;display:flex;gap:12px;align-items:flex-start}
+.risk-badge{padding:2px 7px;border-radius:3px;font-size:8px;font-weight:700;text-transform:uppercase;white-space:nowrap;flex-shrink:0;margin-top:2px}
+.data-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
+.data-item dt{font-size:8px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#C9A84C;margin-bottom:4px}
 .data-item dd{font-size:13px;font-weight:600;color:#F0ECE4}
-.tese-box{background:#162744;border:1px solid #C9A84C44;border-left:3px solid #C9A84C;border-radius:0 8px 8px 0;padding:20px 24px}
-.aviso-box{background:#162744;border:1px solid #243A66;border-radius:8px;padding:16px;font-size:10px;color:#7A8FA8;line-height:1.6}
+.tese-box{background:#162744;border:1px solid rgba(201,168,76,0.2);border-left:3px solid #C9A84C;border-radius:0 6px 6px 0;padding:18px 22px}
+.aviso-box{background:#162744;border:1px solid #243A66;border-radius:6px;padding:14px;font-size:10px;color:#7A8FA8;line-height:1.7}
 </style>
 </head><body>
 
@@ -301,22 +310,27 @@ function buildTeaser(deal: any, lang: string): string {
 <style>
 ${CSS_BASE}
 @page{size:A4 portrait;margin:0}
-body{background:#09081A;padding:32px 0;display:flex;justify-content:center;min-height:100vh}
+body{background:#060515;padding:40px 0;display:flex;justify-content:center;min-height:100vh}
 /* A4 exato em tela: 794px × 1123px */
 .wrap{
-  width:794px;min-height:1123px;
-  padding:56px 64px;
-  background:linear-gradient(160deg,#09081A 50%,#111F35);
+  width:794px;height:1123px;
+  padding:52px 60px;
+  background:linear-gradient(155deg,#09081A 55%,#111F35 100%);
   display:flex;flex-direction:column;
-  box-shadow:0 4px 40px rgba(0,0,0,0.7);
+  border:1px solid rgba(201,168,76,0.18);
+  box-shadow:0 2px 0 0 rgba(201,168,76,0.4),0 8px 48px rgba(0,0,0,0.8);
+  overflow:hidden;position:relative;
 }
+.wrap::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,transparent,#C9A84C,#E8C97A 50%,#C9A84C,transparent)}
 @media print{
   body{padding:0!important;}
   .wrap{
-    width:210mm!important;min-height:297mm!important;
-    padding:15mm 18mm!important;
-    box-shadow:none!important;
+    width:210mm!important;height:297mm!important;
+    padding:14mm 18mm!important;
+    box-shadow:none!important;border:none!important;
+    overflow:visible!important;
   }
+  .wrap::before{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
 }
 .top{display:flex;align-items:center;justify-content:space-between;margin-bottom:48px}
 .logo-box{display:inline-block}
