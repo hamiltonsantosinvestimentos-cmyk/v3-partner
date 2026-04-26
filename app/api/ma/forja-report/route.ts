@@ -518,7 +518,9 @@ export async function POST(req: NextRequest) {
     // ── Upload para Supabase Storage ──────────────────────────────────────────
     const timestamp   = Date.now();
     const storagePath = `${deal_id}/forja-report-${timestamp}.html`;
-    const htmlBytes   = Buffer.from(reportHtml, "utf-8");
+    // UTF-8 BOM garante que browsers interpretem como UTF-8 ao baixar via signed URL
+    const BOM       = Buffer.from([0xEF, 0xBB, 0xBF]);
+    const htmlBytes = Buffer.concat([BOM, Buffer.from(reportHtml, "utf-8")]);
 
     const { error: uploadErr } = await svc.storage
       .from("ma-documents")
@@ -618,6 +620,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       ok:                    true,
       report_url:            reportUrl,
+      // HTML retornado diretamente para o browser abrir via Blob URL (charset garantido)
+      report_html:           reportHtml,
       emails_sent:           emailsSent,
       notifications_created: notifications.length,
       partner_name:          partnerName,

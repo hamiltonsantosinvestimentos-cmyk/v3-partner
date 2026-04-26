@@ -148,10 +148,21 @@ export function ForjaPanel({ deal, dealId, savedResult, onSaved }: ForjaPanelPro
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ deal_id: dealId, deal: { ...deal, id: dealId }, forja_result: result }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error((data as { error?: string }).error ?? `HTTP ${res.status}`);
-      setExported({ url: data.report_url, emails: data.emails_sent ?? 0 });
-      if (data.report_url) window.open(data.report_url, "_blank");
+      const data = await res.json() as {
+        ok?: boolean; error?: string;
+        report_url?: string; report_html?: string;
+        emails_sent?: number; notifications_created?: number;
+      };
+      if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
+      setExported({ url: data.report_url ?? "", emails: data.emails_sent ?? 0 });
+      // Abre via Blob URL com charset explícito — evita mojibake do Supabase Storage
+      if (data.report_html) {
+        const blob = new Blob([data.report_html], { type: "text/html;charset=utf-8" });
+        const blobUrl = URL.createObjectURL(blob);
+        window.open(blobUrl, "_blank");
+      } else if (data.report_url) {
+        window.open(data.report_url, "_blank");
+      }
     } catch (e) {
       setExportError(e instanceof Error ? e.message : String(e));
     } finally {
