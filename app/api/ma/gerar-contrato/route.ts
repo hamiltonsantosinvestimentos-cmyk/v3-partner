@@ -25,14 +25,7 @@ const CSS_BASE = `
     border-bottom: 2px solid #C9A84C;
   }
   .v3-header-left { display: flex; align-items: center; gap: 14px; }
-  .v3-logo-box {
-    width: 44px; height: 44px;
-    background: linear-gradient(135deg, #C9A84C, #E8C97A);
-    border-radius: 10px;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 18px; font-weight: 800; color: #09081A;
-    flex-shrink: 0;
-  }
+  .v3-logo-box { height: 44px; width: auto; flex-shrink: 0; }
   .v3-header-company { display: flex; flex-direction: column; }
   .v3-company-name { font-size: 15px; font-weight: 700; color: #09081A; }
   .v3-company-cnpj { font-size: 10px; color: #666; margin-top: 1px; }
@@ -121,7 +114,7 @@ function buildNDA(deal: (typeof DEMO_DEALS)[0], lang: string): string {
 <body>
   <div class="v3-header">
     <div class="v3-header-left">
-      <div class="v3-logo-box">V3</div>
+      <img src="/v3-logo-flat-gold-alpha.png" alt="V3 Partners" class="v3-logo-box">
       <div class="v3-header-company">
         <span class="v3-company-name">V3 Partners Soluções Ltda</span>
         <span class="v3-company-cnpj">CNPJ 14.219.287/0001-50</span>
@@ -251,7 +244,7 @@ function buildMandato(deal: (typeof DEMO_DEALS)[0], lang: string): string {
 <body>
   <div class="v3-header">
     <div class="v3-header-left">
-      <div class="v3-logo-box">V3</div>
+      <img src="/v3-logo-flat-gold-alpha.png" alt="V3 Partners" class="v3-logo-box">
       <div class="v3-header-company">
         <span class="v3-company-name">V3 Partners Soluções Ltda</span>
         <span class="v3-company-cnpj">CNPJ 14.219.287/0001-50</span>

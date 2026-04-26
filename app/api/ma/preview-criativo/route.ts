@@ -100,7 +100,7 @@ body{max-width:860px;margin:0 auto;padding:0}
 .page-cover{background:linear-gradient(160deg,#09081A 60%,#162744);display:flex;flex-direction:column;justify-content:space-between}
 .page-inner{background:#111F35}
 .cover-logo{display:flex;align-items:center;gap:12px}
-.cover-logo-box{width:44px;height:44px;background:linear-gradient(135deg,#C9A84C,#E8C97A);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:800;color:#09081A}
+.cover-logo-box{height:44px;width:auto}
 .cover-title{font-size:42px;font-weight:800;line-height:1.1;color:#F0ECE4;margin-top:auto;margin-bottom:8px}
 .cover-sub{font-size:14px;color:#7A8FA8;margin-bottom:48px}
 .cover-bar{height:3px;background:linear-gradient(90deg,#C9A84C,#E8C97A,transparent);border-radius:2px;margin-bottom:32px}
@@ -131,7 +131,7 @@ body{max-width:860px;margin:0 auto;padding:0}
 <!-- CAPA -->
 <div class="page page-cover">
   <div class="cover-logo">
-    <div class="cover-logo-box">V3</div>
+    <img src="/v3-logo-flat-gold-alpha.png" alt="V3 Partners" style="height:44px;width:auto;">
     <div>
       <p style="font-size:11px;font-weight:700;color:#F0ECE4">V3 Partners</p>
       <p style="font-size:9px;color:#7A8FA8">M&A · Fusões e Aquisições</p>
@@ -227,7 +227,7 @@ body{max-width:860px;margin:0 auto;padding:0}
   </div>`).join("")}
   <div class="divider"></div>
   <div style="display:flex;align-items:center;gap:16px;margin-top:24px">
-    <div style="width:40px;height:40px;background:linear-gradient(135deg,#C9A84C,#E8C97A);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:800;color:#09081A;flex-shrink:0">V3</div>
+    <img src="/v3-logo-flat-gold-alpha.png" alt="V3 Partners" style="height:40px;width:auto;flex-shrink:0;">
     <div>
       <p style="font-size:11px;font-weight:700;color:#F0ECE4">V3 Partners — Mesa M&A</p>
       <p style="font-size:10px;color:#7A8FA8">v3partners.com.br · Rua Visconde de Pirajá, 414, Sala 718 — Ipanema, Rio de Janeiro</p>
@@ -284,7 +284,7 @@ ${CSS_BASE}
 body{max-width:860px;margin:0 auto;padding:0;min-height:100vh}
 .wrap{min-height:100vh;padding:56px;background:linear-gradient(160deg,#09081A 50%,#111F35);display:flex;flex-direction:column}
 .top{display:flex;align-items:center;justify-content:space-between;margin-bottom:48px}
-.logo-box{width:40px;height:40px;background:linear-gradient(135deg,#C9A84C,#E8C97A);border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:800;color:#09081A}
+.logo-box{display:inline-block}
 .v3-name{font-size:12px;font-weight:700;color:#F0ECE4;margin-left:10px}
 .badge-conf{font-size:9px;font-weight:700;letter-spacing:3px;color:#C9A84C;border:1px solid #C9A84C33;padding:5px 12px;border-radius:4px}
 .bar{height:2px;background:linear-gradient(90deg,#C9A84C,#E8C97A,transparent);border-radius:2px;margin-bottom:36px}
@@ -316,8 +316,8 @@ body{max-width:860px;margin:0 auto;padding:0;min-height:100vh}
 </head><body>
 <div class="wrap">
   <div class="top">
-    <div style="display:flex;align-items:center">
-      <div class="logo-box">V3</div>
+    <div style="display:flex;align-items:center;gap:10px">
+      <img src="/v3-logo-flat-gold-alpha.png" alt="V3 Partners" style="height:40px;width:auto;">
       <span class="v3-name">V3 Partners</span>
     </div>
     <span class="badge-conf">${t.teaser}</span>
@@ -390,7 +390,7 @@ body{background:#09081A;display:flex;align-items:stretch}
 .wrap::before{content:"";position:absolute;top:-200px;right:-200px;width:600px;height:600px;background:radial-gradient(circle,#C9A84C08 0%,transparent 70%)}
 .top{display:flex;align-items:center;justify-content:space-between;margin-bottom:56px}
 .logo{display:flex;align-items:center;gap:12px}
-.logo-box{width:48px;height:48px;background:linear-gradient(135deg,#C9A84C,#E8C97A);border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:800;color:#09081A}
+.logo-box{display:inline-block}
 .logo-name{font-size:15px;font-weight:700;color:#F0ECE4}
 .badge{font-size:10px;font-weight:700;letter-spacing:3px;color:#C9A84C;border:1px solid #C9A84C44;padding:6px 16px;border-radius:5px}
 .bar{height:2px;background:linear-gradient(90deg,#C9A84C,#E8C97A,transparent);margin-bottom:44px}
@@ -411,7 +411,7 @@ body{background:#09081A;display:flex;align-items:stretch}
 <div class="wrap">
   <div class="top">
     <div class="logo">
-      <div class="logo-box">V3</div>
+      <img src="/v3-logo-flat-gold-alpha.png" alt="V3 Partners" style="height:48px;width:auto;">
       <span class="logo-name">V3 Partners</span>
     </div>
     <span class="badge">${t.tag}</span>
@@ -473,7 +473,7 @@ body{background:#09081A}
 .glow{position:absolute;top:0;left:50%;transform:translateX(-50%);width:700px;height:700px;background:radial-gradient(circle,#C9A84C0A 0%,transparent 70%);pointer-events:none}
 .glow2{position:absolute;bottom:0;right:0;width:500px;height:500px;background:radial-gradient(circle,#C9A84C06 0%,transparent 70%);pointer-events:none}
 .top{display:flex;align-items:center;justify-content:space-between;margin-bottom:80px}
-.logo-box{width:56px;height:56px;background:linear-gradient(135deg,#C9A84C,#E8C97A);border-radius:13px;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:800;color:#09081A}
+.logo-box{display:inline-block}
 .logo-name{font-size:17px;font-weight:700;color:#F0ECE4;margin-left:14px}
 .badge{font-size:10px;font-weight:700;letter-spacing:3px;color:#C9A84C;border:1px solid #C9A84C44;padding:8px 18px;border-radius:5px}
 .bar{height:3px;background:linear-gradient(90deg,#C9A84C,#E8C97A,transparent);border-radius:2px;margin-bottom:60px}
@@ -499,8 +499,8 @@ body{background:#09081A}
   <div class="glow"></div>
   <div class="glow2"></div>
   <div class="top">
-    <div style="display:flex;align-items:center">
-      <div class="logo-box">V3</div>
+    <div style="display:flex;align-items:center;gap:14px">
+      <img src="/v3-logo-flat-gold-alpha.png" alt="V3 Partners" style="height:56px;width:auto;">
       <span class="logo-name">V3 Partners</span>
     </div>
     <span class="badge">${t.tag}</span>

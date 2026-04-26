@@ -86,7 +86,8 @@ function buildReportHtml(deal: DealInfo, result: ForjaResult, partnerName: strin
     .page { width: 210mm; min-height: 297mm; background: #111F35; margin: 0 auto; position: relative; }
     .stripe { height: 4px; background: linear-gradient(to right, #09081A, #C9A84C, #E8C97A, #C9A84C, #09081A); }
     .header { background: #09081A; padding: 18px 28px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(201,168,76,0.2); }
-    .header-left { display: flex; flex-direction: column; gap: 2px; }
+    .header-left { display: flex; align-items: center; gap: 14px; }
+    .header-info { display: flex; flex-direction: column; gap: 2px; }
     .header-tag { font-size: 7px; font-weight: 700; letter-spacing: 3px; text-transform: uppercase; color: #C9A84C; }
     .header-title { font-size: 14px; font-weight: 700; color: #F0ECE4; }
     .header-sub { font-size: 9px; color: #7A8FA8; }
@@ -127,9 +128,12 @@ function buildReportHtml(deal: DealInfo, result: ForjaResult, partnerName: strin
   <!-- Header -->
   <div class="header">
     <div class="header-left">
-      <span class="header-tag">Relatório FORJA · Validação M&amp;A</span>
-      <span class="header-title">${deal.code} — ${deal.company}</span>
-      <span class="header-sub">${deal.sector}${deal.location ? ` · ${deal.location}` : ""} · ${formatM(deal.value)}</span>
+      <img src="/v3-logo-flat-gold-alpha.png" alt="V3 Partners" style="height:36px;width:auto;flex-shrink:0;">
+      <div class="header-info">
+        <span class="header-tag">Relatório FORJA · Validação M&amp;A</span>
+        <span class="header-title">${deal.code} — ${deal.company}</span>
+        <span class="header-sub">${deal.sector}${deal.location ? ` · ${deal.location}` : ""} · ${formatM(deal.value)}</span>
+      </div>
     </div>
     <div style="text-align:right;">
       <span class="header-tag">Gerado em</span>
@@ -263,9 +267,12 @@ function buildReportHtml(deal: DealInfo, result: ForjaResult, partnerName: strin
   </div>
 
   <div class="footer">
-    <div class="footer-left">
-      V3 Partners Soluções Ltda · CNPJ 14.219.287/0001-50 · Rua Visconde de Pirajá, 414, Sala 718 — Ipanema, RJ<br/>
-      Plataforma v3-partner · Relatório FORJA · ${deal.code}
+    <div style="display:flex;align-items:center;gap:12px">
+      <img src="/v3-logo-flat-gold-alpha.png" alt="V3 Partners" style="height:24px;width:auto;opacity:0.85;">
+      <div class="footer-left">
+        V3 Partners Soluções Ltda · CNPJ 14.219.287/0001-50 · Rua Visconde de Pirajá, 414, Sala 718 — Ipanema, RJ<br/>
+        Plataforma v3-partner · Relatório FORJA · ${deal.code}
+      </div>
     </div>
     <div class="footer-right">${result.recommendation}</div>
   </div>
