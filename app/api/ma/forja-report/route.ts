@@ -50,7 +50,8 @@ function buildReportHtml(deal: DealInfo, result: ForjaResult, partnerName: strin
   const rec    = REC[result.recommendation];
   const scoreC = result.score >= 80 ? "#10B981" : result.score >= 60 ? "#F59E0B" : "#EF4444";
 
-  function formatM(v: number) {
+  function formatM(v: number | undefined | null) {
+    if (!v || isNaN(Number(v))) return "—";
     if (v >= 1e9) return `R$ ${(v / 1e9).toFixed(1)}B`;
     if (v >= 1e6) return `R$ ${(v / 1e6).toFixed(1)}M`;
     if (v >= 1e3) return `R$ ${(v / 1e3).toFixed(0)}K`;
@@ -288,7 +289,7 @@ function buildMesaEmail(deal: DealInfo, result: ForjaResult, partnerName: string
     PENDENTE: "#F97316", BLOQUEADO: "#EF4444",
   };
   const scoreColor = result.score >= 80 ? "#10B981" : result.score >= 60 ? "#F59E0B" : "#EF4444";
-  function formatM(v: number) { return v >= 1e6 ? `R$ ${(v / 1e6).toFixed(1)}M` : `R$ ${v.toLocaleString("pt-BR")}`; }
+  function formatM(v: number | undefined | null) { if (!v || isNaN(Number(v))) return "—"; return v >= 1e6 ? `R$ ${(v / 1e6).toFixed(1)}M` : `R$ ${Number(v).toLocaleString("pt-BR")}`; }
 
   return `<!DOCTYPE html>
 <html><head><meta charset="UTF-8"/>
@@ -388,7 +389,7 @@ function buildPartnerEmail(deal: DealInfo, result: ForjaResult, partnerName: str
     BLOQUEADO:              { title: "Deal Bloqueado — Revisão Necessária",     body: "O deal precisa de revisão antes de prosseguir. Nossa equipe entrará em contato.", color: "#EF4444" },
   };
   const msg = recMsg[result.recommendation];
-  function formatM(v: number) { return v >= 1e6 ? `R$ ${(v / 1e6).toFixed(1)}M` : `R$ ${v.toLocaleString("pt-BR")}`; }
+  function formatM(v: number | undefined | null) { if (!v || isNaN(Number(v))) return "—"; return v >= 1e6 ? `R$ ${(v / 1e6).toFixed(1)}M` : `R$ ${Number(v).toLocaleString("pt-BR")}`; }
 
   return `<!DOCTYPE html>
 <html><head><meta charset="UTF-8"/>
@@ -461,13 +462,24 @@ export async function POST(req: NextRequest) {
     if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
     const body = await req.json();
-    const { deal_id, deal, forja_result } = body as {
+    const { deal_id, forja_result } = body as {
       deal_id: string;
-      deal: DealInfo;
       forja_result: ForjaResult;
     };
+    // Normaliza campos — o frontend envia target_company/deal_value (nomes do banco)
+    // mas o tipo DealInfo usa company/value. Aceita ambos.
+    const raw = body.deal as Record<string, unknown>;
+    const deal: DealInfo = {
+      id:          (raw.id          as string)  ?? deal_id,
+      code:        (raw.code        as string)  ?? "",
+      company:     (raw.target_company as string) ?? (raw.company as string) ?? "",
+      sector:      (raw.sector      as string)  ?? "",
+      value:       Number((raw.deal_value ?? raw.value) ?? 0),
+      location:    (raw.location    as string)  ?? "",
+      responsible: (raw.responsible as string)  ?? "",
+    };
 
-    if (!deal_id || !deal || !forja_result) {
+    if (!deal_id || !raw || !forja_result) {
       return NextResponse.json({ error: "deal_id, deal e forja_result são obrigatórios" }, { status: 400 });
     }
 
