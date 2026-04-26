@@ -172,6 +172,14 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
   const [uploadedFiles, setUploadedFiles] = useState<Record<string, string>>({}); // docId → filename
   const [uploadedUrls, setUploadedUrls] = useState<Record<string, string>>({}); // docId → signed URL (20 dias)
   const [isUploading, setIsUploading] = useState<string | null>(null); // docId em upload
+
+  // ── OCR state ─────────────────────────────────────────────────────────────
+  type OcrStatus = "idle" | "loading" | "done" | "error";
+  interface OcrField { campo: string; extraido: string | null; esperado: string | null; status: "ok" | "divergente" | "ausente" | "info"; mensagem: string; }
+  interface OcrResultado { doc_id: string; tipo_documento: string; campos: OcrField[]; resumo: "aprovado" | "atencao" | "reprovado"; observacoes: string; }
+  const [ocrStatus, setOcrStatus] = useState<Record<string, OcrStatus>>({});
+  const [ocrResultados, setOcrResultados] = useState<Record<string, OcrResultado>>({});
+  const [ocrErros, setOcrErros] = useState<Record<string, string>>({});
   const [showCompile, setShowCompile] = useState(false);
   const [compileLoading, setCompileLoading] = useState(false);
   const [compileDocs, setCompileDocs] = useState<CompiledDoc[]>([]);
@@ -342,6 +350,48 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
         `/api/credit-proposals/documents?proposal_id=${proposal.id}&doc_id=${encodeURIComponent(docId)}`,
         { method: "DELETE" }
       ).catch(() => {});
+    }
+  }
+
+  async function handleOcrValidar(docId: string, docLabel: string) {
+    if (!proposal) return;
+    const url = uploadedUrls[docId];
+    if (!url) return;
+
+    setOcrStatus(prev => ({ ...prev, [docId]: "loading" }));
+    setOcrErros(prev => { const n = { ...prev }; delete n[docId]; return n; });
+
+    // Monta contexto da proposta para comparação
+    const meta = proposal.metadata ?? {};
+    const ctx: Record<string, string> = {
+      nome_cliente: proposal.client_name ?? "",
+      cpf_cnpj: proposal.cpf_cnpj ?? proposal.client_cpf_cnpj ?? "",
+      tipo_pessoa: (meta.client_type as string) ?? "PF",
+      linha_credito: proposal.credit_line ?? "",
+      valor_solicitado: `R$ ${(proposal.requested_value ?? 0).toLocaleString("pt-BR")}`,
+    };
+    if (meta.email) ctx.email = meta.email as string;
+    if (meta.telefone) ctx.telefone = meta.telefone as string;
+    if (meta.renda_mensal) ctx.renda_mensal = `R$ ${(meta.renda_mensal as number).toLocaleString("pt-BR")}`;
+    if (meta.faturamento_mensal) ctx.faturamento_mensal = `R$ ${(meta.faturamento_mensal as number).toLocaleString("pt-BR")}`;
+    if (meta.razao_social) ctx.razao_social = meta.razao_social as string;
+    if (meta.endereco_rua) ctx.endereco = `${meta.endereco_rua}, ${meta.endereco_cidade ?? ""} - ${meta.endereco_uf ?? ""}`;
+    if (proposal.imovel_endereco) ctx.imovel_endereco = proposal.imovel_endereco;
+    if (proposal.imovel_valor_medio) ctx.imovel_valor_medio = `R$ ${proposal.imovel_valor_medio.toLocaleString("pt-BR")}`;
+
+    try {
+      const res = await fetch("/api/ocr-validar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ doc_id: docId, doc_label: docLabel, doc_url: url, proposal_context: ctx }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Erro ao validar");
+      setOcrResultados(prev => ({ ...prev, [docId]: json.resultado }));
+      setOcrStatus(prev => ({ ...prev, [docId]: "done" }));
+    } catch (e: unknown) {
+      setOcrErros(prev => ({ ...prev, [docId]: e instanceof Error ? e.message : "Erro desconhecido" }));
+      setOcrStatus(prev => ({ ...prev, [docId]: "error" }));
     }
   }
 
@@ -1792,27 +1842,90 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
                             <span className="text-[11px] text-muted-foreground">Enviando arquivo...</span>
                           </div>
                         ) : fileName ? (
-                          <div className="flex items-center gap-2 px-2 py-1 rounded bg-emerald-500/10 border border-emerald-500/30">
-                            <Paperclip className="w-3 h-3 text-emerald-400 flex-shrink-0" />
-                            <span className="text-[11px] text-emerald-400 flex-1 truncate">{fileName}</span>
-                            {uploadedUrls[doc.id] && (
-                              <a
-                                href={uploadedUrls[doc.id]}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-blue-400 hover:text-blue-300 transition-colors flex-shrink-0"
-                                title="Abrir documento (válido por 20 dias)"
+                          <div className="space-y-1.5">
+                            <div className="flex items-center gap-2 px-2 py-1 rounded bg-emerald-500/10 border border-emerald-500/30">
+                              <Paperclip className="w-3 h-3 text-emerald-400 flex-shrink-0" />
+                              <span className="text-[11px] text-emerald-400 flex-1 truncate">{fileName}</span>
+                              {uploadedUrls[doc.id] && (
+                                <a
+                                  href={uploadedUrls[doc.id]}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-blue-400 hover:text-blue-300 transition-colors flex-shrink-0"
+                                  title="Abrir documento (válido por 20 dias)"
+                                >
+                                  <ExternalLink className="w-3 h-3" />
+                                </a>
+                              )}
+                              {/* Botão OCR */}
+                              {canChangeStage && uploadedUrls[doc.id] && (
+                                <button
+                                  onClick={() => handleOcrValidar(doc.id, doc.label)}
+                                  disabled={ocrStatus[doc.id] === "loading"}
+                                  className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-[#C9A84C]/15 text-[#C9A84C] hover:bg-[#C9A84C]/25 border border-[#C9A84C]/30 disabled:opacity-50 transition-colors flex-shrink-0"
+                                  title="Validar documento com OCR"
+                                >
+                                  {ocrStatus[doc.id] === "loading" ? (
+                                    <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                                  ) : (
+                                    <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>
+                                  )}
+                                  {ocrStatus[doc.id] === "loading" ? "Analisando…" : "Validar OCR"}
+                                </button>
+                              )}
+                              <button
+                                onClick={() => removeFile(doc.id)}
+                                className="text-muted-foreground hover:text-red-400 transition-colors flex-shrink-0"
+                                title="Remover arquivo"
                               >
-                                <ExternalLink className="w-3 h-3" />
-                              </a>
+                                <Trash2 className="w-3 h-3" />
+                              </button>
+                            </div>
+
+                            {/* Resultado OCR */}
+                            {ocrStatus[doc.id] === "error" && (
+                              <div className="px-2 py-1.5 rounded bg-red-500/10 border border-red-500/20">
+                                <p className="text-[10px] text-red-400">⚠ {ocrErros[doc.id]}</p>
+                              </div>
                             )}
-                            <button
-                              onClick={() => removeFile(doc.id)}
-                              className="text-muted-foreground hover:text-red-400 transition-colors flex-shrink-0"
-                              title="Remover arquivo"
-                            >
-                              <Trash2 className="w-3 h-3" />
-                            </button>
+                            {ocrStatus[doc.id] === "done" && ocrResultados[doc.id] && (() => {
+                              const r = ocrResultados[doc.id];
+                              const resumoCor = r.resumo === "aprovado" ? "emerald" : r.resumo === "atencao" ? "amber" : "red";
+                              const resumoIcon = r.resumo === "aprovado" ? "✓" : r.resumo === "atencao" ? "⚠" : "✗";
+                              return (
+                                <div className={`rounded-lg border p-2.5 space-y-2 bg-${resumoCor}-500/5 border-${resumoCor}-500/20`}>
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                                      {r.tipo_documento}
+                                    </span>
+                                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-${resumoCor}-500/20 text-${resumoCor}-400`}>
+                                      {resumoIcon} {r.resumo.toUpperCase()}
+                                    </span>
+                                  </div>
+                                  <div className="space-y-1">
+                                    {r.campos.map((campo, ci) => {
+                                      const cor = campo.status === "ok" ? "text-emerald-400" : campo.status === "divergente" ? "text-red-400" : campo.status === "ausente" ? "text-amber-400" : "text-muted-foreground";
+                                      const icon = campo.status === "ok" ? "✓" : campo.status === "divergente" ? "✗" : campo.status === "ausente" ? "?" : "·";
+                                      return (
+                                        <div key={ci} className="flex items-start gap-1.5">
+                                          <span className={`text-[10px] font-bold flex-shrink-0 mt-0.5 ${cor}`}>{icon}</span>
+                                          <div className="min-w-0">
+                                            <span className="text-[10px] text-muted-foreground">{campo.campo}: </span>
+                                            <span className={`text-[10px] font-medium ${cor}`}>{campo.extraido ?? "—"}</span>
+                                            {campo.esperado && campo.status !== "ok" && (
+                                              <span className="text-[9px] text-muted-foreground/60 ml-1">(esperado: {campo.esperado})</span>
+                                            )}
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                  {r.observacoes && (
+                                    <p className="text-[10px] text-muted-foreground/80 italic border-t border-border pt-1.5">{r.observacoes}</p>
+                                  )}
+                                </div>
+                              );
+                            })()}
                           </div>
                         ) : (
                           <label className="flex items-center gap-2 px-2 py-1.5 rounded border border-dashed border-border hover:border-primary/50 hover:bg-primary/5 cursor-pointer transition-colors group">
