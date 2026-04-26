@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { STATUS_LABELS, STATUS_COLORS, type OperationStatus } from "@/lib/constants";
 import { CHECKLISTS, DEFAULT_CHECKLIST } from "./nova-proposta-modal";
+import { RecomendacaoLinha } from "./recomendacao-linha";
 
 export type MesaComment = {
   id: string;
@@ -158,6 +159,10 @@ interface PropostaDetailModalProps {
 }
 
 export function PropostaDetailModal({ open, onClose, proposal, onStageChange, onProposalUpdate, canChangeStage, canEditValorSolicitado, canCompileDocuments, canEditInstituicao }: PropostaDetailModalProps) {
+  // ── Modal tab ─────────────────────────────────────────────────────────────
+  type ModalTab = "detalhes" | "recomendacao" | "documentos" | "comentarios";
+  const [modalTab, setModalTab] = useState<ModalTab>("detalhes");
+
   // ── Checklist state ───────────────────────────────────────────────────────
   const IS_DEMO = false;
   const [checkedDocs, setCheckedDocs] = useState<Record<string, boolean>>({});
@@ -1027,8 +1032,30 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
           </div>
         </div>
 
+        {/* Tabs */}
+        <div className="flex border-b border-border px-6 gap-1">
+          {([
+            { id: "detalhes",      label: "Detalhes" },
+            { id: "recomendacao",  label: "✦ Recomendação" },
+            { id: "documentos",    label: "Documentos" },
+            { id: "comentarios",   label: "Comentários" },
+          ] as { id: ModalTab; label: string }[]).map(t => (
+            <button key={t.id} onClick={() => setModalTab(t.id)}
+              className={`px-3 py-2.5 text-xs font-semibold border-b-2 transition-colors ${
+                modalTab === t.id
+                  ? "border-[#C9A84C] text-[#C9A84C]"
+                  : "border-transparent text-muted-foreground hover:text-white"
+              }`}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+
         {/* Body */}
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
+          {/* ── Seção Detalhes e Recomendação ── */}
+          <div className={modalTab === "documentos" || modalTab === "comentarios" ? "hidden" : "contents"}>
+
           {/* ── Pipeline de Etapas ── */}
           <div>
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Etapas da Proposta</p>
@@ -1066,6 +1093,7 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
           </div>
 
           {/* ── Dados do Cliente ── */}
+          {(() => {
           {(() => {
             const meta = proposal.metadata ?? {};
             // Normaliza campos — suporta tanto snake_case (entrada manual) quanto camelCase (captação)
@@ -1652,7 +1680,17 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
             )}
           </div>
 
+          {/* ── Aba Recomendação ── */}
+          {modalTab === "recomendacao" && (
+            <div className="p-4 rounded-xl border border-[#C9A84C]/20 bg-[#C9A84C]/5">
+              <RecomendacaoLinha proposal={proposal} />
+            </div>
+          )}
+
+          </div>{/* fim wrapper detalhes+recomendacao */}
+
           {/* ── Documentos Enviados pelo Cliente (Captação) ── */}
+          {modalTab === "documentos" && (() => {
           {(() => {
             const meta = proposal.metadata ?? {};
             const captDocs = (meta.documentos as Array<{ label: string; name: string; url: string }> | undefined) ?? [];
@@ -1688,7 +1726,7 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
           })()}
 
           {/* ── Checklist de Documentos ── */}
-          {(() => {
+          {modalTab === "documentos" && (() => {
             const clientType = (proposal.client_type === "PJ" ? "PJ" : "PF") as "PF" | "PJ";
             const docs = CHECKLISTS[proposal.credit_line]?.[clientType] ?? DEFAULT_CHECKLIST[clientType];
             const checkedCount = docs.filter((d) => checkedDocs[d.id]).length;
@@ -1790,13 +1828,15 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
           })()}
 
           {/* Datas */}
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <Calendar className="w-3.5 h-3.5" />
-            Criado em {formatDate(proposal.created_at)}
-          </div>
+          {modalTab === "documentos" && (
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Calendar className="w-3.5 h-3.5" />
+              Criado em {formatDate(proposal.created_at)}
+            </div>
+          )}
 
           {/* ── Mensagens da Mesa ── */}
-          <div className="p-4 rounded-xl border border-border bg-secondary/30 space-y-3">
+          {modalTab === "comentarios" && <div className="p-4 rounded-xl border border-border bg-secondary/30 space-y-3">
             <p className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
               <MessageSquare className="w-3.5 h-3.5" /> Mensagens da Mesa
               {mesaComments.length > 0 && (
@@ -1852,7 +1892,7 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
             {!canChangeStage && (
               <p className="text-[10px] text-muted-foreground italic text-center">Somente a Mesa pode adicionar mensagens.</p>
             )}
-          </div>
+          </div>}
         </div>
 
         {/* Footer */}
