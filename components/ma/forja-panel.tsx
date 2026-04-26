@@ -301,8 +301,25 @@ export function ForjaPanel({ deal, dealId, savedResult, onSaved }: ForjaPanelPro
               )}
             </Button>
 
-            {/* Abrir último relatório salvo no Storage */}
+            {/* Abrir último relatório — session export ou Storage */}
             {(() => {
+              // Prioridade: export atual da sessão → asset_data salvo no banco
+              if (exported?.url) {
+                return (
+                  <button
+                    onClick={() => {
+                      const blob = new Blob([""], { type: "text/html;charset=utf-8" });
+                      // Reabre via signed URL do Storage (encoding correto com BOM)
+                      window.open(exported.url, "_blank");
+                    }}
+                    className="flex items-center gap-1 text-[11px] text-[#C9A84C] hover:underline"
+                    title="Relatório gerado nesta sessão — abre via Storage"
+                  >
+                    <FileText className="w-3 h-3" />
+                    Abrir relatório
+                  </button>
+                );
+              }
               const reports = (deal?.asset_data as Record<string, unknown> | undefined)
                 ?.forja_reports as Array<{ url: string; generated_at: string }> | undefined;
               const last = reports?.[0];

@@ -275,6 +275,10 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
   const [deletingCard, setDeletingCard] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
+  const [showKitOverride, setShowKitOverride] = useState(false);
+  const [overrideWord, setOverrideWord] = useState("");
+  const [overrideLoading, setOverrideLoading] = useState(false);
+
   useEffect(() => {
     if (!selectedCard) { setCardDocs([]); setDetailTab("detalhes"); setEditingCard(false); return; }
     setDocsLoading(true);
@@ -850,6 +854,81 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
                           </button>
                         )}
                       </div>
+                    </div>
+                  )}
+
+                  {/* Override manual — Head de M&A (ADMIN/GESTAO) quando score insuficiente */}
+                  {!forjaAprovado && forjaStatus && !kitLiberado &&
+                   (userRole === "ADMIN" || userRole === "GESTAO") && (
+                    <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-xs font-semibold text-amber-400 flex items-center gap-1.5">
+                            <FileImage size={13} /> Liberação Manual — Head M&A
+                          </p>
+                          <p className="text-[10px] text-[#7A8FA8] mt-0.5">
+                            Score {forjaStatus === "PENDENTE" ? "pendente" : "bloqueado"} — override disponível para gestão.
+                            Esta ação substitui a validação automática do FORJA.
+                          </p>
+                        </div>
+                        {!showKitOverride ? (
+                          <button
+                            onClick={() => { setShowKitOverride(true); setOverrideWord(""); }}
+                            className="text-[10px] font-semibold text-amber-400 px-3 py-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 transition-colors flex-shrink-0"
+                          >
+                            Override KIT
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => setShowKitOverride(false)}
+                            className="text-[10px] text-[#7A8FA8] hover:text-red-400 transition-colors flex-shrink-0"
+                          >
+                            Cancelar
+                          </button>
+                        )}
+                      </div>
+
+                      {showKitOverride && (
+                        <div className="mt-3 pt-3 border-t border-amber-500/20 space-y-2">
+                          <p className="text-[10px] text-amber-400/80">
+                            Digite <strong>LIBERAR</strong> para confirmar a liberação manual do kit:
+                          </p>
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              value={overrideWord}
+                              onChange={e => setOverrideWord(e.target.value.toUpperCase())}
+                              placeholder="LIBERAR"
+                              maxLength={7}
+                              className="flex-1 bg-[#09081A] border border-amber-500/30 rounded-lg px-3 py-1.5 text-xs text-[#F0ECE4] placeholder:text-[#7A8FA8] focus:outline-none focus:border-amber-500/60 font-mono tracking-widest"
+                            />
+                            <button
+                              disabled={overrideWord !== "LIBERAR" || overrideLoading}
+                              onClick={async () => {
+                                if (!selectedCard || overrideWord !== "LIBERAR") return;
+                                setOverrideLoading(true);
+                                try {
+                                  await fetch("/api/ma/forja-kit", {
+                                    method: "POST",
+                                    headers: { "Content-Type": "application/json" },
+                                    body: JSON.stringify({ deal_id: selectedCard.id, action: "liberar_kit" }),
+                                  });
+                                  const newAssetData = { ...(selectedCard.asset_data ?? {}), kit_liberado: true, kit_override: true, kit_override_by: userName };
+                                  setCards(prev => prev.map(c => c.id === selectedCard.id ? { ...c, asset_data: newAssetData } : c));
+                                  setSelectedCard(prev => prev ? { ...prev, asset_data: newAssetData } : null);
+                                  setShowKitOverride(false);
+                                  setOverrideWord("");
+                                } finally {
+                                  setOverrideLoading(false);
+                                }
+                              }}
+                              className="px-3 py-1.5 rounded-lg text-[10px] font-bold transition-colors disabled:opacity-40 disabled:cursor-not-allowed bg-amber-500 text-[#09081A] hover:bg-amber-400"
+                            >
+                              {overrideLoading ? "..." : "Confirmar"}
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
