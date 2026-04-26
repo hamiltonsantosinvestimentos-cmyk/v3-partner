@@ -800,6 +800,13 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
                       setCards(prev => prev.map(c => c.id === selectedCard.id ? { ...c, asset_data: newAssetData } : c));
                       setSelectedCard(prev => prev ? { ...prev, asset_data: newAssetData } : null);
                     }}
+                    onReportSaved={(reportUrl, generatedAt) => {
+                      const prev = (selectedCard.asset_data?.forja_reports as Array<{url:string;generated_at:string}>) ?? [];
+                      const newReports = [{ url: reportUrl, generated_at: generatedAt }, ...prev].slice(0, 10);
+                      const newAssetData = { ...(selectedCard.asset_data ?? {}), forja_reports: newReports };
+                      setCards(p => p.map(c => c.id === selectedCard.id ? { ...c, asset_data: newAssetData } : c));
+                      setSelectedCard(p => p ? { ...p, asset_data: newAssetData } : null);
+                    }}
                   />
                   {/* Liberar / Bloquear KIT — aparece após FORJA validada */}
                   {forjaAprovado && (

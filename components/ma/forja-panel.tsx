@@ -61,11 +61,12 @@ interface ForjaPanelProps {
   dealId: string;
   savedResult?: ForjaResult | null;
   onSaved?: (result: ForjaResult) => void;
+  onReportSaved?: (reportUrl: string, generatedAt: string) => void;
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function ForjaPanel({ deal, dealId, savedResult, onSaved }: ForjaPanelProps) {
+export function ForjaPanel({ deal, dealId, savedResult, onSaved, onReportSaved }: ForjaPanelProps) {
   const [result, setResult]               = useState<ForjaResult | null>(savedResult ?? null);
   const [loading, setLoading]             = useState(false);
   const [error, setError]                 = useState<string | null>(null);
@@ -154,7 +155,10 @@ export function ForjaPanel({ deal, dealId, savedResult, onSaved }: ForjaPanelPro
         emails_sent?: number; notifications_created?: number;
       };
       if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
+      const now = new Date().toISOString();
       setExported({ url: data.report_url ?? "", emails: data.emails_sent ?? 0 });
+      // Notifica o pai para atualizar asset_data.forja_reports imediatamente
+      if (onReportSaved && data.report_url) onReportSaved(data.report_url, now);
       // Abre via Blob URL com charset explícito — evita mojibake do Supabase Storage
       if (data.report_html) {
         const blob = new Blob([data.report_html], { type: "text/html;charset=utf-8" });
@@ -301,40 +305,27 @@ export function ForjaPanel({ deal, dealId, savedResult, onSaved }: ForjaPanelPro
               )}
             </Button>
 
-            {/* Abrir último relatório — session export ou Storage */}
+            {/* Abrir último — session ou Storage */}
             {(() => {
-              // Prioridade: export atual da sessão → asset_data salvo no banco
-              if (exported?.url) {
-                return (
-                  <button
-                    onClick={() => {
-                      const blob = new Blob([""], { type: "text/html;charset=utf-8" });
-                      // Reabre via signed URL do Storage (encoding correto com BOM)
-                      window.open(exported.url, "_blank");
-                    }}
-                    className="flex items-center gap-1 text-[11px] text-[#C9A84C] hover:underline"
-                    title="Relatório gerado nesta sessão — abre via Storage"
-                  >
-                    <FileText className="w-3 h-3" />
-                    Abrir relatório
-                  </button>
-                );
-              }
+              const sessionUrl = exported?.url;
               const reports = (deal?.asset_data as Record<string, unknown> | undefined)
                 ?.forja_reports as Array<{ url: string; generated_at: string }> | undefined;
-              const last = reports?.[0];
-              if (!last?.url) return null;
-              const date = new Date(last.generated_at).toLocaleDateString("pt-BR");
+              const savedUrl  = reports?.[0]?.url;
+              const savedDate = reports?.[0]?.generated_at
+                ? new Date(reports[0].generated_at).toLocaleDateString("pt-BR")
+                : null;
+              const url  = sessionUrl || savedUrl;
+              const label = sessionUrl ? "Abrir relatório" : savedDate ? `Abrir último (${savedDate})` : null;
+              if (!url || !label) return null;
               return (
                 <a
-                  href={last.url}
+                  href={url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center gap-1 text-[11px] text-[#C9A84C] hover:underline"
-                  title={`Gerado em ${date} — válido por 7 dias`}
+                  className="flex items-center gap-1 text-[11px] text-[#C9A84C] hover:underline flex-shrink-0"
                 >
                   <FileText className="w-3 h-3" />
-                  Abrir último ({date})
+                  {label}
                 </a>
               );
             })()}
