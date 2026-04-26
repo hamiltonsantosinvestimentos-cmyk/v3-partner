@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { createClient as sc } from "@supabase/supabase-js";
 import { DEMO_DEALS } from "@/lib/demo-data";
 
 const IS_DEMO = false;
@@ -686,14 +687,24 @@ export async function GET(request: Request) {
   if (IS_DEMO) {
     deal = DEMO_DEALS.find((d) => d.id === dealId) ?? null;
   } else {
-    const { createClient } = await import("@/lib/supabase/server");
-    const supabase = await createClient();
-    const { data } = await supabase.from("ma_deals").select("*").eq("id", dealId).single();
+    // Service client — bypassa RLS para que o preview funcione sem sessão ativa
+    // (necessário para aba anônima e compartilhamento de links)
+    const svc = sc(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+    const { data } = await svc.from("ma_deals").select("*").eq("id", dealId).single();
     deal = data;
   }
 
   if (!deal) {
-    return NextResponse.json({ error: "Deal não encontrado" }, { status: 404 });
+    return new Response(
+      `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Deal não encontrado</title>
+      <style>body{font-family:sans-serif;background:#09081A;color:#F0ECE4;display:flex;align-items:center;justify-content:center;height:100vh;margin:0}
+      .box{text-align:center}.code{font-size:64px;font-weight:800;color:#C9A84C}.msg{color:#7A8FA8;margin-top:8px}</style></head>
+      <body><div class="box"><div class="code">404</div><div class="msg">Deal não encontrado ou ID inválido.</div></div></body></html>`,
+      { status: 404, headers: { "Content-Type": "text/html; charset=utf-8" } }
+    );
   }
 
   let html = "";
