@@ -123,7 +123,8 @@ export async function POST(
     .eq("token", token);
 
   if (updateErr) {
-    return NextResponse.json({ error: "Erro ao registrar assinatura" }, { status: 500 });
+    console.error("updateErr:", JSON.stringify(updateErr));
+    return NextResponse.json({ error: "Erro ao registrar assinatura", detail: updateErr.message, hint: updateErr.hint ?? null }, { status: 500 });
   }
 
   const v3SigningUrl = `${APP_URL}/assinar/v3/${data.v3_token}`;
