@@ -393,7 +393,7 @@ export function AssinarClient({ token, contrato }: { token: string; contrato: Co
                 <strong className="text-white">1.1.</strong> Sem prejuízo das demais definições dispostas neste MANDATO, os termos iniciados em letra maiúscula terão os significados a eles atribuídos neste instrumento:
               </Item>
               <Item>
-                <strong className="text-white">"Operação de Crédito"</strong>: Refere-se à operação por meio da qual a CONTRATADA, diretamente ou por meio de suas Afiliadas, celebrará empréstimos, financiamentos, adiantamentos, outras modalidades de crédito ou qualquer outra transação jurídica a ser definida pelas partes, na modalidade de <strong className="text-[#C9A84C]">{contrato.credit_line ?? "Crédito Estruturado"}</strong>{contrato.deal_value ? `, no valor estimado de <strong className="text-[#C9A84C]">${moeda(contrato.deal_value)}</strong>` : ""}.
+                <strong className="text-white">"Operação de Crédito"</strong>: Refere-se à operação por meio da qual a CONTRATADA, diretamente ou por meio de suas Afiliadas, celebrará empréstimos, financiamentos, adiantamentos, outras modalidades de crédito ou qualquer outra transação jurídica a ser definida pelas partes, como <strong className="text-white">operações financeiras</strong>.
               </Item>
               <Item>
                 <strong className="text-white">"Afiliadas"</strong>: Empresas com relação jurídica com a CONTRATADA por vínculos de controle ou participação acionária, podendo ser subsidiárias, controladoras ou empresas do mesmo grupo econômico.
