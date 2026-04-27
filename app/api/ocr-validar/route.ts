@@ -148,7 +148,18 @@ export async function POST(req: NextRequest) {
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
   try {
-    const mediaType = isPdf ? "application/pdf" : (docData.mimeType as "image/jpeg" | "image/png" | "image/gif" | "image/webp");
+    // Monta o bloco de mídia separadamente para evitar conflito de tipos
+    type ImageMediaType = "image/jpeg" | "image/png" | "image/gif" | "image/webp";
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const mediaBlock: any = isPdf
+      ? {
+          type: "document",
+          source: { type: "base64", media_type: "application/pdf", data: docData.base64 },
+        }
+      : {
+          type: "image",
+          source: { type: "base64", media_type: docData.mimeType as ImageMediaType, data: docData.base64 },
+        };
 
     const message = await anthropic.messages.create({
       model: "claude-sonnet-4-6",
@@ -156,24 +167,8 @@ export async function POST(req: NextRequest) {
       messages: [
         {
           role: "user",
-          content: [
-            {
-              type: "document" in {} ? "document" : ("image" as "image"),
-              ...(isPdf
-                ? {
-                    type: "document" as const,
-                    source: { type: "base64" as const, media_type: "application/pdf" as const, data: docData.base64 },
-                  }
-                : {
-                    type: "image" as const,
-                    source: { type: "base64" as const, media_type: mediaType as "image/jpeg" | "image/png" | "image/gif" | "image/webp", data: docData.base64 },
-                  }),
-            },
-            {
-              type: "text",
-              text: buildPrompt(doc_label, proposal_context),
-            },
-          ],
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          content: [mediaBlock, { type: "text", text: buildPrompt(doc_label, proposal_context) }] as any,
         },
       ],
     });
