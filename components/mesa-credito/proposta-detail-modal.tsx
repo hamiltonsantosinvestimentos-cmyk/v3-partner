@@ -180,6 +180,11 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
   const [ocrStatus, setOcrStatus] = useState<Record<string, OcrStatus>>({});
   const [ocrResultados, setOcrResultados] = useState<Record<string, OcrResultado>>({});
   const [ocrErros, setOcrErros] = useState<Record<string, string>>({});
+
+  // ── Solicitar correção state ──────────────────────────────────────────────
+  const [solicitarDoc, setSolicitarDoc] = useState<{ docId: string; docLabel: string; motivo: string } | null>(null);
+  const [solicitandoCorrecao, setSolicitandoCorrecao] = useState(false);
+  const [correcaoEnviada, setCorrecaoEnviada] = useState<string | null>(null);
   const [showCompile, setShowCompile] = useState(false);
   const [compileLoading, setCompileLoading] = useState(false);
   const [compileDocs, setCompileDocs] = useState<CompiledDoc[]>([]);
@@ -392,6 +397,36 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
     } catch (e: unknown) {
       setOcrErros(prev => ({ ...prev, [docId]: e instanceof Error ? e.message : "Erro desconhecido" }));
       setOcrStatus(prev => ({ ...prev, [docId]: "error" }));
+    }
+  }
+
+  async function handleSolicitarCorrecao() {
+    if (!proposal || !solicitarDoc) return;
+    setSolicitandoCorrecao(true);
+    try {
+      const res = await fetch("/api/ocr-solicitar-correcao", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          proposal_id: proposal.id,
+          proposal_code: proposal.code,
+          proposal_title: proposal.title,
+          partner_id: proposal.partner_id,
+          doc_label: solicitarDoc.docLabel,
+          motivo: solicitarDoc.motivo,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Erro ao enviar");
+      setCorrecaoEnviada(solicitarDoc.docId);
+      setSolicitarDoc(null);
+      // Atualiza stage localmente para PENDENCIA
+      onProposalUpdate?.(proposal.id, { stage: "PENDENCIA" });
+      setTimeout(() => setCorrecaoEnviada(null), 5000);
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : "Erro ao solicitar correção");
+    } finally {
+      setSolicitandoCorrecao(false);
     }
   }
 
@@ -1923,6 +1958,27 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
                                   {r.observacoes && (
                                     <p className="text-[10px] text-muted-foreground/80 italic border-t border-border pt-1.5">{r.observacoes}</p>
                                   )}
+                                  {/* Botão solicitar correção — apenas quando reprovado */}
+                                  {r.resumo === "reprovado" && proposal.partner_id && (
+                                    <div className="border-t border-red-500/20 pt-2">
+                                      {correcaoEnviada === doc.id ? (
+                                        <div className="flex items-center gap-1.5 text-[10px] text-emerald-400">
+                                          <CheckCircle2 className="w-3 h-3" /> Solicitação enviada ao partner. Proposta movida para Pendência.
+                                        </div>
+                                      ) : (
+                                        <button
+                                          onClick={() => setSolicitarDoc({
+                                            docId: doc.id,
+                                            docLabel: doc.label,
+                                            motivo: r.observacoes || r.campos.filter(c => c.status === "divergente" || c.status === "ausente").map(c => c.mensagem).join("; ") || "Documento reprovado na validação OCR",
+                                          })}
+                                          className="flex items-center gap-1.5 w-full justify-center px-3 py-1.5 rounded-lg bg-red-500/15 border border-red-500/30 text-[11px] font-semibold text-red-400 hover:bg-red-500/25 transition-colors"
+                                        >
+                                          <Send className="w-3 h-3" /> Solicitar Correção ao Partner
+                                        </button>
+                                      )}
+                                    </div>
+                                  )}
                                 </div>
                               );
                             })()}
@@ -2211,6 +2267,58 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
                 </Button>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal: Solicitar Correção ao Partner ── */}
+      {solicitarDoc && (
+        <div className="fixed inset-0 z-[220] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+          <div className="bg-[#111F35] border border-[#243A66] rounded-2xl w-full max-w-md shadow-2xl">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-[#243A66]">
+              <div className="flex items-center gap-2">
+                <Send className="w-4 h-4 text-red-400" />
+                <h3 className="text-sm font-bold text-white">Solicitar Correção ao Partner</h3>
+              </div>
+              <button onClick={() => setSolicitarDoc(null)} className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-[#162744] text-muted-foreground hover:text-white transition-colors">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="px-6 py-5 space-y-4">
+              <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20">
+                <p className="text-[11px] text-red-400 font-semibold mb-1">📎 {solicitarDoc.docLabel}</p>
+                <p className="text-[11px] text-red-300/80">Documento reprovado na validação OCR</p>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Motivo da solicitação</label>
+                <textarea
+                  className="w-full bg-[#09081A] border border-[#243A66] rounded-lg px-3 py-2 text-[12px] text-white outline-none resize-none focus:border-[#C9A84C]/50"
+                  rows={3}
+                  value={solicitarDoc.motivo}
+                  onChange={e => setSolicitarDoc(prev => prev ? { ...prev, motivo: e.target.value } : prev)}
+                />
+              </div>
+              <div className="p-3 rounded-xl bg-[#162744] border border-[#243A66] space-y-1">
+                <p className="text-[10px] text-muted-foreground">O partner receberá:</p>
+                <p className="text-[11px] text-white">✓ Notificação interna na plataforma</p>
+                <p className="text-[11px] text-white">✓ E-mail com o documento e motivo</p>
+                <p className="text-[11px] text-white">✓ Proposta movida para <span className="text-orange-400 font-semibold">Pendência de Docs</span></p>
+              </div>
+              <div className="flex gap-3">
+                <Button variant="outline" size="sm" onClick={() => setSolicitarDoc(null)} className="flex-1">
+                  Cancelar
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={handleSolicitarCorrecao}
+                  disabled={solicitandoCorrecao || !solicitarDoc.motivo.trim()}
+                  className="flex-1 gap-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30"
+                >
+                  {solicitandoCorrecao ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                  {solicitandoCorrecao ? "Enviando…" : "Enviar Solicitação"}
+                </Button>
+              </div>
+            </div>
           </div>
         </div>
       )}
