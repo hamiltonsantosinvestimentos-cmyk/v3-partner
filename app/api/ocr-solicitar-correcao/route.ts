@@ -126,10 +126,32 @@ export async function POST(req: NextRequest) {
     action_url: `/mesa-credito/nivel-1`,
   });
 
-  // 3. Avança proposta para PENDENCIA
+  // 3. Busca metadata atual e adiciona pendência OCR
+  const { data: proposalData } = await db
+    .from("credit_desk_proposals")
+    .select("metadata")
+    .eq("id", proposal_id)
+    .single();
+
+  const currentMeta = (proposalData as { metadata?: Record<string, unknown> } | null)?.metadata ?? {};
+  const pendenciasOcr = (currentMeta.pendencias_ocr as Record<string, unknown> ?? {});
+  const docKey = `${doc_label.replace(/\s+/g, "_").toLowerCase()}_${Date.now()}`;
+  pendenciasOcr[docKey] = {
+    doc_label,
+    motivo,
+    status: "pendente",
+    created_at: new Date().toISOString(),
+    corrigido_at: null,
+  };
+
+  // 4. Avança proposta para PENDENCIA e salva metadata
   await db
     .from("credit_desk_proposals")
-    .update({ stage: "PENDENCIA", updated_at: new Date().toISOString() })
+    .update({
+      stage: "PENDENCIA",
+      metadata: { ...currentMeta, pendencias_ocr: pendenciasOcr },
+      updated_at: new Date().toISOString(),
+    })
     .eq("id", proposal_id);
 
   // 4. Envia e-mail se Resend estiver configurado

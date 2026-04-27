@@ -1,8 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import { CreditCard, Building2, Trophy, Clock, CheckCircle2, XCircle, AlertCircle, TrendingUp } from "lucide-react";
+import { CreditCard, Building2, Trophy, AlertCircle, AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, Send, Loader2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+
+interface PendenciaOcr {
+  doc_label: string;
+  motivo: string;
+  status: "pendente" | "corrigido";
+  created_at: string;
+  corrigido_at: string | null;
+}
 
 interface Proposta {
   id: string;
@@ -13,9 +22,11 @@ interface Proposta {
   requested_value: number;
   approved_value: number | null;
   status: string;
+  stage: string;
   current_level: string;
   created_at: string;
   updated_at: string;
+  metadata?: { pendencias_ocr?: Record<string, PendenciaOcr>; [key: string]: unknown };
 }
 
 interface Deal {
@@ -40,7 +51,7 @@ interface Lead {
 }
 
 interface Props {
-  propostas: Proposta[];
+  propostas: Proposta[];  // recebido como prop inicial
   deals: Deal[];
   leads: Lead[];
   partnerName: string;
@@ -80,8 +91,112 @@ function StatusMA({ stage }: { stage: string }) {
 
 type Tab = "credito" | "ma" | "consorcio";
 
-export function MinhasOperacoesClient({ propostas, deals, leads, partnerName }: Props) {
+function PendenciasRow({ proposta, onCorrigido }: {
+  proposta: Proposta;
+  onCorrigido: (proposalId: string, docKey: string, novoStage: string) => void;
+}) {
+  const pendencias = proposta.metadata?.pendencias_ocr ?? {};
+  const pendentes = Object.entries(pendencias).filter(([, p]) => p.status === "pendente");
+  const [expandido, setExpandido] = useState(true);
+  const [enviando, setEnviando] = useState<string | null>(null);
+  const [enviados, setEnviados] = useState<Set<string>>(new Set());
+
+  if (pendentes.length === 0) return null;
+
+  async function marcarCorrigido(docKey: string) {
+    setEnviando(docKey);
+    try {
+      const res = await fetch("/api/ocr-correcao-feita", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          proposal_id: proposta.id,
+          proposal_code: proposta.code,
+          doc_key: docKey,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error);
+      setEnviados(prev => new Set([...prev, docKey]));
+      onCorrigido(proposta.id, docKey, json.novo_stage);
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : "Erro ao enviar");
+    } finally {
+      setEnviando(null);
+    }
+  }
+
+  return (
+    <tr>
+      <td colSpan={9} className="px-4 pb-3 pt-0">
+        <div className="rounded-xl border border-orange-500/30 bg-orange-500/5 overflow-hidden">
+          <button
+            onClick={() => setExpandido(e => !e)}
+            className="w-full flex items-center gap-2 px-4 py-2.5 hover:bg-orange-500/10 transition-colors text-left"
+          >
+            <AlertTriangle className="w-3.5 h-3.5 text-orange-400 flex-shrink-0" />
+            <span className="text-[11px] font-semibold text-orange-400 flex-1">
+              {pendentes.length} documento(s) pendente(s) de correção
+            </span>
+            {expandido ? <ChevronUp className="w-3.5 h-3.5 text-orange-400" /> : <ChevronDown className="w-3.5 h-3.5 text-orange-400" />}
+          </button>
+          {expandido && (
+            <div className="px-4 pb-3 space-y-2 border-t border-orange-500/20">
+              {pendentes.map(([docKey, p]) => (
+                <div key={docKey} className="flex items-start gap-3 p-3 rounded-lg bg-[#09081A] border border-orange-500/20 mt-2">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold text-white mb-0.5">📎 {p.doc_label}</p>
+                    <p className="text-[11px] text-orange-300/80 leading-relaxed">{p.motivo}</p>
+                    <p className="text-[10px] text-muted-foreground/60 mt-1">
+                      Solicitado em {new Date(p.created_at).toLocaleDateString("pt-BR")}
+                    </p>
+                  </div>
+                  <div className="flex-shrink-0">
+                    {enviados.has(docKey) ? (
+                      <div className="flex items-center gap-1.5 text-[11px] text-emerald-400">
+                        <CheckCircle2 className="w-3.5 h-3.5" /> Enviado!
+                      </div>
+                    ) : (
+                      <Button
+                        size="sm"
+                        disabled={enviando === docKey}
+                        onClick={() => marcarCorrigido(docKey)}
+                        className="gap-1.5 text-[11px] bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/30 h-8"
+                      >
+                        {enviando === docKey
+                          ? <><Loader2 className="w-3 h-3 animate-spin" /> Enviando…</>
+                          : <><Send className="w-3 h-3" /> Correção Feita</>}
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              ))}
+              <p className="text-[10px] text-muted-foreground/60 pt-1">
+                Após clicar em "Correção Feita", a mesa será notificada e a proposta voltará para Triagem.
+              </p>
+            </div>
+          )}
+        </div>
+      </td>
+    </tr>
+  );
+}
+
+export function MinhasOperacoesClient({ propostas: initialPropostas, deals, leads, partnerName }: Omit<Props, "propostas"> & { propostas: Proposta[] }) {
   const [tab, setTab] = useState<Tab>("credito");
+  const [propostas, setPropostas] = useState<Proposta[]>(initialPropostas);
+
+  function handleCorrigido(proposalId: string, docKey: string, novoStage: string) {
+    setPropostas(prev => prev.map(p => {
+      if (p.id !== proposalId) return p;
+      const meta = p.metadata ?? {};
+      const pendencias = { ...(meta.pendencias_ocr ?? {}) };
+      if (pendencias[docKey]) {
+        pendencias[docKey] = { ...pendencias[docKey], status: "corrigido", corrigido_at: new Date().toISOString() };
+      }
+      return { ...p, stage: novoStage, metadata: { ...meta, pendencias_ocr: pendencias } };
+    }));
+  }
 
   const totalCredito = propostas.filter(p => p.status === "APPROVED").reduce((s, p) => s + (p.approved_value ?? p.requested_value ?? 0), 0);
   const totalMA = deals.filter(d => d.stage === "CLOSED_WON").reduce((s, d) => s + (d.deal_value ?? 0), 0);
@@ -150,19 +265,30 @@ export function MinhasOperacoesClient({ propostas, deals, leads, partnerName }: 
                       <AlertCircle className="w-8 h-8 mx-auto mb-2 opacity-30" />
                       Nenhuma proposta de crédito enviada
                     </td></tr>
-                  ) : propostas.map((p, i) => (
-                    <tr key={p.id} className={`border-b border-border/20 hover:bg-secondary/30 transition-colors ${i % 2 === 0 ? "" : "bg-[#091221]/40"}`}>
-                      <td className="px-4 py-3 font-mono text-muted-foreground">{p.code}</td>
-                      <td className="px-4 py-3 text-white max-w-[160px]"><div className="truncate" title={p.title}>{p.title}</div></td>
-                      <td className="px-4 py-3 text-muted-foreground">{p.client_name}</td>
-                      <td className="px-4 py-3 text-muted-foreground">{p.credit_line}</td>
-                      <td className="px-4 py-3 text-white">{moeda(p.requested_value)}</td>
-                      <td className="px-4 py-3 text-emerald-400 font-semibold">{moeda(p.approved_value)}</td>
-                      <td className="px-4 py-3 text-muted-foreground">{p.current_level?.replace("NIVEL_", "N") ?? "—"}</td>
-                      <td className="px-4 py-3"><StatusCredito status={p.status} /></td>
-                      <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">{dataFmt(p.created_at)}</td>
-                    </tr>
-                  ))}
+                  ) : propostas.map((p, i) => {
+                    const temPendencias = Object.values(p.metadata?.pendencias_ocr ?? {}).some(x => x.status === "pendente");
+                    return (
+                      <>
+                        <tr key={p.id} className={`border-b ${temPendencias ? "border-orange-500/20" : "border-border/20"} hover:bg-secondary/30 transition-colors ${i % 2 === 0 ? "" : "bg-[#091221]/40"}`}>
+                          <td className="px-4 py-3 font-mono text-muted-foreground">
+                            <div className="flex items-center gap-1.5">
+                              {temPendencias && <AlertTriangle className="w-3 h-3 text-orange-400 flex-shrink-0" />}
+                              {p.code}
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 text-white max-w-[160px]"><div className="truncate" title={p.title}>{p.title}</div></td>
+                          <td className="px-4 py-3 text-muted-foreground">{p.client_name}</td>
+                          <td className="px-4 py-3 text-muted-foreground">{p.credit_line}</td>
+                          <td className="px-4 py-3 text-white">{moeda(p.requested_value)}</td>
+                          <td className="px-4 py-3 text-emerald-400 font-semibold">{moeda(p.approved_value)}</td>
+                          <td className="px-4 py-3 text-muted-foreground">{p.current_level?.replace("NIVEL_", "N") ?? "—"}</td>
+                          <td className="px-4 py-3"><StatusCredito status={p.status} /></td>
+                          <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">{dataFmt(p.created_at)}</td>
+                        </tr>
+                        <PendenciasRow key={`pend-${p.id}`} proposta={p} onCorrigido={handleCorrigido} />
+                      </>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
