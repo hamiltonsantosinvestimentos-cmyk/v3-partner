@@ -74,8 +74,18 @@ export function AssinarClient({ token, contrato }: { token: string; contrato: Co
   const [cpf, setCpf] = useState(contrato.client_cpf ?? "");
   const [birthDate, setBirthDate] = useState("");
   const [cpfLoading, setCpfLoading] = useState(false);
-  const [cpfResult, setCpfResult] = useState<{ tipo: string; nome: string; situacao: string; nomeCorrigido: boolean } | null>(null);
+  const [cpfResult, setCpfResult] = useState<{
+    tipo: string; nome: string; situacao: string; nomeCorrigido: boolean;
+    nome_fantasia?: string;
+    qsa?: Array<{ nome_socio: string; cnpj_cpf_do_socio: string; qualificacao_socio: string }>;
+  } | null>(null);
   const [cpfError, setCpfError] = useState("");
+
+  // Dados PJ (preenchidos ao validar CNPJ)
+  const [nomeSocio, setNomeSocio] = useState("");
+  const [cpfSocio, setCpfSocio] = useState("");
+  const [qualificacaoSocio, setQualificacaoSocio] = useState("");
+  const [nomeFantasia, setNomeFantasia] = useState("");
 
   function toTitleCase(s: string) {
     const minors = new Set(["da","de","do","das","dos","e","a","o","em"]);
@@ -101,14 +111,33 @@ export function AssinarClient({ token, contrato }: { token: string; contrato: Co
       });
       const json = await res.json();
       if (!res.ok) { setCpfError(json.error ?? "Erro ao validar CPF."); return; }
-      // Para CNPJ: preenche com razão social. Para CPF: usuário mantém seu nome.
+      // Para CNPJ: preenche com razão social + dados adicionais. Para CPF: usuário mantém seu nome.
       const rfNome: string = json.nome ?? "";
       if (rfNome && json.tipo === "CNPJ") {
         const rfNomeTitle = toTitleCase(rfNome);
         const nomeAtual = nomeAssinatura.trim();
         const nomeCorrigido = nomeAtual !== "" && normName(rfNome) !== normName(nomeAtual);
         setNomeAssinatura(rfNomeTitle);
-        setCpfResult({ tipo: json.tipo, nome: rfNome, situacao: json.situacao, nomeCorrigido });
+        // Auto-preenche endereço da empresa
+        if (json.logradouro) {
+          const numStr = json.numero ? `, ${json.numero}` : "";
+          const compStr = json.complemento ? ` ${json.complemento}` : "";
+          setEndereco(`${json.logradouro}${numStr}${compStr}`.trim());
+        }
+        if (json.bairro) setBairro(json.bairro);
+        if (json.municipio) setMunicipio(json.municipio);
+        if (json.uf) setEstado(json.uf);
+        if (json.cep) setCep((json.cep as string).replace(/^(\d{5})(\d{3})$/, "$1-$2"));
+        // Nome fantasia
+        setNomeFantasia(json.nome_fantasia ? toTitleCase(json.nome_fantasia as string) : "");
+        // Auto-preenche sócio do QSA (primeiro da lista)
+        const primeiroSocio = (json.qsa as Array<{ nome_socio: string; cnpj_cpf_do_socio: string; qualificacao_socio: string }>)?.[0];
+        if (primeiroSocio) {
+          setNomeSocio(toTitleCase(primeiroSocio.nome_socio ?? ""));
+          setCpfSocio(primeiroSocio.cnpj_cpf_do_socio ?? "");
+          setQualificacaoSocio(primeiroSocio.qualificacao_socio ?? "");
+        }
+        setCpfResult({ tipo: json.tipo, nome: rfNome, situacao: json.situacao, nomeCorrigido, nome_fantasia: json.nome_fantasia, qsa: json.qsa });
       } else {
         setCpfResult({ tipo: json.tipo, nome: rfNome, situacao: json.situacao, nomeCorrigido: false });
       }
@@ -151,14 +180,24 @@ export function AssinarClient({ token, contrato }: { token: string; contrato: Co
   async function handleAssinar() {
     setError("");
     if (!nomeAssinatura.trim()) { setError("Digite seu nome completo para assinar."); return; }
-    if (!cpfResult) { setError("Valide seu CPF na Receita Federal antes de assinar."); return; }
+    if (!cpfResult) { setError("Valide seu CPF/CNPJ na Receita Federal antes de assinar."); return; }
+    if (cpfResult.tipo === "CNPJ" && !nomeSocio.trim()) { setError("Informe o nome do sócio / representante legal."); return; }
     if (!leu) { setError("Você precisa confirmar que leu o contrato."); return; }
     setSaving(true);
     try {
       const res = await fetch(`/api/contratos/${token}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nome_assinatura: nomeAssinatura, endereco, bairro, municipio, estado, cep, birthdate: birthDate, doc_image: docBase64 }),
+        body: JSON.stringify({
+          nome_assinatura: nomeAssinatura,
+          endereco, bairro, municipio, estado, cep,
+          birthdate: cpfResult?.tipo !== "CNPJ" ? birthDate : null,
+          doc_image: docBase64,
+          nome_socio: nomeSocio || null,
+          cpf_socio: cpfSocio || null,
+          qualificacao_socio: qualificacaoSocio || null,
+          nome_fantasia: nomeFantasia || null,
+        }),
       });
       const json = await res.json();
       if (!res.ok) { setError(json.error ?? "Erro ao registrar assinatura."); return; }
@@ -271,25 +310,58 @@ export function AssinarClient({ token, contrato }: { token: string; contrato: Co
               {/* CONTRATANTE */}
               <div className="bg-[#13243D] rounded-xl p-4 space-y-1">
                 <p className="text-[11px] font-bold text-[#C9A84C] uppercase tracking-wider mb-2">Contratante</p>
-                <p>
-                  <strong className="text-[#C9A84C]">{contrato.client_name}</strong>
-                  {contrato.client_cpf && (
-                    <span>, inscrito(a) no CPF/CNPJ nº <strong className="text-white">{contrato.client_cpf}</strong></span>
-                  )}
-                  {contrato.telefone && (
-                    <span>, Tel: <strong className="text-white">{contrato.telefone}</strong></span>
-                  )}
-                  {(endereco || municipio) && (
-                    <span>
-                      , estabelecido(a) à{" "}
-                      <strong className="text-white">
-                        {[endereco, bairro, municipio && estado ? `${municipio} – ${estado}` : municipio || estado, cep].filter(Boolean).join(", ")}
-                      </strong>
-                    </span>
-                  )}
-                  , e-mail: <strong className="text-white">{contrato.client_email}</strong>,
-                  doravante denominado(a) simplesmente <strong className="text-white">CONTRATANTE</strong>.
-                </p>
+                {cpfResult?.tipo === "CNPJ" ? (
+                  /* ── Bloco PJ ── */
+                  <p>
+                    <strong className="text-[#C9A84C]">{nomeAssinatura || contrato.client_name}</strong>
+                    {nomeFantasia && (
+                      <span className="text-[#7A8FA8]"> ({nomeFantasia})</span>
+                    )}
+                    , pessoa jurídica de direito privado, inscrita no CNPJ nº{" "}
+                    <strong className="text-white">{contrato.client_cpf}</strong>
+                    {(endereco || municipio) && (
+                      <span>
+                        , com sede à{" "}
+                        <strong className="text-white">
+                          {[endereco, bairro, municipio && estado ? `${municipio} – ${estado}` : municipio || estado, cep].filter(Boolean).join(", ")}
+                        </strong>
+                      </span>
+                    )}
+                    {nomeSocio && (
+                      <span>
+                        , neste ato representada por{" "}
+                        <strong className="text-white">{nomeSocio}</strong>
+                        {qualificacaoSocio && <span>, {qualificacaoSocio}</span>}
+                        {cpfSocio && (
+                          <span>, inscrito(a) no CPF nº <strong className="text-white">{cpfSocio}</strong></span>
+                        )}
+                      </span>
+                    )}
+                    , e-mail: <strong className="text-white">{contrato.client_email}</strong>,
+                    doravante denominada simplesmente <strong className="text-white">CONTRATANTE</strong>.
+                  </p>
+                ) : (
+                  /* ── Bloco PF ── */
+                  <p>
+                    <strong className="text-[#C9A84C]">{contrato.client_name}</strong>
+                    {contrato.client_cpf && (
+                      <span>, inscrito(a) no CPF nº <strong className="text-white">{contrato.client_cpf}</strong></span>
+                    )}
+                    {contrato.telefone && (
+                      <span>, Tel: <strong className="text-white">{contrato.telefone}</strong></span>
+                    )}
+                    {(endereco || municipio) && (
+                      <span>
+                        , residente à{" "}
+                        <strong className="text-white">
+                          {[endereco, bairro, municipio && estado ? `${municipio} – ${estado}` : municipio || estado, cep].filter(Boolean).join(", ")}
+                        </strong>
+                      </span>
+                    )}
+                    , e-mail: <strong className="text-white">{contrato.client_email}</strong>,
+                    doravante denominado(a) simplesmente <strong className="text-white">CONTRATANTE</strong>.
+                  </p>
+                )}
               </div>
 
               <p>
@@ -537,17 +609,21 @@ export function AssinarClient({ token, contrato }: { token: string; contrato: Co
             Preencha seus dados pessoais e endereço para constar no contrato.
           </p>
           <div className="grid grid-cols-2 gap-3">
-            <div className="col-span-2 sm:col-span-1">
-              <label className="block text-[11px] font-semibold text-[#7A8FA8] mb-1">Data de Nascimento *</label>
-              <input
-                type="date"
-                value={birthDate}
-                onChange={(e) => { setBirthDate(e.target.value); setCpfResult(null); setCpfError(""); }}
-                className="w-full h-9 px-3 text-sm bg-[#13243D] border border-[#1B3050] rounded-lg text-white focus:outline-none focus:ring-1 focus:ring-[#C9A84C]/50"
-              />
-            </div>
+            {cpfResult?.tipo !== "CNPJ" && (
+              <div className="col-span-2 sm:col-span-1">
+                <label className="block text-[11px] font-semibold text-[#7A8FA8] mb-1">Data de Nascimento *</label>
+                <input
+                  type="date"
+                  value={birthDate}
+                  onChange={(e) => { setBirthDate(e.target.value); setCpfResult(null); setCpfError(""); }}
+                  className="w-full h-9 px-3 text-sm bg-[#13243D] border border-[#1B3050] rounded-lg text-white focus:outline-none focus:ring-1 focus:ring-[#C9A84C]/50"
+                />
+              </div>
+            )}
             <div className="col-span-2">
-              <label className="block text-[11px] font-semibold text-[#7A8FA8] mb-1">Endereço (Rua, nº)</label>
+              <label className="block text-[11px] font-semibold text-[#7A8FA8] mb-1">
+                {cpfResult?.tipo === "CNPJ" ? "Endereço da Empresa (Rua, nº)" : "Endereço (Rua, nº)"}
+              </label>
               <input value={endereco} onChange={(e) => setEndereco(e.target.value)} placeholder="Rua Exemplo, 123"
                 className="w-full h-9 px-3 text-sm bg-[#13243D] border border-[#1B3050] rounded-lg text-white placeholder:text-[#7A8FA8] focus:outline-none focus:ring-1 focus:ring-[#C9A84C]/50" />
             </div>
@@ -576,6 +652,32 @@ export function AssinarClient({ token, contrato }: { token: string; contrato: Co
                 ))}
               </select>
             </div>
+
+            {/* ── Campos PJ: Sócio Responsável ── */}
+            {cpfResult?.tipo === "CNPJ" && (
+              <>
+                <div className="col-span-2 pt-2">
+                  <p className="text-[11px] font-bold text-[#C9A84C] uppercase tracking-wider border-t border-[#1B3050] pt-3">
+                    Sócio Responsável / Representante Legal
+                  </p>
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-[11px] font-semibold text-[#7A8FA8] mb-1">Nome do Sócio / Representante *</label>
+                  <input value={nomeSocio} onChange={(e) => setNomeSocio(e.target.value)} placeholder="Nome completo do representante"
+                    className="w-full h-9 px-3 text-sm bg-[#13243D] border border-[#1B3050] rounded-lg text-white placeholder:text-[#7A8FA8] focus:outline-none focus:ring-1 focus:ring-[#C9A84C]/50" />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-semibold text-[#7A8FA8] mb-1">CPF do Sócio</label>
+                  <input value={cpfSocio} onChange={(e) => setCpfSocio(e.target.value)} placeholder="000.000.000-00"
+                    className="w-full h-9 px-3 text-sm bg-[#13243D] border border-[#1B3050] rounded-lg text-white placeholder:text-[#7A8FA8] focus:outline-none focus:ring-1 focus:ring-[#C9A84C]/50" />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-semibold text-[#7A8FA8] mb-1">Qualificação / Cargo</label>
+                  <input value={qualificacaoSocio} onChange={(e) => setQualificacaoSocio(e.target.value)} placeholder="Sócio-Administrador"
+                    className="w-full h-9 px-3 text-sm bg-[#13243D] border border-[#1B3050] rounded-lg text-white placeholder:text-[#7A8FA8] focus:outline-none focus:ring-1 focus:ring-[#C9A84C]/50" />
+                </div>
+              </>
+            )}
           </div>
         </div>
 

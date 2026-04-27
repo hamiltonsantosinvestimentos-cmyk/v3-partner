@@ -41,7 +41,8 @@ export async function POST(
 ) {
   const { token } = await params;
   const body = await req.json();
-  const { endereco, bairro, municipio, estado, cep, nome_assinatura, birthdate, doc_image } = body;
+  const { endereco, bairro, municipio, estado, cep, nome_assinatura, birthdate, doc_image,
+          nome_socio, cpf_socio, qualificacao_socio, nome_fantasia } = body;
 
   if (!nome_assinatura?.trim()) {
     return NextResponse.json({ error: "Nome para assinatura obrigatório" }, { status: 400 });
@@ -104,6 +105,10 @@ export async function POST(
       cep: cep ?? null,
       client_birthdate: birthdate ?? null,
       client_doc_url: clientDocUrl,
+      nome_socio: nome_socio ?? null,
+      cpf_socio: cpf_socio ?? null,
+      qualificacao_socio: qualificacao_socio ?? null,
+      nome_fantasia: nome_fantasia ?? null,
     })
     .eq("token", token);
 
