@@ -49,7 +49,7 @@ export function Testemunha2Client({ token, contrato }: { token: string; contrato
   const [nomeAssinatura, setNomeAssinatura] = useState(nomeInicial);
   const [leu, setLeu] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [assinado, setAssinado] = useState(contrato.status === "ASSINADO" && !!contrato.testemunha2_signed_at);
+  const [assinado, setAssinado] = useState(!!contrato.testemunha2_signed_at);
   const [error, setError] = useState("");
 
   // CPF / Receita Federal — pré-preenchido com dados da Aline
@@ -93,9 +93,6 @@ export function Testemunha2Client({ token, contrato }: { token: string; contrato
   }
 
   const hoje = new Date().toLocaleDateString("pt-BR");
-  const clienteAssinou = contrato.signed_at ? new Date(contrato.signed_at).toLocaleString("pt-BR") : "—";
-  const v3Assinou = contrato.v3_signed_at ? new Date(contrato.v3_signed_at).toLocaleString("pt-BR") : "—";
-  const t1Assinou = contrato.testemunha_signed_at ? new Date(contrato.testemunha_signed_at).toLocaleString("pt-BR") : "—";
   const perc = percExtenso(contrato.commission_perc);
 
   const enderecoCliente = [
@@ -112,9 +109,6 @@ export function Testemunha2Client({ token, contrato }: { token: string; contrato
     if (!nomeAssinatura.trim()) { setError("Digite seu nome completo."); return; }
     if (!cpfResult) { setError("Valide seu CPF na Receita Federal antes de assinar."); return; }
     if (!leu) { setError("Confirme que leu e revisou o contrato."); return; }
-    if (contrato.status !== "AGUARDANDO_TESTEMUNHA2") {
-      setError("Este contrato não está aguardando assinatura da segunda testemunha."); return;
-    }
     setSaving(true);
     try {
       const res = await fetch(`/api/contratos/testemunha2/${token}`, {
@@ -152,26 +146,6 @@ export function Testemunha2Client({ token, contrato }: { token: string; contrato
     );
   }
 
-  if (contrato.status !== "AGUARDANDO_TESTEMUNHA2") {
-    return (
-      <div className="min-h-screen bg-[#09081A] flex items-center justify-center p-6">
-        <div className="max-w-md w-full text-center space-y-4">
-          <div className="w-16 h-16 rounded-2xl bg-amber-500/20 flex items-center justify-center mx-auto">
-            <span className="text-3xl">⚠️</span>
-          </div>
-          <h1 className="text-xl font-bold text-white">
-            {contrato.status === "ASSINADO" ? "Contrato já finalizado" : "Link indisponível"}
-          </h1>
-          <p className="text-[#7A8FA8] text-sm">
-            {contrato.status === "ASSINADO"
-              ? "Este contrato já foi assinado por todas as partes."
-              : "Este link ainda não está disponível para assinatura. Aguarde as etapas anteriores."}
-          </p>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-[#09081A] py-10 px-4">
       <div className="max-w-3xl mx-auto space-y-6">
@@ -187,28 +161,23 @@ export function Testemunha2Client({ token, contrato }: { token: string; contrato
           </div>
         </div>
 
-        {/* Status das assinaturas anteriores */}
-        <div className="space-y-2">
+        {/* Status das assinaturas */}
+        <div className="bg-[#0C1929] border border-[#1B3050] rounded-2xl p-4 space-y-2">
+          <p className="text-[11px] font-bold text-[#C9A84C] uppercase tracking-wider mb-3">Status das Assinaturas</p>
           {[
-            { label: "Cliente assinou", nome: contrato.client_name, data: clienteAssinou },
-            { label: "V3 Partners assinou", nome: contrato.v3_signer_name ?? "V3 Partners", data: v3Assinou },
-            { label: "1ª Testemunha (Parceiro) assinou", nome: contrato.testemunha_nome ?? "Parceiro", data: t1Assinou },
-          ].map((item) => (
-            <div key={item.label} className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl px-4 py-3 flex items-center gap-3">
-              <span className="text-lg">✅</span>
-              <div>
-                <p className="text-xs font-semibold text-emerald-400">{item.label}</p>
-                <p className="text-[11px] text-[#7A8FA8]">{item.nome} · {item.data}</p>
+            { label: "Cliente (Contratante)", nome: contrato.client_name, data: contrato.signed_at },
+            { label: "V3 Partners (Contratada)", nome: contrato.v3_signer_name ?? "João Lemos Netto", data: contrato.v3_signed_at },
+            { label: "1ª Testemunha (Parceiro)", nome: contrato.testemunha_nome ?? "Parceiro", data: contrato.testemunha_signed_at },
+            { label: "2ª Testemunha (Institucional)", nome: contrato.testemunha2_nome ?? "Aline Rodrigues dos Santos", data: contrato.testemunha2_signed_at },
+          ].map((p) => (
+            <div key={p.label} className={`rounded-xl px-4 py-3 flex items-center gap-3 ${p.data ? "bg-emerald-500/10 border border-emerald-500/30" : "bg-amber-500/10 border border-amber-500/20"}`}>
+              <span className="text-base">{p.data ? "✅" : "⏳"}</span>
+              <div className="min-w-0">
+                <p className={`text-xs font-semibold ${p.data ? "text-emerald-400" : "text-amber-400"}`}>{p.label}</p>
+                <p className="text-[11px] text-[#7A8FA8] truncate">{p.nome}{p.data ? ` · ${new Date(p.data).toLocaleString("pt-BR")}` : " · Pendente"}</p>
               </div>
             </div>
           ))}
-          <div className="bg-[#C9A84C]/10 border border-[#C9A84C]/40 rounded-xl px-4 py-3 flex items-center gap-3">
-            <span className="text-lg">✍️</span>
-            <div>
-              <p className="text-xs font-semibold text-[#E8C97A]">Aguardando: 2ª Testemunha</p>
-              <p className="text-[11px] text-[#7A8FA8]">Aline Rodrigues dos Santos · financeiro@v3partners.com.br</p>
-            </div>
-          </div>
         </div>
 
         {/* Resumo do contrato */}
