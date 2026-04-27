@@ -159,6 +159,63 @@ interface PropostaDetailModalProps {
   canEditInstituicao?: boolean;
 }
 
+// ── CorrecaoFeitaBtn ── botão para partner marcar correção feita ──────────────
+function CorrecaoFeitaBtn({
+  proposalId,
+  proposalCode,
+  docKey,
+  docLabel,
+  onCorrigido,
+}: {
+  proposalId: string;
+  proposalCode: string;
+  docKey: string;
+  docLabel: string;
+  onCorrigido: (novoStage: string) => void;
+}) {
+  const [enviando, setEnviando] = React.useState(false);
+  const [enviado, setEnviado] = React.useState(false);
+
+  async function handleClick() {
+    setEnviando(true);
+    try {
+      const res = await fetch("/api/ocr-correcao-feita", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ proposal_id: proposalId, proposal_code: proposalCode, doc_key: docKey }),
+      });
+      const json = await res.json();
+      if (json.ok) {
+        setEnviado(true);
+        onCorrigido(json.novo_stage ?? "TRIAGEM");
+      }
+    } catch {
+      // silently ignore
+    } finally {
+      setEnviando(false);
+    }
+  }
+
+  if (enviado) {
+    return (
+      <span className="flex items-center gap-1 text-emerald-400 text-[11px] font-semibold">
+        <CheckCircle2 className="w-3.5 h-3.5" /> Enviado!
+      </span>
+    );
+  }
+
+  return (
+    <button
+      onClick={handleClick}
+      disabled={enviando}
+      className="flex items-center gap-1 px-2 py-1 rounded text-[11px] font-semibold bg-[#C9A84C]/15 text-[#C9A84C] hover:bg-[#C9A84C]/25 border border-[#C9A84C]/30 disabled:opacity-50 transition-colors"
+    >
+      {enviando ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
+      {enviando ? "Enviando…" : "Correção Feita"}
+    </button>
+  );
+}
+
 export function PropostaDetailModal({ open, onClose, proposal, onStageChange, onProposalUpdate, canChangeStage, canEditValorSolicitado, canCompileDocuments, canEditInstituicao }: PropostaDetailModalProps) {
   // ── Modal tab ─────────────────────────────────────────────────────────────
   type ModalTab = "detalhes" | "recomendacao" | "documentos" | "comentarios";
@@ -180,6 +237,7 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
   const [ocrStatus, setOcrStatus] = useState<Record<string, OcrStatus>>({});
   const [ocrResultados, setOcrResultados] = useState<Record<string, OcrResultado>>({});
   const [ocrErros, setOcrErros] = useState<Record<string, string>>({});
+  const [ocrValidandoTodos, setOcrValidandoTodos] = useState(false);
 
   // ── Solicitar correção state ──────────────────────────────────────────────
   const [solicitarDoc, setSolicitarDoc] = useState<{ docId: string; docLabel: string; motivo: string } | null>(null);
@@ -398,6 +456,24 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
       setOcrErros(prev => ({ ...prev, [docId]: e instanceof Error ? e.message : "Erro desconhecido" }));
       setOcrStatus(prev => ({ ...prev, [docId]: "error" }));
     }
+  }
+
+  async function handleOcrValidarTodos() {
+    if (!proposal) return;
+    const docsComArquivo = Object.entries(uploadedUrls).filter(([, url]) => !!url);
+    if (docsComArquivo.length === 0) return;
+    setOcrValidandoTodos(true);
+    // Pega labels dos docs do checklist
+    const clientType = (proposal.client_type === "PJ" ? "PJ" : "PF") as "PF" | "PJ";
+    const docs = CHECKLISTS[proposal.credit_line]?.[clientType] ?? DEFAULT_CHECKLIST[clientType];
+    const labelMap: Record<string, string> = {};
+    docs.forEach(d => { labelMap[d.id] = d.label; });
+    for (const [docId] of docsComArquivo) {
+      if (ocrStatus[docId] === "done") continue; // já validado, pula
+      const label = labelMap[docId] ?? docId;
+      await handleOcrValidar(docId, label);
+    }
+    setOcrValidandoTodos(false);
   }
 
   async function handleSolicitarCorrecao() {
@@ -1144,6 +1220,59 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
           {/* ── Seção Detalhes e Recomendação ── */}
           <div className={modalTab === "documentos" || modalTab === "comentarios" ? "hidden" : "contents"}>
 
+          {/* ── Banner de Pendências OCR ── visível para todos */}
+          {(() => {
+            const pendencias = proposal.metadata?.pendencias_ocr as Record<string, { doc_label: string; motivo: string; status: string; created_at: string; corrigido_at: string | null }> | undefined;
+            if (!pendencias) return null;
+            const pendentes = Object.entries(pendencias).filter(([, p]) => p.status === "pendente");
+            if (pendentes.length === 0) return null;
+            return (
+              <div className="rounded-xl border border-orange-500/40 bg-orange-500/8 overflow-hidden">
+                <div className="flex items-center gap-2 px-4 py-3 border-b border-orange-500/20">
+                  <AlertTriangle className="w-4 h-4 text-orange-400 flex-shrink-0" />
+                  <p className="text-xs font-bold text-orange-400 flex-1">
+                    {pendentes.length} documento(s) com pendência de correção
+                  </p>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-orange-500/20 text-orange-400">PENDÊNCIA</span>
+                </div>
+                <div className="px-4 py-3 space-y-2">
+                  {pendentes.map(([docKey, p]) => (
+                    <div key={docKey} className="flex items-start gap-3 p-3 rounded-lg bg-[#09081A] border border-orange-500/20">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-semibold text-white mb-0.5">📎 {p.doc_label}</p>
+                        <p className="text-[11px] text-orange-300/80 leading-relaxed">{p.motivo}</p>
+                        <p className="text-[10px] text-muted-foreground/60 mt-1">
+                          Solicitado em {new Date(p.created_at).toLocaleDateString("pt-BR")}
+                        </p>
+                      </div>
+                      {/* Botão Correção Feita — apenas partner */}
+                      {!canChangeStage && (
+                        <CorrecaoFeitaBtn
+                          proposalId={proposal.id}
+                          proposalCode={proposal.code}
+                          docKey={docKey}
+                          docLabel={p.doc_label}
+                          onCorrigido={(novoStage) => {
+                            const newMeta = { ...proposal.metadata };
+                            const pends = { ...(newMeta.pendencias_ocr as Record<string, unknown> ?? {}) };
+                            pends[docKey] = { ...p, status: "corrigido", corrigido_at: new Date().toISOString() };
+                            newMeta.pendencias_ocr = pends;
+                            onProposalUpdate?.(proposal.id, { metadata: newMeta as typeof proposal.metadata, stage: novoStage });
+                          }}
+                        />
+                      )}
+                    </div>
+                  ))}
+                  {!canChangeStage && (
+                    <p className="text-[10px] text-muted-foreground/60">
+                      Após clicar em "Correção Feita", a mesa será notificada e a proposta voltará para Triagem automaticamente.
+                    </p>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
+
           {/* ── Pipeline de Etapas ── */}
           <div>
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Etapas da Proposta</p>
@@ -1833,17 +1962,34 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
             const requiredChecked = allRequired.filter((d) => checkedDocs[d.id]).length;
             return (
               <div className="p-4 rounded-xl border border-border bg-secondary/30 space-y-3">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-2">
                   <p className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
                     <FileText className="w-3.5 h-3.5" /> Checklist de Documentos
                   </p>
-                  <Badge className={checkedCount === docs.length
-                    ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
-                    : requiredChecked === allRequired.length
-                    ? "bg-amber-500/20 text-amber-400 border-amber-500/30"
-                    : "bg-red-500/20 text-red-400 border-red-500/30"}>
-                    {checkedCount}/{docs.length} enviados
-                  </Badge>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    {canChangeStage && Object.keys(uploadedUrls).length > 0 && (
+                      <button
+                        onClick={handleOcrValidarTodos}
+                        disabled={ocrValidandoTodos}
+                        className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-[#C9A84C]/15 text-[#C9A84C] hover:bg-[#C9A84C]/25 border border-[#C9A84C]/30 disabled:opacity-50 transition-colors"
+                        title="Validar todos os documentos anexados com OCR"
+                      >
+                        {ocrValidandoTodos ? (
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                        ) : (
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>
+                        )}
+                        {ocrValidandoTodos ? "Validando…" : "Validar Todos OCR"}
+                      </button>
+                    )}
+                    <Badge className={checkedCount === docs.length
+                      ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
+                      : requiredChecked === allRequired.length
+                      ? "bg-amber-500/20 text-amber-400 border-amber-500/30"
+                      : "bg-red-500/20 text-red-400 border-red-500/30"}>
+                      {checkedCount}/{docs.length} enviados
+                    </Badge>
+                  </div>
                 </div>
                 <div className="w-full bg-secondary rounded-full h-1.5 mb-1">
                   <div className="bg-emerald-500 h-1.5 rounded-full transition-all"
