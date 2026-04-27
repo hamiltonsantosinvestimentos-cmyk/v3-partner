@@ -73,7 +73,7 @@ export async function POST(
     .eq("testemunha_token", token);
 
   if (updateErr) {
-    return NextResponse.json({ error: "Erro ao registrar assinatura" }, { status: 500 });
+    return NextResponse.json({ error: "Erro ao registrar assinatura", detail: updateErr.message }, { status: 500 });
   }
 
   // Status independente de ordem
