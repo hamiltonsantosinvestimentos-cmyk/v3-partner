@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { CreditCard, Building2, Trophy, AlertCircle, AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, Send, Loader2 } from "lucide-react";
+import { CreditCard, Building2, Trophy, AlertCircle, AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, Send, Loader2, Clock, XCircle, TrendingUp } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
