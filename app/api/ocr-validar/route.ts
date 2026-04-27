@@ -119,20 +119,13 @@ Resumo: aprovado=tudo ok, atencao=divergência menor, reprovado=divergência cr�
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           content: [mediaBlock, { type: "text", text: userPrompt }] as any,
         },
-        // Prefill para forçar início do JSON
-        {
-          role: "assistant",
-          content: "{",
-        },
       ],
     });
 
     const rawText = message.content[0].type === "text" ? message.content[0].text : "";
-    // O prefill faz o modelo continuar a partir de "{", então concatenamos
-    const fullText = "{" + rawText;
 
     // Limpa e extrai JSON
-    const cleaned = fullText.replace(/```json\s*/gi, "").replace(/```\s*/g, "").trim();
+    const cleaned = rawText.replace(/```json\s*/gi, "").replace(/```\s*/g, "").trim();
     const start = cleaned.indexOf("{");
     const end = cleaned.lastIndexOf("}");
 
