@@ -3,8 +3,6 @@ import { createClient } from "@/lib/supabase/server";
 
 const ADMIN_ROLES = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"];
 
-// ─── Tipos ───────────────────────────────────────────────────────────────────
-
 export interface OcrField {
   campo: string;
   extraido: string | null;
@@ -21,8 +19,6 @@ export interface OcrResultado {
   observacoes: string;
 }
 
-// ─── Auth ────────────────────────────────────────────────────────────────────
-
 async function getUser() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -31,77 +27,30 @@ async function getUser() {
   return { user, profile };
 }
 
-// ─── Busca URL assinada do documento ─────────────────────────────────────────
-
 async function fetchDocumentAsBase64(url: string): Promise<{ base64: string; mimeType: string } | null> {
   try {
     const res = await fetch(url);
     if (!res.ok) return null;
-    const contentType = res.headers.get("content-type") ?? "application/octet-stream";
+    const contentType = res.headers.get("content-type") ?? "image/jpeg";
     const buffer = await res.arrayBuffer();
     const base64 = Buffer.from(buffer).toString("base64");
-
-    // Normaliza mime type para tipos aceitos pela API Vision
     let mimeType = contentType.split(";")[0].trim();
-    if (mimeType === "application/octet-stream") mimeType = url.toLowerCase().endsWith(".pdf") ? "application/pdf" : "image/jpeg";
-
+    if (!mimeType || mimeType === "application/octet-stream") {
+      const lower = url.toLowerCase();
+      if (lower.endsWith(".pdf")) mimeType = "application/pdf";
+      else if (lower.endsWith(".png")) mimeType = "image/png";
+      else mimeType = "image/jpeg";
+    }
     return { base64, mimeType };
   } catch {
     return null;
   }
 }
 
-// ─── Prompt por tipo de documento ────────────────────────────────────────────
-
-function buildPrompt(docLabel: string, proposalContext: Record<string, string>): string {
-  const ctx = JSON.stringify(proposalContext, null, 2);
-  return `Você é um analista de crédito especializado em validação documental.
-
-Analise este documento e extraia os dados relevantes. Em seguida, compare com os dados da proposta de crédito fornecidos.
-
-**Tipo de documento esperado:** ${docLabel}
-
-**Dados da proposta para comparação:**
-${ctx}
-
-**Instruções:**
-1. Identifique o tipo real do documento (ex: RG, CNH, Contrato Social, Comprovante de Renda, etc.)
-2. Extraia os campos principais (nome, CPF/CNPJ, datas, valores, endereço, etc.)
-3. Compare cada campo extraído com os dados da proposta
-4. Identifique divergências, documentos vencidos, valores inconsistentes
-
-**Responda APENAS em JSON válido, sem texto adicional, no seguinte formato:**
-{
-  "tipo_documento": "nome do tipo de documento identificado",
-  "campos": [
-    {
-      "campo": "Nome do campo (ex: Nome Completo, CPF, Validade, Valor Renda)",
-      "extraido": "valor extraído do documento (null se não encontrado)",
-      "esperado": "valor da proposta para comparação (null se não aplicável)",
-      "status": "ok | divergente | ausente | info",
-      "mensagem": "explicação curta (máx 60 chars)"
-    }
-  ],
-  "resumo": "aprovado | atencao | reprovado",
-  "observacoes": "observação geral sobre o documento (máx 120 chars)"
-}
-
-**Regras para status:**
-- "ok": campo extraído confere com a proposta ou está correto
-- "divergente": campo extraído difere significativamente do esperado
-- "ausente": campo esperado não encontrado no documento
-- "info": informação extraída sem correspondência para comparar (ex: tipo de imóvel)
-- "reprovado": use quando há divergência crítica (CPF diferente, documento vencido, ônus detectado)
-- "atencao": divergência não crítica (diferença de valor, data próxima do vencimento)
-- "aprovado": tudo confere sem problemas`;
-}
-
-// ─── POST /api/ocr-validar ───────────────────────────────────────────────────
-
 export async function POST(req: NextRequest) {
   const { user, profile } = await getUser();
   if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
-  if (!ADMIN_ROLES.includes(profile?.role ?? "")) {
+  if (!ADMIN_ROLES.includes((profile as { role?: string } | null)?.role ?? "")) {
     return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
   }
 
@@ -115,13 +64,11 @@ export async function POST(req: NextRequest) {
 
   if (!doc_url) return NextResponse.json({ error: "URL do documento obrigatória" }, { status: 400 });
 
-  // Busca o documento como base64
   const docData = await fetchDocumentAsBase64(doc_url);
   if (!docData) {
-    return NextResponse.json({ error: "Não foi possível acessar o documento. Verifique se o link ainda é válido." }, { status: 400 });
+    return NextResponse.json({ error: "Não foi possível acessar o documento. O link pode ter expirado." }, { status: 400 });
   }
 
-  // Verifica se é PDF ou imagem
   const isPdf = docData.mimeType === "application/pdf";
   const isImage = docData.mimeType.startsWith("image/");
 
@@ -130,91 +77,84 @@ export async function POST(req: NextRequest) {
       resultado: {
         doc_id,
         tipo_documento: doc_label,
-        campos: [{
-          campo: "Formato do arquivo",
-          extraido: docData.mimeType,
-          esperado: "PDF ou imagem",
-          status: "info" as const,
-          mensagem: "OCR disponível apenas para PDF e imagens",
-        }],
-        resumo: "atencao" as const,
-        observacoes: "Formato não suportado pelo OCR. Use PDF, JPG ou PNG.",
+        campos: [{ campo: "Formato", extraido: docData.mimeType, esperado: "PDF ou imagem", status: "info", mensagem: "OCR suporta apenas PDF, JPG e PNG" }],
+        resumo: "atencao",
+        observacoes: "Formato não suportado. Use PDF, JPG ou PNG.",
       } as OcrResultado,
     });
   }
 
-  // Chama Claude Vision
-  const Anthropic = (await import("@anthropic-ai/sdk")).default;
-  const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-
   try {
-    // Monta o bloco de mídia separadamente para evitar conflito de tipos
-    type ImageMediaType = "image/jpeg" | "image/png" | "image/gif" | "image/webp";
+    const Anthropic = (await import("@anthropic-ai/sdk")).default;
+    const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+
+    const ctxLines = Object.entries(proposal_context)
+      .map(([k, v]) => `- ${k}: ${v}`)
+      .join("\n");
+
+    const systemPrompt = `Você é um sistema de validação documental. Analise documentos e retorne APENAS JSON válido, sem nenhum texto antes ou depois. Nunca use markdown.`;
+
+    const userPrompt = `Analise este documento (${doc_label}) e compare com os dados da proposta:
+
+${ctxLines}
+
+Retorne exatamente este JSON (sem markdown, sem explicações):
+{"tipo_documento":"string","campos":[{"campo":"string","extraido":"string ou null","esperado":"string ou null","status":"ok ou divergente ou ausente ou info","mensagem":"string curta"}],"resumo":"aprovado ou atencao ou reprovado","observacoes":"string"}
+
+Status dos campos: ok=confere, divergente=não confere, ausente=não encontrado, info=sem comparação.
+Resumo: aprovado=tudo ok, atencao=divergência menor, reprovado=divergência crítica ou vencido.`;
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const mediaBlock: any = isPdf
-      ? {
-          type: "document",
-          source: { type: "base64", media_type: "application/pdf", data: docData.base64 },
-        }
-      : {
-          type: "image",
-          source: { type: "base64", media_type: docData.mimeType as ImageMediaType, data: docData.base64 },
-        };
+      ? { type: "document", source: { type: "base64", media_type: "application/pdf", data: docData.base64 } }
+      : { type: "image", source: { type: "base64", media_type: docData.mimeType, data: docData.base64 } };
 
     const message = await anthropic.messages.create({
       model: "claude-sonnet-4-6",
-      max_tokens: 1024,
+      max_tokens: 1500,
+      system: systemPrompt,
       messages: [
         {
           role: "user",
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          content: [mediaBlock, { type: "text", text: buildPrompt(doc_label, proposal_context) }] as any,
+          content: [mediaBlock, { type: "text", text: userPrompt }] as any,
+        },
+        // Prefill para forçar início do JSON
+        {
+          role: "assistant",
+          content: "{",
         },
       ],
     });
 
     const rawText = message.content[0].type === "text" ? message.content[0].text : "";
+    // O prefill faz o modelo continuar a partir de "{", então concatenamos
+    const fullText = "{" + rawText;
 
-    // Remove blocos markdown ```json ... ``` se presentes
-    const cleaned = rawText
-      .replace(/```json\s*/gi, "")
-      .replace(/```\s*/g, "")
-      .trim();
-
-    // Extrai o objeto JSON — pega do primeiro { até o último }
+    // Limpa e extrai JSON
+    const cleaned = fullText.replace(/```json\s*/gi, "").replace(/```\s*/g, "").trim();
     const start = cleaned.indexOf("{");
     const end = cleaned.lastIndexOf("}");
-    if (start === -1 || end === -1) throw new Error("Resposta sem JSON válido");
+
+    if (start === -1 || end === -1 || end <= start) {
+      throw new Error(`JSON não encontrado na resposta: ${cleaned.slice(0, 200)}`);
+    }
 
     const jsonStr = cleaned.slice(start, end + 1);
-
-    let parsed: { tipo_documento?: string; campos?: unknown[]; resumo?: string; observacoes?: string };
-    try {
-      parsed = JSON.parse(jsonStr);
-    } catch {
-      // Fallback: retorna resposta como observação para debug
-      return NextResponse.json({
-        resultado: {
-          doc_id,
-          tipo_documento: doc_label,
-          campos: [],
-          resumo: "atencao",
-          observacoes: `Não foi possível interpretar a resposta do modelo. Tente novamente.`,
-        } as OcrResultado,
-      });
-    }
+    const parsed = JSON.parse(jsonStr);
 
     const resultado: OcrResultado = {
       doc_id,
       tipo_documento: parsed.tipo_documento ?? doc_label,
-      campos: parsed.campos ?? [],
-      resumo: parsed.resumo ?? "atencao",
+      campos: Array.isArray(parsed.campos) ? parsed.campos : [],
+      resumo: (["aprovado", "atencao", "reprovado"].includes(parsed.resumo) ? parsed.resumo : "atencao") as OcrResultado["resumo"],
       observacoes: parsed.observacoes ?? "",
     };
 
     return NextResponse.json({ resultado });
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : "Erro ao processar OCR";
+    console.error("[OCR] Erro:", msg);
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 }
