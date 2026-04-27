@@ -200,7 +200,7 @@ export function AssinarClient({ token, contrato }: { token: string; contrato: Co
         }),
       });
       const json = await res.json();
-      if (!res.ok) { setError(json.error ?? "Erro ao registrar assinatura."); return; }
+      if (!res.ok) { setError(`${json.error ?? "Erro ao registrar assinatura."}${json.detail ? ` — ${json.detail}` : ""}`); return; }
       setAssinado(true);
     } catch {
       setError("Erro de conexão. Tente novamente.");
