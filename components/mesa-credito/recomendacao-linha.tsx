@@ -13,10 +13,10 @@ interface RegraLinha {
   nivel: "NIVEL_1" | "NIVEL_2" | "NIVEL_3";
   categoria: string;
   descricao: string;
-  score: (ctx: AnaliseCtx) => number; // 0–100
-  motivos: (ctx: AnaliseCtx) => string[];  // pontos positivos
-  alertas: (ctx: AnaliseCtx) => string[];  // pontos de atenção
-  restricoes: (ctx: AnaliseCtx) => string[]; // impeditivos
+  score: (ctx: AnaliseCtx) => number;
+  motivos: (ctx: AnaliseCtx) => string[];
+  alertas: (ctx: AnaliseCtx) => string[];
+  restricoes: (ctx: AnaliseCtx) => string[];
   cor: string;
   emoji: string;
 }
@@ -24,7 +24,7 @@ interface RegraLinha {
 interface AnaliseCtx {
   tipo: "PF" | "PJ";
   valor: number;
-  renda: number;          // PF: renda mensal | PJ: faturamento mensal
+  renda: number;           // PF: renda mensal | PJ: faturamento mensal
   temImovel: boolean;
   valorImovel: number;
   finalidade: string;
@@ -32,481 +32,15 @@ interface AnaliseCtx {
   restricao: boolean;
   nivel: string;
   creditLine: string;
-  temRecebíveis: boolean; // faturamento > 0 implica recebíveis
+  temRecebiveis: boolean;
   faturamentoAnual: number;
+  temFrota: boolean;
+  ehConstrutora: boolean;
+  ehAgronegocio: boolean;
+  ehExportador: boolean;
+  ehImportador: boolean;
+  ehInternacional: boolean;
 }
-
-// ─── Engine de Regras — Portfólio V3 Partners ────────────────────────────────
-
-const LINHAS: RegraLinha[] = [
-
-  // ══ NÍVEL 1 — Crédito Varejo ══════════════════════════════════════════════
-
-  {
-    id: "home_equity",
-    nome: "Home Equity",
-    nivel: "NIVEL_1",
-    categoria: "Crédito com Garantia de Imóvel",
-    descricao: "Crédito pessoal ou empresarial com garantia de imóvel residencial ou comercial. Taxas a partir de 0,89% a.m. Prazo até 240 meses.",
-    cor: "#3B82F6",
-    emoji: "🏠",
-    score: (ctx) => {
-      if (!ctx.temImovel) return 0;
-      if (ctx.restricao) return 5;
-      let s = 60;
-      if (ctx.tipo === "PF") s += 20;
-      if (ctx.valor <= ctx.valorImovel * 0.6) s += 15;
-      if (ctx.valor >= 50_000 && ctx.valor <= 3_000_000) s += 5;
-      if (ctx.renda > 0 && ctx.valor / ctx.renda <= 300) s += 10; // comprometimento ok
-      return Math.min(s, 100);
-    },
-    motivos: (ctx) => {
-      const m: string[] = [];
-      if (ctx.temImovel) m.push("Possui imóvel como garantia");
-      if (ctx.tipo === "PF") m.push("Perfil PF — produto ideal");
-      if (ctx.valor <= ctx.valorImovel * 0.6) m.push("Valor solicitado dentro do LTV de 60%");
-      if (ctx.renda > 0) m.push("Renda informada para análise de comprometimento");
-      return m;
-    },
-    alertas: (ctx) => {
-      const a: string[] = [];
-      if (ctx.valor > ctx.valorImovel * 0.6) a.push("Valor solicitado pode exceder o LTV máximo de 60%");
-      if (!ctx.prazo) a.push("Prazo não informado — pode chegar a 240 meses");
-      if (ctx.tipo === "PJ") a.push("Para PJ, exige alienação fiduciária do imóvel");
-      return a;
-    },
-    restricoes: (ctx) => {
-      const r: string[] = [];
-      if (!ctx.temImovel) r.push("Sem imóvel cadastrado como garantia");
-      if (ctx.restricao) r.push("Restrições no CPF/CNPJ — impeditivo para esta linha");
-      if (ctx.valor < 50_000) r.push("Valor mínimo: R$ 50.000");
-      if (ctx.valor > 5_000_000) r.push("Valores acima de R$ 5M — direcionar para N3");
-      return r;
-    },
-  },
-
-  {
-    id: "aval",
-    nome: "Crédito com Aval",
-    nivel: "NIVEL_1",
-    categoria: "Crédito Pessoal Avalizado",
-    descricao: "Crédito pessoal com aval de terceiro. Ideal para quem não possui garantia real. Análise de crédito tradicional.",
-    cor: "#8B5CF6",
-    emoji: "🤝",
-    score: (ctx) => {
-      if (ctx.tipo === "PJ") return 0;
-      if (ctx.restricao) return 5;
-      let s = 40;
-      if (ctx.renda > 0) s += 20;
-      if (ctx.valor >= 5_000 && ctx.valor <= 200_000) s += 20;
-      if (!ctx.temImovel) s += 10; // sem imóvel → aval é boa opção
-      if (ctx.renda > 0 && ctx.valor / ctx.renda <= 60) s += 10;
-      return Math.min(s, 100);
-    },
-    motivos: (ctx) => {
-      const m: string[] = [];
-      if (ctx.tipo === "PF") m.push("Perfil PF — produto aplicável");
-      if (!ctx.temImovel) m.push("Alternativa sem necessidade de imóvel");
-      if (ctx.renda > 0 && ctx.valor / ctx.renda <= 60) m.push("Comprometimento de renda dentro do limite");
-      return m;
-    },
-    alertas: (ctx) => {
-      const a: string[] = [];
-      if (ctx.valor > 200_000) a.push("Valores altos exigem aval de qualidade comprovável");
-      if (!ctx.renda) a.push("Renda não informada — necessária para análise");
-      return a;
-    },
-    restricoes: (ctx) => {
-      const r: string[] = [];
-      if (ctx.tipo === "PJ") r.push("Produto exclusivo para Pessoa Física");
-      if (ctx.restricao) r.push("Restrições no CPF — impeditivo");
-      if (ctx.valor < 5_000) r.push("Valor mínimo: R$ 5.000");
-      if (ctx.valor > 500_000) r.push("Valor máximo recomendado: R$ 500.000");
-      return r;
-    },
-  },
-
-  {
-    id: "cdc",
-    nome: "CDC — Crédito Direto ao Consumidor",
-    nivel: "NIVEL_1",
-    categoria: "Financiamento de Bens",
-    descricao: "Financiamento de veículos, equipamentos e bens de consumo. O próprio bem financia como garantia.",
-    cor: "#06B6D4",
-    emoji: "🚗",
-    score: (ctx) => {
-      if (ctx.tipo === "PJ" && ctx.faturamentoAnual > 10_000_000) return 10;
-      if (ctx.restricao) return 5;
-      let s = 35;
-      const fin = ctx.finalidade?.toLowerCase() ?? "";
-      if (fin.includes("veículo") || fin.includes("veiculo") || fin.includes("equipamento") || fin.includes("máquina") || fin.includes("maquina")) s += 35;
-      if (ctx.valor >= 10_000 && ctx.valor <= 500_000) s += 15;
-      if (ctx.renda > 0) s += 10;
-      return Math.min(s, 100);
-    },
-    motivos: (ctx) => {
-      const m: string[] = [];
-      const fin = ctx.finalidade?.toLowerCase() ?? "";
-      if (fin.includes("veículo") || fin.includes("veiculo")) m.push("Finalidade de veículo — CDC ideal");
-      if (fin.includes("equipamento") || fin.includes("máquina")) m.push("Finalidade de equipamento — CDC aplicável");
-      if (ctx.valor <= 500_000) m.push("Valor dentro da faixa do produto");
-      return m;
-    },
-    alertas: (ctx) => {
-      const a: string[] = [];
-      if (!ctx.finalidade) a.push("Finalidade não informada — necessária para CDC");
-      if (ctx.valor > 500_000) a.push("Valor elevado — avaliar garantias adicionais");
-      return a;
-    },
-    restricoes: (ctx) => {
-      const r: string[] = [];
-      if (ctx.restricao) r.push("Restrições no CPF/CNPJ — impeditivo");
-      if (ctx.valor < 10_000) r.push("Valor mínimo: R$ 10.000");
-      return r;
-    },
-  },
-
-  // ══ NÍVEL 2 — Crédito Estruturado ════════════════════════════════════════
-
-  {
-    id: "v3giro",
-    nome: "V3Giro / Capital de Giro",
-    nivel: "NIVEL_2",
-    categoria: "Capital de Giro Estruturado",
-    descricao: "Capital de giro estruturado para empresas com faturamento comprovado. Antecipação de recebíveis e CCB. Prazo 12–36 meses.",
-    cor: "#F59E0B",
-    emoji: "🔄",
-    score: (ctx) => {
-      if (ctx.tipo === "PF") return 5;
-      if (ctx.restricao) return 5;
-      let s = 40;
-      if (ctx.faturamentoAnual >= 1_200_000) s += 25; // R$100K/mês
-      if (ctx.faturamentoAnual >= 6_000_000) s += 15; // R$500K/mês
-      if (ctx.valor >= 100_000 && ctx.valor <= 5_000_000) s += 15;
-      if (ctx.temRecebíveis) s += 10;
-      const fin = ctx.finalidade?.toLowerCase() ?? "";
-      if (fin.includes("giro") || fin.includes("capital") || fin.includes("fluxo")) s += 10;
-      return Math.min(s, 100);
-    },
-    motivos: (ctx) => {
-      const m: string[] = [];
-      if (ctx.tipo === "PJ") m.push("Perfil PJ — produto estruturado para empresas");
-      if (ctx.faturamentoAnual >= 1_200_000) m.push(`Faturamento anual de ${_fmt(ctx.faturamentoAnual)} — elegível`);
-      if (ctx.temRecebíveis) m.push("Empresa com recebíveis — base para estruturação");
-      const fin = ctx.finalidade?.toLowerCase() ?? "";
-      if (fin.includes("giro")) m.push("Finalidade de capital de giro — produto ideal");
-      return m;
-    },
-    alertas: (ctx) => {
-      const a: string[] = [];
-      if (ctx.faturamentoAnual < 1_200_000 && ctx.faturamentoAnual > 0) a.push("Faturamento abaixo do recomendado (R$100K/mês)");
-      if (!ctx.faturamentoAnual) a.push("Faturamento mensal não informado — necessário");
-      return a;
-    },
-    restricoes: (ctx) => {
-      const r: string[] = [];
-      if (ctx.tipo === "PF") r.push("Produto exclusivo para Pessoa Jurídica");
-      if (ctx.restricao) r.push("Restrições no CNPJ — impeditivo");
-      if (ctx.valor < 100_000) r.push("Valor mínimo: R$ 100.000");
-      return r;
-    },
-  },
-
-  {
-    id: "cgi",
-    nome: "CGI — Crédito com Garantia de Imóvel PJ",
-    nivel: "NIVEL_2",
-    categoria: "Crédito Garantido Real — PJ",
-    descricao: "Crédito empresarial com garantia de imóvel comercial ou industrial. Taxas competitivas. Até 60% do valor do imóvel.",
-    cor: "#10B981",
-    emoji: "🏢",
-    score: (ctx) => {
-      if (ctx.tipo === "PF") return 20; // PF também pode, mas menos ideal
-      if (!ctx.temImovel) return 0;
-      if (ctx.restricao) return 5;
-      let s = 55;
-      if (ctx.tipo === "PJ") s += 20;
-      if (ctx.valor <= ctx.valorImovel * 0.6) s += 15;
-      if (ctx.faturamentoAnual >= 600_000) s += 10;
-      return Math.min(s, 100);
-    },
-    motivos: (ctx) => {
-      const m: string[] = [];
-      if (ctx.tipo === "PJ") m.push("Perfil PJ — CGI é o produto ideal");
-      if (ctx.temImovel) m.push("Imóvel disponível como garantia");
-      if (ctx.valor <= ctx.valorImovel * 0.6) m.push("Dentro do LTV máximo de 60%");
-      if (ctx.faturamentoAnual >= 600_000) m.push(`Faturamento de ${_fmt(ctx.faturamentoAnual)} — elegível`);
-      return m;
-    },
-    alertas: (ctx) => {
-      const a: string[] = [];
-      if (ctx.valor > ctx.valorImovel * 0.6) a.push("Valor pode exceder LTV máximo de 60%");
-      if (ctx.tipo === "PF") a.push("Para PF, Home Equity é mais indicado que CGI");
-      return a;
-    },
-    restricoes: (ctx) => {
-      const r: string[] = [];
-      if (!ctx.temImovel) r.push("Sem imóvel cadastrado como garantia");
-      if (ctx.restricao) r.push("Restrições no CNPJ — impeditivo");
-      if (ctx.valor < 200_000) r.push("Valor mínimo para CGI: R$ 200.000");
-      return r;
-    },
-  },
-
-  {
-    id: "receivables",
-    nome: "Receivables / Antecipação",
-    nivel: "NIVEL_2",
-    categoria: "Antecipação de Recebíveis",
-    descricao: "Antecipação de recebíveis comerciais, NFs, duplicatas e contratos. Ideal para empresas com carteira de clientes pagadores.",
-    cor: "#6366F1",
-    emoji: "📄",
-    score: (ctx) => {
-      if (ctx.tipo === "PF") return 0;
-      if (ctx.restricao) return 5;
-      let s = 35;
-      if (ctx.temRecebíveis) s += 30;
-      if (ctx.faturamentoAnual >= 2_400_000) s += 20; // R$200K/mês
-      const fin = ctx.finalidade?.toLowerCase() ?? "";
-      if (fin.includes("recebív") || fin.includes("antecip") || fin.includes("duplicata") || fin.includes("nota fiscal")) s += 15;
-      return Math.min(s, 100);
-    },
-    motivos: (ctx) => {
-      const m: string[] = [];
-      if (ctx.temRecebíveis) m.push("Empresa com recebíveis — produto ideal");
-      if (ctx.faturamentoAnual >= 2_400_000) m.push(`Faturamento de ${_fmt(ctx.faturamentoAnual)} — elegível`);
-      const fin = ctx.finalidade?.toLowerCase() ?? "";
-      if (fin.includes("antecip") || fin.includes("recebív")) m.push("Finalidade de antecipação — match perfeito");
-      return m;
-    },
-    alertas: (ctx) => {
-      const a: string[] = [];
-      if (ctx.faturamentoAnual < 2_400_000 && ctx.faturamentoAnual > 0) a.push("Faturamento abaixo do recomendado para esta linha");
-      if (!ctx.temRecebíveis) a.push("Recebíveis não identificados — necessário comprovação");
-      return a;
-    },
-    restricoes: (ctx) => {
-      const r: string[] = [];
-      if (ctx.tipo === "PF") r.push("Produto exclusivo para Pessoa Jurídica");
-      if (ctx.restricao) r.push("Restrições no CNPJ — impeditivo");
-      return r;
-    },
-  },
-
-  {
-    id: "fidc",
-    nome: "FIDC — Fundo de Investimento em Direitos Creditórios",
-    nivel: "NIVEL_2",
-    categoria: "Securitização de Crédito",
-    descricao: "Estruturação de FIDC para empresas com carteira de recebíveis. Captação institucional via mercado de capitais.",
-    cor: "#EC4899",
-    emoji: "📊",
-    score: (ctx) => {
-      if (ctx.tipo === "PF") return 0;
-      if (ctx.restricao) return 0;
-      let s = 20;
-      if (ctx.faturamentoAnual >= 12_000_000) s += 40; // R$1M/mês
-      if (ctx.valor >= 2_000_000) s += 25;
-      if (ctx.temRecebíveis) s += 15;
-      return Math.min(s, 100);
-    },
-    motivos: (ctx) => {
-      const m: string[] = [];
-      if (ctx.faturamentoAnual >= 12_000_000) m.push(`Faturamento de ${_fmt(ctx.faturamentoAnual)} — elegível para FIDC`);
-      if (ctx.valor >= 2_000_000) m.push("Volume compatível com estruturação de fundo");
-      if (ctx.temRecebíveis) m.push("Carteira de recebíveis para cessão ao fundo");
-      return m;
-    },
-    alertas: (ctx) => {
-      const a: string[] = [];
-      if (ctx.faturamentoAnual < 12_000_000) a.push("FIDC exige faturamento robusto (mín. R$1M/mês)");
-      if (ctx.valor < 2_000_000) a.push("Volume baixo — FIDC tem custo de estruturação elevado");
-      return a;
-    },
-    restricoes: (ctx) => {
-      const r: string[] = [];
-      if (ctx.tipo === "PF") r.push("Produto exclusivo para Pessoa Jurídica");
-      if (ctx.restricao) r.push("Restrições no CNPJ — impeditivo absoluto");
-      if (ctx.valor < 1_000_000) r.push("Valor mínimo para FIDC: R$ 1.000.000");
-      return r;
-    },
-  },
-
-  // ══ NÍVEL 3 — High Ticket ═════════════════════════════════════════════════
-
-  {
-    id: "cri",
-    nome: "CRI — Certificado de Recebíveis Imobiliários",
-    nivel: "NIVEL_3",
-    categoria: "Securitização Imobiliária",
-    descricao: "Securitização de recebíveis imobiliários. Emissor: Bloxs S.A. (white label). Lastro em contratos de locação, compra e venda ou built-to-suit.",
-    cor: "#F97316",
-    emoji: "🏗️",
-    score: (ctx) => {
-      if (ctx.tipo === "PF") return 0;
-      if (ctx.restricao) return 0;
-      if (ctx.valor < 5_000_000) return 5;
-      let s = 30;
-      const fin = ctx.finalidade?.toLowerCase() ?? "";
-      if (fin.includes("imov") || fin.includes("real estate") || fin.includes("built") || fin.includes("loteamento") || fin.includes("incorpora")) s += 40;
-      if (ctx.temImovel) s += 15;
-      if (ctx.valor >= 10_000_000) s += 15;
-      return Math.min(s, 100);
-    },
-    motivos: (ctx) => {
-      const m: string[] = [];
-      const fin = ctx.finalidade?.toLowerCase() ?? "";
-      if (fin.includes("imov") || fin.includes("real estate")) m.push("Finalidade imobiliária — CRI é o instrumento ideal");
-      if (ctx.temImovel) m.push("Imóvel disponível como lastro");
-      if (ctx.valor >= 10_000_000) m.push("Volume alto — CRI é eficiente acima de R$10M");
-      m.push("Infraestrutura Bloxs S.A. disponível para emissão");
-      return m;
-    },
-    alertas: (ctx) => {
-      const a: string[] = [];
-      if (ctx.valor < 10_000_000) a.push("CRI é mais eficiente acima de R$10M pelo custo de estruturação");
-      const fin = ctx.finalidade?.toLowerCase() ?? "";
-      if (!fin.includes("imov") && !fin.includes("real estate")) a.push("Finalidade não claramente imobiliária — validar");
-      return a;
-    },
-    restricoes: (ctx) => {
-      const r: string[] = [];
-      if (ctx.tipo === "PF") r.push("CRI é emitido por pessoa jurídica (SPE/incorporadora)");
-      if (ctx.restricao) r.push("Restrições — impeditivo absoluto");
-      if (ctx.valor < 5_000_000) r.push("Valor mínimo N3: R$ 5.000.000");
-      return r;
-    },
-  },
-
-  {
-    id: "cra",
-    nome: "CRA — Certificado de Recebíveis do Agronegócio",
-    nivel: "NIVEL_3",
-    categoria: "Securitização do Agronegócio",
-    descricao: "Securitização de recebíveis do agronegócio. Emissor: Bloxs S.A. Lastro em CPR, contratos de compra e venda agrícola.",
-    cor: "#84CC16",
-    emoji: "🌾",
-    score: (ctx) => {
-      if (ctx.tipo === "PF") return 0;
-      if (ctx.restricao) return 0;
-      if (ctx.valor < 5_000_000) return 5;
-      let s = 25;
-      const fin = ctx.finalidade?.toLowerCase() ?? "";
-      if (fin.includes("agro") || fin.includes("rural") || fin.includes("soja") || fin.includes("milho") || fin.includes("cana") || fin.includes("pecuária") || fin.includes("fazenda")) s += 50;
-      if (ctx.valor >= 10_000_000) s += 15;
-      return Math.min(s, 100);
-    },
-    motivos: (ctx) => {
-      const m: string[] = [];
-      const fin = ctx.finalidade?.toLowerCase() ?? "";
-      if (fin.includes("agro") || fin.includes("rural")) m.push("Finalidade do agronegócio — CRA é o instrumento ideal");
-      if (ctx.valor >= 10_000_000) m.push("Volume adequado para CRA");
-      m.push("Infraestrutura Bloxs S.A. disponível");
-      return m;
-    },
-    alertas: (ctx) => {
-      const a: string[] = [];
-      const fin = ctx.finalidade?.toLowerCase() ?? "";
-      if (!fin.includes("agro") && !fin.includes("rural")) a.push("Finalidade não identificada como agronegócio — validar");
-      if (ctx.valor < 10_000_000) a.push("CRA é mais eficiente acima de R$10M");
-      return a;
-    },
-    restricoes: (ctx) => {
-      const r: string[] = [];
-      if (ctx.tipo === "PF") r.push("CRA é emitido por pessoa jurídica do agronegócio");
-      if (ctx.restricao) r.push("Restrições — impeditivo absoluto");
-      if (ctx.valor < 5_000_000) r.push("Valor mínimo N3: R$ 5.000.000");
-      return r;
-    },
-  },
-
-  {
-    id: "project_finance",
-    nome: "Project Finance",
-    nivel: "NIVEL_3",
-    categoria: "Financiamento Estruturado de Projetos",
-    descricao: "Financiamento de grandes projetos de infraestrutura, energia, mineração e real estate. Estrutura off-balance com SPE. Fundos asiáticos e americanos.",
-    cor: "#A855F7",
-    emoji: "🏭",
-    score: (ctx) => {
-      if (ctx.tipo === "PF") return 0;
-      if (ctx.restricao) return 0;
-      if (ctx.valor < 5_000_000) return 5;
-      let s = 30;
-      const fin = ctx.finalidade?.toLowerCase() ?? "";
-      if (fin.includes("infraestrutura") || fin.includes("energia") || fin.includes("mineração") || fin.includes("mineracao") || fin.includes("usina") || fin.includes("porto") || fin.includes("logística")) s += 45;
-      if (ctx.valor >= 20_000_000) s += 20;
-      if (ctx.valor >= 50_000_000) s += 5;
-      return Math.min(s, 100);
-    },
-    motivos: (ctx) => {
-      const m: string[] = [];
-      const fin = ctx.finalidade?.toLowerCase() ?? "";
-      if (fin.includes("infraestrutura") || fin.includes("energia")) m.push("Finalidade de infraestrutura — Project Finance ideal");
-      if (fin.includes("mineração") || fin.includes("mineracao")) m.push("Projeto de mineração — vertical prioritária V3");
-      if (ctx.valor >= 20_000_000) m.push("Volume adequado para estrutura de Project Finance");
-      m.push("Acesso a fundos asiáticos e americanos via V3 Partners");
-      return m;
-    },
-    alertas: (ctx) => {
-      const a: string[] = [];
-      if (ctx.valor < 20_000_000) a.push("Project Finance é mais eficiente acima de R$20M");
-      const fin = ctx.finalidade?.toLowerCase() ?? "";
-      if (!fin) a.push("Finalidade do projeto não informada — essencial para análise");
-      return a;
-    },
-    restricoes: (ctx) => {
-      const r: string[] = [];
-      if (ctx.tipo === "PF") r.push("Project Finance exige SPE ou PJ estruturada");
-      if (ctx.restricao) r.push("Restrições — impeditivo absoluto");
-      if (ctx.valor < 5_000_000) r.push("Valor mínimo N3: R$ 5.000.000");
-      return r;
-    },
-  },
-
-  {
-    id: "real_estate",
-    nome: "Real Estate Estruturado",
-    nivel: "NIVEL_3",
-    categoria: "SLB · BTS · BTR",
-    descricao: "Sale & Leaseback, Built-to-Suit e Built-to-Rent. Estruturas sofisticadas para ativos imobiliários de alto padrão. Tokenização via Bloxs.",
-    cor: "#0EA5E9",
-    emoji: "🏙️",
-    score: (ctx) => {
-      if (ctx.tipo === "PF") return 5;
-      if (ctx.restricao) return 0;
-      if (ctx.valor < 5_000_000) return 5;
-      let s = 30;
-      const fin = ctx.finalidade?.toLowerCase() ?? "";
-      if (fin.includes("sale leaseback") || fin.includes("slb") || fin.includes("built") || fin.includes("bts") || fin.includes("btr")) s += 50;
-      if (fin.includes("imov") || fin.includes("real estate") || fin.includes("galpão") || fin.includes("galp") || fin.includes("lajes")) s += 20;
-      if (ctx.temImovel && ctx.valorImovel >= 5_000_000) s += 15;
-      if (ctx.valor >= 15_000_000) s += 10;
-      return Math.min(s, 100);
-    },
-    motivos: (ctx) => {
-      const m: string[] = [];
-      const fin = ctx.finalidade?.toLowerCase() ?? "";
-      if (fin.includes("slb") || fin.includes("sale leaseback")) m.push("Sale & Leaseback identificado — produto ideal");
-      if (fin.includes("built") || fin.includes("bts")) m.push("Built-to-Suit — estrutura disponível");
-      if (ctx.temImovel && ctx.valorImovel >= 5_000_000) m.push(`Imóvel de alto valor (${_fmt(ctx.valorImovel)}) — elegível`);
-      m.push("Tokenização via Bloxs S.A. disponível");
-      return m;
-    },
-    alertas: (ctx) => {
-      const a: string[] = [];
-      if (!ctx.temImovel) a.push("Imóvel não cadastrado — necessário para SLB/BTS");
-      if (ctx.valor < 15_000_000) a.push("Real Estate Estruturado é mais eficiente acima de R$15M");
-      return a;
-    },
-    restricoes: (ctx) => {
-      const r: string[] = [];
-      if (ctx.restricao) r.push("Restrições — impeditivo absoluto");
-      if (ctx.valor < 5_000_000) r.push("Valor mínimo N3: R$ 5.000.000");
-      return r;
-    },
-  },
-];
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -516,6 +50,1133 @@ function _fmt(v: number) {
   if (v >= 1e3) return `R$ ${(v / 1e3).toFixed(0)}K`;
   return `R$ ${v.toLocaleString("pt-BR")}`;
 }
+
+function ltv(ctx: AnaliseCtx) {
+  return ctx.valorImovel > 0 ? ctx.valor / ctx.valorImovel : 99;
+}
+
+function kw(ctx: AnaliseCtx, ...words: string[]) {
+  const f = ctx.finalidade?.toLowerCase() ?? "";
+  return words.some(w => f.includes(w));
+}
+
+// ─── Portfólio V3 Partners 2026 — Linhas de Crédito ──────────────────────────
+
+const LINHAS: RegraLinha[] = [
+
+  // ══ NÍVEL 1 — Varejo ══════════════════════════════════════════════════════
+
+  {
+    id: "v3equity",
+    nome: "V3Equity",
+    nivel: "NIVEL_1",
+    categoria: "Crédito com Garantia Imobiliária",
+    descricao: "Linha autoral V3. Sem consulta ao BACEN. Sem endividamento adicional. Taxa a partir de 0,45% a.m. + INPC. Prazo até 220 meses. Retorno de 3–5% do Fundo de Reserva ao final.",
+    cor: "#3B82F6",
+    emoji: "🏠",
+    score: (ctx) => {
+      if (!ctx.temImovel) return 0;
+      let s = 55;
+      if (!ctx.restricao) s += 20;
+      else s += 10; // aceita restrição (sem consulta BACEN)
+      if (ctx.valor >= 300_000 && ctx.valor <= 10_000_000) s += 15;
+      if (ltv(ctx) <= 0.60) s += 10;
+      return Math.min(s, 100);
+    },
+    motivos: (ctx) => {
+      const m: string[] = [];
+      if (ctx.temImovel) m.push("Imóvel disponível como garantia — V3Equity aplicável");
+      if (ctx.restricao) m.push("Aceita restrições (sem consulta ao BACEN)");
+      if (ltv(ctx) <= 0.60) m.push("LTV dentro do limite de 60%");
+      if (ctx.valor >= 300_000) m.push(`Valor ${_fmt(ctx.valor)} dentro da faixa R$300K–R$10M`);
+      m.push("Sem endividamento adicional · Retorno do Fundo de Reserva");
+      return m;
+    },
+    alertas: (ctx) => {
+      const a: string[] = [];
+      if (ltv(ctx) > 0.60 && ctx.valorImovel > 0) a.push(`LTV atual ${(ltv(ctx) * 100).toFixed(0)}% — limite: 60%`);
+      if (ctx.valor < 300_000) a.push("Valor abaixo do mínimo recomendado: R$300K");
+      return a;
+    },
+    restricoes: (ctx) => {
+      const r: string[] = [];
+      if (!ctx.temImovel) r.push("Requer imóvel urbano ou rural quitado como garantia");
+      if (ctx.valor > 10_000_000) r.push("Valor acima do teto da linha: R$10M");
+      return r;
+    },
+  },
+
+  {
+    id: "home_equity",
+    nome: "Home Equity",
+    nivel: "NIVEL_1",
+    categoria: "Crédito com Garantia Imobiliária",
+    descricao: "Elegibilidade ágil. Aceita empresas em recuperação judicial. CET 0,7–0,9% a.m. + IPCA. Prazo 60 a 240 meses. LTV 30–50%. Aporte R$80K a R$10M.",
+    cor: "#60A5FA",
+    emoji: "🏡",
+    score: (ctx) => {
+      if (!ctx.temImovel) return 0;
+      if (ctx.restricao) return 5;
+      let s = 60;
+      if (ctx.valor >= 80_000 && ctx.valor <= 10_000_000) s += 15;
+      if (ltv(ctx) <= 0.50) s += 15;
+      if (ctx.renda > 0 && ctx.valor / ctx.renda <= 300) s += 10;
+      return Math.min(s, 100);
+    },
+    motivos: (ctx) => {
+      const m: string[] = [];
+      if (ctx.temImovel) m.push("Imóvel disponível como garantia");
+      if (ltv(ctx) <= 0.50) m.push("LTV dentro do limite de 50%");
+      if (ctx.renda > 0) m.push("Renda disponível para análise de comprometimento");
+      return m;
+    },
+    alertas: (ctx) => {
+      const a: string[] = [];
+      if (ltv(ctx) > 0.50 && ctx.valorImovel > 0) a.push(`LTV atual ${(ltv(ctx) * 100).toFixed(0)}% — limite: 50%`);
+      if (!ctx.prazo) a.push("Prazo não informado — pode chegar a 240 meses");
+      return a;
+    },
+    restricoes: (ctx) => {
+      const r: string[] = [];
+      if (!ctx.temImovel) r.push("Requer imóvel como garantia");
+      if (ctx.restricao) r.push("Restrições no CPF/CNPJ — impeditivo (use Distressed)");
+      if (ctx.valor < 80_000) r.push("Valor mínimo: R$80K");
+      return r;
+    },
+  },
+
+  {
+    id: "distressed",
+    nome: "Home Equity Distressed",
+    nivel: "NIVEL_1",
+    categoria: "Crédito com Garantia Imobiliária — Restrições",
+    descricao: "Para clientes com restrições. Não analisa capacidade de pagamento. Taxa 2,99% a.m. LTV 30–50%. Prazo 24 a 48 meses + 24 de prorrogação.",
+    cor: "#F97316",
+    emoji: "🔓",
+    score: (ctx) => {
+      if (!ctx.temImovel) return 0;
+      let s = 30;
+      if (ctx.restricao) s += 40; // score AUMENTA com restrição — produto específico
+      if (ctx.valor >= 80_000 && ctx.valor <= 10_000_000) s += 15;
+      if (ltv(ctx) <= 0.50) s += 15;
+      return Math.min(s, 100);
+    },
+    motivos: (ctx) => {
+      const m: string[] = [];
+      if (ctx.restricao) m.push("Restrições identificadas — Distressed é o produto indicado");
+      if (ctx.temImovel) m.push("Imóvel disponível como garantia");
+      if (ltv(ctx) <= 0.50) m.push("LTV adequado: até 50%");
+      m.push("Não analisa capacidade de pagamento — análise personalizada");
+      return m;
+    },
+    alertas: (ctx) => {
+      const a: string[] = [];
+      if (!ctx.restricao) a.push("Produto voltado para clientes com restrições — Home Equity pode ser mais vantajoso");
+      a.push("Taxa de 2,99% a.m. — custo elevado, validar capacidade de quitação");
+      return a;
+    },
+    restricoes: (ctx) => {
+      const r: string[] = [];
+      if (!ctx.temImovel) r.push("Requer imóvel como garantia");
+      if (ctx.valor < 80_000) r.push("Valor mínimo: R$80K");
+      if (ctx.valor > 10_000_000) r.push("Valor acima do teto: R$10M");
+      return r;
+    },
+  },
+
+  {
+    id: "giro_auto",
+    nome: "Giro Auto",
+    nivel: "NIVEL_1",
+    categoria: "Crédito com Garantia Veicular",
+    descricao: "Capital de giro com frota como garantia. Sem consulta ao BACEN. CET 1,0–1,45% a.m. + IPCA. Prazo 40–80 meses. R$200K–R$10M.",
+    cor: "#06B6D4",
+    emoji: "🚛",
+    score: (ctx) => {
+      if (ctx.restricao) return 5;
+      let s = 30;
+      if (ctx.temFrota) s += 40;
+      if (ctx.valor >= 200_000 && ctx.valor <= 10_000_000) s += 20;
+      if (ctx.tipo === "PJ") s += 10;
+      return Math.min(s, 100);
+    },
+    motivos: (ctx) => {
+      const m: string[] = [];
+      if (ctx.temFrota) m.push("Frota identificada — Giro Auto é o produto ideal");
+      if (ctx.tipo === "PJ") m.push("Perfil PJ — produto estruturado para empresas com frota");
+      if (ctx.valor >= 200_000) m.push(`Valor ${_fmt(ctx.valor)} dentro da faixa`);
+      m.push("Sem consulta ao BACEN · Retorno do Fundo de Reserva");
+      return m;
+    },
+    alertas: (ctx) => {
+      const a: string[] = [];
+      if (!ctx.temFrota) a.push("Frota de veículos não identificada na proposta");
+      if (ctx.valor < 200_000) a.push("Valor abaixo do mínimo: R$200K");
+      return a;
+    },
+    restricoes: (ctx) => {
+      const r: string[] = [];
+      if (ctx.restricao) r.push("Restrições no CPF/CNPJ — impeditivo");
+      if (ctx.valor > 10_000_000) r.push("Valor acima do teto: R$10M");
+      return r;
+    },
+  },
+
+  {
+    id: "v3auto",
+    nome: "V3Auto",
+    nivel: "NIVEL_1",
+    categoria: "Crédito com Garantia Veicular — Pesados",
+    descricao: "Processo 100% digital. Scania, Iveco, Volvo, VW, Mercedes, Fachini. Taxa a partir de 1,7% a.m. Prazo até 60 meses. R$50K–R$5M.",
+    cor: "#0891B2",
+    emoji: "🚚",
+    score: (ctx) => {
+      if (ctx.restricao) return 5;
+      let s = 25;
+      if (ctx.temFrota) s += 30;
+      const fin = ctx.finalidade?.toLowerCase() ?? "";
+      if (fin.includes("pesado") || fin.includes("scania") || fin.includes("volvo") || fin.includes("iveco") || fin.includes("mercedes") || fin.includes("carreta") || fin.includes("caminhão") || fin.includes("caminhao") || fin.includes("truck")) s += 30;
+      if (ctx.valor >= 50_000 && ctx.valor <= 5_000_000) s += 15;
+      return Math.min(s, 100);
+    },
+    motivos: (ctx) => {
+      const m: string[] = [];
+      if (ctx.temFrota) m.push("Frota de veículos identificada");
+      const fin = ctx.finalidade?.toLowerCase() ?? "";
+      if (fin.includes("pesado") || fin.includes("carreta") || fin.includes("caminhao") || fin.includes("caminhão")) m.push("Veículos pesados — V3Auto ideal");
+      m.push("100% digital · Sem TAC · Uso mantido durante o contrato");
+      return m;
+    },
+    alertas: (ctx) => {
+      const a: string[] = [];
+      if (!ctx.temFrota) a.push("Veículos pesados não identificados na proposta");
+      if (ctx.valor < 50_000) a.push("Valor abaixo do mínimo: R$50K");
+      return a;
+    },
+    restricoes: (ctx) => {
+      const r: string[] = [];
+      if (ctx.restricao) r.push("Restrições no CPF/CNPJ — impeditivo");
+      if (ctx.valor > 5_000_000) r.push("Valor acima do teto: R$5M (use Giro Auto para volumes maiores)");
+      return r;
+    },
+  },
+
+  {
+    id: "credito_aval",
+    nome: "Crédito no Aval",
+    nivel: "NIVEL_1",
+    categoria: "Crédito Empresarial sem Garantia Real",
+    descricao: "Sem garantia real. Aprovação por rating e histórico financeiro. Taxa 2–3,5% a.m. Prazo 6–60 meses. Até R$500K. 100% digital.",
+    cor: "#8B5CF6",
+    emoji: "🤝",
+    score: (ctx) => {
+      if (ctx.tipo !== "PJ") return 0;
+      if (ctx.restricao) return 5;
+      let s = 35;
+      if (ctx.faturamentoAnual >= 240_000 && ctx.faturamentoAnual <= 12_000_000) s += 30;
+      if (ctx.valor >= 10_000 && ctx.valor <= 500_000) s += 25;
+      if (!ctx.temImovel) s += 10; // sem imóvel → aval é boa opção
+      return Math.min(s, 100);
+    },
+    motivos: (ctx) => {
+      const m: string[] = [];
+      if (ctx.tipo === "PJ") m.push("Perfil PJ — produto aplicável sem garantia real");
+      if (ctx.faturamentoAnual >= 240_000) m.push(`Faturamento ${_fmt(ctx.faturamentoAnual)}/ano — elegível`);
+      if (!ctx.temImovel) m.push("Sem imóvel cadastrado — Crédito no Aval é alternativa sólida");
+      m.push("Aprovação rápida · 100% digital · Sem avalistas físicos");
+      return m;
+    },
+    alertas: (ctx) => {
+      const a: string[] = [];
+      if (ctx.faturamentoAnual > 12_000_000) a.push("Faturamento alto — avaliar CGI ou Cash Collateral com menor taxa");
+      if (ctx.valor > 500_000) a.push("Valor acima do teto: R$500K");
+      return a;
+    },
+    restricoes: (ctx) => {
+      const r: string[] = [];
+      if (ctx.tipo !== "PJ") r.push("Produto exclusivo para Pessoa Jurídica");
+      if (ctx.restricao) r.push("Restrições no CNPJ — impeditivo");
+      if (ctx.faturamentoAnual < 240_000) r.push("Faturamento mínimo: R$240K/ano (R$20K/mês)");
+      if (ctx.valor > 500_000) r.push("Valor máximo: R$500K");
+      return r;
+    },
+  },
+
+  {
+    id: "fin_imobiliario",
+    nome: "Financiamento Imobiliário",
+    nivel: "NIVEL_1",
+    categoria: "Financiamento para Aquisição de Imóvel",
+    descricao: "Residencial e comercial. ITBI e cartório incluídos no financiamento. Taxa a partir de 1,50% a.m. + IPCA. LTV até 60%. Prazo 168–240 meses.",
+    cor: "#10B981",
+    emoji: "🏘️",
+    score: (ctx) => {
+      if (ctx.tipo !== "PF") return 10;
+      if (ctx.restricao) return 5;
+      let s = 40;
+      if (ctx.renda >= 4_000) s += 20;
+      if (ctx.valor >= 300_000) s += 15;
+      const fin = ctx.finalidade?.toLowerCase() ?? "";
+      if (fin.includes("compra") || fin.includes("aquisi") || fin.includes("imovel") || fin.includes("casa") || fin.includes("apartamento") || fin.includes("apart")) s += 20;
+      if (ltv(ctx) <= 0.60 && ctx.valorImovel > 0) s += 5;
+      return Math.min(s, 100);
+    },
+    motivos: (ctx) => {
+      const m: string[] = [];
+      if (ctx.tipo === "PF") m.push("Perfil PF — produto ideal para aquisição");
+      if (ctx.renda >= 4_000) m.push(`Renda ${_fmt(ctx.renda)}/mês acima do mínimo exigido`);
+      const fin = ctx.finalidade?.toLowerCase() ?? "";
+      if (fin.includes("compra") || fin.includes("aquisi")) m.push("Finalidade de aquisição — match perfeito");
+      m.push("ITBI e cartório incluídos no financiamento");
+      return m;
+    },
+    alertas: (ctx) => {
+      const a: string[] = [];
+      if (ctx.tipo !== "PF") a.push("Para PJ, avaliar CGI ou CRI Cash Collateral");
+      if (ctx.renda < 4_000 && ctx.renda > 0) a.push("Renda abaixo do mínimo exigido: R$4.000/mês");
+      if (ltv(ctx) > 0.60 && ctx.valorImovel > 0) a.push(`LTV ${(ltv(ctx) * 100).toFixed(0)}% acima do limite de 60%`);
+      return a;
+    },
+    restricoes: (ctx) => {
+      const r: string[] = [];
+      if (ctx.restricao) r.push("Restrições no CPF — impeditivo (avaliar repasse automático)");
+      if (ctx.renda < 4_000 && ctx.renda > 0) r.push("Renda mínima: R$4.000/mês");
+      return r;
+    },
+  },
+
+  {
+    id: "capital_maquinarios",
+    nome: "Capital Maquinários",
+    nivel: "NIVEL_1",
+    categoria: "Crédito com Garantia de Maquinário — Agro",
+    descricao: "Refinanciamento de máquinas usadas. Linha amarela, carretas e caminhões. Taxa 1,1% a.m. + IPCA. Prazo até 60 meses + 1 ano carência. R$25K–R$10M.",
+    cor: "#D97706",
+    emoji: "🚜",
+    score: (ctx) => {
+      if (ctx.restricao) return 5;
+      let s = 20;
+      if (ctx.ehAgronegocio) s += 40;
+      const fin = ctx.finalidade?.toLowerCase() ?? "";
+      if (fin.includes("maqui") || fin.includes("equipamento") || fin.includes("trator") || fin.includes("colheitadeira") || fin.includes("implemento") || fin.includes("linha amarela")) s += 30;
+      if (ctx.valor >= 25_000 && ctx.valor <= 10_000_000) s += 10;
+      return Math.min(s, 100);
+    },
+    motivos: (ctx) => {
+      const m: string[] = [];
+      if (ctx.ehAgronegocio) m.push("Setor agro identificado — Capital Maquinários ideal");
+      const fin = ctx.finalidade?.toLowerCase() ?? "";
+      if (fin.includes("maqui") || fin.includes("trator")) m.push("Maquinário agrícola — produto específico disponível");
+      m.push("Pesados 0km com 10% de entrada · Carência de 1 ano");
+      return m;
+    },
+    alertas: (ctx) => {
+      const a: string[] = [];
+      if (!ctx.ehAgronegocio) a.push("Setor não identificado como agronegócio — validar elegibilidade");
+      if (ctx.valor < 25_000) a.push("Valor abaixo do mínimo: R$25K");
+      return a;
+    },
+    restricoes: (ctx) => {
+      const r: string[] = [];
+      if (ctx.restricao) r.push("Restrições — impeditivo para esta linha");
+      if (ctx.valor > 10_000_000) r.push("Valor acima do teto: R$10M");
+      return r;
+    },
+  },
+
+  // ══ NÍVEL 2 — Estruturado ═════════════════════════════════════════════════
+
+  {
+    id: "homecash",
+    nome: "HomeCash",
+    nivel: "NIVEL_2",
+    categoria: "Crédito com Garantia Imobiliária — Fundo Compra",
+    descricao: "O fundo compra o imóvel. Contratos de compra, posse e recompra garantida. Taxa 0,5% a.m. Prazo 18 meses. LTV até 60%. Liquidez imediata sem perder o uso do ativo.",
+    cor: "#F59E0B",
+    emoji: "💰",
+    score: (ctx) => {
+      if (ctx.restricao && ctx.tipo !== "PJ") return 5;
+      if (!ctx.temImovel) return 0;
+      let s = 40;
+      if (ctx.tipo === "PJ") s += 20;
+      if (ctx.valor >= 400_000) s += 20;
+      if (ltv(ctx) <= 0.60) s += 20;
+      const fin = ctx.finalidade?.toLowerCase() ?? "";
+      if (fin.includes("liquidez") || fin.includes("capital") || fin.includes("giro")) s += 5;
+      return Math.min(s, 100);
+    },
+    motivos: (ctx) => {
+      const m: string[] = [];
+      if (ctx.temImovel) m.push("Imóvel disponível — fundo pode adquirir como garantia");
+      if (ctx.tipo === "PJ") m.push("Perfil empresarial — HomeCash ideal para liquidez rápida");
+      if (ltv(ctx) <= 0.60) m.push("LTV dentro do limite de 60%");
+      m.push("Liquidez imediata · Cliente mantém uso do imóvel");
+      return m;
+    },
+    alertas: (ctx) => {
+      const a: string[] = [];
+      a.push("Custo final 20–30% do valor captado — avaliar custo benefício");
+      if (ltv(ctx) > 0.60 && ctx.valorImovel > 0) a.push(`LTV ${(ltv(ctx) * 100).toFixed(0)}% acima do limite de 60%`);
+      if (ctx.valor < 400_000) a.push("Aporte mínimo: R$400K");
+      return a;
+    },
+    restricoes: (ctx) => {
+      const r: string[] = [];
+      if (!ctx.temImovel) r.push("Requer imóvel como garantia para o fundo adquirir");
+      if (ctx.valor < 400_000) r.push("Aporte mínimo: R$400K");
+      return r;
+    },
+  },
+
+  {
+    id: "cgi_pj",
+    nome: "CGI — Grandes Empresas",
+    nivel: "NIVEL_2",
+    categoria: "Crédito com Garantia Imobiliária — PJ Grande Porte",
+    descricao: "Empresas de maior porte. Utilização gradual do limite em até 5 anos. Faturamento a partir de R$30M/ano. Taxa a partir de 1,15% a.m. + IPCA. R$30K–R$10M.",
+    cor: "#10B981",
+    emoji: "🏢",
+    score: (ctx) => {
+      if (ctx.tipo !== "PJ") return 5;
+      if (!ctx.temImovel) return 0;
+      if (ctx.restricao) return 5;
+      let s = 40;
+      if (ctx.faturamentoAnual >= 30_000_000) s += 35;
+      else if (ctx.faturamentoAnual >= 10_000_000) s += 15;
+      if (ltv(ctx) <= 0.60) s += 15;
+      if (ctx.valor >= 1_000_000) s += 10;
+      return Math.min(s, 100);
+    },
+    motivos: (ctx) => {
+      const m: string[] = [];
+      if (ctx.tipo === "PJ") m.push("Perfil PJ — produto ideal para grandes empresas");
+      if (ctx.faturamentoAnual >= 30_000_000) m.push(`Faturamento ${_fmt(ctx.faturamentoAnual)}/ano — plenamente elegível`);
+      if (ctx.temImovel) m.push("Imóvel disponível como garantia");
+      m.push("Aceita Interveniente Quitante · Análise jurídica personalizada");
+      return m;
+    },
+    alertas: (ctx) => {
+      const a: string[] = [];
+      if (ctx.faturamentoAnual < 30_000_000 && ctx.faturamentoAnual > 0) a.push(`Faturamento ${_fmt(ctx.faturamentoAnual)}/ano abaixo do exigido (R$30M/ano)`);
+      if (!ctx.faturamentoAnual) a.push("Faturamento anual não informado — obrigatório para CGI");
+      return a;
+    },
+    restricoes: (ctx) => {
+      const r: string[] = [];
+      if (ctx.tipo !== "PJ") r.push("Produto exclusivo para Pessoa Jurídica");
+      if (!ctx.temImovel) r.push("Requer imóvel como garantia");
+      if (ctx.restricao) r.push("Restrições no CNPJ — impeditivo");
+      if (ctx.faturamentoAnual < 10_000_000) r.push("Faturamento mínimo: R$30M/ano (R$2,5M/mês)");
+      return r;
+    },
+  },
+
+  {
+    id: "cash_collateral",
+    nome: "Cash Collateral",
+    nivel: "NIVEL_2",
+    categoria: "Crédito Empresarial com Garantia Líquida",
+    descricao: "Garantias líquidas (CDB, títulos bloqueados) como alavanca para crédito de baixo custo. Taxa a partir de 12% a.a. + CDI. Até R$10M. Estruturação 15–60 dias.",
+    cor: "#6366F1",
+    emoji: "💎",
+    score: (ctx) => {
+      if (ctx.tipo !== "PJ") return 0;
+      if (ctx.restricao) return 5;
+      let s = 35;
+      const fin = ctx.finalidade?.toLowerCase() ?? "";
+      if (fin.includes("cdb") || fin.includes("garantia liquida") || fin.includes("título") || fin.includes("titulo") || fin.includes("aplicação") || fin.includes("aplicacao")) s += 40;
+      if (ctx.valor >= 100_000 && ctx.valor <= 10_000_000) s += 20;
+      if (ctx.tipo === "PJ") s += 5;
+      return Math.min(s, 100);
+    },
+    motivos: (ctx) => {
+      const m: string[] = [];
+      const fin = ctx.finalidade?.toLowerCase() ?? "";
+      if (fin.includes("cdb") || fin.includes("garantia liquida")) m.push("Garantia líquida identificada — Cash Collateral ideal");
+      m.push("Juros menores pelo menor risco · Liquidez preservada");
+      m.push("Alavancagem proporcional ao colateral");
+      return m;
+    },
+    alertas: (ctx) => {
+      const a: string[] = [];
+      a.push("Requer comprovação de garantias líquidas (CDB, títulos) a bloquear");
+      if (ctx.valor > 10_000_000) a.push("Valor acima do teto: R$10M");
+      return a;
+    },
+    restricoes: (ctx) => {
+      const r: string[] = [];
+      if (ctx.tipo !== "PJ") r.push("Produto exclusivo para Pessoa Jurídica");
+      if (ctx.restricao) r.push("Restrições no CNPJ — impeditivo");
+      return r;
+    },
+  },
+
+  {
+    id: "moradia",
+    nome: "Fundo Construção — Moradia",
+    nivel: "NIVEL_2",
+    categoria: "Fundo Construção Residencial",
+    descricao: "PF. Projeto aprovado + licença ambiental. Taxa a partir de 9% a.a. + CDI. LTV 80–99% da obra. Aporte mínimo R$300K. Portabilidade pós-conclusão.",
+    cor: "#84CC16",
+    emoji: "🏗️",
+    score: (ctx) => {
+      if (ctx.tipo !== "PF") return 5;
+      if (ctx.restricao) return 5;
+      let s = 30;
+      const fin = ctx.finalidade?.toLowerCase() ?? "";
+      if (fin.includes("constru") || fin.includes("obra") || fin.includes("moradia") || fin.includes("terreno") || fin.includes("projeto")) s += 45;
+      if (ctx.valor >= 300_000) s += 15;
+      if (ctx.renda > 0 && ctx.valor / ctx.renda <= 300) s += 10;
+      return Math.min(s, 100);
+    },
+    motivos: (ctx) => {
+      const m: string[] = [];
+      if (ctx.tipo === "PF") m.push("Perfil PF — produto estruturado para construção");
+      const fin = ctx.finalidade?.toLowerCase() ?? "";
+      if (fin.includes("constru") || fin.includes("obra")) m.push("Finalidade de construção — Fundo Moradia aplicável");
+      if (ctx.valor >= 300_000) m.push("Aporte dentro do mínimo exigido: R$300K");
+      m.push("LTV de até 99% da obra · Portabilidade pós-conclusão");
+      return m;
+    },
+    alertas: (ctx) => {
+      const a: string[] = [];
+      a.push("Exige projeto aprovado e licença ambiental/alvará");
+      if (ctx.valor < 300_000) a.push("Aporte abaixo do mínimo: R$300K");
+      return a;
+    },
+    restricoes: (ctx) => {
+      const r: string[] = [];
+      if (ctx.tipo !== "PF") r.push("Produto exclusivo para Pessoa Física (use Unifamiliar/Incorporadoras para PJ)");
+      if (ctx.restricao) r.push("Restrições no CPF — impeditivo");
+      return r;
+    },
+  },
+
+  {
+    id: "reforma",
+    nome: "Fundo Construção — Reforma",
+    nivel: "NIVEL_2",
+    categoria: "Fundo Construção — Reforma e Ampliação",
+    descricao: "Avaliação em até 48h. Liberação em tranches diretamente na conta. Taxa a partir de 1,15% a.m. + IPCA. LTV até 50% do imóvel. R$30K–R$10M.",
+    cor: "#A78BFA",
+    emoji: "🔨",
+    score: (ctx) => {
+      if (ctx.restricao) return 5;
+      let s = 30;
+      const fin = ctx.finalidade?.toLowerCase() ?? "";
+      if (fin.includes("reforma") || fin.includes("renovação") || fin.includes("amplia") || fin.includes("renovacao")) s += 50;
+      if (ctx.valor >= 30_000 && ctx.valor <= 10_000_000) s += 15;
+      if (ctx.temImovel) s += 5;
+      return Math.min(s, 100);
+    },
+    motivos: (ctx) => {
+      const m: string[] = [];
+      const fin = ctx.finalidade?.toLowerCase() ?? "";
+      if (fin.includes("reforma") || fin.includes("renovação") || fin.includes("amplia")) m.push("Finalidade de reforma — produto específico disponível");
+      m.push("Avaliação em 48h · Libera em tranches · Flexível na documentação");
+      if (ctx.temImovel) m.push("Imóvel como garantia para LTV");
+      return m;
+    },
+    alertas: (ctx) => {
+      const a: string[] = [];
+      if (!ctx.temImovel) a.push("Sem imóvel cadastrado — LTV será avaliado no processo");
+      if (ctx.valor < 30_000) a.push("Valor abaixo do mínimo: R$30K");
+      return a;
+    },
+    restricoes: (ctx) => {
+      const r: string[] = [];
+      if (ctx.restricao) r.push("Restrições — impeditivo");
+      if (ctx.valor > 10_000_000) r.push("Valor acima do teto: R$10M");
+      return r;
+    },
+  },
+
+  {
+    id: "unifamiliar",
+    nome: "Fundo Construção — Unifamiliar",
+    nivel: "NIVEL_2",
+    categoria: "Fundo Construção — Pequenos Construtores",
+    descricao: "Pequenos e médios construtores. Tranches conforme avanço físico. Taxa IPCA + 13,9% a.a. Aporte mínimo R$300K. Sem limite máximo.",
+    cor: "#EC4899",
+    emoji: "🏠",
+    score: (ctx) => {
+      if (ctx.restricao) return 5;
+      let s = 20;
+      if (ctx.ehConstrutora) s += 45;
+      const fin = ctx.finalidade?.toLowerCase() ?? "";
+      if (fin.includes("unifamiliar") || fin.includes("construtor") || fin.includes("construção residencial") || fin.includes("construcao residencial")) s += 25;
+      if (ctx.valor >= 300_000) s += 10;
+      if (ctx.tipo === "PJ") s += 5;
+      return Math.min(s, 100);
+    },
+    motivos: (ctx) => {
+      const m: string[] = [];
+      if (ctx.ehConstrutora) m.push("Perfil construtor identificado — produto ideal");
+      m.push("Comprovação de investimento prévio · Controle de caixa via tranches");
+      if (ctx.valor >= 300_000) m.push("Aporte acima do mínimo: R$300K");
+      return m;
+    },
+    alertas: (ctx) => {
+      const a: string[] = [];
+      if (!ctx.ehConstrutora) a.push("Perfil de construtor não identificado — validar elegibilidade");
+      if (ctx.valor < 300_000) a.push("Aporte mínimo: R$300K");
+      return a;
+    },
+    restricoes: (ctx) => {
+      const r: string[] = [];
+      if (ctx.restricao) r.push("Restrições — impeditivo");
+      return r;
+    },
+  },
+
+  {
+    id: "geminados",
+    nome: "Fundo Construção — Geminados",
+    nivel: "NIVEL_2",
+    categoria: "Fundo Construção — 2 a 4 Unidades",
+    descricao: "2 a 4 unidades por lote. Estruturação via SPE. Taxa CDI + 9% a.a. Aporte mínimo R$500K.",
+    cor: "#F472B6",
+    emoji: "🏘️",
+    score: (ctx) => {
+      if (ctx.restricao) return 5;
+      let s = 15;
+      if (ctx.ehConstrutora) s += 40;
+      const fin = ctx.finalidade?.toLowerCase() ?? "";
+      if (fin.includes("geminado") || fin.includes("duplex") || fin.includes("2 unidades") || fin.includes("3 unidades") || fin.includes("4 unidades")) s += 30;
+      if (ctx.valor >= 500_000) s += 15;
+      if (ctx.tipo === "PJ") s += 5;
+      return Math.min(s, 100);
+    },
+    motivos: (ctx) => {
+      const m: string[] = [];
+      if (ctx.ehConstrutora) m.push("Perfil construtor — Geminados aplicável");
+      const fin = ctx.finalidade?.toLowerCase() ?? "";
+      if (fin.includes("geminado") || fin.includes("2 unidades")) m.push("Projeto de unidades geminadas — produto específico");
+      m.push("SPE para máxima segurança jurídica · Análise de viabilidade pré-liberação");
+      return m;
+    },
+    alertas: (ctx) => {
+      const a: string[] = [];
+      if (ctx.valor < 500_000) a.push("Aporte mínimo: R$500K");
+      a.push("Exige constituição de SPE para o projeto");
+      return a;
+    },
+    restricoes: (ctx) => {
+      const r: string[] = [];
+      if (ctx.restricao) r.push("Restrições — impeditivo");
+      if (ctx.valor < 500_000) r.push("Aporte mínimo: R$500K");
+      return r;
+    },
+  },
+
+  {
+    id: "fin_exterior",
+    nome: "Financiamento — Brasileiros no Exterior",
+    nivel: "NIVEL_2",
+    categoria: "Financiamento Imobiliário Internacional",
+    descricao: "Sem tradução juramentada. Renda internacional aceita. Taxa a partir de 11,25% a.a. LTV até 70%. Praças: SP, RJ, BH, Curitiba, POA, Floripa.",
+    cor: "#0EA5E9",
+    emoji: "✈️",
+    score: (ctx) => {
+      if (ctx.restricao) return 5;
+      let s = 20;
+      if (ctx.ehInternacional) s += 50;
+      const fin = ctx.finalidade?.toLowerCase() ?? "";
+      if (fin.includes("exterior") || fin.includes("estrangeiro") || fin.includes("internacional") || fin.includes("remessa")) s += 25;
+      if (ctx.valor >= 250_000) s += 5;
+      return Math.min(s, 100);
+    },
+    motivos: (ctx) => {
+      const m: string[] = [];
+      if (ctx.ehInternacional) m.push("Operação internacional identificada");
+      m.push("Sem tradução juramentada · Renda internacional aceita");
+      m.push("Aprovação com restrições via repasse automático");
+      return m;
+    },
+    alertas: (ctx) => {
+      const a: string[] = [];
+      if (!ctx.ehInternacional) a.push("Perfil internacional não identificado — validar elegibilidade");
+      a.push("Praças disponíveis: SP, RJ, BH, Curitiba, POA, Florianópolis");
+      return a;
+    },
+    restricoes: (ctx) => {
+      const r: string[] = [];
+      if (ctx.restricao) r.push("Restrições graves — avaliar caso a caso");
+      if (ctx.valor < 250_000) r.push("Valor mínimo: R$250K");
+      return r;
+    },
+  },
+
+  {
+    id: "cpr_agro",
+    nome: "CPR Agro",
+    nivel: "NIVEL_2",
+    categoria: "Crédito para Agronegócio — CPR",
+    descricao: "Antecipação de CPR. Venda do produto convertida a valor presente imediato. Taxa a partir de 1,6% a.m. Aporte mínimo R$500K.",
+    cor: "#65A30D",
+    emoji: "🌱",
+    score: (ctx) => {
+      if (ctx.restricao) return 5;
+      let s = 20;
+      if (ctx.ehAgronegocio) s += 50;
+      const fin = ctx.finalidade?.toLowerCase() ?? "";
+      if (fin.includes("cpr") || fin.includes("safra") || fin.includes("colheita") || fin.includes("producao rural") || fin.includes("produção rural")) s += 30;
+      if (ctx.valor >= 500_000) s += 5;
+      return Math.min(s, 100);
+    },
+    motivos: (ctx) => {
+      const m: string[] = [];
+      if (ctx.ehAgronegocio) m.push("Setor agro identificado — CPR Agro ideal");
+      const fin = ctx.finalidade?.toLowerCase() ?? "";
+      if (fin.includes("cpr") || fin.includes("safra")) m.push("CPR/safra identificado — antecipação de recebível agrícola");
+      m.push("Bom histórico no mercado de capitais gera taxas mais atrativas");
+      return m;
+    },
+    alertas: (ctx) => {
+      const a: string[] = [];
+      if (!ctx.ehAgronegocio) a.push("Setor agro não identificado — validar atividade do cliente");
+      if (ctx.valor < 500_000) a.push("Aporte mínimo: R$500K");
+      return a;
+    },
+    restricoes: (ctx) => {
+      const r: string[] = [];
+      if (ctx.restricao) r.push("Restrições — impeditivo");
+      if (ctx.valor < 500_000) r.push("Aporte mínimo: R$500K");
+      return r;
+    },
+  },
+
+  {
+    id: "slb_agro",
+    nome: "Sale Leaseback Agro",
+    nivel: "NIVEL_2",
+    categoria: "Crédito Agro — Sale Leaseback",
+    descricao: "Fundo compra o imóvel rural. Cliente mantém arrendamento e recompra garantida. Taxa 12% a.a. + IPCA. LTV até 70%. Prazo 10 anos + juros anuais. R$2M–R$100M.",
+    cor: "#4ADE80",
+    emoji: "🌾",
+    score: (ctx) => {
+      if (ctx.restricao) return 5;
+      if (!ctx.temImovel && !ctx.ehAgronegocio) return 0;
+      let s = 25;
+      if (ctx.ehAgronegocio) s += 35;
+      if (ctx.temImovel) s += 20;
+      if (ctx.valor >= 2_000_000) s += 20;
+      const fin = ctx.finalidade?.toLowerCase() ?? "";
+      if (fin.includes("fazenda") || fin.includes("rural") || fin.includes("leaseback") || fin.includes("arrendamento")) s += 10;
+      return Math.min(s, 100);
+    },
+    motivos: (ctx) => {
+      const m: string[] = [];
+      if (ctx.ehAgronegocio) m.push("Setor agro — Sale Leaseback Agro ideal");
+      if (ctx.temImovel) m.push("Imóvel rural disponível para o fundo adquirir");
+      if (ctx.valor >= 2_000_000) m.push(`Valor ${_fmt(ctx.valor)} dentro da faixa R$2M–R$100M`);
+      m.push("Liquidez imediata sem perder o uso do ativo rural");
+      return m;
+    },
+    alertas: (ctx) => {
+      const a: string[] = [];
+      a.push("Custo do mandato: 6% (mín. R$4M) + TAC 3% do fundo");
+      if (ctx.valor < 2_000_000) a.push("Aporte mínimo: R$2M");
+      return a;
+    },
+    restricoes: (ctx) => {
+      const r: string[] = [];
+      if (ctx.restricao) r.push("Restrições — impeditivo");
+      if (ctx.valor < 2_000_000) r.push("Aporte mínimo: R$2M");
+      if (ctx.valor > 100_000_000) r.push("Valor acima do teto: R$100M");
+      return r;
+    },
+  },
+
+  {
+    id: "op_int_cash",
+    nome: "Op. Internacional — Cash Collateral",
+    nivel: "NIVEL_2",
+    categoria: "Operações Internacionais",
+    descricao: "A partir de USD 2M. 25% em garantia bloqueada em banco AAA na conta do cliente. Taxa 6–8% a.a. Prazo 10 anos + 3 de carência. 12 tranches.",
+    cor: "#38BDF8",
+    emoji: "🌎",
+    score: (ctx) => {
+      if (ctx.restricao) return 0;
+      if (!ctx.ehInternacional) return 5;
+      let s = 30;
+      if (ctx.valor >= 10_000_000) s += 40; // ~USD 2M
+      if (ctx.tipo === "PJ") s += 20;
+      if (ctx.ehInternacional) s += 10;
+      return Math.min(s, 100);
+    },
+    motivos: (ctx) => {
+      const m: string[] = [];
+      if (ctx.ehInternacional) m.push("Operação internacional identificada");
+      if (ctx.valor >= 10_000_000) m.push(`Volume ${_fmt(ctx.valor)} compatível (mín. USD 2M)`);
+      m.push("Capital internacional sem internacionalizar a empresa");
+      m.push("Sem taxas antecipadas · 12 tranches de liberação");
+      return m;
+    },
+    alertas: (ctx) => {
+      const a: string[] = [];
+      if (ctx.valor < 10_000_000) a.push("Volume mínimo: aproximadamente USD 2M (≈ R$10M)");
+      a.push("Requer Business Plan e 25% de garantia bloqueada em banco AAA");
+      return a;
+    },
+    restricoes: (ctx) => {
+      const r: string[] = [];
+      if (ctx.restricao) r.push("Restrições — impeditivo absoluto");
+      if (ctx.tipo !== "PJ") r.push("Produto exclusivo para Pessoa Jurídica");
+      if (ctx.valor < 10_000_000) r.push("Volume mínimo: USD 2M (≈ R$10M)");
+      return r;
+    },
+  },
+
+  {
+    id: "cambio_pronto",
+    nome: "Câmbio Pronto",
+    nivel: "NIVEL_2",
+    categoria: "Câmbio e Operações Internacionais",
+    descricao: "Conversão imediata. Liquidação no mesmo dia ou em até 2 dias úteis. Remessas, pagamentos e investimentos no exterior.",
+    cor: "#22D3EE",
+    emoji: "💱",
+    score: (ctx) => {
+      let s = 10;
+      if (ctx.ehInternacional) s += 55;
+      const fin = ctx.finalidade?.toLowerCase() ?? "";
+      if (fin.includes("câmbio") || fin.includes("cambio") || fin.includes("remessa") || fin.includes("pagamento exterior") || fin.includes("dólar") || fin.includes("dolar") || fin.includes("usd")) s += 35;
+      return Math.min(s, 100);
+    },
+    motivos: (ctx) => {
+      const m: string[] = [];
+      if (ctx.ehInternacional) m.push("Operação internacional — Câmbio Pronto disponível");
+      m.push("Taxa travada no ato · Suporte regulatório completo");
+      m.push("Liquidação no mesmo dia ou 2 dias úteis");
+      return m;
+    },
+    alertas: (ctx) => {
+      const a: string[] = [];
+      if (!ctx.ehInternacional) a.push("Operação internacional não identificada — validar necessidade de câmbio");
+      a.push("Custo: câmbio + spread + IOF sobre o valor");
+      return a;
+    },
+    restricoes: () => [],
+  },
+
+  {
+    id: "finimp",
+    nome: "FINIMP — Financiamento de Importações",
+    nivel: "NIVEL_2",
+    categoria: "Câmbio — Importações",
+    descricao: "Crédito em moeda estrangeira. Isenção de IOF com hedge disponível. Prazo 90 dias a 5 anos. Máquinas, matérias-primas e ativos do exterior.",
+    cor: "#67E8F9",
+    emoji: "🚢",
+    score: (ctx) => {
+      if (ctx.restricao) return 5;
+      let s = 10;
+      if (ctx.ehImportador) s += 60;
+      const fin = ctx.finalidade?.toLowerCase() ?? "";
+      if (fin.includes("import") || fin.includes("maquina") || fin.includes("máquina") || fin.includes("materia-prima") || fin.includes("matéria-prima") || fin.includes("finimp")) s += 30;
+      if (ctx.tipo === "PJ") s += 10;
+      return Math.min(s, 100);
+    },
+    motivos: (ctx) => {
+      const m: string[] = [];
+      if (ctx.ehImportador) m.push("Importador identificado — FINIMP ideal");
+      m.push("Condições mais competitivas que crédito doméstico");
+      m.push("Isenção de IOF · Hedge cambial disponível");
+      return m;
+    },
+    alertas: (ctx) => {
+      const a: string[] = [];
+      if (!ctx.ehImportador) a.push("Perfil importador não identificado — validar operação");
+      return a;
+    },
+    restricoes: (ctx) => {
+      const r: string[] = [];
+      if (ctx.restricao) r.push("Restrições — impeditivo");
+      if (ctx.tipo !== "PJ") r.push("Produto exclusivo para empresas importadoras");
+      return r;
+    },
+  },
+
+  {
+    id: "acc",
+    nome: "ACC — Adiantamento sobre Contrato de Câmbio",
+    nivel: "NIVEL_2",
+    categoria: "Câmbio — Exportações Pré-Embarque",
+    descricao: "Capital antecipado para produção antes do envio. Prazo até 360 dias. Taxas internacionais + risco-país. Reduz pressão sobre o caixa.",
+    cor: "#34D399",
+    emoji: "📦",
+    score: (ctx) => {
+      if (ctx.restricao) return 5;
+      let s = 10;
+      if (ctx.ehExportador) s += 65;
+      const fin = ctx.finalidade?.toLowerCase() ?? "";
+      if (fin.includes("exporta") || fin.includes("acc") || fin.includes("embarque") || fin.includes("pré-embarque") || fin.includes("pre-embarque")) s += 25;
+      return Math.min(s, 100);
+    },
+    motivos: (ctx) => {
+      const m: string[] = [];
+      if (ctx.ehExportador) m.push("Exportador identificado — ACC ideal para pré-embarque");
+      m.push("Taxas mais atrativas que crédito doméstico");
+      m.push("Reduz pressão sobre o caixa · Independe dos prazos do importador");
+      return m;
+    },
+    alertas: (ctx) => {
+      const a: string[] = [];
+      if (!ctx.ehExportador) a.push("Perfil exportador não identificado — validar operação");
+      return a;
+    },
+    restricoes: (ctx) => {
+      const r: string[] = [];
+      if (ctx.restricao) r.push("Restrições — impeditivo");
+      if (ctx.tipo !== "PJ") r.push("Produto para empresas exportadoras");
+      return r;
+    },
+  },
+
+  {
+    id: "ace",
+    nome: "ACE — Adiantamento sobre Cambiais Entregues",
+    nivel: "NIVEL_2",
+    categoria: "Câmbio — Exportações Pós-Embarque",
+    descricao: "Pós-embarque. Vendas já enviadas ao exterior convertidas em liquidez imediata. Prazo 180–540 dias. Melhora o ciclo financeiro.",
+    cor: "#6EE7B7",
+    emoji: "🌊",
+    score: (ctx) => {
+      if (ctx.restricao) return 5;
+      let s = 10;
+      if (ctx.ehExportador) s += 60;
+      const fin = ctx.finalidade?.toLowerCase() ?? "";
+      if (fin.includes("exporta") || fin.includes("ace") || fin.includes("pós-embarque") || fin.includes("pos-embarque") || fin.includes("cambiais")) s += 30;
+      return Math.min(s, 100);
+    },
+    motivos: (ctx) => {
+      const m: string[] = [];
+      if (ctx.ehExportador) m.push("Exportador identificado — ACE ideal para pós-embarque");
+      m.push("Melhora o ciclo financeiro e mitiga risco externo");
+      return m;
+    },
+    alertas: (ctx) => {
+      const a: string[] = [];
+      if (!ctx.ehExportador) a.push("Perfil exportador não identificado");
+      return a;
+    },
+    restricoes: (ctx) => {
+      const r: string[] = [];
+      if (ctx.restricao) r.push("Restrições — impeditivo");
+      if (ctx.tipo !== "PJ") r.push("Produto para empresas exportadoras");
+      return r;
+    },
+  },
+
+  // ══ NÍVEL 3 — High Ticket ═════════════════════════════════════════════════
+
+  {
+    id: "cri_cash_collateral",
+    nome: "CRI Cash Collateral",
+    nivel: "NIVEL_3",
+    categoria: "Securitização Imobiliária — Construtoras",
+    descricao: "Para construtoras. Similar ao GERIC da CEF. Taxa 0,50–0,70% a.m. + CDI. R$5M–R$150M. Lastro em carteira de recebíveis (10–35% concluída/vendida).",
+    cor: "#F97316",
+    emoji: "🏗️",
+    score: (ctx) => {
+      if (ctx.restricao) return 0;
+      if (ctx.tipo !== "PJ") return 0;
+      if (ctx.valor < 5_000_000) return 5;
+      let s = 30;
+      if (ctx.ehConstrutora) s += 40;
+      if (ctx.valor >= 10_000_000) s += 20;
+      if (ctx.temRecebiveis) s += 10;
+      return Math.min(s, 100);
+    },
+    motivos: (ctx) => {
+      const m: string[] = [];
+      if (ctx.ehConstrutora) m.push("Construtora/incorporadora — CRI Cash Collateral ideal");
+      if (ctx.valor >= 10_000_000) m.push(`Volume ${_fmt(ctx.valor)} adequado para CRI`);
+      m.push("Condições customizadas · Projetos residenciais, comerciais ou mistos");
+      m.push("Estrutura similar ao GERIC da CEF para grandes projetos");
+      return m;
+    },
+    alertas: (ctx) => {
+      const a: string[] = [];
+      if (!ctx.ehConstrutora) a.push("Perfil de construtora não identificado — validar");
+      if (ctx.valor < 10_000_000) a.push("CRI é mais eficiente acima de R$10M pelo custo de estruturação");
+      a.push("Exige carteira de recebíveis (10–35% concluída/vendida)");
+      return a;
+    },
+    restricoes: (ctx) => {
+      const r: string[] = [];
+      if (ctx.restricao) r.push("Restrições — impeditivo absoluto");
+      if (ctx.tipo !== "PJ") r.push("Produto exclusivo para Pessoa Jurídica");
+      if (ctx.valor < 5_000_000) r.push("Valor mínimo N3: R$5M");
+      return r;
+    },
+  },
+
+  {
+    id: "cri_inicio_obra",
+    nome: "Crédito Ponto / CRI Início de Obra",
+    nivel: "NIVEL_3",
+    categoria: "Fundo Construção — Incorporadoras",
+    descricao: "Para incorporadoras com alvará, LI e SPE. Capital estratégico imediato. Taxa a partir de 0,89% + IPCA. Até R$10M. Amortização Price.",
+    cor: "#FB923C",
+    emoji: "🏢",
+    score: (ctx) => {
+      if (ctx.restricao) return 0;
+      if (ctx.tipo !== "PJ") return 5;
+      let s = 25;
+      if (ctx.ehConstrutora) s += 45;
+      if (ctx.valor >= 500_000 && ctx.valor <= 10_000_000) s += 20;
+      const fin = ctx.finalidade?.toLowerCase() ?? "";
+      if (fin.includes("alvará") || fin.includes("alvara") || fin.includes("inicio de obra") || fin.includes("início de obra") || fin.includes("spe") || fin.includes("incorpora")) s += 10;
+      return Math.min(s, 100);
+    },
+    motivos: (ctx) => {
+      const m: string[] = [];
+      if (ctx.ehConstrutora) m.push("Incorporadora identificada — Crédito Ponto aplicável");
+      if (ctx.valor >= 500_000 && ctx.valor <= 10_000_000) m.push(`Valor ${_fmt(ctx.valor)} dentro da faixa R$500K–R$10M`);
+      m.push("Renda comprovada na 3ª parcela · Capital imediato para início de obra");
+      return m;
+    },
+    alertas: (ctx) => {
+      const a: string[] = [];
+      a.push("Exige alvará, licença de instalação (LI) e SPE já constituída");
+      if (ctx.valor < 500_000) a.push("Aporte mínimo: R$500K");
+      return a;
+    },
+    restricoes: (ctx) => {
+      const r: string[] = [];
+      if (ctx.restricao) r.push("Restrições — impeditivo absoluto");
+      if (ctx.tipo !== "PJ") r.push("Produto para incorporadoras (PJ)");
+      if (ctx.valor > 10_000_000) r.push("Valor máximo: R$10M (use CRI Cash Collateral para volumes maiores)");
+      return r;
+    },
+  },
+
+  {
+    id: "bts_corporativo",
+    nome: "Construtoras BTS — Build-to-Suit",
+    nivel: "NIVEL_3",
+    categoria: "Fundo Construção — Build-to-Suit Corporativo",
+    descricao: "Build-to-Suit corporativo. Alinhamento técnico e financeiro sob medida. Taxas conforme projeto e contrato BTS. R$2M–R$100M.",
+    cor: "#EF4444",
+    emoji: "🏭",
+    score: (ctx) => {
+      if (ctx.restricao) return 0;
+      if (ctx.valor < 2_000_000) return 5;
+      let s = 25;
+      if (ctx.ehConstrutora) s += 35;
+      const fin = ctx.finalidade?.toLowerCase() ?? "";
+      if (fin.includes("built to suit") || fin.includes("build to suit") || fin.includes("bts") || fin.includes("corporativo") || fin.includes("medida")) s += 30;
+      if (ctx.valor >= 10_000_000) s += 10;
+      return Math.min(s, 100);
+    },
+    motivos: (ctx) => {
+      const m: string[] = [];
+      if (ctx.ehConstrutora) m.push("Construtora identificada — BTS corporativo disponível");
+      const fin = ctx.finalidade?.toLowerCase() ?? "";
+      if (fin.includes("bts") || fin.includes("built to suit")) m.push("Build-to-Suit identificado — match perfeito");
+      m.push("Taxas e critérios definidos conforme o projeto e contrato BTS");
+      return m;
+    },
+    alertas: (ctx) => {
+      const a: string[] = [];
+      if (ctx.valor < 2_000_000) a.push("Aporte mínimo: R$2M");
+      if (!ctx.ehConstrutora) a.push("Perfil construtor não identificado — validar");
+      return a;
+    },
+    restricoes: (ctx) => {
+      const r: string[] = [];
+      if (ctx.restricao) r.push("Restrições — impeditivo absoluto");
+      if (ctx.valor < 2_000_000) r.push("Aporte mínimo: R$2M");
+      if (ctx.valor > 100_000_000) r.push("Valor acima do teto: R$100M");
+      return r;
+    },
+  },
+
+  {
+    id: "incorporadoras",
+    nome: "Fundo Incorporadoras",
+    nivel: "NIVEL_3",
+    categoria: "Fundo Construção — Incorporadoras High Ticket",
+    descricao: "Múltiplos lançamentos simultâneos. Holdings e subholdings. Taxa a partir de 6% + CDI. Aporte mínimo R$6M.",
+    cor: "#DC2626",
+    emoji: "🏙️",
+    score: (ctx) => {
+      if (ctx.restricao) return 0;
+      if (ctx.tipo !== "PJ") return 5;
+      if (ctx.valor < 6_000_000) return 5;
+      let s = 30;
+      if (ctx.ehConstrutora) s += 40;
+      if (ctx.valor >= 20_000_000) s += 20;
+      const fin = ctx.finalidade?.toLowerCase() ?? "";
+      if (fin.includes("incorporadora") || fin.includes("holding") || fin.includes("lançamento") || fin.includes("lancamento") || fin.includes("multiplos")) s += 10;
+      return Math.min(s, 100);
+    },
+    motivos: (ctx) => {
+      const m: string[] = [];
+      if (ctx.ehConstrutora) m.push("Incorporadora identificada — produto de alto padrão");
+      if (ctx.valor >= 6_000_000) m.push(`Volume ${_fmt(ctx.valor)} acima do mínimo: R$6M`);
+      m.push("Centralização societária via holdings · Eficiência operacional e segurança jurídica");
+      return m;
+    },
+    alertas: (ctx) => {
+      const a: string[] = [];
+      if (ctx.valor < 6_000_000) a.push("Aporte mínimo: R$6M");
+      if (!ctx.ehConstrutora) a.push("Perfil incorporadora não identificado — validar");
+      return a;
+    },
+    restricoes: (ctx) => {
+      const r: string[] = [];
+      if (ctx.restricao) r.push("Restrições — impeditivo absoluto");
+      if (ctx.tipo !== "PJ") r.push("Produto exclusivo para Pessoa Jurídica (incorporadoras/holdings)");
+      if (ctx.valor < 6_000_000) r.push("Aporte mínimo: R$6M");
+      return r;
+    },
+  },
+
+  {
+    id: "op_int_garantia",
+    nome: "Op. Internacional — Garantia Imobiliária",
+    nivel: "NIVEL_3",
+    categoria: "Operações Internacionais High Ticket",
+    descricao: "A partir de USD 10M. Faturamento mínimo R$25M/ano. Taxa 6–8% a.a. Prazo 10 anos + 2 de carência. Liberação única. Sem IOF.",
+    cor: "#7C3AED",
+    emoji: "🌐",
+    score: (ctx) => {
+      if (ctx.restricao) return 0;
+      if (ctx.tipo !== "PJ") return 0;
+      if (ctx.valor < 50_000_000) return 5;
+      let s = 25;
+      if (ctx.ehInternacional) s += 35;
+      if (ctx.faturamentoAnual >= 25_000_000) s += 25;
+      if (ctx.temImovel) s += 15;
+      return Math.min(s, 100);
+    },
+    motivos: (ctx) => {
+      const m: string[] = [];
+      if (ctx.ehInternacional) m.push("Operação internacional de alto valor identificada");
+      if (ctx.faturamentoAnual >= 25_000_000) m.push(`Faturamento ${_fmt(ctx.faturamentoAnual)}/ano — elegível`);
+      if (ctx.temImovel) m.push("Imóvel como garantia adicional");
+      m.push("Liberação única · Análise pela capacidade do Business Plan futuro · Sem IOF");
+      return m;
+    },
+    alertas: (ctx) => {
+      const a: string[] = [];
+      if (ctx.faturamentoAnual < 25_000_000) a.push("Faturamento mínimo: R$25M/ano");
+      if (ctx.valor < 50_000_000) a.push("Volume mínimo: USD 10M (≈ R$50M)");
+      return a;
+    },
+    restricoes: (ctx) => {
+      const r: string[] = [];
+      if (ctx.restricao) r.push("Restrições — impeditivo absoluto");
+      if (ctx.tipo !== "PJ") r.push("Produto exclusivo para Pessoa Jurídica");
+      if (ctx.faturamentoAnual < 25_000_000) r.push("Faturamento mínimo: R$25M/ano");
+      if (ctx.valor < 50_000_000) r.push("Volume mínimo: USD 10M (≈ R$50M)");
+      return r;
+    },
+  },
+];
+
+// ─── Build context from proposal ─────────────────────────────────────────────
 
 function buildCtx(proposal: ProposalFull): AnaliseCtx {
   const meta: ProposalMeta = proposal.metadata ?? {};
@@ -529,6 +1190,14 @@ function buildCtx(proposal: ProposalFull): AnaliseCtx {
     || proposal.imovel_valor_medio) ?? 0;
   const restricao = (meta.restricao_cliente ?? "").toLowerCase().includes("sim");
   const finalidade = (meta.finalidade ?? proposal.finalidade ?? meta.observacoes ?? "") as string;
+  const fin = finalidade.toLowerCase();
+
+  const temFrota = fin.includes("frota") || fin.includes("veículo") || fin.includes("veiculo") || fin.includes("caminhão") || fin.includes("caminhao") || fin.includes("carreta") || fin.includes("scania") || fin.includes("volvo") || fin.includes("iveco");
+  const ehConstrutora = fin.includes("constru") || fin.includes("incorpor") || fin.includes("bts") || fin.includes("obra") || fin.includes("spe") || fin.includes("lançamento") || fin.includes("lancamento");
+  const ehAgronegocio = fin.includes("agro") || fin.includes("rural") || fin.includes("fazenda") || fin.includes("soja") || fin.includes("milho") || fin.includes("pecuária") || fin.includes("pecuaria") || fin.includes("cpr") || fin.includes("safra");
+  const ehExportador = fin.includes("exporta") || fin.includes("embarque") || fin.includes("acc") || fin.includes("ace");
+  const ehImportador = fin.includes("import") || fin.includes("finimp");
+  const ehInternacional = fin.includes("exterior") || fin.includes("international") || fin.includes("internacional") || fin.includes("câmbio") || fin.includes("cambio") || fin.includes("dólar") || fin.includes("dolar") || fin.includes("usd") || ehExportador || ehImportador;
 
   return {
     tipo,
@@ -541,20 +1210,18 @@ function buildCtx(proposal: ProposalFull): AnaliseCtx {
     restricao,
     nivel: proposal.current_level,
     creditLine: proposal.credit_line,
-    temRecebíveis: renda > 0 && tipo === "PJ",
+    temRecebiveis: renda > 0 && tipo === "PJ",
     faturamentoAnual: tipo === "PJ" ? renda * 12 : 0,
+    temFrota,
+    ehConstrutora,
+    ehAgronegocio,
+    ehExportador,
+    ehImportador,
+    ehInternacional,
   };
 }
 
-interface Resultado {
-  linha: RegraLinha;
-  score: number;
-  motivos: string[];
-  alertas: string[];
-  restricoes: string[];
-}
-
-// ─── Merge DB params into LINHAS scoring ──────────────────────────────────────
+// ─── Merge DB params ─────────────────────────────────────────────────────────
 
 function mergeDBParams(linhas: RegraLinha[], dbRules: RegraDB[]): RegraLinha[] {
   if (!dbRules || dbRules.length === 0) return linhas;
@@ -568,14 +1235,10 @@ function mergeDBParams(linhas: RegraLinha[], dbRules: RegraDB[]): RegraLinha[] {
       categoria: db.categoria || l.categoria,
       cor: db.cor || l.cor,
       emoji: db.emoji || l.emoji,
-      // Override score with DB score_base as the new base value
       score: (ctx: AnaliseCtx) => {
-        // Run original scoring to get multiplier/bonuses, then re-base
         const orig = l.score(ctx);
         if (orig === 0) return 0;
-        // Scale: keep relative bonus but shift base to DB score_base
-        const origBase = l.score({ ...ctx, temImovel: true, restricao: false, renda: 1, valor: db.valor_minimo || 10000, faturamentoAnual: (db.min_faturamento_mensal || 0) * 12, temRecebíveis: true });
-        const bonus = Math.max(0, orig - (origBase > 0 ? origBase * 0.6 : 30));
+        const bonus = Math.max(0, orig - 40);
         return Math.min(100, db.score_base + bonus);
       },
       restricoes: (ctx: AnaliseCtx) => {
@@ -587,12 +1250,18 @@ function mergeDBParams(linhas: RegraLinha[], dbRules: RegraDB[]): RegraLinha[] {
         if (db.valor_maximo && ctx.valor > db.valor_maximo) extra.push(`Valor máximo: ${_fmt(db.valor_maximo)}`);
         if (db.min_faturamento_mensal > 0 && ctx.faturamentoAnual / 12 < db.min_faturamento_mensal)
           extra.push(`Faturamento mínimo: ${_fmt(db.min_faturamento_mensal)}/mês`);
-        // Merge, dedup
-        const all = [...orig, ...extra];
-        return [...new Set(all)];
+        return [...new Set([...orig, ...extra])];
       },
     };
   });
+}
+
+interface Resultado {
+  linha: RegraLinha;
+  score: number;
+  motivos: string[];
+  alertas: string[];
+  restricoes: string[];
 }
 
 function analisar(proposal: ProposalFull, dbRules: RegraDB[] = []): Resultado[] {
@@ -614,7 +1283,7 @@ function analisar(proposal: ProposalFull, dbRules: RegraDB[] = []): Resultado[] 
 
 interface RecomendacaoLinhaProps {
   proposal: ProposalFull;
-  rulesKey?: number; // increment to force refetch
+  rulesKey?: number;
 }
 
 export function RecomendacaoLinha({ proposal, rulesKey }: RecomendacaoLinhaProps) {
@@ -626,7 +1295,7 @@ export function RecomendacaoLinha({ proposal, rulesKey }: RecomendacaoLinhaProps
     fetch("/api/regras-linhas")
       .then(r => r.json())
       .then(({ regras }) => setDbRules(regras ?? []))
-      .catch(() => {/* use hardcoded fallback */})
+      .catch(() => {})
       .finally(() => setLoadingRules(false));
   }, [rulesKey]);
 
@@ -649,17 +1318,17 @@ export function RecomendacaoLinha({ proposal, rulesKey }: RecomendacaoLinhaProps
   }
 
   const top = resultados[0];
-  const alternativas = resultados.slice(1, 4).filter(r => r.score >= 20);
-  const incompativeis = resultados.filter(r => r.score < 10 && r.restricoes.length > 0).slice(0, 3);
+  const alternativas = resultados.slice(1, 5).filter(r => r.score >= 20);
+  const incompativeis = resultados.filter(r => r.score < 10 && r.restricoes.length > 0).slice(0, 4);
 
   const scoreColor = (s: number) => s >= 75 ? "#10B981" : s >= 50 ? "#C9A84C" : s >= 25 ? "#F97316" : "#EF4444";
-  const scoreLabel = (s: number) => s >= 75 ? "Alta compatibilidade" : s >= 50 ? "Compatível" : s >= 25 ? "Compatibilidade parcial" : "Baixa compatibilidade";
+  const scoreLabel = (s: number) => s >= 75 ? "Alta compatibilidade" : s >= 50 ? "Compatível" : s >= 25 ? "Compat. parcial" : "Baixa compat.";
 
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-1.5 mb-1">
         <Sparkles className="w-3.5 h-3.5 text-[#C9A84C]" />
-        <p className="text-xs font-semibold text-[#C9A84C] uppercase tracking-wider">Análise de Compatibilidade — Portfólio V3 Partners</p>
+        <p className="text-xs font-semibold text-[#C9A84C] uppercase tracking-wider">Análise de Compatibilidade — Portfólio V3 Partners 2026</p>
       </div>
 
       {/* Recomendação principal */}
@@ -672,7 +1341,7 @@ export function RecomendacaoLinha({ proposal, rulesKey }: RecomendacaoLinhaProps
           <div className="flex items-center gap-2">
             <span className="text-xl">{top.linha.emoji}</span>
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <p className="text-sm font-bold text-white">{top.linha.nome}</p>
                 <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full"
                   style={{ background: `${top.linha.cor}22`, color: top.linha.cor }}>
@@ -682,7 +1351,6 @@ export function RecomendacaoLinha({ proposal, rulesKey }: RecomendacaoLinhaProps
               <p className="text-[10px] text-muted-foreground">{top.linha.categoria}</p>
             </div>
           </div>
-          {/* Score circular */}
           <div className="flex flex-col items-center flex-shrink-0">
             <div className="w-12 h-12 rounded-full flex items-center justify-center font-black text-sm border-2"
               style={{ borderColor: scoreColor(top.score), color: scoreColor(top.score), background: `${scoreColor(top.score)}15` }}>
@@ -737,7 +1405,7 @@ export function RecomendacaoLinha({ proposal, rulesKey }: RecomendacaoLinhaProps
               <div key={r.linha.id} className="flex items-center gap-3 p-3 rounded-xl border border-border hover:bg-secondary/30 transition-colors">
                 <span className="text-base flex-shrink-0">{r.linha.emoji}</span>
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-1.5 flex-wrap">
                     <p className="text-xs font-semibold text-white truncate">{r.linha.nome}</p>
                     <span className="text-[9px] px-1 py-0.5 rounded font-bold flex-shrink-0"
                       style={{ background: `${r.linha.cor}20`, color: r.linha.cor }}>
@@ -745,9 +1413,7 @@ export function RecomendacaoLinha({ proposal, rulesKey }: RecomendacaoLinhaProps
                     </span>
                   </div>
                   <p className="text-[10px] text-muted-foreground">{r.linha.categoria}</p>
-                  {r.alertas[0] && (
-                    <p className="text-[10px] text-amber-400 mt-0.5">⚠ {r.alertas[0]}</p>
-                  )}
+                  {r.alertas[0] && <p className="text-[10px] text-amber-400 mt-0.5">⚠ {r.alertas[0]}</p>}
                 </div>
                 <div className="flex flex-col items-end flex-shrink-0">
                   <span className="text-sm font-black" style={{ color: scoreColor(r.score) }}>{r.score}%</span>
@@ -769,16 +1435,15 @@ export function RecomendacaoLinha({ proposal, rulesKey }: RecomendacaoLinhaProps
                 title={r.restricoes[0]}>
                 <span className="text-xs opacity-50">{r.linha.emoji}</span>
                 <span className="text-[10px] text-red-400 font-medium">{r.linha.nome}</span>
-                <Info className="w-2.5 h-2.5 text-red-400/60 flex-shrink-0" title={r.restricoes[0]} />
+                <Info className="w-2.5 h-2.5 text-red-400/60 flex-shrink-0" />
               </div>
             ))}
           </div>
         </div>
       )}
 
-      {/* Nota */}
       <p className="text-[9px] text-muted-foreground/60 leading-relaxed">
-        * Análise automática baseada nos dados cadastrados. Sujeita a validação pela mesa de crédito. Portfólio V3 Partners — CNPJ 14.219.287/0001-50.
+        * Análise automática baseada nos dados cadastrados. Sujeita a validação pela mesa de crédito. Portfólio V3 Partners 2026 — CNPJ 14.219.287/0001-50.
       </p>
     </div>
   );
