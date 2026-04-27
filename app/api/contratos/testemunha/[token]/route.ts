@@ -41,7 +41,7 @@ export async function POST(
 
   const { data, error } = await supabase
     .from("contratos_mandato")
-    .select("id, status, client_name, client_email, credit_line, proposal_code, signed_at, v3_signed_at, v3_signer_name, testemunha2_email, testemunha2_nome, testemunha2_token")
+    .select("id, status, client_name, client_email, credit_line, proposal_code, signed_at, v3_signed_at, v3_signer_name, testemunha_signed_at, testemunha2_email, testemunha2_signed_at, testemunha2_nome, testemunha2_token")
     .eq("testemunha_token", token)
     .single();
 
@@ -49,21 +49,20 @@ export async function POST(
     return NextResponse.json({ error: "Contrato não encontrado" }, { status: 404 });
   }
 
-  if (data.status !== "AGUARDANDO_TESTEMUNHA") {
+  if (data.status === "EXPIRADO" || data.status === "CANCELADO") {
     return NextResponse.json({ error: `Contrato está ${data.status.toLowerCase()}` }, { status: 409 });
+  }
+  if (data.testemunha_signed_at) {
+    return NextResponse.json({ error: "Você já assinou este contrato." }, { status: 409 });
   }
 
   const testemunhaSignedAt = new Date().toISOString();
-  const temTestemunha2 = !!(data.testemunha2_email && data.testemunha2_token);
-  const novoStatus = temTestemunha2 ? "AGUARDANDO_TESTEMUNHA2" : "ASSINADO";
-
   const ipRaw = req.headers.get("x-forwarded-for") ?? req.headers.get("x-real-ip") ?? "desconhecido";
   const t1Ip = ipRaw.split(",")[0].trim();
 
   const { error: updateErr } = await supabase
     .from("contratos_mandato")
     .update({
-      status: novoStatus,
       testemunha_signed_at: testemunhaSignedAt,
       testemunha_nome: nome_assinatura.trim(),
       testemunha_cpf: cpf ?? null,
@@ -77,28 +76,24 @@ export async function POST(
     return NextResponse.json({ error: "Erro ao registrar assinatura" }, { status: 500 });
   }
 
-  const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://v3-partner.vercel.app";
+  // Recalcula status com base em quem já assinou
+  const clientSigned = !!data.signed_at;
+  const v3Signed = !!data.v3_signed_at;
+  const t2Signed = !data.testemunha2_email || !!data.testemunha2_signed_at;
+  let novoStatus: string;
+  if (clientSigned && v3Signed && t2Signed) novoStatus = "ASSINADO";
+  else if (clientSigned && v3Signed)         novoStatus = "AGUARDANDO_TESTEMUNHA2";
+  else if (clientSigned)                     novoStatus = "AGUARDANDO_TESTEMUNHA";
+  else                                       novoStatus = "AGUARDANDO_V3";
 
-  if (temTestemunha2) {
-    const testemunha2Url = `${APP_URL}/assinar/testemunha2/${data.testemunha2_token}`;
-    await notifyTestemunha2ParaAssinar({
-      testemunhaEmail: data.testemunha2_email as string,
-      testemunhaNome: (data.testemunha2_nome as string) ?? "Aline Rodrigues dos Santos",
-      clientName: data.client_name,
-      proposalCode: data.proposal_code ?? "",
-      creditLine: data.credit_line ?? "",
-      testemunhaUrl: testemunha2Url,
-    });
-  } else {
+  await supabase.from("contratos_mandato").update({ status: novoStatus }).eq("testemunha_token", token);
+
+  if (novoStatus === "ASSINADO") {
     await notifyContratoCompleto({
-      clientEmail: data.client_email,
-      clientName: data.client_name,
-      repEmail: V3_REP_EMAIL,
-      proposalCode: data.proposal_code ?? "",
-      creditLine: data.credit_line ?? "",
-      clientSignedAt: data.signed_at ?? testemunhaSignedAt,
-      v3SignedAt: data.v3_signed_at ?? testemunhaSignedAt,
-      v3SignerName: data.v3_signer_name ?? "",
+      clientEmail: data.client_email, clientName: data.client_name,
+      repEmail: V3_REP_EMAIL, proposalCode: data.proposal_code ?? "",
+      creditLine: data.credit_line ?? "", clientSignedAt: data.signed_at ?? testemunhaSignedAt,
+      v3SignedAt: data.v3_signed_at ?? testemunhaSignedAt, v3SignerName: data.v3_signer_name ?? "",
     });
   }
 

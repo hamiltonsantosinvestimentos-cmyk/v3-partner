@@ -41,7 +41,7 @@ export async function POST(
 
   const { data, error } = await supabase
     .from("contratos_mandato")
-    .select("id, status, client_name, client_email, client_cpf, credit_line, proposal_code, deal_value, commission_perc, signed_at, ip_address, v3_signed_at, v3_signer_name, v3_email, v3_ip_address, testemunha_nome, testemunha_email, testemunha_cpf, testemunha_signed_at, testemunha_ip_address, testemunha2_nome, testemunha2_email, testemunha2_cpf")
+    .select("id, status, client_name, client_email, client_cpf, credit_line, proposal_code, deal_value, commission_perc, signed_at, ip_address, v3_signed_at, v3_signer_name, v3_email, v3_ip_address, testemunha_nome, testemunha_email, testemunha_cpf, testemunha_signed_at, testemunha_ip_address, testemunha2_nome, testemunha2_email, testemunha2_cpf, testemunha2_signed_at")
     .eq("testemunha2_token", token)
     .single();
 
@@ -49,8 +49,11 @@ export async function POST(
     return NextResponse.json({ error: "Contrato não encontrado" }, { status: 404 });
   }
 
-  if (data.status !== "AGUARDANDO_TESTEMUNHA2") {
+  if (data.status === "EXPIRADO" || data.status === "CANCELADO") {
     return NextResponse.json({ error: `Contrato está ${data.status.toLowerCase()}` }, { status: 409 });
+  }
+  if (data.testemunha2_signed_at) {
+    return NextResponse.json({ error: "Você já assinou este contrato." }, { status: 409 });
   }
 
   const testemunha2SignedAt = new Date().toISOString();
@@ -58,10 +61,16 @@ export async function POST(
   const ipRaw = req.headers.get("x-forwarded-for") ?? req.headers.get("x-real-ip") ?? "desconhecido";
   const t2Ip = ipRaw.split(",")[0].trim();
 
+  // Recalcula status com base em quem já assinou
+  const clientSigned = !!data.signed_at;
+  const v3Signed = !!data.v3_signed_at;
+  const t1Signed = !data.testemunha_email || !!data.testemunha_signed_at;
+  const novoStatus = (clientSigned && v3Signed && t1Signed) ? "ASSINADO" : "AGUARDANDO_TESTEMUNHA2";
+
   const { error: updateErr } = await supabase
     .from("contratos_mandato")
     .update({
-      status: "ASSINADO",
+      status: novoStatus,
       testemunha2_signed_at: testemunha2SignedAt,
       testemunha2_nome: nome_assinatura.trim(),
       testemunha2_cpf: cpf ?? null,

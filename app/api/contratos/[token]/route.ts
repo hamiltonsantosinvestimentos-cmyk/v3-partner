@@ -50,7 +50,7 @@ export async function POST(
 
   const { data, error } = await supabase
     .from("contratos_mandato")
-    .select("id, status, client_name, client_email, credit_line, proposal_code, expires_at, v3_token")
+    .select("id, status, client_name, client_email, credit_line, proposal_code, expires_at, v3_token, v3_signed_at, testemunha_email, testemunha_signed_at, testemunha2_email, testemunha2_signed_at")
     .eq("token", token)
     .single();
 
@@ -92,10 +92,20 @@ export async function POST(
     }
   }
 
+  // Recalcula status com base em quem já assinou (paralelo)
+  const v3Signed = !!data.v3_signed_at;
+  const t1Signed = !data.testemunha_email || !!data.testemunha_signed_at;
+  const t2Signed = !data.testemunha2_email || !!data.testemunha2_signed_at;
+  let novoStatus: string;
+  if (v3Signed && t1Signed && t2Signed) novoStatus = "ASSINADO";
+  else if (v3Signed && t1Signed)         novoStatus = "AGUARDANDO_TESTEMUNHA2";
+  else if (v3Signed)                     novoStatus = "AGUARDANDO_TESTEMUNHA";
+  else                                   novoStatus = "AGUARDANDO_V3";
+
   const { error: updateErr } = await supabase
     .from("contratos_mandato")
     .update({
-      status: "AGUARDANDO_V3",
+      status: novoStatus,
       signed_at: signedAt,
       ip_address: ip,
       endereco: endereco ?? null,
