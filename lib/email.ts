@@ -548,6 +548,38 @@ export async function notifyTestemunhaParaAssinar(opts: {
   );
 }
 
+/** Qualquer assinante: confirmação de que sua assinatura foi registrada */
+export async function notifyAssinaturaRegistrada(opts: {
+  email: string;
+  nome: string;
+  papel: string;
+  proposalCode: string;
+  clientName: string;
+  signedAt: string;
+}): Promise<void> {
+  const dateStr = new Date(opts.signedAt).toLocaleString("pt-BR");
+  const body = `
+    <p style="color:#7A96AF;font-size:14px;margin:0 0 20px;">
+      Olá, <strong style="color:#C8D4E3;">${opts.nome}</strong>!<br>
+      Sua assinatura como <strong style="color:#E5B96A;">${opts.papel}</strong> foi registrada com sucesso.
+    </p>
+    ${row("Proposta", opts.proposalCode)}
+    ${row("Cliente", opts.clientName)}
+    ${row("Registrado em", dateStr)}
+    <div style="margin-top:16px;padding:14px 18px;background:#0A2018;border-radius:8px;border-left:3px solid #10B981;">
+      <p style="margin:0;font-size:20px;font-weight:800;color:#10B981;">✅ Assinatura Registrada</p>
+    </div>
+    <p style="color:#7A96AF;font-size:12px;margin-top:16px;">
+      Aguardando as demais assinaturas para finalização do contrato.
+    </p>
+  `;
+  await send(
+    opts.email,
+    `✅ Assinatura registrada — V3 Partners · ${opts.proposalCode}`,
+    template("Assinatura Registrada com Sucesso", body)
+  );
+}
+
 /** Partner: e-mail de boas-vindas ao ser cadastrado */
 export async function sendWelcomePartner(opts: {
   partnerEmail: string;

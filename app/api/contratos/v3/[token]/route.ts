@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { notifyContratoCompleto, notifyTestemunhaParaAssinar } from "@/lib/email";
+import { notifyContratoCompleto, notifyAssinaturaRegistrada } from "@/lib/email";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -77,17 +77,24 @@ export async function POST(
     return NextResponse.json({ error: "Erro ao registrar assinatura" }, { status: 500 });
   }
 
-  // Recalcula status com base em quem já assinou
+  // Status independente de ordem: verifica quem assinou
   const clientSigned = !!data.signed_at;
-  const t1Signed = !data.testemunha_email || !!data.testemunha_signed_at;
-  const t2Signed = !data.testemunha2_email || !!data.testemunha2_signed_at;
-  let novoStatus: string;
-  if (clientSigned && t1Signed && t2Signed) novoStatus = "ASSINADO";
-  else if (clientSigned && t1Signed)         novoStatus = "AGUARDANDO_TESTEMUNHA2";
-  else if (clientSigned)                     novoStatus = "AGUARDANDO_TESTEMUNHA";
-  else                                       novoStatus = "AGUARDANDO_V3";
+  const t1Done = !data.testemunha_email || !!data.testemunha_signed_at;
+  const t2Done = !data.testemunha2_email || !!data.testemunha2_signed_at;
+  const allSigned = clientSigned && t1Done && t2Done; // v3 acabou de assinar
+  const novoStatus = allSigned ? "ASSINADO" : "AGUARDANDO_V3";
 
   await supabase.from("contratos_mandato").update({ status: novoStatus }).eq("v3_token", token);
+
+  // Confirmação para João
+  await notifyAssinaturaRegistrada({
+    email: process.env.EMAIL_V3_SIGNER ?? "joao.lemos@v3partners.com.br",
+    nome: nome_assinatura.trim(),
+    papel: "Contratada — V3 Partners",
+    proposalCode: data.proposal_code ?? "",
+    clientName: data.client_name,
+    signedAt: v3SignedAt,
+  });
 
   if (novoStatus === "ASSINADO") {
     await notifyContratoCompleto({

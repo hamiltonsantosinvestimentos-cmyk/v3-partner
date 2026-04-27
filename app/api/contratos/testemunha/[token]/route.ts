@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { notifyContratoCompleto, notifyTestemunha2ParaAssinar } from "@/lib/email";
+import { notifyContratoCompleto, notifyAssinaturaRegistrada } from "@/lib/email";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -76,17 +76,32 @@ export async function POST(
     return NextResponse.json({ error: "Erro ao registrar assinatura" }, { status: 500 });
   }
 
-  // Recalcula status com base em quem já assinou
+  // Status independente de ordem
   const clientSigned = !!data.signed_at;
   const v3Signed = !!data.v3_signed_at;
-  const t2Signed = !data.testemunha2_email || !!data.testemunha2_signed_at;
-  let novoStatus: string;
-  if (clientSigned && v3Signed && t2Signed) novoStatus = "ASSINADO";
-  else if (clientSigned && v3Signed)         novoStatus = "AGUARDANDO_TESTEMUNHA2";
-  else if (clientSigned)                     novoStatus = "AGUARDANDO_TESTEMUNHA";
-  else                                       novoStatus = "AGUARDANDO_V3";
+  const t2Done = !data.testemunha2_email || !!data.testemunha2_signed_at;
+  const allSigned = clientSigned && v3Signed && t2Done;
+  const novoStatus = allSigned ? "ASSINADO" : "AGUARDANDO_TESTEMUNHA";
 
   await supabase.from("contratos_mandato").update({ status: novoStatus }).eq("testemunha_token", token);
+
+  // Busca email da testemunha para confirmação
+  const { data: t1Data } = await supabase
+    .from("contratos_mandato")
+    .select("testemunha_email, testemunha_nome")
+    .eq("testemunha_token", token)
+    .single();
+
+  if (t1Data?.testemunha_email) {
+    await notifyAssinaturaRegistrada({
+      email: t1Data.testemunha_email as string,
+      nome: nome_assinatura.trim(),
+      papel: "1ª Testemunha (Parceiro Originador)",
+      proposalCode: data.proposal_code ?? "",
+      clientName: data.client_name,
+      signedAt: testemunhaSignedAt,
+    });
+  }
 
   if (novoStatus === "ASSINADO") {
     await notifyContratoCompleto({

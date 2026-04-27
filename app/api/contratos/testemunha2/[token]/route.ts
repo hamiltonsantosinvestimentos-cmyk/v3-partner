@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { notifyContratoFinalizado } from "@/lib/email";
+import { notifyContratoFinalizado, notifyAssinaturaRegistrada } from "@/lib/email";
 import { gerarCertificadoHTML } from "@/lib/contrato-html";
 import { gerarCertificadoPDF } from "@/lib/contrato-pdf";
 
@@ -83,6 +83,17 @@ export async function POST(
   if (updateErr) {
     return NextResponse.json({ error: "Erro ao registrar assinatura" }, { status: 500 });
   }
+
+  // Confirmação para Aline
+  const alineEmail = (data.testemunha2_email as string) ?? (process.env.WITNESS2_EMAIL ?? "financeiro@v3partners.com.br");
+  await notifyAssinaturaRegistrada({
+    email: alineEmail,
+    nome: nome_assinatura.trim(),
+    papel: "2ª Testemunha (Institucional)",
+    proposalCode: data.proposal_code ?? "",
+    clientName: data.client_name,
+    signedAt: testemunha2SignedAt,
+  });
 
   // Gera e faz upload dos certificados (HTML + PDF)
   let contratoUrl: string | null = null;
