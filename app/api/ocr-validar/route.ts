@@ -175,11 +175,34 @@ export async function POST(req: NextRequest) {
 
     const rawText = message.content[0].type === "text" ? message.content[0].text : "";
 
-    // Parse JSON da resposta
-    const jsonMatch = rawText.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error("Resposta inválida do modelo");
+    // Remove blocos markdown ```json ... ``` se presentes
+    const cleaned = rawText
+      .replace(/```json\s*/gi, "")
+      .replace(/```\s*/g, "")
+      .trim();
 
-    const parsed = JSON.parse(jsonMatch[0]);
+    // Extrai o objeto JSON — pega do primeiro { até o último }
+    const start = cleaned.indexOf("{");
+    const end = cleaned.lastIndexOf("}");
+    if (start === -1 || end === -1) throw new Error("Resposta sem JSON válido");
+
+    const jsonStr = cleaned.slice(start, end + 1);
+
+    let parsed: { tipo_documento?: string; campos?: unknown[]; resumo?: string; observacoes?: string };
+    try {
+      parsed = JSON.parse(jsonStr);
+    } catch {
+      // Fallback: retorna resposta como observação para debug
+      return NextResponse.json({
+        resultado: {
+          doc_id,
+          tipo_documento: doc_label,
+          campos: [],
+          resumo: "atencao",
+          observacoes: `Não foi possível interpretar a resposta do modelo. Tente novamente.`,
+        } as OcrResultado,
+      });
+    }
 
     const resultado: OcrResultado = {
       doc_id,
