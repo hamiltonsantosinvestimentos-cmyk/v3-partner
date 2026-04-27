@@ -7,7 +7,7 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://v3-partner.vercel.app";
+const APP_URL = (process.env.NEXT_PUBLIC_APP_URL ?? "https://v3-partner.vercel.app").trim().replace(/\/+$/, "");
 // Email do representante V3 que assina o contrato (João Lemos)
 const V3_REP_EMAIL = process.env.EMAIL_V3_SIGNER ?? "joao.lemos@v3partners.com.br";
 
