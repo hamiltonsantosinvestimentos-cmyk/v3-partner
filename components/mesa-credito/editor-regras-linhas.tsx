@@ -297,10 +297,11 @@ export function EditorRegrasLinhas({ open, onClose, onSaved }: EditorRegrasLinha
     setSaving(id);
     setError(null);
     try {
+      const fullRegra = regras.find(r => r.id === id) ?? {};
       const res = await fetch("/api/regras-linhas", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id, ...fields }),
+        body: JSON.stringify({ ...fullRegra, id, ...fields }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Erro ao salvar");
@@ -311,7 +312,7 @@ export function EditorRegrasLinhas({ open, onClose, onSaved }: EditorRegrasLinha
     } finally {
       setSaving(null);
     }
-  }, [onSaved]);
+  }, [onSaved, regras]);
 
   async function handleSeed() {
     setSeeding(true);
