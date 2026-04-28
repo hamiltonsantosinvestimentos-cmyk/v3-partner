@@ -461,8 +461,9 @@ interface UploadedFile {
   fileKey: string;
   docId: string;
   name: string;
-  size: number;
-  status: "uploading" | "done";
+  size: number;   // KB
+  status: "pending" | "uploading" | "done" | "error";
+  file?: File;    // real File object, present while pending/uploading
 }
 
 interface NovaPropostaModalProps {
@@ -471,7 +472,7 @@ interface NovaPropostaModalProps {
   level: string;
   partnerName: string;
   partnerId: string;
-  onSubmit: (proposal: Record<string, unknown>) => Promise<void> | void;
+  onSubmit: (proposal: Record<string, unknown>) => Promise<string>;
 }
 
 export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId, onSubmit }: NovaPropostaModalProps) {
@@ -545,7 +546,7 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
   // Usa checklist do portfólio se disponível, senão cai no hardcoded
   const checklist = portfolioDocs[creditLine] ?? (CHECKLISTS[creditLine]?.[clientType]) ?? DEFAULT_CHECKLIST[clientType];
 
-  const uploadedIds = [...new Set(uploadedFiles.filter((f) => f.status === "done").map((f) => f.docId))];
+  const uploadedIds = [...new Set(uploadedFiles.filter((f) => f.status === "done" || f.status === "pending").map((f) => f.docId))];
   const requiredDocs = checklist.filter((d) => d.required);
   const completedRequired = requiredDocs.filter((d) => uploadedIds.includes(d.id)).length;
 
@@ -553,15 +554,15 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
     setImoveis(prev => prev.map((im, i) => i === index ? { ...im, [field]: value } : im));
   }
 
-  function simulateUpload(docId: string, fileName: string) {
+  function queueFile(docId: string, file: File) {
     const fileKey = `${docId}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-    const fake: UploadedFile = { fileKey, docId, name: fileName, size: Math.floor(Math.random() * 900 + 100), status: "uploading" };
-    setUploadedFiles((prev) => [...prev, fake]);
-    setTimeout(() => {
-      setUploadedFiles((prev) =>
-        prev.map((f) => f.fileKey === fileKey ? { ...f, status: "done" } : f)
-      );
-    }, 1200);
+    const pending: UploadedFile = {
+      fileKey, docId, name: file.name,
+      size: Math.max(1, Math.round(file.size / 1024)),
+      status: "pending",
+      file,
+    };
+    setUploadedFiles((prev) => [...prev, pending]);
   }
 
   function removeFile(fileKey: string) {
@@ -621,7 +622,7 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
   function handleFileChange(docId: string, e: React.ChangeEvent<HTMLInputElement>) {
     const files = e.target.files;
     if (files) {
-      Array.from(files).forEach((file) => simulateUpload(docId, file.name));
+      Array.from(files).forEach((file) => queueFile(docId, file));
     }
     e.target.value = "";
   }
@@ -695,7 +696,28 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
       metadata,
     };
     try {
-      await onSubmit(proposal);
+      const proposalId = await onSubmit(proposal);
+
+      // Upload real dos arquivos selecionados
+      const toUpload = uploadedFiles.filter(f => f.status === "pending" && f.file);
+      for (const uf of toUpload) {
+        setUploadedFiles(prev => prev.map(f => f.fileKey === uf.fileKey ? { ...f, status: "uploading" } : f));
+        try {
+          const form = new FormData();
+          form.append("file", uf.file!);
+          form.append("proposal_id", proposalId);
+          form.append("doc_id", uf.docId);
+          const res = await fetch("/api/credit-proposals/documents", { method: "POST", body: form });
+          if (res.ok) {
+            setUploadedFiles(prev => prev.map(f => f.fileKey === uf.fileKey ? { ...f, status: "done", file: undefined } : f));
+          } else {
+            setUploadedFiles(prev => prev.map(f => f.fileKey === uf.fileKey ? { ...f, status: "error" } : f));
+          }
+        } catch {
+          setUploadedFiles(prev => prev.map(f => f.fileKey === uf.fileKey ? { ...f, status: "error" } : f));
+        }
+      }
+
       setSubmitted(true);
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : "Erro ao salvar proposta. Tente novamente.");
@@ -1155,11 +1177,14 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
                 checklist.map((doc) => {
                   const docFiles = uploadedFiles.filter((f) => f.docId === doc.id);
                   const hasUploading = docFiles.some((f) => f.status === "uploading");
+                  const hasPending = docFiles.some((f) => f.status === "pending");
                   const hasDone = docFiles.some((f) => f.status === "done");
                   return (
                     <div key={doc.id} className={`p-3 rounded-xl border transition-all ${
                       hasDone
                         ? "border-emerald-500/30 bg-emerald-500/5"
+                        : hasPending
+                        ? "border-primary/30 bg-primary/5"
                         : "border-border bg-secondary/30"
                     }`}>
                       <div className="flex items-start gap-3">
@@ -1168,6 +1193,8 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
                             <CheckCircle2 className="w-5 h-5 text-emerald-400" />
                           ) : hasUploading ? (
                             <div className="w-5 h-5 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+                          ) : hasPending ? (
+                            <CheckCircle2 className="w-5 h-5 text-primary/70" />
                           ) : (
                             <Circle className={`w-5 h-5 ${doc.required ? "text-amber-400" : "text-muted-foreground"}`} />
                           )}
@@ -1184,10 +1211,16 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
                                 <div key={f.fileKey} className="flex items-center gap-2">
                                   {f.status === "uploading" ? (
                                     <div className="w-3 h-3 rounded-full border-2 border-primary border-t-transparent animate-spin flex-shrink-0" />
+                                  ) : f.status === "error" ? (
+                                    <AlertCircle className="w-3 h-3 text-red-400 flex-shrink-0" />
+                                  ) : f.status === "pending" ? (
+                                    <div className="w-3 h-3 rounded-full border-2 border-primary/50 flex-shrink-0" />
                                   ) : (
                                     <CheckCircle2 className="w-3 h-3 text-emerald-400 flex-shrink-0" />
                                   )}
-                                  <span className="text-xs text-muted-foreground truncate flex-1">{f.name} — {f.size} KB</span>
+                                  <span className={`text-xs truncate flex-1 ${f.status === "error" ? "text-red-400" : "text-muted-foreground"}`}>
+                                    {f.name} — {f.size} KB{f.status === "pending" ? " · aguardando envio" : f.status === "error" ? " · erro no envio" : ""}
+                                  </span>
                                   <button
                                     type="button"
                                     onClick={() => removeFile(f.fileKey)}

@@ -3235,7 +3235,7 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
         level={creditoFormLevel}
         partnerName={userName}
         partnerId={userId}
-        onSubmit={async (proposal) => {
+        onSubmit={async (proposal): Promise<string> => {
           // Salva na Mesa de Crédito
           const metadata = (proposal.metadata as Record<string, unknown>) ?? {};
           const res = await fetch("/api/credit-proposals", {
@@ -3256,6 +3256,7 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
             throw new Error(typeof json.error === "string" ? json.error : "Erro ao salvar na Mesa de Crédito");
           }
           setShowCreditoForm(false);
+          return (json.proposal as Record<string, unknown>).id as string;
         }}
       />
 

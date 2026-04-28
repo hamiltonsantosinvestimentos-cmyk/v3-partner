@@ -103,7 +103,7 @@ export function CreditDeskLevel1Client({ proposals: initial, currentUser }: Cred
   const slaCritical = filtered.filter(p => getSLAInfo(p).sla === "critical").length;
   const slaWarning  = filtered.filter(p => getSLAInfo(p).sla === "warning").length;
 
-  const handleNewProposal = useCallback(async (proposal: Record<string, unknown>) => {
+  const handleNewProposal = useCallback(async (proposal: Record<string, unknown>): Promise<string> => {
     const p = proposal as unknown as Proposal;
     const raw = proposal as Record<string, unknown>;
     const metadata = (raw.metadata as Record<string, unknown>) ?? {
@@ -124,7 +124,7 @@ export function CreditDeskLevel1Client({ proposals: initial, currentUser }: Cred
     const json = await res.json();
     if (json.ok && json.proposal) {
       setProposals(prev => [{ ...p, id: json.proposal.id, partner_id: json.proposal.partner_id ?? p.partner_id, metadata: json.proposal.metadata ?? metadata }, ...prev]);
-      return;
+      return json.proposal.id as string;
     }
     if (typeof json.error === "string") {
       throw new Error(json.error);
