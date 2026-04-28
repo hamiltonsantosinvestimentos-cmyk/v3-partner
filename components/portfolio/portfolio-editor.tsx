@@ -33,7 +33,7 @@ const EMPTY: Omit<PortfolioLinha, "id" | "ativo" | "ordem"> = {
   outras_despesas: null, limite_credito: null, comprometimento_renda: null,
   aporte: null, amortizacao: null, perfil_garantia: null,
   destinacao: null, tempo_estruturacao: null, custo_estruturacao: null,
-  diferenciais: null, documentos: [],
+  diferenciais: null, documentos_pf: [], documentos_pj: [],
 };
 
 function Toast({ msg, type, onClose }: { msg: string; type: "success" | "error"; onClose: () => void }) {
@@ -52,7 +52,7 @@ function Toast({ msg, type, onClose }: { msg: string; type: "success" | "error";
 }
 
 type FormState = Omit<PortfolioLinha, "id" | "ativo" | "ordem">;
-type FormStateRecord = Record<string, string | null | Documento[]>;
+type FormStateRecord = Record<string, string | null | Documento[] | Documento[]>;
 
 // ── Documentos Editor ─────────────────────────────────────────────────────────
 function DocumentosEditor({
@@ -82,11 +82,7 @@ function DocumentosEditor({
   }
 
   return (
-    <div className="space-y-2 md:col-span-2">
-      <label className="text-[10px] font-bold text-[#C9A84C] uppercase tracking-widest flex items-center gap-1.5">
-        <FileText className="w-3 h-3" /> Checklist de Documentos
-      </label>
-
+    <div className="space-y-2">
       {documentos.length === 0 && (
         <p className="text-[11px] text-muted-foreground italic px-1">Nenhum documento cadastrado.</p>
       )}
@@ -158,7 +154,7 @@ function LinhaEditRow({
   onToggle: (id: string, ativo: boolean) => Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState<FormState>({ ...EMPTY, ...linha, documentos: linha.documentos ?? [] });
+  const [form, setForm] = useState<FormState>({ ...EMPTY, ...linha, documentos_pf: linha.documentos_pf ?? [], documentos_pj: linha.documentos_pj ?? [] });
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [confirmDel, setConfirmDel] = useState(false);
@@ -179,7 +175,7 @@ function LinhaEditRow({
     setDeleting(false);
   }
 
-  const docCount = (linha.documentos ?? []).length;
+  const docCount = (linha.documentos_pf ?? []).length + (linha.documentos_pj ?? []).length;
 
   return (
     <div className={cn(
@@ -291,13 +287,29 @@ function LinhaEditRow({
             ))}
           </div>
 
-          {/* Documentos */}
-          <div className="grid grid-cols-1">
-            <DocumentosEditor
-              documentos={form.documentos}
-              onChange={docs => setForm(f => ({ ...f, documentos: docs }))}
-              inputCls={inputCls}
-            />
+          {/* Documentos PF / PJ */}
+          <div className="space-y-3 md:col-span-2">
+            <label className="text-[10px] font-bold text-[#C9A84C] uppercase tracking-widest flex items-center gap-1.5">
+              <FileText className="w-3 h-3" /> Checklist de Documentos
+            </label>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <p className="text-[10px] font-bold text-[#7A8FA8] uppercase tracking-widest">Pessoa Física (PF)</p>
+                <DocumentosEditor
+                  documentos={form.documentos_pf}
+                  onChange={docs => setForm(f => ({ ...f, documentos_pf: docs }))}
+                  inputCls={inputCls}
+                />
+              </div>
+              <div className="space-y-2">
+                <p className="text-[10px] font-bold text-[#7A8FA8] uppercase tracking-widest">Pessoa Jurídica (PJ)</p>
+                <DocumentosEditor
+                  documentos={form.documentos_pj}
+                  onChange={docs => setForm(f => ({ ...f, documentos_pj: docs }))}
+                  inputCls={inputCls}
+                />
+              </div>
+            </div>
           </div>
 
           {/* Actions */}
@@ -311,7 +323,7 @@ function LinhaEditRow({
               {saving ? "Salvando…" : "Salvar"}
             </button>
             <button
-              onClick={() => { setOpen(false); setForm({ ...EMPTY, ...linha, documentos: linha.documentos ?? [] }); }}
+              onClick={() => { setOpen(false); setForm({ ...EMPTY, ...linha, documentos_pf: linha.documentos_pf ?? [], documentos_pj: linha.documentos_pj ?? [] }); }}
               className="flex items-center gap-1.5 px-4 py-2 rounded-lg border border-[#243A66] text-muted-foreground text-xs font-semibold hover:text-foreground transition-colors"
             >
               <X className="w-3.5 h-3.5" /> Cancelar
@@ -417,12 +429,29 @@ function NovaLinhaForm({ onCreated }: { onCreated: (linha: PortfolioLinha) => vo
         ))}
       </div>
 
-      <div className="grid grid-cols-1">
-        <DocumentosEditor
-          documentos={form.documentos}
-          onChange={docs => setForm(f => ({ ...f, documentos: docs }))}
-          inputCls={inputCls}
-        />
+      {/* Documentos PF / PJ */}
+      <div className="space-y-3">
+        <label className="text-[10px] font-bold text-[#C9A84C] uppercase tracking-widest flex items-center gap-1.5">
+          <FileText className="w-3 h-3" /> Checklist de Documentos
+        </label>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <p className="text-[10px] font-bold text-[#7A8FA8] uppercase tracking-widest">Pessoa Física (PF)</p>
+            <DocumentosEditor
+              documentos={form.documentos_pf}
+              onChange={docs => setForm(f => ({ ...f, documentos_pf: docs }))}
+              inputCls={inputCls}
+            />
+          </div>
+          <div className="space-y-2">
+            <p className="text-[10px] font-bold text-[#7A8FA8] uppercase tracking-widest">Pessoa Jurídica (PJ)</p>
+            <DocumentosEditor
+              documentos={form.documentos_pj}
+              onChange={docs => setForm(f => ({ ...f, documentos_pj: docs }))}
+              inputCls={inputCls}
+            />
+          </div>
+        </div>
       </div>
 
       <div className="flex gap-2 pt-1">

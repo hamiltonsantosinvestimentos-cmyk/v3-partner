@@ -28,7 +28,8 @@ export interface PortfolioLinha {
   tempo_estruturacao: string | null;
   custo_estruturacao: string | null;
   diferenciais: string | null;
-  documentos: Documento[];
+  documentos_pf: Documento[];
+  documentos_pj: Documento[];
   ativo: boolean;
   ordem: number;
 }
@@ -62,7 +63,7 @@ const FIELDS: { key: keyof PortfolioLinha; label: string }[] = [
 ];
 
 // ── PDF Generator ─────────────────────────────────────────────────────────────
-async function gerarPDF(linha: PortfolioLinha, checados: Set<string>) {
+async function gerarPDF(linha: PortfolioLinha, docs: Documento[], checados: Set<string>) {
   const { jsPDF } = await import("jspdf");
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
 
@@ -112,13 +113,13 @@ async function gerarPDF(linha: PortfolioLinha, checados: Set<string>) {
 
   let y = 68;
 
-  const obrig = linha.documentos.filter(d => d.obrigatorio);
-  const opcion = linha.documentos.filter(d => !d.obrigatorio);
-  const total = linha.documentos.length;
-  const done = linha.documentos.filter(d => checados.has(d.id)).length;
+  const obrig = docs.filter(d => d.obrigatorio);
+  const opcion = docs.filter(d => !d.obrigatorio);
+  const total = docs.length;
+  const done = docs.filter(d => checados.has(d.id)).length;
 
-  function drawSection(title: string, r: number, g: number, b: number, docs: Documento[]) {
-    if (docs.length === 0) return;
+  function drawSection(title: string, r: number, g: number, b: number, sectionDocs: Documento[]) {
+    if (sectionDocs.length === 0) return;
 
     // Section label
     doc.setFont("helvetica", "bold");
@@ -133,7 +134,7 @@ async function gerarPDF(linha: PortfolioLinha, checados: Set<string>) {
     doc.line(margin, y, W - margin, y);
     y += 8;
 
-    docs.forEach(d => {
+    sectionDocs.forEach(d => {
       const checked = checados.has(d.id);
 
       // Checkbox border
@@ -230,16 +231,27 @@ async function gerarPDF(linha: PortfolioLinha, checados: Set<string>) {
 
 // ── Documentos Checklist ──────────────────────────────────────────────────────
 function DocumentosChecklist({ linha }: { linha: PortfolioLinha }) {
-  const LS_KEY = `v3_docs_${linha.id}`;
+  const [pessoa, setPessoa] = useState<"PF" | "PJ">("PF");
+
+  const docs = pessoa === "PF" ? (linha.documentos_pf ?? []) : (linha.documentos_pj ?? []);
+  const LS_KEY = `v3_docs_${linha.id}_${pessoa}`;
+
   const [checados, setChecados] = useState<Set<string>>(() => {
     if (typeof window === "undefined") return new Set();
-    try { return new Set(JSON.parse(localStorage.getItem(LS_KEY) ?? "[]") as string[]); }
+    try { return new Set(JSON.parse(localStorage.getItem(`v3_docs_${linha.id}_PF`) ?? "[]") as string[]); }
     catch { return new Set<string>(); }
   });
   const [gerando, setGerando] = useState(false);
 
-  const docs = linha.documentos ?? [];
-  if (docs.length === 0) return null;
+  // Reload checados from localStorage whenever pessoa tab changes
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      setChecados(new Set(JSON.parse(localStorage.getItem(LS_KEY) ?? "[]") as string[]));
+    } catch {
+      setChecados(new Set<string>());
+    }
+  }, [pessoa, LS_KEY]);
 
   const obrig = docs.filter(d => d.obrigatorio);
   const opcion = docs.filter(d => !d.obrigatorio);
@@ -258,8 +270,10 @@ function DocumentosChecklist({ linha }: { linha: PortfolioLinha }) {
 
   async function handlePDF() {
     setGerando(true);
-    try { await gerarPDF(linha, checados); } finally { setGerando(false); }
+    try { await gerarPDF(linha, docs, checados); } finally { setGerando(false); }
   }
+
+  const totalDocs = (linha.documentos_pf ?? []).length + (linha.documentos_pj ?? []).length;
 
   return (
     <div className="mt-4 pt-4 border-t border-[#1B3050]">
@@ -272,7 +286,7 @@ function DocumentosChecklist({ linha }: { linha: PortfolioLinha }) {
         </div>
         <button
           onClick={handlePDF}
-          disabled={gerando}
+          disabled={gerando || total === 0}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#C9A84C]/30 bg-[#C9A84C]/10 text-[#C9A84C] text-[10px] font-bold hover:bg-[#C9A84C]/20 transition-all disabled:opacity-50"
         >
           {gerando
@@ -282,85 +296,107 @@ function DocumentosChecklist({ linha }: { linha: PortfolioLinha }) {
         </button>
       </div>
 
-      {/* Progress bar */}
-      <div className="h-1.5 rounded-full bg-[#1B3050] mb-4 overflow-hidden">
-        <div
-          className="h-full rounded-full bg-[#C9A84C] transition-all duration-300"
-          style={{ width: `${pct}%` }}
-        />
+      {/* PF / PJ Toggle */}
+      <div className="flex gap-1 mb-3">
+        {(["PF", "PJ"] as const).map(t => (
+          <button key={t} onClick={() => setPessoa(t)}
+            className={cn(
+              "px-3 py-1 rounded-lg text-[10px] font-bold border transition-all",
+              pessoa === t
+                ? "bg-[#C9A84C]/15 border-[#C9A84C]/40 text-[#C9A84C]"
+                : "border-[#243A66] text-muted-foreground hover:border-[#C9A84C]/30"
+            )}
+          >{t === "PF" ? "Pessoa Física" : "Pessoa Jurídica"}</button>
+        ))}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Obrigatórios */}
-        {obrig.length > 0 && (
-          <div>
-            <p className="text-[9px] font-bold text-amber-400 uppercase tracking-widest mb-2">Obrigatórios</p>
-            <div className="space-y-2">
-              {obrig.map(doc => (
-                <label key={doc.id} className="flex items-center gap-2.5 cursor-pointer group">
-                  <div
-                    onClick={() => toggle(doc.id)}
-                    className={cn(
-                      "w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 transition-all",
-                      checados.has(doc.id)
-                        ? "bg-[#C9A84C] border-[#C9A84C]"
-                        : "border-[#243A66] bg-[#09081A] group-hover:border-[#C9A84C]/50"
-                    )}
-                  >
-                    {checados.has(doc.id) && (
-                      <Check className="w-2.5 h-2.5 text-[#09081A]" strokeWidth={3} />
-                    )}
-                  </div>
-                  <span
-                    onClick={() => toggle(doc.id)}
-                    className={cn(
-                      "text-xs transition-colors select-none",
-                      checados.has(doc.id) ? "line-through text-muted-foreground" : "text-[#F0ECE4]"
-                    )}
-                  >
-                    {doc.nome}
-                  </span>
-                </label>
-              ))}
-            </div>
+      {docs.length === 0 ? (
+        <p className="text-[11px] text-muted-foreground italic px-1">
+          Nenhum documento cadastrado para {pessoa === "PF" ? "Pessoa Física" : "Pessoa Jurídica"}.
+        </p>
+      ) : (
+        <>
+          {/* Progress bar */}
+          <div className="h-1.5 rounded-full bg-[#1B3050] mb-4 overflow-hidden">
+            <div
+              className="h-full rounded-full bg-[#C9A84C] transition-all duration-300"
+              style={{ width: `${pct}%` }}
+            />
           </div>
-        )}
 
-        {/* Opcionais */}
-        {opcion.length > 0 && (
-          <div>
-            <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mb-2">Opcionais</p>
-            <div className="space-y-2">
-              {opcion.map(doc => (
-                <label key={doc.id} className="flex items-center gap-2.5 cursor-pointer group">
-                  <div
-                    onClick={() => toggle(doc.id)}
-                    className={cn(
-                      "w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 transition-all",
-                      checados.has(doc.id)
-                        ? "bg-emerald-500 border-emerald-500"
-                        : "border-[#243A66] bg-[#09081A] group-hover:border-emerald-500/50"
-                    )}
-                  >
-                    {checados.has(doc.id) && (
-                      <Check className="w-2.5 h-2.5 text-white" strokeWidth={3} />
-                    )}
-                  </div>
-                  <span
-                    onClick={() => toggle(doc.id)}
-                    className={cn(
-                      "text-xs transition-colors select-none",
-                      checados.has(doc.id) ? "line-through text-muted-foreground" : "text-[#7A8FA8]"
-                    )}
-                  >
-                    {doc.nome}
-                  </span>
-                </label>
-              ))}
-            </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Obrigatórios */}
+            {obrig.length > 0 && (
+              <div>
+                <p className="text-[9px] font-bold text-amber-400 uppercase tracking-widest mb-2">Obrigatórios</p>
+                <div className="space-y-2">
+                  {obrig.map(doc => (
+                    <label key={doc.id} className="flex items-center gap-2.5 cursor-pointer group">
+                      <div
+                        onClick={() => toggle(doc.id)}
+                        className={cn(
+                          "w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 transition-all",
+                          checados.has(doc.id)
+                            ? "bg-[#C9A84C] border-[#C9A84C]"
+                            : "border-[#243A66] bg-[#09081A] group-hover:border-[#C9A84C]/50"
+                        )}
+                      >
+                        {checados.has(doc.id) && (
+                          <Check className="w-2.5 h-2.5 text-[#09081A]" strokeWidth={3} />
+                        )}
+                      </div>
+                      <span
+                        onClick={() => toggle(doc.id)}
+                        className={cn(
+                          "text-xs transition-colors select-none",
+                          checados.has(doc.id) ? "line-through text-muted-foreground" : "text-[#F0ECE4]"
+                        )}
+                      >
+                        {doc.nome}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Opcionais */}
+            {opcion.length > 0 && (
+              <div>
+                <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mb-2">Opcionais</p>
+                <div className="space-y-2">
+                  {opcion.map(doc => (
+                    <label key={doc.id} className="flex items-center gap-2.5 cursor-pointer group">
+                      <div
+                        onClick={() => toggle(doc.id)}
+                        className={cn(
+                          "w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 transition-all",
+                          checados.has(doc.id)
+                            ? "bg-emerald-500 border-emerald-500"
+                            : "border-[#243A66] bg-[#09081A] group-hover:border-emerald-500/50"
+                        )}
+                      >
+                        {checados.has(doc.id) && (
+                          <Check className="w-2.5 h-2.5 text-white" strokeWidth={3} />
+                        )}
+                      </div>
+                      <span
+                        onClick={() => toggle(doc.id)}
+                        className={cn(
+                          "text-xs transition-colors select-none",
+                          checados.has(doc.id) ? "line-through text-muted-foreground" : "text-[#7A8FA8]"
+                        )}
+                      >
+                        {doc.nome}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
-        )}
-      </div>
+        </>
+      )}
     </div>
   );
 }
@@ -369,6 +405,8 @@ function DocumentosChecklist({ linha }: { linha: PortfolioLinha }) {
 function LinhaCard({ linha }: { linha: PortfolioLinha }) {
   const [open, setOpen] = useState(false);
   const catCls = CAT_COLORS[linha.categoria ?? ""] ?? "bg-[#C9A84C]/20 text-[#C9A84C] border-[#C9A84C]/30";
+
+  const totalDocs = (linha.documentos_pf ?? []).length + (linha.documentos_pj ?? []).length;
 
   return (
     <div className={cn(
@@ -391,10 +429,10 @@ function LinhaCard({ linha }: { linha: PortfolioLinha }) {
                 {linha.categoria}
               </span>
             )}
-            {(linha.documentos ?? []).length > 0 && (
+            {totalDocs > 0 && (
               <span className="text-[9px] font-bold border px-2 py-0.5 rounded-full uppercase tracking-wide bg-[#C9A84C]/10 text-[#C9A84C] border-[#C9A84C]/25 flex items-center gap-1">
                 <FileText className="w-2.5 h-2.5" />
-                {(linha.documentos ?? []).length} docs
+                {totalDocs} docs
               </span>
             )}
           </div>

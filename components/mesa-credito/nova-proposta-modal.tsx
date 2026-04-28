@@ -515,7 +515,7 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
 
   // Portfolio docs (checklist dinâmico)
-  const [portfolioDocs, setPortfolioDocs] = useState<Record<string, { id: string; label: string; required: boolean }[]>>({});
+  const [portfolioDocs, setPortfolioDocs] = useState<Record<string, { PF: { id: string; label: string; required: boolean }[]; PJ: { id: string; label: string; required: boolean }[] }>>({});
 
   useEffect(() => {
     if (!open) return;
@@ -523,14 +523,14 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
       .then(r => r.json())
       .then(({ linhas }) => {
         if (!Array.isArray(linhas)) return;
-        const map: Record<string, { id: string; label: string; required: boolean }[]> = {};
+        const map: Record<string, { PF: { id: string; label: string; required: boolean }[]; PJ: { id: string; label: string; required: boolean }[] }> = {};
         for (const linha of linhas) {
-          if (Array.isArray(linha.documentos) && linha.documentos.length > 0) {
-            map[linha.nome] = linha.documentos.map((d: { id: string; nome: string; obrigatorio: boolean }) => ({
-              id: d.id,
-              label: d.nome,
-              required: d.obrigatorio,
-            }));
+          const toItems = (arr: { id: string; nome: string; obrigatorio: boolean }[]) =>
+            arr.map(d => ({ id: d.id, label: d.nome, required: d.obrigatorio }));
+          const pf = Array.isArray(linha.documentos_pf) && linha.documentos_pf.length > 0 ? toItems(linha.documentos_pf) : null;
+          const pj = Array.isArray(linha.documentos_pj) && linha.documentos_pj.length > 0 ? toItems(linha.documentos_pj) : null;
+          if (pf || pj) {
+            map[linha.nome] = { PF: pf ?? [], PJ: pj ?? [] };
           }
         }
         setPortfolioDocs(map);
@@ -544,7 +544,7 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
 
   const lines = LEVEL_LINES[level] ?? [];
   // Usa checklist do portfólio se disponível, senão cai no hardcoded
-  const checklist = portfolioDocs[creditLine] ?? (CHECKLISTS[creditLine]?.[clientType]) ?? DEFAULT_CHECKLIST[clientType];
+  const checklist = portfolioDocs[creditLine]?.[clientType] ?? (CHECKLISTS[creditLine]?.[clientType]) ?? DEFAULT_CHECKLIST[clientType];
 
   const uploadedIds = [...new Set(uploadedFiles.filter((f) => f.status === "done" || f.status === "pending").map((f) => f.docId))];
   const requiredDocs = checklist.filter((d) => d.required);

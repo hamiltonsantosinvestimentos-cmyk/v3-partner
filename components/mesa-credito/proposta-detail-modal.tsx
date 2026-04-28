@@ -224,7 +224,7 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
   // ── Checklist state ───────────────────────────────────────────────────────
   const IS_DEMO = false;
   const [checkedDocs, setCheckedDocs] = useState<Record<string, boolean>>({});
-  const [portfolioDocs, setPortfolioDocs] = useState<Record<string, { id: string; label: string; required: boolean; hint?: string }[]>>({});
+  const [portfolioDocs, setPortfolioDocs] = useState<Record<string, { PF: { id: string; label: string; required: boolean; hint?: string }[]; PJ: { id: string; label: string; required: boolean; hint?: string }[] }>>({});
   const [uploadedFiles, setUploadedFiles] = useState<Record<string, string>>({}); // docId → filename
   const [uploadedUrls, setUploadedUrls] = useState<Record<string, string>>({}); // docId → signed URL (20 dias)
   const [isUploading, setIsUploading] = useState<string | null>(null); // docId em upload
@@ -354,14 +354,14 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
       .then(r => r.json())
       .then(({ linhas }) => {
         if (!Array.isArray(linhas)) return;
-        const map: Record<string, { id: string; label: string; required: boolean; hint?: string }[]> = {};
+        const map: Record<string, { PF: { id: string; label: string; required: boolean; hint?: string }[]; PJ: { id: string; label: string; required: boolean; hint?: string }[] }> = {};
         for (const linha of linhas) {
-          if (Array.isArray(linha.documentos) && linha.documentos.length > 0) {
-            map[linha.nome] = linha.documentos.map((d: { id: string; nome: string; obrigatorio: boolean }) => ({
-              id: d.id,
-              label: d.nome,
-              required: d.obrigatorio,
-            }));
+          const toItems = (arr: { id: string; nome: string; obrigatorio: boolean }[]) =>
+            arr.map(d => ({ id: d.id, label: d.nome, required: d.obrigatorio }));
+          const pf = Array.isArray(linha.documentos_pf) && linha.documentos_pf.length > 0 ? toItems(linha.documentos_pf) : null;
+          const pj = Array.isArray(linha.documentos_pj) && linha.documentos_pj.length > 0 ? toItems(linha.documentos_pj) : null;
+          if (pf || pj) {
+            map[linha.nome] = { PF: pf ?? [], PJ: pj ?? [] };
           }
         }
         setPortfolioDocs(map);
@@ -487,7 +487,7 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
     // Pega labels dos docs do checklist
     const meta = proposal.metadata ?? {};
     const clientType = ((meta.client_type ?? proposal.client_type) === "PJ" ? "PJ" : "PF") as "PF" | "PJ";
-    const docs = portfolioDocs[proposal.credit_line] ?? CHECKLISTS[proposal.credit_line]?.[clientType] ?? DEFAULT_CHECKLIST[clientType];
+    const docs = portfolioDocs[proposal.credit_line]?.[clientType] ?? CHECKLISTS[proposal.credit_line]?.[clientType] ?? DEFAULT_CHECKLIST[clientType];
     const labelMap: Record<string, string> = {};
     docs.forEach(d => { labelMap[d.id] = d.label; });
     for (const [docId] of docsComArquivo) {
@@ -1979,7 +1979,7 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
           {modalTab === "documentos" && (() => {
             const meta = proposal.metadata ?? {};
             const clientType = ((meta.client_type ?? proposal.client_type) === "PJ" ? "PJ" : "PF") as "PF" | "PJ";
-            const docs = portfolioDocs[proposal.credit_line] ?? CHECKLISTS[proposal.credit_line]?.[clientType] ?? DEFAULT_CHECKLIST[clientType];
+            const docs = portfolioDocs[proposal.credit_line]?.[clientType] ?? CHECKLISTS[proposal.credit_line]?.[clientType] ?? DEFAULT_CHECKLIST[clientType];
             const checkedCount = docs.filter((d) => checkedDocs[d.id]).length;
             const allRequired = docs.filter((d) => d.required);
             const requiredChecked = allRequired.filter((d) => checkedDocs[d.id]).length;
