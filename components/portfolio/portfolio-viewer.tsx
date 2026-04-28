@@ -1,8 +1,14 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { ChevronDown, ChevronUp, Search, Briefcase, Loader2 } from "lucide-react";
+import { ChevronDown, ChevronUp, Search, Briefcase, Loader2, FileText, Check, Download } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+export interface Documento {
+  id: string;
+  nome: string;
+  obrigatorio: boolean;
+}
 
 export interface PortfolioLinha {
   id: string;
@@ -22,6 +28,7 @@ export interface PortfolioLinha {
   tempo_estruturacao: string | null;
   custo_estruturacao: string | null;
   diferenciais: string | null;
+  documentos: Documento[];
   ativo: boolean;
   ordem: number;
 }
@@ -54,6 +61,311 @@ const FIELDS: { key: keyof PortfolioLinha; label: string }[] = [
   { key: "diferenciais",        label: "Diferenciais" },
 ];
 
+// ── PDF Generator ─────────────────────────────────────────────────────────────
+async function gerarPDF(linha: PortfolioLinha, checados: Set<string>) {
+  const { jsPDF } = await import("jspdf");
+  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+
+  const W = 210;
+  const margin = 18;
+
+  // Header background
+  doc.setFillColor(9, 8, 26);
+  doc.rect(0, 0, W, 52, "F");
+
+  // Logo
+  try {
+    const logoRes = await fetch("/logo.jpg");
+    const logoBlob = await logoRes.blob();
+    const logoB64 = await new Promise<string>((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.readAsDataURL(logoBlob);
+    });
+    doc.addImage(logoB64, "JPEG", margin, 9, 30, 30);
+  } catch { /* logo opcional */ }
+
+  // Product name
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(15);
+  doc.setTextColor(240, 236, 228);
+  doc.text(linha.nome, margin + 36, 26);
+
+  // Category
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8);
+  doc.setTextColor(201, 168, 76);
+  doc.text((linha.categoria ?? "").toUpperCase(), margin + 36, 33);
+
+  // Subtitle
+  doc.setFontSize(7);
+  doc.setTextColor(122, 143, 168);
+  doc.text("CHECKLIST DE DOCUMENTOS — V3 PARTNERS 2026", margin + 36, 40);
+
+  // Gold separator line
+  doc.setFillColor(201, 168, 76);
+  doc.rect(0, 52, W, 0.8, "F");
+
+  // Body background
+  doc.setFillColor(10, 22, 40);
+  doc.rect(0, 52.8, W, 244.2, "F");
+
+  let y = 68;
+
+  const obrig = linha.documentos.filter(d => d.obrigatorio);
+  const opcion = linha.documentos.filter(d => !d.obrigatorio);
+  const total = linha.documentos.length;
+  const done = linha.documentos.filter(d => checados.has(d.id)).length;
+
+  function drawSection(title: string, r: number, g: number, b: number, docs: Documento[]) {
+    if (docs.length === 0) return;
+
+    // Section label
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8);
+    doc.setTextColor(r, g, b);
+    doc.text(title, margin, y);
+    y += 2;
+
+    // Underline
+    doc.setDrawColor(r, g, b);
+    doc.setLineWidth(0.3);
+    doc.line(margin, y, W - margin, y);
+    y += 8;
+
+    docs.forEach(d => {
+      const checked = checados.has(d.id);
+
+      // Checkbox border
+      doc.setDrawColor(201, 168, 76);
+      doc.setLineWidth(0.5);
+      doc.setFillColor(10, 22, 40);
+      doc.rect(margin, y - 3.5, 4, 4, "FD");
+
+      // Checkbox fill
+      if (checked) {
+        doc.setFillColor(201, 168, 76);
+        doc.rect(margin + 0.7, y - 2.8, 2.6, 2.6, "F");
+      }
+
+      // Document name
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+      if (checked) {
+        doc.setTextColor(122, 143, 168);
+      } else {
+        doc.setTextColor(240, 236, 228);
+      }
+      doc.text(d.nome, margin + 7, y);
+
+      // Strikethrough for checked items
+      if (checked) {
+        const textWidth = doc.getTextWidth(d.nome);
+        doc.setDrawColor(122, 143, 168);
+        doc.setLineWidth(0.3);
+        doc.line(margin + 7, y - 0.6, margin + 7 + textWidth, y - 0.6);
+      }
+
+      y += 9;
+
+      if (y > 270) {
+        doc.addPage();
+        doc.setFillColor(10, 22, 40);
+        doc.rect(0, 0, W, 297, "F");
+        y = 20;
+      }
+    });
+
+    y += 6;
+  }
+
+  drawSection("DOCUMENTOS OBRIGATÓRIOS", 201, 168, 76, obrig);
+  drawSection("DOCUMENTOS OPCIONAIS", 122, 143, 168, opcion);
+
+  // Progress summary
+  y += 4;
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9);
+  doc.setTextColor(201, 168, 76);
+  doc.text(`${done} de ${total} documentos coletados`, margin, y);
+  y += 5;
+
+  // Progress bar background
+  doc.setFillColor(27, 48, 80);
+  doc.rect(margin, y, W - margin * 2, 3, "F");
+
+  // Progress bar fill
+  if (total > 0) {
+    const pct = done / total;
+    doc.setFillColor(201, 168, 76);
+    doc.rect(margin, y, (W - margin * 2) * pct, 3, "F");
+  }
+
+  // Footer
+  const footerY = 285;
+  doc.setFillColor(9, 8, 26);
+  doc.rect(0, footerY - 6, W, 18, "F");
+  doc.setFillColor(201, 168, 76);
+  doc.rect(0, footerY - 6, W, 0.5, "F");
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(7);
+  doc.setTextColor(122, 143, 168);
+  doc.text("v3partners.com.br", margin, footerY + 2);
+  doc.text(
+    "Documento de uso interno — V3 Partners Soluções Ltda",
+    W / 2,
+    footerY + 2,
+    { align: "center" }
+  );
+  doc.text(
+    new Date().toLocaleDateString("pt-BR"),
+    W - margin,
+    footerY + 2,
+    { align: "right" }
+  );
+
+  doc.save(`checklist-${linha.nome.toLowerCase().replace(/[\s/]+/g, "-")}.pdf`);
+}
+
+// ── Documentos Checklist ──────────────────────────────────────────────────────
+function DocumentosChecklist({ linha }: { linha: PortfolioLinha }) {
+  const LS_KEY = `v3_docs_${linha.id}`;
+  const [checados, setChecados] = useState<Set<string>>(() => {
+    if (typeof window === "undefined") return new Set();
+    try { return new Set(JSON.parse(localStorage.getItem(LS_KEY) ?? "[]") as string[]); }
+    catch { return new Set<string>(); }
+  });
+  const [gerando, setGerando] = useState(false);
+
+  const docs = linha.documentos ?? [];
+  if (docs.length === 0) return null;
+
+  const obrig = docs.filter(d => d.obrigatorio);
+  const opcion = docs.filter(d => !d.obrigatorio);
+  const total = docs.length;
+  const done = docs.filter(d => checados.has(d.id)).length;
+  const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+
+  function toggle(id: string) {
+    setChecados(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      try { localStorage.setItem(LS_KEY, JSON.stringify([...next])); } catch { /* noop */ }
+      return next;
+    });
+  }
+
+  async function handlePDF() {
+    setGerando(true);
+    try { await gerarPDF(linha, checados); } finally { setGerando(false); }
+  }
+
+  return (
+    <div className="mt-4 pt-4 border-t border-[#1B3050]">
+      {/* Header row */}
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <FileText className="w-3.5 h-3.5 text-[#C9A84C]" />
+          <p className="text-[10px] font-bold text-[#C9A84C] uppercase tracking-widest">Checklist de Documentos</p>
+          <span className="text-[10px] text-muted-foreground">{done}/{total} coletados</span>
+        </div>
+        <button
+          onClick={handlePDF}
+          disabled={gerando}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#C9A84C]/30 bg-[#C9A84C]/10 text-[#C9A84C] text-[10px] font-bold hover:bg-[#C9A84C]/20 transition-all disabled:opacity-50"
+        >
+          {gerando
+            ? <Loader2 className="w-3 h-3 animate-spin" />
+            : <Download className="w-3 h-3" />}
+          {gerando ? "Gerando…" : "Exportar PDF"}
+        </button>
+      </div>
+
+      {/* Progress bar */}
+      <div className="h-1.5 rounded-full bg-[#1B3050] mb-4 overflow-hidden">
+        <div
+          className="h-full rounded-full bg-[#C9A84C] transition-all duration-300"
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Obrigatórios */}
+        {obrig.length > 0 && (
+          <div>
+            <p className="text-[9px] font-bold text-amber-400 uppercase tracking-widest mb-2">Obrigatórios</p>
+            <div className="space-y-2">
+              {obrig.map(doc => (
+                <label key={doc.id} className="flex items-center gap-2.5 cursor-pointer group">
+                  <div
+                    onClick={() => toggle(doc.id)}
+                    className={cn(
+                      "w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 transition-all",
+                      checados.has(doc.id)
+                        ? "bg-[#C9A84C] border-[#C9A84C]"
+                        : "border-[#243A66] bg-[#09081A] group-hover:border-[#C9A84C]/50"
+                    )}
+                  >
+                    {checados.has(doc.id) && (
+                      <Check className="w-2.5 h-2.5 text-[#09081A]" strokeWidth={3} />
+                    )}
+                  </div>
+                  <span
+                    onClick={() => toggle(doc.id)}
+                    className={cn(
+                      "text-xs transition-colors select-none",
+                      checados.has(doc.id) ? "line-through text-muted-foreground" : "text-[#F0ECE4]"
+                    )}
+                  >
+                    {doc.nome}
+                  </span>
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Opcionais */}
+        {opcion.length > 0 && (
+          <div>
+            <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mb-2">Opcionais</p>
+            <div className="space-y-2">
+              {opcion.map(doc => (
+                <label key={doc.id} className="flex items-center gap-2.5 cursor-pointer group">
+                  <div
+                    onClick={() => toggle(doc.id)}
+                    className={cn(
+                      "w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 transition-all",
+                      checados.has(doc.id)
+                        ? "bg-emerald-500 border-emerald-500"
+                        : "border-[#243A66] bg-[#09081A] group-hover:border-emerald-500/50"
+                    )}
+                  >
+                    {checados.has(doc.id) && (
+                      <Check className="w-2.5 h-2.5 text-white" strokeWidth={3} />
+                    )}
+                  </div>
+                  <span
+                    onClick={() => toggle(doc.id)}
+                    className={cn(
+                      "text-xs transition-colors select-none",
+                      checados.has(doc.id) ? "line-through text-muted-foreground" : "text-[#7A8FA8]"
+                    )}
+                  >
+                    {doc.nome}
+                  </span>
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Linha Card ─────────────────────────────────────────────────────────────────
 function LinhaCard({ linha }: { linha: PortfolioLinha }) {
   const [open, setOpen] = useState(false);
   const catCls = CAT_COLORS[linha.categoria ?? ""] ?? "bg-[#C9A84C]/20 text-[#C9A84C] border-[#C9A84C]/30";
@@ -77,6 +389,12 @@ function LinhaCard({ linha }: { linha: PortfolioLinha }) {
             {linha.categoria && (
               <span className={cn("text-[9px] font-bold border px-2 py-0.5 rounded-full uppercase tracking-wide", catCls)}>
                 {linha.categoria}
+              </span>
+            )}
+            {(linha.documentos ?? []).length > 0 && (
+              <span className="text-[9px] font-bold border px-2 py-0.5 rounded-full uppercase tracking-wide bg-[#C9A84C]/10 text-[#C9A84C] border-[#C9A84C]/25 flex items-center gap-1">
+                <FileText className="w-2.5 h-2.5" />
+                {(linha.documentos ?? []).length} docs
               </span>
             )}
           </div>
@@ -126,6 +444,9 @@ function LinhaCard({ linha }: { linha: PortfolioLinha }) {
               );
             })}
           </div>
+
+          {/* Checklist de documentos */}
+          <DocumentosChecklist linha={linha} />
         </div>
       )}
     </div>

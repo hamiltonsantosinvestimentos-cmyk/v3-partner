@@ -3,10 +3,10 @@
 import { useState, useEffect } from "react";
 import {
   Plus, Pencil, Trash2, ChevronDown, ChevronUp,
-  Save, X, Loader2, CheckCircle2, AlertCircle, Power,
+  Save, X, Loader2, CheckCircle2, AlertCircle, Power, FileText,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { PortfolioLinha } from "./portfolio-viewer";
+import type { PortfolioLinha, Documento } from "./portfolio-viewer";
 
 const CATEGORIAS = ["Imobiliário", "Auto", "Capital de Giro", "Consórcio", "Construção", "Agro", "Internacional", "Seguros", "M&A", "Outros"];
 
@@ -33,7 +33,7 @@ const EMPTY: Omit<PortfolioLinha, "id" | "ativo" | "ordem"> = {
   outras_despesas: null, limite_credito: null, comprometimento_renda: null,
   aporte: null, amortizacao: null, perfil_garantia: null,
   destinacao: null, tempo_estruturacao: null, custo_estruturacao: null,
-  diferenciais: null,
+  diferenciais: null, documentos: [],
 };
 
 function Toast({ msg, type, onClose }: { msg: string; type: "success" | "error"; onClose: () => void }) {
@@ -52,7 +52,100 @@ function Toast({ msg, type, onClose }: { msg: string; type: "success" | "error";
 }
 
 type FormState = Omit<PortfolioLinha, "id" | "ativo" | "ordem">;
+type FormStateRecord = Record<string, string | null | Documento[]>;
 
+// ── Documentos Editor ─────────────────────────────────────────────────────────
+function DocumentosEditor({
+  documentos,
+  onChange,
+  inputCls,
+}: {
+  documentos: Documento[];
+  onChange: (docs: Documento[]) => void;
+  inputCls: string;
+}) {
+  const [newNome, setNewNome] = useState("");
+
+  function addDoc() {
+    const nome = newNome.trim();
+    if (!nome) return;
+    onChange([...documentos, { id: crypto.randomUUID(), nome, obrigatorio: true }]);
+    setNewNome("");
+  }
+
+  function removeDoc(id: string) {
+    onChange(documentos.filter(d => d.id !== id));
+  }
+
+  function toggleObrig(id: string) {
+    onChange(documentos.map(d => d.id === id ? { ...d, obrigatorio: !d.obrigatorio } : d));
+  }
+
+  return (
+    <div className="space-y-2 md:col-span-2">
+      <label className="text-[10px] font-bold text-[#C9A84C] uppercase tracking-widest flex items-center gap-1.5">
+        <FileText className="w-3 h-3" /> Checklist de Documentos
+      </label>
+
+      {documentos.length === 0 && (
+        <p className="text-[11px] text-muted-foreground italic px-1">Nenhum documento cadastrado.</p>
+      )}
+
+      <div className="space-y-1.5">
+        {documentos.map((doc, idx) => (
+          <div
+            key={doc.id}
+            className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#080F1C] border border-[#1B3050]"
+          >
+            <span className="text-[9px] text-muted-foreground w-4 text-center flex-shrink-0">{idx + 1}</span>
+            <button
+              type="button"
+              onClick={() => toggleObrig(doc.id)}
+              title="Clique para alternar obrigatório/opcional"
+              className={cn(
+                "text-[9px] font-bold px-2 py-0.5 rounded border transition-all flex-shrink-0",
+                doc.obrigatorio
+                  ? "bg-amber-500/15 border-amber-500/30 text-amber-400"
+                  : "bg-[#243A66]/40 border-[#243A66] text-muted-foreground"
+              )}
+            >
+              {doc.obrigatorio ? "OBRIG." : "OPCION."}
+            </button>
+            <span className="text-xs text-[#F0ECE4] flex-1 truncate">{doc.nome}</span>
+            <button
+              type="button"
+              onClick={() => removeDoc(doc.id)}
+              className="text-muted-foreground hover:text-red-400 transition-colors flex-shrink-0"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        ))}
+      </div>
+
+      {/* Add new document */}
+      <div className="flex gap-2">
+        <input
+          value={newNome}
+          onChange={e => setNewNome(e.target.value)}
+          onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addDoc(); } }}
+          placeholder="Nome do documento… (Enter para adicionar)"
+          className={inputCls}
+        />
+        <button
+          type="button"
+          onClick={addDoc}
+          disabled={!newNome.trim()}
+          className="flex-shrink-0 px-3 py-2 rounded-lg bg-[#C9A84C]/15 border border-[#C9A84C]/30 text-[#C9A84C] hover:bg-[#C9A84C]/25 transition-all disabled:opacity-40"
+        >
+          <Plus className="w-3.5 h-3.5" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Linha Edit Row ─────────────────────────────────────────────────────────────
 function LinhaEditRow({
   linha,
   onSave,
@@ -65,7 +158,7 @@ function LinhaEditRow({
   onToggle: (id: string, ativo: boolean) => Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState<FormState>({ ...EMPTY, ...linha });
+  const [form, setForm] = useState<FormState>({ ...EMPTY, ...linha, documentos: linha.documentos ?? [] });
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [confirmDel, setConfirmDel] = useState(false);
@@ -86,6 +179,8 @@ function LinhaEditRow({
     setDeleting(false);
   }
 
+  const docCount = (linha.documentos ?? []).length;
+
   return (
     <div className={cn(
       "rounded-xl border transition-all overflow-hidden",
@@ -95,9 +190,16 @@ function LinhaEditRow({
       <div className="flex items-center gap-3 px-4 py-3">
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold text-white truncate">{linha.nome}</p>
-          {linha.categoria && (
-            <p className="text-[10px] text-muted-foreground mt-0.5">{linha.categoria}</p>
-          )}
+          <div className="flex items-center gap-2 mt-0.5">
+            {linha.categoria && (
+              <p className="text-[10px] text-muted-foreground">{linha.categoria}</p>
+            )}
+            {docCount > 0 && (
+              <span className="text-[9px] text-[#C9A84C] flex items-center gap-1">
+                <FileText className="w-2.5 h-2.5" />{docCount} doc{docCount !== 1 ? "s" : ""}
+              </span>
+            )}
+          </div>
         </div>
         {/* Ativo toggle */}
         <button
@@ -164,7 +266,7 @@ function LinhaEditRow({
             </div>
           </div>
 
-          {/* All fields */}
+          {/* Product fields */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {FIELDS.map(({ key, label, long }) => (
               <div key={key} className={cn("space-y-1", long && "md:col-span-2")}>
@@ -172,14 +274,14 @@ function LinhaEditRow({
                 {long ? (
                   <textarea
                     rows={3}
-                    value={(form[key] as string) ?? ""}
+                    value={((form as FormStateRecord)[key] as string) ?? ""}
                     onChange={e => setForm(f => ({ ...f, [key]: e.target.value || null }))}
                     className={inputCls}
                     placeholder={label}
                   />
                 ) : (
                   <input
-                    value={(form[key] as string) ?? ""}
+                    value={((form as FormStateRecord)[key] as string) ?? ""}
                     onChange={e => setForm(f => ({ ...f, [key]: e.target.value || null }))}
                     className={inputCls}
                     placeholder={label}
@@ -187,6 +289,15 @@ function LinhaEditRow({
                 )}
               </div>
             ))}
+          </div>
+
+          {/* Documentos */}
+          <div className="grid grid-cols-1">
+            <DocumentosEditor
+              documentos={form.documentos}
+              onChange={docs => setForm(f => ({ ...f, documentos: docs }))}
+              inputCls={inputCls}
+            />
           </div>
 
           {/* Actions */}
@@ -200,7 +311,7 @@ function LinhaEditRow({
               {saving ? "Salvando…" : "Salvar"}
             </button>
             <button
-              onClick={() => { setOpen(false); setForm({ ...EMPTY, ...linha }); }}
+              onClick={() => { setOpen(false); setForm({ ...EMPTY, ...linha, documentos: linha.documentos ?? [] }); }}
               className="flex items-center gap-1.5 px-4 py-2 rounded-lg border border-[#243A66] text-muted-foreground text-xs font-semibold hover:text-foreground transition-colors"
             >
               <X className="w-3.5 h-3.5" /> Cancelar
@@ -212,6 +323,7 @@ function LinhaEditRow({
   );
 }
 
+// ── Nova Linha Form ───────────────────────────────────────────────────────────
 function NovaLinhaForm({ onCreated }: { onCreated: (linha: PortfolioLinha) => void }) {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<FormState>({ ...EMPTY });
@@ -288,14 +400,14 @@ function NovaLinhaForm({ onCreated }: { onCreated: (linha: PortfolioLinha) => vo
             {long ? (
               <textarea
                 rows={3}
-                value={(form[key] as string) ?? ""}
+                value={((form as FormStateRecord)[key] as string) ?? ""}
                 onChange={e => setForm(f => ({ ...f, [key]: e.target.value || null }))}
                 className={inputCls}
                 placeholder={label}
               />
             ) : (
               <input
-                value={(form[key] as string) ?? ""}
+                value={((form as FormStateRecord)[key] as string) ?? ""}
                 onChange={e => setForm(f => ({ ...f, [key]: e.target.value || null }))}
                 className={inputCls}
                 placeholder={label}
@@ -303,6 +415,14 @@ function NovaLinhaForm({ onCreated }: { onCreated: (linha: PortfolioLinha) => vo
             )}
           </div>
         ))}
+      </div>
+
+      <div className="grid grid-cols-1">
+        <DocumentosEditor
+          documentos={form.documentos}
+          onChange={docs => setForm(f => ({ ...f, documentos: docs }))}
+          inputCls={inputCls}
+        />
       </div>
 
       <div className="flex gap-2 pt-1">
@@ -325,6 +445,7 @@ function NovaLinhaForm({ onCreated }: { onCreated: (linha: PortfolioLinha) => vo
   );
 }
 
+// ── Portfolio Editor ──────────────────────────────────────────────────────────
 export function PortfolioEditor() {
   const [linhas, setLinhas] = useState<PortfolioLinha[]>([]);
   const [loading, setLoading] = useState(true);
