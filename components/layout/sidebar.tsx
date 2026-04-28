@@ -57,7 +57,14 @@ const NAV_SECTIONS: NavSection[] = [
   {
     label: "PRODUTOS",
     items: [
-      { href: "/simulador-home-equity", label: "Simuladores", icon: "Calculator", roles: ["ADMIN", "GESTAO", "PARTNER", "PARTNER_PRO", "MESA_OPERACIONAL"] },
+      {
+        href: "/simulador-home-equity", label: "Simuladores", icon: "Calculator",
+        roles: ["ADMIN", "GESTAO", "PARTNER", "PARTNER_PRO", "MESA_OPERACIONAL"],
+        children: [
+          { href: "/simulador-home-equity", label: "Home Equity / CGI", roles: ["ADMIN", "GESTAO", "PARTNER", "PARTNER_PRO", "MESA_OPERACIONAL"] },
+          { href: "/simulador-homecash", label: "HomeCash", roles: ["ADMIN", "GESTAO", "PARTNER", "PARTNER_PRO", "MESA_OPERACIONAL"] },
+        ],
+      },
       { href: "/split-fiscal", label: "Split Fiscal", icon: "PieChart", roles: ["ADMIN", "PARTNER", "PARTNER_PRO", "GESTAO"] },
       { href: "/ma", label: "M&A", icon: "Building2", roles: ["ADMIN", "GESTAO", "PARTNER", "PARTNER_PRO", "MESA_OPERACIONAL"] },
       {
