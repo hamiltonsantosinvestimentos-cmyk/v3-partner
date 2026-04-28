@@ -131,7 +131,7 @@ export async function POST(
     const { error: htmlErr } = await supabase.storage
       .from("contratos")
       .upload(`${prefix}.html`, Buffer.from(htmlContent, "utf-8"), {
-        contentType: "text/html",
+        contentType: "text/html; charset=utf-8",
         upsert: true,
       });
 
