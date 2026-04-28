@@ -143,9 +143,10 @@ export function HomeCashSimulator() {
     const f2Selected = sistemaF2 === "PRICE" ? price : sac;
     const parcelaMensal = sistemaF2 === "PRICE" ? price.parcela : sac.primeiraParc;
 
-    // Custo Final combinado (média ponderada de saída mensal / VL)
-    const custoFinal12m = (aluguelMensal * 12 + parcelaMensal * prazoF2) / vl / (12 + prazoF2);
-    const custoFinal18m = (aluguelMensal * 18 + parcelaMensal * prazoF2) / vl / (18 + prazoF2);
+    // Custo Final combinado: (total saído Fase1 + total saído Fase2) / VL / meses totais
+    const totalSaidoF2  = f2Selected.totalPago;
+    const custoFinal12m = (aluguelMensal * 12 + totalSaidoF2) / vl / (12 + prazoF2);
+    const custoFinal18m = (aluguelMensal * 18 + totalSaidoF2) / vl / (18 + prazoF2);
 
     return { vl, aluguelMensal, vr12, vr18, custo12, custo18, pctTotal12, pctTotal18,
       pctMensal12, pctMensal18, price, sac, f2Selected, parcelaMensal, custoFinal12m, custoFinal18m };
