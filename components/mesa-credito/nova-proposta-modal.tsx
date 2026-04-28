@@ -11,7 +11,7 @@ import { formatCurrency } from "@/lib/utils";
 
 // ─── Checklists por linha e tipo de pessoa ─────────────────────────────────
 export const CHECKLISTS: Record<string, Record<"PF" | "PJ", { id: string; label: string; required: boolean; hint?: string }[]>> = {
-  "HOME EQUITY": {
+  "Home Equity": {
     PF: [
       { id: "he_pf_1", label: "RG e CPF (ou CNH)", required: true, hint: "Documento de identificação com foto" },
       { id: "he_pf_2", label: "Comprovante de renda (3 últimos meses)", required: true, hint: "Holerite, pró-labore ou decore" },
@@ -40,7 +40,7 @@ export const CHECKLISTS: Record<string, Record<"PF" | "PJ", { id: string; label:
       { id: "he_pj_12", label: "3 fotos externas do imóvel", required: true, hint: "Fachada, lateral e área externa" },
     ],
   },
-  "HOME EQUITY ESTRESSADO": {
+  "Home Equity Distressed": {
     PF: [
       { id: "hee_pf_1", label: "RG e CPF (ou CNH)", required: true, hint: "Documento de identificação com foto" },
       { id: "hee_pf_2", label: "Comprovante de renda (3 últimos meses)", required: true, hint: "Holerite, pró-labore ou decore" },
@@ -71,7 +71,7 @@ export const CHECKLISTS: Record<string, Record<"PF" | "PJ", { id: string; label:
       { id: "hee_pj_13", label: "3 fotos externas do imóvel", required: true, hint: "Fachada, lateral e área externa" },
     ],
   },
-  "AVAL": {
+  "Crédito no Aval": {
     PF: [
       { id: "av_pf_1", label: "RG e CPF (ou CNH)", required: true },
       { id: "av_pf_2", label: "Comprovante de renda (3 últimos meses)", required: true },
@@ -106,7 +106,7 @@ export const CHECKLISTS: Record<string, Record<"PF" | "PJ", { id: string; label:
       { id: "fidc_pj_8", label: "Relatório de auditoria independente", required: false },
     ],
   },
-  "CRI": {
+  "CRI Cash Collateral": {
     PF: [
       { id: "cri_pf_1", label: "RG e CPF (ou CNH)", required: true },
       { id: "cri_pf_2", label: "Comprovante de renda e patrimônio", required: true },
@@ -178,7 +178,7 @@ export const CHECKLISTS: Record<string, Record<"PF" | "PJ", { id: string; label:
       { id: "pf_pj_8", label: "Certidões Negativas completas", required: true },
     ],
   },
-  "FUNDO CONSTRUÇÃO RESIDENCIAL": {
+  "Fundo Construção — Moradia": {
     PF: [
       { id: "fcr_pf_1", label: "RG e CPF (ou CNH)", required: true },
       { id: "fcr_pf_2", label: "Comprovante de renda (3 últimos meses)", required: true },
@@ -207,7 +207,7 @@ export const CHECKLISTS: Record<string, Record<"PF" | "PJ", { id: string; label:
       { id: "fcr_pj_12", label: "3 fotos externas do imóvel / obra", required: true, hint: "Fachada, terreno e área externa" },
     ],
   },
-  "HOMECASH": {
+  "HomeCash": {
     PF: [
       { id: "hc_pf_1", label: "RG e CPF (ou CNH)", required: true },
       { id: "hc_pf_2", label: "Comprovante de renda (3 últimos meses)", required: true },
@@ -235,7 +235,7 @@ export const CHECKLISTS: Record<string, Record<"PF" | "PJ", { id: string; label:
       { id: "hc_pj_11", label: "3 fotos externas do imóvel", required: true, hint: "Fachada, lateral e área externa" },
     ],
   },
-  "V3GIRO E V3AUTOGIRO": {
+  "Giro Auto": {
     PF: [
       { id: "v3g_pf_1", label: "RG e CPF (ou CNH)", required: true },
       { id: "v3g_pf_2", label: "Comprovante de renda (3 últimos meses)", required: true },
@@ -253,7 +253,7 @@ export const CHECKLISTS: Record<string, Record<"PF" | "PJ", { id: string; label:
       { id: "v3g_pj_8", label: "Nota fiscal de faturamento (amostra 3 meses)", required: false },
     ],
   },
-  "CGI": {
+  "CGI — Grandes Empresas": {
     PF: [
       { id: "cgi_pf_1", label: "RG e CPF (ou CNH)", required: true },
       { id: "cgi_pf_2", label: "Comprovante de renda (3 últimos meses)", required: true },
@@ -279,7 +279,7 @@ export const CHECKLISTS: Record<string, Record<"PF" | "PJ", { id: string; label:
       { id: "cgi_pj_11", label: "3 fotos externas do imóvel em garantia", required: true, hint: "Fachada, lateral e área externa" },
     ],
   },
-  "CPR": {
+  "CPR Agro": {
     PF: [
       { id: "cpr_pf_1", label: "RG e CPF (ou CNH)", required: true },
       { id: "cpr_pf_2", label: "CAR — Cadastro Ambiental Rural", required: true },
@@ -299,7 +299,7 @@ export const CHECKLISTS: Record<string, Record<"PF" | "PJ", { id: string; label:
       { id: "cpr_pj_8", label: "Certidões Negativas completas", required: true },
     ],
   },
-  "FUNDO INTERNACIONAL CASH COLATERAL": {
+  "Op. Internacional — Cash Collateral": {
     PF: [
       { id: "ficc_pf_1", label: "RG e CPF (ou CNH)", required: true },
       { id: "ficc_pf_2", label: "Comprovante de patrimônio internacional", required: true },
@@ -318,7 +318,7 @@ export const CHECKLISTS: Record<string, Record<"PF" | "PJ", { id: string; label:
       { id: "ficc_pj_8", label: "Relatório de compliance AML/KYC", required: true },
     ],
   },
-  "FUNDO INTERNACIONAL IMOB": {
+  "Op. Internacional — Garantia Imobiliária": {
     PF: [
       { id: "fii_pf_1", label: "RG e CPF (ou CNH)", required: true },
       { id: "fii_pf_2", label: "Imposto de Renda + recibo", required: true },
@@ -335,7 +335,7 @@ export const CHECKLISTS: Record<string, Record<"PF" | "PJ", { id: string; label:
       { id: "fii_pj_7", label: "Certidões Negativas completas", required: true },
     ],
   },
-  "FUNDO CONSTRUÇÃO LOTEAMENTO": {
+  "Crédito Ponto / CRI Início de Obra": {
     PF: [],
     PJ: [
       { id: "fcl_pj_1", label: "Contrato Social + todas as alterações", required: true },
@@ -351,7 +351,7 @@ export const CHECKLISTS: Record<string, Record<"PF" | "PJ", { id: string; label:
       { id: "fcl_pj_11", label: "RG e CPF dos sócios", required: true },
     ],
   },
-  "FUNDO CONSTRUÇÃO EMPREENDIMENTO": {
+  "Construtoras BTS — Build-to-Suit": {
     PF: [],
     PJ: [
       { id: "fce_pj_1", label: "Contrato Social + todas as alterações", required: true },
@@ -387,9 +387,40 @@ export const DEFAULT_CHECKLIST = {
 
 // ─── Linhas por nível ──────────────────────────────────────────────────────
 const LEVEL_LINES: Record<string, string[]> = {
-  NIVEL_1: ["HOME EQUITY", "HOME EQUITY ESTRESSADO", "AVAL", "FUNDO CONSTRUÇÃO RESIDENCIAL"],
-  NIVEL_2: ["HOMECASH", "V3GIRO E V3AUTOGIRO", "CGI"],
-  NIVEL_3: ["CRI", "CRA", "CPR", "FUNDO INTERNACIONAL CASH COLATERAL", "FUNDO INTERNACIONAL IMOB", "FUNDO CONSTRUÇÃO LOTEAMENTO", "FUNDO CONSTRUÇÃO EMPREENDIMENTO"],
+  NIVEL_1: [
+    "V3Equity",
+    "Home Equity",
+    "Home Equity Distressed",
+    "Giro Auto",
+    "V3Auto",
+    "Crédito no Aval",
+    "Financiamento Imobiliário",
+    "Capital Maquinários",
+  ],
+  NIVEL_2: [
+    "HomeCash",
+    "CGI — Grandes Empresas",
+    "Cash Collateral",
+    "Fundo Construção — Moradia",
+    "Fundo Construção — Reforma",
+    "Fundo Construção — Unifamiliar",
+    "Fundo Construção — Geminados",
+    "Financiamento — Brasileiros no Exterior",
+    "CPR Agro",
+    "Câmbio Pronto",
+    "FINIMP — Financiamento de Importações",
+    "ACC — Adiantamento s/ Contrato de Câmbio",
+    "ACE — Adiantamento s/ Cambiais Entregues",
+  ],
+  NIVEL_3: [
+    "Sale Leaseback Agro",
+    "Op. Internacional — Cash Collateral",
+    "CRI Cash Collateral",
+    "Crédito Ponto / CRI Início de Obra",
+    "Construtoras BTS — Build-to-Suit",
+    "Fundo Incorporadoras",
+    "Op. Internacional — Garantia Imobiliária",
+  ],
 };
 
 type Tab = "cliente" | "operacao" | "documentos";
@@ -886,7 +917,7 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
                 />
               </div>
 
-              {(creditLine === "HOME EQUITY" || creditLine === "CRI" || creditLine === "HOMECASH" || creditLine === "CGI" || creditLine === "FUNDO CONSTRUÇÃO RESIDENCIAL" || creditLine === "FUNDO CONSTRUÇÃO LOTEAMENTO" || creditLine === "FUNDO CONSTRUÇÃO EMPREENDIMENTO") && (
+              {(creditLine === "Home Equity" || creditLine === "Home Equity Distressed" || creditLine === "V3Equity" || creditLine === "CRI Cash Collateral" || creditLine === "HomeCash" || creditLine === "CGI — Grandes Empresas" || creditLine === "Fundo Construção — Moradia" || creditLine === "Fundo Construção — Reforma" || creditLine === "Fundo Construção — Unifamiliar" || creditLine === "Fundo Construção — Geminados" || creditLine === "Crédito Ponto / CRI Início de Obra" || creditLine === "Construtoras BTS — Build-to-Suit" || creditLine === "Fundo Incorporadoras" || creditLine === "Sale Leaseback Agro" || creditLine === "Op. Internacional — Garantia Imobiliária") && (
                 <div className="space-y-3">
                   {imoveis.map((im, idx) => (
                     <div key={idx} className="p-4 rounded-xl border border-amber-500/20 bg-amber-500/5 space-y-3">
