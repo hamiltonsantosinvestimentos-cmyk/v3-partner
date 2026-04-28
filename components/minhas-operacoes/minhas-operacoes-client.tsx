@@ -184,7 +184,7 @@ function PendenciasRow({ proposta, onCorrigido }: {
 }
 
 export function MinhasOperacoesClient({ propostas: initialPropostas, deals, leads, partnerName }: Omit<Props, "propostas"> & { propostas: Proposta[] }) {
-  const [tab, setTab] = useState<Tab>("credito");
+  const [tab, setTab] = useState<Tab>("portfolio");
   const [propostas, setPropostas] = useState<Proposta[]>(initialPropostas);
 
   function handleCorrigido(proposalId: string, docKey: string, novoStage: string) {
