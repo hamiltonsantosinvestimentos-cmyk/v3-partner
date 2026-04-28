@@ -225,8 +225,9 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
   const IS_DEMO = false;
   const [checkedDocs, setCheckedDocs] = useState<Record<string, boolean>>({});
   const [portfolioDocs, setPortfolioDocs] = useState<Record<string, { PF: { id: string; label: string; required: boolean; hint?: string }[]; PJ: { id: string; label: string; required: boolean; hint?: string }[] }>>({});
-  const [uploadedFiles, setUploadedFiles] = useState<Record<string, string>>({}); // docId → filename
-  const [uploadedUrls, setUploadedUrls] = useState<Record<string, string>>({}); // docId → signed URL (20 dias)
+  // docId → array de { name, url, key }
+  interface DocFile { name: string; url: string | null; key: string; }
+  const [uploadedFiles, setUploadedFiles] = useState<Record<string, DocFile[]>>({});
   const [isUploading, setIsUploading] = useState<string | null>(null); // docId em upload
 
   // ── OCR state ─────────────────────────────────────────────────────────────
@@ -299,7 +300,6 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
     if (!proposal) return;
     setCheckedDocs({});
     setUploadedFiles({});
-    setUploadedUrls({});
     const instRaw = proposal.instituicao_encaminhada ?? "";
     let parsedInsts: string[] = [];
     if (instRaw) {
@@ -326,21 +326,17 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
       fetch(`/api/credit-proposals/documents?proposal_id=${proposal.id}`)
         .then((r) => r.json())
         .then(({ documents, checklist, mesa_comments }) => {
-          // Carrega checklist salvo (marcações sem arquivo)
           const savedChecks: Record<string, boolean> = (checklist && typeof checklist === "object") ? checklist : {};
-          const files: Record<string, string>   = {};
-          const urls: Record<string, string>    = {};
-          // Documentos com arquivo sobrescrevem o checklist
+          const files: Record<string, { name: string; url: string | null; key: string }[]> = {};
           if (Array.isArray(documents)) {
-            documents.forEach((d: { doc_id: string; file_name: string; url: string | null }) => {
+            documents.forEach((d: { doc_id: string; file_name: string; url: string | null; file_key?: string }) => {
               savedChecks[d.doc_id] = true;
-              files[d.doc_id]  = d.file_name;
-              if (d.url) urls[d.doc_id] = d.url;
+              if (!files[d.doc_id]) files[d.doc_id] = [];
+              files[d.doc_id].push({ name: d.file_name, url: d.url ?? null, key: d.file_key ?? d.file_name });
             });
           }
           setCheckedDocs(savedChecks);
           setUploadedFiles(files);
-          setUploadedUrls(urls);
           if (Array.isArray(mesa_comments)) setMesaComments(mesa_comments);
         })
         .catch(() => {});
@@ -388,50 +384,45 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
     if (!proposal) return;
     if (IS_DEMO) {
       const newChecks = { ...checkedDocs, [docId]: true };
-      const newFiles  = { ...uploadedFiles, [docId]: file.name };
+      const prev = uploadedFiles[docId] ?? [];
+      const newFiles = { ...uploadedFiles, [docId]: [...prev, { name: file.name, url: null, key: file.name }] };
       setCheckedDocs(newChecks);
       setUploadedFiles(newFiles);
-      try {
-        localStorage.setItem(`v3_docs_${proposal.id}`,  JSON.stringify(newChecks));
-        localStorage.setItem(`v3_files_${proposal.id}`, JSON.stringify(newFiles));
-      } catch {}
       return;
     }
     setIsUploading(docId);
     try {
-      const form = new FormData();
-      form.append("file", file);
-      form.append("proposal_id", proposal.id);
-      form.append("doc_id", docId);
-      const res  = await fetch("/api/credit-proposals/documents", { method: "POST", body: form });
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("proposal_id", proposal.id);
+      formData.append("doc_id", docId);
+      const res  = await fetch("/api/credit-proposals/documents", { method: "POST", body: formData });
       const json = await res.json();
       if (!res.ok) { alert(json.error ?? "Erro ao enviar arquivo"); return; }
       setCheckedDocs((prev) => ({ ...prev, [docId]: true }));
-      setUploadedFiles((prev) => ({ ...prev, [docId]: file.name }));
-      if (json.document?.url) setUploadedUrls((prev) => ({ ...prev, [docId]: json.document.url }));
+      setUploadedFiles((prev) => ({
+        ...prev,
+        [docId]: [...(prev[docId] ?? []), {
+          name: file.name,
+          url: json.document?.url ?? null,
+          key: json.document?.file_key ?? file.name,
+        }],
+      }));
     } finally {
       setIsUploading(null);
     }
   }
 
-  function removeFile(docId: string) {
+  function removeFile(docId: string, fileKey: string) {
     if (!proposal) return;
-    // Atualiza UI imediatamente (optimistic)
-    const newFiles  = { ...uploadedFiles };
-    const newUrls   = { ...uploadedUrls };
-    delete newFiles[docId];
-    delete newUrls[docId];
-    setUploadedFiles(newFiles);
-    setUploadedUrls(newUrls);
-    setCheckedDocs((prev) => ({ ...prev, [docId]: false }));
-    if (IS_DEMO) {
-      try {
-        localStorage.setItem(`v3_docs_${proposal.id}`,  JSON.stringify({ ...checkedDocs, [docId]: false }));
-        localStorage.setItem(`v3_files_${proposal.id}`, JSON.stringify(newFiles));
-      } catch {}
-    } else {
+    const remaining = (uploadedFiles[docId] ?? []).filter(f => f.key !== fileKey);
+    setUploadedFiles(prev => ({ ...prev, [docId]: remaining }));
+    if (remaining.length === 0) {
+      setCheckedDocs(prev => ({ ...prev, [docId]: false }));
+    }
+    if (!IS_DEMO) {
       fetch(
-        `/api/credit-proposals/documents?proposal_id=${proposal.id}&doc_id=${encodeURIComponent(docId)}`,
+        `/api/credit-proposals/documents?proposal_id=${proposal.id}&doc_id=${encodeURIComponent(docId)}&file_key=${encodeURIComponent(fileKey)}`,
         { method: "DELETE" }
       ).catch(() => {});
     }
@@ -439,7 +430,7 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
 
   async function handleOcrValidar(docId: string, docLabel: string) {
     if (!proposal) return;
-    const url = uploadedUrls[docId];
+    const url = (uploadedFiles[docId] ?? []).find(f => f.url)?.url;
     if (!url) return;
 
     setOcrStatus(prev => ({ ...prev, [docId]: "loading" }));
@@ -481,7 +472,7 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
 
   async function handleOcrValidarTodos() {
     if (!proposal) return;
-    const docsComArquivo = Object.entries(uploadedUrls).filter(([, url]) => !!url);
+    const docsComArquivo = Object.entries(uploadedFiles).filter(([, files]) => files.some(f => f.url));
     if (docsComArquivo.length === 0) return;
     setOcrValidandoTodos(true);
     // Pega labels dos docs do checklist
@@ -1990,7 +1981,7 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
                     <FileText className="w-3.5 h-3.5" /> Checklist de Documentos
                   </p>
                   <div className="flex items-center gap-2 flex-shrink-0">
-                    {canChangeStage && Object.keys(uploadedUrls).length > 0 && (
+                    {canChangeStage && Object.values(uploadedFiles).some(arr => arr.some(f => f.url)) && (
                       <button
                         onClick={handleOcrValidarTodos}
                         disabled={ocrValidandoTodos}
@@ -2021,7 +2012,7 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
                 <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
                   {docs.map((doc) => {
                     const isChecked = !!checkedDocs[doc.id];
-                    const fileName  = uploadedFiles[doc.id];
+                    const docFiles  = uploadedFiles[doc.id] ?? [];
                     return (
                       <div key={doc.id} className="rounded-lg border border-border bg-secondary/20 p-2.5 space-y-1.5">
                         {/* Row 1: checkbox + label */}
@@ -2037,56 +2028,72 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
                             {doc.required && <span className="text-red-400 ml-0.5">*</span>}
                             {doc.hint && <span className="text-muted-foreground ml-1">— {doc.hint}</span>}
                           </span>
+                          {/* Botão adicionar mais arquivos (sempre visível) */}
+                          <label className="flex-shrink-0 cursor-pointer">
+                            <input
+                              type="file"
+                              accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                              multiple
+                              className="hidden"
+                              onChange={async (e) => {
+                                const files = Array.from(e.target.files ?? []);
+                                for (const file of files) await handleFileUpload(doc.id, file);
+                                e.target.value = "";
+                              }}
+                            />
+                            <span className="flex items-center gap-1 px-2 py-1 rounded border border-dashed border-border hover:border-primary/50 hover:bg-primary/5 text-[10px] text-muted-foreground hover:text-primary transition-colors">
+                              <Upload className="w-3 h-3" />
+                              {docFiles.length > 0 ? "+ Adicionar" : "Anexar"}
+                            </span>
+                          </label>
                         </div>
 
-                        {/* Row 2: upload area */}
-                        {isUploading === doc.id ? (
+                        {/* Row 2: arquivos enviados */}
+                        {isUploading === doc.id && (
                           <div className="flex items-center gap-2 px-2 py-1.5 rounded border border-dashed border-primary/40 bg-primary/5">
                             <div className="w-3 h-3 rounded-full border-2 border-primary border-t-transparent animate-spin flex-shrink-0" />
                             <span className="text-[11px] text-muted-foreground">Enviando arquivo...</span>
                           </div>
-                        ) : fileName ? (
+                        )}
+                        {docFiles.length > 0 && (
                           <div className="space-y-1.5">
-                            <div className="flex items-center gap-2 px-2 py-1 rounded bg-emerald-500/10 border border-emerald-500/30">
-                              <Paperclip className="w-3 h-3 text-emerald-400 flex-shrink-0" />
-                              <span className="text-[11px] text-emerald-400 flex-1 truncate">{fileName}</span>
-                              {uploadedUrls[doc.id] && (
-                                <a
-                                  href={uploadedUrls[doc.id]}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-blue-400 hover:text-blue-300 transition-colors flex-shrink-0"
-                                  title="Abrir documento (válido por 20 dias)"
-                                >
-                                  <ExternalLink className="w-3 h-3" />
-                                </a>
-                              )}
-                              {/* Botão OCR */}
-                              {canChangeStage && uploadedUrls[doc.id] && (
+                            {docFiles.map((df, fi) => (
+                              <div key={fi} className="flex items-center gap-2 px-2 py-1 rounded bg-emerald-500/10 border border-emerald-500/30">
+                                <Paperclip className="w-3 h-3 text-emerald-400 flex-shrink-0" />
+                                <span className="text-[11px] text-emerald-400 flex-1 truncate">{df.name}</span>
+                                {df.url && (
+                                  <a
+                                    href={df.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-blue-400 hover:text-blue-300 transition-colors flex-shrink-0"
+                                    title="Abrir documento"
+                                  >
+                                    <ExternalLink className="w-3 h-3" />
+                                  </a>
+                                )}
+                                {/* Botão OCR — só no primeiro arquivo */}
+                                {fi === 0 && canChangeStage && df.url && (
+                                  <button
+                                    onClick={() => handleOcrValidar(doc.id, doc.label)}
+                                    disabled={ocrStatus[doc.id] === "loading"}
+                                    className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-[#C9A84C]/15 text-[#C9A84C] hover:bg-[#C9A84C]/25 border border-[#C9A84C]/30 disabled:opacity-50 transition-colors flex-shrink-0"
+                                  >
+                                    {ocrStatus[doc.id] === "loading" ? <Loader2 className="w-2.5 h-2.5 animate-spin" /> : <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>}
+                                    {ocrStatus[doc.id] === "loading" ? "Analisando…" : "OCR"}
+                                  </button>
+                                )}
                                 <button
-                                  onClick={() => handleOcrValidar(doc.id, doc.label)}
-                                  disabled={ocrStatus[doc.id] === "loading"}
-                                  className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-[#C9A84C]/15 text-[#C9A84C] hover:bg-[#C9A84C]/25 border border-[#C9A84C]/30 disabled:opacity-50 transition-colors flex-shrink-0"
-                                  title="Validar documento com OCR"
+                                  onClick={() => removeFile(doc.id, df.key)}
+                                  className="text-muted-foreground hover:text-red-400 transition-colors flex-shrink-0"
+                                  title="Remover arquivo"
                                 >
-                                  {ocrStatus[doc.id] === "loading" ? (
-                                    <Loader2 className="w-2.5 h-2.5 animate-spin" />
-                                  ) : (
-                                    <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>
-                                  )}
-                                  {ocrStatus[doc.id] === "loading" ? "Analisando…" : "Validar OCR"}
+                                  <Trash2 className="w-3 h-3" />
                                 </button>
-                              )}
-                              <button
-                                onClick={() => removeFile(doc.id)}
-                                className="text-muted-foreground hover:text-red-400 transition-colors flex-shrink-0"
-                                title="Remover arquivo"
-                              >
-                                <Trash2 className="w-3 h-3" />
-                              </button>
-                            </div>
+                              </div>
+                            ))}
 
-                            {/* Resultado OCR */}
+                            {/* Resultado OCR — baseado no primeiro arquivo */}
                             {ocrStatus[doc.id] === "error" && (
                               <div className="px-2 py-1.5 rounded bg-red-500/10 border border-red-500/20">
                                 <p className="text-[10px] text-red-400">⚠ {ocrErros[doc.id]}</p>
@@ -2152,23 +2159,6 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
                               );
                             })()}
                           </div>
-                        ) : (
-                          <label className="flex items-center gap-2 px-2 py-1.5 rounded border border-dashed border-border hover:border-primary/50 hover:bg-primary/5 cursor-pointer transition-colors group">
-                            <Upload className="w-3 h-3 text-muted-foreground group-hover:text-primary flex-shrink-0" />
-                            <span className="text-[11px] text-muted-foreground group-hover:text-primary">
-                              Clique para anexar arquivo (PDF, JPG, PNG)
-                            </span>
-                            <input
-                              type="file"
-                              accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
-                              className="hidden"
-                              onChange={async (e) => {
-                                const file = e.target.files?.[0];
-                                if (file) await handleFileUpload(doc.id, file);
-                                e.target.value = "";
-                              }}
-                            />
-                          </label>
                         )}
                       </div>
                     );
