@@ -523,6 +523,11 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
       .then(r => r.json())
       .then(({ linhas }) => {
         if (!Array.isArray(linhas)) return;
+        console.log("[Portfolio] linhas recebidas:", linhas.map((l: Record<string, unknown>) => ({
+          nome: l.nome,
+          pf: Array.isArray(l.documentos_pf) ? (l.documentos_pf as unknown[]).length : "N/A",
+          pj: Array.isArray(l.documentos_pj) ? (l.documentos_pj as unknown[]).length : "N/A",
+        })));
         const map: Record<string, { PF: { id: string; label: string; required: boolean }[]; PJ: { id: string; label: string; required: boolean }[] }> = {};
         for (const linha of linhas) {
           const toItems = (arr: { id: string; nome: string; obrigatorio: boolean }[]) =>
@@ -533,9 +538,10 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
             map[linha.nome] = { PF: pf ?? [], PJ: pj ?? [] };
           }
         }
+        console.log("[Portfolio] map construído:", Object.keys(map));
         setPortfolioDocs(map);
       })
-      .catch(() => {});
+      .catch(err => console.error("[Portfolio] erro ao buscar:", err));
   }, [open]);
 
   // CEP loading
