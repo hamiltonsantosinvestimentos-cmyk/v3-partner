@@ -5,9 +5,10 @@ import {
   Settings, Link2, Bell, Shield, Zap, Copy, Check, Plus, Power,
   ExternalLink, BarChart3, Users, TrendingUp, Globe, Mail,
   Database, Key, RefreshCw, CheckCircle2, AlertCircle, Clock,
-  ChevronRight, Eye, EyeOff, Trash2, Activity, CreditCard,
+  ChevronRight, Eye, EyeOff, Trash2, Activity, CreditCard, Briefcase,
 } from "lucide-react";
 import { EditorRegrasLinhas } from "@/components/mesa-credito/editor-regras-linhas";
+import { PortfolioEditor } from "@/components/portfolio/portfolio-editor";
 
 interface Profile {
   id: string;
@@ -43,7 +44,7 @@ interface Props {
   systemStats: SystemStats | null;
 }
 
-type Tab = "captacao" | "notificacoes" | "sistema" | "integracoes" | "cobranding" | "regras-credito";
+type Tab = "captacao" | "notificacoes" | "sistema" | "integracoes" | "cobranding" | "regras-credito" | "portfolio";
 
 const IS_PARTNER = (role: string) => ["PARTNER", "PARTNER_PRO", "ADMIN", "GESTAO"].includes(role);
 const IS_ADMIN   = (role: string) => ["ADMIN", "GESTAO"].includes(role);
@@ -235,6 +236,7 @@ export function ConfiguracoesClient({ profile, initialLinks, systemStats }: Prop
     { key: "cobranding"  as Tab, label: "Co-branding PRO",   icon: <Globe className="w-4 h-4" />,   show: profile.role === "PARTNER_PRO" },
     { key: "notificacoes" as Tab, label: "Notificações",      icon: <Bell className="w-4 h-4" />,    show: true },
     { key: "regras-credito" as Tab, label: "Regras de Crédito", icon: <CreditCard className="w-4 h-4" />, show: IS_ADMIN(profile.role) },
+    { key: "portfolio"   as Tab, label: "Portfólio",          icon: <Briefcase className="w-4 h-4" />, show: IS_ADMIN(profile.role) },
     { key: "sistema"     as Tab, label: "Sistema",            icon: <Shield className="w-4 h-4" />, show: IS_ADMIN(profile.role) },
     { key: "integracoes" as Tab, label: "Integrações",        icon: <Zap className="w-4 h-4" />,    show: IS_ADMIN_ONLY(profile.role) },
   ] as { key: Tab; label: string; icon: React.ReactNode; show: boolean }[]).filter(t => t.show);
@@ -701,6 +703,22 @@ export function ConfiguracoesClient({ profile, initialLinks, systemStats }: Prop
             onClose={() => setRulesEditorOpen(false)}
             onSaved={() => { setRulesKey(k => k + 1); showToast("Regras salvas com sucesso!", "success"); }}
           />
+        </div>
+      )}
+
+      {/* ── TAB: PORTFÓLIO ── */}
+      {tab === "portfolio" && (
+        <div className="space-y-4">
+          <div className="p-4 rounded-xl bg-[#C9A84C]/5 border border-[#C9A84C]/20 flex gap-3">
+            <Briefcase className="w-4 h-4 text-[#C9A84C] flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-xs font-semibold text-[#E8C97A]">Portfólio V3 Partners 2026</p>
+              <p className="text-xs text-[#7A8FA8] mt-0.5">
+                Gerencie todos os produtos e linhas de crédito do portfólio. Cada produto ficará visível na aba "Portfólio" de todos os partners.
+              </p>
+            </div>
+          </div>
+          <PortfolioEditor />
         </div>
       )}
 

@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { CreditCard, Building2, Trophy, AlertCircle, AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, Send, Loader2, Clock, XCircle, TrendingUp } from "lucide-react";
+import { CreditCard, Building2, Trophy, AlertCircle, AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, Send, Loader2, Clock, XCircle, TrendingUp, Briefcase } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { PortfolioViewer } from "@/components/portfolio/portfolio-viewer";
 
 interface PendenciaOcr {
   doc_label: string;
@@ -89,7 +90,7 @@ function StatusMA({ stage }: { stage: string }) {
   return <span className={`text-[10px] font-semibold border px-2 py-0.5 rounded-full ${cfg.cls}`}>{cfg.label}</span>;
 }
 
-type Tab = "credito" | "ma" | "consorcio";
+type Tab = "credito" | "ma" | "consorcio" | "portfolio";
 
 function PendenciasRow({ proposta, onCorrigido }: {
   proposta: Proposta;
@@ -203,9 +204,10 @@ export function MinhasOperacoesClient({ propostas: initialPropostas, deals, lead
   const totalConsorcio = leads.reduce((s, l) => s + (l.value ?? 0), 0);
 
   const tabs: { id: Tab; label: string; icon: React.ReactNode; count: number }[] = [
-    { id: "credito",   label: "Crédito",  icon: <CreditCard className="w-4 h-4" />,  count: propostas.length },
-    { id: "ma",        label: "M&A",      icon: <Building2 className="w-4 h-4" />,   count: deals.length },
-    { id: "consorcio", label: "Consórcio",icon: <Trophy className="w-4 h-4" />,      count: leads.length },
+    { id: "credito",   label: "Crédito",   icon: <CreditCard className="w-4 h-4" />,  count: propostas.length },
+    { id: "ma",        label: "M&A",       icon: <Building2 className="w-4 h-4" />,   count: deals.length },
+    { id: "consorcio", label: "Consórcio", icon: <Trophy className="w-4 h-4" />,      count: leads.length },
+    { id: "portfolio", label: "Portfólio", icon: <Briefcase className="w-4 h-4" />,   count: 0 },
   ];
 
   return (
@@ -241,7 +243,9 @@ export function MinhasOperacoesClient({ propostas: initialPropostas, deals, lead
             className={`flex items-center gap-2 px-4 py-2 rounded-md text-xs font-semibold transition-all ${tab === t.id ? "bg-[#C9A84C] text-[#09081A]" : "text-muted-foreground hover:text-foreground"}`}
           >
             {t.icon} {t.label}
-            <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${tab === t.id ? "bg-[#09081A]/20" : "bg-secondary"}`}>{t.count}</span>
+            {t.id !== "portfolio" && (
+              <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${tab === t.id ? "bg-[#09081A]/20" : "bg-secondary"}`}>{t.count}</span>
+            )}
           </button>
         ))}
       </div>
@@ -366,6 +370,19 @@ export function MinhasOperacoesClient({ propostas: initialPropostas, deals, lead
                 </tbody>
               </table>
             </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Portfólio */}
+      {tab === "portfolio" && (
+        <Card>
+          <CardContent className="p-5">
+            <div className="mb-4">
+              <h2 className="text-base font-bold text-white">Portfólio V3 Partners 2026</h2>
+              <p className="text-xs text-muted-foreground mt-0.5">Todas as linhas de produtos e soluções financeiras disponíveis para originação</p>
+            </div>
+            <PortfolioViewer />
           </CardContent>
         </Card>
       )}
