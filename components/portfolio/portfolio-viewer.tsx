@@ -27,12 +27,15 @@ export interface PortfolioLinha {
 }
 
 const CAT_COLORS: Record<string, string> = {
-  "Imobiliário":   "bg-blue-500/20 text-blue-400 border-blue-500/30",
-  "Auto":          "bg-amber-500/20 text-amber-400 border-amber-500/30",
+  "Imobiliário":    "bg-blue-500/20 text-blue-400 border-blue-500/30",
+  "Auto":           "bg-amber-500/20 text-amber-400 border-amber-500/30",
   "Capital de Giro":"bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
-  "Consórcio":     "bg-purple-500/20 text-purple-400 border-purple-500/30",
-  "Construção":    "bg-orange-500/20 text-orange-400 border-orange-500/30",
-  "Agro":          "bg-lime-500/20 text-lime-400 border-lime-500/30",
+  "Consórcio":      "bg-purple-500/20 text-purple-400 border-purple-500/30",
+  "Construção":     "bg-orange-500/20 text-orange-400 border-orange-500/30",
+  "Agro":           "bg-lime-500/20 text-lime-400 border-lime-500/30",
+  "Internacional":  "bg-cyan-500/20 text-cyan-400 border-cyan-500/30",
+  "Seguros":        "bg-indigo-500/20 text-indigo-400 border-indigo-500/30",
+  "M&A":            "bg-rose-500/20 text-rose-400 border-rose-500/30",
 };
 
 const FIELDS: { key: keyof PortfolioLinha; label: string }[] = [

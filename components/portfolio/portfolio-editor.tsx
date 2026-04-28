@@ -8,7 +8,7 @@ import {
 import { cn } from "@/lib/utils";
 import type { PortfolioLinha } from "./portfolio-viewer";
 
-const CATEGORIAS = ["Imobiliário", "Auto", "Capital de Giro", "Consórcio", "Construção", "Agro", "Outros"];
+const CATEGORIAS = ["Imobiliário", "Auto", "Capital de Giro", "Consórcio", "Construção", "Agro", "Internacional", "Seguros", "M&A", "Outros"];
 
 const FIELDS: { key: keyof PortfolioLinha; label: string; long?: boolean }[] = [
   { key: "descricao",           label: "Descrição",              long: true },
