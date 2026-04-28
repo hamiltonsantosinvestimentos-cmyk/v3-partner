@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   X, User, Building2, FileText, Upload, CheckCircle2, Circle,
   ChevronRight, AlertCircle, Home, Shield, TrendingUp, Zap,
@@ -513,12 +513,37 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
   // Documentos
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
 
+  // Portfolio docs (checklist dinâmico)
+  const [portfolioDocs, setPortfolioDocs] = useState<Record<string, { id: string; label: string; required: boolean }[]>>({});
+
+  useEffect(() => {
+    if (!open) return;
+    fetch("/api/portfolio")
+      .then(r => r.json())
+      .then(({ linhas }) => {
+        if (!Array.isArray(linhas)) return;
+        const map: Record<string, { id: string; label: string; required: boolean }[]> = {};
+        for (const linha of linhas) {
+          if (Array.isArray(linha.documentos) && linha.documentos.length > 0) {
+            map[linha.nome] = linha.documentos.map((d: { id: string; nome: string; obrigatorio: boolean }) => ({
+              id: d.id,
+              label: d.nome,
+              required: d.obrigatorio,
+            }));
+          }
+        }
+        setPortfolioDocs(map);
+      })
+      .catch(() => {});
+  }, [open]);
+
   // CEP loading
   const [cepLoading, setCepLoading] = useState(false);
   const [cepLoadingIdx, setCepLoadingIdx] = useState<number | null>(null);
 
   const lines = LEVEL_LINES[level] ?? [];
-  const checklist = (CHECKLISTS[creditLine]?.[clientType]) ?? DEFAULT_CHECKLIST[clientType];
+  // Usa checklist do portfólio se disponível, senão cai no hardcoded
+  const checklist = portfolioDocs[creditLine] ?? (CHECKLISTS[creditLine]?.[clientType]) ?? DEFAULT_CHECKLIST[clientType];
 
   const uploadedIds = [...new Set(uploadedFiles.filter((f) => f.status === "done").map((f) => f.docId))];
   const requiredDocs = checklist.filter((d) => d.required);
@@ -1152,7 +1177,7 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
                             {doc.label}
                             {doc.required && <span className="text-red-400 ml-1">*</span>}
                           </p>
-                          {doc.hint && <p className="text-xs text-muted-foreground">{doc.hint}</p>}
+                          {"hint" in doc && (doc as { hint?: string }).hint && <p className="text-xs text-muted-foreground">{(doc as { hint?: string }).hint}</p>}
                           {docFiles.length > 0 && (
                             <div className="mt-1.5 space-y-1">
                               {docFiles.map((f) => (
