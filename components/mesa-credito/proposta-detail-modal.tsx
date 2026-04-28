@@ -354,11 +354,6 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
       .then(r => r.json())
       .then(({ linhas }) => {
         if (!Array.isArray(linhas)) return;
-        console.log("[Portfolio Detail] linhas:", linhas.map((l: Record<string, unknown>) => ({
-          nome: l.nome,
-          pf: Array.isArray(l.documentos_pf) ? (l.documentos_pf as unknown[]).length : "N/A",
-          pj: Array.isArray(l.documentos_pj) ? (l.documentos_pj as unknown[]).length : "N/A",
-        })));
         const map: Record<string, { PF: { id: string; label: string; required: boolean; hint?: string }[]; PJ: { id: string; label: string; required: boolean; hint?: string }[] }> = {};
         for (const linha of linhas) {
           const toItems = (arr: { id: string; nome: string; obrigatorio: boolean }[]) =>
@@ -366,10 +361,9 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
           const pf = Array.isArray(linha.documentos_pf) && linha.documentos_pf.length > 0 ? toItems(linha.documentos_pf) : null;
           const pj = Array.isArray(linha.documentos_pj) && linha.documentos_pj.length > 0 ? toItems(linha.documentos_pj) : null;
           if (pf || pj) {
-            map[linha.nome] = { PF: pf ?? [], PJ: pj ?? [] };
+            map[linha.nome.toLowerCase()] = { PF: pf ?? [], PJ: pj ?? [] };
           }
         }
-        console.log("[Portfolio Detail] map keys:", Object.keys(map));
         setPortfolioDocs(map);
       })
       .catch(() => {});
@@ -493,7 +487,7 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
     // Pega labels dos docs do checklist
     const meta = proposal.metadata ?? {};
     const clientType = ((meta.client_type ?? proposal.client_type) === "PJ" ? "PJ" : "PF") as "PF" | "PJ";
-    const docs = portfolioDocs[proposal.credit_line]?.[clientType] ?? CHECKLISTS[proposal.credit_line]?.[clientType] ?? DEFAULT_CHECKLIST[clientType];
+    const docs = portfolioDocs[proposal.credit_line?.toLowerCase()]?.[clientType] ?? CHECKLISTS[proposal.credit_line]?.[clientType] ?? DEFAULT_CHECKLIST[clientType];
     const labelMap: Record<string, string> = {};
     docs.forEach(d => { labelMap[d.id] = d.label; });
     for (const [docId] of docsComArquivo) {
@@ -1985,7 +1979,7 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
           {modalTab === "documentos" && (() => {
             const meta = proposal.metadata ?? {};
             const clientType = ((meta.client_type ?? proposal.client_type) === "PJ" ? "PJ" : "PF") as "PF" | "PJ";
-            const docs = portfolioDocs[proposal.credit_line]?.[clientType] ?? CHECKLISTS[proposal.credit_line]?.[clientType] ?? DEFAULT_CHECKLIST[clientType];
+            const docs = portfolioDocs[proposal.credit_line?.toLowerCase()]?.[clientType] ?? CHECKLISTS[proposal.credit_line]?.[clientType] ?? DEFAULT_CHECKLIST[clientType];
             const checkedCount = docs.filter((d) => checkedDocs[d.id]).length;
             const allRequired = docs.filter((d) => d.required);
             const requiredChecked = allRequired.filter((d) => checkedDocs[d.id]).length;

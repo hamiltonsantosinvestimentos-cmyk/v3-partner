@@ -523,11 +523,6 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
       .then(r => r.json())
       .then(({ linhas }) => {
         if (!Array.isArray(linhas)) return;
-        console.log("[Portfolio] linhas recebidas:", linhas.map((l: Record<string, unknown>) => ({
-          nome: l.nome,
-          pf: Array.isArray(l.documentos_pf) ? (l.documentos_pf as unknown[]).length : "N/A",
-          pj: Array.isArray(l.documentos_pj) ? (l.documentos_pj as unknown[]).length : "N/A",
-        })));
         const map: Record<string, { PF: { id: string; label: string; required: boolean }[]; PJ: { id: string; label: string; required: boolean }[] }> = {};
         for (const linha of linhas) {
           const toItems = (arr: { id: string; nome: string; obrigatorio: boolean }[]) =>
@@ -535,13 +530,13 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
           const pf = Array.isArray(linha.documentos_pf) && linha.documentos_pf.length > 0 ? toItems(linha.documentos_pf) : null;
           const pj = Array.isArray(linha.documentos_pj) && linha.documentos_pj.length > 0 ? toItems(linha.documentos_pj) : null;
           if (pf || pj) {
-            map[linha.nome] = { PF: pf ?? [], PJ: pj ?? [] };
+            // chave normalizada para minúsculas — evita mismatch de capitalização
+            map[linha.nome.toLowerCase()] = { PF: pf ?? [], PJ: pj ?? [] };
           }
         }
-        console.log("[Portfolio] map construído:", Object.keys(map));
         setPortfolioDocs(map);
       })
-      .catch(err => console.error("[Portfolio] erro ao buscar:", err));
+      .catch(() => {});
   }, [open]);
 
   // CEP loading
@@ -550,7 +545,7 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
 
   const lines = LEVEL_LINES[level] ?? [];
   // Usa checklist do portfólio se disponível, senão cai no hardcoded
-  const checklist = portfolioDocs[creditLine]?.[clientType] ?? (CHECKLISTS[creditLine]?.[clientType]) ?? DEFAULT_CHECKLIST[clientType];
+  const checklist = portfolioDocs[creditLine.toLowerCase()]?.[clientType] ?? (CHECKLISTS[creditLine]?.[clientType]) ?? DEFAULT_CHECKLIST[clientType];
 
   const uploadedIds = [...new Set(uploadedFiles.filter((f) => f.status === "done" || f.status === "pending").map((f) => f.docId))];
   const requiredDocs = checklist.filter((d) => d.required);
