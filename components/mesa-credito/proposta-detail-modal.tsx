@@ -356,6 +356,15 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
   // ── Modal tab ─────────────────────────────────────────────────────────────
   type ModalTab = "detalhes" | "recomendacao" | "documentos" | "comentarios";
   const [modalTab, setModalTab] = useState<ModalTab>("detalhes");
+  const bodyRef = React.useRef<HTMLDivElement>(null);
+
+  // Volta ao topo e reseta aba ao abrir uma proposta
+  useEffect(() => {
+    if (open && proposal) {
+      setModalTab("detalhes");
+      setTimeout(() => { bodyRef.current?.scrollTo({ top: 0, behavior: "instant" }); }, 0);
+    }
+  }, [open, proposal?.id]);
   const [rulesKey] = useState(0);
 
   // ── Checklist state ───────────────────────────────────────────────────────
@@ -1492,7 +1501,7 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
         </div>
 
         {/* Body */}
-        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
+        <div ref={bodyRef} className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
           {/* ── Seção Detalhes e Recomendação ── */}
           <div className={modalTab === "documentos" || modalTab === "comentarios" ? "hidden" : "contents"}>
 
