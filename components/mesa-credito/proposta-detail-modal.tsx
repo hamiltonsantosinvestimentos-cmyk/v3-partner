@@ -1454,8 +1454,8 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
   const prevStage = activeIdx > 0 ? PIPELINE_STAGES[activeIdx - 1] : null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="bg-card border border-border rounded-2xl w-full max-w-2xl max-h-[92vh] flex flex-col animate-fade-in">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/60 backdrop-blur-sm">
+      <div className="bg-card border border-border rounded-2xl w-full max-w-4xl max-h-[90vh] flex flex-col animate-fade-in">
         {/* Header */}
         <div className="flex items-start justify-between px-6 py-4 border-b border-border">
           <div>
