@@ -197,14 +197,21 @@ export function UsersClient({ initialUsers }: UsersClientProps) {
   const handleRenovarTrial = async () => {
     if (!renewalUser || !renewalDate) return;
     setRenewingTrial(true);
+    // Usa fim do dia (23:59:59) no horário local para evitar problema de fuso UTC-3
+    const newExpiry = new Date(`${renewalDate}T23:59:59`).toISOString();
     try {
       const res = await fetch(`/api/usuarios/${renewalUser.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ trial_expires_at: new Date(renewalDate).toISOString() }),
+        // Também reativa o partner caso esteja bloqueado por trial expirado
+        body: JSON.stringify({ trial_expires_at: newExpiry, is_active: true }),
       });
       if (res.ok) {
-        setUsers(prev => prev.map(u => u.id === renewalUser.id ? { ...u, trial_expires_at: new Date(renewalDate).toISOString() } : u));
+        setUsers(prev => prev.map(u =>
+          u.id === renewalUser.id
+            ? { ...u, trial_expires_at: newExpiry, is_active: true }
+            : u
+        ));
         setRenewalUser(null);
         setRenewalDate("");
       } else {
