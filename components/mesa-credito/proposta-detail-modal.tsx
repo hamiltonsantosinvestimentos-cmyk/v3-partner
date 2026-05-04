@@ -1942,8 +1942,10 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
               : (proposal.imovel_cidade || proposal.imovel_endereco)
                 ? [{ endereco: proposal.imovel_endereco, valor_medio: proposal.imovel_valor_medio, cidade: proposal.imovel_cidade, estado: proposal.imovel_estado }]
                 : [];
-            const linhasComImovel = ["HOME EQUITY","HOME EQUITY ESTRESSADO","HOMECASH","CGI","CRI","FUNDO CONSTRUÇÃO RESIDENCIAL","FUNDO CONSTRUÇÃO LOTEAMENTO","FUNDO CONSTRUÇÃO EMPREENDIMENTO"];
-            if (!linhasComImovel.includes(proposal.credit_line) || imoveis.length === 0) return null;
+            const linhasComImovelKeywords = ["home equity","homecash","cgi","cri","fundo construção","fundo incorpor"];
+            const creditLineLower = (proposal.credit_line ?? "").toLowerCase();
+            const linhaTemImovel = linhasComImovelKeywords.some(kw => creditLineLower.includes(kw));
+            if (!linhaTemImovel || imoveis.length === 0) return null;
             return (
               <div className="space-y-2">
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
