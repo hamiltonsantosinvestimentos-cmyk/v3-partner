@@ -45,55 +45,63 @@ export function LocationGate({ role }: LocationGateProps) {
 
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
+        // Permissão concedida — tenta reverse geocode
+        let city = "Não identificada";
+        let state = "";
+        let country = "BR";
+
         try {
-          // Reverse geocode via OpenStreetMap (gratuito, sem API key)
           const res = await fetch(
             `https://nominatim.openstreetmap.org/reverse?lat=${pos.coords.latitude}&lon=${pos.coords.longitude}&format=json`,
             { headers: { "Accept-Language": "pt-BR" } }
           );
           const geo = await res.json();
-
-          const city =
+          city =
             geo?.address?.city ||
             geo?.address?.town ||
             geo?.address?.municipality ||
             geo?.address?.county ||
-            "Cidade não identificada";
-
-          const state = geo?.address?.state ?? "";
-          const country = geo?.address?.country_code?.toUpperCase() ?? "BR";
-
-          await fetch("/api/onboarding/location", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              city,
-              state,
-              country,
-              lat: pos.coords.latitude,
-              lon: pos.coords.longitude,
-            }),
-          });
-
-          setStatus("success");
-          sessionStorage.setItem(STORAGE_KEY, "1");
-          setTimeout(() => setVisible(false), 1800);
+            "Não identificada";
+          state = geo?.address?.state ?? "";
+          country = geo?.address?.country_code?.toUpperCase() ?? "BR";
         } catch {
-          setStatus("denied");
+          // Nominatim falhou — salva com coordenadas sem cidade nomeada
         }
-      },
-      async () => {
-        // Usuário negou — registra a recusa
+
         await fetch("/api/onboarding/location", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ denied: true }),
+          body: JSON.stringify({
+            city,
+            state,
+            country,
+            lat: pos.coords.latitude,
+            lon: pos.coords.longitude,
+          }),
         }).catch(() => {});
 
+        setStatus("success");
         sessionStorage.setItem(STORAGE_KEY, "1");
-        setStatus("denied");
+        setTimeout(() => setVisible(false), 1800);
       },
-      { timeout: 10000 }
+      async (err) => {
+        // Só registra como "recusado" se o usuário explicitamente negou (code 1)
+        // code 2 = GPS indisponível, code 3 = timeout — não são negativas do usuário
+        if (err.code === 1) {
+          await fetch("/api/onboarding/location", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ denied: true }),
+          }).catch(() => {});
+          sessionStorage.setItem(STORAGE_KEY, "1");
+          setStatus("denied");
+        } else {
+          // GPS indisponível ou timeout — deixa tentar de novo (não marca como recusado)
+          setStatus("idle");
+          setVisible(true);
+        }
+      },
+      { timeout: 20000, enableHighAccuracy: false }
     );
   }
 
