@@ -1,140 +1,214 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { X, CheckCircle2, Circle, User, Zap, Wallet, ArrowRight } from "lucide-react";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
+import {
+  CheckCircle2, Circle, ChevronDown, ChevronUp,
+  Users, CreditCard, GraduationCap, UserCircle, Sparkles,
+} from "lucide-react";
 
-interface Step {
-  id: string;
-  label: string;
-  description: string;
-  href: string;
-  icon: React.ReactNode;
-}
+const WIZARD_KEY  = "v3_onboarding_wizard_done";
+const ACADEMY_KEY = "v3_onboarding_academy_visited";
+const DONE_KEY    = "v3_onboarding_banner_done";
 
-const STEPS: Step[] = [
-  {
-    id: "profile",
-    label: "Complete seu perfil",
-    description: "Adicione nome, telefone e CPF nas configurações",
-    href: "/configuracoes",
-    icon: <User className="w-4 h-4" />,
-  },
-  {
-    id: "operation",
-    label: "Cadastre sua primeira operação",
-    description: "Envie uma proposta de crédito ou M&A para sua carteira",
-    href: "/mesa-credito/nivel-1",
-    icon: <Zap className="w-4 h-4" />,
-  },
-  {
-    id: "commission",
-    label: "Acompanhe suas comissões",
-    description: "Veja seu histórico financeiro e status de repasses",
-    href: "/comissoes",
-    icon: <Wallet className="w-4 h-4" />,
-  },
-];
-
-interface Props {
+interface OnboardingBannerProps {
   role: string;
   hasFullName: boolean;
 }
 
-export function OnboardingBanner({ role, hasFullName }: Props) {
-  const [visible, setVisible] = useState(false);
-  const [dismissing, setDismissing] = useState(false);
+interface StepData {
+  id: string;
+  label: string;
+  icon: React.ReactNode;
+  done: boolean;
+  action?: string;
+  actionLabel?: string;
+}
+
+export function OnboardingBanner({ role, hasFullName }: OnboardingBannerProps) {
+  const router = useRouter();
+  const [expanded, setExpanded] = useState(true);
+  const [crmDone, setCrmDone] = useState(false);
+  const [propostaDone, setPropostaDone] = useState(false);
+  const [wizardDone, setWizardDone] = useState(false);
+  const [academyDone, setAcademyDone] = useState(false);
+  const [hidden, setHidden] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!["PARTNER", "PARTNER_PRO"].includes(role)) return;
-    fetch("/api/profile")
-      .then(r => r.json())
-      .then(({ profile }) => {
-        if (!profile?.onboarding_dismissed) setVisible(true);
+    if (!["PARTNER", "PARTNER_PRO"].includes(role)) {
+      setLoading(false);
+      return;
+    }
+    if (typeof window !== "undefined") {
+      setWizardDone(!!localStorage.getItem(WIZARD_KEY));
+      setAcademyDone(!!localStorage.getItem(ACADEMY_KEY));
+      setHidden(!!localStorage.getItem(DONE_KEY));
+    }
+    fetch("/api/onboarding/progress")
+      .then((r) => r.json())
+      .then((d) => {
+        setCrmDone(d.crmLeads > 0);
+        setPropostaDone(d.proposals > 0);
+        setLoading(false);
       })
-      .catch(() => {});
+      .catch(() => setLoading(false));
   }, [role]);
 
-  const handleDismiss = async () => {
-    setDismissing(true);
-    try {
-      await fetch("/api/profile", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ onboarding_dismissed: true }),
-      });
-    } catch {
-      // ignore
-    }
-    setVisible(false);
-    setDismissing(false);
-  };
+  if (!["PARTNER", "PARTNER_PRO"].includes(role) || hidden || loading) return null;
 
-  if (!visible) return null;
+  const steps: StepData[] = [
+    {
+      id: "wizard",
+      label: "Concluir o tour de boas-vindas",
+      icon: <Sparkles className="w-4 h-4" />,
+      done: wizardDone,
+    },
+    {
+      id: "profile",
+      label: "Completar seu perfil",
+      icon: <UserCircle className="w-4 h-4" />,
+      done: hasFullName,
+      action: "/perfil",
+      actionLabel: "Completar perfil",
+    },
+    {
+      id: "crm",
+      label: "Cadastrar o primeiro lead no CRM",
+      icon: <Users className="w-4 h-4" />,
+      done: crmDone,
+      action: "/crm",
+      actionLabel: "Ir para o CRM",
+    },
+    {
+      id: "proposta",
+      label: "Enviar a primeira proposta de crédito",
+      icon: <CreditCard className="w-4 h-4" />,
+      done: propostaDone,
+      action: "/mesa-credito",
+      actionLabel: "Mesa de Crédito",
+    },
+    {
+      id: "academy",
+      label: "Explorar o Academy V3",
+      icon: <GraduationCap className="w-4 h-4" />,
+      done: academyDone,
+      action: "/academy",
+      actionLabel: "Acessar Academy",
+    },
+  ];
 
-  const completedSteps = hasFullName ? 1 : 0;
-  const totalSteps = STEPS.length;
+  const completedCount = steps.filter((s) => s.done).length;
+  const totalSteps     = steps.length;
+  const progress       = Math.round((completedCount / totalSteps) * 100);
+  const allDone        = completedCount === totalSteps;
 
-  return (
-    <div
-      className="rounded-2xl border border-[#C9A84C]/20 bg-[#111F35] p-5"
-      style={{ boxShadow: "0 0 0 1px rgba(201,168,76,0.06), 0 8px 24px rgba(0,0,0,0.3)" }}
-    >
-      {/* Header */}
-      <div className="flex items-start justify-between mb-4">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-[#C9A84C]/15 flex items-center justify-center flex-shrink-0">
-            <Zap className="w-4 h-4 text-[#C9A84C]" />
-          </div>
-          <div>
-            <p className="text-sm font-bold text-[#F0ECE4]">Primeiros passos na V3</p>
-            <p className="text-xs text-[#7A8FA8] mt-0.5">
-              {completedSteps}/{totalSteps} etapas concluídas
-            </p>
-          </div>
+  function dismissBanner() {
+    localStorage.setItem(DONE_KEY, "true");
+    setHidden(true);
+  }
+
+  function goTo(path: string) {
+    if (path === "/academy") localStorage.setItem(ACADEMY_KEY, "true");
+    router.push(path);
+  }
+
+  if (allDone) {
+    return (
+      <div className="flex items-center gap-4 px-5 py-4 rounded-xl border border-emerald-500/30 bg-emerald-500/5">
+        <div className="w-10 h-10 rounded-xl bg-emerald-500/15 flex items-center justify-center">
+          <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+        </div>
+        <div className="flex-1">
+          <p className="text-sm font-bold text-emerald-400">Onboarding concluído! Você está pronto para operar. 🚀</p>
+          <p className="text-xs text-emerald-400/60 mt-0.5">Explore todos os módulos e comece a fechar operações.</p>
         </div>
         <button
-          onClick={handleDismiss}
-          disabled={dismissing}
-          className="p-1.5 rounded-lg hover:bg-white/[0.05] transition-colors text-[#7A8FA8] hover:text-[#F0ECE4]"
-          title="Dispensar"
+          onClick={dismissBanner}
+          className="text-xs text-[#7A8FA8] hover:text-[#F0ECE4] transition-colors px-3 py-1.5 border border-[#243A66] rounded-lg"
         >
-          <X className="w-4 h-4" />
+          Fechar
         </button>
       </div>
+    );
+  }
 
-      {/* Progress bar */}
-      <div className="h-1 rounded-full bg-white/10 overflow-hidden mb-4">
-        <div
-          className="h-full rounded-full bg-gradient-to-r from-[#C9A84C] to-[#E8C97A] transition-all duration-500"
-          style={{ width: `${Math.round((completedSteps / totalSteps) * 100)}%` }}
-        />
-      </div>
+  return (
+    <div className="rounded-xl border border-[#243A66] overflow-hidden" style={{ background: "#0D1929" }}>
+      {/* Header */}
+      <button
+        onClick={() => setExpanded((e) => !e)}
+        className="w-full flex items-center gap-4 px-5 py-4 text-left hover:bg-white/[0.02] transition-colors"
+      >
+        <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+          style={{ background: "linear-gradient(135deg, #C9A84C22, #E8C97A11)", border: "1px solid #C9A84C33" }}>
+          <Sparkles className="w-4 h-4 text-[#C9A84C]" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center justify-between mb-1.5">
+            <p className="text-sm font-bold text-[#F0ECE4]">
+              Primeiros Passos — {completedCount}/{totalSteps} concluídos
+            </p>
+            <span className="text-xs font-semibold text-[#C9A84C] ml-4 flex-shrink-0">{progress}%</span>
+          </div>
+          <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
+            <div
+              className="h-full rounded-full transition-all duration-500"
+              style={{
+                width: `${progress}%`,
+                background: "linear-gradient(90deg, #C9A84C, #E8C97A)",
+              }}
+            />
+          </div>
+        </div>
+        <div className="text-[#7A8FA8] ml-3">
+          {expanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+        </div>
+      </button>
 
-      {/* Steps */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        {STEPS.map((step, idx) => {
-          const done = idx === 0 && hasFullName;
-          return (
-            <Link
-              key={step.id}
-              href={step.href}
-              className="flex items-start gap-3 p-3 rounded-xl bg-[#0D1929]/60 border border-[#243A66]/60 hover:border-[#C9A84C]/30 hover:bg-[#C9A84C]/05 transition-all group"
+      {/* Checklist expandido */}
+      {expanded && (
+        <div className="px-5 pb-4 border-t border-[#1B3050]">
+          <div className="flex flex-col gap-2 mt-3">
+            {steps.map((s) => (
+              <div
+                key={s.id}
+                className={`flex items-center gap-3 px-4 py-3 rounded-xl border transition-colors
+                  ${s.done
+                    ? "border-emerald-500/20 bg-emerald-500/5"
+                    : "border-[#1B3050] bg-[#0A1628]"
+                  }`}
+              >
+                <div className={s.done ? "text-emerald-400" : "text-[#7A8FA8]"}>
+                  {s.done ? <CheckCircle2 className="w-4 h-4" /> : <Circle className="w-4 h-4" />}
+                </div>
+                <div className={`flex-1 flex items-center gap-2`}>
+                  <span className={s.done ? "text-emerald-400" : "text-[#7A8FA8]"}>{s.icon}</span>
+                  <span className={`text-sm ${s.done ? "text-emerald-400 line-through" : "text-[#F0ECE4]"}`}>
+                    {s.label}
+                  </span>
+                </div>
+                {!s.done && s.action && (
+                  <button
+                    onClick={() => goTo(s.action!)}
+                    className="text-xs font-semibold text-[#C9A84C] hover:text-[#E8C97A] transition-colors flex-shrink-0"
+                  >
+                    {s.actionLabel} →
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+          <div className="flex items-center justify-end mt-3">
+            <button
+              onClick={dismissBanner}
+              className="text-xs text-[#7A8FA8] hover:text-[#F0ECE4] transition-colors"
             >
-              <div className={`mt-0.5 flex-shrink-0 ${done ? "text-emerald-400" : "text-[#7A8FA8]"}`}>
-                {done ? <CheckCircle2 className="w-4 h-4" /> : <Circle className="w-4 h-4" />}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className={`text-xs font-semibold ${done ? "text-emerald-400 line-through" : "text-[#F0ECE4]"}`}>
-                  {step.label}
-                </p>
-                <p className="text-[10px] text-[#7A8FA8] mt-0.5 leading-relaxed">{step.description}</p>
-              </div>
-              <ArrowRight className="w-3 h-3 text-[#7A8FA8] group-hover:text-[#C9A84C] transition-colors flex-shrink-0 mt-0.5" />
-            </Link>
-          );
-        })}
-      </div>
+              Ocultar este painel
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

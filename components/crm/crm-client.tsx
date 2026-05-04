@@ -31,6 +31,7 @@ import {
   ToggleRight,
   RefreshCw,
   Trash2,
+  CalendarPlus,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -572,6 +573,10 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
   const [captacaoLinks, setCaptacaoLinks] = useState<CaptacaoLink[]>([]);
   const [captacaoLoading, setCaptacaoLoading] = useState(false);
   const [captacaoGenerating, setCaptacaoGenerating] = useState(false);
+
+  // Re-agendamento rápido
+  const [reagendandoId, setReagendandoId] = useState<string | null>(null);
+  const [reagendandoData, setReagendandoData] = useState("");
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
 
   // M&A Captacao links state
@@ -953,6 +958,22 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
     setShowConvert(null);
     setSelectedConvert("");
     setSelectedCreditLine("");
+  }
+
+  async function handleReagendar(leadId: string, novaData: string) {
+    if (!novaData) return;
+    try {
+      await fetch("/api/crm/reagendar", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: leadId, next_contact: novaData }),
+      });
+      setLeads((prev) =>
+        prev.map((l) => l.id === leadId ? { ...l, nextContact: novaData } : l)
+      );
+      setReagendandoId(null);
+      setReagendandoData("");
+    } catch { /* silent */ }
   }
 
   async function handleEnviarMesa(lead: CRMLead) {
@@ -1578,8 +1599,47 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
                       <td style={{ padding: "10px 12px", color: "#C9A84C", whiteSpace: "nowrap" }}>{formatCurrency(lead.annualRevenue)}</td>
                       <td style={{ padding: "10px 12px", color: "#7A8FA8", whiteSpace: "nowrap" }}>{lead.city}/{lead.state}</td>
                       <td style={{ padding: "10px 12px", color: "#7A8FA8", whiteSpace: "nowrap" }}>{formatDate(lead.visitDate)}</td>
-                      <td style={{ padding: "10px 12px", color: lead.nextContact ? "#E8C97A" : "#7A8FA8", whiteSpace: "nowrap" }}>
-                        {formatDate(lead.nextContact)}
+                      <td style={{ padding: "10px 12px", whiteSpace: "nowrap" }}>
+                        {reagendandoId === lead.id ? (
+                          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                            <input
+                              type="date"
+                              value={reagendandoData}
+                              onChange={(e) => setReagendandoData(e.target.value)}
+                              style={{
+                                background: "#0D1929", border: "1px solid #243A66",
+                                borderRadius: 6, padding: "3px 6px", color: "#F0ECE4",
+                                fontSize: 11, outline: "none",
+                              }}
+                              autoFocus
+                            />
+                            <button
+                              onClick={() => handleReagendar(lead.id, reagendandoData)}
+                              style={{ background: "rgba(201,168,76,0.2)", border: "1px solid rgba(201,168,76,0.4)", borderRadius: 5, padding: "3px 8px", color: "#C9A84C", cursor: "pointer", fontSize: 11 }}
+                            >✓</button>
+                            <button
+                              onClick={() => { setReagendandoId(null); setReagendandoData(""); }}
+                              style={{ background: "transparent", border: "none", color: "#7A8FA8", cursor: "pointer", fontSize: 13 }}
+                            >✕</button>
+                          </div>
+                        ) : (
+                          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                            <span style={{ color: lead.nextContact ? "#E8C97A" : "#7A8FA8" }}>
+                              {formatDate(lead.nextContact) || "—"}
+                            </span>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setReagendandoId(lead.id);
+                                setReagendandoData(lead.nextContact ?? "");
+                              }}
+                              title="Reagendar contato"
+                              style={{ background: "transparent", border: "none", color: "#7A8FA8", cursor: "pointer", padding: 2, display: "flex", alignItems: "center", opacity: 0.6 }}
+                            >
+                              <CalendarPlus size={13} />
+                            </button>
+                          </div>
+                        )}
                       </td>
                       <td style={{ padding: "10px 12px", whiteSpace: "nowrap" }}>
                         <span

@@ -122,7 +122,7 @@ export function CreditDeskClient({ proposals: initial, level, currentUser }: Cre
 
   const filtered = applyFilters(proposals, filters);
   const totalValue = filtered.reduce((s, p) => s + p.requested_value, 0);
-  const slaCritical = filtered.filter(p => getSLAInfo(p).sla === "critical").length;
+  const slaCritical = filtered.filter(p => ["critical","expired"].includes(getSLAInfo(p).sla)).length;
   const slaWarning  = filtered.filter(p => getSLAInfo(p).sla === "warning").length;
 
   const handleNewProposal = useCallback(async (proposal: Record<string, unknown>): Promise<string> => {
@@ -269,11 +269,11 @@ export function CreditDeskClient({ proposals: initial, level, currentUser }: Cre
                     <div className="flex items-center justify-center py-8 text-[11px] text-muted-foreground/40">Vazio</div>
                   ) : (
                     cards.map((p) => {
-                      const { days, sla } = getSLAInfo(p);
+                      const { sla, hoursLeft, hoursLimit, pct } = getSLAInfo(p);
                       return (
                         <div key={p.id} onClick={() => setDetailProposal(p)}
                           className={`bg-card border rounded-lg p-3 cursor-pointer hover:border-primary/40 hover:bg-card/80 transition-all space-y-2 group ${
-                            sla === "critical" ? "border-red-500/40" : sla === "warning" ? "border-amber-500/40" : "border-border/60"
+                            sla === "expired" || sla === "critical" ? "border-red-500/40" : sla === "warning" ? "border-amber-500/40" : "border-border/60"
                           }`}>
                           <div className="flex items-center justify-between gap-1">
                             <span className="font-mono text-[9px] text-muted-foreground truncate">{p.code}</span>
@@ -287,8 +287,13 @@ export function CreditDeskClient({ proposals: initial, level, currentUser }: Cre
                             <span className="text-[10px] font-bold text-emerald-400 flex-shrink-0">{formatCurrency(p.requested_value)}</span>
                           </div>
                           {sla !== "ok" && (
-                            <div className={`text-[9px] font-bold flex items-center gap-1 ${sla === "critical" ? "text-red-400" : "text-amber-400"}`}>
-                              ⚠ SLA: {days} dia{days !== 1 ? "s" : ""} em aberto
+                            <div className="space-y-1">
+                              <div className="h-1 rounded-full bg-white/10 overflow-hidden">
+                                <div className={`h-full rounded-full transition-all ${
+                                  sla === "expired" || sla === "critical" ? "bg-red-500" : "bg-amber-400"
+                                }`} style={{ width: `${pct}%` }} />
+                              </div>
+                              <SLABadge sla={sla} hoursLeft={hoursLeft} hoursLimit={hoursLimit} pct={pct} />
                             </div>
                           )}
                           {p.instituicao_encaminhada && (() => {
@@ -339,11 +344,11 @@ export function CreditDeskClient({ proposals: initial, level, currentUser }: Cre
                 </thead>
                 <tbody>
                   {filtered.map((p) => {
-                    const { days, sla } = getSLAInfo(p);
+                    const { sla, hoursLeft, hoursLimit, pct, hoursElapsed } = getSLAInfo(p);
                     return (
                       <tr key={p.id}
                         className={`border-b border-border/30 cursor-pointer transition-colors ${
-                          sla === "critical" ? "bg-red-500/5 hover:bg-red-500/10"
+                          sla === "expired" || sla === "critical" ? "bg-red-500/5 hover:bg-red-500/10"
                           : sla === "warning" ? "bg-amber-500/5 hover:bg-amber-500/10"
                           : "hover:bg-secondary/50"
                         }`}
@@ -355,11 +360,13 @@ export function CreditDeskClient({ proposals: initial, level, currentUser }: Cre
                         <td className="px-4 py-3 text-right font-semibold text-white">{formatCurrency(p.requested_value)}</td>
                         <td className="px-4 py-3 text-right font-semibold text-emerald-400">{p.approved_value ? formatCurrency(p.approved_value) : "—"}</td>
                         <td className="px-4 py-3 text-xs text-muted-foreground">{p.stage ?? "RECEBIDO"}</td>
-                        <td className="px-4 py-3">
+                        <td className="px-4 py-3 min-w-[100px]">
                           {sla === "ok" ? (
-                            <span className="text-xs text-muted-foreground">{days}d</span>
+                            <span className="text-xs text-muted-foreground">
+                              {hoursElapsed < 24 ? `${Math.round(hoursElapsed)}h` : `${Math.round(hoursElapsed / 24)}d`}
+                            </span>
                           ) : (
-                            <SLABadge days={days} sla={sla} />
+                            <SLABadge sla={sla} hoursLeft={hoursLeft} hoursLimit={hoursLimit} pct={pct} />
                           )}
                         </td>
                         <td className="px-4 py-3">

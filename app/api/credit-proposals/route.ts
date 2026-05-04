@@ -235,6 +235,28 @@ export async function PATCH(req: NextRequest) {
   if (fields.level2_notes && !fields.level2_at) updateData.level2_at = new Date().toISOString();
   if (fields.level3_notes && !fields.level3_at) updateData.level3_at = new Date().toISOString();
 
+  // Quando o stage muda, salva stage_changed_at no metadata para controle de SLA por etapa
+  if (fields.stage) {
+    const { data: current } = await serviceClient()
+      .from("credit_desk_proposals")
+      .select("stage, metadata")
+      .eq("id", id)
+      .single();
+
+    if (current && current.stage !== fields.stage) {
+      const existingMeta = (current.metadata as Record<string, unknown>) ?? {};
+      updateData.metadata = {
+        ...existingMeta,
+        ...(fields.metadata as Record<string, unknown> ?? {}),
+        stage_changed_at: new Date().toISOString(),
+        stage_history: [
+          ...((existingMeta.stage_history as Array<unknown>) ?? []),
+          { stage: current.stage, exited_at: new Date().toISOString() },
+        ],
+      };
+    }
+  }
+
   const { data, error } = await serviceClient()
     .from("credit_desk_proposals")
     .update(updateData)

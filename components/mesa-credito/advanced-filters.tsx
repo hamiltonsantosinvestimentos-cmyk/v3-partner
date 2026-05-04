@@ -226,30 +226,170 @@ export function applyFilters<T extends {
   });
 }
 
-export type SLAStatus = "ok" | "warning" | "critical";
+export type SLAStatus = "ok" | "warning" | "critical" | "expired";
 
-export function getSLAInfo(proposal: { created_at: string; status: string; stage?: string }): {
-  days: number; sla: SLAStatus;
-} {
-  const finals = ["APPROVED", "REJECTED", "COMPLETED", "CANCELLED"];
-  const days = Math.floor((Date.now() - new Date(proposal.created_at).getTime()) / 86400000);
-  if (finals.includes(proposal.status) || proposal.stage === "FINALIZADO") {
-    return { days, sla: "ok" };
+// SLA em horas úteis por etapa (seg–sex, 08h–18h = 10h úteis/dia)
+export const SLA_HOURS_BY_STAGE: Record<string, number> = {
+  RECEBIDO:   20,   // 2 dias úteis
+  TRIAGEM:    20,   // 2 dias úteis
+  ANALISE:    70,   // 7 dias úteis
+  PENDENCIA:  20,   // 2 dias úteis
+  APROVACAO:  30,   // 3 dias úteis
+  FINALIZADO: Infinity,
+};
+
+// Fuso horário de Brasília (UTC-3)
+const BRT_OFFSET_MS = -3 * 60 * 60 * 1000;
+
+/**
+ * Calcula horas úteis decorridas entre `from` e `to`
+ * Expediente: segunda a sexta, 08:00–18:00 (horário de Brasília)
+ */
+function businessHoursElapsed(from: Date, to: Date): number {
+  if (to <= from) return 0;
+
+  const WORK_START = 8;   // 08:00
+  const WORK_END   = 18;  // 18:00
+  const WORK_HOURS = WORK_END - WORK_START; // 10h/dia
+
+  let elapsed = 0;
+  // Avança minuto a minuto seria lento — avança hora a hora
+  let cursor = new Date(from.getTime());
+
+  // Ajusta cursor para horário de Brasília usando offset
+  const toBRT = (d: Date) => new Date(d.getTime() + BRT_OFFSET_MS);
+
+  // Avança até o início do próximo período útil se necessário
+  const snapToWorkStart = (d: Date): Date => {
+    const brt = toBRT(d);
+    const day = brt.getUTCDay(); // 0=dom, 6=sáb
+    const hour = brt.getUTCHours();
+
+    // Fim de semana: avança para segunda 08:00
+    if (day === 0 || day === 6) {
+      const daysToMon = day === 0 ? 1 : 2;
+      const next = new Date(d);
+      next.setTime(
+        new Date(brt.getUTCFullYear(), brt.getUTCMonth(), brt.getUTCDate() + daysToMon, WORK_START, 0, 0, 0).getTime() - BRT_OFFSET_MS
+      );
+      return next;
+    }
+    // Antes do expediente: avança para 08:00
+    if (hour < WORK_START) {
+      const next = new Date(d);
+      next.setTime(
+        new Date(brt.getUTCFullYear(), brt.getUTCMonth(), brt.getUTCDate(), WORK_START, 0, 0, 0).getTime() - BRT_OFFSET_MS
+      );
+      return next;
+    }
+    // Após expediente ou sexta noite: avança para próximo dia útil 08:00
+    if (hour >= WORK_END) {
+      const daysAhead = day === 5 ? 3 : 1; // sexta → segunda
+      const next = new Date(d);
+      next.setTime(
+        new Date(brt.getUTCFullYear(), brt.getUTCMonth(), brt.getUTCDate() + daysAhead, WORK_START, 0, 0, 0).getTime() - BRT_OFFSET_MS
+      );
+      return next;
+    }
+    return d;
+  };
+
+  cursor = snapToWorkStart(cursor);
+  if (cursor >= to) return 0;
+
+  while (cursor < to) {
+    const brt     = toBRT(cursor);
+    const day     = brt.getUTCDay();
+    const hour    = brt.getUTCHours();
+
+    // Se fora do expediente, pula para o próximo slot útil
+    if (day === 0 || day === 6 || hour < WORK_START || hour >= WORK_END) {
+      cursor = snapToWorkStart(cursor);
+      continue;
+    }
+
+    // Fim do expediente de hoje (em UTC)
+    const endOfDayBRT = new Date(brt.getUTCFullYear(), brt.getUTCMonth(), brt.getUTCDate(), WORK_END, 0, 0, 0);
+    const endOfDay    = new Date(endOfDayBRT.getTime() - BRT_OFFSET_MS);
+
+    const chunkEnd = to < endOfDay ? to : endOfDay;
+    elapsed += (chunkEnd.getTime() - cursor.getTime()) / 3600000;
+    cursor   = snapToWorkStart(chunkEnd);
   }
-  if (days >= 10) return { days, sla: "critical" };
-  if (days >= 5)  return { days, sla: "warning" };
-  return { days, sla: "ok" };
+
+  return Math.max(elapsed, 0);
 }
 
-export function SLABadge({ days, sla }: { days: number; sla: SLAStatus }) {
+export interface SLAInfo {
+  hoursElapsed: number;   // horas úteis na etapa atual
+  hoursLimit:   number;   // limite da etapa em horas úteis
+  hoursLeft:    number;   // horas úteis restantes (negativo = vencido)
+  pct:          number;   // 0-100 % consumido
+  sla:          SLAStatus;
+  stage:        string;
+  stageChangedAt: string | null;
+}
+
+export function getSLAInfo(proposal: {
+  created_at: string;
+  status: string;
+  stage?: string;
+  metadata?: Record<string, unknown> | null;
+}): SLAInfo {
+  const finals = ["APPROVED", "REJECTED", "COMPLETED", "CANCELLED"];
+  const stage  = proposal.stage ?? "RECEBIDO";
+
+  if (finals.includes(proposal.status) || stage === "FINALIZADO") {
+    return { hoursElapsed: 0, hoursLimit: Infinity, hoursLeft: Infinity, pct: 0, sla: "ok", stage, stageChangedAt: null };
+  }
+
+  // Usa stage_changed_at do metadata (reseta por etapa) ou created_at como fallback
+  const stageChangedAt = (proposal.metadata?.stage_changed_at as string | null) ?? null;
+  const baseDate  = stageChangedAt ? new Date(stageChangedAt) : new Date(proposal.created_at);
+  const now       = new Date();
+
+  const hoursElapsed = businessHoursElapsed(baseDate, now);
+  const hoursLimit   = SLA_HOURS_BY_STAGE[stage] ?? 20;
+  const hoursLeft    = hoursLimit - hoursElapsed;
+  const pct          = Math.min(Math.round((hoursElapsed / hoursLimit) * 100), 100);
+
+  let sla: SLAStatus = "ok";
+  if (hoursLeft <= 0)                         sla = "expired";
+  else if (hoursLeft <= hoursLimit * 0.2)     sla = "critical";  // últimos 20%
+  else if (hoursLeft <= hoursLimit * 0.5)     sla = "warning";   // últimos 50%
+
+  return { hoursElapsed, hoursLimit, hoursLeft, pct, sla, stage, stageChangedAt };
+}
+
+function fmtHours(h: number): string {
+  if (h <= 0) {
+    const abs = Math.abs(h);
+    if (abs < 1) return `${Math.round(abs * 60)}min vencido`;
+    if (abs < 24) return `${Math.round(abs)}h vencido`;
+    return `${Math.round(abs / 24)}d vencido`;
+  }
+  if (h < 1)  return `${Math.round(h * 60)}min`;
+  if (h < 24) return `${Math.round(h)}h`;
+  return `${Math.round(h / 24)}d`;
+}
+
+export function SLABadge({ sla, hoursLeft, hoursLimit, pct }: {
+  sla: SLAStatus; hoursLeft: number; hoursLimit: number; pct: number;
+}) {
   if (sla === "ok") return null;
+
+  const configs = {
+    expired:  { bg: "bg-red-600/25",   text: "text-red-400",   border: "border-red-500/40",   label: `⏰ ${fmtHours(hoursLeft)}` },
+    critical: { bg: "bg-red-500/20",   text: "text-red-400",   border: "border-red-500/30",   label: `⚠ ${fmtHours(hoursLeft)}` },
+    warning:  { bg: "bg-amber-500/20", text: "text-amber-400", border: "border-amber-500/30", label: `⏱ ${fmtHours(hoursLeft)}` },
+    ok:       { bg: "", text: "", border: "", label: "" },
+  };
+  const c = configs[sla];
+
   return (
-    <span className={`inline-flex items-center gap-0.5 text-[9px] font-bold px-1.5 py-0.5 rounded ml-1 ${
-      sla === "critical"
-        ? "bg-red-500/20 text-red-400 border border-red-500/30"
-        : "bg-amber-500/20 text-amber-400 border border-amber-500/30"
-    }`}>
-      ⚠ {days}d
+    <span title={`SLA: ${pct}% consumido — Limite: ${fmtHours(hoursLimit)}`}
+      className={`inline-flex items-center gap-0.5 text-[9px] font-bold px-1.5 py-0.5 rounded ml-1 border ${c.bg} ${c.text} ${c.border}`}>
+      {c.label}
     </span>
   );
 }
