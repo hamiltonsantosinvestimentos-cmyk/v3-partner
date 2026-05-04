@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import {
-  X, User, Building2, CheckCircle2, Clock, ArrowRight,
+  X, User, Building2, CheckCircle2, Clock, ArrowRight, ArrowLeft,
   FileText, CreditCard, Calendar, Link2, Pencil, Check,
   Percent, TrendingUp, BadgeDollarSign, Upload, Paperclip, Trash2, Home, ExternalLink,
   Package, Copy, CheckCheck, MessageSquare, Send, Search, AlertTriangle, ShieldCheck,
@@ -158,6 +158,141 @@ interface PropostaDetailModalProps {
   canEditInstituicao?: boolean;
 }
 
+// ── PartnerDocUpload ── upload livre de documentos (partner e admin) ──────────
+type FreeDoc = { doc_id: string; file_name: string; storage_path: string; uploaded_at: string; url: string | null };
+
+function PartnerDocUpload({ proposalId }: { proposalId: string }) {
+  const [docs, setDocs] = React.useState<FreeDoc[]>([]);
+  const [uploading, setUploading] = React.useState(false);
+  const [deleting, setDeleting] = React.useState<string | null>(null);
+  const [error, setError] = React.useState<string | null>(null);
+  const fileRef = React.useRef<HTMLInputElement>(null);
+
+  const load = React.useCallback(async () => {
+    try {
+      const res = await fetch(`/api/credit-proposals/documents?proposal_id=${proposalId}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      setDocs(data.documents ?? []);
+    } catch {
+      // silencioso
+    }
+  }, [proposalId]);
+
+  React.useEffect(() => { load(); }, [load]);
+
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    setError(null);
+    try {
+      const form = new FormData();
+      form.append("proposal_id", proposalId);
+      // doc_id livre: prefixo + timestamp para não colidir com checklist
+      form.append("doc_id", `anexo_${Date.now()}`);
+      form.append("file", file);
+      const res = await fetch("/api/credit-proposals/documents", { method: "POST", body: form });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        setError(d.error ?? "Erro ao enviar documento.");
+      } else {
+        await load();
+      }
+    } catch {
+      setError("Erro de conexão ao enviar documento.");
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  };
+
+  const handleDelete = async (doc: FreeDoc) => {
+    setDeleting(doc.storage_path);
+    try {
+      const params = new URLSearchParams({
+        proposal_id: proposalId,
+        doc_id: doc.doc_id,
+        file_key: doc.storage_path,
+      });
+      const res = await fetch(`/api/credit-proposals/documents?${params}`, { method: "DELETE" });
+      if (res.ok) setDocs(prev => prev.filter(d => d.storage_path !== doc.storage_path));
+    } finally {
+      setDeleting(null);
+    }
+  };
+
+  return (
+    <div className="rounded-xl border border-[#243A66] bg-[#111F35] p-5 space-y-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Paperclip className="w-4 h-4 text-[#C9A84C]" />
+          <span className="text-sm font-semibold text-[#F0ECE4]">Documentos Anexados</span>
+          {docs.length > 0 && (
+            <span className="text-[10px] font-bold uppercase tracking-wide text-[#C9A84C] bg-[#C9A84C]/10 px-2 py-0.5 rounded-full">
+              {docs.length}
+            </span>
+          )}
+        </div>
+        <Button
+          size="sm"
+          disabled={uploading}
+          onClick={() => fileRef.current?.click()}
+          className="bg-[#C9A84C] hover:bg-[#E8C97A] text-[#09081A] font-semibold text-xs h-8 px-3"
+        >
+          {uploading ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" /> : <Upload className="w-3.5 h-3.5 mr-1.5" />}
+          {uploading ? "Enviando…" : "Anexar Documento"}
+        </Button>
+        <input ref={fileRef} type="file" className="hidden" onChange={handleUpload} accept="*/*" />
+      </div>
+
+      {error && (
+        <p className="text-xs text-red-400 bg-red-500/10 rounded-lg px-3 py-2">{error}</p>
+      )}
+
+      {docs.length === 0 && !uploading && (
+        <p className="text-xs text-[#7A8FA8] text-center py-4">
+          Nenhum documento anexado. Clique em &quot;Anexar Documento&quot; para enviar arquivos.
+        </p>
+      )}
+
+      {docs.length > 0 && (
+        <ul className="space-y-2">
+          {docs.map(doc => (
+            <li key={doc.storage_path} className="flex items-center justify-between gap-3 rounded-lg bg-[#162744] px-3 py-2.5">
+              <div className="flex items-center gap-2 min-w-0">
+                <FileText className="w-4 h-4 text-[#7A8FA8] shrink-0" />
+                <span className="text-xs text-[#F0ECE4] truncate">{doc.file_name}</span>
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0">
+                {doc.url && (
+                  <a
+                    href={doc.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="p-1.5 rounded hover:bg-[#243A66] text-[#7A8FA8] hover:text-[#C9A84C] transition-colors"
+                    title="Baixar"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                  </a>
+                )}
+                <button
+                  onClick={() => handleDelete(doc)}
+                  disabled={deleting === doc.storage_path}
+                  className="p-1.5 rounded hover:bg-red-500/10 text-[#7A8FA8] hover:text-red-400 transition-colors disabled:opacity-50"
+                  title="Remover"
+                >
+                  {deleting === doc.storage_path ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                </button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 // ── CorrecaoFeitaBtn ── botão para partner marcar correção feita ──────────────
 function CorrecaoFeitaBtn({
   proposalId,
@@ -165,12 +300,14 @@ function CorrecaoFeitaBtn({
   docKey,
   docLabel,
   onCorrigido,
+  labelOverride,
 }: {
   proposalId: string;
   proposalCode: string;
   docKey: string;
   docLabel: string;
   onCorrigido: (novoStage: string) => void;
+  labelOverride?: string;
 }) {
   const [enviando, setEnviando] = React.useState(false);
   const [enviado, setEnviado] = React.useState(false);
@@ -210,7 +347,7 @@ function CorrecaoFeitaBtn({
       className="flex items-center gap-1 px-2 py-1 rounded text-[11px] font-semibold bg-[#C9A84C]/15 text-[#C9A84C] hover:bg-[#C9A84C]/25 border border-[#C9A84C]/30 disabled:opacity-50 transition-colors"
     >
       {enviando ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
-      {enviando ? "Enviando…" : "Correção Feita"}
+      {enviando ? "Enviando…" : (labelOverride ?? "Correção Feita")}
     </button>
   );
 }
@@ -234,10 +371,110 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
   type OcrStatus = "idle" | "loading" | "done" | "error";
   interface OcrField { campo: string; extraido: string | null; esperado: string | null; status: "ok" | "divergente" | "ausente" | "info"; mensagem: string; }
   interface OcrResultado { doc_id: string; tipo_documento: string; campos: OcrField[]; resumo: "aprovado" | "atencao" | "reprovado"; observacoes: string; }
-  const [ocrStatus, setOcrStatus] = useState<Record<string, OcrStatus>>({});
-  const [ocrResultados, setOcrResultados] = useState<Record<string, OcrResultado>>({});
+
+  // Carrega resultados OCR já salvos no metadata ao abrir o modal
+  const savedOcrResultados = (proposal?.metadata?.ocr_resultados ?? {}) as Record<string, OcrResultado>;
+  const savedOcrStatus: Record<string, OcrStatus> = {};
+  Object.keys(savedOcrResultados).forEach(k => { savedOcrStatus[k] = "done"; });
+
+  const [ocrStatus, setOcrStatus] = useState<Record<string, OcrStatus>>(savedOcrStatus);
+  const [ocrResultados, setOcrResultados] = useState<Record<string, OcrResultado>>(savedOcrResultados);
   const [ocrErros, setOcrErros] = useState<Record<string, string>>({});
   const [ocrValidandoTodos, setOcrValidandoTodos] = useState(false);
+
+  // ── Workflow de aprovação ─────────────────────────────────────────────────
+  const [showAprovar, setShowAprovar] = useState(false);
+  const [showReprovar, setShowReprovar] = useState(false);
+  const [showEscalar, setShowEscalar] = useState(false);
+  const [valorAprovado, setValorAprovado] = useState("");
+  const [motivoReprovacao, setMotivoReprovacao] = useState("");
+  const [nivelEscalar, setNivelEscalar] = useState("");
+  const [savingAprovacao, setSavingAprovacao] = useState(false);
+
+  async function handleAprovar() {
+    if (!proposal || !valorAprovado) return;
+    setSavingAprovacao(true);
+    try {
+      const val = parseFloat(valorAprovado.replace(/\D/g, "")) / 100;
+      await fetch("/api/credit-proposals", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: proposal.id, status: "APPROVED", approved_value: val, stage: "FINALIZADO" }),
+      });
+      onProposalUpdate?.(proposal.id, { status: "APPROVED", approved_value: val, stage: "FINALIZADO" });
+      onStageChange?.(proposal.id, "FINALIZADO");
+      // Notifica o partner
+      if (proposal.partner_id) {
+        fetch("/api/notifications", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            user_id: proposal.partner_id,
+            title: `✅ Proposta ${proposal.code} Aprovada`,
+            message: `Sua proposta de crédito para ${proposal.client_name} foi aprovada no valor de ${val.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}.`,
+            type: "proposal",
+            action_url: "/minhas-operacoes",
+          }),
+        }).catch(() => {});
+      }
+      setShowAprovar(false);
+      setValorAprovado("");
+    } finally { setSavingAprovacao(false); }
+  }
+
+  async function handleReprovar() {
+    if (!proposal || !motivoReprovacao.trim()) return;
+    setSavingAprovacao(true);
+    try {
+      const newMeta = { ...(proposal.metadata ?? {}), motivo_reprovacao: motivoReprovacao };
+      await fetch("/api/credit-proposals", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: proposal.id, status: "REJECTED", metadata: newMeta }),
+      });
+      onProposalUpdate?.(proposal.id, { status: "REJECTED", metadata: newMeta as typeof proposal.metadata });
+      // Notifica o partner
+      if (proposal.partner_id) {
+        fetch("/api/notifications", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            user_id: proposal.partner_id,
+            title: `❌ Proposta ${proposal.code} Reprovada`,
+            message: `Sua proposta de crédito para ${proposal.client_name} foi reprovada. Motivo: ${motivoReprovacao}`,
+            type: "proposal",
+            action_url: "/minhas-operacoes",
+          }),
+        }).catch(() => {});
+      }
+      setShowReprovar(false);
+      setMotivoReprovacao("");
+    } finally { setSavingAprovacao(false); }
+  }
+
+  async function handleEscalar() {
+    if (!proposal || !nivelEscalar) return;
+    setSavingAprovacao(true);
+    try {
+      await fetch("/api/credit-proposals", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: proposal.id, current_level: nivelEscalar, stage: "TRIAGEM", status: "PENDING" }),
+      });
+      onProposalUpdate?.(proposal.id, { current_level: nivelEscalar, stage: "TRIAGEM", status: "PENDING" });
+      onStageChange?.(proposal.id, "TRIAGEM");
+      setShowEscalar(false);
+      setNivelEscalar("");
+    } finally { setSavingAprovacao(false); }
+  }
+
+  const isEmAprovacao = proposal?.stage === "APROVACAO";
+  const nivelAtual = proposal?.current_level ?? "NIVEL_1";
+  const proximosNiveis = nivelAtual === "NIVEL_1"
+    ? [{ key: "NIVEL_2", label: "N2 — Estruturado" }, { key: "NIVEL_3", label: "N3 — High Ticket" }]
+    : nivelAtual === "NIVEL_2"
+    ? [{ key: "NIVEL_3", label: "N3 — High Ticket" }]
+    : [];
 
   // ── Solicitar correção state ──────────────────────────────────────────────
   const [solicitarDoc, setSolicitarDoc] = useState<{ docId: string; docLabel: string; motivo: string } | null>(null);
@@ -419,6 +656,18 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
     setUploadedFiles(prev => ({ ...prev, [docId]: remaining }));
     if (remaining.length === 0) {
       setCheckedDocs(prev => ({ ...prev, [docId]: false }));
+      // Remove resultado OCR ao excluir o último arquivo do documento
+      setOcrStatus(prev => { const n = { ...prev }; delete n[docId]; return n; });
+      setOcrResultados(prev => { const n = { ...prev }; delete n[docId]; return n; });
+      const newOcrResultados = { ...(proposal.metadata?.ocr_resultados as Record<string, unknown> ?? {}) };
+      delete newOcrResultados[docId];
+      const newMeta = { ...(proposal.metadata ?? {}), ocr_resultados: newOcrResultados };
+      onProposalUpdate?.(proposal.id, { metadata: newMeta as typeof proposal.metadata });
+      fetch("/api/credit-proposals", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: proposal.id, metadata: newMeta }),
+      }).catch(() => {});
     }
     if (!IS_DEMO) {
       fetch(
@@ -464,6 +713,14 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
       if (!res.ok) throw new Error(json.error ?? "Erro ao validar");
       setOcrResultados(prev => ({ ...prev, [docId]: json.resultado }));
       setOcrStatus(prev => ({ ...prev, [docId]: "done" }));
+      // Persiste resultado no metadata para não perder ao recarregar
+      const newMeta = { ...(proposal.metadata ?? {}), ocr_resultados: { ...(proposal.metadata?.ocr_resultados as Record<string, unknown> ?? {}), [docId]: json.resultado } };
+      onProposalUpdate?.(proposal.id, { metadata: newMeta as typeof proposal.metadata });
+      fetch("/api/credit-proposals", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: proposal.id, metadata: newMeta }),
+      }).catch(() => {});
     } catch (e: unknown) {
       setOcrErros(prev => ({ ...prev, [docId]: e instanceof Error ? e.message : "Erro desconhecido" }));
       setOcrStatus(prev => ({ ...prev, [docId]: "error" }));
@@ -1178,8 +1435,14 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
     onStageChange?.(proposal.id, PIPELINE_STAGES[activeIdx + 1].key);
   }
 
+  function goBack() {
+    if (!proposal || activeIdx <= 0) return;
+    onStageChange?.(proposal.id, PIPELINE_STAGES[activeIdx - 1].key);
+  }
+
   const isFinished = activeIdx === PIPELINE_STAGES.length - 1;
   const nextStage = !isFinished ? PIPELINE_STAGES[activeIdx + 1] : null;
+  const prevStage = activeIdx > 0 ? PIPELINE_STAGES[activeIdx - 1] : null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
@@ -1258,7 +1521,7 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
                           Solicitado em {new Date(p.created_at).toLocaleDateString("pt-BR")}
                         </p>
                       </div>
-                      {/* Botão Correção Feita — apenas partner */}
+                      {/* Botão Correção Feita — partner */}
                       {!canChangeStage && (
                         <CorrecaoFeitaBtn
                           proposalId={proposal.id}
@@ -1274,11 +1537,34 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
                           }}
                         />
                       )}
+                      {/* Botão Pendência Resolvida — mesa operacional/admin */}
+                      {canChangeStage && (
+                        <CorrecaoFeitaBtn
+                          proposalId={proposal.id}
+                          proposalCode={proposal.code}
+                          docKey={docKey}
+                          docLabel={p.doc_label}
+                          onCorrigido={(novoStage) => {
+                            const newMeta = { ...proposal.metadata };
+                            const pends = { ...(newMeta.pendencias_ocr as Record<string, unknown> ?? {}) };
+                            pends[docKey] = { ...p, status: "corrigido", corrigido_at: new Date().toISOString() };
+                            newMeta.pendencias_ocr = pends;
+                            // Mesa não retrocede stage automaticamente — apenas marca como resolvido
+                            onProposalUpdate?.(proposal.id, { metadata: newMeta as typeof proposal.metadata });
+                          }}
+                          labelOverride="Pendência Resolvida"
+                        />
+                      )}
                     </div>
                   ))}
                   {!canChangeStage && (
                     <p className="text-[10px] text-muted-foreground/60">
                       Após clicar em "Correção Feita", a mesa será notificada e a proposta voltará para Triagem automaticamente.
+                    </p>
+                  )}
+                  {canChangeStage && (
+                    <p className="text-[10px] text-muted-foreground/60">
+                      Clique em "Pendência Resolvida" para marcar o documento como corrigido e liberar o andamento da proposta.
                     </p>
                   )}
                 </div>
@@ -1931,6 +2217,11 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
 
           </div>{/* fim wrapper detalhes+recomendacao */}
 
+          {/* ── Upload livre de documentos (partner e admin) ── */}
+          {modalTab === "documentos" && (
+            <PartnerDocUpload proposalId={proposal.id} />
+          )}
+
           {/* ── Documentos Enviados pelo Cliente (Captação) ── */}
           {modalTab === "documentos" && (() => {
             const meta = proposal.metadata ?? {};
@@ -2338,13 +2629,48 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
               </Button>
             )}
           </div>
-          {canChangeStage && !isFinished && nextStage && (
+          {canChangeStage && activeIdx > 0 && prevStage && !isEmAprovacao && (
+            <Button size="sm" variant="outline" onClick={goBack} className="gap-2 border-border text-muted-foreground hover:text-white">
+              <ArrowLeft className="w-4 h-4" />
+              Retroceder para <span className={prevStage.color}>{prevStage.label}</span>
+            </Button>
+          )}
+          {canChangeStage && !isFinished && nextStage && !isEmAprovacao && (
             <Button size="sm" onClick={advance} className="gap-2">
               Avançar para <span className={nextStage.color}>{nextStage.label}</span>
               <ArrowRight className="w-4 h-4" />
             </Button>
           )}
-          {isFinished && (
+          {/* ── Botões de aprovação — apenas em "Em Aprovação" ── */}
+          {canChangeStage && isEmAprovacao && (
+            <div className="flex items-center gap-2 flex-wrap">
+              {proximosNiveis.length > 0 && (
+                <Button size="sm" variant="outline" onClick={() => setShowEscalar(true)}
+                  className="gap-1.5 border-amber-500/40 text-amber-400 hover:bg-amber-500/10">
+                  <ArrowRight className="w-3.5 h-3.5" /> Escalar Nível
+                </Button>
+              )}
+              <Button size="sm" variant="outline" onClick={() => setShowReprovar(true)}
+                className="gap-1.5 border-red-500/40 text-red-400 hover:bg-red-500/10">
+                <X className="w-3.5 h-3.5" /> Reprovar
+              </Button>
+              <Button size="sm" onClick={() => setShowAprovar(true)}
+                className="gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white border-0">
+                <CheckCircle2 className="w-3.5 h-3.5" /> Aprovar
+              </Button>
+            </div>
+          )}
+          {isFinished && proposal?.status === "APPROVED" && (
+            <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 text-xs px-3 py-1">
+              <CheckCircle2 className="w-3 h-3 mr-1" /> Aprovada — {proposal.approved_value ? formatCurrency(proposal.approved_value) : "Finalizada"}
+            </Badge>
+          )}
+          {proposal?.status === "REJECTED" && (
+            <Badge className="bg-red-500/20 text-red-400 border-red-500/30 text-xs px-3 py-1">
+              ✗ Reprovada
+            </Badge>
+          )}
+          {isFinished && proposal?.status !== "APPROVED" && proposal?.status !== "REJECTED" && (
             <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 text-xs px-3 py-1">
               <CheckCircle2 className="w-3 h-3 mr-1" /> Proposta Finalizada
             </Badge>
@@ -2352,6 +2678,112 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
           </div>
         </div>
       </div>
+
+      {/* ── Modal: Aprovar ── */}
+      {showAprovar && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+          <div className="bg-card border border-emerald-500/30 rounded-2xl w-full max-w-sm animate-fade-in">
+            <div className="flex items-center gap-2 px-5 py-4 border-b border-border">
+              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+              <h3 className="text-sm font-bold text-white">Aprovar Proposta</h3>
+            </div>
+            <div className="px-5 py-4 space-y-4">
+              <p className="text-xs text-muted-foreground">Informe o valor aprovado pela instituição financeira.</p>
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Valor Aprovado *</label>
+                <input
+                  type="text"
+                  value={valorAprovado}
+                  onChange={e => {
+                    const nums = e.target.value.replace(/\D/g, "");
+                    const val = parseFloat(nums) / 100;
+                    setValorAprovado(isNaN(val) ? "" : val.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }));
+                  }}
+                  placeholder="R$ 0,00"
+                  className="w-full h-9 px-3 text-sm bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                />
+              </div>
+              <p className="text-[11px] text-muted-foreground">O partner será notificado automaticamente e a proposta será finalizada.</p>
+            </div>
+            <div className="px-5 py-4 border-t border-border flex gap-2 justify-end">
+              <Button size="sm" variant="outline" onClick={() => { setShowAprovar(false); setValorAprovado(""); }}>Cancelar</Button>
+              <Button size="sm" onClick={handleAprovar} disabled={!valorAprovado || savingAprovacao}
+                className="bg-emerald-600 hover:bg-emerald-500 border-0 text-white gap-1.5">
+                {savingAprovacao ? <span className="w-3 h-3 rounded-full border-2 border-white border-t-transparent animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+                Confirmar Aprovação
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal: Reprovar ── */}
+      {showReprovar && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+          <div className="bg-card border border-red-500/30 rounded-2xl w-full max-w-sm animate-fade-in">
+            <div className="flex items-center gap-2 px-5 py-4 border-b border-border">
+              <X className="w-4 h-4 text-red-400" />
+              <h3 className="text-sm font-bold text-white">Reprovar Proposta</h3>
+            </div>
+            <div className="px-5 py-4 space-y-4">
+              <p className="text-xs text-muted-foreground">Informe o motivo da reprovação. O partner será notificado.</p>
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Motivo *</label>
+                <textarea
+                  value={motivoReprovacao}
+                  onChange={e => setMotivoReprovacao(e.target.value)}
+                  placeholder="Ex: Score insuficiente, documentação incompleta, restrições cadastrais..."
+                  rows={4}
+                  className="w-full px-3 py-2 text-sm bg-secondary border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-red-500/50 resize-none"
+                />
+              </div>
+            </div>
+            <div className="px-5 py-4 border-t border-border flex gap-2 justify-end">
+              <Button size="sm" variant="outline" onClick={() => { setShowReprovar(false); setMotivoReprovacao(""); }}>Cancelar</Button>
+              <Button size="sm" onClick={handleReprovar} disabled={!motivoReprovacao.trim() || savingAprovacao}
+                className="bg-red-600 hover:bg-red-500 border-0 text-white gap-1.5">
+                {savingAprovacao ? <span className="w-3 h-3 rounded-full border-2 border-white border-t-transparent animate-spin" /> : <X className="w-3.5 h-3.5" />}
+                Confirmar Reprovação
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal: Escalar Nível ── */}
+      {showEscalar && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+          <div className="bg-card border border-amber-500/30 rounded-2xl w-full max-w-sm animate-fade-in">
+            <div className="flex items-center gap-2 px-5 py-4 border-b border-border">
+              <ArrowRight className="w-4 h-4 text-amber-400" />
+              <h3 className="text-sm font-bold text-white">Escalar Nível</h3>
+            </div>
+            <div className="px-5 py-4 space-y-4">
+              <p className="text-xs text-muted-foreground">Selecione o nível para onde a proposta será escalada. Ela voltará para Triagem no novo nível.</p>
+              <div className="flex flex-col gap-2">
+                {proximosNiveis.map(n => (
+                  <button key={n.key} onClick={() => setNivelEscalar(n.key)}
+                    className={`w-full text-left px-4 py-3 rounded-lg border transition-all text-sm font-medium ${
+                      nivelEscalar === n.key
+                        ? "border-amber-500/60 bg-amber-500/15 text-amber-400"
+                        : "border-border text-muted-foreground hover:bg-secondary"
+                    }`}>
+                    {n.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="px-5 py-4 border-t border-border flex gap-2 justify-end">
+              <Button size="sm" variant="outline" onClick={() => { setShowEscalar(false); setNivelEscalar(""); }}>Cancelar</Button>
+              <Button size="sm" onClick={handleEscalar} disabled={!nivelEscalar || savingAprovacao}
+                className="gap-1.5 border-amber-500/40 text-amber-400 bg-amber-500/10 hover:bg-amber-500/20">
+                {savingAprovacao ? <span className="w-3 h-3 rounded-full border-2 border-amber-400 border-t-transparent animate-spin" /> : <ArrowRight className="w-3.5 h-3.5" />}
+                Confirmar Escalada
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Modal: Compilar Documentos ── */}
       {showCompile && (
