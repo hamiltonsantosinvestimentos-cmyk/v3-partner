@@ -1,10 +1,11 @@
 "use client";
 
-import React, { useState, useMemo, useEffect } from "react";
-import { Play, Search, GraduationCap, Clock, ChevronRight, CheckCircle2, BookOpen, Flame, Star, Settings } from "lucide-react";
+import React, { useState, useMemo, useEffect, useRef, useCallback } from "react";
+import { Play, Search, GraduationCap, Clock, ChevronRight, CheckCircle2, BookOpen, Flame, Star, Settings, Award } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { VideoPlayer } from "./video-player";
 import { AcademyAdmin, loadYtLinks } from "./academy-admin";
+import { AcademyCertificate } from "./academy-certificate";
 import { ACADEMY_CATEGORIES, getAllVideos, type Video, type VideoCategory } from "@/lib/academy-data";
 
 const LEVEL_COLORS: Record<string, string> = {
@@ -32,11 +33,9 @@ function VideoCard({ video, onPlay, progress, index, ytId }: {
       onMouseLeave={() => setHovered(false)}
       onClick={() => onPlay(video)}
     >
-      {/* Thumbnail */}
       <div className={`relative rounded-xl overflow-hidden transition-all duration-300 ${hovered ? "scale-105 shadow-2xl ring-2 ring-white/20" : ""}`}
         style={{ aspectRatio: "16/9" }}>
         <div className={`absolute inset-0 bg-gradient-to-br ${video.gradient}`} />
-        {/* YouTube thumbnail overlay */}
         {ytId && (
           <img
             src={`https://img.youtube.com/vi/${ytId}/mqdefault.jpg`}
@@ -49,27 +48,24 @@ function VideoCard({ video, onPlay, progress, index, ytId }: {
             backgroundImage: "linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px)",
             backgroundSize: "40px 40px"
           }} />
-
-        {/* Duration badge */}
         <div className="absolute bottom-2 right-2 px-1.5 py-0.5 rounded bg-black/70 text-[10px] text-white font-mono">
           {video.duration}
         </div>
-
-        {/* Progress bar */}
         {progress && progress > 0 && (
           <div className="absolute bottom-0 left-0 right-0 h-1 bg-white/20">
             <div className="h-full bg-red-500 transition-all" style={{ width: `${progress}%` }} />
           </div>
         )}
-
-        {/* Completed badge */}
         {progress === 100 && (
           <div className="absolute top-2 right-2">
             <CheckCircle2 className="w-5 h-5 text-emerald-400 drop-shadow" />
           </div>
         )}
-
-        {/* Hover overlay */}
+        {video.required && (
+          <div className="absolute top-2 left-2 px-1.5 py-0.5 rounded bg-[#C9A84C]/80 text-[9px] text-[#09081A] font-black uppercase">
+            Obrigatório
+          </div>
+        )}
         {hovered && (
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/50 transition-all">
             <div className="w-12 h-12 rounded-full bg-white/90 flex items-center justify-center mb-2 shadow-lg">
@@ -79,8 +75,6 @@ function VideoCard({ video, onPlay, progress, index, ytId }: {
           </div>
         )}
       </div>
-
-      {/* Info */}
       <div className="mt-2 px-0.5">
         <p className="text-xs font-semibold text-white leading-tight line-clamp-2 group-hover:text-white/90">{video.title}</p>
         <div className="flex items-center gap-1.5 mt-1">
@@ -120,8 +114,7 @@ function CategoryRow({ category, onPlay, progress, ytLinks }: {
 
   function scroll(dir: "left" | "right") {
     if (!scrollRef.current) return;
-    const amount = 460;
-    scrollRef.current.scrollBy({ left: dir === "left" ? -amount : amount, behavior: "smooth" });
+    scrollRef.current.scrollBy({ left: dir === "left" ? -460 : 460, behavior: "smooth" });
   }
 
   function onScroll() {
@@ -134,7 +127,6 @@ function CategoryRow({ category, onPlay, progress, ytLinks }: {
 
   return (
     <div className="relative">
-      {/* Row header */}
       <div className="flex items-center justify-between mb-3 px-1">
         <div className="flex items-center gap-2">
           <span className="text-lg">{category.icon}</span>
@@ -147,13 +139,16 @@ function CategoryRow({ category, onPlay, progress, ytLinks }: {
               {completedCount}/{category.videos.length} concluídos
             </Badge>
           )}
+          {completedCount === category.videos.length && category.videos.length > 0 && (
+            <Badge className="bg-[#C9A84C]/20 text-[#C9A84C] border-[#C9A84C]/30 text-[10px] flex items-center gap-1">
+              <Award className="w-2.5 h-2.5" /> Certificado disponível
+            </Badge>
+          )}
         </div>
         <button className="text-xs text-muted-foreground hover:text-white flex items-center gap-1 transition-colors">
           Ver todos <ChevronRight className="w-3.5 h-3.5" />
         </button>
       </div>
-
-      {/* Scroll container */}
       <div className="relative">
         {canScrollLeft && (
           <button onClick={() => scroll("left")}
@@ -186,15 +181,12 @@ function HeroBanner({ video, onPlay }: { video: Video; onPlay: (v: Video) => voi
       <div className={`absolute inset-0 bg-gradient-to-br ${video.gradient}`} />
       <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/40 to-transparent" />
       <div className="absolute inset-0 bg-gradient-to-t from-[#060D1A] via-transparent to-transparent" />
-
-      {/* Animated particles */}
       <div className="absolute inset-0 overflow-hidden">
         {Array.from({ length: 8 }).map((_, i) => (
           <div key={i} className="absolute w-1 h-1 rounded-full bg-white/20 animate-pulse"
             style={{ left: `${10 + i * 12}%`, top: `${20 + (i % 3) * 25}%`, animationDelay: `${i * 0.3}s` }} />
         ))}
       </div>
-
       <div className="absolute inset-0 flex flex-col justify-end px-8 pb-8">
         <div className="max-w-xl">
           <div className="flex items-center gap-2 mb-3">
@@ -224,7 +216,7 @@ function HeroBanner({ video, onPlay }: { video: Video; onPlay: (v: Video) => voi
 }
 
 // ── Main Academy Client ──────────────────────────────────────────────────────
-export function AcademyClient({ initialCategory, userRole }: { initialCategory?: string; userRole?: string }) {
+export function AcademyClient({ initialCategory, userRole, userName }: { initialCategory?: string; userRole?: string; userName?: string }) {
   const isAdmin = userRole === "ADMIN";
   const [activeTab, setActiveTab] = useState<"content" | "admin">("content");
   const [activeCategory, setActiveCategory] = useState<string>(initialCategory ?? "all");
@@ -232,9 +224,23 @@ export function AcademyClient({ initialCategory, userRole }: { initialCategory?:
   const [playingVideo, setPlayingVideo] = useState<Video | null>(null);
   const [videoProgress, setVideoProgress] = useState<Record<string, number>>({});
   const [ytLinks, setYtLinks] = useState<Record<string, string>>({});
+  const [certificates, setCertificates] = useState<Set<string>>(new Set());
+  const [certificate, setCertificate] = useState<{ categoryId: string; issuedAt: string } | null>(null);
+  const saveProgressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Load progress, YT links e certificates da API
   useEffect(() => {
-    setYtLinks(loadYtLinks());
+    Promise.all([
+      fetch("/api/academy/progress").then((r) => r.json()),
+      fetch("/api/academy/yt-links").then((r) => r.json()),
+      fetch("/api/academy/certificates").then((r) => r.json()),
+    ]).then(([pData, lData, cData]) => {
+      if (pData.progress) setVideoProgress(pData.progress);
+      if (lData.links) setYtLinks(lData.links);
+      if (cData.certificates) {
+        setCertificates(new Set((cData.certificates as { category_id: string }[]).map((c) => c.category_id)));
+      }
+    }).catch(() => {});
   }, []);
 
   const allVideos = getAllVideos();
@@ -262,23 +268,64 @@ export function AcademyClient({ initialCategory, userRole }: { initialCategory?:
     return p > 0 && p < 90;
   });
 
-  // Find adjacent videos for player nav
   const flatVideosInCategory = playingVideo
     ? (ACADEMY_CATEGORIES.find((c) => c.id === playingVideo.category)?.videos ?? [])
     : [];
   const currentIdx = flatVideosInCategory.findIndex((v) => v.id === playingVideo?.id);
 
+  // Verifica e emite certificado de categoria
+  const checkCertificate = useCallback(async (videoId: string, pct: number) => {
+    if (pct < 90) return;
+    const video = allVideos.find((v) => v.id === videoId);
+    if (!video) return;
+    const category = ACADEMY_CATEGORIES.find((c) => c.id === video.category);
+    if (!category || certificates.has(category.id)) return;
+
+    // Verifica se todos os vídeos da categoria estão concluídos (incluindo o atual)
+    const updatedProgress = { ...videoProgress, [videoId]: pct };
+    const allDone = category.videos.every((v) => (updatedProgress[v.id] ?? 0) >= 90);
+    if (!allDone) return;
+
+    // Emite certificado
+    const res = await fetch("/api/academy/certificates", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ category_id: category.id }),
+    });
+    const d = await res.json();
+    if (d.certificate) {
+      setCertificates((prev) => new Set([...prev, category.id]));
+      if (!d.already_had) {
+        setCertificate({ categoryId: category.id, issuedAt: d.certificate.issued_at });
+      }
+    }
+  }, [allVideos, certificates, videoProgress]);
+
+  // Salva progresso com debounce
   function handleProgress(videoId: string, pct: number) {
     setVideoProgress((prev) => ({ ...prev, [videoId]: pct }));
+    if (saveProgressTimer.current) clearTimeout(saveProgressTimer.current);
+    saveProgressTimer.current = setTimeout(() => {
+      fetch("/api/academy/progress", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ video_id: videoId, progress_pct: pct }),
+      }).catch(() => {});
+      checkCertificate(videoId, pct);
+    }, 3000);
   }
 
   const totalVideos = allVideos.length;
   const completedVideos = allVideos.filter((v) => (videoProgress[v.id] ?? 0) >= 90).length;
   const totalHours = Math.floor(allVideos.reduce((s, v) => s + v.durationSecs, 0) / 3600);
 
+  // Dados do certificado para exibir
+  const certCategory = certificate
+    ? ACADEMY_CATEGORIES.find((c) => c.id === certificate.categoryId)
+    : null;
+
   return (
     <div className="animate-fade-in">
-      {/* Header */}
       {/* Header */}
       <div className="flex items-start justify-between mb-4">
         <div className="flex items-center gap-3">
@@ -291,7 +338,6 @@ export function AcademyClient({ initialCategory, userRole }: { initialCategory?:
           </div>
         </div>
         <div className="flex items-center gap-3">
-          {/* Stats */}
           <div className="hidden md:flex items-center gap-4 text-xs text-muted-foreground">
             <div className="flex items-center gap-1.5">
               <BookOpen className="w-3.5 h-3.5 text-blue-400" />
@@ -305,8 +351,13 @@ export function AcademyClient({ initialCategory, userRole }: { initialCategory?:
               <Flame className="w-3.5 h-3.5 text-orange-400" />
               <span className="text-white font-semibold">{continueWatching.length}</span> em progresso
             </div>
+            {certificates.size > 0 && (
+              <div className="flex items-center gap-1.5">
+                <Award className="w-3.5 h-3.5 text-[#C9A84C]" />
+                <span className="text-white font-semibold">{certificates.size}</span> certificados
+              </div>
+            )}
           </div>
-          {/* Admin tab button */}
           {isAdmin && (
             <button
               onClick={() => setActiveTab(activeTab === "admin" ? "content" : "admin")}
@@ -328,92 +379,70 @@ export function AcademyClient({ initialCategory, userRole }: { initialCategory?:
         <AcademyAdmin ytLinks={ytLinks} onLinksChange={setYtLinks} />
       )}
 
-      {/* Content — hidden when admin tab is active */}
+      {/* Content */}
       {activeTab === "content" && <>
+        <div className="relative mb-5">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar videoaulas, instrutores, temas..."
+            className="w-full h-10 pl-10 pr-4 text-sm bg-secondary border border-border rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
+          />
+        </div>
 
-      {/* Search */}
-      <div className="relative mb-5">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Buscar videoaulas, instrutores, temas..."
-          className="w-full h-10 pl-10 pr-4 text-sm bg-secondary border border-border rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
-        />
-      </div>
-
-      {/* Category Tabs */}
-      {!search && (
-        <div className="flex gap-1.5 overflow-x-auto pb-1 mb-6 scrollbar-none" style={{ scrollbarWidth: "none" }}>
-          <button
-            onClick={() => setActiveCategory("all")}
-            className={`flex-shrink-0 px-4 py-1.5 rounded-full text-xs font-semibold transition-all ${activeCategory === "all" ? "bg-white text-black" : "bg-secondary text-muted-foreground hover:text-white border border-border"}`}
-          >
-            Todos
-          </button>
-          {ACADEMY_CATEGORIES.map((cat) => (
-            <button key={cat.id}
-              onClick={() => setActiveCategory(cat.id)}
-              className={`flex-shrink-0 flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold transition-all border ${
-                activeCategory === cat.id
-                  ? "text-white border-current"
-                  : "bg-secondary text-muted-foreground hover:text-white border-border"
-              }`}
-              style={activeCategory === cat.id ? { background: `${cat.color}25`, borderColor: `${cat.color}60`, color: cat.color } : {}}>
-              <span>{cat.icon}</span>{cat.label}
+        {!search && (
+          <div className="flex gap-1.5 overflow-x-auto pb-1 mb-6 scrollbar-none" style={{ scrollbarWidth: "none" }}>
+            <button
+              onClick={() => setActiveCategory("all")}
+              className={`flex-shrink-0 px-4 py-1.5 rounded-full text-xs font-semibold transition-all ${activeCategory === "all" ? "bg-white text-black" : "bg-secondary text-muted-foreground hover:text-white border border-border"}`}
+            >
+              Todos
             </button>
+            {ACADEMY_CATEGORIES.map((cat) => (
+              <button key={cat.id}
+                onClick={() => setActiveCategory(cat.id)}
+                className={`flex-shrink-0 flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold transition-all border ${
+                  activeCategory === cat.id ? "text-white border-current" : "bg-secondary text-muted-foreground hover:text-white border-border"
+                }`}
+                style={activeCategory === cat.id ? { background: `${cat.color}25`, borderColor: `${cat.color}60`, color: cat.color } : {}}>
+                <span>{cat.icon}</span>{cat.label}
+                {certificates.has(cat.id) && <Award className="w-3 h-3 text-[#C9A84C]" />}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {activeCategory === "all" && !search && (
+          <HeroBanner video={featuredVideo} onPlay={setPlayingVideo} />
+        )}
+
+        {continueWatching.length > 0 && !search && (
+          <div className="mb-8">
+            <CategoryRow
+              category={{ id: "continue", label: "Continuar Assistindo", description: "Retome de onde parou", icon: "▶️", color: "#F97316", videos: continueWatching }}
+              onPlay={setPlayingVideo}
+              progress={videoProgress}
+              ytLinks={ytLinks}
+            />
+          </div>
+        )}
+
+        <div className="space-y-8">
+          {filteredCategories.map((category) => (
+            <CategoryRow key={category.id} category={category} onPlay={setPlayingVideo} progress={videoProgress} ytLinks={ytLinks} />
           ))}
         </div>
-      )}
 
-      {/* Hero Banner — only on "all" without search */}
-      {activeCategory === "all" && !search && (
-        <HeroBanner video={featuredVideo} onPlay={setPlayingVideo} />
-      )}
-
-      {/* Continue Watching */}
-      {continueWatching.length > 0 && !search && (
-        <div className="mb-8">
-          <CategoryRow
-            category={{
-              id: "continue",
-              label: "Continuar Assistindo",
-              description: "Retome de onde parou",
-              icon: "▶️",
-              color: "#F97316",
-              videos: continueWatching,
-            }}
-            onPlay={setPlayingVideo}
-            progress={videoProgress}
-            ytLinks={ytLinks}
-          />
-        </div>
-      )}
-
-      {/* Category Rows */}
-      <div className="space-y-8">
-        {filteredCategories.map((category) => (
-          <CategoryRow
-            key={category.id}
-            category={category}
-            onPlay={setPlayingVideo}
-            progress={videoProgress}
-            ytLinks={ytLinks}
-          />
-        ))}
-      </div>
-
-      {/* No results */}
-      {filteredCategories.length === 0 && (
-        <div className="flex flex-col items-center justify-center py-20 gap-3">
-          <Search className="w-10 h-10 text-muted-foreground" />
-          <p className="text-muted-foreground text-sm">Nenhuma aula encontrada para "{search}"</p>
-        </div>
-      )}
-
+        {filteredCategories.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-20 gap-3">
+            <Search className="w-10 h-10 text-muted-foreground" />
+            <p className="text-muted-foreground text-sm">Nenhuma aula encontrada para &quot;{search}&quot;</p>
+          </div>
+        )}
       </>}
 
-      {/* Video Player — always rendered outside content fragment */}
+      {/* Video Player */}
       {playingVideo && (
         <VideoPlayer
           video={playingVideo}
@@ -425,6 +454,17 @@ export function AcademyClient({ initialCategory, userRole }: { initialCategory?:
           onProgress={handleProgress}
           savedProgress={playingVideo ? Math.round((videoProgress[playingVideo.id] ?? 0) / 100 * playingVideo.durationSecs) : 0}
           youtubeUrl={ytLinks[playingVideo.id]}
+        />
+      )}
+
+      {/* Certificate modal */}
+      {certificate && certCategory && (
+        <AcademyCertificate
+          partnerName={userName || "Partner"}
+          categoryLabel={certCategory.label}
+          categoryIcon={certCategory.icon}
+          issuedAt={certificate.issuedAt}
+          onClose={() => setCertificate(null)}
         />
       )}
     </div>

@@ -14,6 +14,7 @@ export interface Video {
   accentColor: string;     // hex for glow effects
   tags: string[];
   featured?: boolean;
+  required?: boolean;      // obrigatório para novos partners
 }
 
 export interface VideoCategory {
@@ -48,6 +49,7 @@ export const ACADEMY_CATEGORIES: VideoCategory[] = [
         accentColor: "#3B6EF8",
         tags: ["LTV", "CMN 4.676", "Garantia"],
         featured: true,
+        required: true,
       },
       {
         id: "he-002",
@@ -316,6 +318,7 @@ export const ACADEMY_CATEGORIES: VideoCategory[] = [
         gradient: "from-orange-600 via-red-600 to-orange-700",
         accentColor: "#EA580C",
         featured: true,
+        required: true,
       },
       {
         id: "sf-002",
@@ -422,6 +425,7 @@ export const ACADEMY_CATEGORIES: VideoCategory[] = [
         gradient: "from-slate-600 via-gray-600 to-slate-700",
         accentColor: "#475569",
         featured: true,
+        required: true,
       },
       {
         id: "comp-002",
