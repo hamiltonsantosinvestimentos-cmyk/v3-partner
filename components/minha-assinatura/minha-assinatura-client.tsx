@@ -158,21 +158,63 @@ export function MinhaAssinaturaClient({ profile, contract, commissions }: Props)
             </button>
           )}
 
-          {/* Botão upgrade — apenas para PARTNER (não PRO) */}
-          {profile.role === "PARTNER" && (
-            <button
-              onClick={handleUpgrade}
-              disabled={upgradeStatus === "loading" || upgradeStatus === "ok"}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold bg-[#C9A84C]/15 border border-[#C9A84C]/30 text-[#C9A84C] hover:bg-[#C9A84C]/25 transition-all disabled:opacity-60"
-            >
-              {upgradeStatus === "loading"
-                ? <Loader2 className="w-4 h-4 animate-spin" />
-                : <ArrowUpCircle className="w-4 h-4" />}
-              {upgradeStatus === "ok" ? "Solicitação enviada!" : upgradeStatus === "err" ? "Erro — tente novamente" : "Fazer Upgrade para PRO"}
-            </button>
-          )}
+          {/* Upgrade movido para card de comparação abaixo */}
         </div>
       </div>
+
+      {/* Comparativo de planos — apenas para PARTNER (não PRO) */}
+      {profile.role === "PARTNER" && (
+        <div className="rounded-2xl border border-[#C9A84C]/20 bg-[#C9A84C]/5 p-5">
+          <p className="text-xs font-bold text-[#C9A84C] uppercase tracking-widest mb-4">Compare os Planos</p>
+          <div className="grid grid-cols-2 gap-4">
+            {/* Partner atual */}
+            <div className="rounded-xl bg-[#111F35] border border-[#243A66] p-4 space-y-3">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center">
+                  <Shield className="w-4 h-4 text-blue-400" />
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-[#F0ECE4]">V3 Partner</p>
+                  <p className="text-xs text-[#7A8FA8]">Plano atual</p>
+                </div>
+              </div>
+              <p className="text-xl font-bold text-blue-400">R$ 197<span className="text-xs font-normal text-[#7A8FA8]">/mês</span></p>
+              <ul className="space-y-1.5 text-xs text-[#7A8FA8]">
+                {["30% de comissão", "Acesso a crédito N1 e N2", "CRM completo", "M&A pipeline", "Split Fiscal", "Academy básico"].map(b => (
+                  <li key={b} className="flex items-center gap-1.5"><CheckCircle2 className="w-3 h-3 text-blue-400 flex-shrink-0" />{b}</li>
+                ))}
+              </ul>
+            </div>
+            {/* PRO */}
+            <div className="rounded-xl bg-[#1A1500] border border-[#C9A84C]/40 p-4 space-y-3 relative overflow-hidden">
+              <div className="absolute top-0 right-0 bg-[#C9A84C] text-[#09081A] text-[9px] font-black px-2 py-0.5 rounded-bl-lg">PRO</div>
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-[#C9A84C]/20 flex items-center justify-center">
+                  <Crown className="w-4 h-4 text-[#C9A84C]" />
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-[#F0ECE4]">V3 Partner PRO</p>
+                  <p className="text-xs text-[#C9A84C]">Upgrade disponível</p>
+                </div>
+              </div>
+              <p className="text-xl font-bold text-[#C9A84C]">R$ 397<span className="text-xs font-normal text-[#7A8FA8]">/mês</span></p>
+              <ul className="space-y-1.5 text-xs text-[#7A8FA8]">
+                {["50% de comissão (+67%)", "Crédito N1, N2 e N3 High Ticket", "Co-branding V3 Partners", "Priority support", "Mesa de Crédito completa", "Academy M&A exclusivo"].map(b => (
+                  <li key={b} className="flex items-center gap-1.5"><CheckCircle2 className="w-3 h-3 text-[#C9A84C] flex-shrink-0" />{b}</li>
+                ))}
+              </ul>
+              <button
+                onClick={handleUpgrade}
+                disabled={upgradeStatus === "loading" || upgradeStatus === "ok"}
+                className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-bold bg-[#C9A84C] text-[#09081A] hover:bg-[#E8C97A] disabled:opacity-60 transition-all mt-1"
+              >
+                {upgradeStatus === "loading" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ArrowUpCircle className="w-3.5 h-3.5" />}
+                {upgradeStatus === "ok" ? "Solicitação enviada!" : upgradeStatus === "err" ? "Erro — tente novamente" : "Solicitar Upgrade para PRO"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* KPIs financeiros */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

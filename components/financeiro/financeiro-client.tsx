@@ -141,6 +141,46 @@ function VisaoGeralTab() {
   const dreAtual = DEMO_DRE[DEMO_DRE.length - 1];
   const dreMesAnterior = DEMO_DRE[DEMO_DRE.length - 2];
 
+  // Carrega despesas reais do mês atual para mostrar em aberto vs pagas
+  const mesAtual = new Date().getMonth() + 1;
+  const anoAtual = new Date().getFullYear();
+  const [despesasAberto, setDespesasAberto] = React.useState(0);
+  const [despesasPagas, setDespesasPagas] = React.useState(0);
+
+  React.useEffect(() => {
+    Promise.all([
+      fetch("/api/financeiro?type=despesa_fixa").then(r => r.json()),
+      fetch("/api/financeiro?type=despesa_variavel").then(r => r.json()),
+      fetch("/api/financeiro?type=despesa_fixa_paga").then(r => r.json()),
+    ]).then(([fixasJson, variaveisJson, pagasJson]) => {
+      const templates: Array<{ id: string; valor: number }> =
+        (fixasJson.records ?? []).map((r: { id: string; data: { id: string; valor: number } }) => ({ ...r.data, _dbId: r.id }));
+      const variaveis: Array<{ mes: number; ano: number; valor: number; status: string }> =
+        (variaveisJson.records ?? []).map((r: { data: { mes: number; ano: number; valor: number; status: string } }) => r.data);
+      const fixasPagasSet = new Set<string>(
+        (pagasJson.records ?? [])
+          .map((r: { data: { despesaBaseId: string; mes: number; ano: number } }) =>
+            `${r.data.despesaBaseId}-${r.data.mes}-${r.data.ano}`)
+      );
+
+      // Fixas do mês: soma as pagas e as em aberto
+      let fixaAberto = 0, fixaPaga = 0;
+      for (const t of templates) {
+        const key = `${t.id}-${mesAtual}-${anoAtual}`;
+        if (fixasPagasSet.has(key)) fixaPaga += t.valor;
+        else fixaAberto += t.valor;
+      }
+
+      // Variáveis do mês
+      const varMes = variaveis.filter(d => d.mes === mesAtual && d.ano === anoAtual);
+      const varAberto = varMes.filter(d => d.status !== "PAGA").reduce((s, d) => s + d.valor, 0);
+      const varPaga   = varMes.filter(d => d.status === "PAGA").reduce((s, d) => s + d.valor, 0);
+
+      setDespesasAberto(fixaAberto + varAberto);
+      setDespesasPagas(fixaPaga + varPaga);
+    }).catch(() => {});
+  }, [mesAtual, anoAtual]);
+
   if (!dreAtual) {
     return (
       <div className="space-y-5">
@@ -148,7 +188,8 @@ function VisaoGeralTab() {
           <KpiCard label="Comissões a Pagar" value={formatMoeda(comissoesAPagar)} sub="pendentes" icon={CreditCard} color="#F59E0B" />
           <KpiCard label="Impostos a Recolher" value={formatMoeda(impostoAPagar)} sub="meses abertos" icon={Receipt} color="#EF4444" />
           <KpiCard label="Folha do Mês" value={formatMoeda(bruto)} sub={`${DEMO_FUNCIONARIOS.length} colaboradores`} icon={Users} color="#8B5CF6" />
-          <KpiCard label="Despesas Fixas" value={formatMoeda(DESPESAS_FIXAS_TEMPLATES.reduce((s, t) => s + t.valor, 0))} sub="mensais recorrentes" icon={FileText} color="#06B6D4" />
+          <KpiCard label="Despesas em Aberto" value={formatMoeda(despesasAberto)} sub={`${MESES_PT[mesAtual - 1]}/${anoAtual}`} icon={Clock} color="#F59E0B" />
+          <KpiCard label="Despesas Pagas" value={formatMoeda(despesasPagas)} sub={`${MESES_PT[mesAtual - 1]}/${anoAtual}`} icon={CheckCircle2} color="#22C55E" />
         </div>
         <div className="flex items-center justify-center h-40 text-muted-foreground text-sm">
           Cadastre lançamentos no DRE para visualizar o painel financeiro.
@@ -169,7 +210,8 @@ function VisaoGeralTab() {
         <KpiCard label="Comissões a Pagar" value={formatMoeda(comissoesAPagar)} sub={`${DEMO_COMISSOES.filter(c => c.status === "A_PAGAR").length} pendentes`} icon={CreditCard} color="#F59E0B" />
         <KpiCard label="Impostos a Recolher" value={formatMoeda(impostoAPagar)} sub="meses abertos" icon={Receipt} color="#EF4444" />
         <KpiCard label="Folha do Mês" value={formatMoeda(bruto)} sub={`${DEMO_FUNCIONARIOS.length} colaboradores`} icon={Users} color="#8B5CF6" />
-        <KpiCard label="Despesas Fixas" value={formatMoeda(DESPESAS_FIXAS_TEMPLATES.reduce((s, t) => s + t.valor, 0))} sub="mensais recorrentes" icon={FileText} color="#06B6D4" />
+        <KpiCard label="Despesas em Aberto" value={formatMoeda(despesasAberto)} sub={`${MESES_PT[mesAtual - 1]}/${anoAtual} · fixas + variáveis`} icon={Clock} color="#F59E0B" />
+        <KpiCard label="Despesas Pagas" value={formatMoeda(despesasPagas)} sub={`${MESES_PT[mesAtual - 1]}/${anoAtual} · fixas + variáveis`} icon={CheckCircle2} color="#22C55E" />
         <KpiCard label="Margem Líquida" value={`${((dreAtual.lucroLiquido / dreAtual.receitas) * 100).toFixed(1)}%`} sub="lucro / receita bruta" icon={TrendingUp} color="#10B981" />
         <KpiCard label="EBITDA" value={formatMoeda(dreAtual.ebitda)} sub={MESES_PT[dreAtual.mes - 1]} icon={BarChart3} color="#C9A84C" />
       </div>
@@ -939,11 +981,15 @@ function DespesasTab() {
   const [mes, setMes] = useState(new Date().getMonth() + 1);
   const [ano, setAno] = useState(new Date().getFullYear());
   const [subtab, setSubtab] = useState<"fixas" | "variaveis">("fixas");
+  const [filtroStatus, setFiltroStatus] = useState<"ABERTAS" | "PAGAS">("ABERTAS");
   const [showModal, setShowModal] = useState(false);
   const [templates, setTemplates] = useState<import("@/lib/demo-data-financeiro").DespesaFixaTemplate[]>([]);
   const [todasVariaveis, setTodasVariaveis] = useState<import("@/lib/demo-data-financeiro").Despesa[]>([]);
   const [editandoFixaTpl, setEditandoFixaTpl] = useState<import("@/lib/demo-data-financeiro").DespesaFixaTemplate | null>(null);
   const [editandoVariavel, setEditandoVariavel] = useState<import("@/lib/demo-data-financeiro").Despesa | null>(null);
+  // Rastreia quais despesas fixas foram pagas por mês: key = `${despesaBaseId}-${mes}-${ano}`, value = dbId
+  const [fixasPagas, setFixasPagas] = useState<Map<string, string>>(new Map());
+  const [marcandoPago, setMarcandoPago] = useState<string | null>(null);
 
   // Carrega do Supabase na montagem
   React.useEffect(() => {
@@ -954,6 +1000,18 @@ function DespesasTab() {
     fetch("/api/financeiro?type=despesa_variavel")
       .then(r => r.json())
       .then(json => { if (json.records?.length) setTodasVariaveis(json.records.map((r: { id: string; data: import("@/lib/demo-data-financeiro").Despesa }) => ({ ...r.data, _dbId: r.id }))); })
+      .catch(() => {});
+    fetch("/api/financeiro?type=despesa_fixa_paga")
+      .then(r => r.json())
+      .then(json => {
+        if (json.records?.length) {
+          const map = new Map<string, string>();
+          json.records.forEach((r: { id: string; data: { despesaBaseId: string; mes: number; ano: number } }) => {
+            map.set(`${r.data.despesaBaseId}-${r.data.mes}-${r.data.ano}`, r.id);
+          });
+          setFixasPagas(map);
+        }
+      })
       .catch(() => {});
   }, []);
 
@@ -970,22 +1028,27 @@ function DespesasTab() {
     setTodasVariaveis(prev => prev.filter(d => d.id !== id));
   };
 
-  // Fixas: expande os templates (incluindo os novos) para o mês selecionado
+  // Fixas: expande os templates para o mês selecionado, aplicando status de pagamento
   const fixas = useMemo(() => {
-    return templates.map(t => ({
-      id: `fix-${t.id}-${mes}-${ano}`,
-      descricao: t.descricao,
-      categoria: t.categoria,
-      tipo: "FIXA" as const,
-      valor: t.valor,
-      mes, ano,
-      autoReplicada: true,
-      despesaBaseId: t.id,
-      fornecedor: t.fornecedor,
-      vencimento: `${ano}-${String(mes).padStart(2, "0")}-${String(t.diaVencimento).padStart(2, "0")}`,
-      status: "PENDENTE" as const,
-    }));
-  }, [templates, mes, ano]);
+    return templates.map(t => {
+      const fixaKey = `${t.id}-${mes}-${ano}`;
+      const paga = fixasPagas.has(fixaKey);
+      return {
+        id: `fix-${t.id}-${mes}-${ano}`,
+        descricao: t.descricao,
+        categoria: t.categoria,
+        tipo: "FIXA" as const,
+        valor: t.valor,
+        mes, ano,
+        autoReplicada: true,
+        despesaBaseId: t.id,
+        fornecedor: t.fornecedor,
+        vencimento: `${ano}-${String(mes).padStart(2, "0")}-${String(t.diaVencimento).padStart(2, "0")}`,
+        status: paga ? "PAGA" as const : "PENDENTE" as const,
+        _fixaKey: fixaKey,
+      };
+    });
+  }, [templates, mes, ano, fixasPagas]);
 
   // Variáveis: todas (demo + novas) filtradas por mês/ano
   const variaveis = useMemo(() => {
@@ -995,6 +1058,43 @@ function DespesasTab() {
   const totalFixas = fixas.reduce((s, d) => s + d.valor, 0);
   const totalVariaveis = variaveis.reduce((s, d) => s + d.valor, 0);
   const items = subtab === "fixas" ? fixas : variaveis;
+
+  // Filtra por status
+  const itemsFiltrados = useMemo(() => {
+    if (filtroStatus === "ABERTAS") return items.filter(d => d.status !== "PAGA");
+    if (filtroStatus === "PAGAS")   return items.filter(d => d.status === "PAGA");
+    return items;
+  }, [items, filtroStatus]);
+
+  const totalAberto = items.filter(d => d.status !== "PAGA").reduce((s, d) => s + d.valor, 0);
+  const totalPago   = items.filter(d => d.status === "PAGA").reduce((s, d) => s + d.valor, 0);
+
+  async function handleMarcarPago(d: typeof items[0]) {
+    setMarcandoPago(d.id);
+    try {
+      if (subtab === "variaveis") {
+        const existing = todasVariaveis.find(x => x.id === d.id) as (import("@/lib/demo-data-financeiro").Despesa & { _dbId?: string });
+        if (existing?._dbId) {
+          await fetch("/api/financeiro", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id: existing._dbId, data: { ...existing, status: "PAGA" } }),
+          });
+        }
+        setTodasVariaveis(prev => prev.map(x => x.id === d.id ? { ...x, status: "PAGA" as const } : x));
+      } else {
+        // Fixa: salva registro de pagamento no Supabase
+        const res = await fetch("/api/financeiro", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ type: "despesa_fixa_paga", data: { despesaBaseId: d.despesaBaseId, mes, ano } }),
+        });
+        const json = await res.json();
+        const key = (d as typeof d & { _fixaKey?: string })._fixaKey ?? `${d.despesaBaseId}-${mes}-${ano}`;
+        setFixasPagas(prev => new Map(prev).set(key, json.record?.id ?? "ok"));
+      }
+    } finally { setMarcandoPago(null); }
+  }
 
   return (
     <>
@@ -1037,7 +1137,7 @@ function DespesasTab() {
 
       <div className="space-y-4">
         <div className="flex items-center justify-between flex-wrap gap-3">
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3 flex-wrap">
             <MonthSelector mes={mes} ano={ano} onChange={(m, a) => { setMes(m); setAno(a); }} />
             <div className="flex bg-secondary rounded-lg p-0.5">
               <button onClick={() => setSubtab("fixas")} className={`px-4 py-1.5 rounded-md text-xs font-semibold transition-all ${subtab === "fixas" ? "bg-[#C9A84C] text-white" : "text-muted-foreground hover:text-foreground"}`}>
@@ -1045,6 +1145,17 @@ function DespesasTab() {
               </button>
               <button onClick={() => setSubtab("variaveis")} className={`px-4 py-1.5 rounded-md text-xs font-semibold transition-all ${subtab === "variaveis" ? "bg-[#C9A84C] text-white" : "text-muted-foreground hover:text-foreground"}`}>
                 Variáveis <span className="ml-1 opacity-70">{formatMoeda(totalVariaveis)}</span>
+              </button>
+            </div>
+            {/* Filtro Em Aberto / Pagas */}
+            <div className="flex bg-secondary rounded-lg p-0.5">
+              <button onClick={() => setFiltroStatus("ABERTAS")} className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all flex items-center gap-1.5 ${filtroStatus === "ABERTAS" ? "bg-amber-500/30 text-amber-400" : "text-muted-foreground hover:text-foreground"}`}>
+                <Clock className="w-3 h-3" /> Em Aberto
+                <span className="ml-0.5 font-bold">{items.filter(d => d.status !== "PAGA").length}</span>
+              </button>
+              <button onClick={() => setFiltroStatus("PAGAS")} className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all flex items-center gap-1.5 ${filtroStatus === "PAGAS" ? "bg-emerald-500/30 text-emerald-400" : "text-muted-foreground hover:text-foreground"}`}>
+                <CheckCircle2 className="w-3 h-3" /> Pagas
+                <span className="ml-0.5 font-bold">{items.filter(d => d.status === "PAGA").length}</span>
               </button>
             </div>
           </div>
@@ -1091,19 +1202,25 @@ function DespesasTab() {
                   </tr>
                 </thead>
                 <tbody>
-                  {items.length === 0 ? (
+                  {itemsFiltrados.length === 0 ? (
                     <tr>
                       <td colSpan={7} className="px-4 py-10 text-center text-muted-foreground">
                         <div className="flex flex-col items-center gap-2">
                           <Receipt className="w-7 h-7 opacity-20" />
-                          <span>Nenhuma despesa {subtab === "fixas" ? "fixa" : "variável"} neste mês</span>
-                          <button onClick={() => setShowModal(true)} className="text-[#C9A84C] hover:underline text-xs mt-1">
-                            + Adicionar agora
-                          </button>
+                          <span>
+                            {filtroStatus === "PAGAS" ? "Nenhuma despesa paga neste mês" :
+                             filtroStatus === "ABERTAS" ? "Nenhuma despesa em aberto neste mês 🎉" :
+                             `Nenhuma despesa ${subtab === "fixas" ? "fixa" : "variável"} neste mês`}
+                          </span>
+                          {filtroStatus === "ABERTAS" && (
+                            <button onClick={() => setShowModal(true)} className="text-[#C9A84C] hover:underline text-xs mt-1">
+                              + Adicionar agora
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
-                  ) : items.map((d, i) => (
+                  ) : itemsFiltrados.map((d, i) => (
                     <tr key={d.id} className={`border-b border-border/20 hover:bg-secondary/30 transition-colors ${i % 2 === 0 ? "" : "bg-[#091221]/40"}`}>
                       <td className="px-4 py-3 font-medium text-white">{d.descricao}</td>
                       <td className="px-4 py-3">
@@ -1121,7 +1238,21 @@ function DespesasTab() {
                         </td>
                       )}
                       <td className="px-4 py-3">
-                        <div className="flex gap-1">
+                        <div className="flex gap-1 items-center">
+                          {/* Botão Pago — apenas para despesas em aberto */}
+                          {d.status !== "PAGA" && (
+                            <button
+                              onClick={() => handleMarcarPago(d)}
+                              disabled={marcandoPago === d.id}
+                              className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/25 disabled:opacity-50 transition-all whitespace-nowrap"
+                              title="Marcar como pago"
+                            >
+                              {marcandoPago === d.id
+                                ? <Loader2 className="w-3 h-3 animate-spin" />
+                                : <CheckCircle2 className="w-3 h-3" />}
+                              Pago
+                            </button>
+                          )}
                           <button
                             onClick={() => {
                               if (subtab === "fixas") {
@@ -1157,9 +1288,16 @@ function DespesasTab() {
                 </tbody>
                 <tfoot>
                   <tr className="bg-[#0F1E35] border-t border-[#C9A84C]/30">
-                    <td className="px-4 py-3 font-bold text-[#C9A84C]" colSpan={4}>TOTAL {subtab === "fixas" ? "FIXAS" : "VARIÁVEIS"} — {items.length} item{items.length !== 1 ? "s" : ""}</td>
-                    <td className="px-4 py-3 font-bold text-[#C9A84C]">{formatMoeda(subtab === "fixas" ? totalFixas : totalVariaveis)}</td>
-                    <td colSpan={3} />
+                    <td className="px-4 py-3 font-bold text-[#C9A84C]" colSpan={3}>
+                      TOTAL — {itemsFiltrados.length} item{itemsFiltrados.length !== 1 ? "s" : ""}
+                    </td>
+                    <td className="px-4 py-2" colSpan={2}>
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-[10px] text-amber-400 font-semibold">Em aberto: {formatMoeda(totalAberto)}</span>
+                        <span className="text-[10px] text-emerald-400 font-semibold">Pago: {formatMoeda(totalPago)}</span>
+                      </div>
+                    </td>
+                    <td colSpan={subtab === "fixas" ? 3 : 2} />
                   </tr>
                 </tfoot>
               </table>

@@ -30,6 +30,24 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({ notifications: data ?? [] });
 }
 
+// POST — cria uma notificação para um usuário específico (uso interno/server)
+export async function POST(req: NextRequest) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+
+  const body = await req.json();
+  const { user_id, title, message, type = "info", action_url } = body;
+  if (!user_id || !title) return NextResponse.json({ error: "user_id e title obrigatórios" }, { status: 400 });
+
+  const { error } = await svc()
+    .from("notifications")
+    .insert({ user_id, title, message, type, action_url, read: false });
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ ok: true });
+}
+
 // PATCH — marca TODAS as notificações do usuário como lidas
 export async function PATCH(req: NextRequest) {
   const supabase = await createClient();

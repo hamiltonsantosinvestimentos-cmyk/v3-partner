@@ -16,6 +16,9 @@ import {
   DollarSign,
   Crown,
   AlertCircle,
+  Phone,
+  Download,
+  CalendarDays,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -193,6 +196,24 @@ interface DashboardClientProps {
     target_company: string;
     created_at: string;
   }>;
+  recentProposals?: Array<{
+    id: string;
+    code: string;
+    title: string;
+    client_name: string;
+    requested_value: number;
+    current_level: string;
+    status: string;
+    created_at: string;
+  }>;
+  followUps?: Array<{
+    id: string;
+    name: string;
+    phone: string | null;
+    next_contact: string;
+    status: string;
+    segment: string | null;
+  }>;
 }
 
 export function DashboardClient({
@@ -205,6 +226,8 @@ export function DashboardClient({
   kpis,
   recentSplits,
   recentDeals,
+  recentProposals = [],
+  followUps = [],
 }: DashboardClientProps) {
   const router = useRouter();
   const [greeting, setGreeting] = useState("Olá");
@@ -365,6 +388,50 @@ export function DashboardClient({
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Exportar Relatório Gerencial — apenas ADMIN/GESTAO/FINANCEIRO */}
+      {["ADMIN", "GESTAO", "FINANCEIRO"].includes(role) && (
+        <div className="flex justify-end">
+          <button
+            onClick={() => {
+              const rows = [
+                ["Métrica", "Valor"],
+                ["Split Fiscal", kpis.totalSplits],
+                ["Deals M&A", kpis.totalDeals],
+                ["Tickets Abertos", kpis.openTickets],
+                ["Propostas Crédito", kpis.pendingProposals],
+                ...(redeHealth ? [
+                  ["Partners Ativos", redeHealth.partnersAtivos],
+                  ["Partners PRO", redeHealth.partnersPRO],
+                  ["MRR (R$)", redeHealth.mrr],
+                  ["Comissões Pendentes (R$)", redeHealth.comissoesPendentes],
+                  ["Vencendo 7d", redeHealth.vencendo7d],
+                ] : []),
+              ];
+              const now = new Date().toLocaleDateString("pt-BR");
+              const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/><title>Relatório V3 Partners</title>
+              <style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:'Segoe UI',Arial,sans-serif;font-size:12px;color:#1a1a2e;background:#fff}
+              .header{background:linear-gradient(135deg,#09081A,#111F35);color:#F0ECE4;padding:24px 32px;display:flex;justify-content:space-between;align-items:center}
+              .header h1{font-size:18px;font-weight:700;color:#C9A84C}.header .sub{font-size:11px;color:#7A8FA8;margin-top:4px}
+              table{width:100%;border-collapse:collapse;margin:24px 32px;width:calc(100% - 64px)}
+              th{background:#111F35;color:#C9A84C;font-size:10px;text-transform:uppercase;letter-spacing:.1em;padding:10px 14px;text-align:left}
+              td{padding:10px 14px;border-bottom:1px solid #e5e7eb;font-size:12px}tr:nth-child(even)td{background:#f9fafb}
+              .footer{margin:24px 32px;font-size:9px;color:#9ca3af;border-top:1px solid #e5e7eb;padding-top:8px}
+              @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}</style></head>
+              <body><div class="header"><div><h1>Relatório Gerencial — V3 Partners</h1><div class="sub">Período: ${PERIOD_LABELS[period] ?? period} · Gerado em ${now}</div></div></div>
+              <table><thead><tr>${rows[0].map(h => `<th>${h}</th>`).join("")}</tr></thead>
+              <tbody>${rows.slice(1).map(r => `<tr>${r.map(c => `<td>${c}</td>`).join("")}</tr>`).join("")}</tbody></table>
+              <div class="footer">V3 Partners Soluções Ltda · CNPJ 14.219.287/0001-50 · v3partners.com.br</div></body></html>`;
+              const win = window.open("", "_blank");
+              if (win) { win.document.write(html); win.document.close(); win.print(); }
+            }}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold border border-[#C9A84C]/30 text-[#C9A84C] bg-[#C9A84C]/5 hover:bg-[#C9A84C]/15 transition-colors"
+          >
+            <Download className="w-3.5 h-3.5" />
+            Exportar Relatório
+          </button>
         </div>
       )}
 
@@ -538,12 +605,13 @@ export function DashboardClient({
               </div>
             ) : (
               recentDeals.map((deal) => (
-                <div
+                <a
                   key={deal.id}
-                  className="flex items-center justify-between py-2 border-b border-border/30 last:border-0"
+                  href={`/ma/${deal.id}`}
+                  className="flex items-center justify-between py-2 border-b border-border/30 last:border-0 hover:bg-secondary/40 rounded px-1 -mx-1 transition-colors cursor-pointer group"
                 >
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-foreground truncate">
+                    <p className="text-sm font-medium text-foreground truncate group-hover:text-[#E8C97A] transition-colors">
                       {deal.target_company}
                     </p>
                     <p className="text-xs text-muted-foreground">
@@ -560,11 +628,105 @@ export function DashboardClient({
                       {deal.stage}
                     </span>
                   </div>
-                </div>
+                </a>
               ))
             )}
           </CardContent>
         </Card>
+
+        {/* Follow-ups da Semana — CRM */}
+        {followUps.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm font-semibold flex items-center justify-between">
+                <span className="flex items-center gap-1.5"><CalendarDays className="w-4 h-4 text-amber-400" /> Follow-ups da Semana</span>
+                <a href="/crm" className="text-xs text-[#C9A84C] hover:text-[#E8C97A] transition-colors">Ver CRM →</a>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {followUps.map((lead) => {
+                const d = new Date(lead.next_contact + "T00:00:00");
+                const hoje = new Date(); hoje.setHours(0,0,0,0);
+                const dias = Math.round((d.getTime() - hoje.getTime()) / 86400000);
+                const urgente = dias === 0;
+                const amanha = dias === 1;
+                return (
+                  <a key={lead.id} href="/crm"
+                    className="flex items-center justify-between py-2 border-b border-border/30 last:border-0 hover:bg-secondary/40 rounded px-1 -mx-1 transition-colors group">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-foreground truncate group-hover:text-[#E8C97A] transition-colors">{lead.name}</p>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        {lead.phone && <span className="text-[10px] text-muted-foreground flex items-center gap-1"><Phone className="w-2.5 h-2.5" />{lead.phone}</span>}
+                        {lead.segment && <span className="text-[10px] text-muted-foreground">{lead.segment}</span>}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 ml-3 flex-shrink-0">
+                      <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${urgente ? "bg-red-500/20 text-red-400" : amanha ? "bg-amber-500/20 text-amber-400" : "bg-emerald-500/20 text-emerald-400"}`}>
+                        {urgente ? "Hoje" : amanha ? "Amanhã" : `${dias}d`}
+                      </span>
+                    </div>
+                  </a>
+                );
+              })}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Recent Credit Proposals */}
+        {recentProposals.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm font-semibold flex items-center justify-between">
+                <span>Propostas de Crédito Recentes</span>
+                <a href="/mesa-credito" className="text-xs text-[#C9A84C] hover:text-[#E8C97A] transition-colors">
+                  Ver mesa →
+                </a>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {recentProposals.map((p) => {
+                const nivelMap: Record<string, string> = {
+                  NIVEL_1: "/mesa-credito/nivel-1",
+                  NIVEL_2: "/mesa-credito/nivel-2",
+                  NIVEL_3: "/mesa-credito/nivel-3",
+                };
+                const nivelLabel: Record<string, string> = {
+                  NIVEL_1: "N1 Varejo",
+                  NIVEL_2: "N2 Estruturado",
+                  NIVEL_3: "N3 High Ticket",
+                };
+                const href = nivelMap[p.current_level] ?? "/mesa-credito";
+                return (
+                  <a
+                    key={p.id}
+                    href={href}
+                    className="flex items-center justify-between py-2 border-b border-border/30 last:border-0 hover:bg-secondary/40 rounded px-1 -mx-1 transition-colors cursor-pointer group"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-foreground truncate group-hover:text-[#E8C97A] transition-colors">
+                        {p.client_name}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {p.code} · {formatDate(p.created_at)}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 ml-3">
+                      <span className="text-sm font-semibold text-white">
+                        {formatCurrency(p.requested_value)}
+                      </span>
+                      <span className="text-[10px] bg-blue-500/20 text-blue-400 border border-blue-500/30 px-1.5 py-0.5 rounded whitespace-nowrap">
+                        {nivelLabel[p.current_level] ?? p.current_level}
+                      </span>
+                      <Badge className={`text-[10px] ${STATUS_COLORS[p.status as OperationStatus]}`}>
+                        {STATUS_LABELS[p.status as OperationStatus]}
+                      </Badge>
+                    </div>
+                  </a>
+                );
+              })}
+            </CardContent>
+          </Card>
+        )}
       </div>
     </div>
   );
