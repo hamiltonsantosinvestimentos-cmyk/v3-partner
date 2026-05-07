@@ -132,10 +132,8 @@ export async function POST(req: NextRequest) {
     query = query.eq("role", "PARTNER_PRO");
   } else if (filtro === "BASE") {
     query = query.eq("role", "PARTNER");
-  } else if (filtro === "TRIAL") {
-    query = query.eq("role", "TRIAL");
   } else {
-    query = query.in("role", ["PARTNER", "PARTNER_PRO", "TRIAL"]);
+    query = query.in("role", ["PARTNER", "PARTNER_PRO"]);
   }
 
   const { data: partners, error: dbErr } = await query;

@@ -1,10 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Send, History, Users, Crown, Shield, UserCheck, ChevronDown, CheckCircle2, AlertCircle, Loader2, Mail } from "lucide-react";
+import { Send, History, Users, Crown, Shield, ChevronDown, CheckCircle2, AlertCircle, Loader2, Mail } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 
-type Filtro = "TODOS" | "PRO" | "BASE" | "TRIAL";
+type Filtro = "TODOS" | "PRO" | "BASE";
 type Historico = {
   id: string;
   assunto: string;
@@ -15,10 +15,9 @@ type Historico = {
 };
 
 const FILTROS: { value: Filtro; label: string; icon: React.ReactNode; desc: string }[] = [
-  { value: "TODOS", label: "Todos os Partners", icon: <Users className="w-4 h-4" />, desc: "Partner + PRO + Trial" },
+  { value: "TODOS", label: "Todos os Partners", icon: <Users className="w-4 h-4" />, desc: "Partner + PRO" },
   { value: "PRO", label: "Apenas PRO", icon: <Crown className="w-4 h-4 text-[#C9A84C]" />, desc: "50% comissão · co-branding" },
   { value: "BASE", label: "Apenas Base", icon: <Shield className="w-4 h-4 text-blue-400" />, desc: "30% comissão" },
-  { value: "TRIAL", label: "Apenas Trial", icon: <UserCheck className="w-4 h-4 text-emerald-400" />, desc: "Período de avaliação" },
 ];
 
 export function ComunicadosPanel() {
