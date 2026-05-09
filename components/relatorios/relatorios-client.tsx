@@ -89,7 +89,7 @@ export function ReportosClient({ reports, generatedReports = [], userRole }: Pro
       </div>
 
       {/* Grid */}
-      {filtered.length === 0 ? (
+      {filtered.length === 0 && !(showGenerated && generatedReports.length > 0) ? (
         <div className="flex flex-col items-center justify-center h-64 text-center">
           <BarChart2 className="w-12 h-12 text-[#243A66] mb-4" />
           <p className="text-[#7A8FA8] text-sm">Nenhum relatório encontrado.</p>
