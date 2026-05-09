@@ -380,6 +380,11 @@ export function AgentesClient({ squads, userName }: Props) {
 
 function WelcomeScreen({ squad, onSuggest }: { squad: Squad; onSuggest: (t: string) => void }) {
   const SUGESTOES: Record<string, string[]> = {
+    "market-scout": [
+      "Buyer Side: fundo de PE americano busca usinas de etanol no Brasil, ticket USD 50–200M",
+      "Seller Side: quem são os mandatários de diesel EN-590 exportação nas Américas — USGC e Brasil",
+      "Match request: investidor asiático quer minério de lítio brasileiro — mapeie vendedores e intermediários",
+    ],
     "analista-ma": [
       "Analise uma distribuidora de alimentos com faturamento de R$ 20M e EBITDA de 8%",
       "Qual instrumento financeiro é mais adequado para antecipar recebíveis de uma construtora?",
@@ -504,6 +509,7 @@ function MessageBubble({ msg, squad, userName, copied, onCopy, copyId, isLastAss
 }
 
 function ThinkingIndicator({ squad }: { squad: Squad }) {
+  const isScout = squad.id === "market-scout";
   return (
     <div className="flex gap-3">
       <div className="w-8 h-8 rounded-full bg-[#C9A84C]/20 flex items-center justify-center shrink-0">
@@ -511,7 +517,9 @@ function ThinkingIndicator({ squad }: { squad: Squad }) {
       </div>
       <div className="bg-[#111F35] border border-[#243A66] rounded-2xl rounded-tl-sm px-4 py-3">
         <div className="flex gap-1 items-center">
-          <span className="text-[#7A8FA8] text-xs">{squad.nome} está pensando</span>
+          <span className="text-[#7A8FA8] text-xs">
+            {isScout ? "Market Scout mapeando mandatários" : `${squad.nome} está pensando`}
+          </span>
           <span className="flex gap-0.5">
             {[0,1,2].map(i => (
               <span key={i} className="w-1 h-1 rounded-full bg-[#C9A84C] animate-bounce"
@@ -519,6 +527,11 @@ function ThinkingIndicator({ squad }: { squad: Squad }) {
             ))}
           </span>
         </div>
+        {isScout && (
+          <p className="text-[#7A8FA8] text-[10px] mt-1">
+            Pesquisando Buyer Side + Seller Side · Pode levar até 30s
+          </p>
+        )}
       </div>
     </div>
   );
