@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import { Send, Plus, Bot, User, Copy, Check, Download, ChevronRight, Loader2, FileText } from "lucide-react";
+import { Send, Plus, Bot, User, Copy, Check, Download, ChevronRight, Loader2, FileText, Briefcase } from "lucide-react";
+import { DealIntakeModal } from "@/components/hub/deal-intake-modal";
 import type { Squad } from "@/lib/squads";
 
 interface Message { role: "user" | "assistant"; content: string; ts?: string; }
@@ -33,6 +34,8 @@ export function AgentesClient({ squads, userName }: Props) {
   const [sidebarOpen, setSidebarOpen]     = useState(false);
   const [exporting, setExporting]         = useState(false);
   const [exportDone, setExportDone]       = useState(false);
+  const [showDealModal, setShowDealModal] = useState(false);
+  const [scoutPrefill, setScoutPrefill]   = useState<Record<string, string>>({});
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -159,6 +162,26 @@ export function AgentesClient({ squads, userName }: Props) {
       }),
     });
     if (res.ok) alert("Sessão exportada com sucesso.");
+  }
+
+  // Criar deal a partir do Scout
+  function openDealFromScout() {
+    const last = [...messages].reverse().find(m => m.role === "assistant");
+    if (!last) return;
+
+    // Tenta extrair setor do conteúdo
+    const content = last.content.toLowerCase();
+    let setor = "ma_cross_border";
+    if (content.includes("real estate") || content.includes("imóvel") || content.includes("imobil")) setor = "real_estate";
+    else if (content.includes("mineração") || content.includes("commodity") || content.includes("diesel") || content.includes("petróleo") || content.includes("commodit")) setor = "mineracao_commodities";
+    else if (content.includes("crédito") || content.includes("recebível") || content.includes("fidc") || content.includes("cri")) setor = "credito_recebiveis";
+
+    setScoutPrefill({
+      setor,
+      origem_lead: "cold_outreach",
+      observacoes: `Gerado pelo Market Scout V3.\n\n${last.content.substring(0, 400)}`,
+    });
+    setShowDealModal(true);
   }
 
   // Export as V3 HTML Report
@@ -341,6 +364,7 @@ export function AgentesClient({ squads, userName }: Props) {
                   onExport={exportAsV3Report}
                   exporting={exporting}
                   exportDone={exportDone}
+                  onCreateDeal={activeSquad.id === "market-scout" && isLast ? openDealFromScout : undefined}
                 />
               );
             })
@@ -348,6 +372,15 @@ export function AgentesClient({ squads, userName }: Props) {
           {loading && <ThinkingIndicator squad={activeSquad} />}
           <div ref={bottomRef} />
         </div>
+
+        {/* Modal Criar Deal — Market Scout */}
+        {showDealModal && (
+          <DealIntakeModal
+            prefill={scoutPrefill}
+            onClose={() => setShowDealModal(false)}
+            onSuccess={() => setShowDealModal(false)}
+          />
+        )}
 
         {/* Input */}
         <div className="px-6 py-4 border-t border-[#243A66] bg-[#111F35] shrink-0">
@@ -440,10 +473,11 @@ function WelcomeScreen({ squad, onSuggest }: { squad: Squad; onSuggest: (t: stri
   );
 }
 
-function MessageBubble({ msg, squad, userName, copied, onCopy, copyId, isLastAssistant, onExport, exporting, exportDone }: {
+function MessageBubble({ msg, squad, userName, copied, onCopy, copyId, isLastAssistant, onExport, exporting, exportDone, onCreateDeal }: {
   msg: Message; squad: Squad; userName: string;
   copied: string | null; onCopy: (c: string) => void; copyId: string;
   isLastAssistant?: boolean; onExport?: () => void; exporting?: boolean; exportDone?: boolean;
+  onCreateDeal?: () => void;
 }) {
   const isUser = msg.role === "user";
 
@@ -495,10 +529,21 @@ function MessageBubble({ msg, squad, userName, copied, onCopy, copyId, isLastAss
                 {exporting ? (
                   <><Loader2 className="w-3 h-3 animate-spin" /> Gerando relatório...</>
                 ) : exportDone ? (
-                  <><Check className="w-3 h-3" /> Relatório gerado! Ver em Relatórios V3</>
+                  <><Check className="w-3 h-3" /> Relatório gerado!</>
                 ) : (
                   <><FileText className="w-3 h-3" /> Gerar Relatório V3</>
                 )}
+              </button>
+            )}
+
+            {/* Botão Criar Deal — só no Market Scout, última resposta */}
+            {isLastAssistant && onCreateDeal && (
+              <button
+                onClick={onCreateDeal}
+                className="flex items-center gap-1.5 text-[10px] font-semibold px-3 py-1.5 rounded-lg transition-all bg-[#162744] hover:bg-[#243A66] border border-[#243A66] hover:border-[#C9A84C] text-[#F0ECE4]"
+              >
+                <Briefcase className="w-3 h-3 text-[#C9A84C]" />
+                Criar Deal
               </button>
             )}
           </div>

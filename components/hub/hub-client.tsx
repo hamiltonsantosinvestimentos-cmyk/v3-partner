@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import { X, Building2, TrendingUp, Layers, Mail, Send, Plus, Trash2 } from "lucide-react";
+import { DealIntakeModal } from "./deal-intake-modal";
 
 export interface HubDeal {
   id: string;
@@ -57,25 +58,41 @@ function formatDate(iso: string): string {
 }
 
 export function HubClient({ deals, userRole }: HubClientProps) {
-  const [selected, setSelected] = useState<HubDeal | null>(null);
+  const [selected, setSelected]     = useState<HubDeal | null>(null);
+  const [showIntake, setShowIntake] = useState(false);
+  const [dealList, setDealList]     = useState<HubDeal[]>(deals);
+
+  function handleNewDeal() {
+    // Reload page to show the new deal
+    window.location.reload();
+  }
 
   return (
     <div className="min-h-screen bg-[#09081A] p-6">
       {/* Header */}
-      <div className="mb-8">
-        <div className="flex items-center gap-2 mb-1">
-          <Layers className="w-5 h-5 text-[#C9A84C]" />
-          <span className="text-[#C9A84C] text-xs font-bold tracking-[2px] uppercase">Hub de Inteligência</span>
+      <div className="mb-8 flex items-start justify-between">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <Layers className="w-5 h-5 text-[#C9A84C]" />
+            <span className="text-[#C9A84C] text-xs font-bold tracking-[2px] uppercase">Hub de Inteligência</span>
+          </div>
+          <h1 className="text-[#F0ECE4] text-3xl font-bold">Deals V3</h1>
+          <p className="text-[#7A8FA8] text-sm mt-1">
+            {dealList.length} {dealList.length === 1 ? "deal registrado" : "deals registrados"}
+            {userRole === "ADMIN" ? " · Visão completa (ADMIN)" : " · Visão interna"}
+          </p>
         </div>
-        <h1 className="text-[#F0ECE4] text-3xl font-bold">Deals V3</h1>
-        <p className="text-[#7A8FA8] text-sm mt-1">
-          {deals.length} {deals.length === 1 ? "deal registrado" : "deals registrados"}
-          {userRole === "ADMIN" ? " · Visão completa (ADMIN)" : " · Visão interna"}
-        </p>
+        <button
+          onClick={() => setShowIntake(true)}
+          className="flex items-center gap-2 bg-[#C9A84C] hover:bg-[#E8C97A] text-[#09081A] font-bold text-sm px-4 py-2.5 rounded-xl transition-colors shrink-0"
+        >
+          <Plus className="w-4 h-4" />
+          Novo Deal
+        </button>
       </div>
 
       {/* Gallery Grid */}
-      {deals.length === 0 ? (
+      {dealList.length === 0 ? (
         <div className="flex flex-col items-center justify-center h-64 text-center">
           <Layers className="w-12 h-12 text-[#243A66] mb-4" />
           <p className="text-[#7A8FA8] text-sm">Nenhum deal registrado ainda.</p>
@@ -83,7 +100,7 @@ export function HubClient({ deals, userRole }: HubClientProps) {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {deals.map((deal) => (
+          {dealList.map((deal) => (
             <DealCard
               key={deal.id}
               deal={deal}
@@ -93,12 +110,16 @@ export function HubClient({ deals, userRole }: HubClientProps) {
         </div>
       )}
 
-      {/* Modal */}
+      {/* Modal deal detalhe */}
       {selected && (
-        <DealModal
-          deal={selected}
-          userRole={userRole}
-          onClose={() => setSelected(null)}
+        <DealModal deal={selected} userRole={userRole} onClose={() => setSelected(null)} />
+      )}
+
+      {/* Modal novo deal */}
+      {showIntake && (
+        <DealIntakeModal
+          onClose={() => setShowIntake(false)}
+          onSuccess={handleNewDeal}
         />
       )}
     </div>
