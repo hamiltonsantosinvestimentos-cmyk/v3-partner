@@ -8,7 +8,7 @@ import {
   LayoutDashboard, Users, BrainCircuit, PieChart, Building2,
   CreditCard, Headphones, ChevronDown, ChevronRight, X,
   Trophy, GraduationCap, Handshake, Settings2, Medal,
-  ContactRound, DollarSign, Wallet, Zap, Target, ShieldCheck, Calculator, UserPlus, ClipboardList, BadgeCheck,
+  ContactRound, DollarSign, Wallet, Zap, Target, ShieldCheck, Calculator, UserPlus, ClipboardList, BadgeCheck, Layers, BarChart2, BookMarked,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { UserRole } from "@/lib/constants";
@@ -17,7 +17,7 @@ const iconMap = {
   LayoutDashboard, Users, BrainCircuit, PieChart, Building2,
   CreditCard, Headphones, Trophy, GraduationCap, Handshake,
   Settings2, Medal, ContactRound, DollarSign, Wallet, Zap,
-  Target, ShieldCheck, Calculator, UserPlus, ClipboardList, BadgeCheck,
+  Target, ShieldCheck, Calculator, UserPlus, ClipboardList, BadgeCheck, Layers, BarChart2, BookMarked,
 };
 
 interface NavSubItem { href: string; label: string; roles: string[]; }
@@ -49,6 +49,9 @@ const NAV_SECTIONS: NavSection[] = [
           { href: "/mesa-credito/nivel-3", label: "N3 — High Ticket", roles: ["ADMIN", "GESTAO", "PARTNER_PRO"] },
         ],
       },
+      { href: "/relatorios", label: "Relatórios V3", icon: "BarChart2", roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL", "FINANCEIRO"] },
+      { href: "/hub", label: "Hub de Deals", icon: "Layers", roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL", "FINANCEIRO"] },
+      { href: "/prompts", label: "Banco de Prompts", icon: "BookMarked", roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL", "FINANCEIRO"] },
       { href: "/mesa-ma", label: "Mesa M&A", icon: "Handshake", roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL"] },
       { href: "/mesa-operacional", label: "Mesa Operacional", icon: "Headphones", roles: ["ADMIN", "MESA_OPERACIONAL", "GESTAO"] },
       { href: "/mesa-consorcio-op", label: "Mesa Consórcio", icon: "Settings2", roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL"] },

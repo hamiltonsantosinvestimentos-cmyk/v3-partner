@@ -40,7 +40,28 @@ const nextConfig: NextConfig = {
     ],
   },
   async headers() {
+    // Headers para rotas de conteúdo em iframe (prompts e relatórios)
+    const iframeContentHeaders = securityHeaders
+      .filter(h => h.key !== "X-Frame-Options")
+      .map(h => {
+        // Permitir framing same-origin no CSP
+        if (h.key === "Content-Security-Policy") {
+          return { ...h, value: h.value.replace("frame-ancestors 'none'", "frame-ancestors 'self'") };
+        }
+        return h;
+      });
+
     return [
+      // Rotas de conteúdo em iframe — sem X-Frame-Options DENY, frame-ancestors self
+      {
+        source: "/api/prompts/content",
+        headers: iframeContentHeaders,
+      },
+      {
+        source: "/api/relatorios/content",
+        headers: iframeContentHeaders,
+      },
+      // Todas as outras rotas — segurança total
       {
         source: "/(.*)",
         headers: securityHeaders,
