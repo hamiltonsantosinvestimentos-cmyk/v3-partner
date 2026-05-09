@@ -8,7 +8,7 @@ import {
   LayoutDashboard, Users, BrainCircuit, PieChart, Building2,
   CreditCard, Headphones, ChevronDown, ChevronRight, X,
   Trophy, GraduationCap, Handshake, Settings2, Medal,
-  ContactRound, DollarSign, Wallet, Zap, Target, ShieldCheck, Calculator, UserPlus, ClipboardList, BadgeCheck, Layers, BarChart2, BookMarked,
+  ContactRound, DollarSign, Wallet, Zap, Target, ShieldCheck, Calculator, UserPlus, ClipboardList, BadgeCheck, Layers, BarChart2, BookMarked, BotMessageSquare,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { UserRole } from "@/lib/constants";
@@ -17,7 +17,7 @@ const iconMap = {
   LayoutDashboard, Users, BrainCircuit, PieChart, Building2,
   CreditCard, Headphones, Trophy, GraduationCap, Handshake,
   Settings2, Medal, ContactRound, DollarSign, Wallet, Zap,
-  Target, ShieldCheck, Calculator, UserPlus, ClipboardList, BadgeCheck, Layers, BarChart2, BookMarked,
+  Target, ShieldCheck, Calculator, UserPlus, ClipboardList, BadgeCheck, Layers, BarChart2, BookMarked, BotMessageSquare,
 };
 
 interface NavSubItem { href: string; label: string; roles: string[]; }
@@ -77,6 +77,7 @@ const NAV_SECTIONS: NavSection[] = [
   {
     label: "PLATAFORMA",
     items: [
+      { href: "/agentes", label: "Squads de IA", icon: "BotMessageSquare", roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL", "FINANCEIRO"] },
       { href: "/ia-assistant", label: "V3 IA Partner", icon: "BrainCircuit", roles: ["ADMIN", "PARTNER", "PARTNER_PRO", "MESA_OPERACIONAL", "GESTAO", "FINANCEIRO"] },
       { href: "/metas", label: "Metas & Performance", icon: "Target", roles: ["ADMIN", "GESTAO", "PARTNER", "PARTNER_PRO"] },
       { href: "/compliance", label: "Compliance", icon: "ShieldCheck", roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL"] },
