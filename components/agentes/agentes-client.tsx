@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import { Send, Plus, Bot, User, Copy, Check, Download, Trash2, ChevronRight, Loader2 } from "lucide-react";
+import { Send, Plus, Bot, User, Copy, Check, Download, ChevronRight, Loader2, FileText } from "lucide-react";
 import type { Squad } from "@/lib/squads";
 
 interface Message { role: "user" | "assistant"; content: string; ts?: string; }
@@ -31,6 +31,8 @@ export function AgentesClient({ squads, userName }: Props) {
   const [loadingSessions, setLoadingSessions] = useState(false);
   const [copied, setCopied]               = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen]     = useState(false);
+  const [exporting, setExporting]         = useState(false);
+  const [exportDone, setExportDone]       = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -159,6 +161,46 @@ export function AgentesClient({ squads, userName }: Props) {
     if (res.ok) alert("Sessão exportada com sucesso.");
   }
 
+  // Export as V3 HTML Report
+  async function exportAsV3Report() {
+    const last = [...messages].reverse().find(m => m.role === "assistant");
+    if (!last || exporting) return;
+
+    setExporting(true);
+    setExportDone(false);
+
+    const title = messages[0]?.content?.substring(0, 80) ?? "Relatório V3";
+
+    try {
+      const res = await fetch("/api/agentes/export-report", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          content: last.content,
+          squad_id: activeSquad.id,
+          title,
+          session_id: sessionId,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.html) throw new Error(data.error ?? "Falha");
+
+      // Abrir HTML em nova aba
+      const blob = new Blob([data.html], { type: "text/html;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank");
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+
+      setExportDone(true);
+      setTimeout(() => setExportDone(false), 3000);
+    } catch (err) {
+      alert("Erro ao gerar relatório: " + (err instanceof Error ? err.message : "desconhecido"));
+    } finally {
+      setExporting(false);
+    }
+  }
+
   // Export as text file
   function exportAsText() {
     const content = messages
@@ -261,15 +303,28 @@ export function AgentesClient({ squads, userName }: Props) {
           </div>
           <div className="flex items-center gap-2">
             {messages.length > 0 && (
-              <>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={exportAsV3Report}
+                  disabled={exporting}
+                  className="flex items-center gap-1.5 text-[10px] font-semibold disabled:opacity-50 disabled:cursor-not-allowed text-[#09081A] bg-[#C9A84C] hover:bg-[#E8C97A] px-3 py-1.5 rounded-lg transition-colors"
+                >
+                  {exporting ? (
+                    <><Loader2 className="w-3 h-3 animate-spin" /> Gerando...</>
+                  ) : exportDone ? (
+                    <><Check className="w-3 h-3" /> Relatório gerado!</>
+                  ) : (
+                    <><FileText className="w-3 h-3" /> Gerar Relatório V3</>
+                  )}
+                </button>
                 <button
                   onClick={exportAsText}
                   className="flex items-center gap-1.5 text-[10px] text-[#7A8FA8] hover:text-[#F0ECE4] px-2.5 py-1.5 rounded-lg border border-[#243A66] hover:border-[#C9A84C] transition-colors"
                 >
                   <Download className="w-3 h-3" />
-                  Exportar
+                  .txt
                 </button>
-              </>
+              </div>
             )}
             <button
               onClick={newSession}

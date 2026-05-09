@@ -1,4 +1,4 @@
-import { ReportosClient, type Report } from "@/components/relatorios/relatorios-client";
+import { ReportosClient, type Report, type GeneratedReport } from "@/components/relatorios/relatorios-client";
 import { createClient as sc } from "@supabase/supabase-js";
 
 export const dynamic = "force-dynamic";
@@ -103,5 +103,17 @@ export default async function RelatoriosPage() {
 
   const reports = await fetchReports();
 
-  return <ReportosClient reports={reports} userRole={userRole} userName={userName} />;
+  // Fetch generated reports from Supabase
+  let generatedReports: GeneratedReport[] = [];
+  if (user) {
+    const svc2 = sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+    const { data: genData } = await svc2
+      .from("generated_reports")
+      .select("id, squad_id, title, created_at")
+      .order("created_at", { ascending: false })
+      .limit(20);
+    generatedReports = (genData ?? []) as GeneratedReport[];
+  }
+
+  return <ReportosClient reports={reports} generatedReports={generatedReports} userRole={userRole} userName={userName} />;
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { BarChart2, Calendar, Layers, TrendingUp } from "lucide-react";
+import { BarChart2, Calendar, Layers, TrendingUp, Bot, ExternalLink } from "lucide-react";
 
 export interface Report {
   id: string;
@@ -13,8 +13,16 @@ export interface Report {
   folder: "root" | "historico";
 }
 
+export interface GeneratedReport {
+  id: string;
+  squad_id: string;
+  title: string;
+  created_at: string;
+}
+
 interface Props {
   reports: Report[];
+  generatedReports?: GeneratedReport[];
   userRole: string;
   userName: string;
 }
@@ -25,12 +33,21 @@ function formatDate(iso: string): string {
   } catch { return iso; }
 }
 
-export function ReportosClient({ reports, userRole }: Props) {
-  const [filter, setFilter] = useState<"todos" | "diario" | "setor">("todos");
+const SQUAD_NAMES: Record<string, string> = {
+  "analista-ma": "Analista M&A",
+  "deal-hunter": "Deal Hunter",
+  "estrategista": "Estrategista",
+  "monitor-regulatorio": "Monitor Regulatório",
+  "pesquisador": "Pesquisador de Mercado",
+};
 
-  const filtered = filter === "todos" ? reports : reports.filter(r => r.type === filter);
+export function ReportosClient({ reports, generatedReports = [], userRole }: Props) {
+  const [filter, setFilter] = useState<"todos" | "diario" | "setor" | "gerados">("todos");
+
+  const filtered = filter === "gerados" ? [] : (filter === "todos" ? reports : reports.filter(r => r.type === filter));
   const diarios = reports.filter(r => r.type === "diario").length;
   const setores = reports.filter(r => r.type === "setor").length;
+  const showGenerated = filter === "todos" || filter === "gerados";
 
   return (
     <div className="min-h-screen bg-[#09081A] p-6">
@@ -51,9 +68,10 @@ export function ReportosClient({ reports, userRole }: Props) {
       <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
         <div className="flex gap-3">
           {[
-            { key: "todos", label: `Todos (${reports.length})` },
+            { key: "todos", label: `Todos (${reports.length + generatedReports.length})` },
             { key: "diario", label: `Diários (${diarios})` },
             { key: "setor", label: `Setoriais (${setores})` },
+            { key: "gerados", label: `Gerados por IA (${generatedReports.length})` },
           ].map(({ key, label }) => (
             <button
               key={key}
@@ -77,13 +95,73 @@ export function ReportosClient({ reports, userRole }: Props) {
           <p className="text-[#7A8FA8] text-sm">Nenhum relatório encontrado.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {filtered.map(report => (
-            <ReportCard key={report.id} report={report} />
-          ))}
+        <div className="space-y-8">
+          {/* CCR Reports */}
+          {filtered.length > 0 && (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {filtered.map(report => (
+                <ReportCard key={report.id} report={report} />
+              ))}
+            </div>
+          )}
+
+          {/* Generated Reports */}
+          {showGenerated && generatedReports.length > 0 && (
+            <div>
+              <div className="flex items-center gap-2 mb-4">
+                <Bot className="w-4 h-4 text-[#C9A84C]" />
+                <span className="text-[#C9A84C] text-[10px] font-bold tracking-[2px] uppercase">Gerados por IA — Squads V3</span>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                {generatedReports.map(r => (
+                  <GeneratedReportCard key={r.id} report={r} />
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
+  );
+}
+
+function GeneratedReportCard({ report }: { report: GeneratedReport }) {
+  return (
+    <a
+      href={`/api/relatorios/generated?id=${report.id}`}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="text-left bg-[#111F35] border border-[#243A66] rounded-xl p-5 hover:border-[#C9A84C] hover:bg-[#162744] transition-all duration-200 group w-full block"
+    >
+      <div className="flex items-start justify-between mb-4">
+        <span className="text-[9px] font-bold uppercase tracking-[1.5px] px-2 py-1 rounded-full text-[#C9A84C] bg-[#C9A84C]/10">
+          {SQUAD_NAMES[report.squad_id] ?? report.squad_id}
+        </span>
+        <div className="flex items-center gap-1 text-[#7A8FA8] group-hover:text-[#C9A84C] transition-colors">
+          <Calendar className="w-3.5 h-3.5" />
+          <span className="text-[10px]">{formatDate(report.created_at.slice(0, 10))}</span>
+        </div>
+      </div>
+
+      <div className="flex items-start gap-3 mb-4">
+        <div className="w-9 h-9 rounded-lg bg-[#09081A] flex items-center justify-center shrink-0 group-hover:bg-[#C9A84C]/10 transition-colors">
+          <Bot className="w-4 h-4 text-[#C9A84C]" />
+        </div>
+        <h3 className="text-[#F0ECE4] font-semibold text-sm leading-snug group-hover:text-[#C9A84C] transition-colors pt-1 line-clamp-2">
+          {report.title}
+        </h3>
+      </div>
+
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-1">
+          <Layers className="w-3 h-3 text-[#7A8FA8]" />
+          <span className="text-[#7A8FA8] text-[10px]">Gerado por IA · V3</span>
+        </div>
+        <span className="text-[#C9A84C] text-[10px] font-semibold opacity-0 group-hover:opacity-100 transition-opacity">
+          Abrir ↗
+        </span>
+      </div>
+    </a>
   );
 }
 
