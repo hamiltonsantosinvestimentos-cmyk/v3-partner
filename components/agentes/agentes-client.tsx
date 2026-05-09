@@ -303,28 +303,13 @@ export function AgentesClient({ squads, userName }: Props) {
           </div>
           <div className="flex items-center gap-2">
             {messages.length > 0 && (
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={exportAsV3Report}
-                  disabled={exporting}
-                  className="flex items-center gap-1.5 text-[10px] font-semibold disabled:opacity-50 disabled:cursor-not-allowed text-[#09081A] bg-[#C9A84C] hover:bg-[#E8C97A] px-3 py-1.5 rounded-lg transition-colors"
-                >
-                  {exporting ? (
-                    <><Loader2 className="w-3 h-3 animate-spin" /> Gerando...</>
-                  ) : exportDone ? (
-                    <><Check className="w-3 h-3" /> Relatório gerado!</>
-                  ) : (
-                    <><FileText className="w-3 h-3" /> Gerar Relatório V3</>
-                  )}
-                </button>
-                <button
-                  onClick={exportAsText}
-                  className="flex items-center gap-1.5 text-[10px] text-[#7A8FA8] hover:text-[#F0ECE4] px-2.5 py-1.5 rounded-lg border border-[#243A66] hover:border-[#C9A84C] transition-colors"
-                >
-                  <Download className="w-3 h-3" />
-                  .txt
-                </button>
-              </div>
+              <button
+                onClick={exportAsText}
+                className="flex items-center gap-1.5 text-[10px] text-[#7A8FA8] hover:text-[#F0ECE4] px-2.5 py-1.5 rounded-lg border border-[#243A66] hover:border-[#C9A84C] transition-colors"
+              >
+                <Download className="w-3 h-3" />
+                .txt
+              </button>
             )}
             <button
               onClick={newSession}
@@ -341,17 +326,24 @@ export function AgentesClient({ squads, userName }: Props) {
           {messages.length === 0 ? (
             <WelcomeScreen squad={activeSquad} onSuggest={text => { setInput(text); textareaRef.current?.focus(); }} />
           ) : (
-            messages.map((msg, i) => (
-              <MessageBubble
-                key={i}
-                msg={msg}
-                squad={activeSquad}
-                userName={userName}
-                copied={copied}
-                onCopy={content => copyMsg(content, `msg-${i}`)}
-                copyId={`msg-${i}`}
-              />
-            ))
+            messages.map((msg, i) => {
+              const isLast = i === messages.length - 1 && msg.role === "assistant";
+              return (
+                <MessageBubble
+                  key={i}
+                  msg={msg}
+                  squad={activeSquad}
+                  userName={userName}
+                  copied={copied}
+                  onCopy={content => copyMsg(content, `msg-${i}`)}
+                  copyId={`msg-${i}`}
+                  isLastAssistant={isLast}
+                  onExport={exportAsV3Report}
+                  exporting={exporting}
+                  exportDone={exportDone}
+                />
+              );
+            })
           )}
           {loading && <ThinkingIndicator squad={activeSquad} />}
           <div ref={bottomRef} />
@@ -443,9 +435,10 @@ function WelcomeScreen({ squad, onSuggest }: { squad: Squad; onSuggest: (t: stri
   );
 }
 
-function MessageBubble({ msg, squad, userName, copied, onCopy, copyId }: {
+function MessageBubble({ msg, squad, userName, copied, onCopy, copyId, isLastAssistant, onExport, exporting, exportDone }: {
   msg: Message; squad: Squad; userName: string;
   copied: string | null; onCopy: (c: string) => void; copyId: string;
+  isLastAssistant?: boolean; onExport?: () => void; exporting?: boolean; exportDone?: boolean;
 }) {
   const isUser = msg.role === "user";
 
@@ -462,7 +455,7 @@ function MessageBubble({ msg, squad, userName, copied, onCopy, copyId }: {
       </div>
 
       {/* Bubble */}
-      <div className={`flex flex-col max-w-[75%] ${isUser ? "items-end" : "items-start"}`}>
+      <div className={`flex flex-col max-w-[80%] ${isUser ? "items-end" : "items-start"}`}>
         <span className="text-[10px] text-[#7A8FA8] mb-1 px-1">
           {isUser ? (userName || "Você") : squad.nome}
         </span>
@@ -473,17 +466,37 @@ function MessageBubble({ msg, squad, userName, copied, onCopy, copyId }: {
         }`}>
           {msg.content}
         </div>
-        {/* Copy button */}
+
+        {/* Actions: copy + export (última resposta do agente) */}
         {!isUser && (
-          <button
-            onClick={() => onCopy(msg.content)}
-            className="mt-1 flex items-center gap-1 text-[10px] text-[#7A8FA8] hover:text-[#C9A84C] opacity-0 group-hover:opacity-100 transition-all px-1"
-          >
-            {copied === copyId
-              ? <><Check className="w-3 h-3" /> Copiado</>
-              : <><Copy className="w-3 h-3" /> Copiar</>
-            }
-          </button>
+          <div className="mt-2 flex items-center gap-2 px-1">
+            <button
+              onClick={() => onCopy(msg.content)}
+              className="flex items-center gap-1 text-[10px] text-[#7A8FA8] hover:text-[#C9A84C] opacity-0 group-hover:opacity-100 transition-all"
+            >
+              {copied === copyId
+                ? <><Check className="w-3 h-3" /> Copiado</>
+                : <><Copy className="w-3 h-3" /> Copiar</>
+              }
+            </button>
+
+            {/* Botão de exportar — só na última resposta */}
+            {isLastAssistant && onExport && (
+              <button
+                onClick={onExport}
+                disabled={exporting}
+                className="flex items-center gap-1.5 text-[10px] font-semibold px-3 py-1.5 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed bg-[#C9A84C] hover:bg-[#E8C97A] text-[#09081A]"
+              >
+                {exporting ? (
+                  <><Loader2 className="w-3 h-3 animate-spin" /> Gerando relatório...</>
+                ) : exportDone ? (
+                  <><Check className="w-3 h-3" /> Relatório gerado! Ver em Relatórios V3</>
+                ) : (
+                  <><FileText className="w-3 h-3" /> Gerar Relatório V3</>
+                )}
+              </button>
+            )}
+          </div>
         )}
       </div>
     </div>
