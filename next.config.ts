@@ -32,11 +32,13 @@ const nextConfig: NextConfig = {
     ignoreDuringBuilds: true,
   },
   images: {
+    imageSizes: [16, 32, 48, 64, 96, 100, 128, 256, 384],
     remotePatterns: [
       { protocol: "https", hostname: "avatars.githubusercontent.com" },
       { protocol: "https", hostname: "lh3.googleusercontent.com" },
       { protocol: "https", hostname: "img.youtube.com" },
       { protocol: "https", hostname: "feosfhqlofkfuwdsyeaq.supabase.co" },
+      { protocol: "https", hostname: "sbmuashewklfhdyyuezr.supabase.co" },
     ],
   },
   async headers() {
