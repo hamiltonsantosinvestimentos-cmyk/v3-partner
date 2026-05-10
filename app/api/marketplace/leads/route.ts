@@ -104,12 +104,13 @@ export async function GET(req: NextRequest) {
   const supplierIdHeader = req.headers.get("x-supplier-id");
   if (supplierIdHeader) {
     // Valida que o fornecedor existe
-    const { data: supplier } = await svc
+    const { data: supplier, error: supErr } = await svc
       .from("marketplace_suppliers")
       .select("id")
       .eq("id", supplierIdHeader)
       .single();
-    if (!supplier) return NextResponse.json({ error: "Fornecedor não encontrado" }, { status: 403 });
+    if (supErr) console.error("Supplier lookup error:", supErr.message, "id:", supplierIdHeader);
+    if (!supplier) return NextResponse.json({ error: "Fornecedor não encontrado", debug_id: supplierIdHeader }, { status: 403 });
 
     const { data, error } = await svc
       .from("marketplace_leads")
@@ -122,7 +123,11 @@ export async function GET(req: NextRequest) {
       .eq("supplier_id", supplierIdHeader)
       .order("created_at", { ascending: false });
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (error) {
+      console.error("Leads query error:", error.message);
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+    console.log(`Leads para supplier ${supplierIdHeader}: ${data?.length ?? 0} encontrados`);
     return NextResponse.json({ leads: data ?? [] });
   }
 

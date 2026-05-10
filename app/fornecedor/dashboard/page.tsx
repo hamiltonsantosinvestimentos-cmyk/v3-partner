@@ -363,7 +363,12 @@ export default function FornecedorDashboardPage() {
       const leadsJson = await leadsRes.json();
       if (supJson.supplier) setSupplier(supJson.supplier);
       setProducts(prodJson.products ?? []);
+      if (leadsJson.error) {
+        console.error("Leads API error:", leadsJson.error, "status:", leadsRes.status, "supplier_id:", sid);
+      }
       setLeads(leadsJson.leads ?? []);
+    } catch (err) {
+      console.error("fetchData error:", err);
     } finally {
       setLoading(false);
     }
