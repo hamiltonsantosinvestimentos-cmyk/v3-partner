@@ -5,6 +5,7 @@ export const USER_ROLES = {
   MESA_OPERACIONAL: "MESA_OPERACIONAL",
   GESTAO: "GESTAO",
   FINANCEIRO: "FINANCEIRO",
+  FORNECEDOR: "FORNECEDOR",
 } as const;
 
 export type UserRole = keyof typeof USER_ROLES;
@@ -16,6 +17,7 @@ export const ROLE_LABELS: Record<UserRole, string> = {
   MESA_OPERACIONAL: "Mesa Operacional",
   GESTAO: "Gestão",
   FINANCEIRO: "Financeiro",
+  FORNECEDOR: "Fornecedor",
 };
 
 export const ROLE_COLORS: Record<UserRole, string> = {
@@ -25,7 +27,46 @@ export const ROLE_COLORS: Record<UserRole, string> = {
   MESA_OPERACIONAL: "bg-purple-500/20 text-purple-400 border-purple-500/30",
   GESTAO: "bg-amber-500/20 text-amber-400 border-amber-500/30",
   FINANCEIRO: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
+  FORNECEDOR: "bg-teal-500/20 text-teal-400 border-teal-500/30",
 };
+
+// Marketplace
+export const MARKETPLACE_CATEGORIES = [
+  "Equipamentos de Saúde",
+  "Mentoria & Consultoria",
+  "Tecnologia & SaaS",
+  "Serviços Financeiros",
+  "Treinamentos & Cursos",
+  "Imóveis & Real Estate",
+  "Agronegócio",
+  "Outros",
+] as const;
+
+export type MarketplaceCategory = typeof MARKETPLACE_CATEGORIES[number];
+
+export const PRODUCT_STATUS = {
+  PENDING: "PENDING",
+  APPROVED: "APPROVED",
+  REJECTED: "REJECTED",
+  INACTIVE: "INACTIVE",
+} as const;
+
+export type ProductStatus = keyof typeof PRODUCT_STATUS;
+
+export const PRODUCT_STATUS_LABELS: Record<ProductStatus, string> = {
+  PENDING: "Aguardando Aprovação",
+  APPROVED: "Aprovado",
+  REJECTED: "Reprovado",
+  INACTIVE: "Inativo",
+};
+
+export const SUPPLIER_STATUS = {
+  PENDING: "PENDING",
+  APPROVED: "APPROVED",
+  REJECTED: "REJECTED",
+} as const;
+
+export type SupplierStatus = keyof typeof SUPPLIER_STATUS;
 
 // Mesa de Crédito - 3 níveis
 export const CREDIT_DESK_LEVELS = {

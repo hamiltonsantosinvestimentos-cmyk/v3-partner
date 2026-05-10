@@ -5,7 +5,7 @@ import {
   Headphones, Plus, ChevronRight, User, Building2,
   Banknote, Clock, CheckCircle2, AlertCircle, Link2,
   LayoutGrid, List, Search, X, FileText, ArrowRight, ArrowLeft, MessageSquare, Trash2,
-  ScrollText, RefreshCw, XCircle, Download,
+  ScrollText, RefreshCw, XCircle, Download, Edit2, Users,
 } from "lucide-react";
 import { ExportButton } from "@/components/financeiro/export-button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { formatCurrency, formatDate, formatDateTime } from "@/lib/utils";
 import {
   STATUS_LABELS, STATUS_COLORS, PRIORITY_LABELS, PRIORITY_COLORS,
+  CREDIT_DESK_LINES,
   type OperationStatus, type TicketPriority,
 } from "@/lib/constants";
 import { PropostaDetailModal, PIPELINE_STAGES, type ProposalFull } from "@/components/mesa-credito/proposta-detail-modal";
@@ -133,6 +134,198 @@ function NovoTicketModal({ open, onClose, onSubmit }: {
   );
 }
 
+// ─── Editar Proposta Modal ────────────────────────────────────────────────
+interface Partner { id: string; full_name: string }
+type CreditLevel = "NIVEL_1" | "NIVEL_2" | "NIVEL_3";
+
+function EditarPropostaModal({ open, onClose, proposal, onSaved }: {
+  open: boolean;
+  onClose: () => void;
+  proposal: ProposalCard | null;
+  onSaved: (id: string, updates: Partial<ProposalCard>) => void;
+}) {
+  const [partners, setPartners] = useState<Partner[]>([]);
+  const [partnersLoading, setPartnersLoading] = useState(false);
+  const [partnerId, setPartnerId] = useState("");
+  const [level, setLevel] = useState<CreditLevel>("NIVEL_1");
+  const [creditLine, setCreditLine] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [partnerSearch, setPartnerSearch] = useState("");
+
+  useEffect(() => {
+    if (!open || !proposal) return;
+    setPartnerId(proposal.partner_id ?? "");
+    setLevel((proposal.current_level as CreditLevel) ?? "NIVEL_1");
+    setCreditLine(proposal.credit_line ?? "");
+    setPartnerSearch("");
+    setPartnersLoading(true);
+    fetch("/api/partners")
+      .then(r => r.json())
+      .then(d => setPartners(d.partners ?? []))
+      .catch(() => {})
+      .finally(() => setPartnersLoading(false));
+  }, [open, proposal]);
+
+  useEffect(() => {
+    const lines = CREDIT_DESK_LINES[level];
+    if (!lines.includes(creditLine)) setCreditLine(lines[0] ?? "");
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [level]);
+
+  async function handleSave() {
+    if (!proposal) return;
+    setSaving(true);
+    try {
+      const body: Record<string, unknown> = { id: proposal.id };
+      if (partnerId && partnerId !== proposal.partner_id) body.partner_id = partnerId;
+      if (level !== proposal.current_level) body.current_level = level;
+      if (creditLine && creditLine !== proposal.credit_line) body.credit_line = creditLine;
+
+      const res = await fetch("/api/credit-proposals", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      if (res.ok) {
+        const partnerName = partners.find(p => p.id === partnerId)?.full_name ?? proposal.partner_name;
+        onSaved(proposal.id, {
+          partner_id: partnerId || proposal.partner_id,
+          partner_name: partnerName,
+          current_level: level,
+          credit_line: creditLine,
+        });
+        if (partnerId && partnerId !== proposal.partner_id) {
+          fetch("/api/notifications", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              user_id: partnerId,
+              title: `Proposta ${proposal.code} atribuída a você`,
+              message: `A proposta de ${proposal.client_name} foi atribuída ao seu perfil.`,
+              type: "proposal",
+              action_url: "/minhas-operacoes",
+            }),
+          }).catch(() => {});
+        }
+        onClose();
+      }
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (!open || !proposal) return null;
+
+  const filteredPartners = partners.filter(p =>
+    !partnerSearch || p.full_name.toLowerCase().includes(partnerSearch.toLowerCase())
+  );
+
+  const LEVEL_CONFIG = {
+    NIVEL_1: { label: "Nível 1", sub: "Varejo", color: "border-blue-500/40 bg-blue-500/10 text-blue-400" },
+    NIVEL_2: { label: "Nível 2", sub: "Estruturado", color: "border-amber-500/40 bg-amber-500/10 text-amber-400" },
+    NIVEL_3: { label: "Nível 3", sub: "High Ticket", color: "border-purple-500/40 bg-purple-500/10 text-purple-400" },
+  };
+
+  return (
+    <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+      <div className="bg-card border border-border rounded-2xl w-full max-w-md">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+          <div>
+            <h3 className="text-sm font-bold text-white">Editar Proposta</h3>
+            <p className="text-xs text-muted-foreground mt-0.5">{proposal.code} · {proposal.client_name}</p>
+          </div>
+          <button onClick={onClose} className="w-7 h-7 rounded-lg hover:bg-secondary flex items-center justify-center text-muted-foreground hover:text-white transition-colors">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="px-6 py-5 space-y-5">
+          {/* Partner */}
+          <div>
+            <label className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground mb-2">
+              <Users className="w-3.5 h-3.5" /> Partner Responsável
+            </label>
+            <div className="relative mb-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+              <input
+                value={partnerSearch}
+                onChange={e => setPartnerSearch(e.target.value)}
+                placeholder={partners.find(p => p.id === partnerId)?.full_name || proposal.partner_name || "Buscar partner..."}
+                className="w-full h-9 pl-9 pr-4 text-sm bg-secondary border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
+              />
+            </div>
+            {partnersLoading ? (
+              <p className="text-xs text-muted-foreground px-1">Carregando partners...</p>
+            ) : (
+              <div className="max-h-36 overflow-y-auto rounded-lg border border-border bg-secondary">
+                {filteredPartners.length === 0 ? (
+                  <p className="text-xs text-muted-foreground p-3 text-center">Nenhum partner encontrado</p>
+                ) : filteredPartners.map(p => (
+                  <button
+                    key={p.id}
+                    onClick={() => { setPartnerId(p.id); setPartnerSearch(""); }}
+                    className={`w-full text-left px-3 py-2 text-xs transition-colors hover:bg-primary/10 hover:text-white flex items-center justify-between ${
+                      partnerId === p.id ? "bg-primary/15 text-primary font-semibold" : "text-foreground"
+                    }`}
+                  >
+                    {p.full_name}
+                    {partnerId === p.id && <CheckCircle2 className="w-3 h-3 flex-shrink-0" />}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Nível */}
+          <div>
+            <label className="block text-xs font-semibold text-muted-foreground mb-2">Transferir para Nível</label>
+            <div className="grid grid-cols-3 gap-2">
+              {(["NIVEL_1", "NIVEL_2", "NIVEL_3"] as const).map(lvl => (
+                <button
+                  key={lvl}
+                  onClick={() => setLevel(lvl)}
+                  className={`py-2.5 px-2 rounded-xl border text-center transition-all ${
+                    level === lvl ? LEVEL_CONFIG[lvl].color : "border-border text-muted-foreground hover:bg-secondary"
+                  }`}
+                >
+                  <p className="text-xs font-bold">{LEVEL_CONFIG[lvl].label}</p>
+                  <p className="text-[10px] opacity-70">{LEVEL_CONFIG[lvl].sub}</p>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Linha de Crédito */}
+          <div>
+            <label className="block text-xs font-semibold text-muted-foreground mb-2">Linha de Crédito</label>
+            <select
+              value={creditLine}
+              onChange={e => setCreditLine(e.target.value)}
+              className="w-full h-9 px-3 text-sm bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
+            >
+              {CREDIT_DESK_LINES[level].map(line => (
+                <option key={line} value={line}>{line}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div className="px-6 py-4 border-t border-border flex gap-2 justify-end">
+          <Button variant="outline" size="sm" onClick={onClose} disabled={saving}>Cancelar</Button>
+          <Button size="sm" onClick={handleSave} disabled={saving} className="gap-1.5">
+            {saving
+              ? <span className="w-3 h-3 rounded-full border-2 border-white border-t-transparent animate-spin" />
+              : <Edit2 className="w-3.5 h-3.5" />}
+            Salvar Alterações
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Component ────────────────────────────────────────────────────────
 export function MesaOpClient({ tickets: initialTickets, proposals: initialProposals, currentUser }: MesaOpClientProps) {
   const [view, setView] = useState<"kanban" | "tickets" | "contratos">("kanban");
@@ -181,6 +374,7 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
   }, []);
   const [novoTicket, setNovoTicket] = useState(false);
   const [detailProposal, setDetailProposal] = useState<ProposalCard | null>(null);
+  const [editProposal, setEditProposal] = useState<ProposalCard | null>(null);
   const [search, setSearch] = useState("");
   const [selectedStage, setSelectedStage] = useState<string | null>(null);
 
@@ -458,6 +652,15 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
                         <div className="flex items-start justify-between gap-1 mb-2">
                           <span className="font-mono text-[10px] text-muted-foreground">{p.code}</span>
                           <div className="flex items-center gap-1">
+                            {canChangeStage && (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); setEditProposal(p); }}
+                                className="w-5 h-5 rounded flex items-center justify-center text-[#C9A84C]/60 hover:text-[#C9A84C] hover:bg-[#C9A84C]/15 transition-colors"
+                                title="Editar partner / transferir nível"
+                              >
+                                <Edit2 className="w-3 h-3" />
+                              </button>
+                            )}
                             {currentUser?.role === "ADMIN" && (
                               <button
                                 onClick={(e) => {
@@ -802,6 +1005,16 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
           } catch {}
           setTickets(prev => [t, ...prev]);
         }} />
+
+      <EditarPropostaModal
+        open={!!editProposal}
+        onClose={() => setEditProposal(null)}
+        proposal={editProposal}
+        onSaved={(id, updates) => {
+          handleProposalUpdate(id, updates);
+          setEditProposal(null);
+        }}
+      />
 
       <PropostaDetailModal
         open={!!detailProposal}

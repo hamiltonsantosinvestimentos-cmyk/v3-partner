@@ -129,6 +129,7 @@ const SOURCE_LABELS: Record<string, string> = {
   digital: "Digital",
   evento: "Evento",
   parceiro: "Parceiro",
+  marketplace: "Marketplace",
 };
 
 function formatDate(d: string) {

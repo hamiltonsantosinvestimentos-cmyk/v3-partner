@@ -944,6 +944,86 @@ export async function notifyLembreteOnboardingEtapa(opts: {
   );
 }
 
+/** Fornecedor: novo lead recebido pelo marketplace */
+export async function notifyMarketplaceLead(opts: {
+  supplierEmail: string;
+  supplierName: string;
+  productName: string;
+  partnerName: string;
+  clientName: string | null;
+  clientContact: string | null;
+  message: string | null;
+}): Promise<void> {
+  const body = `
+    <p style="color:#7A96AF;font-size:14px;margin:0 0 20px;">
+      Olá, <strong style="color:#C8D4E3;">${opts.supplierName}</strong>!
+      Um partner da V3 demonstrou interesse em um dos seus produtos.
+    </p>
+    ${row("Produto", opts.productName)}
+    ${row("Partner", opts.partnerName)}
+    ${opts.clientName ? row("Cliente indicado", opts.clientName) : ""}
+    ${opts.clientContact ? row("Contato do cliente", opts.clientContact) : ""}
+    ${opts.message ? `
+    <div style="margin-top:16px;padding:16px 18px;background:#13243D;border-radius:8px;border-left:3px solid #C4922E;">
+      <p style="margin:0 0 6px;font-size:11px;color:#7A96AF;text-transform:uppercase;letter-spacing:1px;">Mensagem</p>
+      <p style="margin:0;font-size:14px;color:#C8D4E3;line-height:1.6;">${opts.message}</p>
+    </div>` : ""}
+    <p style="color:#7A96AF;font-size:13px;margin-top:16px;">
+      Acesse o painel do fornecedor para acompanhar e atualizar o status deste lead.
+    </p>
+  `;
+  await send(
+    opts.supplierEmail,
+    `🛒 Novo lead no Marketplace — ${opts.productName}`,
+    template("Novo Lead Recebido", body, {
+      label: "Ver no Painel",
+      url: `${process.env.NEXT_PUBLIC_SITE_URL ?? "https://v3-partner.vercel.app"}/fornecedor/dashboard`,
+    })
+  );
+}
+
+/** Partner: fornecedor atualizou o status do lead */
+export async function notifyLeadStatusAtualizado(opts: {
+  partnerEmail: string;
+  partnerName: string;
+  productName: string;
+  supplierName: string;
+  novoStatus: string;
+}): Promise<void> {
+  const statusMap: Record<string, { label: string; color: string; emoji: string }> = {
+    IN_PROGRESS: { label: "Em Andamento",  color: "#F59E0B", emoji: "🔄" },
+    CONVERTED:   { label: "Convertido",    color: "#10B981", emoji: "✅" },
+    LOST:        { label: "Perdido",       color: "#EF4444", emoji: "❌" },
+    PENDING:     { label: "Pendente",      color: "#7A96AF", emoji: "⏳" },
+  };
+  const st = statusMap[opts.novoStatus];
+  if (!st) return;
+
+  const body = `
+    <p style="color:#7A96AF;font-size:14px;margin:0 0 20px;">
+      Olá, <strong style="color:#C8D4E3;">${opts.partnerName}</strong>!
+      O fornecedor atualizou o status do seu lead.
+    </p>
+    ${row("Produto", opts.productName)}
+    ${row("Fornecedor", opts.supplierName)}
+    <div style="margin-top:16px;padding:14px 18px;background:#13243D;border-radius:8px;border-left:3px solid ${st.color};">
+      <p style="margin:0 0 4px;font-size:11px;color:#7A96AF;">Novo status</p>
+      <p style="margin:0;font-size:20px;font-weight:800;color:${st.color};">${st.emoji} ${st.label}</p>
+    </div>
+    <p style="color:#7A96AF;font-size:13px;margin-top:16px;">
+      Acesse o marketplace para ver mais detalhes dos seus leads.
+    </p>
+  `;
+  await send(
+    opts.partnerEmail,
+    `${st.emoji} Lead atualizado — ${opts.productName}`,
+    template("Status do Lead Atualizado", body, {
+      label: "Ver Meus Leads",
+      url: `${process.env.NEXT_PUBLIC_SITE_URL ?? "https://v3-partner.vercel.app"}/marketplace`,
+    })
+  );
+}
+
 /** Partner: resumo diário de follow-ups do CRM */
 export async function notifyFollowUpsDodia(opts: {
   partnerEmail: string;

@@ -46,27 +46,59 @@ export function LocationGate({ role }: LocationGateProps) {
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
         // Permissão concedida — tenta reverse geocode
-        let city = "Não identificada";
+        let city = "";
         let state = "";
-        let country = "BR";
+        let country = "";
 
+        const lat = pos.coords.latitude;
+        const lon = pos.coords.longitude;
+
+        // Tentativa 1: Nominatim (OpenStreetMap)
         try {
           const res = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?lat=${pos.coords.latitude}&lon=${pos.coords.longitude}&format=json`,
+            `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`,
             { headers: { "Accept-Language": "pt-BR" } }
           );
-          const geo = await res.json();
-          city =
-            geo?.address?.city ||
-            geo?.address?.town ||
-            geo?.address?.municipality ||
-            geo?.address?.county ||
-            "Não identificada";
-          state = geo?.address?.state ?? "";
-          country = geo?.address?.country_code?.toUpperCase() ?? "BR";
+          if (res.ok) {
+            const geo = await res.json();
+            city =
+              geo?.address?.city ||
+              geo?.address?.town ||
+              geo?.address?.village ||
+              geo?.address?.municipality ||
+              geo?.address?.county ||
+              "";
+            state = geo?.address?.state ?? "";
+            country = geo?.address?.country_code?.toUpperCase() ?? "";
+          }
         } catch {
-          // Nominatim falhou — salva com coordenadas sem cidade nomeada
+          // Nominatim falhou — tenta fallback
         }
+
+        // Tentativa 2: BigDataCloud (gratuito, sem chave, mais preciso para cidades BR)
+        if (!city) {
+          try {
+            const res2 = await fetch(
+              `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=pt`
+            );
+            if (res2.ok) {
+              const geo2 = await res2.json();
+              city =
+                geo2?.city ||
+                geo2?.locality ||
+                geo2?.principalSubdivision ||
+                "";
+              if (!state) state = geo2?.principalSubdivision ?? "";
+              if (!country) country = geo2?.countryCode ?? "";
+            }
+          } catch {
+            // BigDataCloud também falhou
+          }
+        }
+
+        // Fallback final: só coordenadas, sem inventar cidade
+        if (!city) city = "Não identificada";
+        if (!country) country = "BR";
 
         await fetch("/api/onboarding/location", {
           method: "POST",

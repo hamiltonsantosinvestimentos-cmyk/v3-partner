@@ -9,6 +9,7 @@ import {
   CreditCard, Headphones, ChevronDown, ChevronRight, X,
   Trophy, GraduationCap, Handshake, Settings2, Medal,
   ContactRound, DollarSign, Wallet, Zap, Target, ShieldCheck, Calculator, UserPlus, ClipboardList, BadgeCheck, Layers, BarChart2, BookMarked, BotMessageSquare,
+  ShoppingBag,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { UserRole } from "@/lib/constants";
@@ -18,6 +19,7 @@ const iconMap = {
   CreditCard, Headphones, Trophy, GraduationCap, Handshake,
   Settings2, Medal, ContactRound, DollarSign, Wallet, Zap,
   Target, ShieldCheck, Calculator, UserPlus, ClipboardList, BadgeCheck, Layers, BarChart2, BookMarked, BotMessageSquare,
+  ShoppingBag,
 };
 
 interface NavSubItem { href: string; label: string; roles: string[]; }
@@ -79,6 +81,9 @@ const NAV_SECTIONS: NavSection[] = [
           { href: "/consorcio/projetos", label: "Projetos", roles: ["ADMIN", "PARTNER", "PARTNER_PRO", "MESA_OPERACIONAL", "GESTAO"] },
         ],
       },
+      { href: "/marketplace", label: "Marketplace", icon: "ShoppingBag",
+        roles: ["ADMIN", "PARTNER", "PARTNER_PRO", "GESTAO", "MESA_OPERACIONAL"],
+      },
     ],
   },
   {
@@ -111,6 +116,7 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { href: "/admin-dashboard",  label: "Painel Admin",    icon: "LayoutDashboard", roles: ["ADMIN"] },
       { href: "/admin-cadastros", label: "Cadastros",      icon: "UserPlus", roles: ["ADMIN"] },
+      { href: "/admin-marketplace", label: "Marketplace Admin", icon: "ShoppingBag", roles: ["ADMIN", "GESTAO"] },
       { href: "/usuarios",       label: "Usuários",       icon: "Users",    roles: ["ADMIN"] },
       { href: "/configuracoes",  label: "Configurações",  icon: "Settings2", roles: ["ADMIN", "PARTNER", "PARTNER_PRO", "GESTAO", "MESA_OPERACIONAL", "FINANCEIRO"] },
     ],
