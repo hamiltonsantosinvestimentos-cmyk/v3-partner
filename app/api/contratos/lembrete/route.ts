@@ -7,14 +7,13 @@ import {
   notifyTestemunha2ParaAssinar,
 } from "@/lib/email";
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
-
-const APP_URL = (process.env.NEXT_PUBLIC_APP_URL ?? "https://v3-partner.vercel.app").trim().replace(/\/+$/, "");
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://v3-partner.vercel.app";
 
 export async function GET(req: NextRequest) {
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
   // Proteção por secret para chamadas externas (cron do Vercel passa Authorization)
   const authHeader = req.headers.get("authorization");
   if (

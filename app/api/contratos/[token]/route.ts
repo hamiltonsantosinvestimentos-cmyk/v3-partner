@@ -2,12 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { notifyContratoAssinado, notifyV3ParaAssinar } from "@/lib/email";
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
-
-const APP_URL = (process.env.NEXT_PUBLIC_APP_URL ?? "https://v3-partner.vercel.app").trim().replace(/\/+$/, "");
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://v3-partner.vercel.app";
 // Email do representante V3 que assina o contrato (João Lemos)
 const V3_REP_EMAIL = process.env.EMAIL_V3_SIGNER ?? "joao.lemos@v3partners.com.br";
 
@@ -15,6 +10,10 @@ export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ token: string }> }
 ) {
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
   const { token } = await params;
 
   const { data, error } = await supabase
@@ -39,10 +38,13 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ token: string }> }
 ) {
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
   const { token } = await params;
   const body = await req.json();
-  const { endereco, bairro, municipio, estado, cep, nome_assinatura, birthdate, doc_image,
-          nome_socio, cpf_socio, qualificacao_socio, nome_fantasia } = body;
+  const { endereco, bairro, municipio, estado, cep, nome_assinatura, birthdate, doc_image } = body;
 
   if (!nome_assinatura?.trim()) {
     return NextResponse.json({ error: "Nome para assinatura obrigatório" }, { status: 400 });
@@ -50,7 +52,7 @@ export async function POST(
 
   const { data, error } = await supabase
     .from("contratos_mandato")
-    .select("id, status, client_name, client_email, credit_line, proposal_code, expires_at, v3_token, v3_signed_at, testemunha_email, testemunha_signed_at, testemunha2_email, testemunha2_signed_at")
+    .select("id, status, client_name, client_email, credit_line, proposal_code, expires_at, v3_token")
     .eq("token", token)
     .single();
 
@@ -92,20 +94,10 @@ export async function POST(
     }
   }
 
-  // Recalcula status com base em quem já assinou (paralelo)
-  const v3Signed = !!data.v3_signed_at;
-  const t1Signed = !data.testemunha_email || !!data.testemunha_signed_at;
-  const t2Signed = !data.testemunha2_email || !!data.testemunha2_signed_at;
-  let novoStatus: string;
-  if (v3Signed && t1Signed && t2Signed) novoStatus = "ASSINADO";
-  else if (v3Signed && t1Signed)         novoStatus = "AGUARDANDO_TESTEMUNHA2";
-  else if (v3Signed)                     novoStatus = "AGUARDANDO_TESTEMUNHA";
-  else                                   novoStatus = "AGUARDANDO_V3";
-
   const { error: updateErr } = await supabase
     .from("contratos_mandato")
     .update({
-      status: novoStatus,
+      status: "AGUARDANDO_V3",
       signed_at: signedAt,
       ip_address: ip,
       endereco: endereco ?? null,
@@ -115,15 +107,11 @@ export async function POST(
       cep: cep ?? null,
       client_birthdate: birthdate ?? null,
       client_doc_url: clientDocUrl,
-      nome_socio: nome_socio ?? null,
-      cpf_socio: cpf_socio ?? null,
-      qualificacao_socio: qualificacao_socio ?? null,
-      nome_fantasia: nome_fantasia ?? null,
     })
     .eq("token", token);
 
   if (updateErr) {
-    return NextResponse.json({ error: "Erro ao registrar assinatura", detail: updateErr.message }, { status: 500 });
+    return NextResponse.json({ error: "Erro ao registrar assinatura" }, { status: 500 });
   }
 
   const v3SigningUrl = `${APP_URL}/assinar/v3/${data.v3_token}`;

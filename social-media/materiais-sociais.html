@@ -5,29 +5,34 @@
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>V3 Partner — Materiais para Redes Sociais</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
-<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
+<!-- FIX: Outfit + Inter substituídos por DM Sans (fonte única V3) -->
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <style>
+  /* ── Paleta V3 Partners · Brandbook V2.0 aprovado ── */
   :root{
-    --gold:#C4922E;--gold-l:#E5B96A;--gold-p:#F5D99A;
-    --navy:#050C18;--navy-m:#091221;--navy-s:#0F1E35;
-    --blue:#1A4FC4;--blue-l:#2E67E8;
-    --fg:#E8EDF5;--muted:#5A7490;
-    --success:#10B981;--danger:#EF4444;
+    --gold:#C9A84C;--gold-l:#E8C97A;--gold-p:#F0ECE4;
+    --navy:#09081A;--navy-m:#111F35;--navy-s:#162744;--navy-mid:#243A66;
+    /* azul e verde proibidos no brandbook — variáveis removidas */
+    --fg:#F0ECE4;--muted:#7A8FA8;
+    --cream:#F0ECE4;
+    /* danger mantido apenas para badges de erro */
+    --danger:#C9604C;
   }
   *{box-sizing:border-box;margin:0;padding:0}
-  body{background:#0a0f1a;font-family:'Inter',sans-serif;color:var(--fg);padding:40px 20px}
+  body{background:#09081A;font-family:'DM Sans',sans-serif;color:var(--fg);padding:40px 20px}
 
   /* PAGE HEADER */
   .page-header{text-align:center;margin-bottom:60px}
-  .page-header h1{font-family:'Outfit',sans-serif;font-size:2.4rem;font-weight:900;
-    background:linear-gradient(120deg,#C4922E,#F5D99A,#C4922E);
+  .page-header h1{font-family:'DM Sans',sans-serif;font-size:2.4rem;font-weight:800;
+    background:linear-gradient(120deg,#C9A84C,#F0ECE4,#C9A84C);
     -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
   .page-header p{color:var(--muted);margin-top:8px;font-size:1rem}
 
   /* SECTION */
   .section{margin-bottom:80px}
-  .section-title{font-family:'Outfit',sans-serif;font-size:1.4rem;font-weight:700;color:var(--gold-l);
+  /* FIX: Outfit → DM Sans · emojis removidos no HTML */
+  .section-title{font-family:'DM Sans',sans-serif;font-size:1.4rem;font-weight:700;color:var(--gold-l);
     border-left:3px solid var(--gold);padding-left:14px;margin-bottom:32px}
 
   /* GRID */
@@ -37,12 +42,13 @@
   /* POST WRAPPER */
   .post-wrap{display:flex;flex-direction:column;gap:16px}
   .post-label{display:flex;gap:8px;align-items:center}
-  .badge{padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;letter-spacing:.5px}
-  .badge-ig{background:linear-gradient(135deg,#833ab4,#fd1d1d,#fcb045);color:#fff}
-  .badge-li{background:#0077B5;color:#fff}
-  .badge-carousel{background:rgba(196,146,46,.2);color:var(--gold-l);border:1px solid rgba(196,146,46,.3)}
-  .badge-feed{background:rgba(16,185,129,.15);color:#10B981;border:1px solid rgba(16,185,129,.3)}
-  .badge-story{background:rgba(46,103,232,.2);color:var(--blue-l);border:1px solid rgba(46,103,232,.3)}
+  /* FIX: todas as badges agora usam apenas navy/ouro — cores Instagram/LinkedIn/verde proibidas */
+  .badge{padding:3px 10px;border-radius:2px;font-size:11px;font-weight:700;letter-spacing:.5px}
+  .badge-ig{background:rgba(201,168,76,.1);border:1px solid rgba(201,168,76,.3);color:var(--gold-l)}
+  .badge-li{background:rgba(201,168,76,.08);border:1px solid rgba(201,168,76,.25);color:var(--gold)}
+  .badge-carousel{background:rgba(201,168,76,.1);color:var(--gold-l);border:1px solid rgba(201,168,76,.3)}
+  .badge-feed{background:rgba(240,236,228,.06);color:var(--fg);border:1px solid rgba(240,236,228,.15)}
+  .badge-story{background:rgba(122,143,168,.1);color:var(--muted);border:1px solid rgba(122,143,168,.25)}
 
   /* CAPTION BOX */
   .caption-box{background:var(--navy-m);border:1px solid rgba(196,146,46,.15);border-radius:12px;padding:16px 18px}
@@ -50,7 +56,7 @@
   .caption-box p{font-size:.88rem;line-height:1.65;color:#c5cfe0;white-space:pre-wrap}
   .copy-btn{margin-top:10px;background:rgba(196,146,46,.1);border:1px solid rgba(196,146,46,.25);
     color:var(--gold-l);padding:6px 14px;border-radius:8px;font-size:12px;cursor:pointer;
-    font-family:'Inter',sans-serif;transition:.2s}
+    font-family:'DM Sans',sans-serif;transition:.2s}
   .copy-btn:hover{background:rgba(196,146,46,.2)}
 
   /* ─────────────────────────────────
@@ -58,7 +64,7 @@
   ───────────────────────────────── */
   .post{position:relative;width:100%;aspect-ratio:1/1;border-radius:16px;overflow:hidden;
     display:flex;flex-direction:column;justify-content:flex-end;
-    background:var(--navy);font-family:'Outfit',sans-serif}
+    background:var(--navy);font-family:'DM Sans',sans-serif}
   .post-wide{aspect-ratio:16/9}
   .post-portrait{aspect-ratio:4/5}
 
@@ -69,11 +75,13 @@
     background-size:40px 40px}
   .bg-radial-gold::after{content:'';position:absolute;inset:0;z-index:0;
     background:radial-gradient(ellipse 70% 60% at 50% 0%,rgba(196,146,46,.18) 0%,transparent 70%)}
+  /* FIX: azul → navy-mid V3 */
   .bg-radial-blue::after{content:'';position:absolute;inset:0;z-index:0;
-    background:radial-gradient(ellipse 80% 60% at 80% 100%,rgba(26,79,196,.25) 0%,transparent 70%)}
+    background:radial-gradient(ellipse 80% 60% at 80% 100%,rgba(36,58,102,.25) 0%,transparent 70%)}
+  /* FIX: azul → navy-mid V3 */
   .bg-radial-dual::after{content:'';position:absolute;inset:0;z-index:0;
-    background:radial-gradient(ellipse 50% 50% at 20% 20%,rgba(196,146,46,.15) 0%,transparent 60%),
-               radial-gradient(ellipse 50% 50% at 80% 80%,rgba(26,79,196,.2) 0%,transparent 60%)}
+    background:radial-gradient(ellipse 50% 50% at 20% 20%,rgba(201,168,76,.15) 0%,transparent 60%),
+               radial-gradient(ellipse 50% 50% at 80% 80%,rgba(36,58,102,.2) 0%,transparent 60%)}
 
   .post-content{position:relative;z-index:2;padding:28px}
   .post-top{position:absolute;top:0;left:0;right:0;z-index:2;padding:22px 28px;
@@ -83,7 +91,7 @@
   .logo-mini{display:flex;align-items:center;gap:7px}
   .logo-mini img{width:28px;height:28px;border-radius:6px;object-fit:cover;
     box-shadow:0 2px 8px rgba(196,146,46,.3)}
-  .logo-mini span{font-family:'Outfit',sans-serif;font-size:.85rem;font-weight:800;
+  .logo-mini span{font-family:'DM Sans',sans-serif;font-size:.85rem;font-weight:800;
     background:linear-gradient(120deg,#C4922E,#F5D99A);
     -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
     letter-spacing:.05em}
@@ -92,12 +100,12 @@
   .gold-line-top{position:absolute;top:0;left:0;right:0;height:2px;z-index:3;
     background:linear-gradient(90deg,transparent,#C4922E 30%,#F5D99A 50%,#C4922E 70%,transparent)}
 
-  /* Tags */
-  .tag{display:inline-block;padding:4px 12px;border-radius:20px;font-size:.7rem;font-weight:700;
+  /* Tags — FIX: tag-blue e tag-green substituídos por variantes navy/muted (cores proibidas) */
+  .tag{display:inline-block;padding:4px 12px;border-radius:2px;font-size:.7rem;font-weight:700;
     letter-spacing:.6px;text-transform:uppercase}
-  .tag-gold{background:rgba(196,146,46,.15);border:1px solid rgba(196,146,46,.4);color:var(--gold-l)}
-  .tag-blue{background:rgba(26,79,196,.2);border:1px solid rgba(46,103,232,.4);color:var(--blue-l)}
-  .tag-green{background:rgba(16,185,129,.15);border:1px solid rgba(16,185,129,.4);color:#10B981}
+  .tag-gold{background:rgba(201,168,76,.15);border:1px solid rgba(201,168,76,.4);color:var(--gold-l)}
+  .tag-blue{background:rgba(36,58,102,.3);border:1px solid rgba(36,58,102,.5);color:var(--muted)}
+  .tag-green{background:rgba(122,143,168,.1);border:1px solid rgba(122,143,168,.25);color:var(--muted)}
 
   /* Gradient text */
   .g-text{background:linear-gradient(120deg,#C4922E,#F5D99A,#E5B96A);
@@ -110,7 +118,8 @@
     color:var(--gold);margin-bottom:10px}
   .post-h1{font-size:1.9rem;font-weight:900;line-height:1.1;margin-bottom:12px}
   .post-h2{font-size:1.5rem;font-weight:800;line-height:1.15;margin-bottom:12px}
-  .post-body{font-family:'Inter',sans-serif;font-size:.82rem;color:#9ab0c8;line-height:1.6;margin-bottom:16px}
+  /* FIX: Inter → DM Sans */
+  .post-body{font-family:'DM Sans',sans-serif;font-size:.82rem;color:#7A8FA8;line-height:1.6;margin-bottom:16px}
   .post-cta{display:inline-flex;align-items:center;gap:6px;
     background:linear-gradient(120deg,#C4922E,#E5B96A);
     color:var(--navy);font-weight:700;font-size:.75rem;letter-spacing:.5px;
@@ -123,18 +132,18 @@
   .stat-row{display:flex;gap:16px;margin-bottom:16px}
   .stat-item{flex:1;background:rgba(15,30,53,.7);border:1px solid rgba(196,146,46,.2);
     border-radius:10px;padding:12px;text-align:center}
-  .stat-num{font-size:1.4rem;font-weight:900;font-family:'Outfit',sans-serif}
-  .stat-label{font-size:.65rem;color:var(--muted);font-family:'Inter',sans-serif;margin-top:2px}
+  .stat-num{font-size:1.4rem;font-weight:900;font-family:'DM Sans',sans-serif}
+  .stat-label{font-size:.65rem;color:var(--muted);font-family:'DM Sans',sans-serif;margin-top:2px}
 
   /* Feature list */
   .feat-list{list-style:none;display:flex;flex-direction:column;gap:8px}
-  .feat-list li{display:flex;align-items:center;gap:8px;font-family:'Inter',sans-serif;font-size:.8rem;color:#b0c4d8}
+  .feat-list li{display:flex;align-items:center;gap:8px;font-family:'DM Sans',sans-serif;font-size:.8rem;color:#7A8FA8}
   .feat-list li::before{content:'✦';color:var(--gold);font-size:.65rem;flex-shrink:0}
 
   /* Module pill */
   .mod-pill{display:inline-flex;align-items:center;gap:6px;padding:6px 14px;
     background:rgba(15,30,53,.8);border:1px solid rgba(196,146,46,.2);border-radius:20px;
-    font-size:.72rem;font-family:'Inter',sans-serif;color:#9ab0c8}
+    font-size:.72rem;font-family:'DM Sans',sans-serif;color:#7A8FA8}
   .mod-pill-dot{width:6px;height:6px;border-radius:50%;background:var(--gold);flex-shrink:0}
 
   /* ─── CAROUSEL ─── */
@@ -149,12 +158,12 @@
   .nav-btn{background:rgba(196,146,46,.12);border:1px solid rgba(196,146,46,.25);
     color:var(--gold-l);width:34px;height:34px;border-radius:50%;cursor:pointer;
     font-size:1rem;display:flex;align-items:center;justify-content:center;
-    font-family:'Inter',sans-serif;transition:.2s;flex-shrink:0}
+    font-family:'DM Sans',sans-serif;transition:.2s;flex-shrink:0}
   .nav-btn:hover{background:rgba(196,146,46,.25)}
 
   /* Number indicator (carousel slide) */
   .slide-num{position:absolute;bottom:20px;right:22px;z-index:3;
-    font-family:'Outfit',sans-serif;font-size:.75rem;font-weight:700;
+    font-family:'DM Sans',sans-serif;font-size:.75rem;font-weight:700;
     color:rgba(196,146,46,.6);letter-spacing:.3px}
 
   /* Decorative elements */
@@ -180,7 +189,7 @@
   /* Download button */
   .dl-btn{width:100%;padding:10px;border-radius:10px;border:none;cursor:pointer;
     background:linear-gradient(120deg,#C4922E,#E5B96A);
-    color:#050C18;font-family:'Outfit',sans-serif;font-weight:800;font-size:.85rem;
+    color:#050C18;font-family:'DM Sans',sans-serif;font-weight:800;font-size:.85rem;
     letter-spacing:.5px;transition:.2s;display:flex;align-items:center;justify-content:center;gap:8px}
   .dl-btn:hover{opacity:.9;transform:translateY(-1px)}
   .dl-btn:disabled{opacity:.5;cursor:wait}
@@ -189,15 +198,15 @@
   #export-overlay{display:none;position:fixed;inset:0;background:rgba(5,12,24,.85);
     z-index:9999;align-items:center;justify-content:center;flex-direction:column;gap:16px}
   #export-overlay.show{display:flex}
-  #export-overlay p{font-family:'Outfit';font-size:1.1rem;color:#E5B96A;font-weight:700}
-  #export-overlay span{font-family:'Inter';font-size:.8rem;color:#5A7490}
+  #export-overlay p{font-family:'DM Sans';font-size:1.1rem;color:#E5B96A;font-weight:700}
+  #export-overlay span{font-family:'DM Sans';font-size:.8rem;color:#7A8FA8}
 </style>
 </head>
 <body>
 
 <!-- Loading overlay -->
 <div id="export-overlay">
-  <p>⏳ Gerando imagem PNG...</p>
+  <p>Gerando imagem PNG...</p>
   <span>Aguarde, isso leva alguns segundos</span>
 </div>
 
@@ -211,7 +220,7 @@
      SEÇÃO 1 — INSTAGRAM FEED (POSTS ESTÁTICOS)
 ═══════════════════════════════════════════════════════════ -->
 <div class="section">
-<div class="section-title">📱 Instagram — Posts Feed</div>
+<div class="section-title">Instagram — Posts Feed</div>
 <div class="grid-2">
 
   <!-- POST 1 — INSTITUCIONAL LANÇAMENTO -->
@@ -238,16 +247,16 @@
     </div>
     <div class="caption-box">
       <h4>Legenda — Post #1</h4>
-      <p>🚀 O mercado financeiro evoluiu. A sua operação acompanhou?
+      <p>O mercado financeiro evoluiu. A sua operação acompanhou?
 
 A V3 Partner é a plataforma mais completa para gestão financeira: CRM inteligente, Split Fiscal, Mesa de Crédito N1 ao High Ticket, M&A, Consórcio e até IA integrada com Claude.
 
 Tudo em um só lugar. Tudo em tempo real.
 
-💬 Comenta "V3" que a gente te explica tudo.
+Comenta "V3" que a gente te explica tudo.
 
 #V3Partner #MercadoFinanceiro #Fintech #PlataformaFinanceira #GestãoFinanceira #Inovação #TechFinance #Empreendedorismo</p>
-      <button class="copy-btn" onclick="copyCaption(this)">📋 Copiar legenda</button>
+      <button class="copy-btn" onclick="copyCaption(this)">Copiar legenda</button>
     </div>
   </div>
 
@@ -279,20 +288,20 @@ Tudo em um só lugar. Tudo em tempo real.
     </div>
     <div class="caption-box">
       <h4>Legenda — Post #2</h4>
-      <p>💰 Você sabia que seus clientes podem estar pagando impostos a mais?
+      <p>Você sabia que seus clientes podem estar pagando impostos a mais?
 
 O módulo Split Fiscal da V3 Partner faz a simulação completa: analisa o mix de pagamentos (PIX, débito, crédito 1x, parcelado), calcula o custo real com cada operadora e mostra a economia real.
 
-✅ Compare taxas na hora
-✅ Gere proposta em PDF automaticamente
-✅ Mostre a diferença em R$ para o cliente
+— Compare taxas na hora
+— Gere proposta em PDF automaticamente
+— Mostre a diferença em R$ para o cliente
 
 Resultado? Mais contratos fechados.
 
-💬 Salva esse post pra não esquecer!
+Salva esse post pra não esquecer!
 
 #SplitFiscal #Tributação #Fintech #V3Partner #MercadoFinanceiro #Impostos #Negócios #Empreendedor</p>
-      <button class="copy-btn" onclick="copyCaption(this)">📋 Copiar legenda</button>
+      <button class="copy-btn" onclick="copyCaption(this)">Copiar legenda</button>
     </div>
   </div>
 
@@ -314,7 +323,7 @@ Resultado? Mais contratos fechados.
           <div style="position:absolute;inset:0;border-radius:50%;border:1px solid rgba(196,146,46,.3);animation:none"></div>
           <div style="position:absolute;inset:20px;border-radius:50%;border:1px solid rgba(46,103,232,.25)"></div>
           <div style="position:absolute;inset:40px;border-radius:50%;background:radial-gradient(circle,rgba(196,146,46,.15),transparent);display:flex;align-items:center;justify-content:center">
-            <span style="font-size:2rem">🤖</span>
+            <span style="font-family:'DM Sans';font-size:1rem;font-weight:900;color:var(--gold)">IA</span>
           </div>
         </div>
       </div>
@@ -327,7 +336,7 @@ Resultado? Mais contratos fechados.
     </div>
     <div class="caption-box">
       <h4>Legenda — Post #3</h4>
-      <p>🤖 Não é mais o futuro. É agora.
+      <p>Não é mais o futuro. É agora.
 
 A V3 Partner tem IA real integrada à sua plataforma financeira, powered by Claude (Anthropic) — o mesmo modelo usado pelas maiores empresas do mundo.
 
@@ -337,12 +346,12 @@ O que você pode fazer:
 → Tirar dúvidas técnicas sobre produtos
 → Obter insights de mercado em tempo real
 
-Enquanto outros ainda usam planilha, você opera com IA. 🔥
+Enquanto outros ainda usam planilha, você opera com IA.
 
-📌 Salva esse post!
+Salva esse post!
 
 #InteligenciaArtificial #IA #Fintech #V3Partner #Claude #Tecnologia #MercadoFinanceiro #Inovação</p>
-      <button class="copy-btn" onclick="copyCaption(this)">📋 Copiar legenda</button>
+      <button class="copy-btn" onclick="copyCaption(this)">Copiar legenda</button>
     </div>
   </div>
 
@@ -378,7 +387,7 @@ Enquanto outros ainda usam planilha, você opera com IA. 🔥
     </div>
     <div class="caption-box">
       <h4>Legenda — Post #4</h4>
-      <p>🏢 M&A: onde os grandes negócios acontecem.
+      <p>M&A: onde os grandes negócios acontecem.
 
 Fusões e aquisições não são só para grandes bancos. Com a Mesa M&A da V3 Partner, você estrutura as maiores operações do mercado com metodologia, análise e tecnologia de alto nível.
 
@@ -387,10 +396,10 @@ Fusões e aquisições não são só para grandes bancos. Com a Mesa M&A da V3 P
 ✦ Gestão de propostas e contratos
 ✦ Acompanhamento em tempo real
 
-Você está pronto para operar nesse nível? 💼
+Você está pronto para operar nesse nível?
 
 #MA #FusoesEAquisicoes #MercadoFinanceiro #V3Partner #HighTicket #Negócios #Investimentos #CorretorFinanceiro</p>
-      <button class="copy-btn" onclick="copyCaption(this)">📋 Copiar legenda</button>
+      <button class="copy-btn" onclick="copyCaption(this)">Copiar legenda</button>
     </div>
   </div>
 
@@ -413,15 +422,15 @@ Você está pronto para operar nesse nível? 💼
         <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px">
           <div style="display:flex;align-items:center;gap:10px">
             <div style="width:28px;height:28px;border-radius:6px;background:rgba(16,185,129,.15);border:1px solid rgba(16,185,129,.3);display:flex;align-items:center;justify-content:center;font-size:.75rem;color:#10B981;font-weight:700;flex-shrink:0">N1</div>
-            <span style="font-family:'Inter';font-size:.8rem;color:#9ab0c8">Crédito Varejo — rápido e direto</span>
+            <span style="font-family:'DM Sans';font-size:.8rem;color:#7A8FA8">Crédito Varejo — rápido e direto</span>
           </div>
           <div style="display:flex;align-items:center;gap:10px">
             <div style="width:28px;height:28px;border-radius:6px;background:rgba(196,146,46,.15);border:1px solid rgba(196,146,46,.3);display:flex;align-items:center;justify-content:center;font-size:.75rem;color:var(--gold);font-weight:700;flex-shrink:0">N2</div>
-            <span style="font-family:'Inter';font-size:.8rem;color:#9ab0c8">Crédito Estruturado — operações complexas</span>
+            <span style="font-family:'DM Sans';font-size:.8rem;color:#7A8FA8">Crédito Estruturado — operações complexas</span>
           </div>
           <div style="display:flex;align-items:center;gap:10px">
             <div style="width:28px;height:28px;border-radius:6px;background:rgba(46,103,232,.15);border:1px solid rgba(46,103,232,.3);display:flex;align-items:center;justify-content:center;font-size:.75rem;color:var(--blue-l);font-weight:700;flex-shrink:0">N3</div>
-            <span style="font-family:'Inter';font-size:.8rem;color:#9ab0c8">High Ticket — grandes volumes</span>
+            <span style="font-family:'DM Sans';font-size:.8rem;color:#7A8FA8">High Ticket — grandes volumes</span>
           </div>
         </div>
         <span class="post-cta">Acessar mesa ▸</span>
@@ -429,20 +438,20 @@ Você está pronto para operar nesse nível? 💼
     </div>
     <div class="caption-box">
       <h4>Legenda — Post #5</h4>
-      <p>💳 3 níveis de crédito. Uma plataforma. Resultado máximo.
+      <p>3 níveis de crédito. Uma plataforma. Resultado máximo.
 
 A Mesa de Crédito da V3 Partner foi desenhada para atender qualquer tipo de operação:
 
-🟢 N1 — Crédito Varejo: agilidade para fechar mais
-🟡 N2 — Crédito Estruturado: operações complexas com método
-🔵 N3 — High Ticket: grandes volumes, alta performance
+N1 — Crédito Varejo: agilidade para fechar mais
+N2 — Crédito Estruturado: operações complexas com método
+N3 — High Ticket: grandes volumes, alta performance
 
 Cada nível tem workflow dedicado, análise integrada e gestão de pipeline completa.
 
-Você opera em qual nível hoje? 👇
+Você opera em qual nível hoje?
 
 #MesaDeCredito #Credito #HighTicket #CreditoEstruturado #V3Partner #MercadoFinanceiro #Correspondente #Fintech</p>
-      <button class="copy-btn" onclick="copyCaption(this)">📋 Copiar legenda</button>
+      <button class="copy-btn" onclick="copyCaption(this)">Copiar legenda</button>
     </div>
   </div>
 
@@ -459,7 +468,7 @@ Você opera em qual nível hoje? 👇
         <span class="tag tag-gold">ACADEMY</span>
       </div>
       <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-60%);z-index:1;
-        font-size:5rem;opacity:.06;font-family:'Outfit',sans-serif;font-weight:900;
+        font-size:5rem;opacity:.06;font-family:'DM Sans',sans-serif;font-weight:900;
         color:#C4922E;white-space:nowrap">ACADEMY</div>
       <div class="post-content">
         <div class="post-eyebrow">V3 Academy</div>
@@ -477,26 +486,26 @@ Você opera em qual nível hoje? 👇
     </div>
     <div class="caption-box">
       <h4>Legenda — Post #6</h4>
-      <p>📚 Plataforma boa não basta. Você precisa dominar o que está vendendo.
+      <p>Plataforma boa não basta. Você precisa dominar o que está vendendo.
 
 A V3 Academy é o hub de conhecimento dentro da V3 Partner. Trilhas especializadas em:
 
-📘 Home Equity
-📗 Crédito Estruturado
-📙 High Ticket
-📕 M&A
-📒 Split Fiscal
-📓 Consórcio
-📔 Compliance
+— Home Equity
+— Crédito Estruturado
+— High Ticket
+— M&A
+— Split Fiscal
+— Consórcio
+— Compliance
 
 Aprenda, aplique e feche mais negócios.
 
-💡 Conhecimento = Vantagem competitiva.
+Conhecimento = Vantagem competitiva.
 
-👉 Siga @v3partner para mais conteúdos.
+Siga @v3partner para mais conteúdos.
 
 #V3Academy #Educação #Fintech #MercadoFinanceiro #V3Partner #Treinamento #Capacitação #HomeEquity</p>
-      <button class="copy-btn" onclick="copyCaption(this)">📋 Copiar legenda</button>
+      <button class="copy-btn" onclick="copyCaption(this)">Copiar legenda</button>
     </div>
   </div>
 
@@ -525,7 +534,7 @@ Aprenda, aplique e feche mais negócios.
     </div>
     <div class="caption-box">
       <h4>Legenda — Post #7</h4>
-      <p>📊 Você sabe onde está cada cliente do seu pipeline?
+      <p>Você sabe onde está cada cliente do seu pipeline?
 
 Com o CRM da V3 Partner, você tem:
 
@@ -535,12 +544,12 @@ Com o CRM da V3 Partner, você tem:
 → Integração com todos os módulos da plataforma
 → Relatórios em tempo real
 
-Chega de perder negócio por falta de acompanhamento. 🎯
+Chega de perder negócio por falta de acompanhamento.
 
 Comenta "CRM" pra saber mais!
 
 #CRM #GestãoDeClientes #Vendas #Fintech #V3Partner #Pipeline #NegóciasFinanceiros #MercadoFinanceiro</p>
-      <button class="copy-btn" onclick="copyCaption(this)">📋 Copiar legenda</button>
+      <button class="copy-btn" onclick="copyCaption(this)">Copiar legenda</button>
     </div>
   </div>
 
@@ -573,21 +582,21 @@ Comenta "CRM" pra saber mais!
     </div>
     <div class="caption-box">
       <h4>Legenda — Post #8</h4>
-      <p>🏠 Consórcio ainda é um dos produtos mais rentáveis do mercado. Você está aproveitando?
+      <p>Consórcio ainda é um dos produtos mais rentáveis do mercado. Você está aproveitando?
 
 A V3 Partner tem um módulo completo de consórcio:
 
-🔸 Simulador instantâneo de parcelas
-🔸 Banco de cartas contempladas
-🔸 Gestão de projetos do cliente
-🔸 Mesa operacional dedicada
+— Simulador instantâneo de parcelas
+— Banco de cartas contempladas
+— Gestão de projetos do cliente
+— Mesa operacional dedicada
 
 Do atendimento ao pós-venda, tudo em uma plataforma.
 
-Quantos consórcios você vendeu esse mês? 👇
+Quantos consórcios você vendeu esse mês?
 
 #Consórcio #V3Partner #MercadoFinanceiro #Fintech #Simulador #Imóveis #Veículos #Correspondente</p>
-      <button class="copy-btn" onclick="copyCaption(this)">📋 Copiar legenda</button>
+      <button class="copy-btn" onclick="copyCaption(this)">Copiar legenda</button>
     </div>
   </div>
 
@@ -598,7 +607,7 @@ Quantos consórcios você vendeu esse mês? 👇
      SEÇÃO 2 — INSTAGRAM CARROSSÉIS
 ═══════════════════════════════════════════════════════════ -->
 <div class="section">
-<div class="section-title">🎠 Instagram — Carrosseis</div>
+<div class="section-title">Instagram — Carrosseis</div>
 <div class="grid-2">
 
   <!-- CARROSSEL 1 — 5 MOTIVOS V3 -->
@@ -617,7 +626,7 @@ Quantos consórcios você vendeu esse mês? 👇
           <div class="post-content" style="display:flex;flex-direction:column;justify-content:center;height:100%;padding-top:80px">
             <div class="post-eyebrow">Por que escolher</div>
             <h2 class="post-h1" style="font-size:2.1rem">5 motivos<br/>para operar<br/><span class="g-text">com a V3.</span></h2>
-            <p class="post-body">Arrasta para ver cada razão 👉</p>
+            <p class="post-body">Arrasta para ver cada razão</p>
           </div>
           <div class="slide-num">01 / 05</div>
         </div>
@@ -627,7 +636,6 @@ Quantos consórcios você vendeu esse mês? 👇
           <div class="gold-line-top"></div>
           <div class="post-top"><span class="logo-mini"><img src="../public/logo.jpg" alt="V3"/><span>V3 PARTNER</span></span></div>
           <div class="post-content" style="display:flex;flex-direction:column;justify-content:center;height:100%;padding-top:60px">
-            <div style="font-size:3rem;margin-bottom:16px">🏆</div>
             <div class="post-eyebrow">Motivo #1</div>
             <h2 class="post-h2"><span class="g-text">Tudo integrado</span><br/>em uma só plataforma</h2>
             <p class="post-body">CRM + Crédito + M&A + Consórcio + Split Fiscal + IA. Sem precisar alternar entre sistemas. Sem perda de informação.</p>
@@ -641,7 +649,6 @@ Quantos consórcios você vendeu esse mês? 👇
           <div class="gold-line-top"></div>
           <div class="post-top"><span class="logo-mini"><img src="../public/logo.jpg" alt="V3"/><span>V3 PARTNER</span></span></div>
           <div class="post-content" style="display:flex;flex-direction:column;justify-content:center;height:100%;padding-top:60px">
-            <div style="font-size:3rem;margin-bottom:16px">🤖</div>
             <div class="post-eyebrow">Motivo #2</div>
             <h2 class="post-h2"><span class="g-text-b">Inteligência Artificial</span><br/>na sua operação</h2>
             <p class="post-body">IA com Claude integrada diretamente na plataforma. Análise instantânea, propostas automáticas, insights de mercado.</p>
@@ -655,7 +662,6 @@ Quantos consórcios você vendeu esse mês? 👇
           <div class="gold-line-top"></div>
           <div class="post-top"><span class="logo-mini"><img src="../public/logo.jpg" alt="V3"/><span>V3 PARTNER</span></span></div>
           <div class="post-content" style="display:flex;flex-direction:column;justify-content:center;height:100%;padding-top:60px">
-            <div style="font-size:3rem;margin-bottom:16px">📚</div>
             <div class="post-eyebrow">Motivo #3</div>
             <h2 class="post-h2">Formação<br/><span class="g-text">especializada</span><br/>inclusa</h2>
             <p class="post-body">V3 Academy com trilhas em Home Equity, M&A, High Ticket, Compliance e muito mais. Conhecimento aplicado = mais vendas.</p>
@@ -669,7 +675,6 @@ Quantos consórcios você vendeu esse mês? 👇
           <div class="gold-line-top"></div>
           <div class="post-top"><span class="logo-mini"><img src="../public/logo.jpg" alt="V3"/><span>V3 PARTNER</span></span></div>
           <div class="post-content" style="display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;height:100%;padding-top:60px">
-            <div style="font-size:3rem;margin-bottom:12px">🚀</div>
             <div class="post-eyebrow" style="text-align:center">Pronto para o próximo nível?</div>
             <h2 class="post-h2" style="text-align:center">Entre para a<br/><span class="g-text">V3 Partner</span><br/>hoje mesmo.</h2>
             <p class="post-body" style="text-align:center">Acesse nossa plataforma e transforme sua operação financeira.</p>
@@ -693,20 +698,20 @@ Quantos consórcios você vendeu esse mês? 👇
     </div>
     <div class="caption-box">
       <h4>Legenda — Carrossel #9</h4>
-      <p>➡️ Arrasta até o final (vale muito a pena)
+      <p>Arrasta até o final (vale muito a pena)
 
 5 motivos para operar com a V3 Partner em 2025:
 
-1️⃣ Tudo integrado — CRM, crédito, M&A, consórcio em um só lugar
-2️⃣ IA real integrada — powered by Claude (Anthropic)
-3️⃣ Academy inclusa — formação especializada em produtos financeiros
-4️⃣ Multi-perfil — Admin, Partner, Gestão e Mesa Operacional
-5️⃣ Resultados — dados em tempo real para decisões melhores
+1. Tudo integrado — CRM, crédito, M&A, consórcio em um só lugar
+2. IA real integrada — powered by Claude (Anthropic)
+3. Academy inclusa — formação especializada em produtos financeiros
+4. Multi-perfil — Admin, Partner, Gestão e Mesa Operacional
+5. Resultados — dados em tempo real para decisões melhores
 
-Qual desses mais chamou sua atenção? Comenta aí 👇
+Qual desses mais chamou sua atenção? Comenta aí
 
 #V3Partner #Fintech #MercadoFinanceiro #Plataforma #Tecnologia #Resultados #Inovação</p>
-      <button class="copy-btn" onclick="copyCaption(this)">📋 Copiar legenda</button>
+      <button class="copy-btn" onclick="copyCaption(this)">Copiar legenda</button>
     </div>
   </div>
 
@@ -726,7 +731,7 @@ Qual desses mais chamou sua atenção? Comenta aí 👇
           <div class="post-content" style="display:flex;flex-direction:column;justify-content:center;height:100%;padding-top:70px">
             <div class="post-eyebrow">Transformação real</div>
             <h2 class="post-h1" style="font-size:2rem">Sua operação<br/><span style="color:#EF4444">antes</span> vs<br/><span class="g-text">depois</span> da V3.</h2>
-            <p class="post-body">Arrasta e veja a diferença que a plataforma faz 👉</p>
+            <p class="post-body">Arrasta e veja a diferença que a plataforma faz</p>
           </div>
           <div class="slide-num">01 / 04</div>
         </div>
@@ -734,25 +739,25 @@ Qual desses mais chamou sua atenção? Comenta aí 👇
         <!-- SLIDE 2 — ANTES -->
         <div class="slide" style="background:linear-gradient(145deg,#1a0505,#120a0a)">
           <div style="position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,#EF4444,transparent)"></div>
-          <div class="post-top"><span style="color:#EF4444;font-weight:700;font-family:'Outfit',sans-serif;font-size:.9rem">ANTES ✗</span></div>
+          <div class="post-top"><span style="color:#EF4444;font-weight:700;font-family:'DM Sans',sans-serif;font-size:.9rem">ANTES ✗</span></div>
           <div class="post-content" style="display:flex;flex-direction:column;justify-content:center;height:100%;padding-top:60px">
             <div style="display:flex;flex-direction:column;gap:10px">
-              <div style="display:flex;gap:10px;align-items:center;font-family:'Inter';font-size:.8rem;color:#c0a0a0">
+              <div style="display:flex;gap:10px;align-items:center;font-family:'DM Sans';font-size:.8rem;color:#c0a0a0">
                 <span style="color:#EF4444;font-size:1rem">✗</span> Planilhas desorganizadas
               </div>
-              <div style="display:flex;gap:10px;align-items:center;font-family:'Inter';font-size:.8rem;color:#c0a0a0">
+              <div style="display:flex;gap:10px;align-items:center;font-family:'DM Sans';font-size:.8rem;color:#c0a0a0">
                 <span style="color:#EF4444;font-size:1rem">✗</span> Clientes perdidos no processo
               </div>
-              <div style="display:flex;gap:10px;align-items:center;font-family:'Inter';font-size:.8rem;color:#c0a0a0">
+              <div style="display:flex;gap:10px;align-items:center;font-family:'DM Sans';font-size:.8rem;color:#c0a0a0">
                 <span style="color:#EF4444;font-size:1rem">✗</span> Sem visão do pipeline
               </div>
-              <div style="display:flex;gap:10px;align-items:center;font-family:'Inter';font-size:.8rem;color:#c0a0a0">
+              <div style="display:flex;gap:10px;align-items:center;font-family:'DM Sans';font-size:.8rem;color:#c0a0a0">
                 <span style="color:#EF4444;font-size:1rem">✗</span> Propostas manuais demoradas
               </div>
-              <div style="display:flex;gap:10px;align-items:center;font-family:'Inter';font-size:.8rem;color:#c0a0a0">
+              <div style="display:flex;gap:10px;align-items:center;font-family:'DM Sans';font-size:.8rem;color:#c0a0a0">
                 <span style="color:#EF4444;font-size:1rem">✗</span> Sem análise tributária
               </div>
-              <div style="display:flex;gap:10px;align-items:center;font-family:'Inter';font-size:.8rem;color:#c0a0a0">
+              <div style="display:flex;gap:10px;align-items:center;font-family:'DM Sans';font-size:.8rem;color:#c0a0a0">
                 <span style="color:#EF4444;font-size:1rem">✗</span> Dados espalhados em vários sistemas
               </div>
             </div>
@@ -763,25 +768,25 @@ Qual desses mais chamou sua atenção? Comenta aí 👇
         <!-- SLIDE 3 — DEPOIS -->
         <div class="slide" style="background:linear-gradient(145deg,#030f0c,#041510)">
           <div style="position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,#10B981,transparent)"></div>
-          <div class="post-top"><span style="color:#10B981;font-weight:700;font-family:'Outfit',sans-serif;font-size:.9rem">DEPOIS ✓</span></div>
+          <div class="post-top"><span style="color:#10B981;font-weight:700;font-family:'DM Sans',sans-serif;font-size:.9rem">DEPOIS ✓</span></div>
           <div class="post-content" style="display:flex;flex-direction:column;justify-content:center;height:100%;padding-top:60px">
             <div style="display:flex;flex-direction:column;gap:10px">
-              <div style="display:flex;gap:10px;align-items:center;font-family:'Inter';font-size:.8rem;color:#90c8a8">
+              <div style="display:flex;gap:10px;align-items:center;font-family:'DM Sans';font-size:.8rem;color:#90c8a8">
                 <span style="color:#10B981;font-size:1rem">✓</span> CRM integrado e organizado
               </div>
-              <div style="display:flex;gap:10px;align-items:center;font-family:'Inter';font-size:.8rem;color:#90c8a8">
+              <div style="display:flex;gap:10px;align-items:center;font-family:'DM Sans';font-size:.8rem;color:#90c8a8">
                 <span style="color:#10B981;font-size:1rem">✓</span> Pipeline visual e rastreável
               </div>
-              <div style="display:flex;gap:10px;align-items:center;font-family:'Inter';font-size:.8rem;color:#90c8a8">
+              <div style="display:flex;gap:10px;align-items:center;font-family:'DM Sans';font-size:.8rem;color:#90c8a8">
                 <span style="color:#10B981;font-size:1rem">✓</span> Propostas geradas em segundos
               </div>
-              <div style="display:flex;gap:10px;align-items:center;font-family:'Inter';font-size:.8rem;color:#90c8a8">
+              <div style="display:flex;gap:10px;align-items:center;font-family:'DM Sans';font-size:.8rem;color:#90c8a8">
                 <span style="color:#10B981;font-size:1rem">✓</span> Split Fiscal automático
               </div>
-              <div style="display:flex;gap:10px;align-items:center;font-family:'Inter';font-size:.8rem;color:#90c8a8">
+              <div style="display:flex;gap:10px;align-items:center;font-family:'DM Sans';font-size:.8rem;color:#90c8a8">
                 <span style="color:#10B981;font-size:1rem">✓</span> IA auxiliando decisões
               </div>
-              <div style="display:flex;gap:10px;align-items:center;font-family:'Inter';font-size:.8rem;color:#90c8a8">
+              <div style="display:flex;gap:10px;align-items:center;font-family:'DM Sans';font-size:.8rem;color:#90c8a8">
                 <span style="color:#10B981;font-size:1rem">✓</span> Tudo em uma plataforma
               </div>
             </div>
@@ -815,20 +820,20 @@ Qual desses mais chamou sua atenção? Comenta aí 👇
     </div>
     <div class="caption-box">
       <h4>Legenda — Carrossel #10</h4>
-      <p>👈 Arrasta e veja como muda TUDO
+      <p>Arrasta e veja como muda TUDO
 
 Sua operação financeira antes vs depois da V3 Partner:
 
-❌ ANTES: Planilhas, sistemas separados, clientes perdendo-se no processo, propostas manuais, zero visibilidade.
+ANTES: Planilhas, sistemas separados, clientes perdendo-se no processo, propostas manuais, zero visibilidade.
 
-✅ DEPOIS: CRM integrado, pipeline visual, propostas automáticas, Split Fiscal, IA e tudo em uma só plataforma.
+DEPOIS: CRM integrado, pipeline visual, propostas automáticas, Split Fiscal, IA e tudo em uma só plataforma.
 
 A diferença? Uma plataforma feita para quem quer resultado de verdade.
 
-💬 Marca aquele amigo que ainda usa planilha 👇
+Marca aquele amigo que ainda usa planilha
 
 #V3Partner #Transformação #Fintech #Produtividade #MercadoFinanceiro #Tecnologia #Inovação #Correspondente</p>
-      <button class="copy-btn" onclick="copyCaption(this)">📋 Copiar legenda</button>
+      <button class="copy-btn" onclick="copyCaption(this)">Copiar legenda</button>
     </div>
   </div>
 
@@ -847,7 +852,7 @@ A diferença? Uma plataforma feita para quem quer resultado de verdade.
           <div class="post-content" style="display:flex;flex-direction:column;justify-content:center;height:100%;padding-top:70px">
             <div class="post-eyebrow">Descubra cada módulo</div>
             <h2 class="post-h1">O que tem<br/>dentro da<br/><span class="g-text">V3 Partner?</span></h2>
-            <p class="post-body">Arrasta para ver todos os módulos 👉</p>
+            <p class="post-body">Arrasta para ver todos os módulos</p>
           </div>
           <div class="slide-num">01 / 06</div>
         </div>
@@ -856,7 +861,6 @@ A diferença? Uma plataforma feita para quem quer resultado de verdade.
           <div class="gold-line-top"></div>
           <div class="post-top"><span class="logo-mini"><img src="../public/logo.jpg" alt="V3"/><span>V3 PARTNER</span></span><span class="tag tag-gold">MÓDULO 1</span></div>
           <div class="post-content" style="display:flex;flex-direction:column;justify-content:center;height:100%;padding-top:60px">
-            <div style="font-size:2.5rem;margin-bottom:12px">📊</div>
             <h2 class="post-h2"><span class="g-text">Dashboard</span><br/>&amp; CRM</h2>
             <p class="post-body">Visão 360° da operação. Gerencie clientes, acompanhe KPIs e tome decisões baseadas em dados reais.</p>
             <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -871,7 +875,6 @@ A diferença? Uma plataforma feita para quem quer resultado de verdade.
           <div class="gold-line-top"></div>
           <div class="post-top"><span class="logo-mini"><img src="../public/logo.jpg" alt="V3"/><span>V3 PARTNER</span></span><span class="tag tag-green">MÓDULO 2</span></div>
           <div class="post-content" style="display:flex;flex-direction:column;justify-content:center;height:100%;padding-top:60px">
-            <div style="font-size:2.5rem;margin-bottom:12px">💰</div>
             <h2 class="post-h2"><span style="color:#10B981">Split Fiscal</span></h2>
             <p class="post-body">Simulador de proposta, mix de pagamentos, comparativo de taxas e geração de PDF. Otimize a tributação dos seus clientes.</p>
             <span class="tag tag-green" style="align-self:flex-start">Otimização tributária</span>
@@ -883,7 +886,6 @@ A diferença? Uma plataforma feita para quem quer resultado de verdade.
           <div class="gold-line-top"></div>
           <div class="post-top"><span class="logo-mini"><img src="../public/logo.jpg" alt="V3"/><span>V3 PARTNER</span></span><span class="tag tag-gold">MÓDULO 3</span></div>
           <div class="post-content" style="display:flex;flex-direction:column;justify-content:center;height:100%;padding-top:60px">
-            <div style="font-size:2.5rem;margin-bottom:12px">🏦</div>
             <h2 class="post-h2"><span class="g-text">Mesa de</span><br/><span class="g-text">Crédito</span></h2>
             <p class="post-body">3 níveis: Varejo (N1), Estruturado (N2) e High Ticket (N3). Do crédito simples ao mais complexo.</p>
             <div style="display:flex;gap:6px">
@@ -899,7 +901,6 @@ A diferença? Uma plataforma feita para quem quer resultado de verdade.
           <div class="gold-line-top"></div>
           <div class="post-top"><span class="logo-mini"><img src="../public/logo.jpg" alt="V3"/><span>V3 PARTNER</span></span><span class="tag tag-blue">MÓDULO 4</span></div>
           <div class="post-content" style="display:flex;flex-direction:column;justify-content:center;height:100%;padding-top:60px">
-            <div style="font-size:2.5rem;margin-bottom:12px">🤝</div>
             <h2 class="post-h2"><span class="g-text-b">M&amp;A +</span><br/><span class="g-text-b">Consórcio</span></h2>
             <p class="post-body">Fusões e Aquisições com metodologia e Consórcio com simulação, cartas contempladas e gestão completa de projetos.</p>
             <div style="display:flex;gap:8px">
@@ -913,7 +914,6 @@ A diferença? Uma plataforma feita para quem quer resultado de verdade.
         <div class="slide bg-radial-dual" style="background:#050C18">
           <div class="gold-line-top"></div>
           <div class="post-content" style="display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;height:100%">
-            <div style="font-size:2.8rem;margin-bottom:14px">🚀</div>
             <span class="logo-mini" style="justify-content:center;margin-bottom:8px"><img src="../public/logo.jpg" alt="V3" style="width:32px;height:32px;border-radius:7px"/><span style="font-size:1rem">V3 PARTNER</span></span>
             <h2 class="post-h2" style="text-align:center">A plataforma<br/><span class="g-text">completa</span><br/>que você precisava.</h2>
             <span class="post-cta" style="margin-top:20px">Conheça agora ▸</span>
@@ -937,22 +937,22 @@ A diferença? Uma plataforma feita para quem quer resultado de verdade.
     </div>
     <div class="caption-box">
       <h4>Legenda — Carrossel #11</h4>
-      <p>🔍 Você sabe exatamente o que tem dentro da V3 Partner? Arrasta pra descobrir!
+      <p>Você sabe exatamente o que tem dentro da V3 Partner? Arrasta pra descobrir!
 
 A plataforma mais completa do mercado financeiro:
 
-📊 Dashboard + CRM — visão 360° da operação
-💰 Split Fiscal — otimização tributária em segundos
-🏦 Mesa de Crédito — N1 ao High Ticket
-🏢 M&A — fusões e aquisições estruturadas
-🏠 Consórcio — simulação e cartas contempladas
-🤖 IA Assistant — inteligência aplicada
-📚 V3 Academy — formação especializada
+— Dashboard + CRM — visão 360° da operação
+— Split Fiscal — otimização tributária em segundos
+— Mesa de Crédito — N1 ao High Ticket
+— M&A — fusões e aquisições estruturadas
+— Consórcio — simulação e cartas contempladas
+— IA Assistant — inteligência aplicada
+— V3 Academy — formação especializada
 
-Qual módulo você mais usaria? 👇
+Qual módulo você mais usaria?
 
 #V3Partner #Fintech #MercadoFinanceiro #Plataforma #Tecnologia #Crédito #Consórcio #SplitFiscal</p>
-      <button class="copy-btn" onclick="copyCaption(this)">📋 Copiar legenda</button>
+      <button class="copy-btn" onclick="copyCaption(this)">Copiar legenda</button>
     </div>
   </div>
 
@@ -980,17 +980,17 @@ Qual módulo você mais usaria? 👇
           <div class="post-content" style="display:flex;flex-direction:column;justify-content:flex-end;height:100%;padding-bottom:40px">
             <div style="display:flex;flex-direction:column;gap:10px">
               <div style="display:flex;align-items:center;gap:12px;background:rgba(196,146,46,.12);border:1px solid rgba(196,146,46,.3);border-radius:12px;padding:12px 16px">
-                <span style="font-size:1.4rem">🥇</span>
-                <div><div style="font-family:'Outfit';font-weight:800;color:#F5D99A">1º LUGAR</div><div style="font-size:.72rem;color:var(--muted);font-family:'Inter'">Top performer do mês</div></div>
-                <div style="margin-left:auto;font-family:'Outfit';font-weight:900;color:var(--gold)">+R$</div>
+                <span style="font-size:1rem;font-weight:900;color:var(--gold)">1</span>
+                <div><div style="font-family:'DM Sans';font-weight:800;color:#F5D99A">1º LUGAR</div><div style="font-size:.72rem;color:var(--muted);font-family:'DM Sans'">Top performer do mês</div></div>
+                <div style="margin-left:auto;font-family:'DM Sans';font-weight:900;color:var(--gold)">+R$</div>
               </div>
               <div style="display:flex;align-items:center;gap:12px;background:rgba(15,30,53,.5);border:1px solid rgba(196,146,46,.15);border-radius:12px;padding:12px 16px">
-                <span style="font-size:1.4rem">🥈</span>
-                <div><div style="font-family:'Outfit';font-weight:700;color:#9ab0c8">2º LUGAR</div><div style="font-size:.72rem;color:var(--muted);font-family:'Inter'">Destaque do mês</div></div>
+                <span style="font-size:1rem;font-weight:900;color:var(--muted)">2</span>
+                <div><div style="font-family:'DM Sans';font-weight:700;color:#7A8FA8">2º LUGAR</div><div style="font-size:.72rem;color:var(--muted);font-family:'DM Sans'">Destaque do mês</div></div>
               </div>
               <div style="display:flex;align-items:center;gap:12px;background:rgba(15,30,53,.4);border:1px solid rgba(196,146,46,.1);border-radius:12px;padding:12px 16px">
-                <span style="font-size:1.4rem">🥉</span>
-                <div><div style="font-family:'Outfit';font-weight:700;color:#9ab0c8">3º LUGAR</div><div style="font-size:.72rem;color:var(--muted);font-family:'Inter'">Em ascensão</div></div>
+                <span style="font-size:1rem;font-weight:900;color:var(--muted)">3</span>
+                <div><div style="font-family:'DM Sans';font-weight:700;color:#7A8FA8">3º LUGAR</div><div style="font-size:.72rem;color:var(--muted);font-family:'DM Sans'">Em ascensão</div></div>
               </div>
             </div>
           </div>
@@ -999,7 +999,6 @@ Qual módulo você mais usaria? 👇
         <div class="slide bg-radial-gold" style="background:#050C18">
           <div class="gold-line-top"></div>
           <div class="post-content" style="display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;height:100%">
-            <div style="font-size:2.5rem;margin-bottom:12px">🏆</div>
             <h2 class="post-h2" style="text-align:center">Você está no<br/><span class="g-text">topo do ranking?</span></h2>
             <p class="post-body" style="text-align:center">A V3 Partner mostra quem está entregando resultado de verdade.</p>
             <span class="post-cta" style="margin-top:16px">Ver ranking ▸</span>
@@ -1019,7 +1018,7 @@ Qual módulo você mais usaria? 👇
     </div>
     <div class="caption-box">
       <h4>Legenda — Carrossel #12</h4>
-      <p>🏆 Você sabe quem está no topo da sua operação?
+      <p>Você sabe quem está no topo da sua operação?
 
 O Ranking V3 Partner mostra em tempo real quem está performando, quem está crescendo e quem precisa de atenção.
 
@@ -1030,10 +1029,10 @@ O Ranking V3 Partner mostra em tempo real quem está performando, quem está cre
 
 Porque o que é medido, é gerenciado. E o que é gerenciado, melhora.
 
-Você está no topo? 👇 Comenta sua posição!
+Você está no topo? Comenta sua posição!
 
 #Ranking #Performance #Gestão #V3Partner #Resultados #Equipe #MercadoFinanceiro #Liderança</p>
-      <button class="copy-btn" onclick="copyCaption(this)">📋 Copiar legenda</button>
+      <button class="copy-btn" onclick="copyCaption(this)">Copiar legenda</button>
     </div>
   </div>
 
@@ -1044,7 +1043,7 @@ Você está no topo? 👇 Comenta sua posição!
      SEÇÃO 3 — LINKEDIN
 ═══════════════════════════════════════════════════════════ -->
 <div class="section">
-<div class="section-title">💼 LinkedIn — Posts Profissionais</div>
+<div class="section-title">LinkedIn — Posts Profissionais</div>
 <div class="grid-2">
 
   <!-- LINKEDIN 1 — INSTITUCIONAL -->
@@ -1065,8 +1064,8 @@ Você está no topo? 👇 Comenta sua posição!
           <h2 class="post-h2">O mercado financeiro<br/>precisa de tecnologia.<br/><span class="g-text">A V3 entrega.</span></h2>
         </div>
         <div style="text-align:right">
-          <div style="font-family:'Outfit';font-size:.75rem;color:var(--muted)">Módulos</div>
-          <div style="font-family:'Outfit';font-size:1.8rem;font-weight:900;color:var(--gold-l)">10+</div>
+          <div style="font-family:'DM Sans';font-size:.75rem;color:var(--muted)">Módulos</div>
+          <div style="font-family:'DM Sans';font-size:1.8rem;font-weight:900;color:var(--gold-l)">10+</div>
         </div>
       </div>
     </div>
@@ -1076,22 +1075,22 @@ Você está no topo? 👇 Comenta sua posição!
 
 Há alguns anos, montar uma operação financeira eficiente exigia múltiplos sistemas, equipes grandes e muito retrabalho. Hoje, com a V3 Partner, uma única plataforma centraliza tudo:
 
-📊 CRM com pipeline visual
-💰 Split Fiscal com simulação em tempo real
-🏦 Mesa de Crédito (Varejo, Estruturado e High Ticket)
-🤝 M&A com metodologia completa
-🏠 Consórcio — simulação e gestão
-🤖 IA integrada com Claude (Anthropic)
-📚 V3 Academy — formação especializada
+— CRM com pipeline visual
+— Split Fiscal com simulação em tempo real
+— Mesa de Crédito (Varejo, Estruturado e High Ticket)
+— M&A com metodologia completa
+— Consórcio — simulação e gestão
+— IA integrada com Claude (Anthropic)
+— V3 Academy — formação especializada
 
 Não é sobre ter mais ferramentas. É sobre ter as ferramentas certas, integradas, funcionando juntas.
 
 Que desafio operacional você enfrenta hoje no mercado financeiro?
 
-👇 Compartilha nos comentários.
+Compartilha nos comentários.
 
 #Fintech #MercadoFinanceiro #Tecnologia #Inovação #V3Partner #PlataformaFinanceira #Transformação #Empreendedorismo</p>
-      <button class="copy-btn" onclick="copyCaption(this)">📋 Copiar legenda</button>
+      <button class="copy-btn" onclick="copyCaption(this)">Copiar legenda</button>
     </div>
   </div>
 
@@ -1109,7 +1108,7 @@ Que desafio operacional você enfrenta hoje no mercado financeiro?
           <div class="post-eyebrow">Otimização Tributária</div>
           <h2 class="post-h2">Como o Split Fiscal<br/>pode reduzir custos<br/><span class="g-text">em até 40%.</span></h2>
         </div>
-        <div style="font-size:3rem;opacity:.5">💰</div>
+        <div style="font-family:'DM Sans';font-size:1.8rem;font-weight:900;color:var(--gold);opacity:.5">R$</div>
       </div>
     </div>
     <div class="caption-box">
@@ -1130,10 +1129,10 @@ Resultado? O cliente vê em R$ exatamente quanto está gastando e quanto pode ec
 
 Isso fecha contrato. Toda vez.
 
-🔖 Salva esse post pra usar na sua próxima reunião de vendas.
+Salva esse post pra usar na sua próxima reunião de vendas.
 
 #SplitFiscal #Tributação #MercadoFinanceiro #Vendas #Fintech #V3Partner #Tecnologia #Resultado</p>
-      <button class="copy-btn" onclick="copyCaption(this)">📋 Copiar legenda</button>
+      <button class="copy-btn" onclick="copyCaption(this)">Copiar legenda</button>
     </div>
   </div>
 
@@ -1152,8 +1151,8 @@ Isso fecha contrato. Toda vez.
           <h2 class="post-h2">O que separa<br/>um corretor comum<br/>de um <span class="g-text">high performer.</span></h2>
         </div>
         <div style="text-align:center">
-          <div style="font-family:'Outfit';font-size:2.5rem;font-weight:900;color:#2E67E8">N3</div>
-          <div style="font-size:.65rem;color:var(--muted);font-family:'Inter'">High Ticket</div>
+          <div style="font-family:'DM Sans';font-size:2.5rem;font-weight:900;color:#2E67E8">N3</div>
+          <div style="font-size:.65rem;color:var(--muted);font-family:'DM Sans'">High Ticket</div>
         </div>
       </div>
     </div>
@@ -1176,7 +1175,7 @@ Porque uma operação de R$ 500k merece uma ferramenta à altura.
 Você opera em high ticket? Qual é seu maior desafio hoje?
 
 #HighTicket #MercadoFinanceiro #Vendas #Crédito #V3Partner #Fintech #Performance #Resultado</p>
-      <button class="copy-btn" onclick="copyCaption(this)">📋 Copiar legenda</button>
+      <button class="copy-btn" onclick="copyCaption(this)">Copiar legenda</button>
     </div>
   </div>
 
@@ -1209,20 +1208,20 @@ Não é culpa do corretor. É falta de acesso a conteúdo estruturado, atualizad
 
 A V3 Academy resolve isso com trilhas de conhecimento em:
 
-📘 Home Equity — como estruturar operações com imóvel como garantia
-📗 Crédito Estruturado — produtos complexos de forma simples
-📙 High Ticket — mentalidade e processo para grandes operações
-📕 M&A — fusões e aquisições para o mercado mid-market
-📒 Split Fiscal — otimização tributária na prática
-📓 Consórcio — do básico ao avançado
-📔 Compliance — operação segura e dentro das normas
+— Home Equity — como estruturar operações com imóvel como garantia
+— Crédito Estruturado — produtos complexos de forma simples
+— High Ticket — mentalidade e processo para grandes operações
+— M&A — fusões e aquisições para o mercado mid-market
+— Split Fiscal — otimização tributária na prática
+— Consórcio — do básico ao avançado
+— Compliance — operação segura e dentro das normas
 
 Saber vender é bom. Saber o que está vendendo é melhor. E a combinação dos dois? Imbatível.
 
 Qual desses temas você mais precisa dominar?
 
 #V3Academy #Educação #MercadoFinanceiro #HomeEquity #Compliance #V3Partner #Conhecimento #Fintech</p>
-      <button class="copy-btn" onclick="copyCaption(this)">📋 Copiar legenda</button>
+      <button class="copy-btn" onclick="copyCaption(this)">Copiar legenda</button>
     </div>
   </div>
 
@@ -1240,7 +1239,7 @@ Qual desses temas você mais precisa dominar?
           <div class="post-eyebrow">Inteligência Artificial</div>
           <h2 class="post-h2">IA no mercado<br/>financeiro:<br/><span class="g-text-b">não é tendência,</span><br/><span class="g-text">é realidade.</span></h2>
         </div>
-        <div style="font-size:3.5rem;opacity:.4">🤖</div>
+        <div style="font-family:'DM Sans';font-size:1.6rem;font-weight:900;color:var(--gold-l);opacity:.4">IA</div>
       </div>
     </div>
     <div class="caption-box">
@@ -1261,10 +1260,10 @@ Não substituímos o corretor. Potencializamos ele.
 
 O profissional financeiro do futuro não é aquele que compete com a IA — é aquele que sabe usar a IA como alavanca.
 
-Você já está usando IA na sua operação? Como? 👇
+Você já está usando IA na sua operação? Como?
 
 #InteligenciaArtificial #IA #Fintech #MercadoFinanceiro #Inovação #Claude #Tecnologia #V3Partner</p>
-      <button class="copy-btn" onclick="copyCaption(this)">📋 Copiar legenda</button>
+      <button class="copy-btn" onclick="copyCaption(this)">Copiar legenda</button>
     </div>
   </div>
 
@@ -1282,7 +1281,7 @@ Você já está usando IA na sua operação? Como? 👇
           <div class="post-eyebrow">Fusões &amp; Aquisições</div>
           <h2 class="post-h2">M&amp;A não é<br/>só para<br/><span class="g-text">grandes bancos.</span></h2>
         </div>
-        <div style="font-size:3rem;opacity:.35">🏢</div>
+        <div style="font-family:'DM Sans';font-size:1.5rem;font-weight:900;color:var(--gold-l);opacity:.35">M&A</div>
       </div>
     </div>
     <div class="caption-box">
@@ -1308,7 +1307,7 @@ Essa é a democratização do M&A.
 Você já fechou ou está trabalhando em alguma operação de M&A?
 
 #MA #FusoesEAquisicoes #MercadoFinanceiro #V3Partner #InvestmentBanking #Fintech #Negócios #Empresas</p>
-      <button class="copy-btn" onclick="copyCaption(this)">📋 Copiar legenda</button>
+      <button class="copy-btn" onclick="copyCaption(this)">Copiar legenda</button>
     </div>
   </div>
 
@@ -1319,7 +1318,7 @@ Você já fechou ou está trabalhando em alguma operação de M&A?
      SEÇÃO 4 — POSTS EXTRAS INSTAGRAM (VIRAIS)
 ═══════════════════════════════════════════════════════════ -->
 <div class="section">
-<div class="section-title">🔥 Instagram — Posts para Viralizar</div>
+<div class="section-title">Instagram — Posts para Viralizar</div>
 <div class="grid-3">
 
   <!-- POST VIRAL 1 — PERGUNTA ENGAJAMENTO -->
@@ -1332,31 +1331,30 @@ Você já fechou ou está trabalhando em alguma operação de M&A?
       <div class="gold-line-top"></div>
       <div class="post-top"><span class="logo-mini"><img src="../public/logo.jpg" alt="V3"/><span>V3 PARTNER</span></span></div>
       <div class="post-content" style="display:flex;flex-direction:column;justify-content:center;height:100%;padding-top:60px;text-align:center;align-items:center">
-        <div style="font-size:3rem;margin-bottom:16px">🤔</div>
         <div class="post-eyebrow" style="text-align:center">Enquete</div>
         <h2 class="post-h2" style="text-align:center">Qual é seu<br/><span class="g-text">maior desafio</span><br/>hoje?</h2>
         <div style="display:flex;flex-direction:column;gap:8px;width:100%;margin-top:16px">
-          <div style="padding:10px 14px;border:1px solid rgba(196,146,46,.3);border-radius:8px;font-family:'Inter';font-size:.8rem;color:#9ab0c8;text-align:center">Organizar clientes 📊</div>
-          <div style="padding:10px 14px;border:1px solid rgba(46,103,232,.3);border-radius:8px;font-family:'Inter';font-size:.8rem;color:#9ab0c8;text-align:center">Fechar mais propostas 💼</div>
-          <div style="padding:10px 14px;border:1px solid rgba(16,185,129,.3);border-radius:8px;font-family:'Inter';font-size:.8rem;color:#9ab0c8;text-align:center">Gestão tributária 💰</div>
+          <div style="padding:10px 14px;border:1px solid rgba(201,168,76,.3);border-radius:0;font-family:'DM Sans';font-size:.8rem;color:#7A8FA8;text-align:center">Organizar clientes</div>
+          <div style="padding:10px 14px;border:1px solid rgba(201,168,76,.2);border-radius:0;font-family:'DM Sans';font-size:.8rem;color:#7A8FA8;text-align:center">Fechar mais propostas</div>
+          <div style="padding:10px 14px;border:1px solid rgba(201,168,76,.15);border-radius:0;font-family:'DM Sans';font-size:.8rem;color:#7A8FA8;text-align:center">Gestão tributária</div>
         </div>
       </div>
     </div>
     <div class="caption-box">
       <h4>Legenda — Post Viral #19</h4>
-      <p>Responde aqui 👇 (sem julgamento, prometo 😄)
+      <p>Responde aqui (sem julgamento, prometo)
 
 Qual é o seu maior desafio no dia a dia do mercado financeiro?
 
-A) 📊 Organizar e acompanhar clientes
-B) 💼 Criar propostas e fechar mais negócios
-C) 💰 Entender e otimizar a tributação dos clientes
-D) 🔄 Gerenciar múltiplos produtos ao mesmo tempo
+A) Organizar e acompanhar clientes
+B) Criar propostas e fechar mais negócios
+C) Entender e otimizar a tributação dos clientes
+D) Gerenciar múltiplos produtos ao mesmo tempo
 
-Comenta a letra! Quero entender o que você enfrenta pra trazer o conteúdo certo 🎯
+Comenta a letra! Quero entender o que você enfrenta pra trazer o conteúdo certo
 
 #MercadoFinanceiro #Desafios #Vendas #V3Partner #Fintech #Correspondente #Corretores #Engajamento</p>
-      <button class="copy-btn" onclick="copyCaption(this)">📋 Copiar legenda</button>
+      <button class="copy-btn" onclick="copyCaption(this)">Copiar legenda</button>
     </div>
   </div>
 
@@ -1374,11 +1372,11 @@ Comenta a letra! Quero entender o que você enfrenta pra trazer o conteúdo cert
       </div>
       <div class="post-content" style="display:flex;flex-direction:column;justify-content:center;height:100%;padding-top:60px;text-align:center;align-items:center">
         <div class="post-eyebrow" style="text-align:center">Verdade do dia</div>
-        <h2 style="font-family:'Outfit';font-size:1.5rem;font-weight:900;line-height:1.25;text-align:center;margin-bottom:16px">
+        <h2 style="font-family:'DM Sans';font-size:1.5rem;font-weight:900;line-height:1.25;text-align:center;margin-bottom:16px">
           "A ferramenta certa<br/>não substitui o talento —<br/><span class="g-text">ela multiplica.</span>"
         </h2>
         <div class="divider-gold" style="width:60px;margin:0 auto 16px"></div>
-        <p style="font-family:'Inter';font-size:.75rem;color:var(--muted);text-align:center">V3 Partner — Tecnologia para quem<br/>quer resultado de verdade</p>
+        <p style="font-family:'DM Sans';font-size:.75rem;color:var(--muted);text-align:center">V3 Partner — Tecnologia para quem<br/>quer resultado de verdade</p>
       </div>
     </div>
     <div class="caption-box">
@@ -1393,10 +1391,10 @@ Não criamos a plataforma para fazer o trabalho por você. Criamos para que voc�
 ✦ A V3 traz a tecnologia
 ✦ Juntos, vocês entregam resultado
 
-💛 Salva esse post se você acredita nisso!
+Salva esse post se você acredita nisso!
 
 #Mindset #MercadoFinanceiro #Tecnologia #V3Partner #Fintech #Motivação #Resultado #Talento</p>
-      <button class="copy-btn" onclick="copyCaption(this)">📋 Copiar legenda</button>
+      <button class="copy-btn" onclick="copyCaption(this)">Copiar legenda</button>
     </div>
   </div>
 
@@ -1414,23 +1412,23 @@ Não criamos a plataforma para fazer o trabalho por você. Criamos para que voc�
         <h2 class="post-h2" style="font-size:1.4rem;margin-bottom:20px">Por que a tecnologia<br/><span class="g-text">faz a diferença.</span></h2>
         <div style="display:flex;flex-direction:column;gap:12px">
           <div style="background:rgba(196,146,46,.08);border:1px solid rgba(196,146,46,.2);border-radius:10px;padding:12px 14px;display:flex;gap:12px;align-items:center">
-            <div style="font-family:'Outfit';font-size:1.6rem;font-weight:900;color:var(--gold);flex-shrink:0">3x</div>
-            <div style="font-family:'Inter';font-size:.75rem;color:#9ab0c8">mais conversões com CRM estruturado vs. sem gestão</div>
+            <div style="font-family:'DM Sans';font-size:1.6rem;font-weight:900;color:var(--gold);flex-shrink:0">3x</div>
+            <div style="font-family:'DM Sans';font-size:.75rem;color:#7A8FA8">mais conversões com CRM estruturado vs. sem gestão</div>
           </div>
           <div style="background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.2);border-radius:10px;padding:12px 14px;display:flex;gap:12px;align-items:center">
-            <div style="font-family:'Outfit';font-size:1.6rem;font-weight:900;color:#10B981;flex-shrink:0">40%</div>
-            <div style="font-family:'Inter';font-size:.75rem;color:#9ab0c8">de redução em custos tributários com Split Fiscal adequado</div>
+            <div style="font-family:'DM Sans';font-size:1.6rem;font-weight:900;color:#10B981;flex-shrink:0">40%</div>
+            <div style="font-family:'DM Sans';font-size:.75rem;color:#7A8FA8">de redução em custos tributários com Split Fiscal adequado</div>
           </div>
           <div style="background:rgba(46,103,232,.08);border:1px solid rgba(46,103,232,.2);border-radius:10px;padding:12px 14px;display:flex;gap:12px;align-items:center">
-            <div style="font-family:'Outfit';font-size:1.6rem;font-weight:900;color:var(--blue-l);flex-shrink:0">10x</div>
-            <div style="font-family:'Inter';font-size:.75rem;color:#9ab0c8">mais rápido gerar uma proposta com a plataforma certa</div>
+            <div style="font-family:'DM Sans';font-size:1.6rem;font-weight:900;color:var(--blue-l);flex-shrink:0">10x</div>
+            <div style="font-family:'DM Sans';font-size:.75rem;color:#7A8FA8">mais rápido gerar uma proposta com a plataforma certa</div>
           </div>
         </div>
       </div>
     </div>
     <div class="caption-box">
       <h4>Legenda — Post Viral #21 (bônus)</h4>
-      <p>📊 Os números não mentem.
+      <p>Os números não mentem.
 
 ✦ 3x mais conversões com CRM estruturado
 ✦ 40% de redução em custos com Split Fiscal bem feito
@@ -1440,12 +1438,12 @@ Enquanto muitos ainda operam no feeling, os melhores do mercado usam dados, proc
 
 A V3 Partner coloca essas ferramentas na sua mão.
 
-💬 Você usa dados pra tomar decisões ou ainda vai no instinto? Comenta! 👇
+Você usa dados pra tomar decisões ou ainda vai no instinto? Comenta!
 
-🔖 Salva pra mostrar pro seu sócio.
+Salva pra mostrar pro seu sócio.
 
 #Dados #Tecnologia #MercadoFinanceiro #V3Partner #Fintech #Resultados #CRM #SplitFiscal #Inovação</p>
-      <button class="copy-btn" onclick="copyCaption(this)">📋 Copiar legenda</button>
+      <button class="copy-btn" onclick="copyCaption(this)">Copiar legenda</button>
     </div>
   </div>
 
@@ -1456,38 +1454,38 @@ A V3 Partner coloca essas ferramentas na sua mão.
      GUIA DE HASHTAGS E ESTRATÉGIA INSTAGRAM
 ═══════════════════════════════════════════════════════════ -->
 <div class="section">
-<div class="section-title">📋 Guia de Estratégia — Instagram Viral</div>
+<div class="section-title">Guia de Estratégia — Instagram Viral</div>
 <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px">
 
   <div style="background:var(--navy-m);border:1px solid rgba(196,146,46,.15);border-radius:14px;padding:24px">
-    <h3 style="font-family:'Outfit';font-weight:700;color:var(--gold-l);font-size:1rem;margin-bottom:14px">🏷️ Set de Hashtags por Categoria</h3>
-    <div style="display:flex;flex-direction:column;gap:16px;font-family:'Inter';font-size:.82rem">
+    <h3 style="font-family:'DM Sans';font-weight:700;color:var(--gold-l);font-size:1rem;margin-bottom:14px">Set de Hashtags por Categoria</h3>
+    <div style="display:flex;flex-direction:column;gap:16px;font-family:'DM Sans';font-size:.82rem">
       <div>
         <div style="color:var(--gold);font-weight:600;margin-bottom:6px">INSTITUCIONAL (use sempre)</div>
-        <code style="color:#9ab0c8;background:rgba(15,30,53,.7);padding:8px 10px;border-radius:6px;display:block;line-height:1.8">#V3Partner #MercadoFinanceiro #Fintech #PlataformaFinanceira #Inovação #Tecnologia</code>
+        <code style="color:#7A8FA8;background:rgba(15,30,53,.7);padding:8px 10px;border-radius:6px;display:block;line-height:1.8">#V3Partner #MercadoFinanceiro #Fintech #PlataformaFinanceira #Inovação #Tecnologia</code>
       </div>
       <div>
         <div style="color:#10B981;font-weight:600;margin-bottom:6px">SPLIT FISCAL</div>
-        <code style="color:#9ab0c8;background:rgba(15,30,53,.7);padding:8px 10px;border-radius:6px;display:block;line-height:1.8">#SplitFiscal #Tributação #ImpostoDeRenda #PlanejamentoTributário #Contabilidade</code>
+        <code style="color:#7A8FA8;background:rgba(15,30,53,.7);padding:8px 10px;border-radius:6px;display:block;line-height:1.8">#SplitFiscal #Tributação #ImpostoDeRenda #PlanejamentoTributário #Contabilidade</code>
       </div>
       <div>
         <div style="color:var(--blue-l);font-weight:600;margin-bottom:6px">CRÉDITO</div>
-        <code style="color:#9ab0c8;background:rgba(15,30,53,.7);padding:8px 10px;border-radius:6px;display:block;line-height:1.8">#Credito #HighTicket #CreditoEstruturado #CorrespondentesBancarios #Correspondente</code>
+        <code style="color:#7A8FA8;background:rgba(15,30,53,.7);padding:8px 10px;border-radius:6px;display:block;line-height:1.8">#Credito #HighTicket #CreditoEstruturado #CorrespondentesBancarios #Correspondente</code>
       </div>
       <div>
         <div style="color:var(--gold);font-weight:600;margin-bottom:6px">M&A</div>
-        <code style="color:#9ab0c8;background:rgba(15,30,53,.7);padding:8px 10px;border-radius:6px;display:block;line-height:1.8">#MA #FusoesAquisicoes #Investimentos #MercadoCapital #BusinessDevelopment</code>
+        <code style="color:#7A8FA8;background:rgba(15,30,53,.7);padding:8px 10px;border-radius:6px;display:block;line-height:1.8">#MA #FusoesAquisicoes #Investimentos #MercadoCapital #BusinessDevelopment</code>
       </div>
       <div>
         <div style="color:#E5B96A;font-weight:600;margin-bottom:6px">ENGAJAMENTO</div>
-        <code style="color:#9ab0c8;background:rgba(15,30,53,.7);padding:8px 10px;border-radius:6px;display:block;line-height:1.8">#EmpreendedorBrasileiro #Empreendedorismo #Negócios #Vendas #Resultado</code>
+        <code style="color:#7A8FA8;background:rgba(15,30,53,.7);padding:8px 10px;border-radius:6px;display:block;line-height:1.8">#EmpreendedorBrasileiro #Empreendedorismo #Negócios #Vendas #Resultado</code>
       </div>
     </div>
   </div>
 
   <div style="background:var(--navy-m);border:1px solid rgba(196,146,46,.15);border-radius:14px;padding:24px">
-    <h3 style="font-family:'Outfit';font-weight:700;color:var(--gold-l);font-size:1rem;margin-bottom:14px">🚀 Estratégia para Viralizar</h3>
-    <div style="display:flex;flex-direction:column;gap:12px;font-family:'Inter';font-size:.82rem;color:#9ab0c8;line-height:1.6">
+    <h3 style="font-family:'DM Sans';font-weight:700;color:var(--gold-l);font-size:1rem;margin-bottom:14px">Estratégia para Viralizar</h3>
+    <div style="display:flex;flex-direction:column;gap:12px;font-family:'DM Sans';font-size:.82rem;color:#7A8FA8;line-height:1.6">
       <div style="display:flex;gap:10px"><span style="color:var(--gold);flex-shrink:0">▸</span><span><strong style="color:var(--fg)">Horários de pico:</strong> Publique ter/qua/qui entre 18h–21h (maior engajamento financeiro no BR)</span></div>
       <div style="display:flex;gap:10px"><span style="color:var(--gold);flex-shrink:0">▸</span><span><strong style="color:var(--fg)">CTAs poderosos:</strong> "Salva esse post", "Comenta a letra", "Marca um colega" — aumentam alcance orgânico</span></div>
       <div style="display:flex;gap:10px"><span style="color:var(--gold);flex-shrink:0">▸</span><span><strong style="color:var(--fg)">Carrosseis:</strong> O Instagram prioriza carrosseis — usam 3x mais tempo na tela e têm 3x mais alcance</span></div>
@@ -1500,23 +1498,23 @@ A V3 Partner coloca essas ferramentas na sua mão.
   </div>
 
   <div style="background:var(--navy-m);border:1px solid rgba(46,103,232,.15);border-radius:14px;padding:24px;grid-column:1/-1">
-    <h3 style="font-family:'Outfit';font-weight:700;color:var(--blue-l);font-size:1rem;margin-bottom:14px">💼 Estratégia LinkedIn — Algoritmo e Viralizção</h3>
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;font-family:'Inter';font-size:.82rem;color:#9ab0c8;line-height:1.6">
+    <h3 style="font-family:'DM Sans';font-weight:700;color:var(--gold-l);font-size:1rem;margin-bottom:14px">Estratégia LinkedIn — Algoritmo e Viralização</h3>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;font-family:'DM Sans';font-size:.82rem;color:#7A8FA8;line-height:1.6">
       <div style="display:flex;flex-direction:column;gap:8px">
-        <div style="color:var(--blue-l);font-weight:600">📅 Frequência Ideal</div>
+        <div style="color:var(--gold-l);font-weight:600">Frequência Ideal</div>
         <div style="display:flex;gap:8px"><span style="color:var(--gold)">▸</span>3–5 posts por semana</div>
         <div style="display:flex;gap:8px"><span style="color:var(--gold)">▸</span>Horário: seg–sex, 7h–9h ou 11h–12h</div>
         <div style="display:flex;gap:8px"><span style="color:var(--gold)">▸</span>Evitar finais de semana</div>
       </div>
       <div style="display:flex;flex-direction:column;gap:8px">
-        <div style="color:var(--blue-l);font-weight:600">✍️ Formato que Performa</div>
+        <div style="color:var(--gold-l);font-weight:600">Formato que Performa</div>
         <div style="display:flex;gap:8px"><span style="color:var(--gold)">▸</span>Primeira linha = gancho forte</div>
         <div style="display:flex;gap:8px"><span style="color:var(--gold)">▸</span>Parágrafos curtos (1–2 linhas)</div>
         <div style="display:flex;gap:8px"><span style="color:var(--gold)">▸</span>Pergunta no final = comentários</div>
         <div style="display:flex;gap:8px"><span style="color:var(--gold)">▸</span>Evitar links no corpo do post</div>
       </div>
       <div style="display:flex;flex-direction:column;gap:8px">
-        <div style="color:var(--blue-l);font-weight:600">🎯 Conteúdo que Engaja</div>
+        <div style="color:var(--gold-l);font-weight:600">Conteúdo que Engaja</div>
         <div style="display:flex;gap:8px"><span style="color:var(--gold)">▸</span>Histórias pessoais + aprendizado</div>
         <div style="display:flex;gap:8px"><span style="color:var(--gold)">▸</span>Dados e estatísticas do setor</div>
         <div style="display:flex;gap:8px"><span style="color:var(--gold)">▸</span>Opiniões contrárias ao senso comum</div>
@@ -1627,8 +1625,8 @@ function downloadPost(wrap, nome) {
 function copyCaption(btn) {
   const p = btn.parentElement.querySelector('p');
   navigator.clipboard.writeText(p.innerText).then(() => {
-    btn.textContent = '✅ Copiado!';
-    setTimeout(() => { btn.textContent = '📋 Copiar legenda'; }, 2000);
+    btn.textContent = 'Copiado!';
+    setTimeout(() => { btn.textContent = 'Copiar legenda'; }, 2000);
   });
 }
 </script>

@@ -4,15 +4,14 @@ import { notifyContratoFinalizado, notifyAssinaturaRegistrada } from "@/lib/emai
 import { gerarCertificadoHTML } from "@/lib/contrato-html";
 import { gerarCertificadoPDF } from "@/lib/contrato-pdf";
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
-
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ token: string }> }
 ) {
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
   const { token } = await params;
 
   const { data, error } = await supabase
@@ -32,6 +31,10 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ token: string }> }
 ) {
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
   const { token } = await params;
   const { nome_assinatura, cpf, birthdate, address } = await req.json();
 

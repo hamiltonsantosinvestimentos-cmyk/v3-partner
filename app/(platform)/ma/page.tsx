@@ -11,6 +11,7 @@ export default async function MAPage() {
   let initialDeals: MaDeal[] = [];
   let userId = "";
   let userName = "";
+  let userRole = "PARTNER";
 
   if (user) {
     const svc = sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -23,9 +24,10 @@ export default async function MAPage() {
 
     userId   = profile?.id   ?? user.id ?? "";
     userName = profile?.full_name ?? "";
+    userRole = profile?.role ?? "PARTNER";
 
     const adminRoles = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"];
-    const isAdmin = adminRoles.includes(profile?.role ?? "");
+    const isAdmin = adminRoles.includes(userRole);
 
     let query = svc
       .from("ma_deals")
@@ -69,6 +71,7 @@ export default async function MAPage() {
       deals={initialDeals}
       userId={userId}
       userName={userName}
+      userRole={userRole}
     />
   );
 }

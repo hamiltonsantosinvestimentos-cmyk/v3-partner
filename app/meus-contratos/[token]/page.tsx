@@ -2,11 +2,6 @@ import { createClient } from "@supabase/supabase-js";
 import { MeusContratosClient } from "./meus-contratos-client";
 import { notFound } from "next/navigation";
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
-
 export const dynamic = "force-dynamic";
 
 export default async function MeusContratosPage({
@@ -14,6 +9,10 @@ export default async function MeusContratosPage({
 }: {
   params: Promise<{ token: string }>;
 }) {
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
   const { token } = await params;
 
   // Busca pelo token de assinatura do cliente

@@ -11,6 +11,7 @@ import { formatCurrency } from "@/lib/utils";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { NovoDealForm } from "@/components/ma/novo-deal-form";
 import { DealFormEditorClient } from "@/components/ma/deal-form-editor-client";
+import { ForjaPanel } from "@/components/ma/forja-panel";
 
 // ─── Etapas unificadas M&A ────────────────────────────────────────────────────
 export const MA_PIPELINE = [
@@ -162,9 +163,13 @@ interface MaClientProps {
   deals: MaDeal[];
   userId?: string;
   userName?: string;
+  userRole?: string;
 }
 
-export function MaClient({ deals, userId = "", userName = "" }: MaClientProps) {
+const ADMIN_ROLES = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"];
+
+export function MaClient({ deals, userId = "", userName = "", userRole = "PARTNER" }: MaClientProps) {
+  const isAdmin = ADMIN_ROLES.includes(userRole);
   const [localDeals, setLocalDeals] = useState(deals);
   const [showNewDeal, setShowNewDeal] = useState(false);
   const [showFullForm, setShowFullForm] = useState(false);
@@ -614,42 +619,80 @@ export function MaClient({ deals, userId = "", userName = "" }: MaClientProps) {
                   })()}
                 </div>
 
-                {/* Status FORJA — somente leitura para o partner */}
-                {(() => {
-                  const ad = selectedDeal.asset_data as Record<string, unknown> | null;
-                  const fs = ad?.forja_status as string | undefined;
-                  const score = ad?.forja_score as number | undefined;
-                  const validatedAt = ad?.forja_validated_at as string | undefined;
-                  const statusConfig: Record<string, { label: string; color: string; bg: string }> = {
-                    APROVADO: { label: "Aprovado", color: "text-emerald-400", bg: "bg-emerald-500/10 border-emerald-500/20" },
-                    APROVADO_COM_RESSALVAS: { label: "Aprovado com Ressalvas", color: "text-amber-400", bg: "bg-amber-500/10 border-amber-500/20" },
-                    PENDENTE: { label: "Pendente", color: "text-orange-400", bg: "bg-orange-500/10 border-orange-500/20" },
-                    BLOQUEADO: { label: "Bloqueado", color: "text-red-400", bg: "bg-red-500/10 border-red-500/20" },
-                  };
-                  const cfg = fs ? statusConfig[fs] : null;
-                  return (
-                    <div>
-                      <p className="text-xs text-[#7A8FA8] mb-2 flex items-center gap-1.5">
-                        <span className="text-[#C9A84C]">⚡</span> Validação FORJA
-                      </p>
-                      <div className={`px-3 py-2.5 rounded-lg border ${cfg ? cfg.bg : "bg-[#0F1E35] border-[#122036]"} flex items-center justify-between gap-2`}>
-                        <div>
-                          <p className={`text-xs font-semibold ${cfg ? cfg.color : "text-[#7A8FA8]"}`}>
-                            {cfg ? cfg.label : "Aguardando validação pela Mesa M&A"}
-                          </p>
-                          {validatedAt && (
-                            <p className="text-[10px] text-[#5A7490] mt-0.5">
-                              Validado em {new Date(validatedAt).toLocaleDateString("pt-BR")}
+                {/* FORJA — admin vê painel completo, partner vê status somente leitura */}
+                {isAdmin ? (
+                  <ForjaPanel
+                    deal={{
+                      id: selectedDeal.id,
+                      code: selectedDeal.code,
+                      target_company: selectedDeal.target_company,
+                      sector: selectedDeal.sector ?? "",
+                      deal_value: selectedDeal.deal_value ?? 0,
+                      probability_percent: selectedDeal.probability_percent ?? 0,
+                      stage: selectedDeal.stage,
+                      location: selectedDeal.location ?? "",
+                      notes: selectedDeal.notes ?? "",
+                      asset_data: selectedDeal.asset_data ?? {},
+                      comments: selectedDeal.comments ?? [],
+                    }}
+                    dealId={selectedDeal.id}
+                    savedResult={(selectedDeal.asset_data?.forja_result ?? null) as never}
+                    onSaved={(result) => {
+                      const newAssetData = {
+                        ...(selectedDeal.asset_data ?? {}),
+                        forja_result: result,
+                        forja_status: result.recommendation,
+                        forja_score: result.score,
+                        forja_validated_at: new Date().toISOString(),
+                      };
+                      setLocalDeals(prev => prev.map(d => d.id === selectedDeal.id ? { ...d, asset_data: newAssetData } : d));
+                      setSelectedDeal(prev => prev ? { ...prev, asset_data: newAssetData } : null);
+                    }}
+                    onReportSaved={(reportUrl, generatedAt) => {
+                      const prevReports = (selectedDeal.asset_data?.forja_reports as Array<{ url: string; generated_at: string }>) ?? [];
+                      const newReports = [{ url: reportUrl, generated_at: generatedAt }, ...prevReports].slice(0, 10);
+                      const newAssetData = { ...(selectedDeal.asset_data ?? {}), forja_reports: newReports };
+                      setLocalDeals(prev => prev.map(d => d.id === selectedDeal.id ? { ...d, asset_data: newAssetData } : d));
+                      setSelectedDeal(prev => prev ? { ...prev, asset_data: newAssetData } : null);
+                    }}
+                  />
+                ) : (
+                  (() => {
+                    const ad = selectedDeal.asset_data as Record<string, unknown> | null;
+                    const fs = ad?.forja_status as string | undefined;
+                    const score = ad?.forja_score as number | undefined;
+                    const validatedAt = ad?.forja_validated_at as string | undefined;
+                    const statusConfig: Record<string, { label: string; color: string; bg: string }> = {
+                      APROVADO: { label: "Aprovado", color: "text-emerald-400", bg: "bg-emerald-500/10 border-emerald-500/20" },
+                      APROVADO_COM_RESSALVAS: { label: "Aprovado com Ressalvas", color: "text-amber-400", bg: "bg-amber-500/10 border-amber-500/20" },
+                      PENDENTE: { label: "Pendente", color: "text-orange-400", bg: "bg-orange-500/10 border-orange-500/20" },
+                      BLOQUEADO: { label: "Bloqueado", color: "text-red-400", bg: "bg-red-500/10 border-red-500/20" },
+                    };
+                    const cfg = fs ? statusConfig[fs] : null;
+                    return (
+                      <div>
+                        <p className="text-xs text-[#7A8FA8] mb-2 flex items-center gap-1.5">
+                          <span className="text-[#C9A84C]">⚡</span> Validação FORJA
+                        </p>
+                        <div className={`px-3 py-2.5 rounded-lg border ${cfg ? cfg.bg : "bg-[#0F1E35] border-[#122036]"} flex items-center justify-between gap-2`}>
+                          <div>
+                            <p className={`text-xs font-semibold ${cfg ? cfg.color : "text-[#7A8FA8]"}`}>
+                              {cfg ? cfg.label : "Aguardando validação pela Mesa M&A"}
                             </p>
+                            {validatedAt && (
+                              <p className="text-[10px] text-[#5A7490] mt-0.5">
+                                Validado em {new Date(validatedAt).toLocaleDateString("pt-BR")}
+                              </p>
+                            )}
+                          </div>
+                          {score !== undefined && (
+                            <span className={`text-sm font-bold ${cfg ? cfg.color : "text-[#7A8FA8]"}`}>{score}/100</span>
                           )}
                         </div>
-                        {score !== undefined && (
-                          <span className={`text-sm font-bold ${cfg ? cfg.color : "text-[#7A8FA8]"}`}>{score}/100</span>
-                        )}
                       </div>
-                    </div>
-                  );
-                })()}
+                    );
+                  })()
+                )}
 
                 {/* Kit de Criativos — liberado pela Mesa M&A */}
                 {(() => {

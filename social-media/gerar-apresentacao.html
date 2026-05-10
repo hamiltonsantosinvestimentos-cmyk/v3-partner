@@ -3,44 +3,45 @@
 <head>
 <meta charset="UTF-8"/>
 <title>V3 Partner — Apresentação Premium</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
 <script src="https://unpkg.com/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-body{background:radial-gradient(ellipse at 30% 40%,#0a1628 0%,#020810 70%);
-  font-family:'Segoe UI',Arial,sans-serif;color:#E8EDF5;
+body{background:radial-gradient(ellipse at 30% 40%,#111F35 0%,#09081A 70%);
+  font-family:'DM Sans',sans-serif;color:#F0ECE4;
   display:flex;flex-direction:column;align-items:center;justify-content:center;
   min-height:100vh;padding:40px;text-align:center}
 .logo-wrap{position:relative;margin-bottom:22px}
-.logo-preview{width:100px;height:100px;border-radius:16px;border:2px solid #C4922E;
-  object-fit:cover;box-shadow:0 0 50px rgba(196,146,46,.7),0 0 100px rgba(196,146,46,.3)}
+.logo-preview{width:100px;height:100px;border-radius:4px;border:2px solid #C9A84C;
+  object-fit:cover;box-shadow:0 0 50px rgba(201,168,76,.7),0 0 100px rgba(201,168,76,.3)}
 h1{font-size:2.4rem;font-weight:900;margin-bottom:8px;letter-spacing:2px;
-  background:linear-gradient(90deg,#C4922E,#F5D99A,#E5B96A,#C4922E);
+  background:linear-gradient(90deg,#C9A84C,#F0ECE4,#E8C97A,#C9A84C);
   -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
-.sub{color:#5A7490;font-size:.9rem;margin-bottom:40px;max-width:700px;line-height:1.8}
-#btn{padding:22px 80px;border:none;border-radius:50px;cursor:pointer;
-  background:linear-gradient(120deg,#8A6018,#C4922E,#F5D99A,#C4922E,#8A6018);
+.sub{color:#7A8FA8;font-size:.9rem;margin-bottom:40px;max-width:700px;line-height:1.8}
+#btn{padding:22px 80px;border:none;border-radius:0;cursor:pointer;
+  background:linear-gradient(120deg,#7A6028,#C9A84C,#F0ECE4,#C9A84C,#7A6028);
   background-size:200%;
-  color:#050C18;font-weight:900;font-size:1.2rem;letter-spacing:2px;
-  box-shadow:0 0 40px rgba(196,146,46,.6),0 0 80px rgba(196,146,46,.2);
+  color:#09081A;font-weight:900;font-size:1.2rem;letter-spacing:2px;
+  box-shadow:0 0 40px rgba(201,168,76,.6),0 0 80px rgba(201,168,76,.2);
   transition:.3s;text-transform:uppercase}
-#btn:hover{background-position:right;box-shadow:0 0 60px rgba(196,146,46,.9);transform:scale(1.03)}
+#btn:hover{background-position:right;box-shadow:0 0 60px rgba(201,168,76,.9);transform:scale(1.03)}
 #btn:disabled{opacity:.35;cursor:wait;transform:none;box-shadow:none}
-#status{margin-top:28px;color:#E5B96A;font-size:1rem;font-weight:700;min-height:30px;letter-spacing:.5px}
-#progress{width:480px;height:12px;background:#0a1628;border-radius:6px;margin-top:16px;
-  overflow:hidden;border:1px solid #122036}
-#bar{height:100%;width:0;background:linear-gradient(90deg,#8A6018,#C4922E,#F5D99A);
-  border-radius:6px;transition:width .4s;box-shadow:0 0 12px rgba(196,146,46,.6)}
+#status{margin-top:28px;color:#E8C97A;font-size:1rem;font-weight:700;min-height:30px;letter-spacing:.5px}
+#progress{width:480px;height:12px;background:#111F35;border-radius:0;margin-top:16px;
+  overflow:hidden;border:1px solid rgba(201,168,76,.2)}
+#bar{height:100%;width:0;background:linear-gradient(90deg,#7A6028,#C9A84C,#F0ECE4);
+  border-radius:0;transition:width .4s;box-shadow:0 0 12px rgba(201,168,76,.6)}
 .grid{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;max-width:850px;margin-top:36px}
-.sl{background:rgba(9,18,33,.8);border:1px solid #1a2f4a;border-radius:10px;padding:12px 8px;
-  font-size:.68rem;color:#5A7490;transition:.2s}
-.sl strong{color:#C4922E;display:block;font-size:.9rem;margin-bottom:4px}
+.sl{background:rgba(17,31,53,.8);border:1px solid rgba(201,168,76,.12);border-radius:0;padding:12px 8px;
+  font-size:.7rem;color:#7A8FA8;transition:.2s}
+.sl strong{color:#C9A84C;display:block;font-size:.9rem;margin-bottom:4px}
 </style>
 </head>
 <body>
 <img class="logo-preview" src="../public/logo.jpg" id="logoEl" alt="V3 Logo"/>
 <h1>V3 PARTNER</h1>
 <p class="sub">Apresentação Institucional Elite · 20 Slides · Fundos Canvas Ultra-Premium · Alto Impacto · Brandbook V3 Completo</p>
-<button id="btn" onclick="gerar()">⚡ GERAR APRESENTAÇÃO ELITE</button>
+<button id="btn" onclick="gerar()">GERAR APRESENTAÇÃO ELITE</button>
 <div id="status"></div>
 <div id="progress"><div id="bar"></div></div>
 <div class="grid">
@@ -70,19 +71,22 @@ h1{font-size:2.4rem;font-weight:900;margin-bottom:8px;letter-spacing:2px;
 // ═══════════════════════════════════════════════════════════
 //  BRAND
 // ═══════════════════════════════════════════════════════════
-const NAVY='#050C18',NAVY2='#091221',NAVY3='#0F1E35',
-      GOLD='#C4922E',GOLDL='#E5B96A',GOLDP='#F5D99A',GOLDD='#8A6018',
-      BLUE='#1A4FC4',BLUEL='#2E67E8',BLULL='#4A7FF0',
-      GREEN='#10B981',GREENL='#34D399',
-      RED='#EF4444',WHITE='#FFFFFF',FG='#E8EDF5',MUTED='#5A7490';
+// ── Paleta V3 Partners aprovada · Brandbook V2.0 ──
+const NAVY='#09081A',NAVY2='#111F35',NAVY3='#162744',NAVY4='#243A66',
+      GOLD='#C9A84C',GOLDL='#E8C97A',GOLDP='#F0ECE4',GOLDD='#7A6028',
+      // AZUL, VERDE e VERMELHO proibidos no brandbook V3 — substituídos por navy/ouro
+      BLUE='#243A66',BLUEL='#162744',BLULL='#111F35',
+      GREEN='#C9A84C',GREENL='#E8C97A',
+      RED='#7A6028',WHITE='#F0ECE4',FG='#F0ECE4',MUTED='#7A8FA8';
 
 // hex without # for pptx
 const C={
-  navy:'050C18',navy2:'091221',navy3:'0F1E35',navy4:'122036',
-  gold:'C4922E',goldL:'E5B96A',goldP:'F5D99A',goldD:'8A6018',
-  blue:'1A4FC4',blueL:'2E67E8',blueLL:'4A7FF0',
-  green:'10B981',greenL:'34D399',red:'EF4444',redL:'F87171',
-  white:'FFFFFF',fg:'E8EDF5',muted:'5A7490',dim:'2A3F55'
+  navy:'09081A',navy2:'111F35',navy3:'162744',navy4:'243A66',
+  gold:'C9A84C',goldL:'E8C97A',goldP:'F0ECE4',goldD:'7A6028',
+  // navy variants substituem azul/verde/vermelho proibidos
+  blue:'243A66',blueL:'162744',blueLL:'111F35',
+  green:'C9A84C',greenL:'E8C97A',red:'7A6028',redL:'C9A84C',
+  white:'F0ECE4',fg:'F0ECE4',muted:'7A8FA8',dim:'243A66'
 };
 
 let LOGO_B64=null;
@@ -579,10 +583,10 @@ function S04_Proposito(pptx,logo,bgs){
     lineSpacingMultiple:1.5,italic:true,
     shadow:{type:'outer',color:C.gold,blur:22,offset:2,angle:45,opacity:.7}});
   const vs=[
-    {i:'🎯',t:'Missão',d:'Empoderar parceiros com\ntecnologia de ponta'},
-    {i:'🔭',t:'Visão',d:'Ser a plataforma #1 do\nparceiro financeiro BR'},
-    {i:'💎',t:'Valores',d:'Excelência · Ética\nInovação · Resultado'},
-    {i:'🚀',t:'Cultura',d:'Alta performance com\npropósito real'},
+    {i:'01',t:'Missão',d:'Empoderar parceiros com\ntecnologia de ponta'},
+    {i:'02',t:'Visão',d:'Ser a plataforma #1 do\nparceiro financeiro BR'},
+    {i:'03',t:'Valores',d:'Excelência · Ética\nInovação · Resultado'},
+    {i:'04',t:'Cultura',d:'Alta performance com\npropósito real'},
   ];
   vs.forEach((v,i)=>{
     const x=.5+i*2.38;
@@ -649,12 +653,12 @@ function S07_Solucao(pptx,logo,bgs){
   s.addText('A V3 Partner unifica em um único ecossistema tudo que o parceiro precisa para operar, crescer e prosperar.',{
     x:.4,y:1.35,w:9.2,h:.72,fontSize:13,color:C.fg,lineSpacingMultiple:1.6});
   const ss=[
-    {i:'✅',t:'Plataforma Unificada',d:'9 módulos, um login, total integração',c:C.green},
-    {i:'🤖',t:'IA Generativa (Claude)',d:'Especializada em finanças BR, 24/7',c:C.blueLL},
-    {i:'⚡',t:'Tempo Real',d:'Propostas, status, aprovações ao vivo',c:C.gold},
-    {i:'📊',t:'Analytics Avançado',d:'Dashboard com KPIs, gráficos, alertas',c:C.goldL},
-    {i:'🎓',t:'V3 Academy',d:'25+ videoaulas, certificações, crescimento',c:C.goldL},
-    {i:'🔐',t:'Segurança Bancária',d:'PostgreSQL + RLS + JWT + HTTPS',c:C.greenL}
+    {i:'01',t:'Plataforma Unificada',d:'9 módulos, um login, total integração',c:C.green},
+    {i:'IA',t:'IA Generativa (Claude)',d:'Especializada em finanças BR, 24/7',c:C.blueLL},
+    {i:'RT',t:'Tempo Real',d:'Propostas, status, aprovações ao vivo',c:C.gold},
+    {i:'KP',t:'Analytics Avançado',d:'Dashboard com KPIs, gráficos, alertas',c:C.goldL},
+    {i:'AC',t:'V3 Academy',d:'25+ videoaulas, certificações, crescimento',c:C.goldL},
+    {i:'SEC',t:'Segurança Bancária',d:'PostgreSQL + RLS + JWT + HTTPS',c:C.greenL}
   ];
   ss.forEach((p,i)=>{
     const x=i%2===0?.4:5.1, y=2.2+Math.floor(i/2)*1.2;
@@ -723,7 +727,7 @@ function S09_SplitFiscal(pptx,logo,bgs){
   });
   card(s,pptx,.4,5.02,9.2,1.58,'051A08','10B981',5);
   s.addShape(pptx.ShapeType.rect,{x:.4,y:5.02,w:9.2,h:.05,fill:{color:C.green},line:{type:'none'}});
-  s.addText('💡 Impacto Comprovado',{x:.65,y:5.1,w:4,h:.42,fontSize:13,bold:true,color:C.greenL});
+  s.addText('Impacto Comprovado',{x:.65,y:5.1,w:4,h:.42,fontSize:13,bold:true,color:C.greenL});
   s.addText('Parceiros V3 reportam redução média de 18% na carga tributária e aumento de 32% na receita líquida por operação com o simulador de Split Fiscal.',{
     x:.65,y:5.54,w:8.8,h:.92,fontSize:10.5,color:C.fg,lineSpacingMultiple:1.5});
   footer(s,pptx,logo,9,20);
@@ -803,7 +807,7 @@ function S12_IA(pptx,logo,bgs){
   // Chat mockup
   const msgs=[
     {t:'Qual a diferença entre CRI e CRA para cliente PF?',bot:false},
-    {t:'🤖  CRI é lastreado em recebíveis imobiliários e CRA no agronegócio. Ambos são isentos de IR para PF. Recomendo CRI para diversificação + CRA como complemento de renda fixada. Posso estruturar uma proposta personalizada?',bot:true},
+    {t:'CRI é lastreado em recebíveis imobiliários e CRA no agronegócio. Ambos são isentos de IR para PF. Recomendo CRI para diversificação + CRA como complemento de renda fixada. Posso estruturar uma proposta personalizada?',bot:true},
     {t:'Estruture proposta FIDC para empresa com R$ 5M em recebíveis',bot:false},
   ];
   msgs.forEach((m,i)=>{
@@ -814,15 +818,15 @@ function S12_IA(pptx,logo,bgs){
     s.addText(m.t,{x:x+.12,y:y+.08,w:w-.24,h:.65,fontSize:9,
       color:m.bot?C.fg:C.blueLL,lineSpacingMultiple:1.4,valign:'middle'});
   });
-  const caps=['📝 Estrutura propostas complexas instantaneamente',
-    '⚖️ Compliance e regulatório do mercado BR',
-    '🏦 Especializado: FIDC · CRI · CRA · Home Equity · M&A',
-    '🔄 Streaming em tempo real — resposta em segundos'];
+  const caps=['Estrutura propostas complexas instantaneamente',
+    'Compliance e regulatório do mercado BR',
+    'Especializado: FIDC · CRI · CRA · Home Equity · M&A',
+    'Streaming em tempo real — resposta em segundos'];
   caps.forEach((c,i)=> bullet(s,pptx,.4,4.6+i*.46,c,10.5,C.muted));
   // Big highlight
   s.addShape(pptx.ShapeType.roundRect,{x:.4,y:6.5,w:9.2,h:.52,
     fill:{color:C.blueL+'22'},line:{color:C.blueL,width:1},arcsize:6});
-  s.addText('⚡  O único assistente de IA treinado especificamente para o mercado financeiro brasileiro',{
+  s.addText('O único assistente de IA treinado especificamente para o mercado financeiro brasileiro',{
     x:.6,y:6.5,w:9,h:.52,fontSize:11,bold:true,color:C.blueLL,valign:'middle'});
   footer(s,pptx,logo,12,20);
 }
@@ -840,9 +844,9 @@ function S13_Academy(pptx,logo,bgs){
   stat(s,pptx,'YouTube','Integrado','admin configura',.4+2.28*3,1.72,2.15,1.22,C.green);
   s.addText('7 Categorias de Conteúdo',{x:.4,y:3.12,w:9,h:.38,fontSize:14,bold:true,color:C.goldL});
   const cats=[
-    {c:'🏠 Home Equity',col:C.gold},{c:'💼 Crédito Estruturado',col:C.blueLL},
-    {c:'💎 High Ticket',col:C.goldL},{c:'🤝 M&A',col:C.green},
-    {c:'📊 Split Fiscal',col:C.gold},{c:'🏘️ Consórcio',col:C.blueLL},{c:'⚖️ Compliance',col:C.redL}];
+    {c:'Home Equity',col:C.gold},{c:'Crédito Estruturado',col:C.blueLL},
+    {c:'High Ticket',col:C.goldL},{c:'M&A',col:C.green},
+    {c:'Split Fiscal',col:C.gold},{c:'Consórcio',col:C.blueLL},{c:'Compliance',col:C.redL}];
   cats.forEach((c,i)=>{
     const x=.4+(i%4)*2.4, y=3.58+Math.floor(i/4)*.72;
     s.addShape(pptx.ShapeType.roundRect,{x,y,w:2.22,h:.55,
@@ -884,8 +888,8 @@ function S14_Dashboard(pptx,logo,bgs){
         stops:[{position:0,color:C.goldL},{position:100,color:C.goldD}]},line:{type:'none'}});
     s.addText(m,{x:bx-.04,y:5.62,w:.68,h:.28,fontSize:8,color:C.muted,align:'center'});
   });
-  const rf=['📈 Volume Mensal (Área)','🍕 Distribuição Crédito (Pizza)',
-    '📊 Pipeline M&A (Barras)','🔄 Atualização em tempo real','📱 Responsivo total'];
+  const rf=['Volume Mensal (Área)','Distribuição Crédito (Pizza)',
+    'Pipeline M&A (Barras)','Atualização em tempo real','Responsivo total'];
   rf.forEach((f,i)=> bullet(s,pptx,5.35,3.08+i*.62,f,10.5,C.fg));
   footer(s,pptx,logo,14,20);
 }
@@ -899,7 +903,7 @@ function S15_Consorcio(pptx,logo,bgs){
   // Left
   card(s,pptx,.4,1.42,4.55,5.22,C.navy3,C.blueLL,5);
   s.addShape(pptx.ShapeType.rect,{x:.4,y:1.42,w:4.55,h:.07,fill:{color:C.blueLL},line:{type:'none'}});
-  s.addText('🏘️  Consórcio',{x:.6,y:1.55,w:4.15,h:.55,fontSize:18,bold:true,color:C.blueLL});
+  s.addText('Consórcio',{x:.6,y:1.55,w:4.15,h:.55,fontSize:18,bold:true,color:C.blueLL});
   ['Simulação interativa com slider em tempo real','Cartas contempladas — marketplace digital',
     'Projetos de consórcio com formulário inline','Cálculo de parcelas, prazo e rentabilidade',
     'Integração com propostas de crédito'].forEach((t,i)=> bullet(s,pptx,.6,2.22+i*.6,t,10.5,C.fg));
@@ -936,7 +940,7 @@ function S16_Tecnologia(pptx,logo,bgs){
   });
   card(s,pptx,.4,5.08,9.2,.72,'041A0A','10B981',4);
   s.addShape(pptx.ShapeType.rect,{x:.4,y:5.08,w:9.2,h:.05,fill:{color:C.green},line:{type:'none'}});
-  s.addText('🔐  Segurança Nível Bancário: JWT Auth · Row Level Security · HTTPS · Dados criptografados · 99.9% uptime',{
+  s.addText('Segurança Nível Bancário: JWT Auth · Row Level Security · HTTPS · Dados criptografados · 99.9% uptime',{
     x:.6,y:5.1,w:9,h:.68,fontSize:11,color:C.greenL,valign:'middle',lineSpacingMultiple:1.4});
   footer(s,pptx,logo,16,20);
 }
@@ -1086,8 +1090,8 @@ async function gerar(){
   btn.disabled=true;
   prog(2,'Carregando logo V3 Partners...');
   const logo=await loadLogo();
-  if(!logo) prog(4,'⚠️ Logo sem CORS — continuando...');
-  else prog(5,'✅ Logo carregado com sucesso!');
+  if(!logo) prog(4,'Logo sem CORS — continuando...');
+  else prog(5,'Logo carregado com sucesso!');
 
   prog(8,'Renderizando fundos premium Canvas...');
   await delay(50);
@@ -1140,7 +1144,7 @@ async function gerar(){
 
   prog(98,'Empacotando PPTX premium...');
   await pptx.writeFile({fileName:'V3Partner-Apresentacao-Elite-2025.pptx'});
-  prog(100,'✅ Download concluído!');
+  prog(100,'Download concluído!');
   document.getElementById('status').style.color='#34D399';
   btn.disabled=false;
   btn.textContent='⬇️ BAIXAR NOVAMENTE';
