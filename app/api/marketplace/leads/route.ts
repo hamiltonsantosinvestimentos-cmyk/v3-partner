@@ -45,8 +45,8 @@ export async function POST(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  // Auto-create CRM lead if client info provided
-  if (client_name && data) {
+  // Auto-create CRM lead sempre que um lead é enviado
+  if (data) {
     const { data: productData } = await svc
       .from("marketplace_products")
       .select("name, category")
@@ -59,23 +59,26 @@ export async function POST(req: NextRequest) {
       .eq("id", user.id)
       .single();
 
+    const partnerName = (profile as { full_name?: string } | null)?.full_name ?? "Partner";
+    const productName = (productData as { name?: string } | null)?.name ?? "Produto";
+    const leadName = client_name ?? `Lead Marketplace — ${productName}`;
     const code = `MKT-${Date.now().toString(36).toUpperCase()}`;
+
     await svc.from("crm_leads").insert({
       code,
-      name: client_name,
+      name: leadName,
       email: null,
       phone: client_contact ?? null,
       person_type: "PF",
       status: "prospect",
       source: "marketplace",
-      notes: `Lead via Marketplace — Produto: ${productData?.name ?? ""}${message ? `\nMensagem: ${message}` : ""}`,
-      product_interest: productData?.name ?? null,
+      notes: `Lead via Marketplace — Produto: ${productName}${message ? `\nMensagem: ${message}` : ""}`,
+      product_interest: productName,
       interactions: [],
       partner_id: user.id,
-      partner_name: (profile as { full_name?: string } | null)?.full_name ?? "Partner",
+      partner_name: partnerName,
       created_by: user.id,
-      marketplace_lead_id: data.id,
-    }).then(() => {}).catch(() => {});
+    }).then(() => {}).catch((err: unknown) => { console.error("CRM lead create error:", err); });
   }
 
   // Email notification to supplier (non-blocking)
