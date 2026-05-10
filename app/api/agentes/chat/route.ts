@@ -71,7 +71,7 @@ async function runWithTools(
   anthropic: InstanceType<typeof import("@anthropic-ai/sdk").default>,
   system: string,
   messages: Array<{ role: "user" | "assistant"; content: string }>,
-  maxIterations = 5
+  maxIterations = 10
 ): Promise<string> {
   const { default: Anthropic } = await import("@anthropic-ai/sdk");
 
@@ -90,17 +90,29 @@ async function runWithTools(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let currentMessages: any[] = [...messages];
   let iteration = 0;
+  const SYNTHESIS_THRESHOLD = 6; // após 6 buscas, força síntese
 
   while (iteration < maxIterations) {
+    // Após SYNTHESIS_THRESHOLD iterações, injeta instrução de síntese e remove tools
+    const shouldSynthesize = iteration >= SYNTHESIS_THRESHOLD;
+    const activeTools = shouldSynthesize ? undefined : tools;
+
+    if (shouldSynthesize && iteration === SYNTHESIS_THRESHOLD) {
+      currentMessages.push({
+        role: "user",
+        content: "Você já coletou informações suficientes. Com base em tudo que pesquisou até agora, entregue a resposta completa e estruturada no formato solicitado. Não faça mais buscas — sintetize agora."
+      });
+    }
+
     const response = await anthropic.messages.create({
       model: "claude-sonnet-4-6",
       max_tokens: 4096,
       system,
       messages: currentMessages,
-      tools,
+      ...(activeTools ? { tools: activeTools } : {}),
     });
 
-    if (response.stop_reason === "end_turn") {
+    if (response.stop_reason === "end_turn" || shouldSynthesize) {
       return response.content
         .filter(b => b.type === "text")
         .map(b => (b as { type: "text"; text: string }).text)
@@ -108,10 +120,8 @@ async function runWithTools(
     }
 
     if (response.stop_reason === "tool_use") {
-      // Adiciona resposta do assistente
       currentMessages.push({ role: "assistant", content: response.content });
 
-      // Executa cada tool call
       const toolResults = await Promise.all(
         response.content
           .filter(b => b.type === "tool_use")
@@ -138,7 +148,17 @@ async function runWithTools(
       .join("");
   }
 
-  return "Limite de iterações atingido. Tente reformular a pergunta.";
+  // Última tentativa — força resposta sem tools
+  const finalResponse = await anthropic.messages.create({
+    model: "claude-sonnet-4-6",
+    max_tokens: 4096,
+    system,
+    messages: [...currentMessages, { role: "user", content: "Sintetize suas pesquisas e entregue a resposta estruturada agora." }],
+  });
+  return finalResponse.content
+    .filter(b => b.type === "text")
+    .map(b => (b as { type: "text"; text: string }).text)
+    .join("") || "Não foi possível completar a pesquisa. Tente uma consulta mais específica.";
 }
 
 // ── Handler principal ────────────────────────────────────────────────────────

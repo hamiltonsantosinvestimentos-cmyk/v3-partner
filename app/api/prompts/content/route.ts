@@ -3,11 +3,12 @@ import { NextResponse } from "next/server";
 const GITHUB_RAW = "https://raw.githubusercontent.com/Jlnetto35/relat-rios-de-intelig-ncia-de-mercado-v3-M-A/main/prompts.html";
 
 export async function GET() {
-  // Repo público — sem necessidade de token
+  const rawToken = (process.env.GITHUB_REPORTS_TOKEN ?? "").replace(/\s/g, "");
   const headers: Record<string, string> = { "User-Agent": "v3-partners-portal" };
+  if (rawToken) headers["Authorization"] = `token ${rawToken}`;
 
   try {
-    const res = await fetch(GITHUB_RAW, { headers, next: { revalidate: 3600 } });
+    const res = await fetch(GITHUB_RAW, { headers, cache: "no-store" });
     if (!res.ok) return new NextResponse("Banco de Prompts não disponível", { status: 502 });
 
     let html = await res.text();
