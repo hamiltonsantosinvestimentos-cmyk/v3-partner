@@ -165,6 +165,21 @@ export function AgentesClient({ squads, userName }: Props) {
     if (res.ok) alert("Sessão exportada com sucesso.");
   }
 
+  // Passar output do Scout para o Executor de Deals
+  function sendToExecutor() {
+    const last = [...messages].reverse().find(m => m.role === "assistant");
+    if (!last) return;
+    const executor = squads.find(s => s.id === "executor-deals");
+    if (!executor) return;
+    const prefill = `Com base no mapa de mandatários abaixo gerado pelo Market Scout, crie o plano de ação completo com emails, follow-ups e scripts de abordagem:\n\n${last.content}`;
+    setActiveSquad(executor);
+    setMessages([]);
+    setSessionId(null);
+    setInput(prefill);
+    setSidebarOpen(false);
+    setTimeout(() => textareaRef.current?.focus(), 100);
+  }
+
   // Criar deal a partir do Scout
   function openDealFromScout() {
     const last = [...messages].reverse().find(m => m.role === "assistant");
@@ -366,6 +381,7 @@ export function AgentesClient({ squads, userName }: Props) {
                   exporting={exporting}
                   exportDone={exportDone}
                   onCreateDeal={activeSquad.id === "market-scout" && isLast ? openDealFromScout : undefined}
+                  onSendToExecutor={activeSquad.id === "market-scout" && isLast ? sendToExecutor : undefined}
                 />
               );
             })
@@ -414,6 +430,11 @@ export function AgentesClient({ squads, userName }: Props) {
 
 function WelcomeScreen({ squad, onSuggest }: { squad: Squad; onSuggest: (t: string) => void }) {
   const SUGESTOES: Record<string, string[]> = {
+    "executor-deals": [
+      "Cole aqui o output do Market Scout e gere o plano de ação completo com emails e follow-ups",
+      "Tenho 3 targets identificados no setor de frigoríficos no Nordeste — crie os emails de cold outreach",
+      "Preciso de uma sequência de 5 follow-ups para um fundo de PE americano interessado em lítio brasileiro",
+    ],
     "market-scout": [
       "Buyer Side: fundo de PE americano busca usinas de etanol no Brasil, ticket USD 50–200M",
       "Seller Side: quem são os mandatários de diesel EN-590 exportação nas Américas — USGC e Brasil",
@@ -474,11 +495,11 @@ function WelcomeScreen({ squad, onSuggest }: { squad: Squad; onSuggest: (t: stri
   );
 }
 
-function MessageBubble({ msg, squad, userName, copied, onCopy, copyId, isLastAssistant, onExport, exporting, exportDone, onCreateDeal }: {
+function MessageBubble({ msg, squad, userName, copied, onCopy, copyId, isLastAssistant, onExport, exporting, exportDone, onCreateDeal, onSendToExecutor }: {
   msg: Message; squad: Squad; userName: string;
   copied: string | null; onCopy: (c: string) => void; copyId: string;
   isLastAssistant?: boolean; onExport?: () => void; exporting?: boolean; exportDone?: boolean;
-  onCreateDeal?: () => void;
+  onCreateDeal?: () => void; onSendToExecutor?: () => void;
 }) {
   const isUser = msg.role === "user";
 
@@ -545,6 +566,17 @@ function MessageBubble({ msg, squad, userName, copied, onCopy, copyId, isLastAss
               >
                 <Briefcase className="w-3 h-3 text-[#C9A84C]" />
                 Criar Deal
+              </button>
+            )}
+
+            {/* Botão Executor de Deals — passa output do Scout diretamente */}
+            {isLastAssistant && onSendToExecutor && (
+              <button
+                onClick={onSendToExecutor}
+                className="flex items-center gap-1.5 text-[10px] font-semibold px-3 py-1.5 rounded-lg transition-all bg-[#C9A84C]/15 hover:bg-[#C9A84C]/30 border border-[#C9A84C]/40 hover:border-[#C9A84C] text-[#C9A84C]"
+              >
+                <Send className="w-3 h-3" />
+                Gerar Plano de Ação
               </button>
             )}
           </div>
