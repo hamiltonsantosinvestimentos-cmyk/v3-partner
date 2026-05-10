@@ -45,73 +45,49 @@ export async function POST(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  // Auto-create CRM lead sempre que um lead é enviado
-  if (data) {
-    const { data: productData } = await svc
-      .from("marketplace_products")
-      .select("name, category")
-      .eq("id", product_id)
-      .single();
+  // Busca dados adicionais em paralelo
+  const [productRes, profileRes, supplierRes] = await Promise.all([
+    svc.from("marketplace_products").select("name, category").eq("id", product_id).single(),
+    svc.from("profiles").select("full_name").eq("id", user.id).single(),
+    svc.from("marketplace_suppliers").select("email, company_name").eq("id", product.supplier_id).single(),
+  ]);
 
-    const { data: profile } = await svc
-      .from("profiles")
-      .select("full_name")
-      .eq("id", user.id)
-      .single();
+  const productName = (productRes.data as { name?: string } | null)?.name ?? "Produto";
+  const partnerName = (profileRes.data as { full_name?: string } | null)?.full_name ?? "Partner";
+  const supplierEmail = (supplierRes.data as { email?: string } | null)?.email ?? null;
+  const supplierCompany = (supplierRes.data as { company_name?: string } | null)?.company_name ?? "Fornecedor";
 
-    const partnerName = (profile as { full_name?: string } | null)?.full_name ?? "Partner";
-    const productName = (productData as { name?: string } | null)?.name ?? "Produto";
-    const leadName = client_name ?? `Lead Marketplace — ${productName}`;
-    const code = `MKT-${Date.now().toString(36).toUpperCase()}`;
+  // CRM lead
+  const crmResult = await svc.from("crm_leads").insert({
+    code: `MKT-${Date.now().toString(36).toUpperCase()}`,
+    name: client_name ?? `Lead Marketplace — ${productName}`,
+    email: null,
+    phone: client_contact ?? null,
+    person_type: "PF",
+    status: "prospect",
+    source: "marketplace",
+    notes: `Lead via Marketplace — Produto: ${productName}${message ? `\nMensagem: ${message}` : ""}`,
+    product_interest: productName,
+    interactions: [],
+    partner_id: user.id,
+    partner_name: partnerName,
+    created_by: user.id,
+  });
+  if (crmResult.error) console.error("CRM lead create error:", crmResult.error.message);
 
-    await svc.from("crm_leads").insert({
-      code,
-      name: leadName,
-      email: null,
-      phone: client_contact ?? null,
-      person_type: "PF",
-      status: "prospect",
-      source: "marketplace",
-      notes: `Lead via Marketplace — Produto: ${productName}${message ? `\nMensagem: ${message}` : ""}`,
-      product_interest: productName,
-      interactions: [],
-      partner_id: user.id,
-      partner_name: partnerName,
-      created_by: user.id,
-    }).then(() => {}).catch((err: unknown) => { console.error("CRM lead create error:", err); });
-  }
-
-  // Email notification to supplier (non-blocking)
-  if (data) {
-    const { data: supplierData } = await svc
-      .from("marketplace_suppliers")
-      .select("email, company_name")
-      .eq("id", product.supplier_id)
-      .single();
-
-    const { data: partnerProfile } = await svc
-      .from("profiles")
-      .select("full_name")
-      .eq("id", user.id)
-      .single();
-
-    const { data: productName } = await svc
-      .from("marketplace_products")
-      .select("name")
-      .eq("id", product_id)
-      .single();
-
-    if (supplierData?.email) {
-      notifyMarketplaceLead({
-        supplierEmail: supplierData.email,
-        supplierName: supplierData.company_name,
-        productName: (productName as { name: string } | null)?.name ?? "Produto",
-        partnerName: (partnerProfile as { full_name: string } | null)?.full_name ?? "Partner",
-        clientName: client_name ?? null,
-        clientContact: client_contact ?? null,
-        message: message ?? null,
-      }).catch(() => {});
-    }
+  // Email ao fornecedor (aguardado para garantir envio antes de encerrar a função)
+  if (supplierEmail) {
+    await notifyMarketplaceLead({
+      supplierEmail,
+      supplierName: supplierCompany,
+      productName,
+      partnerName,
+      clientName: client_name ?? null,
+      clientContact: client_contact ?? null,
+      message: message ?? null,
+    }).catch((err: unknown) => console.error("Email supplier error:", err));
+  } else {
+    console.warn("Fornecedor sem email cadastrado — supplier_id:", product.supplier_id);
   }
 
   return NextResponse.json({ lead: data }, { status: 201 });
