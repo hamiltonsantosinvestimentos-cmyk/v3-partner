@@ -116,7 +116,7 @@ export async function GET(req: NextRequest) {
       .from("marketplace_leads")
       .select(`
         id, message, client_name, client_contact, status, notes, created_at,
-        product:marketplace_products(id, name, category, commission_percent, partner_commission_percent),
+        product:marketplace_products(id, name, category, commission_percent),
         partner:profiles(id, full_name, email),
         supplier:marketplace_suppliers(id, company_name)
       `)
@@ -147,7 +147,7 @@ export async function GET(req: NextRequest) {
     .from("marketplace_leads")
     .select(`
       id, message, client_name, client_contact, status, notes, created_at,
-      product:marketplace_products(id, name, category, commission_percent, partner_commission_percent),
+      product:marketplace_products(id, name, category, commission_percent),
       partner:profiles(id, full_name, email),
       supplier:marketplace_suppliers(id, company_name)
     `)

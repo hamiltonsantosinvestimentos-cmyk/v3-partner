@@ -18,9 +18,9 @@ export async function GET(
     .from("marketplace_products")
     .select(`
       id, name, description, category, price, price_type,
-      commission_percent, partner_commission_percent, images, specs,
+      commission_percent, images, specs,
       min_order, delivery_days, available_nationwide, states, status,
-      views, created_at,
+      created_at,
       supplier:marketplace_suppliers(id, company_name, logo_url, city, state, description, website, categories)
     `)
     .eq("id", id)
@@ -28,8 +28,8 @@ export async function GET(
 
   if (error || !data) return NextResponse.json({ error: "Produto não encontrado" }, { status: 404 });
 
-  // Increment views async (don't await)
-  svc.from("marketplace_products").update({ views: ((data as { views?: number }).views ?? 0) + 1 }).eq("id", id).then(() => {});
+  // Increment views async (don't await — coluna pode não existir ainda)
+  svc.from("marketplace_products").update({ views: ((data as { views?: number }).views ?? 0) + 1 }).eq("id", id).then(() => {}).catch(() => {});
 
   return NextResponse.json({ product: data });
 }
