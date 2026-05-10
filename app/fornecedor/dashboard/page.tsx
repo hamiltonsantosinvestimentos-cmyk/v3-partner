@@ -356,7 +356,7 @@ export default function FornecedorDashboardPage() {
       const [supRes, prodRes, leadsRes] = await Promise.all([
         fetch(`/api/marketplace/suppliers/${sid}`),
         fetch(`/api/marketplace/products?supplier_id=${sid}`),
-        fetch(`/api/marketplace/leads?supplier_id=${sid}`),
+        fetch(`/api/marketplace/leads`, { headers: { "x-supplier-id": sid } }),
       ]);
       const supJson = await supRes.json();
       const prodJson = await prodRes.json();

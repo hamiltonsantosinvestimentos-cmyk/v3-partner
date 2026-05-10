@@ -93,18 +93,43 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ lead: data }, { status: 201 });
 }
 
-/** GET /api/marketplace/leads — supplier, partner, or admin sees leads */
+/** GET /api/marketplace/leads — supplier (via x-supplier-id header), partner, or admin */
 export async function GET(req: NextRequest) {
+  const { searchParams } = new URL(req.url);
+  const isAdmin = searchParams.get("admin") === "true";
+  const productId = searchParams.get("product_id");
+  const svc = serviceClient();
+
+  // Fornecedor autenticado via header (sessionStorage no dashboard)
+  const supplierIdHeader = req.headers.get("x-supplier-id");
+  if (supplierIdHeader) {
+    // Valida que o fornecedor existe
+    const { data: supplier } = await svc
+      .from("marketplace_suppliers")
+      .select("id")
+      .eq("id", supplierIdHeader)
+      .single();
+    if (!supplier) return NextResponse.json({ error: "Fornecedor não encontrado" }, { status: 403 });
+
+    const { data, error } = await svc
+      .from("marketplace_leads")
+      .select(`
+        id, message, client_name, client_contact, status, notes, created_at,
+        product:marketplace_products(id, name, category, commission_percent, partner_commission_percent),
+        partner:profiles(id, full_name, email),
+        supplier:marketplace_suppliers(id, company_name)
+      `)
+      .eq("supplier_id", supplierIdHeader)
+      .order("created_at", { ascending: false });
+
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ leads: data ?? [] });
+  }
+
+  // Partner ou admin autenticado via Supabase session
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
-
-  const { searchParams } = new URL(req.url);
-  const supplierId = searchParams.get("supplier_id");
-  const isAdmin = searchParams.get("admin") === "true";
-  const productId = searchParams.get("product_id");
-
-  const svc = serviceClient();
 
   if (isAdmin) {
     const { data: caller } = await svc.from("profiles").select("role").eq("id", user.id).single();
@@ -125,8 +150,6 @@ export async function GET(req: NextRequest) {
 
   if (isAdmin) {
     if (productId) query = query.eq("product_id", productId);
-  } else if (supplierId) {
-    query = query.eq("supplier_id", supplierId);
   } else {
     query = query.eq("partner_id", user.id);
   }
