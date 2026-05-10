@@ -4,7 +4,7 @@ import React, { useState, useCallback, useEffect } from "react";
 import {
   Headphones, Plus, ChevronRight, User, Building2,
   Banknote, Clock, CheckCircle2, AlertCircle, Link2,
-  LayoutGrid, List, Search, X, FileText, ArrowRight, MessageSquare, Trash2,
+  LayoutGrid, List, Search, X, FileText, ArrowRight, ArrowLeft, MessageSquare, Trash2,
   ScrollText, RefreshCw, XCircle, Download,
 } from "lucide-react";
 import { ExportButton } from "@/components/financeiro/export-button";
@@ -185,6 +185,72 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
   const [selectedStage, setSelectedStage] = useState<string | null>(null);
 
   const canChangeStage = (currentUser?.role === "MESA_OPERACIONAL" || currentUser?.role === "ADMIN" || currentUser?.role === "GESTAO");
+
+  // ─── Ações rápidas de aprovação ───────────────────────────────────────────
+  const [quickAction, setQuickAction] = useState<{ type: "aprovar" | "reprovar"; proposal: ProposalCard } | null>(null);
+  const [quickValorAprovado, setQuickValorAprovado] = useState("");
+  const [quickMotivo, setQuickMotivo] = useState("");
+  const [quickSaving, setQuickSaving] = useState(false);
+
+  async function handleQuickAprovar() {
+    if (!quickAction?.proposal || !quickValorAprovado) return;
+    setQuickSaving(true);
+    const parsed = parseFloat(quickValorAprovado.replace(/\./g, "").replace(",", ".").replace(/[^\d.]/g, ""));
+    try {
+      const res = await fetch("/api/credit-proposals", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: quickAction.proposal.id, status: "APPROVED", approved_value: parsed, stage: "FINALIZADO" }),
+      });
+      if (res.ok) {
+        setProposals(prev => prev.map(p => p.id === quickAction.proposal.id ? { ...p, status: "APPROVED", stage: "FINALIZADO", approved_value: parsed } : p));
+        if (quickAction.proposal.partner_id) {
+          fetch("/api/notifications", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              user_id: quickAction.proposal.partner_id,
+              title: `✅ Proposta ${quickAction.proposal.code} Aprovada`,
+              message: `Sua proposta para ${quickAction.proposal.client_name} foi aprovada no valor de ${parsed.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}.`,
+              type: "proposal",
+              action_url: "/minhas-operacoes",
+            }),
+          }).catch(() => {});
+        }
+        setQuickAction(null); setQuickValorAprovado("");
+      }
+    } finally { setQuickSaving(false); }
+  }
+
+  async function handleQuickReprovar() {
+    if (!quickAction?.proposal || !quickMotivo.trim()) return;
+    setQuickSaving(true);
+    try {
+      const meta = { ...(quickAction.proposal.metadata ?? {}), motivo_reprovacao: quickMotivo };
+      const res = await fetch("/api/credit-proposals", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: quickAction.proposal.id, status: "REJECTED", metadata: meta }),
+      });
+      if (res.ok) {
+        setProposals(prev => prev.map(p => p.id === quickAction.proposal.id ? { ...p, status: "REJECTED", metadata: meta } : p));
+        if (quickAction.proposal.partner_id) {
+          fetch("/api/notifications", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              user_id: quickAction.proposal.partner_id,
+              title: `❌ Proposta ${quickAction.proposal.code} Reprovada`,
+              message: `Sua proposta para ${quickAction.proposal.client_name} foi reprovada. Motivo: ${quickMotivo}`,
+              type: "proposal",
+              action_url: "/minhas-operacoes",
+            }),
+          }).catch(() => {});
+        }
+        setQuickAction(null); setQuickMotivo("");
+      }
+    } finally { setQuickSaving(false); }
+  }
 
   // ─── Painel de Contratos ─────────────────────────────────────────────────
   type ContratoItem = {
@@ -439,6 +505,19 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
                             <span className="text-[10px] text-primary font-semibold">{p.mesa_comments_count} msg</span>
                           </div>
                         )}
+                        {/* Botões de aprovação rápida — apenas em "Em Aprovação" */}
+                        {canChangeStage && p.stage === "APROVACAO" && p.status !== "APPROVED" && p.status !== "REJECTED" && (
+                          <div className="mt-2 pt-2 border-t border-purple-500/20 flex gap-1.5" onClick={e => e.stopPropagation()}>
+                            <button
+                              onClick={() => { setQuickAction({ type: "reprovar", proposal: p }); setQuickMotivo(""); }}
+                              className="flex-1 py-1 rounded text-[10px] font-semibold bg-red-500/15 border border-red-500/30 text-red-400 hover:bg-red-500/25 transition-colors"
+                            >✗ Reprovar</button>
+                            <button
+                              onClick={() => { setQuickAction({ type: "aprovar", proposal: p }); setQuickValorAprovado(""); }}
+                              className="flex-1 py-1 rounded text-[10px] font-semibold bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/25 transition-colors"
+                            >✓ Aprovar</button>
+                          </div>
+                        )}
                         {p.instituicao_encaminhada && (() => {
                           let insts: string[] = [];
                           try { const a = JSON.parse(p.instituicao_encaminhada); insts = Array.isArray(a) ? a : [p.instituicao_encaminhada]; }
@@ -513,9 +592,34 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
                       </td>
                       <td className="px-4 py-3 text-xs text-muted-foreground">{ticket.due_date ? formatDateTime(ticket.due_date) : "—"}</td>
                       <td className="px-4 py-3 flex items-center gap-2">
+                        {ticket.status !== "PENDING" && (
+                          <button
+                            onClick={async () => {
+                              const newStatus = ticket.status === "COMPLETED" ? "IN_REVIEW" : "PENDING";
+                              setTickets((prev) => prev.map((t) => t.id === ticket.id ? { ...t, status: newStatus } : t));
+                              await fetch("/api/tickets", {
+                                method: "PATCH",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ id: ticket.id, status: newStatus }),
+                              }).catch(() => {});
+                            }}
+                            className="text-xs text-muted-foreground hover:text-white flex items-center gap-1"
+                          >
+                            <ArrowLeft className="w-3 h-3" />
+                            {ticket.status === "COMPLETED" ? "Em Revisão" : "Pendente"}
+                          </button>
+                        )}
                         {ticket.status !== "COMPLETED" && (
                           <button
-                            onClick={() => setTickets((prev) => prev.map((t) => t.id === ticket.id ? { ...t, status: t.status === "PENDING" ? "IN_REVIEW" : "COMPLETED" } : t))}
+                            onClick={async () => {
+                              const newStatus = ticket.status === "PENDING" ? "IN_REVIEW" : "COMPLETED";
+                              setTickets((prev) => prev.map((t) => t.id === ticket.id ? { ...t, status: newStatus } : t));
+                              await fetch("/api/tickets", {
+                                method: "PATCH",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ id: ticket.id, status: newStatus }),
+                              }).catch(() => {});
+                            }}
                             className="text-xs text-primary hover:underline flex items-center gap-1"
                           >
                             {ticket.status === "PENDING" ? "Iniciar" : "Concluir"}
@@ -710,6 +814,78 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
         canCompileDocuments={canChangeStage}
         canEditInstituicao={canChangeStage}
       />
+
+      {/* ── Modal Rápido: Aprovar ── */}
+      {quickAction?.type === "aprovar" && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+          <div className="bg-card border border-emerald-500/30 rounded-2xl w-full max-w-sm">
+            <div className="flex items-center gap-2 px-5 py-4 border-b border-border">
+              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+              <h3 className="text-sm font-bold text-white">Aprovar Proposta</h3>
+            </div>
+            <div className="px-5 py-4 space-y-3">
+              <p className="text-xs text-muted-foreground">{quickAction.proposal.code} · {quickAction.proposal.client_name}</p>
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Valor Aprovado *</label>
+                <input
+                  type="text"
+                  value={quickValorAprovado}
+                  onChange={e => {
+                    const nums = e.target.value.replace(/\D/g, "");
+                    const val = parseFloat(nums) / 100;
+                    setQuickValorAprovado(isNaN(val) ? "" : val.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }));
+                  }}
+                  placeholder="R$ 0,00"
+                  className="w-full h-9 px-3 text-sm bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                  autoFocus
+                />
+              </div>
+            </div>
+            <div className="px-5 py-4 border-t border-border flex gap-2 justify-end">
+              <Button size="sm" variant="outline" onClick={() => { setQuickAction(null); setQuickValorAprovado(""); }}>Cancelar</Button>
+              <Button size="sm" onClick={handleQuickAprovar} disabled={!quickValorAprovado || quickSaving}
+                className="bg-emerald-600 hover:bg-emerald-500 border-0 text-white gap-1.5">
+                {quickSaving ? <span className="w-3 h-3 rounded-full border-2 border-white border-t-transparent animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+                Confirmar Aprovação
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal Rápido: Reprovar ── */}
+      {quickAction?.type === "reprovar" && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+          <div className="bg-card border border-red-500/30 rounded-2xl w-full max-w-sm">
+            <div className="flex items-center gap-2 px-5 py-4 border-b border-border">
+              <XCircle className="w-4 h-4 text-red-400" />
+              <h3 className="text-sm font-bold text-white">Reprovar Proposta</h3>
+            </div>
+            <div className="px-5 py-4 space-y-3">
+              <p className="text-xs text-muted-foreground">{quickAction.proposal.code} · {quickAction.proposal.client_name}</p>
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Motivo *</label>
+                <textarea
+                  value={quickMotivo}
+                  onChange={e => setQuickMotivo(e.target.value)}
+                  placeholder="Ex: Score insuficiente, documentação incompleta..."
+                  rows={3}
+                  className="w-full px-3 py-2 text-sm bg-secondary border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-red-500/50 resize-none"
+                  autoFocus
+                />
+              </div>
+            </div>
+            <div className="px-5 py-4 border-t border-border flex gap-2 justify-end">
+              <Button size="sm" variant="outline" onClick={() => { setQuickAction(null); setQuickMotivo(""); }}>Cancelar</Button>
+              <Button size="sm" onClick={handleQuickReprovar} disabled={!quickMotivo.trim() || quickSaving}
+                className="bg-red-600 hover:bg-red-500 border-0 text-white gap-1.5">
+                {quickSaving ? <span className="w-3 h-3 rounded-full border-2 border-white border-t-transparent animate-spin" /> : <XCircle className="w-3.5 h-3.5" />}
+                Confirmar Reprovação
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { notifyContratoCliente, notifyContratoV3Rep } from "@/lib/email";
+import { notifyContratoCliente, notifyV3ParaAssinar, notifyTestemunhaParaAssinar, notifyTestemunha2ParaAssinar } from "@/lib/email";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://v3-partner.vercel.app";
+const APP_URL = (process.env.NEXT_PUBLIC_APP_URL ?? "https://v3-partner.vercel.app").trim().replace(/\/+$/, "");
 const V3_REP_EMAIL = process.env.EMAIL_MESA_OPERACIONAL ?? process.env.EMAIL_ADMIN ?? "mesa@v3partners.com.br";
 
 export async function POST(req: NextRequest) {
@@ -35,18 +35,20 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "E-mail do cliente não cadastrado na proposta" }, { status: 422 });
     }
 
-    // Busca e-mail e nome do partner (testemunha)
+    // Busca nome, e-mail e CPF do partner (testemunha 1)
     let testemunhaNome: string | null = null;
     let testemunhaEmail: string | null = null;
+    let testemunhaCpf: string | null = null;
     if (proposal.partner_id) {
       const { data: partner } = await supabase
         .from("profiles")
-        .select("full_name, email")
+        .select("full_name, email, cpf")
         .eq("id", proposal.partner_id)
         .single();
       if (partner) {
-        testemunhaNome = (partner.full_name as string) ?? null;
+        testemunhaNome  = (partner.full_name as string) ?? null;
         testemunhaEmail = (partner.email as string) ?? null;
+        testemunhaCpf   = (partner.cpf as string) ?? null;
       }
     }
 
@@ -92,10 +94,11 @@ export async function POST(req: NextRequest) {
           municipio_cadastrado: municipioMeta || null,
           estado_cadastrado: estadoMeta || null,
           cep_cadastrado: cepMeta || null,
-          testemunha_nome: testemunhaNome,
+          testemunha_nome:  testemunhaNome,
           testemunha_email: testemunhaEmail,
-          // Testemunha 2 — configurada via variável de ambiente
-          testemunha2_nome:  process.env.WITNESS2_NAME  ?? "Representante V3 Partners",
+          testemunha_cpf:   testemunhaCpf,
+          // Testemunha 2 — Aline (financeiro)
+          testemunha2_nome:  process.env.WITNESS2_NAME  ?? "Aline Rodrigues dos Santos",
           testemunha2_email: process.env.WITNESS2_EMAIL ?? "financeiro@v3partners.com.br",
           testemunha2_cpf:   process.env.WITNESS2_CPF   ?? null,
           v3_email:          process.env.EMAIL_V3_SIGNER ?? "joao.lemos@v3partners.com.br",
@@ -111,10 +114,25 @@ export async function POST(req: NextRequest) {
       token = contrato.token;
     }
 
-    const signingUrl = `${APP_URL}/assinar/${token}`;
+    // Busca todos os tokens para os 4 assinantes
+    const { data: tokens } = await supabase
+      .from("contratos_mandato")
+      .select("token, v3_token, testemunha_token, testemunha2_token, testemunha_email, testemunha_nome, testemunha2_email, testemunha2_nome")
+      .eq("token", token)
+      .single();
+
+    const signingUrl     = `${APP_URL}/assinar/${token}`;
+    const v3SigningUrl   = tokens?.v3_token       ? `${APP_URL}/assinar/v3/${tokens.v3_token}` : null;
+    const t1SigningUrl   = tokens?.testemunha_token  ? `${APP_URL}/assinar/testemunha/${tokens.testemunha_token}` : null;
+    const t2SigningUrl   = tokens?.testemunha2_token ? `${APP_URL}/assinar/testemunha2/${tokens.testemunha2_token}` : null;
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
 
+    const joaoEmail    = process.env.EMAIL_V3_SIGNER    ?? "joao.lemos@v3partners.com.br";
+    const alineEmail   = process.env.WITNESS2_EMAIL      ?? "financeiro@v3partners.com.br";
+    const alineNome    = process.env.WITNESS2_NAME       ?? "Aline Rodrigues dos Santos";
+
     await Promise.allSettled([
+      // 1. Cliente
       notifyContratoCliente({
         clientEmail,
         clientName: proposal.client_name,
@@ -124,16 +142,34 @@ export async function POST(req: NextRequest) {
         signingUrl,
         expiresAt,
       }),
-      notifyContratoV3Rep({
-        repEmail: V3_REP_EMAIL,
+      // 2. João (V3 — representante)
+      v3SigningUrl ? notifyV3ParaAssinar({
+        repEmail: joaoEmail,
         clientName: proposal.client_name,
         clientEmail,
         proposalCode: proposal.code,
         creditLine: proposal.credit_line,
-        requestedValue: proposal.requested_value,
-        commissionPerc: (proposal.comissao_mandato_perc as number) ?? 6.0,
-        signingUrl,
-      }),
+        signedAt: new Date().toISOString(),
+        v3SigningUrl,
+      }) : Promise.resolve(),
+      // 3. Partner / Partner PRO (1ª testemunha)
+      t1SigningUrl && tokens?.testemunha_email ? notifyTestemunhaParaAssinar({
+        testemunhaEmail: tokens.testemunha_email as string,
+        testemunhaNome:  (tokens.testemunha_nome as string) ?? "Parceiro",
+        clientName: proposal.client_name,
+        proposalCode: proposal.code,
+        creditLine: proposal.credit_line,
+        testemunhaUrl: t1SigningUrl,
+      }) : Promise.resolve(),
+      // 4. Aline (2ª testemunha — financeiro)
+      t2SigningUrl ? notifyTestemunha2ParaAssinar({
+        testemunhaEmail: alineEmail,
+        testemunhaNome:  alineNome,
+        clientName: proposal.client_name,
+        proposalCode: proposal.code,
+        creditLine: proposal.credit_line,
+        testemunhaUrl: t2SigningUrl,
+      }) : Promise.resolve(),
     ]);
 
     return NextResponse.json({ ok: true, token, signingUrl });

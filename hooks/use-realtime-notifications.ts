@@ -77,6 +77,11 @@ export function useRealtimeNotifications() {
     if (typeof WebSocket === "undefined") return;
 
     let channel: ReturnType<typeof supabase.channel> | null = null;
+    let userId: string | null = null;
+
+    supabase.auth.getUser().then(({ data }) => {
+      userId = data.user?.id ?? null;
+    }).catch(() => {});
 
     try {
       channel = supabase
@@ -85,7 +90,9 @@ export function useRealtimeNotifications() {
           "postgres_changes",
           { event: "INSERT", schema: "public", table: "notifications" },
           (payload) => {
+            // Filtra pelo user_id para garantir que só recebe as próprias notificações
             const row = payload.new as Record<string, unknown>;
+            if (userId && row.user_id !== userId) return;
             setNotifications((prev) => {
               // Evita duplicatas
               if (prev.some((n) => n.id === row.id)) return prev;

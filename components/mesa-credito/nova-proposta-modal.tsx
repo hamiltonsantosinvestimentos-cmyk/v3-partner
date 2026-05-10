@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   X, User, Building2, FileText, Upload, CheckCircle2, Circle,
   ChevronRight, AlertCircle, Home, Shield, TrendingUp, Zap,
@@ -11,7 +11,7 @@ import { formatCurrency } from "@/lib/utils";
 
 // ─── Checklists por linha e tipo de pessoa ─────────────────────────────────
 export const CHECKLISTS: Record<string, Record<"PF" | "PJ", { id: string; label: string; required: boolean; hint?: string }[]>> = {
-  "HOME EQUITY": {
+  "Home Equity": {
     PF: [
       { id: "he_pf_1", label: "RG e CPF (ou CNH)", required: true, hint: "Documento de identificação com foto" },
       { id: "he_pf_2", label: "Comprovante de renda (3 últimos meses)", required: true, hint: "Holerite, pró-labore ou decore" },
@@ -40,7 +40,7 @@ export const CHECKLISTS: Record<string, Record<"PF" | "PJ", { id: string; label:
       { id: "he_pj_12", label: "3 fotos externas do imóvel", required: true, hint: "Fachada, lateral e área externa" },
     ],
   },
-  "HOME EQUITY ESTRESSADO": {
+  "Home Equity Distressed": {
     PF: [
       { id: "hee_pf_1", label: "RG e CPF (ou CNH)", required: true, hint: "Documento de identificação com foto" },
       { id: "hee_pf_2", label: "Comprovante de renda (3 últimos meses)", required: true, hint: "Holerite, pró-labore ou decore" },
@@ -71,7 +71,7 @@ export const CHECKLISTS: Record<string, Record<"PF" | "PJ", { id: string; label:
       { id: "hee_pj_13", label: "3 fotos externas do imóvel", required: true, hint: "Fachada, lateral e área externa" },
     ],
   },
-  "AVAL": {
+  "Crédito no Aval": {
     PF: [
       { id: "av_pf_1", label: "RG e CPF (ou CNH)", required: true },
       { id: "av_pf_2", label: "Comprovante de renda (3 últimos meses)", required: true },
@@ -106,7 +106,7 @@ export const CHECKLISTS: Record<string, Record<"PF" | "PJ", { id: string; label:
       { id: "fidc_pj_8", label: "Relatório de auditoria independente", required: false },
     ],
   },
-  "CRI": {
+  "CRI Cash Collateral": {
     PF: [
       { id: "cri_pf_1", label: "RG e CPF (ou CNH)", required: true },
       { id: "cri_pf_2", label: "Comprovante de renda e patrimônio", required: true },
@@ -178,7 +178,7 @@ export const CHECKLISTS: Record<string, Record<"PF" | "PJ", { id: string; label:
       { id: "pf_pj_8", label: "Certidões Negativas completas", required: true },
     ],
   },
-  "FUNDO CONSTRUÇÃO RESIDENCIAL": {
+  "Fundo Construção — Moradia": {
     PF: [
       { id: "fcr_pf_1", label: "RG e CPF (ou CNH)", required: true },
       { id: "fcr_pf_2", label: "Comprovante de renda (3 últimos meses)", required: true },
@@ -207,7 +207,7 @@ export const CHECKLISTS: Record<string, Record<"PF" | "PJ", { id: string; label:
       { id: "fcr_pj_12", label: "3 fotos externas do imóvel / obra", required: true, hint: "Fachada, terreno e área externa" },
     ],
   },
-  "HOMECASH": {
+  "HomeCash": {
     PF: [
       { id: "hc_pf_1", label: "RG e CPF (ou CNH)", required: true },
       { id: "hc_pf_2", label: "Comprovante de renda (3 últimos meses)", required: true },
@@ -235,7 +235,7 @@ export const CHECKLISTS: Record<string, Record<"PF" | "PJ", { id: string; label:
       { id: "hc_pj_11", label: "3 fotos externas do imóvel", required: true, hint: "Fachada, lateral e área externa" },
     ],
   },
-  "V3GIRO E V3AUTOGIRO": {
+  "Giro Auto": {
     PF: [
       { id: "v3g_pf_1", label: "RG e CPF (ou CNH)", required: true },
       { id: "v3g_pf_2", label: "Comprovante de renda (3 últimos meses)", required: true },
@@ -253,7 +253,7 @@ export const CHECKLISTS: Record<string, Record<"PF" | "PJ", { id: string; label:
       { id: "v3g_pj_8", label: "Nota fiscal de faturamento (amostra 3 meses)", required: false },
     ],
   },
-  "CGI": {
+  "CGI — Grandes Empresas": {
     PF: [
       { id: "cgi_pf_1", label: "RG e CPF (ou CNH)", required: true },
       { id: "cgi_pf_2", label: "Comprovante de renda (3 últimos meses)", required: true },
@@ -279,7 +279,7 @@ export const CHECKLISTS: Record<string, Record<"PF" | "PJ", { id: string; label:
       { id: "cgi_pj_11", label: "3 fotos externas do imóvel em garantia", required: true, hint: "Fachada, lateral e área externa" },
     ],
   },
-  "CPR": {
+  "CPR Agro": {
     PF: [
       { id: "cpr_pf_1", label: "RG e CPF (ou CNH)", required: true },
       { id: "cpr_pf_2", label: "CAR — Cadastro Ambiental Rural", required: true },
@@ -299,7 +299,7 @@ export const CHECKLISTS: Record<string, Record<"PF" | "PJ", { id: string; label:
       { id: "cpr_pj_8", label: "Certidões Negativas completas", required: true },
     ],
   },
-  "FUNDO INTERNACIONAL CASH COLATERAL": {
+  "Op. Internacional — Cash Collateral": {
     PF: [
       { id: "ficc_pf_1", label: "RG e CPF (ou CNH)", required: true },
       { id: "ficc_pf_2", label: "Comprovante de patrimônio internacional", required: true },
@@ -318,7 +318,7 @@ export const CHECKLISTS: Record<string, Record<"PF" | "PJ", { id: string; label:
       { id: "ficc_pj_8", label: "Relatório de compliance AML/KYC", required: true },
     ],
   },
-  "FUNDO INTERNACIONAL IMOB": {
+  "Op. Internacional — Garantia Imobiliária": {
     PF: [
       { id: "fii_pf_1", label: "RG e CPF (ou CNH)", required: true },
       { id: "fii_pf_2", label: "Imposto de Renda + recibo", required: true },
@@ -335,7 +335,7 @@ export const CHECKLISTS: Record<string, Record<"PF" | "PJ", { id: string; label:
       { id: "fii_pj_7", label: "Certidões Negativas completas", required: true },
     ],
   },
-  "FUNDO CONSTRUÇÃO LOTEAMENTO": {
+  "Crédito Ponto / CRI Início de Obra": {
     PF: [],
     PJ: [
       { id: "fcl_pj_1", label: "Contrato Social + todas as alterações", required: true },
@@ -351,7 +351,7 @@ export const CHECKLISTS: Record<string, Record<"PF" | "PJ", { id: string; label:
       { id: "fcl_pj_11", label: "RG e CPF dos sócios", required: true },
     ],
   },
-  "FUNDO CONSTRUÇÃO EMPREENDIMENTO": {
+  "Construtoras BTS — Build-to-Suit": {
     PF: [],
     PJ: [
       { id: "fce_pj_1", label: "Contrato Social + todas as alterações", required: true },
@@ -387,9 +387,40 @@ export const DEFAULT_CHECKLIST = {
 
 // ─── Linhas por nível ──────────────────────────────────────────────────────
 const LEVEL_LINES: Record<string, string[]> = {
-  NIVEL_1: ["HOME EQUITY", "HOME EQUITY ESTRESSADO", "AVAL", "FUNDO CONSTRUÇÃO RESIDENCIAL"],
-  NIVEL_2: ["HOMECASH", "V3GIRO E V3AUTOGIRO", "CGI"],
-  NIVEL_3: ["CRI", "CRA", "CPR", "FUNDO INTERNACIONAL CASH COLATERAL", "FUNDO INTERNACIONAL IMOB", "FUNDO CONSTRUÇÃO LOTEAMENTO", "FUNDO CONSTRUÇÃO EMPREENDIMENTO"],
+  NIVEL_1: [
+    "V3Equity",
+    "Home Equity",
+    "Home Equity Distressed",
+    "Giro Auto",
+    "V3Auto",
+    "Crédito no Aval",
+    "Financiamento Imobiliário",
+    "Capital Maquinários",
+  ],
+  NIVEL_2: [
+    "HomeCash",
+    "CGI — Grandes Empresas",
+    "Cash Collateral",
+    "Fundo Construção — Moradia",
+    "Fundo Construção — Reforma",
+    "Fundo Construção — Unifamiliar",
+    "Fundo Construção — Geminados",
+    "Financiamento — Brasileiros no Exterior",
+    "CPR Agro",
+    "Câmbio Pronto",
+    "FINIMP — Financiamento de Importações",
+    "ACC — Adiantamento s/ Contrato de Câmbio",
+    "ACE — Adiantamento s/ Cambiais Entregues",
+  ],
+  NIVEL_3: [
+    "Sale Leaseback Agro",
+    "Op. Internacional — Cash Collateral",
+    "CRI Cash Collateral",
+    "Crédito Ponto / CRI Início de Obra",
+    "Construtoras BTS — Build-to-Suit",
+    "Fundo Incorporadoras",
+    "Op. Internacional — Garantia Imobiliária",
+  ],
 };
 
 type Tab = "cliente" | "operacao" | "documentos";
@@ -430,8 +461,9 @@ interface UploadedFile {
   fileKey: string;
   docId: string;
   name: string;
-  size: number;
-  status: "uploading" | "done";
+  size: number;   // KB
+  status: "pending" | "uploading" | "done" | "error";
+  file?: File;    // real File object, present while pending/uploading
 }
 
 interface NovaPropostaModalProps {
@@ -440,7 +472,7 @@ interface NovaPropostaModalProps {
   level: string;
   partnerName: string;
   partnerId: string;
-  onSubmit: (proposal: Record<string, unknown>) => Promise<void> | void;
+  onSubmit: (proposal: Record<string, unknown>) => Promise<string>;
 }
 
 export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId, onSubmit }: NovaPropostaModalProps) {
@@ -482,14 +514,40 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
   // Documentos
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
 
+  // Portfolio docs (checklist dinâmico)
+  const [portfolioDocs, setPortfolioDocs] = useState<Record<string, { PF: { id: string; label: string; required: boolean }[]; PJ: { id: string; label: string; required: boolean }[] }>>({});
+
+  useEffect(() => {
+    if (!open) return;
+    fetch("/api/portfolio")
+      .then(r => r.json())
+      .then(({ linhas }) => {
+        if (!Array.isArray(linhas)) return;
+        const map: Record<string, { PF: { id: string; label: string; required: boolean }[]; PJ: { id: string; label: string; required: boolean }[] }> = {};
+        for (const linha of linhas) {
+          const toItems = (arr: { id: string; nome: string; obrigatorio: boolean }[]) =>
+            arr.map(d => ({ id: d.id, label: d.nome, required: d.obrigatorio }));
+          const pf = Array.isArray(linha.documentos_pf) && linha.documentos_pf.length > 0 ? toItems(linha.documentos_pf) : null;
+          const pj = Array.isArray(linha.documentos_pj) && linha.documentos_pj.length > 0 ? toItems(linha.documentos_pj) : null;
+          if (pf || pj) {
+            // chave normalizada para minúsculas — evita mismatch de capitalização
+            map[linha.nome.toLowerCase()] = { PF: pf ?? [], PJ: pj ?? [] };
+          }
+        }
+        setPortfolioDocs(map);
+      })
+      .catch(() => {});
+  }, [open]);
+
   // CEP loading
   const [cepLoading, setCepLoading] = useState(false);
   const [cepLoadingIdx, setCepLoadingIdx] = useState<number | null>(null);
 
   const lines = LEVEL_LINES[level] ?? [];
-  const checklist = (CHECKLISTS[creditLine]?.[clientType]) ?? DEFAULT_CHECKLIST[clientType];
+  // Usa checklist do portfólio se disponível, senão cai no hardcoded
+  const checklist = portfolioDocs[creditLine.toLowerCase()]?.[clientType] ?? (CHECKLISTS[creditLine]?.[clientType]) ?? DEFAULT_CHECKLIST[clientType];
 
-  const uploadedIds = [...new Set(uploadedFiles.filter((f) => f.status === "done").map((f) => f.docId))];
+  const uploadedIds = [...new Set(uploadedFiles.filter((f) => f.status === "done" || f.status === "pending").map((f) => f.docId))];
   const requiredDocs = checklist.filter((d) => d.required);
   const completedRequired = requiredDocs.filter((d) => uploadedIds.includes(d.id)).length;
 
@@ -497,15 +555,15 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
     setImoveis(prev => prev.map((im, i) => i === index ? { ...im, [field]: value } : im));
   }
 
-  function simulateUpload(docId: string, fileName: string) {
+  function queueFile(docId: string, file: File) {
     const fileKey = `${docId}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-    const fake: UploadedFile = { fileKey, docId, name: fileName, size: Math.floor(Math.random() * 900 + 100), status: "uploading" };
-    setUploadedFiles((prev) => [...prev, fake]);
-    setTimeout(() => {
-      setUploadedFiles((prev) =>
-        prev.map((f) => f.fileKey === fileKey ? { ...f, status: "done" } : f)
-      );
-    }, 1200);
+    const pending: UploadedFile = {
+      fileKey, docId, name: file.name,
+      size: Math.max(1, Math.round(file.size / 1024)),
+      status: "pending",
+      file,
+    };
+    setUploadedFiles((prev) => [...prev, pending]);
   }
 
   function removeFile(fileKey: string) {
@@ -565,7 +623,7 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
   function handleFileChange(docId: string, e: React.ChangeEvent<HTMLInputElement>) {
     const files = e.target.files;
     if (files) {
-      Array.from(files).forEach((file) => simulateUpload(docId, file.name));
+      Array.from(files).forEach((file) => queueFile(docId, file));
     }
     e.target.value = "";
   }
@@ -639,7 +697,28 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
       metadata,
     };
     try {
-      await onSubmit(proposal);
+      const proposalId = await onSubmit(proposal);
+
+      // Upload real dos arquivos selecionados
+      const toUpload = uploadedFiles.filter(f => f.status === "pending" && f.file);
+      for (const uf of toUpload) {
+        setUploadedFiles(prev => prev.map(f => f.fileKey === uf.fileKey ? { ...f, status: "uploading" } : f));
+        try {
+          const form = new FormData();
+          form.append("file", uf.file!);
+          form.append("proposal_id", proposalId);
+          form.append("doc_id", uf.docId);
+          const res = await fetch("/api/credit-proposals/documents", { method: "POST", body: form });
+          if (res.ok) {
+            setUploadedFiles(prev => prev.map(f => f.fileKey === uf.fileKey ? { ...f, status: "done", file: undefined } : f));
+          } else {
+            setUploadedFiles(prev => prev.map(f => f.fileKey === uf.fileKey ? { ...f, status: "error" } : f));
+          }
+        } catch {
+          setUploadedFiles(prev => prev.map(f => f.fileKey === uf.fileKey ? { ...f, status: "error" } : f));
+        }
+      }
+
       setSubmitted(true);
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : "Erro ao salvar proposta. Tente novamente.");
@@ -886,7 +965,7 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
                 />
               </div>
 
-              {(creditLine === "HOME EQUITY" || creditLine === "CRI" || creditLine === "HOMECASH" || creditLine === "CGI" || creditLine === "FUNDO CONSTRUÇÃO RESIDENCIAL" || creditLine === "FUNDO CONSTRUÇÃO LOTEAMENTO" || creditLine === "FUNDO CONSTRUÇÃO EMPREENDIMENTO") && (
+              {(creditLine === "Home Equity" || creditLine === "Home Equity Distressed" || creditLine === "V3Equity" || creditLine === "CRI Cash Collateral" || creditLine === "HomeCash" || creditLine === "CGI — Grandes Empresas" || creditLine === "Fundo Construção — Moradia" || creditLine === "Fundo Construção — Reforma" || creditLine === "Fundo Construção — Unifamiliar" || creditLine === "Fundo Construção — Geminados" || creditLine === "Crédito Ponto / CRI Início de Obra" || creditLine === "Construtoras BTS — Build-to-Suit" || creditLine === "Fundo Incorporadoras" || creditLine === "Sale Leaseback Agro" || creditLine === "Op. Internacional — Garantia Imobiliária") && (
                 <div className="space-y-3">
                   {imoveis.map((im, idx) => (
                     <div key={idx} className="p-4 rounded-xl border border-amber-500/20 bg-amber-500/5 space-y-3">
@@ -1099,11 +1178,14 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
                 checklist.map((doc) => {
                   const docFiles = uploadedFiles.filter((f) => f.docId === doc.id);
                   const hasUploading = docFiles.some((f) => f.status === "uploading");
+                  const hasPending = docFiles.some((f) => f.status === "pending");
                   const hasDone = docFiles.some((f) => f.status === "done");
                   return (
                     <div key={doc.id} className={`p-3 rounded-xl border transition-all ${
                       hasDone
                         ? "border-emerald-500/30 bg-emerald-500/5"
+                        : hasPending
+                        ? "border-primary/30 bg-primary/5"
                         : "border-border bg-secondary/30"
                     }`}>
                       <div className="flex items-start gap-3">
@@ -1112,6 +1194,8 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
                             <CheckCircle2 className="w-5 h-5 text-emerald-400" />
                           ) : hasUploading ? (
                             <div className="w-5 h-5 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+                          ) : hasPending ? (
+                            <CheckCircle2 className="w-5 h-5 text-primary/70" />
                           ) : (
                             <Circle className={`w-5 h-5 ${doc.required ? "text-amber-400" : "text-muted-foreground"}`} />
                           )}
@@ -1121,17 +1205,23 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
                             {doc.label}
                             {doc.required && <span className="text-red-400 ml-1">*</span>}
                           </p>
-                          {doc.hint && <p className="text-xs text-muted-foreground">{doc.hint}</p>}
+                          {"hint" in doc && (doc as { hint?: string }).hint && <p className="text-xs text-muted-foreground">{(doc as { hint?: string }).hint}</p>}
                           {docFiles.length > 0 && (
                             <div className="mt-1.5 space-y-1">
                               {docFiles.map((f) => (
                                 <div key={f.fileKey} className="flex items-center gap-2">
                                   {f.status === "uploading" ? (
                                     <div className="w-3 h-3 rounded-full border-2 border-primary border-t-transparent animate-spin flex-shrink-0" />
+                                  ) : f.status === "error" ? (
+                                    <AlertCircle className="w-3 h-3 text-red-400 flex-shrink-0" />
+                                  ) : f.status === "pending" ? (
+                                    <div className="w-3 h-3 rounded-full border-2 border-primary/50 flex-shrink-0" />
                                   ) : (
                                     <CheckCircle2 className="w-3 h-3 text-emerald-400 flex-shrink-0" />
                                   )}
-                                  <span className="text-xs text-muted-foreground truncate flex-1">{f.name} — {f.size} KB</span>
+                                  <span className={`text-xs truncate flex-1 ${f.status === "error" ? "text-red-400" : "text-muted-foreground"}`}>
+                                    {f.name} — {f.size} KB{f.status === "pending" ? " · aguardando envio" : f.status === "error" ? " · erro no envio" : ""}
+                                  </span>
                                   <button
                                     type="button"
                                     onClick={() => removeFile(f.fileKey)}

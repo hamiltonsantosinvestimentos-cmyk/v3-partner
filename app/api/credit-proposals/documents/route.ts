@@ -66,14 +66,9 @@ export async function POST(req: NextRequest) {
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_").substring(0, 80);
   const storagePath = `${ownerId}/${proposalId}/${docId}_${Date.now()}_${safeName}`;
 
-  // Remove versão anterior do mesmo doc (se existir)
   const existingDocs: DocEntry[] = Array.isArray(proposal.documents) ? proposal.documents : [];
-  const oldDoc = existingDocs.find((d) => d.doc_id === docId);
-  if (oldDoc) {
-    await svc.storage.from(BUCKET).remove([oldDoc.storage_path]);
-  }
 
-  // Upload para o Storage
+  // Upload para o Storage (não remove arquivos anteriores do mesmo doc_id)
   const bytes = await file.arrayBuffer();
   const { error: uploadError } = await svc.storage
     .from(BUCKET)
@@ -88,7 +83,7 @@ export async function POST(req: NextRequest) {
     .from(BUCKET)
     .createSignedUrl(storagePath, SIGNED_URL_EXPIRES);
 
-  // Atualiza campo documents (JSONB) da proposta
+  // Adiciona novo doc à lista (múltiplos arquivos por doc_id são permitidos)
   const newDoc: DocEntry = {
     doc_id:       docId,
     file_name:    file.name,
@@ -96,7 +91,7 @@ export async function POST(req: NextRequest) {
     uploaded_at:  new Date().toISOString(),
     uploaded_by:  user.id,
   };
-  const updatedDocs = [...existingDocs.filter((d) => d.doc_id !== docId), newDoc];
+  const updatedDocs = [...existingDocs, newDoc];
 
   const { error: updateError } = await svc
     .from("credit_desk_proposals")
@@ -117,7 +112,7 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({
     ok: true,
-    document: { ...newDoc, url: signedData?.signedUrl ?? null },
+    document: { ...newDoc, url: signedData?.signedUrl ?? null, file_key: storagePath },
   });
 }
 
@@ -169,6 +164,7 @@ export async function DELETE(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const proposalId = searchParams.get("proposal_id");
   const docId      = searchParams.get("doc_id");
+  const fileKey    = searchParams.get("file_key"); // storage_path do arquivo específico
   if (!proposalId || !docId) {
     return NextResponse.json({ error: "proposal_id e doc_id obrigatórios" }, { status: 400 });
   }
@@ -188,14 +184,20 @@ export async function DELETE(req: NextRequest) {
   }
 
   const docs: DocEntry[] = Array.isArray(proposal.documents) ? proposal.documents : [];
-  const docToRemove = docs.find((d) => d.doc_id === docId);
-  if (!docToRemove) return NextResponse.json({ error: "Documento não encontrado" }, { status: 404 });
+
+  // Se file_key fornecido, remove apenas esse arquivo específico; senão remove todos do doc_id
+  const docsToRemove = fileKey
+    ? docs.filter((d) => d.storage_path === fileKey)
+    : docs.filter((d) => d.doc_id === docId);
+
+  if (docsToRemove.length === 0) return NextResponse.json({ error: "Documento não encontrado" }, { status: 404 });
 
   // Remove do Storage
-  await svc.storage.from(BUCKET).remove([docToRemove.storage_path]);
+  await svc.storage.from(BUCKET).remove(docsToRemove.map((d) => d.storage_path));
 
   // Atualiza JSONB
-  const updatedDocs = docs.filter((d) => d.doc_id !== docId);
+  const storagesToRemove = new Set(docsToRemove.map((d) => d.storage_path));
+  const updatedDocs = docs.filter((d) => !storagesToRemove.has(d.storage_path));
   await svc
     .from("credit_desk_proposals")
     .update({ documents: updatedDocs, updated_at: new Date().toISOString() })

@@ -27,7 +27,7 @@ export default async function MinhasOperacoesPage() {
   ] = await Promise.all([
     svc
       .from("credit_desk_proposals")
-      .select("id, code, title, client_name, credit_line, requested_value, approved_value, status, current_level, created_at, updated_at")
+      .select("id, code, title, client_name, credit_line, requested_value, approved_value, status, stage, current_level, created_at, updated_at, metadata")
       .eq("partner_id", user.id)
       .order("created_at", { ascending: false }),
     svc

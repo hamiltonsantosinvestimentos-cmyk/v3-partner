@@ -8,7 +8,7 @@ async function getContrato(token: string) {
   );
   const { data, error } = await supabase
     .from("contratos_mandato")
-    .select("id, status, client_name, client_cpf, client_email, commission_perc, deal_value, credit_line, proposal_code, signed_at, v3_signed_at, endereco, bairro, municipio, estado, cep, telefone")
+    .select("id, status, client_name, client_cpf, client_email, commission_perc, deal_value, credit_line, proposal_code, signed_at, v3_signed_at, testemunha_nome, testemunha_signed_at, testemunha2_nome, testemunha2_signed_at, endereco, bairro, municipio, estado, cep, telefone")
     .eq("v3_token", token)
     .single();
 

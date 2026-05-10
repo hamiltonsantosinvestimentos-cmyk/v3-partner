@@ -1,5 +1,7 @@
 import { AcademyClient } from "@/components/academy/academy-client";
-import { cookies } from "next/headers";
+import { createClient } from "@/lib/supabase/server";
+
+export const dynamic = "force-dynamic";
 
 interface AcademyPageProps {
   searchParams: Promise<{ cat?: string }>;
@@ -8,13 +10,22 @@ interface AcademyPageProps {
 export default async function AcademyPage({ searchParams }: AcademyPageProps) {
   const params = await searchParams;
 
-  // Read user role from demo session or Supabase
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
   let userRole = "PARTNER";
-  const cookieStore = await cookies();
-  const session = cookieStore.get("v3_demo_session")?.value;
-  if (session) {
-    try { userRole = JSON.parse(session).role ?? "PARTNER"; } catch {}
+  let userName = "Partner";
+
+  if (user) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role, full_name")
+      .eq("id", user.id)
+      .single();
+
+    userRole = profile?.role ?? "PARTNER";
+    userName = profile?.full_name ?? user.email ?? "Partner";
   }
 
-  return <AcademyClient initialCategory={params.cat} userRole={userRole} />;
+  return <AcademyClient initialCategory={params.cat} userRole={userRole} userName={userName} />;
 }

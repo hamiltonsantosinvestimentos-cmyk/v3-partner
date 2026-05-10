@@ -12,7 +12,7 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://v3-partner.vercel.app";
+const APP_URL = (process.env.NEXT_PUBLIC_APP_URL ?? "https://v3-partner.vercel.app").trim().replace(/\/+$/, "");
 
 export async function POST(req: NextRequest) {
   const body = await req.json();

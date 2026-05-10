@@ -548,6 +548,38 @@ export async function notifyTestemunhaParaAssinar(opts: {
   );
 }
 
+/** Qualquer assinante: confirmação de que sua assinatura foi registrada */
+export async function notifyAssinaturaRegistrada(opts: {
+  email: string;
+  nome: string;
+  papel: string;
+  proposalCode: string;
+  clientName: string;
+  signedAt: string;
+}): Promise<void> {
+  const dateStr = new Date(opts.signedAt).toLocaleString("pt-BR");
+  const body = `
+    <p style="color:#7A96AF;font-size:14px;margin:0 0 20px;">
+      Olá, <strong style="color:#C8D4E3;">${opts.nome}</strong>!<br>
+      Sua assinatura como <strong style="color:#E5B96A;">${opts.papel}</strong> foi registrada com sucesso.
+    </p>
+    ${row("Proposta", opts.proposalCode)}
+    ${row("Cliente", opts.clientName)}
+    ${row("Registrado em", dateStr)}
+    <div style="margin-top:16px;padding:14px 18px;background:#0A2018;border-radius:8px;border-left:3px solid #10B981;">
+      <p style="margin:0;font-size:20px;font-weight:800;color:#10B981;">✅ Assinatura Registrada</p>
+    </div>
+    <p style="color:#7A96AF;font-size:12px;margin-top:16px;">
+      Aguardando as demais assinaturas para finalização do contrato.
+    </p>
+  `;
+  await send(
+    opts.email,
+    `✅ Assinatura registrada — V3 Partners · ${opts.proposalCode}`,
+    template("Assinatura Registrada com Sucesso", body)
+  );
+}
+
 /** Partner: e-mail de boas-vindas ao ser cadastrado */
 export async function sendWelcomePartner(opts: {
   partnerEmail: string;
@@ -742,6 +774,228 @@ export async function notifyComissaoPaga(opts: {
     template("Comissão Liquidada", body, {
       label: "Ver Extrato",
       url: "https://v3-partner.vercel.app/comissoes",
+    })
+  );
+}
+
+/** Partner: e-mail de boas-vindas no primeiro acesso */
+export async function notifyBoasVindasPartner(opts: {
+  partnerEmail: string;
+  partnerName: string;
+  plano: string;
+}): Promise<void> {
+  const planoLabel = opts.plano === "PARTNER_PRO" ? "Partner PRO" : "Partner";
+  const comissao  = opts.plano === "PARTNER_PRO" ? "50%" : "30%";
+  const body = `
+    <p style="color:#C8D4E3;font-size:15px;margin:0 0 8px;font-weight:700;">
+      Bem-vindo à V3 Partners, ${opts.partnerName}! 🎉
+    </p>
+    <p style="color:#7A96AF;font-size:14px;margin:0 0 24px;">
+      Sua conta <strong style="color:#E8C97A;">${planoLabel}</strong> está ativa.
+      Você tem ${comissao} de comissionamento em todas as operações fechadas.
+      Veja abaixo como começar a operar hoje mesmo.
+    </p>
+    <div style="background:#0D1C2E;border-radius:10px;padding:20px;margin-bottom:20px;">
+      <p style="margin:0 0 14px;font-size:12px;font-weight:700;color:#C9A84C;letter-spacing:0.08em;">PRIMEIROS PASSOS</p>
+      <div style="display:flex;align-items:flex-start;gap:14px;margin-bottom:14px;">
+        <div style="min-width:28px;height:28px;background:#C9A84C20;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#C9A84C;">1</div>
+        <div>
+          <p style="margin:0 0 2px;font-size:13px;font-weight:600;color:#F0ECE4;">Cadastre seus leads no CRM</p>
+          <p style="margin:0;font-size:12px;color:#7A96AF;">Organize seus contatos e acompanhe cada negociação</p>
+        </div>
+      </div>
+      <div style="display:flex;align-items:flex-start;gap:14px;margin-bottom:14px;">
+        <div style="min-width:28px;height:28px;background:#C9A84C20;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#C9A84C;">2</div>
+        <div>
+          <p style="margin:0 0 2px;font-size:13px;font-weight:600;color:#F0ECE4;">Envie sua primeira proposta de crédito</p>
+          <p style="margin:0;font-size:12px;color:#7A96AF;">Nossa Mesa de Crédito analisa em até 48h</p>
+        </div>
+      </div>
+      <div style="display:flex;align-items:flex-start;gap:14px;">
+        <div style="min-width:28px;height:28px;background:#C9A84C20;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#C9A84C;">3</div>
+        <div>
+          <p style="margin:0 0 2px;font-size:13px;font-weight:600;color:#F0ECE4;">Acesse o Academy</p>
+          <p style="margin:0;font-size:12px;color:#7A96AF;">Capacite-se para fechar operações maiores e mais complexas</p>
+        </div>
+      </div>
+    </div>
+    ${row("Plano", planoLabel)}
+    ${row("Comissionamento", comissao)}
+    ${row("Suporte", "operacional@v3partners.com.br")}
+    <p style="color:#7A96AF;font-size:12px;margin-top:20px;">
+      Nossa equipe está disponível para apoiar você em cada operação. Boas vendas! 🚀
+    </p>
+  `;
+  await send(
+    opts.partnerEmail,
+    `🎉 Bem-vindo à V3 Partners, ${opts.partnerName}!`,
+    template("Sua conta V3 está ativa", body, {
+      label: "Acessar a Plataforma",
+      url: "https://app.v3partners.com.br/dashboard",
+    })
+  );
+}
+
+/** Admin: lembrete de onboarding específico por etapa */
+export async function notifyLembreteOnboardingEtapa(opts: {
+  partnerEmail: string;
+  partnerName: string;
+  plano: string;
+  step: string;
+}): Promise<void> {
+  const planoLabel = opts.plano === "PARTNER_PRO" ? "Partner PRO" : "Partner";
+
+  type StepConfig = {
+    emoji: string;
+    title: string;
+    subject: string;
+    body: string;
+    cta: { label: string; url: string };
+  };
+
+  const stepMap: Record<string, StepConfig> = {
+    profile: {
+      emoji: "👤",
+      subject: `👤 Complete seu perfil na V3, ${opts.partnerName}`,
+      title: "Seu perfil ainda está incompleto",
+      body: `
+        <p style="color:#C8D4E3;font-size:14px;margin:0 0 16px;">
+          Olá, <strong>${opts.partnerName}</strong>! 👋<br><br>
+          Notamos que seu perfil na V3 Partners ainda está incompleto.
+          Ter um perfil completo aumenta sua credibilidade e é o primeiro passo para operar.
+        </p>
+        <div style="background:#0D1C2E;border-radius:10px;padding:18px;margin-bottom:16px;">
+          <p style="margin:0 0 10px;font-size:12px;font-weight:700;color:#C9A84C;letter-spacing:0.08em;">O QUE PREENCHER</p>
+          <p style="margin:0;font-size:13px;color:#7A96AF;line-height:1.8;">
+            • Nome completo<br>• Telefone de contato<br>• Cidade e estado
+          </p>
+        </div>
+        <p style="color:#7A96AF;font-size:13px;">Leva menos de 1 minuto. Clique abaixo para completar agora.</p>
+      `,
+      cta: { label: "Completar Perfil", url: "https://app.v3partners.com.br/perfil" },
+    },
+    crm: {
+      emoji: "👥",
+      subject: `👥 Cadastre seu primeiro lead no CRM V3, ${opts.partnerName}`,
+      title: "Você ainda não tem leads no CRM",
+      body: `
+        <p style="color:#C8D4E3;font-size:14px;margin:0 0 16px;">
+          Olá, <strong>${opts.partnerName}</strong>! 👋<br><br>
+          O CRM é onde tudo começa. Cada lead cadastrado é um potencial negócio e uma comissão futura.
+          Você ainda não registrou nenhum cliente.
+        </p>
+        <div style="background:#0D1C2E;border-radius:10px;padding:18px;margin-bottom:16px;">
+          <p style="margin:0 0 10px;font-size:12px;font-weight:700;color:#C9A84C;letter-spacing:0.08em;">POR QUE USAR O CRM</p>
+          <p style="margin:0;font-size:13px;color:#7A96AF;line-height:1.8;">
+            • Organize todos seus contatos em um só lugar<br>
+            • Acompanhe o status de cada negociação<br>
+            • Programe follow-ups e nunca perca um lead<br>
+            • Histórico completo de interações
+          </p>
+        </div>
+        <p style="color:#7A96AF;font-size:13px;">Cadastre seu primeiro lead agora e comece a construir sua carteira.</p>
+      `,
+      cta: { label: "Acessar o CRM", url: "https://app.v3partners.com.br/crm" },
+    },
+    proposta: {
+      emoji: "📝",
+      subject: `📝 Envie sua primeira proposta de crédito, ${opts.partnerName}`,
+      title: "Sua primeira proposta está te esperando",
+      body: `
+        <p style="color:#C8D4E3;font-size:14px;margin:0 0 16px;">
+          Olá, <strong>${opts.partnerName}</strong>! 👋<br><br>
+          Você é <strong style="color:#E8C97A;">${planoLabel}</strong> e ainda não enviou nenhuma proposta para a Mesa de Crédito.
+          Cada proposta aprovada gera comissão direta para você.
+        </p>
+        <div style="background:#0D1C2E;border-radius:10px;padding:18px;margin-bottom:16px;">
+          <p style="margin:0 0 10px;font-size:12px;font-weight:700;color:#C9A84C;letter-spacing:0.08em;">NOSSAS LINHAS DE CRÉDITO</p>
+          <p style="margin:0;font-size:13px;color:#7A96AF;line-height:1.8;">
+            • Crédito Varejo (N1) — até R$500K<br>
+            • Crédito Estruturado (N2) — R$500K a R$5M<br>
+            • High Ticket (N3) — acima de R$5M
+          </p>
+        </div>
+        <p style="color:#7A96AF;font-size:13px;">Nossa Mesa analisa em até 48h. Envie sua primeira proposta agora.</p>
+      `,
+      cta: { label: "Ir para a Mesa de Crédito", url: "https://app.v3partners.com.br/mesa-credito" },
+    },
+    welcome_email: {
+      emoji: "✉️",
+      subject: `✉️ Bem-vindo à V3 Partners, ${opts.partnerName}!`,
+      title: "Sua conta V3 está ativa",
+      body: `
+        <p style="color:#C8D4E3;font-size:14px;margin:0 0 16px;">
+          Olá, <strong>${opts.partnerName}</strong>! 👋<br><br>
+          Sua conta <strong style="color:#E8C97A;">${planoLabel}</strong> na V3 Partners está ativa e pronta para operar.
+          Acesse a plataforma e conheça todos os módulos disponíveis para você.
+        </p>
+        <p style="color:#7A96AF;font-size:13px;">Qualquer dúvida, nossa equipe está disponível para ajudar.</p>
+      `,
+      cta: { label: "Acessar a Plataforma", url: "https://app.v3partners.com.br/dashboard" },
+    },
+  };
+
+  const cfg = stepMap[opts.step] ?? stepMap.profile;
+
+  await send(
+    opts.partnerEmail,
+    cfg.subject,
+    template(cfg.title, cfg.body, cfg.cta)
+  );
+}
+
+/** Partner: resumo diário de follow-ups do CRM */
+export async function notifyFollowUpsDodia(opts: {
+  partnerEmail: string;
+  partnerName: string;
+  followUpsHoje: Array<{ name: string; phone: string | null; segment: string | null }>;
+  leadsEsquecidos: Array<{ name: string; diasSemContato: number }>;
+}): Promise<void> {
+  const hoje = new Date().toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long" });
+
+  const listaHoje = opts.followUpsHoje.length > 0
+    ? opts.followUpsHoje.map((l) => `
+        <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid #1B3050;">
+          <div style="min-width:32px;height:32px;background:#C9A84C20;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;">📞</div>
+          <div>
+            <p style="margin:0;font-size:13px;font-weight:600;color:#F0ECE4;">${l.name}</p>
+            <p style="margin:0;font-size:11px;color:#7A96AF;">${l.phone ?? "Sem telefone"}${l.segment ? ` · ${l.segment}` : ""}</p>
+          </div>
+        </div>`).join("")
+    : `<p style="color:#7A96AF;font-size:13px;">Nenhum follow-up agendado para hoje.</p>`;
+
+  const listaEsquecidos = opts.leadsEsquecidos.length > 0
+    ? `<div style="margin-top:20px;padding:16px;background:#1A0A0A;border-radius:8px;border-left:3px solid #EF4444;">
+        <p style="margin:0 0 10px;font-size:12px;font-weight:700;color:#EF4444;letter-spacing:0.08em;">⚠ LEADS SEM CONTATO HÁ 7+ DIAS</p>
+        ${opts.leadsEsquecidos.map((l) => `
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #2A1010;">
+            <span style="font-size:13px;color:#F0ECE4;">${l.name}</span>
+            <span style="font-size:11px;font-weight:700;color:#EF4444;">${l.diasSemContato}d sem contato</span>
+          </div>`).join("")}
+      </div>`
+    : "";
+
+  const body = `
+    <p style="color:#C8D4E3;font-size:14px;margin:0 0 4px;">Olá, <strong>${opts.partnerName}</strong>!</p>
+    <p style="color:#7A96AF;font-size:13px;margin:0 0 20px;">Aqui estão seus follow-ups para <strong style="color:#E8C97A;">${hoje}</strong>.</p>
+    <div style="background:#0D1C2E;border-radius:10px;padding:16px;margin-bottom:16px;">
+      <p style="margin:0 0 12px;font-size:12px;font-weight:700;color:#C9A84C;letter-spacing:0.08em;">
+        📞 FOLLOW-UPS DE HOJE (${opts.followUpsHoje.length})
+      </p>
+      ${listaHoje}
+    </div>
+    ${listaEsquecidos}
+    <p style="color:#7A96AF;font-size:12px;margin-top:16px;">
+      Acesse o CRM para registrar as interações e reagendar os próximos contatos.
+    </p>
+  `;
+
+  await send(
+    opts.partnerEmail,
+    `📞 ${opts.followUpsHoje.length} follow-up${opts.followUpsHoje.length !== 1 ? "s" : ""} para hoje — V3 Partners`,
+    template("Seus follow-ups do dia", body, {
+      label: "Abrir CRM",
+      url:   "https://app.v3partners.com.br/crm",
     })
   );
 }

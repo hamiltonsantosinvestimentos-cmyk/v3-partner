@@ -65,7 +65,16 @@ export async function POST(req: NextRequest) {
           valid: true,
           tipo: "CNPJ",
           nome: (data.razao_social as string) ?? "",
+          nome_fantasia: (data.nome_fantasia as string) ?? "",
           situacao: (data.descricao_situacao_cadastral as string) ?? "Ativa",
+          logradouro: (data.logradouro as string) ?? "",
+          numero: (data.numero as string) ?? "",
+          complemento: (data.complemento as string) ?? "",
+          bairro: (data.bairro as string) ?? "",
+          municipio: (data.municipio as string) ?? "",
+          uf: (data.uf as string) ?? "",
+          cep: (data.cep as string) ?? "",
+          qsa: Array.isArray(data.qsa) ? (data.qsa as Array<{ nome_socio: string; cnpj_cpf_do_socio: string; qualificacao_socio: string }>).slice(0, 3) : [],
         });
       } catch {
         return NextResponse.json(

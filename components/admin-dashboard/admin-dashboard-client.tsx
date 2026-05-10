@@ -2,6 +2,7 @@
 
 import { Users, TrendingUp, Wallet, UserPlus, Activity, Crown, Shield, Clock, CheckCircle2, AlertCircle } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
+import { ComunicadosPanel } from "./comunicados-panel";
 
 const moeda = (v: number) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
@@ -183,6 +184,9 @@ export function AdminDashboardClient({
           </CardContent>
         </Card>
       </div>
+
+      {/* Comunicados aos Partners */}
+      <ComunicadosPanel />
 
       {/* Cadastros pendentes */}
       {recentCadastros.length > 0 && (

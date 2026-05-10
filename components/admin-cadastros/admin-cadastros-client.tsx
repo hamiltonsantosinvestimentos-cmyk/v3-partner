@@ -452,7 +452,7 @@ export function AdminCadastrosClient({
         <div>
           <p className="text-xs font-semibold text-foreground">Link público de cadastro</p>
           <p className="text-xs text-muted-foreground mt-0.5 font-mono">
-            {typeof window !== "undefined" ? window.location.origin : "https://v3-partner.vercel.app"}/cadastro-partner
+            {typeof window !== "undefined" ? window.location.origin : "https://v3partners.com.br"}/cadastro-partner
           </p>
         </div>
         <button

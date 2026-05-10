@@ -110,19 +110,23 @@ export default async function DashboardPage({
   // Recentes — mesmo filtro
   let splitsQ = svc.from("split_fiscal").select("id, code, title, status, total_value, created_at").order("created_at", { ascending: false }).limit(5);
   let dealsQ  = svc.from("ma_deals").select("id, code, title, stage, deal_value, target_company, created_at").order("created_at", { ascending: false }).limit(5);
+  let propsQ  = svc.from("credit_desk_proposals").select("id, code, title, client_name, requested_value, current_level, status, created_at").order("created_at", { ascending: false }).limit(5);
 
   if (!isAdmin) {
     splitsQ = splitsQ.or(`created_by.eq.${uid},partner_id.eq.${uid}`) as typeof splitsQ;
     dealsQ  = dealsQ.or(`created_by.eq.${uid},assigned_to.eq.${uid}`) as typeof dealsQ;
+    propsQ  = propsQ.eq("partner_id", uid) as typeof propsQ;
   }
   if (since) {
     splitsQ = splitsQ.gte("created_at", since) as typeof splitsQ;
     dealsQ  = dealsQ.gte("created_at", since) as typeof dealsQ;
+    propsQ  = propsQ.gte("created_at", since) as typeof propsQ;
   }
 
-  const [splitsResult, dealsResult] = await Promise.allSettled([splitsQ, dealsQ]);
-  const recentSplits = splitsResult.status === "fulfilled" ? (splitsResult.value.data ?? []) : [];
-  const recentDeals  = dealsResult.status === "fulfilled"  ? (dealsResult.value.data ?? [])  : [];
+  const [splitsResult, dealsResult, propsResult] = await Promise.allSettled([splitsQ, dealsQ, propsQ]);
+  const recentSplits    = splitsResult.status === "fulfilled" ? (splitsResult.value.data ?? []) : [];
+  const recentDeals     = dealsResult.status  === "fulfilled" ? (dealsResult.value.data  ?? []) : [];
+  const recentProposals = propsResult.status  === "fulfilled" ? (propsResult.value.data  ?? []) : [];
 
   // Busca propostas dos últimos 12 meses para montar o gráfico de volume
   const dozeAtras = new Date();
@@ -204,6 +208,20 @@ export default async function DashboardPage({
     }
   }
 
+  // Follow-ups da semana — leads do CRM com next_contact nos próximos 7 dias
+  const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+  const em7dias = new Date(hoje); em7dias.setDate(hoje.getDate() + 7);
+  let followUpsQ = svc
+    .from("crm_leads")
+    .select("id, name, phone, next_contact, status, segment")
+    .gte("next_contact", hoje.toISOString().split("T")[0])
+    .lte("next_contact", em7dias.toISOString().split("T")[0])
+    .order("next_contact", { ascending: true })
+    .limit(5);
+  if (!isAdmin) followUpsQ = followUpsQ.eq("created_by", uid) as typeof followUpsQ;
+  const followUpsResult = await followUpsQ;
+  const followUps = followUpsResult.data ?? [];
+
   return (
     <DashboardClient
       role={role}
@@ -219,6 +237,8 @@ export default async function DashboardPage({
       }}
       recentSplits={recentSplits as Parameters<typeof DashboardClient>[0]["recentSplits"]}
       recentDeals={recentDeals as Parameters<typeof DashboardClient>[0]["recentDeals"]}
+      recentProposals={recentProposals as Parameters<typeof DashboardClient>[0]["recentProposals"]}
+      followUps={followUps as Parameters<typeof DashboardClient>[0]["followUps"]}
       userCreatedAt={profileData?.created_at ?? null}
     />
   );

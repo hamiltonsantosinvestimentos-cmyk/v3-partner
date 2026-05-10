@@ -5,8 +5,10 @@ import {
   Settings, Link2, Bell, Shield, Zap, Copy, Check, Plus, Power,
   ExternalLink, BarChart3, Users, TrendingUp, Globe, Mail,
   Database, Key, RefreshCw, CheckCircle2, AlertCircle, Clock,
-  ChevronRight, Eye, EyeOff, Trash2, Activity,
+  ChevronRight, Eye, EyeOff, Trash2, Activity, CreditCard, Briefcase,
 } from "lucide-react";
+import { EditorRegrasLinhas } from "@/components/mesa-credito/editor-regras-linhas";
+import { PortfolioEditor } from "@/components/portfolio/portfolio-editor";
 
 interface Profile {
   id: string;
@@ -42,7 +44,7 @@ interface Props {
   systemStats: SystemStats | null;
 }
 
-type Tab = "captacao" | "notificacoes" | "sistema" | "integracoes" | "cobranding";
+type Tab = "captacao" | "notificacoes" | "sistema" | "integracoes" | "cobranding" | "regras-credito" | "portfolio";
 
 const IS_PARTNER = (role: string) => ["PARTNER", "PARTNER_PRO", "ADMIN", "GESTAO"].includes(role);
 const IS_ADMIN   = (role: string) => ["ADMIN", "GESTAO"].includes(role);
@@ -233,6 +235,8 @@ export function ConfiguracoesClient({ profile, initialLinks, systemStats }: Prop
     { key: "captacao"    as Tab, label: "Links de Captação", icon: <Link2 className="w-4 h-4" />,   show: IS_PARTNER(profile.role) },
     { key: "cobranding"  as Tab, label: "Co-branding PRO",   icon: <Globe className="w-4 h-4" />,   show: profile.role === "PARTNER_PRO" },
     { key: "notificacoes" as Tab, label: "Notificações",      icon: <Bell className="w-4 h-4" />,    show: true },
+    { key: "regras-credito" as Tab, label: "Regras de Crédito", icon: <CreditCard className="w-4 h-4" />, show: IS_ADMIN(profile.role) },
+    { key: "portfolio"   as Tab, label: "Portfólio",          icon: <Briefcase className="w-4 h-4" />, show: IS_ADMIN(profile.role) },
     { key: "sistema"     as Tab, label: "Sistema",            icon: <Shield className="w-4 h-4" />, show: IS_ADMIN(profile.role) },
     { key: "integracoes" as Tab, label: "Integrações",        icon: <Zap className="w-4 h-4" />,    show: IS_ADMIN_ONLY(profile.role) },
   ] as { key: Tab; label: string; icon: React.ReactNode; show: boolean }[]).filter(t => t.show);
@@ -243,6 +247,8 @@ export function ConfiguracoesClient({ profile, initialLinks, systemStats }: Prop
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null);
   const [showTokens, setShowTokens] = useState<Record<string, boolean>>({});
+  const [rulesEditorOpen, setRulesEditorOpen] = useState(false);
+  const [rulesKey, setRulesKey] = useState(0);
 
   // Notificações (localStorage)
   const [notifEmail, setNotifEmail]   = useState(() => typeof window !== "undefined" ? localStorage.getItem("v3_notif_email") !== "false" : true);
@@ -664,6 +670,55 @@ export function ConfiguracoesClient({ profile, initialLinks, systemStats }: Prop
               <ChevronRight className="w-3 h-3" />
             </a>
           </div>
+        </div>
+      )}
+
+      {/* ── TAB: REGRAS DE CRÉDITO ── */}
+      {tab === "regras-credito" && (
+        <div className="space-y-4">
+          <div className="p-4 rounded-xl border border-[#1E3050]/50 bg-[#0D1B2E]/60 space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-semibold text-[#F0ECE4]">Regras das Linhas de Crédito</p>
+                <p className="text-xs text-[#7A8FA8] mt-0.5">Edite score mínimo, valores, LTV, faturamento e parâmetros de cada linha de crédito.</p>
+              </div>
+              <button
+                key={rulesKey}
+                onClick={() => setRulesEditorOpen(true)}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-lg border border-[#C9A84C]/30 bg-[#C9A84C]/10 text-xs font-semibold text-[#C9A84C] hover:bg-[#C9A84C]/20 transition-colors"
+              >
+                <CreditCard className="w-3.5 h-3.5" /> Editar Regras
+              </button>
+            </div>
+            <div className="flex flex-wrap gap-2 pt-1">
+              {["CGI", "CRI", "FIDC", "SLB", "BTS", "BTR", "PRECATÓRIO", "MINERAÇÃO", "M&A", "CROSS-BORDER", "HIGH TICKET"].map(line => (
+                <span key={line} className="text-[10px] font-bold px-2 py-0.5 rounded bg-[#C9A84C]/10 text-[#C9A84C] border border-[#C9A84C]/20">{line}</span>
+              ))}
+            </div>
+            <p className="text-[11px] text-[#7A8FA8]">11 linhas de crédito configuráveis. Alterações refletem imediatamente na recomendação de linhas para todas as propostas.</p>
+          </div>
+
+          <EditorRegrasLinhas
+            open={rulesEditorOpen}
+            onClose={() => setRulesEditorOpen(false)}
+            onSaved={() => { setRulesKey(k => k + 1); showToast("Regras salvas com sucesso!", "success"); }}
+          />
+        </div>
+      )}
+
+      {/* ── TAB: PORTFÓLIO ── */}
+      {tab === "portfolio" && (
+        <div className="space-y-4">
+          <div className="p-4 rounded-xl bg-[#C9A84C]/5 border border-[#C9A84C]/20 flex gap-3">
+            <Briefcase className="w-4 h-4 text-[#C9A84C] flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-xs font-semibold text-[#E8C97A]">Portfólio V3 Partners 2026</p>
+              <p className="text-xs text-[#7A8FA8] mt-0.5">
+                Gerencie todos os produtos e linhas de crédito do portfólio. Cada produto ficará visível na aba "Portfólio" de todos os partners.
+              </p>
+            </div>
+          </div>
+          <PortfolioEditor />
         </div>
       )}
 

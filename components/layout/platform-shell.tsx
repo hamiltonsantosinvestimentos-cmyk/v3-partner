@@ -4,6 +4,8 @@ import React, { useState } from "react";
 import { Sidebar } from "./sidebar";
 import { Topbar } from "./topbar";
 import type { UserRole } from "@/lib/constants";
+import { WelcomeWizard } from "@/components/onboarding/welcome-wizard";
+import { LocationGate } from "@/components/onboarding/location-gate";
 
 interface PlatformShellProps {
   user: {
@@ -22,6 +24,10 @@ export function PlatformShell({ user, notificationCount, children }: PlatformShe
 
   return (
     <div className="flex h-screen overflow-hidden bg-[#09081A]">
+      {/* Wizard de boas-vindas — apenas para partners novos */}
+      <WelcomeWizard userName={user.full_name || "Parceiro"} role={user.role} />
+      {/* Gate de localização — solicita cidade na primeira sessão */}
+      <LocationGate role={user.role} />
       {/* Desktop sidebar */}
       <div className="hidden lg:flex flex-shrink-0">
         <Sidebar role={user.role} />
