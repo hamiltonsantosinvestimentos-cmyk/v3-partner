@@ -62,6 +62,9 @@ const patchSchema = z.object({
   metadata:        z.record(z.string(), z.unknown()).optional().nullable(),
   // Campo exclusivo mesa/admin (armazena JSON array de instituições)
   instituicao_encaminhada: z.string().max(1000).optional().nullable(),
+  // Transferência de nível e linha (apenas mesa/admin)
+  credit_line: z.string().min(1).max(100).optional(),
+  partner_id:  z.string().uuid().optional().nullable(),
 });
 
 // GET — lista propostas (partner vê as suas, admin/mesa vê todas)

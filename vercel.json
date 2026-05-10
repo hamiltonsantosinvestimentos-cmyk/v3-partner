@@ -17,5 +17,15 @@
       "path": "/api/cron/followups",
       "schedule": "0 8 * * 1-5"
     }
-  ]
+  ],
+  "experimentalServices": {
+    "frontend": {
+      "routePrefix": "/",
+      "framework": "nextjs"
+    },
+    "creative-engine": {
+      "entrypoint": "services/creative-engine",
+      "routePrefix": "/_/creative-engine"
+    }
+  }
 }

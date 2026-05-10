@@ -6,7 +6,7 @@ import {
   FileText, CreditCard, Calendar, Link2, Pencil, Check,
   Percent, TrendingUp, BadgeDollarSign, Upload, Paperclip, Trash2, Home, ExternalLink,
   Package, Copy, CheckCheck, MessageSquare, Send, Search, AlertTriangle, ShieldCheck,
-  Phone, Mail, MapPin, Banknote, Download, Loader2,
+  Phone, Mail, MapPin, Banknote, Download, Loader2, Brain, RefreshCw,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -354,7 +354,7 @@ function CorrecaoFeitaBtn({
 
 export function PropostaDetailModal({ open, onClose, proposal, onStageChange, onProposalUpdate, canChangeStage, canEditValorSolicitado, canCompileDocuments, canEditInstituicao }: PropostaDetailModalProps) {
   // ── Modal tab ─────────────────────────────────────────────────────────────
-  type ModalTab = "detalhes" | "recomendacao" | "documentos" | "comentarios";
+  type ModalTab = "detalhes" | "recomendacao" | "documentos" | "comentarios" | "analise_ia";
   const [modalTab, setModalTab] = useState<ModalTab>("detalhes");
   const bodyRef = React.useRef<HTMLDivElement>(null);
 
@@ -366,6 +366,67 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
     }
   }, [open, proposal?.id]);
   const [rulesKey] = useState(0);
+
+  // ── Análise IA state ──────────────────────────────────────────────────────
+  type AnaliseStatus = "idle" | "loading" | "done" | "error";
+  interface AnaliseIA {
+    resumo_executivo: string; parecer: string; score_risco: string;
+    cinco_cs: { carater: string; capacidade: string; capital: string; colateral: string; condicoes: string };
+    analise_financeira: string; capacidade_pagamento: string; comprometimento_renda: string; gap_analise: string;
+    pontos_criticos: string[]; pontos_atencao: string[]; pontos_positivos: string[];
+    analise_documentos: string; historico_operacao: string; parecer_final: string;
+    generated_at?: string;
+  }
+  const [analiseStatus, setAnaliseStatus] = useState<AnaliseStatus>("idle");
+  const [analiseData, setAnaliseData] = useState<AnaliseIA | null>(null);
+  const [analisePdfB64, setAnalisePdfB64] = useState<string | null>(null);
+  const [analiseErro, setAnaliseErro] = useState<string>("");
+
+  // Carrega análise prévia do metadata ao abrir
+  useEffect(() => {
+    if (open && proposal) {
+      const prev = (proposal.metadata as Record<string, unknown>)?.ai_analysis as AnaliseIA | undefined;
+      if (prev) { setAnaliseData(prev); setAnaliseStatus("done"); }
+      else { setAnaliseData(null); setAnaliseStatus("idle"); }
+      setAnalisePdfB64(null);
+    }
+  }, [open, proposal?.id]);
+
+  async function handleGerarAnalise() {
+    if (!proposal) return;
+    setAnaliseStatus("loading");
+    setAnaliseData(null);
+    setAnalisePdfB64(null);
+    try {
+      const res = await fetch("/api/credit-proposals/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ proposal_id: proposal.id }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Erro desconhecido");
+      setAnaliseData(json.analise);
+      setAnalisePdfB64(json.pdf_base64 ?? null);
+      setAnaliseStatus("done");
+      onProposalUpdate?.(proposal.id, {
+        metadata: { ...(proposal.metadata ?? {}), ai_analysis: json.analise } as typeof proposal.metadata,
+      });
+    } catch (e) {
+      console.error("[AnaliseIA]", e);
+      setAnaliseStatus("error");
+      setAnaliseErro(String(e));
+    }
+  }
+
+  function downloadPdf() {
+    if (!analisePdfB64 || !proposal) return;
+    const bytes = Uint8Array.from(atob(analisePdfB64), c => c.charCodeAt(0));
+    const blob = new Blob([bytes], { type: "application/pdf" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = `relatorio-comite-${proposal.code}.pdf`; a.click();
+    URL.revokeObjectURL(url);
+  }
 
   // ── Checklist state ───────────────────────────────────────────────────────
   const IS_DEMO = false;
@@ -1488,6 +1549,7 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
             { id: "recomendacao",  label: "✦ Recomendação" },
             { id: "documentos",    label: "Documentos" },
             { id: "comentarios",   label: "Comentários" },
+            { id: "analise_ia",    label: "🧠 Análise IA" },
           ] as { id: ModalTab; label: string }[]).map(t => (
             <button key={t.id} onClick={() => setModalTab(t.id)}
               className={`px-3 py-2.5 text-xs font-semibold border-b-2 transition-colors ${
@@ -1503,7 +1565,7 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
         {/* Body */}
         <div ref={bodyRef} className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
           {/* ── Seção Detalhes e Recomendação ── */}
-          <div className={modalTab === "documentos" || modalTab === "comentarios" ? "hidden" : "contents"}>
+          <div className={modalTab === "documentos" || modalTab === "comentarios" || modalTab === "analise_ia" ? "hidden" : "contents"}>
 
           {/* ── Banner de Pendências OCR ── visível para todos */}
           {(() => {
@@ -2537,6 +2599,188 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
               <p className="text-[10px] text-muted-foreground italic text-center">Somente a Mesa pode adicionar mensagens.</p>
             )}
           </div>}
+
+          {/* ── Aba Análise IA ── */}
+          {modalTab === "analise_ia" && (
+            <div className="space-y-4">
+              {/* Header com botão gerar */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Brain className="w-4 h-4 text-[#C9A84C]" />
+                  <p className="text-sm font-bold text-white">Análise de Inteligência de Crédito</p>
+                  {analiseData?.generated_at && (
+                    <span className="text-[10px] text-muted-foreground">
+                      · Gerado em {new Date(analiseData.generated_at).toLocaleDateString("pt-BR")}
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  {analiseStatus === "done" && analisePdfB64 && (
+                    <button
+                      onClick={downloadPdf}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#C9A84C]/10 border border-[#C9A84C]/30 text-[#C9A84C] text-xs font-semibold hover:bg-[#C9A84C]/20 transition-colors"
+                    >
+                      <Download className="w-3.5 h-3.5" /> Baixar PDF
+                    </button>
+                  )}
+                  {canChangeStage && (
+                    <button
+                      onClick={handleGerarAnalise}
+                      disabled={analiseStatus === "loading"}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary/15 border border-primary/30 text-primary text-xs font-semibold hover:bg-primary/25 disabled:opacity-50 transition-colors"
+                    >
+                      {analiseStatus === "loading"
+                        ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Analisando...</>
+                        : <><RefreshCw className="w-3.5 h-3.5" /> {analiseData ? "Reanalisar" : "Gerar Análise"}</>}
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {analiseStatus === "idle" && !analiseData && (
+                <div className="flex flex-col items-center justify-center py-12 text-center">
+                  <Brain className="w-10 h-10 text-muted-foreground/40 mb-3" />
+                  <p className="text-sm text-muted-foreground">Nenhuma análise gerada ainda.</p>
+                  <p className="text-xs text-muted-foreground/60 mt-1">Clique em "Gerar Análise" para iniciar.</p>
+                </div>
+              )}
+
+              {analiseStatus === "loading" && (
+                <div className="flex flex-col items-center justify-center py-12 text-center">
+                  <Loader2 className="w-10 h-10 text-primary animate-spin mb-3" />
+                  <p className="text-sm text-white font-semibold">Analisando a proposta...</p>
+                  <p className="text-xs text-muted-foreground mt-1">Consultando documentos, dados e histórico via IA</p>
+                </div>
+              )}
+
+              {analiseStatus === "error" && (
+                <div className="p-4 rounded-xl border border-red-500/30 bg-red-500/10">
+                  <p className="text-sm text-red-400 font-semibold mb-1">Erro ao gerar análise</p>
+                  {analiseErro && <p className="text-xs text-muted-foreground font-mono break-all">{analiseErro}</p>}
+                  <p className="text-xs text-muted-foreground mt-2">Tente novamente ou contate o suporte.</p>
+                </div>
+              )}
+
+              {analiseStatus === "done" && analiseData && (
+                <div className="space-y-4">
+                  {/* Parecer + Risco */}
+                  <div className="flex items-center gap-3">
+                    <span className={`px-3 py-1.5 rounded-lg border text-xs font-bold ${
+                      analiseData.parecer === "FAVORÁVEL"
+                        ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-400"
+                        : analiseData.parecer === "DESFAVORÁVEL"
+                        ? "bg-red-500/15 border-red-500/40 text-red-400"
+                        : "bg-amber-500/15 border-amber-500/40 text-amber-400"
+                    }`}>PARECER: {analiseData.parecer}</span>
+                    <span className={`px-3 py-1.5 rounded-lg border text-xs font-bold ${
+                      analiseData.score_risco === "BAIXO"
+                        ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
+                        : analiseData.score_risco === "ALTO"
+                        ? "bg-red-500/10 border-red-500/30 text-red-400"
+                        : "bg-amber-500/10 border-amber-500/30 text-amber-400"
+                    }`}>RISCO {analiseData.score_risco}</span>
+                  </div>
+
+                  {/* Resumo Executivo */}
+                  <div className="p-4 rounded-xl border border-[#C9A84C]/20 bg-[#C9A84C]/5">
+                    <p className="text-xs font-bold text-[#C9A84C] uppercase tracking-wider mb-2">Resumo Executivo</p>
+                    <p className="text-sm text-foreground leading-relaxed">{analiseData.resumo_executivo}</p>
+                  </div>
+
+                  {/* 5 C's */}
+                  <div className="p-4 rounded-xl border border-border bg-secondary/30">
+                    <p className="text-xs font-bold text-[#C9A84C] uppercase tracking-wider mb-3">Os 5 C's do Crédito</p>
+                    <div className="grid grid-cols-1 gap-2.5">
+                      {([
+                        { key: "carater",    label: "Caráter" },
+                        { key: "capacidade", label: "Capacidade" },
+                        { key: "capital",    label: "Capital" },
+                        { key: "colateral",  label: "Colateral" },
+                        { key: "condicoes",  label: "Condições" },
+                      ] as { key: keyof typeof analiseData.cinco_cs; label: string }[]).map(({ key, label }) => (
+                        <div key={key} className="p-3 rounded-lg bg-card border-l-2 border-l-[#C9A84C]/50 border border-border">
+                          <p className="text-[10px] font-bold text-[#C9A84C] uppercase tracking-wider mb-1">{label}</p>
+                          <p className="text-xs text-foreground leading-relaxed">{analiseData.cinco_cs[key]}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Análise Financeira */}
+                  <div className="p-4 rounded-xl border border-border bg-secondary/30">
+                    <p className="text-xs font-bold text-[#C9A84C] uppercase tracking-wider mb-2">Análise Financeira</p>
+                    <p className="text-xs text-foreground leading-relaxed mb-3">{analiseData.analise_financeira}</p>
+                    <div className="grid grid-cols-1 gap-1.5">
+                      <div className="flex items-center justify-between py-1.5 border-b border-border">
+                        <span className="text-xs text-muted-foreground">Capacidade de Pagamento</span>
+                        <span className="text-xs font-bold text-emerald-400">{analiseData.capacidade_pagamento}</span>
+                      </div>
+                      <div className="flex items-center justify-between py-1.5 border-b border-border">
+                        <span className="text-xs text-muted-foreground">Comprometimento de Renda</span>
+                        <span className="text-xs font-bold text-foreground">{analiseData.comprometimento_renda}</span>
+                      </div>
+                      <div className="py-1.5">
+                        <span className="text-xs text-amber-400">{analiseData.gap_analise}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Pontos */}
+                  <div className="p-4 rounded-xl border border-border bg-secondary/30 space-y-3">
+                    <p className="text-xs font-bold text-[#C9A84C] uppercase tracking-wider">Pontos da Operação</p>
+                    {analiseData.pontos_criticos.length > 0 && (
+                      <div>
+                        <p className="text-[10px] font-bold text-red-400 uppercase mb-1.5">🔴 Críticos</p>
+                        <ul className="space-y-1">{analiseData.pontos_criticos.map((p, i) => (
+                          <li key={i} className="text-xs text-foreground flex gap-1.5"><span className="text-red-400 flex-shrink-0">✕</span>{p}</li>
+                        ))}</ul>
+                      </div>
+                    )}
+                    {analiseData.pontos_atencao.length > 0 && (
+                      <div>
+                        <p className="text-[10px] font-bold text-amber-400 uppercase mb-1.5">🟡 Atenção</p>
+                        <ul className="space-y-1">{analiseData.pontos_atencao.map((p, i) => (
+                          <li key={i} className="text-xs text-foreground flex gap-1.5"><span className="text-amber-400 flex-shrink-0">!</span>{p}</li>
+                        ))}</ul>
+                      </div>
+                    )}
+                    {analiseData.pontos_positivos.length > 0 && (
+                      <div>
+                        <p className="text-[10px] font-bold text-emerald-400 uppercase mb-1.5">🟢 Positivos</p>
+                        <ul className="space-y-1">{analiseData.pontos_positivos.map((p, i) => (
+                          <li key={i} className="text-xs text-foreground flex gap-1.5"><span className="text-emerald-400 flex-shrink-0">✓</span>{p}</li>
+                        ))}</ul>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Análise Documentos */}
+                  <div className="p-4 rounded-xl border border-border bg-secondary/30">
+                    <p className="text-xs font-bold text-[#C9A84C] uppercase tracking-wider mb-2">Análise de Documentos</p>
+                    <p className="text-xs text-foreground leading-relaxed">{analiseData.analise_documentos}</p>
+                  </div>
+
+                  {/* Histórico */}
+                  {analiseData.historico_operacao && (
+                    <div className="p-4 rounded-xl border border-border bg-secondary/30">
+                      <p className="text-xs font-bold text-[#C9A84C] uppercase tracking-wider mb-2">Histórico da Operação</p>
+                      <p className="text-xs text-foreground leading-relaxed">{analiseData.historico_operacao}</p>
+                    </div>
+                  )}
+
+                  {/* Parecer Final */}
+                  <div className={`p-4 rounded-xl border ${
+                    analiseData.parecer === "FAVORÁVEL" ? "border-emerald-500/30 bg-emerald-500/5" :
+                    analiseData.parecer === "DESFAVORÁVEL" ? "border-red-500/30 bg-red-500/5" :
+                    "border-amber-500/30 bg-amber-500/5"
+                  }`}>
+                    <p className="text-xs font-bold uppercase tracking-wider mb-2 text-muted-foreground">Parecer Final ao Comitê</p>
+                    <p className="text-xs text-foreground leading-relaxed">{analiseData.parecer_final}</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Footer */}

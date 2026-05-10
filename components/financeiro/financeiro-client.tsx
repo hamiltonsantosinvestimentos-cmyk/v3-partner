@@ -66,8 +66,9 @@ function TipoComissaoBadge({ tipo }: { tipo: string }) {
     CREDITO: "bg-blue-500/20 text-blue-400 border-blue-500/30",
     MA: "bg-purple-500/20 text-purple-400 border-purple-500/30",
     CONSORCIO: "bg-amber-500/20 text-amber-400 border-amber-500/30",
+    MARKETPLACE: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
   };
-  const labels: Record<string, string> = { CREDITO: "Crédito", MA: "M&A", CONSORCIO: "Consórcio" };
+  const labels: Record<string, string> = { CREDITO: "Crédito", MA: "M&A", CONSORCIO: "Consórcio", MARKETPLACE: "Marketplace" };
   return (
     <span className={`text-[10px] font-semibold border px-2 py-0.5 rounded-full ${map[tipo] ?? ""}`}>
       {labels[tipo] ?? tipo}
@@ -1312,18 +1313,59 @@ function DespesasTab() {
 // ─── TAB: COMISSÕES (VISÃO FINANCEIRO/ADMIN) ──────────────────────────────────
 
 function ComissoesAdminTab() {
-  const [filtroTipo, setFiltroTipo] = useState<"TODOS" | "CREDITO" | "MA" | "CONSORCIO">("TODOS");
+  const [filtroTipo, setFiltroTipo] = useState<"TODOS" | "CREDITO" | "MA" | "CONSORCIO" | "MARKETPLACE">("TODOS");
   const [filtroStatus, setFiltroStatus] = useState<"TODOS" | "A_PAGAR" | "PAGA">("TODOS");
   const [filtroPartner, setFiltroPartner] = useState<string>("TODOS");
   const [buscaPartner, setBuscaPartner] = useState("");
+  const [mktComissoes, setMktComissoes] = useState<Comissao[]>([]);
+
+  useEffect(() => {
+    fetch("/api/marketplace/leads?admin=true")
+      .then(r => r.json())
+      .then(({ leads }) => {
+        if (!leads) return;
+        const statusMap: Record<string, "A_PAGAR" | "PAGA" | "CANCELADA"> = {
+          NEW: "A_PAGAR", IN_PROGRESS: "A_PAGAR", PENDING: "A_PAGAR",
+          CONVERTED: "PAGA", LOST: "CANCELADA",
+        };
+        const converted = (leads as Array<{
+          id: string; created_at: string; status: string;
+          product?: { name: string; partner_commission_percent: number | null; commission_percent: number } | null;
+          partner?: { full_name: string } | null;
+        }>)
+          .map((l): Comissao => ({
+            id: `MKT-${l.id}`,
+            codigo: `MKT-${l.id.slice(0, 8).toUpperCase()}`,
+            partnerId: "",
+            partnerNome: l.partner?.full_name ?? "Partner",
+            operacaoTipo: "MARKETPLACE",
+            operacaoId: l.id,
+            operacaoCodigo: `MKT-${l.id.slice(0, 8).toUpperCase()}`,
+            operacaoDescricao: `Marketplace — ${l.product?.name ?? "Produto"}`,
+            valorOperacao: 0,
+            percentualComissao: l.product?.partner_commission_percent ?? l.product?.commission_percent ?? 0,
+            valorComissao: 0,
+            mes: new Date(l.created_at).getMonth() + 1,
+            ano: new Date(l.created_at).getFullYear(),
+            dataOperacaoFinalizada: l.created_at,
+            status: statusMap[l.status] ?? "A_PAGAR",
+            dataPagamento: null,
+            observacoes: null,
+          }));
+        setMktComissoes(converted);
+      })
+      .catch(() => {});
+  }, []);
+
+  const todasComissoes = useMemo(() => [...DEMO_COMISSOES, ...mktComissoes], [mktComissoes]);
 
   // Lista única de partners presentes nas comissões
   const parceiros = useMemo(() => {
-    const nomes = Array.from(new Set(DEMO_COMISSOES.map(c => c.partnerNome))).sort();
+    const nomes = Array.from(new Set(todasComissoes.map(c => c.partnerNome))).sort();
     return nomes;
-  }, []);
+  }, [todasComissoes]);
 
-  const filtradas = DEMO_COMISSOES.filter(c =>
+  const filtradas = todasComissoes.filter(c =>
     (filtroTipo === "TODOS" || c.operacaoTipo === filtroTipo) &&
     (filtroStatus === "TODOS" || c.status === filtroStatus) &&
     (filtroPartner === "TODOS" || c.partnerNome === filtroPartner) &&
@@ -1342,8 +1384,8 @@ function ComissoesAdminTab() {
     })(),
   } : null;
 
-  const totalAPagar = DEMO_COMISSOES.filter(c => c.status === "A_PAGAR").reduce((s, c) => s + c.valorComissao, 0);
-  const totalPago = DEMO_COMISSOES.filter(c => c.status === "PAGA").reduce((s, c) => s + c.valorComissao, 0);
+  const totalAPagar = todasComissoes.filter(c => c.status === "A_PAGAR").reduce((s, c) => s + c.valorComissao, 0);
+  const totalPago = todasComissoes.filter(c => c.status === "PAGA").reduce((s, c) => s + c.valorComissao, 0);
 
   return (
     <div className="space-y-4">
@@ -1351,17 +1393,17 @@ function ComissoesAdminTab() {
         <div className="bg-[#091221] border border-[#122036] rounded-xl p-4">
           <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Total a Pagar</p>
           <p className="text-xl font-bold text-amber-400">{formatMoeda(totalAPagar)}</p>
-          <p className="text-xs text-muted-foreground mt-1">{DEMO_COMISSOES.filter(c => c.status === "A_PAGAR").length} comissões pendentes</p>
+          <p className="text-xs text-muted-foreground mt-1">{todasComissoes.filter(c => c.status === "A_PAGAR").length} comissões pendentes</p>
         </div>
         <div className="bg-[#091221] border border-[#122036] rounded-xl p-4">
           <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Total Pago</p>
           <p className="text-xl font-bold text-emerald-400">{formatMoeda(totalPago)}</p>
-          <p className="text-xs text-muted-foreground mt-1">{DEMO_COMISSOES.filter(c => c.status === "PAGA").length} comissões liquidadas</p>
+          <p className="text-xs text-muted-foreground mt-1">{todasComissoes.filter(c => c.status === "PAGA").length} comissões liquidadas</p>
         </div>
         <div className="bg-[#091221] border border-[#122036] rounded-xl p-4">
           <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Total Geral</p>
           <p className="text-xl font-bold text-[#C9A84C]">{formatMoeda(totalAPagar + totalPago)}</p>
-          <p className="text-xs text-muted-foreground mt-1">{DEMO_COMISSOES.length} operações com comissão</p>
+          <p className="text-xs text-muted-foreground mt-1">{todasComissoes.length} operações com comissão{mktComissoes.length > 0 ? ` · ${mktComissoes.length} marketplace` : ""}</p>
         </div>
       </div>
 
@@ -1411,8 +1453,8 @@ function ComissoesAdminTab() {
       <div className="flex items-center gap-3 flex-wrap justify-between">
         <div className="flex items-center gap-3 flex-wrap">
         <div className="flex bg-secondary rounded-lg p-0.5">
-          {(["TODOS", "CREDITO", "MA", "CONSORCIO"] as const).map(t => {
-            const labels = { TODOS: "Todos", CREDITO: "Crédito", MA: "M&A", CONSORCIO: "Consórcio" };
+          {(["TODOS", "CREDITO", "MA", "CONSORCIO", "MARKETPLACE"] as const).map(t => {
+            const labels = { TODOS: "Todos", CREDITO: "Crédito", MA: "M&A", CONSORCIO: "Consórcio", MARKETPLACE: "Marketplace" };
             return (
               <button key={t} onClick={() => setFiltroTipo(t)} className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${filtroTipo === t ? "bg-[#C9A84C] text-white" : "text-muted-foreground hover:text-foreground"}`}>
                 {labels[t]}
@@ -1469,9 +1511,9 @@ function ComissoesAdminTab() {
                     <td className="px-4 py-3 font-medium text-white whitespace-nowrap">{c.partnerNome}</td>
                     <td className="px-4 py-3 text-muted-foreground max-w-[180px] truncate" title={c.operacaoDescricao}>{c.operacaoDescricao}</td>
                     <td className="px-4 py-3"><TipoComissaoBadge tipo={c.operacaoTipo} /></td>
-                    <td className="px-4 py-3 text-white">{formatMoeda(c.valorOperacao)}</td>
+                    <td className="px-4 py-3 text-white">{c.operacaoTipo === "MARKETPLACE" ? <span className="text-muted-foreground">—</span> : formatMoeda(c.valorOperacao)}</td>
                     <td className="px-4 py-3 text-[#C9A84C] font-semibold">{c.percentualComissao}%</td>
-                    <td className="px-4 py-3 font-bold text-white">{formatMoeda(c.valorComissao)}</td>
+                    <td className="px-4 py-3 font-bold text-white">{c.operacaoTipo === "MARKETPLACE" ? <span className="text-muted-foreground text-xs">a calcular</span> : formatMoeda(c.valorComissao)}</td>
                     <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">{new Date(c.dataOperacaoFinalizada).toLocaleDateString("pt-BR")}</td>
                     <td className="px-4 py-3"><StatusBadge status={c.status} /></td>
                   </tr>

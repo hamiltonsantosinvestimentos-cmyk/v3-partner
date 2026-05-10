@@ -48,7 +48,7 @@ export interface Comissao {
   codigo: string;
   partnerId: string;
   partnerNome: string;
-  operacaoTipo: "CREDITO" | "MA" | "CONSORCIO";
+  operacaoTipo: "CREDITO" | "MA" | "CONSORCIO" | "MARKETPLACE";
   operacaoId: string;
   operacaoCodigo: string;
   operacaoDescricao: string;
