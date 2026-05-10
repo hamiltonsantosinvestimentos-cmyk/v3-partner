@@ -1324,12 +1324,15 @@ function ComissoesAdminTab() {
       .then(r => r.json())
       .then(({ leads }) => {
         if (!leads) return;
+        const statusMap: Record<string, "A_PAGAR" | "PAGA" | "CANCELADA"> = {
+          NEW: "A_PAGAR", IN_PROGRESS: "A_PAGAR", PENDING: "A_PAGAR",
+          CONVERTED: "PAGA", LOST: "CANCELADA",
+        };
         const converted = (leads as Array<{
           id: string; created_at: string; status: string;
           product?: { name: string; partner_commission_percent: number | null; commission_percent: number } | null;
           partner?: { full_name: string } | null;
         }>)
-          .filter(l => l.status === "CONVERTED")
           .map((l): Comissao => ({
             id: `MKT-${l.id}`,
             codigo: `MKT-${l.id.slice(0, 8).toUpperCase()}`,
@@ -1345,7 +1348,7 @@ function ComissoesAdminTab() {
             mes: new Date(l.created_at).getMonth() + 1,
             ano: new Date(l.created_at).getFullYear(),
             dataOperacaoFinalizada: l.created_at,
-            status: "A_PAGAR",
+            status: statusMap[l.status] ?? "A_PAGAR",
             dataPagamento: null,
             observacoes: null,
           }));
