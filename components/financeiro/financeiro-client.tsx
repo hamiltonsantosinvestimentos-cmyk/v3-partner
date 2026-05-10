@@ -1508,9 +1508,9 @@ function ComissoesAdminTab() {
                     <td className="px-4 py-3 font-medium text-white whitespace-nowrap">{c.partnerNome}</td>
                     <td className="px-4 py-3 text-muted-foreground max-w-[180px] truncate" title={c.operacaoDescricao}>{c.operacaoDescricao}</td>
                     <td className="px-4 py-3"><TipoComissaoBadge tipo={c.operacaoTipo} /></td>
-                    <td className="px-4 py-3 text-white">{formatMoeda(c.valorOperacao)}</td>
+                    <td className="px-4 py-3 text-white">{c.operacaoTipo === "MARKETPLACE" ? <span className="text-muted-foreground">—</span> : formatMoeda(c.valorOperacao)}</td>
                     <td className="px-4 py-3 text-[#C9A84C] font-semibold">{c.percentualComissao}%</td>
-                    <td className="px-4 py-3 font-bold text-white">{formatMoeda(c.valorComissao)}</td>
+                    <td className="px-4 py-3 font-bold text-white">{c.operacaoTipo === "MARKETPLACE" ? <span className="text-muted-foreground text-xs">a calcular</span> : formatMoeda(c.valorComissao)}</td>
                     <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">{new Date(c.dataOperacaoFinalizada).toLocaleDateString("pt-BR")}</td>
                     <td className="px-4 py-3"><StatusBadge status={c.status} /></td>
                   </tr>

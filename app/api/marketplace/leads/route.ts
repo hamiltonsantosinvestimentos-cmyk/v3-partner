@@ -129,7 +129,7 @@ export async function GET(req: NextRequest) {
 
   if (isAdmin) {
     const { data: caller } = await svc.from("profiles").select("role").eq("id", user.id).single();
-    if (!["ADMIN", "GESTAO"].includes((caller as { role: string } | null)?.role ?? "")) {
+    if (!["ADMIN", "GESTAO", "FINANCEIRO"].includes((caller as { role: string } | null)?.role ?? "")) {
       return NextResponse.json({ error: "Acesso restrito" }, { status: 403 });
     }
   }
