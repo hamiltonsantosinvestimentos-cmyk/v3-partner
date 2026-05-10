@@ -10,8 +10,23 @@ export async function GET(req: NextRequest) {
 
   const { searchParams } = new URL(req.url);
   const squad_id = searchParams.get("squad_id");
+  const session_id = searchParams.get("session_id");
 
   const svc = sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+
+  // Busca sessao individual com historico de mensagens
+  if (session_id) {
+    const { data, error } = await svc
+      .from("agent_sessions")
+      .select("id, squad_id, title, messages, created_at, updated_at")
+      .eq("id", session_id)
+      .eq("user_id", user.id)
+      .single();
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ session: data });
+  }
+
+  // Lista sessoes do usuario (sem mensagens para economizar bandwidth)
   let query = svc
     .from("agent_sessions")
     .select("id, squad_id, title, created_at, updated_at")

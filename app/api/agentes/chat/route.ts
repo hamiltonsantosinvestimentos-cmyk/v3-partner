@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { SQUADS } from "@/lib/squads";
+import type Anthropic from "@anthropic-ai/sdk";
 
 interface Message { role: "user" | "assistant"; content: string; ts?: string; }
 
@@ -74,7 +75,7 @@ async function runWithTools(
 ): Promise<string> {
   const { default: Anthropic } = await import("@anthropic-ai/sdk");
 
-  const tools: import("@anthropic-ai/sdk").Tool[] = [{
+  const tools: Anthropic.Messages.Tool[] = [{
     name: "web_search",
     description: "Busca informações atuais na web sobre empresas, mandatários, preços, players de mercado e oportunidades de negócios.",
     input_schema: {

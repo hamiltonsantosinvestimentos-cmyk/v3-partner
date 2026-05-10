@@ -69,10 +69,11 @@ export function AgentesClient({ squads, userName }: Props) {
   // Load session history
   async function loadSession(sess: Session) {
     try {
-      const res = await fetch(`/api/agentes/sessions?squad_id=${sess.squad_id}`);
+      const res = await fetch(`/api/agentes/sessions?session_id=${sess.id}`);
       const data = await res.json();
-      const full = data.sessions?.find((s: Session) => s.id === sess.id);
-      // Full session data would need a separate endpoint — for now just switch
+      if (data.session?.messages) {
+        setMessages(data.session.messages as Message[]);
+      }
       setSessionId(sess.id);
       setSidebarOpen(false);
     } catch { /* silencioso */ }
