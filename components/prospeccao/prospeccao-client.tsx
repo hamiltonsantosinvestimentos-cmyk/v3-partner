@@ -5,7 +5,7 @@ import {
   Plus, X, ChevronRight, ChevronLeft, Link2, MessageCircle, Mail,
   Copy, Check, User, MapPin, Phone, Building2, Search,
   Loader2, Trash2, Pencil, RefreshCw, AlertCircle, ExternalLink,
-  Crown, Users, Target, TrendingUp,
+  Crown, Users, Target, TrendingUp, PhoneCall, Send, Clock,
 } from "lucide-react";
 
 const GOLD = "#C9A84C";
@@ -310,6 +310,26 @@ function ProspectModal({
   );
 }
 
+// ─── Tipos Follow-up ──────────────────────────────────────────────────────────
+
+interface Followup {
+  id: string;
+  tipo: string;
+  notas?: string;
+  created_at: string;
+  responsavel?: { full_name: string } | null;
+}
+
+const FOLLOWUP_TIPOS = [
+  { value: "ligacao",   label: "Ligação",  icon: PhoneCall,     color: "#60A5FA" },
+  { value: "whatsapp",  label: "WhatsApp", icon: MessageCircle, color: "#25D366" },
+  { value: "email",     label: "E-mail",   icon: Mail,          color: GOLD },
+];
+
+function tipoFollowup(tipo: string) {
+  return FOLLOWUP_TIPOS.find(t => t.value === tipo) ?? FOLLOWUP_TIPOS[0];
+}
+
 // ─── Modal de Detalhe do Prospect ────────────────────────────────────────────
 
 function DetalheModal({
@@ -323,7 +343,41 @@ function DetalheModal({
   isAdmin: boolean;
 }) {
   const etapa = ETAPAS.find(e => e.id === prospect.etapa);
-  const fmt = (d: string) => new Date(d).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
+  const fmt = (d: string) => new Date(d).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  const fmtDate = (d: string) => new Date(d).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
+
+  const [followups, setFollowups] = useState<Followup[]>([]);
+  const [loadingFU, setLoadingFU] = useState(true);
+  const [novoTipo, setNovoTipo] = useState("ligacao");
+  const [novoNota, setNovoNota] = useState("");
+  const [salvando, setSalvando] = useState(false);
+
+  useEffect(() => {
+    fetch(`/api/prospeccao/${prospect.id}/followups`)
+      .then(r => r.json())
+      .then(j => setFollowups(j.followups ?? []))
+      .finally(() => setLoadingFU(false));
+  }, [prospect.id]);
+
+  const salvarFollowup = async () => {
+    if (!novoNota.trim()) return;
+    setSalvando(true);
+    const r = await fetch(`/api/prospeccao/${prospect.id}/followups`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tipo: novoTipo, notas: novoNota.trim() }),
+    }).then(r => r.json());
+    if (r.followup) {
+      setFollowups(f => [r.followup, ...f]);
+      setNovoNota("");
+    }
+    setSalvando(false);
+  };
+
+  const deletarFollowup = async (fid: string) => {
+    await fetch(`/api/prospeccao/${prospect.id}/followups?followup_id=${fid}`, { method: "DELETE" });
+    setFollowups(f => f.filter(x => x.id !== fid));
+  };
 
   const rows: Array<{ label: string; value: string | null | undefined }> = [
     { label: "Nome / Razão Social", value: prospect.nome },
@@ -338,14 +392,14 @@ function DetalheModal({
     { label: "Responsável", value: prospect.responsavel_nome },
     { label: "Notas", value: prospect.notas },
     { label: "Motivo de perda", value: prospect.motivo_perda },
-    { label: "Link gerado em", value: prospect.link_gerado_em ? fmt(prospect.link_gerado_em) : null },
-    { label: "Convertido em", value: prospect.convertido_em ? fmt(prospect.convertido_em) : null },
-    { label: "Cadastrado em", value: fmt(prospect.created_at) },
+    { label: "Link gerado em", value: prospect.link_gerado_em ? fmtDate(prospect.link_gerado_em) : null },
+    { label: "Convertido em", value: prospect.convertido_em ? fmtDate(prospect.convertido_em) : null },
+    { label: "Cadastrado em", value: fmtDate(prospect.created_at) },
   ].filter(r => r.value);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "#00000090" }}>
-      <div className="w-full max-w-lg rounded-2xl border border-white/10 overflow-hidden flex flex-col max-h-[90vh]" style={{ background: "#0F1E35" }}>
+      <div className="w-full max-w-lg rounded-2xl border border-white/10 overflow-hidden flex flex-col max-h-[92vh]" style={{ background: "#0F1E35" }}>
 
         {/* Header */}
         <div className="flex items-start justify-between px-5 py-4 border-b border-white/10 shrink-0">
@@ -361,13 +415,12 @@ function DetalheModal({
         </div>
 
         {/* Conteúdo */}
-        <div className="overflow-y-auto p-5 space-y-4 flex-1">
+        <div className="overflow-y-auto p-5 space-y-5 flex-1">
+
+          {/* Dados cadastrais */}
           <div className="rounded-xl border border-white/5 overflow-hidden" style={{ background: NAVY_CARD }}>
             {rows.map((r, i) => (
-              <div
-                key={r.label}
-                className={`flex gap-3 px-4 py-2.5 ${i < rows.length - 1 ? "border-b border-white/5" : ""}`}
-              >
+              <div key={r.label} className={`flex gap-3 px-4 py-2.5 ${i < rows.length - 1 ? "border-b border-white/5" : ""}`}>
                 <span className="text-[11px] font-semibold shrink-0 w-36" style={{ color: MUTED }}>{r.label}</span>
                 <span className="text-[12px] text-white break-words">{r.value}</span>
               </div>
@@ -393,6 +446,99 @@ function DetalheModal({
               </div>
             </div>
           )}
+
+          {/* ── Follow-ups ── */}
+          <div className="space-y-3">
+            <p className="text-xs font-bold uppercase tracking-widest" style={{ color: GOLD }}>Follow-up</p>
+
+            {/* Novo follow-up */}
+            <div className="rounded-xl border border-white/10 p-3 space-y-3" style={{ background: NAVY_CARD }}>
+              {/* Tipo */}
+              <div className="flex gap-2">
+                {FOLLOWUP_TIPOS.map(t => (
+                  <button
+                    key={t.value}
+                    onClick={() => setNovoTipo(t.value)}
+                    className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-semibold border transition-all"
+                    style={{
+                      borderColor: novoTipo === t.value ? t.color : "rgba(255,255,255,0.08)",
+                      background: novoTipo === t.value ? `${t.color}20` : "transparent",
+                      color: novoTipo === t.value ? t.color : MUTED,
+                    }}
+                  >
+                    <t.icon className="w-3.5 h-3.5" /> {t.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Nota */}
+              <textarea
+                value={novoNota}
+                onChange={e => setNovoNota(e.target.value)}
+                rows={2}
+                placeholder="Descreva o contato realizado, próximos passos, observações…"
+                className="w-full rounded-xl px-3 py-2 text-sm text-white border border-white/10 focus:border-yellow-500/40 focus:outline-none transition-colors resize-none"
+                style={{ background: "#0F1E35" }}
+                onKeyDown={e => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) salvarFollowup(); }}
+              />
+
+              <button
+                onClick={salvarFollowup}
+                disabled={salvando || !novoNota.trim()}
+                className="w-full py-2 rounded-xl text-xs font-bold text-black flex items-center justify-center gap-1.5 disabled:opacity-40 hover:opacity-90 transition-opacity"
+                style={{ background: GOLD }}
+              >
+                {salvando ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                Registrar Follow-up
+              </button>
+            </div>
+
+            {/* Histórico */}
+            {loadingFU && (
+              <div className="flex items-center gap-2 text-xs" style={{ color: MUTED }}>
+                <Loader2 className="w-3 h-3 animate-spin" style={{ color: GOLD }} /> Carregando histórico…
+              </div>
+            )}
+
+            {!loadingFU && followups.length === 0 && (
+              <p className="text-xs text-center py-2" style={{ color: MUTED }}>Nenhum follow-up registrado ainda</p>
+            )}
+
+            {!loadingFU && followups.map(fu => {
+              const t = tipoFollowup(fu.tipo);
+              const Icon = t.icon;
+              return (
+                <div key={fu.id} className="rounded-xl border border-white/5 p-3 flex gap-3" style={{ background: NAVY_CARD }}>
+                  <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5" style={{ background: `${t.color}20` }}>
+                    <Icon className="w-3.5 h-3.5" style={{ color: t.color }} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: t.color }}>{t.label}</span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] flex items-center gap-0.5" style={{ color: MUTED }}>
+                          <Clock className="w-2.5 h-2.5" />
+                          {fmt(fu.created_at)}
+                        </span>
+                        <button
+                          onClick={() => deletarFollowup(fu.id)}
+                          className="p-0.5 hover:text-red-400 transition-colors"
+                        >
+                          <Trash2 className="w-3 h-3" style={{ color: MUTED }} />
+                        </button>
+                      </div>
+                    </div>
+                    {fu.notas && <p className="text-xs text-white leading-relaxed">{fu.notas}</p>}
+                    {fu.responsavel && (
+                      <p className="text-[10px] mt-1 flex items-center gap-1" style={{ color: MUTED }}>
+                        <User className="w-2.5 h-2.5" /> {(fu.responsavel as { full_name: string }).full_name}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
 
         {/* Ações */}
