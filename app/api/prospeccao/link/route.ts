@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
   }
 
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://v3-partner.vercel.app";
-  const url = `${baseUrl}/cadastro-partner?ref=${token}`;
+  const url = `${baseUrl}/indicacao?ref=${token}`;
 
   // Mensagem WhatsApp pré-formatada
   const nome = (lead as { nome: string }).nome;

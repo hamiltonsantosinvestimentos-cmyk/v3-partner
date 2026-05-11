@@ -435,7 +435,7 @@ function LinkGeralModal({ onClose }: { onClose: () => void }) {
   const baseUrl = typeof window !== "undefined"
     ? window.location.origin
     : "https://v3-partner.vercel.app";
-  const url = `${baseUrl}/cadastro-partner`;
+  const url = `${baseUrl}/indicacao`;
 
   const [copied, setCopied] = useState(false);
 
