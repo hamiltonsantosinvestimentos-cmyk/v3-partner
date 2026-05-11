@@ -11,6 +11,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ExportButton } from "@/components/financeiro/export-button";
 import { Badge } from "@/components/ui/badge";
+import { MetricasClient } from "@/components/financeiro/metricas-client";
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Legend,
@@ -24,7 +25,7 @@ import {
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
-type Tab = "visao-geral" | "folha" | "despesas" | "comissoes" | "dre" | "fluxo" | "impostos" | "assinaturas";
+type Tab = "metricas" | "visao-geral" | "folha" | "despesas" | "comissoes" | "dre" | "fluxo" | "impostos" | "assinaturas";
 
 interface Props {
   role: string;
@@ -2728,6 +2729,7 @@ function AssinaturasTab() {
 // ─── COMPONENTE PRINCIPAL ─────────────────────────────────────────────────────
 
 const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
+  { id: "metricas", label: "Métricas", icon: TrendingUp },
   { id: "visao-geral", label: "Visão Geral", icon: BarChart3 },
   { id: "folha", label: "Folha de Pagamento", icon: Users },
   { id: "despesas", label: "Despesas", icon: FileText },
@@ -2743,6 +2745,7 @@ export function FinanceiroClient({ role, userName }: Props) {
 
   const renderTab = () => {
     switch (activeTab) {
+      case "metricas": return <MetricasClient />;
       case "visao-geral": return <VisaoGeralTab />;
       case "folha": return <FolhaTab />;
       case "despesas": return <DespesasTab />;
