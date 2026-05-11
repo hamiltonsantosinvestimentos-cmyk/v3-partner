@@ -442,26 +442,28 @@ function ProspectCard({
 
   return (
     <div
-      className="rounded-xl border border-white/5 p-3 space-y-2 hover:border-white/10 transition-colors cursor-default"
+      className="rounded-xl border border-white/5 p-3 space-y-2 hover:border-white/10 transition-colors cursor-pointer"
       style={{ background: "#0F1E35" }}
+      onClick={() => onDetalhe(prospect)}
     >
       {/* Header */}
       <div className="flex items-start justify-between gap-2">
         <button
-          onClick={() => onDetalhe(prospect)}
-          className="text-sm font-semibold text-white leading-tight text-left hover:underline decoration-yellow-500/50 underline-offset-2 transition-all"
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onDetalhe(prospect); }}
+          className="text-sm font-semibold text-white leading-tight text-left cursor-pointer hover:text-yellow-400 transition-colors"
         >
           {prospect.nome}
         </button>
         <div className="flex items-center gap-1 shrink-0">
-          <button onClick={() => onEdit(prospect)} className="p-1 rounded-lg hover:bg-white/10 transition-colors" title="Editar">
+          <button onClick={(e) => { e.stopPropagation(); onEdit(prospect); }} className="p-1 rounded-lg hover:bg-white/10 transition-colors" title="Editar">
             <Pencil className="w-3 h-3" style={{ color: MUTED }} />
           </button>
-          <button onClick={() => onLink(prospect)} className="p-1 rounded-lg hover:bg-white/10 transition-colors" title="Gerar Link">
+          <button onClick={(e) => { e.stopPropagation(); onLink(prospect); }} className="p-1 rounded-lg hover:bg-white/10 transition-colors" title="Gerar Link">
             <Link2 className="w-3 h-3" style={{ color: GOLD }} />
           </button>
           {isAdmin && (
-            <button onClick={() => onDelete(prospect.id)} className="p-1 rounded-lg hover:bg-red-500/10 transition-colors" title="Excluir">
+            <button onClick={(e) => { e.stopPropagation(); onDelete(prospect.id); }} className="p-1 rounded-lg hover:bg-red-500/10 transition-colors" title="Excluir">
               <Trash2 className="w-3 h-3 text-red-400" />
             </button>
           )}
@@ -520,24 +522,20 @@ function ProspectCard({
       {podeMover && (
         <div className="flex items-center justify-between pt-1 border-t border-white/5">
           <button
-            onClick={() => {
-              if (etapaAtual > 0) onMove(prospect.id, ETAPAS[etapaAtual - 1].id);
-            }}
+            onClick={(e) => { e.stopPropagation(); if (etapaAtual > 0) onMove(prospect.id, ETAPAS[etapaAtual - 1].id); }}
             disabled={etapaAtual === 0}
             className="p-1 rounded-lg hover:bg-white/10 transition-colors disabled:opacity-20"
           >
             <ChevronLeft className="w-3 h-3" style={{ color: MUTED }} />
           </button>
           <button
-            onClick={() => onMove(prospect.id, "perdido")}
+            onClick={(e) => { e.stopPropagation(); onMove(prospect.id, "perdido"); }}
             className="text-[9px] px-2 py-0.5 rounded-full border border-red-500/30 text-red-400 hover:bg-red-500/10 transition-colors"
           >
             Perdido
           </button>
           <button
-            onClick={() => {
-              if (etapaAtual < ETAPAS.length - 1) onMove(prospect.id, ETAPAS[etapaAtual + 1].id);
-            }}
+            onClick={(e) => { e.stopPropagation(); if (etapaAtual < ETAPAS.length - 1) onMove(prospect.id, ETAPAS[etapaAtual + 1].id); }}
             disabled={etapaAtual === ETAPAS.length - 1}
             className="p-1 rounded-lg hover:bg-white/10 transition-colors disabled:opacity-20"
           >
