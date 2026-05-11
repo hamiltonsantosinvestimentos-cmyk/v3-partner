@@ -2,24 +2,23 @@ import { NextRequest, NextResponse } from "next/server";
 
 const GITHUB_RAW = "https://raw.githubusercontent.com/Jlnetto35/relat-rios-de-intelig-ncia-de-mercado-v3-M-A/main";
 
-// Allowed files — validated allowlist
-const ALLOWED_PATHS = new Set([
-  "v3-report-esmeraldas-mg-2026-04-19.html",
-  "v3-report-frigorificos-nordeste-ba-2026-04-19.html",
-  "v3-report-mineracao-terras-raras-ouro-brasil-2026-04-25.html",
-  "historico/v3-report-2026-04-11.html",
-  "historico/v3-report-2026-04-24.html",
-  "historico/v3-report-2026-05-01.html",
-  "historico/v3-report-2026-05-06.html",
-  "historico/v3-report-2026-05-08.html",
-]);
+// Validacao por padrao — sem allowlist manual que precisa ser atualizado todo dia
+// Permite: historico/v3-report-YYYY-MM-DD.html (gerados pelo CCR diariamente)
+//          v3-report-*.html (relatorios setoriais na raiz)
+// Bloqueia: path traversal, extensoes nao-html, qualquer outro padrao
+function isAllowed(file: string): boolean {
+  if (!file || file.includes("..") || file.includes("//")) return false;
+  const dailyReport = /^historico\/v3-report-\d{4}-\d{2}-\d{2}\.html$/;
+  const sectorReport = /^v3-report-[a-z0-9-]+-\d{4}-\d{2}-\d{2}\.html$/;
+  const legacyReport = /^[a-z0-9-]+\.html$/;
+  return dailyReport.test(file) || sectorReport.test(file) || legacyReport.test(file);
+}
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const file = searchParams.get("file") ?? "";
 
-  // Only allow known files
-  if (!ALLOWED_PATHS.has(file)) {
+  if (!isAllowed(file)) {
     return new NextResponse(`Relatório não encontrado: ${file}`, { status: 404 });
   }
 
