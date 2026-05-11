@@ -310,16 +310,131 @@ function ProspectModal({
   );
 }
 
+// ─── Modal de Detalhe do Prospect ────────────────────────────────────────────
+
+function DetalheModal({
+  prospect, onClose, onEdit, onLink, isAdmin, onDelete,
+}: {
+  prospect: Prospect;
+  onClose: () => void;
+  onEdit: (p: Prospect) => void;
+  onLink: (p: Prospect) => void;
+  onDelete: (id: string) => void;
+  isAdmin: boolean;
+}) {
+  const etapa = ETAPAS.find(e => e.id === prospect.etapa);
+  const fmt = (d: string) => new Date(d).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
+
+  const rows: Array<{ label: string; value: string | null | undefined }> = [
+    { label: "Nome / Razão Social", value: prospect.nome },
+    { label: "CPF / CNPJ", value: prospect.documento },
+    { label: "E-mail", value: prospect.email },
+    { label: "Telefone", value: prospect.telefone },
+    { label: "Cidade", value: prospect.cidade },
+    { label: "Estado", value: prospect.estado },
+    { label: "Origem", value: origemLabel(prospect.origem) },
+    { label: "Indicado por (partner)", value: prospect.indicado_por_partner?.full_name },
+    { label: "Indicado por (nome livre)", value: prospect.indicado_por_nome },
+    { label: "Responsável", value: prospect.responsavel_nome },
+    { label: "Notas", value: prospect.notas },
+    { label: "Motivo de perda", value: prospect.motivo_perda },
+    { label: "Link gerado em", value: prospect.link_gerado_em ? fmt(prospect.link_gerado_em) : null },
+    { label: "Convertido em", value: prospect.convertido_em ? fmt(prospect.convertido_em) : null },
+    { label: "Cadastrado em", value: fmt(prospect.created_at) },
+  ].filter(r => r.value);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "#00000090" }}>
+      <div className="w-full max-w-lg rounded-2xl border border-white/10 overflow-hidden flex flex-col max-h-[90vh]" style={{ background: "#0F1E35" }}>
+
+        {/* Header */}
+        <div className="flex items-start justify-between px-5 py-4 border-b border-white/10 shrink-0">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: etapa?.color ?? MUTED }}>
+              {etapa?.label ?? prospect.etapa}
+            </p>
+            <h3 className="text-base font-bold text-white">{prospect.nome}</h3>
+          </div>
+          <button onClick={onClose} className="text-muted-foreground hover:text-white transition-colors mt-0.5">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Conteúdo */}
+        <div className="overflow-y-auto p-5 space-y-4 flex-1">
+          <div className="rounded-xl border border-white/5 overflow-hidden" style={{ background: NAVY_CARD }}>
+            {rows.map((r, i) => (
+              <div
+                key={r.label}
+                className={`flex gap-3 px-4 py-2.5 ${i < rows.length - 1 ? "border-b border-white/5" : ""}`}
+              >
+                <span className="text-[11px] font-semibold shrink-0 w-36" style={{ color: MUTED }}>{r.label}</span>
+                <span className="text-[12px] text-white break-words">{r.value}</span>
+              </div>
+            ))}
+          </div>
+
+          {prospect.link_token && (
+            <div className="rounded-xl border border-emerald-500/20 px-4 py-2.5 flex items-center gap-2" style={{ background: "#34D39910" }}>
+              <Link2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+              <div>
+                <p className="text-[11px] font-semibold text-emerald-400">Link personalizado ativo</p>
+                <p className="text-[10px]" style={{ color: MUTED }}>Token: {prospect.link_token}</p>
+              </div>
+            </div>
+          )}
+
+          {prospect.indicado_por_partner && (
+            <div className="rounded-xl border px-4 py-2.5 flex items-center gap-2" style={{ background: `${GOLD}10`, borderColor: `${GOLD}30` }}>
+              <Crown className="w-3.5 h-3.5 shrink-0" style={{ color: GOLD }} />
+              <div>
+                <p className="text-[11px] font-semibold" style={{ color: GOLD }}>Indicação de Partner</p>
+                <p className="text-[10px]" style={{ color: MUTED }}>{prospect.indicado_por_partner.full_name} — comissão a ser gerada na conversão</p>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Ações */}
+        <div className="flex gap-2 px-5 pb-5 pt-3 border-t border-white/5 shrink-0">
+          <button
+            onClick={() => { onClose(); onEdit(prospect); }}
+            className="flex-1 py-2 rounded-xl text-sm font-semibold border border-white/10 text-white hover:border-white/20 transition-colors flex items-center justify-center gap-1.5"
+          >
+            <Pencil className="w-3.5 h-3.5" /> Editar
+          </button>
+          <button
+            onClick={() => { onClose(); onLink(prospect); }}
+            className="flex-1 py-2 rounded-xl text-sm font-semibold flex items-center justify-center gap-1.5 border transition-colors"
+            style={{ borderColor: `${GOLD}40`, color: GOLD }}
+          >
+            <Link2 className="w-3.5 h-3.5" /> Gerar Link
+          </button>
+          {isAdmin && (
+            <button
+              onClick={() => { onDelete(prospect.id); onClose(); }}
+              className="py-2 px-3 rounded-xl text-sm border border-red-500/20 text-red-400 hover:bg-red-500/10 transition-colors"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Card do Kanban ──────────────────────────────────────────────────────────
 
 function ProspectCard({
-  prospect, onMove, onEdit, onLink, onDelete, isAdmin,
+  prospect, onMove, onEdit, onLink, onDelete, onDetalhe, isAdmin,
 }: {
   prospect: Prospect;
   onMove: (id: string, etapa: Etapa) => void;
   onEdit: (p: Prospect) => void;
   onLink: (p: Prospect) => void;
   onDelete: (id: string) => void;
+  onDetalhe: (p: Prospect) => void;
   isAdmin: boolean;
 }) {
   const etapaAtual = ETAPAS.findIndex(e => e.id === prospect.etapa);
@@ -332,7 +447,12 @@ function ProspectCard({
     >
       {/* Header */}
       <div className="flex items-start justify-between gap-2">
-        <p className="text-sm font-semibold text-white leading-tight">{prospect.nome}</p>
+        <button
+          onClick={() => onDetalhe(prospect)}
+          className="text-sm font-semibold text-white leading-tight text-left hover:underline decoration-yellow-500/50 underline-offset-2 transition-all"
+        >
+          {prospect.nome}
+        </button>
         <div className="flex items-center gap-1 shrink-0">
           <button onClick={() => onEdit(prospect)} className="p-1 rounded-lg hover:bg-white/10 transition-colors" title="Editar">
             <Pencil className="w-3 h-3" style={{ color: MUTED }} />
@@ -621,6 +741,7 @@ export function ProspeccaoClient({ role }: { role: string }) {
   const [editing, setEditing] = useState<Prospect | null>(null);
   const [linking, setLinking] = useState<Prospect | null>(null);
   const [showLinkGeral, setShowLinkGeral] = useState(false);
+  const [detalhe, setDetalhe] = useState<Prospect | null>(null);
   const isAdmin = role === "ADMIN";
 
   const load = () => {
@@ -822,6 +943,7 @@ export function ProspeccaoClient({ role }: { role: string }) {
                       onEdit={p => { setEditing(p); setShowModal(true); }}
                       onLink={setLinking}
                       onDelete={handleDelete}
+                      onDetalhe={setDetalhe}
                       isAdmin={isAdmin}
                     />
                   ))}
@@ -891,6 +1013,17 @@ export function ProspeccaoClient({ role }: { role: string }) {
 
       {showLinkGeral && (
         <LinkGeralModal onClose={() => setShowLinkGeral(false)} />
+      )}
+
+      {detalhe && (
+        <DetalheModal
+          prospect={detalhe}
+          onClose={() => setDetalhe(null)}
+          onEdit={p => { setDetalhe(null); setEditing(p); setShowModal(true); }}
+          onLink={p => { setDetalhe(null); setLinking(p); }}
+          onDelete={id => { handleDelete(id); setDetalhe(null); }}
+          isAdmin={isAdmin}
+        />
       )}
     </div>
   );
