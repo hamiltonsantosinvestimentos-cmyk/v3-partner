@@ -429,7 +429,80 @@ function ProspectCard({
   );
 }
 
-// ─── Modal de Link ─────────────────────────────────────────────────────────────
+// ─── Modal de Link Genérico (sem prospect) ────────────────────────────────────
+
+function LinkGeralModal({ onClose }: { onClose: () => void }) {
+  const baseUrl = typeof window !== "undefined"
+    ? window.location.origin
+    : "https://v3-partner.vercel.app";
+  const url = `${baseUrl}/cadastro-partner`;
+
+  const [copied, setCopied] = useState(false);
+
+  const copy = () => {
+    navigator.clipboard.writeText(url);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const nome = "futuro partner";
+  const whatsappMsg = encodeURIComponent(
+    `Olá! 👋\n\nVocê foi convidado(a) para se tornar um Partner V3 Partners.\n\nAcesse o link abaixo para fazer seu cadastro gratuito e começar no período de trial de 30 dias:\n\n${url}\n\n*V3 Partners* — Boutique institucional multiproduto de securitização e estruturação financeira.`
+  );
+  const whatsappUrl = `https://wa.me/?text=${whatsappMsg}`;
+  const emailSubject = encodeURIComponent("Convite V3 Partners — Torne-se um Partner");
+  const emailBody = encodeURIComponent(
+    `Olá,\n\nVocê foi convidado(a) para fazer parte da rede de partners V3 Partners.\n\nClique no link abaixo para realizar seu cadastro:\n${url}\n\nO trial é gratuito por 30 dias. Sem necessidade de cartão de crédito.\n\nEquipe V3 Partners`
+  );
+  const emailUrl = `mailto:?subject=${emailSubject}&body=${emailBody}`;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "#00000080" }}>
+      <div className="w-full max-w-md rounded-2xl border border-white/10 overflow-hidden" style={{ background: "#0F1E35" }}>
+        <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
+          <div>
+            <h3 className="text-base font-bold text-white">Link Geral de Cadastro</h3>
+            <p className="text-xs mt-0.5" style={{ color: MUTED }}>Envie para qualquer pessoa — sem precisar cadastrar prospect</p>
+          </div>
+          <button onClick={onClose} className="text-muted-foreground hover:text-white transition-colors">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <div className="p-5 space-y-4">
+          <div className="rounded-xl p-3 border border-white/10 flex items-center gap-2" style={{ background: NAVY_CARD }}>
+            <p className="flex-1 text-xs text-white font-mono truncate">{url}</p>
+            <button onClick={copy} className="shrink-0 p-1.5 rounded-lg hover:bg-white/10 transition-colors">
+              {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" style={{ color: GOLD }} />}
+            </button>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <a
+              href={whatsappUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold text-white hover:opacity-90 transition-opacity"
+              style={{ background: "#25D366" }}
+            >
+              <MessageCircle className="w-4 h-4" /> WhatsApp
+            </a>
+            <a
+              href={emailUrl}
+              className="flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold text-white hover:opacity-90 transition-opacity"
+              style={{ background: "#4285F4" }}
+            >
+              <Mail className="w-4 h-4" /> E-mail
+            </a>
+          </div>
+          <p className="text-[11px] text-center" style={{ color: MUTED }}>
+            Para links personalizados por prospect, use o ícone 🔗 em cada card
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Modal de Link por Prospect ───────────────────────────────────────────────
 
 function LinkModal({ prospect, onClose }: { prospect: Prospect; onClose: () => void }) {
   const [loading, setLoading] = useState(false);
@@ -547,6 +620,7 @@ export function ProspeccaoClient({ role }: { role: string }) {
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<Prospect | null>(null);
   const [linking, setLinking] = useState<Prospect | null>(null);
+  const [showLinkGeral, setShowLinkGeral] = useState(false);
   const isAdmin = role === "ADMIN";
 
   const load = () => {
@@ -631,13 +705,22 @@ export function ProspeccaoClient({ role }: { role: string }) {
           <h1 className="text-lg font-bold text-white">CRM de Prospecção</h1>
           <p className="text-xs mt-0.5" style={{ color: MUTED }}>Pipeline de captação de novos partners</p>
         </div>
-        <button
-          onClick={() => { setEditing(null); setShowModal(true); }}
-          className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold text-black"
-          style={{ background: GOLD }}
-        >
-          <Plus className="w-4 h-4" /> Novo Prospect
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowLinkGeral(true)}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold border border-white/10 hover:border-white/20 transition-colors"
+            style={{ color: GOLD }}
+          >
+            <Link2 className="w-4 h-4" /> Gerar Link
+          </button>
+          <button
+            onClick={() => { setEditing(null); setShowModal(true); }}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold text-black"
+            style={{ background: GOLD }}
+          >
+            <Plus className="w-4 h-4" /> Novo Prospect
+          </button>
+        </div>
       </div>
 
       {/* KPIs */}
@@ -804,6 +887,10 @@ export function ProspeccaoClient({ role }: { role: string }) {
           prospect={linking}
           onClose={() => setLinking(null)}
         />
+      )}
+
+      {showLinkGeral && (
+        <LinkGeralModal onClose={() => setShowLinkGeral(false)} />
       )}
     </div>
   );
