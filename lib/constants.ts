@@ -6,6 +6,8 @@ export const USER_ROLES = {
   GESTAO: "GESTAO",
   FINANCEIRO: "FINANCEIRO",
   FORNECEDOR: "FORNECEDOR",
+  SDR: "SDR",
+  CLOSER: "CLOSER",
 } as const;
 
 export type UserRole = keyof typeof USER_ROLES;
@@ -18,6 +20,8 @@ export const ROLE_LABELS: Record<UserRole, string> = {
   GESTAO: "Gestão",
   FINANCEIRO: "Financeiro",
   FORNECEDOR: "Fornecedor",
+  SDR: "SDR",
+  CLOSER: "Closer",
 };
 
 export const ROLE_COLORS: Record<UserRole, string> = {
@@ -28,6 +32,8 @@ export const ROLE_COLORS: Record<UserRole, string> = {
   GESTAO: "bg-amber-500/20 text-amber-400 border-amber-500/30",
   FINANCEIRO: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
   FORNECEDOR: "bg-teal-500/20 text-teal-400 border-teal-500/30",
+  SDR: "bg-sky-500/20 text-sky-400 border-sky-500/30",
+  CLOSER: "bg-orange-500/20 text-orange-400 border-orange-500/30",
 };
 
 // Marketplace

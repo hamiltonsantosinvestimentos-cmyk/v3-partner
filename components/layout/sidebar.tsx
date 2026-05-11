@@ -9,7 +9,7 @@ import {
   CreditCard, Headphones, ChevronDown, ChevronRight, X,
   Trophy, GraduationCap, Handshake, Settings2, Medal,
   ContactRound, DollarSign, Wallet, Zap, Target, ShieldCheck, Calculator, UserPlus, ClipboardList, BadgeCheck, Layers, BarChart2, BookMarked, BotMessageSquare,
-  ShoppingBag,
+  ShoppingBag, Radar,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { UserRole } from "@/lib/constants";
@@ -19,7 +19,7 @@ const iconMap = {
   CreditCard, Headphones, Trophy, GraduationCap, Handshake,
   Settings2, Medal, ContactRound, DollarSign, Wallet, Zap,
   Target, ShieldCheck, Calculator, UserPlus, ClipboardList, BadgeCheck, Layers, BarChart2, BookMarked, BotMessageSquare,
-  ShoppingBag,
+  ShoppingBag, Radar,
 };
 
 interface NavSubItem { href: string; label: string; roles: string[]; }
@@ -33,8 +33,9 @@ const NAV_SECTIONS: NavSection[] = [
   {
     label: "GERAL",
     items: [
-      { href: "/dashboard", label: "Dashboard", icon: "LayoutDashboard", roles: ["ADMIN", "PARTNER", "PARTNER_PRO", "MESA_OPERACIONAL", "GESTAO"] },
+      { href: "/dashboard", label: "Dashboard", icon: "LayoutDashboard", roles: ["ADMIN", "PARTNER", "PARTNER_PRO", "MESA_OPERACIONAL", "GESTAO", "SDR", "CLOSER"] },
       { href: "/crm", label: "CRM", icon: "ContactRound", roles: ["ADMIN", "PARTNER", "PARTNER_PRO"] },
+      { href: "/prospeccao", label: "Prospecção Partners", icon: "Radar", roles: ["ADMIN", "SDR", "CLOSER", "GESTAO"] },
       { href: "/minhas-operacoes", label: "Minhas Operações", icon: "ClipboardList", roles: ["PARTNER", "PARTNER_PRO"] },
       { href: "/ranking", label: "Ranking", icon: "Medal", roles: ["ADMIN", "PARTNER", "PARTNER_PRO"] },
     ],
@@ -130,6 +131,8 @@ const ROLE_LABELS: Record<string, string> = {
   MESA_OPERACIONAL: "Mesa Operacional",
   FINANCEIRO: "Financeiro",
   GESTAO: "Gestão",
+  SDR: "SDR",
+  CLOSER: "Closer",
 };
 
 interface SidebarProps { role: UserRole; onClose?: () => void; }
