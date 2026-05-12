@@ -15,6 +15,7 @@ export interface Video {
   tags: string[];
   featured?: boolean;
   required?: boolean;      // obrigatório para novos partners
+  requires?: string[];     // IDs de vídeos que devem ser concluídos antes
 }
 
 export interface VideoCategory {
@@ -92,6 +93,7 @@ export const ACADEMY_CATEGORIES: VideoCategory[] = [
         gradient: "from-violet-700 via-blue-700 to-blue-800",
         accentColor: "#7C3AED",
         tags: ["CCB", "Cartório", "Registro", "Aprovação"],
+        requires: ["he-001", "he-002"],
       },
       {
         id: "he-005",
