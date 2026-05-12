@@ -94,14 +94,25 @@ export async function GET(req: NextRequest) {
   const limit = searchParams.get("limit") ?? "20";
   const status = searchParams.get("status"); // PENDING, PAID, CANCELLED, etc.
 
-  let path = `/v2/invoices?page=${page}&limit=${limit}`;
-  if (status) path += `&status=${status}`;
+  // Tenta múltiplos formatos pois a Cora pode variar entre versões
+  const paths = [
+    `/v2/invoices?page_number=${page}&page_size=${limit}`,
+    `/v2/invoices?page=${page}&per_page=${limit}`,
+    `/v1/invoices?page=${page}&limit=${limit}`,
+    `/v2/invoices`,
+  ];
+  if (status) paths[0] += `&status=${status}`;
 
-  try {
-    const res = await coraFetch(path);
-    const data = await res.json();
-    if (!res.ok) return NextResponse.json({ error: data?.message ?? "Erro Cora" }, { status: res.status });
-    return NextResponse.json(data);
+  let lastError = "";
+  for (const path of paths) {
+    try {
+      const res = await coraFetch(path);
+      const data = await res.json() as Record<string, unknown>;
+      if (res.ok) return NextResponse.json({ _path: path, ...data });
+      lastError = (data?.message as string) ?? (data?.error as string) ?? JSON.stringify(data);
+    } catch { /* tenta próximo */ }
+  }
+  return NextResponse.json({ error: lastError || "Erro Cora" }, { status: 400 });
   } catch (e: unknown) {
     return NextResponse.json({ error: String(e) }, { status: 500 });
   }
