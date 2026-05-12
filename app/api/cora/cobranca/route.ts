@@ -118,9 +118,6 @@ export async function GET(req: NextRequest) {
   }
   // Retorna todos os erros para debug
   return NextResponse.json({ error: "Nenhum endpoint funcionou", attempts: results }, { status: 400 });
-  } catch (e: unknown) {
-    return NextResponse.json({ error: String(e) }, { status: 500 });
-  }
 }
 
 export async function DELETE(req: NextRequest) {
