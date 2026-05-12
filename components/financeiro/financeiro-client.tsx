@@ -6,12 +6,13 @@ import {
   CreditCard, Receipt, ChevronLeft, ChevronRight,
   ArrowUpRight, ArrowDownRight, CheckCircle2, Clock,
   AlertCircle, RefreshCw, Plus, Download, Eye, Trash2, Pencil,
-  Crown, ShieldCheck, XCircle, Loader2, Ban, RotateCcw,
+  Crown, ShieldCheck, XCircle, Loader2, Ban, RotateCcw, Building2,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ExportButton } from "@/components/financeiro/export-button";
 import { Badge } from "@/components/ui/badge";
 import { MetricasClient } from "@/components/financeiro/metricas-client";
+import { CoraPanel } from "@/components/financeiro/cora-panel";
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Legend,
@@ -25,7 +26,7 @@ import {
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
-type Tab = "metricas" | "visao-geral" | "folha" | "despesas" | "comissoes" | "dre" | "fluxo" | "impostos" | "assinaturas";
+type Tab = "metricas" | "visao-geral" | "folha" | "despesas" | "comissoes" | "dre" | "fluxo" | "impostos" | "assinaturas" | "cora";
 
 interface Props {
   role: string;
@@ -2738,6 +2739,7 @@ const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
   { id: "fluxo", label: "Fluxo de Caixa", icon: DollarSign },
   { id: "impostos", label: "Impostos", icon: Receipt },
   { id: "assinaturas", label: "Assinaturas", icon: Crown },
+  { id: "cora", label: "Cora Bank", icon: Building2 },
 ];
 
 export function FinanceiroClient({ role, userName }: Props) {
@@ -2754,6 +2756,7 @@ export function FinanceiroClient({ role, userName }: Props) {
       case "fluxo": return <FluxoCaixaTab />;
       case "impostos": return <ImpostosTab />;
       case "assinaturas": return <AssinaturasTab />;
+      case "cora": return <CoraPanel />;
     }
   };
 
