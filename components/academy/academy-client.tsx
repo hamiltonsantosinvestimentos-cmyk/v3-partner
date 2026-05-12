@@ -1,12 +1,46 @@
 "use client";
 
 import React, { useState, useMemo, useEffect, useRef, useCallback } from "react";
-import { Play, Search, GraduationCap, Clock, ChevronRight, CheckCircle2, BookOpen, Flame, Star, Settings, Award } from "lucide-react";
+import { Play, Search, GraduationCap, Clock, ChevronRight, CheckCircle2, BookOpen, Flame, Star, Settings, Award, Lock, Trophy, Zap } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { VideoPlayer } from "./video-player";
 import { AcademyAdmin, loadYtLinks } from "./academy-admin";
 import { AcademyCertificate } from "./academy-certificate";
+import { AcademyQuiz } from "./academy-quiz";
 import { ACADEMY_CATEGORIES, getAllVideos, type Video, type VideoCategory } from "@/lib/academy-data";
+import { getQuiz } from "@/lib/academy-quizzes";
+import { BADGE_DEFS, RARITY_COLORS } from "@/lib/academy-badges";
+
+interface VideoOverride {
+  video_id: string;
+  title?: string;
+  description?: string;
+  instructor?: string;
+  instructor_role?: string;
+  level?: string;
+  duration?: string;
+  duration_secs?: number;
+  featured?: boolean;
+  required?: boolean;
+  tags?: string[];
+}
+
+function applyOverride(video: Video, override?: VideoOverride): Video {
+  if (!override) return video;
+  return {
+    ...video,
+    title: override.title ?? video.title,
+    description: override.description ?? video.description,
+    instructor: override.instructor ?? video.instructor,
+    instructorRole: override.instructor_role ?? video.instructorRole,
+    level: (override.level as Video["level"]) ?? video.level,
+    duration: override.duration ?? video.duration,
+    durationSecs: override.duration_secs ?? video.durationSecs,
+    featured: override.featured ?? video.featured,
+    required: override.required ?? video.required,
+    tags: override.tags ?? video.tags,
+  };
+}
 
 const LEVEL_COLORS: Record<string, string> = {
   "Iniciante": "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
@@ -21,17 +55,18 @@ function formatTime(secs: number): string {
 }
 
 // ── Video Card ──────────────────────────────────────────────────────────────
-function VideoCard({ video, onPlay, progress, index, ytId }: {
-  video: Video; onPlay: (v: Video) => void; progress?: number; index: number; ytId?: string;
+function VideoCard({ video, onPlay, progress, index, ytId, locked }: {
+  video: Video; onPlay: (v: Video) => void; progress?: number; index: number; ytId?: string; locked?: boolean;
 }) {
   const [hovered, setHovered] = useState(false);
   return (
     <div
-      className="relative flex-shrink-0 cursor-pointer group"
+      className={`relative flex-shrink-0 group ${locked ? "cursor-not-allowed opacity-70" : "cursor-pointer"}`}
       style={{ width: 220, animationDelay: `${index * 0.05}s` }}
-      onMouseEnter={() => setHovered(true)}
+      onMouseEnter={() => !locked && setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      onClick={() => onPlay(video)}
+      onClick={() => !locked && onPlay(video)}
+      title={locked ? "Complete os pré-requisitos para desbloquear esta aula" : undefined}
     >
       <div className={`relative rounded-xl overflow-hidden transition-all duration-300 ${hovered ? "scale-105 shadow-2xl ring-2 ring-white/20" : ""}`}
         style={{ aspectRatio: "16/9" }}>
@@ -61,12 +96,18 @@ function VideoCard({ video, onPlay, progress, index, ytId }: {
             <CheckCircle2 className="w-5 h-5 text-emerald-400 drop-shadow" />
           </div>
         )}
-        {video.required && (
+        {video.required && !locked && (
           <div className="absolute top-2 left-2 px-1.5 py-0.5 rounded bg-[#C9A84C]/80 text-[9px] text-[#09081A] font-black uppercase">
             Obrigatório
           </div>
         )}
-        {hovered && (
+        {locked && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 rounded-xl">
+            <Lock className="w-6 h-6 text-white/70 mb-1" />
+            <p className="text-[9px] text-white/70 font-semibold px-2 text-center">Conclua os pré-requisitos</p>
+          </div>
+        )}
+        {hovered && !locked && (
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/50 transition-all">
             <div className="w-12 h-12 rounded-full bg-white/90 flex items-center justify-center mb-2 shadow-lg">
               <Play className="w-5 h-5 text-black ml-0.5" fill="black" />
@@ -165,9 +206,10 @@ function CategoryRow({ category, onPlay, progress, ytLinks }: {
         <div ref={scrollRef} onScroll={onScroll}
           className="flex gap-3 overflow-x-auto pb-2 scrollbar-none"
           style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}>
-          {category.videos.map((video, i) => (
-            <VideoCard key={video.id} video={video} onPlay={onPlay} progress={progress[video.id]} index={i} ytId={extractYtId(ytLinks[video.id])} />
-          ))}
+          {category.videos.map((video, i) => {
+            const locked = !!video.requires?.length && !video.requires.every(reqId => (progress[reqId] ?? 0) >= 90);
+            return <VideoCard key={video.id} video={video} onPlay={onPlay} progress={progress[video.id]} index={i} ytId={extractYtId(ytLinks[video.id])} locked={locked} />;
+          })}
         </div>
       </div>
     </div>
@@ -226,30 +268,63 @@ export function AcademyClient({ initialCategory, userRole, userName }: { initial
   const [ytLinks, setYtLinks] = useState<Record<string, string>>({});
   const [certificates, setCertificates] = useState<Set<string>>(new Set());
   const [certificate, setCertificate] = useState<{ categoryId: string; issuedAt: string } | null>(null);
+  const [quizData, setQuizData] = useState<{ categoryId: string; quizPassed: boolean } | null>(null);
+  const [quizResults, setQuizResults] = useState<Record<string, { score: number; passed: boolean }>>({});
+  const [earnedBadges, setEarnedBadges] = useState<Set<string>>(new Set());
+  const [newBadges, setNewBadges] = useState<string[]>([]);
+  const [overrides, setOverrides] = useState<Record<string, VideoOverride>>({});
   const saveProgressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Load progress, YT links e certificates da API
+  // Load progress, YT links, certificates, quiz results, badges, overrides
   useEffect(() => {
     Promise.all([
       fetch("/api/academy/progress").then((r) => r.json()),
       fetch("/api/academy/yt-links").then((r) => r.json()),
       fetch("/api/academy/certificates").then((r) => r.json()),
-    ]).then(([pData, lData, cData]) => {
+      fetch("/api/academy/quiz").then((r) => r.json()),
+      fetch("/api/academy/badges").then((r) => r.json()),
+      fetch("/api/academy/video-overrides").then((r) => r.json()).catch(() => ({ overrides: [] })),
+    ]).then(([pData, lData, cData, qData, bData, oData]) => {
       if (pData.progress) setVideoProgress(pData.progress);
       if (lData.links) setYtLinks(lData.links);
       if (cData.certificates) {
         setCertificates(new Set((cData.certificates as { category_id: string }[]).map((c) => c.category_id)));
       }
+      if (qData.results) {
+        const map: Record<string, { score: number; passed: boolean }> = {};
+        for (const r of qData.results as { category_id: string; score: number; passed: boolean }[]) {
+          map[r.category_id] = { score: r.score, passed: r.passed };
+        }
+        setQuizResults(map);
+      }
+      if (bData.badges) {
+        setEarnedBadges(new Set((bData.badges as { badge_id: string }[]).map((b) => b.badge_id)));
+      }
+      if (oData.overrides) {
+        const map: Record<string, VideoOverride> = {};
+        for (const o of oData.overrides as VideoOverride[]) { map[o.video_id] = o; }
+        setOverrides(map);
+      }
     }).catch(() => {});
   }, []);
 
-  const allVideos = getAllVideos();
+  const allVideos = useMemo(() =>
+    getAllVideos().map(v => applyOverride(v, overrides[v.id])),
+  [overrides]);
+
+  const mergedCategories = useMemo(() =>
+    ACADEMY_CATEGORIES.map(cat => ({
+      ...cat,
+      videos: cat.videos.map(v => applyOverride(v, overrides[v.id])),
+    })),
+  [overrides]);
+
   const featuredVideo = allVideos.find((v) => v.featured) ?? allVideos[0];
 
   const filteredCategories = useMemo(() => {
     if (search) {
       const q = search.toLowerCase();
-      return ACADEMY_CATEGORIES.map((cat) => ({
+      return mergedCategories.map((cat) => ({
         ...cat,
         videos: cat.videos.filter((v) =>
           v.title.toLowerCase().includes(q) ||
@@ -259,9 +334,9 @@ export function AcademyClient({ initialCategory, userRole, userName }: { initial
         ),
       })).filter((cat) => cat.videos.length > 0);
     }
-    if (activeCategory === "all") return ACADEMY_CATEGORIES;
-    return ACADEMY_CATEGORIES.filter((c) => c.id === activeCategory);
-  }, [activeCategory, search]);
+    if (activeCategory === "all") return mergedCategories;
+    return mergedCategories.filter((c) => c.id === activeCategory);
+  }, [activeCategory, search, mergedCategories]);
 
   const continueWatching = allVideos.filter((v) => {
     const p = videoProgress[v.id] ?? 0;
@@ -269,11 +344,34 @@ export function AcademyClient({ initialCategory, userRole, userName }: { initial
   });
 
   const flatVideosInCategory = playingVideo
-    ? (ACADEMY_CATEGORIES.find((c) => c.id === playingVideo.category)?.videos ?? [])
+    ? (mergedCategories.find((c) => c.id === playingVideo.category)?.videos ?? [])
     : [];
   const currentIdx = flatVideosInCategory.findIndex((v) => v.id === playingVideo?.id);
 
-  // Verifica e emite certificado de categoria
+  // Emite certificado após quiz aprovado
+  const issueCertificate = useCallback(async (categoryId: string) => {
+    const res = await fetch("/api/academy/certificates", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ category_id: categoryId }),
+    });
+    const d = await res.json();
+    if (d.certificate) {
+      setCertificates((prev) => new Set([...prev, categoryId]));
+      if (!d.already_had) {
+        setCertificate({ categoryId, issuedAt: d.certificate.issued_at });
+      }
+    }
+    // Check and award badges
+    const bRes = await fetch("/api/academy/badges", { method: "POST" }).then(r => r.json()).catch(() => ({ awarded: [] }));
+    if (bRes.awarded?.length > 0) {
+      setEarnedBadges(prev => new Set([...prev, ...bRes.awarded]));
+      setNewBadges(bRes.awarded);
+      setTimeout(() => setNewBadges([]), 5000);
+    }
+  }, []);
+
+  // Verifica e emite certificado de categoria (com quiz)
   const checkCertificate = useCallback(async (videoId: string, pct: number) => {
     if (pct < 90) return;
     const video = allVideos.find((v) => v.id === videoId);
@@ -286,20 +384,17 @@ export function AcademyClient({ initialCategory, userRole, userName }: { initial
     const allDone = category.videos.every((v) => (updatedProgress[v.id] ?? 0) >= 90);
     if (!allDone) return;
 
-    // Emite certificado
-    const res = await fetch("/api/academy/certificates", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ category_id: category.id }),
-    });
-    const d = await res.json();
-    if (d.certificate) {
-      setCertificates((prev) => new Set([...prev, category.id]));
-      if (!d.already_had) {
-        setCertificate({ categoryId: category.id, issuedAt: d.certificate.issued_at });
-      }
+    // Verifica se existe quiz para esta categoria
+    const quiz = getQuiz(category.id);
+    if (quiz && !quizResults[category.id]?.passed) {
+      // Mostra quiz antes do certificado
+      setQuizData({ categoryId: category.id, quizPassed: false });
+      return;
     }
-  }, [allVideos, certificates, videoProgress]);
+
+    // Emite certificado diretamente (sem quiz ou quiz já aprovado)
+    await issueCertificate(category.id);
+  }, [allVideos, certificates, videoProgress, quizResults, issueCertificate]);
 
   // Salva progresso com debounce
   function handleProgress(videoId: string, pct: number) {
@@ -319,10 +414,18 @@ export function AcademyClient({ initialCategory, userRole, userName }: { initial
   const completedVideos = allVideos.filter((v) => (videoProgress[v.id] ?? 0) >= 90).length;
   const totalHours = Math.floor(allVideos.reduce((s, v) => s + v.durationSecs, 0) / 3600);
 
+  // Trilha de onboarding — aulas obrigatórias em ordem
+  const ONBOARDING_TRAIL = allVideos.filter(v => v.required);
+  const trailCompleted = ONBOARDING_TRAIL.filter(v => (videoProgress[v.id] ?? 0) >= 90).length;
+  const trailPct = ONBOARDING_TRAIL.length > 0 ? Math.round((trailCompleted / ONBOARDING_TRAIL.length) * 100) : 0;
+
   // Dados do certificado para exibir
   const certCategory = certificate
     ? ACADEMY_CATEGORIES.find((c) => c.id === certificate.categoryId)
     : null;
+
+  // Category for quiz modal
+  const quizCategory = quizData ? ACADEMY_CATEGORIES.find(c => c.id === quizData.categoryId) : null;
 
   return (
     <div className="animate-fade-in">
@@ -374,6 +477,25 @@ export function AcademyClient({ initialCategory, userRole, userName }: { initial
         </div>
       </div>
 
+      {/* New badge notification */}
+      {newBadges.length > 0 && (
+        <div className="fixed bottom-6 right-6 z-[100] space-y-2">
+          {newBadges.map(badgeId => {
+            const def = BADGE_DEFS.find(b => b.id === badgeId);
+            if (!def) return null;
+            return (
+              <div key={badgeId} className={`flex items-center gap-3 px-4 py-3 rounded-xl border bg-gradient-to-r ${RARITY_COLORS[def.rarity]} shadow-2xl animate-bounce`}>
+                <span className="text-2xl">{def.icon}</span>
+                <div>
+                  <p className="text-xs font-bold">Badge desbloqueada!</p>
+                  <p className="text-xs opacity-80">{def.label} — {def.description}</p>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       {/* Admin Panel */}
       {isAdmin && activeTab === "admin" && (
         <AcademyAdmin ytLinks={ytLinks} onLinksChange={setYtLinks} />
@@ -390,6 +512,62 @@ export function AcademyClient({ initialCategory, userRole, userName }: { initial
             className="w-full h-10 pl-10 pr-4 text-sm bg-secondary border border-border rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
           />
         </div>
+
+        {/* Onboarding Trail */}
+        {!search && trailPct < 100 && ONBOARDING_TRAIL.length > 0 && (
+          <div className="mb-5 p-4 rounded-xl border border-[#C9A84C]/30 bg-gradient-to-r from-[#C9A84C]/5 to-transparent">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <Zap className="w-4 h-4 text-[#C9A84C]" />
+                <span className="text-sm font-bold text-white">Trilha de Onboarding</span>
+                <span className="text-xs text-muted-foreground">— {trailCompleted}/{ONBOARDING_TRAIL.length} aulas obrigatórias</span>
+              </div>
+              <span className="text-xs font-bold text-[#C9A84C]">{trailPct}%</span>
+            </div>
+            <div className="h-2 bg-[#243A66] rounded-full overflow-hidden mb-3">
+              <div className="h-full bg-[#C9A84C] rounded-full transition-all" style={{ width: `${trailPct}%` }} />
+            </div>
+            <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none" style={{ scrollbarWidth: "none" }}>
+              {ONBOARDING_TRAIL.map((v, i) => {
+                const done = (videoProgress[v.id] ?? 0) >= 90;
+                const isCurrent = !done && ONBOARDING_TRAIL.slice(0, i).every(pv => (videoProgress[pv.id] ?? 0) >= 90);
+                return (
+                  <button
+                    key={v.id}
+                    onClick={() => setPlayingVideo(v)}
+                    className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border transition-all ${
+                      done ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400" :
+                      isCurrent ? "border-[#C9A84C]/50 bg-[#C9A84C]/10 text-[#C9A84C] font-semibold" :
+                      "border-[#243A66] text-muted-foreground"
+                    }`}
+                  >
+                    {done ? <CheckCircle2 className="w-3 h-3" /> : isCurrent ? <Play className="w-3 h-3" fill="currentColor" /> : <Clock className="w-3 h-3" />}
+                    {v.title.length > 25 ? v.title.slice(0, 25) + "…" : v.title}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Badges earned */}
+        {earnedBadges.size > 0 && !search && (
+          <div className="mb-5 p-4 rounded-xl border border-[#243A66] bg-[#0D1929]">
+            <div className="flex items-center gap-2 mb-3">
+              <Trophy className="w-4 h-4 text-[#C9A84C]" />
+              <span className="text-sm font-bold text-white">Minhas Conquistas</span>
+              <span className="text-xs text-muted-foreground">({earnedBadges.size} badges)</span>
+            </div>
+            <div className="flex gap-2 flex-wrap">
+              {BADGE_DEFS.filter(b => earnedBadges.has(b.id)).map(b => (
+                <div key={b.id} className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border bg-gradient-to-r text-xs ${RARITY_COLORS[b.rarity]}`} title={b.description}>
+                  <span>{b.icon}</span>
+                  <span className="font-semibold">{b.label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {!search && (
           <div className="flex gap-1.5 overflow-x-auto pb-1 mb-6 scrollbar-none" style={{ scrollbarWidth: "none" }}>
@@ -454,6 +632,22 @@ export function AcademyClient({ initialCategory, userRole, userName }: { initial
           onProgress={handleProgress}
           savedProgress={playingVideo ? Math.round((videoProgress[playingVideo.id] ?? 0) / 100 * playingVideo.durationSecs) : 0}
           youtubeUrl={ytLinks[playingVideo.id]}
+        />
+      )}
+
+      {/* Quiz modal */}
+      {quizData && quizCategory && getQuiz(quizData.categoryId) && (
+        <AcademyQuiz
+          quiz={getQuiz(quizData.categoryId)!}
+          categoryLabel={quizCategory.label}
+          categoryIcon={quizCategory.icon}
+          previousScore={quizResults[quizData.categoryId]?.score}
+          onPass={async () => {
+            setQuizResults(prev => ({ ...prev, [quizData.categoryId]: { score: 100, passed: true } }));
+            setQuizData(null);
+            await issueCertificate(quizData.categoryId);
+          }}
+          onClose={() => setQuizData(null)}
         />
       )}
 

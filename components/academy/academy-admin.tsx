@@ -3,12 +3,28 @@
 import React, { useState, useEffect } from "react";
 import {
   Video, Save, CheckCircle2, AlertCircle, Search,
-  ExternalLink, Trash2, Link2, Info, Trophy, Loader2,
+  ExternalLink, Trash2, Link2, Info, Trophy, Loader2, BarChart2, Upload, X, Edit3,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ACADEMY_CATEGORIES, getAllVideos, type Video as VideoType } from "@/lib/academy-data";
 import { AcademyRanking } from "./academy-ranking";
+import { AcademyAnalytics } from "./academy-analytics";
+import { AcademyVideoEdit } from "./academy-video-edit";
+
+interface VideoOverride {
+  video_id: string;
+  title?: string;
+  description?: string;
+  instructor?: string;
+  instructor_role?: string;
+  level?: string;
+  duration?: string;
+  duration_secs?: number;
+  featured?: boolean;
+  required?: boolean;
+  tags?: string[];
+}
 
 // Mantida para compatibilidade — academy-client carrega links pela API agora
 export function loadYtLinks(): Record<string, string> { return {}; }
@@ -30,9 +46,11 @@ interface RowProps {
   savedUrl: string;
   onSave: (videoId: string, url: string, isNew: boolean) => Promise<void>;
   onDelete: (videoId: string) => Promise<void>;
+  onEdit?: () => void;
+  hasOverride?: boolean;
 }
 
-function VideoRow({ video, savedUrl, onSave, onDelete }: RowProps) {
+function VideoRow({ video, savedUrl, onSave, onDelete, onEdit, hasOverride }: RowProps) {
   const [url, setUrl] = useState(savedUrl);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -137,6 +155,20 @@ function VideoRow({ video, savedUrl, onSave, onDelete }: RowProps) {
             </button>
           )}
 
+          {onEdit && (
+            <button
+              onClick={onEdit}
+              className={`flex-shrink-0 w-9 h-9 rounded-lg border flex items-center justify-center transition-colors ${
+                hasOverride
+                  ? "border-[#C9A84C]/50 text-[#C9A84C] bg-[#C9A84C]/10 hover:bg-[#C9A84C]/20"
+                  : "border-[#243A66] text-[#7A8FA8] hover:text-[#F0ECE4] hover:border-[#3A5070]"
+              }`}
+              title="Editar metadados do vídeo"
+            >
+              <Edit3 className="w-4 h-4" />
+            </button>
+          )}
+
           <Button
             size="sm"
             onClick={handleSave}
@@ -174,11 +206,54 @@ interface AcademyAdminProps {
 }
 
 export function AcademyAdmin({ ytLinks, onLinksChange }: AcademyAdminProps) {
-  const [tab, setTab] = useState<"links" | "ranking">("links");
+  const [tab, setTab] = useState<"links" | "ranking" | "analytics">("links");
+  const [showCsvImport, setShowCsvImport] = useState(false);
+  const [csvText, setCsvText] = useState("");
+  const [csvImporting, setCsvImporting] = useState(false);
+  const [csvResult, setCsvResult] = useState<{ ok: number; errors: string[] } | null>(null);
   const [search, setSearch] = useState("");
   const [filterCat, setFilterCat] = useState("all");
+  const [overrides, setOverrides] = useState<Record<string, VideoOverride>>({});
+  const [editingVideo, setEditingVideo] = useState<VideoType | null>(null);
 
   const allVideos = getAllVideos();
+
+  useEffect(() => {
+    fetch("/api/academy/video-overrides")
+      .then(r => r.json())
+      .then(d => {
+        if (d.overrides) {
+          const map: Record<string, VideoOverride> = {};
+          for (const o of d.overrides as VideoOverride[]) { map[o.video_id] = o; }
+          setOverrides(map);
+        }
+      }).catch(() => {});
+  }, []);
+
+  async function handleSaveOverride(videoId: string, data: Partial<VideoOverride>) {
+    const res = await fetch("/api/academy/video-overrides", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ video_id: videoId, ...data }),
+    });
+    if (res.ok) {
+      setOverrides(prev => ({ ...prev, [videoId]: { video_id: videoId, ...prev[videoId], ...data } }));
+    }
+  }
+
+  async function handleResetOverride(videoId: string) {
+    await fetch("/api/academy/video-overrides", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ video_id: videoId }),
+    });
+    setOverrides(prev => {
+      const next = { ...prev };
+      delete next[videoId];
+      return next;
+    });
+    setEditingVideo(null);
+  }
   const linkedCount = Object.values(ytLinks).filter(Boolean).length;
 
   const filtered = allVideos.filter((v) => {
@@ -220,6 +295,7 @@ export function AcademyAdmin({ ytLinks, onLinksChange }: AcademyAdminProps) {
         {([
           { key: "links", label: "Links YouTube", icon: <Link2 className="w-3.5 h-3.5" /> },
           { key: "ranking", label: "Ranking Engajamento", icon: <Trophy className="w-3.5 h-3.5" /> },
+          { key: "analytics", label: "Analytics", icon: <BarChart2 className="w-3.5 h-3.5" /> },
         ] as const).map((t) => (
           <button
             key={t.key}
@@ -234,6 +310,7 @@ export function AcademyAdmin({ ytLinks, onLinksChange }: AcademyAdminProps) {
       </div>
 
       {tab === "ranking" && <AcademyRanking />}
+      {tab === "analytics" && <AcademyAnalytics />}
 
       {tab === "links" && <>
         {/* Info banner */}
@@ -262,6 +339,61 @@ export function AcademyAdmin({ ytLinks, onLinksChange }: AcademyAdminProps) {
             <p className="text-2xl font-bold text-amber-400">{allVideos.length - linkedCount}</p>
             <p className="text-xs text-muted-foreground">Sem link</p>
           </div>
+        </div>
+
+        {/* CSV Import */}
+        <div>
+          <button
+            onClick={() => { setShowCsvImport(!showCsvImport); setCsvResult(null); }}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-[#243A66] text-xs text-[#7A8FA8] hover:text-[#F0ECE4] transition-colors"
+          >
+            <Upload className="w-3.5 h-3.5" /> Importar CSV em lote
+          </button>
+          {showCsvImport && (
+            <div className="mt-3 p-4 rounded-xl border border-[#243A66] bg-[#0D1929] space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-semibold text-white">Importação em Lote</p>
+                <button onClick={() => setShowCsvImport(false)}><X className="w-4 h-4 text-muted-foreground" /></button>
+              </div>
+              <p className="text-xs text-muted-foreground">Cole o CSV no formato: <code className="text-[#C9A84C]">video_id,url</code> — uma por linha. Ex: <code className="text-[#C9A84C]">he-001,https://youtu.be/ABC123</code></p>
+              <textarea
+                value={csvText}
+                onChange={e => setCsvText(e.target.value)}
+                placeholder={"he-001,https://youtu.be/XYZ\nhe-002,https://youtu.be/ABC\n..."}
+                rows={5}
+                className="w-full px-3 py-2 text-xs bg-[#0A1628] border border-[#243A66] rounded-lg text-[#F0ECE4] placeholder:text-[#3A5070] focus:outline-none focus:ring-1 focus:ring-[#C9A84C]/50 font-mono resize-none"
+              />
+              <button
+                onClick={async () => {
+                  setCsvImporting(true); setCsvResult(null);
+                  const lines = csvText.trim().split("\n").filter(Boolean);
+                  const allVids = getAllVideos();
+                  let ok = 0; const errors: string[] = [];
+                  for (const line of lines) {
+                    const [videoId, url] = line.split(",").map(s => s.trim());
+                    if (!videoId || !url) { errors.push(`Linha inválida: "${line}"`); continue; }
+                    const v = allVids.find(v => v.id === videoId);
+                    if (!v) { errors.push(`ID não encontrado: "${videoId}"`); continue; }
+                    const res = await fetch("/api/academy/yt-links", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ video_id: videoId, url, video_title: v.title, is_new: !ytLinks[videoId] }) });
+                    if (res.ok) { ok++; onLinksChange({ ...ytLinks, [videoId]: url }); }
+                    else { errors.push(`Erro ao salvar ${videoId}`); }
+                  }
+                  setCsvResult({ ok, errors }); setCsvImporting(false);
+                }}
+                disabled={!csvText.trim() || csvImporting}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[#C9A84C] hover:bg-[#E8C97A] text-[#09081A] text-xs font-bold transition-colors disabled:opacity-50"
+              >
+                {csvImporting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                {csvImporting ? "Importando..." : "Importar"}
+              </button>
+              {csvResult && (
+                <div className={`text-xs p-3 rounded-lg ${csvResult.errors.length > 0 ? "bg-amber-500/10 border border-amber-500/20" : "bg-emerald-500/10 border border-emerald-500/20"}`}>
+                  <p className="font-semibold text-white">{csvResult.ok} link(s) importado(s) com sucesso</p>
+                  {csvResult.errors.map((e, i) => <p key={i} className="text-red-400 mt-1">{e}</p>)}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Filters */}
@@ -310,6 +442,8 @@ export function AcademyAdmin({ ytLinks, onLinksChange }: AcademyAdminProps) {
                       savedUrl={ytLinks[video.id] ?? ""}
                       onSave={handleSave}
                       onDelete={handleDelete}
+                      onEdit={() => setEditingVideo(video)}
+                      hasOverride={!!overrides[video.id]}
                     />
                   ))}
                 </div>
@@ -322,6 +456,16 @@ export function AcademyAdmin({ ytLinks, onLinksChange }: AcademyAdminProps) {
           <div className="text-center py-12 text-muted-foreground text-sm">Nenhuma aula encontrada.</div>
         )}
       </>}
+
+      {editingVideo && (
+        <AcademyVideoEdit
+          video={editingVideo}
+          override={overrides[editingVideo.id]}
+          onSave={handleSaveOverride}
+          onReset={handleResetOverride}
+          onClose={() => setEditingVideo(null)}
+        />
+      )}
     </div>
   );
 }
