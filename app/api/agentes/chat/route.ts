@@ -173,9 +173,11 @@ export async function POST(req: NextRequest) {
     message: string;
     session_id?: string;
     history?: Message[];
+    workspace_id?: string;
+    workspace_context?: string;
   };
 
-  const { squad_id, message, session_id, history = [] } = body;
+  const { squad_id, message, session_id, history = [], workspace_id, workspace_context } = body;
 
   const squad = SQUADS[squad_id];
   if (!squad) return NextResponse.json({ error: "Squad inválido" }, { status: 400 });
@@ -183,6 +185,11 @@ export async function POST(req: NextRequest) {
 
   const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
   if (!apiKey) return NextResponse.json({ error: "API key não configurada" }, { status: 500 });
+
+  // Injeta contexto do workspace no system prompt se disponível
+  const systemPrompt = workspace_context
+    ? `${squad.prompt}\n\n---\nCONTEXTO DO DEAL WORKSPACE:\n${workspace_context}\n\nUse este contexto como base para suas análises. As informações acima foram coletadas por outros squads sobre este mesmo deal.`
+    : squad.prompt;
 
   const claudeMessages = [
     ...history.map(m => ({ role: m.role as "user" | "assistant", content: m.content })),
@@ -197,13 +204,13 @@ export async function POST(req: NextRequest) {
 
     if (squad.useWebSearch) {
       // Market Scout — com tool_use de busca
-      assistantText = await runWithTools(anthropic, squad.prompt, claudeMessages);
+      assistantText = await runWithTools(anthropic, systemPrompt, claudeMessages);
     } else {
       // Squads padrão — sem tools
       const response = await anthropic.messages.create({
         model: "claude-sonnet-4-6",
         max_tokens: 2048,
-        system: squad.prompt,
+        system: systemPrompt,
         messages: claudeMessages,
       });
       assistantText = response.content
@@ -229,9 +236,22 @@ export async function POST(req: NextRequest) {
     } else {
       const title = message.length > 60 ? message.substring(0, 60) + "…" : message;
       const { data: newSession } = await svc.from("agent_sessions")
-        .insert({ user_id: user.id, squad_id, title, messages: newMessages })
+        .insert({
+          user_id: user.id,
+          squad_id,
+          title,
+          messages: newMessages,
+          ...(workspace_id ? { workspace_id } : {}),
+        })
         .select("id").single();
       finalSessionId = newSession?.id;
+    }
+
+    // Atualiza updated_at do workspace para refletir atividade recente
+    if (workspace_id) {
+      await svc.from("deal_workspaces")
+        .update({ updated_at: now })
+        .eq("id", workspace_id);
     }
 
     return NextResponse.json({ response: assistantText, session_id: finalSessionId });
