@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { CheckCircle2, Clock, AlertCircle, FileText, Wallet, TrendingUp, Crown, Shield, RefreshCw, ArrowUpCircle, Loader2 } from "lucide-react";
+import { useState, useEffect } from "react";
+import { CheckCircle2, Clock, AlertCircle, FileText, Wallet, TrendingUp, Crown, Shield, RefreshCw, ArrowUpCircle, Loader2, QrCode, Copy, ExternalLink } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 
 interface Profile {
@@ -67,6 +67,29 @@ export function MinhaAssinaturaClient({ profile, contract, commissions }: Props)
   const [upgradeStatus, setUpgradeStatus]     = useState<"idle" | "loading" | "ok" | "err">("idle");
   const [confirmRenovar, setConfirmRenovar]   = useState(false);
   const [confirmUpgrade, setConfirmUpgrade]   = useState(false);
+  const [subscription, setSubscription] = useState<{
+    id: string; status: string; pix_emv?: string; pix_qr_code?: string;
+    boleto_barcode?: string; boleto_pdf?: string; amount_cents: number; due_date: string;
+  } | null>(null);
+  const [loadingSub, setLoadingSub] = useState(false);
+  const [pixCopiado, setPixCopiado] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/cora/subscription")
+      .then(r => r.json())
+      .then(d => { if (d.subscription) setSubscription(d.subscription); })
+      .catch(() => {});
+  }, []);
+
+  async function handleGerarCobranca() {
+    setLoadingSub(true);
+    try {
+      const res = await fetch("/api/cora/subscription", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}) });
+      const d = await res.json();
+      if (d.subscription) setSubscription(d.subscription);
+    } catch { /* silencioso */ }
+    setLoadingSub(false);
+  }
 
   const totalRecebido = commissions.filter(c => c.status === "PAGA").reduce((s, c) => s + c.commission_value, 0);
   const totalPendente = commissions.filter(c => c.status === "A_PAGAR").reduce((s, c) => s + c.commission_value, 0);
@@ -178,6 +201,81 @@ export function MinhaAssinaturaClient({ profile, contract, commissions }: Props)
           {/* Upgrade movido para card de comparação abaixo */}
         </div>
       </div>
+
+      {/* Cobrança Cora — Pix/Boleto de Mensalidade */}
+      {subscription && subscription.status === "PENDING" && (
+        <div className="bg-[#111F35] border border-[#C9A84C]/30 rounded-2xl overflow-hidden">
+          <div className="px-5 py-4 border-b border-[#243A66] flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <QrCode className="w-4 h-4 text-[#C9A84C]" />
+              <p className="text-sm font-bold text-white">Cobrança de Mensalidade Pendente</p>
+            </div>
+            <div className="text-right">
+              <p className="text-lg font-bold text-[#C9A84C]">
+                {((subscription.amount_cents ?? 0) / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+              </p>
+              <p className="text-xs text-[#7A8FA8]">Vence {new Date(subscription.due_date).toLocaleDateString("pt-BR")}</p>
+            </div>
+          </div>
+          <div className="p-5 space-y-4">
+            {subscription.pix_emv && (
+              <div className="space-y-2">
+                <p className="text-xs font-semibold text-[#7A8FA8] uppercase">Pix Copia e Cola</p>
+                <div className="flex gap-2">
+                  <div className="flex-1 px-3 py-2 rounded-lg bg-[#0A1628] border border-[#243A66] text-xs font-mono text-[#7A8FA8] truncate">
+                    {subscription.pix_emv}
+                  </div>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(subscription.pix_emv!);
+                      setPixCopiado(true);
+                      setTimeout(() => setPixCopiado(false), 3000);
+                    }}
+                    className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${pixCopiado ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30" : "bg-[#C9A84C] hover:bg-[#E8C97A] text-[#09081A]"}`}
+                  >
+                    <Copy className="w-3.5 h-3.5" />
+                    {pixCopiado ? "Copiado!" : "Copiar"}
+                  </button>
+                </div>
+              </div>
+            )}
+            {subscription.boleto_barcode && (
+              <div className="space-y-2">
+                <p className="text-xs font-semibold text-[#7A8FA8] uppercase">Boleto Bancário</p>
+                <div className="flex gap-2">
+                  <div className="flex-1 px-3 py-2 rounded-lg bg-[#0A1628] border border-[#243A66] text-xs font-mono text-[#7A8FA8] truncate">
+                    {subscription.boleto_barcode}
+                  </div>
+                  {subscription.boleto_pdf && (
+                    <a href={subscription.boleto_pdf} target="_blank" rel="noopener noreferrer"
+                      className="flex-shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-lg border border-[#243A66] text-xs text-[#7A8FA8] hover:text-white transition-colors">
+                      <ExternalLink className="w-3.5 h-3.5" /> Ver
+                    </a>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Botão gerar cobrança se não há pendente */}
+      {!subscription && (
+        <div className="p-4 rounded-xl border border-[#243A66] bg-[#0D1929] flex items-center justify-between">
+          <div>
+            <p className="text-sm font-semibold text-white">Pagar Mensalidade via Cora</p>
+            <p className="text-xs text-[#7A8FA8]">Gere um Pix ou Boleto para {valorMensal}/mês</p>
+          </div>
+          <button
+            onClick={handleGerarCobranca}
+            disabled={loadingSub}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#C9A84C] hover:bg-[#E8C97A] text-[#09081A] text-sm font-bold transition-colors disabled:opacity-60"
+          >
+            {loadingSub ? <Loader2 className="w-4 h-4 animate-spin" /> : <QrCode className="w-4 h-4" />}
+            {loadingSub ? "Gerando..." : "Gerar Cobrança"}
+          </button>
+        </div>
+      )}
 
       {/* Comparativo de planos — apenas para PARTNER (não PRO) */}
       {profile.role === "PARTNER" && (
