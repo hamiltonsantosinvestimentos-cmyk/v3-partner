@@ -19,6 +19,7 @@ import {
   Phone,
   Download,
   CalendarDays,
+  ShoppingBag,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -115,9 +116,14 @@ function TrialBanner({ createdAt, role }: { createdAt: string; role: string }) {
         <div className="flex-1 min-w-0">
           <p className="text-sm font-bold text-red-400">Seu período de acesso expirou.</p>
           <p className="text-xs text-red-400/70 mt-0.5">
-            Entre em contato com o administrador para reativar sua conta.
+            Renove sua assinatura para continuar usando a plataforma.
           </p>
         </div>
+        <a href="/minha-assinatura"
+          className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/20 border border-red-500/40 text-red-400 text-xs font-bold hover:bg-red-500/30 transition-colors">
+          <CreditCard className="w-3.5 h-3.5" />
+          Renovar
+        </a>
       </div>
     );
   }
@@ -150,9 +156,19 @@ function TrialBanner({ createdAt, role }: { createdAt: string; role: string }) {
         </div>
         <p className="text-xs text-muted-foreground mt-1.5">
           Expira em {new Date(new Date(createdAt).getTime() + TRIAL_DAYS * 86400000).toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" })}
-          {" · "}Fale com seu administrador para renovar o acesso.
         </p>
       </div>
+      {isUrgent || isWarning ? (
+        <a href="/minha-assinatura"
+          className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+            isUrgent
+              ? "bg-red-500/20 border border-red-500/40 text-red-400 hover:bg-red-500/30"
+              : "bg-amber-400/20 border border-amber-400/40 text-amber-400 hover:bg-amber-400/30"
+          }`}>
+          <CreditCard className="w-3.5 h-3.5" />
+          Renovar
+        </a>
+      ) : null}
     </div>
   );
 }
@@ -267,6 +283,32 @@ export function DashboardClient({
       {/* Trial Banner — apenas para PARTNER e PARTNER_PRO */}
       {userCreatedAt && (
         <TrialBanner createdAt={userCreatedAt} role={role} />
+      )}
+
+      {/* Próximos Passos — apenas para partners */}
+      {["PARTNER", "PARTNER_PRO"].includes(role) && (
+        <div className="rounded-xl border border-[#243A66] bg-[#111F35] p-4">
+          <p className="text-[10px] font-bold text-[#C9A84C] uppercase tracking-widest mb-3">Comece por aqui</p>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { href: "/mesa-credito", icon: <CreditCard className="w-4 h-4" />, label: "Enviar Proposta de Crédito", desc: "Indique um cliente para a mesa" },
+              { href: "/marketplace", icon: <ShoppingBag className="w-4 h-4" />, label: "Explorar Marketplace", desc: "Produtos com comissão para vender" },
+              { href: "/crm", icon: <Users className="w-4 h-4" />, label: "Gerenciar CRM", desc: "Seus leads e follow-ups" },
+              { href: "/academy", icon: <Crown className="w-4 h-4" />, label: "Academy V3", desc: "Treinamentos e certificações" },
+            ].map(item => (
+              <a key={item.href} href={item.href}
+                className="group flex items-start gap-3 p-3 rounded-lg bg-[#09081A] border border-[#243A66] hover:border-[#C9A84C]/40 transition-all cursor-pointer">
+                <div className="w-8 h-8 rounded-lg bg-[#C9A84C]/10 flex items-center justify-center flex-shrink-0 text-[#C9A84C] group-hover:bg-[#C9A84C]/20 transition-colors">
+                  {item.icon}
+                </div>
+                <div>
+                  <p className="text-xs font-semibold text-[#F0ECE4] leading-tight">{item.label}</p>
+                  <p className="text-[10px] text-[#7A8FA8] mt-0.5 leading-tight">{item.desc}</p>
+                </div>
+              </a>
+            ))}
+          </div>
+        </div>
       )}
 
       {/* Header */}

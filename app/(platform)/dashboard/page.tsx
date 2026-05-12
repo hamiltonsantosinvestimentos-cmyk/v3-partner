@@ -1,5 +1,6 @@
 import { DashboardClient } from "@/components/dashboard/dashboard-client";
 import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 import {
   DEMO_SPLITS, DEMO_DEALS, DEMO_CREDIT_PROPOSALS, DEMO_TICKETS
 } from "@/lib/demo-data";
@@ -77,7 +78,13 @@ export default async function DashboardPage({
   const since = periodToDate(period);
   const adminRoles = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"];
   const isAdmin = adminRoles.includes(role);
-  const uid = user.id;
+  // Sanitiza uid: garante que é UUID válido antes de usar em queries string
+  const uidRaw = user.id;
+  const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (!UUID_REGEX.test(uidRaw)) {
+    return redirect("/unauthorized");
+  }
+  const uid = uidRaw;
 
   // Usa serviceClient para garantir leitura mesmo com RLS restritivo
   const { createClient: sc } = await import("@supabase/supabase-js");

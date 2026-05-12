@@ -38,7 +38,8 @@ export async function GET() {
       indicado_por_partner:profiles!prospeccao_leads_indicado_por_partner_id_fkey(id, full_name),
       responsavel:profiles!prospeccao_leads_responsavel_id_fkey(id, full_name)
     `)
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    .limit(500);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
@@ -54,7 +55,8 @@ export async function GET() {
     .from("profiles")
     .select("id, full_name, email")
     .in("role", ["PARTNER", "PARTNER_PRO"])
-    .order("full_name");
+    .order("full_name")
+    .limit(1000);
 
   return NextResponse.json({
     leads: leads ?? [],

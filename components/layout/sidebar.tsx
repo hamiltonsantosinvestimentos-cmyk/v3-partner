@@ -140,6 +140,19 @@ interface SidebarProps { role: UserRole; onClose?: () => void; }
 export function Sidebar({ role, onClose }: SidebarProps) {
   const pathname = usePathname();
   const [expandedItems, setExpandedItems] = useState<string[]>(["/mesa-credito"]);
+  const [academyProgress, setAcademyProgress] = useState<{ completed: number; total: number } | null>(null);
+
+  React.useEffect(() => {
+    fetch("/api/academy/progress")
+      .then(r => r.json())
+      .then(d => {
+        if (d.progress) {
+          const vals = Object.values(d.progress as Record<string, number>);
+          const completed = vals.filter((v: number) => v >= 90).length;
+          setAcademyProgress({ completed, total: 27 });
+        }
+      }).catch(() => {});
+  }, []);
 
   const toggleExpanded = (href: string) =>
     setExpandedItems(prev => prev.includes(href) ? prev.filter(h => h !== href) : [...prev, href]);
@@ -214,6 +227,11 @@ export function Sidebar({ role, onClose }: SidebarProps) {
                           <Icon className="w-3.5 h-3.5" />
                         </div>
                         <span className="flex-1 text-left">{item.label}</span>
+                        {item.href === "/academy" && academyProgress && academyProgress.completed > 0 && (
+                          <span className="text-[9px] font-bold text-[#C9A84C] bg-[#C9A84C]/10 px-1.5 py-0.5 rounded-full mr-1">
+                            {academyProgress.completed}/{academyProgress.total}
+                          </span>
+                        )}
                         {isExpanded
                           ? <ChevronDown className="w-3 h-3 flex-shrink-0 opacity-50" />
                           : <ChevronRight className="w-3 h-3 flex-shrink-0 opacity-50" />}

@@ -13,6 +13,24 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   }
 
+  // Rate limiting: verifica se já rodou nas últimas 12h (evita spam)
+  // Usa maybeSingle() para não lançar erro quando não existem notificações ainda
+  const { data: recentRuns } = await svc()
+    .from("notifications")
+    .select("created_at")
+    .eq("type", "ASSINATURA_VENCENDO")
+    .order("created_at", { ascending: false })
+    .limit(1);
+
+  const recentRun = recentRuns?.[0] ?? null;
+  if (recentRun) {
+    const lastRun = new Date(recentRun.created_at);
+    const horasSinceLastRun = (Date.now() - lastRun.getTime()) / 3600000;
+    if (horasSinceLastRun < 12) {
+      return NextResponse.json({ ok: true, skipped: true, reason: "Já rodou nas últimas 12h" });
+    }
+  }
+
   const now = new Date();
   const em7dias = new Date(now);
   em7dias.setDate(em7dias.getDate() + 7);

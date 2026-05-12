@@ -22,7 +22,7 @@ const ADMIN_ROLES = ["ADMIN", "GESTAO", "FINANCEIRO"] as const;
 
 const createSchema = z.object({
   partner_id:           z.string().uuid("Partner obrigatório"),
-  operation_type:       z.enum(["CREDITO", "MA", "CONSORCIO", "SPLIT_FISCAL"]),
+  operation_type:       z.enum(["CREDITO", "MA", "CONSORCIO", "SPLIT_FISCAL", "MARKETPLACE"]),
   operation_id:         z.string().uuid().optional().nullable(),
   operation_code:       z.string().max(50).optional().nullable(),
   operation_description: z.string().min(3).max(300),

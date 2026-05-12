@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Wallet, TrendingUp, Clock, CheckCircle2, Plus, X, Loader2 } from "lucide-react";
+import { Wallet, TrendingUp, Clock, CheckCircle2, Plus, X, Loader2, ShoppingBag, Send, Trophy, AlertCircle } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatMoeda } from "@/lib/demo-data-financeiro";
 import { ExportButton } from "@/components/financeiro/export-button";
@@ -23,6 +23,15 @@ export interface CommissionRow {
   created_at: string;
 }
 
+export interface MarketplaceLead {
+  id: string;
+  status: string;
+  created_at: string;
+  product_id: string;
+  client_name: string | null;
+  marketplace_products: { name: string; partner_commission_percent: number | null } | null;
+}
+
 interface Partner {
   id: string;
   full_name: string | null;
@@ -36,6 +45,7 @@ interface Props {
   role: string;
   commissions: CommissionRow[];
   partners?: Partner[];
+  marketplaceLeads?: MarketplaceLead[];
 }
 
 function StatusBadge({ status }: { status: string }) {
@@ -58,22 +68,36 @@ function TipoBadge({ tipo }: { tipo: string }) {
     MA: "bg-purple-500/20 text-purple-400 border-purple-500/30",
     CONSORCIO: "bg-amber-500/20 text-amber-400 border-amber-500/30",
     SPLIT_FISCAL: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
+    MARKETPLACE: "bg-[#C9A84C]/20 text-[#C9A84C] border-[#C9A84C]/30",
   };
-  const labels: Record<string, string> = { CREDITO: "Crédito", MA: "M&A", CONSORCIO: "Consórcio", SPLIT_FISCAL: "Split" };
+  const labels: Record<string, string> = { CREDITO: "Crédito", MA: "M&A", CONSORCIO: "Consórcio", SPLIT_FISCAL: "Split", MARKETPLACE: "Marketplace" };
   return (
-    <span className={`text-[10px] font-semibold border px-2 py-0.5 rounded-full ${map[tipo] ?? ""}`}>
+    <span className={`text-[10px] font-semibold border px-2 py-0.5 rounded-full ${map[tipo] ?? "bg-gray-500/20 text-gray-400 border-gray-500/30"}`}>
       {labels[tipo] ?? tipo}
     </span>
   );
 }
 
+function MktStatusBadge({ status }: { status: string }) {
+  const map: Record<string, { cls: string; label: string }> = {
+    NEW:          { cls: "bg-blue-500/20 text-blue-400 border-blue-500/30",    label: "Novo" },
+    IN_PROGRESS:  { cls: "bg-amber-500/20 text-amber-400 border-amber-500/30", label: "Em Andamento" },
+    CLOSED_WON:   { cls: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30", label: "Ganho" },
+    CLOSED_LOST:  { cls: "bg-gray-500/20 text-gray-400 border-gray-500/30",   label: "Perdido" },
+  };
+  const { cls, label } = map[status] ?? { cls: "bg-gray-500/20 text-gray-400 border-gray-500/30", label: status };
+  return <span className={`text-[10px] font-semibold border px-2 py-0.5 rounded-full ${cls}`}>{label}</span>;
+}
+
 const inputCls = "w-full h-9 px-3 text-sm rounded-lg border bg-[#0A1628] border-[#243A66] text-[#F0ECE4] placeholder:text-[#3A5070] focus:outline-none focus:ring-1 focus:ring-[#C9A84C]/50";
 const labelCls = "block text-xs font-semibold text-[#7A8FA8] mb-1";
 
-export function ComissoesPartnerClient({ partnerId, partnerName, role, commissions: initialCommissions, partners = [] }: Props) {
+export function ComissoesPartnerClient({ partnerId, partnerName, role, commissions: initialCommissions, partners = [], marketplaceLeads = [] }: Props) {
   const [commissions, setCommissions] = useState<CommissionRow[]>(initialCommissions);
-  const [filtroTipo, setFiltroTipo] = useState<"TODOS" | "CREDITO" | "MA" | "CONSORCIO" | "SPLIT_FISCAL">("TODOS");
+  const [filtroTipo, setFiltroTipo] = useState<"TODOS" | "CREDITO" | "MA" | "CONSORCIO" | "SPLIT_FISCAL" | "MARKETPLACE">("TODOS");
   const [filtroStatus, setFiltroStatus] = useState<"TODOS" | "A_PAGAR" | "PAGA">("TODOS");
+  const [mktPage, setMktPage] = useState(0);
+  const MKT_PAGE_SIZE = 5;
 
   const isAdmin = ["ADMIN", "GESTAO", "FINANCEIRO"].includes(role);
 
@@ -83,7 +107,7 @@ export function ComissoesPartnerClient({ partnerId, partnerName, role, commissio
   const [erroModal, setErroModal] = useState("");
   const [form, setForm] = useState({
     partner_id: "",
-    operation_type: "CREDITO" as "CREDITO" | "MA" | "CONSORCIO" | "SPLIT_FISCAL",
+    operation_type: "CREDITO" as "CREDITO" | "MA" | "CONSORCIO" | "SPLIT_FISCAL" | "MARKETPLACE",
     operation_description: "",
     operation_code: "",
     operation_value: "",
@@ -130,7 +154,7 @@ export function ComissoesPartnerClient({ partnerId, partnerName, role, commissio
       if (!res.ok) { setErroModal(data.error || "Erro ao criar comissão."); return; }
       setCommissions(prev => [data.commission, ...prev]);
       setModalAberto(false);
-      setForm({ partner_id: "", operation_type: "CREDITO", operation_description: "", operation_code: "", operation_value: "", commission_percent: "30", operation_closed_at: new Date().toISOString().slice(0, 10), notes: "" });
+      setForm({ partner_id: "", operation_type: "CREDITO" as const, operation_description: "", operation_code: "", operation_value: "", commission_percent: "30", operation_closed_at: new Date().toISOString().slice(0, 10), notes: "" });
     } catch {
       setErroModal("Erro de rede. Tente novamente.");
     } finally {
@@ -147,11 +171,20 @@ export function ComissoesPartnerClient({ partnerId, partnerName, role, commissio
   const recebido = commissions.filter(c => c.status === "PAGA").reduce((s, c) => s + (c.commission_value ?? 0), 0);
   const totalGeral = aReceber + recebido;
 
-  const porTipo = (["CREDITO", "MA", "CONSORCIO", "SPLIT_FISCAL"] as const).map(tipo => ({
+  const porTipo = (["CREDITO", "MA", "CONSORCIO", "SPLIT_FISCAL", "MARKETPLACE"] as const).map(tipo => ({
     tipo,
     total: commissions.filter(c => c.operation_type === tipo).reduce((s, c) => s + (c.commission_value ?? 0), 0),
     qtd: commissions.filter(c => c.operation_type === tipo).length,
   }));
+
+  // Marketplace stats
+  const mktTotal   = marketplaceLeads.length;
+  const mktNovos   = marketplaceLeads.filter(l => l.status === "NEW").length;
+  const mktAndamento = marketplaceLeads.filter(l => l.status === "IN_PROGRESS").length;
+  const mktGanhos  = marketplaceLeads.filter(l => l.status === "CLOSED_WON").length;
+  const mktPerdidos = marketplaceLeads.filter(l => l.status === "CLOSED_LOST").length;
+  const mktPaginados = marketplaceLeads.slice(mktPage * MKT_PAGE_SIZE, (mktPage + 1) * MKT_PAGE_SIZE);
+  const mktTotalPages = Math.ceil(marketplaceLeads.length / MKT_PAGE_SIZE);
 
   return (
     <div className="space-y-5 animate-fade-in">
@@ -215,11 +248,11 @@ export function ComissoesPartnerClient({ partnerId, partnerName, role, commissio
       </div>
 
       {/* Por tipo */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
         {porTipo.map(({ tipo, total, qtd }) => {
-          const labels: Record<string, string> = { CREDITO: "Crédito", MA: "M&A", CONSORCIO: "Consórcio", SPLIT_FISCAL: "Split Fiscal" };
-          const colors: Record<string, string> = { CREDITO: "#3B82F6", MA: "#8B5CF6", CONSORCIO: "#F59E0B", SPLIT_FISCAL: "#10B981" };
-          const icons: Record<string, string> = { CREDITO: "💳", MA: "🤝", CONSORCIO: "🏆", SPLIT_FISCAL: "📊" };
+          const labels: Record<string, string> = { CREDITO: "Crédito", MA: "M&A", CONSORCIO: "Consórcio", SPLIT_FISCAL: "Split Fiscal", MARKETPLACE: "Marketplace" };
+          const colors: Record<string, string> = { CREDITO: "#3B82F6", MA: "#8B5CF6", CONSORCIO: "#F59E0B", SPLIT_FISCAL: "#10B981", MARKETPLACE: "#C9A84C" };
+          const icons: Record<string, string> = { CREDITO: "💳", MA: "🤝", CONSORCIO: "🏆", SPLIT_FISCAL: "📊", MARKETPLACE: "🛒" };
           return (
             <div key={tipo} className="bg-[#091221] border border-[#122036] rounded-xl p-4">
               <div className="flex items-center gap-2 mb-3">
@@ -233,11 +266,124 @@ export function ComissoesPartnerClient({ partnerId, partnerName, role, commissio
         })}
       </div>
 
+      {/* Dashboard Marketplace */}
+      <div className="rounded-xl border border-[#C9A84C]/20 bg-[#0D1B2E] p-5">
+        <div className="flex items-center gap-2 mb-4">
+          <div className="w-8 h-8 rounded-lg bg-[#C9A84C]/20 flex items-center justify-center">
+            <ShoppingBag className="w-4 h-4 text-[#C9A84C]" />
+          </div>
+          <div>
+            <p className="text-sm font-bold text-white">Marketplace — Leads Enviados</p>
+            <p className="text-xs text-muted-foreground">Produtos indicados a clientes via marketplace</p>
+          </div>
+        </div>
+
+        {mktTotal === 0 ? (
+          <div className="flex flex-col items-center justify-center py-6 text-center text-muted-foreground">
+            <ShoppingBag className="w-8 h-8 mb-2 opacity-30" />
+            <p className="text-sm">Nenhum lead de marketplace ainda</p>
+            <p className="text-xs mt-1">Acesse o Marketplace e indique produtos a clientes para gerar comissões.</p>
+          </div>
+        ) : (
+          <>
+            {/* KPI mini cards */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
+              <div className="bg-[#091221] border border-[#122036] rounded-lg p-3 text-center">
+                <div className="flex items-center justify-center gap-1 mb-1">
+                  <Send className="w-3 h-3 text-blue-400" />
+                  <span className="text-[10px] text-muted-foreground uppercase tracking-wide">Enviados</span>
+                </div>
+                <p className="text-xl font-bold text-blue-400">{mktTotal}</p>
+              </div>
+              <div className="bg-[#091221] border border-[#122036] rounded-lg p-3 text-center">
+                <div className="flex items-center justify-center gap-1 mb-1">
+                  <AlertCircle className="w-3 h-3 text-amber-400" />
+                  <span className="text-[10px] text-muted-foreground uppercase tracking-wide">Em Andamento</span>
+                </div>
+                <p className="text-xl font-bold text-amber-400">{mktAndamento + mktNovos}</p>
+              </div>
+              <div className="bg-[#091221] border border-[#122036] rounded-lg p-3 text-center">
+                <div className="flex items-center justify-center gap-1 mb-1">
+                  <Trophy className="w-3 h-3 text-emerald-400" />
+                  <span className="text-[10px] text-muted-foreground uppercase tracking-wide">Ganhos</span>
+                </div>
+                <p className="text-xl font-bold text-emerald-400">{mktGanhos}</p>
+              </div>
+              <div className="bg-[#091221] border border-[#122036] rounded-lg p-3 text-center">
+                <div className="flex items-center justify-center gap-1 mb-1">
+                  <TrendingUp className="w-3 h-3 text-[#C9A84C]" />
+                  <span className="text-[10px] text-muted-foreground uppercase tracking-wide">Taxa Conversão</span>
+                </div>
+                <p className="text-xl font-bold text-[#C9A84C]">
+                  {mktTotal > 0 ? `${Math.round((mktGanhos / mktTotal) * 100)}%` : "0%"}
+                </p>
+              </div>
+            </div>
+
+            {/* Tabela de leads marketplace */}
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-border/40">
+                    {["Produto", "Cliente", "Status", "Data"].map(h => (
+                      <th key={h} className="text-left px-3 py-2 text-muted-foreground font-semibold uppercase tracking-wide text-[10px]">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {mktPaginados.map((lead, i) => (
+                    <tr key={lead.id} className={`border-b border-border/20 hover:bg-secondary/30 transition-colors ${i % 2 === 0 ? "" : "bg-[#091221]/40"}`}>
+                      <td className="px-3 py-2 text-white max-w-[180px]">
+                        <div className="truncate" title={lead.marketplace_products?.name ?? "—"}>
+                          {lead.marketplace_products?.name ?? "—"}
+                        </div>
+                        {lead.marketplace_products?.partner_commission_percent != null && (
+                          <div className="text-[10px] text-[#C9A84C]">{lead.marketplace_products.partner_commission_percent}% comissão</div>
+                        )}
+                      </td>
+                      <td className="px-3 py-2 text-muted-foreground">{lead.client_name ?? "—"}</td>
+                      <td className="px-3 py-2"><MktStatusBadge status={lead.status} /></td>
+                      <td className="px-3 py-2 text-muted-foreground whitespace-nowrap">
+                        {new Date(lead.created_at).toLocaleDateString("pt-BR")}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Paginação */}
+            {mktTotalPages > 1 && (
+              <div className="flex items-center justify-between mt-3">
+                <span className="text-xs text-muted-foreground">{mktTotal} leads no total</span>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setMktPage(p => Math.max(0, p - 1))}
+                    disabled={mktPage === 0}
+                    className="px-3 py-1 text-xs rounded-lg border border-[#243A66] text-[#7A8FA8] disabled:opacity-40 hover:text-white transition-colors"
+                  >
+                    ‹ Anterior
+                  </button>
+                  <span className="text-xs text-muted-foreground">{mktPage + 1} / {mktTotalPages}</span>
+                  <button
+                    onClick={() => setMktPage(p => Math.min(mktTotalPages - 1, p + 1))}
+                    disabled={mktPage === mktTotalPages - 1}
+                    className="px-3 py-1 text-xs rounded-lg border border-[#243A66] text-[#7A8FA8] disabled:opacity-40 hover:text-white transition-colors"
+                  >
+                    Próximo ›
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+
       {/* Filtros */}
       <div className="flex items-center gap-3 flex-wrap">
-        <div className="flex bg-secondary rounded-lg p-0.5">
-          {(["TODOS", "CREDITO", "MA", "CONSORCIO", "SPLIT_FISCAL"] as const).map(t => {
-            const labels = { TODOS: "Todos", CREDITO: "Crédito", MA: "M&A", CONSORCIO: "Consórcio", SPLIT_FISCAL: "Split" };
+        <div className="flex bg-secondary rounded-lg p-0.5 flex-wrap gap-0.5">
+          {(["TODOS", "CREDITO", "MA", "CONSORCIO", "SPLIT_FISCAL", "MARKETPLACE"] as const).map(t => {
+            const labels = { TODOS: "Todos", CREDITO: "Crédito", MA: "M&A", CONSORCIO: "Consórcio", SPLIT_FISCAL: "Split", MARKETPLACE: "Marketplace" };
             return (
               <button key={t} onClick={() => setFiltroTipo(t)} className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${filtroTipo === t ? "bg-[#C9A84C] text-[#09081A]" : "text-muted-foreground hover:text-foreground"}`}>
                 {labels[t]}
@@ -386,6 +532,7 @@ export function ComissoesPartnerClient({ partnerId, partnerName, role, commissio
                     <option value="MA">M&A</option>
                     <option value="CONSORCIO">Consórcio</option>
                     <option value="SPLIT_FISCAL">Split Fiscal</option>
+                    <option value="MARKETPLACE">Marketplace</option>
                   </select>
                 </div>
                 <div>

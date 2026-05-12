@@ -84,6 +84,15 @@ export default async function ComissoesPage() {
     partners = partnerRows ?? [];
   }
 
+  // Marketplace leads deste partner (ou todos se admin)
+  let mktQ = svc
+    .from("marketplace_leads")
+    .select("id, status, created_at, product_id, client_name, marketplace_products(name, partner_commission_percent)")
+    .order("created_at", { ascending: false })
+    .limit(500);
+  if (!isAdmin) mktQ = mktQ.eq("partner_id", user.id) as typeof mktQ;
+  const { data: marketplaceLeads } = await mktQ;
+
   return (
     <ComissoesPartnerClient
       partnerId={user.id}
@@ -91,6 +100,7 @@ export default async function ComissoesPage() {
       role={profile.role}
       commissions={(commissions ?? []) as Parameters<typeof ComissoesPartnerClient>[0]["commissions"]}
       partners={partners}
+      marketplaceLeads={(marketplaceLeads ?? []) as Parameters<typeof ComissoesPartnerClient>[0]["marketplaceLeads"]}
     />
   );
 }

@@ -22,6 +22,27 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Nome e e-mail são obrigatórios" }, { status: 400 });
   }
 
+  // Validação básica de formato de e-mail
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(email.trim())) {
+    return NextResponse.json({ error: "E-mail inválido" }, { status: 400 });
+  }
+
+  // Rate limiting básico por e-mail: impede o mesmo e-mail de criar múltiplos prospects em 1h
+  const { data: existente } = await svc()
+    .from("prospeccao_leads")
+    .select("id, created_at")
+    .eq("email", email.trim().toLowerCase())
+    .order("created_at", { ascending: false })
+    .limit(1);
+  const ultimoCadastro = existente?.[0];
+  if (!token && ultimoCadastro) {
+    const minutos = (Date.now() - new Date(ultimoCadastro.created_at).getTime()) / 60000;
+    if (minutos < 60) {
+      return NextResponse.json({ ok: true, leadId: ultimoCadastro.id }); // retorna silenciosamente ok para não revelar existência
+    }
+  }
+
   const db = svc();
 
   if (token) {
@@ -42,10 +63,10 @@ export async function POST(req: NextRequest) {
     // Atualiza dados e avança etapa para "contatado" se ainda estiver em "prospect"
     const novaEtapa = etapaAtual === "prospect" ? "contatado" : etapaAtual;
 
-    await db.from("prospeccao_leads").update({
+    const { error: updateError } = await db.from("prospeccao_leads").update({
       nome: nome.trim(),
       documento: documento || null,
-      email: email.trim(),
+      email: email.trim().toLowerCase(),
       telefone: telefone || null,
       cidade: cidade || null,
       estado: estado || null,
@@ -54,13 +75,18 @@ export async function POST(req: NextRequest) {
       etapa: novaEtapa,
     }).eq("id", leadId);
 
-    // Registra no histórico
+    if (updateError) {
+      console.error("Erro ao atualizar prospect via link:", updateError.message);
+      return NextResponse.json({ error: "Erro ao salvar dados" }, { status: 500 });
+    }
+
+    // Registra no histórico apenas se update foi bem-sucedido
     if (novaEtapa !== etapaAtual) {
       await db.from("prospeccao_historico").insert({
         lead_id: leadId,
         etapa_anterior: etapaAtual,
         etapa_nova: novaEtapa,
-        nota: "Prospect preencheu o formulário via link",
+        nota: "Prospect preencheu o formulário via link público",
       });
     }
 

@@ -33,11 +33,22 @@ export async function POST(req: NextRequest) {
 
   if (!lead) return NextResponse.json({ error: "Prospect não encontrado" }, { status: 404 });
 
-  // Reutiliza token existente ou gera novo
+  // Reutiliza token existente ou gera novo com verificação de unicidade
   let token = (lead as { link_token?: string }).link_token;
   if (!token) {
-    // Token: 12 chars alfanuméricos únicos
-    token = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`.toUpperCase().slice(0, 12);
+    // Gera token único com loop de verificação para evitar colisões
+    let attempts = 0;
+    while (!token && attempts < 5) {
+      attempts++;
+      const candidate = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 9)}`.toUpperCase().slice(0, 14);
+      const { data: existing } = await db
+        .from("prospeccao_leads")
+        .select("id")
+        .eq("link_token", candidate)
+        .limit(1);
+      if (!existing || existing.length === 0) token = candidate;
+    }
+    if (!token) return NextResponse.json({ error: "Erro ao gerar token único" }, { status: 500 });
 
     await db
       .from("prospeccao_leads")

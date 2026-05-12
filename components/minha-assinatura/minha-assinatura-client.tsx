@@ -27,6 +27,9 @@ interface Commission {
   commission_value: number;
   status: string;
   created_at: string;
+  deal_id?: string | null;
+  deal_type?: string | null;
+  description?: string | null;
 }
 
 interface Props {
@@ -62,6 +65,8 @@ export function MinhaAssinaturaClient({ profile, contract, commissions }: Props)
 
   const [renovacaoStatus, setRenovacaoStatus] = useState<"idle" | "loading" | "ok" | "err">("idle");
   const [upgradeStatus, setUpgradeStatus]     = useState<"idle" | "loading" | "ok" | "err">("idle");
+  const [confirmRenovar, setConfirmRenovar]   = useState(false);
+  const [confirmUpgrade, setConfirmUpgrade]   = useState(false);
 
   const totalRecebido = commissions.filter(c => c.status === "PAGA").reduce((s, c) => s + c.commission_value, 0);
   const totalPendente = commissions.filter(c => c.status === "A_PAGAR").reduce((s, c) => s + c.commission_value, 0);
@@ -74,22 +79,28 @@ export function MinhaAssinaturaClient({ profile, contract, commissions }: Props)
   const showRenovar = trialStatus.daysLeft <= 15 || trialStatus.daysLeft === 0;
 
   async function handleRenovar() {
+    setConfirmRenovar(false);
     setRenovacaoStatus("loading");
     try {
       const res = await fetch("/api/assinatura/solicitar-renovacao", { method: "POST" });
       setRenovacaoStatus(res.ok ? "ok" : "err");
+      if (res.ok) setTimeout(() => setRenovacaoStatus("idle"), 5000);
     } catch {
       setRenovacaoStatus("err");
+      setTimeout(() => setRenovacaoStatus("idle"), 4000);
     }
   }
 
   async function handleUpgrade() {
+    setConfirmUpgrade(false);
     setUpgradeStatus("loading");
     try {
       const res = await fetch("/api/assinatura/solicitar-upgrade", { method: "POST" });
       setUpgradeStatus(res.ok ? "ok" : "err");
+      if (res.ok) setTimeout(() => setUpgradeStatus("idle"), 5000);
     } catch {
       setUpgradeStatus("err");
+      setTimeout(() => setUpgradeStatus("idle"), 4000);
     }
   }
 
@@ -145,19 +156,25 @@ export function MinhaAssinaturaClient({ profile, contract, commissions }: Props)
         {/* Ações */}
         <div className="mt-5 pt-5 border-t border-[#243A66] flex flex-wrap gap-3">
           {/* Botão renovar — aparece quando faltam ≤ 15 dias */}
-          {showRenovar && (
+          {showRenovar && !confirmRenovar && (
             <button
-              onClick={handleRenovar}
-              disabled={renovacaoStatus === "loading" || renovacaoStatus === "ok"}
+              onClick={() => setConfirmRenovar(true)}
+              disabled={renovacaoStatus === "loading"}
               className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold bg-amber-500/15 border border-amber-500/30 text-amber-400 hover:bg-amber-500/25 transition-all disabled:opacity-60"
             >
               {renovacaoStatus === "loading"
                 ? <Loader2 className="w-4 h-4 animate-spin" />
                 : <RefreshCw className="w-4 h-4" />}
-              {renovacaoStatus === "ok" ? "Solicitação enviada!" : renovacaoStatus === "err" ? "Erro — tente novamente" : "Solicitar Renovação"}
+              {renovacaoStatus === "ok" ? "✓ Solicitação enviada!" : renovacaoStatus === "err" ? "Erro — tente novamente" : "Solicitar Renovação"}
             </button>
           )}
-
+          {showRenovar && confirmRenovar && (
+            <div className="flex items-center gap-2 p-3 rounded-xl border border-amber-500/30 bg-amber-500/10">
+              <p className="text-xs text-amber-400 font-medium">Confirmar solicitação de renovação por {valorMensal}/mês?</p>
+              <button onClick={handleRenovar} className="px-3 py-1 rounded-lg bg-amber-500 text-[#09081A] text-xs font-bold hover:bg-amber-400">Confirmar</button>
+              <button onClick={() => setConfirmRenovar(false)} className="px-3 py-1 rounded-lg bg-white/5 text-[#7A8FA8] text-xs">Cancelar</button>
+            </div>
+          )}
           {/* Upgrade movido para card de comparação abaixo */}
         </div>
       </div>
@@ -203,14 +220,24 @@ export function MinhaAssinaturaClient({ profile, contract, commissions }: Props)
                   <li key={b} className="flex items-center gap-1.5"><CheckCircle2 className="w-3 h-3 text-[#C9A84C] flex-shrink-0" />{b}</li>
                 ))}
               </ul>
-              <button
-                onClick={handleUpgrade}
-                disabled={upgradeStatus === "loading" || upgradeStatus === "ok"}
-                className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-bold bg-[#C9A84C] text-[#09081A] hover:bg-[#E8C97A] disabled:opacity-60 transition-all mt-1"
-              >
-                {upgradeStatus === "loading" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ArrowUpCircle className="w-3.5 h-3.5" />}
-                {upgradeStatus === "ok" ? "Solicitação enviada!" : upgradeStatus === "err" ? "Erro — tente novamente" : "Solicitar Upgrade para PRO"}
-              </button>
+              {!confirmUpgrade ? (
+                <button
+                  onClick={() => setConfirmUpgrade(true)}
+                  disabled={upgradeStatus === "loading"}
+                  className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-bold bg-[#C9A84C] text-[#09081A] hover:bg-[#E8C97A] disabled:opacity-60 transition-all mt-1"
+                >
+                  {upgradeStatus === "loading" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ArrowUpCircle className="w-3.5 h-3.5" />}
+                  {upgradeStatus === "ok" ? "✓ Solicitação enviada!" : upgradeStatus === "err" ? "Erro — tente novamente" : "Solicitar Upgrade para PRO"}
+                </button>
+              ) : (
+                <div className="mt-1 space-y-2">
+                  <p className="text-xs text-[#C9A84C] text-center">Confirmar upgrade para PRO por R$ 397/mês?</p>
+                  <div className="flex gap-2">
+                    <button onClick={handleUpgrade} className="flex-1 py-2 rounded-lg bg-[#C9A84C] text-[#09081A] text-xs font-bold">Confirmar</button>
+                    <button onClick={() => setConfirmUpgrade(false)} className="flex-1 py-2 rounded-lg bg-white/5 text-[#7A8FA8] text-xs">Cancelar</button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -279,16 +306,20 @@ export function MinhaAssinaturaClient({ profile, contract, commissions }: Props)
               <table className="w-full text-xs">
                 <thead>
                   <tr className="border-b border-border/30">
-                    {["Data", "Valor", "Status"].map(h => (
+                    {["Data", "Operação", "Valor", "Status"].map(h => (
                       <th key={h} className="text-left px-5 py-2.5 text-muted-foreground font-semibold uppercase tracking-wide text-[10px]">{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {commissions.slice(0, 10).map((c, i) => (
+                  {commissions.slice(0, 20).map((c, i) => (
                     <tr key={i} className="border-b border-border/20 hover:bg-secondary/20">
-                      <td className="px-5 py-2.5 text-muted-foreground">{new Date(c.created_at).toLocaleDateString("pt-BR")}</td>
-                      <td className="px-5 py-2.5 font-semibold text-[#F0ECE4]">{moeda(c.commission_value)}</td>
+                      <td className="px-5 py-2.5 text-muted-foreground whitespace-nowrap">{new Date(c.created_at).toLocaleDateString("pt-BR")}</td>
+                      <td className="px-5 py-2.5 text-[#F0ECE4] max-w-[200px]">
+                        <p className="truncate">{c.description ?? c.deal_type ?? "—"}</p>
+                        {c.deal_id && <p className="text-[#7A8FA8] text-[10px]">Ref: {c.deal_id.slice(0, 8)}…</p>}
+                      </td>
+                      <td className="px-5 py-2.5 font-semibold text-[#F0ECE4] whitespace-nowrap">{moeda(c.commission_value)}</td>
                       <td className="px-5 py-2.5">
                         <span className={`text-[10px] font-semibold border px-2 py-0.5 rounded-full ${
                           c.status === "PAGA" ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"

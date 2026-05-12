@@ -6,6 +6,7 @@ import { Topbar } from "./topbar";
 import type { UserRole } from "@/lib/constants";
 import { WelcomeWizard } from "@/components/onboarding/welcome-wizard";
 import { LocationGate } from "@/components/onboarding/location-gate";
+import { SubscriptionGuard } from "./subscription-guard";
 
 interface PlatformShellProps {
   user: {
@@ -14,6 +15,8 @@ interface PlatformShellProps {
     email: string;
     role: UserRole;
     avatar_url: string | null;
+    trial_expires_at?: string | null;
+    is_active?: boolean | null;
   };
   notificationCount: number;
   children: React.ReactNode;
@@ -24,6 +27,12 @@ export function PlatformShell({ user, notificationCount, children }: PlatformShe
 
   return (
     <div className="flex h-screen overflow-hidden bg-[#09081A]">
+      {/* Bloqueio de assinatura expirada */}
+      <SubscriptionGuard
+        trialExpiresAt={user.trial_expires_at ?? null}
+        isActive={user.is_active ?? null}
+        role={user.role}
+      />
       {/* Wizard de boas-vindas — apenas para partners novos */}
       <WelcomeWizard userName={user.full_name || "Parceiro"} role={user.role} />
       {/* Gate de localização — solicita cidade na primeira sessão */}

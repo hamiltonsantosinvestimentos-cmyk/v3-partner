@@ -70,6 +70,8 @@ export default async function PlatformLayout({
       id: string; email: string; full_name: string | null;
       role: "ADMIN" | "PARTNER" | "PARTNER_PRO" | "MESA_OPERACIONAL" | "GESTAO" | "FINANCEIRO";
       avatar_url: string | null;
+      trial_expires_at: string | null;
+      is_active: boolean | null;
     };
 
     let notificationCount = 0;
@@ -92,6 +94,8 @@ export default async function PlatformLayout({
           email: profile.email,
           role: profile.role,
           avatar_url: profile.avatar_url,
+          trial_expires_at: profile.trial_expires_at ?? null,
+          is_active: profile.is_active ?? null,
         }}
         notificationCount={notificationCount}
       >

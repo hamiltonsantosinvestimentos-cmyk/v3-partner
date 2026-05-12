@@ -76,7 +76,7 @@ function ProductCard({ product, favorites, onToggleFavorite, myLeadProductIds }:
   onToggleFavorite: (id: string) => void;
   myLeadProductIds: Set<string>;
 }) {
-  const commRate = product.partner_commission_percent ?? product.commission_percent;
+  const commRate = product.partner_commission_percent ?? product.commission_percent ?? 0;
   const isFav = favorites.has(product.id);
   const hasLead = myLeadProductIds.has(product.id);
 
@@ -92,9 +92,11 @@ function ProductCard({ product, favorites, onToggleFavorite, myLeadProductIds }:
             <Package className="w-16 h-16 text-[#7A8FA8]/30" />
           )}
           {/* Commission badge */}
-          <div className="absolute top-2 right-2 bg-[#09081A]/90 border border-[#C9A84C]/40 rounded-full px-2.5 py-1">
-            <span className="text-[#C9A84C] text-[10px] font-bold">{commRate}% comissão</span>
-          </div>
+          {commRate > 0 && (
+            <div className="absolute top-2 right-2 bg-[#09081A]/90 border border-[#C9A84C]/40 rounded-full px-2.5 py-1">
+              <span className="text-[#C9A84C] text-[10px] font-bold">{commRate}% comissão</span>
+            </div>
+          )}
         </div>
       </Link>
 
@@ -168,12 +170,13 @@ function QuickModal({ product, onClose }: { product: Product; onClose: () => voi
   const [sent, setSent] = useState(false);
   const [error, setError] = useState("");
 
-  const commRate = product.partner_commission_percent ?? product.commission_percent;
-  const estimatedCommission = saleValue && !isNaN(parseFloat(saleValue)) && parseFloat(saleValue) > 0
+  const commRate = product.partner_commission_percent ?? product.commission_percent ?? 0;
+  const estimatedCommission = saleValue && !isNaN(parseFloat(saleValue)) && parseFloat(saleValue) > 0 && commRate > 0
     ? parseFloat(saleValue) * commRate / 100
     : null;
 
   async function handleInteresse() {
+    if (!clientName.trim()) { setError("Informe o nome do cliente antes de enviar."); return; }
     setSending(true);
     setError("");
     try {
@@ -227,8 +230,8 @@ function QuickModal({ product, onClose }: { product: Product; onClose: () => voi
             </div>
             <div className="bg-[#C9A84C]/10 rounded-xl p-4 border border-[#C9A84C]/30">
               <p className="text-[10px] text-[#C9A84C] uppercase tracking-wider mb-1">Sua Comissão</p>
-              <p className="text-[#C9A84C] font-bold text-xl">{commRate}%</p>
-              {product.price && (
+              <p className="text-[#C9A84C] font-bold text-xl">{commRate > 0 ? `${commRate}%` : "A definir"}</p>
+              {product.price && commRate > 0 && (
                 <p className="text-[#7A8FA8] text-xs mt-0.5">≈ {fmtCurrency(product.price * commRate / 100)} por venda</p>
               )}
             </div>
@@ -288,11 +291,14 @@ function QuickModal({ product, onClose }: { product: Product; onClose: () => voi
                 Quero vender este produto
               </h3>
               <div className="space-y-3">
-                <input value={clientName} onChange={e => setClientName(e.target.value)}
-                  placeholder="Nome do cliente (opcional)"
-                  className="w-full bg-[#111F35] border border-[#1B3050] rounded-lg px-3 py-2 text-sm text-[#F0ECE4] placeholder:text-[#7A8FA8]/50 focus:outline-none focus:border-[#C9A84C]/50" />
+                <div>
+                  <input value={clientName} onChange={e => setClientName(e.target.value)}
+                    placeholder="Nome do cliente *"
+                    className="w-full bg-[#111F35] border border-[#C9A84C]/30 rounded-lg px-3 py-2 text-sm text-[#F0ECE4] placeholder:text-[#7A8FA8]/50 focus:outline-none focus:border-[#C9A84C]/60" />
+                  <p className="text-[10px] text-[#7A8FA8] mt-1">Obrigatório — identifica o lead para o fornecedor</p>
+                </div>
                 <input value={clientContact} onChange={e => setClientContact(e.target.value)}
-                  placeholder="Contato do cliente (opcional)"
+                  placeholder="WhatsApp ou e-mail do cliente (opcional)"
                   className="w-full bg-[#111F35] border border-[#1B3050] rounded-lg px-3 py-2 text-sm text-[#F0ECE4] placeholder:text-[#7A8FA8]/50 focus:outline-none focus:border-[#C9A84C]/50" />
                 <textarea value={message} onChange={e => setMessage(e.target.value)}
                   placeholder="Mensagem ao fornecedor (opcional)" rows={3}

@@ -100,27 +100,31 @@ export async function GET() {
     ? Math.round(((mrr - mrrMesAnterior) / mrrMesAnterior) * 100 * 10) / 10
     : 0;
 
-  // Série histórica mensal (últimos 6 meses) para gráfico
+  // Série histórica mensal (últimos 6 meses) para gráfico — calculada uma vez sobre o array já carregado
   const serie: Array<{ mes: string; mrr: number; partners: number; novos: number }> = [];
   for (let i = 5; i >= 0; i--) {
     const d = new Date(anoAtual, mesAtual - 1 - i, 1);
-    const fim = new Date(anoAtual, mesAtual - 1 - i + 1, 0);
+    const fim = new Date(anoAtual, mesAtual - 1 - i + 1, 0, 23, 59, 59);
     const nomeMes = d.toLocaleString("pt-BR", { month: "short" });
-    const ativosNoMes = partners.filter(p => {
-      const criado = new Date(p.created_at);
-      if (criado > fim) return false;
-      if (!p.is_active && i > 0) return false; // aproximação
-      if (!p.trial_expires_at) return true;
-      return new Date(p.trial_expires_at) >= d;
+    const dTime = d.getTime();
+    const fimTime = fim.getTime();
+    let countPartner = 0, countPro = 0, novosNoMes = 0;
+    for (const p of partners) {
+      const criadoTime = new Date(p.created_at).getTime();
+      if (criadoTime >= dTime && criadoTime <= fimTime) novosNoMes++;
+      if (criadoTime > fimTime) continue;
+      if (!p.is_active && i > 0) continue;
+      const expTime = p.trial_expires_at ? new Date(p.trial_expires_at).getTime() : Infinity;
+      if (expTime < dTime) continue;
+      if (p.role === "PARTNER") countPartner++;
+      else if (p.role === "PARTNER_PRO") countPro++;
+    }
+    serie.push({
+      mes: nomeMes,
+      mrr: countPartner * PRECO_PARTNER + countPro * PRECO_PRO,
+      partners: countPartner + countPro,
+      novos: novosNoMes,
     });
-    const mrrNoMes =
-      ativosNoMes.filter(p => p.role === "PARTNER").length * PRECO_PARTNER +
-      ativosNoMes.filter(p => p.role === "PARTNER_PRO").length * PRECO_PRO;
-    const novosNoMes = partners.filter(p => {
-      const criado = new Date(p.created_at);
-      return criado >= d && criado <= fim;
-    }).length;
-    serie.push({ mes: nomeMes, mrr: mrrNoMes, partners: ativosNoMes.length, novos: novosNoMes });
   }
 
   // Receita real registrada (financeiro_records)

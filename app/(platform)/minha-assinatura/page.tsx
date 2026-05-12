@@ -30,9 +30,10 @@ export default async function MinhaAssinaturaPage() {
 
   const { data: commissions } = await svc
     .from("commissions")
-    .select("commission_value, status, created_at")
+    .select("commission_value, status, created_at, deal_id, deal_type, description")
     .eq("partner_id", user.id)
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    .limit(50);
 
   return (
     <MinhaAssinaturaClient

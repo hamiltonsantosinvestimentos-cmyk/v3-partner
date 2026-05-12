@@ -57,7 +57,8 @@ export async function POST(req: NextRequest) {
   const supplierEmail = (supplierRes.data as { email?: string } | null)?.email ?? null;
   const supplierCompany = (supplierRes.data as { company_name?: string } | null)?.company_name ?? "Fornecedor";
 
-  // CRM lead
+  // CRM lead (best-effort — falha não bloqueia o marketplace lead)
+  let crmWarning: string | undefined;
   const crmResult = await svc.from("crm_leads").insert({
     code: `MKT-${Date.now().toString(36).toUpperCase()}`,
     name: client_name ?? `Lead Marketplace — ${productName}`,
@@ -73,7 +74,10 @@ export async function POST(req: NextRequest) {
     partner_name: partnerName,
     created_by: user.id,
   });
-  if (crmResult.error) console.error("CRM lead create error:", crmResult.error.message);
+  if (crmResult.error) {
+    console.error("CRM lead create error:", crmResult.error.message);
+    crmWarning = "Lead salvo, mas não foi possível espelhar no CRM automaticamente.";
+  }
 
   // Email ao fornecedor (aguardado para garantir envio antes de encerrar a função)
   if (supplierEmail) {
@@ -90,7 +94,7 @@ export async function POST(req: NextRequest) {
     console.warn("Fornecedor sem email cadastrado — supplier_id:", product.supplier_id);
   }
 
-  return NextResponse.json({ lead: data }, { status: 201 });
+  return NextResponse.json({ lead: data, ...(crmWarning ? { warning: crmWarning } : {}) }, { status: 201 });
 }
 
 /** GET /api/marketplace/leads — supplier (via x-supplier-id header), partner, or admin */
@@ -103,14 +107,20 @@ export async function GET(req: NextRequest) {
   // Fornecedor autenticado via header (sessionStorage no dashboard)
   const supplierIdHeader = req.headers.get("x-supplier-id");
   if (supplierIdHeader) {
-    // Valida que o fornecedor existe
+    // Valida que o fornecedor existe E que o auth_user_id corresponde ao usuário autenticado
+    const { data: { user: supplierUser } } = await (await createClient()).auth.getUser();
     const { data: supplier, error: supErr } = await svc
       .from("marketplace_suppliers")
-      .select("id")
+      .select("id, auth_user_id")
       .eq("id", supplierIdHeader)
       .single();
-    if (supErr) console.error("Supplier lookup error:", supErr.message, "id:", supplierIdHeader);
-    if (!supplier) return NextResponse.json({ error: "Fornecedor não encontrado", debug_id: supplierIdHeader }, { status: 403 });
+    if (supErr) console.error("Supplier lookup error:", supErr.message);
+    if (!supplier) return NextResponse.json({ error: "Fornecedor não encontrado" }, { status: 403 });
+
+    // Segurança: valida que o usuário logado é dono deste supplier
+    if (supplierUser && supplier.auth_user_id && supplier.auth_user_id !== supplierUser.id) {
+      return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
+    }
 
     const { data, error } = await svc
       .from("marketplace_leads")
@@ -121,13 +131,10 @@ export async function GET(req: NextRequest) {
         supplier:marketplace_suppliers(id, company_name)
       `)
       .eq("supplier_id", supplierIdHeader)
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: false })
+      .limit(200);
 
-    if (error) {
-      console.error("Leads query error:", error.message);
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
-    console.log(`Leads para supplier ${supplierIdHeader}: ${data?.length ?? 0} encontrados`);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json({ leads: data ?? [] });
   }
 
@@ -146,9 +153,8 @@ export async function GET(req: NextRequest) {
   let query = svc
     .from("marketplace_leads")
     .select(`
-      id, message, client_name, client_contact, status, notes, created_at,
-      product:marketplace_products(id, name, category, commission_percent),
-      partner:profiles(id, full_name, email),
+      id, partner_id, message, client_name, client_contact, status, notes, created_at,
+      product:marketplace_products(id, name, category, commission_percent, partner_commission_percent),
       supplier:marketplace_suppliers(id, company_name)
     `)
     .order("created_at", { ascending: false });
@@ -161,5 +167,22 @@ export async function GET(req: NextRequest) {
 
   const { data, error } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ leads: data ?? [] });
+
+  // Busca dados dos partners separadamente (partner_id referencia auth.users, não profiles)
+  const partnerIds = [...new Set((data ?? []).map((l: { partner_id: string }) => l.partner_id).filter(Boolean))];
+  const partnerMap: Record<string, { id: string; full_name: string; email: string }> = {};
+  if (partnerIds.length > 0) {
+    const { data: profiles } = await svc
+      .from("profiles")
+      .select("id, full_name, email")
+      .in("id", partnerIds);
+    (profiles ?? []).forEach((p: { id: string; full_name: string; email: string }) => { partnerMap[p.id] = p; });
+  }
+
+  const leads = (data ?? []).map((l: { partner_id: string; [key: string]: unknown }) => ({
+    ...l,
+    partner: partnerMap[l.partner_id] ?? null,
+  }));
+
+  return NextResponse.json({ leads });
 }
