@@ -13,21 +13,21 @@ const PLANO_VALOR: Record<string, number> = {
   PARTNER_PRO: 39700,
 };
 
-// GET — retorna cobrança vigente do partner
+// GET — retorna cobrança vigente + histórico do partner
 export async function GET() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
-  const { data } = await svc()
+  const { data: all } = await svc()
     .from("partner_subscriptions")
     .select("*")
     .eq("partner_id", user.id)
     .order("created_at", { ascending: false })
-    .limit(1)
-    .single();
+    .limit(24);
 
-  return NextResponse.json({ subscription: data ?? null });
+  const latest = all?.[0] ?? null;
+  return NextResponse.json({ subscription: latest, history: all ?? [] });
 }
 
 // POST — gera nova cobrança mensal para o partner

@@ -1,12 +1,83 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as sc } from "@supabase/supabase-js";
+import { coraFetch } from "@/lib/cora";
+import { randomUUID } from "crypto";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 }
 
+const PLANO_VALOR: Record<string, number> = {
+  PARTNER: 19700,
+  PARTNER_PRO: 39700,
+};
+
+async function gerarProximaCobranca(db: ReturnType<typeof svc>, partnerId: string, plano: string) {
+  try {
+    const { data: profile } = await db
+      .from("profiles")
+      .select("full_name, cpf, cnpj, email")
+      .eq("id", partnerId)
+      .single();
+
+    if (!profile) return;
+
+    const documento = (profile as { cpf?: string; cnpj?: string }).cpf ?? (profile as { cpf?: string; cnpj?: string }).cnpj ?? "";
+    const valor = PLANO_VALOR[plano] ?? 19700;
+
+    const dueDate = new Date();
+    dueDate.setMonth(dueDate.getMonth() + 1);
+    dueDate.setDate(10);
+    const dueDateStr = dueDate.toISOString().split("T")[0];
+
+    const res = await coraFetch("/v2/invoices", {
+      method: "POST",
+      body: JSON.stringify({
+        code: randomUUID().slice(0, 8).toUpperCase(),
+        customer: {
+          name: (profile as { full_name: string }).full_name,
+          document: {
+            identity: documento.replace(/\D/g, ""),
+            type: documento.replace(/\D/g, "").length === 11 ? "CPF" : "CNPJ",
+          },
+          ...((profile as { email?: string }).email ? { contacts: [{ contact: (profile as { email?: string }).email, type: "EMAIL" }] } : {}),
+        },
+        payment_terms: { due_date: dueDateStr, amount: valor },
+        payment_options: {
+          interest: { type: "MONTHLY_PERCENTAGE", value: 1 },
+          fine: { type: "PERCENTAGE", value: 2 },
+        },
+        services: [{ name: `V3 Partners — Mensalidade ${plano === "PARTNER_PRO" ? "Partner PRO" : "Partner"}`, amount: valor }],
+        notifications: { formats: ["EMAIL"], by_email: { should_notify: true } },
+      }),
+      idempotencyKey: randomUUID(),
+    });
+
+    if (!res.ok) return;
+    const coraData = await res.json() as {
+      id?: string;
+      pix?: { emv?: string; qr_code?: string };
+      bank_slip?: { pdf?: { url?: string }; our_number?: string };
+    };
+
+    await db.from("partner_subscriptions").insert({
+      partner_id:      partnerId,
+      plano,
+      amount_cents:    valor,
+      due_date:        dueDateStr,
+      cora_invoice_id: coraData.id,
+      status:          "PENDING",
+      pix_emv:         coraData.pix?.emv,
+      pix_qr_code:     coraData.pix?.qr_code,
+      boleto_barcode:  coraData.bank_slip?.our_number,
+      boleto_pdf:      coraData.bank_slip?.pdf?.url,
+    });
+  } catch (e) {
+    console.error("Erro ao gerar próxima cobrança:", e);
+  }
+}
+
 // Cora envia webhook com evento de pagamento
-// Docs: POST /api/cora/webhook
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json() as {
@@ -32,7 +103,7 @@ export async function POST(req: NextRequest) {
     const db = svc();
     const paidAt = body.data?.payment_date ?? new Date().toISOString();
 
-    // 1. Atualiza cadastro pendente se existir cobrança para este invoice
+    // 1. Atualiza cadastro pendente de adesão
     const { data: reg } = await db
       .from("partner_registrations")
       .select("id, plano, email, nome_completo, razao_social")
@@ -46,20 +117,29 @@ export async function POST(req: NextRequest) {
         status: "PAGO",
       }).eq("id", reg.id);
 
-      // Notifica admin via notifications table
-      await db.from("notifications").insert({
-        type: "CADASTRO_PAGO",
-        title: "Pagamento de Cadastro Confirmado",
-        message: `Partner ${reg.nome_completo ?? reg.razao_social} (${reg.plano}) pagou a adesão via Cora.`,
-        metadata: { registration_id: reg.id, invoice_id: invoiceId },
-        read: false,
-      }).catch(() => {});
+      // Notifica admins
+      const { data: admins } = await db
+        .from("profiles")
+        .select("id")
+        .in("role", ["ADMIN", "FINANCEIRO"]);
+      if (admins?.length) {
+        await db.from("notifications").insert(
+          admins.map((a: { id: string }) => ({
+            user_id: a.id,
+            type: "commission",
+            title: "Pagamento de Adesão Confirmado",
+            message: `${reg.nome_completo ?? reg.razao_social} (${reg.plano}) pagou a adesão via Cora.`,
+            action_url: "/financeiro",
+            read: false,
+          }))
+        ).catch(() => {});
+      }
     }
 
-    // 2. Atualiza mensalidade de renovação se existir
+    // 2. Atualiza mensalidade e gera próxima cobrança automaticamente
     const { data: sub } = await db
       .from("partner_subscriptions")
-      .select("id, partner_id")
+      .select("id, partner_id, plano")
       .eq("cora_invoice_id", invoiceId)
       .single();
 
@@ -69,13 +149,26 @@ export async function POST(req: NextRequest) {
         paid_at: paidAt,
       }).eq("id", sub.id);
 
-      // Atualiza subscription_status e validade no profile
+      // Estende validade no profile por 1 mês
       const newExpiry = new Date();
       newExpiry.setMonth(newExpiry.getMonth() + 1);
       await db.from("profiles").update({
         subscription_status: "ATIVO",
         subscription_expires_at: newExpiry.toISOString(),
       }).eq("id", sub.partner_id);
+
+      // Notifica o partner
+      await db.from("notifications").insert({
+        user_id: sub.partner_id,
+        type: "commission",
+        title: "Mensalidade Paga!",
+        message: `Sua mensalidade foi confirmada. Acesso garantido até ${newExpiry.toLocaleDateString("pt-BR")}.`,
+        action_url: "/minha-assinatura",
+        read: false,
+      }).catch(() => {});
+
+      // Gera cobrança do mês seguinte automaticamente (#8)
+      await gerarProximaCobranca(db, sub.partner_id, sub.plano);
     }
 
     return NextResponse.json({ received: true });

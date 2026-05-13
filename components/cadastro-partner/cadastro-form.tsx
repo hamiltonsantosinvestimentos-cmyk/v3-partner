@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import Image from "next/image";
 import {
   User, Building2, CheckCircle2, ChevronRight, ChevronLeft,
@@ -236,6 +236,24 @@ export function CadastroPartnerForm() {
     valor?: number;
   } | null>(null);
   const [pixCopiado, setPixCopiado] = useState(false);
+  const [invoiceStatus, setInvoiceStatus] = useState<"PENDING" | "PAID" | null>(null);
+  const registrationIdRef = useRef<string | null>(null);
+
+  // Polling de status do pagamento após cadastro (#5)
+  useEffect(() => {
+    if (!sucesso || !cobranca?.invoiceId || invoiceStatus === "PAID") return;
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/cora/cobranca/status?id=${cobranca.invoiceId}`);
+        const data = await res.json();
+        if (data.status === "PAID") {
+          setInvoiceStatus("PAID");
+          clearInterval(interval);
+        }
+      } catch { /* silencioso */ }
+    }, 10000); // a cada 10s
+    return () => clearInterval(interval);
+  }, [sucesso, cobranca?.invoiceId, invoiceStatus]);
 
   // ─── Busca CEP ────────────────────────────────────────────────────────────
   const buscarCEP = async (cepVal: string) => {
@@ -438,6 +456,22 @@ export function CadastroPartnerForm() {
               </div>
             )}
           </div>
+
+          {/* Status de pagamento em tempo real */}
+          {invoiceStatus === "PAID" ? (
+            <div className="flex items-center gap-3 p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30">
+              <CheckCircle2 className="w-6 h-6 text-emerald-400 flex-shrink-0" />
+              <div>
+                <p className="text-sm font-bold text-emerald-400">Pagamento Confirmado!</p>
+                <p className="text-xs text-[#7A8FA8]">Nossa equipe já recebeu a notificação e iniciará a análise.</p>
+              </div>
+            </div>
+          ) : cobranca?.invoiceId ? (
+            <div className="flex items-center gap-2 p-3 rounded-xl border border-[#243A66] text-xs text-[#7A8FA8]">
+              <Loader2 className="w-4 h-4 animate-spin text-[#C9A84C]" />
+              Aguardando confirmação de pagamento...
+            </div>
+          ) : null}
 
           {/* Próximos passos */}
           <div className="bg-[#111F35] border border-[#243A66] rounded-xl p-4 space-y-2">

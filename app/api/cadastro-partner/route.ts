@@ -205,6 +205,58 @@ export async function POST(req: NextRequest) {
       }).eq("id", regId);
     }
 
+    // Envia e-mail com dados de pagamento (#6)
+    try {
+      const { Resend } = await import("resend");
+      const resend = new Resend(process.env.RESEND_API_KEY);
+      const valorFmt = ((PLANO_VALOR[plano] ?? 19700) / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+      const planoLabel = plano === "PARTNER_PRO" ? "V3 Partner PRO" : "V3 Partner";
+      const vencimento = new Date(Date.now() + 3 * 86400000).toLocaleDateString("pt-BR");
+
+      await resend.emails.send({
+        from: "V3 Partners <noreply@v3partners.com.br>",
+        to: email,
+        subject: `Bem-vindo à V3 Partners — Conclua seu pagamento de ${valorFmt}`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #09081A; color: #F0ECE4; padding: 32px; border-radius: 16px;">
+            <img src="https://app.v3partners.com.br/logo.jpg" alt="V3 Partners" style="height: 40px; margin-bottom: 24px;" />
+            <h1 style="color: #C9A84C; font-size: 24px; margin-bottom: 8px;">Cadastro Recebido!</h1>
+            <p style="color: #7A8FA8; margin-bottom: 24px;">Olá <strong style="color:#F0ECE4">${nome}</strong>, seu cadastro no plano <strong style="color:#C9A84C">${planoLabel}</strong> foi recebido com sucesso.</p>
+
+            <div style="background: #111F35; border: 1px solid #243A66; border-radius: 12px; padding: 20px; margin-bottom: 24px;">
+              <p style="margin: 0 0 8px; color: #7A8FA8; font-size: 12px;">VALOR DA ADESÃO</p>
+              <p style="margin: 0 0 16px; color: #C9A84C; font-size: 28px; font-weight: bold;">${valorFmt}</p>
+              <p style="margin: 0; color: #7A8FA8; font-size: 12px;">Vencimento: <strong style="color:#F0ECE4">${vencimento}</strong></p>
+            </div>
+
+            ${cora.pixEmv ? `
+            <div style="background: #111F35; border: 1px solid #243A66; border-radius: 12px; padding: 20px; margin-bottom: 16px;">
+              <p style="margin: 0 0 8px; color: #10b981; font-size: 13px; font-weight: bold;">✓ Pague via Pix (aprovação instantânea)</p>
+              <p style="margin: 0 0 8px; color: #7A8FA8; font-size: 11px;">Pix Copia e Cola:</p>
+              <p style="margin: 0; background: #0A1628; padding: 12px; border-radius: 8px; font-family: monospace; font-size: 11px; color: #7A8FA8; word-break: break-all;">${cora.pixEmv}</p>
+            </div>` : ""}
+
+            ${cora.boletoPdf ? `
+            <div style="margin-bottom: 16px;">
+              <a href="${cora.boletoPdf}" style="display: inline-block; padding: 12px 24px; background: #243A66; color: #F0ECE4; text-decoration: none; border-radius: 8px; font-size: 13px;">Ver Boleto Bancário</a>
+            </div>` : ""}
+
+            ${cora.paymentUrl ? `
+            <div style="margin-bottom: 16px;">
+              <a href="${cora.paymentUrl}" style="display: inline-block; padding: 12px 24px; background: #C9A84C; color: #09081A; text-decoration: none; border-radius: 8px; font-size: 13px; font-weight: bold;">Ir para Pagamento</a>
+            </div>` : ""}
+
+            <hr style="border: none; border-top: 1px solid #243A66; margin: 24px 0;" />
+            <p style="color: #7A8FA8; font-size: 11px; margin: 0;">Dúvidas? Responda este e-mail ou entre em contato: contato@v3partners.com.br</p>
+            <p style="color: #3A5070; font-size: 10px; margin: 8px 0 0;">V3 Partners Soluções Ltda · CNPJ 14.219.287/0001-50</p>
+          </div>
+        `,
+      });
+    } catch (emailErr) {
+      console.error("Erro ao enviar e-mail de cadastro:", emailErr);
+      // Não bloqueia o retorno — e-mail é secundário
+    }
+
     return NextResponse.json({
       ok: true,
       id: regId,

@@ -71,13 +71,19 @@ export function MinhaAssinaturaClient({ profile, contract, commissions }: Props)
     id: string; status: string; pix_emv?: string; pix_qr_code?: string;
     boleto_barcode?: string; boleto_pdf?: string; amount_cents: number; due_date: string;
   } | null>(null);
+  const [subHistory, setSubHistory] = useState<{
+    id: string; status: string; amount_cents: number; due_date: string; paid_at?: string | null; plano: string; created_at: string;
+  }[]>([]);
   const [loadingSub, setLoadingSub] = useState(false);
   const [pixCopiado, setPixCopiado] = useState(false);
 
   useEffect(() => {
     fetch("/api/cora/subscription")
       .then(r => r.json())
-      .then(d => { if (d.subscription) setSubscription(d.subscription); })
+      .then(d => {
+        if (d.subscription) setSubscription(d.subscription);
+        if (d.history) setSubHistory(d.history);
+      })
       .catch(() => {});
   }, []);
 
@@ -387,6 +393,50 @@ export function MinhaAssinaturaClient({ profile, contract, commissions }: Props)
                   <p className="font-semibold text-[#F0ECE4] truncate">{f.value}</p>
                 </div>
               ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Histórico de mensalidades Cora */}
+      {subHistory.length > 0 && (
+        <Card>
+          <CardContent className="p-0">
+            <div className="px-5 py-4 border-b border-border/40 flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-[#C9A84C]" />
+              <span className="text-sm font-bold text-[#F0ECE4]">Histórico de Mensalidades</span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-border/30">
+                    {["Competência", "Vencimento", "Valor", "Status", "Pago em"].map(h => (
+                      <th key={h} className="text-left px-5 py-2.5 text-muted-foreground font-semibold uppercase tracking-wide text-[10px]">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {subHistory.map((s) => (
+                    <tr key={s.id} className="border-b border-border/20 hover:bg-secondary/20">
+                      <td className="px-5 py-2.5 text-[#F0ECE4]">{new Date(s.created_at).toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}</td>
+                      <td className="px-5 py-2.5 text-muted-foreground">{new Date(s.due_date + "T12:00:00").toLocaleDateString("pt-BR")}</td>
+                      <td className="px-5 py-2.5 font-semibold text-[#F0ECE4]">{moeda(s.amount_cents / 100)}</td>
+                      <td className="px-5 py-2.5">
+                        <span className={`text-[10px] font-semibold border px-2 py-0.5 rounded-full ${
+                          s.status === "PAID" ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
+                          : s.status === "PENDING" ? "bg-amber-500/20 text-amber-400 border-amber-500/30"
+                          : "bg-red-500/20 text-red-400 border-red-500/30"
+                        }`}>
+                          {s.status === "PAID" ? "Pago" : s.status === "PENDING" ? "Pendente" : "Cancelado"}
+                        </span>
+                      </td>
+                      <td className="px-5 py-2.5 text-muted-foreground">
+                        {s.paid_at ? new Date(s.paid_at).toLocaleDateString("pt-BR") : "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </CardContent>
         </Card>
