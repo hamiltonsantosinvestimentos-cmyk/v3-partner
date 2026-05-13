@@ -63,9 +63,8 @@ export function CoraPanel() {
       }
       if (eData.items) setLancamentos(eData.items);
       else if (Array.isArray(eData)) setLancamentos(eData);
-      if (cData.invoices) setCobrancas(cData.invoices);
-      else if (cData.items) setCobrancas(cData.items);
-      else if (Array.isArray(cData)) setCobrancas(cData);
+      const rawList: Cobranca[] = cData.invoices ?? cData.items ?? (Array.isArray(cData) ? cData : []);
+      setCobrancas(rawList.filter((c) => c && typeof c === "object" && c.id));
     } catch (e) {
       setError(String(e));
     }
@@ -265,11 +264,11 @@ export function CoraPanel() {
                     <Badge className={`text-[10px] px-1.5 py-0 ${st.cls}`}>{st.label}</Badge>
                   </div>
                   <p className="text-[10px] text-muted-foreground">
-                    {c.services?.[0]?.name ?? "Cobrança"} · Vence {fmtDate(c.payment_terms.due_date)}
+                    {c.services?.[0]?.name ?? "Cobrança"}{c.payment_terms?.due_date ? ` · Vence ${fmtDate(c.payment_terms.due_date)}` : ""}
                   </p>
                 </div>
                 <div className="text-right flex-shrink-0">
-                  <p className="text-sm font-bold text-[#C9A84C]">{fmtBRL(c.payment_terms.amount)}</p>
+                  <p className="text-sm font-bold text-[#C9A84C]">{fmtBRL(c.payment_terms?.amount ?? 0)}</p>
                   <p className="text-[10px] text-muted-foreground font-mono">{c.code}</p>
                 </div>
               </div>
