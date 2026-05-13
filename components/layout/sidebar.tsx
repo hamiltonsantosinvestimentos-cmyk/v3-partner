@@ -9,7 +9,7 @@ import {
   CreditCard, Headphones, ChevronDown, ChevronRight, X,
   Trophy, GraduationCap, Handshake, Settings2, Medal,
   ContactRound, DollarSign, Wallet, Zap, Target, ShieldCheck, Calculator, UserPlus, ClipboardList, BadgeCheck, Layers, BarChart2, BookMarked, BotMessageSquare,
-  ShoppingBag, Radar,
+  ShoppingBag, Radar, BookOpen, FileText,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { UserRole } from "@/lib/constants";
@@ -19,7 +19,7 @@ const iconMap = {
   CreditCard, Headphones, Trophy, GraduationCap, Handshake,
   Settings2, Medal, ContactRound, DollarSign, Wallet, Zap,
   Target, ShieldCheck, Calculator, UserPlus, ClipboardList, BadgeCheck, Layers, BarChart2, BookMarked, BotMessageSquare,
-  ShoppingBag, Radar,
+  ShoppingBag, Radar, BookOpen, FileText,
 };
 
 interface NavSubItem { href: string; label: string; roles: string[]; }
@@ -109,6 +109,19 @@ const NAV_SECTIONS: NavSection[] = [
           { href: "/academy?cat=split-fiscal", label: "Split Fiscal", roles: ["ADMIN", "PARTNER", "PARTNER_PRO", "GESTAO"] },
           { href: "/academy?cat=consorcio", label: "Consórcio", roles: ["ADMIN", "PARTNER", "PARTNER_PRO", "MESA_OPERACIONAL", "GESTAO"] },
           { href: "/academy?cat=compliance", label: "Compliance", roles: ["ADMIN", "PARTNER", "PARTNER_PRO", "MESA_OPERACIONAL", "GESTAO"] },
+        ],
+      },
+    ],
+  },
+  {
+    label: "DOCUMENTAÇÃO",
+    items: [
+      {
+        href: "/docs", label: "Manuais", icon: "BookOpen",
+        roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL", "FINANCEIRO"],
+        children: [
+          { href: "/docs/usuario",  label: "Manual do Usuário",  roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL", "FINANCEIRO"] },
+          { href: "/docs/tecnico",  label: "Manual Técnico",     roles: ["ADMIN", "GESTAO"] },
         ],
       },
     ],
