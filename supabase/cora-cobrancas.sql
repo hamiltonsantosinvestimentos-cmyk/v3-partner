@@ -30,11 +30,19 @@ create table if not exists partner_subscriptions (
 alter table partner_subscriptions enable row level security;
 
 -- Partner vê só as próprias
-create policy "partner sees own subscriptions"
-  on partner_subscriptions for select
-  using (partner_id = auth.uid());
+do $$ begin
+  if not exists (select 1 from pg_policies where tablename = 'partner_subscriptions' and policyname = 'partner sees own subscriptions') then
+    create policy "partner sees own subscriptions"
+      on partner_subscriptions for select
+      using (partner_id = auth.uid());
+  end if;
+end $$;
 
 -- Serviço pode inserir/atualizar
-create policy "service full access"
-  on partner_subscriptions for all
-  using (true) with check (true);
+do $$ begin
+  if not exists (select 1 from pg_policies where tablename = 'partner_subscriptions' and policyname = 'service full access') then
+    create policy "service full access"
+      on partner_subscriptions for all
+      using (true) with check (true);
+  end if;
+end $$;

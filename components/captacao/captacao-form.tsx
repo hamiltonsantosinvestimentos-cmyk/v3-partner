@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { ChevronRight, ChevronLeft, CheckCircle2, Home, User, Building2, AlertTriangle, Upload, FileText, X, Check } from "lucide-react";
 
 const CREDIT_LINES = [
@@ -23,22 +23,6 @@ const IMOVEL_LINES = ["HOME EQUITY", "HOME EQUITY ESTRESSADO", "CGI", "CRI"];
 const UFS = ["AC","AL","AM","AP","BA","CE","DF","ES","GO","MA","MG","MS","MT","PA","PB","PE","PI","PR","RJ","RN","RO","RR","RS","SC","SE","SP","TO"];
 
 const LGPD_TEXT = `Autorizo a V3 Partners Soluções Ltda (CNPJ 14.219.287/0001-50) a coletar, processar e armazenar meus dados pessoais e documentos para fins de análise e estruturação de operações financeiras, em conformidade com a Lei Geral de Proteção de Dados (LGPD — Lei nº 13.709/2018). Os dados poderão ser compartilhados com parceiros e instituições financeiras exclusivamente para a finalidade informada. Tenho ciência de que esta autorização pode ser revogada a qualquer momento mediante solicitação formal ao e-mail: compliance@v3partners.com.br.`;
-
-// Checklist de documentos por linha de crédito
-const DOC_CHECKLIST: Record<string, string[]> = {
-  "HOME EQUITY": ["RG ou CNH", "Comprovante de Renda (3 últimos meses)", "Comprovante de Residência", "Certidão de Matrícula do Imóvel", "Declaração do Imposto de Renda (2 anos)", "Extratos Bancários (3 meses)"],
-  "HOME EQUITY ESTRESSADO": ["RG ou CNH", "Comprovante de Renda (3 últimos meses)", "Comprovante de Residência", "Certidão de Matrícula do Imóvel", "Declaração do Imposto de Renda"],
-  "AVAL": ["RG ou CNH", "Comprovante de Renda (3 últimos meses)", "Comprovante de Residência", "Extratos Bancários (3 meses)", "Declaração do Imposto de Renda"],
-  "FIDC": ["Contrato Social Atualizado", "Balanço Patrimonial (2 últimos anos)", "DRE (2 últimos anos)", "Certidão Negativa de Débitos Federais", "Extratos Bancários PJ (6 meses)", "Declaração de Faturamento"],
-  "CRI": ["Contrato Social", "Certidão de Matrícula do Imóvel", "Balanço Patrimonial", "Projeto de Viabilidade Econômica", "Declaração do Imposto de Renda"],
-  "CRA": ["Contrato Social", "Nota Fiscal Agroindustrial", "DAR/ITR do Imóvel Rural", "Matrícula do Imóvel Rural", "Declaração de Produção Agroindustrial"],
-  "HIGH TICKET": ["Documentos Pessoais (RG/CNH)", "Comprovante de Patrimônio", "Declaração do Imposto de Renda (2 anos)", "Extratos Bancários (6 meses)", "Carta de Intenção da Operação"],
-  "PROJECT FINANCE": ["Plano de Negócios", "Estudo de Viabilidade Econômica", "Documentos Societários", "Licenças e Alvarás", "Orçamento e Cronograma da Obra"],
-  "CGI": ["RG ou CNH", "Comprovante de Renda (3 meses)", "Comprovante de Residência", "Certidão de Matrícula do Imóvel", "Extratos Bancários (3 meses)"],
-  "M&A": ["NDA Assinado", "Balanço Patrimonial (3 últimos anos)", "DRE (3 últimos anos)", "Lista de Ativos e Passivos", "Contrato Social Atualizado"],
-  "CONSORCIO": ["RG ou CNH", "CPF", "Comprovante de Renda (3 meses)", "Comprovante de Residência"],
-  "SPLIT FISCAL": ["Contrato Social Atualizado", "Balanço Patrimonial", "Nota Fiscal Demonstrativa", "Certidão Negativa de Débitos"],
-};
 
 const DEFAULT_CHECKLIST = ["Documento de Identidade (RG ou CNH)", "CPF/CNPJ", "Comprovante de Endereço", "Comprovante de Renda ou Faturamento"];
 
@@ -122,6 +106,20 @@ export function CaptacaoForm({ token, partnerName }: CaptacaoFormProps) {
   const [imovelValor, setImovelValor] = useState("");
   const [imovelZona, setImovelZona] = useState<"" | "URBANO" | "RURAL">("");
   const [imovelProprio, setImovelProprio] = useState(true);
+
+  // Portfólio — documentos dinâmicos por linha
+  const [portfolioLinhas, setPortfolioLinhas] = useState<{
+    nome: string;
+    documentos_pf: { nome: string; obrigatorio: boolean }[];
+    documentos_pj: { nome: string; obrigatorio: boolean }[];
+  }[]>([]);
+
+  useEffect(() => {
+    fetch("/api/portfolio")
+      .then(r => r.json())
+      .then(d => { if (d.linhas) setPortfolioLinhas(d.linhas); })
+      .catch(() => {});
+  }, []);
 
   // Step Documentos
   const [uploadedDocs, setUploadedDocs] = useState<Record<string, { name: string; url: string }>>({});
@@ -268,7 +266,19 @@ export function CaptacaoForm({ token, partnerName }: CaptacaoFormProps) {
     backdropFilter: "blur(8px)",
   };
 
-  const checklist = DOC_CHECKLIST[creditLine] ?? DEFAULT_CHECKLIST;
+  const checklistFull = (() => {
+    const linha = portfolioLinhas.find(l =>
+      l.nome.toUpperCase().trim() === creditLine.toUpperCase().trim()
+    );
+    if (linha) {
+      const docs = personType === "PJ"
+        ? (linha.documentos_pj ?? [])
+        : (linha.documentos_pf ?? []);
+      if (docs.length > 0) return docs.map(d => ({ nome: d.nome, obrigatorio: d.obrigatorio }));
+    }
+    return DEFAULT_CHECKLIST.map(nome => ({ nome, obrigatorio: true }));
+  })();
+  const checklist = checklistFull.map(d => d.nome);
 
   return (
     <div>
@@ -567,7 +577,7 @@ export function CaptacaoForm({ token, partnerName }: CaptacaoFormProps) {
 
             {/* Checklist */}
             <div className="space-y-2">
-              {checklist.map((docLabel) => {
+              {checklistFull.map(({ nome: docLabel, obrigatorio }) => {
                 const uploaded = uploadedDocs[docLabel];
                 const isUploading = uploading === docLabel;
                 return (
@@ -584,7 +594,18 @@ export function CaptacaoForm({ token, partnerName }: CaptacaoFormProps) {
                         <div style={{ width: 14, height: 14, borderRadius: "50%", border: "2px solid rgba(22,39,68,0.9)", flexShrink: 0 }} />
                       )}
                       <div style={{ minWidth: 0 }}>
-                        <p style={{ fontSize: 12, color: uploaded ? "#10B981" : "#F0ECE4", margin: 0, fontWeight: 600 }}>{docLabel}</p>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <p style={{ fontSize: 12, color: uploaded ? "#10B981" : "#F0ECE4", margin: 0, fontWeight: 600 }}>{docLabel}</p>
+                          <span style={{
+                            fontSize: 9, fontWeight: 700, padding: "1px 5px", borderRadius: 4,
+                            background: obrigatorio ? "rgba(201,168,76,0.15)" : "rgba(122,143,168,0.15)",
+                            color: obrigatorio ? "#C9A84C" : "#7A8FA8",
+                            border: `1px solid ${obrigatorio ? "rgba(201,168,76,0.3)" : "rgba(122,143,168,0.2)"}`,
+                            letterSpacing: "0.05em",
+                          }}>
+                            {obrigatorio ? "OBRIG." : "OPCION."}
+                          </span>
+                        </div>
                         {uploaded && (
                           <p style={{ fontSize: 10, color: "#7A8FA8", margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                             {uploaded.name}
