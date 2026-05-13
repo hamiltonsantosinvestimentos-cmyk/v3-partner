@@ -401,12 +401,34 @@ function DocumentosChecklist({ linha }: { linha: PortfolioLinha }) {
   );
 }
 
+const NIVEL_CFG: Record<string, { label: string; cls: string }> = {
+  NIVEL_1: { label: "N1",  cls: "bg-blue-500/20 text-blue-400 border-blue-500/30" },
+  NIVEL_2: { label: "N2",  cls: "bg-amber-500/20 text-amber-400 border-amber-500/30" },
+  NIVEL_3: { label: "N3",  cls: "bg-purple-500/20 text-purple-400 border-purple-500/30" },
+};
+
+function normStr(s: string) {
+  return s.toUpperCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^A-Z0-9 ]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 // ── Linha Card ─────────────────────────────────────────────────────────────────
-function LinhaCard({ linha }: { linha: PortfolioLinha }) {
+function LinhaCard({ linha, nivelMap }: { linha: PortfolioLinha; nivelMap: Record<string, string> }) {
   const [open, setOpen] = useState(false);
   const catCls = CAT_COLORS[linha.categoria ?? ""] ?? "bg-[#C9A84C]/20 text-[#C9A84C] border-[#C9A84C]/30";
 
   const totalDocs = (linha.documentos_pf ?? []).length + (linha.documentos_pj ?? []).length;
+
+  // Match nivel by normalized name (prefix match both ways)
+  const nomeNorm = normStr(linha.nome);
+  const nivelKey = Object.keys(nivelMap).find(k => {
+    return k === nomeNorm || k.startsWith(nomeNorm) || nomeNorm.startsWith(k);
+  });
+  const nivel = nivelKey ? nivelMap[nivelKey] : null;
+  const nivelCfg = nivel ? NIVEL_CFG[nivel] : null;
 
   return (
     <div className={cn(
@@ -424,6 +446,12 @@ function LinhaCard({ linha }: { linha: PortfolioLinha }) {
         <div className="flex-1 min-w-0">
           <div className="flex flex-wrap items-center gap-2 mb-1">
             <p className="text-sm font-bold text-white">{linha.nome}</p>
+            {nivelCfg && (
+              <span className={cn("text-[9px] font-bold border px-2 py-0.5 rounded-full uppercase tracking-wide", nivelCfg.cls)}
+                title={nivel === "NIVEL_1" ? "Mesa Crédito N1 — Varejo" : nivel === "NIVEL_2" ? "Mesa Crédito N2 — Estruturado" : "Mesa Crédito N3 — High Ticket"}>
+                {nivelCfg.label}
+              </span>
+            )}
             {linha.categoria && (
               <span className={cn("text-[9px] font-bold border px-2 py-0.5 rounded-full uppercase tracking-wide", catCls)}>
                 {linha.categoria}
@@ -493,15 +521,24 @@ function LinhaCard({ linha }: { linha: PortfolioLinha }) {
 
 export function PortfolioViewer() {
   const [linhas, setLinhas] = useState<PortfolioLinha[]>([]);
+  const [nivelMap, setNivelMap] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [catFilter, setCatFilter] = useState<string>("Todos");
 
   useEffect(() => {
-    fetch("/api/portfolio")
-      .then(r => r.json())
-      .then(d => setLinhas(d.linhas ?? []))
-      .finally(() => setLoading(false));
+    Promise.all([
+      fetch("/api/portfolio").then(r => r.json()),
+      fetch("/api/regras-linhas").then(r => r.json()),
+    ]).then(([portfolioData, regrasData]) => {
+      setLinhas(portfolioData.linhas ?? []);
+      // Build map: normalized nome → nivel
+      const map: Record<string, string> = {};
+      for (const r of (regrasData.regras ?? [])) {
+        if (r.nome && r.nivel) map[normStr(r.nome)] = r.nivel;
+      }
+      setNivelMap(map);
+    }).finally(() => setLoading(false));
   }, []);
 
   const categorias = ["Todos", ...Array.from(new Set(linhas.map(l => l.categoria).filter(Boolean) as string[]))];
@@ -566,7 +603,7 @@ export function PortfolioViewer() {
         </div>
       ) : (
         <div className="space-y-3">
-          {filtered.map(l => <LinhaCard key={l.id} linha={l} />)}
+          {filtered.map(l => <LinhaCard key={l.id} linha={l} nivelMap={nivelMap} />)}
         </div>
       )}
     </div>
