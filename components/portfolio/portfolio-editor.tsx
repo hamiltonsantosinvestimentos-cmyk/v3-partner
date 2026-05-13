@@ -27,13 +27,48 @@ const FIELDS: { key: keyof PortfolioLinha; label: string; long?: boolean }[] = [
   { key: "diferenciais",        label: "Diferenciais",           long: true },
 ];
 
+const DOCS_PF_PADRAO: Documento[] = [
+  { id: "pf-1",  nome: "RG/CNH",                                    obrigatorio: true },
+  { id: "pf-2",  nome: "Comprovante de endereço do mês vigente",    obrigatorio: true },
+  { id: "pf-3",  nome: "Certidão civil",                            obrigatorio: true },
+  { id: "pf-4",  nome: "RG/CNH do cônjuge (se casado)",             obrigatorio: false },
+  { id: "pf-5",  nome: "Extrato Bancário dos últimos 3 meses",      obrigatorio: true },
+  { id: "pf-6",  nome: "Matrícula do Imóvel",                       obrigatorio: true },
+  { id: "pf-7",  nome: "IPTU do ano vigente",                       obrigatorio: true },
+  { id: "pf-8",  nome: "3 fotos internas do imóvel",                obrigatorio: true },
+  { id: "pf-9",  nome: "3 fotos externas do imóvel",                obrigatorio: true },
+  { id: "pf-10", nome: "IRPF do último exercício — Declaração",     obrigatorio: true },
+  { id: "pf-11", nome: "IRPF do último exercício — Recibo",         obrigatorio: true },
+];
+
+const DOCS_PJ_PADRAO: Documento[] = [
+  { id: "pj-1",  nome: "Contrato social com a última alteração",           obrigatorio: true },
+  { id: "pj-2",  nome: "Balanço e DRE do ano anterior consolidado",        obrigatorio: true },
+  { id: "pj-3",  nome: "Balancete do último trimestre",                    obrigatorio: true },
+  { id: "pj-4",  nome: "Faturamento dos últimos 12 meses",                 obrigatorio: true },
+  { id: "pj-5",  nome: "Comprovante de endereço da empresa do mês vigente",obrigatorio: true },
+  { id: "pj-6",  nome: "RG/CNH",                                           obrigatorio: true },
+  { id: "pj-7",  nome: "Comprovante de endereço do mês vigente",           obrigatorio: true },
+  { id: "pj-8",  nome: "Certidão civil",                                   obrigatorio: true },
+  { id: "pj-9",  nome: "RG/CNH do cônjuge (se casado)",                    obrigatorio: false },
+  { id: "pj-10", nome: "Extrato Bancário dos últimos 3 meses",             obrigatorio: true },
+  { id: "pj-11", nome: "Matrícula do Imóvel",                              obrigatorio: true },
+  { id: "pj-12", nome: "IPTU do ano vigente",                              obrigatorio: true },
+  { id: "pj-13", nome: "3 fotos internas do imóvel",                       obrigatorio: true },
+  { id: "pj-14", nome: "3 fotos externas do imóvel",                       obrigatorio: true },
+  { id: "pj-15", nome: "IRPF do último exercício — Declaração",            obrigatorio: true },
+  { id: "pj-16", nome: "IRPF do último exercício — Recibo",                obrigatorio: true },
+];
+
 const EMPTY: Omit<PortfolioLinha, "id" | "ativo" | "ordem"> = {
   nome: "", descricao: null, categoria: "Imobiliário",
   publico_alvo: null, prazo_pagamento: null, taxas: null,
   outras_despesas: null, limite_credito: null, comprometimento_renda: null,
   aporte: null, amortizacao: null, perfil_garantia: null,
   destinacao: null, tempo_estruturacao: null, custo_estruturacao: null,
-  diferenciais: null, documentos_pf: [], documentos_pj: [],
+  diferenciais: null,
+  documentos_pf: DOCS_PF_PADRAO.map(d => ({ ...d, id: crypto.randomUUID() })),
+  documentos_pj: DOCS_PJ_PADRAO.map(d => ({ ...d, id: crypto.randomUUID() })),
 };
 
 function Toast({ msg, type, onClose }: { msg: string; type: "success" | "error"; onClose: () => void }) {
@@ -154,7 +189,16 @@ function LinhaEditRow({
   onToggle: (id: string, ativo: boolean) => Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState<FormState>({ ...EMPTY, ...linha, documentos_pf: linha.documentos_pf ?? [], documentos_pj: linha.documentos_pj ?? [] });
+  const [form, setForm] = useState<FormState>({
+    ...EMPTY,
+    ...linha,
+    documentos_pf: (linha.documentos_pf ?? []).length > 0
+      ? linha.documentos_pf!
+      : DOCS_PF_PADRAO.map(d => ({ ...d, id: crypto.randomUUID() })),
+    documentos_pj: (linha.documentos_pj ?? []).length > 0
+      ? linha.documentos_pj!
+      : DOCS_PJ_PADRAO.map(d => ({ ...d, id: crypto.randomUUID() })),
+  });
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [confirmDel, setConfirmDel] = useState(false);
@@ -323,7 +367,7 @@ function LinhaEditRow({
               {saving ? "Salvando…" : "Salvar"}
             </button>
             <button
-              onClick={() => { setOpen(false); setForm({ ...EMPTY, ...linha, documentos_pf: linha.documentos_pf ?? [], documentos_pj: linha.documentos_pj ?? [] }); }}
+              onClick={() => { setOpen(false); setForm({ ...EMPTY, ...linha, documentos_pf: (linha.documentos_pf ?? []).length > 0 ? linha.documentos_pf! : DOCS_PF_PADRAO.map(d => ({ ...d, id: crypto.randomUUID() })), documentos_pj: (linha.documentos_pj ?? []).length > 0 ? linha.documentos_pj! : DOCS_PJ_PADRAO.map(d => ({ ...d, id: crypto.randomUUID() })) }); }}
               className="flex items-center gap-1.5 px-4 py-2 rounded-lg border border-[#243A66] text-muted-foreground text-xs font-semibold hover:text-foreground transition-colors"
             >
               <X className="w-3.5 h-3.5" /> Cancelar
@@ -355,7 +399,7 @@ function NovaLinhaForm({ onCreated }: { onCreated: (linha: PortfolioLinha) => vo
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       onCreated(data.linha);
-      setForm({ ...EMPTY });
+      setForm({ ...EMPTY, documentos_pf: DOCS_PF_PADRAO.map(d => ({ ...d, id: crypto.randomUUID() })), documentos_pj: DOCS_PJ_PADRAO.map(d => ({ ...d, id: crypto.randomUUID() })) });
       setOpen(false);
     } finally {
       setSaving(false);
