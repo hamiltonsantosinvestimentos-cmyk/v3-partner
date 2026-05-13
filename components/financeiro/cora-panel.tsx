@@ -16,11 +16,16 @@ interface Lancamento {
 }
 interface Cobranca {
   id: string;
-  code: string;
-  status: "PENDING" | "PAID" | "CANCELLED" | "OVERDUE";
-  customer: { name: string };
-  payment_terms: { due_date: string; amount: number };
-  services?: { name: string }[];
+  code?: string;
+  status: string;
+  customer_name: string;
+  customer_document?: string;
+  due_date: string;
+  total_amount: number;
+  paid_at?: string | null;
+  total_paid?: number | null;
+  payment_form?: string;
+  created_at?: string;
 }
 
 function fmtBRL(centavos: number) {
@@ -31,10 +36,12 @@ function fmtDate(s: string) {
 }
 
 const STATUS_LABEL: Record<string, { label: string; cls: string }> = {
+  OPEN:      { label: "Pendente",   cls: "bg-amber-500/20 text-amber-400 border-amber-500/30" },
   PENDING:   { label: "Pendente",   cls: "bg-amber-500/20 text-amber-400 border-amber-500/30" },
   PAID:      { label: "Pago",       cls: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" },
   CANCELLED: { label: "Cancelado",  cls: "bg-red-500/20 text-red-400 border-red-500/30" },
   OVERDUE:   { label: "Vencido",    cls: "bg-red-500/20 text-red-400 border-red-500/30" },
+  EXPIRED:   { label: "Vencido",    cls: "bg-red-500/20 text-red-400 border-red-500/30" },
 };
 
 export function CoraPanel() {
@@ -42,7 +49,7 @@ export function CoraPanel() {
   const [saldo, setSaldo] = useState<Saldo | null>(null);
   const [lancamentos, setLancamentos] = useState<Lancamento[]>([]);
   const [cobrancas, setCobrancas] = useState<Cobranca[]>([]);
-  const [rawDebug, setRawDebug] = useState<string | null>(null);
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -64,7 +71,6 @@ export function CoraPanel() {
       }
       if (eData.items) setLancamentos(eData.items);
       else if (Array.isArray(eData)) setLancamentos(eData);
-      setRawDebug(JSON.stringify(cData, null, 2).slice(0, 2000));
       const rawList: Cobranca[] = cData.invoices ?? cData.items ?? (Array.isArray(cData) ? cData : []);
       setCobrancas(rawList.filter((c) => c && typeof c === "object" && c.id));
     } catch (e) {
@@ -146,14 +152,6 @@ export function CoraPanel() {
             <p className="text-xl font-bold text-[#7A8FA8]">{fmtBRL(saldo.blocked)}</p>
           </div>
         </div>
-      )}
-
-      {/* Debug temporário — remover após identificar estrutura */}
-      {rawDebug && (
-        <details className="text-[10px] text-[#7A8FA8]">
-          <summary className="cursor-pointer text-[#C9A84C] font-bold">Debug API Cora (clique para ver)</summary>
-          <pre className="mt-2 p-3 rounded-lg bg-[#0A1628] border border-[#243A66] overflow-auto max-h-64 whitespace-pre-wrap break-all">{rawDebug}</pre>
-        </details>
       )}
 
       {/* Tabs */}
@@ -270,16 +268,17 @@ export function CoraPanel() {
               <div key={c.id} className="flex items-center gap-3 p-4 rounded-xl border border-[#243A66] bg-[#0D1929]">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
-                    <span className="text-xs font-bold text-white truncate">{c.customer?.name}</span>
+                    <span className="text-xs font-bold text-white truncate">{c.customer_name}</span>
                     <Badge className={`text-[10px] px-1.5 py-0 ${st.cls}`}>{st.label}</Badge>
                   </div>
                   <p className="text-[10px] text-muted-foreground">
-                    {c.services?.[0]?.name ?? "Cobrança"}{c.payment_terms?.due_date ? ` · Vence ${fmtDate(c.payment_terms.due_date)}` : ""}
+                    {c.payment_form ?? "Cobrança"} · Vence {fmtDate(c.due_date)}
+                    {c.paid_at ? ` · Pago em ${fmtDate(c.paid_at)}` : ""}
                   </p>
                 </div>
                 <div className="text-right flex-shrink-0">
-                  <p className="text-sm font-bold text-[#C9A84C]">{fmtBRL(c.payment_terms?.amount ?? 0)}</p>
-                  <p className="text-[10px] text-muted-foreground font-mono">{c.code}</p>
+                  <p className="text-sm font-bold text-[#C9A84C]">{fmtBRL(c.total_amount)}</p>
+                  <p className="text-[10px] text-muted-foreground font-mono">{c.id.slice(-8).toUpperCase()}</p>
                 </div>
               </div>
             );
