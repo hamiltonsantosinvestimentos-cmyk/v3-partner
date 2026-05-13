@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import {
   X, User, Building2, FileText, Upload, CheckCircle2, Circle,
-  ChevronRight, AlertCircle, Home, Shield, TrendingUp, Zap,
+  ChevronRight, AlertCircle, Home, Shield, TrendingUp, Zap, Download, Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -466,6 +466,236 @@ interface UploadedFile {
   file?: File;    // real File object, present while pending/uploading
 }
 
+// ─── Linhas que exigem Release do Cliente ─────────────────────────────────────
+const RELEASE_LINES = [
+  "Op. Internacional — Cash Collateral",
+  "Op. Internacional — Garantia Imobiliária",
+];
+
+async function gerarReleasePDF() {
+  const { jsPDF } = await import("jspdf");
+  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+
+  const W = 210;
+  const M = 18;
+
+  // Header navy
+  doc.setFillColor(9, 8, 26);
+  doc.rect(0, 0, W, 48, "F");
+
+  // Logo
+  try {
+    const logoRes = await fetch("/logo.jpg");
+    const blob = await logoRes.blob();
+    const b64 = await new Promise<string>(res => {
+      const fr = new FileReader();
+      fr.onloadend = () => res(fr.result as string);
+      fr.readAsDataURL(blob);
+    });
+    doc.addImage(b64, "JPEG", M, 8, 28, 28);
+  } catch { /* logo opcional */ }
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(14);
+  doc.setTextColor(240, 236, 228);
+  doc.text("RELEASE DO CLIENTE", M + 34, 22);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8);
+  doc.setTextColor(201, 168, 76);
+  doc.text("MODELO PADRONIZADO — OPERAÇÕES INTERNACIONAIS", M + 34, 30);
+  doc.setTextColor(122, 143, 168);
+  doc.setFontSize(7);
+  doc.text("V3 Partners Soluções Ltda · CNPJ 14.219.287/0001-50 · v3partners.com.br", M + 34, 38);
+
+  // Gold line
+  doc.setFillColor(201, 168, 76);
+  doc.rect(0, 48, W, 0.7, "F");
+
+  // Body bg
+  doc.setFillColor(10, 22, 40);
+  doc.rect(0, 48.7, W, 248.3, "F");
+
+  let y = 60;
+  const lineH = 7;
+  const blank = "_____________________________";
+
+  function gold(text: string) {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.setTextColor(201, 168, 76);
+    doc.text(text, M, y);
+    y += 1.5;
+    doc.setDrawColor(201, 168, 76);
+    doc.setLineWidth(0.3);
+    doc.line(M, y, W - M, y);
+    y += 6;
+  }
+
+  function item(label: string) {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9.5);
+    doc.setTextColor(240, 236, 228);
+    const lines = doc.splitTextToSize(`• ${label}: ${blank}`, W - M * 2 - 4);
+    doc.text(lines, M + 3, y);
+    y += lines.length * lineH;
+    checkPage();
+  }
+
+  function sub(text: string) {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8.5);
+    doc.setTextColor(180, 200, 230);
+    doc.text(text, M, y);
+    y += lineH;
+    checkPage();
+  }
+
+  function note(text: string) {
+    doc.setFont("helvetica", "italic");
+    doc.setFontSize(8);
+    doc.setTextColor(122, 143, 168);
+    const lines = doc.splitTextToSize(text, W - M * 2);
+    doc.text(lines, M, y);
+    y += lines.length * 5.5 + 2;
+    checkPage();
+  }
+
+  function spacer(n = 4) { y += n; checkPage(); }
+
+  function checkPage() {
+    if (y > 274) {
+      doc.addPage();
+      doc.setFillColor(10, 22, 40);
+      doc.rect(0, 0, W, 297, "F");
+      y = 18;
+    }
+  }
+
+  // 1. Identificação
+  gold("1. IDENTIFICAÇÃO DO CLIENTE");
+  item("Razão Social / Nome");
+  item("CNPJ / CPF");
+  item("Segmento / Atividade Principal");
+  item("Tempo de Atuação no Mercado");
+  item("Localização / Unidade Operacional");
+  spacer();
+
+  // 2. Resumo Executivo
+  gold("2. RESUMO EXECUTIVO");
+  note("Breve síntese do contexto geral do cliente, destacando perfil, momento atual e principais intenções de investimento.");
+  note("Exemplo: \"Cliente com operação consolidada no segmento ___, em fase de expansão operacional, buscando captação para acelerar o projeto ___\".");
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9.5);
+  doc.setTextColor(240, 236, 228);
+  for (let i = 0; i < 4; i++) {
+    doc.text(blank + blank.slice(0, 10), M + 3, y);
+    y += lineH;
+    checkPage();
+  }
+  spacer();
+
+  // 3. Planos de Investimento
+  gold("3. PLANOS DE INVESTIMENTO");
+  item("Objetivo da Captação");
+  item("Valor Pretendido (R$)");
+  sub("  Destinação dos Recursos:");
+  item("Expansão");
+  item("Reestruturação");
+  item("Capital de Giro");
+  item("Outras frentes");
+  sub("  Prazos e Marcos Projetados:");
+  item("Curto Prazo (0–6 meses)");
+  item("Médio Prazo (6–18 meses)");
+  item("Longo Prazo (18+ meses)");
+  spacer();
+
+  // 4. Situação Financeira
+  gold("4. SITUAÇÃO FINANCEIRA ATUAL");
+  sub("4.1 Faturamento");
+  item("Média dos últimos 12 meses (R$)");
+  item("Média dos últimos 24 meses (R$)");
+  item("Tendência (Crescimento / Estabilidade / Queda)");
+  spacer(2);
+  sub("4.2 Estrutura Financeira");
+  item("Endividamento Bancário");
+  item("Comprometimento Mensal");
+  item("Liquidez Operacional");
+  spacer();
+
+  // 5. Passivos e Exposições
+  gold("5. PASSIVOS E EXPOSIÇÕES");
+  sub("5.1 Apontamentos Trabalhistas");
+  item("Quantidade total de ações");
+  item("Principais riscos identificados");
+  item("Status (ativos / arquivados / acordados)");
+  item("Impacto estimado (se houver)");
+  spacer(2);
+  sub("5.2 Tributos em Aberto");
+  item("Débitos inscritos em dívida ativa");
+  item("Parcelamentos existentes");
+  item("Risco de execução fiscal");
+  item("Potencial impacto no fluxo de caixa");
+  spacer(2);
+  sub("5.3 Ações de Execução à Vista");
+  note("(Execuções que exigem pagamentos imediatos ou negociáveis.)");
+  item("Existência de execuções  Sim ( )  Não ( )");
+  item("Valor total (R$)");
+  item("Prazos e riscos");
+  item("Ameaça a bens essenciais / garantias");
+  spacer();
+
+  // 6. Análise de Impacto Futuro
+  gold("6. ANÁLISE DE IMPACTO FUTURO");
+  note("Indicar se os passivos podem comprometer operações, garantias ou a conclusão da operação de crédito.");
+  item("Impacto Potencial para Investidores / Fundo:  Baixo ( )  Médio ( )  Alto ( )");
+  item("Principais pontos de atenção");
+  item("Mitigações sugeridas");
+  spacer();
+
+  // 7. Considerações Finais
+  gold("7. CONSIDERAÇÕES FINAIS");
+  note("Sumário da viabilidade, pontos de risco e recomendação preliminar.");
+  note("Exemplo: \"O cliente demonstra capacidade operacional e intenção clara de investimento. No entanto, alguns passivos trabalhistas e tributários precisam de acompanhamento para não comprometer garantias e a operação projetada.\"");
+  for (let i = 0; i < 5; i++) {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9.5);
+    doc.setTextColor(240, 236, 228);
+    doc.text(blank + blank, M + 3, y);
+    y += lineH;
+    checkPage();
+  }
+  spacer(6);
+
+  // Assinatura
+  doc.setDrawColor(201, 168, 76);
+  doc.setLineWidth(0.3);
+  doc.line(M, y, M + 70, y);
+  doc.line(W - M - 70, y, W - M, y);
+  y += 5;
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8);
+  doc.setTextColor(122, 143, 168);
+  doc.text("Assinatura do Responsável", M, y);
+  doc.text("Data", W - M - 70, y);
+
+  // Footer em todas as páginas
+  const totalPages = doc.getNumberOfPages();
+  for (let p = 1; p <= totalPages; p++) {
+    doc.setPage(p);
+    doc.setFillColor(9, 8, 26);
+    doc.rect(0, 285, W, 12, "F");
+    doc.setFillColor(201, 168, 76);
+    doc.rect(0, 285, W, 0.4, "F");
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(6.5);
+    doc.setTextColor(122, 143, 168);
+    doc.text("v3partners.com.br  ·  Documento de uso interno — V3 Partners Soluções Ltda  ·  CNPJ 14.219.287/0001-50", W / 2, 290, { align: "center" });
+    doc.text(`${p} / ${totalPages}`, W - M, 290, { align: "right" });
+  }
+
+  doc.save("release-cliente-v3partners.pdf");
+}
+
 interface NovaPropostaModalProps {
   open: boolean;
   onClose: () => void;
@@ -481,6 +711,7 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
   const [submitted, setSubmitted] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [gerandoPDF, setGerandoPDF] = useState(false);
 
   // Dados do cliente
   const [nome, setNome] = useState("");
@@ -835,6 +1066,45 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
 
         {/* Body */}
         <div className="flex-1 overflow-y-auto px-6 py-5">
+
+          {/* ── BANNER: Release do Cliente (Op. Internacional) ── */}
+          {RELEASE_LINES.includes(creditLine) && (
+            <div className="mb-5 rounded-xl border border-[#C9A84C]/40 bg-[#C9A84C]/08 p-4"
+              style={{ background: "rgba(201,168,76,0.07)" }}>
+              <div className="flex items-start gap-3">
+                <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
+                  style={{ background: "rgba(201,168,76,0.15)", border: "1px solid rgba(201,168,76,0.35)" }}>
+                  <FileText className="w-4 h-4 text-[#C9A84C]" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-bold text-[#C9A84C] uppercase tracking-wide mb-0.5">
+                    Release do Cliente — Obrigatório
+                  </p>
+                  <p className="text-[11px] text-[#7A8FA8] leading-relaxed">
+                    Esta linha exige o preenchimento do <strong className="text-[#F0ECE4]">Release do Cliente</strong> pelo prospect antes da análise. Baixe o formulário, envie ao cliente e anexe o PDF preenchido à proposta.
+                  </p>
+                </div>
+                <button
+                  onClick={async () => {
+                    setGerandoPDF(true);
+                    try { await gerarReleasePDF(); } finally { setGerandoPDF(false); }
+                  }}
+                  disabled={gerandoPDF}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold flex-shrink-0 transition-all disabled:opacity-60"
+                  style={{
+                    background: "rgba(201,168,76,0.15)",
+                    border: "1px solid rgba(201,168,76,0.4)",
+                    color: "#C9A84C",
+                  }}
+                >
+                  {gerandoPDF
+                    ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Gerando…</>
+                    : <><Download className="w-3.5 h-3.5" /> Baixar Release</>}
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* ── TAB: CLIENTE ── */}
           {tab === "cliente" && (
             <div className="space-y-4">
