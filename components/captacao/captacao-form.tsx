@@ -266,15 +266,26 @@ export function CaptacaoForm({ token, partnerName }: CaptacaoFormProps) {
     backdropFilter: "blur(8px)",
   };
 
+  function normalizeStr(s: string) {
+    return s.toUpperCase()
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^A-Z0-9 ]/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
   const checklistFull = (() => {
-    const linha = portfolioLinhas.find(l =>
-      l.nome.toUpperCase().trim() === creditLine.toUpperCase().trim()
-    );
+    if (!creditLine) return DEFAULT_CHECKLIST.map(nome => ({ nome, obrigatorio: true }));
+    const cl = normalizeStr(creditLine);
+    const linha = portfolioLinhas.find(l => {
+      const n = normalizeStr(l.nome);
+      return n === cl || n.startsWith(cl) || cl.startsWith(n);
+    });
     if (linha) {
       const docs = personType === "PJ"
         ? (linha.documentos_pj ?? [])
         : (linha.documentos_pf ?? []);
-      if (docs.length > 0) return docs.map(d => ({ nome: d.nome, obrigatorio: d.obrigatorio }));
+      if (docs.length > 0) return docs.map((d: { nome: string; obrigatorio: boolean }) => ({ nome: d.nome, obrigatorio: d.obrigatorio }));
     }
     return DEFAULT_CHECKLIST.map(nome => ({ nome, obrigatorio: true }));
   })();
