@@ -42,6 +42,7 @@ export function CoraPanel() {
   const [saldo, setSaldo] = useState<Saldo | null>(null);
   const [lancamentos, setLancamentos] = useState<Lancamento[]>([]);
   const [cobrancas, setCobrancas] = useState<Cobranca[]>([]);
+  const [rawDebug, setRawDebug] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -63,6 +64,7 @@ export function CoraPanel() {
       }
       if (eData.items) setLancamentos(eData.items);
       else if (Array.isArray(eData)) setLancamentos(eData);
+      setRawDebug(JSON.stringify(cData, null, 2).slice(0, 2000));
       const rawList: Cobranca[] = cData.invoices ?? cData.items ?? (Array.isArray(cData) ? cData : []);
       setCobrancas(rawList.filter((c) => c && typeof c === "object" && c.id));
     } catch (e) {
@@ -144,6 +146,14 @@ export function CoraPanel() {
             <p className="text-xl font-bold text-[#7A8FA8]">{fmtBRL(saldo.blocked)}</p>
           </div>
         </div>
+      )}
+
+      {/* Debug temporário — remover após identificar estrutura */}
+      {rawDebug && (
+        <details className="text-[10px] text-[#7A8FA8]">
+          <summary className="cursor-pointer text-[#C9A84C] font-bold">Debug API Cora (clique para ver)</summary>
+          <pre className="mt-2 p-3 rounded-lg bg-[#0A1628] border border-[#243A66] overflow-auto max-h-64 whitespace-pre-wrap break-all">{rawDebug}</pre>
+        </details>
       )}
 
       {/* Tabs */}
