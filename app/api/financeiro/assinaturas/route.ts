@@ -153,7 +153,27 @@ export async function PATCH(req: NextRequest) {
     if (!p) return NextResponse.json({ error: "Partner não encontrado" }, { status: 404 });
 
     const pp = p as { id: string; full_name: string; email?: string; role: string; trial_expires_at?: string; created_at: string; cpf?: string; cnpj?: string };
-    const documento = pp.cpf ?? pp.cnpj ?? "";
+
+    // Busca CPF/CNPJ do cadastro se não estiver no profile
+    let documento = (pp.cpf ?? pp.cnpj ?? "").replace(/\D/g, "");
+    if (!documento) {
+      const { data: reg } = await svc()
+        .from("partner_registrations")
+        .select("cpf, cnpj, tipo_pessoa")
+        .eq("email", pp.email ?? "")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (reg) {
+        const r = reg as { cpf?: string; cnpj?: string; tipo_pessoa?: string };
+        documento = ((r.cpf ?? r.cnpj ?? "")).replace(/\D/g, "");
+      }
+    }
+
+    if (!documento) {
+      return NextResponse.json({ error: "CPF/CNPJ não encontrado para este partner. Atualize o cadastro." }, { status: 422 });
+    }
+
     const valor = PLANO_VALOR[pp.role] ?? 19700;
 
     // Vencimento = data de expiração do partner (ou +30 dias se já venceu)
@@ -173,31 +193,35 @@ export async function PATCH(req: NextRequest) {
     if (existing) return NextResponse.json({ error: "Já existe cobrança pendente", existing }, { status: 409 });
 
     let coraData: { id?: string; pix?: { emv?: string; qr_code?: string }; bank_slip?: { pdf?: { url?: string }; our_number?: string } } = {};
-    if (documento) {
-      const res = await coraFetch("/v2/invoices", {
-        method: "POST",
-        body: JSON.stringify({
-          code: randomUUID().slice(0, 8).toUpperCase(),
-          customer: {
-            name: pp.full_name,
-            document: {
-              identity: documento.replace(/\D/g, ""),
-              type: documento.replace(/\D/g, "").length === 11 ? "CPF" : "CNPJ",
-            },
-            ...(pp.email ? { contacts: [{ contact: pp.email, type: "EMAIL" }] } : {}),
+    const coraRes = await coraFetch("/v2/invoices", {
+      method: "POST",
+      body: JSON.stringify({
+        code: randomUUID().slice(0, 8).toUpperCase(),
+        customer: {
+          name: pp.full_name,
+          document: {
+            identity: documento,
+            type: documento.length === 11 ? "CPF" : "CNPJ",
           },
-          payment_terms: { due_date: dueDateStr, amount: valor },
-          payment_options: {
-            interest: { type: "MONTHLY_PERCENTAGE", value: 1 },
-            fine: { type: "PERCENTAGE", value: 2 },
-          },
-          services: [{ name: `V3 Partners — Mensalidade ${pp.role === "PARTNER_PRO" ? "Partner PRO" : "Partner"}`, amount: valor }],
-          notifications: { formats: ["EMAIL"], by_email: { should_notify: true } },
-        }),
-        idempotencyKey: randomUUID(),
-      });
-      if (res.ok) coraData = await res.json();
+          ...(pp.email ? { contacts: [{ contact: pp.email, type: "EMAIL" }] } : {}),
+        },
+        payment_terms: { due_date: dueDateStr, amount: valor },
+        payment_options: {
+          interest: { type: "MONTHLY_PERCENTAGE", value: 1 },
+          fine: { type: "PERCENTAGE", value: 2 },
+        },
+        services: [{ name: `V3 Partners — Mensalidade ${pp.role === "PARTNER_PRO" ? "Partner PRO" : "Partner"}`, amount: valor }],
+        notifications: { formats: ["EMAIL"], by_email: { should_notify: true } },
+      }),
+      idempotencyKey: randomUUID(),
+    });
+
+    if (!coraRes.ok) {
+      const errData = await coraRes.json() as { message?: string };
+      return NextResponse.json({ error: `Erro Cora: ${errData.message ?? coraRes.status}` }, { status: 502 });
     }
+
+    coraData = await coraRes.json();
 
     await svc().from("partner_subscriptions").insert({
       partner_id:      partnerId,

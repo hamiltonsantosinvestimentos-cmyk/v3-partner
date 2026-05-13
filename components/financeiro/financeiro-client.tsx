@@ -2363,11 +2363,15 @@ function AssinaturasTab() {
   async function doAction(partnerId: string, action: string) {
     setActionLoading(partnerId + action);
     try {
-      await fetch("/api/financeiro/assinaturas", {
+      const res = await fetch("/api/financeiro/assinaturas", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ partnerId, action }),
       });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({})) as { error?: string };
+        alert(d.error ?? `Erro ao executar ação (${res.status})`);
+      }
       await fetchData();
     } finally {
       setActionLoading(null);
