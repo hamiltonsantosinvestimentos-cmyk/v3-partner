@@ -2265,6 +2265,16 @@ interface PartnerRow {
   is_active: boolean;
 }
 
+interface CoraSubRow {
+  id: string;
+  status: string;
+  cora_invoice_id?: string;
+  amount_cents: number;
+  due_date: string;
+  pix_emv?: string;
+  paid_at?: string;
+}
+
 interface PaymentRecord {
   id: string;
   data: {
@@ -2316,8 +2326,11 @@ function AssinaturasTab() {
   const [partners, setPartners] = useState<PartnerRow[]>([]);
   const [payments, setPayments] = useState<PaymentRecord[]>([]);
   const [pendingNotifs, setPendingNotifs] = useState<PendingNotif[]>([]);
+  const [coraByPartner, setCoraByPartner] = useState<Record<string, CoraSubRow>>({});
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [gerandoLote, setGerandoLote] = useState(false);
+  const [loteResult, setLoteResult] = useState<{ ok: number; skip: number } | null>(null);
 
   // Modal de pagamento
   const [showPayModal, setShowPayModal] = useState(false);
@@ -2338,6 +2351,7 @@ function AssinaturasTab() {
         setPartners(d.partners ?? []);
         setPayments(d.payments ?? []);
         setPendingNotifs(d.pendingNotifs ?? []);
+        setCoraByPartner(d.coraByPartner ?? {});
       }
     } finally {
       setLoading(false);
@@ -2358,6 +2372,30 @@ function AssinaturasTab() {
     } finally {
       setActionLoading(null);
     }
+  }
+
+  async function handleGerarCobraLote() {
+    // Gera cobranças Cora para todos partners sem cobrança pendente
+    const semCobranca = partners.filter(p => {
+      const sub = coraByPartner[p.id];
+      return !sub || !["PENDING", "OPEN"].includes(sub.status);
+    });
+    if (semCobranca.length === 0) return;
+    setGerandoLote(true); setLoteResult(null);
+    let ok = 0; let skip = 0;
+    for (const p of semCobranca) {
+      try {
+        const res = await fetch("/api/financeiro/assinaturas", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ partnerId: p.id, action: "gerar_cobranca_cora" }),
+        });
+        if (res.ok) ok++; else skip++;
+      } catch { skip++; }
+    }
+    setLoteResult({ ok, skip });
+    setGerandoLote(false);
+    await fetchData();
   }
 
   async function handlePagar() {
@@ -2512,12 +2550,25 @@ function AssinaturasTab() {
             {f}
           </button>
         ))}
-        <button
-          onClick={fetchData}
-          className="ml-auto flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground border border-border/40 px-3 py-1.5 rounded-lg transition-colors"
-        >
-          <RefreshCw className="w-3 h-3" /> Atualizar
-        </button>
+        <div className="ml-auto flex items-center gap-2">
+          {loteResult && (
+            <span className="text-xs text-emerald-400">{loteResult.ok} geradas{loteResult.skip > 0 ? `, ${loteResult.skip} ignoradas` : ""}</span>
+          )}
+          <button
+            onClick={handleGerarCobraLote}
+            disabled={gerandoLote}
+            className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg bg-[#C9A84C]/10 border border-[#C9A84C]/30 text-[#C9A84C] hover:bg-[#C9A84C]/20 transition-colors disabled:opacity-50"
+          >
+            {gerandoLote ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}
+            Gerar Cobranças Cora
+          </button>
+          <button
+            onClick={fetchData}
+            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground border border-border/40 px-3 py-1.5 rounded-lg transition-colors"
+          >
+            <RefreshCw className="w-3 h-3" /> Atualizar
+          </button>
+        </div>
       </div>
 
       {/* Tabela de partners */}
@@ -2532,13 +2583,14 @@ function AssinaturasTab() {
                   <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-3">Mensalidade</th>
                   <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-3">Status</th>
                   <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-3">Vencimento</th>
+                  <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-3">Cobrança Cora</th>
                   <th className="text-right text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-3">Ações</th>
                 </tr>
               </thead>
               <tbody>
                 {filtered.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="text-center text-muted-foreground py-10 text-sm">
+                    <td colSpan={7} className="text-center text-muted-foreground py-10 text-sm">
                       Nenhum partner encontrado.
                     </td>
                   </tr>
@@ -2567,6 +2619,48 @@ function AssinaturasTab() {
                         <span className={`text-xs font-semibold ${status.color}`}>{status.label}</span>
                       </td>
                       <td className="px-4 py-3 text-xs text-muted-foreground">{expDate}</td>
+                      <td className="px-4 py-3">
+                        {(() => {
+                          const sub = coraByPartner[p.id];
+                          if (!sub) {
+                            return (
+                              <button
+                                onClick={() => doAction(p.id, "gerar_cobranca_cora")}
+                                disabled={!!isLoadingAny}
+                                className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-lg border border-[#C9A84C]/30 text-[#C9A84C] hover:bg-[#C9A84C]/10 transition-colors disabled:opacity-40"
+                              >
+                                {actionLoading === p.id + "gerar_cobranca_cora" ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}
+                                Gerar
+                              </button>
+                            );
+                          }
+                          const isPending = ["PENDING", "OPEN"].includes(sub.status);
+                          const isPaid = sub.status === "PAID";
+                          return (
+                            <div className="space-y-0.5">
+                              <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
+                                isPaid ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
+                                : isPending ? "bg-amber-500/20 text-amber-400 border-amber-500/30"
+                                : "bg-red-500/20 text-red-400 border-red-500/30"
+                              }`}>
+                                {isPaid ? "Pago" : isPending ? "Pendente" : "Cancelado"}
+                              </span>
+                              <p className="text-[10px] text-muted-foreground">
+                                Vence {new Date(sub.due_date + "T12:00:00").toLocaleDateString("pt-BR")}
+                              </p>
+                              {isPending && (
+                                <button
+                                  onClick={() => doAction(p.id, "gerar_cobranca_cora")}
+                                  disabled={!!isLoadingAny}
+                                  className="text-[10px] text-[#C9A84C] hover:underline disabled:opacity-40"
+                                >
+                                  Nova cobrança
+                                </button>
+                              )}
+                            </div>
+                          );
+                        })()}
+                      </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-end gap-1.5">
                           {/* Registrar pagamento */}
