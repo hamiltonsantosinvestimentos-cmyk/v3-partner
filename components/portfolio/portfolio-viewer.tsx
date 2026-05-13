@@ -447,7 +447,7 @@ function LinhaCard({ linha, nivelMap }: { linha: PortfolioLinha; nivelMap: Recor
           <div className="flex flex-wrap items-center gap-2 mb-1">
             <p className="text-sm font-bold text-white">{linha.nome}</p>
             {nivelCfg && (
-              <span className={cn("text-[9px] font-bold border px-2 py-0.5 rounded-full uppercase tracking-wide", nivelCfg.cls)}
+              <span className={cn("text-xs font-bold border px-3 py-1 rounded-lg uppercase tracking-widest", nivelCfg.cls)}
                 title={nivel === "NIVEL_1" ? "Mesa Crédito N1 — Varejo" : nivel === "NIVEL_2" ? "Mesa Crédito N2 — Estruturado" : "Mesa Crédito N3 — High Ticket"}>
                 {nivelCfg.label}
               </span>
