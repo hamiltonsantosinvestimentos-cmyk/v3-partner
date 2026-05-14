@@ -152,7 +152,13 @@ export function ForjaPanel({ deal, dealId, savedResult, onSaved, onReportSaved }
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              deal:           { sector: (deal as Record<string,unknown>).sector, location: (deal as Record<string,unknown>).location, deal_value: (deal as Record<string,unknown>).deal_value, notes: (deal as Record<string,unknown>).notes },
+              deal: {
+                sector:         (deal as Record<string,unknown>).sector,
+                location:       (deal as Record<string,unknown>).location,
+                deal_value:     (deal as Record<string,unknown>).deal_value,
+                notes:          (deal as Record<string,unknown>).notes,
+                contexto_forja: ((deal as Record<string,unknown>).asset_data as Record<string,unknown> | undefined)?.contexto_forja,
+              },
               validated:      phase1.validated,
               missing:        phase1.missing,
               recommendation: phase1.recommendation,

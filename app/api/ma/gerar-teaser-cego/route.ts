@@ -19,13 +19,28 @@ type ForjaResult = {
   recommendation_note: string;
 };
 
-// Campos que identificam a empresa — nunca no teaser cego
-const BLIND_KEYS = new Set([
-  "id", "code", "target_company", "cnpj", "email", "telefone",
-  "contato", "instagram", "linkedin", "website", "responsavel",
-]);
-function isBlind(field: string) {
-  return [...BLIND_KEYS].some(k => field.toLowerCase().includes(k));
+// Campos que identificam a empresa ou expõem dados internos — NUNCA no teaser cego
+const BLIND_PATTERNS = [
+  // Identidade
+  "id", "code", "target_company", "cnpj", "razao_social", "nome_fantasia",
+  // Localização exata
+  "location", "localizacao", "endereco", "address", "cep", "rua",
+  "municipio", "cidade", "bairro", "numero", "logradouro",
+  // Contatos
+  "contato", "email", "telefone", "whatsapp", "instagram", "linkedin", "website",
+  "responsavel", "vendedor", "comprador",
+  // Dados financeiros internos
+  "comissionamento", "commission", "fee", "honorario",
+  "divida_total", "divida", "debt",
+  // Dados jurídicos identificáveis
+  "processo_v3", "processo_regulatorio", "processo_judicial",
+  "assessor_juridico", "advogado",
+  // Documentos e registros
+  "matricula", "car", "itr", "registro",
+];
+function isBlind(field: string): boolean {
+  const lower = field.toLowerCase();
+  return BLIND_PATTERNS.some(p => lower.includes(p));
 }
 
 function formatM(v: number | null | undefined): string {
@@ -288,19 +303,34 @@ export async function POST(req: NextRequest) {
     }, { status: 422 });
   }
 
-  // Região cega: apenas estado/UF
+  // Região SEMPRE cega: apenas UF/estado — nunca cidade, endereço ou CEP
   const loc = (deal.location ?? "") as string;
   const regiaoBlind = (() => {
-    const ufMatch = loc.match(/\b([A-Z]{2})\b/);
+    // Tenta extrair UF de 2 letras maiúsculas
+    const ufMatch = loc.match(/\b(AC|AL|AM|AP|BA|CE|DF|ES|GO|MA|MG|MS|MT|PA|PB|PE|PI|PR|RJ|RN|RO|RR|RS|SC|SE|SP|TO)\b/);
     if (ufMatch) return ufMatch[1];
-    const parts = loc.split(/[-·,\s]+/).filter(Boolean);
-    return parts[parts.length - 1] ?? loc;
+    // Tenta nome do estado
+    const estadoMap: Record<string, string> = {
+      "rio de janeiro": "RJ", "são paulo": "SP", "minas gerais": "MG",
+      "bahia": "BA", "paraná": "PR", "rio grande do sul": "RS",
+      "santa catarina": "SC", "pernambuco": "PE", "ceará": "CE",
+      "goiás": "GO", "espírito santo": "ES", "mato grosso": "MT",
+    };
+    const lower = loc.toLowerCase();
+    for (const [estado, uf] of Object.entries(estadoMap)) {
+      if (lower.includes(estado)) return uf;
+    }
+    // Pega apenas a ÚLTIMA parte separada por vírgula/traço (geralmente o estado)
+    const parts = loc.split(/[,\-·]/).map(p => p.trim()).filter(Boolean);
+    if (parts.length > 1) return parts[parts.length - 1];
+    // Se não conseguiu extrair, retorna genérico — nunca endereço completo
+    return "Brasil";
   })();
 
   // Tipo de deal
   const dealType = (
     (ad.tipo_oportunidade as string) ??
-    (deal.deal_type as string) ??
+    (ad.deal_type as string) ??     // deal_type vive em asset_data para TEASER_CEGO
     ""
   ).replace("TEASER_CEGO", "").trim();
 

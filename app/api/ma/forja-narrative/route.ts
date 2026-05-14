@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
   const body = await req.json() as {
     deal: {
       sector?: string; location?: string; deal_value?: number; notes?: string;
-      code?: string; [key: string]: unknown;
+      contexto_forja?: string; code?: string; [key: string]: unknown;
     };
     validated: { field: string; value: string; note?: string }[];
     missing:   { field: string; impact: string; priority: string }[];
@@ -55,7 +55,11 @@ export async function POST(req: NextRequest) {
     `Score FORJA: ${score}/100 · ${recommendation}\n\n` +
     `Dados validados:\n${validatedSummary}\n\n` +
     (missingSummary ? `Itens ausentes (ALTA prioridade):\n${missingSummary}\n\n` : "") +
-    `Contexto adicional: ${deal.notes ?? ""}\n\n` +
+    (deal.contexto_forja?.trim()
+      ? `Contexto da Mesa (PRIORITÁRIO — use para enriquecer a narrativa):\n${deal.contexto_forja}\n\n`
+      : deal.notes?.trim()
+      ? `Notas: ${deal.notes}\n\n`
+      : "") +
     `Retorne APENAS JSON válido, sem markdown:\n` +
     `{\n` +
     `  "tese_investimento": [\n` +

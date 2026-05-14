@@ -291,6 +291,11 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
   const [transferError, setTransferError] = useState<string | null>(null);
   const [transferOk, setTransferOk] = useState(false);
 
+  // Contexto FORJA — campo livre por deal
+  const [ctxForja, setCtxForja]   = useState("");
+  const [ctxSaving, setCtxSaving] = useState(false);
+  const [ctxOk, setCtxOk]         = useState(false);
+
   // Teaser Cego
   const [showTeaserCego, setShowTeaserCego] = useState(false);
   const [teaserForm, setTeaserForm] = useState({
@@ -302,6 +307,8 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
 
   useEffect(() => {
     if (!selectedCard) { setCardDocs([]); setDetailTab("detalhes"); setEditingCard(false); return; }
+    // Inicializa contexto FORJA do card selecionado
+    setCtxForja(((selectedCard.asset_data as Record<string,unknown> | undefined)?.contexto_forja as string) ?? "");
     setDocsLoading(true);
     fetch(`/api/ma/documents?deal_id=${selectedCard.id}`)
       .then(r => r.json())
@@ -1070,6 +1077,49 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
                     <Check size={12} /> Informações atualizadas com sucesso!
                   </div>
                 )}
+
+                {/* ── Contexto para o FORJA ─────────────────────── */}
+                <div className="rounded-xl border border-[#C9A84C]/20 bg-[#09081A] p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-1.5">
+                      <Zap size={12} className="text-[#C9A84C]" />
+                      <p className="text-[10px] font-bold tracking-widest uppercase text-[#C9A84C]">Contexto para o FORJA</p>
+                    </div>
+                    {ctxOk && <span className="text-[10px] text-emerald-400 flex items-center gap-1"><Check size={10} />Salvo</span>}
+                  </div>
+                  <textarea
+                    value={ctxForja}
+                    onChange={e => setCtxForja(e.target.value)}
+                    rows={3}
+                    placeholder="Adicione contexto que o FORJA deve considerar: situação do vendedor, urgência, interesse de compradores, restrições, tese preliminar, condições especiais..."
+                    className="w-full rounded-lg border border-[#243A66] bg-[#111F35] text-[#E8EDF5] text-xs px-3 py-2 placeholder:text-[#7A8FA8]/50 focus:outline-none focus:border-[#C9A84C] transition-colors resize-none"
+                  />
+                  <div className="flex items-center justify-between mt-2">
+                    <p className="text-[10px] text-[#7A8FA8]">Injetado no prompt do FORJA antes da validação.</p>
+                    <button
+                      onClick={async () => {
+                        setCtxSaving(true);
+                        try {
+                          const newAssetData = { ...(selectedCard.asset_data as Record<string,unknown> ?? {}), contexto_forja: ctxForja };
+                          await fetch("/api/ma-deals", {
+                            method: "PATCH",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ id: selectedCard.id, asset_data: newAssetData }),
+                          });
+                          setCards(prev => prev.map(c => c.id === selectedCard.id ? { ...c, asset_data: newAssetData } : c));
+                          setSelectedCard(prev => prev ? { ...prev, asset_data: newAssetData } : null);
+                          setCtxOk(true);
+                          setTimeout(() => setCtxOk(false), 2500);
+                        } catch { /* silencioso */ }
+                        setCtxSaving(false);
+                      }}
+                      disabled={ctxSaving}
+                      className="flex items-center gap-1.5 text-[10px] font-semibold text-[#C9A84C] bg-[#C9A84C]/10 border border-[#C9A84C]/30 px-3 py-1.5 rounded-lg hover:bg-[#C9A84C]/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      {ctxSaving ? <><Loader2 size={10} className="animate-spin" />Salvando</> : <><Check size={10} />Salvar Contexto</>}
+                    </button>
+                  </div>
+                </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="rounded-lg bg-[#0F1E35] border border-[#122036] p-3">
                     <p className="text-xs text-[#7A8FA8] mb-1">Setor</p>

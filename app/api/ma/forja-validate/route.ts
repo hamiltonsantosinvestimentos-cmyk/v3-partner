@@ -116,6 +116,9 @@ export async function POST(req: NextRequest) {
     const cleanDeal = sanitizeDeal(deal);
     const dealId = deal.id as string | undefined;
 
+    // Contexto adicional fornecido pelo usuário — injetado no prompt
+    const contextoForja = (deal?.asset_data as Record<string,unknown> | undefined)?.contexto_forja as string | undefined;
+
     // Carrega PDFs se foram selecionados
     const pdfs: PdfPayload[] =
       doc_ids?.length && dealId
@@ -125,7 +128,6 @@ export async function POST(req: NextRequest) {
     const hasDocs = pdfs.length > 0;
 
     // FASE 1 — só validação (rápida, sem narrativa)
-    // A narrativa e a tese são geradas separadamente via /api/ma/forja-narrative
     const systemPrompt =
       "Você é o FORJA, validador de deals M&A da V3 Partners. " +
       (hasDocs
@@ -161,9 +163,13 @@ export async function POST(req: NextRequest) {
       ),
       {
         type: "text",
-        text: hasDocs
-          ? `Analise este deal M&A e valide contra os ${pdfs.length} documento(s) fornecido(s):\n\n${JSON.stringify(cleanDeal, null, 2)}`
-          : `Analise este deal M&A:\n\n${JSON.stringify(cleanDeal, null, 2)}`,
+        text: (hasDocs
+          ? `Analise este deal M&A e valide contra os ${pdfs.length} documento(s) fornecido(s):\n\n`
+          : `Analise este deal M&A:\n\n`) +
+          (contextoForja?.trim()
+            ? `CONTEXTO ADICIONAL (fornecido pela Mesa — considerar na análise):\n${contextoForja}\n\n`
+            : "") +
+          JSON.stringify(cleanDeal, null, 2),
       },
     ];
 
