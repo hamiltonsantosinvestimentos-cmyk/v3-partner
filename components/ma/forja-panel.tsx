@@ -77,6 +77,11 @@ export function ForjaPanel({ deal, dealId, savedResult, onSaved, onReportSaved }
   const [exported, setExported]     = useState<{ url: string; emails: number } | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
 
+  // Teaser Cego
+  const [teaserLoading, setTeaserLoading] = useState(false);
+  const [teaserError, setTeaserError]     = useState<string | null>(null);
+  const [teaserDone, setTeaserDone]       = useState(false);
+
   const [docs, setDocs]                 = useState<DocEntry[]>([]);
   const [docsLoading, setDocsLoading]   = useState(false);
   const [selectedDocIds, setSelectedDocIds] = useState<string[]>([]);
@@ -171,6 +176,28 @@ export function ForjaPanel({ deal, dealId, savedResult, onSaved, onReportSaved }
       setExportError(e instanceof Error ? e.message : String(e));
     } finally {
       setExporting(false);
+    }
+  };
+
+  const handleTeaserCego = async () => {
+    setTeaserLoading(true);
+    setTeaserError(null);
+    setTeaserDone(false);
+    try {
+      const res = await fetch("/api/ma/gerar-teaser-cego", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ deal_id: dealId }),
+      });
+      const data = await res.json() as { ok?: boolean; html?: string; error?: string };
+      if (!res.ok || !data.html) throw new Error(data.error ?? `HTTP ${res.status}`);
+      const blob = new Blob([data.html], { type: "text/html;charset=utf-8" });
+      window.open(URL.createObjectURL(blob), "_blank");
+      setTeaserDone(true);
+    } catch (e) {
+      setTeaserError(e instanceof Error ? e.message : "Erro ao gerar teaser");
+    } finally {
+      setTeaserLoading(false);
     }
   };
 
@@ -280,6 +307,35 @@ export function ForjaPanel({ deal, dealId, savedResult, onSaved, onReportSaved }
             <p className="mt-3 text-xs text-red-400 flex items-center gap-1.5">
               <XCircle className="w-3.5 h-3.5" />{error}
             </p>
+          )}
+
+          {/* Teaser Cego — visível para qualquer resultado FORJA */}
+          {result && (
+            <div className="mt-3 pt-3 border-t border-[#243A66] flex items-center gap-3 flex-wrap">
+              <Button
+                size="sm"
+                onClick={handleTeaserCego}
+                disabled={teaserLoading}
+                variant="outline"
+                className="border-[#C9A84C]/40 text-[#C9A84C] hover:bg-[#C9A84C]/10 flex items-center gap-1.5"
+              >
+                {teaserLoading ? (
+                  <><Loader2 className="w-3.5 h-3.5 animate-spin" />Gerando Teaser...</>
+                ) : teaserDone ? (
+                  <><CheckCheck className="w-3.5 h-3.5" />Teaser Gerado</>
+                ) : (
+                  <><FileText className="w-3.5 h-3.5" />Gerar Teaser Cego</>
+                )}
+              </Button>
+              <span className="text-[10px] text-muted-foreground">
+                Disponível para qualquer status FORJA · identidade do ativo omitida automaticamente
+              </span>
+              {teaserError && (
+                <span className="text-xs text-red-400 flex items-center gap-1">
+                  <XCircle className="w-3 h-3" />{teaserError}
+                </span>
+              )}
+            </div>
           )}
 
           {/* Exportar Relatório — sempre visível, desabilitado sem resultado */}
@@ -452,7 +508,7 @@ export function ForjaPanel({ deal, dealId, savedResult, onSaved, onReportSaved }
                   <div className="flex items-center justify-between mb-0.5">
                     <p className="text-[10px] font-bold tracking-widest uppercase text-emerald-500/70">{v.field}</p>
                     {v.doc_confirmed && (
-                      <ShieldCheck className="w-3 h-3 text-[#C9A84C]" title="Confirmado em documento" />
+                      <ShieldCheck className="w-3 h-3 text-[#C9A84C]" aria-label="Confirmado em documento" />
                     )}
                   </div>
                   <p className="text-xs text-[#F0ECE4] font-medium">{v.value}</p>
