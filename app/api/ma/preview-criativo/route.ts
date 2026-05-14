@@ -32,13 +32,51 @@ function formatUSD(v: number) {
   return `USD ${(usd / 1e3).toFixed(0)}K`;
 }
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function getForjaData(ad: any) {
+  const fr = ad?.forja_result ?? {};
+  return {
+    narrative_pt: (fr.narrative_pt ?? "") as string,
+    narrative_en: (fr.narrative_en ?? "") as string,
+    tese: Array.isArray(fr.tese_investimento) ? fr.tese_investimento as string[] : [],
+  };
+}
+
+// Renderiza tese_investimento como bullets (array) ou parágrafo (string legado)
+function renderTese(tese: string[] | string, style = "font-size:12px;color:#7A8FA8;line-height:1.7"): string {
+  if (Array.isArray(tese) && tese.length > 0) {
+    return tese.map(b =>
+      `<div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:10px;">
+         <div style="width:5px;height:5px;border-radius:50%;background:#C9A84C;flex-shrink:0;margin-top:5px;"></div>
+         <p style="${style}">${b}</p>
+       </div>`
+    ).join("");
+  }
+  if (typeof tese === "string" && tese.trim()) {
+    return `<p style="${style}">${tese}</p>`;
+  }
+  return "";
+}
+
 // ── CIM — Memorando de Informação Confidencial ──────────────────────────────
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function buildCIM(deal: any, lang: string): string {
   const ad = deal.asset_data ?? {};
   const isPt = lang === "pt-br";
-  const desc = isPt ? (ad.descricao_ptbr ?? ad.descricao ?? "") : (ad.descricao_en ?? ad.descricao_ptbr ?? "");
-  const tese = isPt ? (ad.tese_investimento ?? "") : (ad.tese_investimento_en ?? ad.tese_investimento ?? "");
+  const forja = getForjaData(ad);
+
+  // Descrição: preferência FORJA narrative → gerar-kit-ia descricao
+  const desc = isPt
+    ? (forja.narrative_pt || ad.descricao_ptbr || ad.descricao || "")
+    : (forja.narrative_en || ad.descricao_en || ad.descricao_ptbr || "");
+
+  // Tese: preferência FORJA tese_investimento (array) → legado string
+  const tese = forja.tese.length > 0
+    ? forja.tese
+    : isPt ? (ad.tese_investimento ?? "") : (ad.tese_investimento_en ?? ad.tese_investimento ?? "");
+
   const metricas: { label: string; value: string; sub?: string }[] = ad.metricas ?? [];
   const diferenciais: string[] = ad.diferenciais ?? [];
   const riscos: { nivel: string; descricao: string; mitigacao: string }[] = ad.riscos ?? [];
@@ -177,10 +215,7 @@ body{background:#060515;padding:40px 0;min-height:100vh}
         <p>${deal.deal_value ? formatBRL(deal.deal_value) : "—"}</p>
       </div>
       ${deal.ebitda_multiple ? `<div class="cover-meta-item"><p>${t.multiploEbitda}</p><p>${deal.ebitda_multiple}x</p></div>` : ""}
-      <div class="cover-meta-item">
-        <p>${t.probabilidade}</p>
-        <p>${deal.probability_percent}%</p>
-      </div>
+      ${deal.sector ? `<div class="cover-meta-item"><p>${t.setor}</p><p>${deal.sector}</p></div>` : ""}
     </div>
     <p style="margin-top:32px" class="cover-confidential">${t.confidencial}</p>
   </div>
@@ -209,10 +244,10 @@ body{background:#060515;padding:40px 0;min-height:100vh}
   <h2 class="section-title">${deal.target_company}</h2>
   <p class="section-sub">${deal.sector}${deal.location ? " · " + deal.location : ""}</p>
   <p style="font-size:13px;color:#7A8FA8;line-height:1.8;margin-bottom:24px">${desc}</p>
-  ${tese ? `
+  ${(Array.isArray(tese) ? tese.length > 0 : !!tese) ? `
   <p class="label" style="margin-bottom:12px">${t.tese}</p>
   <div class="tese-box">
-    <p style="font-size:13px;color:#F0ECE4;line-height:1.8">${tese}</p>
+    ${renderTese(tese, "font-size:12px;color:#F0ECE4;line-height:1.75")}
   </div>` : ""}
   <span class="page-num">${t.pag} 3 ${t.de} 6</span>
 </div>
@@ -272,9 +307,31 @@ body{background:#060515;padding:40px 0;min-height:100vh}
 function buildTeaser(deal: any, lang: string): string {
   const ad = deal.asset_data ?? {};
   const isPt = lang === "pt-br";
+  const forja = getForjaData(ad);
+
+  // Descrição cega: preferência FORJA narrative → legado curto
+  const desc = isPt
+    ? (forja.narrative_pt || ad.teaser_ptbr || ad.descricao_ptbr || "")
+    : (forja.narrative_en || ad.teaser_en || ad.descricao_en || "");
+
+  // Tese: FORJA array → legado string
+  const tese = forja.tese.length > 0
+    ? forja.tese
+    : isPt ? (ad.tese_investimento ?? "") : (ad.tese_investimento_en ?? ad.tese_investimento ?? "");
+
+  // Região CEGA: apenas estado/UF
+  const loc = (deal.location ?? "") as string;
+  const regiaoBlind = (() => {
+    const ufMatch = loc.match(/\b([A-Z]{2})\b/);
+    if (ufMatch) return ufMatch[1];
+    const estado = loc.match(/(Rio de Janeiro|São Paulo|Minas Gerais|Bahia|Paraná|Rio Grande do Sul|Pernambuco|Ceará|Goiás|Mato Grosso)/i);
+    if (estado) return estado[0];
+    const parts = loc.split(/[-·,\s]+/).filter(Boolean);
+    return parts[parts.length - 1] ?? "Brasil";
+  })();
+
   const metricas: { label: string; value: string; sub?: string }[] = ad.metricas ?? [];
   const diferenciais: string[] = ad.diferenciais ?? [];
-  const tese = isPt ? (ad.tese_investimento ?? "") : (ad.tese_investimento_en ?? ad.tese_investimento ?? "");
 
   const t = isPt ? {
     teaser: "TEASER CEGO — OPORTUNIDADE M&A",
@@ -374,19 +431,24 @@ body{background:#060515;padding:40px 0;display:flex;justify-content:center;min-h
   <div class="bar"></div>
   <p class="hero-label">${t.oport}</p>
   <h1 class="hero-title">${deal.sector}</h1>
-  <p class="hero-sub">${deal.location ? deal.location : "Brasil"}</p>
+  <p class="hero-sub">${regiaoBlind} · ${deal.deal_value ? formatBRL(deal.deal_value) : ""}</p>
   <div class="meta-row">
     ${deal.deal_value ? `<div class="meta-item"><p>${t.deal}</p><p>${formatBRL(deal.deal_value)}</p></div>` : ""}
     ${deal.ebitda_multiple ? `<div class="meta-item"><p>${t.multiplo}</p><p>${deal.ebitda_multiple}x</p></div>` : ""}
-    ${deal.probability_percent ? `<div class="meta-item"><p>Probabilidade</p><p>${deal.probability_percent}%</p></div>` : ""}
+    <div class="meta-item"><p>${isPt ? "Região" : "Region"}</p><p>${regiaoBlind}</p></div>
   </div>
-  ${tese ? `<div class="tese"><p>${tese}</p></div>` : ""}
-  ${metricas.length > 0 ? `
+  ${(Array.isArray(tese) ? tese.length > 0 : !!tese) ? `
+  <p class="label" style="margin-bottom:10px">${t.tese}</p>
+  <div class="tese">
+    ${renderTese(tese, "font-size:11px;color:#C4CDD8;line-height:1.7")}
+  </div>` : ""}
+  ${desc ? `<p style="font-size:11px;color:#7A8FA8;line-height:1.75;margin-bottom:20px;border-left:2px solid rgba(201,168,76,0.3);padding-left:12px;">${desc.slice(0, 400)}${desc.length > 400 ? "..." : ""}</p>` : ""}
+  ${metricas.length > 0 && !desc ? `
   <p class="label" style="margin-bottom:12px">${t.metricas}</p>
   <div class="metrics-row">
     ${metricas.map(m => `<div class="metric-box"><p class="label">${m.label}</p><p class="val">${m.value}</p>${m.sub ? `<p class="sub">${m.sub}</p>` : ""}</div>`).join("")}
   </div>` : ""}
-  ${diferenciais.length > 0 ? `
+  ${diferenciais.length > 0 && !desc ? `
   <p class="label" style="margin-bottom:12px">${t.difer}</p>
   <ul class="diff-list">
     ${diferenciais.map(d => `<li><span>${d}</span></li>`).join("")}
