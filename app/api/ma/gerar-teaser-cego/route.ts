@@ -274,7 +274,7 @@ export async function POST(req: NextRequest) {
 
   const { data: deal, error } = await db
     .from("ma_deals")
-    .select("id, code, target_company, sector, deal_value, deal_type, location, notes, asset_data")
+    .select("id, code, target_company, sector, deal_value, location, notes, asset_data")
     .eq("id", deal_id).single();
 
   if (error || !deal) return NextResponse.json({ error: "Deal não encontrado" }, { status: 404 });
