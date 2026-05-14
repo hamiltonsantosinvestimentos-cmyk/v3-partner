@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { BarChart2, Calendar, Layers, TrendingUp, Bot, ExternalLink } from "lucide-react";
+import { BarChart2, Calendar, Layers, TrendingUp, Bot, ExternalLink, Zap, CheckCircle2, Loader2, X } from "lucide-react";
 
 export interface Report {
   id: string;
@@ -18,6 +18,8 @@ export interface GeneratedReport {
   squad_id: string;
   title: string;
   created_at: string;
+  opportunities_scanned_at?: string | null;
+  opportunities_found?: number | null;
 }
 
 interface Props {
@@ -126,42 +128,106 @@ export function ReportosClient({ reports, generatedReports = [], userRole }: Pro
 }
 
 function GeneratedReportCard({ report }: { report: GeneratedReport }) {
+  const [scanning, setScanning]   = useState(false);
+  const [scanResult, setScanResult] = useState<{ total: number; resumo: string } | null>(
+    report.opportunities_scanned_at
+      ? { total: report.opportunities_found ?? 0, resumo: "Já escaneado" }
+      : null
+  );
+  const [scanError, setScanError] = useState<string | null>(null);
+
+  const handleScan = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setScanning(true);
+    setScanError(null);
+    try {
+      const res = await fetch("/api/ma/detect-opportunities", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ report_id: report.id, save: true }),
+      });
+      const data = await res.json() as { total?: number; resumo?: string; error?: string };
+      if (!res.ok) throw new Error(data.error ?? "Erro no scan");
+      setScanResult({ total: data.total ?? 0, resumo: data.resumo ?? "" });
+    } catch (err) {
+      setScanError(err instanceof Error ? err.message : "Erro");
+    } finally {
+      setScanning(false);
+    }
+  };
+
+  const alreadyScanned = !!scanResult;
+
   return (
-    <a
-      href={`/api/relatorios/generated?id=${report.id}`}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="text-left bg-[#111F35] border border-[#243A66] rounded-xl p-5 hover:border-[#C9A84C] hover:bg-[#162744] transition-all duration-200 group w-full block"
-    >
+    <div className="bg-[#111F35] border border-[#243A66] rounded-xl p-5 hover:border-[#C9A84C]/40 hover:bg-[#162744] transition-all duration-200 group">
       <div className="flex items-start justify-between mb-4">
         <span className="text-[9px] font-bold uppercase tracking-[1.5px] px-2 py-1 rounded-full text-[#C9A84C] bg-[#C9A84C]/10">
           {SQUAD_NAMES[report.squad_id] ?? report.squad_id}
         </span>
-        <div className="flex items-center gap-1 text-[#7A8FA8] group-hover:text-[#C9A84C] transition-colors">
+        <div className="flex items-center gap-1 text-[#7A8FA8]">
           <Calendar className="w-3.5 h-3.5" />
           <span className="text-[10px]">{formatDate(report.created_at.slice(0, 10))}</span>
         </div>
       </div>
 
       <div className="flex items-start gap-3 mb-4">
-        <div className="w-9 h-9 rounded-lg bg-[#09081A] flex items-center justify-center shrink-0 group-hover:bg-[#C9A84C]/10 transition-colors">
+        <div className="w-9 h-9 rounded-lg bg-[#09081A] flex items-center justify-center shrink-0">
           <Bot className="w-4 h-4 text-[#C9A84C]" />
         </div>
-        <h3 className="text-[#F0ECE4] font-semibold text-sm leading-snug group-hover:text-[#C9A84C] transition-colors pt-1 line-clamp-2">
+        <h3 className="text-[#F0ECE4] font-semibold text-sm leading-snug pt-1 line-clamp-2">
           {report.title}
         </h3>
       </div>
 
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-1">
-          <Layers className="w-3 h-3 text-[#7A8FA8]" />
-          <span className="text-[#7A8FA8] text-[10px]">Gerado por IA · V3</span>
+      {/* Resultado do scan */}
+      {scanResult && (
+        <div className="mb-3 px-3 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+          <div className="flex items-center gap-1.5">
+            <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+            <span className="text-[10px] font-semibold text-emerald-400">
+              {scanResult.total} oportunidade{scanResult.total !== 1 ? "s" : ""} detectada{scanResult.total !== 1 ? "s" : ""}
+            </span>
+          </div>
+          {scanResult.resumo && scanResult.resumo !== "Já escaneado" && (
+            <p className="text-[9px] text-[#7A8FA8] mt-1 line-clamp-2">{scanResult.resumo}</p>
+          )}
         </div>
-        <span className="text-[#C9A84C] text-[10px] font-semibold opacity-0 group-hover:opacity-100 transition-opacity">
-          Abrir ↗
-        </span>
+      )}
+      {scanError && (
+        <p className="text-[10px] text-red-400 mb-3">{scanError}</p>
+      )}
+
+      <div className="flex items-center justify-between gap-2">
+        <a
+          href={`/api/relatorios/generated?id=${report.id}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-1 text-[#7A8FA8] hover:text-[#C9A84C] transition-colors text-[10px]"
+          onClick={e => e.stopPropagation()}
+        >
+          <ExternalLink className="w-3 h-3" />
+          Abrir relatório
+        </a>
+
+        <button
+          onClick={handleScan}
+          disabled={scanning || alreadyScanned}
+          className={`flex items-center gap-1.5 text-[10px] font-semibold px-2.5 py-1.5 rounded-lg transition-colors ${
+            alreadyScanned
+              ? "text-emerald-400 bg-emerald-500/10 cursor-default"
+              : "text-[#C9A84C] bg-[#C9A84C]/10 hover:bg-[#C9A84C]/20 border border-[#C9A84C]/30 disabled:opacity-50"
+          }`}
+        >
+          {scanning
+            ? <><Loader2 className="w-3 h-3 animate-spin" />Escaneando...</>
+            : alreadyScanned
+            ? <><CheckCircle2 className="w-3 h-3" />Escaneado</>
+            : <><Zap className="w-3 h-3" />Detectar Deals</>
+          }
+        </button>
       </div>
-    </a>
+    </div>
   );
 }
 
