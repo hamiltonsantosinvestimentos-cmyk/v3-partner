@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 
-export const maxDuration = 30;
+export const maxDuration = 60;
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -18,16 +18,13 @@ type ForjaResult = {
   recommendation_note: string;
 };
 
-// Campos que identificam a empresa — nunca exibidos no teaser cego
-const BLIND_FIELDS = new Set([
-  "id", "code", "target_company", "asset_data.contato.nome",
-  "asset_data.contato.email", "asset_data.contato.telefone",
-  "location", "asset_data.cnpj", "website_url", "linkedin", "instagram",
+// Campos que identificam a empresa — nunca no teaser cego
+const BLIND_KEYS = new Set([
+  "id", "code", "target_company", "cnpj", "email", "telefone",
+  "contato", "instagram", "linkedin", "website", "responsavel",
 ]);
-
-function isBlind(field: string): boolean {
-  return BLIND_FIELDS.has(field) ||
-    /contato|cnpj|email|telefone|instagram|linkedin|website|id$|code$/.test(field.toLowerCase());
+function isBlind(field: string) {
+  return [...BLIND_KEYS].some(k => field.toLowerCase().includes(k));
 }
 
 function formatM(v: number | null | undefined): string {
@@ -38,197 +35,229 @@ function formatM(v: number | null | undefined): string {
   return `R$ ${v.toLocaleString("pt-BR")}`;
 }
 
+// Gera 5 bullets de tese de investimento via Claude Haiku
+async function gerarTeseInvestimento(params: {
+  sector: string;
+  regiao: string;
+  valor: number;
+  narrativaPt: string;
+  dealContext: string;
+}): Promise<string[]> {
+  if (!process.env.ANTHROPIC_API_KEY) return [];
+
+  const { default: Anthropic } = await import("@anthropic-ai/sdk");
+  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+
+  const prompt =
+    `Você é analista sênior de M&A da V3 Partners. Com base nas informações abaixo, gere EXATAMENTE 5 bullets de tese de investimento para um teaser cego.\n\n` +
+    `Setor: ${params.sector}\n` +
+    `Região: ${params.regiao}\n` +
+    `Valor: ${formatM(params.valor)}\n` +
+    `Contexto: ${params.dealContext}\n` +
+    `Narrativa: ${params.narrativaPt}\n\n` +
+    `Regras:\n` +
+    `- Cada bullet em 1 frase objetiva e impactante\n` +
+    `- Foco em por que o investidor deve QUERER conhecer o ativo\n` +
+    `- NÃO mencione nome da empresa, cidade exata ou contatos\n` +
+    `- Destaque: barreiras de entrada, potencial de upside, estrutura financeira favorável, posição de mercado\n` +
+    `- Tom: institucional, direto, sem exageros\n` +
+    `- Formato: retorne APENAS uma linha por bullet, sem numeração, sem traços iniciais, sem markdown\n` +
+    `- Primeira palavra de cada bullet deve ser um verbo forte (Ex: Adquira, Acesse, Capture, Consolide, Aproveite...)`;
+
+  try {
+    const msg = await client.messages.create({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 600,
+      messages: [{ role: "user", content: prompt }],
+    });
+    const text = (msg.content[0] as { text: string }).text.trim();
+    return text
+      .split("\n")
+      .map(l => l.replace(/^[-•·*\d.)\s]+/, "").trim())
+      .filter(l => l.length > 10)
+      .slice(0, 5);
+  } catch {
+    return [];
+  }
+}
+
 function buildTeaserHtml(params: {
   code: string;
   sector: string;
   regiao: string;
   valor: number;
+  dealType: string;
+  dealEstrutura: string;
   forjaResult: ForjaResult;
-  dealType?: string;
+  teseInvestimento: string[];
   highlights: { label: string; value: string }[];
   generatedAt: string;
 }): string {
-  const { code, sector, regiao, valor, forjaResult, dealType, highlights, generatedAt } = params;
+  const { code, sector, regiao, valor, dealType, dealEstrutura, forjaResult, teseInvestimento, highlights, generatedAt } = params;
 
-  const REC_COLOR: Record<string, string> = {
-    APROVADO: "#10B981", APROVADO_COM_RESSALVAS: "#F59E0B",
-    PENDENTE: "#F97316", BLOQUEADO: "#EF4444",
-  };
-  const recColor = REC_COLOR[forjaResult.recommendation] ?? "#7A8FA8";
+  const teseHtml = teseInvestimento.length > 0
+    ? teseInvestimento.map(b =>
+        `<div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:10px;">
+          <div style="width:6px;height:6px;border-radius:50%;background:#C9A84C;flex-shrink:0;margin-top:4px;"></div>
+          <p style="margin:0;font-size:11px;color:#E8EDF5;line-height:1.65;">${b}</p>
+        </div>`).join("")
+    : `<p style="font-size:11px;color:#7A8FA8;">Ativo com tese estruturada — informações completas disponíveis mediante NDA.</p>`;
 
-  const highlightRows = highlights
-    .map(h => `
-      <tr>
-        <td style="padding:8px 12px;font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#7A8FA8;width:38%;border-bottom:1px solid #162744;">${h.label}</td>
-        <td style="padding:8px 12px;font-size:11px;color:#F0ECE4;font-weight:500;border-bottom:1px solid #162744;">${h.value}</td>
-      </tr>`)
-    .join("");
+  const highlightCards = highlights.slice(0, 8).map(h =>
+    `<div style="background:#162744;border:1px solid #243A66;border-radius:6px;padding:12px 14px;">
+      <p style="margin:0 0 3px;font-size:8px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#7A8FA8;">${h.label}</p>
+      <p style="margin:0;font-size:12px;font-weight:600;color:#F0ECE4;">${h.value}</p>
+    </div>`).join("");
 
   return `<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>Teaser Cego — ${code} · V3 Partners</title>
+  <title>Teaser Cego · ${sector} · V3 Partners</title>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
   <style>
     @page { size: A4 portrait; margin: 0; }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: 'DM Sans', Arial, sans-serif; background: #09081A; color: #F0ECE4;
-           -webkit-print-color-adjust: exact; print-color-adjust: exact; padding: 32px 0; }
-    .page { width: 794px; min-height: 1123px; background: #111F35; margin: 0 auto 24px;
-            box-shadow: 0 4px 40px rgba(0,0,0,0.7); position: relative; overflow: hidden; }
+           -webkit-print-color-adjust: exact; print-color-adjust: exact; padding: 28px 0; }
+    .page { width: 794px; background: #09081A; margin: 0 auto 24px; box-shadow: 0 4px 40px rgba(0,0,0,.7); }
     .stripe { height: 4px; background: linear-gradient(to right,#09081A,#C9A84C,#E8C97A,#C9A84C,#09081A); }
-
-    /* Cover */
-    .cover { background: #09081A; padding: 56px 52px 48px; min-height: 460px; display: flex; flex-direction: column; justify-content: space-between; border-bottom: 1px solid #162744; }
-    .cover-top { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 48px; }
-    .cover-badge { font-size: 8px; font-weight: 700; letter-spacing: 3px; text-transform: uppercase; color: #C9A84C; border: 1px solid rgba(201,168,76,0.4); padding: 5px 12px; border-radius: 2px; }
-    .cover-title { font-size: 46px; font-weight: 800; line-height: 1.05; letter-spacing: -1px; color: #F0ECE4; margin-bottom: 16px; }
-    .cover-title span { color: #C9A84C; }
-    .cover-meta { display: flex; gap: 32px; flex-wrap: wrap; }
-    .cover-meta-item { display: flex; flex-direction: column; gap: 3px; }
-    .cover-meta-label { font-size: 8px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: #7A8FA8; }
-    .cover-meta-value { font-size: 16px; font-weight: 700; color: #F0ECE4; }
-    .cover-meta-value.gold { color: #C9A84C; }
-    .cover-footer { display: flex; align-items: center; justify-content: space-between; padding-top: 32px; border-top: 1px solid #162744; margin-top: 40px; }
-    .cover-nda { background: rgba(201,168,76,0.08); border: 1px solid rgba(201,168,76,0.3); border-radius: 4px; padding: 8px 16px; }
-    .cover-nda p { font-size: 8px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: #C9A84C; }
-
-    /* Body sections */
-    .body { padding: 24px 32px 32px; }
-    .section { margin-bottom: 20px; }
-    .section-label { font-size: 7px; font-weight: 700; letter-spacing: 3px; text-transform: uppercase; color: #C9A84C; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
-    .section-label::after { content: ''; flex: 1; height: 1px; background: rgba(201,168,76,0.2); }
-    .card { background: #162744; border: 1px solid #243A66; border-radius: 6px; overflow: hidden; margin-bottom: 14px; }
-    .narrative { font-size: 10px; color: #C4CDD8; line-height: 1.8; border-left: 3px solid rgba(201,168,76,0.4); padding: 14px 16px; background: rgba(9,8,26,0.4); border-radius: 0 6px 6px 0; }
-    table.data { width: 100%; border-collapse: collapse; }
-    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-    .blind-note { background: rgba(9,8,26,0.6); border: 1px solid #243A66; border-radius: 4px; padding: 10px 14px; font-size: 8px; color: #7A8FA8; line-height: 1.6; display: flex; align-items: flex-start; gap: 8px; }
-    .blind-icon { color: #C9A84C; font-size: 14px; flex-shrink: 0; }
-
-    /* CTA */
-    .cta-box { background: linear-gradient(135deg,#162744,#0F1E35); border: 1px solid rgba(201,168,76,0.3); border-radius: 8px; padding: 20px 24px; text-align: center; margin-top: 20px; }
-    .cta-title { font-size: 13px; font-weight: 700; color: #F0ECE4; margin-bottom: 6px; }
-    .cta-sub { font-size: 9px; color: #7A8FA8; margin-bottom: 14px; }
-    .cta-email { font-size: 11px; font-weight: 700; color: #C9A84C; letter-spacing: 1px; }
-
-    /* Footer */
-    .footer { background: #09081A; border-top: 1px solid rgba(201,168,76,0.15); padding: 10px 32px; display: flex; justify-content: space-between; align-items: center; }
-    .footer-l { font-size: 7px; color: #7A8FA8; line-height: 1.6; }
-    .footer-r { font-size: 7px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: rgba(201,168,76,0.4); }
-
-    .no-print { display: block; text-align: center; padding: 8px; font-size: 10px; color: #7A8FA8; background: #162744; }
+    .no-print { display:block; text-align:center; padding:8px; font-size:10px; color:#7A8FA8; background:#162744; }
     @media print {
-      .no-print { display: none !important; }
-      html, body { background: #09081A !important; padding: 0 !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-      .page { width: 210mm !important; min-height: 297mm !important; margin: 0 !important; box-shadow: none !important; page-break-after: always; }
+      .no-print { display:none!important; }
+      html, body { background:#09081A!important; padding:0!important; -webkit-print-color-adjust:exact!important; print-color-adjust:exact!important; }
+      .page { width:210mm!important; margin:0!important; box-shadow:none!important; }
     }
   </style>
 </head>
 <body>
-
-<div class="no-print">Para salvar como PDF: Ctrl+P → Salvar como PDF → Sem margens · Gráficos de fundo ativado</div>
-
+<div class="no-print">Ctrl+P → Salvar como PDF → Sem margens · Gráficos de fundo ativado</div>
 <div class="page">
-  <div class="stripe"></div>
+<div class="stripe"></div>
 
-  <!-- CAPA -->
-  <div class="cover">
-    <div>
-      <div class="cover-top">
-        <img src="/v3-logo-flat-gold-alpha.png" alt="V3 Partners" style="height:36px;width:auto;"/>
-        <div class="cover-badge">Teaser Cego · Confidencial</div>
-      </div>
+<!-- ═══ CAPA ═══════════════════════════════════════════════════════════ -->
+<div style="background:#09081A;padding:52px 52px 44px;border-bottom:1px solid #162744;">
 
-      <div class="cover-title">Oportunidade<br/><span>${sector}</span></div>
-
-      <div class="cover-meta">
-        <div class="cover-meta-item">
-          <span class="cover-meta-label">Valor da Operação</span>
-          <span class="cover-meta-value gold">${formatM(valor)}</span>
-        </div>
-        <div class="cover-meta-item">
-          <span class="cover-meta-label">Setor</span>
-          <span class="cover-meta-value">${sector}</span>
-        </div>
-        <div class="cover-meta-item">
-          <span class="cover-meta-label">Região</span>
-          <span class="cover-meta-value">${regiao}</span>
-        </div>
-        ${dealType ? `<div class="cover-meta-item">
-          <span class="cover-meta-label">Tipo</span>
-          <span class="cover-meta-value">${dealType}</span>
-        </div>` : ""}
-      </div>
-    </div>
-
-    <div>
-      <div class="cover-nda">
-        <p>Informações confidenciais. Divulgação condicionada à assinatura de NDA com a V3 Partners.</p>
-      </div>
-      <div class="cover-footer">
-        <div style="font-size:8px;color:#7A8FA8;">
-          <span style="color:#C9A84C;font-weight:700;">V3 Partners</span> Soluções Ltda · Ipanema, Rio de Janeiro<br/>
-          Referência: ${code} · Emitido em: ${generatedAt}
-        </div>
-        <div style="text-align:right;font-size:8px;color:#7A8FA8;">
-          FORJA Score: <span style="color:${recColor};font-weight:700;">${forjaResult.score}/100</span><br/>
-          <span style="color:${recColor};">${forjaResult.recommendation}</span>
-        </div>
-      </div>
+  <!-- Logo + badge -->
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:52px;">
+    <img src="/v3-logo-flat-gold-alpha.png" alt="V3 Partners" style="height:38px;width:auto;"/>
+    <div style="display:flex;align-items:center;gap:10px;">
+      <div style="font-size:8px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#7A8FA8;border:1px solid #243A66;padding:5px 12px;border-radius:2px;">Documento Cego</div>
+      <div style="font-size:8px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#C9A84C;border:1px solid rgba(201,168,76,0.4);padding:5px 12px;border-radius:2px;">NDA Requerido</div>
     </div>
   </div>
 
-  <div class="body">
-
-    <!-- Nota de confidencialidade -->
-    <div class="blind-note" style="margin-bottom:20px;">
-      <span class="blind-icon">⊘</span>
-      <div>
-        <strong style="color:#C9A84C;">Documento Cego</strong> — A identidade do ativo, razão social, endereço exato e contatos do vendedor foram omitidos. As informações completas são disponibilizadas após assinatura do NDA e qualificação do interesse pelo investidor.
-      </div>
-    </div>
-
-    <!-- Descrição do Ativo -->
-    <div class="section">
-      <div class="section-label">Descrição do Ativo</div>
-      <div class="narrative">${forjaResult.narrative_pt}</div>
-    </div>
-
-    <!-- Highlights Operacionais -->
-    ${highlights.length > 0 ? `
-    <div class="section">
-      <div class="section-label">Highlights Operacionais</div>
-      <div class="card">
-        <table class="data">
-          <tbody>${highlightRows}</tbody>
-        </table>
-      </div>
-    </div>` : ""}
-
-    <!-- Narrativa EN -->
-    <div class="section">
-      <div class="section-label">Investment Narrative (EN)</div>
-      <div class="narrative">${forjaResult.narrative_en}</div>
-    </div>
-
-    <!-- CTA -->
-    <div class="cta-box">
-      <div class="cta-title">Interesse nesta oportunidade?</div>
-      <div class="cta-sub">Entre em contato com a V3 Partners para acesso ao Information Memorandum completo e processo de qualificação.</div>
-      <div class="cta-email">mesa@v3partners.com.br</div>
-      <div style="font-size:8px;color:#7A8FA8;margin-top:6px;">v3partners.com.br · +55 21 98993-7178</div>
-    </div>
-
+  <!-- Eyebrow -->
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+    <div style="width:28px;height:2px;background:#C9A84C;"></div>
+    <span style="font-size:9px;font-weight:700;letter-spacing:4px;text-transform:uppercase;color:#C9A84C;">Oportunidade M&A · V3 Partners</span>
   </div>
 
-  <div class="footer">
-    <div class="footer-l">V3 Partners Soluções Ltda · CNPJ 14.219.287/0001-50 · Ipanema, Rio de Janeiro, RJ</div>
-    <div class="footer-r">Confidencial · ${code}</div>
+  <!-- Título principal -->
+  <h1 style="font-size:52px;font-weight:800;line-height:1.0;letter-spacing:-1.5px;color:#F0ECE4;margin-bottom:8px;">
+    Aquisição<br/><span style="color:#C9A84C;">${sector}</span>
+  </h1>
+  <p style="font-size:14px;color:#7A8FA8;margin-bottom:40px;font-weight:400;">${dealType ? dealType + ' · ' : ''}${regiao}</p>
+
+  <!-- KPIs principais -->
+  <div style="display:grid;grid-template-columns:auto auto 1fr;gap:0;margin-bottom:44px;">
+    <div style="padding-right:32px;border-right:1px solid #162744;">
+      <p style="font-size:8px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#7A8FA8;margin-bottom:6px;">Valor da Operação</p>
+      <p style="font-size:32px;font-weight:800;color:#C9A84C;line-height:1;">${formatM(valor)}</p>
+    </div>
+    <div style="padding-left:32px;padding-right:32px;border-right:1px solid #162744;">
+      <p style="font-size:8px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#7A8FA8;margin-bottom:6px;">Setor</p>
+      <p style="font-size:20px;font-weight:700;color:#F0ECE4;line-height:1;">${sector}</p>
+    </div>
+    <div style="padding-left:32px;">
+      <p style="font-size:8px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#7A8FA8;margin-bottom:6px;">Região</p>
+      <p style="font-size:20px;font-weight:700;color:#F0ECE4;line-height:1;">${regiao}</p>
+    </div>
   </div>
+
+  <!-- Estrutura do deal highlight -->
+  ${dealEstrutura ? `
+  <div style="background:rgba(201,168,76,0.08);border:1px solid rgba(201,168,76,0.25);border-radius:6px;padding:14px 18px;">
+    <p style="font-size:8px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#C9A84C;margin-bottom:5px;">Estrutura do Deal</p>
+    <p style="font-size:12px;color:#E8EDF5;line-height:1.6;">${dealEstrutura}</p>
+  </div>` : ""}
+
 </div>
 
+<!-- ═══ TESE DE INVESTIMENTO ═══════════════════════════════════════════ -->
+<div style="background:#111F35;padding:36px 52px;border-bottom:1px solid #162744;">
+
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px;">
+    <div style="width:24px;height:2px;background:#C9A84C;"></div>
+    <span style="font-size:9px;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:#C9A84C;">Por que este ativo?</span>
+  </div>
+
+  <div style="border-left:3px solid #C9A84C;padding-left:20px;">
+    ${teseHtml}
+  </div>
+
+</div>
+
+<!-- ═══ HIGHLIGHTS OPERACIONAIS ════════════════════════════════════════ -->
+${highlights.length > 0 ? `
+<div style="padding:32px 52px;border-bottom:1px solid #162744;">
+
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
+    <div style="width:24px;height:2px;background:#C9A84C;"></div>
+    <span style="font-size:9px;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:#C9A84C;">Dados do Ativo</span>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+    ${highlightCards}
+  </div>
+
+</div>` : ""}
+
+<!-- ═══ DESCRIÇÃO DO ATIVO ═════════════════════════════════════════════ -->
+<div style="background:#111F35;padding:32px 52px;border-bottom:1px solid #162744;">
+
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
+    <div style="width:24px;height:2px;background:#C9A84C;"></div>
+    <span style="font-size:9px;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:#C9A84C;">Descrição do Ativo</span>
+  </div>
+
+  <p style="font-size:11px;color:#C4CDD8;line-height:1.85;border-left:2px solid rgba(201,168,76,0.3);padding-left:16px;">${forjaResult.narrative_pt}</p>
+
+</div>
+
+<!-- ═══ INVESTMENT NARRATIVE EN ════════════════════════════════════════ -->
+<div style="padding:32px 52px;border-bottom:1px solid #162744;">
+
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
+    <div style="width:24px;height:2px;background:#C9A84C;"></div>
+    <span style="font-size:9px;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:#C9A84C;">Investment Narrative — English</span>
+  </div>
+
+  <p style="font-size:11px;color:#C4CDD8;line-height:1.85;border-left:2px solid rgba(201,168,76,0.3);padding-left:16px;">${forjaResult.narrative_en}</p>
+
+</div>
+
+<!-- ═══ CTA ═══════════════════════════════════════════════════════════ -->
+<div style="background:#09081A;padding:36px 52px 40px;">
+
+  <div style="background:linear-gradient(135deg,#162744,#0F1E35);border:1px solid rgba(201,168,76,0.3);border-radius:10px;padding:28px 32px;text-align:center;">
+    <p style="font-size:9px;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:#C9A84C;margin-bottom:10px;">Próximo Passo</p>
+    <h2 style="font-size:18px;font-weight:700;color:#F0ECE4;margin-bottom:8px;">Solicite o Information Memorandum Completo</h2>
+    <p style="font-size:11px;color:#7A8FA8;margin-bottom:20px;line-height:1.6;">Acesso às informações confidenciais — dados financeiros, estrutura jurídica e plano operacional — disponibilizado após qualificação do interesse e assinatura do NDA.</p>
+    <div style="display:inline-block;background:#C9A84C;color:#09081A;font-size:12px;font-weight:800;letter-spacing:1px;padding:12px 32px;border-radius:6px;margin-bottom:12px;">mesa@v3partners.com.br</div>
+    <p style="font-size:10px;color:#7A8FA8;">v3partners.com.br · +55 21 98993-7178 · Ipanema, Rio de Janeiro</p>
+  </div>
+
+</div>
+
+<!-- ═══ RODAPÉ ══════════════════════════════════════════════════════════ -->
+<div style="background:#09081A;border-top:1px solid #162744;padding:10px 52px;display:flex;justify-content:space-between;align-items:center;">
+  <p style="font-size:7px;color:#7A8FA8;line-height:1.6;">V3 Partners Soluções Ltda · CNPJ 14.219.287/0001-50 · Confidencial · ${code} · ${generatedAt}</p>
+  <p style="font-size:7px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:rgba(201,168,76,0.35);">Destinado exclusivamente a investidores qualificados</p>
+</div>
+
+</div>
 </body>
 </html>`;
 }
@@ -244,7 +273,7 @@ export async function POST(req: NextRequest) {
 
   const { data: deal, error } = await db
     .from("ma_deals")
-    .select("id, code, target_company, sector, deal_value, location, notes, asset_data")
+    .select("id, code, target_company, sector, deal_value, deal_type, location, notes, asset_data")
     .eq("id", deal_id).single();
 
   if (error || !deal) return NextResponse.json({ error: "Deal não encontrado" }, { status: 404 });
@@ -254,28 +283,59 @@ export async function POST(req: NextRequest) {
 
   if (!forjaResult?.narrative_pt) {
     return NextResponse.json({
-      error: "Execute o FORJA primeiro para gerar a narrativa do ativo antes de criar o teaser cego."
+      error: "Execute o FORJA primeiro para gerar a narrativa antes de criar o teaser cego.",
     }, { status: 422 });
   }
 
-  // Região cega: apenas UF/estado, nunca cidade
+  // Região cega: apenas estado/UF
   const loc = (deal.location ?? "") as string;
   const regiaoBlind = (() => {
-    const uf = loc.match(/\b([A-Z]{2})\b/) ?? loc.match(/\b(Rio de Janeiro|São Paulo|Minas Gerais|Bahia|Paraná|Rio Grande do Sul)\b/i);
-    if (uf) return uf[0];
-    const parts = loc.split(/[-·,]/);
-    return parts[parts.length - 1]?.trim() ?? loc;
+    const ufMatch = loc.match(/\b([A-Z]{2})\b/);
+    if (ufMatch) return ufMatch[1];
+    const parts = loc.split(/[-·,\s]+/).filter(Boolean);
+    return parts[parts.length - 1] ?? loc;
   })();
 
-  // Highlights: campos validados não cegos
+  // Tipo de deal
+  const dealType = (
+    (ad.tipo_oportunidade as string) ??
+    (deal.deal_type as string) ??
+    ""
+  ).replace("TEASER_CEGO", "").trim();
+
+  // Estrutura do deal — extraída da narrativa ou asset_data
+  const dealEstrutura = (() => {
+    const notas = (deal.notes ?? "") as string;
+    // Procura menção de estrutura financeira
+    const match = forjaResult.narrative_pt.match(
+      /estrutura[^.]{0,200}(entrada|assun[çc][aã]o|dívida)[^.]*\./i
+    );
+    if (match) return match[0].trim();
+    if (notas.length > 20 && notas.length < 300) return notas;
+    return "";
+  })();
+
+  // Highlights: campos validados não identificadores
   const highlights = (forjaResult.validated ?? [])
-    .filter(v => !isBlind(v.field))
-    .filter(v => v.value && v.value !== "—" && v.value.length < 200)
-    .slice(0, 12)
+    .filter(v => !isBlind(v.field) && v.value && v.value !== "—" && v.value.length < 150)
+    .slice(0, 8)
     .map(v => ({
-      label: v.field.replace(/asset_data\./g, "").replace(/_/g, " ").replace(/\./g, " › "),
+      label: v.field
+        .replace(/asset_data\./g, "")
+        .replace(/\./g, " › ")
+        .replace(/_/g, " ")
+        .replace(/\b\w/g, c => c.toUpperCase()),
       value: v.value,
     }));
+
+  // Gerar tese de investimento via Haiku
+  const teseInvestimento = await gerarTeseInvestimento({
+    sector: deal.sector ?? "",
+    regiao: regiaoBlind,
+    valor: Number(deal.deal_value ?? 0),
+    narrativaPt: forjaResult.narrative_pt,
+    dealContext: dealEstrutura || deal.notes as string || "",
+  });
 
   const generatedAt = new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" });
 
@@ -284,19 +344,21 @@ export async function POST(req: NextRequest) {
     sector:      deal.sector ?? "—",
     regiao:      regiaoBlind,
     valor:       Number(deal.deal_value ?? 0),
+    dealType,
+    dealEstrutura,
     forjaResult,
-    dealType:    (ad.tipo_oportunidade ?? ad.deal_type) as string | undefined,
+    teseInvestimento,
     highlights,
     generatedAt,
   });
 
-  // Salvar URL no asset_data para histórico
+  // Salvar histórico
   try {
-    const teaserHistory = Array.isArray(ad.teaser_cego_history)
-      ? [...(ad.teaser_cego_history as unknown[]), { generated_at: new Date().toISOString(), type: "html" }]
-      : [{ generated_at: new Date().toISOString(), type: "html" }];
+    const history = Array.isArray(ad.teaser_cego_history)
+      ? [...(ad.teaser_cego_history as unknown[]), { generated_at: new Date().toISOString() }]
+      : [{ generated_at: new Date().toISOString() }];
     await db.from("ma_deals").update({
-      asset_data: { ...ad, teaser_cego_history: teaserHistory, teaser_cego_generated_at: new Date().toISOString() },
+      asset_data: { ...ad, teaser_cego_history: history, teaser_cego_generated_at: new Date().toISOString() },
     }).eq("id", deal_id);
   } catch { /* não bloquear */ }
 
