@@ -6,7 +6,7 @@ import {
   BarChart2, Mail, Circle, FileText,
   Paperclip, Trash2, ExternalLink, Upload, Copy, CheckCheck,
   MessageSquare, Send, Zap, FileImage, FileSignature,
-  ArrowLeftRight, Pencil, Check,
+  ArrowLeftRight, Pencil, Check, Loader2,
 } from "lucide-react";
 import { ExportButton } from "@/components/financeiro/export-button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -279,6 +279,15 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
   const [overrideWord, setOverrideWord] = useState("");
   const [overrideLoading, setOverrideLoading] = useState(false);
 
+  // Teaser Cego
+  const [showTeaserCego, setShowTeaserCego] = useState(false);
+  const [teaserForm, setTeaserForm] = useState({
+    apelido: "", setor: "Real Estate", uf: "", tipo: "Venda de Participação",
+    valor: "", descricao: "", contato_nome: "", contato_telefone: "",
+  });
+  const [teaserSaving, setTeaserSaving] = useState(false);
+  const [teaserError, setTeaserError] = useState<string | null>(null);
+
   useEffect(() => {
     if (!selectedCard) { setCardDocs([]); setDetailTab("detalhes"); setEditingCard(false); return; }
     setDocsLoading(true);
@@ -496,6 +505,14 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
           </div>
           {(activeTab === "kanban" || activeTab === "conexoes") && (
             <div className="flex items-center gap-2">
+              <button
+                onClick={() => { setShowTeaserCego(true); setTeaserError(null); }}
+                className="flex items-center gap-2 rounded-lg border border-[#7A8FA8]/40 text-[#7A8FA8] text-xs font-semibold px-3 py-2 hover:border-[#C9A84C]/40 hover:text-[#C9A84C] transition-colors"
+                title="Cadastrar oportunidade pontual sem necessidade de securitização"
+              >
+                <FileSignature size={14} />
+                Teaser Cego
+              </button>
               <button
                 onClick={() => setShowNewCard(true)}
                 className="flex items-center gap-2 rounded-lg border border-[#C9A84C]/40 text-[#C9A84C] text-xs font-semibold px-3 py-2 hover:bg-[#C9A84C]/10 transition-colors"
@@ -1720,6 +1737,199 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
                 className="flex-1 rounded-lg bg-[#C9A84C] text-[#09081A] text-sm font-semibold py-2.5 hover:bg-[#E8C97A] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 Adicionar
+              </button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── MODAL TEASER CEGO ────────────────────────────────────────────── */}
+      <Dialog open={showTeaserCego} onOpenChange={setShowTeaserCego}>
+        <DialogContent className="max-w-md bg-[#111F35] border border-[#243A66] text-[#E8EDF5]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base font-bold text-[#F0ECE4]">
+              <FileSignature size={16} className="text-[#C9A84C]" />
+              Teaser Cego — Oportunidade Pontual
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-xs text-[#7A8FA8] -mt-2 mb-1">
+            Para oportunidades sem necessidade de securitização ou empréstimo. Dados mínimos, identidade protegida.
+          </p>
+
+          <div className="space-y-3">
+            {/* Apelido */}
+            <div>
+              <label className="text-[10px] font-bold tracking-widest uppercase text-[#7A8FA8] mb-1 block">Apelido do Ativo <span className="text-red-400">*</span></label>
+              <input
+                placeholder="Ex: Plataforma Logística Sul, Ativo Industrial ABC..."
+                value={teaserForm.apelido}
+                onChange={e => setTeaserForm(p => ({ ...p, apelido: e.target.value }))}
+                className="w-full rounded-lg border border-[#243A66] bg-[#09081A] text-[#E8EDF5] text-sm px-3 py-2.5 focus:outline-none focus:border-[#C9A84C] transition-colors placeholder:text-[#7A8FA8]/50"
+              />
+              <p className="text-[10px] text-[#7A8FA8] mt-1">Não use o nome real da empresa. Use apelido neutro.</p>
+            </div>
+
+            {/* Setor + UF em linha */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-[10px] font-bold tracking-widest uppercase text-[#7A8FA8] mb-1 block">Setor <span className="text-red-400">*</span></label>
+                <select
+                  value={teaserForm.setor}
+                  onChange={e => setTeaserForm(p => ({ ...p, setor: e.target.value }))}
+                  className="w-full rounded-lg border border-[#243A66] bg-[#09081A] text-[#E8EDF5] text-sm px-3 py-2.5 focus:outline-none focus:border-[#C9A84C] transition-colors"
+                >
+                  {SECTORS.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-[10px] font-bold tracking-widest uppercase text-[#7A8FA8] mb-1 block">UF / Região <span className="text-red-400">*</span></label>
+                <input
+                  placeholder="Ex: SP, RJ, Sul..."
+                  value={teaserForm.uf}
+                  onChange={e => setTeaserForm(p => ({ ...p, uf: e.target.value }))}
+                  className="w-full rounded-lg border border-[#243A66] bg-[#09081A] text-[#E8EDF5] text-sm px-3 py-2.5 focus:outline-none focus:border-[#C9A84C] transition-colors placeholder:text-[#7A8FA8]/50"
+                />
+              </div>
+            </div>
+
+            {/* Tipo */}
+            <div>
+              <label className="text-[10px] font-bold tracking-widest uppercase text-[#7A8FA8] mb-1 block">Tipo de Oportunidade <span className="text-red-400">*</span></label>
+              <select
+                value={teaserForm.tipo}
+                onChange={e => setTeaserForm(p => ({ ...p, tipo: e.target.value }))}
+                className="w-full rounded-lg border border-[#243A66] bg-[#09081A] text-[#E8EDF5] text-sm px-3 py-2.5 focus:outline-none focus:border-[#C9A84C] transition-colors"
+              >
+                {["Venda de Participação", "Captação de Capital", "Parceria Estratégica", "Real Estate", "M&A Cross-Border", "Outro"].map(t => (
+                  <option key={t} value={t}>{t}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Valor */}
+            <div>
+              <label className="text-[10px] font-bold tracking-widest uppercase text-[#7A8FA8] mb-1 block">Valor Aproximado (R$) <span className="text-red-400">*</span></label>
+              <input
+                type="number"
+                placeholder="Ex: 5000000"
+                value={teaserForm.valor}
+                onChange={e => setTeaserForm(p => ({ ...p, valor: e.target.value }))}
+                className="w-full rounded-lg border border-[#243A66] bg-[#09081A] text-[#E8EDF5] text-sm px-3 py-2.5 focus:outline-none focus:border-[#C9A84C] transition-colors placeholder:text-[#7A8FA8]/50"
+              />
+            </div>
+
+            {/* Descrição cega */}
+            <div>
+              <label className="text-[10px] font-bold tracking-widest uppercase text-[#7A8FA8] mb-1 block">Descrição Cega <span className="text-red-400">*</span></label>
+              <textarea
+                rows={3}
+                maxLength={250}
+                placeholder="Descreva a oportunidade sem identificar empresa, sócios ou localização exata..."
+                value={teaserForm.descricao}
+                onChange={e => setTeaserForm(p => ({ ...p, descricao: e.target.value }))}
+                className="w-full rounded-lg border border-[#243A66] bg-[#09081A] text-[#E8EDF5] text-sm px-3 py-2.5 focus:outline-none focus:border-[#C9A84C] transition-colors resize-none placeholder:text-[#7A8FA8]/50"
+              />
+              <p className="text-[10px] text-[#7A8FA8] text-right">{teaserForm.descricao.length}/250</p>
+            </div>
+
+            {/* Contato */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-[10px] font-bold tracking-widest uppercase text-[#7A8FA8] mb-1 block">Contato (nome) <span className="text-red-400">*</span></label>
+                <input
+                  placeholder="Nome do originador"
+                  value={teaserForm.contato_nome}
+                  onChange={e => setTeaserForm(p => ({ ...p, contato_nome: e.target.value }))}
+                  className="w-full rounded-lg border border-[#243A66] bg-[#09081A] text-[#E8EDF5] text-sm px-3 py-2.5 focus:outline-none focus:border-[#C9A84C] transition-colors placeholder:text-[#7A8FA8]/50"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-bold tracking-widest uppercase text-[#7A8FA8] mb-1 block">Telefone / Email</label>
+                <input
+                  placeholder="(11) 99999-9999"
+                  value={teaserForm.contato_telefone}
+                  onChange={e => setTeaserForm(p => ({ ...p, contato_telefone: e.target.value }))}
+                  className="w-full rounded-lg border border-[#243A66] bg-[#09081A] text-[#E8EDF5] text-sm px-3 py-2.5 focus:outline-none focus:border-[#C9A84C] transition-colors placeholder:text-[#7A8FA8]/50"
+                />
+              </div>
+            </div>
+
+            {teaserError && (
+              <p className="text-xs text-red-400 flex items-center gap-1.5">
+                <X size={12} /> {teaserError}
+              </p>
+            )}
+
+            {/* Ações */}
+            <div className="flex gap-3 pt-1">
+              <button
+                onClick={() => setShowTeaserCego(false)}
+                className="flex-1 rounded-lg border border-[#243A66] text-[#7A8FA8] text-sm py-2.5 hover:text-[#E8EDF5] transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                disabled={teaserSaving || !teaserForm.apelido || !teaserForm.uf || !teaserForm.valor || !teaserForm.descricao || !teaserForm.contato_nome}
+                onClick={async () => {
+                  setTeaserSaving(true);
+                  setTeaserError(null);
+                  try {
+                    const res = await fetch("/api/ma-deals", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        title: teaserForm.apelido,
+                        target_company: "Ativo Confidencial",
+                        sector: teaserForm.setor,
+                        location: teaserForm.uf,
+                        deal_value: Number(teaserForm.valor),
+                        deal_type: "TEASER_CEGO",
+                        stage: "PROSPECTING",
+                        probability_percent: 30,
+                        notes: teaserForm.descricao,
+                        asset_data: {
+                          teaser_cego: true,
+                          tipo_oportunidade: teaserForm.tipo,
+                          descricao_blind: teaserForm.descricao,
+                          contato_nome: teaserForm.contato_nome,
+                          contato_telefone: teaserForm.contato_telefone,
+                          forja_status: "PENDENTE",
+                        },
+                      }),
+                    });
+                    if (!res.ok) throw new Error("Falha ao criar teaser");
+                    const { deal } = await res.json() as { deal?: { id: string; code?: string } };
+                    if (deal) {
+                      const newCard: MaCard = {
+                        id: deal.id,
+                        code: deal.code ?? "TC-" + Date.now().toString().slice(-4),
+                        company: teaserForm.apelido,
+                        sector: teaserForm.setor,
+                        value: Number(teaserForm.valor),
+                        stage: "prospeccao",
+                        dbStage: "PROSPECTING",
+                        responsible: userName,
+                        probability: 30,
+                        createdAt: new Date().toISOString().split("T")[0],
+                        notes: teaserForm.descricao,
+                        comments: [],
+                        location: teaserForm.uf,
+                        tipo_participante: "Vendedor",
+                        asset_data: { teaser_cego: true, tipo_oportunidade: teaserForm.tipo, forja_status: "PENDENTE" },
+                      };
+                      setCards(prev => [newCard, ...prev]);
+                    }
+                    setShowTeaserCego(false);
+                    setTeaserForm({ apelido: "", setor: "Real Estate", uf: "", tipo: "Venda de Participação", valor: "", descricao: "", contato_nome: "", contato_telefone: "" });
+                  } catch (e) {
+                    setTeaserError(e instanceof Error ? e.message : "Erro ao salvar");
+                  } finally {
+                    setTeaserSaving(false);
+                  }
+                }}
+                className="flex-1 rounded-lg bg-[#C9A84C] text-[#09081A] text-sm font-semibold py-2.5 hover:bg-[#E8C97A] transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {teaserSaving ? <><Loader2 size={14} className="animate-spin" /> Salvando...</> : <><FileSignature size={14} /> Criar Teaser Cego</>}
               </button>
             </div>
           </div>
