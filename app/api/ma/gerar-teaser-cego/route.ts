@@ -108,7 +108,9 @@ function buildTeaserHtml(params: {
   teseInvestimento: string[];
   highlights: { label: string; value: string }[];
   generatedAt: string;
+  baseUrl: string;
 }): string {
+  const { baseUrl } = params;
   const { code, sector, regiao, valor, dealType, dealEstrutura, forjaResult, teseInvestimento, highlights, generatedAt } = params;
 
   const teseHtml = teseInvestimento.length > 0
@@ -157,7 +159,7 @@ function buildTeaserHtml(params: {
 
   <!-- Logo + badge -->
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:52px;">
-    <img src="/v3-logo-flat-gold-alpha.png" alt="V3 Partners" style="height:38px;width:auto;"/>
+    <img src="${baseUrl}/v3-logo-flat-gold-alpha.png" alt="V3 Partners" style="height:38px;width:auto;"/>
     <div style="display:flex;align-items:center;gap:10px;">
       <div style="font-size:8px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#7A8FA8;border:1px solid #243A66;padding:5px 12px;border-radius:2px;">Documento Cego</div>
       <div style="font-size:8px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#C9A84C;border:1px solid rgba(201,168,76,0.4);padding:5px 12px;border-radius:2px;">NDA Requerido</div>
@@ -276,6 +278,12 @@ ${highlights.length > 0 ? `
 </div>
 </body>
 </html>`;
+}
+
+function getBaseUrl(req: NextRequest): string {
+  const host = req.headers.get("host") ?? "app.v3partners.com.br";
+  const proto = host.startsWith("localhost") ? "http" : "https";
+  return `${proto}://${host}`;
 }
 
 export async function POST(req: NextRequest) {
@@ -410,6 +418,7 @@ export async function POST(req: NextRequest) {
         });
 
   const generatedAt = new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" });
+  const baseUrl     = getBaseUrl(req);
 
   const html = buildTeaserHtml({
     code:        deal.code ?? deal_id.slice(0, 8),
@@ -422,6 +431,7 @@ export async function POST(req: NextRequest) {
     teseInvestimento,
     highlights,
     generatedAt,
+    baseUrl,
   });
 
   // Salvar histórico
