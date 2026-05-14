@@ -8,6 +8,50 @@ function serviceClient() {
 
 const ADMIN_ROLES = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"] as const;
 
+type ValidatedField = { field: string; value: string; note?: string };
+
+// Extrai UF/estado de uma string de localização
+function extractUF(loc: string): string | null {
+  const ufMatch = loc.match(/\b(AC|AL|AM|AP|BA|CE|DF|ES|GO|MA|MG|MS|MT|PA|PB|PE|PI|PR|RJ|RN|RO|RR|RS|SC|SE|SP|TO)\b/);
+  if (ufMatch) return ufMatch[1];
+  const estadoMap: Record<string, string> = {
+    "rio de janeiro": "RJ", "são paulo": "SP", "minas gerais": "MG",
+    "bahia": "BA", "paraná": "PR", "rio grande do sul": "RS",
+    "pernambuco": "PE", "ceará": "CE", "goiás": "GO",
+    "santa catarina": "SC", "mato grosso": "MT", "mato grosso do sul": "MS",
+  };
+  const lower = loc.toLowerCase();
+  for (const [estado, uf] of Object.entries(estadoMap)) {
+    if (lower.includes(estado)) return uf;
+  }
+  return null;
+}
+
+// Extrai dados relevantes para matching dos campos validated do FORJA
+function extractMatchingFields(validated: ValidatedField[]): {
+  location?: string; sector?: string; tipoOperacao?: string; uf?: string;
+} {
+  const result: ReturnType<typeof extractMatchingFields> = {};
+
+  for (const v of validated) {
+    const f = v.field.toLowerCase();
+    if ((f === "location" || f === "localizacao") && v.value && v.value !== "—") {
+      result.location = v.value;
+      result.uf = extractUF(v.value) ?? undefined;
+    }
+    if (f === "sector" && v.value && v.value !== "—") {
+      result.sector = v.value;
+    }
+    if ((f === "tipooperacao" || f === "tipo_operacao" || f === "deal_type") && v.value) {
+      result.tipoOperacao = v.value;
+    }
+    if (f === "municipio_uf" && !result.uf) {
+      result.uf = extractUF(v.value) ?? undefined;
+    }
+  }
+  return result;
+}
+
 // POST — salva resultado FORJA ou libera/bloqueia KIT (apenas admin/gestao/mesa)
 export async function POST(req: NextRequest) {
   const supabase = await createClient();
@@ -27,42 +71,56 @@ export async function POST(req: NextRequest) {
 
   if (!deal_id) return NextResponse.json({ error: "deal_id obrigatório" }, { status: 400 });
 
-  const { data: deal } = await svc.from("ma_deals").select("asset_data").eq("id", deal_id).single();
+  const { data: deal } = await svc
+    .from("ma_deals")
+    .select("asset_data, location, sector")
+    .eq("id", deal_id).single();
   const currentAssetData = (deal?.asset_data ?? {}) as Record<string, unknown>;
 
   let newAssetData: Record<string, unknown> = { ...currentAssetData };
+  const dealColumnUpdates: Record<string, unknown> = {};
 
   if (action === "save_forja") {
     if (!forja_result) return NextResponse.json({ error: "forja_result obrigatório" }, { status: 400 });
+
+    // Extrair dados para matching a partir dos campos validated
+    const validated: ValidatedField[] = Array.isArray(forja_result.validated) ? forja_result.validated : [];
+    const extracted = extractMatchingFields(validated);
+
     newAssetData = {
       ...currentAssetData,
       forja_result,
-      forja_status: forja_result.recommendation,
-      forja_score: forja_result.score,
+      forja_status:       forja_result.recommendation,
+      forja_score:        forja_result.score,
       forja_validated_at: new Date().toISOString(),
+      // Dados de matching extraídos pelo FORJA
+      ...(extracted.uf          && { uf_extraido:             extracted.uf }),
+      ...(extracted.tipoOperacao && { tipo_operacao_extraida: extracted.tipoOperacao }),
     };
+
+    // Atualizar colunas diretas do deal se estiverem vazias
+    if (!deal?.location && extracted.location) dealColumnUpdates.location = extracted.location;
+    if (!deal?.sector   && extracted.sector)   dealColumnUpdates.sector   = extracted.sector;
+
   } else if (action === "liberar_kit") {
-    newAssetData = {
-      ...currentAssetData,
-      kit_liberado: true,
-      kit_liberado_at: new Date().toISOString(),
-    };
+    newAssetData = { ...currentAssetData, kit_liberado: true, kit_liberado_at: new Date().toISOString() };
   } else if (action === "bloquear_kit") {
-    newAssetData = {
-      ...currentAssetData,
-      kit_liberado: false,
-    };
+    newAssetData = { ...currentAssetData, kit_liberado: false };
   } else {
     return NextResponse.json({ error: "action inválida" }, { status: 400 });
   }
 
   const { data, error } = await svc
     .from("ma_deals")
-    .update({ asset_data: newAssetData, updated_at: new Date().toISOString() })
+    .update({
+      asset_data:  newAssetData,
+      updated_at:  new Date().toISOString(),
+      ...dealColumnUpdates,
+    })
     .eq("id", deal_id)
-    .select("asset_data")
+    .select("asset_data, location, sector")
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ ok: true, asset_data: data.asset_data });
+  return NextResponse.json({ ok: true, asset_data: data.asset_data, updated_columns: dealColumnUpdates });
 }

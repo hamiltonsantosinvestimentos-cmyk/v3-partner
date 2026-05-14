@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { MA_PIPELINE } from "@/components/ma/ma-client";
 import { ForjaPanel } from "@/components/ma/forja-panel";
 import { ContratoPanel } from "@/components/ma/contrato-panel";
+import { InvestorMatchPanel } from "@/components/ma/investor-match-panel";
 import { NovoDealForm } from "@/components/ma/novo-deal-form";
 import { DealFormEditorClient } from "@/components/ma/deal-form-editor-client";
 
@@ -182,7 +183,7 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
   const [cards, setCards] = useState<MaCard[]>(initialDeals);
   const [operators, setOperators] = useState<MesaOperator[]>([]);
   const [selectedCard, setSelectedCard] = useState<MaCard | null>(null);
-  const [detailTab, setDetailTab] = useState<"detalhes" | "forja" | "criativos" | "contrato">("detalhes");
+  const [detailTab, setDetailTab] = useState<"detalhes" | "forja" | "criativos" | "contrato" | "matches">("detalhes");
   const [showNewCard, setShowNewCard] = useState(false);
   const [showFullForm, setShowFullForm] = useState(false);
   const [showNewOp, setShowNewOp] = useState(false);
@@ -770,6 +771,7 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
               {([
                 { id: "detalhes" as const, label: "Detalhes", icon: <FileText size={12} /> },
                 { id: "forja" as const, label: "FORJA", icon: <Zap size={12} /> },
+                { id: "matches" as const, label: "Matches", icon: <ArrowLeftRight size={12} /> },
                 { id: "criativos" as const, label: "Criativos", icon: <FileImage size={12} /> },
                 { id: "contrato" as const, label: "NDA / Mandato", icon: <FileSignature size={12} /> },
               ]).map(tab => (
@@ -966,6 +968,17 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
                       )}
                     </div>
                   )}
+                </div>
+              );
+            }
+
+            if (detailTab === "matches") {
+              return (
+                <div className="mt-2">
+                  <InvestorMatchPanel
+                    dealId={selectedCard.id}
+                    dealCode={selectedCard.code}
+                  />
                 </div>
               );
             }
