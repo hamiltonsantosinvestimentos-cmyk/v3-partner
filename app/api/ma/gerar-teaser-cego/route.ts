@@ -334,30 +334,68 @@ export async function POST(req: NextRequest) {
     ""
   ).replace("TEASER_CEGO", "").trim();
 
-  // Estrutura do deal — extraída da narrativa ou asset_data
+  // Estrutura do deal — APENAS da narrativa FORJA (nunca de notes — pode conter comissão/NDA)
   const dealEstrutura = (() => {
-    const notas = (deal.notes ?? "") as string;
-    // Procura menção de estrutura financeira
     const match = forjaResult.narrative_pt.match(
       /estrutura[^.]{0,200}(entrada|assun[çc][aã]o|dívida)[^.]*\./i
     );
-    if (match) return match[0].trim();
-    if (notas.length > 20 && notas.length < 300) return notas;
-    return "";
+    return match ? match[0].trim() : "";
   })();
 
-  // Highlights: campos validados não identificadores
+  // Palavras que revelam localização pelo contexto (nomes de ruas, cidades, concorrentes locais)
+  function valueRevealLocation(val: string): boolean {
+    const lower = val.toLowerCase();
+    return (
+      /\bav(enida)?\b|\brua\b|\bpraça\b|\bcep\b|\bn°|\bnúmero\b/i.test(val) ||  // endereço
+      /\d{5}-?\d{3}/.test(val) ||  // CEP
+      /méier|botafogo|tijuca|barra|ipanema|copacabana|leblon|flamengo|gloria|catete|lapa|centro|norte shopping|nova améric/i.test(lower) ||
+      /tatuapé|mooca|paulista|pinheiros|perdizes|lapa sp|jardins|vila olimpia/i.test(lower) ||
+      /casashopping|iguatemi|eldorado|morumbi shopping|shopping sp|shopping rj/i.test(lower)
+    );
+  }
+
+  // Labels legíveis sem bug de capitalização com português
+  function toLabel(field: string): string {
+    return field
+      .replace(/asset_data\./g, "")
+      .replace(/\./g, " › ")
+      .replace(/_/g, " ")
+      .split(" ")
+      .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+      .join(" ");
+  }
+
+  // Campos seguros para highlights (whitelist por categoria)
+  const SAFE_FIELD_PATTERNS = [
+    "receita", "ebitda", "lucro", "faturamento", "revenue",
+    "area", "leitos", "capacidade", "lojas", "andares", "m²", "hectares", "ha",
+    "fundacao", "founding", "operacao", "historico",
+    "processos", "pendencias", "licencas", "alvarás",
+    "estrutura_fisica", "estrutura fisica", "metragem",
+    "divida", "debt", "valor", "deal_value",
+    "tipo_operacao", "tipo operacao", "deal_type",
+    "setor", "sector",
+    "buyer", "seller", "participante",
+  ];
+  function isSafeHighlight(field: string): boolean {
+    const lower = field.toLowerCase();
+    // Bloquear campos identificadores
+    if (isBlind(field)) return false;
+    // Bloquear campos de contexto competitivo que revelam localização
+    if (/alinhamento|mercado.atendido|concorrente|competidor/i.test(lower)) return false;
+    // Permitir apenas campos de categorias seguras
+    return SAFE_FIELD_PATTERNS.some(p => lower.includes(p));
+  }
+
   const highlights = (forjaResult.validated ?? [])
-    .filter(v => !isBlind(v.field) && v.value && v.value !== "—" && v.value.length < 150)
+    .filter(v =>
+      isSafeHighlight(v.field) &&
+      v.value && v.value !== "—" &&
+      v.value.length < 200 &&
+      !valueRevealLocation(v.value)   // rejeita valores que identificam localização
+    )
     .slice(0, 8)
-    .map(v => ({
-      label: v.field
-        .replace(/asset_data\./g, "")
-        .replace(/\./g, " › ")
-        .replace(/_/g, " ")
-        .replace(/\b\w/g, c => c.toUpperCase()),
-      value: v.value,
-    }));
+    .map(v => ({ label: toLabel(v.field), value: v.value }));
 
   // Usa tese gerada pelo FORJA — fallback para Haiku se não existir (deals antigos)
   const teseInvestimento: string[] =
