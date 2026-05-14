@@ -18,8 +18,16 @@ type PdfPayload = {
 // Remove campos nulos/vazios e irrelevantes antes de enviar à IA.
 function sanitizeDeal(deal: Record<string, unknown>): Record<string, unknown> {
   const EXCLUDE_KEYS = new Set([
+    // Campos de controle interno — irrelevantes para a IA
     "id", "dbStage", "createdAt", "assigned_to_id", "responsible",
     "comments", "probability", "stage",
+    // Resultados FORJA anteriores — nunca reenviar (causam truncamento)
+    "forja_result", "forja_status", "forja_score", "forja_validated_at", "forja_reports",
+    // Histórico e metadados de operações
+    "transfer_history", "teaser_cego_history", "teaser_cego_generated_at",
+    "kit_liberado", "kit_liberado_at", "kit_override", "kit_override_by",
+    // Conteúdo gerado (HTML pesado)
+    "deal_card_html", "sugestao_tese",
   ]);
 
   function stripEmpty(obj: unknown): unknown {
@@ -120,8 +128,8 @@ export async function POST(req: NextRequest) {
       '  "corrected": [ { "field": "<campo>", "original": "<valor original>", "corrected": "<valor corrigido>", "reason": "<motivo>", "doc_source": "<nome do doc se aplicável>" } ],\n' +
       '  "missing": [ { "field": "<campo>", "impact": "<impacto>", "priority": "ALTA" | "MEDIA" | "BAIXA" } ],\n' +
       (hasDocs ? '  "doc_insights": [ { "doc": "<nome do arquivo>", "finding": "<dado encontrado não presente nos metadados>" } ],\n' : "") +
-      '  "narrative_pt": "<narrativa de investimento em português — máximo 3 frases>",\n' +
-      '  "narrative_en": "<investment narrative in english — maximum 3 sentences>",\n' +
+      '  "narrative_pt": "<narrativa de investimento em português — 2 a 4 parágrafos, cega (sem citar nome da empresa ou cidade)>",\n' +
+      '  "narrative_en": "<investment narrative in english — 2 to 4 paragraphs, blind (no company name or exact city)>",\n' +
       '  "recommendation": "APROVADO" | "APROVADO_COM_RESSALVAS" | "PENDENTE" | "BLOQUEADO",\n' +
       '  "recommendation_note": "<justificativa da recomendação>"\n' +
       "}\n\n" +
@@ -157,7 +165,7 @@ export async function POST(req: NextRequest) {
 
     const message = await client.messages.create({
       model: "claude-sonnet-4-6",
-      max_tokens: 3500,
+      max_tokens: 6000,
       system: systemPrompt,
       messages: [{ role: "user", content: hasDocs ? userContent : userContent[0].text }],
     });
