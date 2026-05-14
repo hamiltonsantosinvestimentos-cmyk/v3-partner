@@ -442,17 +442,27 @@ body{background:#060515;padding:40px 0;display:flex;justify-content:center;min-h
   <div class="tese">
     ${renderTese(tese, "font-size:11px;color:#C4CDD8;line-height:1.7")}
   </div>` : ""}
-  ${desc ? `<p style="font-size:11px;color:#7A8FA8;line-height:1.75;margin-bottom:20px;border-left:2px solid rgba(201,168,76,0.3);padding-left:12px;">${desc.slice(0, 400)}${desc.length > 400 ? "..." : ""}</p>` : ""}
-  ${metricas.length > 0 && !desc ? `
+  ${desc ? `<p style="font-size:11px;color:#7A8FA8;line-height:1.75;margin-bottom:20px;border-left:2px solid rgba(201,168,76,0.3);padding-left:12px;">${desc.slice(0, 500)}${desc.length > 500 ? "..." : ""}</p>` : ""}
+  ${metricas.length > 0 ? `
   <p class="label" style="margin-bottom:12px">${t.metricas}</p>
   <div class="metrics-row">
     ${metricas.map(m => `<div class="metric-box"><p class="label">${m.label}</p><p class="val">${m.value}</p>${m.sub ? `<p class="sub">${m.sub}</p>` : ""}</div>`).join("")}
   </div>` : ""}
-  ${diferenciais.length > 0 && !desc ? `
+  ${diferenciais.length > 0 ? `
   <p class="label" style="margin-bottom:12px">${t.difer}</p>
   <ul class="diff-list">
     ${diferenciais.map(d => `<li><span>${d}</span></li>`).join("")}
   </ul>` : ""}
+  ${!desc && !metricas.length && !diferenciais.length && !(Array.isArray(tese) ? tese.length > 0 : !!tese) ? `
+  <div style="background:#162744;border:1px solid #243A66;border-radius:8px;padding:20px;margin-bottom:24px;">
+    <p style="font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#C9A84C;margin-bottom:8px">Ativo em Análise</p>
+    <p style="font-size:12px;color:#7A8FA8;line-height:1.7">
+      ${isPt
+        ? `Oportunidade no setor de ${deal.sector ?? "M&A"} com valor de ${deal.deal_value ? formatBRL(deal.deal_value) : "a confirmar"}. Execute o FORJA para gerar a narrativa completa e a tese de investimento.`
+        : `${deal.sector ?? "M&A"} sector opportunity valued at ${deal.deal_value ? formatBRL(deal.deal_value) : "TBD"}. Run FORJA analysis to generate the full investment narrative.`
+      }
+    </p>
+  </div>` : ""}
   <div class="nda-box">
     <div>
       <p>${t.nda}</p>

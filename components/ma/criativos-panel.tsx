@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
   FileText, Image, Download, RefreshCw, Zap, CheckCircle,
-  Clock, AlertCircle, Globe, Flag, Eye, EyeOff
+  Clock, AlertCircle, Globe, Flag, Eye, EyeOff, Loader2
 } from "lucide-react";
 
 type CreativeJob = {
@@ -163,6 +163,29 @@ export function CriativosPanel({ dealId, dealName, isDemo = false, isAdmin = fal
     }
   };
 
+  const [teaserGenerating, setTeaserGenerating] = useState(false);
+  const [teaserError, setTeaserError] = useState<string | null>(null);
+
+  const handleTeaserCego = async () => {
+    setTeaserGenerating(true);
+    setTeaserError(null);
+    try {
+      const res = await fetch("/api/ma/gerar-teaser-cego", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ deal_id: dealId }),
+      });
+      const data = await res.json() as { html?: string; error?: string };
+      if (!res.ok || !data.html) throw new Error(data.error ?? "Erro ao gerar teaser");
+      const blob = new Blob([data.html], { type: "text/html;charset=utf-8" });
+      window.open(URL.createObjectURL(blob), "_blank");
+    } catch (e) {
+      setTeaserError(e instanceof Error ? e.message : "Erro ao gerar teaser cego");
+    } finally {
+      setTeaserGenerating(false);
+    }
+  };
+
   const handleGenerate = async () => {
     if (isDemo) {
       alert("Modo demo — conecte o Supabase para disparar a geração real.");
@@ -209,6 +232,41 @@ export function CriativosPanel({ dealId, dealName, isDemo = false, isAdmin = fal
 
   return (
     <div className="space-y-4">
+
+      {/* ── TEASER CEGO — botão dedicado, sempre visível para admins ── */}
+      {isAdmin && (
+        <Card className="border-[#C9A84C]/30 bg-gradient-to-br from-[#162744] to-[#111F35]">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="text-[10px] font-bold tracking-widest uppercase text-[#C9A84C] mb-1 flex items-center gap-1.5">
+                  <FileText className="w-3 h-3" />
+                  Teaser Cego — Documento de Alta Qualidade
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Gera teaser com narrativa do FORJA, tese de investimento e layout profissional. Requer FORJA validado.
+                </p>
+                {teaserError && (
+                  <p className="text-xs text-red-400 mt-1 flex items-center gap-1">
+                    <AlertCircle className="w-3 h-3" />{teaserError}
+                  </p>
+                )}
+              </div>
+              <Button
+                size="sm"
+                onClick={handleTeaserCego}
+                disabled={teaserGenerating}
+                className="bg-[#C9A84C] hover:bg-[#E8C97A] text-[#09081A] font-bold whitespace-nowrap flex-shrink-0"
+              >
+                {teaserGenerating
+                  ? <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />Gerando...</>
+                  : <><FileText className="w-3.5 h-3.5 mr-1.5" />Gerar Teaser Cego</>
+                }
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Status + ação — apenas admins veem controles de geração */}
       {isAdmin && <Card className={jobStatus === "DONE" ? "border-emerald-500/20 bg-emerald-500/5" : jobStatus === "ERROR" ? "border-red-500/20 bg-red-500/5" : "border-[#C9A84C]/20 bg-[#C9A84C]/5"}>
