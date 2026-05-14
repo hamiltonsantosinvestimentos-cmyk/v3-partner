@@ -83,6 +83,9 @@ export function ForjaPanel({ deal, dealId, savedResult, onSaved, onReportSaved }
   const [teaserError, setTeaserError]     = useState<string | null>(null);
   const [teaserDone, setTeaserDone]       = useState(false);
 
+  // Fase 2 — narrativa assíncrona
+  const [narrativeLoading, setNarrativeLoading] = useState(false);
+
   const [docs, setDocs]                 = useState<DocEntry[]>([]);
   const [docsLoading, setDocsLoading]   = useState(false);
   const [selectedDocIds, setSelectedDocIds] = useState<string[]>([]);
@@ -108,7 +111,9 @@ export function ForjaPanel({ deal, dealId, savedResult, onSaved, onReportSaved }
     setLoading(true);
     setError(null);
     setResult(null);
+    setNarrativeLoading(false);
     try {
+      // ── Fase 1: validação rápida ──────────────────────────────────────────
       const res = await fetch("/api/ma/forja-validate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -121,25 +126,66 @@ export function ForjaPanel({ deal, dealId, savedResult, onSaved, onReportSaved }
         const errData = await res.json().catch(() => ({}));
         throw new Error((errData as { error?: string }).error ?? `HTTP ${res.status}`);
       }
-      const data: ForjaResult = await res.json();
-      setResult(data);
+      const phase1 = await res.json() as ForjaResult & { narrative_pending?: boolean };
+      setResult(phase1);
+      setLoading(false);
 
+      // Salva fase 1 no banco imediatamente (sem narrativa ainda)
       if (dealId) {
         setSaving(true);
         try {
           await fetch("/api/ma/forja-kit", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ deal_id: dealId, action: "save_forja", forja_result: data }),
+            body: JSON.stringify({ deal_id: dealId, action: "save_forja", forja_result: phase1 }),
           });
-          if (onSaved) onSaved(data);
-        } catch { /* silencioso — resultado já exibido */ }
+          if (onSaved) onSaved(phase1);
+        } catch { /* silencioso */ }
         setSaving(false);
+      }
+
+      // ── Fase 2: gera narrativa e tese assincronamente ─────────────────────
+      if (phase1.narrative_pending !== false) {
+        setNarrativeLoading(true);
+        try {
+          const narRes = await fetch("/api/ma/forja-narrative", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              deal:           { sector: (deal as Record<string,unknown>).sector, location: (deal as Record<string,unknown>).location, deal_value: (deal as Record<string,unknown>).deal_value, notes: (deal as Record<string,unknown>).notes },
+              validated:      phase1.validated,
+              missing:        phase1.missing,
+              recommendation: phase1.recommendation,
+              score:          phase1.score,
+            }),
+          });
+          if (narRes.ok) {
+            const narData = await narRes.json() as { tese_investimento?: string[]; narrative_pt?: string; narrative_en?: string };
+            const full: ForjaResult = {
+              ...phase1,
+              tese_investimento: narData.tese_investimento ?? [],
+              narrative_pt:      narData.narrative_pt ?? "",
+              narrative_en:      narData.narrative_en ?? "",
+            };
+            setResult(full);
+            // Salva versão completa no banco
+            if (dealId) {
+              try {
+                await fetch("/api/ma/forja-kit", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ deal_id: dealId, action: "save_forja", forja_result: full }),
+                });
+                if (onSaved) onSaved(full);
+              } catch { /* silencioso */ }
+            }
+          }
+        } catch { /* narrativa falhou — validação já foi salva */ }
+        setNarrativeLoading(false);
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       setError(`Falha na validação: ${msg}`);
-    } finally {
       setLoading(false);
     }
   };
@@ -611,6 +657,14 @@ export function ForjaPanel({ deal, dealId, savedResult, onSaved, onReportSaved }
             ))}
           </CardContent>
         </Card>
+      )}
+
+      {/* Indicador fase 2 */}
+      {narrativeLoading && (
+        <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[#162744] border border-[#243A66]">
+          <Loader2 className="w-3.5 h-3.5 animate-spin text-[#C9A84C]" />
+          <span className="text-xs text-[#7A8FA8]">Gerando narrativa e tese de investimento...</span>
+        </div>
       )}
 
       {/* Narrativa */}
