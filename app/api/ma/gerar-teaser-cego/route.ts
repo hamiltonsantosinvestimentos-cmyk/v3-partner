@@ -12,6 +12,7 @@ type ValidatedField = { field: string; value: string; note?: string };
 type ForjaResult = {
   score: number;
   validated: ValidatedField[];
+  tese_investimento?: string[];
   narrative_pt: string;
   narrative_en: string;
   recommendation: string;
@@ -328,14 +329,17 @@ export async function POST(req: NextRequest) {
       value: v.value,
     }));
 
-  // Gerar tese de investimento via Haiku
-  const teseInvestimento = await gerarTeseInvestimento({
-    sector: deal.sector ?? "",
-    regiao: regiaoBlind,
-    valor: Number(deal.deal_value ?? 0),
-    narrativaPt: forjaResult.narrative_pt,
-    dealContext: dealEstrutura || deal.notes as string || "",
-  });
+  // Usa tese gerada pelo FORJA — fallback para Haiku se não existir (deals antigos)
+  const teseInvestimento: string[] =
+    Array.isArray(forjaResult.tese_investimento) && forjaResult.tese_investimento.length > 0
+      ? forjaResult.tese_investimento
+      : await gerarTeseInvestimento({
+          sector: deal.sector ?? "",
+          regiao: regiaoBlind,
+          valor: Number(deal.deal_value ?? 0),
+          narrativaPt: forjaResult.narrative_pt,
+          dealContext: dealEstrutura || (deal.notes as string) || "",
+        });
 
   const generatedAt = new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" });
 

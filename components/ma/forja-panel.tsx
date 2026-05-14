@@ -24,6 +24,7 @@ type ForjaResult = {
   corrected: CorrectedField[];
   missing: MissingField[];
   doc_insights?: DocInsight[];
+  tese_investimento?: string[];
   narrative_pt: string;
   narrative_en: string;
   recommendation: "APROVADO" | "APROVADO_COM_RESSALVAS" | "PENDENTE" | "BLOQUEADO";
@@ -586,6 +587,26 @@ export function ForjaPanel({ deal, dealId, savedResult, onSaved, onReportSaved }
                   <FileText className="w-2.5 h-2.5" />{ins.doc}
                 </p>
                 <p className="text-xs text-[#F0ECE4]">{ins.finding}</p>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Tese de Investimento */}
+      {result?.tese_investimento && result.tese_investimento.length > 0 && (
+        <Card className="border-[#C9A84C]/20 bg-gradient-to-br from-[#162744] to-[#111F35]">
+          <CardHeader className="pb-2 pt-4">
+            <CardTitle className="text-xs font-bold tracking-widest uppercase text-[#C9A84C] flex items-center gap-2">
+              <Zap className="w-3.5 h-3.5" />
+              Tese de Investimento
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pb-4 space-y-2">
+            {result.tese_investimento.map((bullet, i) => (
+              <div key={i} className="flex items-start gap-2.5">
+                <div className="w-1.5 h-1.5 rounded-full bg-[#C9A84C] flex-shrink-0 mt-1.5" />
+                <p className="text-xs text-[#E8EDF5] leading-relaxed">{bullet}</p>
               </div>
             ))}
           </CardContent>

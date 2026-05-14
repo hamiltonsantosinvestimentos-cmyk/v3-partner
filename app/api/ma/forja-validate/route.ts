@@ -115,11 +115,12 @@ export async function POST(req: NextRequest) {
     const hasDocs = pdfs.length > 0;
 
     const systemPrompt =
-      "Você é o FORJA, validador inteligente de dados de deals M&A da V3 Partners. " +
+      "Você é o FORJA, validador inteligente de deals M&A e estrategista de negócios da V3 Partners. " +
+      "Sua função é dupla: (1) validar a qualidade dos dados do deal e (2) gerar uma narrativa comercial atrativa e uma tese de investimento que gere interesse genuíno no ativo.\n\n" +
       (hasDocs
-        ? "Você recebeu os documentos reais do deal. Valide os dados fornecidos CONTRA os documentos, " +
-          "identificando discrepâncias, confirmações e informações adicionais encontradas nos documentos. " +
-          "Adicione o campo \"doc_insights\" com descobertas dos documentos que não estavam nos dados do deal. "
+        ? "Você recebeu documentos reais do deal. Valide os dados CONTRA os documentos, " +
+          "identificando discrepâncias, confirmações e informações adicionais dos documentos. " +
+          "Adicione o campo \"doc_insights\" com descobertas dos documentos que não estavam nos dados do deal.\n\n"
         : "") +
       "Retorne APENAS um JSON válido, sem markdown:\n" +
       "{\n" +
@@ -128,22 +129,30 @@ export async function POST(req: NextRequest) {
       '  "corrected": [ { "field": "<campo>", "original": "<valor original>", "corrected": "<valor corrigido>", "reason": "<motivo>", "doc_source": "<nome do doc se aplicável>" } ],\n' +
       '  "missing": [ { "field": "<campo>", "impact": "<impacto>", "priority": "ALTA" | "MEDIA" | "BAIXA" } ],\n' +
       (hasDocs ? '  "doc_insights": [ { "doc": "<nome do arquivo>", "finding": "<dado encontrado não presente nos metadados>" } ],\n' : "") +
-      '  "narrative_pt": "<narrativa de investimento em português — 2 a 4 parágrafos, cega (sem citar nome da empresa ou cidade)>",\n' +
-      '  "narrative_en": "<investment narrative in english — 2 to 4 paragraphs, blind (no company name or exact city)>",\n' +
+      '  "tese_investimento": [\n' +
+      '    "<bullet 1 — começar com verbo forte: Adquira / Acesse / Capture / Consolide / Aproveite / Estruture>",\n' +
+      '    "<bullet 2>",\n' +
+      '    "<bullet 3>",\n' +
+      '    "<bullet 4>",\n' +
+      '    "<bullet 5>"\n' +
+      '  ],\n' +
+      '  "narrative_pt": "<narrativa comercial atrativa em português — 2 a 4 parágrafos que vendem o ativo sem citar nome da empresa ou cidade exata. Tom: analítico e direto, focado em oportunidade, barreiras de entrada, upside e estrutura do deal>",\n' +
+      '  "narrative_en": "<attractive investment narrative in English — 2 to 4 paragraphs, blind (no company name or exact city), same quality as PT version>",\n' +
       '  "recommendation": "APROVADO" | "APROVADO_COM_RESSALVAS" | "PENDENTE" | "BLOQUEADO",\n' +
       '  "recommendation_note": "<justificativa da recomendação>"\n' +
       "}\n\n" +
-      "Regras:\n" +
-      "- validated: liste os 15 campos mais relevantes para M&A (score e recomendação consideram todos)\n" +
-      "- missing: liste TODOS os campos obrigatórios ausentes — sem omitir nenhum\n" +
-      "- corrected: liste TODAS as inconsistências encontradas\n" +
+      "Regras críticas:\n" +
+      "- validated: liste os 15 campos mais relevantes para M&A\n" +
+      "- missing: liste TODOS os campos obrigatórios ausentes\n" +
+      "- tese_investimento: EXATAMENTE 5 bullets, 1 frase cada, específicos para este ativo (não genéricos). Foco em: barreiras de entrada, upside operacional, estrutura financeira favorável, posição de mercado, timing de oportunidade\n" +
+      "- narrative_pt / narrative_en: CEGAR o ativo — sem nome da empresa, sem cidade exata, apenas estado/região. Escrever para gerar desejo de conhecer mais. Destacar o que é único e valioso neste ativo\n" +
       "- score >= 80 e dados completos → APROVADO\n" +
-      "- score 60-79 ou poucos dados ausentes não críticos → APROVADO_COM_RESSALVAS\n" +
+      "- score 60-79 ou poucos ausentes não críticos → APROVADO_COM_RESSALVAS\n" +
       "- score 40-59 ou campos importantes ausentes → PENDENTE\n" +
       "- score < 40 ou dados insuficientes → BLOQUEADO\n" +
       (hasDocs
-        ? "- Se dados do deal conflitam com documentos, registre em corrected com doc_source\n" +
-          "- Se documentos confirmam dados do deal, marque doc_confirmed: true em validated\n"
+        ? "- Se dados conflitam com documentos → registre em corrected com doc_source\n" +
+          "- Se documentos confirmam → marque doc_confirmed: true em validated\n"
         : "") +
       "- Retorne APENAS o JSON, sem texto adicional.";
 
