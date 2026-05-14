@@ -18,16 +18,26 @@ type PdfPayload = {
 // Remove campos nulos/vazios e irrelevantes antes de enviar à IA.
 function sanitizeDeal(deal: Record<string, unknown>): Record<string, unknown> {
   const EXCLUDE_KEYS = new Set([
-    // Campos de controle interno — irrelevantes para a IA
+    // Controle interno
     "id", "dbStage", "createdAt", "assigned_to_id", "responsible",
     "comments", "probability", "stage",
-    // Resultados FORJA anteriores — nunca reenviar (causam truncamento)
+    // FORJA anterior — nunca reenviar
     "forja_result", "forja_status", "forja_score", "forja_validated_at", "forja_reports",
-    // Histórico e metadados de operações
+    // Histórico e metadados
     "transfer_history", "teaser_cego_history", "teaser_cego_generated_at",
     "kit_liberado", "kit_liberado_at", "kit_override", "kit_override_by",
-    // Conteúdo gerado (HTML pesado)
+    "kit_gerado_at", "kit_job_id", "kit_files_available",
+    // Conteúdo gerado pelo gerar-kit-ia — não relevante para validação
     "deal_card_html", "sugestao_tese",
+    "descricao_ptbr", "descricao_en",
+    "teaser_ptbr", "teaser_en",
+    "linkedin_post_ptbr", "linkedin_post_en",
+    "linkedin_story_ptbr", "linkedin_story_en",
+    "tese_investimento", "tese_investimento_en",
+    "diferenciais", "riscos", "metricas",
+    // Matching metadata
+    "uf_extraido", "tipo_operacao_extraida",
+    "teaser_cego_generated_at",
   ]);
 
   function stripEmpty(obj: unknown): unknown {
@@ -172,8 +182,12 @@ export async function POST(req: NextRequest) {
       },
     ];
 
+    // Sem PDFs → Haiku (~5-10s, suficiente para validação de campos)
+    // Com PDFs → Sonnet (necessário para leitura de documentos)
+    const model = hasDocs ? "claude-sonnet-4-6" : "claude-haiku-4-5-20251001";
+
     const message = await client.messages.create({
-      model: "claude-sonnet-4-6",
+      model,
       max_tokens: 6000,
       system: systemPrompt,
       messages: [{ role: "user", content: hasDocs ? userContent : userContent[0].text }],
