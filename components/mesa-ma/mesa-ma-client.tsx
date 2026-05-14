@@ -279,6 +279,17 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
   const [overrideWord, setOverrideWord] = useState("");
   const [overrideLoading, setOverrideLoading] = useState(false);
 
+  // Transferência de deal
+  const [showTransferDeal, setShowTransferDeal] = useState(false);
+  const [transferForm, setTransferForm] = useState({
+    new_partner_id: "", new_partner_name: "", new_partner_email: "",
+    motivo: "cadastro_mesa", justificativa: "", confirmar: false,
+    modo: "existente" as "existente" | "externo",
+  });
+  const [transferSaving, setTransferSaving] = useState(false);
+  const [transferError, setTransferError] = useState<string | null>(null);
+  const [transferOk, setTransferOk] = useState(false);
+
   // Teaser Cego
   const [showTeaserCego, setShowTeaserCego] = useState(false);
   const [teaserForm, setTeaserForm] = useState({
@@ -1467,6 +1478,23 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
                   </div>
                 )}
 
+                {/* Transferir deal */}
+                {["ADMIN", "GESTAO"].includes(userRole) && (
+                  <div className="pt-1 border-t border-[#122036]">
+                    <button
+                      onClick={() => {
+                        setTransferForm({ new_partner_id: "", new_partner_name: "", new_partner_email: "", motivo: "cadastro_mesa", justificativa: "", confirmar: false, modo: "existente" });
+                        setTransferError(null);
+                        setTransferOk(false);
+                        setShowTransferDeal(true);
+                      }}
+                      className="w-full text-xs text-[#7A8FA8] hover:text-[#C9A84C] transition-colors py-1.5 flex items-center justify-center gap-1.5"
+                    >
+                      <ArrowLeftRight size={12} /> Transferir Deal para outro Partner
+                    </button>
+                  </div>
+                )}
+
                 {/* Excluir deal */}
                 <div className="pt-1 border-t border-[#122036]">
                   {!confirmDelete ? (
@@ -1740,6 +1768,207 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
               </button>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── MODAL TRANSFERÊNCIA DE DEAL ─────────────────────────────────── */}
+      <Dialog open={showTransferDeal} onOpenChange={setShowTransferDeal}>
+        <DialogContent className="max-w-lg bg-[#111F35] border border-[#243A66] text-[#E8EDF5]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base font-bold text-[#F0ECE4]">
+              <ArrowLeftRight size={16} className="text-[#C9A84C]" />
+              Transferir Deal — {selectedCard?.code}
+            </DialogTitle>
+          </DialogHeader>
+
+          {transferOk ? (
+            <div className="py-6 text-center space-y-3">
+              <div className="w-12 h-12 rounded-full bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center mx-auto">
+                <Check size={22} className="text-emerald-400" />
+              </div>
+              <p className="text-sm font-semibold text-emerald-400">Transferência realizada com sucesso</p>
+              <p className="text-xs text-[#7A8FA8]">Email enviado para Financeiro, Head de Ativos e Compliance.</p>
+              <button
+                onClick={() => setShowTransferDeal(false)}
+                className="mt-2 px-6 py-2 rounded-lg bg-[#C9A84C] text-[#09081A] text-sm font-bold hover:bg-[#E8C97A] transition-colors"
+              >
+                Fechar
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {/* Aviso */}
+              <div className="rounded-lg p-3 flex items-start gap-2" style={{ background: "rgba(201,168,76,0.08)", border: "1px solid rgba(201,168,76,0.25)" }}>
+                <Mail size={13} className="text-[#C9A84C] flex-shrink-0 mt-0.5" />
+                <p className="text-[11px] text-[#C9A84C] leading-relaxed">
+                  Ao confirmar, um email será enviado automaticamente para <strong>Financeiro</strong>, <strong>Head de Ativos</strong> e <strong>Compliance</strong> com os detalhes da transferência.
+                </p>
+              </div>
+
+              {/* Motivo */}
+              <div>
+                <label className="text-[10px] font-bold tracking-widest uppercase text-[#7A8FA8] mb-1 block">Motivo <span className="text-red-400">*</span></label>
+                <select
+                  value={transferForm.motivo}
+                  onChange={e => setTransferForm(p => ({ ...p, motivo: e.target.value }))}
+                  className="w-full rounded-lg border border-[#243A66] bg-[#09081A] text-[#E8EDF5] text-sm px-3 py-2.5 focus:outline-none focus:border-[#C9A84C] transition-colors"
+                >
+                  <option value="cadastro_mesa">Cadastro via Mesa — parceiro sem acesso à plataforma</option>
+                  <option value="inadimplencia">Inadimplência — parceiro em atraso</option>
+                  <option value="solicitacao">Solicitação do parceiro</option>
+                  <option value="reestruturacao">Reestruturação de carteira</option>
+                  <option value="outro">Outro motivo</option>
+                </select>
+              </div>
+
+              {/* Modo: existente ou externo */}
+              <div>
+                <label className="text-[10px] font-bold tracking-widest uppercase text-[#7A8FA8] mb-2 block">Novo Partner</label>
+                <div className="flex gap-2 mb-3">
+                  {(["existente", "externo"] as const).map(m => (
+                    <button
+                      key={m}
+                      onClick={() => setTransferForm(p => ({ ...p, modo: m, new_partner_id: "", new_partner_name: "", new_partner_email: "" }))}
+                      className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-colors border ${
+                        transferForm.modo === m
+                          ? "bg-[#C9A84C]/15 border-[#C9A84C]/50 text-[#C9A84C]"
+                          : "border-[#243A66] text-[#7A8FA8] hover:text-[#E8EDF5]"
+                      }`}
+                    >
+                      {m === "existente" ? "Com conta na plataforma" : "Sem conta (externo)"}
+                    </button>
+                  ))}
+                </div>
+
+                {transferForm.modo === "existente" ? (
+                  <select
+                    value={transferForm.new_partner_id}
+                    onChange={e => setTransferForm(p => ({ ...p, new_partner_id: e.target.value }))}
+                    className="w-full rounded-lg border border-[#243A66] bg-[#09081A] text-[#E8EDF5] text-sm px-3 py-2.5 focus:outline-none focus:border-[#C9A84C] transition-colors"
+                  >
+                    <option value="">Selecione o partner...</option>
+                    {partners.map(p => (
+                      <option key={p.id} value={p.id}>{p.name} — {p.role}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <div className="space-y-2">
+                    <input
+                      placeholder="Nome completo do partner"
+                      value={transferForm.new_partner_name}
+                      onChange={e => setTransferForm(p => ({ ...p, new_partner_name: e.target.value }))}
+                      className="w-full rounded-lg border border-[#243A66] bg-[#09081A] text-[#E8EDF5] text-sm px-3 py-2.5 focus:outline-none focus:border-[#C9A84C] transition-colors placeholder:text-[#7A8FA8]/50"
+                    />
+                    <input
+                      placeholder="Email (opcional)"
+                      type="email"
+                      value={transferForm.new_partner_email}
+                      onChange={e => setTransferForm(p => ({ ...p, new_partner_email: e.target.value }))}
+                      className="w-full rounded-lg border border-[#243A66] bg-[#09081A] text-[#E8EDF5] text-sm px-3 py-2.5 focus:outline-none focus:border-[#C9A84C] transition-colors placeholder:text-[#7A8FA8]/50"
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Justificativa */}
+              <div>
+                <label className="text-[10px] font-bold tracking-widest uppercase text-[#7A8FA8] mb-1 block">Justificativa <span className="text-red-400">*</span></label>
+                <textarea
+                  rows={3}
+                  maxLength={500}
+                  placeholder="Descreva o motivo detalhado da transferência. Esta informação ficará no log de auditoria e será enviada aos diretores..."
+                  value={transferForm.justificativa}
+                  onChange={e => setTransferForm(p => ({ ...p, justificativa: e.target.value }))}
+                  className="w-full rounded-lg border border-[#243A66] bg-[#09081A] text-[#E8EDF5] text-sm px-3 py-2.5 focus:outline-none focus:border-[#C9A84C] transition-colors resize-none placeholder:text-[#7A8FA8]/50"
+                />
+                <p className="text-[10px] text-[#7A8FA8] text-right">{transferForm.justificativa.length}/500</p>
+              </div>
+
+              {/* Checkbox de confirmação */}
+              <label className="flex items-start gap-3 cursor-pointer group">
+                <div
+                  onClick={() => setTransferForm(p => ({ ...p, confirmar: !p.confirmar }))}
+                  className={`mt-0.5 w-4 h-4 rounded flex-shrink-0 border-2 flex items-center justify-center transition-colors ${
+                    transferForm.confirmar
+                      ? "bg-[#C9A84C] border-[#C9A84C]"
+                      : "bg-transparent border-[#243A66] group-hover:border-[#C9A84C]/50"
+                  }`}
+                >
+                  {transferForm.confirmar && <Check size={10} className="text-[#09081A]" />}
+                </div>
+                <span className="text-xs text-[#7A8FA8] leading-relaxed">
+                  Confirmo que esta transferência está autorizada e estou ciente de que um email será enviado para os diretores da V3 Partners com os detalhes registrados acima.
+                </span>
+              </label>
+
+              {transferError && (
+                <p className="text-xs text-red-400 flex items-center gap-1.5">
+                  <X size={12} /> {transferError}
+                </p>
+              )}
+
+              {/* Ações */}
+              <div className="flex gap-3 pt-1">
+                <button
+                  onClick={() => setShowTransferDeal(false)}
+                  className="flex-1 rounded-lg border border-[#243A66] text-[#7A8FA8] text-sm py-2.5 hover:text-[#E8EDF5] transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  disabled={
+                    transferSaving ||
+                    !transferForm.motivo ||
+                    !transferForm.justificativa.trim() ||
+                    !transferForm.confirmar ||
+                    (transferForm.modo === "existente" && !transferForm.new_partner_id) ||
+                    (transferForm.modo === "externo" && !transferForm.new_partner_name.trim())
+                  }
+                  onClick={async () => {
+                    if (!selectedCard) return;
+                    setTransferSaving(true);
+                    setTransferError(null);
+                    try {
+                      const res = await fetch("/api/ma/transfer-deal", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          deal_id:          selectedCard.id,
+                          new_partner_id:   transferForm.modo === "existente" ? transferForm.new_partner_id : undefined,
+                          new_partner_name: transferForm.modo === "externo"   ? transferForm.new_partner_name : undefined,
+                          new_partner_email:transferForm.modo === "externo"   ? transferForm.new_partner_email : undefined,
+                          motivo:           transferForm.motivo,
+                          justificativa:    transferForm.justificativa,
+                          confirmar:        transferForm.confirmar,
+                        }),
+                      });
+                      const data = await res.json() as { ok?: boolean; error?: string; transfer?: { to_name: string; to_id?: string } };
+                      if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
+                      // Atualizar card local
+                      if (data.transfer) {
+                        const newResp = data.transfer.to_name;
+                        const newId   = data.transfer.to_id;
+                        setCards(prev => prev.map(c => c.id === selectedCard.id ? {
+                          ...c, responsible: newResp, assigned_to_id: newId,
+                        } : c));
+                        setSelectedCard(prev => prev ? { ...prev, responsible: newResp, assigned_to_id: newId } : null);
+                      }
+                      setTransferOk(true);
+                    } catch (e) {
+                      setTransferError(e instanceof Error ? e.message : "Erro ao transferir");
+                    } finally {
+                      setTransferSaving(false);
+                    }
+                  }}
+                  className="flex-1 rounded-lg bg-[#C9A84C] text-[#09081A] text-sm font-bold py-2.5 hover:bg-[#E8C97A] transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {transferSaving
+                    ? <><Loader2 size={14} className="animate-spin" /> Transferindo...</>
+                    : <><ArrowLeftRight size={14} /> Confirmar Transferência</>}
+                </button>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 
