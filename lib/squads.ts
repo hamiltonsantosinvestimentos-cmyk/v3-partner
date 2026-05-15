@@ -6,6 +6,7 @@ export interface Squad {
   cor: string;
   prompt: string;
   useWebSearch?: boolean; // habilita tool_use de busca neste squad
+  maxTokens?: number;     // limite de tokens de resposta (default: 4096)
 }
 
 export const SQUADS: Record<string, Squad> = {
@@ -248,6 +249,7 @@ PRINCÍPIOS:
 - João Lemos assina como "Head de Ativos" para peers e "Sócio" para seniores
 - Ticket mínimo R$ 500K — nunca abordar oportunidades abaixo disto
 - Sinalizar qualquer alvo com histórico negativo ou conflito de interesse`,
+    maxTokens: 6000, // emails + follow-ups + scripts requerem output longo
   },
 };
 

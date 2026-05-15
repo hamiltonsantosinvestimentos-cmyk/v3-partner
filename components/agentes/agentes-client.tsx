@@ -200,22 +200,31 @@ export function AgentesClient({ squads, userName }: Props) {
     setShowDealModal(true);
   }
 
-  // Export as V3 HTML Report
+  // Export as V3 HTML Report — usa toda a conversa consolidada
   async function exportAsV3Report() {
-    const last = [...messages].reverse().find(m => m.role === "assistant");
-    if (!last || exporting) return;
+    const assistantMessages = messages.filter(m => m.role === "assistant");
+    if (!assistantMessages.length || exporting) return;
 
     setExporting(true);
     setExportDone(false);
 
     const title = messages[0]?.content?.substring(0, 80) ?? "Relatório V3";
 
+    // Consolida TODAS as respostas do assistente em ordem cronológica
+    // (preserva refinamentos feitos ao longo da conversa)
+    const consolidatedContent = assistantMessages
+      .map((m, i) => assistantMessages.length > 1
+        ? `### Análise ${i + 1}\n\n${m.content}`
+        : m.content
+      )
+      .join("\n\n---\n\n");
+
     try {
       const res = await fetch("/api/agentes/export-report", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          content: last.content,
+          content: consolidatedContent,
           squad_id: activeSquad.id,
           title,
           session_id: sessionId,

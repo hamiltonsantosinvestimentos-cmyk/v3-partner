@@ -207,9 +207,10 @@ export async function POST(req: NextRequest) {
       assistantText = await runWithTools(anthropic, systemPrompt, claudeMessages);
     } else {
       // Squads padrão — sem tools
+      const maxTokens = squad.maxTokens ?? 4096; // default aumentado de 2048 para 4096
       const response = await anthropic.messages.create({
         model: "claude-sonnet-4-6",
-        max_tokens: 2048,
+        max_tokens: maxTokens,
         system: systemPrompt,
         messages: claudeMessages,
       });
