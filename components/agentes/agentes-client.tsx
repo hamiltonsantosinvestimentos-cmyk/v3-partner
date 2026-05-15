@@ -249,6 +249,131 @@ export function AgentesClient({ squads, userName }: Props) {
     }
   }
 
+  // Gerar Prompt de Apresentação para Claude
+  const [promptCopied, setPromptCopied] = useState(false);
+  const [showPromptModal, setShowPromptModal] = useState(false);
+  const [generatedPrompt, setGeneratedPrompt] = useState("");
+
+  function buildPresentationPrompt() {
+    const assistantMsgs = messages.filter(m => m.role === "assistant");
+    const userFirstMsg   = messages.find(m => m.role === "user")?.content ?? "";
+    const sessionContent = assistantMsgs.map(m => m.content).join("\n\n---\n\n");
+    const squadLabel     = activeSquad.nome;
+    const date           = new Date().toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" });
+
+    return `Você é um designer editorial especialista em apresentações institucionais da V3 Partners.
+
+Crie uma apresentação HTML completa, profissional e visualmente impactante com os slides abaixo, seguindo RIGOROSAMENTE a identidade visual V3 Partners.
+
+════════════════════════════════════════
+IDENTIDADE VISUAL V3 PARTNERS — OBRIGATÓRIA
+════════════════════════════════════════
+
+PALETA DE CORES (usar exatamente estes hex):
+  Navy Profundo  #09081A  → fundo principal, body, slides escuros
+  Navy Base      #111F35  → cards, seções internas
+  Navy Card      #162744  → elementos de destaque
+  Navy Médio     #243A66  → bordas, separadores
+  Ouro V3        #C9A84C  → títulos, destaques, labels, badges, CTAs
+  Ouro Claro     #E8C97A  → gradientes, hover, acento secundário
+  Cream          #F0ECE4  → texto principal, títulos grandes
+  Muted          #7A8FA8  → corpo de texto, subtítulos
+
+REGRA 90/8/2: 90% navy · 8% cream/muted · 2% ouro
+NUNCA: fundo branco, preto puro, azul, vermelho, verde, laranja fora de badges de status
+
+TIPOGRAFIA:
+  Fonte exclusiva: DM Sans (Google Fonts)
+  Import: https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800&display=swap
+  Títulos de slide: 700-800 · 40-64px · #F0ECE4
+  Subtítulos: 600 · 20-28px · #F0ECE4
+  Corpo: 400 · 13-15px · #7A8FA8
+  Labels/Tags: 700 CAPS · 8-10px · letter-spacing 3px · #C9A84C
+  NUNCA: Inter, Montserrat, Bebas Neue, ou qualquer outra fonte
+
+LOGO:
+  <img src="https://app.v3partners.com.br/v3-logo-flat-gold-alpha.png" alt="V3 Partners" style="height:44px;width:auto;">
+  Presente em TODOS os slides no canto superior esquerdo ou rodapé
+
+════════════════════════════════════════
+ESTRUTURA OBRIGATÓRIA DA APRESENTAÇÃO
+════════════════════════════════════════
+
+Crie slides como seções HTML rolável ou usando navegação por JS.
+Cada slide: width 100vw / height 100vh (fullscreen), fundo navy, padding 60-80px.
+
+SLIDES OBRIGATÓRIOS:
+
+Slide 1 — CAPA
+  Logo V3 Partners (canto superior esquerdo)
+  Badge: "${squadLabel} · V3 Partners"
+  Título principal grande: baseado no tema da sessão
+  Subtítulo: descrição em 1 linha
+  Data: ${date}
+  Faixa dourada no rodapé
+
+Slide 2 — CONTEXTO / BRIEFING
+  O que motivou esta análise (baseado na primeira pergunta do usuário)
+  3-4 pontos principais em cards navy-card
+
+Slide 3 ao N — CONTEÚDO PRINCIPAL
+  Adapte o número de slides ao conteúdo abaixo
+  Cada seção vira um slide
+  Use cards, badges, ícones SVG inline e tabelas quando cabível
+  Bullets com ● (ponto dourado) em vez de hífen
+  Dados numéricos em destaque com fonte grande e cor ouro
+
+Último Slide — PRÓXIMOS PASSOS / CTA
+  3-5 ações concretas
+  Contato: João Lemos | Head de Ativos | +55 21 98993-7178 | v3partners.com.br
+  Logo V3 grande centralizada
+
+════════════════════════════════════════
+REQUISITOS TÉCNICOS
+════════════════════════════════════════
+
+- DOCTYPE html + meta charset UTF-8 + viewport
+- CSS @page print ready com -webkit-print-color-adjust: exact
+- Navegação: botões Anterior/Próximo com setas ← → OU scroll snap
+- Responsivo mas otimizado para 16:9 (1280×720px ou 1920×1080px)
+- Cada slide com page-break-after: always para impressão
+- Animações sutis de entrada (opacity + transform) opcionais
+- Sem dependências externas além de Google Fonts
+- HTML completo e autossuficiente, começando com <!DOCTYPE html>
+
+════════════════════════════════════════
+CONTEÚDO DA SESSÃO — ${squadLabel.toUpperCase()}
+════════════════════════════════════════
+
+Pergunta/tema original do usuário:
+${userFirstMsg.substring(0, 300)}${userFirstMsg.length > 300 ? "..." : ""}
+
+Análise e conteúdo gerado:
+${sessionContent}
+
+════════════════════════════════════════
+
+IMPORTANTE:
+- Retorne APENAS o HTML completo, começando com <!DOCTYPE html>
+- Adapte o conteúdo para formato de slides — síntese visual, não texto corrido
+- Cada ponto importante vira um elemento visual (card, badge, número em destaque)
+- Tom: institucional, direto, premium — nível Pentagram/McKinsey para M&A
+- Versão PT-BR, mas manter termos técnicos em inglês quando padrão de mercado`;
+  }
+
+  function openPromptModal() {
+    const prompt = buildPresentationPrompt();
+    setGeneratedPrompt(prompt);
+    setShowPromptModal(true);
+    setPromptCopied(false);
+  }
+
+  async function copyPrompt() {
+    await navigator.clipboard.writeText(generatedPrompt);
+    setPromptCopied(true);
+    setTimeout(() => setPromptCopied(false), 3000);
+  }
+
   // Export as text file
   function exportAsText() {
     const content = messages
@@ -351,13 +476,23 @@ export function AgentesClient({ squads, userName }: Props) {
           </div>
           <div className="flex items-center gap-2">
             {messages.length > 0 && (
-              <button
-                onClick={exportAsText}
-                className="flex items-center gap-1.5 text-[10px] text-[#7A8FA8] hover:text-[#F0ECE4] px-2.5 py-1.5 rounded-lg border border-[#243A66] hover:border-[#C9A84C] transition-colors"
-              >
-                <Download className="w-3 h-3" />
-                .txt
-              </button>
+              <>
+                <button
+                  onClick={exportAsText}
+                  className="flex items-center gap-1.5 text-[10px] text-[#7A8FA8] hover:text-[#F0ECE4] px-2.5 py-1.5 rounded-lg border border-[#243A66] hover:border-[#C9A84C] transition-colors"
+                >
+                  <Download className="w-3 h-3" />
+                  .txt
+                </button>
+                <button
+                  onClick={openPromptModal}
+                  className="flex items-center gap-1.5 text-[10px] text-[#C9A84C] bg-[#C9A84C]/10 hover:bg-[#C9A84C]/20 font-semibold px-2.5 py-1.5 rounded-lg border border-[#C9A84C]/30 hover:border-[#C9A84C] transition-colors"
+                  title="Gera prompt otimizado para criar apresentação V3 no Claude"
+                >
+                  <FileText className="w-3 h-3" />
+                  Apresentação
+                </button>
+              </>
             )}
             <button
               onClick={newSession}
@@ -406,6 +541,69 @@ export function AgentesClient({ squads, userName }: Props) {
             onClose={() => setShowDealModal(false)}
             onSuccess={() => setShowDealModal(false)}
           />
+        )}
+
+        {/* ── Modal Prompt de Apresentação ─────────────────────────────── */}
+        {showPromptModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+            <div className="w-full max-w-2xl bg-[#111F35] border border-[#243A66] rounded-xl shadow-2xl flex flex-col max-h-[85vh]">
+              {/* Header */}
+              <div className="flex items-center justify-between px-6 py-4 border-b border-[#243A66]">
+                <div>
+                  <p className="text-[9px] font-bold tracking-[3px] uppercase text-[#C9A84C] mb-0.5">Prompt de Apresentação</p>
+                  <h2 className="text-sm font-bold text-[#F0ECE4]">Copie e execute no Claude para gerar slides V3</h2>
+                </div>
+                <button onClick={() => setShowPromptModal(false)} className="text-[#7A8FA8] hover:text-[#F0ECE4] transition-colors text-lg leading-none">✕</button>
+              </div>
+
+              {/* Instrução */}
+              <div className="px-6 py-3 bg-[#162744] border-b border-[#243A66]">
+                <div className="flex items-start gap-3">
+                  <div className="w-5 h-5 rounded-full bg-[#C9A84C] flex items-center justify-center flex-shrink-0 text-[#09081A] font-bold text-[10px] mt-0.5">1</div>
+                  <p className="text-[11px] text-[#7A8FA8]">Clique <strong className="text-[#F0ECE4]">Copiar Prompt</strong></p>
+                </div>
+                <div className="flex items-start gap-3 mt-2">
+                  <div className="w-5 h-5 rounded-full bg-[#C9A84C] flex items-center justify-center flex-shrink-0 text-[#09081A] font-bold text-[10px] mt-0.5">2</div>
+                  <p className="text-[11px] text-[#7A8FA8]">Abra <strong className="text-[#F0ECE4]">claude.ai</strong> → nova conversa → cole o prompt → envie</p>
+                </div>
+                <div className="flex items-start gap-3 mt-2">
+                  <div className="w-5 h-5 rounded-full bg-[#C9A84C] flex items-center justify-center flex-shrink-0 text-[#09081A] font-bold text-[10px] mt-0.5">3</div>
+                  <p className="text-[11px] text-[#7A8FA8]">Claude gera o HTML da apresentação completa → copie o código → abra no browser → Ctrl+P para PDF</p>
+                </div>
+              </div>
+
+              {/* Prompt preview */}
+              <div className="flex-1 overflow-y-auto px-6 py-4">
+                <pre className="text-[10px] text-[#7A8FA8] leading-relaxed whitespace-pre-wrap font-mono bg-[#09081A] border border-[#243A66] rounded-lg p-4 max-h-64 overflow-y-auto">
+                  {generatedPrompt.substring(0, 800)}...
+                  {"\n\n[+ " + (generatedPrompt.length - 800).toLocaleString() + " caracteres de conteúdo da sessão]"}
+                </pre>
+              </div>
+
+              {/* Actions */}
+              <div className="px-6 py-4 border-t border-[#243A66] flex gap-3">
+                <button
+                  onClick={() => setShowPromptModal(false)}
+                  className="flex-1 rounded-lg border border-[#243A66] text-[#7A8FA8] text-sm py-2.5 hover:text-[#F0ECE4] transition-colors"
+                >
+                  Fechar
+                </button>
+                <button
+                  onClick={copyPrompt}
+                  className={`flex-1 rounded-lg text-sm font-bold py-2.5 flex items-center justify-center gap-2 transition-all ${
+                    promptCopied
+                      ? "bg-emerald-500 text-white"
+                      : "bg-[#C9A84C] hover:bg-[#E8C97A] text-[#09081A]"
+                  }`}
+                >
+                  {promptCopied
+                    ? <><Check className="w-4 h-4" />Copiado!</>
+                    : <><Copy className="w-4 h-4" />Copiar Prompt Completo</>
+                  }
+                </button>
+              </div>
+            </div>
+          </div>
         )}
 
         {/* Input */}
