@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { FileText, Lock, BookOpen, ChevronRight, Shield } from "lucide-react";
+import { FileText, Lock, BookOpen, ChevronRight, Shield, GitBranch } from "lucide-react";
 
 interface Props {
   userRole: string;
@@ -9,9 +9,11 @@ interface Props {
 }
 
 const TECH_ROLES = ["ADMIN", "GESTAO"];
+const GOV_ROLES  = ["ADMIN", "GESTAO", "MESA"];
 
 export function DocsHubClient({ userRole, userName }: Props) {
   const canSeeTech = TECH_ROLES.includes(userRole);
+  const canSeeGov  = GOV_ROLES.includes(userRole);
 
   return (
     <div className="min-h-screen" style={{ background: "#09081A", color: "#F0ECE4" }}>
@@ -144,6 +146,52 @@ export function DocsHubClient({ userRole, userName }: Props) {
             </div>
           )}
         </div>
+
+        {/* Governança Corporativa — ADMIN/GESTAO/MESA */}
+        {canSeeGov && (
+          <div className="mt-6">
+            <Link href="/docs/governanca" className="block group">
+              <div
+                className="rounded-xl p-6 transition-all duration-200 group-hover:border-[#C9A84C]/40"
+                style={{ background: "#111F35", border: "1px solid #162744" }}
+              >
+                <div className="flex items-start justify-between mb-4">
+                  <div
+                    className="rounded-lg flex items-center justify-center"
+                    style={{ width: 44, height: 44, background: "rgba(74,222,128,0.1)", border: "1px solid rgba(74,222,128,0.2)" }}
+                  >
+                    <GitBranch size={20} color="#4ade80" />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", color: "#4ade80", background: "rgba(74,222,128,0.1)", border: "1px solid rgba(74,222,128,0.2)", padding: "3px 8px", borderRadius: 20 }}>
+                      Live
+                    </span>
+                    <ChevronRight size={16} color="#7A8FA8" className="group-hover:translate-x-1 transition-transform" />
+                  </div>
+                </div>
+                <div
+                  className="inline-block mb-3"
+                  style={{ fontSize: 9, fontWeight: 700, letterSpacing: 2, textTransform: "uppercase", color: "#C9A84C", background: "rgba(201,168,76,0.1)", border: "1px solid rgba(201,168,76,0.2)", padding: "3px 10px", borderRadius: 20 }}
+                >
+                  Diretoria · Mesa · Gestão
+                </div>
+                <h2 style={{ fontSize: 20, fontWeight: 700, color: "#F0ECE4", marginBottom: 8 }}>
+                  Governança & Roadmap
+                </h2>
+                <p style={{ color: "#7A8FA8", fontSize: 13, lineHeight: 1.7 }}>
+                  Rastreabilidade completa do portal: features em produção, sprint ativo, decisões de arquitetura (ADRs), riscos operacionais e status de migrações Supabase.
+                </p>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {["Roadmap", "ADRs", "Riscos", "Migrações", "Sprint"].map(tag => (
+                    <span key={tag} style={{ fontSize: 10, color: "#7A8FA8", background: "#162744", padding: "2px 8px", borderRadius: 4 }}>
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </Link>
+          </div>
+        )}
 
         {/* Info footer */}
         <div
