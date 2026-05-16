@@ -120,6 +120,65 @@
 
 ---
 
+## BANCO DE AGENTES V3 — 21 agentes ativos
+
+> Ativação: `@nome-do-agente` no terminal Claude Code
+> Arquivos: `C:\Users\jlemo\.claude\agents\`
+> Pre-Execution Gate: `~/.claude/rules/v3-agent-execution-protocol.md`
+
+### Mesa M&A
+| Agente | Persona | Ativação | Função |
+|---|---|---|---|
+| ma-supervisor | MAESTRO | `@ma-supervisor` | Supervisor Central — orquestra todos os agentes |
+| ma-deal-hunter | SCOUT | `@ma-deal-hunter` | Prospecção ativa de deals e ativos no Brasil |
+| ma-estruturador | FORJA | `@ma-estruturador` | Kit completo de peças M&A (CIM, Teaser, LinkedIn, Story) |
+| buyside-agro-ma | AGRO | `@buyside-agro-ma` | Buyside M&A frigoríficos e usinas (5 SIMs V3) |
+| v3-scout | V3 SCOUT | `@v3-scout` | Deal hunter nas 4 verticais V3 |
+
+### Brand & Visual
+| Agente | Persona | Ativação | Função |
+|---|---|---|---|
+| identity-chief | ID CHIEF | `@identity-chief` | Decisões centrais de identidade visual |
+| brand-strategist | BRAND | `@brand-strategist` | Posicionamento, voz da marca e mensagem |
+| visual-director | VISUAL | `@visual-director` | Revisão final de peças (navy/ouro/DM Sans/90-8-2) |
+| brand-guardian | GUARDIAN | `@brand-guardian` | Conformidade identidade visual em qualquer material |
+| logo-architect | LOGO | `@logo-architect` | Uso correto das variantes de logo |
+
+### Produto & Engenharia
+| Agente | Persona | Ativação | Função |
+|---|---|---|---|
+| **v3-feature-architect** | **ORION** | `@v3-feature-architect` | **Arquiteto de features V3 — spec, review, ADR, estimate** |
+| hooks-architect | LATCH | `@hooks-architect` | Hooks lifecycle Claude Code (17 eventos) |
+| swarm-orchestrator | SWARM | `@swarm-orchestrator` | Orquestrador de agentes paralelos |
+| config-engineer | CONFIG | `@config-engineer` | settings.json, permissions, env vars |
+| mcp-integrator | MCP | `@mcp-integrator` | Servidores MCP (filesystem, context7, playwright, exa) |
+| claude-mastery-chief | MASTERY | `@claude-mastery-chief` | Setup completo Claude Code |
+| skill-craftsman | CRAFT | `@skill-craftsman` | Criação de skills e slash commands |
+| project-integrator | INTEGRA | `@project-integrator` | Integração de projetos e CLAUDE.md |
+
+### Gestão & Governança
+| Agente | Persona | Ativação | Função |
+|---|---|---|---|
+| project-pm | AXIS | `@project-pm` | Technical PM — Agile/Scrum time de 2 |
+| roadmap-sentinel | SENTINEL | `@roadmap-sentinel` | Guardião do roadmap, OKRs e desvios de prazo |
+
+### Database (AIOX Framework)
+| Agente | Persona | Ativação | Função |
+|---|---|---|---|
+| data-engineer | DARA | `@data-engineer` (skill) | Schema design, migrations, RLS, query optimization |
+
+### Protocolo ORION + Dara
+```
+Usuário → ORION *spec → BRIEF → go → Feature Spec + HANDOFF
+       → Dara recebe HANDOFF → BRIEF → go → Migration SQL
+       → ORION *review → validação padrões V3
+```
+Arquivos do protocolo:
+- `~/.claude/rules/v3-agent-execution-protocol.md` — protocolo central
+- `~/.claude/rules/v3-dara-gate.md` — gate específico Dara + contexto V3
+
+---
+
 ## ALERTAS E RISCOS ATIVOS
 
 | # | Risco | Severidade | Ação |

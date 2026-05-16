@@ -55,6 +55,40 @@ const RISKS = [
   { id: "R-03", desc: "Investor profiles sem cadastros — matching inativo", severity: "pending" as StatusKey, action: "Cadastrar primeiros 3–5 perfis" },
 ];
 
+const AGENTS = [
+  // Mesa M&A
+  { name:"ma-supervisor",    persona:"MAESTRO",  cat:"Mesa M&A",    color:"#C9A84C", desc:"Supervisor Central — conhece TODO o contexto de João Lemos. Orquestra os demais agentes e entrega soluções integradas.",             invoke:"@ma-supervisor",    path:"~/.claude/agents/ma-supervisor.md" },
+  { name:"ma-deal-hunter",   persona:"SCOUT",    cat:"Mesa M&A",    color:"#C9A84C", desc:"Prospecção ativa de ativos e investidores no mercado brasileiro. Filtra e valida deals qualificados para o pipeline V3.",             invoke:"@ma-deal-hunter",   path:"~/.claude/agents/ma-deal-hunter.md" },
+  { name:"ma-estruturador",  persona:"FORJA",    cat:"Mesa M&A",    color:"#C9A84C", desc:"Estrutura kit completo de peças M&A: CIM, Teaser Cego, LinkedIn Post e Story — PT-BR e EN — prontos para PDF.",                     invoke:"@ma-estruturador",  path:"~/.claude/agents/ma-estruturador.md" },
+  { name:"buyside-agro-ma",  persona:"AGRO",     cat:"Mesa M&A",    color:"#C9A84C", desc:"Buyside M&A especializado em frigoríficos e usinas de açúcar/etanol. Qualifica por Regra dos 5 SIMs V3.",                            invoke:"@buyside-agro-ma",  path:"~/.claude/agents/buyside-agro-ma.md" },
+  { name:"v3-scout",         persona:"V3 SCOUT", cat:"Mesa M&A",    color:"#C9A84C", desc:"Deal hunter nas 4 verticais V3: recebíveis, real estate, mineração e M&A cross-border. Qualifica pela tese V3.",                     invoke:"@v3-scout",         path:"~/.claude/agents/v3-scout.md" },
+  // Brand & Visual
+  { name:"identity-chief",   persona:"ID CHIEF", cat:"Brand",       color:"#E8C97A", desc:"Chefe de identidade. Decisões centrais de identidade visual, coordena brand-strategist, visual-director e logo-architect.",           invoke:"@identity-chief",   path:"~/.claude/agents/identity-chief.md" },
+  { name:"brand-strategist", persona:"BRAND",    cat:"Brand",       color:"#E8C97A", desc:"Estratégia de marca V3. Posicionamento, voz da marca, arquitetura de mensagem e consistência institucional.",                        invoke:"@brand-strategist", path:"~/.claude/agents/brand-strategist.md" },
+  { name:"visual-director",  persona:"VISUAL",   cat:"Brand",       color:"#E8C97A", desc:"Revisão final de peças visuais — paleta navy/ouro, DM Sans, logo, regra 90/8/2 e mobile-first em HTML/CSS.",                        invoke:"@visual-director",  path:"~/.claude/agents/visual-director.md" },
+  { name:"brand-guardian",   persona:"GUARDIAN", cat:"Brand",       color:"#E8C97A", desc:"Conformidade da identidade visual V3. Verifica logo, cores navy/ouro, DM Sans e regra 90/8/2 em qualquer peça.",                    invoke:"@brand-guardian",   path:"~/.claude/agents/brand-guardian.md" },
+  { name:"logo-architect",   persona:"LOGO",     cat:"Brand",       color:"#E8C97A", desc:"Logo e ativos visuais V3. Verifica uso correto das variantes (flat-gold, mono-cream, 3d) e regras de aplicação.",                    invoke:"@logo-architect",   path:"~/.claude/agents/logo-architect.md" },
+  // Produto & Engenharia
+  { name:"v3-feature-architect", persona:"ORION",cat:"Produto",     color:"#60a5fa", desc:"Arquiteto de features V3. Especifica, revisa e planeja novas funcionalidades com contexto completo de stack e roadmap.",             invoke:"@v3-feature-architect", path:"~/.claude/agents/v3-feature-architect.md" },
+  { name:"hooks-architect",  persona:"LATCH",    cat:"Produto",     color:"#60a5fa", desc:"Arquiteto de hooks do lifecycle Claude Code. Cria, audita e depura hooks nos 17 eventos — gates de segurança e pipelines.",          invoke:"@hooks-architect",  path:"~/.claude/agents/hooks-architect.md" },
+  { name:"swarm-orchestrator",persona:"SWARM",   cat:"Produto",     color:"#60a5fa", desc:"Orquestrador de swarms paralelos. Decompõe tarefas complexas em sub-tarefas, coordena múltiplos agentes e consolida resultados.",    invoke:"@swarm-orchestrator",path:"~/.claude/agents/swarm-orchestrator.md" },
+  { name:"config-engineer",  persona:"CONFIG",   cat:"Produto",     color:"#60a5fa", desc:"Engenheiro de configuração Claude Code. Ajusta settings.json, permissions, deny/allow rules e variáveis de ambiente.",              invoke:"@config-engineer",  path:"~/.claude/agents/config-engineer.md" },
+  { name:"mcp-integrator",   persona:"MCP",      cat:"Produto",     color:"#60a5fa", desc:"Integração de servidores MCP. Descobre, configura, audita e diagnostica MCPs em settings.json.",                                    invoke:"@mcp-integrator",   path:"~/.claude/agents/mcp-integrator.md" },
+  { name:"claude-mastery-chief",persona:"MASTERY",cat:"Produto",    color:"#60a5fa", desc:"Orquestrador do setup Claude Code. Audita, configura, otimiza e diagnostica o ambiente — hooks, settings, MCPs, CLAUDE.md.",        invoke:"@claude-mastery-chief",path:"~/.claude/agents/claude-mastery-chief.md" },
+  { name:"skill-craftsman",  persona:"CRAFT",    cat:"Produto",     color:"#60a5fa", desc:"Criador de skills e slash commands. Projeta, escreve e registra novos skills — definição, frontmatter e dependências.",             invoke:"@skill-craftsman",  path:"~/.claude/agents/skill-craftsman.md" },
+  { name:"project-integrator",persona:"INTEGRA", cat:"Produto",     color:"#60a5fa", desc:"Integração de projetos no Claude Code. Conecta repositórios, estrutura CLAUDE.md e integra squads ao ambiente.",                   invoke:"@project-integrator",path:"~/.claude/agents/project-integrator.md" },
+  // Gestão & Governança
+  { name:"project-pm",       persona:"AXIS",     cat:"Gestão",      color:"#c084fc", desc:"Technical PM V3. Governança Agile/Scrum para time de 2, guardião do Handbook de identidade visual e estrutura modular.",            invoke:"@project-pm",       path:"~/.claude/agents/project-pm.md" },
+  { name:"roadmap-sentinel", persona:"SENTINEL", cat:"Gestão",      color:"#c084fc", desc:"Guardião do roadmap V3. Rastreia OKRs, monitora entregas pendentes e sinaliza desvios de prazo nas frentes ativas.",               invoke:"@roadmap-sentinel",  path:"~/.claude/agents/roadmap-sentinel.md" },
+  // Database
+  { name:"data-engineer",    persona:"DARA",     cat:"Database",    color:"#4ade80", desc:"Database Architect & Operations Engineer (AIOX). Schema design, migrations, RLS policies, query optimization, snapshots.",          invoke:"@data-engineer",    path:"AIOX:agents:data-engineer (skill userSettings)" },
+];
+
+const AGENT_CATS = ["Mesa M&A","Brand","Produto","Gestão","Database"];
+const CAT_COLORS: Record<string,string> = {
+  "Mesa M&A":"#C9A84C","Brand":"#E8C97A","Produto":"#60a5fa","Gestão":"#c084fc","Database":"#4ade80"
+};
+
 const ADRS = [
   { id: "ADR-001", decision: "FORJA two-phase (anti-504)",       date: "14/05", reason: "Vercel timeout 60s — chamada única excedia limite" },
   { id: "ADR-002", decision: "Teaser Cego whitelist",            date: "14/05", reason: "Blacklist causava vazamento de localização" },
@@ -212,6 +246,98 @@ export function GovernancaClient({ userRole, userName }: Props) {
                 <span style={{ fontSize: 10, color: muted }}>{a.date}</span>
               </div>
             ))}
+          </div>
+        </section>
+
+        {/* Banco de Agentes V3 */}
+        <section style={{ marginBottom: 36 }}>
+          <h2 style={{ fontSize: 14, fontWeight: 700, color: gold, textTransform: "uppercase", letterSpacing: 2, marginBottom: 6 }}>
+            Banco de Agentes V3 — {AGENTS.length} agentes
+          </h2>
+          <p style={{ fontSize: 12, color: muted, marginBottom: 16, lineHeight: 1.6 }}>
+            Ativação via Claude Code terminal: <code style={{ color: gold, fontFamily: "monospace", fontSize: 11, background: navyC, padding: "1px 5px", borderRadius: 3 }}>@nome-do-agente</code>&nbsp;
+            · Arquivos em <code style={{ color: gold, fontFamily: "monospace", fontSize: 11, background: navyC, padding: "1px 5px", borderRadius: 3 }}>C:\Users\jlemo\.claude\agents\</code>
+            · Pre-Execution Gate ativo em todos via <code style={{ color: gold, fontFamily: "monospace", fontSize: 11, background: navyC, padding: "1px 5px", borderRadius: 3 }}>~/.claude/rules/v3-agent-execution-protocol.md</code>
+          </p>
+
+          {AGENT_CATS.map(cat => {
+            const catAgents = AGENTS.filter(a => a.cat === cat);
+            const catColor = CAT_COLORS[cat];
+            return (
+              <div key={cat} style={{ marginBottom: 20 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                  <div style={{ width: 3, height: 16, background: catColor, borderRadius: 2 }} />
+                  <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 2, textTransform: "uppercase", color: catColor }}>
+                    {cat} · {catAgents.length} agente{catAgents.length > 1 ? "s" : ""}
+                  </span>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 8 }}>
+                  {catAgents.map(agent => (
+                    <div key={agent.name} style={{
+                      background: navyB, border: `1px solid ${navyM}`,
+                      borderLeft: `3px solid ${agent.color}`,
+                      borderRadius: "0 8px 8px 0", padding: "12px 14px",
+                    }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <span style={{
+                            fontSize: 8, fontWeight: 800, letterSpacing: 1.5, textTransform: "uppercase",
+                            color: navyB, background: agent.color, padding: "2px 7px", borderRadius: 3,
+                          }}>
+                            {agent.persona}
+                          </span>
+                          <code style={{ fontSize: 10, color: agent.color, fontFamily: "monospace" }}>
+                            {agent.invoke}
+                          </code>
+                        </div>
+                      </div>
+                      <p style={{ fontSize: 11, color: muted, lineHeight: 1.55, margin: 0, marginBottom: 6 }}>
+                        {agent.desc}
+                      </p>
+                      <code style={{ fontSize: 9, color: "#4b5563", fontFamily: "monospace" }}>
+                        {agent.path}
+                      </code>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+
+          {/* Protocolo entre agentes */}
+          <div style={{
+            background: "rgba(96,165,250,0.05)", border: "1px solid rgba(96,165,250,0.2)",
+            borderRadius: 8, padding: "14px 18px", marginTop: 12,
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+              <div style={{ width: 3, height: 16, background: "#60a5fa", borderRadius: 2 }} />
+              <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 2, textTransform: "uppercase", color: "#60a5fa" }}>
+                Protocolo de Colaboração ORION + Dara
+              </span>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 28px 1fr 28px 1fr", gap: 0, alignItems: "center" }}>
+              {[
+                { step: "1", label: "ORION", detail: "*spec [feature] → BRIEF obrigatório → aprovação usuário", color: "#60a5fa" },
+                null,
+                { step: "2", label: "DARA", detail: "Recebe HANDOFF → executa próprio BRIEF → migration SQL", color: "#4ade80" },
+                null,
+                { step: "3", label: "ORION", detail: "*review [resultado] → valida padrões V3", color: "#60a5fa" },
+              ].map((item, i) => item ? (
+                <div key={i} style={{ background: navyC, border: `1px solid ${item.color}30`, borderRadius: 6, padding: "10px 12px" }}>
+                  <div style={{ fontSize: 8, fontWeight: 700, color: item.color, letterSpacing: 2, textTransform: "uppercase", marginBottom: 4 }}>
+                    STEP {item.step} · {item.label}
+                  </div>
+                  <div style={{ fontSize: 10, color: muted, lineHeight: 1.5 }}>{item.detail}</div>
+                </div>
+              ) : (
+                <div key={i} style={{ textAlign: "center", color: "#243A66", fontSize: 18, fontWeight: 700 }}>→</div>
+              ))}
+            </div>
+            <p style={{ fontSize: 10, color: "#4b5563", marginTop: 10, marginBottom: 0, lineHeight: 1.5 }}>
+              Nenhum agente escreve código ou SQL sem executar BRIEF e receber aprovação explícita.
+              Regras em <code style={{ fontFamily: "monospace" }}>~/.claude/rules/v3-agent-execution-protocol.md</code>
+              · <code style={{ fontFamily: "monospace" }}>~/.claude/rules/v3-dara-gate.md</code>
+            </p>
           </div>
         </section>
 
