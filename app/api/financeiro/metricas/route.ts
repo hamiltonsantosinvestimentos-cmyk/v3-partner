@@ -25,7 +25,7 @@ export async function GET() {
   // Todos os partners (PARTNER + PARTNER_PRO)
   const { data: allPartners } = await db
     .from("profiles")
-    .select("id, role, is_active, trial_expires_at, created_at")
+    .select("id, full_name, email, role, is_active, trial_expires_at, created_at")
     .in("role", ["PARTNER", "PARTNER_PRO"])
     .order("created_at", { ascending: true });
 
@@ -159,12 +159,45 @@ export async function GET() {
   const ticketMedioMensal = ativos.length > 0 ? mrr / ativos.length : 0;
   const ltv = ticketMedioMensal * (churnRate > 0 ? (1 / (churnRate / 100)) : 12);
 
+  // Partners vencendo nos próximos 30 dias
+  const parceirosVencendo30 = partners
+    .filter(p => {
+      if (!p.is_active) return false;
+      const exp = p.trial_expires_at ? new Date(p.trial_expires_at) : null;
+      if (!exp) return false;
+      const dias = Math.floor((exp.getTime() - now.getTime()) / 86400000);
+      return dias >= 0 && dias <= 30;
+    })
+    .map(p => ({
+      id: p.id,
+      full_name: p.full_name ?? "—",
+      email: p.email ?? null,
+      role: p.role,
+      trial_expires_at: p.trial_expires_at,
+      diasRestantes: Math.floor((new Date(p.trial_expires_at!).getTime() - now.getTime()) / 86400000),
+    }))
+    .sort((a, b) => a.diasRestantes - b.diasRestantes);
+
+  // Tendências MoM para os KPIs secundários
+  const ativosMesAnteriorPartner = ativosMesAnterior.filter(p => p.role === "PARTNER").length;
+  const ativosMesAnteriorPro = ativosMesAnterior.filter(p => p.role === "PARTNER_PRO").length;
+  const totalAtivosMesAnterior = ativosMesAnteriorPartner + ativosMesAnteriorPro;
+  const crescimentoPartnersM = totalAtivosMesAnterior > 0
+    ? Math.round(((ativos.length - totalAtivosMesAnterior) / totalAtivosMesAnterior) * 100 * 10) / 10
+    : 0;
+  const ticketMedioAnterior = totalAtivosMesAnterior > 0 ? mrrMesAnterior / totalAtivosMesAnterior : 0;
+  const crescimentoTicketM = ticketMedioAnterior > 0
+    ? Math.round(((ticketMedioMensal - ticketMedioAnterior) / ticketMedioAnterior) * 100 * 10) / 10
+    : 0;
+
   return NextResponse.json({
     // KPIs
     mrr,
     arr,
     churnRate,
     crescimentoMoM,
+    crescimentoPartnersM,
+    crescimentoTicketM,
     novosEsteMes,
     totalAtivos: ativos.length,
     ativosPartner,
@@ -176,5 +209,8 @@ export async function GET() {
     // Série histórica
     serie,
     pagamentosHistorico,
+    // Inadimplência
+    parceirosVencendo30,
+    totalVencendo7d: parceirosVencendo30.filter(p => p.diasRestantes <= 7).length,
   });
 }

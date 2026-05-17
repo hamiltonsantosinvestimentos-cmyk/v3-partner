@@ -1,11 +1,11 @@
 "use client";
 
-import React, { useState, useCallback, useEffect } from "react";
+import React, { useState, useCallback, useEffect, useRef } from "react";
 import {
   Headphones, Plus, ChevronRight, User, Building2,
-  Banknote, Clock, CheckCircle2, AlertCircle, Link2,
+  Clock, CheckCircle2, AlertCircle, Link2,
   LayoutGrid, List, Search, X, FileText, ArrowRight, ArrowLeft, MessageSquare, Trash2,
-  ScrollText, RefreshCw, XCircle, Download, Edit2, Users,
+  ScrollText, RefreshCw, XCircle, Download, Edit2, Users, Filter,
 } from "lucide-react";
 import { ExportButton } from "@/components/financeiro/export-button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -21,8 +21,20 @@ import { PropostaDetailModal, PIPELINE_STAGES, type ProposalFull } from "@/compo
 
 // ─── Tipos ─────────────────────────────────────────────────────────────────
 interface Ticket {
-  id: string; code: string; title: string; category: string;
-  priority: string; status: string; due_date: string | null; created_at: string;
+  id: string; code: string; title: string; description?: string | null;
+  category: string; priority: string; status: string;
+  due_date: string | null; created_at: string;
+  assigned_to?: string | null;
+  resolution?: string | null;
+  requester?: { id: string; full_name: string } | null;
+  assignee?: { id: string; full_name: string } | null;
+}
+
+interface TicketComment {
+  id: string;
+  content: string;
+  created_at: string;
+  author: { id: string; full_name: string } | null;
 }
 
 interface ProposalCard {
@@ -51,6 +63,28 @@ interface MesaOpClientProps {
   currentUser?: { id: string; full_name: string; role: string };
 }
 
+// ─── Constantes ────────────────────────────────────────────────────────────
+const CATEGORY_LABELS: Record<string, string> = {
+  compliance: "Compliance", tecnico: "Técnico", juridico: "Jurídico",
+  onboarding: "Onboarding", operacional: "Operacional", financeiro: "Financeiro",
+};
+
+const TICKET_STATUS_OPTIONS = [
+  { value: "", label: "Todos os status" },
+  { value: "PENDING", label: "Pendente" },
+  { value: "IN_REVIEW", label: "Em Revisão" },
+  { value: "COMPLETED", label: "Concluído" },
+  { value: "CANCELLED", label: "Cancelado" },
+];
+
+const TICKET_PRIORITY_OPTIONS = [
+  { value: "", label: "Todas prioridades" },
+  { value: "URGENT", label: "Urgente" },
+  { value: "HIGH", label: "Alta" },
+  { value: "MEDIUM", label: "Média" },
+  { value: "LOW", label: "Baixa" },
+];
+
 // ─── Novo Ticket Modal ─────────────────────────────────────────────────────
 function NovoTicketModal({ open, onClose, onSubmit }: {
   open: boolean; onClose: () => void;
@@ -62,11 +96,26 @@ function NovoTicketModal({ open, onClose, onSubmit }: {
   const [dueDate, setDueDate] = useState("");
   const [descricao, setDescricao] = useState("");
 
-  function submit() {
+  async function submit() {
     if (!title.trim()) return;
+    try {
+      const res = await fetch("/api/tickets", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: title.trim(), category, priority, due_date: dueDate || null, description: descricao || null }),
+      });
+      const json = await res.json();
+      if (json.ticket) {
+        onSubmit(json.ticket);
+        setTitle(""); setCategory("operacional"); setPriority("MEDIUM"); setDueDate(""); setDescricao("");
+        onClose();
+        return;
+      }
+    } catch {}
+    // fallback local
     const t: Ticket = {
       id: `tick-${Date.now()}`, code: `TICK-26-${String(Date.now()).slice(-6)}`,
-      title, category, priority,
+      title, category, priority, description: descricao || null,
       status: "PENDING",
       due_date: dueDate ? new Date(dueDate).toISOString() : null,
       created_at: new Date().toISOString(),
@@ -98,7 +147,7 @@ function NovoTicketModal({ open, onClose, onSubmit }: {
               <select value={category} onChange={(e) => setCategory(e.target.value)}
                 className="w-full h-9 px-3 text-sm bg-secondary border border-border rounded-lg text-foreground focus:outline-none">
                 {["compliance", "tecnico", "juridico", "onboarding", "operacional", "financeiro"].map((c) => (
-                  <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>
+                  <option key={c} value={c}>{CATEGORY_LABELS[c]}</option>
                 ))}
               </select>
             </div>
@@ -128,6 +177,260 @@ function NovoTicketModal({ open, onClose, onSubmit }: {
         <div className="px-6 py-4 border-t border-border flex gap-2 justify-end">
           <Button variant="outline" size="sm" onClick={onClose}>Cancelar</Button>
           <Button size="sm" onClick={submit} disabled={!title.trim()}>Criar Ticket</Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Ticket Detail Modal ───────────────────────────────────────────────────
+function TicketDetailModal({ open, onClose, ticket, currentUser, onUpdated }: {
+  open: boolean;
+  onClose: () => void;
+  ticket: Ticket | null;
+  currentUser?: { id: string; full_name: string; role: string };
+  onUpdated: (id: string, updates: Partial<Ticket>) => void;
+}) {
+  const [comments, setComments] = useState<TicketComment[]>([]);
+  const [commentsLoading, setCommentsLoading] = useState(false);
+  const [newComment, setNewComment] = useState("");
+  const [submittingComment, setSubmittingComment] = useState(false);
+  const [partners, setPartners] = useState<{ id: string; full_name: string }[]>([]);
+  const [assigneeId, setAssigneeId] = useState<string>("");
+  const [ticketStatus, setTicketStatus] = useState("");
+  const [resolution, setResolution] = useState("");
+  const [saving, setSaving] = useState(false);
+  const commentsEndRef = useRef<HTMLDivElement>(null);
+
+  const isAdmin = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"].includes(currentUser?.role ?? "");
+
+  useEffect(() => {
+    if (!open || !ticket) return;
+    setTicketStatus(ticket.status);
+    setAssigneeId(ticket.assignee?.id ?? ticket.assigned_to ?? "");
+    setResolution(ticket.resolution ?? "");
+    setNewComment("");
+    setComments([]);
+
+    setCommentsLoading(true);
+    fetch(`/api/tickets/comments?ticket_id=${ticket.id}`)
+      .then(r => r.json())
+      .then(d => setComments(d.comments ?? []))
+      .catch(() => {})
+      .finally(() => setCommentsLoading(false));
+
+    if (isAdmin) {
+      fetch("/api/partners")
+        .then(r => r.json())
+        .then(d => setPartners(d.partners ?? []))
+        .catch(() => {});
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, ticket?.id]);
+
+  useEffect(() => {
+    commentsEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [comments]);
+
+  async function handleSave() {
+    if (!ticket) return;
+    setSaving(true);
+    try {
+      const body: Record<string, unknown> = { id: ticket.id };
+      if (ticketStatus !== ticket.status) body.status = ticketStatus;
+      const currentAssigneeId = ticket.assignee?.id ?? ticket.assigned_to ?? "";
+      if (assigneeId !== currentAssigneeId) body.assigned_to = assigneeId || null;
+      if (resolution !== (ticket.resolution ?? "")) body.resolution = resolution || null;
+
+      const res = await fetch("/api/tickets", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (res.ok) {
+        const assignee = partners.find(p => p.id === assigneeId);
+        onUpdated(ticket.id, {
+          status: ticketStatus,
+          assigned_to: assigneeId || null,
+          assignee: assignee ? { id: assignee.id, full_name: assignee.full_name } : null,
+          resolution: resolution || null,
+        });
+        onClose();
+      }
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleAddComment() {
+    if (!ticket || !newComment.trim()) return;
+    setSubmittingComment(true);
+    try {
+      const res = await fetch("/api/tickets/comments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ticket_id: ticket.id, content: newComment.trim() }),
+      });
+      const json = await res.json();
+      if (json.comment) {
+        setComments(prev => [...prev, json.comment]);
+        setNewComment("");
+      }
+    } catch {}
+    finally { setSubmittingComment(false); }
+  }
+
+  if (!open || !ticket) return null;
+
+  return (
+    <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+      <div className="bg-card border border-border rounded-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+        {/* Header */}
+        <div className="flex items-start justify-between px-6 py-4 border-b border-border flex-shrink-0">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <span className="font-mono text-xs text-muted-foreground">{ticket.code}</span>
+              <Badge className={PRIORITY_COLORS[ticket.priority as TicketPriority]}>{PRIORITY_LABELS[ticket.priority as TicketPriority]}</Badge>
+              <Badge className={STATUS_COLORS[ticket.status as OperationStatus]}>{STATUS_LABELS[ticket.status as OperationStatus]}</Badge>
+            </div>
+            <h3 className="text-sm font-bold text-white">{ticket.title}</h3>
+          </div>
+          <button onClick={onClose} className="w-7 h-7 rounded-lg hover:bg-secondary flex items-center justify-center text-muted-foreground hover:text-white transition-colors flex-shrink-0 ml-4">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Body scrollável */}
+        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+          {/* Detalhes */}
+          <div className="grid grid-cols-2 gap-2">
+            <div className="bg-secondary rounded-xl p-3">
+              <p className="text-[10px] font-semibold text-muted-foreground uppercase mb-1">Categoria</p>
+              <p className="text-xs text-foreground">{CATEGORY_LABELS[ticket.category] ?? ticket.category}</p>
+            </div>
+            <div className="bg-secondary rounded-xl p-3">
+              <p className="text-[10px] font-semibold text-muted-foreground uppercase mb-1">Prazo</p>
+              <p className="text-xs text-foreground">{ticket.due_date ? formatDate(ticket.due_date) : "—"}</p>
+            </div>
+            {ticket.requester && (
+              <div className="bg-secondary rounded-xl p-3">
+                <p className="text-[10px] font-semibold text-muted-foreground uppercase mb-1">Solicitante</p>
+                <p className="text-xs text-foreground">{ticket.requester.full_name}</p>
+              </div>
+            )}
+            {ticket.assignee && (
+              <div className="bg-secondary rounded-xl p-3">
+                <p className="text-[10px] font-semibold text-muted-foreground uppercase mb-1">Responsável</p>
+                <p className="text-xs text-foreground">{ticket.assignee.full_name}</p>
+              </div>
+            )}
+            <div className="bg-secondary rounded-xl p-3">
+              <p className="text-[10px] font-semibold text-muted-foreground uppercase mb-1">Criado em</p>
+              <p className="text-xs text-foreground">{formatDate(ticket.created_at)}</p>
+            </div>
+          </div>
+
+          {/* Descrição */}
+          {ticket.description && (
+            <div>
+              <p className="text-xs font-semibold text-muted-foreground mb-2">Descrição</p>
+              <p className="text-xs text-foreground bg-secondary rounded-xl p-3 whitespace-pre-wrap">{ticket.description}</p>
+            </div>
+          )}
+
+          {/* Resolução existente (read-only para não-admin) */}
+          {!isAdmin && ticket.resolution && (
+            <div>
+              <p className="text-xs font-semibold text-muted-foreground mb-2">Resolução</p>
+              <p className="text-xs text-foreground bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-3 whitespace-pre-wrap">{ticket.resolution}</p>
+            </div>
+          )}
+
+          {/* Controles admin */}
+          {isAdmin && (
+            <div className="space-y-3 border border-border rounded-xl p-4">
+              <p className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
+                <Users className="w-3.5 h-3.5" /> Controles Administrativos
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Status</label>
+                  <select value={ticketStatus} onChange={e => setTicketStatus(e.target.value)}
+                    className="w-full h-9 px-3 text-sm bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50">
+                    {TICKET_STATUS_OPTIONS.filter(o => o.value).map(s => (
+                      <option key={s.value} value={s.value}>{s.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Responsável</label>
+                  <select value={assigneeId} onChange={e => setAssigneeId(e.target.value)}
+                    className="w-full h-9 px-3 text-sm bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50">
+                    <option value="">— Sem responsável —</option>
+                    {partners.map(p => <option key={p.id} value={p.id}>{p.full_name}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Resolução / Observação interna</label>
+                <textarea value={resolution} onChange={e => setResolution(e.target.value)} rows={2}
+                  placeholder="Descreva a resolução ou observação..."
+                  className="w-full px-3 py-2 text-sm bg-secondary border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 resize-none" />
+              </div>
+            </div>
+          )}
+
+          {/* Comentários */}
+          <div>
+            <p className="text-xs font-semibold text-muted-foreground mb-3 flex items-center gap-1.5">
+              <MessageSquare className="w-3.5 h-3.5" /> Comentários ({comments.length})
+            </p>
+            {commentsLoading ? (
+              <p className="text-xs text-muted-foreground text-center py-4">Carregando...</p>
+            ) : comments.length === 0 ? (
+              <p className="text-xs text-muted-foreground text-center py-4 bg-secondary/50 rounded-xl">Nenhum comentário ainda.</p>
+            ) : (
+              <div className="space-y-2 mb-3">
+                {comments.map(c => (
+                  <div key={c.id} className="bg-secondary rounded-xl px-4 py-3">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[11px] font-semibold text-foreground">{c.author?.full_name ?? "Usuário"}</span>
+                      <span className="text-[10px] text-muted-foreground">{formatDateTime(c.created_at)}</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground whitespace-pre-wrap">{c.content}</p>
+                  </div>
+                ))}
+                <div ref={commentsEndRef} />
+              </div>
+            )}
+            {/* Adicionar comentário */}
+            <div className="flex gap-2">
+              <textarea
+                value={newComment}
+                onChange={e => setNewComment(e.target.value)}
+                onKeyDown={e => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) handleAddComment(); }}
+                rows={2}
+                placeholder="Adicionar comentário... (Ctrl+Enter para enviar)"
+                className="flex-1 px-3 py-2 text-sm bg-secondary border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 resize-none"
+              />
+              <Button size="sm" onClick={handleAddComment} disabled={!newComment.trim() || submittingComment} className="self-end">
+                {submittingComment
+                  ? <span className="w-3 h-3 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                  : <MessageSquare className="w-3.5 h-3.5" />}
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="px-6 py-4 border-t border-border flex gap-2 justify-end flex-shrink-0">
+          <Button variant="outline" size="sm" onClick={onClose} disabled={saving}>Fechar</Button>
+          {isAdmin && (
+            <Button size="sm" onClick={handleSave} disabled={saving} className="gap-1.5">
+              {saving ? <span className="w-3 h-3 rounded-full border-2 border-white border-t-transparent animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+              Salvar Alterações
+            </Button>
+          )}
         </div>
       </div>
     </div>
@@ -230,7 +533,6 @@ function EditarPropostaModal({ open, onClose, proposal, onSaved }: {
   return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
       <div className="bg-card border border-border rounded-2xl w-full max-w-md">
-        {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-border">
           <div>
             <h3 className="text-sm font-bold text-white">Editar Proposta</h3>
@@ -242,7 +544,6 @@ function EditarPropostaModal({ open, onClose, proposal, onSaved }: {
         </div>
 
         <div className="px-6 py-5 space-y-5">
-          {/* Partner */}
           <div>
             <label className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground mb-2">
               <Users className="w-3.5 h-3.5" /> Partner Responsável
@@ -278,7 +579,6 @@ function EditarPropostaModal({ open, onClose, proposal, onSaved }: {
             )}
           </div>
 
-          {/* Nível */}
           <div>
             <label className="block text-xs font-semibold text-muted-foreground mb-2">Transferir para Nível</label>
             <div className="grid grid-cols-3 gap-2">
@@ -297,7 +597,6 @@ function EditarPropostaModal({ open, onClose, proposal, onSaved }: {
             </div>
           </div>
 
-          {/* Linha de Crédito */}
           <div>
             <label className="block text-xs font-semibold text-muted-foreground mb-2">Linha de Crédito</label>
             <select
@@ -332,7 +631,7 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
   const [tickets, setTickets] = useState<Ticket[]>(initialTickets);
   const [proposals, setProposals] = useState<ProposalCard[]>(initialProposals);
 
-  // Busca dados frescos da API ao montar (reflete atualizações de outras abas)
+  // Busca dados frescos das propostas ao montar
   useEffect(() => {
     fetch("/api/credit-proposals")
       .then(r => r.json())
@@ -363,7 +662,6 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
             valor_credito_atual: p.valor_credito_atual as number | undefined,
             comissao_mandato_perc: p.comissao_mandato_perc as number | undefined,
             comissao_instituicao_perc: p.comissao_instituicao_perc as number | undefined,
-            // Garante que metadata completo (com imoveis, endereço, cep, etc.) é passado
             metadata: meta ?? undefined,
             instituicao_encaminhada: p.instituicao_encaminhada as string | null | undefined,
           };
@@ -372,11 +670,31 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
       .catch(() => {});
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Auto-refresh a cada 60 segundos
+  useEffect(() => {
+    const interval = setInterval(() => {
+      fetch("/api/tickets")
+        .then(r => r.json())
+        .then(({ tickets: fresh }) => {
+          if (Array.isArray(fresh)) setTickets(fresh);
+        })
+        .catch(() => {});
+    }, 60000);
+    return () => clearInterval(interval);
+  }, []);
+
   const [novoTicket, setNovoTicket] = useState(false);
+  const [ticketDetail, setTicketDetail] = useState<Ticket | null>(null);
   const [detailProposal, setDetailProposal] = useState<ProposalCard | null>(null);
   const [editProposal, setEditProposal] = useState<ProposalCard | null>(null);
   const [search, setSearch] = useState("");
   const [selectedStage, setSelectedStage] = useState<string | null>(null);
+
+  // Filtros de tickets
+  const [ticketSearch, setTicketSearch] = useState("");
+  const [ticketStatusFilter, setTicketStatusFilter] = useState("");
+  const [ticketPriorityFilter, setTicketPriorityFilter] = useState("");
 
   const canChangeStage = (currentUser?.role === "MESA_OPERACIONAL" || currentUser?.role === "ADMIN" || currentUser?.role === "GESTAO");
 
@@ -490,6 +808,7 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
     } catch {
       setContratosAcao(prev => ({ ...prev, [id]: "erro" }));
     }
+    void proposalCode;
   }
 
   async function handleContratosCancelar(id: string) {
@@ -521,9 +840,25 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
     EXPIRADO:               { label: "Expirado",               color: "text-gray-400",    bg: "bg-gray-500/10" },
   };
 
+  // ─── Métricas ─────────────────────────────────────────────────────────────
   const openCount = tickets.filter((t) => ["PENDING", "IN_REVIEW"].includes(t.status)).length;
   const urgentCount = tickets.filter((t) => t.priority === "URGENT").length;
+  const pendingTickets = tickets.filter(t => t.status === "PENDING").length;
+  const contratosPendentes = contratos.filter(c => !["ASSINADO", "CANCELADO", "EXPIRADO"].includes(c.status)).length;
 
+  // ─── Filtros de tickets ───────────────────────────────────────────────────
+  const filteredTickets = tickets.filter(t => {
+    const matchSearch = !ticketSearch ||
+      t.title.toLowerCase().includes(ticketSearch.toLowerCase()) ||
+      t.code.toLowerCase().includes(ticketSearch.toLowerCase()) ||
+      (t.requester?.full_name ?? "").toLowerCase().includes(ticketSearch.toLowerCase()) ||
+      (t.assignee?.full_name ?? "").toLowerCase().includes(ticketSearch.toLowerCase());
+    const matchStatus = !ticketStatusFilter || t.status === ticketStatusFilter;
+    const matchPriority = !ticketPriorityFilter || t.priority === ticketPriorityFilter;
+    return matchSearch && matchStatus && matchPriority;
+  });
+
+  // ─── Filtros de propostas ─────────────────────────────────────────────────
   const filteredProposals = proposals.filter((p) => {
     const matchSearch = !search ||
       p.client_name.toLowerCase().includes(search.toLowerCase()) ||
@@ -543,13 +878,14 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
     if (detailProposal?.id === proposalId) {
       setDetailProposal((prev) => prev ? { ...prev, stage: newStage } : prev);
     }
-    // Persiste no banco
     fetch("/api/credit-proposals", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id: proposalId, stage: newStage }),
     }).catch(() => {});
   }, [detailProposal]);
+
+  const stageKeys = PIPELINE_STAGES.map(s => s.key);
 
   return (
     <div className="space-y-5 animate-fade-in">
@@ -573,6 +909,11 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
             <button onClick={() => setView("tickets")}
               className={`px-3 py-1.5 text-xs font-medium flex items-center gap-1.5 transition-colors ${view === "tickets" ? "bg-[#C9A84C]/15 text-[#E8C97A]" : "text-muted-foreground hover:text-white hover:bg-secondary"}`}>
               <List className="w-3.5 h-3.5" /> Tickets
+              {pendingTickets > 0 && (
+                <span className="px-1.5 py-0.5 rounded-full bg-amber-500 text-[9px] font-bold text-black leading-none">
+                  {pendingTickets}
+                </span>
+              )}
             </button>
             <button onClick={() => setView("contratos")}
               className={`px-3 py-1.5 text-xs font-medium flex items-center gap-1.5 transition-colors ${view === "contratos" ? "bg-[#C9A84C]/15 text-[#E8C97A]" : "text-muted-foreground hover:text-white hover:bg-secondary"}`}>
@@ -586,12 +927,13 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
       </div>
 
       {/* KPIs */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">
         {[
           { label: "Propostas Ativas", value: proposals.filter((p) => p.stage !== "FINALIZADO").length, color: "text-blue-400", icon: <FileText className="w-4 h-4" /> },
           { label: "Tickets Abertos", value: openCount, color: "text-amber-400", icon: <Clock className="w-4 h-4" /> },
           { label: "Urgentes", value: urgentCount, color: "text-red-400", icon: <AlertCircle className="w-4 h-4" /> },
           { label: "Finalizados", value: proposals.filter((p) => p.stage === "FINALIZADO").length, color: "text-emerald-400", icon: <CheckCircle2 className="w-4 h-4" /> },
+          { label: "Contratos Pendentes", value: contratosPendentes > 0 ? contratosPendentes : "—", color: "text-purple-400", icon: <ScrollText className="w-4 h-4" /> },
         ].map((kpi) => (
           <Card key={kpi.label}><CardContent className="p-4 flex items-center gap-3">
             <div className={kpi.color}>{kpi.icon}</div>
@@ -606,7 +948,6 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
       {/* ── VIEW: KANBAN ── */}
       {view === "kanban" && (
         <div className="space-y-4">
-          {/* Search + stage filter */}
           <div className="flex gap-2 flex-wrap">
             <div className="relative flex-1 min-w-52">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -635,108 +976,148 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
               const stageProposals = filteredProposals.filter(
                 (p) => (p.stage === stage.key) || (!p.stage && stage.key === "RECEBIDO")
               );
+              const totalValue = stageProposals.reduce((sum, p) => sum + (p.requested_value || 0), 0);
               return (
                 <div key={stage.key} className="flex flex-col gap-2">
                   {/* Column header */}
-                  <div className={`px-3 py-2 rounded-lg ${stage.bg} border border-current/20 flex items-center justify-between`}>
-                    <span className={`text-xs font-semibold ${stage.color}`}>{stage.label}</span>
-                    <span className={`text-xs font-bold ${stage.color}`}>{stageProposals.length}</span>
+                  <div className={`px-3 py-2 rounded-lg ${stage.bg} border border-current/20`}>
+                    <div className="flex items-center justify-between">
+                      <span className={`text-xs font-semibold ${stage.color}`}>{stage.label}</span>
+                      <span className={`text-xs font-bold ${stage.color}`}>{stageProposals.length}</span>
+                    </div>
+                    {totalValue > 0 && (
+                      <p className={`text-[9px] mt-0.5 opacity-70 ${stage.color}`}>
+                        {formatCurrency(totalValue)}
+                      </p>
+                    )}
                   </div>
 
                   {/* Cards */}
                   <div className="flex flex-col gap-2 min-h-24">
-                    {stageProposals.map((p) => (
-                      <div key={p.id}
-                        className="relative w-full text-left p-3 rounded-xl bg-card border border-border hover:border-primary/40 hover:bg-secondary/50 transition-all group cursor-pointer"
-                        onClick={() => setDetailProposal(p)}>
-                        <div className="flex items-start justify-between gap-1 mb-2">
-                          <span className="font-mono text-[10px] text-muted-foreground">{p.code}</span>
-                          <div className="flex items-center gap-1">
-                            {canChangeStage && (
-                              <button
-                                onClick={(e) => { e.stopPropagation(); setEditProposal(p); }}
-                                className="w-5 h-5 rounded flex items-center justify-center text-[#C9A84C]/60 hover:text-[#C9A84C] hover:bg-[#C9A84C]/15 transition-colors"
-                                title="Editar partner / transferir nível"
-                              >
-                                <Edit2 className="w-3 h-3" />
-                              </button>
-                            )}
-                            {currentUser?.role === "ADMIN" && (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  if (!confirm(`Excluir proposta ${p.code} de ${p.client_name}? Esta ação não pode ser desfeita.`)) return;
-                                  fetch(`/api/credit-proposals?id=${p.id}`, { method: "DELETE" })
-                                    .then(() => setProposals(prev => prev.filter(x => x.id !== p.id)))
-                                    .catch(() => alert("Erro ao excluir proposta."));
-                                }}
-                                className="w-5 h-5 rounded flex items-center justify-center text-muted-foreground hover:text-red-400 hover:bg-red-500/15 transition-colors opacity-0 group-hover:opacity-100"
-                                title="Excluir proposta"
-                              >
-                                <Trash2 className="w-3 h-3" />
-                              </button>
-                            )}
-                            <ChevronRight className="w-3 h-3 text-muted-foreground group-hover:text-primary transition-colors flex-shrink-0" />
-                          </div>
-                        </div>
-                        <p className="text-xs font-semibold text-foreground leading-tight mb-1.5 line-clamp-2">{p.client_name}</p>
-                        <div className="flex items-center gap-1 mb-1.5">
-                          {p.client_type === "PJ"
-                            ? <Building2 className="w-3 h-3 text-muted-foreground" />
-                            : <User className="w-3 h-3 text-muted-foreground" />}
-                          <span className="text-[10px] text-muted-foreground">{p.client_type ?? "PF"}</span>
-                        </div>
-                        <Badge className="text-[10px] px-1.5 py-0.5 bg-primary/15 text-primary border-primary/30">{p.credit_line}</Badge>
-                        <p className="text-xs font-bold text-white mt-1.5">{formatCurrency(p.requested_value)}</p>
-                        {p.partner_name && (
-                          <p className="text-[10px] text-muted-foreground mt-1 flex items-center gap-1">
-                            <Link2 className="w-2.5 h-2.5" />{p.partner_name}
-                          </p>
-                        )}
-                        {typeof p.docs_uploaded === "number" && (
-                          <div className="mt-1.5 flex items-center gap-1">
-                            <div className="flex-1 h-1 bg-secondary rounded-full">
-                              <div className="h-1 bg-emerald-500 rounded-full"
-                                style={{ width: `${Math.min(100, ((p.docs_uploaded ?? 0) / (p.docs_required || 1)) * 100)}%` }} />
+                    {stageProposals.map((p) => {
+                      const cardIdx = stageKeys.indexOf(p.stage ?? "RECEBIDO");
+                      const hasPrev = canChangeStage && cardIdx > 0;
+                      const hasNext = canChangeStage && cardIdx < stageKeys.length - 1;
+                      return (
+                        <div key={p.id}
+                          className="relative w-full text-left p-3 rounded-xl bg-card border border-border hover:border-primary/40 hover:bg-secondary/50 transition-all group cursor-pointer"
+                          onClick={() => setDetailProposal(p)}>
+                          <div className="flex items-start justify-between gap-1 mb-2">
+                            <span className="font-mono text-[10px] text-muted-foreground">{p.code}</span>
+                            <div className="flex items-center gap-1">
+                              {canChangeStage && (
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); setEditProposal(p); }}
+                                  className="w-5 h-5 rounded flex items-center justify-center text-[#C9A84C]/60 hover:text-[#C9A84C] hover:bg-[#C9A84C]/15 transition-colors"
+                                  title="Editar partner / transferir nível"
+                                >
+                                  <Edit2 className="w-3 h-3" />
+                                </button>
+                              )}
+                              {currentUser?.role === "ADMIN" && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (!confirm(`Excluir proposta ${p.code} de ${p.client_name}? Esta ação não pode ser desfeita.`)) return;
+                                    fetch(`/api/credit-proposals?id=${p.id}`, { method: "DELETE" })
+                                      .then(() => setProposals(prev => prev.filter(x => x.id !== p.id)))
+                                      .catch(() => alert("Erro ao excluir proposta."));
+                                  }}
+                                  className="w-5 h-5 rounded flex items-center justify-center text-muted-foreground hover:text-red-400 hover:bg-red-500/15 transition-colors opacity-0 group-hover:opacity-100"
+                                  title="Excluir proposta"
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                </button>
+                              )}
+                              <ChevronRight className="w-3 h-3 text-muted-foreground group-hover:text-primary transition-colors flex-shrink-0" />
                             </div>
-                            <span className="text-[10px] text-muted-foreground">{p.docs_uploaded}/{p.docs_required}</span>
                           </div>
-                        )}
-                        {(p.mesa_comments_count ?? 0) > 0 && (
-                          <div className="mt-1 flex items-center gap-1">
-                            <MessageSquare className="w-2.5 h-2.5 text-primary" />
-                            <span className="text-[10px] text-primary font-semibold">{p.mesa_comments_count} msg</span>
+                          <p className="text-xs font-semibold text-foreground leading-tight mb-1.5 line-clamp-2">{p.client_name}</p>
+                          <div className="flex items-center gap-1 mb-1.5">
+                            {p.client_type === "PJ"
+                              ? <Building2 className="w-3 h-3 text-muted-foreground" />
+                              : <User className="w-3 h-3 text-muted-foreground" />}
+                            <span className="text-[10px] text-muted-foreground">{p.client_type ?? "PF"}</span>
                           </div>
-                        )}
-                        {/* Botões de aprovação rápida — apenas em "Em Aprovação" */}
-                        {canChangeStage && p.stage === "APROVACAO" && p.status !== "APPROVED" && p.status !== "REJECTED" && (
-                          <div className="mt-2 pt-2 border-t border-purple-500/20 flex gap-1.5" onClick={e => e.stopPropagation()}>
-                            <button
-                              onClick={() => { setQuickAction({ type: "reprovar", proposal: p }); setQuickMotivo(""); }}
-                              className="flex-1 py-1 rounded text-[10px] font-semibold bg-red-500/15 border border-red-500/30 text-red-400 hover:bg-red-500/25 transition-colors"
-                            >✗ Reprovar</button>
-                            <button
-                              onClick={() => { setQuickAction({ type: "aprovar", proposal: p }); setQuickValorAprovado(""); }}
-                              className="flex-1 py-1 rounded text-[10px] font-semibold bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/25 transition-colors"
-                            >✓ Aprovar</button>
-                          </div>
-                        )}
-                        {p.instituicao_encaminhada && (() => {
-                          let insts: string[] = [];
-                          try { const a = JSON.parse(p.instituicao_encaminhada); insts = Array.isArray(a) ? a : [p.instituicao_encaminhada]; }
-                          catch { insts = [p.instituicao_encaminhada]; }
-                          return insts.length > 0 ? (
-                            <div className="mt-1.5 flex flex-wrap gap-1">
-                              {insts.map((inst, i) => (
-                                <span key={i} className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-[#C9A84C]/15 border border-[#C9A84C]/30 text-[#C9A84C] text-[9px] font-semibold">
-                                  <Building2 className="w-2.5 h-2.5 flex-shrink-0" />{inst}
-                                </span>
-                              ))}
+                          <Badge className="text-[10px] px-1.5 py-0.5 bg-primary/15 text-primary border-primary/30">{p.credit_line}</Badge>
+                          <p className="text-xs font-bold text-white mt-1.5">{formatCurrency(p.requested_value)}</p>
+                          {p.partner_name && (
+                            <p className="text-[10px] text-muted-foreground mt-1 flex items-center gap-1">
+                              <Link2 className="w-2.5 h-2.5" />{p.partner_name}
+                            </p>
+                          )}
+                          {typeof p.docs_uploaded === "number" && (
+                            <div className="mt-1.5 flex items-center gap-1">
+                              <div className="flex-1 h-1 bg-secondary rounded-full">
+                                <div className="h-1 bg-emerald-500 rounded-full"
+                                  style={{ width: `${Math.min(100, ((p.docs_uploaded ?? 0) / (p.docs_required || 1)) * 100)}%` }} />
+                              </div>
+                              <span className="text-[10px] text-muted-foreground">{p.docs_uploaded}/{p.docs_required}</span>
                             </div>
-                          ) : null;
-                        })()}
-                      </div>
-                    ))}
+                          )}
+                          {(p.mesa_comments_count ?? 0) > 0 && (
+                            <div className="mt-1 flex items-center gap-1">
+                              <MessageSquare className="w-2.5 h-2.5 text-primary" />
+                              <span className="text-[10px] text-primary font-semibold">{p.mesa_comments_count} msg</span>
+                            </div>
+                          )}
+                          {p.instituicao_encaminhada && (() => {
+                            let insts: string[] = [];
+                            try { const a = JSON.parse(p.instituicao_encaminhada); insts = Array.isArray(a) ? a : [p.instituicao_encaminhada]; }
+                            catch { insts = [p.instituicao_encaminhada]; }
+                            return insts.length > 0 ? (
+                              <div className="mt-1.5 flex flex-wrap gap-1">
+                                {insts.map((inst, i) => (
+                                  <span key={i} className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-[#C9A84C]/15 border border-[#C9A84C]/30 text-[#C9A84C] text-[9px] font-semibold">
+                                    <Building2 className="w-2.5 h-2.5 flex-shrink-0" />{inst}
+                                  </span>
+                                ))}
+                              </div>
+                            ) : null;
+                          })()}
+
+                          {/* Botões de aprovação rápida — apenas em "Em Aprovação" */}
+                          {canChangeStage && p.stage === "APROVACAO" && p.status !== "APPROVED" && p.status !== "REJECTED" && (
+                            <div className="mt-2 pt-2 border-t border-purple-500/20 flex gap-1.5" onClick={e => e.stopPropagation()}>
+                              <button
+                                onClick={() => { setQuickAction({ type: "reprovar", proposal: p }); setQuickMotivo(""); }}
+                                className="flex-1 py-1 rounded text-[10px] font-semibold bg-red-500/15 border border-red-500/30 text-red-400 hover:bg-red-500/25 transition-colors"
+                              >✗ Reprovar</button>
+                              <button
+                                onClick={() => { setQuickAction({ type: "aprovar", proposal: p }); setQuickValorAprovado(""); }}
+                                className="flex-1 py-1 rounded text-[10px] font-semibold bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/25 transition-colors"
+                              >✓ Aprovar</button>
+                            </div>
+                          )}
+
+                          {/* Navegação rápida de stage */}
+                          {(hasPrev || hasNext) && (
+                            <div className="mt-2 pt-2 border-t border-border/30 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
+                              {hasPrev && (
+                                <button
+                                  onClick={() => handleStageChange(p.id, stageKeys[cardIdx - 1])}
+                                  className="flex-1 py-0.5 rounded text-[9px] font-medium text-muted-foreground hover:text-white hover:bg-secondary border border-border/40 flex items-center justify-center gap-0.5 transition-colors"
+                                  title={PIPELINE_STAGES[cardIdx - 1]?.label}
+                                >
+                                  <ArrowLeft className="w-2.5 h-2.5" />
+                                  <span className="truncate">{PIPELINE_STAGES[cardIdx - 1]?.label}</span>
+                                </button>
+                              )}
+                              {hasNext && (
+                                <button
+                                  onClick={() => handleStageChange(p.id, stageKeys[cardIdx + 1])}
+                                  className="flex-1 py-0.5 rounded text-[9px] font-medium text-muted-foreground hover:text-white hover:bg-secondary border border-border/40 flex items-center justify-center gap-0.5 transition-colors"
+                                  title={PIPELINE_STAGES[cardIdx + 1]?.label}
+                                >
+                                  <span className="truncate">{PIPELINE_STAGES[cardIdx + 1]?.label}</span>
+                                  <ArrowRight className="w-2.5 h-2.5" />
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
 
                     {stageProposals.length === 0 && (
                       <div className="flex items-center justify-center h-16 rounded-xl border border-dashed border-border/50">
@@ -753,104 +1134,149 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
 
       {/* ── VIEW: TICKETS ── */}
       {view === "tickets" && (
-        <Card>
-          <CardHeader className="pb-3 flex flex-row items-center justify-between">
-            <CardTitle className="text-sm font-semibold">Todos os Tickets</CardTitle>
-            <ExportButton opts={{
-              titulo: "Tickets Operacionais",
-              orientacao: "landscape",
-              colunas: [
-                { header: "Código", key: "code", width: 14 },
-                { header: "Título", key: "title", width: 35 },
-                { header: "Categoria", key: "category", width: 14 },
-                { header: "Prioridade", key: "priority", width: 12 },
-                { header: "Status", key: "status", width: 12 },
-                { header: "Vencimento", key: "due_date", format: "date", width: 14 },
-                { header: "Criado em", key: "created_at", format: "date", width: 14 },
-              ],
-              dados: tickets,
-            }} />
-          </CardHeader>
-          <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border/50">
-                    {["Código", "Título", "Categoria", "Prioridade", "Status", "Vencimento", "Ação"].map((h) => (
-                      <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {tickets.map((ticket) => (
-                    <tr key={ticket.id} className="data-table-row">
-                      <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{ticket.code}</td>
-                      <td className="px-4 py-3 font-medium text-foreground max-w-52 truncate">{ticket.title}</td>
-                      <td className="px-4 py-3 text-xs text-muted-foreground capitalize">{ticket.category}</td>
-                      <td className="px-4 py-3">
-                        <Badge className={PRIORITY_COLORS[ticket.priority as TicketPriority]}>{PRIORITY_LABELS[ticket.priority as TicketPriority]}</Badge>
-                      </td>
-                      <td className="px-4 py-3">
-                        <Badge className={STATUS_COLORS[ticket.status as OperationStatus]}>{STATUS_LABELS[ticket.status as OperationStatus]}</Badge>
-                      </td>
-                      <td className="px-4 py-3 text-xs text-muted-foreground">{ticket.due_date ? formatDateTime(ticket.due_date) : "—"}</td>
-                      <td className="px-4 py-3 flex items-center gap-2">
-                        {ticket.status !== "PENDING" && (
-                          <button
-                            onClick={async () => {
-                              const newStatus = ticket.status === "COMPLETED" ? "IN_REVIEW" : "PENDING";
-                              setTickets((prev) => prev.map((t) => t.id === ticket.id ? { ...t, status: newStatus } : t));
-                              await fetch("/api/tickets", {
-                                method: "PATCH",
-                                headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({ id: ticket.id, status: newStatus }),
-                              }).catch(() => {});
-                            }}
-                            className="text-xs text-muted-foreground hover:text-white flex items-center gap-1"
-                          >
-                            <ArrowLeft className="w-3 h-3" />
-                            {ticket.status === "COMPLETED" ? "Em Revisão" : "Pendente"}
-                          </button>
-                        )}
-                        {ticket.status !== "COMPLETED" && (
-                          <button
-                            onClick={async () => {
-                              const newStatus = ticket.status === "PENDING" ? "IN_REVIEW" : "COMPLETED";
-                              setTickets((prev) => prev.map((t) => t.id === ticket.id ? { ...t, status: newStatus } : t));
-                              await fetch("/api/tickets", {
-                                method: "PATCH",
-                                headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({ id: ticket.id, status: newStatus }),
-                              }).catch(() => {});
-                            }}
-                            className="text-xs text-primary hover:underline flex items-center gap-1"
-                          >
-                            {ticket.status === "PENDING" ? "Iniciar" : "Concluir"}
-                            <ArrowRight className="w-3 h-3" />
-                          </button>
-                        )}
-                        {currentUser?.role === "ADMIN" && (
-                          <button
-                            onClick={async () => {
-                              if (!confirm("Excluir este ticket permanentemente?")) return;
-                              await fetch(`/api/tickets?id=${ticket.id}`, { method: "DELETE" });
-                              setTickets(prev => prev.filter(t => t.id !== ticket.id));
-                            }}
-                            className="text-xs text-red-400 hover:text-red-300"
-                          >
-                            Excluir
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+        <div className="space-y-3">
+          {/* Barra de filtros */}
+          <div className="flex gap-2 flex-wrap items-center">
+            <div className="relative flex-1 min-w-52">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <input
+                value={ticketSearch}
+                onChange={(e) => setTicketSearch(e.target.value)}
+                placeholder="Buscar por título, código, solicitante..."
+                className="w-full h-9 pl-9 pr-4 text-sm bg-secondary border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
+              />
             </div>
-          </CardContent>
-        </Card>
-      )}
+            <div className="flex items-center gap-1.5">
+              <Filter className="w-3.5 h-3.5 text-muted-foreground" />
+              <select value={ticketStatusFilter} onChange={e => setTicketStatusFilter(e.target.value)}
+                className="h-9 px-3 text-sm bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50">
+                {TICKET_STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+              <select value={ticketPriorityFilter} onChange={e => setTicketPriorityFilter(e.target.value)}
+                className="h-9 px-3 text-sm bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50">
+                {TICKET_PRIORITY_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+              {(ticketSearch || ticketStatusFilter || ticketPriorityFilter) && (
+                <button onClick={() => { setTicketSearch(""); setTicketStatusFilter(""); setTicketPriorityFilter(""); }}
+                  className="h-9 px-2 rounded-lg border border-border text-muted-foreground hover:text-white hover:bg-secondary transition-colors">
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+          </div>
 
+          <Card>
+            <CardHeader className="pb-3 flex flex-row items-center justify-between">
+              <CardTitle className="text-sm font-semibold">
+                Tickets ({filteredTickets.length})
+              </CardTitle>
+              <ExportButton opts={{
+                titulo: "Tickets Operacionais",
+                orientacao: "landscape",
+                colunas: [
+                  { header: "Código", key: "code", width: 14 },
+                  { header: "Título", key: "title", width: 35 },
+                  { header: "Categoria", key: "category", width: 14 },
+                  { header: "Prioridade", key: "priority", width: 12 },
+                  { header: "Status", key: "status", width: 12 },
+                  { header: "Vencimento", key: "due_date", format: "date", width: 14 },
+                  { header: "Criado em", key: "created_at", format: "date", width: 14 },
+                ],
+                dados: filteredTickets,
+              }} />
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-border/50">
+                      {["Código", "Título", "Categoria", "Prioridade", "Status", "Responsável", "Vencimento", "Ação"].map((h) => (
+                        <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider whitespace-nowrap">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredTickets.length === 0 ? (
+                      <tr><td colSpan={8} className="px-4 py-10 text-center text-xs text-muted-foreground">Nenhum ticket encontrado.</td></tr>
+                    ) : filteredTickets.map((ticket) => (
+                      <tr key={ticket.id}
+                        className="data-table-row cursor-pointer hover:bg-secondary/30 transition-colors"
+                        onClick={() => setTicketDetail(ticket)}>
+                        <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{ticket.code}</td>
+                        <td className="px-4 py-3 max-w-52">
+                          <p className="font-medium text-foreground truncate">{ticket.title}</p>
+                          {ticket.description && (
+                            <p className="text-[10px] text-muted-foreground truncate">{ticket.description}</p>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-xs text-muted-foreground capitalize">{CATEGORY_LABELS[ticket.category] ?? ticket.category}</td>
+                        <td className="px-4 py-3">
+                          <Badge className={PRIORITY_COLORS[ticket.priority as TicketPriority]}>{PRIORITY_LABELS[ticket.priority as TicketPriority]}</Badge>
+                        </td>
+                        <td className="px-4 py-3">
+                          <Badge className={STATUS_COLORS[ticket.status as OperationStatus]}>{STATUS_LABELS[ticket.status as OperationStatus]}</Badge>
+                        </td>
+                        <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">
+                          {ticket.assignee?.full_name ?? "—"}
+                        </td>
+                        <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">{ticket.due_date ? formatDateTime(ticket.due_date) : "—"}</td>
+                        <td className="px-4 py-3 flex items-center gap-2" onClick={e => e.stopPropagation()}>
+                          {ticket.status !== "PENDING" && (
+                            <button
+                              onClick={async () => {
+                                const newStatus = ticket.status === "COMPLETED" ? "IN_REVIEW" : "PENDING";
+                                setTickets((prev) => prev.map((t) => t.id === ticket.id ? { ...t, status: newStatus } : t));
+                                await fetch("/api/tickets", {
+                                  method: "PATCH",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({ id: ticket.id, status: newStatus }),
+                                }).catch(() => {});
+                              }}
+                              className="text-xs text-muted-foreground hover:text-white flex items-center gap-1"
+                            >
+                              <ArrowLeft className="w-3 h-3" />
+                              {ticket.status === "COMPLETED" ? "Em Revisão" : "Pendente"}
+                            </button>
+                          )}
+                          {ticket.status !== "COMPLETED" && (
+                            <button
+                              onClick={async () => {
+                                const newStatus = ticket.status === "PENDING" ? "IN_REVIEW" : "COMPLETED";
+                                setTickets((prev) => prev.map((t) => t.id === ticket.id ? { ...t, status: newStatus } : t));
+                                await fetch("/api/tickets", {
+                                  method: "PATCH",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({ id: ticket.id, status: newStatus }),
+                                }).catch(() => {});
+                              }}
+                              className="text-xs text-primary hover:underline flex items-center gap-1"
+                            >
+                              {ticket.status === "PENDING" ? "Iniciar" : "Concluir"}
+                              <ArrowRight className="w-3 h-3" />
+                            </button>
+                          )}
+                          {currentUser?.role === "ADMIN" && (
+                            <button
+                              onClick={async () => {
+                                if (!confirm("Excluir este ticket permanentemente?")) return;
+                                await fetch(`/api/tickets?id=${ticket.id}`, { method: "DELETE" });
+                                setTickets(prev => prev.filter(t => t.id !== ticket.id));
+                              }}
+                              className="text-xs text-red-400 hover:text-red-300"
+                            >
+                              Excluir
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {/* ── VIEW: CONTRATOS ── */}
       {view === "contratos" && (
@@ -889,6 +1315,22 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
 
           {/* Tabela */}
           <Card>
+            <CardHeader className="pb-3 flex flex-row items-center justify-between">
+              <CardTitle className="text-sm font-semibold">Contratos ({contratos.length})</CardTitle>
+              <ExportButton opts={{
+                titulo: "Contratos",
+                orientacao: "landscape",
+                colunas: [
+                  { header: "Proposta", key: "proposal_code", width: 14 },
+                  { header: "Cliente", key: "client_name", width: 28 },
+                  { header: "E-mail", key: "client_email", width: 28 },
+                  { header: "Linha", key: "credit_line", width: 20 },
+                  { header: "Status", key: "status", width: 22 },
+                  { header: "Expira", key: "expires_at", format: "date", width: 14 },
+                ],
+                dados: contratos,
+              }} />
+            </CardHeader>
             <CardContent className="p-0">
               {contratosLoading ? (
                 <div className="py-16 text-center text-muted-foreground text-sm">Carregando contratos…</div>
@@ -992,19 +1434,18 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
 
       {/* Modais */}
       <NovoTicketModal open={novoTicket} onClose={() => setNovoTicket(false)}
-        onSubmit={async (t) => {
-          // Salva no Supabase; fallback local em demo
-          try {
-            const res = await fetch("/api/tickets", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ title: t.title, category: t.category, priority: t.priority, due_date: t.due_date }),
-            });
-            const json = await res.json();
-            if (json.ticket) { setTickets(prev => [json.ticket, ...prev]); return; }
-          } catch {}
-          setTickets(prev => [t, ...prev]);
-        }} />
+        onSubmit={(t) => setTickets(prev => [t, ...prev])} />
+
+      <TicketDetailModal
+        open={!!ticketDetail}
+        onClose={() => setTicketDetail(null)}
+        ticket={ticketDetail}
+        currentUser={currentUser}
+        onUpdated={(id, updates) => {
+          setTickets(prev => prev.map(t => t.id === id ? { ...t, ...updates } : t));
+          setTicketDetail(null);
+        }}
+      />
 
       <EditarPropostaModal
         open={!!editProposal}

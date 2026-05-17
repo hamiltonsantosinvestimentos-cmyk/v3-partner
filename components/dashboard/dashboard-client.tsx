@@ -20,6 +20,8 @@ import {
   Download,
   CalendarDays,
   ShoppingBag,
+  Target,
+  Trophy,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -182,6 +184,17 @@ interface RedeHealth {
   vencendo7d: number;
 }
 
+interface MetaMes {
+  goal_proposals: number;
+  goal_approvals: number;
+  goal_volume: number;
+  goal_deals: number;
+  atual_proposals: number;
+  atual_approvals: number;
+  atual_volume: number;
+  atual_deals: number;
+}
+
 interface DashboardClientProps {
   role: string;
   userName: string;
@@ -195,6 +208,15 @@ interface DashboardClientProps {
     openTickets: number;
     pendingProposals: number;
   };
+  kpiChanges?: {
+    splits?: number;
+    deals?: number;
+    proposals?: number;
+  };
+  marketplaceLeads?: number;
+  comissoesAPagar?: number;
+  metaMes?: MetaMes | null;
+  topPartners?: Array<{ id: string; full_name: string; count: number }>;
   recentSplits: Array<{
     id: string;
     code: string;
@@ -240,6 +262,11 @@ export function DashboardClient({
   revenueData = [],
   redeHealth,
   kpis,
+  kpiChanges,
+  marketplaceLeads = 0,
+  comissoesAPagar = 0,
+  metaMes,
+  topPartners = [],
   recentSplits,
   recentDeals,
   recentProposals = [],
@@ -355,6 +382,7 @@ export function DashboardClient({
           icon={<TrendingUp className="w-5 h-5 text-blue-400" />}
           color="bg-blue-500/20"
           subtitle="operações totais"
+          change={kpiChanges?.splits}
         />
         <KpiCard
           title="Deals M&A"
@@ -362,6 +390,7 @@ export function DashboardClient({
           icon={<Building2 className="w-5 h-5 text-purple-400" />}
           color="bg-purple-500/20"
           subtitle="em pipeline"
+          change={kpiChanges?.deals}
         />
         <KpiCard
           title="Tickets Abertos"
@@ -376,8 +405,29 @@ export function DashboardClient({
           icon={<CreditCard className="w-5 h-5 text-emerald-400" />}
           color="bg-emerald-500/20"
           subtitle="em análise"
+          change={kpiChanges?.proposals}
         />
       </div>
+
+      {/* KPI extra — Marketplace + Comissões (partners) */}
+      {["PARTNER", "PARTNER_PRO"].includes(role) && (
+        <div className="grid grid-cols-2 gap-4">
+          <KpiCard
+            title="Leads Marketplace"
+            value={marketplaceLeads}
+            icon={<ShoppingBag className="w-5 h-5 text-emerald-400" />}
+            color="bg-emerald-500/20"
+            subtitle="leads enviados"
+          />
+          <KpiCard
+            title="Comissões a Receber"
+            value={new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }).format(comissoesAPagar)}
+            icon={<DollarSign className="w-5 h-5 text-amber-400" />}
+            color="bg-amber-500/20"
+            subtitle="aguardando pagamento"
+          />
+        </div>
+      )}
 
       {/* Saúde da Rede — só para ADMIN/GESTAO */}
       {redeHealth && ["ADMIN", "GESTAO", "FINANCEIRO"].includes(role) && (
@@ -430,6 +480,79 @@ export function DashboardClient({
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Widget de Metas do Mês — partners */}
+      {metaMes && ["PARTNER", "PARTNER_PRO"].includes(role) && (
+        <div className="rounded-xl border border-[#C9A84C]/20 bg-[#C9A84C]/5 p-4">
+          <p className="text-[10px] font-bold text-[#C9A84C] uppercase tracking-widest mb-3 flex items-center gap-1.5">
+            <Target className="w-3.5 h-3.5" /> Metas do Mês
+          </p>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            {[
+              { label: "Propostas", atual: metaMes.atual_proposals, meta: metaMes.goal_proposals, color: "#60A5FA" },
+              { label: "Aprovações", atual: metaMes.atual_approvals, meta: metaMes.goal_approvals, color: "#34D399" },
+              { label: "Volume", atual: metaMes.atual_volume, meta: metaMes.goal_volume, color: "#C9A84C", isCurrency: true },
+              { label: "Deals M&A", atual: metaMes.atual_deals, meta: metaMes.goal_deals, color: "#A78BFA" },
+            ].map(m => {
+              if (m.meta === 0) return null;
+              const pct = Math.min(100, m.meta > 0 ? Math.round((m.atual / m.meta) * 100) : 0);
+              const fmtVal = (v: number) => m.isCurrency
+                ? new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }).format(v)
+                : v.toString();
+              return (
+                <div key={m.label} className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-muted-foreground">{m.label}</span>
+                    <span className="text-xs font-bold" style={{ color: m.color }}>{pct}%</span>
+                  </div>
+                  <div className="h-2 rounded-full bg-white/5 overflow-hidden">
+                    <div
+                      className="h-full rounded-full transition-all duration-500"
+                      style={{ width: `${pct}%`, background: m.color }}
+                    />
+                  </div>
+                  <p className="text-[10px] text-muted-foreground">
+                    {fmtVal(m.atual)} / {fmtVal(m.meta)}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Ranking rápido — top 5 partners (admin) */}
+      {topPartners.length > 0 && ["ADMIN", "GESTAO"].includes(role) && (
+        <div className="rounded-xl border border-[#243A66] bg-[#111F35] p-4">
+          <p className="text-[10px] font-bold text-[#C9A84C] uppercase tracking-widest mb-3 flex items-center gap-1.5">
+            <Trophy className="w-3.5 h-3.5" /> Top Partners — Propostas no Mês
+          </p>
+          <div className="space-y-2">
+            {topPartners.map((p, idx) => {
+              const max = topPartners[0].count;
+              const pct = max > 0 ? Math.round((p.count / max) * 100) : 0;
+              const medals = ["🥇", "🥈", "🥉"];
+              return (
+                <div key={p.id} className="flex items-center gap-3">
+                  <span className="text-base w-6 flex-shrink-0">{medals[idx] ?? `${idx + 1}.`}</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-medium text-foreground truncate">{p.full_name}</span>
+                      <span className="text-xs font-bold text-[#C9A84C] ml-2 flex-shrink-0">{p.count}</span>
+                    </div>
+                    <div className="h-1.5 rounded-full bg-white/5 overflow-hidden">
+                      <div className="h-full rounded-full bg-[#C9A84C]" style={{ width: `${pct}%` }} />
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <a href="/ranking" className="text-xs text-[#C9A84C] hover:text-[#E8C97A] transition-colors mt-3 block">
+            Ver ranking completo →
+          </a>
         </div>
       )}
 

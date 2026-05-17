@@ -226,8 +226,154 @@ export default async function DashboardPage({
     .order("next_contact", { ascending: true })
     .limit(5);
   if (!isAdmin) followUpsQ = followUpsQ.eq("created_by", uid) as typeof followUpsQ;
-  const followUpsResult = await followUpsQ;
-  const followUps = followUpsResult.data ?? [];
+
+  // Mês atual para comparativo
+  const agora = new Date();
+  const inicioMesAtual = new Date(agora.getFullYear(), agora.getMonth(), 1).toISOString();
+  const inicioMesAnterior = new Date(agora.getFullYear(), agora.getMonth() - 1, 1).toISOString();
+  const fimMesAnterior = new Date(agora.getFullYear(), agora.getMonth(), 0, 23, 59, 59).toISOString();
+
+  // Contagens do mês anterior para comparativo MoM
+  let splitsMesAntQ = svc.from("split_fiscal").select("*", { count: "exact", head: true }).gte("created_at", inicioMesAnterior).lte("created_at", fimMesAnterior);
+  let dealsMesAntQ  = svc.from("ma_deals").select("*", { count: "exact", head: true }).gte("created_at", inicioMesAnterior).lte("created_at", fimMesAnterior);
+  let propsMesAntQ  = svc.from("credit_desk_proposals").select("*", { count: "exact", head: true }).gte("created_at", inicioMesAnterior).lte("created_at", fimMesAnterior);
+
+  let splitsMesAtualQ = svc.from("split_fiscal").select("*", { count: "exact", head: true }).gte("created_at", inicioMesAtual);
+  let dealsMesAtualQ  = svc.from("ma_deals").select("*", { count: "exact", head: true }).gte("created_at", inicioMesAtual);
+  let propsMesAtualQ  = svc.from("credit_desk_proposals").select("*", { count: "exact", head: true }).gte("created_at", inicioMesAtual);
+
+  if (!isAdmin) {
+    splitsMesAntQ = splitsMesAntQ.or(`created_by.eq.${uid},partner_id.eq.${uid}`) as typeof splitsMesAntQ;
+    dealsMesAntQ  = dealsMesAntQ.or(`created_by.eq.${uid},assigned_to.eq.${uid}`) as typeof dealsMesAntQ;
+    propsMesAntQ  = propsMesAntQ.eq("partner_id", uid) as typeof propsMesAntQ;
+    splitsMesAtualQ = splitsMesAtualQ.or(`created_by.eq.${uid},partner_id.eq.${uid}`) as typeof splitsMesAtualQ;
+    dealsMesAtualQ  = dealsMesAtualQ.or(`created_by.eq.${uid},assigned_to.eq.${uid}`) as typeof dealsMesAtualQ;
+    propsMesAtualQ  = propsMesAtualQ.eq("partner_id", uid) as typeof propsMesAtualQ;
+  }
+
+  // Marketplace leads (apenas partner)
+  let marketplaceLeads = 0;
+  let comissoesAPagar = 0;
+  let metaMes: Parameters<typeof DashboardClient>[0]["metaMes"] = null;
+  let topPartners: Parameters<typeof DashboardClient>[0]["topPartners"] = [];
+
+  const [
+    followUpsResult,
+    splitsMesAntResult, dealsMesAntResult, propsMesAntResult,
+    splitsMesAtualResult, dealsMesAtualResult, propsMesAtualResult,
+  ] = await Promise.allSettled([
+    followUpsQ,
+    splitsMesAntQ, dealsMesAntQ, propsMesAntQ,
+    splitsMesAtualQ, dealsMesAtualQ, propsMesAtualQ,
+  ]);
+
+  const followUps = followUpsResult.status === "fulfilled" ? (followUpsResult.value.data ?? []) : [];
+  const splitsMesAnt  = splitsMesAntResult.status === "fulfilled"  ? (splitsMesAntResult.value.count  ?? 0) : 0;
+  const dealsMesAnt   = dealsMesAntResult.status === "fulfilled"   ? (dealsMesAntResult.value.count   ?? 0) : 0;
+  const propsMesAnt   = propsMesAntResult.status === "fulfilled"   ? (propsMesAntResult.value.count   ?? 0) : 0;
+  const splitsMesAtual = splitsMesAtualResult.status === "fulfilled" ? (splitsMesAtualResult.value.count ?? 0) : 0;
+  const dealsMesAtual  = dealsMesAtualResult.status === "fulfilled"  ? (dealsMesAtualResult.value.count ?? 0) : 0;
+  const propsMesAtual  = propsMesAtualResult.status === "fulfilled"  ? (propsMesAtualResult.value.count ?? 0) : 0;
+
+  function momChange(atual: number, anterior: number) {
+    if (anterior === 0) return undefined;
+    return Math.round(((atual - anterior) / anterior) * 100);
+  }
+
+  const kpiChanges = {
+    splits: momChange(splitsMesAtual, splitsMesAnt),
+    deals:  momChange(dealsMesAtual,  dealsMesAnt),
+    proposals: momChange(propsMesAtual, propsMesAnt),
+  };
+
+  // Dados extras paralelos
+  const extraQueries = await Promise.allSettled([
+    // Marketplace leads do partner
+    !isAdmin
+      ? svc.from("marketplace_leads").select("*", { count: "exact", head: true }).eq("partner_id", uid)
+      : Promise.resolve({ count: 0 }),
+    // Comissões a pagar do partner (ou total admin)
+    isAdmin
+      ? svc.from("commissions").select("commission_value, status").eq("status", "A_PAGAR")
+      : svc.from("commissions").select("commission_value, status").eq("partner_id", uid).eq("status", "A_PAGAR"),
+    // Metas do mês atual
+    svc.from("partner_goals")
+      .select("*")
+      .eq("partner_id", uid)
+      .eq("year", agora.getFullYear())
+      .eq("month", agora.getMonth() + 1)
+      .maybeSingle(),
+    // Propostas do mês atual do partner (para actual vs goal)
+    svc.from("credit_desk_proposals")
+      .select("id, status, requested_value")
+      .eq("partner_id", uid)
+      .gte("created_at", inicioMesAtual),
+    // Deals do mês atual do partner
+    svc.from("ma_deals")
+      .select("id")
+      .or(`created_by.eq.${uid},assigned_to.eq.${uid}`)
+      .gte("created_at", inicioMesAtual),
+    // Top partners por volume de propostas (admin)
+    isAdmin
+      ? svc.from("credit_desk_proposals")
+          .select("partner_id, partner:profiles!credit_desk_proposals_partner_id_fkey(full_name)")
+          .gte("created_at", inicioMesAtual)
+          .not("partner_id", "is", null)
+          .limit(100)
+      : Promise.resolve({ data: [] }),
+  ]);
+
+  // Marketplace leads
+  if (extraQueries[0].status === "fulfilled") {
+    marketplaceLeads = (extraQueries[0].value as { count: number | null }).count ?? 0;
+  }
+
+  // Comissões a pagar
+  if (extraQueries[1].status === "fulfilled") {
+    const coms = (extraQueries[1].value as { data: Array<{ commission_value: number }> | null }).data ?? [];
+    comissoesAPagar = coms.reduce((s, c) => s + (c.commission_value ?? 0), 0);
+  }
+
+  // Metas
+  const goalData = extraQueries[2].status === "fulfilled"
+    ? (extraQueries[2].value as { data: Record<string, unknown> | null }).data
+    : null;
+  const propsDoMes = extraQueries[3].status === "fulfilled"
+    ? ((extraQueries[3].value as { data: Array<{ status: string; requested_value: number }> | null }).data ?? [])
+    : [];
+  const dealsDoMes = extraQueries[4].status === "fulfilled"
+    ? ((extraQueries[4].value as { data: Array<{ id: string }> | null }).data ?? [])
+    : [];
+
+  if (goalData) {
+    const g = goalData as Record<string, number>;
+    metaMes = {
+      goal_proposals: g.goal_proposals ?? 0,
+      goal_approvals: g.goal_approvals ?? 0,
+      goal_volume: g.goal_volume ?? 0,
+      goal_deals: g.goal_deals ?? 0,
+      atual_proposals: propsDoMes.length,
+      atual_approvals: propsDoMes.filter(p => p.status === "APPROVED").length,
+      atual_volume: propsDoMes.reduce((s, p) => s + (p.requested_value ?? 0), 0),
+      atual_deals: dealsDoMes.length,
+    };
+  }
+
+  // Top partners
+  if (isAdmin && extraQueries[5].status === "fulfilled") {
+    const rows = ((extraQueries[5].value as { data: Array<{ partner_id: string; partner: { full_name: string } | null }> | null }).data ?? []);
+    const contagem: Record<string, { full_name: string; count: number }> = {};
+    for (const r of rows) {
+      if (!r.partner_id) continue;
+      const nome = r.partner?.full_name ?? "—";
+      if (!contagem[r.partner_id]) contagem[r.partner_id] = { full_name: nome, count: 0 };
+      contagem[r.partner_id].count++;
+    }
+    topPartners = Object.entries(contagem)
+      .map(([id, v]) => ({ id, full_name: v.full_name, count: v.count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 5);
+  }
 
   return (
     <DashboardClient
@@ -242,6 +388,11 @@ export default async function DashboardPage({
         openTickets: totalTickets,
         pendingProposals: totalProposals,
       }}
+      kpiChanges={kpiChanges}
+      marketplaceLeads={marketplaceLeads}
+      comissoesAPagar={comissoesAPagar}
+      metaMes={metaMes}
+      topPartners={topPartners}
       recentSplits={recentSplits as Parameters<typeof DashboardClient>[0]["recentSplits"]}
       recentDeals={recentDeals as Parameters<typeof DashboardClient>[0]["recentDeals"]}
       recentProposals={recentProposals as Parameters<typeof DashboardClient>[0]["recentProposals"]}

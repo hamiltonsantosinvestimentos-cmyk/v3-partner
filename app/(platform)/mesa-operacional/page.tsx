@@ -53,7 +53,12 @@ export default async function MesaOperacionalPage() {
   const isAdmin = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"].includes(currentUser.role);
 
   // Tickets: admin vê todos, partner vê os próprios
-  let ticketsQuery = supabase.from("operational_tickets").select("*").order("created_at", { ascending: false });
+  let ticketsQuery = supabase.from("operational_tickets").select(`
+    id, code, title, description, category, priority,
+    status, due_date, resolution, created_at, assigned_to,
+    requester:profiles!operational_tickets_requester_id_fkey(id, full_name),
+    assignee:profiles!operational_tickets_assigned_to_fkey(id, full_name)
+  `).order("created_at", { ascending: false });
   if (!isAdmin) ticketsQuery = ticketsQuery.eq("requester_id", currentUser.id);
   const { data: ticketsData } = await ticketsQuery;
 

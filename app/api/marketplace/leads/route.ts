@@ -125,9 +125,8 @@ export async function GET(req: NextRequest) {
     const { data, error } = await svc
       .from("marketplace_leads")
       .select(`
-        id, message, client_name, client_contact, status, notes, created_at,
+        id, partner_id, message, client_name, client_contact, status, notes, created_at,
         product:marketplace_products(id, name, category, commission_percent),
-        partner:profiles(id, full_name, email),
         supplier:marketplace_suppliers(id, company_name)
       `)
       .eq("supplier_id", supplierIdHeader)
@@ -135,7 +134,24 @@ export async function GET(req: NextRequest) {
       .limit(200);
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    return NextResponse.json({ leads: data ?? [] });
+
+    // Busca dados dos partners separadamente (partner_id referencia auth.users, não profiles)
+    const supplierPartnerIds = [...new Set((data ?? []).map((l: { partner_id: string }) => l.partner_id).filter(Boolean))];
+    const supplierPartnerMap: Record<string, { id: string; full_name: string; email: string }> = {};
+    if (supplierPartnerIds.length > 0) {
+      const { data: profiles } = await svc
+        .from("profiles")
+        .select("id, full_name, email")
+        .in("id", supplierPartnerIds);
+      (profiles ?? []).forEach((p: { id: string; full_name: string; email: string }) => { supplierPartnerMap[p.id] = p; });
+    }
+
+    const supplierLeads = (data ?? []).map((l: { partner_id: string; [key: string]: unknown }) => ({
+      ...l,
+      partner: supplierPartnerMap[l.partner_id] ?? null,
+    }));
+
+    return NextResponse.json({ leads: supplierLeads });
   }
 
   // Partner ou admin autenticado via Supabase session
