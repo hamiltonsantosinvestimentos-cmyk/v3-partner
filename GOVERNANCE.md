@@ -120,6 +120,51 @@
 
 ---
 
+## CERTIFICAÇÃO DE AGENTES — SPRINT 17/Mai/2026
+
+### Processo: skill-creator benchmark (with_skill vs baseline, pass rate > 85%)
+
+| Agente | Persona | Delta | Pass Rate | Status |
+|---|---|---|---|---|
+| ma-supervisor | MAESTRO v2.0 | +67 pp | 100% | CERTIFICADO |
+| v3-feature-architect | ORION v2.0 | +38 pp | 100% | CERTIFICADO |
+| ma-deal-hunter | SCOUT v2.0 | +56 pp | 89% | CERTIFICADO |
+
+### Skills certificadas pelo skill-creator
+
+| Skill | Delta | Iterações | Status |
+|---|---|---|---|
+| v3-forja-validation v1.2 | +62 pp | 3 | CERTIFICADA |
+| v3-feature-spec v1.0 | +62 pp | 1 | CERTIFICADA |
+| v3-compliance-gate v1.0 | +40 pp | 1 | CERTIFICADA |
+| v3-frontend-design v1.0 | +25 pp | 1 | CERTIFICADA |
+
+### Agentes aguardando certificação (próxima sessão)
+
+**P1 — Negócio crítico (certificar primeiro):**
+- `project-pm` (AXIS) — PM técnico, Agile/Scrum, roadmap
+- `roadmap-sentinel` (SENTINEL) — OKRs, prazos, desvios
+- `ma-estruturador` (FORJA agent) — kit M&A: CIM, Teaser, LinkedIn, Story
+
+**P2 — Marca crítica:**
+- `identity-chief` · `brand-strategist` · `visual-director` · `brand-guardian` · `logo-architect`
+
+**P3 — Técnico:**
+- `hooks-architect` · `swarm-orchestrator` · `config-engineer` · `mcp-integrator`
+- `claude-mastery-chief` · `skill-craftsman` · `project-integrator`
+- `buyside-agro-ma` · `v3-scout`
+
+### Protocolo de certificação (padrão estabelecido)
+1. Ler agente atual → identificar gaps e desatualizações
+2. Criar 3 evals com cenários V3 reais (6 agentes: 3 with_skill + 3 baseline)
+3. Rodar benchmark em paralelo
+4. Grading com assertions discriminadoras
+5. Corrigir bugs encontrados → re-rodar eval com falha
+6. Atualizar arquivo `.claude/agents/nome.md`
+7. Registrar no GOVERNANCE.md
+
+---
+
 ## BANCO DE AGENTES V3 — 21 agentes ativos
 
 > Ativação: `@nome-do-agente` no terminal Claude Code
