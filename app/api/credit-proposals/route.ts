@@ -250,25 +250,34 @@ export async function PATCH(req: NextRequest) {
     updateData.pending_at = new Date().toISOString();
   }
 
-  // Quando o stage muda, salva stage_changed_at no metadata para controle de SLA por etapa
-  if (fields.stage) {
+  // Quando o stage muda OU metadata é enviado, garante merge correto (nunca sobrescreve dados existentes)
+  if (fields.stage || fields.metadata !== undefined) {
     const { data: current } = await serviceClient()
       .from("credit_desk_proposals")
       .select("stage, metadata")
       .eq("id", id)
       .single();
 
-    if (current && current.stage !== fields.stage) {
+    if (current) {
       const existingMeta = (current.metadata as Record<string, unknown>) ?? {};
-      updateData.metadata = {
-        ...existingMeta,
-        ...(fields.metadata as Record<string, unknown> ?? {}),
-        stage_changed_at: new Date().toISOString(),
-        stage_history: [
-          ...((existingMeta.stage_history as Array<unknown>) ?? []),
-          { stage: current.stage, exited_at: new Date().toISOString() },
-        ],
-      };
+      if (fields.stage && current.stage !== fields.stage) {
+        // Stage mudou — registra histórico e faz merge completo
+        updateData.metadata = {
+          ...existingMeta,
+          ...(fields.metadata as Record<string, unknown> ?? {}),
+          stage_changed_at: new Date().toISOString(),
+          stage_history: [
+            ...((existingMeta.stage_history as Array<unknown>) ?? []),
+            { stage: current.stage, exited_at: new Date().toISOString() },
+          ],
+        };
+      } else if (fields.metadata !== undefined) {
+        // Apenas metadata atualizado — merge preservando todos os dados existentes
+        updateData.metadata = {
+          ...existingMeta,
+          ...(fields.metadata as Record<string, unknown> ?? {}),
+        };
+      }
     }
   }
 

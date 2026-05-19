@@ -1612,10 +1612,12 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
     const proposal = proposals.find(p => p.id === proposalId);
     const existing = proposal ? getDealSlaOverride(proposal) : {};
     const newOverride = { ...existing, [stage]: date };
+    // Merge com metadata completo para não sobrescrever dados do cliente no DB
+    const fullMeta = { ...(proposal?.metadata ?? {}), sla_override: newOverride };
     await fetch("/api/credit-proposals", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: proposalId, metadata: { sla_override: newOverride } }),
+      body: JSON.stringify({ id: proposalId, metadata: fullMeta }),
     }).catch(() => {});
     const fmt = parseLocalDate(date).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
     showToast(`Retorno SLA definido: ${fmt} — ${SLA_STAGE_LABELS[stage]}`);
