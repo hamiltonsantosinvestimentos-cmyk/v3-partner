@@ -56,6 +56,8 @@ export default async function MesaOperacionalPage() {
   let ticketsQuery = supabase.from("operational_tickets").select(`
     id, code, title, description, category, priority,
     status, due_date, resolution, created_at, assigned_to,
+    pending_reason, pending_responsible, pending_at,
+    pending_resolved_at, pending_resolved_by, reminder_sent_at,
     requester:profiles!operational_tickets_requester_id_fkey(id, full_name),
     assignee:profiles!operational_tickets_assigned_to_fkey(id, full_name)
   `).order("created_at", { ascending: false });
@@ -64,12 +66,19 @@ export default async function MesaOperacionalPage() {
 
   // Propostas: admin vê todas, partner vê somente as suas (usa service client p/ bypassar RLS)
   const svc = sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
-  let proposalsQuery = svc.from("credit_desk_proposals").select("*").order("created_at", { ascending: false });
+  let proposalsQuery = svc
+    .from("credit_desk_proposals")
+    .select("*, partner:profiles!partner_id(id, full_name)")
+    .order("created_at", { ascending: false });
   if (!isAdmin) proposalsQuery = proposalsQuery.eq("partner_id", currentUser.id);
   const { data: proposalsData } = await proposalsQuery;
 
   const proposals = (proposalsData ?? []).map((p: any) => ({
     ...p,
+    // Normaliza nome do campo CPF/CNPJ (coluna real no BD é client_cpf_cnpj)
+    cpf_cnpj: p.client_cpf_cnpj ?? p.cpf_cnpj,
+    // Resolve nome do partner via JOIN
+    partner_name: (p.partner as any)?.full_name ?? p.partner_name,
     docs_uploaded: Array.isArray(p.documents) ? p.documents.length : 0,
     docs_required: 8,
     mesa_comments_count: Array.isArray(p.mesa_comments) ? p.mesa_comments.length : 0,

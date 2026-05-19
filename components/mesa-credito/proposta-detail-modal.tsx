@@ -3,9 +3,9 @@
 import React, { useState, useEffect } from "react";
 import {
   X, User, Building2, CheckCircle2, Clock, ArrowRight, ArrowLeft,
-  FileText, CreditCard, Calendar, Link2, Pencil, Check,
+  FileText, CreditCard, Calendar, Link2, Pencil, Check, Edit2,
   Percent, TrendingUp, BadgeDollarSign, Upload, Paperclip, Trash2, Home, ExternalLink,
-  Package, Copy, CheckCheck, MessageSquare, Send, Search, AlertTriangle, ShieldCheck,
+  Package, Copy, CheckCheck, MessageSquare, Send, Search, AlertTriangle, AlertCircle, ShieldCheck,
   Phone, Mail, MapPin, Banknote, Download, Loader2, Brain, RefreshCw,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -117,6 +117,13 @@ export interface ProposalFull {
   mesa_comments?: MesaComment[];
   metadata?: ProposalMeta;
   instituicao_encaminhada?: string | null;
+  // Campos de pendência
+  pending_reason?: string | null;
+  pending_responsible?: string | null;
+  pending_at?: string | null;
+  pending_resolved_at?: string | null;
+  pending_resolved_by?: string | null;
+  reminder_sent_at?: string | null;
 }
 
 interface EscavadorProcesso {
@@ -352,6 +359,168 @@ function CorrecaoFeitaBtn({
   );
 }
 
+// ── Banner de Pendência com edição inline ─────────────────────────────────
+function PendingBanner({ proposal, canChangeStage, onProposalUpdate, onStageChange }: {
+  proposal: ProposalFull;
+  canChangeStage: boolean;
+  onProposalUpdate?: (id: string, updates: Partial<ProposalFull>) => void;
+  onStageChange?: (id: string, stage: string) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [reason, setReason] = useState(proposal.pending_reason ?? "");
+  const [responsible, setResponsible] = useState(proposal.pending_responsible ?? "");
+  const [saving, setSaving] = useState(false);
+
+  // Sincroniza se a proposta mudar por fora
+  useEffect(() => {
+    if (!editing) {
+      setReason(proposal.pending_reason ?? "");
+      setResponsible(proposal.pending_responsible ?? "");
+    }
+  }, [proposal.pending_reason, proposal.pending_responsible, editing]);
+
+  async function handleSave() {
+    setSaving(true);
+    const updates = { pending_reason: reason.trim(), pending_responsible: responsible.trim() };
+    await fetch("/api/credit-proposals", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: proposal.id, ...updates }),
+    }).catch(() => {});
+    onProposalUpdate?.(proposal.id, updates);
+    setSaving(false);
+    setEditing(false);
+  }
+
+  return (
+    <div className="rounded-xl overflow-hidden" style={{ border: "1px solid rgba(255,107,107,0.4)", background: "rgba(58,31,31,0.6)" }}>
+      <div className="flex items-center gap-2 px-4 py-3" style={{ borderBottom: "1px solid rgba(255,107,107,0.2)" }}>
+        <AlertCircle className="w-4 h-4 flex-shrink-0" style={{ color: "#FF6B6B" }} />
+        <p className="text-xs font-bold flex-1" style={{ color: "#FF6B6B" }}>Proposta em Pendência</p>
+        {proposal.pending_at && !editing && (
+          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ background: "rgba(255,107,107,0.15)", color: "#FF6B6B" }}>
+            desde {new Date(proposal.pending_at).toLocaleDateString("pt-BR")}
+          </span>
+        )}
+        {canChangeStage && !proposal.pending_resolved_at && (
+          <button
+            onClick={() => { setEditing(e => !e); setReason(proposal.pending_reason ?? ""); setResponsible(proposal.pending_responsible ?? ""); }}
+            className="w-6 h-6 rounded flex items-center justify-center transition-colors ml-1"
+            style={{ color: editing ? "#C9A84C" : "rgba(255,107,107,0.6)", background: editing ? "rgba(201,168,76,0.1)" : "transparent" }}
+            title="Editar pendência"
+          >
+            <Edit2 className="w-3.5 h-3.5" />
+          </button>
+        )}
+      </div>
+      <div className="px-4 py-3 space-y-3">
+        {editing ? (
+          <>
+            <div className="space-y-1">
+              <p className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: "#FF6B6B", opacity: 0.7 }}>Motivo da Pendência</p>
+              <textarea
+                value={reason}
+                onChange={e => setReason(e.target.value)}
+                rows={3}
+                autoFocus
+                placeholder="Descreva o motivo da pendência..."
+                className="w-full px-3 py-2 rounded-lg text-sm resize-none outline-none"
+                style={{ background: "#1A2A3A", border: "1px solid rgba(255,107,107,0.4)", color: "#F0ECE4" }}
+              />
+            </div>
+            <div className="space-y-1">
+              <p className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: "#FF6B6B", opacity: 0.7 }}>Responsável pela Resolução</p>
+              <input
+                type="text"
+                value={responsible}
+                onChange={e => setResponsible(e.target.value)}
+                placeholder="Nome do responsável..."
+                className="w-full px-3 py-2 rounded-lg text-sm outline-none"
+                style={{ background: "#1A2A3A", border: "1px solid rgba(255,107,107,0.4)", color: "#F0ECE4" }}
+              />
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setEditing(false)}
+                className="px-3 py-1.5 rounded-lg text-xs font-medium"
+                style={{ background: "rgba(255,255,255,0.05)", color: "#7A8FA8" }}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={saving || !reason.trim()}
+                className="flex-1 py-1.5 rounded-lg text-xs font-bold disabled:opacity-40"
+                style={{ background: "rgba(201,168,76,0.15)", color: "#C9A84C", border: "1px solid rgba(201,168,76,0.3)" }}
+              >
+                {saving ? "Salvando..." : "✓ Salvar"}
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            {proposal.pending_reason && (
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-wide mb-1" style={{ color: "#FF6B6B", opacity: 0.7 }}>Motivo</p>
+                <p className="text-sm italic" style={{ color: "#FF6B6B" }}>{proposal.pending_reason}</p>
+              </div>
+            )}
+            {!proposal.pending_reason && (
+              <p className="text-xs italic" style={{ color: "rgba(255,107,107,0.5)" }}>Nenhum motivo registrado. Clique em editar para adicionar.</p>
+            )}
+            {proposal.pending_responsible && (
+              <p className="text-xs" style={{ color: "#FF6B6B", opacity: 0.8 }}>
+                Responsável: <strong>{proposal.pending_responsible}</strong>
+              </p>
+            )}
+            {proposal.pending_resolved_at && (
+              <div className="pt-2" style={{ borderTop: "1px solid rgba(74,222,128,0.2)" }}>
+                <p className="text-xs font-semibold" style={{ color: "#4ADE80" }}>
+                  ✓ Resolvida em {new Date(proposal.pending_resolved_at).toLocaleDateString("pt-BR")}
+                  {proposal.pending_resolved_by && ` por ${proposal.pending_resolved_by}`}
+                </p>
+              </div>
+            )}
+          </>
+        )}
+        {canChangeStage && !proposal.pending_resolved_at && !editing && (
+          <div className="flex gap-2 pt-1" style={{ borderTop: "1px solid rgba(255,107,107,0.2)" }}>
+            <button
+              onClick={async () => {
+                const now = new Date().toISOString();
+                onStageChange?.(proposal.id, "ANALISE");
+                onProposalUpdate?.(proposal.id, { stage: "ANALISE", pending_resolved_at: now });
+                await fetch("/api/credit-proposals", {
+                  method: "PATCH",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ id: proposal.id, stage: "ANALISE", pending_resolved_at: now }),
+                }).catch(() => {});
+              }}
+              className="flex-1 py-1.5 rounded-lg text-xs font-bold transition-colors"
+              style={{ background: "rgba(74,222,128,0.15)", color: "#4ADE80", border: "1px solid rgba(74,222,128,0.3)" }}
+            >
+              ✓ Marcar como Resolvido
+            </button>
+            <button
+              onClick={async () => {
+                await fetch("/api/tickets/remind", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ proposal_id: proposal.id }),
+                }).catch(() => {});
+              }}
+              className="flex-1 py-1.5 rounded-lg text-xs font-bold transition-colors"
+              style={{ background: "rgba(201,168,76,0.1)", color: "#C9A84C", border: "1px solid rgba(201,168,76,0.3)" }}
+            >
+              🔔 Enviar Lembrete
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function PropostaDetailModal({ open, onClose, proposal, onStageChange, onProposalUpdate, canChangeStage, canEditValorSolicitado, canCompileDocuments, canEditInstituicao }: PropostaDetailModalProps) {
   // ── Modal tab ─────────────────────────────────────────────────────────────
   type ModalTab = "detalhes" | "recomendacao" | "documentos" | "comentarios" | "analise_ia";
@@ -451,6 +620,8 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
   const [ocrResultados, setOcrResultados] = useState<Record<string, OcrResultado>>(savedOcrResultados);
   const [ocrErros, setOcrErros] = useState<Record<string, string>>({});
   const [ocrValidandoTodos, setOcrValidandoTodos] = useState(false);
+  const [ocrBatchLoading, setOcrBatchLoading] = useState(false);
+  const [ocrBatchProgress, setOcrBatchProgress] = useState<string>("");
 
   // ── Workflow de aprovação ─────────────────────────────────────────────────
   const [showAprovar, setShowAprovar] = useState(false);
@@ -747,19 +918,21 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
     }
   }
 
-  async function handleOcrValidar(docId: string, docLabel: string) {
+  async function handleOcrValidar(docId: string, docLabel: string, fileUrl?: string, fileKey?: string) {
     if (!proposal) return;
-    const url = (uploadedFiles[docId] ?? []).find(f => f.url)?.url;
+    const url = fileUrl ?? (uploadedFiles[docId] ?? []).find(f => f.url)?.url;
     if (!url) return;
+    // Chave composta para rastrear OCR por arquivo individual
+    const ocrKey = fileKey ? `${docId}::${fileKey}` : docId;
 
-    setOcrStatus(prev => ({ ...prev, [docId]: "loading" }));
-    setOcrErros(prev => { const n = { ...prev }; delete n[docId]; return n; });
+    setOcrStatus(prev => ({ ...prev, [ocrKey]: "loading" }));
+    setOcrErros(prev => { const n = { ...prev }; delete n[ocrKey]; return n; });
 
     // Monta contexto da proposta para comparação
     const meta = proposal.metadata ?? {};
     const ctx: Record<string, string> = {
       nome_cliente: proposal.client_name ?? "",
-      cpf_cnpj: proposal.cpf_cnpj ?? proposal.client_cpf_cnpj ?? "",
+      cpf_cnpj: proposal.client_cpf_cnpj ?? proposal.cpf_cnpj ?? "",
       tipo_pessoa: (meta.client_type as string) ?? "PF",
       linha_credito: proposal.credit_line ?? "",
       valor_solicitado: `R$ ${(proposal.requested_value ?? 0).toLocaleString("pt-BR")}`,
@@ -777,14 +950,14 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
       const res = await fetch("/api/ocr-validar", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ doc_id: docId, doc_label: docLabel, doc_url: url, proposal_context: ctx }),
+        body: JSON.stringify({ doc_id: ocrKey, doc_label: docLabel, doc_url: url, proposal_context: ctx }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Erro ao validar");
-      setOcrResultados(prev => ({ ...prev, [docId]: json.resultado }));
-      setOcrStatus(prev => ({ ...prev, [docId]: "done" }));
+      setOcrResultados(prev => ({ ...prev, [ocrKey]: json.resultado }));
+      setOcrStatus(prev => ({ ...prev, [ocrKey]: "done" }));
       // Persiste resultado no metadata para não perder ao recarregar
-      const newMeta = { ...(proposal.metadata ?? {}), ocr_resultados: { ...(proposal.metadata?.ocr_resultados as Record<string, unknown> ?? {}), [docId]: json.resultado } };
+      const newMeta = { ...(proposal.metadata ?? {}), ocr_resultados: { ...(proposal.metadata?.ocr_resultados as Record<string, unknown> ?? {}), [ocrKey]: json.resultado } };
       onProposalUpdate?.(proposal.id, { metadata: newMeta as typeof proposal.metadata });
       fetch("/api/credit-proposals", {
         method: "PATCH",
@@ -792,8 +965,8 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
         body: JSON.stringify({ id: proposal.id, metadata: newMeta }),
       }).catch(() => {});
     } catch (e: unknown) {
-      setOcrErros(prev => ({ ...prev, [docId]: e instanceof Error ? e.message : "Erro desconhecido" }));
-      setOcrStatus(prev => ({ ...prev, [docId]: "error" }));
+      setOcrErros(prev => ({ ...prev, [ocrKey]: e instanceof Error ? e.message : "Erro desconhecido" }));
+      setOcrStatus(prev => ({ ...prev, [ocrKey]: "error" }));
     }
   }
 
@@ -808,12 +981,64 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
     const docs = portfolioDocs[proposal.credit_line?.toLowerCase()]?.[clientType] ?? CHECKLISTS[proposal.credit_line]?.[clientType] ?? DEFAULT_CHECKLIST[clientType];
     const labelMap: Record<string, string> = {};
     docs.forEach(d => { labelMap[d.id] = d.label; });
-    for (const [docId] of docsComArquivo) {
-      if (ocrStatus[docId] === "done") continue; // já validado, pula
+    // Processa TODOS os arquivos de cada documento (não apenas o primeiro)
+    for (const [docId, files] of docsComArquivo) {
       const label = labelMap[docId] ?? docId;
-      await handleOcrValidar(docId, label);
+      for (const file of files) {
+        if (!file.url) continue;
+        const ocrKey = `${docId}::${file.key}`;
+        if (ocrStatus[ocrKey] === "done") continue; // já validado, pula
+        await handleOcrValidar(docId, label, file.url, file.key);
+      }
     }
     setOcrValidandoTodos(false);
+  }
+
+  async function handleOcrBatch() {
+    if (!proposal) return;
+    setOcrBatchLoading(true);
+    setOcrBatchProgress("Iniciando análise OCR de todos os documentos...");
+    try {
+      const res = await fetch("/api/credit-proposals/ocr-batch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ proposal_id: proposal.id }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Erro ao processar OCR em lote");
+
+      // Atualiza resultados OCR no estado local
+      if (Array.isArray(json.ocr_results)) {
+        const byDocId: Record<string, OcrResultado> = {};
+        for (const r of json.ocr_results as OcrResultado[]) {
+          byDocId[r.doc_id] = r;
+          setOcrStatus(prev => ({ ...prev, [r.doc_id]: "done" }));
+        }
+        setOcrResultados(prev => ({ ...prev, ...byDocId }));
+      }
+
+      // Atualiza análise IA com o resultado automático
+      if (json.ai_analysis) {
+        setAnaliseData(json.ai_analysis);
+        setAnalisePdfB64(null);
+        setAnaliseStatus("done");
+        onProposalUpdate?.(proposal.id, {
+          metadata: { ...(proposal.metadata ?? {}), ai_analysis: json.ai_analysis, ocr_results: json.ocr_results } as typeof proposal.metadata,
+        });
+      } else {
+        onProposalUpdate?.(proposal.id, {
+          metadata: { ...(proposal.metadata ?? {}), ocr_results: json.ocr_results } as typeof proposal.metadata,
+        });
+      }
+
+      setOcrBatchProgress("");
+      // Navega automaticamente para aba de Análise IA
+      setModalTab("analise_ia");
+    } catch (e) {
+      setOcrBatchProgress(`Erro: ${e instanceof Error ? e.message : "Falha ao processar"}`);
+    } finally {
+      setOcrBatchLoading(false);
+    }
   }
 
   async function handleSolicitarCorrecao() {
@@ -1055,7 +1280,7 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
     const ct = (meta.client_type ?? proposal.client_type ?? "PF") as "PF" | "PJ";
     setEditClientType(ct);
     setEditNome(proposal.client_name ?? "");
-    setEditCpfCnpj(proposal.cpf_cnpj ?? "");
+    setEditCpfCnpj(proposal.client_cpf_cnpj ?? proposal.cpf_cnpj ?? "");
     setEditEmail((meta.email ?? proposal.email ?? "") as string);
     setEditTelefone((meta.telefone ?? proposal.telefone ?? "") as string);
     setEditRg((meta.rg ?? "") as string);
@@ -1567,6 +1792,16 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
           {/* ── Seção Detalhes e Recomendação ── */}
           <div className={modalTab === "documentos" || modalTab === "comentarios" || modalTab === "analise_ia" ? "hidden" : "contents"}>
 
+          {/* ── Banner de Pendência de Stage ── visível quando stage = PENDENCIA */}
+          {proposal.stage === "PENDENCIA" && (
+            <PendingBanner
+              proposal={proposal}
+              canChangeStage={!!canChangeStage}
+              onProposalUpdate={onProposalUpdate}
+              onStageChange={onStageChange}
+            />
+          )}
+
           {/* ── Banner de Pendências OCR ── visível para todos */}
           {(() => {
             const pendencias = proposal.metadata?.pendencias_ocr as Record<string, { doc_label: string; motivo: string; status: string; created_at: string; corrigido_at: string | null }> | undefined;
@@ -1740,7 +1975,7 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
                   <div className="grid grid-cols-2 gap-x-6 gap-y-2">
                     <InfoRow label="Nome" value={proposal.client_name} />
                     <InfoRow label="Tipo" value={clientType === "PJ" ? "Pessoa Jurídica" : "Pessoa Física"} />
-                    {proposal.cpf_cnpj && <InfoRow label={clientType === "PJ" ? "CNPJ" : "CPF"} value={proposal.cpf_cnpj} />}
+                    {(proposal.client_cpf_cnpj ?? proposal.cpf_cnpj) && <InfoRow label={clientType === "PJ" ? "CNPJ" : "CPF"} value={(proposal.client_cpf_cnpj ?? proposal.cpf_cnpj)!} />}
                     {email && (
                       <div className="flex items-start justify-between gap-2">
                         <span className="text-xs text-muted-foreground flex-shrink-0 flex items-center gap-1"><Mail className="w-3 h-3" /> E-mail</span>
@@ -2348,7 +2583,7 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
                     {canChangeStage && Object.values(uploadedFiles).some(arr => arr.some(f => f.url)) && (
                       <button
                         onClick={handleOcrValidarTodos}
-                        disabled={ocrValidandoTodos}
+                        disabled={ocrValidandoTodos || ocrBatchLoading}
                         className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-[#C9A84C]/15 text-[#C9A84C] hover:bg-[#C9A84C]/25 border border-[#C9A84C]/30 disabled:opacity-50 transition-colors"
                         title="Validar todos os documentos anexados com OCR"
                       >
@@ -2358,6 +2593,21 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
                           <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>
                         )}
                         {ocrValidandoTodos ? "Validando…" : "Validar Todos OCR"}
+                      </button>
+                    )}
+                    {canChangeStage && (
+                      <button
+                        onClick={handleOcrBatch}
+                        disabled={ocrBatchLoading || ocrValidandoTodos}
+                        className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-[#C9A84C]/25 text-[#C9A84C] hover:bg-[#C9A84C]/35 border border-[#C9A84C]/50 disabled:opacity-50 transition-colors"
+                        title="Analisar todos os documentos com OCR e gerar análise IA automaticamente"
+                      >
+                        {ocrBatchLoading ? (
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                        ) : (
+                          <Brain className="w-3 h-3" />
+                        )}
+                        {ocrBatchLoading ? "Processando..." : "OCR + Análise IA"}
                       </button>
                     )}
                     <Badge className={checkedCount === docs.length
@@ -2373,6 +2623,12 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
                   <div className="bg-emerald-500 h-1.5 rounded-full transition-all"
                     style={{ width: `${Math.min(100, (checkedCount / (docs.length || 1)) * 100)}%` }} />
                 </div>
+                {(ocrBatchLoading || ocrBatchProgress) && (
+                  <div className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-xs ${ocrBatchProgress.startsWith("Erro") ? "border-red-500/30 bg-red-500/10 text-red-400" : "border-[#C9A84C]/30 bg-[#C9A84C]/5 text-[#C9A84C]"}`}>
+                    {ocrBatchLoading && <Loader2 className="w-3 h-3 animate-spin flex-shrink-0" />}
+                    <span>{ocrBatchProgress || "Processando OCR + Análise IA..."}</span>
+                  </div>
+                )}
                 <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
                   {docs.map((doc) => {
                     const isChecked = !!checkedDocs[doc.id];
@@ -2421,8 +2677,14 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
                         )}
                         {docFiles.length > 0 && (
                           <div className="space-y-1.5">
-                            {docFiles.map((df, fi) => (
-                              <div key={fi} className="flex items-center gap-2 px-2 py-1 rounded bg-emerald-500/10 border border-emerald-500/30">
+                            {docFiles.map((df, fi) => {
+                              const ocrKey = `${doc.id}::${df.key}`;
+                              const fileOcrStatus = ocrStatus[ocrKey];
+                              const fileOcrResultado = ocrResultados[ocrKey];
+                              const fileOcrErro = ocrErros[ocrKey];
+                              return (
+                              <div key={fi} className="space-y-1">
+                              <div className="flex items-center gap-2 px-2 py-1 rounded bg-emerald-500/10 border border-emerald-500/30">
                                 <Paperclip className="w-3 h-3 text-emerald-400 flex-shrink-0" />
                                 <span className="text-[11px] text-emerald-400 flex-1 truncate">{df.name}</span>
                                 {df.url && (
@@ -2436,15 +2698,15 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
                                     <ExternalLink className="w-3 h-3" />
                                   </a>
                                 )}
-                                {/* Botão OCR — só no primeiro arquivo */}
-                                {fi === 0 && canChangeStage && df.url && (
+                                {/* Botão OCR — para todos os arquivos */}
+                                {canChangeStage && df.url && (
                                   <button
-                                    onClick={() => handleOcrValidar(doc.id, doc.label)}
-                                    disabled={ocrStatus[doc.id] === "loading"}
+                                    onClick={() => handleOcrValidar(doc.id, doc.label, df.url ?? undefined, df.key)}
+                                    disabled={fileOcrStatus === "loading"}
                                     className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-[#C9A84C]/15 text-[#C9A84C] hover:bg-[#C9A84C]/25 border border-[#C9A84C]/30 disabled:opacity-50 transition-colors flex-shrink-0"
                                   >
-                                    {ocrStatus[doc.id] === "loading" ? <Loader2 className="w-2.5 h-2.5 animate-spin" /> : <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>}
-                                    {ocrStatus[doc.id] === "loading" ? "Analisando…" : "OCR"}
+                                    {fileOcrStatus === "loading" ? <Loader2 className="w-2.5 h-2.5 animate-spin" /> : <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>}
+                                    {fileOcrStatus === "loading" ? "Analisando…" : "OCR"}
                                   </button>
                                 )}
                                 <button
@@ -2455,18 +2717,17 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
                                   <Trash2 className="w-3 h-3" />
                                 </button>
                               </div>
-                            ))}
 
-                            {/* Resultado OCR — baseado no primeiro arquivo */}
-                            {ocrStatus[doc.id] === "error" && (
-                              <div className="px-2 py-1.5 rounded bg-red-500/10 border border-red-500/20">
-                                <p className="text-[10px] text-red-400">⚠ {ocrErros[doc.id]}</p>
-                              </div>
-                            )}
-                            {ocrStatus[doc.id] === "done" && ocrResultados[doc.id] && (() => {
-                              const r = ocrResultados[doc.id];
-                              const resumoCor = r.resumo === "aprovado" ? "emerald" : r.resumo === "atencao" ? "amber" : "red";
-                              const resumoIcon = r.resumo === "aprovado" ? "✓" : r.resumo === "atencao" ? "⚠" : "✗";
+                              {/* Resultado OCR inline por arquivo */}
+                              {fileOcrStatus === "error" && (
+                                <div className="px-2 py-1.5 rounded bg-red-500/10 border border-red-500/20">
+                                  <p className="text-[10px] text-red-400">⚠ {fileOcrErro}</p>
+                                </div>
+                              )}
+                              {fileOcrStatus === "done" && fileOcrResultado && (() => {
+                                const r = fileOcrResultado;
+                                const resumoCor = r.resumo === "aprovado" ? "emerald" : r.resumo === "atencao" ? "amber" : "red";
+                                const resumoIcon = r.resumo === "aprovado" ? "✓" : r.resumo === "atencao" ? "⚠" : "✗";
                               return (
                                 <div className={`rounded-lg border p-2.5 space-y-2 bg-${resumoCor}-500/5 border-${resumoCor}-500/20`}>
                                   <div className="flex items-center justify-between">
@@ -2522,6 +2783,9 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
                                 </div>
                               );
                             })()}
+                              </div>
+                            );
+                            })}
                           </div>
                         )}
                       </div>
