@@ -609,6 +609,108 @@ const LEAD_STATUS_MAP: Record<string, { label: string; cls: string }> = {
   PENDING:     { label: "Aguardando",    cls: "bg-gray-500/10 text-gray-400 border-gray-500/30" },
 };
 
+/* ── Lead Row (with inline status update) ────────────── */
+function LeadRow({ lead, onRefresh }: { lead: Lead; onRefresh: () => void }) {
+  const [status, setStatus] = useState(lead.status);
+  const [notes, setNotes] = useState(lead.notes ?? "");
+  const [saving, setSaving] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  const st = LEAD_STATUS_MAP[lead.status] ?? LEAD_STATUS_MAP.PENDING;
+  const hasChanged = status !== lead.status || notes !== (lead.notes ?? "");
+
+  async function save() {
+    setSaving(true);
+    try {
+      await fetch(`/api/marketplace/leads/${lead.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status, notes }),
+      });
+      onRefresh();
+    } finally { setSaving(false); }
+  }
+
+  return (
+    <div className="bg-[#0D1929] border border-[#1B3050] rounded-xl overflow-hidden">
+      <div className="p-4">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-1 flex-wrap">
+              <p className="text-[#F0ECE4] font-semibold text-sm">{lead.product?.name ?? "Produto"}</p>
+              <span className={cn("inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border", st.cls)}>
+                {st.label}
+              </span>
+              {lead.product?.partner_commission_percent && (
+                <span className="text-[10px] font-bold text-[#C9A84C] bg-[#C9A84C]/10 border border-[#C9A84C]/20 px-2 py-0.5 rounded-full">
+                  {lead.product.partner_commission_percent}% comissão
+                </span>
+              )}
+            </div>
+            <p className="text-[#7A8FA8] text-xs">{lead.supplier?.company_name} · {lead.product?.category}</p>
+            <p className="text-[#7A8FA8] text-xs mt-0.5">
+              Partner: <span className="text-[#F0ECE4]">{lead.partner?.full_name}</span>
+              {lead.partner?.email && <> ({lead.partner.email})</>}
+            </p>
+            {lead.client_name && (
+              <p className="text-[#7A8FA8] text-xs mt-0.5">
+                Cliente: <span className="text-[#F0ECE4]">{lead.client_name}</span>
+                {lead.client_contact && <> · {lead.client_contact}</>}
+              </p>
+            )}
+            {lead.message && (
+              <p className="text-[#F0ECE4] text-xs bg-[#111F35] rounded-lg px-3 py-2 mt-2 italic">&ldquo;{lead.message}&rdquo;</p>
+            )}
+            {lead.notes && !expanded && (
+              <p className="text-[#7A8FA8] text-xs mt-1.5 italic">Nota: {lead.notes}</p>
+            )}
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <p className="text-[#7A8FA8] text-xs">{new Date(lead.created_at).toLocaleDateString("pt-BR")}</p>
+            <button onClick={() => setExpanded(v => !v)} title="Editar status / notas"
+              className={cn("p-1.5 rounded-lg border transition-colors",
+                expanded
+                  ? "bg-[#C9A84C]/20 border-[#C9A84C]/40 text-[#C9A84C]"
+                  : "bg-[#111F35] border-[#1B3050] text-[#7A8FA8] hover:text-[#C9A84C]")}>
+              <Edit2 className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {expanded && (
+        <div className="border-t border-[#1B3050] p-4 space-y-3 bg-[#111F35]/40">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-[10px] font-bold text-[#7A8FA8] uppercase tracking-wider mb-1.5">Status</label>
+              <select value={status} onChange={e => setStatus(e.target.value)}
+                className="w-full bg-[#0D1929] border border-[#1B3050] rounded-lg px-3 py-2 text-sm text-[#F0ECE4] focus:outline-none focus:border-[#C9A84C]/50">
+                <option value="NEW">Novo</option>
+                <option value="IN_PROGRESS">Em andamento</option>
+                <option value="CONVERTED">Convertido</option>
+                <option value="LOST">Perdido</option>
+                <option value="PENDING">Aguardando</option>
+              </select>
+            </div>
+            <div className="flex items-end">
+              <button onClick={save} disabled={saving || !hasChanged}
+                className="w-full flex items-center justify-center gap-2 py-2 bg-[#C9A84C] hover:bg-[#E8C97A] text-[#09081A] font-bold rounded-lg text-sm disabled:opacity-40 transition-colors">
+                {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                {saving ? "Salvando..." : "Salvar"}
+              </button>
+            </div>
+          </div>
+          <div>
+            <label className="block text-[10px] font-bold text-[#7A8FA8] uppercase tracking-wider mb-1.5">Notas internas</label>
+            <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2}
+              placeholder="Adicionar nota interna sobre este lead..."
+              className="w-full bg-[#0D1929] border border-[#1B3050] rounded-lg px-3 py-2 text-sm text-[#F0ECE4] placeholder:text-[#7A8FA8]/40 focus:outline-none focus:border-[#C9A84C]/50 resize-none" />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ── Main Component ───────────────────────────────────── */
 export function AdminMarketplaceClient() {
   const [tab, setTab] = useState<TabId>("suppliers");
@@ -620,6 +722,7 @@ export function AdminMarketplaceClient() {
   const [filterSupplier, setFilterSupplier] = useState("");
   const [origin, setOrigin] = useState("");
   const [exportingCsv, setExportingCsv] = useState(false);
+  const [leadFilter, setLeadFilter] = useState("");
 
   useEffect(() => { setOrigin(window.location.origin); }, []);
 
@@ -715,14 +818,14 @@ export function AdminMarketplaceClient() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         {[
           { label: "Fornecedores", value: suppliers.length, icon: Building2, color: "text-[#C9A84C]" },
           { label: "Fornec. Pendentes", value: pendingSuppliers, icon: Clock, color: "text-amber-400" },
           { label: "Produtos", value: products.length, icon: Package, color: "text-blue-400" },
+          { label: "Prods. Pendentes", value: pendingProducts, icon: Eye, color: "text-amber-400" },
           { label: "Leads Totais", value: leads.length, icon: TrendingUp, color: "text-emerald-400" },
-          { label: "Leads Convertidos", value: leads.filter(l => l.status === "CONVERTED").length, icon: CheckCircle, color: "text-emerald-400" },
-          { label: "Produtos Pendentes", value: pendingProducts, icon: Eye, color: "text-amber-400" },
+          { label: "Taxa Conversão", value: leads.length ? `${Math.round(leads.filter(l => l.status === "CONVERTED").length / leads.length * 100)}%` : "—", icon: CheckCircle, color: "text-emerald-400" },
         ].map(({ label, value, icon: Icon, color }) => (
           <div key={label} className="bg-[#0D1929] border border-[#1B3050] rounded-xl p-4 flex items-center gap-3">
             <div className={cn("w-9 h-9 rounded-lg bg-white/5 flex items-center justify-center flex-shrink-0", color)}>
@@ -805,44 +908,26 @@ export function AdminMarketplaceClient() {
               ))
           )}
           {tab === "leads" && (
-            leads.length === 0
-              ? <div className="text-center py-16 text-[#7A8FA8]">Nenhum lead ainda</div>
-              : leads.map(lead => {
-                const st = LEAD_STATUS_MAP[lead.status] ?? LEAD_STATUS_MAP.PENDING;
-                return (
-                  <div key={lead.id} className="bg-[#0D1929] border border-[#1B3050] rounded-xl p-4">
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <p className="text-[#F0ECE4] font-semibold text-sm">{lead.product?.name ?? "Produto"}</p>
-                          <span className={cn("inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border", st.cls)}>
-                            {st.label}
-                          </span>
-                        </div>
-                        <p className="text-[#7A8FA8] text-xs">{lead.supplier?.company_name} · {lead.product?.category}</p>
-                        <p className="text-[#7A8FA8] text-xs mt-0.5">
-                          Partner: <span className="text-[#F0ECE4]">{lead.partner?.full_name}</span> ({lead.partner?.email})
-                        </p>
-                        {lead.client_name && (
-                          <p className="text-[#7A8FA8] text-xs mt-0.5">
-                            Cliente: <span className="text-[#F0ECE4]">{lead.client_name}</span>
-                            {lead.client_contact && <> · {lead.client_contact}</>}
-                          </p>
-                        )}
-                        {lead.message && (
-                          <p className="text-[#F0ECE4] text-xs bg-[#111F35] rounded-lg px-3 py-2 mt-2 italic">&ldquo;{lead.message}&rdquo;</p>
-                        )}
-                      </div>
-                      <div className="text-right flex-shrink-0">
-                        <p className="text-[#7A8FA8] text-xs">{new Date(lead.created_at).toLocaleDateString("pt-BR")}</p>
-                        {lead.product?.partner_commission_percent && (
-                          <p className="text-[#C9A84C] text-xs font-bold mt-0.5">{lead.product.partner_commission_percent}% comissão</p>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })
+            <>
+              {/* Lead status filter */}
+              <div className="flex gap-2 flex-wrap">
+                {(["", "NEW", "IN_PROGRESS", "CONVERTED", "LOST", "PENDING"] as const).map(s => (
+                  <button key={s || "all"} onClick={() => setLeadFilter(s)}
+                    className={cn("px-3 py-1.5 rounded-full text-xs font-medium transition-all border",
+                      leadFilter === s
+                        ? "bg-[#C9A84C]/20 text-[#C9A84C] border-[#C9A84C]/40"
+                        : "bg-[#111F35] text-[#7A8FA8] border-[#1B3050] hover:text-[#F0ECE4]")}>
+                    {s === "" ? `Todos (${leads.length})` : `${LEAD_STATUS_MAP[s]?.label ?? s} (${leads.filter(l => l.status === s).length})`}
+                  </button>
+                ))}
+              </div>
+              {leads.filter(l => !leadFilter || l.status === leadFilter).length === 0
+                ? <div className="text-center py-16 text-[#7A8FA8]">Nenhum lead neste status</div>
+                : leads.filter(l => !leadFilter || l.status === leadFilter).map(lead => (
+                    <LeadRow key={lead.id} lead={lead} onRefresh={fetchData} />
+                  ))
+              }
+            </>
           )}
         </div>
       )}

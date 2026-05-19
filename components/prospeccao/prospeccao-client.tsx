@@ -36,6 +36,7 @@ interface Prospect {
   convertido_em?: string;
   comissao_gerada: boolean;
   created_at: string;
+  crm_lead_id?: string | null;
   indicado_por_partner?: { id: string; full_name: string } | null;
   responsavel?: { id: string; full_name: string } | null;
 }
@@ -54,13 +55,14 @@ const ETAPAS: { id: Etapa; label: string; color: string; bg: string }[] = [
 ];
 
 const ORIGENS = [
-  { value: "linkedin",   label: "LinkedIn" },
-  { value: "instagram",  label: "Instagram" },
-  { value: "indicacao",  label: "Indicação" },
-  { value: "youtube",    label: "YouTube" },
-  { value: "google",     label: "Google" },
-  { value: "evento",     label: "Evento" },
-  { value: "outro",      label: "Outro" },
+  { value: "linkedin",           label: "LinkedIn" },
+  { value: "instagram",          label: "Instagram" },
+  { value: "indicacao",          label: "Indicação" },
+  { value: "indicacao_partner",  label: "Indicação Partner" },
+  { value: "youtube",            label: "YouTube" },
+  { value: "google",             label: "Google" },
+  { value: "evento",             label: "Evento" },
+  { value: "outro",              label: "Outro" },
 ];
 
 const ESTADOS_BR = [
@@ -76,7 +78,7 @@ function origemLabel(o: string) {
 
 function origemColor(o: string) {
   const map: Record<string, string> = {
-    linkedin: "#0A66C2", instagram: "#E1306C", indicacao: GOLD,
+    linkedin: "#0A66C2", instagram: "#E1306C", indicacao: GOLD, indicacao_partner: GOLD,
     youtube: "#FF0000", google: "#4285F4", evento: "#A78BFA", outro: MUTED,
   };
   return map[o] ?? MUTED;
@@ -389,6 +391,7 @@ function DetalheModal({
     { label: "Origem", value: origemLabel(prospect.origem) },
     { label: "Indicado por (partner)", value: prospect.indicado_por_partner?.full_name },
     { label: "Indicado por (nome livre)", value: prospect.indicado_por_nome },
+    { label: "Lead no CRM", value: prospect.crm_lead_id ? "Sim — clique em Ver no CRM" : undefined },
     { label: "Responsável", value: prospect.responsavel_nome },
     { label: "Notas", value: prospect.notas },
     { label: "Motivo de perda", value: prospect.motivo_perda },
@@ -654,6 +657,16 @@ function ProspectCard({
           <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400">
             Link ativo
           </span>
+        )}
+        {prospect.crm_lead_id && (
+          <a
+            href="/crm"
+            onClick={e => e.stopPropagation()}
+            className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 transition-colors"
+          >
+            <ExternalLink className="w-2 h-2 inline mr-0.5" />
+            Ver no CRM
+          </a>
         )}
       </div>
 

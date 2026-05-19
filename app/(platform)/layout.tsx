@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { PlatformShell } from "@/components/layout/platform-shell";
+import { PWAInstallPrompt } from "@/components/pwa/pwa-install-prompt";
 
 const IS_DEMO = false;
 
@@ -28,18 +29,21 @@ export default async function PlatformLayout({
     }
 
     return (
-      <PlatformShell
-        user={{
-          id: session.id,
-          full_name: session.full_name,
-          email: session.email,
-          role: session.role,
-          avatar_url: null,
-        }}
-        notificationCount={3}
-      >
-        {children}
-      </PlatformShell>
+      <>
+        <PlatformShell
+          user={{
+            id: session.id,
+            full_name: session.full_name,
+            email: session.email,
+            role: session.role,
+            avatar_url: null,
+          }}
+          notificationCount={3}
+        >
+          {children}
+        </PlatformShell>
+        <PWAInstallPrompt />
+      </>
     );
   }
 
@@ -86,21 +90,35 @@ export default async function PlatformLayout({
       // silently ignore notification errors
     }
 
+    const isPartner = ["PARTNER", "PARTNER_PRO"].includes(profile.role);
+    const isAdminRole = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"].includes(profile.role);
+    const { ChatToastListener } = await import("@/components/chat/chat-toast-listener");
+
     return (
-      <PlatformShell
-        user={{
-          id: profile.id,
-          full_name: profile.full_name,
-          email: profile.email,
-          role: profile.role,
-          avatar_url: profile.avatar_url,
-          trial_expires_at: profile.trial_expires_at ?? null,
-          is_active: profile.is_active ?? null,
-        }}
-        notificationCount={notificationCount}
-      >
-        {children}
-      </PlatformShell>
+      <>
+        <PlatformShell
+          user={{
+            id: profile.id,
+            full_name: profile.full_name,
+            email: profile.email,
+            role: profile.role,
+            avatar_url: profile.avatar_url,
+            trial_expires_at: profile.trial_expires_at ?? null,
+            is_active: profile.is_active ?? null,
+          }}
+          notificationCount={notificationCount}
+        >
+          {children}
+        </PlatformShell>
+        <PWAInstallPrompt />
+        {(isPartner || isAdminRole) && (
+          <ChatToastListener
+            profileId={profile.id}
+            roomId={isPartner ? `partner_${profile.id}` : ""}
+            isAdmin={isAdminRole}
+          />
+        )}
+      </>
     );
   } catch (err) {
     // Re-throw redirect errors (used internally pelo Next.js)

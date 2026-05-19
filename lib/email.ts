@@ -672,8 +672,14 @@ export async function sendMonthlyReport(opts: {
   totalPendente: number;
   totalOperacoes: number;
   totalComissoes: number;
+  aiInsights?: string;
 }): Promise<void> {
   const semMovimento = opts.totalComissoes === 0 && opts.totalOperacoes === 0;
+  const aiSection = opts.aiInsights ? `
+    <div style="margin-top:24px;padding:18px 20px;background:#0D1929;border-radius:10px;border:1px solid #1B3050;border-left:3px solid #C9A84C;">
+      <p style="margin:0 0 12px;font-size:11px;font-weight:700;color:#C9A84C;text-transform:uppercase;letter-spacing:0.12em;">📊 Inteligência de Mercado</p>
+      <p style="margin:0;font-size:13px;color:#7A96AF;line-height:1.7;white-space:pre-line;">${opts.aiInsights}</p>
+    </div>` : "";
   const body = `
     <p style="color:#7A96AF;font-size:14px;margin:0 0 20px;">
       Olá, <strong style="color:#C8D4E3;">${opts.partnerName}</strong>!
@@ -690,6 +696,7 @@ export async function sendMonthlyReport(opts: {
         Nenhuma operação registrada este mês. Que tal indicar novos clientes para aumentar suas comissões?
       </p>
     </div>` : ""}
+    ${aiSection}
     <p style="color:#7A96AF;font-size:12px;margin-top:20px;">
       Acesse a plataforma para ver o extrato completo e os detalhes das suas operações.
     </p>

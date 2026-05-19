@@ -19,6 +19,18 @@ export function AcademyCertificate({ partnerName, categoryLabel, categoryIcon, i
     window.print();
   }
 
+  function handleLinkedIn() {
+    const postText = encodeURIComponent(
+      `Acabei de concluir a trilha "${categoryLabel}" na V3 Partners Academy! ${categoryIcon}\n\nCertificado verificado pela plataforma líder em estruturação financeira do Brasil.\n\n#V3Partners #Academy #FinanceiroEstruturado #Certificação`
+    );
+    const url = encodeURIComponent("https://app.v3partners.com.br/academy");
+    window.open(
+      `https://www.linkedin.com/sharing/share-offsite/?url=${url}&summary=${postText}`,
+      "_blank",
+      "noopener,noreferrer,width=600,height=600"
+    );
+  }
+
   return (
     <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 print:p-0">
       <div className="absolute inset-0 bg-black/80 backdrop-blur-sm print:hidden" onClick={onClose} />
@@ -108,7 +120,16 @@ export function AcademyCertificate({ partnerName, categoryLabel, categoryIcon, i
         </div>
 
         {/* Action buttons */}
-        <div className="flex gap-3 mt-4 justify-center print:hidden">
+        <div className="flex flex-wrap gap-3 mt-4 justify-center print:hidden">
+          <button
+            onClick={handleLinkedIn}
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#0077B5] hover:bg-[#006097] text-white text-sm font-bold transition-colors"
+          >
+            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
+            </svg>
+            Compartilhar no LinkedIn
+          </button>
           <button
             onClick={handlePrint}
             className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#C9A84C] text-[#09081A] text-sm font-bold hover:bg-[#E8C97A] transition-colors"

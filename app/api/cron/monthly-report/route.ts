@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { sendMonthlyReport } from "@/lib/email";
+import Anthropic from "@anthropic-ai/sdk";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -33,15 +34,27 @@ export async function GET(req: NextRequest) {
   let sent = 0;
   const erros: string[] = [];
 
+  const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
+
+  const OP_LABELS: Record<string, string> = {
+    CREDITO: "crédito estruturado",
+    MA: "M&A",
+    CONSORCIO: "consórcio",
+    SPLIT_FISCAL: "split fiscal",
+    MARKETPLACE: "marketplace financeiro",
+  };
+
   for (const partner of partners) {
     try {
-      // Comissões do mês anterior
-      const { data: commissions } = await svc()
+      // Comissões do mês anterior (com operation_type para insights de IA)
+      const { data: prevMonthCommissions } = await svc()
         .from("commissions")
-        .select("commission_value, status")
+        .select("commission_value, status, operation_type")
         .eq("partner_id", partner.id)
         .gte("created_at", inicioMesAnterior.toISOString())
         .lte("created_at", fimMesAnterior.toISOString());
+
+      const commissions = prevMonthCommissions ?? [];
 
       // Operações do mês anterior
       const { count: totalOps } = await svc()
@@ -51,8 +64,34 @@ export async function GET(req: NextRequest) {
         .gte("created_at", inicioMesAnterior.toISOString())
         .lte("created_at", fimMesAnterior.toISOString());
 
-      const totalRecebido = (commissions ?? []).filter(c => c.status === "PAGA").reduce((s, c) => s + c.commission_value, 0);
-      const totalPendente = (commissions ?? []).filter(c => c.status === "A_PAGAR").reduce((s, c) => s + c.commission_value, 0);
+      const totalRecebido = commissions.filter(c => c.status === "PAGA").reduce((s, c) => s + c.commission_value, 0);
+      const totalPendente = commissions.filter(c => c.status === "A_PAGAR").reduce((s, c) => s + c.commission_value, 0);
+
+      // Determina operação principal para personalizar insights de IA
+      const opCounts: Record<string, number> = {};
+      commissions.forEach((c: { operation_type?: string }) => {
+        if (c.operation_type) {
+          opCounts[c.operation_type] = (opCounts[c.operation_type] ?? 0) + 1;
+        }
+      });
+      const topOp = Object.entries(opCounts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? "CREDITO";
+      const topOpLabel = OP_LABELS[topOp] ?? "crédito estruturado";
+
+      // Gera insights de mercado com IA (não bloqueante — falha silenciosa)
+      let aiInsights = "";
+      try {
+        const msg = await anthropic.messages.create({
+          model: "claude-haiku-4-5-20251001",
+          max_tokens: 300,
+          messages: [{
+            role: "user",
+            content: `Você é analista financeiro da V3 Partners. Gere 3 insights de mercado CONCISOS e ACIONÁVEIS para um assessor financeiro no Brasil especializado em ${topOpLabel}. Contexto: Selic ~13,25%, mercado de crédito estruturado aquecido. Formato: 3 bullets curtos (máx 15 palavras cada). Em português. Sem markdown pesado.`,
+          }],
+        });
+        aiInsights = msg.content[0].type === "text" ? msg.content[0].text : "";
+      } catch {
+        aiInsights = "";
+      }
 
       await sendMonthlyReport({
         partnerEmail: partner.email,
@@ -62,7 +101,8 @@ export async function GET(req: NextRequest) {
         totalRecebido,
         totalPendente,
         totalOperacoes: totalOps ?? 0,
-        totalComissoes: (commissions ?? []).length,
+        totalComissoes: commissions.length,
+        aiInsights,
       });
 
       sent++;

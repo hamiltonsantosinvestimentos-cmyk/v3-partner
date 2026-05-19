@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
-import { ShoppingBag, MapPin, Globe, Package, ArrowLeft, Loader2, Tag } from "lucide-react";
+import { ShoppingBag, MapPin, Globe, Package, ArrowLeft, Loader2, Tag, ShieldCheck, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface Supplier {
@@ -14,6 +14,18 @@ interface Supplier {
   description: string;
   website: string | null;
   categories: string[];
+}
+
+interface DueDiligenceResult {
+  supplier: {
+    id: string;
+    company_name: string;
+    is_verified: boolean;
+    products_count: number;
+    avg_rating: string | null;
+  };
+  report: string;
+  generated_at: string;
 }
 
 interface Product {
@@ -44,6 +56,22 @@ export function SupplierVitrineClient({ supplierId }: { supplierId: string }) {
   const [supplier, setSupplier] = useState<Supplier | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
+  const [ddResult, setDdResult] = useState<DueDiligenceResult | null>(null);
+  const [ddLoading, setDdLoading] = useState(false);
+  const [ddOpen, setDdOpen] = useState(false);
+
+  async function fetchDueDiligence() {
+    if (ddResult) { setDdOpen(true); return; }
+    setDdLoading(true);
+    setDdOpen(true);
+    try {
+      const res = await fetch(`/api/marketplace/suppliers/${supplierId}/due-diligence`);
+      const data = await res.json();
+      if (res.ok) setDdResult(data);
+    } finally {
+      setDdLoading(false);
+    }
+  }
 
   useEffect(() => {
     async function load() {
@@ -146,6 +174,120 @@ export function SupplierVitrineClient({ supplierId }: { supplierId: string }) {
             ))}
           </div>
         )}
+
+        {/* Due Diligence */}
+        <div className="bg-[#111F35] border border-[#1B3050] rounded-xl overflow-hidden">
+          <button
+            onClick={fetchDueDiligence}
+            className="w-full flex items-center justify-between px-5 py-4 hover:bg-[#162744] transition-colors"
+          >
+            <div className="flex items-center gap-3">
+              <ShieldCheck className="w-5 h-5 text-[#C9A84C]" />
+              <div className="text-left">
+                <span className="text-[#F0ECE4] font-semibold text-sm">Relatório de Due Diligence</span>
+                <span className="block text-[#7A8FA8] text-xs mt-0.5">Análise gerada por IA V3 Partners</span>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              {!ddResult && !ddLoading && (
+                <span className="text-[9px] font-bold uppercase tracking-wider bg-[#C9A84C]/15 text-[#C9A84C] border border-[#C9A84C]/30 px-2 py-1 rounded-full">
+                  Gerar relatório
+                </span>
+              )}
+              <ChevronDown className={cn("w-4 h-4 text-[#7A8FA8] transition-transform", ddOpen && "rotate-180")} />
+            </div>
+          </button>
+
+          {ddOpen && (
+            <div className="border-t border-[#1B3050] px-5 py-4">
+              {ddLoading && (
+                <div className="flex items-center gap-3 py-6 justify-center">
+                  <Loader2 className="w-5 h-5 animate-spin text-[#C9A84C]" />
+                  <span className="text-[#7A8FA8] text-sm">Analisando fornecedor com IA…</span>
+                </div>
+              )}
+
+              {!ddLoading && ddResult && (
+                <div className="space-y-4">
+                  {/* Header */}
+                  <div className="flex items-center justify-between">
+                    <span className="text-[#C9A84C] text-[9px] font-bold tracking-[2px] uppercase">
+                      Relatório de Due Diligence — IA V3
+                    </span>
+                    <div className="flex items-center gap-3 text-[10px] text-[#7A8FA8]">
+                      {ddResult.supplier.is_verified && (
+                        <span className="flex items-center gap-1 text-emerald-400">
+                          <ShieldCheck className="w-3 h-3" />
+                          Verificado
+                        </span>
+                      )}
+                      <span>{ddResult.supplier.products_count} produto{ddResult.supplier.products_count !== 1 ? "s" : ""}</span>
+                      {ddResult.supplier.avg_rating && (
+                        <span>Nota média: {ddResult.supplier.avg_rating}</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Report content */}
+                  <div className="space-y-3">
+                    {ddResult.report.split("\n\n").map((para, i) => {
+                      const trimmed = para.trim();
+                      if (!trimmed) return null;
+                      // Render markdown headings
+                      if (trimmed.startsWith("## ") || trimmed.startsWith("# ")) {
+                        const text = trimmed.replace(/^#+\s/, "");
+                        return (
+                          <h3 key={i} className="text-[#E8C97A] font-semibold text-sm mt-3">
+                            {text}
+                          </h3>
+                        );
+                      }
+                      // Render bullet lists
+                      if (trimmed.includes("\n- ") || trimmed.startsWith("- ")) {
+                        const lines = trimmed.split("\n").filter(Boolean);
+                        return (
+                          <ul key={i} className="space-y-1.5 pl-1">
+                            {lines.map((line, j) => {
+                              const isHeading = line.startsWith("## ") || line.startsWith("# ") || line.startsWith("**");
+                              if (isHeading && !line.startsWith("-")) {
+                                return <p key={j} className="text-[#E8C97A] font-semibold text-sm">{line.replace(/^#+\s|^\*\*/g, "").replace(/\*\*$/, "")}</p>;
+                              }
+                              const clean = line.replace(/^- /, "").replace(/\*\*/g, "");
+                              return (
+                                <li key={j} className="flex items-start gap-2 text-[#7A8FA8] text-sm">
+                                  <span className="text-[#C9A84C] mt-1 flex-shrink-0">•</span>
+                                  {clean}
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        );
+                      }
+                      return (
+                        <p key={i} className="text-[#7A8FA8] text-sm leading-relaxed">
+                          {trimmed.replace(/\*\*/g, "")}
+                        </p>
+                      );
+                    })}
+                  </div>
+
+                  {/* Footer disclaimer */}
+                  <div className="mt-4 pt-3 border-t border-[#1B3050] flex items-center justify-between flex-wrap gap-2">
+                    <p className="text-[#243A66] text-[10px] italic">
+                      Gerado por IA V3 Partners · não é conselho de investimento
+                    </p>
+                    <span className="text-[#243A66] text-[10px]">
+                      {new Date(ddResult.generated_at).toLocaleString("pt-BR", {
+                        day: "2-digit", month: "short", year: "numeric",
+                        hour: "2-digit", minute: "2-digit",
+                      })}
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
 
         {/* Products */}
         <div>

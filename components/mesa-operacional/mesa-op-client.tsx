@@ -5,7 +5,7 @@ import {
   Headphones, Plus, ChevronRight, User, Building2,
   Clock, CheckCircle2, AlertCircle, Link2,
   LayoutGrid, List, Search, X, FileText, ArrowRight, ArrowLeft, MessageSquare, Trash2,
-  ScrollText, RefreshCw, XCircle, Download, Edit2, Users, Filter,
+  ScrollText, RefreshCw, XCircle, Download, Edit2, Users, Filter, Settings, Bell,
 } from "lucide-react";
 import { ExportButton } from "@/components/financeiro/export-button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -17,7 +17,7 @@ import {
   CREDIT_DESK_LINES,
   type OperationStatus, type TicketPriority,
 } from "@/lib/constants";
-import { PropostaDetailModal, PIPELINE_STAGES, type ProposalFull } from "@/components/mesa-credito/proposta-detail-modal";
+import { PropostaDetailModal, PIPELINE_STAGES, type ProposalFull, type MesaComment } from "@/components/mesa-credito/proposta-detail-modal";
 
 // ─── Tipos ─────────────────────────────────────────────────────────────────
 interface Ticket {
@@ -28,6 +28,13 @@ interface Ticket {
   resolution?: string | null;
   requester?: { id: string; full_name: string } | null;
   assignee?: { id: string; full_name: string } | null;
+  // Campos de pendência
+  pending_reason?: string | null;
+  pending_responsible?: string | null;
+  pending_at?: string | null;
+  pending_resolved_at?: string | null;
+  pending_resolved_by?: string | null;
+  reminder_sent_at?: string | null;
 }
 
 interface TicketComment {
@@ -55,6 +62,13 @@ interface ProposalCard {
   comissao_instituicao_perc?: number;
   metadata?: Record<string, unknown>;
   instituicao_encaminhada?: string | null;
+  // Campos de pendência
+  pending_reason?: string | null;
+  pending_responsible?: string | null;
+  pending_at?: string | null;
+  pending_resolved_at?: string | null;
+  pending_resolved_by?: string | null;
+  reminder_sent_at?: string | null;
 }
 
 interface MesaOpClientProps {
@@ -84,6 +98,262 @@ const TICKET_PRIORITY_OPTIONS = [
   { value: "MEDIUM", label: "Média" },
   { value: "LOW", label: "Baixa" },
 ];
+
+// ─── SLA por Fase ──────────────────────────────────────────────────────────
+const SLA_STAGES = ["RECEBIDO", "TRIAGEM", "ANALISE", "PENDENCIA", "APROVACAO"] as const;
+type SlaStage = typeof SLA_STAGES[number];
+
+interface SlaConfig {
+  RECEBIDO: number;
+  TRIAGEM: number;
+  ANALISE: number;
+  PENDENCIA: number;
+  APROVACAO: number;
+}
+
+const SLA_STAGE_LABELS: Record<SlaStage, string> = {
+  RECEBIDO: "Recebido",
+  TRIAGEM: "Triagem",
+  ANALISE: "Análise",
+  PENDENCIA: "Pendência",
+  APROVACAO: "Aprovação",
+};
+
+const DEFAULT_SLA: SlaConfig = { RECEBIDO: 1, TRIAGEM: 2, ANALISE: 5, PENDENCIA: 3, APROVACAO: 2 };
+const SLA_STORAGE_KEY = "v3_sla_config";
+
+function loadSlaConfig(): SlaConfig {
+  if (typeof window === "undefined") return DEFAULT_SLA;
+  try {
+    const raw = localStorage.getItem(SLA_STORAGE_KEY);
+    if (!raw) return DEFAULT_SLA;
+    const parsed = JSON.parse(raw) as Partial<SlaConfig>;
+    return { ...DEFAULT_SLA, ...parsed };
+  } catch { return DEFAULT_SLA; }
+}
+
+function saveSlaConfig(cfg: SlaConfig) {
+  try { localStorage.setItem(SLA_STORAGE_KEY, JSON.stringify(cfg)); } catch {}
+}
+
+/** Retorna sla_override do deal: valores são ISO date strings (ex: "2026-05-25") */
+function getDealSlaOverride(proposal: ProposalCard): Record<string, string> {
+  try {
+    const raw = proposal.metadata?.sla_override;
+    if (raw && typeof raw === "object") return raw as Record<string, string>;
+  } catch {}
+  return {};
+}
+
+/** Mantém compatibilidade com código legado que usa getDealSla */
+function getDealSla(proposal: ProposalCard): Partial<SlaConfig> {
+  return getDealSlaOverride(proposal) as unknown as Partial<SlaConfig>;
+}
+
+interface SlaStatusResult {
+  status: "ok" | "warning" | "danger";
+  daysLeft: number;       // positivo = dias restantes, negativo = dias vencidos
+  targetDate: string | null; // ISO date se definido por calendário
+  // legado
+  daysElapsed: number;
+  slaLimit: number;
+}
+
+function getSlaStatus(proposal: ProposalCard, slaConfig: SlaConfig): SlaStatusResult | null {
+  if (!proposal.stage || proposal.stage === "FINALIZADO") return null;
+  const stage = proposal.stage as SlaStage;
+  if (!SLA_STAGES.includes(stage)) return null;
+
+  const override = getDealSlaOverride(proposal);
+  const targetDateStr = override[stage];
+
+  if (targetDateStr && typeof targetDateStr === "string" && targetDateStr.match(/^\d{4}-\d{2}-\d{2}/)) {
+    // SLA por calendário: compara data alvo vs hoje
+    const target = parseLocalDate(targetDateStr);
+    target.setHours(23, 59, 59, 999);
+    const now = Date.now();
+    const diffMs = target.getTime() - now;
+    const daysLeft = Math.ceil(diffMs / 86400000);
+    let status: "ok" | "warning" | "danger";
+    if (daysLeft < 0) status = "danger";
+    else if (daysLeft <= 1) status = "warning";
+    else status = "ok";
+    return { status, daysLeft, targetDate: targetDateStr, daysElapsed: -daysLeft, slaLimit: 0 };
+  }
+
+  // Fallback: SLA global em dias
+  const stageChangedAt = proposal.metadata?.stage_changed_at as string | undefined;
+  const referenceDate = stageChangedAt ?? proposal.created_at;
+  if (!referenceDate) return null;
+  const elapsed = (Date.now() - new Date(referenceDate).getTime()) / 86400000;
+  const limit = slaConfig[stage] ?? DEFAULT_SLA[stage];
+  const ratio = elapsed / limit;
+  let status: "ok" | "warning" | "danger";
+  if (ratio >= 1) status = "danger";
+  else if (ratio >= 0.7) status = "warning";
+  else status = "ok";
+  return { status, daysLeft: Math.ceil(limit - elapsed), targetDate: null, daysElapsed: Math.floor(elapsed), slaLimit: limit };
+}
+
+// ─── SLA da Etapa Modal (automático ao mudar de stage) ────────────────────
+/** Formata Date como YYYY-MM-DD no fuso local (evita UTC shift) */
+function toLocalDateString(date: Date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+/** Parseia "YYYY-MM-DD" como horário local (evita UTC shift) */
+function parseLocalDate(str: string): Date {
+  const [y, m, d] = str.split("-").map(Number);
+  return new Date(y, m - 1, d);
+}
+
+function StageSLAModal({ open, onClose, proposal, stage, globalSla, onConfirm }: {
+  open: boolean; onClose: () => void;
+  proposal: ProposalCard | null;
+  stage: SlaStage | null;
+  globalSla: SlaConfig;
+  onConfirm: (proposalId: string, stage: SlaStage, date: string) => void;
+}) {
+  const override = proposal && stage ? getDealSlaOverride(proposal) : {};
+  const existingDate = stage ? (override[stage] ?? null) : null;
+  const globalDefaultDays = stage ? (globalSla[stage] ?? DEFAULT_SLA[stage]) : 3;
+
+  function defaultDate() {
+    const d = new Date();
+    d.setDate(d.getDate() + globalDefaultDays);
+    return toLocalDateString(d);
+  }
+
+  const [date, setDate] = useState<string>("");
+
+  useEffect(() => {
+    if (open) setDate(existingDate ?? defaultDate());
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, existingDate]);
+
+  if (!open || !proposal || !stage) return null;
+
+  const today = toLocalDateString(new Date());
+  const valid = date >= today;
+
+  const daysUntil = date ? Math.ceil((parseLocalDate(date).setHours(23,59,59,999) - Date.now()) / 86400000) : 0;
+
+  return (
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.7)" }}>
+      <div className="w-full max-w-sm rounded-2xl" style={{ background: "#111F35", border: "1px solid rgba(201,168,76,0.2)" }}>
+        <div className="px-5 py-4 space-y-1" style={{ borderBottom: "1px solid rgba(201,168,76,0.1)" }}>
+          <div className="flex items-center gap-2">
+            <Clock className="w-4 h-4" style={{ color: "#C9A84C" }} />
+            <h3 className="text-sm font-bold text-white">SLA — {SLA_STAGE_LABELS[stage]}</h3>
+          </div>
+          <p className="text-[11px]" style={{ color: "#7A8FA8" }}>{proposal.client_name} · {proposal.code}</p>
+        </div>
+        <div className="px-5 py-5 space-y-4">
+          <p className="text-xs" style={{ color: "#7A8FA8" }}>
+            Selecione a <strong style={{ color: "#F0ECE4" }}>data de retorno</strong> para a etapa{" "}
+            <strong style={{ color: "#F0ECE4" }}>{SLA_STAGE_LABELS[stage]}</strong>:
+          </p>
+          <input
+            type="date"
+            autoFocus
+            min={today}
+            value={date}
+            onChange={e => setDate(e.target.value)}
+            onKeyDown={e => { if (e.key === "Enter" && valid) { onConfirm(proposal.id, stage, date); onClose(); } }}
+            className="w-full h-11 px-3 rounded-xl outline-none text-sm font-semibold"
+            style={{
+              background: "#162744",
+              border: `1px solid ${valid ? "rgba(201,168,76,0.4)" : "rgba(255,107,107,0.4)"}`,
+              color: "#F0ECE4",
+              colorScheme: "dark",
+            }}
+          />
+          {date && (
+            <p className="text-[11px]" style={{ color: daysUntil > 1 ? "#4ADE80" : daysUntil === 1 ? "#F59E0B" : "#FF6B6B" }}>
+              {daysUntil > 0
+                ? `Retorno em ${daysUntil} dia${daysUntil !== 1 ? "s" : ""}`
+                : daysUntil === 0 ? "Retorno hoje"
+                : `Vencido há ${Math.abs(daysUntil)} dia${Math.abs(daysUntil) !== 1 ? "s" : ""}`}
+            </p>
+          )}
+        </div>
+        <div className="flex gap-2 px-5 py-4" style={{ borderTop: "1px solid rgba(201,168,76,0.1)" }}>
+          <button
+            onClick={() => { onConfirm(proposal.id, stage, defaultDate()); onClose(); }}
+            className="px-3 py-2 rounded-xl text-xs font-medium"
+            style={{ background: "#162744", color: "#7A8FA8" }}
+          >
+            Padrão (+{globalDefaultDays}d)
+          </button>
+          <button
+            onClick={() => { if (valid) { onConfirm(proposal.id, stage, date); onClose(); } }}
+            disabled={!valid}
+            className="flex-1 py-2 rounded-xl text-xs font-bold disabled:opacity-40"
+            style={{ background: "rgba(201,168,76,0.15)", color: "#C9A84C", border: "1px solid rgba(201,168,76,0.3)" }}
+          >
+            Confirmar Data
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── SLA Config Modal ──────────────────────────────────────────────────────
+function SLAConfigModal({ open, onClose, config, onSave }: {
+  open: boolean; onClose: () => void;
+  config: SlaConfig; onSave: (cfg: SlaConfig) => void;
+}) {
+  const [draft, setDraft] = useState<SlaConfig>(config);
+
+  useEffect(() => { if (open) setDraft(config); }, [open, config]);
+
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      <div className="bg-card border border-border rounded-2xl w-full max-w-sm animate-fade-in">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+          <div className="flex items-center gap-2">
+            <Settings className="w-4 h-4 text-[#C9A84C]" />
+            <h2 className="text-sm font-bold text-white">SLA por Fase</h2>
+          </div>
+          <button onClick={onClose} className="w-8 h-8 rounded-lg hover:bg-secondary flex items-center justify-center text-muted-foreground hover:text-white transition-colors">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <div className="px-6 py-5 space-y-4">
+          <p className="text-xs text-muted-foreground">Configure o prazo máximo (em dias) para cada fase do pipeline. O semáforo nos cards mostrará o status de cada proposta.</p>
+          {SLA_STAGES.map((stage) => (
+            <div key={stage} className="flex items-center gap-3">
+              <span className="text-xs font-medium text-foreground w-24 flex-shrink-0">{SLA_STAGE_LABELS[stage]}</span>
+              <input
+                type="number" min={1} max={90}
+                value={draft[stage]}
+                onChange={(e) => setDraft(prev => ({ ...prev, [stage]: Math.max(1, parseInt(e.target.value) || 1) }))}
+                className="w-20 h-8 px-2 text-sm text-center bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
+              />
+              <span className="text-xs text-muted-foreground">dias</span>
+            </div>
+          ))}
+        </div>
+        <div className="px-6 py-4 border-t border-border space-y-3">
+          <div className="flex gap-3 text-[10px] text-muted-foreground">
+            <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block" /> OK</span>
+            <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block" /> Atenção (≥70%)</span>
+            <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-red-500 inline-block" /> Vencido</span>
+          </div>
+          <div className="flex gap-2 justify-end">
+            <Button variant="outline" size="sm" onClick={onClose}>Cancelar</Button>
+            <Button size="sm" onClick={() => { onSave(draft); onClose(); }}>Salvar</Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // ─── Novo Ticket Modal ─────────────────────────────────────────────────────
 function NovoTicketModal({ open, onClose, onSubmit }: {
@@ -183,13 +453,406 @@ function NovoTicketModal({ open, onClose, onSubmit }: {
   );
 }
 
+// ─── Bloco de pendência no card com edição inline ─────────────────────────
+function CardPendingBlock({ proposal, canChangeStage, currentUserName, onResolve, onReminder, onSaved }: {
+  proposal: ProposalCard;
+  canChangeStage: boolean;
+  currentUserName?: string;
+  onResolve: () => Promise<void>;
+  onReminder: () => Promise<void>;
+  onSaved: (updates: Partial<ProposalCard>) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [reason, setReason] = useState(proposal.pending_reason ?? "");
+  const [responsible, setResponsible] = useState(proposal.pending_responsible ?? "");
+  const [saving, setSaving] = useState(false);
+
+  async function handleSave() {
+    setSaving(true);
+    const updates = { pending_reason: reason.trim(), pending_responsible: responsible.trim() };
+    await fetch("/api/credit-proposals", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: proposal.id, ...updates }),
+    }).catch(() => {});
+    onSaved(updates);
+    setSaving(false);
+    setEditing(false);
+  }
+
+  return (
+    <div className="mt-2 rounded-lg p-2 space-y-1.5" style={{ background: "#3A1F1F", border: "1px solid rgba(255,107,107,0.3)" }}
+      onClick={e => e.stopPropagation()}>
+      <div className="flex items-center gap-1">
+        <AlertCircle className="w-3 h-3 flex-shrink-0" style={{ color: "#FF6B6B" }} />
+        <span className="text-[10px] font-bold uppercase tracking-wide flex-1" style={{ color: "#FF6B6B" }}>Pendente</span>
+        {proposal.pending_at && !editing && (
+          <span className="text-[9px]" style={{ color: "#FF6B6B", opacity: 0.7 }}>
+            {new Date(proposal.pending_at).toLocaleDateString("pt-BR")}
+          </span>
+        )}
+        {canChangeStage && !editing && (
+          <button
+            onClick={() => { setEditing(true); setReason(proposal.pending_reason ?? ""); setResponsible(proposal.pending_responsible ?? ""); }}
+            className="w-4 h-4 rounded flex items-center justify-center ml-1"
+            style={{ color: "rgba(255,107,107,0.6)" }}
+            title="Editar pendência"
+          >
+            <Edit2 className="w-2.5 h-2.5" />
+          </button>
+        )}
+      </div>
+
+      {editing ? (
+        <div className="space-y-1.5">
+          <textarea
+            value={reason}
+            onChange={e => setReason(e.target.value)}
+            rows={2}
+            autoFocus
+            placeholder="Motivo da pendência..."
+            className="w-full px-2 py-1.5 rounded text-[10px] resize-none outline-none"
+            style={{ background: "#1A0E0E", border: "1px solid rgba(255,107,107,0.4)", color: "#F0ECE4" }}
+          />
+          <input
+            type="text"
+            value={responsible}
+            onChange={e => setResponsible(e.target.value)}
+            placeholder="Responsável..."
+            className="w-full px-2 py-1 rounded text-[10px] outline-none"
+            style={{ background: "#1A0E0E", border: "1px solid rgba(255,107,107,0.4)", color: "#F0ECE4" }}
+          />
+          <div className="flex gap-1">
+            <button onClick={() => setEditing(false)} className="px-2 py-1 rounded text-[9px]" style={{ background: "rgba(255,255,255,0.05)", color: "#7A8FA8" }}>Cancelar</button>
+            <button onClick={handleSave} disabled={saving || !reason.trim()} className="flex-1 py-1 rounded text-[9px] font-bold disabled:opacity-40" style={{ background: "rgba(201,168,76,0.15)", color: "#C9A84C", border: "1px solid rgba(201,168,76,0.3)" }}>
+              {saving ? "..." : "✓ Salvar"}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <>
+          {proposal.pending_reason ? (
+            <p className="text-[10px] italic line-clamp-2" style={{ color: "#FF6B6B", opacity: 0.9 }} title={proposal.pending_reason}>
+              {proposal.pending_reason}
+            </p>
+          ) : (
+            <p className="text-[10px] italic" style={{ color: "rgba(255,107,107,0.4)" }}>Sem motivo registrado</p>
+          )}
+          {proposal.pending_responsible && (
+            <p className="text-[9px]" style={{ color: "#FF6B6B", opacity: 0.7 }}>Resp.: {proposal.pending_responsible}</p>
+          )}
+          {canChangeStage && (
+            <div className="flex gap-1 pt-0.5">
+              <button onClick={onResolve} className="flex-1 py-1 rounded text-[9px] font-bold" style={{ background: "rgba(74,222,128,0.15)", color: "#4ADE80", border: "1px solid rgba(74,222,128,0.3)" }}>✓ Resolvido</button>
+              <button onClick={onReminder} className="flex-1 py-1 rounded text-[9px] font-bold" style={{ background: "rgba(201,168,76,0.1)", color: "#C9A84C", border: "1px solid rgba(201,168,76,0.3)" }}>
+                <Bell className="w-2.5 h-2.5 inline mr-0.5" />Lembrete
+              </button>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+// ─── Formulário de Pendência para Proposta/Deal ────────────────────────────
+function ProposalPendingForm({ proposal, onClose, onConfirm }: {
+  proposal: ProposalCard;
+  onClose: () => void;
+  onConfirm: (proposal: ProposalCard, reason: string, responsible: string) => Promise<void>;
+}) {
+  const [reason, setReason] = useState("");
+  const [responsible, setResponsible] = useState("Partner");
+  const [loading, setLoading] = useState(false);
+  const valid = reason.trim().length >= 10;
+
+  async function submit() {
+    if (!valid) return;
+    setLoading(true);
+    await onConfirm(proposal, reason.trim(), responsible);
+    setLoading(false);
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="space-y-1.5">
+        <label className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "#7A8FA8" }}>
+          Motivo da pendência *
+        </label>
+        <textarea
+          value={reason}
+          onChange={e => setReason(e.target.value)}
+          placeholder="Descreva o motivo da pendência (mín. 10 caracteres)..."
+          rows={3}
+          className="w-full rounded-xl px-3 py-2 text-sm text-white resize-none outline-none focus:ring-1"
+          style={{ background: "#162744", border: `1px solid ${!valid && reason.length > 0 ? "#FF6B6B" : "rgba(201,168,76,0.2)"}`, "--tw-ring-color": "#C9A84C" } as React.CSSProperties}
+        />
+        {!valid && reason.length > 0 && (
+          <p className="text-[10px]" style={{ color: "#FF6B6B" }}>Mínimo 10 caracteres</p>
+        )}
+      </div>
+      <div className="space-y-1.5">
+        <label className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "#7A8FA8" }}>
+          Responsável pela resolução
+        </label>
+        <select
+          value={responsible}
+          onChange={e => setResponsible(e.target.value)}
+          className="w-full rounded-xl px-3 py-2 text-sm text-white outline-none"
+          style={{ background: "#162744", border: "1px solid rgba(201,168,76,0.2)" }}
+        >
+          <option value="Partner">Partner</option>
+          <option value="Mesa Operacional">Mesa Operacional</option>
+          <option value="Financeiro">Financeiro</option>
+          <option value="Jurídico">Jurídico</option>
+          <option value="Externo">Externo</option>
+        </select>
+      </div>
+      <div className="flex gap-2 justify-end pt-1">
+        <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs font-medium" style={{ background: "#162744", color: "#7A8FA8" }}>
+          Cancelar
+        </button>
+        <button
+          onClick={submit}
+          disabled={!valid || loading}
+          className="px-4 py-2 rounded-xl text-xs font-bold transition-opacity disabled:opacity-50"
+          style={{ background: "rgba(255,107,107,0.2)", color: "#FF6B6B", border: "1px solid rgba(255,107,107,0.3)" }}
+        >
+          {loading ? "Salvando..." : "Confirmar Pendência"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Modal de Pendência ────────────────────────────────────────────────────
+function PendingModal({ open, onClose, ticket, onConfirm }: {
+  open: boolean;
+  onClose: () => void;
+  ticket: Ticket | null;
+  onConfirm: (reason: string, responsible: string) => Promise<void>;
+}) {
+  const [reason, setReason] = useState("");
+  const [responsible, setResponsible] = useState("Partner");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => { if (open) { setReason(""); setResponsible("Partner"); setError(""); } }, [open]);
+
+  async function handleConfirm() {
+    if (reason.trim().length < 10) { setError("Motivo deve ter ao menos 10 caracteres."); return; }
+    setSaving(true);
+    try {
+      await onConfirm(reason.trim(), responsible);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (!open || !ticket) return null;
+  return (
+    <div className="fixed inset-0 z-[90] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+      <div className="bg-card border border-[#FF6B6B]/30 rounded-2xl w-full max-w-md animate-fade-in">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-[#FF6B6B]" />
+            <h2 className="text-sm font-bold text-white">Registrar Pendência</h2>
+          </div>
+          <button onClick={onClose} className="w-8 h-8 rounded-lg hover:bg-secondary flex items-center justify-center text-muted-foreground hover:text-white transition-colors">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <div className="px-6 py-5 space-y-4">
+          <p className="text-xs text-muted-foreground">
+            Ticket <span className="font-mono text-[#C9A84C]">{ticket.code}</span> — {ticket.title}
+          </p>
+          <div>
+            <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
+              Motivo da pendência <span className="text-[#FF6B6B]">*</span>
+            </label>
+            <textarea
+              value={reason}
+              onChange={e => { setReason(e.target.value); setError(""); }}
+              rows={4}
+              placeholder="Descreva detalhadamente o motivo desta pendência..."
+              className="w-full px-3 py-2 text-sm bg-secondary border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-[#FF6B6B]/50 resize-none"
+              autoFocus
+            />
+            {error && <p className="mt-1 text-[11px] text-[#FF6B6B]">{error}</p>}
+            <p className="mt-1 text-[10px] text-muted-foreground">{reason.length} / mínimo 10 caracteres</p>
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Responsável pela resolução</label>
+            <select
+              value={responsible}
+              onChange={e => setResponsible(e.target.value)}
+              className="w-full h-9 px-3 text-sm bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
+            >
+              <option value="Partner">Partner</option>
+              <option value="Mesa Operacional">Mesa Operacional</option>
+              <option value="Financeiro">Financeiro</option>
+              <option value="Jurídico">Jurídico</option>
+              <option value="Externo">Externo</option>
+            </select>
+          </div>
+        </div>
+        <div className="px-6 py-4 border-t border-border flex gap-2 justify-end">
+          <Button variant="outline" size="sm" onClick={onClose} disabled={saving}>Cancelar</Button>
+          <Button
+            size="sm"
+            onClick={handleConfirm}
+            disabled={saving || reason.trim().length < 10}
+            className="gap-1.5"
+            style={{ background: "#3A1F1F", color: "#FF6B6B", border: "1px solid rgba(255,107,107,0.3)" }}
+          >
+            {saving
+              ? <span className="w-3 h-3 rounded-full border-2 border-current border-t-transparent animate-spin" />
+              : <AlertCircle className="w-3.5 h-3.5" />}
+            Confirmar Pendência
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Modal de Resolução ────────────────────────────────────────────────────
+function ResolveModal({ open, onClose, ticket, onConfirm }: {
+  open: boolean;
+  onClose: () => void;
+  ticket: Ticket | null;
+  onConfirm: (obs: string) => Promise<void>;
+}) {
+  const [obs, setObs] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => { if (open) { setObs(""); } }, [open]);
+
+  async function handleConfirm() {
+    setSaving(true);
+    try {
+      await onConfirm(obs.trim());
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (!open || !ticket) return null;
+  return (
+    <div className="fixed inset-0 z-[90] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+      <div className="bg-card border border-[#4ADE80]/30 rounded-2xl w-full max-w-sm animate-fade-in">
+        <div className="flex items-center gap-2 px-6 py-4 border-b border-border">
+          <CheckCircle2 className="w-4 h-4 text-[#4ADE80]" />
+          <h2 className="text-sm font-bold text-white">Confirmar Resolução</h2>
+        </div>
+        <div className="px-6 py-5 space-y-4">
+          <p className="text-xs text-muted-foreground">
+            Ticket <span className="font-mono text-[#C9A84C]">{ticket.code}</span> voltará para <strong className="text-white">Em Revisão</strong>.
+          </p>
+          <div>
+            <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Observação de resolução (opcional)</label>
+            <textarea
+              value={obs}
+              onChange={e => setObs(e.target.value)}
+              rows={3}
+              placeholder="Descreva como a pendência foi resolvida..."
+              className="w-full px-3 py-2 text-sm bg-secondary border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-[#4ADE80]/50 resize-none"
+              autoFocus
+            />
+          </div>
+        </div>
+        <div className="px-6 py-4 border-t border-border flex gap-2 justify-end">
+          <Button variant="outline" size="sm" onClick={onClose} disabled={saving}>Cancelar</Button>
+          <Button
+            size="sm"
+            onClick={handleConfirm}
+            disabled={saving}
+            className="gap-1.5"
+            style={{ background: "#1A3A2A", color: "#4ADE80", border: "1px solid rgba(74,222,128,0.3)" }}
+          >
+            {saving
+              ? <span className="w-3 h-3 rounded-full border-2 border-current border-t-transparent animate-spin" />
+              : <CheckCircle2 className="w-3.5 h-3.5" />}
+            Marcar como Resolvido
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Helper: formata "há X tempo" ─────────────────────────────────────────
+function timeAgo(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "agora mesmo";
+  if (mins < 60) return `há ${mins}min`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `há ${hrs}h`;
+  const days = Math.floor(hrs / 24);
+  return `há ${days}d`;
+}
+
+// ─── PendingBadge ──────────────────────────────────────────────────────────
+function PendingBadge({ ticket }: { ticket: Ticket }) {
+  const isPending = ticket.status === "PENDING";
+  const isResolved = isPending && !!ticket.pending_resolved_at;
+
+  if (!isPending && !ticket.pending_reason) return null;
+
+  if (ticket.pending_resolved_at) {
+    return (
+      <div className="mt-2 rounded-lg p-2" style={{ background: "#1A3A2A", border: "1px solid rgba(74,222,128,0.3)" }}>
+        <div className="flex items-center gap-1.5 mb-0.5">
+          <span className="text-[10px] font-bold uppercase tracking-wide" style={{ color: "#4ADE80" }}>RESOLVIDO</span>
+          <span className="text-[9px]" style={{ color: "#4ADE80" }}>
+            {new Date(ticket.pending_resolved_at).toLocaleDateString("pt-BR")}
+          </span>
+        </div>
+        {ticket.pending_resolved_by && (
+          <p className="text-[10px]" style={{ color: "#4ADE80", opacity: 0.8 }}>por {ticket.pending_resolved_by}</p>
+        )}
+      </div>
+    );
+  }
+
+  if (!isPending) return null;
+
+  return (
+    <div className="mt-2 rounded-lg p-2" style={{ background: "#3A1F1F", border: "1px solid rgba(255,107,107,0.3)" }}>
+      <div className="flex items-center gap-1.5 mb-0.5">
+        <span className="text-[10px] font-bold uppercase tracking-wide" style={{ color: "#FF6B6B" }}>PENDENTE</span>
+        {ticket.pending_at && (
+          <span className="text-[9px]" style={{ color: "#FF6B6B", opacity: 0.8 }}>
+            desde {new Date(ticket.pending_at).toLocaleDateString("pt-BR")}
+          </span>
+        )}
+      </div>
+      {ticket.pending_reason && (
+        <p className="text-[10px] italic line-clamp-2" style={{ color: "#FF6B6B", opacity: 0.9 }}
+          title={ticket.pending_reason}>
+          {ticket.pending_reason}
+        </p>
+      )}
+      {ticket.pending_responsible && (
+        <p className="text-[10px] mt-0.5" style={{ color: "#FF6B6B", opacity: 0.7 }}>
+          Resp.: {ticket.pending_responsible}
+        </p>
+      )}
+    </div>
+  );
+}
+
 // ─── Ticket Detail Modal ───────────────────────────────────────────────────
-function TicketDetailModal({ open, onClose, ticket, currentUser, onUpdated }: {
+function TicketDetailModal({ open, onClose, ticket, currentUser, onUpdated, onOpenPending, onOpenResolve, onSendReminder }: {
   open: boolean;
   onClose: () => void;
   ticket: Ticket | null;
   currentUser?: { id: string; full_name: string; role: string };
   onUpdated: (id: string, updates: Partial<Ticket>) => void;
+  onOpenPending: () => void;
+  onOpenResolve: () => void;
+  onSendReminder: () => void;
 }) {
   const [comments, setComments] = useState<TicketComment[]>([]);
   const [commentsLoading, setCommentsLoading] = useState(false);
@@ -234,6 +897,14 @@ function TicketDetailModal({ open, onClose, ticket, currentUser, onUpdated }: {
 
   async function handleSave() {
     if (!ticket) return;
+
+    // Se mudando para PENDING, abre o modal de pendência em vez de salvar direto
+    if (ticketStatus === "PENDING" && ticket.status !== "PENDING") {
+      onClose();
+      onOpenPending();
+      return;
+    }
+
     setSaving(true);
     try {
       const body: Record<string, unknown> = { id: ticket.id };
@@ -343,6 +1014,77 @@ function TicketDetailModal({ open, onClose, ticket, currentUser, onUpdated }: {
             <div>
               <p className="text-xs font-semibold text-muted-foreground mb-2">Resolução</p>
               <p className="text-xs text-foreground bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-3 whitespace-pre-wrap">{ticket.resolution}</p>
+            </div>
+          )}
+
+          {/* ── Bloco de pendência ── */}
+          {ticket.status === "PENDING" && (
+            <div className="rounded-xl p-4 space-y-3" style={{ background: "#3A1F1F", border: "1px solid rgba(255,107,107,0.3)" }}>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4" style={{ color: "#FF6B6B" }} />
+                  <span className="text-xs font-bold uppercase tracking-wide" style={{ color: "#FF6B6B" }}>Ticket Pendente</span>
+                  {ticket.pending_at && (
+                    <span className="text-[10px]" style={{ color: "#FF6B6B", opacity: 0.7 }}>
+                      desde {new Date(ticket.pending_at).toLocaleDateString("pt-BR")}
+                    </span>
+                  )}
+                </div>
+              </div>
+              {ticket.pending_reason && (
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-wide mb-1" style={{ color: "#FF6B6B", opacity: 0.7 }}>Motivo</p>
+                  <p className="text-xs italic whitespace-pre-wrap" style={{ color: "#FF6B6B" }}>{ticket.pending_reason}</p>
+                </div>
+              )}
+              {ticket.pending_responsible && (
+                <p className="text-[10px]" style={{ color: "#FF6B6B", opacity: 0.8 }}>
+                  Responsável pela resolução: <strong>{ticket.pending_responsible}</strong>
+                </p>
+              )}
+              {isAdmin && (
+                <div className="flex gap-2 pt-1 flex-wrap">
+                  {/* Botão Marcar como Resolvido */}
+                  <button
+                    onClick={() => { onClose(); onOpenResolve(); }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors"
+                    style={{ background: "#1A3A2A", color: "#4ADE80", border: "1px solid rgba(74,222,128,0.3)" }}
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    Marcar como Resolvido
+                  </button>
+                  {/* Botão Enviar Lembrete */}
+                  <button
+                    onClick={() => { onClose(); onSendReminder(); }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors"
+                    style={{ background: "#1A2A3A", color: "#C9A84C", border: "1px solid rgba(201,168,76,0.3)" }}
+                  >
+                    <Bell className="w-3.5 h-3.5" />
+                    Enviar Lembrete
+                  </button>
+                </div>
+              )}
+              {ticket.reminder_sent_at && (
+                <p className="text-[10px]" style={{ color: "#C9A84C", opacity: 0.8 }}>
+                  Último lembrete enviado: {timeAgo(ticket.reminder_sent_at)}
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* ── Bloco de pendência resolvida ── */}
+          {ticket.status !== "PENDING" && ticket.pending_resolved_at && (
+            <div className="rounded-xl p-4 space-y-2" style={{ background: "#1A3A2A", border: "1px solid rgba(74,222,128,0.3)" }}>
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4" style={{ color: "#4ADE80" }} />
+                <span className="text-xs font-bold uppercase tracking-wide" style={{ color: "#4ADE80" }}>Pendência Resolvida</span>
+                <span className="text-[10px]" style={{ color: "#4ADE80", opacity: 0.7 }}>
+                  em {new Date(ticket.pending_resolved_at).toLocaleDateString("pt-BR")}
+                </span>
+              </div>
+              {ticket.pending_resolved_by && (
+                <p className="text-[10px]" style={{ color: "#4ADE80", opacity: 0.8 }}>por {ticket.pending_resolved_by}</p>
+              )}
             </div>
           )}
 
@@ -664,6 +1406,11 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
             comissao_instituicao_perc: p.comissao_instituicao_perc as number | undefined,
             metadata: meta ?? undefined,
             instituicao_encaminhada: p.instituicao_encaminhada as string | null | undefined,
+            pending_reason: p.pending_reason as string | null | undefined,
+            pending_responsible: p.pending_responsible as string | null | undefined,
+            pending_at: p.pending_at as string | null | undefined,
+            pending_resolved_at: p.pending_resolved_at as string | null | undefined,
+            pending_resolved_by: p.pending_resolved_by as string | null | undefined,
           };
         }));
       })
@@ -685,11 +1432,200 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
   }, []);
 
   const [novoTicket, setNovoTicket] = useState(false);
+  // ─── Estado de pendência ─────────────────────────────────────────────────
+  const [pendingTarget, setPendingTarget] = useState<Ticket | null>(null);
+  const [resolveTarget, setResolveTarget] = useState<Ticket | null>(null);
+  // Pendência de deal/proposta
+  const [pendingProposalTarget, setPendingProposalTarget] = useState<ProposalCard | null>(null);
+  const [reminderLoading, setReminderLoading] = useState(false);
+  const [reminderToast, setReminderToast] = useState<string | null>(null);
+
+  function showToast(msg: string) {
+    setReminderToast(msg);
+    setTimeout(() => setReminderToast(null), 4000);
+  }
+
+  async function handleConfirmPending(ticket: Ticket, reason: string, responsible: string) {
+    const res = await fetch("/api/tickets", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id: ticket.id,
+        status: "PENDING",
+        pending_reason: reason,
+        pending_responsible: responsible,
+      }),
+    });
+    if (res.ok) {
+      setTickets(prev => prev.map(t => t.id === ticket.id ? {
+        ...t,
+        status: "PENDING",
+        pending_reason: reason,
+        pending_responsible: responsible,
+        pending_at: new Date().toISOString(),
+      } : t));
+      setPendingTarget(null);
+      showToast("Pendência registrada com sucesso.");
+    }
+  }
+
+  async function handleConfirmResolve(ticket: Ticket, obs: string) {
+    const res = await fetch("/api/tickets", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id: ticket.id,
+        status: "IN_REVIEW",
+        pending_resolved_obs: obs || null,
+      }),
+    });
+    if (res.ok) {
+      const now = new Date().toISOString();
+      setTickets(prev => prev.map(t => t.id === ticket.id ? {
+        ...t,
+        status: "IN_REVIEW",
+        pending_resolved_at: now,
+        pending_resolved_by: currentUser?.full_name ?? "Usuário",
+      } : t));
+      setResolveTarget(null);
+      showToast("Pendência marcada como resolvida.");
+    }
+  }
+
+  async function handleSendReminder(ticket: Ticket) {
+    setReminderLoading(true);
+    try {
+      const res = await fetch("/api/tickets/remind", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ticket_id: ticket.id }),
+      });
+      const json = await res.json();
+      if (json.ok) {
+        setTickets(prev => prev.map(t => t.id === ticket.id ? { ...t, reminder_sent_at: new Date().toISOString() } : t));
+        showToast("Lembrete enviado por email e chat.");
+      } else {
+        showToast("Erro ao enviar lembrete.");
+      }
+    } catch {
+      showToast("Erro ao enviar lembrete.");
+    } finally {
+      setReminderLoading(false);
+    }
+  }
+  async function handleConfirmProposalPending(proposal: ProposalCard, reason: string, responsible: string) {
+    const now = new Date().toISOString();
+    const updates = { stage: "PENDENCIA", pending_reason: reason, pending_responsible: responsible, pending_at: now };
+    setProposals(prev => prev.map(p => p.id === proposal.id ? { ...p, ...updates } : p));
+    // Atualiza também o detailProposal se estiver aberto
+    if (detailProposal?.id === proposal.id) {
+      setDetailProposal(prev => prev ? { ...prev, ...updates } : prev);
+    }
+    setPendingProposalTarget(null);
+    showToast("Pendência registrada com sucesso.");
+    await fetch("/api/credit-proposals", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: proposal.id, ...updates }),
+    }).catch(() => {});
+    // Auto-abre modal de SLA para PENDENCIA
+    if (SLA_STAGES.includes("PENDENCIA" as SlaStage)) {
+      const updated = { ...proposal, ...updates };
+      setStageSlaTarget({ proposal: updated, stage: "PENDENCIA" as SlaStage });
+    }
+  }
+
+  async function handleSendProposalReminder(proposal: ProposalCard) {
+    setReminderLoading(true);
+    try {
+      const res = await fetch("/api/tickets/remind", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ proposal_id: proposal.id }),
+      });
+      if (res.ok) showToast("Lembrete enviado por email e chat.");
+      else showToast("Erro ao enviar lembrete.");
+    } catch {
+      showToast("Erro ao enviar lembrete.");
+    } finally {
+      setReminderLoading(false);
+    }
+  }
+
   const [ticketDetail, setTicketDetail] = useState<Ticket | null>(null);
   const [detailProposal, setDetailProposal] = useState<ProposalCard | null>(null);
   const [editProposal, setEditProposal] = useState<ProposalCard | null>(null);
+  const [stageSlaTarget, setStageSlaTarget] = useState<{ proposal: ProposalCard; stage: SlaStage } | null>(null);
   const [search, setSearch] = useState("");
+
+  // Drag & drop
+  const [draggedId, setDraggedId] = useState<string | null>(null);
+  const [dragOverStage, setDragOverStage] = useState<string | null>(null);
+
+  // Notas internas inline
+  const [notesOpenId, setNotesOpenId] = useState<string | null>(null);
+  const [inlineNotes, setInlineNotes] = useState<Record<string, MesaComment[]>>({});
+  const [noteText, setNoteText] = useState("");
+  const [noteSaving, setNoteSaving] = useState(false);
+
+  async function loadNotes(proposalId: string) {
+    try {
+      const res = await fetch(`/api/credit-proposals/comments?proposal_id=${proposalId}`);
+      if (res.ok) {
+        const { comments } = await res.json();
+        setInlineNotes(prev => ({ ...prev, [proposalId]: Array.isArray(comments) ? comments : [] }));
+      } else {
+        setInlineNotes(prev => ({ ...prev, [proposalId]: [] }));
+      }
+    } catch {
+      setInlineNotes(prev => ({ ...prev, [proposalId]: [] }));
+    }
+  }
+
+  async function handleAddNote(proposalId: string) {
+    if (!noteText.trim()) return;
+    setNoteSaving(true);
+    const res = await fetch("/api/credit-proposals/comments", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ proposal_id: proposalId, text: noteText.trim() }),
+    });
+    if (res.ok) {
+      const { comment } = await res.json();
+      setInlineNotes(prev => ({ ...prev, [proposalId]: [...(prev[proposalId] ?? []), comment] }));
+      setProposals(prev => prev.map(p => p.id === proposalId ? { ...p, mesa_comments_count: (p.mesa_comments_count ?? 0) + 1 } : p));
+      setNoteText("");
+    }
+    setNoteSaving(false);
+  }
+
+  async function handleConfirmStageSla(proposalId: string, stage: SlaStage, date: string) {
+    const applyOverride = (p: ProposalCard) => {
+      const existing = getDealSlaOverride(p);
+      const newOverride = { ...existing, [stage]: date };
+      return { ...p, metadata: { ...(p.metadata ?? {}), sla_override: newOverride } };
+    };
+    setProposals(prev => prev.map(p => p.id === proposalId ? applyOverride(p) : p));
+    if (detailProposal?.id === proposalId) {
+      setDetailProposal(prev => prev ? applyOverride(prev) : prev);
+    }
+    const proposal = proposals.find(p => p.id === proposalId);
+    const existing = proposal ? getDealSlaOverride(proposal) : {};
+    const newOverride = { ...existing, [stage]: date };
+    await fetch("/api/credit-proposals", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: proposalId, metadata: { sla_override: newOverride } }),
+    }).catch(() => {});
+    const fmt = parseLocalDate(date).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+    showToast(`Retorno SLA definido: ${fmt} — ${SLA_STAGE_LABELS[stage]}`);
+  }
   const [selectedStage, setSelectedStage] = useState<string | null>(null);
+
+  // SLA
+  const [slaConfig, setSlaConfig] = useState<SlaConfig>(DEFAULT_SLA);
+  const [slaModalOpen, setSlaModalOpen] = useState(false);
+  useEffect(() => { setSlaConfig(loadSlaConfig()); }, []);
 
   // Filtros de tickets
   const [ticketSearch, setTicketSearch] = useState("");
@@ -845,6 +1781,10 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
   const urgentCount = tickets.filter((t) => t.priority === "URGENT").length;
   const pendingTickets = tickets.filter(t => t.status === "PENDING").length;
   const contratosPendentes = contratos.filter(c => !["ASSINADO", "CANCELADO", "EXPIRADO"].includes(c.status)).length;
+  const slaVencidas = proposals.filter(p => {
+    const s = getSlaStatus(p, slaConfig);
+    return s?.status === "danger";
+  }).length;
 
   // ─── Filtros de tickets ───────────────────────────────────────────────────
   const filteredTickets = tickets.filter(t => {
@@ -874,16 +1814,36 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
   }, [detailProposal]);
 
   const handleStageChange = useCallback((proposalId: string, newStage: string) => {
-    setProposals((prev) => prev.map((p) => p.id === proposalId ? { ...p, stage: newStage } : p));
+    // Se indo para PENDENCIA, abre modal de motivo primeiro
+    if (newStage === "PENDENCIA") {
+      const proposal = proposals.find(p => p.id === proposalId) ?? null;
+      if (proposal) {
+        setPendingProposalTarget(proposal);
+        return;
+      }
+    }
+    const now = new Date().toISOString();
+    setProposals((prev) => prev.map((p) =>
+      p.id === proposalId
+        ? { ...p, stage: newStage, metadata: { ...(p.metadata ?? {}), stage_changed_at: now } }
+        : p
+    ));
     if (detailProposal?.id === proposalId) {
-      setDetailProposal((prev) => prev ? { ...prev, stage: newStage } : prev);
+      setDetailProposal((prev) => prev ? { ...prev, stage: newStage, metadata: { ...(prev.metadata ?? {}), stage_changed_at: now } } : prev);
     }
     fetch("/api/credit-proposals", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id: proposalId, stage: newStage }),
     }).catch(() => {});
-  }, [detailProposal]);
+    // Auto-abre modal de SLA para a nova etapa (exceto FINALIZADO)
+    if (newStage !== "FINALIZADO" && SLA_STAGES.includes(newStage as SlaStage)) {
+      const proposal = proposals.find(p => p.id === proposalId);
+      if (proposal) {
+        setStageSlaTarget({ proposal: { ...proposal, stage: newStage }, stage: newStage as SlaStage });
+      }
+    }
+  }, [detailProposal, proposals]);
 
   const stageKeys = PIPELINE_STAGES.map(s => s.key);
 
@@ -920,6 +1880,15 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
               <ScrollText className="w-3.5 h-3.5" /> Contratos
             </button>
           </div>
+          {canChangeStage && (
+            <button
+              onClick={() => setSlaModalOpen(true)}
+              className="w-9 h-9 rounded-lg border border-border text-muted-foreground hover:text-[#C9A84C] hover:border-[#C9A84C]/40 hover:bg-[#C9A84C]/10 flex items-center justify-center transition-colors"
+              title="Configurar SLA por fase"
+            >
+              <Settings className="w-4 h-4" />
+            </button>
+          )}
           <Button size="sm" onClick={() => setNovoTicket(true)}>
             <Plus className="w-4 h-4 mr-1.5" /> Novo Ticket
           </Button>
@@ -927,13 +1896,14 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
       </div>
 
       {/* KPIs */}
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
         {[
           { label: "Propostas Ativas", value: proposals.filter((p) => p.stage !== "FINALIZADO").length, color: "text-blue-400", icon: <FileText className="w-4 h-4" /> },
           { label: "Tickets Abertos", value: openCount, color: "text-amber-400", icon: <Clock className="w-4 h-4" /> },
           { label: "Urgentes", value: urgentCount, color: "text-red-400", icon: <AlertCircle className="w-4 h-4" /> },
           { label: "Finalizados", value: proposals.filter((p) => p.stage === "FINALIZADO").length, color: "text-emerald-400", icon: <CheckCircle2 className="w-4 h-4" /> },
           { label: "Contratos Pendentes", value: contratosPendentes > 0 ? contratosPendentes : "—", color: "text-purple-400", icon: <ScrollText className="w-4 h-4" /> },
+          { label: "SLA Vencidas", value: slaVencidas > 0 ? slaVencidas : "—", color: slaVencidas > 0 ? "text-red-400" : "text-muted-foreground", icon: <Clock className="w-4 h-4" /> },
         ].map((kpi) => (
           <Card key={kpi.label}><CardContent className="p-4 flex items-center gap-3">
             <div className={kpi.color}>{kpi.icon}</div>
@@ -978,9 +1948,13 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
               );
               const totalValue = stageProposals.reduce((sum, p) => sum + (p.requested_value || 0), 0);
               return (
-                <div key={stage.key} className="flex flex-col gap-2">
+                <div key={stage.key} className="flex flex-col gap-2"
+                  onDragOver={(e) => { if (!canChangeStage) return; e.preventDefault(); setDragOverStage(stage.key); }}
+                  onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOverStage(null); }}
+                  onDrop={(e) => { e.preventDefault(); const id = e.dataTransfer.getData("proposalId"); if (id && canChangeStage && id !== "") handleStageChange(id, stage.key); setDragOverStage(null); }}
+                >
                   {/* Column header */}
-                  <div className={`px-3 py-2 rounded-lg ${stage.bg} border border-current/20`}>
+                  <div className={`px-3 py-2 rounded-lg ${stage.bg} border transition-all ${dragOverStage === stage.key ? "border-[#C9A84C] ring-2 ring-[#C9A84C]/30 scale-[1.02]" : "border-current/20"}`}>
                     <div className="flex items-center justify-between">
                       <span className={`text-xs font-semibold ${stage.color}`}>{stage.label}</span>
                       <span className={`text-xs font-bold ${stage.color}`}>{stageProposals.length}</span>
@@ -1000,11 +1974,42 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
                       const hasNext = canChangeStage && cardIdx < stageKeys.length - 1;
                       return (
                         <div key={p.id}
-                          className="relative w-full text-left p-3 rounded-xl bg-card border border-border hover:border-primary/40 hover:bg-secondary/50 transition-all group cursor-pointer"
+                          draggable={canChangeStage}
+                          onDragStart={(e) => { e.dataTransfer.setData("proposalId", p.id); e.dataTransfer.effectAllowed = "move"; setDraggedId(p.id); }}
+                          onDragEnd={() => { setDraggedId(null); setDragOverStage(null); }}
+                          className={`relative w-full text-left p-3 rounded-xl bg-card border border-border hover:border-primary/40 hover:bg-secondary/50 transition-all group cursor-pointer ${draggedId === p.id ? "opacity-40 scale-95 cursor-grabbing" : canChangeStage ? "cursor-grab active:cursor-grabbing" : ""}`}
                           onClick={() => setDetailProposal(p)}>
+                          {(() => {
+                            const sla = getSlaStatus(p, slaConfig);
+                            if (!sla) return null;
+                            const colors = { ok: "bg-emerald-500", warning: "bg-amber-500", danger: "bg-red-500" };
+                            const fmtDate = sla.targetDate
+                              ? parseLocalDate(sla.targetDate).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })
+                              : null;
+                            const label = sla.targetDate
+                              ? (sla.daysLeft < 0 ? `venceu ${fmtDate}` : sla.daysLeft === 0 ? `hoje ${fmtDate}` : `retorno ${fmtDate}`)
+                              : (sla.daysLeft < 0 ? `+${Math.abs(sla.daysLeft)}d vencido` : `${sla.daysLeft}d restantes`);
+                            const title = sla.targetDate ? `Retorno: ${parseLocalDate(sla.targetDate).toLocaleDateString("pt-BR")}` : `${sla.daysElapsed}d / ${sla.slaLimit}d`;
+                            return (
+                              <div className="flex items-center gap-1 mb-1.5" title={title}>
+                                <span className={`w-2 h-2 rounded-full flex-shrink-0 ${colors[sla.status]}`} />
+                                <span className={`text-[9px] font-semibold ${sla.status === "danger" ? "text-red-400" : sla.status === "warning" ? "text-amber-400" : "text-emerald-400"}`}>{label}</span>
+                              </div>
+                            );
+                          })()}
                           <div className="flex items-start justify-between gap-1 mb-2">
                             <span className="font-mono text-[10px] text-muted-foreground">{p.code}</span>
                             <div className="flex items-center gap-1">
+                              {canChangeStage && SLA_STAGES.includes((p.stage ?? "") as SlaStage) && (
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); setStageSlaTarget({ proposal: p, stage: p.stage as SlaStage }); }}
+                                  className="w-5 h-5 rounded flex items-center justify-center transition-colors"
+                                  style={{ color: getDealSlaOverride(p)[p.stage ?? ""] ? "#C9A84C" : "rgba(201,168,76,0.35)" }}
+                                  title={getDealSlaOverride(p)[p.stage ?? ""] ? "Editar data de retorno SLA" : "Definir data de retorno SLA"}
+                                >
+                                  <Clock className="w-3 h-3" />
+                                </button>
+                              )}
                               {canChangeStage && (
                                 <button
                                   onClick={(e) => { e.stopPropagation(); setEditProposal(p); }}
@@ -1075,6 +2080,81 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
                               </div>
                             ) : null;
                           })()}
+
+                          {/* Notas internas */}
+                          {canChangeStage && (
+                            <div className="mt-1.5" onClick={e => e.stopPropagation()}>
+                              <button
+                                onClick={() => {
+                                  if (notesOpenId === p.id) { setNotesOpenId(null); return; }
+                                  setNotesOpenId(p.id);
+                                  setNoteText("");
+                                  if (!inlineNotes[p.id]) loadNotes(p.id);
+                                }}
+                                className="flex items-center gap-1 text-[10px] font-medium transition-colors"
+                                style={{ color: notesOpenId === p.id ? "#C9A84C" : (p.mesa_comments_count ?? 0) > 0 ? "#C9A84C" : "rgba(122,143,168,0.7)" }}
+                              >
+                                <MessageSquare className="w-3 h-3" />
+                                {(p.mesa_comments_count ?? 0) > 0 ? `${p.mesa_comments_count} nota${(p.mesa_comments_count ?? 0) !== 1 ? "s" : ""}` : "Notas internas"}
+                              </button>
+                              {notesOpenId === p.id && (
+                                <div className="mt-1.5 rounded-lg p-2 space-y-2" style={{ background: "#0F1C2E", border: "1px solid rgba(201,168,76,0.15)" }}>
+                                  <div className="space-y-1.5 max-h-32 overflow-y-auto">
+                                    {!inlineNotes[p.id] && <p className="text-[10px] text-center py-1" style={{ color: "#7A8FA8" }}>Carregando...</p>}
+                                    {inlineNotes[p.id]?.length === 0 && <p className="text-[10px] text-center py-1 italic" style={{ color: "#7A8FA8" }}>Sem notas ainda</p>}
+                                    {inlineNotes[p.id]?.map((c) => (
+                                      <div key={c.id} className="rounded p-1.5 space-y-0.5" style={{ background: "rgba(201,168,76,0.06)" }}>
+                                        <div className="flex items-center justify-between gap-1">
+                                          <span className="text-[9px] font-semibold" style={{ color: "#C9A84C" }}>{c.author}</span>
+                                          <span className="text-[9px]" style={{ color: "#7A8FA8" }}>{new Date(c.created_at).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}</span>
+                                        </div>
+                                        <p className="text-[10px] leading-snug" style={{ color: "#F0ECE4" }}>{c.text}</p>
+                                      </div>
+                                    ))}
+                                  </div>
+                                  <div className="flex gap-1">
+                                    <input
+                                      type="text"
+                                      value={noteText}
+                                      onChange={e => setNoteText(e.target.value)}
+                                      onKeyDown={e => { if (e.key === "Enter" && noteText.trim()) handleAddNote(p.id); }}
+                                      placeholder="Adicionar nota..."
+                                      className="flex-1 px-2 py-1 rounded text-[10px] outline-none"
+                                      style={{ background: "#162744", border: "1px solid rgba(201,168,76,0.2)", color: "#F0ECE4" }}
+                                    />
+                                    <button
+                                      onClick={() => handleAddNote(p.id)}
+                                      disabled={noteSaving || !noteText.trim()}
+                                      className="w-6 h-6 rounded flex items-center justify-center disabled:opacity-40"
+                                      style={{ background: "rgba(201,168,76,0.2)", color: "#C9A84C" }}
+                                    >
+                                      <ArrowRight className="w-3 h-3" />
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          {/* Bloco de pendência — exibido quando stage = PENDENCIA */}
+                          {p.stage === "PENDENCIA" && (
+                            <CardPendingBlock
+                              proposal={p}
+                              canChangeStage={canChangeStage}
+                              currentUserName={currentUser?.full_name}
+                              onResolve={async () => {
+                                const now = new Date().toISOString();
+                                setProposals(prev => prev.map(x => x.id === p.id ? { ...x, stage: "ANALISE", pending_resolved_at: now, pending_resolved_by: currentUser?.full_name ?? "Usuário" } : x));
+                                await fetch("/api/credit-proposals", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: p.id, stage: "ANALISE", pending_resolved_at: now, pending_resolved_by: currentUser?.full_name ?? "Usuário" }) }).catch(() => {});
+                                showToast("Pendência resolvida.");
+                              }}
+                              onReminder={async () => { await handleSendProposalReminder(p); }}
+                              onSaved={(updates) => {
+                                setProposals(prev => prev.map(x => x.id === p.id ? { ...x, ...updates } : x));
+                                if (detailProposal?.id === p.id) setDetailProposal(prev => prev ? { ...prev, ...updates } : prev);
+                              }}
+                            />
+                          )}
 
                           {/* Botões de aprovação rápida — apenas em "Em Aprovação" */}
                           {canChangeStage && p.stage === "APROVACAO" && p.status !== "APPROVED" && p.status !== "REJECTED" && (
@@ -1208,23 +2288,62 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
                           {ticket.description && (
                             <p className="text-[10px] text-muted-foreground truncate">{ticket.description}</p>
                           )}
+                          {/* Badge pendência inline na tabela */}
+                          {ticket.status === "PENDING" && ticket.pending_reason && (
+                            <p className="text-[10px] italic truncate mt-0.5" style={{ color: "#FF6B6B" }}
+                              title={ticket.pending_reason}>
+                              {ticket.pending_reason}
+                            </p>
+                          )}
                         </td>
                         <td className="px-4 py-3 text-xs text-muted-foreground capitalize">{CATEGORY_LABELS[ticket.category] ?? ticket.category}</td>
                         <td className="px-4 py-3">
                           <Badge className={PRIORITY_COLORS[ticket.priority as TicketPriority]}>{PRIORITY_LABELS[ticket.priority as TicketPriority]}</Badge>
                         </td>
                         <td className="px-4 py-3">
-                          <Badge className={STATUS_COLORS[ticket.status as OperationStatus]}>{STATUS_LABELS[ticket.status as OperationStatus]}</Badge>
+                          {ticket.status === "PENDING" ? (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase"
+                              style={{ background: "#3A1F1F", color: "#FF6B6B", border: "1px solid rgba(255,107,107,0.3)" }}>
+                              PENDENTE
+                            </span>
+                          ) : (
+                            <Badge className={STATUS_COLORS[ticket.status as OperationStatus]}>{STATUS_LABELS[ticket.status as OperationStatus]}</Badge>
+                          )}
                         </td>
                         <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">
                           {ticket.assignee?.full_name ?? "—"}
                         </td>
                         <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">{ticket.due_date ? formatDateTime(ticket.due_date) : "—"}</td>
-                        <td className="px-4 py-3 flex items-center gap-2" onClick={e => e.stopPropagation()}>
+                        <td className="px-4 py-3 flex items-center gap-2 flex-wrap" onClick={e => e.stopPropagation()}>
+                          {/* Botões especiais de pendência */}
+                          {ticket.status === "PENDING" && ["ADMIN","GESTAO","MESA_OPERACIONAL"].includes(currentUser?.role ?? "") && (
+                            <>
+                              <button
+                                onClick={() => setResolveTarget(ticket)}
+                                className="text-xs flex items-center gap-0.5 font-semibold"
+                                style={{ color: "#4ADE80" }}
+                              >
+                                <CheckCircle2 className="w-3 h-3" /> Resolver
+                              </button>
+                              <button
+                                onClick={() => handleSendReminder(ticket)}
+                                className="text-xs flex items-center gap-0.5 font-semibold"
+                                style={{ color: "#C9A84C" }}
+                                title={ticket.reminder_sent_at ? `Último lembrete: ${timeAgo(ticket.reminder_sent_at)}` : "Enviar lembrete"}
+                              >
+                                <Bell className="w-3 h-3" />
+                                {ticket.reminder_sent_at ? timeAgo(ticket.reminder_sent_at) : "Lembrar"}
+                              </button>
+                            </>
+                          )}
                           {ticket.status !== "PENDING" && (
                             <button
                               onClick={async () => {
                                 const newStatus = ticket.status === "COMPLETED" ? "IN_REVIEW" : "PENDING";
+                                if (newStatus === "PENDING") {
+                                  setPendingTarget(ticket);
+                                  return;
+                                }
                                 setTickets((prev) => prev.map((t) => t.id === ticket.id ? { ...t, status: newStatus } : t));
                                 await fetch("/api/tickets", {
                                   method: "PATCH",
@@ -1238,10 +2357,10 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
                               {ticket.status === "COMPLETED" ? "Em Revisão" : "Pendente"}
                             </button>
                           )}
-                          {ticket.status !== "COMPLETED" && (
+                          {ticket.status !== "COMPLETED" && ticket.status !== "PENDING" && (
                             <button
                               onClick={async () => {
-                                const newStatus = ticket.status === "PENDING" ? "IN_REVIEW" : "COMPLETED";
+                                const newStatus = "COMPLETED";
                                 setTickets((prev) => prev.map((t) => t.id === ticket.id ? { ...t, status: newStatus } : t));
                                 await fetch("/api/tickets", {
                                   method: "PATCH",
@@ -1251,7 +2370,7 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
                               }}
                               className="text-xs text-primary hover:underline flex items-center gap-1"
                             >
-                              {ticket.status === "PENDING" ? "Iniciar" : "Concluir"}
+                              Concluir
                               <ArrowRight className="w-3 h-3" />
                             </button>
                           )}
@@ -1433,6 +2552,22 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
       )}
 
       {/* Modais */}
+      <SLAConfigModal
+        open={slaModalOpen}
+        onClose={() => setSlaModalOpen(false)}
+        config={slaConfig}
+        onSave={(cfg) => { setSlaConfig(cfg); saveSlaConfig(cfg); }}
+      />
+
+      <StageSLAModal
+        open={!!stageSlaTarget}
+        onClose={() => setStageSlaTarget(null)}
+        proposal={stageSlaTarget?.proposal ?? null}
+        stage={stageSlaTarget?.stage ?? null}
+        globalSla={slaConfig}
+        onConfirm={handleConfirmStageSla}
+      />
+
       <NovoTicketModal open={novoTicket} onClose={() => setNovoTicket(false)}
         onSubmit={(t) => setTickets(prev => [t, ...prev])} />
 
@@ -1445,6 +2580,9 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
           setTickets(prev => prev.map(t => t.id === id ? { ...t, ...updates } : t));
           setTicketDetail(null);
         }}
+        onOpenPending={() => { setPendingTarget(ticketDetail); setTicketDetail(null); }}
+        onOpenResolve={() => { setResolveTarget(ticketDetail); setTicketDetail(null); }}
+        onSendReminder={() => { if (ticketDetail) handleSendReminder(ticketDetail); }}
       />
 
       <EditarPropostaModal
@@ -1468,6 +2606,66 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
         canCompileDocuments={canChangeStage}
         canEditInstituicao={canChangeStage}
       />
+
+      {/* ── Modal de Pendência ── */}
+      <PendingModal
+        open={!!pendingTarget}
+        onClose={() => setPendingTarget(null)}
+        ticket={pendingTarget}
+        onConfirm={async (reason, responsible) => {
+          if (pendingTarget) await handleConfirmPending(pendingTarget, reason, responsible);
+        }}
+      />
+
+      {/* ── Modal de Resolução ── */}
+      <ResolveModal
+        open={!!resolveTarget}
+        onClose={() => setResolveTarget(null)}
+        ticket={resolveTarget}
+        onConfirm={async (obs) => {
+          if (resolveTarget) await handleConfirmResolve(resolveTarget, obs);
+        }}
+      />
+
+      {/* ── Modal de Pendência — Deal/Proposta ── */}
+      {pendingProposalTarget && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.7)" }}>
+          <div className="w-full max-w-md rounded-2xl p-6 space-y-4" style={{ background: "#111F35", border: "1px solid rgba(201,168,76,0.2)" }}>
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: "rgba(255,107,107,0.15)" }}>
+                <AlertCircle className="w-5 h-5" style={{ color: "#FF6B6B" }} />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-white">Registrar Pendência</h3>
+                <p className="text-[11px]" style={{ color: "#7A8FA8" }}>{pendingProposalTarget.client_name} · {pendingProposalTarget.code}</p>
+              </div>
+            </div>
+            <ProposalPendingForm
+              proposal={pendingProposalTarget}
+              onClose={() => setPendingProposalTarget(null)}
+              onConfirm={handleConfirmProposalPending}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* ── Toast de feedback ── */}
+      {reminderToast && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] px-5 py-3 rounded-xl text-sm font-medium text-white shadow-xl animate-fade-in"
+          style={{ background: "#162744", border: "1px solid #C9A84C50" }}>
+          {reminderToast}
+        </div>
+      )}
+
+      {/* ── Overlay de loading do lembrete ── */}
+      {reminderLoading && (
+        <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/40">
+          <div className="px-6 py-4 rounded-xl text-sm text-white flex items-center gap-3" style={{ background: "#162744", border: "1px solid #C9A84C50" }}>
+            <span className="w-4 h-4 rounded-full border-2 border-[#C9A84C] border-t-transparent animate-spin" />
+            Enviando lembrete...
+          </div>
+        </div>
+      )}
 
       {/* ── Modal Rápido: Aprovar ── */}
       {quickAction?.type === "aprovar" && (

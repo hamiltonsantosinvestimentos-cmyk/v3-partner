@@ -31,7 +31,8 @@ export default async function CRMPage() {
   const { data: leadsData } = await query;
 
   // Normaliza campo snake_case → camelCase para o cliente
-  const initialLeads = (leadsData ?? []).map((l) => ({
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const initialLeads = (leadsData ?? []).map((l: any) => ({
     id:              l.id,
     code:            l.code,
     name:            l.name,
@@ -57,6 +58,7 @@ export default async function CRMPage() {
     createdAt:       l.created_at?.split("T")[0] ?? "",
     interactions:    Array.isArray(l.interactions) ? l.interactions : [],
     metadata:        (l.metadata ?? {}) as Record<string, unknown>,
+    clientToken:     (l.client_token as string | null) ?? null,
   }));
 
   return <CRMClient userRole={userRole} userName={userName} userId={userId} initialLeads={initialLeads} />;

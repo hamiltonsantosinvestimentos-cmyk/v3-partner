@@ -9,7 +9,10 @@ import { AcademyCertificate } from "./academy-certificate";
 import { AcademyQuiz } from "./academy-quiz";
 import { ACADEMY_CATEGORIES, getAllVideos, type Video, type VideoCategory } from "@/lib/academy-data";
 import { getQuiz } from "@/lib/academy-quizzes";
-import { BADGE_DEFS, RARITY_COLORS } from "@/lib/academy-badges";
+import { BADGE_DEFS, RARITY_COLORS, SPECIALTY_BADGE_DEFS } from "@/lib/academy-badges";
+import { LiveClasses } from "./live-classes";
+import { OnboardingTrail } from "./onboarding-trail";
+import { AcademyRanking } from "./academy-ranking";
 
 interface VideoOverride {
   video_id: string;
@@ -258,9 +261,9 @@ function HeroBanner({ video, onPlay }: { video: Video; onPlay: (v: Video) => voi
 }
 
 // ── Main Academy Client ──────────────────────────────────────────────────────
-export function AcademyClient({ initialCategory, userRole, userName }: { initialCategory?: string; userRole?: string; userName?: string }) {
+export function AcademyClient({ initialCategory, userRole, userName, userId, isNew }: { initialCategory?: string; userRole?: string; userName?: string; userId?: string; isNew?: boolean }) {
   const isAdmin = userRole === "ADMIN";
-  const [activeTab, setActiveTab] = useState<"content" | "admin">("content");
+  const [activeTab, setActiveTab] = useState<"content" | "admin" | "ranking">("content");
   const [activeCategory, setActiveCategory] = useState<string>(initialCategory ?? "all");
   const [search, setSearch] = useState("");
   const [playingVideo, setPlayingVideo] = useState<Video | null>(null);
@@ -419,6 +422,36 @@ export function AcademyClient({ initialCategory, userRole, userName }: { initial
   const trailCompleted = ONBOARDING_TRAIL.filter(v => (videoProgress[v.id] ?? 0) >= 90).length;
   const trailPct = ONBOARDING_TRAIL.length > 0 ? Math.round((trailCompleted / ONBOARDING_TRAIL.length) * 100) : 0;
 
+  // Specialty badge unlock logic: count certs per category label
+  const unlockedSpecialtyBadges = useMemo(() => {
+    const unlocked = new Set<string>();
+    // Count certificates per category label
+    const certsByCategory: Record<string, number> = {};
+    for (const catId of Array.from(certificates)) {
+      const cat = ACADEMY_CATEGORIES.find(c => c.id === catId);
+      if (cat) {
+        certsByCategory[cat.label] = (certsByCategory[cat.label] ?? 0) + 1;
+      }
+    }
+    // Check specialty badges
+    for (const sb of SPECIALTY_BADGE_DEFS) {
+      if (sb.category_requirement && sb.courses_required) {
+        if ((certsByCategory[sb.category_requirement] ?? 0) >= sb.courses_required) {
+          unlocked.add(sb.id);
+        }
+      } else if (sb.specializations_required) {
+        const specializationsCount = SPECIALTY_BADGE_DEFS
+          .filter(s => s.category_requirement && s.courses_required)
+          .filter(s => unlocked.has(s.id))
+          .length;
+        if (specializationsCount >= sb.specializations_required) {
+          unlocked.add(sb.id);
+        }
+      }
+    }
+    return unlocked;
+  }, [certificates]);
+
   // Dados do certificado para exibir
   const certCategory = certificate
     ? ACADEMY_CATEGORIES.find((c) => c.id === certificate.categoryId)
@@ -461,6 +494,17 @@ export function AcademyClient({ initialCategory, userRole, userName }: { initial
               </div>
             )}
           </div>
+          <button
+            onClick={() => setActiveTab(activeTab === "ranking" ? "content" : "ranking")}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
+              activeTab === "ranking"
+                ? "bg-[#C9A84C]/15 border-[#C9A84C]/40 text-[#C9A84C]"
+                : "border-border text-muted-foreground hover:text-white hover:bg-secondary"
+            }`}
+          >
+            <Trophy className="w-3.5 h-3.5" />
+            Ranking
+          </button>
           {isAdmin && (
             <button
               onClick={() => setActiveTab(activeTab === "admin" ? "content" : "admin")}
@@ -501,8 +545,19 @@ export function AcademyClient({ initialCategory, userRole, userName }: { initial
         <AcademyAdmin ytLinks={ytLinks} onLinksChange={setYtLinks} />
       )}
 
+      {/* Ranking Panel */}
+      {activeTab === "ranking" && (
+        <AcademyRanking />
+      )}
+
       {/* Content */}
       {activeTab === "content" && <>
+        {/* Live Classes */}
+        {!search && <LiveClasses />}
+
+        {/* Welcome Onboarding Trail */}
+        {!search && <OnboardingTrail isNew={isNew ?? false} />}
+
         <div className="relative mb-5">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <input
@@ -551,20 +606,44 @@ export function AcademyClient({ initialCategory, userRole, userName }: { initial
         )}
 
         {/* Badges earned */}
-        {earnedBadges.size > 0 && !search && (
+        {(earnedBadges.size > 0 || unlockedSpecialtyBadges.size > 0) && !search && (
           <div className="mb-5 p-4 rounded-xl border border-[#243A66] bg-[#0D1929]">
             <div className="flex items-center gap-2 mb-3">
               <Trophy className="w-4 h-4 text-[#C9A84C]" />
               <span className="text-sm font-bold text-white">Minhas Conquistas</span>
-              <span className="text-xs text-muted-foreground">({earnedBadges.size} badges)</span>
+              <span className="text-xs text-muted-foreground">({earnedBadges.size + unlockedSpecialtyBadges.size} badges)</span>
             </div>
             <div className="flex gap-2 flex-wrap">
-              {BADGE_DEFS.filter(b => earnedBadges.has(b.id)).map(b => (
+              {BADGE_DEFS.filter(b => earnedBadges.has(b.id) && !SPECIALTY_BADGE_DEFS.find(s => s.id === b.id)).map(b => (
                 <div key={b.id} className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border bg-gradient-to-r text-xs ${RARITY_COLORS[b.rarity]}`} title={b.description}>
                   <span>{b.icon}</span>
                   <span className="font-semibold">{b.label}</span>
                 </div>
               ))}
+              {SPECIALTY_BADGE_DEFS.map(sb => {
+                const isUnlocked = unlockedSpecialtyBadges.has(sb.id);
+                return (
+                  <div
+                    key={sb.id}
+                    className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border bg-gradient-to-r text-xs transition-all ${
+                      isUnlocked
+                        ? `${RARITY_COLORS[sb.rarity]} shadow-[0_0_12px_rgba(201,168,76,0.3)]`
+                        : "border-[#243A66] bg-[#111F35] text-[#7A8FA8] opacity-50"
+                    }`}
+                    title={sb.description}
+                  >
+                    <span>{sb.icon}</span>
+                    <div className="flex flex-col leading-none gap-0.5">
+                      {isUnlocked && (
+                        <span className="text-[7px] font-black tracking-widest text-[#C9A84C] uppercase">
+                          ESPECIALIZAÇÃO
+                        </span>
+                      )}
+                      <span className="font-semibold">{sb.label}</span>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}

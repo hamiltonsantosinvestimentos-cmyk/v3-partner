@@ -8,6 +8,14 @@ function serviceClient() {
 
 const VALID_STATUSES = ["NEW", "IN_PROGRESS", "CONVERTED", "LOST", "PENDING"];
 
+const STATUS_LABELS: Record<string, string> = {
+  NEW: "Novo",
+  IN_PROGRESS: "Em andamento",
+  CONVERTED: "Convertido 🎉",
+  LOST: "Não avançou",
+  PENDING: "Aguardando resposta",
+};
+
 /** PATCH /api/marketplace/leads/[id] — update lead status (supplier or admin) */
 export async function PATCH(
   req: NextRequest,
@@ -69,6 +77,27 @@ export async function PATCH(
         supplierName: product?.supplier?.company_name ?? "Fornecedor",
         novoStatus: status,
       }).catch(() => {});
+    }
+
+    // In-app notification for the partner who owns this lead
+    const { data: leadOwner } = await svc
+      .from("marketplace_leads")
+      .select("partner_id, client_name")
+      .eq("id", id)
+      .single();
+
+    if (leadOwner?.partner_id) {
+      const clientName = leadOwner.client_name ?? partner?.full_name ?? "Cliente";
+      const productName = product?.name ?? "Produto";
+      const statusLabel = STATUS_LABELS[status] ?? status;
+
+      svc.from("notifications").insert({
+        user_id: leadOwner.partner_id,
+        title: "Status do lead atualizado",
+        message: `Seu lead "${clientName}" para ${productName} foi atualizado para: ${statusLabel}`,
+        type: "info",
+        action_url: "/marketplace?tab=leads",
+      }).then(() => {}).catch(() => {});
     }
   }
 

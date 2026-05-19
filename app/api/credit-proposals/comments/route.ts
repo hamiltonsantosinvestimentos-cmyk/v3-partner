@@ -7,6 +7,27 @@ export const dynamic = "force-dynamic";
 
 const MESA_ROLES = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"] as const;
 
+// GET — retorna comentários de uma proposta (apenas mesa/admin)
+export async function GET(req: NextRequest) {
+  const { user, profile } = await getAuthedUser();
+  if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+  const isMesa = MESA_ROLES.includes(profile?.role as typeof MESA_ROLES[number]);
+  if (!isMesa) return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
+
+  const { searchParams } = new URL(req.url);
+  const proposal_id = searchParams.get("proposal_id");
+  if (!proposal_id) return NextResponse.json({ error: "proposal_id obrigatório" }, { status: 400 });
+
+  const { data } = await serviceClient()
+    .from("credit_desk_proposals")
+    .select("mesa_comments")
+    .eq("id", proposal_id)
+    .single();
+
+  const comments = Array.isArray(data?.mesa_comments) ? data.mesa_comments : [];
+  return NextResponse.json({ comments });
+}
+
 function serviceClient() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 }

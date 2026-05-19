@@ -147,5 +147,15 @@ export async function PATCH(req: NextRequest) {
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // Fire-and-forget AI matching when product is approved
+  if (status === "APPROVED" && data?.id) {
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.v3partners.com.br";
+    fetch(`${appUrl}/api/marketplace/products/${data.id}/match-partners`, {
+      method: "POST",
+      headers: { "x-internal-key": process.env.INTERNAL_API_KEY ?? "v3-internal" },
+    }).catch(() => {});
+  }
+
   return NextResponse.json({ product: data });
 }

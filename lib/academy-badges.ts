@@ -20,6 +20,25 @@ export const BADGE_DEFS: BadgeDef[] = [
   { id: "quiz_first",     label: "Quiz Expert",        icon: "🧠", description: "Passou em seu primeiro quiz",                           rarity: "comum" },
   { id: "quiz_all",       label: "Quiz Master",        icon: "🏆", description: "Passou em todos os quizzes",                            rarity: "épico" },
   { id: "streak_3",       label: "Sequência",          icon: "⚡", description: "Assistiu aulas 3 dias seguidos",                        rarity: "raro" },
+  // Specialty badges — awarded when partner has certificates in N+ courses of same category
+  { id: "specialist_credito", label: "Especialista em Crédito", icon: "💳", description: "Completou 2+ trilhas de Crédito",         rarity: "épico" },
+  { id: "specialist_ma",      label: "Especialista em M&A",     icon: "🤝", description: "Completou 2+ trilhas de M&A",             rarity: "épico" },
+  { id: "specialist_fundos",  label: "Especialista em Fundos",  icon: "📊", description: "Completou 2+ trilhas de Fundos",          rarity: "épico" },
+  { id: "all_rounder",        label: "Profissional Completo",   icon: "⭐", description: "Especializou-se em 3+ categorias",        rarity: "lendário" },
+];
+
+export interface SpecialtyBadgeDef extends BadgeDef {
+  specialty: true;
+  category_requirement?: string;
+  courses_required?: number;
+  specializations_required?: number;
+}
+
+export const SPECIALTY_BADGE_DEFS: SpecialtyBadgeDef[] = [
+  { id: "specialist_credito", label: "Especialista em Crédito", icon: "💳", description: "Completou 2+ trilhas de Crédito",  rarity: "épico",    specialty: true, category_requirement: "Crédito", courses_required: 2 },
+  { id: "specialist_ma",      label: "Especialista em M&A",     icon: "🤝", description: "Completou 2+ trilhas de M&A",    rarity: "épico",    specialty: true, category_requirement: "M&A",     courses_required: 2 },
+  { id: "specialist_fundos",  label: "Especialista em Fundos",  icon: "📊", description: "Completou 2+ trilhas de Fundos", rarity: "épico",    specialty: true, category_requirement: "Fundos",  courses_required: 2 },
+  { id: "all_rounder",        label: "Profissional Completo",   icon: "⭐", description: "Especializou-se em 3+ categorias", rarity: "lendário", specialty: true, specializations_required: 3 },
 ];
 
 export function getBadgeDef(id: string): BadgeDef | undefined {

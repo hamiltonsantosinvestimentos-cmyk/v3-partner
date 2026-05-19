@@ -32,12 +32,14 @@ import {
   RefreshCw,
   Trash2,
   CalendarPlus,
+  Share2,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { NovaPropostaModal } from "@/components/mesa-credito/nova-proposta-modal";
 import { NovoDealForm } from "@/components/ma/novo-deal-form";
+import { ColdLeadAlert } from "@/components/crm/cold-lead-alert";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -75,6 +77,7 @@ type CRMLead = {
   createdAt: string;
   interactions: Interaction[];
   metadata?: Record<string, unknown>;
+  clientToken?: string | null;
 };
 
 type CaptacaoLink = {
@@ -94,6 +97,45 @@ type MaCaptacaoLink = {
   uses_count: number;
   created_at: string;
 };
+
+// ─── Lead Score ──────────────────────────────────────────────────────────────
+
+function calcLeadScore(lead: CRMLead): { score: number; label: string; colorClass: string } {
+  let score = 0;
+  const statusScore: Record<string, number> = { prospect: 10, qualificado: 25, proposta: 45, negociacao: 65, ganho: 100, perdido: 0 };
+  score += statusScore[lead.status] ?? 10;
+  if (lead.email && lead.phone) score += 10;
+  if (lead.productInterest) score += 15;
+  const updatedAt = (lead as unknown as Record<string, string>).updatedAt ?? lead.createdAt;
+  if (updatedAt) {
+    const days = (Date.now() - new Date(updatedAt).getTime()) / 86400000;
+    if (days < 7) score += 10;
+  }
+  if (lead.document) score += 5;
+  score = Math.min(100, score);
+  if (score >= 70) return { score, label: "Quente 🔥", colorClass: "text-red-400 bg-red-500/10 border-red-500/30" };
+  if (score >= 40) return { score, label: "Morno", colorClass: "text-amber-400 bg-amber-500/10 border-amber-500/30" };
+  return { score, label: "Frio", colorClass: "text-blue-400 bg-blue-500/10 border-blue-500/30" };
+}
+
+// ─── CSV Import helpers ───────────────────────────────────────────────────────
+
+function parseCSV(text: string): string[][] {
+  return text.trim().split('\n').map(row =>
+    row.split(',').map(cell => cell.trim().replace(/^["']|["']$/g, ''))
+  );
+}
+
+// ─── Kanban columns ───────────────────────────────────────────────────────────
+
+const KANBAN_COLUMNS = [
+  { id: "prospect",    label: "Prospect",    color: "border-blue-500/40",    bg: "bg-blue-500/5",    count_color: "text-blue-400",    hex: "#3B82F6" },
+  { id: "qualificado", label: "Qualificado", color: "border-amber-500/40",   bg: "bg-amber-500/5",   count_color: "text-amber-400",   hex: "#F59E0B" },
+  { id: "proposta",    label: "Proposta",    color: "border-purple-500/40",  bg: "bg-purple-500/5",  count_color: "text-purple-400",  hex: "#A855F7" },
+  { id: "negociacao",  label: "Negociação",  color: "border-orange-500/40",  bg: "bg-orange-500/5",  count_color: "text-orange-400",  hex: "#F97316" },
+  { id: "ganho",       label: "Ganho ✓",     color: "border-emerald-500/40", bg: "bg-emerald-500/5", count_color: "text-emerald-400", hex: "#10B981" },
+  { id: "perdido",     label: "Perdido",     color: "border-gray-500/40",    bg: "bg-gray-500/5",    count_color: "text-gray-400",    hex: "#6B7280" },
+];
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -561,6 +603,7 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
   const [filterPartner, setFilterPartner] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterSource, setFilterSource] = useState("all");
+  const [filterCold, setFilterCold] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [reportPeriod, setReportPeriod] = useState<"semanal" | "mensal" | "anual">("mensal");
   const [reportPartner, setReportPartner] = useState("all");
@@ -585,6 +628,33 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
   const [maCaptacaoLoading, setMaCaptacaoLoading] = useState(false);
   const [maCaptacaoGenerating, setMaCaptacaoGenerating] = useState(false);
   const [maCopiedToken, setMaCopiedToken] = useState<string | null>(null);
+
+  // ── Feature 1: Lead Score (sort) ─────────────────────────────────────────
+  const [sortByScore, setSortByScore] = useState(false);
+
+  // ── Feature 2: AI Next Action ─────────────────────────────────────────────
+  const [aiSuggestions, setAiSuggestions] = useState<Record<string, string>>({});
+  const [aiLoading, setAiLoading] = useState<Record<string, boolean>>({});
+
+  // ── Feature 3: CSV Import ─────────────────────────────────────────────────
+  const [showImport, setShowImport] = useState(false);
+  const [importStep, setImportStep] = useState<1 | 2 | 3>(1);
+  const [importRawRows, setImportRawRows] = useState<string[][]>([]);
+  const [importMapping, setImportMapping] = useState<Record<number, string>>({});
+  const [importLoading, setImportLoading] = useState(false);
+  const [importResult, setImportResult] = useState<string | null>(null);
+
+  // ── Proposta share ───────────────────────────────────────────────────────
+  const [copiedPropostaId, setCopiedPropostaId] = useState<string | null>(null);
+  const [propostaLinkMsg, setPropostaLinkMsg] = useState<string | null>(null);
+
+  // ── Feature 4: Kanban view ────────────────────────────────────────────────
+  const [crmView, setCrmView] = useState<"list" | "kanban">(() => {
+    if (typeof window !== "undefined") {
+      return (localStorage.getItem("crm-view") as "list" | "kanban") ?? "list";
+    }
+    return "list";
+  });
 
   const loadCaptacaoLinks = useCallback(async () => {
     setCaptacaoLoading(true);
@@ -612,6 +682,22 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
       loadMaCaptacaoLinks();
     }
   }, [tab, loadCaptacaoLinks, loadMaCaptacaoLinks]);
+
+  // Escuta evento do ColdLeadAlert para ativar filtro de leads frios
+  useEffect(() => {
+    function handleColdLeadFilter() {
+      setFilterCold(true);
+      setTab("leads");
+    }
+    // Verifica se ColdLeadAlert pediu filtro via localStorage (redirect externo)
+    if (typeof window !== "undefined" && localStorage.getItem("crm-filter-cold") === "true") {
+      localStorage.removeItem("crm-filter-cold");
+      setFilterCold(true);
+      setTab("leads");
+    }
+    window.addEventListener("crm:filter-cold-leads", handleColdLeadFilter);
+    return () => window.removeEventListener("crm:filter-cold-leads", handleColdLeadFilter);
+  }, []);
 
   async function handleGerarLink() {
     setCaptacaoGenerating(true);
@@ -672,6 +758,24 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
     navigator.clipboard.writeText(url).then(() => {
       setMaCopiedToken(token);
       setTimeout(() => setMaCopiedToken(null), 2000);
+    });
+  }
+
+  function handleCopyPropostaLink(lead: CRMLead) {
+    const token = lead.clientToken;
+    if (!token) {
+      setPropostaLinkMsg("Token não disponível. Execute o SQL de migração no Supabase.");
+      setTimeout(() => setPropostaLinkMsg(null), 4000);
+      return;
+    }
+    const url = `https://app.v3partners.com.br/proposta/${token}`;
+    navigator.clipboard.writeText(url).then(() => {
+      setCopiedPropostaId(lead.id);
+      setPropostaLinkMsg("Link copiado! Envie ao cliente.");
+      setTimeout(() => { setCopiedPropostaId(null); setPropostaLinkMsg(null); }, 3000);
+    }).catch(() => {
+      setPropostaLinkMsg("Erro ao copiar. Tente novamente.");
+      setTimeout(() => setPropostaLinkMsg(null), 3000);
     });
   }
 
@@ -784,11 +888,19 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
   const [selectedCreditLine, setSelectedCreditLine] = useState<string>("");
 
   // Filtered leads
+  const COLD_THRESHOLD_MS = 15 * 24 * 60 * 60 * 1000; // 15 dias
+
   const visibleLeads = leads.filter((l) => {
     if (!isAdmin && l.partnerId !== userId) return false;
     if (isAdmin && filterPartner !== "all" && l.partnerId !== filterPartner) return false;
     if (filterStatus !== "all" && l.status !== filterStatus) return false;
     if (filterSource !== "all" && l.source !== filterSource) return false;
+    if (filterCold) {
+      const activeSt = !["ganho", "perdido", "won", "lost"].includes(l.status);
+      const updatedAt = (l as unknown as Record<string, string>).updatedAt ?? l.createdAt;
+      const isCold = activeSt && updatedAt && (Date.now() - new Date(updatedAt).getTime()) > COLD_THRESHOLD_MS;
+      if (!isCold) return false;
+    }
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       return (
@@ -800,7 +912,7 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
       );
     }
     return true;
-  });
+  }).sort((a, b) => sortByScore ? calcLeadScore(b).score - calcLeadScore(a).score : 0);
 
   // Report filtered leads
   const reportLeads = leads.filter((l) => {
@@ -975,6 +1087,129 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
       setReagendandoId(null);
       setReagendandoData("");
     } catch { /* silent */ }
+  }
+
+  // ── Feature 2: AI Next Action handler ────────────────────────────────────
+  async function handleAiSuggest(lead: CRMLead) {
+    setAiLoading(prev => ({ ...prev, [lead.id]: true }));
+    try {
+      const res = await fetch("/api/crm/next-action", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lead_id: lead.id }),
+      });
+      const json = await res.json();
+      if (json.suggestion) {
+        setAiSuggestions(prev => ({ ...prev, [lead.id]: json.suggestion }));
+        setTimeout(() => {
+          setAiSuggestions(prev => { const n = { ...prev }; delete n[lead.id]; return n; });
+        }, 30000);
+      }
+    } catch { /* silent */ }
+    setAiLoading(prev => ({ ...prev, [lead.id]: false }));
+  }
+
+  // ── Feature 3: CSV import handler ─────────────────────────────────────────
+  function handleCSVFile(file: File) {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const text = e.target?.result as string;
+      const rows = parseCSV(text);
+      if (rows.length < 2) return;
+      setImportRawRows(rows);
+      // Auto-map by header name
+      const headers = rows[0];
+      const autoMap: Record<number, string> = {};
+      const fieldMap: Record<string, string> = {
+        nome: "nome", name: "nome", "razão social": "nome", "razao social": "nome",
+        email: "email",
+        telefone: "telefone", phone: "telefone", celular: "telefone",
+        cidade: "cidade", city: "cidade",
+        estado: "estado", state: "estado", uf: "estado",
+        observacoes: "observacoes", "observações": "observacoes", notes: "observacoes",
+      };
+      headers.forEach((h, i) => {
+        const key = h.toLowerCase().trim();
+        autoMap[i] = fieldMap[key] ?? "ignorar";
+      });
+      setImportMapping(autoMap);
+      setImportStep(2);
+    };
+    reader.readAsText(file, "UTF-8");
+  }
+
+  async function handleImportSubmit() {
+    const headers = importRawRows[0];
+    const dataRows = importRawRows.slice(1);
+    const leads = dataRows.map(row => {
+      const obj: Record<string, string> = {};
+      headers.forEach((_, i) => {
+        const field = importMapping[i];
+        if (field && field !== "ignorar" && row[i]) obj[field] = row[i];
+      });
+      return obj as { nome: string; email?: string; telefone?: string; cidade?: string; estado?: string; observacoes?: string };
+    }).filter(l => l.nome?.trim());
+
+    setImportLoading(true);
+    try {
+      const res = await fetch("/api/crm/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ leads }),
+      });
+      const json = await res.json();
+      if (res.ok) {
+        setImportResult(`✅ ${json.imported} contato(s) importado(s) com sucesso!`);
+        setImportStep(3);
+        // Reload leads
+        try {
+          const r2 = await fetch("/api/crm");
+          const j2 = await r2.json();
+          if (j2.leads) {
+            const mapped: CRMLead[] = j2.leads.map((l: Record<string, unknown>) => ({
+              id: l.id as string, code: l.code as string, name: l.name as string,
+              document: (l.document as string) ?? "", personType: (l.person_type as "PF" | "PJ") ?? "PJ",
+              email: (l.email as string) ?? "", phone: (l.phone as string) ?? "",
+              segment: (l.segment as string) ?? "", annualRevenue: Number(l.annual_revenue ?? 0),
+              city: (l.city as string) ?? "", state: (l.state as string) ?? "",
+              status: (l.status as CRMLead["status"]) ?? "prospect",
+              source: (l.source as CRMLead["source"]) ?? "ativo",
+              visitDate: (l.visit_date as string) ?? "", nextContact: (l.next_contact as string) ?? "",
+              notes: (l.notes as string) ?? "", convertedTo: "" as const, convertedAt: "",
+              productInterest: (l.product_interest as string) ?? "", creditLine: (l.credit_line as string) ?? "",
+              partnerId: (l.partner_id as string) ?? userId, partnerName: (l.partner_name as string) ?? userName,
+              createdAt: ((l.created_at as string) ?? "").split("T")[0] ?? todayISO(),
+              interactions: [], metadata: (l.metadata as Record<string, unknown>) ?? {},
+            }));
+            setLeads(mapped);
+          }
+        } catch { /* silent */ }
+      } else {
+        setImportResult(`❌ Erro: ${json.error}`);
+        setImportStep(3);
+      }
+    } catch {
+      setImportResult("❌ Erro de conexão ao importar.");
+      setImportStep(3);
+    }
+    setImportLoading(false);
+  }
+
+  // ── Feature 4: Kanban move handler ────────────────────────────────────────
+  async function handleMoveKanban(leadId: string, newStatus: CRMLead["status"]) {
+    setLeads(prev => prev.map(l => l.id === leadId ? { ...l, status: newStatus } : l));
+    try {
+      await fetch("/api/crm", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: leadId, status: newStatus }),
+      });
+    } catch { /* silent */ }
+  }
+
+  function handleCrmViewChange(v: "list" | "kanban") {
+    setCrmView(v);
+    if (typeof window !== "undefined") localStorage.setItem("crm-view", v);
   }
 
   async function handleEnviarMesa(lead: CRMLead) {
@@ -1199,10 +1434,23 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
               Gestão de Relacionamento com Clientes
             </p>
           </div>
-          <Button onClick={() => setShowNewLead(true)}>
-            <Plus className="w-4 h-4 mr-2" />
-            Novo Lead
-          </Button>
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            <button
+              onClick={() => { setShowImport(true); setImportStep(1); setImportRawRows([]); setImportResult(null); }}
+              style={{
+                display: "flex", alignItems: "center", gap: 6,
+                padding: "8px 14px", borderRadius: 8,
+                border: "1px solid rgba(201,168,76,0.3)", background: "rgba(201,168,76,0.08)",
+                color: "#C9A84C", cursor: "pointer", fontSize: 13, fontWeight: 600,
+              }}
+            >
+              ⬆ Importar CSV
+            </button>
+            <Button onClick={() => setShowNewLead(true)}>
+              <Plus className="w-4 h-4 mr-2" />
+              Novo Lead
+            </Button>
+          </div>
         </div>
 
         {/* Tabs */}
@@ -1249,6 +1497,26 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
         </div>
       )}
 
+      {/* Proposta link toast */}
+      {propostaLinkMsg && (
+        <div style={{
+          position: "fixed", bottom: 72, right: 24, zIndex: 9999,
+          background: "#1A1506", border: "1px solid #C9A84C", borderRadius: 10,
+          padding: "14px 20px", color: "#E8C97A", fontSize: 14, fontWeight: 600,
+          boxShadow: "0 4px 24px rgba(0,0,0,0.4)", maxWidth: 380,
+          display: "flex", alignItems: "center", gap: 10,
+        }}>
+          <Share2 size={16} />
+          <span>{propostaLinkMsg}</span>
+          <button
+            onClick={() => setPropostaLinkMsg(null)}
+            style={{ marginLeft: "auto", background: "none", border: "none", color: "#C9A84C", cursor: "pointer", fontSize: 16 }}
+          >
+            ×
+          </button>
+        </div>
+      )}
+
       {/* Success toast */}
       {mesaSuccess && (
         <div style={{
@@ -1271,6 +1539,9 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
 
       {/* Content */}
       <div style={{ padding: "24px" }}>
+        {/* ── Banner: Leads Frios ── */}
+        <ColdLeadAlert onShowColdLeads={() => { setFilterCold(true); setTab("leads"); }} />
+
         {/* ── TAB: PIPELINE ── */}
         {tab === "pipeline" && (
           <div>
@@ -1341,7 +1612,9 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
                           Nenhum lead
                         </div>
                       )}
-                      {stageLeads.map((lead) => (
+                      {stageLeads.map((lead) => {
+                        const ls = calcLeadScore(lead);
+                        return (
                         <div
                           key={lead.id}
                           onClick={() => setSelectedLead(lead)}
@@ -1381,6 +1654,27 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
                               </span>
                             </div>
                           </div>
+                          {/* Score badge + AI */}
+                          <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 5, flexWrap: "wrap" }}>
+                            <span style={{
+                              fontSize: 10, fontWeight: 700, padding: "1px 6px", borderRadius: 20, border: "1px solid",
+                              borderColor: ls.score >= 70 ? "rgba(239,68,68,0.3)" : ls.score >= 40 ? "rgba(245,158,11,0.3)" : "rgba(59,130,246,0.3)",
+                              background: ls.score >= 70 ? "rgba(239,68,68,0.1)" : ls.score >= 40 ? "rgba(245,158,11,0.1)" : "rgba(59,130,246,0.1)",
+                              color: ls.score >= 70 ? "#F87171" : ls.score >= 40 ? "#FBBF24" : "#60A5FA",
+                            }}>
+                              {ls.label} · {ls.score}
+                            </span>
+                            <button onClick={(e) => { e.stopPropagation(); handleAiSuggest(lead); }} disabled={aiLoading[lead.id]}
+                              style={{ background: "transparent", border: "none", cursor: aiLoading[lead.id] ? "not-allowed" : "pointer", color: "#7A8FA8", fontSize: 11, padding: 0 }}
+                              title="Sugestão IA">
+                              {aiLoading[lead.id] ? "⏳" : "⚡"}
+                            </button>
+                          </div>
+                          {aiSuggestions[lead.id] && (
+                            <div style={{ fontSize: 10, color: "#E8C97A", background: "rgba(201,168,76,0.1)", border: "1px solid rgba(201,168,76,0.2)", borderRadius: 6, padding: "3px 7px", marginBottom: 5, lineHeight: 1.4 }}>
+                              {aiSuggestions[lead.id]}
+                            </div>
+                          )}
                           <div style={{ fontSize: 11, color: "#7A8FA8", marginBottom: 4 }}>{lead.segment}</div>
                           <div style={{ fontSize: 11, color: "#7A8FA8", display: "flex", alignItems: "center", gap: 4, marginBottom: 4 }}>
                             <MapPin className="w-3 h-3" />
@@ -1445,7 +1739,7 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
                             </button>
                           )}
                         </div>
-                      ))}
+                      ); })}
                     </div>
                   </div>
                 );
@@ -1457,8 +1751,46 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
         {/* ── TAB: LEADS ── */}
         {tab === "leads" && (
           <div>
-            {/* Filter bar */}
+            {/* View toggle + Filter bar */}
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 20, alignItems: "center" }}>
+              {/* View toggle */}
+              <div style={{ display: "flex", background: "#091221", border: "1px solid #122036", borderRadius: 8, overflow: "hidden", flexShrink: 0 }}>
+                {(["list", "kanban"] as const).map((v) => (
+                  <button key={v} onClick={() => handleCrmViewChange(v)}
+                    style={{
+                      padding: "7px 14px", border: "none", cursor: "pointer", fontSize: 12, fontWeight: 600,
+                      background: crmView === v ? "#243A66" : "transparent",
+                      color: crmView === v ? "#E8C97A" : "#7A8FA8",
+                    }}
+                  >
+                    {v === "list" ? "☰ Lista" : "▦ Kanban"}
+                  </button>
+                ))}
+              </div>
+              {/* Score sort toggle */}
+              <button
+                onClick={() => setSortByScore(s => !s)}
+                style={{
+                  padding: "7px 14px", borderRadius: 8, border: "1px solid #122036", cursor: "pointer", fontSize: 12, fontWeight: 600,
+                  background: sortByScore ? "rgba(201,168,76,0.15)" : "#091221",
+                  color: sortByScore ? "#E8C97A" : "#7A8FA8",
+                  flexShrink: 0,
+                }}
+              >
+                🔥 Score
+              </button>
+              {/* Cold leads filter toggle */}
+              <button
+                onClick={() => setFilterCold(f => !f)}
+                style={{
+                  padding: "7px 14px", borderRadius: 8, border: "1px solid #122036", cursor: "pointer", fontSize: 12, fontWeight: 600,
+                  background: filterCold ? "rgba(201,168,76,0.15)" : "#091221",
+                  color: filterCold ? "#E8C97A" : "#7A8FA8",
+                  flexShrink: 0,
+                }}
+              >
+                🧊 Leads frios
+              </button>
               <div style={{ position: "relative", flex: "1 1 220px" }}>
                 <Search
                   className="w-4 h-4"
@@ -1544,11 +1876,11 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
             </div>
 
             {/* Table */}
-            <div style={{ background: "#091221", border: "1px solid #122036", borderRadius: 12, overflowX: "auto" }}>
+            {crmView === "list" && <div style={{ background: "#091221", border: "1px solid #122036", borderRadius: 12, overflowX: "auto" }}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                 <thead>
                   <tr style={{ borderBottom: "1px solid #122036" }}>
-                    {["Código", "Nome / Razão Social", "Tipo", "Segmento", "Faturamento", "Cidade/UF", "Última Visita", "Próx. Contato", "Status", "Convertido", ...(isAdmin ? ["Partner"] : []), "Ações"].map((col) => (
+                    {["Código", "Nome / Razão Social", "Score", "Tipo", "Segmento", "Faturamento", "Cidade/UF", "Última Visita", "Próx. Contato", "Status", "Convertido", ...(isAdmin ? ["Partner"] : []), "Ações"].map((col) => (
                       <th key={col} style={{ padding: "10px 12px", textAlign: "left", color: "#7A8FA8", fontWeight: 600, whiteSpace: "nowrap" }}>
                         {col}
                       </th>
@@ -1558,12 +1890,14 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
                 <tbody>
                   {visibleLeads.length === 0 && (
                     <tr>
-                      <td colSpan={isAdmin ? 12 : 11} style={{ textAlign: "center", padding: 32, color: "#7A8FA8" }}>
+                      <td colSpan={isAdmin ? 13 : 12} style={{ textAlign: "center", padding: 32, color: "#7A8FA8" }}>
                         Nenhum lead encontrado.
                       </td>
                     </tr>
                   )}
-                  {visibleLeads.map((lead, idx) => (
+                  {visibleLeads.map((lead, idx) => {
+                    const ls = calcLeadScore(lead);
+                    return (
                     <tr
                       key={lead.id}
                       style={{
@@ -1580,6 +1914,33 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
                               🔗 Digital
                             </span>
                           )}
+                        </div>
+                      </td>
+                      <td style={{ padding: "10px 12px", whiteSpace: "nowrap" }}>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                          <span style={{
+                            fontSize: 10, fontWeight: 700, padding: "1px 7px", borderRadius: 20,
+                            border: `1px solid`,
+                            borderColor: ls.score >= 70 ? "rgba(239,68,68,0.3)" : ls.score >= 40 ? "rgba(245,158,11,0.3)" : "rgba(59,130,246,0.3)",
+                            background: ls.score >= 70 ? "rgba(239,68,68,0.1)" : ls.score >= 40 ? "rgba(245,158,11,0.1)" : "rgba(59,130,246,0.1)",
+                            color: ls.score >= 70 ? "#F87171" : ls.score >= 40 ? "#FBBF24" : "#60A5FA",
+                            whiteSpace: "nowrap",
+                          }}>
+                            {ls.label} · {ls.score}
+                          </span>
+                          {aiSuggestions[lead.id] && (
+                            <span style={{ fontSize: 10, color: "#E8C97A", background: "rgba(201,168,76,0.1)", border: "1px solid rgba(201,168,76,0.25)", borderRadius: 6, padding: "2px 6px", maxWidth: 160, whiteSpace: "normal", lineHeight: 1.3 }}>
+                              ⚡ {aiSuggestions[lead.id]}
+                            </span>
+                          )}
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleAiSuggest(lead); }}
+                            disabled={aiLoading[lead.id]}
+                            title="Sugestão de próxima ação (IA)"
+                            style={{ background: "transparent", border: "none", cursor: aiLoading[lead.id] ? "not-allowed" : "pointer", color: "#7A8FA8", fontSize: 11, padding: 0, textAlign: "left" }}
+                          >
+                            {aiLoading[lead.id] ? "⏳..." : "⚡ IA"}
+                          </button>
                         </div>
                       </td>
                       <td style={{ padding: "10px 12px" }}>
@@ -1694,6 +2055,28 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
                           >
                             Ver
                           </button>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleCopyPropostaLink(lead); }}
+                            title="Copiar link da proposta para o cliente"
+                            style={{
+                              background: copiedPropostaId === lead.id ? "rgba(201,168,76,0.2)" : "rgba(201,168,76,0.1)",
+                              border: `1px solid ${copiedPropostaId === lead.id ? "rgba(201,168,76,0.5)" : "rgba(201,168,76,0.25)"}`,
+                              borderRadius: 6,
+                              padding: "4px 8px",
+                              color: "#C9A84C",
+                              cursor: "pointer",
+                              fontSize: 12,
+                              fontWeight: 600,
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 4,
+                            }}
+                          >
+                            {copiedPropostaId === lead.id
+                              ? <Check className="w-3 h-3" />
+                              : <Share2 className="w-3 h-3" />
+                            }
+                          </button>
                           {(lead.status === "proposta" || lead.status === "negociacao") && lead.creditLine !== "M&A" && (lead.metadata as Record<string, unknown>)?.form_type !== "ma" && (
                             <button
                               onClick={() => handleEnviarMesa(lead)}
@@ -1791,13 +2174,88 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
                         </div>
                       </td>
                     </tr>
-                  ))}
+                  ); })}
                 </tbody>
               </table>
-            </div>
-            <div style={{ marginTop: 10, fontSize: 12, color: "#7A8FA8" }}>
+            </div>}
+            {crmView === "list" && <div style={{ marginTop: 10, fontSize: 12, color: "#7A8FA8" }}>
               {visibleLeads.length} lead{visibleLeads.length !== 1 ? "s" : ""} encontrado{visibleLeads.length !== 1 ? "s" : ""}
-            </div>
+            </div>}
+
+            {/* ── KANBAN VIEW ── */}
+            {crmView === "kanban" && (
+              <div style={{ display: "flex", gap: 12, overflowX: "auto", paddingBottom: 16 }}>
+                {KANBAN_COLUMNS.map((col) => {
+                  const colLeads = visibleLeads.filter(l => l.status === col.id);
+                  const totalValue = colLeads.reduce((acc, l) => acc + (l.annualRevenue || 0), 0);
+                  return (
+                    <div key={col.id} style={{ minWidth: 230, flex: "0 0 230px", background: "#091221", border: `1px solid ${col.hex}30`, borderRadius: 12, overflow: "hidden" }}>
+                      {/* Column header */}
+                      <div style={{ padding: "10px 14px", background: `${col.hex}08`, borderBottom: `1px solid ${col.hex}30`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <span style={{ fontWeight: 700, fontSize: 13, color: col.hex }}>{col.label}</span>
+                        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                          {totalValue > 0 && <span style={{ fontSize: 9, color: "#C9A84C", fontWeight: 600 }}>{formatCurrency(totalValue)}</span>}
+                          <span style={{ background: col.hex, color: "#09081A", borderRadius: 20, fontSize: 11, fontWeight: 700, padding: "1px 8px" }}>{colLeads.length}</span>
+                        </div>
+                      </div>
+                      {/* Cards */}
+                      <div style={{ padding: 8, display: "flex", flexDirection: "column", gap: 8, maxHeight: 560, overflowY: "auto" }}>
+                        {colLeads.length === 0 && <div style={{ textAlign: "center", color: "#7A8FA8", fontSize: 12, padding: "20px 0" }}>Nenhum lead</div>}
+                        {colLeads.map((lead) => {
+                          const ls = calcLeadScore(lead);
+                          return (
+                            <div key={lead.id} style={{ background: "#0F1E35", border: "1px solid #122036", borderRadius: 8, padding: "10px 12px", cursor: "pointer", transition: "border-color 0.15s" }}
+                              onClick={() => setSelectedLead(lead)}
+                              onMouseEnter={(e) => (e.currentTarget.style.borderColor = col.hex)}
+                              onMouseLeave={(e) => (e.currentTarget.style.borderColor = "#122036")}
+                            >
+                              <div style={{ fontWeight: 700, fontSize: 12, color: "#E8EDF5", marginBottom: 4 }}>{lead.name}</div>
+                              {/* Score badge */}
+                              <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 4, flexWrap: "wrap" }}>
+                                <span style={{
+                                  fontSize: 10, fontWeight: 700, padding: "1px 6px", borderRadius: 20, border: "1px solid",
+                                  borderColor: ls.score >= 70 ? "rgba(239,68,68,0.3)" : ls.score >= 40 ? "rgba(245,158,11,0.3)" : "rgba(59,130,246,0.3)",
+                                  background: ls.score >= 70 ? "rgba(239,68,68,0.1)" : ls.score >= 40 ? "rgba(245,158,11,0.1)" : "rgba(59,130,246,0.1)",
+                                  color: ls.score >= 70 ? "#F87171" : ls.score >= 40 ? "#FBBF24" : "#60A5FA",
+                                }}>
+                                  {ls.label} · {ls.score}
+                                </span>
+                                <button onClick={(e) => { e.stopPropagation(); handleAiSuggest(lead); }} disabled={aiLoading[lead.id]}
+                                  style={{ background: "transparent", border: "none", cursor: aiLoading[lead.id] ? "not-allowed" : "pointer", color: "#7A8FA8", fontSize: 11, padding: 0 }}
+                                  title="Sugestão IA">
+                                  {aiLoading[lead.id] ? "⏳" : "⚡"}
+                                </button>
+                              </div>
+                              {aiSuggestions[lead.id] && (
+                                <div style={{ fontSize: 10, color: "#E8C97A", background: "rgba(201,168,76,0.1)", border: "1px solid rgba(201,168,76,0.2)", borderRadius: 6, padding: "3px 7px", marginBottom: 4, lineHeight: 1.4 }}>
+                                  {aiSuggestions[lead.id]}
+                                </div>
+                              )}
+                              {lead.productInterest && <div style={{ fontSize: 10, color: "#7A8FA8", marginBottom: 3 }}>{CONVERTED_LABELS[lead.productInterest] ?? lead.productInterest}</div>}
+                              <div style={{ fontSize: 10, color: "#7A8FA8", display: "flex", alignItems: "center", gap: 3, marginBottom: 6 }}>
+                                <MapPin style={{ width: 10, height: 10 }} />{lead.city}, {lead.state}
+                              </div>
+                              {/* Mover para */}
+                              <select
+                                value=""
+                                onClick={(e) => e.stopPropagation()}
+                                onChange={(e) => { if (e.target.value) handleMoveKanban(lead.id, e.target.value as CRMLead["status"]); }}
+                                style={{ width: "100%", background: "#162744", border: "1px solid #243A66", borderRadius: 6, padding: "4px 8px", color: "#7A8FA8", fontSize: 11, cursor: "pointer", outline: "none" }}
+                              >
+                                <option value="">Mover para →</option>
+                                {KANBAN_COLUMNS.filter(c => c.id !== col.id).map(c => (
+                                  <option key={c.id} value={c.id}>{c.label}</option>
+                                ))}
+                              </select>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
 
@@ -2454,6 +2912,105 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
           Relatório gerado em {formatDate(todayISO())} — V3 Partners Plataforma
         </footer>
       </div>
+
+      {/* ── MODAL: CSV Import ── */}
+      {showImport && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 60, background: "rgba(0,0,0,0.75)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
+          onClick={(e) => { if (e.target === e.currentTarget) setShowImport(false); }}>
+          <div style={{ background: "#09081A", border: "1px solid #1E3A5F", borderRadius: 16, padding: 28, width: "100%", maxWidth: 640, maxHeight: "85vh", overflowY: "auto" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+              <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "#F0ECE4" }}>Importar Contatos CSV</h2>
+              <button onClick={() => setShowImport(false)} style={{ background: "transparent", border: "none", color: "#7A8FA8", cursor: "pointer", fontSize: 20 }}>×</button>
+            </div>
+
+            {/* Step indicator */}
+            <div style={{ display: "flex", gap: 8, marginBottom: 24 }}>
+              {[1,2,3].map(s => (
+                <div key={s} style={{ flex: 1, height: 4, borderRadius: 2, background: importStep >= s ? "#C9A84C" : "#122036" }} />
+              ))}
+            </div>
+
+            {/* Step 1: Upload */}
+            {importStep === 1 && (
+              <div>
+                <p style={{ margin: "0 0 16px", fontSize: 13, color: "#7A8FA8" }}>
+                  Selecione um arquivo CSV com os dados dos contatos. A primeira linha deve ser o cabeçalho.
+                </p>
+                <label style={{
+                  display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+                  border: "2px dashed rgba(201,168,76,0.3)", borderRadius: 12, padding: "32px 24px",
+                  cursor: "pointer", background: "rgba(201,168,76,0.03)", color: "#C9A84C",
+                }}>
+                  <span style={{ fontSize: 32, marginBottom: 8 }}>⬆</span>
+                  <span style={{ fontSize: 14, fontWeight: 600 }}>Clique para selecionar ou arraste o arquivo .csv</span>
+                  <input type="file" accept=".csv" style={{ display: "none" }}
+                    onChange={(e) => { const f = e.target.files?.[0]; if (f) handleCSVFile(f); }} />
+                </label>
+              </div>
+            )}
+
+            {/* Step 2: Map columns */}
+            {importStep === 2 && importRawRows.length > 0 && (
+              <div>
+                <p style={{ margin: "0 0 12px", fontSize: 13, color: "#7A8FA8" }}>
+                  Mapeie as colunas do seu CSV para os campos do CRM:
+                </p>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
+                  {importRawRows[0].map((header, i) => (
+                    <div key={i} style={{ background: "#0F1E35", border: "1px solid #122036", borderRadius: 8, padding: "10px 12px" }}>
+                      <div style={{ fontSize: 11, color: "#7A8FA8", marginBottom: 4 }}>Coluna: <strong style={{ color: "#E8EDF5" }}>{header}</strong></div>
+                      <select value={importMapping[i] ?? "ignorar"} onChange={(e) => setImportMapping(prev => ({ ...prev, [i]: e.target.value }))}
+                        style={{ width: "100%", background: "#162744", border: "1px solid #243A66", borderRadius: 6, padding: "5px 8px", color: "#E8EDF5", fontSize: 12, outline: "none" }}>
+                        <option value="ignorar">Ignorar</option>
+                        <option value="nome">Nome</option>
+                        <option value="email">E-mail</option>
+                        <option value="telefone">Telefone</option>
+                        <option value="cidade">Cidade</option>
+                        <option value="estado">Estado/UF</option>
+                        <option value="observacoes">Observações</option>
+                      </select>
+                    </div>
+                  ))}
+                </div>
+                {/* Preview */}
+                <div style={{ marginBottom: 16 }}>
+                  <div style={{ fontSize: 11, color: "#7A8FA8", marginBottom: 6, fontWeight: 700, textTransform: "uppercase" }}>
+                    Prévia (5 primeiros registros)
+                  </div>
+                  <div style={{ overflowX: "auto" }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+                      <thead>
+                        <tr>{importRawRows[0].map((h, i) => <th key={i} style={{ padding: "4px 8px", borderBottom: "1px solid #122036", color: "#7A8FA8", textAlign: "left", whiteSpace: "nowrap" }}>{h}</th>)}</tr>
+                      </thead>
+                      <tbody>
+                        {importRawRows.slice(1, 6).map((row, ri) => (
+                          <tr key={ri}>{row.map((cell, ci) => <td key={ci} style={{ padding: "4px 8px", borderBottom: "1px solid #0d1929", color: "#E8EDF5", whiteSpace: "nowrap" }}>{cell}</td>)}</tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <button onClick={() => setImportStep(1)} style={{ background: "transparent", border: "1px solid #122036", borderRadius: 8, padding: "8px 16px", color: "#7A8FA8", cursor: "pointer", fontSize: 13 }}>Voltar</button>
+                  <button onClick={handleImportSubmit} disabled={importLoading}
+                    style={{ background: "#C9A84C", border: "none", borderRadius: 8, padding: "8px 20px", color: "#09081A", fontWeight: 700, cursor: importLoading ? "not-allowed" : "pointer", fontSize: 13 }}>
+                    {importLoading ? "Importando..." : `Importar ${importRawRows.slice(1).filter(r => r[0]?.trim()).length} contato(s)`}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Step 3: Result */}
+            {importStep === 3 && (
+              <div style={{ textAlign: "center", padding: "24px 0" }}>
+                <div style={{ fontSize: 32, marginBottom: 12 }}>{importResult?.startsWith("✅") ? "✅" : "❌"}</div>
+                <p style={{ fontSize: 15, color: importResult?.startsWith("✅") ? "#10B981" : "#EF4444", fontWeight: 600, margin: "0 0 20px" }}>{importResult}</p>
+                <button onClick={() => setShowImport(false)} style={{ background: "#C9A84C", border: "none", borderRadius: 8, padding: "8px 24px", color: "#09081A", fontWeight: 700, cursor: "pointer", fontSize: 13 }}>Fechar</button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* ── MODAL: Lead Detail ── */}
       <Dialog open={!!selectedLead} onOpenChange={(open) => { if (!open) setSelectedLead(null); }}>

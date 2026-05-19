@@ -1,4 +1,5 @@
 import { createClient as sc } from "@supabase/supabase-js";
+import { sendPushNotification, sendPushToMany } from "@/lib/push";
 
 function svc() {
   return sc(
@@ -25,6 +26,13 @@ export async function createNotification(n: NotificationPayload) {
       type:       n.type,
       action_url: n.action_url ?? null,
     });
+    // Dispara push (awaited para não ser cancelado em serverless)
+    await sendPushNotification({
+      user_id: n.user_id,
+      title:   n.title,
+      body:    n.message ?? "",
+      url:     n.action_url ?? "/",
+    });
   } catch { /* notificações são fire-and-forget */ }
 }
 
@@ -50,6 +58,11 @@ export async function notifyByRoles(
         type:       n.type,
         action_url: n.action_url ?? null,
       }))
+    );
+    // Dispara push para todos (awaited para não ser cancelado em serverless)
+    await sendPushToMany(
+      users.map((u) => u.id),
+      { title: n.title, body: n.message ?? "", url: n.action_url ?? "/" }
     );
   } catch { /* fire-and-forget */ }
 }

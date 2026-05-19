@@ -82,5 +82,26 @@ export async function POST(req: NextRequest) {
     .update({ uses_count: (link.uses_count ?? 0) + 1 })
     .eq("id", link.id);
 
+  // Espelha o lead na tabela prospeccao_leads para visibilidade de ADMIN/SDR/CLOSER
+  await svc.from("prospeccao_leads").insert({
+    nome:                     clientName,
+    documento:                formData.cpfCnpj ?? null,
+    email:                    formData.email ?? null,
+    telefone:                 formData.phone ?? null,
+    cidade:                   formData.city ?? null,
+    estado:                   formData.state ?? null,
+    origem:                   "indicacao_partner",
+    indicado_por_partner_id:  link.partner_id,
+    indicado_por_nome:        link.partner_name ?? null,
+    responsavel_id:            null,
+    responsavel_nome:         null,
+    notas:                    formData.observacoes
+                                ? `Produto: ${formData.productInterest ?? "-"}\n${formData.observacoes}`
+                                : `Produto: ${formData.productInterest ?? "-"}`,
+    etapa:                    "prospect",
+    created_by:               link.partner_id,
+    crm_lead_id:              (lead as { id: string }).id,
+  }).then(() => {}).catch(() => {}); // fire-and-forget, não bloqueia resposta
+
   return NextResponse.json({ ok: true, code: lead.code });
 }

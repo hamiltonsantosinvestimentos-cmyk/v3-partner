@@ -1314,6 +1314,121 @@ function DespesasTab() {
 
 // ─── TAB: COMISSÕES (VISÃO FINANCEIRO/ADMIN) ──────────────────────────────────
 
+// ─── NPS Admin Panel ──────────────────────────────────────────────────────────
+
+interface NpsResponseAdmin {
+  id: string;
+  score: number;
+  comment: string | null;
+  created_at: string;
+  commission_id: string | null;
+  partner_id: string;
+  profiles: { full_name: string | null; email: string } | null;
+}
+
+function NpsAdminPanel() {
+  const [responses, setResponses] = useState<NpsResponseAdmin[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/nps")
+      .then(r => r.json())
+      .then(({ responses: data }) => {
+        if (Array.isArray(data)) setResponses(data);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  const avg = responses.length > 0
+    ? responses.reduce((s, r) => s + r.score, 0) / responses.length
+    : null;
+
+  // NPS = %promotores(9-10) - %detratores(0-6)
+  const promotores = responses.filter(r => r.score >= 9).length;
+  const detratores = responses.filter(r => r.score <= 6).length;
+  const npsScore = responses.length > 0
+    ? Math.round(((promotores - detratores) / responses.length) * 100)
+    : null;
+
+  function npsBadge(score: number) {
+    if (score > 50) return { label: "Excelente", cls: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" };
+    if (score > 0)  return { label: "Bom",       cls: "bg-amber-500/20 text-amber-400 border-amber-500/30" };
+    return               { label: "Ruim",       cls: "bg-red-500/20 text-red-400 border-red-500/30" };
+  }
+
+  const last5 = responses.slice(0, 5);
+
+  return (
+    <div className="mt-6 bg-[#091221] border border-[#1A2D4A] rounded-xl p-5 space-y-4">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-bold text-[#F0ECE4] tracking-wide uppercase">
+          NPS dos Partners
+        </h3>
+        {!loading && responses.length > 0 && npsScore !== null && (
+          <span className={`text-[10px] font-bold border px-2.5 py-0.5 rounded-full ${npsBadge(npsScore).cls}`}>
+            {npsBadge(npsScore).label}
+          </span>
+        )}
+      </div>
+
+      {loading ? (
+        <p className="text-xs text-[#7A8FA8]">Carregando NPS...</p>
+      ) : responses.length === 0 ? (
+        <p className="text-xs text-[#7A8FA8]">Nenhuma resposta NPS ainda.</p>
+      ) : (
+        <>
+          {/* KPIs */}
+          <div className="grid grid-cols-3 gap-3">
+            <div className="bg-[#111F35] border border-[#243A66] rounded-lg p-3">
+              <p className="text-[10px] text-[#7A8FA8] uppercase tracking-wide mb-1">Score NPS</p>
+              <p className="text-xl font-bold text-[#C9A84C]">{npsScore}</p>
+              <p className="text-[10px] text-[#7A8FA8]">{responses.length} respostas</p>
+            </div>
+            <div className="bg-[#111F35] border border-[#243A66] rounded-lg p-3">
+              <p className="text-[10px] text-[#7A8FA8] uppercase tracking-wide mb-1">Média</p>
+              <p className="text-xl font-bold text-[#F0ECE4]">{avg !== null ? avg.toFixed(1) : "—"}</p>
+              <p className="text-[10px] text-[#7A8FA8]">de 10</p>
+            </div>
+            <div className="bg-[#111F35] border border-[#243A66] rounded-lg p-3">
+              <p className="text-[10px] text-[#7A8FA8] uppercase tracking-wide mb-1">Promotores</p>
+              <p className="text-xl font-bold text-emerald-400">{promotores}</p>
+              <p className="text-[10px] text-[#7A8FA8]">{detratores} detratores</p>
+            </div>
+          </div>
+
+          {/* Últimas 5 respostas */}
+          <div className="space-y-2">
+            <p className="text-[10px] text-[#7A8FA8] uppercase tracking-wide font-semibold">Últimas respostas</p>
+            {last5.map(r => (
+              <div key={r.id} className="flex items-start gap-3 bg-[#111F35] border border-[#243A66] rounded-lg p-3">
+                <span className={`min-w-[2rem] h-8 flex items-center justify-center rounded-lg text-sm font-bold border ${
+                  r.score >= 9 ? "bg-emerald-500/20 border-emerald-500/30 text-emerald-400"
+                  : r.score >= 7 ? "bg-amber-500/20 border-amber-500/30 text-amber-400"
+                  : "bg-red-500/20 border-red-500/30 text-red-400"
+                }`}>
+                  {r.score}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-semibold text-[#F0ECE4]">
+                    {r.profiles?.full_name ?? r.profiles?.email ?? "Partner"}
+                  </p>
+                  {r.comment && (
+                    <p className="text-[11px] text-[#7A8FA8] mt-0.5 line-clamp-2">{r.comment}</p>
+                  )}
+                  <p className="text-[10px] text-[#3A5070] mt-0.5">
+                    {new Date(r.created_at).toLocaleDateString("pt-BR")}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 function ComissoesAdminTab() {
   const [filtroTipo, setFiltroTipo] = useState<"TODOS" | "CREDITO" | "MA" | "CONSORCIO" | "MARKETPLACE">("TODOS");
   const [filtroStatus, setFiltroStatus] = useState<"TODOS" | "A_PAGAR" | "PAGA">("TODOS");
@@ -1525,6 +1640,8 @@ function ComissoesAdminTab() {
           </div>
         </CardContent>
       </Card>
+
+      <NpsAdminPanel />
     </div>
   );
 }

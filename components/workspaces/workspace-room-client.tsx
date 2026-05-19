@@ -4,7 +4,7 @@ import React, { useState, useRef, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
   Layers, ArrowLeft, Bot, User, Send, Plus, Loader2, Sparkles,
-  ChevronRight, Copy, Check, FileText, Clock
+  ChevronRight, Copy, Check, FileText, Clock, MessageSquare, X, ChevronDown
 } from "lucide-react";
 import type { Squad } from "@/lib/squads";
 
@@ -23,6 +23,15 @@ interface Props {
   userRole: string;
   userName: string;
 }
+
+interface AiMessage { role: "user" | "assistant"; content: string; }
+
+const AI_QUICK_PROMPTS = [
+  "Analise os riscos",
+  "Sugira próximos passos",
+  "Gere uma minuta NDA",
+  "Calcule a comissão",
+];
 
 const SQUAD_COLORS: Record<string, string> = {
   "analista-ma": "text-[#C9A84C]",
@@ -82,7 +91,16 @@ export function WorkspaceRoomClient({ workspace: initialWs, sessions: initialSes
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  // AI Assistant panel state
+  const [aiOpen, setAiOpen] = useState(false);
+  const [aiMessages, setAiMessages] = useState<AiMessage[]>([]);
+  const [aiInput, setAiInput] = useState("");
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiSessionId, setAiSessionId] = useState<string | null>(null);
+  const aiBottomRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
+  useEffect(() => { aiBottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [aiMessages]);
 
   const workspaceContext = useCallback(
     () => buildWorkspaceContext(workspace, sessions),
@@ -167,6 +185,42 @@ export function WorkspaceRoomClient({ workspace: initialWs, sessions: initialSes
     }
   }
 
+  async function sendAiMessage(text?: string) {
+    const content = (text ?? aiInput).trim();
+    if (!content || aiLoading) return;
+
+    const userMsg: AiMessage = { role: "user", content };
+    setAiMessages(prev => [...prev, userMsg]);
+    setAiInput("");
+    setAiLoading(true);
+
+    try {
+      const res = await fetch("/api/agentes/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          squad_id: "estrategista",
+          message: content,
+          session_id: aiSessionId,
+          history: aiMessages,
+          workspace_id: workspace.id,
+          workspace_context: workspaceContext(),
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setAiMessages(prev => [...prev, { role: "assistant", content: data.response }]);
+        if (data.session_id && !aiSessionId) setAiSessionId(data.session_id);
+      } else {
+        setAiMessages(prev => [...prev, { role: "assistant", content: `Erro: ${data.error ?? "Falha"}` }]);
+      }
+    } catch {
+      setAiMessages(prev => [...prev, { role: "assistant", content: "Falha de conexão." }]);
+    } finally {
+      setAiLoading(false);
+    }
+  }
+
   async function copyText(text: string, id: string) {
     await navigator.clipboard.writeText(text);
     setCopied(id);
@@ -179,7 +233,7 @@ export function WorkspaceRoomClient({ workspace: initialWs, sessions: initialSes
   }));
 
   return (
-    <div className="flex h-screen bg-[#09081A] overflow-hidden">
+    <div className="flex h-screen bg-[#09081A] overflow-hidden relative">
 
       {/* Sidebar esquerda — squads */}
       <div className="w-56 flex-shrink-0 border-r border-[#162744] flex flex-col">
@@ -265,6 +319,21 @@ export function WorkspaceRoomClient({ workspace: initialWs, sessions: initialSes
               {label}
             </button>
           ))}
+          {/* AI Assistant toggle */}
+          <div className="ml-auto pb-1">
+            <button
+              onClick={() => setAiOpen(v => !v)}
+              className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors ${
+                aiOpen
+                  ? "bg-[#C9A84C]/15 border-[#C9A84C]/40 text-[#C9A84C]"
+                  : "bg-[#111F35] border-[#243A66] text-[#7A8FA8] hover:text-[#F0ECE4] hover:border-[#C9A84C]/40"
+              }`}
+            >
+              <MessageSquare className="w-3.5 h-3.5" />
+              Assistente IA
+              <ChevronDown className={`w-3 h-3 transition-transform ${aiOpen ? "rotate-180" : ""}`} />
+            </button>
+          </div>
         </div>
 
         {/* Tab: Chat */}
@@ -501,6 +570,107 @@ export function WorkspaceRoomClient({ workspace: initialWs, sessions: initialSes
           </div>
         )}
       </div>
+
+      {/* AI Assistant Panel — collapsible right drawer */}
+      {aiOpen && (
+        <div className="w-80 flex-shrink-0 border-l border-[#162744] flex flex-col bg-[#0D1929]">
+          {/* Panel header */}
+          <div className="flex items-center justify-between px-4 py-3 border-b border-[#162744]">
+            <div className="flex items-center gap-2">
+              <div className="w-6 h-6 rounded-full bg-[#C9A84C]/15 border border-[#C9A84C]/30 flex items-center justify-center">
+                <Bot className="w-3.5 h-3.5 text-[#C9A84C]" />
+              </div>
+              <div>
+                <p className="text-[#F0ECE4] text-xs font-bold">IA V3 — Assistente de Deal</p>
+                <p className="text-[#7A8FA8] text-[10px]">Estrategista · {workspace.name}</p>
+              </div>
+            </div>
+            <button
+              onClick={() => setAiOpen(false)}
+              className="w-6 h-6 flex items-center justify-center rounded-full hover:bg-[#162744] text-[#7A8FA8] hover:text-[#F0ECE4] transition-colors"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+          {/* Quick prompts */}
+          <div className="px-3 py-2.5 border-b border-[#162744] flex flex-wrap gap-1.5">
+            {AI_QUICK_PROMPTS.map(prompt => (
+              <button
+                key={prompt}
+                onClick={() => sendAiMessage(prompt)}
+                disabled={aiLoading}
+                className="text-[10px] font-semibold px-2.5 py-1 rounded-full bg-[#162744] border border-[#243A66] text-[#7A8FA8] hover:border-[#C9A84C]/40 hover:text-[#C9A84C] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {prompt}
+              </button>
+            ))}
+          </div>
+
+          {/* Messages */}
+          <div className="flex-1 overflow-y-auto p-3 space-y-3 max-h-[calc(100vh-220px)]">
+            {aiMessages.length === 0 && (
+              <div className="flex flex-col items-center justify-center h-32 text-center">
+                <Sparkles className="w-6 h-6 text-[#243A66] mb-2" />
+                <p className="text-[#7A8FA8] text-xs">Use os atalhos acima ou faça sua pergunta.</p>
+              </div>
+            )}
+            {aiMessages.map((msg, i) => (
+              <div key={i} className={`flex gap-2 ${msg.role === "user" ? "justify-end" : ""}`}>
+                {msg.role === "assistant" && (
+                  <div className="w-5 h-5 rounded-full bg-[#111F35] border border-[#243A66] flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <Bot className="w-3 h-3 text-[#C9A84C]" />
+                  </div>
+                )}
+                <div className={`max-w-[85%] rounded-xl px-3 py-2 text-xs leading-relaxed whitespace-pre-wrap ${
+                  msg.role === "user"
+                    ? "bg-[#162744] text-[#F0ECE4] rounded-br-sm"
+                    : "bg-[#111F35] text-[#F0ECE4] rounded-bl-sm border border-[#162744]"
+                }`}>
+                  {msg.content}
+                </div>
+                {msg.role === "user" && (
+                  <div className="w-5 h-5 rounded-full bg-[#C9A84C]/20 border border-[#C9A84C]/30 flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <User className="w-3 h-3 text-[#C9A84C]" />
+                  </div>
+                )}
+              </div>
+            ))}
+            {aiLoading && (
+              <div className="flex gap-2">
+                <div className="w-5 h-5 rounded-full bg-[#111F35] border border-[#243A66] flex items-center justify-center">
+                  <Bot className="w-3 h-3 text-[#C9A84C]" />
+                </div>
+                <div className="bg-[#111F35] border border-[#162744] rounded-xl px-3 py-2">
+                  <Loader2 className="w-3.5 h-3.5 text-[#C9A84C] animate-spin" />
+                </div>
+              </div>
+            )}
+            <div ref={aiBottomRef} />
+          </div>
+
+          {/* Input */}
+          <div className="p-3 border-t border-[#162744]">
+            <div className="flex gap-2 items-end bg-[#111F35] border border-[#243A66] rounded-xl px-3 py-2 focus-within:border-[#C9A84C] transition-colors">
+              <input
+                type="text"
+                value={aiInput}
+                onChange={e => setAiInput(e.target.value)}
+                onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendAiMessage(); } }}
+                placeholder="Pergunte ao Assistente IA…"
+                className="flex-1 bg-transparent text-[#F0ECE4] text-xs placeholder-[#243A66] focus:outline-none"
+              />
+              <button
+                onClick={() => sendAiMessage()}
+                disabled={aiLoading || !aiInput.trim()}
+                className="w-6 h-6 flex items-center justify-center bg-[#C9A84C] rounded-lg hover:bg-[#E8C97A] transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex-shrink-0"
+              >
+                <Send className="w-3 h-3 text-[#09081A]" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -393,6 +393,29 @@ export interface Database {
           read?: boolean;
         };
       };
+      chat_messages: {
+        Row: {
+          id: string;
+          room_id: string;
+          sender_id: string;
+          sender_name: string;
+          sender_role: string;
+          content: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          room_id: string;
+          sender_id: string;
+          sender_name: string;
+          sender_role: string;
+          content: string;
+          created_at?: string;
+        };
+        Update: {
+          content?: string;
+        };
+      };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;

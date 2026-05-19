@@ -41,6 +41,11 @@ import {
 import { MarketTicker } from "@/components/dashboard/market-ticker";
 import { NotificationBell } from "@/components/dashboard/notification-bell";
 import { OnboardingBanner } from "@/components/onboarding/onboarding-banner";
+import { OnboardingChecklist } from "@/components/onboarding/onboarding-checklist";
+import { FounderVideoModal } from "@/components/onboarding/founder-video-modal";
+import { OnboardingCallWidget } from "@/components/onboarding/onboarding-call-widget";
+import { PerformanceBenchmark, type BenchmarkData } from "@/components/dashboard/performance-benchmark";
+import { UpgradeNudge } from "@/components/upgrade/upgrade-nudge";
 
 
 interface KpiCardProps {
@@ -252,6 +257,7 @@ interface DashboardClientProps {
     status: string;
     segment: string | null;
   }>;
+  benchmarkData?: BenchmarkData | null;
 }
 
 export function DashboardClient({
@@ -271,6 +277,7 @@ export function DashboardClient({
   recentDeals,
   recentProposals = [],
   followUps = [],
+  benchmarkData,
 }: DashboardClientProps) {
   const router = useRouter();
   const [greeting, setGreeting] = useState("Olá");
@@ -299,8 +306,31 @@ export function DashboardClient({
 
   const totalOperacoes = kpis.totalSplits + kpis.totalDeals + kpis.pendingProposals + kpis.openTickets;
 
+  // ── Compute completedSteps for OnboardingChecklist ──────────────────────────
+  const completedSteps: string[] = ["account_created"];
+  // Has commissions → step "first_indication" done
+  if (comissoesAPagar > 0) completedSteps.push("first_indication");
+  // Has marketplace leads → "first_lead_sent" done
+  if (marketplaceLeads > 0) completedSteps.push("first_lead_sent");
+  // Has any split or deal → involved in the platform
+  if (kpis.totalSplits > 0 || kpis.totalDeals > 0) completedSteps.push("marketplace_explored");
+  // Has crm follow-ups (only accessible if has contacts) → crm step done
+  if (followUps.length > 0) completedSteps.push("crm_contact");
+
+  // "New" partner: created within 14 days OR no commissions yet
+  const isNewPartner = (() => {
+    if (!["PARTNER", "PARTNER_PRO"].includes(role)) return false;
+    if (comissoesAPagar === 0) return true;
+    if (!userCreatedAt) return true;
+    const daysSince = Math.floor((Date.now() - new Date(userCreatedAt).getTime()) / 86400000);
+    return daysSince <= 14;
+  })();
+
   return (
     <div className="space-y-6 animate-fade-in">
+      {/* Founder Video Modal — renders once for new partners, manages own visibility */}
+      <FounderVideoModal partnerName={userName} />
+
       {/* Market Ticker */}
       <MarketTicker />
 
@@ -373,6 +403,17 @@ export function DashboardClient({
           <NotificationBell />
         </div>
       </div>
+
+      {/* Onboarding Checklist + Call Widget — only for new partners */}
+      {isNewPartner && (
+        <div className="space-y-4">
+          <OnboardingChecklist completedSteps={completedSteps} />
+          <OnboardingCallWidget userCreatedAt={userCreatedAt} />
+        </div>
+      )}
+
+      {/* Upgrade Nudge — PARTNER → PRO (só para PARTNER, não PRO) */}
+      {role === "PARTNER" && <UpgradeNudge />}
 
       {/* KPI Grid */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -521,6 +562,11 @@ export function DashboardClient({
             })}
           </div>
         </div>
+      )}
+
+      {/* Benchmark de Performance — apenas para partners */}
+      {benchmarkData && ["PARTNER", "PARTNER_PRO"].includes(role) && (
+        <PerformanceBenchmark benchmarkData={benchmarkData} />
       )}
 
       {/* Ranking rápido — top 5 partners (admin) */}

@@ -1,12 +1,14 @@
 "use client";
 
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import {
   Settings, Link2, Bell, Shield, Zap, Copy, Check, Plus, Power,
   ExternalLink, BarChart3, Users, TrendingUp, Globe, Mail,
   Database, Key, RefreshCw, CheckCircle2, AlertCircle, Clock,
   ChevronRight, Eye, EyeOff, Trash2, Activity, CreditCard, Briefcase,
+  BellRing,
 } from "lucide-react";
+import { usePushNotifications } from "@/hooks/use-push-notifications";
 import { EditorRegrasLinhas } from "@/components/mesa-credito/editor-regras-linhas";
 import { PortfolioEditor } from "@/components/portfolio/portfolio-editor";
 
@@ -224,6 +226,202 @@ function CobrandingTab({ profile }: { profile: Profile }) {
           className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-[#C9A84C] hover:bg-[#E8C97A] text-[#09081A] text-sm font-bold transition-colors disabled:opacity-60">
           {saving ? <RefreshCw className="w-4 h-4 animate-spin" /> : saved ? <Check className="w-4 h-4" /> : null}
           {saving ? "Salvando..." : saved ? "Salvo!" : "Salvar Co-branding"}
+        </button>
+      </form>
+    </div>
+  );
+}
+
+function PushNotificationsSection() {
+  const { isSupported, isSubscribed, permission, loading, subscribe, unsubscribe } =
+    usePushNotifications();
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+
+  const handleToggle = async () => {
+    setError(""); setSuccess("");
+    try {
+      if (isSubscribed) {
+        await unsubscribe();
+        setSuccess("Notificações push desativadas.");
+      } else {
+        await subscribe();
+        setSuccess("Notificações push ativadas com sucesso!");
+      }
+    } catch (e: unknown) {
+      setError((e as Error).message ?? "Erro ao configurar notificações.");
+    }
+    setTimeout(() => { setSuccess(""); setError(""); }, 4000);
+  };
+
+  if (!isSupported) {
+    return (
+      <div className="p-6 rounded-2xl border border-[#1E3050] bg-[#0A1628]/60">
+        <h2 className="text-sm font-bold text-[#F0ECE4] flex items-center gap-2 mb-3">
+          <BellRing className="w-4 h-4 text-[#C9A84C]" /> Notificações Push
+        </h2>
+        <p className="text-xs text-[#7A8FA8]">
+          Seu navegador não suporta notificações push. Tente no Chrome, Firefox ou Edge.
+        </p>
+      </div>
+    );
+  }
+
+  const statusLabel = permission === "denied"
+    ? "Bloqueado pelo navegador"
+    : isSubscribed
+    ? "Ativo"
+    : "Inativo";
+
+  const statusColor = permission === "denied"
+    ? "text-red-400 border-red-400/20 bg-red-400/10"
+    : isSubscribed
+    ? "text-emerald-400 border-emerald-400/20 bg-emerald-400/10"
+    : "text-[#7A8FA8] border-[#1E3050] bg-[#111F35]";
+
+  return (
+    <div className="p-6 rounded-2xl border border-[#1E3050] bg-[#0A1628]/60 space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-bold text-[#F0ECE4] flex items-center gap-2">
+          <BellRing className="w-4 h-4 text-[#C9A84C]" /> Notificações Push
+        </h2>
+        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${statusColor}`}>
+          {statusLabel}
+        </span>
+      </div>
+
+      <p className="text-xs text-[#7A8FA8]">
+        Receba alertas mesmo com o navegador fechado — novas mensagens no chat, comissões aprovadas/pagas e alertas importantes da plataforma.
+      </p>
+
+      {permission === "denied" ? (
+        <div className="flex items-start gap-2 p-3 rounded-xl bg-red-500/10 border border-red-500/20">
+          <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" />
+          <p className="text-xs text-red-300">
+            Permissão bloqueada no navegador. Para ativar, vá em Configurações do navegador → Notificações e permita este site.
+          </p>
+        </div>
+      ) : (
+        <button
+          onClick={handleToggle}
+          disabled={loading}
+          className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-bold transition-all disabled:opacity-60 ${
+            isSubscribed
+              ? "bg-[#1E3050] text-[#7A8FA8] border border-[#243A66] hover:border-red-500/40 hover:text-red-400"
+              : "bg-[#C9A84C] hover:bg-[#E8C97A] text-[#09081A]"
+          }`}
+        >
+          {loading ? (
+            <RefreshCw className="w-4 h-4 animate-spin" />
+          ) : (
+            <BellRing className="w-4 h-4" />
+          )}
+          {loading
+            ? "Aguarde..."
+            : isSubscribed
+            ? "Desativar notificações push"
+            : "Ativar notificações push"}
+        </button>
+      )}
+
+      {success && (
+        <div className="flex items-center gap-2 p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
+          <p className="text-xs text-emerald-400">{success}</p>
+        </div>
+      )}
+      {error && (
+        <div className="flex items-center gap-2 p-2.5 rounded-lg bg-red-500/10 border border-red-500/20">
+          <AlertCircle className="w-3.5 h-3.5 text-red-400 flex-shrink-0" />
+          <p className="text-xs text-red-400">{error}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function VideoBoasVindasEditor() {
+  const [url, setUrl] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [err, setErr] = useState("");
+
+  useEffect(() => {
+    fetch("/api/settings/platform")
+      .then(r => r.json())
+      .then(d => {
+        // Extrai ID do embed ou URL comum do YouTube
+        setUrl(d.founder_video_url ?? "");
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  function toEmbed(raw: string): string {
+    const clean = raw.trim();
+    // Já é URL de embed
+    if (clean.includes("youtube.com/embed/")) return clean;
+    // youtu.be/ID
+    const short = clean.match(/youtu\.be\/([^?&]+)/);
+    if (short) return `https://www.youtube.com/embed/${short[1]}`;
+    // youtube.com/watch?v=ID
+    const watch = clean.match(/[?&]v=([^&]+)/);
+    if (watch) return `https://www.youtube.com/embed/${watch[1]}`;
+    return clean;
+  }
+
+  async function handleSave(e: React.FormEvent) {
+    e.preventDefault();
+    setErr(""); setSaving(true);
+    const embedUrl = toEmbed(url);
+    if (!embedUrl.includes("youtube.com/embed/")) {
+      setErr("Cole um link válido do YouTube (ex: https://www.youtube.com/watch?v=...)");
+      setSaving(false); return;
+    }
+    const res = await fetch("/api/settings/platform", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ founder_video_url: embedUrl }),
+    });
+    const data = await res.json();
+    if (!res.ok) { setErr(data.error ?? "Erro ao salvar."); setSaving(false); return; }
+    setUrl(embedUrl);
+    setSaved(true); setSaving(false);
+    setTimeout(() => setSaved(false), 3000);
+  }
+
+  const inputCls = "w-full h-10 px-3 text-sm rounded-lg border bg-[#0A1628] border-[#243A66] text-[#F0ECE4] placeholder:text-[#3A5070] focus:outline-none focus:ring-1 focus:ring-[#C9A84C]/50";
+
+  return (
+    <div className="p-6 rounded-2xl border border-[#1E3050] bg-[#0A1628]/60 space-y-4">
+      <h2 className="text-sm font-bold text-[#F0ECE4] flex items-center gap-2">
+        <Activity className="w-4 h-4 text-[#C9A84C]" /> Vídeo de Boas-Vindas
+      </h2>
+      <p className="text-xs text-[#7A8FA8]">
+        Exibido automaticamente para novos parceiros ao entrar na plataforma. Cole o link do YouTube abaixo.
+      </p>
+      <form onSubmit={handleSave} className="space-y-3">
+        <div>
+          <label className="block text-xs font-semibold text-[#7A8FA8] mb-1.5">
+            Link do vídeo (YouTube)
+          </label>
+          <input
+            value={loading ? "Carregando..." : url}
+            onChange={e => setUrl(e.target.value)}
+            placeholder="https://www.youtube.com/watch?v=..."
+            disabled={loading || saving}
+            className={inputCls}
+          />
+          <p className="text-[10px] text-[#3A5070] mt-1">
+            Aceita links normais (watch?v=) ou links de incorporação (embed/)
+          </p>
+        </div>
+        {err && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{err}</p>}
+        <button type="submit" disabled={saving || loading}
+          className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-[#C9A84C] hover:bg-[#E8C97A] text-[#09081A] text-sm font-bold transition-colors disabled:opacity-60">
+          {saving ? <RefreshCw className="w-4 h-4 animate-spin" /> : saved ? <Check className="w-4 h-4" /> : null}
+          {saving ? "Salvando..." : saved ? "Salvo!" : "Salvar vídeo"}
         </button>
       </form>
     </div>
@@ -513,6 +711,8 @@ export function ConfiguracoesClient({ profile, initialLinks, systemStats }: Prop
             />
           </div>
 
+          <PushNotificationsSection />
+
           <div className="flex items-center gap-2 p-3 rounded-xl bg-[#111F35] border border-[#1E3050]/50">
             <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
             <p className="text-xs text-[#7A8FA8]">Preferências salvas automaticamente neste dispositivo.</p>
@@ -572,6 +772,9 @@ export function ConfiguracoesClient({ profile, initialLinks, systemStats }: Prop
               <p className="text-[10px] text-[#7A8FA8]">Alterações nos parâmetros requerem update no banco de dados. Contate o time técnico.</p>
             </div>
           </div>
+
+          {/* Vídeo de boas-vindas */}
+          <VideoBoasVindasEditor />
 
           {/* Ambiente */}
           <div className="p-6 rounded-2xl border border-[#1E3050] bg-[#0A1628]/60 space-y-3">

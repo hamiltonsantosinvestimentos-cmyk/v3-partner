@@ -28,14 +28,18 @@ const createSchema = z.object({
 });
 
 const patchSchema = z.object({
-  id:          z.string().uuid("ID inválido"),
-  status:      z.enum(["PENDING","IN_REVIEW","APPROVED","REJECTED","COMPLETED","CANCELLED"]).optional(),
-  assigned_to: z.string().uuid().optional().nullable(),
-  resolution:  z.string().max(2000).optional().nullable(),
-  priority:    z.enum(["LOW","MEDIUM","HIGH","URGENT"]).optional(),
-  due_date:    z.string().optional().nullable(),
-  title:       z.string().min(3).max(200).optional(),
-  description: z.string().max(2000).optional().nullable(),
+  id:                   z.string().uuid("ID inválido"),
+  status:               z.enum(["PENDING","IN_REVIEW","APPROVED","REJECTED","COMPLETED","CANCELLED"]).optional(),
+  assigned_to:          z.string().uuid().optional().nullable(),
+  resolution:           z.string().max(2000).optional().nullable(),
+  priority:             z.enum(["LOW","MEDIUM","HIGH","URGENT"]).optional(),
+  due_date:             z.string().optional().nullable(),
+  title:                z.string().min(3).max(200).optional(),
+  description:          z.string().max(2000).optional().nullable(),
+  // Campos de pendência
+  pending_reason:       z.string().max(2000).optional().nullable(),
+  pending_responsible:  z.string().max(100).optional().nullable(),
+  pending_resolved_obs: z.string().max(2000).optional().nullable(),
 });
 
 // GET — lista tickets (partner vê os seus, admin/mesa vê todos)
@@ -55,6 +59,8 @@ export async function GET(req: NextRequest) {
     .select(`
       id, code, title, description, category, priority,
       status, due_date, resolved_at, resolution, tags, created_at,
+      pending_reason, pending_responsible, pending_at,
+      pending_resolved_at, pending_resolved_by, reminder_sent_at,
       requester:profiles!operational_tickets_requester_id_fkey(id, full_name),
       assignee:profiles!operational_tickets_assigned_to_fkey(id, full_name)
     `)
@@ -149,10 +155,40 @@ export async function PATCH(req: NextRequest) {
     delete (fields as Record<string, unknown>).assigned_to;
   }
 
+  // Valida pendência: se mudando para PENDING, pending_reason é obrigatório
+  if (fields.status === "PENDING" && !fields.pending_reason) {
+    return NextResponse.json(
+      { error: { pending_reason: ["Motivo da pendência é obrigatório ao definir status Pendente"] } },
+      { status: 400 }
+    );
+  }
+
+  // Remove campos de controle de pendência do spread direto
+  const { pending_reason, pending_responsible, pending_resolved_obs, ...restFields } = fields;
+
   // Marca resolved_at quando concluído
-  const updateData: Record<string, unknown> = { ...fields, updated_at: new Date().toISOString() };
+  const updateData: Record<string, unknown> = { ...restFields, updated_at: new Date().toISOString() };
   if (fields.status === "COMPLETED" || fields.status === "RESOLVED") {
     updateData.resolved_at = new Date().toISOString();
+  }
+
+  // Campos de pendência
+  if (fields.status === "PENDING") {
+    updateData.pending_reason = pending_reason ?? null;
+    updateData.pending_responsible = pending_responsible ?? null;
+    updateData.pending_at = new Date().toISOString();
+    updateData.pending_resolved_at = null;
+    updateData.pending_resolved_by = null;
+  }
+
+  // Resolução de pendência: quando pending_resolved_obs é enviado, registra resolução
+  if (pending_resolved_obs !== undefined) {
+    updateData.pending_resolved_at = new Date().toISOString();
+    updateData.pending_resolved_by = profile?.full_name ?? user.id;
+    // Armazena observação de resolução no campo resolution (reutiliza coluna existente se obs presente)
+    if (pending_resolved_obs) {
+      updateData.resolution = pending_resolved_obs;
+    }
   }
 
   const { data, error } = await svc

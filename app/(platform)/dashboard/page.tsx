@@ -375,6 +375,64 @@ export default async function DashboardPage({
       .slice(0, 5);
   }
 
+  // Benchmark de Performance — para partners, calcula médias da plataforma
+  let benchmarkData: Parameters<typeof DashboardClient>[0]["benchmarkData"] = null;
+  if (!isAdmin && ["PARTNER", "PARTNER_PRO"].includes(role)) {
+    try {
+      const [allDealsRes, allLeadsRes, allComissRes] = await Promise.allSettled([
+        // Todos os deals de todos os partners no mês atual
+        svc.from("ma_deals").select("created_by").gte("created_at", inicioMesAtual),
+        // Todos os marketplace leads no mês atual
+        svc.from("marketplace_leads").select("partner_id").gte("created_at", inicioMesAtual),
+        // Todas as comissões no mês atual
+        svc.from("commissions").select("partner_id, commission_value").gte("created_at", inicioMesAtual),
+      ]);
+
+      const allDeals   = allDealsRes.status === "fulfilled"   ? (allDealsRes.value.data ?? [])   : [];
+      const allLeads   = allLeadsRes.status === "fulfilled"   ? (allLeadsRes.value.data ?? [])   : [];
+      const allComiss  = allComissRes.status === "fulfilled"  ? (allComissRes.value.data ?? [])  : [];
+
+      // Count per partner for deals
+      const dealsByPartner: Record<string, number> = {};
+      for (const d of allDeals) {
+        const pid = (d as { created_by: string | null }).created_by;
+        if (pid) dealsByPartner[pid] = (dealsByPartner[pid] ?? 0) + 1;
+      }
+      // Count per partner for leads
+      const leadsByPartner: Record<string, number> = {};
+      for (const l of allLeads) {
+        const pid = (l as { partner_id: string | null }).partner_id;
+        if (pid) leadsByPartner[pid] = (leadsByPartner[pid] ?? 0) + 1;
+      }
+      // Sum per partner for commissions
+      const commByPartner: Record<string, number> = {};
+      for (const c of allComiss) {
+        const pid = (c as { partner_id: string | null; commission_value: number }).partner_id;
+        const val = (c as { commission_value: number }).commission_value ?? 0;
+        if (pid) commByPartner[pid] = (commByPartner[pid] ?? 0) + val;
+      }
+
+      const dealsVals  = Object.values(dealsByPartner);
+      const leadsVals  = Object.values(leadsByPartner);
+      const commVals   = Object.values(commByPartner);
+
+      const avg = (arr: number[]) => arr.length === 0 ? 0 : Math.round(arr.reduce((s, v) => s + v, 0) / arr.length);
+
+      benchmarkData = {
+        partnerDeals:       dealsByPartner[uid] ?? 0,
+        avgDeals:           avg(dealsVals),
+        partnerVolume:      metaMes?.atual_volume ?? 0,
+        avgVolume:          avg(commVals), // use total commission volume as proxy
+        partnerLeads:       marketplaceLeads,
+        avgLeads:           avg(leadsVals),
+        partnerCommission:  commByPartner[uid] ?? 0,
+        avgCommission:      avg(commVals),
+      };
+    } catch {
+      benchmarkData = null;
+    }
+  }
+
   return (
     <DashboardClient
       role={role}
@@ -393,6 +451,7 @@ export default async function DashboardPage({
       comissoesAPagar={comissoesAPagar}
       metaMes={metaMes}
       topPartners={topPartners}
+      benchmarkData={benchmarkData}
       recentSplits={recentSplits as Parameters<typeof DashboardClient>[0]["recentSplits"]}
       recentDeals={recentDeals as Parameters<typeof DashboardClient>[0]["recentDeals"]}
       recentProposals={recentProposals as Parameters<typeof DashboardClient>[0]["recentProposals"]}

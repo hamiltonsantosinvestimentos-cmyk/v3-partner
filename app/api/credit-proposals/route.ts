@@ -65,6 +65,11 @@ const patchSchema = z.object({
   // Transferência de nível e linha (apenas mesa/admin)
   credit_line: z.string().min(1).max(100).optional(),
   partner_id:  z.string().uuid().optional().nullable(),
+  // Campos de pendência
+  pending_reason:        z.string().max(2000).optional().nullable(),
+  pending_responsible:   z.string().max(200).optional().nullable(),
+  pending_resolved_at:   z.string().optional().nullable(),
+  pending_resolved_by:   z.string().max(200).optional().nullable(),
 });
 
 // GET — lista propostas (partner vê as suas, admin/mesa vê todas)
@@ -87,6 +92,8 @@ export async function GET(req: NextRequest) {
       level1_at, level2_at, level3_at, created_at,
       valor_credito_atual, comissao_mandato_perc, comissao_instituicao_perc,
       instituicao_encaminhada,
+      pending_reason, pending_responsible, pending_at,
+      pending_resolved_at, pending_resolved_by,
       metadata,
       partner:profiles!partner_id(id, full_name)
     `)
@@ -237,6 +244,11 @@ export async function PATCH(req: NextRequest) {
   if (fields.level1_notes && !fields.level1_at) updateData.level1_at = new Date().toISOString();
   if (fields.level2_notes && !fields.level2_at) updateData.level2_at = new Date().toISOString();
   if (fields.level3_notes && !fields.level3_at) updateData.level3_at = new Date().toISOString();
+
+  // Registra pending_at quando vai para PENDENCIA
+  if (fields.stage === "PENDENCIA") {
+    updateData.pending_at = new Date().toISOString();
+  }
 
   // Quando o stage muda, salva stage_changed_at no metadata para controle de SLA por etapa
   if (fields.stage) {
