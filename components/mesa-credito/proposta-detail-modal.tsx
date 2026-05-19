@@ -165,6 +165,40 @@ interface PropostaDetailModalProps {
   canEditInstituicao?: boolean;
 }
 
+// ── CopyClientLinkButton ── botão para copiar link de acompanhamento ──────────
+function CopyClientLinkButton({ proposalId }: { proposalId: string }) {
+  const [copied, setCopied] = React.useState(false);
+
+  function handleCopy() {
+    const baseUrl = window.location.origin;
+    const url = `${baseUrl}/acompanhar/${proposalId}`;
+    navigator.clipboard.writeText(url).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }
+
+  return (
+    <button
+      onClick={handleCopy}
+      title="Copiar link de acompanhamento para o cliente"
+      className="flex items-center gap-1.5 h-8 px-2.5 rounded-lg bg-[#243A66]/50 border border-[#243A66] text-[#7A8FA8] hover:bg-[#243A66] hover:text-[#F0ECE4] transition-colors text-xs font-semibold"
+    >
+      {copied ? (
+        <>
+          <CheckCheck className="w-3.5 h-3.5 text-emerald-400" />
+          <span className="text-emerald-400">Copiado!</span>
+        </>
+      ) : (
+        <>
+          <Link2 className="w-3.5 h-3.5" />
+          Link Cliente
+        </>
+      )}
+    </button>
+  );
+}
+
 // ── PartnerDocUpload ── upload livre de documentos (partner e admin) ──────────
 type FreeDoc = { doc_id: string; file_name: string; storage_path: string; uploaded_at: string; url: string | null };
 
@@ -1761,6 +1795,7 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
               <Download className="w-3.5 h-3.5" />
               PDF
             </button>
+            <CopyClientLinkButton proposalId={proposal.id} />
             <button onClick={onClose} className="w-8 h-8 rounded-lg hover:bg-secondary flex items-center justify-center text-muted-foreground hover:text-white transition-colors">
               <X className="w-4 h-4" />
             </button>
