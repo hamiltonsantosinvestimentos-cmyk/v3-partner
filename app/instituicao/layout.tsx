@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { InstituicaoChatProvider } from "@/components/instituicao/chat-provider";
 
 export const metadata: Metadata = {
   title: "Portal Instituição — V3 Partners",
@@ -9,6 +10,7 @@ export default function InstituicaoLayout({ children }: { children: React.ReactN
   return (
     <div className="min-h-screen bg-[#09081A] font-sans">
       {children}
+      <InstituicaoChatProvider />
     </div>
   );
 }

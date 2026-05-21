@@ -7,7 +7,6 @@ import {
   CheckCircle2, Search, Loader2, TrendingUp, LayoutGrid, List, Settings
 } from "lucide-react";
 import { InstituicaoPropostaModal } from "@/components/instituicao/proposta-modal";
-import { InstituicaoChatWidget } from "@/components/instituicao/chat-widget";
 
 type Proposta = {
   id: string;
@@ -398,10 +397,6 @@ export default function InstituicaoDashboard() {
         />
       )}
 
-      {/* Chat flutuante com a mesa */}
-      {instId && nome && (
-        <InstituicaoChatWidget instituicaoId={instId} instituicaoNome={nome} />
-      )}
     </div>
   );
 }
