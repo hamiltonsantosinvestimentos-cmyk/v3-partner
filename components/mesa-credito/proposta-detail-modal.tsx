@@ -764,7 +764,7 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
   const INSTITUICOES = [
     "BTG Pactual","Itaú BBA","Bradesco BBI","Santander","Caixa Econômica Federal",
     "Banco do Brasil","Daycoval","Mercantil do Brasil","Omni","Creditas",
-    "BV Financeira","Safra","ABC Brasil","Fibra","Outra",
+    "BV Financeira","Safra","ABC Brasil","Fibra","Oxigênio Capital","Outra",
   ];
   const [instituicoesList, setInstituicoesList] = useState<string[]>([]);
   const [addingInst, setAddingInst] = useState<string>("");
