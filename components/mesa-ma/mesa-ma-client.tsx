@@ -14,9 +14,19 @@ import { MA_PIPELINE } from "@/components/ma/ma-client";
 import { ForjaPanel } from "@/components/ma/forja-panel";
 import { ContratoPanel } from "@/components/ma/contrato-panel";
 import { InvestorMatchPanel } from "@/components/ma/investor-match-panel";
-import { DealAnalyticsPanel } from "@/components/ma/deal-analytics-panel";
-import { DealQAPanel } from "@/components/ma/deal-qa-panel";
-import { DealRoomPanel } from "@/components/ma/deal-room-panel";
+import dynamic from "next/dynamic";
+const DealAnalyticsPanel = dynamic(
+  () => import("@/components/ma/deal-analytics-panel").then(m => m.DealAnalyticsPanel),
+  { ssr: false }
+);
+const DealQAPanel = dynamic(
+  () => import("@/components/ma/deal-qa-panel").then(m => m.DealQAPanel),
+  { ssr: false }
+);
+const DealRoomPanel = dynamic(
+  () => import("@/components/ma/deal-room-panel").then(m => m.DealRoomPanel),
+  { ssr: false }
+);
 import { NovoDealForm } from "@/components/ma/novo-deal-form";
 import { DealFormEditorClient } from "@/components/ma/deal-form-editor-client";
 
