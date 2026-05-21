@@ -30,6 +30,7 @@ export default function InstituicaoLoginPage() {
 
       sessionStorage.setItem("instituicao_id", data.instituicao_id);
       sessionStorage.setItem("instituicao_nome", data.nome);
+      sessionStorage.setItem("instituicao_email", email);
 
       // Garante que não há sessão Supabase ativa que conflite com a plataforma interna
       try {
