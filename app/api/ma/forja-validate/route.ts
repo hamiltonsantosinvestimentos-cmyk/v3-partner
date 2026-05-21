@@ -37,7 +37,12 @@ function sanitizeDeal(deal: Record<string, unknown>): Record<string, unknown> {
     "diferenciais", "riscos", "metricas",
     // Matching metadata
     "uf_extraido", "tipo_operacao_extraida",
-    "teaser_cego_generated_at",
+    // Dados financeiros derivados — grandes demais, já extraídos de PDFs anteriores
+    "financial_projections", "noi_mensal", "updated_from_qa", "vacancia_pct",
+    // Documentos de referência já registrados — não úteis para revalidação
+    "documentos_origem",
+    // Metadados de storage e controle de docs
+    "storage_id", "file_size_bytes", "uploaded_at",
   ]);
 
   function stripEmpty(obj: unknown): unknown {
@@ -177,7 +182,8 @@ export async function POST(req: NextRequest) {
     // Com PDFs → Sonnet (necessário para leitura de documentos)
     const model = hasDocs ? "claude-sonnet-4-6" : "claude-haiku-4-5-20251001";
     // Fase 1 só precisa de tokens para validated/corrected/missing — sem narrativa
-    const maxTokensPhase1 = hasDocs ? 4000 : 2000;
+    // 3000 para Haiku (deal com muitos campos preenchidos), 4000 para Sonnet com PDFs
+    const maxTokensPhase1 = hasDocs ? 4000 : 3000;
 
     const message = await client.messages.create({
       model,
