@@ -1,4 +1,3 @@
-import { createServerClient } from "@supabase/ssr";
 import { createClient as sc } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 
@@ -12,25 +11,16 @@ export async function POST(request: Request) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
   const anonKey = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
-  const response = NextResponse.json({ success: true });
-
-  const supabase = createServerClient(url, anonKey, {
-    cookies: {
-      getAll() { return []; },
-      setAll(cookiesToSet) {
-        cookiesToSet.forEach(({ name, value, options }) => {
-          response.cookies.set(name, value, options ?? {});
-        });
-      },
-    },
-  });
-
-  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  // Auth temporária apenas para verificar credenciais — usamos client anônimo sem cookies
+  // para NÃO criar sessão persistente que conflite com a plataforma interna
+  const anonClient = sc(url, anonKey);
+  const { data, error } = await anonClient.auth.signInWithPassword({ email, password });
 
   if (error || !data.user) {
     return NextResponse.json({ error: "Email ou senha inválidos." }, { status: 401 });
   }
 
+  // Verifica se o usuário é uma instituição cadastrada
   const svc = serviceClient();
   const { data: inst } = await svc
     .from("instituicoes")
@@ -46,15 +36,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Acesso inativo. Entre em contato com a V3 Partners." }, { status: 403 });
   }
 
-  const finalResponse = NextResponse.json({
+  // NÃO propagamos cookies de sessão Supabase — o portal de instituição usa
+  // apenas sessionStorage, evitando conflito com a sessão da plataforma interna
+  return NextResponse.json({
     success: true,
     instituicao_id: inst.id,
     nome: inst.nome,
   });
-
-  response.cookies.getAll().forEach(cookie => {
-    finalResponse.cookies.set(cookie.name, cookie.value);
-  });
-
-  return finalResponse;
 }
