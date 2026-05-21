@@ -16,6 +16,7 @@ import { ContratoPanel } from "@/components/ma/contrato-panel";
 import { InvestorMatchPanel } from "@/components/ma/investor-match-panel";
 import { DealAnalyticsPanel } from "@/components/ma/deal-analytics-panel";
 import { DealQAPanel } from "@/components/ma/deal-qa-panel";
+import { DealRoomPanel } from "@/components/ma/deal-room-panel";
 import { NovoDealForm } from "@/components/ma/novo-deal-form";
 import { DealFormEditorClient } from "@/components/ma/deal-form-editor-client";
 
@@ -1053,6 +1054,8 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
             if (detailTab === "contrato") {
               return (
                 <div className="mt-2 space-y-4">
+                  {/* Deal Room VDR */}
+                  <DealRoomPanel dealId={selectedCard.id} dealCode={selectedCard.code} userRole={userRole} />
                   <ContratoPanel deal={dealObj} dealCode={selectedCard.code} isDemo={false} />
                   {/* Liberar Kit de Criativos */}
                   <div className="p-4 rounded-xl border border-[#122036] bg-[#091221]">
