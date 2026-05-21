@@ -41,10 +41,8 @@ export async function GET(req: NextRequest) {
 
   if (pErr) return NextResponse.json({ error: pErr.message }, { status: 500 });
 
-  if (!partners?.length) return NextResponse.json({ rooms: [] });
-
-  // Para cada partner, busca a última mensagem
-  const rooms = await Promise.all(
+  // Salas de partners
+  const partnerRooms = await Promise.all(
     (partners ?? []).map(async (p: { id: string; full_name: string | null; role: string }) => {
       const room_id = `partner_${p.id}`;
       const { data: msgs } = await svc()
@@ -55,8 +53,6 @@ export async function GET(req: NextRequest) {
         .limit(1);
 
       const lastMsg = msgs?.[0] ?? null;
-
-      // Conta mensagens não lidas de partners (mensagens enviadas pelo próprio partner)
       const { count: unread } = await svc()
         .from("chat_messages")
         .select("*", { count: "exact", head: true })
@@ -68,19 +64,38 @@ export async function GET(req: NextRequest) {
         partner_id: p.id,
         partner_name: p.full_name ?? "Partner",
         partner_role: p.role,
-        last_message: lastMsg
-          ? {
-              content: lastMsg.content,
-              sender_name: lastMsg.sender_name,
-              created_at: lastMsg.created_at,
-            }
-          : null,
+        last_message: lastMsg ? { content: lastMsg.content, sender_name: lastMsg.sender_name, created_at: lastMsg.created_at } : null,
         unread_count: unread ?? 0,
       };
     })
   );
 
-  // Ordena por última mensagem mais recente primeiro
+  // Salas de instituições que já enviaram mensagens
+  const { data: instMsgs } = await svc()
+    .from("chat_messages")
+    .select("room_id, sender_name, content, created_at")
+    .like("room_id", "instituicao_%")
+    .order("created_at", { ascending: false });
+
+  const instRoomsMap = new Map<string, { room_id: string; partner_id: string; partner_name: string; partner_role: string; last_message: { content: string; sender_name: string; created_at: string } | null; unread_count: number }>();
+  for (const msg of instMsgs ?? []) {
+    const room_id = msg.room_id as string;
+    if (!instRoomsMap.has(room_id)) {
+      const inst_id = room_id.replace("instituicao_", "");
+      const { data: inst } = await svc().from("instituicoes").select("id, nome").eq("id", inst_id).single();
+      instRoomsMap.set(room_id, {
+        room_id,
+        partner_id: inst_id,
+        partner_name: inst?.nome ?? "Instituição",
+        partner_role: "INSTITUICAO",
+        last_message: { content: msg.content as string, sender_name: msg.sender_name as string, created_at: msg.created_at as string },
+        unread_count: 0,
+      });
+    }
+  }
+
+  const rooms = [...Array.from(instRoomsMap.values()), ...partnerRooms];
+
   rooms.sort((a, b) => {
     if (!a.last_message && !b.last_message) return 0;
     if (!a.last_message) return 1;
