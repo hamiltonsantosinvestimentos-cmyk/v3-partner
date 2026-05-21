@@ -11,7 +11,7 @@ function svc() {
 async function validateInstituicao(instituicao_id: string) {
   const { data } = await svc()
     .from("instituicoes")
-    .select("id, nome, status")
+    .select("id, nome, status, auth_user_id")
     .eq("id", instituicao_id)
     .single();
   return data;
@@ -53,7 +53,7 @@ export async function POST(request: Request) {
     .from("chat_messages")
     .insert({
       room_id,
-      sender_id: instituicao_id,
+      sender_id: inst.auth_user_id, // auth.users UUID — satisfaz a FK constraint
       sender_name: inst.nome,
       sender_role: "INSTITUICAO",
       content: content.trim(),
