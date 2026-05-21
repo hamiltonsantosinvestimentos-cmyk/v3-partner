@@ -98,7 +98,7 @@ function renderTese(tese: string[] | string, style = "font-size:12px;color:#7A8F
   return "";
 }
 
-// ── CIM — Memorando de Informação Confidencial (9 páginas) ──────────────────
+// ── CIM — fiel ao modelo de referência V3 (engenharia reversa completa) ─────
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function buildCIM(deal: any, lang: string): string {
   const ad = deal.asset_data ?? {};
@@ -117,392 +117,455 @@ function buildCIM(deal: any, lang: string): string {
     ? (forja.narrative_pt || ad.descricao_ptbr || ad.descricao || "")
     : (forja.narrative_en || ad.descricao_en || ad.descricao_ptbr || "");
 
-  const tese = forja.tese.length > 0
-    ? forja.tese
-    : isPt ? (ad.tese_investimento ?? "") : (ad.tese_investimento_en ?? ad.tese_investimento ?? "");
+  const teseArr: string[] = forja.tese.length > 0 ? forja.tese
+    : Array.isArray(ad.diferenciais) ? ad.diferenciais : [];
 
-  const richMetricas = buildMetricasFromFP(fp, deal);
-  const metricas: { label: string; value: string; sub?: string }[] =
-    richMetricas.length > 0 ? richMetricas : (ad.metricas ?? []);
-  const diferenciais: string[] = ad.diferenciais ?? [];
   const riscos: { nivel: string; descricao: string; mitigacao: string }[] = ad.riscos ?? [];
 
-  // Dados financeiros estruturados
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const receitas: { ano: number; tipo: string; valor: number }[] = fp?.receita ?? [];
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const sc = fp?.scenarios as Record<string, { noi_anual?: number; cap_rate?: number; valuation?: number }> | undefined;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const despesas = fp?.despesas_breakdown as Record<string, number> | undefined;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const vacancias: { pct: number; pavimento: string }[] = fp?.vacancia_pct ?? [];
 
-  // Cover: 3 itens inteligentes — Valuation + NOI ou Cap Rate + Setor/ABL
-  const coverItem2 = sc?.base?.noi_anual
-    ? { label: isPt ? "NOI Anual Base" : "Base Annual NOI", value: formatBRL(sc.base.noi_anual) }
-    : sc?.base?.cap_rate
-    ? { label: "Cap Rate Base", value: `${(sc.base.cap_rate * 100).toFixed(1)}%` }
-    : deal.ebitda_multiple
-    ? { label: isPt ? "Múltiplo EBITDA" : "EBITDA Multiple", value: `${deal.ebitda_multiple}x` }
-    : null;
-  const coverItem3 = val("area_construida")
-    ? { label: "ABL Total", value: val("area_construida") }
-    : { label: isPt ? "Setor" : "Sector", value: deal.sector };
-
-  // Anos de operação
   const foundingYear = val("founding_year") ? parseInt(val("founding_year")) : null;
   const anosOp = foundingYear ? `${new Date().getFullYear() - foundingYear} anos` : "";
 
-  // Despesas total mensais
   const totalDesp = despesas ? Object.values(despesas).reduce((s, v) => s + v, 0) : 0;
 
-  const t = isPt ? {
-    confidencial: "MEMORANDO DE INFORMAÇÃO CONFIDENCIAL",
-    sumario: "Sumário Executivo",
-    metricas: "Métricas-Chave",
-    difer: "Diferenciais Competitivos",
-    riscos: "Riscos e Mitigações",
-    operacao: "Dados da Operação",
-    tese: "Tese de Investimento",
-    financeiro: "Performance Financeira",
-    cenarios: "Análise de Valor — Cenários",
-    aviso: "Este documento é estritamente confidencial e destinado exclusivamente ao destinatário autorizado. A reprodução, distribuição ou divulgação sem autorização prévia da V3 Partners é expressamente proibida.",
-    setor: "Setor", localizacao: "Localização", fechamento: "Fechamento Previsto",
-    valorDeal: "Valor do Deal", nivel: "Nível", mitigacao: "Mitigação", pag: "Página", de: "de",
-    anosOp: "Anos de Operação", abl: "Área Bruta Locável", divida: "Dívida Total",
-    tipoOp: "Tipo de Operação", contencioso: "Contencioso",
-    receita: "Receita Bruta", realizado: "Realizado", projetado: "Projetado",
-    despesasLabel: "Composição de Despesas Mensais", noi: "NOI Anual",
-    cenBase: "Cenário Base", cenEstab: "Cenário Estabilizado", cenExp: "Cenário Expansão",
-    valuation: "Valuation", capRate: "Cap Rate",
-  } : {
-    confidencial: "CONFIDENTIAL INFORMATION MEMORANDUM",
-    sumario: "Executive Summary",
-    metricas: "Key Metrics",
-    difer: "Competitive Advantages",
-    riscos: "Risk Factors & Mitigations",
-    operacao: "Transaction Details",
-    tese: "Investment Thesis",
-    financeiro: "Financial Performance",
-    cenarios: "Valuation Analysis — Scenarios",
-    aviso: "This document is strictly confidential and intended solely for the authorized recipient. Reproduction, distribution or disclosure without prior written consent from V3 Partners is expressly prohibited.",
-    setor: "Sector", localizacao: "Location", fechamento: "Expected Close",
-    valorDeal: "Deal Value", nivel: "Level", mitigacao: "Mitigation", pag: "Page", de: "of",
-    anosOp: "Years of Operation", abl: "Gross Leasable Area", divida: "Total Debt",
-    tipoOp: "Transaction Type", contencioso: "Litigation",
-    receita: "Gross Revenue", realizado: "Realized", projetado: "Projected",
-    despesasLabel: "Monthly Expense Breakdown", noi: "Annual NOI",
-    cenBase: "Base Case", cenEstab: "Stabilized Case", cenExp: "Expansion Case",
-    valuation: "Valuation", capRate: "Cap Rate",
-  };
+  // receita realizada mais recente
+  const receitaReal = receitas.filter(r => r.tipo === "realizado").sort((a,b) => b.ano - a.ano)[0];
+  // crescimento YoY
+  const receitaAnt = receitas.filter(r => r.tipo === "realizado").sort((a,b) => b.ano - a.ano)[1];
+  const yoy = receitaReal && receitaAnt ? ((receitaReal.valor / receitaAnt.valor - 1) * 100) : null;
 
   const nivelColor = (n: string) =>
-    n === "baixo" || n === "low" ? "#10b981" : n === "medio" || n === "medium" ? "#f59e0b" : "#ef4444";
+    n?.toLowerCase().includes("baixo") || n?.toLowerCase().includes("low") ? "var(--green-ok)"
+    : n?.toLowerCase().includes("medio") || n?.toLowerCase().includes("medium") ? "var(--amber)"
+    : "var(--red-risk)";
+  const nivelClass = (n: string) =>
+    n?.toLowerCase().includes("baixo") || n?.toLowerCase().includes("low") ? "risk-baixo"
+    : n?.toLowerCase().includes("medio") || n?.toLowerCase().includes("medium") ? "risk-medio"
+    : "risk-alto";
 
-  // Contagem dinâmica de páginas
+  // KPIs para seção 02
+  const kpi1 = receitaReal ? { label: `Receita ${receitaReal.ano}`, val: formatBRL(receitaReal.valor), sub: yoy ? `+${yoy.toFixed(1)}% vs ${receitaAnt?.ano}` : "realizado", badge: yoy ? `↑ +${yoy.toFixed(1)}% YoY` : "" } : null;
+  const kpi2 = val("area_construida") ? { label: "Área Construída", val: val("area_construida"), sub: "GLA atual" } : null;
+  const kpi3 = sc?.base?.noi_anual ? { label: "NOI Base Anual", val: formatBRL(sc.base.noi_anual), sub: "cenário conservador" } : null;
+  const kpi4 = sc?.base?.cap_rate ? { label: "Cap Rate Base", val: `${(sc.base.cap_rate*100).toFixed(1)}%`, sub: "sobre valuation pedido" } : null;
+
+  const kpis = [kpi1, kpi2, kpi3, kpi4].filter(Boolean);
+
+  // info-card Ficha do Ativo
+  const fichaRows: [string, string, string?][] = [
+    deal.target_company && ["Ativo", deal.target_company],
+    val("tipo_operacao") && ["Operação", val("tipo_operacao")],
+    deal.sector && ["Setor", deal.sector],
+    deal.location && ["Localização", deal.location, "gold"],
+    foundingYear && ["Fundação", `${foundingYear}${anosOp ? " ("+anosOp+")" : ""}`],
+    val("area_construida") && ["Área Construída", val("area_construida"), "gold"],
+    deal.deal_value && ["Valuation", formatBRL(deal.deal_value), "gold"],
+    val("divida_total") && ["Dívida Total", val("divida_total"), "amber"],
+    val("processos_judiciais") && ["Processos Judiciais", val("processos_judiciais"), val("processos_judiciais").toLowerCase().includes("sem") ? "green" : "amber"],
+    deal.code && ["Processo V3", deal.code],
+  ].filter(Boolean) as [string, string, string?][];
+
+  // Cenários para seção 06
+  type Cen = { label: string; tag: string; tagClass: string; metrics: [string,string][] };
+  const cenarios: Cen[] = [];
+  if (sc?.base) cenarios.push({
+    label: "Cenário Base", tag: "Atual", tagClass: "tag-base",
+    metrics: [
+      receitaReal ? [`Receita ${receitaReal.ano}`, formatBRL(receitaReal.valor)] : null,
+      sc.base.noi_anual ? ["NOI est./ano", formatBRL(sc.base.noi_anual)] : null,
+      sc.base.cap_rate ? ["Cap Rate implícito", `~${(sc.base.cap_rate*100).toFixed(1)}%`] : null,
+      sc.base.valuation ? ["Valuation", formatBRL(sc.base.valuation)] : (deal.deal_value ? ["Valuation", formatBRL(deal.deal_value)] : null),
+    ].filter(Boolean) as [string,string][],
+  });
+  if (sc?.estabilizado) cenarios.push({
+    label: "Cenário Estabilizado", tag: "18–24 meses", tagClass: "tag-estabilizado",
+    metrics: [
+      sc.estabilizado.noi_anual ? ["NOI anual estabilizado", formatBRL(sc.estabilizado.noi_anual)] : null,
+      sc.estabilizado.cap_rate ? ["Cap Rate estabilizado", `~${(sc.estabilizado.cap_rate*100).toFixed(1)}%`] : null,
+      sc.estabilizado.valuation ? ["Valor justo estimado", formatBRL(sc.estabilizado.valuation)] : null,
+    ].filter(Boolean) as [string,string][],
+  });
+  if (sc?.expansao) cenarios.push({
+    label: "Cenário c/ Expansão", tag: "36–48 meses", tagClass: "tag-expansao",
+    metrics: [
+      sc.expansao.noi_anual ? ["NOI anual expandido", formatBRL(sc.expansao.noi_anual)] : null,
+      sc.expansao.cap_rate ? ["Cap Rate expansão", `~${(sc.expansao.cap_rate*100).toFixed(1)}%`] : null,
+      sc.expansao.valuation ? ["Valor potencial", formatBRL(sc.expansao.valuation)] : null,
+    ].filter(Boolean) as [string,string][],
+  });
+
   const hasFinanceiro = receitas.length > 0 || !!despesas;
-  const hasCenarios = !!(sc?.base || sc?.estabilizado || sc?.expansao);
-  const totalPages = 6 + (hasFinanceiro ? 1 : 0) + (hasCenarios ? 1 : 0) + 1; // +1 contato
-  let pageN = 0;
-  const pg = () => `<span class="page-num">${t.pag} ${++pageN} ${t.de} ${totalPages}</span>`;
-
-  // Bar chart horizontal helper
-  const barChart = (items: { label: string; value: number; pct: number; color?: string }[]) =>
-    items.map(i => `
-    <div style="margin-bottom:10px">
-      <div style="display:flex;justify-content:space-between;margin-bottom:4px">
-        <span style="font-size:11px;color:#9BAFC5">${i.label}</span>
-        <span style="font-size:11px;font-weight:700;color:#E8C97A">${formatBRL(i.value)}</span>
-      </div>
-      <div style="height:6px;background:#162744;border-radius:3px;overflow:hidden">
-        <div style="height:100%;width:${Math.min(i.pct,100).toFixed(1)}%;background:${i.color ?? "#C9A84C"};border-radius:3px"></div>
-      </div>
-    </div>`).join("");
-
-  // Linha de receita para tabela
-  const maxReceita = Math.max(...receitas.map(r => r.valor), 1);
-  const receitaRows = receitas.map(r => {
-    const isProjeted = r.tipo !== "realizado";
-    const pct = (r.valor / maxReceita) * 100;
-    return `<tr>
-      <td style="padding:8px 12px;font-size:12px;color:#9BAFC5;border-bottom:1px solid #243A66">${r.ano}</td>
-      <td style="padding:8px 12px;font-size:11px;color:${isProjeted ? "#9BAFC5" : "#E8C97A"};border-bottom:1px solid #243A66;font-style:${isProjeted ? "italic" : "normal"}">${isProjeted ? t.projetado : t.realizado}</td>
-      <td style="padding:8px 12px;font-size:13px;font-weight:700;color:${isProjeted ? "#9BAFC5" : "#F5F1E8"};border-bottom:1px solid #243A66">${formatBRL(r.valor)}</td>
-      <td style="padding:8px 12px;border-bottom:1px solid #243A66">
-        <div style="height:8px;background:#162744;border-radius:4px;overflow:hidden;width:120px">
-          <div style="height:100%;width:${pct.toFixed(0)}%;background:${isProjeted ? "#243A66" : "#C9A84C"};border-radius:4px"></div>
-        </div>
-      </td>
-    </tr>`;
-  }).join("");
+  const hasCenarios = cenarios.length > 0;
 
   return `<!DOCTYPE html><html lang="${lang}"><head><meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>CIM — ${deal.target_company}</title>
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>CIM — ${deal.target_company} | V3 Partners</title>
 <link href="${FONT}" rel="stylesheet">
 <style>
-${CSS_BASE}
-@page{size:A4 portrait;margin:0}
-body{background:#060515;padding:40px 0;min-height:100vh}
-.page{
-  width:794px;min-height:1123px;
-  margin:0 auto 32px;padding:52px 60px;
-  position:relative;page-break-after:always;
-  border:1px solid rgba(201,168,76,0.18);
-  box-shadow:0 2px 0 0 rgba(201,168,76,0.4),0 8px 48px rgba(0,0,0,0.8),0 0 0 1px rgba(201,168,76,0.06);
-  overflow:hidden;
-}
-.page-cover{background:linear-gradient(155deg,#09081A 55%,#111F35 100%);display:flex;flex-direction:column;height:1123px}
-.page-inner{background:#111F35;min-height:1123px}
-.page::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,transparent,#C9A84C,#E8C97A 50%,#C9A84C,transparent)}
-@media print{
-  body{padding:0!important;background:#09081A!important;}
-  .page{width:210mm!important;height:297mm!important;min-height:297mm!important;padding:14mm 18mm!important;border:none!important;margin:0!important;box-shadow:none!important;overflow:visible!important;page-break-after:always;}
-  .page-cover{height:297mm!important;}
-  .page::before{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
-}
-.cover-logo{display:flex;align-items:center;gap:14px;margin-bottom:auto}
-.cover-title{font-size:38px;font-weight:800;line-height:1.1;color:#F0ECE4;margin-bottom:10px}
-.cover-sub{font-size:13px;color:#7A8FA8;margin-bottom:40px;line-height:1.5}
-.cover-bar{width:60px;height:3px;background:linear-gradient(90deg,#C9A84C,#E8C97A);border-radius:2px;margin-bottom:28px}
-.cover-meta{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:32px}
-.cover-meta-item{background:rgba(22,39,68,0.6);border:1px solid rgba(201,168,76,0.15);border-radius:6px;padding:14px 16px}
-.cover-meta-item p:first-child{font-size:8px;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:#C9A84C;margin-bottom:6px}
-.cover-meta-item p:last-child{font-size:18px;font-weight:800;color:#E8C97A}
-.cover-confidential{font-size:8px;font-weight:700;letter-spacing:4px;text-transform:uppercase;color:rgba(201,168,76,0.6);border:1px solid rgba(201,168,76,0.2);padding:5px 12px;border-radius:3px;display:inline-block}
-.page-num{position:absolute;bottom:28px;right:52px;font-size:9px;color:rgba(122,143,168,0.5);letter-spacing:1px}
-.section-title{font-size:20px;font-weight:700;color:#F0ECE4;margin-bottom:6px}
-.section-sub{font-size:11px;color:#7A8FA8;margin-bottom:24px;line-height:1.6}
-.metric-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:16px}
-.metric-item{background:#162744;border:1px solid #243A66;border-radius:8px;padding:16px;border-top:2px solid #C9A84C}
-.metric-item .val{font-size:18px;font-weight:800;color:#E8C97A;margin:5px 0 2px}
-.metric-item .sub{font-size:10px;color:#7A8FA8}
-.diff-item{display:flex;align-items:flex-start;gap:12px;padding:14px 16px;background:#162744;border:1px solid #243A66;border-radius:6px;margin-bottom:10px}
-.diff-dot{width:6px;height:6px;border-radius:50%;background:#C9A84C;margin-top:5px;flex-shrink:0}
-.diff-text{font-size:12px;color:#9BAFC5;line-height:1.65}
-.risk-item{border:1px solid #243A66;border-radius:6px;padding:14px 16px;margin-bottom:10px;display:flex;gap:14px;align-items:flex-start}
-.risk-badge{padding:3px 8px;border-radius:3px;font-size:8px;font-weight:700;text-transform:uppercase;white-space:nowrap;flex-shrink:0;margin-top:2px}
-.data-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
-.data-item dt{font-size:8px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#C9A84C;margin-bottom:4px}
-.data-item dd{font-size:13px;font-weight:600;color:#F0ECE4;line-height:1.4}
-.tese-box{background:#162744;border:1px solid rgba(201,168,76,0.2);border-left:3px solid #C9A84C;border-radius:0 6px 6px 0;padding:18px 22px}
-.aviso-box{background:#162744;border:1px solid #243A66;border-radius:6px;padding:14px;font-size:10px;color:#7A8FA8;line-height:1.7}
-.cen-card{background:#162744;border:1px solid #243A66;border-radius:10px;padding:20px;flex:1}
-.cen-card.highlight{border-color:rgba(201,168,76,0.4);box-shadow:0 0 0 1px rgba(201,168,76,0.15)}
-.cen-card .cen-label{font-size:9px;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:#C9A84C;margin-bottom:8px}
-.cen-card .cen-val{font-size:22px;font-weight:800;color:#E8C97A;margin-bottom:4px}
-.cen-card .cen-noi{font-size:13px;color:#9BAFC5;margin-bottom:8px}
-.cen-card .cen-cap{font-size:11px;color:#9BAFC5;padding:4px 8px;background:#243A66;border-radius:4px;display:inline-block}
-table.rev-table{width:100%;border-collapse:collapse;margin-top:12px}
-table.rev-table th{font-size:8px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#C9A84C;padding:8px 12px;border-bottom:2px solid #243A66;text-align:left}
+  :root{
+    --navy:#09081A;--navy-mid:#0F0E2A;--navy-light:#1A1836;
+    --gold:#C9A84C;--gold-light:#E2C97A;--gold-dark:#A8873A;
+    --cream:#F5F1E8;--cream-dark:#EDE8DA;--muted:#9BAFC5;--white:#FFFFFF;
+    --red-risk:#E05555;--green-ok:#4CAF7D;--amber:#E89B3A;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:'DM Sans',sans-serif;background:var(--navy);color:var(--cream);font-size:14px;line-height:1.6;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
+  @media print{@page{size:A4;margin:12mm}body{font-size:11px}.page-break{page-break-before:always}.no-print{display:none}}
+  /* COVER */
+  .cover{min-height:100vh;background:var(--navy);display:flex;flex-direction:column;justify-content:space-between;padding:60px;position:relative;overflow:hidden}
+  .cover::before{content:'';position:absolute;top:0;left:0;right:0;height:4px;background:linear-gradient(90deg,var(--gold-dark),var(--gold),var(--gold-light))}
+  .cover-grid{position:absolute;inset:0;background-image:linear-gradient(rgba(201,168,76,0.04)1px,transparent 1px),linear-gradient(90deg,rgba(201,168,76,0.04)1px,transparent 1px);background-size:60px 60px;pointer-events:none}
+  .cover-logo{display:flex;align-items:center;gap:16px}
+  .cover-logo img{height:48px}
+  .cover-logo-label{font-size:11px;font-weight:600;letter-spacing:3px;color:var(--muted);text-transform:uppercase;border-left:1px solid var(--gold);padding-left:16px}
+  .cover-center{flex:1;display:flex;flex-direction:column;justify-content:center;padding:60px 0;position:relative;z-index:1}
+  .cover-badge{display:inline-flex;align-items:center;gap:8px;background:rgba(201,168,76,0.12);border:1px solid rgba(201,168,76,0.3);border-radius:4px;padding:6px 14px;font-size:11px;font-weight:600;letter-spacing:2px;color:var(--gold);text-transform:uppercase;margin-bottom:32px;width:fit-content}
+  .cover-badge::before{content:'';width:6px;height:6px;background:var(--gold);border-radius:50%}
+  .cover-title{font-size:48px;font-weight:700;line-height:1.1;color:var(--white);margin-bottom:8px;letter-spacing:-1px}
+  .cover-subtitle{font-size:20px;font-weight:300;color:var(--muted);margin-bottom:48px;letter-spacing:0.5px}
+  .cover-metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:rgba(255,255,255,0.06);border-radius:12px;overflow:hidden;max-width:800px}
+  .cover-metric{background:var(--navy-light);padding:24px;position:relative}
+  .cover-metric::after{content:'';position:absolute;bottom:0;left:24px;right:24px;height:2px;background:var(--gold);opacity:0.3}
+  .cover-metric-label{font-size:10px;font-weight:600;letter-spacing:2px;color:var(--muted);text-transform:uppercase;margin-bottom:8px}
+  .cover-metric-value{font-size:22px;font-weight:700;color:var(--gold);line-height:1}
+  .cover-metric-sub{font-size:11px;color:var(--muted);margin-top:4px}
+  .cover-footer{display:flex;justify-content:space-between;align-items:flex-end;position:relative;z-index:1}
+  .cover-confidential{background:rgba(224,85,85,0.12);border:1px solid rgba(224,85,85,0.3);border-radius:6px;padding:12px 20px;max-width:500px}
+  .cover-confidential strong{color:var(--red-risk);display:block;font-size:11px;letter-spacing:2px;text-transform:uppercase;margin-bottom:4px}
+  .cover-confidential p{font-size:11px;color:var(--muted);line-height:1.5}
+  .cover-date{text-align:right;font-size:11px;color:var(--muted)}
+  .cover-date strong{display:block;color:var(--cream);font-size:13px;margin-bottom:2px}
+  /* SECTIONS */
+  .section{padding:60px;border-bottom:1px solid rgba(255,255,255,0.05)}
+  .section-alt{background:var(--navy-mid)}
+  .section-header{display:flex;align-items:center;gap:16px;margin-bottom:40px}
+  .section-number{width:36px;height:36px;background:rgba(201,168,76,0.12);border:1px solid rgba(201,168,76,0.3);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:var(--gold);flex-shrink:0}
+  .section-title{font-size:24px;font-weight:700;color:var(--white);letter-spacing:-0.5px}
+  .section-title span{color:var(--gold)}
+  /* EXEC */
+  .exec-grid{display:grid;grid-template-columns:1fr 380px;gap:40px}
+  .exec-lead{font-size:14px;font-weight:400;color:var(--cream);line-height:1.8;margin-bottom:20px}
+  .exec-highlight{background:rgba(201,168,76,0.08);border-left:3px solid var(--gold);padding:16px 20px;border-radius:0 8px 8px 0;margin-top:24px}
+  .exec-highlight p{font-size:13px;color:var(--cream);line-height:1.7}
+  .exec-highlight strong{color:var(--gold)}
+  /* INFO CARD */
+  .info-card{background:var(--navy-light);border:1px solid rgba(255,255,255,0.06);border-radius:12px;overflow:hidden}
+  .info-card-header{background:rgba(201,168,76,0.1);border-bottom:1px solid rgba(201,168,76,0.2);padding:14px 20px;font-size:11px;font-weight:600;letter-spacing:2px;color:var(--gold);text-transform:uppercase}
+  .info-row{display:flex;justify-content:space-between;align-items:center;padding:12px 20px;border-bottom:1px solid rgba(255,255,255,0.04);gap:12px}
+  .info-row:last-child{border-bottom:none}
+  .info-label{font-size:11px;color:var(--muted);font-weight:500}
+  .info-value{font-size:13px;font-weight:600;color:var(--cream);text-align:right}
+  .info-value.gold{color:var(--gold)}.info-value.green{color:var(--green-ok)}.info-value.amber{color:var(--amber)}.info-value.red{color:var(--red-risk)}
+  /* KPI */
+  .kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:40px}
+  .kpi-grid-3{grid-template-columns:repeat(3,1fr)}
+  .kpi-card{background:var(--navy-light);border:1px solid rgba(255,255,255,0.06);border-radius:12px;padding:24px;position:relative;overflow:hidden;break-inside:avoid}
+  .kpi-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--gold-dark),var(--gold))}
+  .kpi-label{font-size:10px;font-weight:600;letter-spacing:2px;color:var(--muted);text-transform:uppercase;margin-bottom:12px}
+  .kpi-value{font-size:28px;font-weight:700;color:var(--gold);line-height:1;margin-bottom:6px}
+  .kpi-sub{font-size:12px;color:var(--muted)}
+  .kpi-badge{display:inline-flex;align-items:center;gap:4px;background:rgba(76,175,125,0.12);border:1px solid rgba(76,175,125,0.3);border-radius:4px;padding:3px 8px;font-size:11px;font-weight:600;color:var(--green-ok);margin-top:8px}
+  /* THESIS */
+  .thesis-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px}
+  .thesis-item{background:var(--navy-light);border:1px solid rgba(255,255,255,0.06);border-radius:12px;padding:24px;display:flex;gap:16px;break-inside:avoid}
+  .thesis-num{width:32px;height:32px;background:rgba(201,168,76,0.15);border:1px solid rgba(201,168,76,0.3);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:var(--gold);flex-shrink:0}
+  .thesis-content h4{font-size:14px;font-weight:600;color:var(--white);margin-bottom:8px;line-height:1.3}
+  .thesis-content p{font-size:12px;color:var(--muted);line-height:1.6}
+  /* FINANCIAL */
+  .fin-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px}
+  .fin-table{width:100%;border-collapse:collapse}
+  .fin-table tr{border-bottom:1px solid rgba(255,255,255,0.05)}
+  .fin-table td{padding:10px 0;font-size:13px}
+  .fin-table td:last-child{text-align:right;font-weight:600;color:var(--cream)}
+  .fin-table .total-row td{color:var(--gold);font-weight:700;border-top:1px solid rgba(201,168,76,0.3);padding-top:14px}
+  .fin-table .sub-row td{color:var(--muted);font-size:12px}
+  .fin-table .growth td:last-child{color:var(--green-ok)}
+  /* SCENARIOS */
+  .upside-scenario{background:var(--navy-light);border:1px solid rgba(255,255,255,0.06);border-radius:12px;overflow:hidden;break-inside:avoid}
+  .upside-header{padding:16px 24px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid rgba(255,255,255,0.06)}
+  .upside-header h3{font-size:15px;font-weight:600;color:var(--white)}
+  .upside-tag{font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;padding:4px 10px;border-radius:4px}
+  .tag-base{background:rgba(155,175,197,0.1);color:var(--muted)}
+  .tag-estabilizado{background:rgba(232,155,58,0.15);color:var(--amber)}
+  .tag-expansao{background:rgba(201,168,76,0.15);color:var(--gold)}
+  .upside-body{padding:20px 24px}
+  .upside-metric{display:flex;justify-content:space-between;padding:6px 0;font-size:13px;border-bottom:1px solid rgba(255,255,255,0.04)}
+  .upside-metric:last-child{border:none}
+  .upside-metric span:first-child{color:var(--muted)}
+  .upside-metric span:last-child{font-weight:600;color:var(--cream)}
+  .upside-metric.highlight span:last-child{color:var(--gold);font-size:16px;font-weight:700}
+  /* RISK TABLE */
+  .risk-table{width:100%;border-collapse:collapse}
+  .risk-table th{background:rgba(201,168,76,0.1);color:var(--gold);font-size:10px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;padding:10px 14px;text-align:left}
+  .risk-table td{padding:12px 14px;border-bottom:1px solid rgba(255,255,255,0.04);font-size:12px;vertical-align:top}
+  .risk-badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase}
+  .risk-alto{background:rgba(224,85,85,0.12);color:var(--red-risk)}
+  .risk-medio{background:rgba(232,155,58,0.12);color:var(--amber)}
+  .risk-baixo{background:rgba(76,175,125,0.12);color:var(--green-ok)}
+  /* FOOTER */
+  .doc-footer{background:var(--navy-mid);padding:32px 60px;display:flex;justify-content:space-between;align-items:center;border-top:1px solid rgba(255,255,255,0.06)}
+  .footer-logo img{height:32px;opacity:0.7}
+  .footer-info{text-align:center;font-size:11px;color:var(--muted);line-height:1.6}
+  .footer-ref{text-align:right;font-size:11px;color:var(--muted)}
+  .footer-ref strong{color:var(--gold);display:block;margin-bottom:2px}
+  /* UTILS */
+  .divider{height:1px;background:rgba(255,255,255,0.06);margin:32px 0}
+  .mt-16{margin-top:16px}.mt-24{margin-top:24px}.mt-32{margin-top:32px}.mb-24{margin-bottom:24px}
+  a{color:var(--gold);text-decoration:none}
 </style>
-</head><body>
+</head>
+<body>
 
-<!-- PÁG 1 — CAPA -->
-<div class="page page-cover">
+<!-- ═══ CAPA ═══ -->
+<div class="cover">
+  <div class="cover-grid"></div>
   <div class="cover-logo">
-    <img src="/v3-logo-flat-gold-alpha.png" alt="V3 Partners" style="height:44px;width:auto;">
+    <img src="/v3-logo-flat-gold-alpha.png" alt="V3 Partners">
+    <span class="cover-logo-label">${isPt ? "Memorando de Informação Confidencial" : "Confidential Information Memorandum"}</span>
+  </div>
+  <div class="cover-center">
+    <div class="cover-badge">${deal.sector}${val("tipo_operacao") ? " · " + val("tipo_operacao") : ""}</div>
+    <div class="cover-title">${deal.target_company}</div>
+    <div class="cover-subtitle">${deal.location ?? ""}${anosOp ? " · " + anosOp : ""}</div>
+    <div class="cover-metrics">
+      ${deal.deal_value ? `<div class="cover-metric"><div class="cover-metric-label">Valuation</div><div class="cover-metric-value">${formatBRL(deal.deal_value)}</div><div class="cover-metric-sub">${val("tipo_operacao") || "Deal"}</div></div>` : ""}
+      ${receitaReal ? `<div class="cover-metric"><div class="cover-metric-label">Receita ${receitaReal.ano}</div><div class="cover-metric-value">${formatBRL(receitaReal.valor)}</div><div class="cover-metric-sub">${yoy ? "+"+yoy.toFixed(1)+"% vs "+receitaAnt?.ano : "realizado"}</div></div>` : ""}
+      ${val("area_construida") ? `<div class="cover-metric"><div class="cover-metric-label">${isPt ? "Área Construída" : "Gross Area"}</div><div class="cover-metric-value">${val("area_construida")}</div><div class="cover-metric-sub">${isPt ? "área total" : "total area"}</div></div>` : ""}
+      ${anosOp ? `<div class="cover-metric"><div class="cover-metric-label">${isPt ? "Operação" : "Operation"}</div><div class="cover-metric-value">${anosOp}</div><div class="cover-metric-sub">${foundingYear ? "Desde " + foundingYear : ""}</div></div>` : (sc?.base?.cap_rate ? `<div class="cover-metric"><div class="cover-metric-label">Cap Rate Base</div><div class="cover-metric-value">${(sc.base.cap_rate*100).toFixed(1)}%</div><div class="cover-metric-sub">cenário conservador</div></div>` : "")}
+    </div>
+  </div>
+  <div class="cover-footer">
+    <div class="cover-confidential">
+      <strong>${isPt ? "Documento Estritamente Confidencial" : "Strictly Confidential Document"}</strong>
+      <p>${isPt ? "Este memorando é destinado exclusivamente ao destinatário identificado e está protegido por Acordo de Confidencialidade (NDA). A reprodução, distribuição ou divulgação não autorizada deste documento é expressamente proibida." : "This memorandum is intended solely for the identified recipient and is protected by a Non-Disclosure Agreement (NDA). Unauthorized reproduction, distribution or disclosure is expressly prohibited."}</p>
+    </div>
+    <div class="cover-date">
+      <strong>${deal.code ?? ""}</strong>
+      ${new Date().toLocaleDateString(isPt ? "pt-BR" : "en-US", { month: "long", year: "numeric" })}<br>
+      <span style="color:var(--gold)">V3 Partners · Mesa de M&A</span>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ 01. SUMÁRIO EXECUTIVO ═══ -->
+<div class="section page-break">
+  <div class="section-header">
+    <div class="section-number">01</div>
+    <h2 class="section-title">${isPt ? "Sumário <span>Executivo</span>" : "Executive <span>Summary</span>"}</h2>
+  </div>
+  <div class="exec-grid">
     <div>
-      <p style="font-size:11px;font-weight:700;color:#F0ECE4">V3 Partners</p>
-      <p style="font-size:9px;color:#7A8FA8">M&A · Fusões e Aquisições</p>
+      ${desc.split(/\.\s+/).filter(Boolean).map(p => `<p class="exec-lead">${p}${p.endsWith(".") ? "" : "."}</p>`).slice(0,3).join("")}
     </div>
-  </div>
-  <div>
-    <div class="cover-bar"></div>
-    <p class="label" style="margin-bottom:16px">${t.confidencial}</p>
-    <h1 class="cover-title">${deal.target_company}</h1>
-    <p class="cover-sub">${deal.sector}${deal.location ? " · " + deal.location : ""}${anosOp ? " · " + anosOp : ""}</p>
-    <div class="cover-meta">
-      <div class="cover-meta-item">
-        <p>${t.valorDeal}</p>
-        <p>${deal.deal_value ? formatBRL(deal.deal_value) : "—"}</p>
-      </div>
-      ${coverItem2 ? `<div class="cover-meta-item"><p>${coverItem2.label}</p><p>${coverItem2.value}</p></div>` : ""}
-      <div class="cover-meta-item">
-        <p>${coverItem3.label}</p>
-        <p style="font-size:${coverItem3.value.length > 12 ? "13px" : "18px"}">${coverItem3.value}</p>
+    <div>
+      <div class="info-card">
+        <div class="info-card-header">${isPt ? "Ficha do Ativo" : "Asset Summary"}</div>
+        ${fichaRows.map(([label, value, cls]) => `
+        <div class="info-row">
+          <span class="info-label">${label}</span>
+          <span class="info-value${cls ? " "+cls : ""}">${value}</span>
+        </div>`).join("")}
       </div>
     </div>
-    <p style="margin-top:32px" class="cover-confidential">${t.confidencial}</p>
   </div>
-  ${pg()}
 </div>
 
-<!-- PÁG 2 — DADOS DA OPERAÇÃO -->
-<div class="page page-inner">
-  <p class="label" style="margin-bottom:24px">${t.operacao}</p>
-  <div class="data-grid" style="margin-bottom:28px">
-    ${deal.code || ad.processo_v3 ? `<div class="data-item"><dt>Processo V3</dt><dd>${deal.code ?? ad.processo_v3}</dd></div>` : ""}
-    <div class="data-item"><dt>${t.setor}</dt><dd>${deal.sector}</dd></div>
-    ${deal.location ? `<div class="data-item"><dt>${t.localizacao}</dt><dd>${deal.location}</dd></div>` : ""}
-    <div class="data-item"><dt>${t.valorDeal}</dt><dd>${deal.deal_value ? formatBRL(deal.deal_value) + " · " + formatUSD(deal.deal_value) : "—"}</dd></div>
-    ${val("area_construida") ? `<div class="data-item"><dt>${t.abl}</dt><dd>${val("area_construida")}</dd></div>` : ""}
-    ${val("founding_year") ? `<div class="data-item"><dt>${t.anosOp}</dt><dd>${anosOp} (fundado ${val("founding_year")})</dd></div>` : ""}
-    ${val("divida_total") ? `<div class="data-item"><dt>${t.divida}</dt><dd>${val("divida_total")}</dd></div>` : ""}
-    ${val("tipo_operacao") ? `<div class="data-item"><dt>${t.tipoOp}</dt><dd>${val("tipo_operacao")}</dd></div>` : ""}
-    ${val("processos_judiciais") ? `<div class="data-item"><dt>${t.contencioso}</dt><dd style="color:${val("processos_judiciais").toLowerCase().includes("sem") ? "#10b981" : "#f59e0b"}">${val("processos_judiciais")}</dd></div>` : ""}
-    ${deal.expected_close_date ? `<div class="data-item"><dt>${t.fechamento}</dt><dd>${deal.expected_close_date}</dd></div>` : ""}
+<!-- ═══ 02. DESTAQUES DO INVESTIMENTO ═══ -->
+<div class="section section-alt page-break">
+  <div class="section-header">
+    <div class="section-number">02</div>
+    <h2 class="section-title">${isPt ? "Destaques do <span>Investimento</span>" : "Investment <span>Highlights</span>"}</h2>
   </div>
-  <div class="divider"></div>
-  <div class="aviso-box">${t.aviso}</div>
-  ${pg()}
-</div>
-
-<!-- PÁG 3 — SUMÁRIO EXECUTIVO + TESE -->
-<div class="page page-inner">
-  <p class="label" style="margin-bottom:8px">${t.sumario}</p>
-  <h2 class="section-title">${deal.target_company}</h2>
-  <p class="section-sub">${deal.sector}${deal.location ? " · " + deal.location : ""}</p>
-  <p style="font-size:12px;color:#9BAFC5;line-height:1.85;margin-bottom:24px">${desc}</p>
-  ${(Array.isArray(tese) ? tese.length > 0 : !!tese) ? `
-  <p class="label" style="margin-bottom:12px">${t.tese}</p>
-  <div class="tese-box">
-    ${renderTese(tese, "font-size:12px;color:#F5F1E8;line-height:1.75")}
+  ${kpis.length > 0 ? `
+  <div class="kpi-grid${kpis.length <= 3 ? " kpi-grid-3" : ""}">
+    ${kpis.map(k => `
+    <div class="kpi-card">
+      <div class="kpi-label">${k!.label}</div>
+      <div class="kpi-value">${k!.val}</div>
+      <div class="kpi-sub">${k!.sub}</div>
+      ${(k as {badge?:string}).badge ? `<div class="kpi-badge">${(k as {badge?:string}).badge}</div>` : ""}
+    </div>`).join("")}
   </div>` : ""}
-  ${pg()}
+  ${teseArr.length > 0 ? `
+  <div class="thesis-grid">
+    ${teseArr.map((t, i) => `
+    <div class="thesis-item">
+      <div class="thesis-num">${String(i+1).padStart(2,"0")}</div>
+      <div class="thesis-content">
+        <p>${t}</p>
+      </div>
+    </div>`).join("")}
+  </div>` : ""}
 </div>
 
 ${hasFinanceiro ? `
-<!-- PÁG 4 — PERFORMANCE FINANCEIRA -->
-<div class="page page-inner">
-  <p class="label" style="margin-bottom:8px">${t.financeiro}</p>
-  <h2 class="section-title" style="margin-bottom:4px">${t.receita} — Histórico & Projeção</h2>
-  ${receitas.length > 0 ? `
-  <table class="rev-table" style="margin-bottom:28px">
-    <thead><tr>
-      <th style="width:80px">Ano</th>
-      <th style="width:100px">Status</th>
-      <th>Valor</th>
-      <th style="width:140px">Evolução</th>
-    </tr></thead>
-    <tbody>${receitaRows}</tbody>
-  </table>` : ""}
-  ${despesas && totalDesp > 0 ? `
-  <p class="label" style="margin-bottom:12px">${t.despesasLabel}</p>
-  ${barChart(
-    Object.entries(despesas)
-      .sort(([,a],[,b]) => b - a)
-      .map(([k,v]) => ({
-        label: k.charAt(0).toUpperCase() + k.slice(1).replace(/_/g," "),
-        value: v as number,
-        pct: ((v as number) / totalDesp) * 100,
-      }))
-  )}
-  <div style="margin-top:8px;padding:10px 14px;background:#162744;border:1px solid #243A66;border-radius:6px;display:flex;justify-content:space-between;align-items:center">
-    <span style="font-size:11px;font-weight:700;color:#C9A84C;letter-spacing:1px">TOTAL DESPESAS / MÊS</span>
-    <span style="font-size:16px;font-weight:800;color:#E8C97A">${formatBRL(totalDesp)}</span>
+<!-- ═══ 03. DESEMPENHO FINANCEIRO ═══ -->
+<div class="section page-break">
+  <div class="section-header">
+    <div class="section-number">03</div>
+    <h2 class="section-title">${isPt ? "Desempenho <span>Financeiro</span>" : "Financial <span>Performance</span>"}</h2>
+  </div>
+  <div class="fin-grid">
+    <div>
+      ${receitas.length > 0 ? `
+      <div class="info-card">
+        <div class="info-card-header">${isPt ? "Receita Anual" : "Annual Revenue"}</div>
+        <table class="fin-table" style="padding:16px 20px;display:block">
+          ${receitas.sort((a,b) => a.ano - b.ano).map((r, i, arr) => {
+            const prev = arr[i-1];
+            const growth = prev && r.tipo === "realizado" && prev.tipo === "realizado" ? ((r.valor/prev.valor-1)*100).toFixed(1) : null;
+            return `<tr class="${r.tipo !== "realizado" ? "sub-row" : i === arr.filter(x=>x.tipo==="realizado").length - 1 ? "growth" : "sub-row"}">
+              <td style="color:${r.tipo!=="realizado" ? "var(--muted)" : "var(--cream)"}${r.tipo!=="realizado" ? ";font-style:italic" : ""}">${r.tipo!=="realizado" ? r.ano+" (proj.)" : "<strong>"+r.ano+"</strong>"}</td>
+              <td>${r.tipo !== "realizado" ? "" : growth ? `<span style="color:var(--green-ok)">↑ +${growth}%</span>` : ""}</td>
+              <td><strong>${formatBRL(r.valor)}</strong></td>
+            </tr>`;
+          }).join("")}
+        </table>
+      </div>` : ""}
+    </div>
+    <div>
+      ${despesas && totalDesp > 0 ? `
+      <div class="info-card">
+        <div class="info-card-header">${isPt ? "Despesas Operacionais (mensal)" : "Operating Expenses (monthly)"}</div>
+        <table class="fin-table" style="padding:16px 20px;display:block">
+          ${Object.entries(despesas).sort(([,a],[,b]) => (b as number)-(a as number)).map(([k,v]) => `
+          <tr class="sub-row">
+            <td>${k.charAt(0).toUpperCase()+k.slice(1).replace(/_/g," ")}</td>
+            <td>${formatBRL(v as number)}</td>
+          </tr>`).join("")}
+          <tr class="total-row">
+            <td>${isPt ? "Total despesas operacionais" : "Total operating expenses"}</td>
+            <td>${formatBRL(totalDesp)}</td>
+          </tr>
+        </table>
+      </div>` : ""}
+    </div>
+  </div>
+  ${vacancias.length > 0 ? `
+  <div class="mt-32">
+    <h3 style="font-size:15px;color:var(--white);margin-bottom:16px">${isPt ? "Vacância por Pavimento" : "Vacancy by Floor"}</h3>
+    ${vacancias.map(v => `
+    <div style="margin-bottom:12px;display:flex;align-items:center;gap:16px">
+      <span style="font-size:12px;color:var(--muted);width:120px;text-transform:capitalize">${v.pavimento}</span>
+      <div style="flex:1;height:8px;background:var(--navy);border-radius:4px;overflow:hidden">
+        <div style="height:100%;width:${(v.pct*100).toFixed(0)}%;background:${v.pct>0.5?"var(--red-risk)":v.pct>0.2?"var(--amber)":"var(--green-ok)"};border-radius:4px"></div>
+      </div>
+      <span style="font-size:13px;font-weight:700;color:${v.pct>0.5?"var(--red-risk)":v.pct>0.2?"var(--amber)":"var(--green-ok)"};width:60px;text-align:right">${(v.pct*100).toFixed(0)}% ${isPt ? "vago" : "vacant"}</span>
+    </div>`).join("")}
   </div>` : ""}
-  ${pg()}
 </div>` : ""}
 
 ${hasCenarios ? `
-<!-- PÁG 5 — ANÁLISE DE VALOR / CENÁRIOS -->
-<div class="page page-inner">
-  <p class="label" style="margin-bottom:8px">${t.cenarios}</p>
-  <h2 class="section-title" style="margin-bottom:20px">Valuation Bridge</h2>
-  <div style="display:flex;gap:14px;margin-bottom:24px">
-    ${sc?.base ? `
-    <div class="cen-card">
-      <div class="cen-label">${t.cenBase}</div>
-      <div class="cen-val">${formatBRL(sc.base.valuation ?? deal.deal_value ?? 0)}</div>
-      ${sc.base.noi_anual ? `<div class="cen-noi">${t.noi}: ${formatBRL(sc.base.noi_anual)}</div>` : ""}
-      ${sc.base.cap_rate ? `<div class="cen-cap">Cap Rate ${(sc.base.cap_rate*100).toFixed(1)}%</div>` : ""}
-    </div>` : ""}
-    ${sc?.estabilizado ? `
-    <div class="cen-card">
-      <div class="cen-label">${t.cenEstab}</div>
-      <div class="cen-val">${formatBRL(sc.estabilizado.valuation ?? 0)}</div>
-      ${sc.estabilizado.noi_anual ? `<div class="cen-noi">${t.noi}: ${formatBRL(sc.estabilizado.noi_anual)}</div>` : ""}
-      ${sc.estabilizado.cap_rate ? `<div class="cen-cap">Cap Rate ${(sc.estabilizado.cap_rate*100).toFixed(1)}%</div>` : ""}
-    </div>` : ""}
-    ${sc?.expansao ? `
-    <div class="cen-card highlight">
-      <div class="cen-label" style="color:#E8C97A">${t.cenExp}</div>
-      <div class="cen-val" style="color:#F5F1E8">${formatBRL(sc.expansao.valuation ?? 0)}</div>
-      ${sc.expansao.noi_anual ? `<div class="cen-noi">${t.noi}: ${formatBRL(sc.expansao.noi_anual)}</div>` : ""}
-      ${sc.expansao.cap_rate ? `<div class="cen-cap">Cap Rate ${(sc.expansao.cap_rate*100).toFixed(1)}%</div>` : ""}
-    </div>` : ""}
+<!-- ═══ 04. CENÁRIOS DE RETORNO ═══ -->
+<div class="section${hasFinanceiro ? "" : " page-break"} section-alt">
+  <div class="section-header">
+    <div class="section-number">0${hasFinanceiro ? "4" : "3"}</div>
+    <h2 class="section-title">${isPt ? "Cenários de <span>Retorno</span>" : "Return <span>Scenarios</span>"}</h2>
   </div>
-  ${vacancias.length > 0 ? `
-  <p class="label" style="margin-bottom:12px">${isPt ? "Vacância por Pavimento" : "Vacancy by Floor"}</p>
-  ${vacancias.map(v => `
-  <div style="margin-bottom:10px">
-    <div style="display:flex;justify-content:space-between;margin-bottom:4px">
-      <span style="font-size:12px;color:#9BAFC5;text-transform:capitalize">${v.pavimento}</span>
-      <span style="font-size:12px;font-weight:700;color:${v.pct > 0.5 ? "#f59e0b" : v.pct > 0.2 ? "#E8C97A" : "#10b981"}">${(v.pct*100).toFixed(0)}% ${isPt ? "vago" : "vacant"}</span>
-    </div>
-    <div style="height:8px;background:#162744;border-radius:4px;overflow:hidden">
-      <div style="height:100%;width:${(v.pct*100).toFixed(0)}%;background:${v.pct>0.5?"#f59e0b":v.pct>0.2?"#C9A84C":"#10b981"};border-radius:4px"></div>
-    </div>
-  </div>`).join("")}` : ""}
-  ${pg()}
+  <div style="display:grid;grid-template-columns:repeat(${cenarios.length},1fr);gap:20px;margin-bottom:32px">
+    ${cenarios.map(c => `
+    <div class="upside-scenario">
+      <div class="upside-header">
+        <h3>${c.label}</h3>
+        <span class="upside-tag ${c.tagClass}">${c.tag}</span>
+      </div>
+      <div class="upside-body">
+        ${c.metrics.map((m, i) => `
+        <div class="upside-metric${i === c.metrics.length-1 ? " highlight" : ""}">
+          <span>${m[0]}</span><span>${m[1]}</span>
+        </div>`).join("")}
+      </div>
+    </div>`).join("")}
+  </div>
+  <div class="exec-highlight">
+    <p><strong>${isPt ? "Nota metodológica:" : "Methodology note:"}</strong> ${isPt ? "Os cenários são estimativas baseadas nos dados operacionais reais disponíveis. O NOI real depende de demonstrações financeiras auditadas. Recomendamos solicitar P&L consolidado ao vendedor antes de qualquer LOI vinculativa." : "Scenarios are estimates based on available operational data. Actual NOI depends on audited financial statements. We recommend requesting a consolidated P&L from the seller before any binding LOI."}</p>
+  </div>
 </div>` : ""}
 
-<!-- PÁG 6 — MÉTRICAS-CHAVE -->
-<div class="page page-inner">
-  <p class="label" style="margin-bottom:8px">${t.metricas}</p>
-  <h2 class="section-title" style="margin-bottom:16px">Performance & Valuation</h2>
-  ${metricas.length > 0 ? `
-  <div class="metric-grid">
-    ${metricas.map(m => `
-    <div class="metric-item">
-      <p class="label">${m.label}</p>
-      <p class="val">${m.value}</p>
-      ${m.sub ? `<p class="sub">${m.sub}</p>` : ""}
-    </div>`).join("")}
-  </div>` : `<p style="color:#9BAFC5;font-size:13px;margin-top:20px">${isPt ? "Métricas financeiras detalhadas disponíveis sob solicitação com NDA assinado." : "Detailed financial metrics available upon signed NDA."}</p>`}
-  ${pg()}
-</div>
-
-<!-- PÁG 7 — DIFERENCIAIS COMPETITIVOS -->
-<div class="page page-inner">
-  <p class="label" style="margin-bottom:8px">${t.difer}</p>
-  <h2 class="section-title" style="margin-bottom:20px">${isPt ? "Por que este ativo?" : "Why this asset?"}</h2>
-  ${diferenciais.map(d => `<div class="diff-item"><span class="diff-dot"></span><p class="diff-text">${d}</p></div>`).join("")}
-  ${pg()}
-</div>
-
-<!-- PÁG 8 — RISCOS + MITIGAÇÕES -->
-<div class="page page-inner">
-  <p class="label" style="margin-bottom:8px">${t.riscos}</p>
-  <h2 class="section-title" style="margin-bottom:20px">Risk Framework</h2>
-  ${riscos.map(r => `
-  <div class="risk-item">
-    <span class="risk-badge" style="background:${nivelColor(r.nivel)}22;color:${nivelColor(r.nivel)}">${r.nivel.toUpperCase()}</span>
-    <div>
-      <p style="font-size:12px;font-weight:600;color:#F5F1E8;margin-bottom:5px">${r.descricao}</p>
-      <p style="font-size:11px;color:#9BAFC5;line-height:1.6">${t.mitigacao}: ${r.mitigacao}</p>
-    </div>
-  </div>`).join("")}
-  ${pg()}
-</div>
-
-<!-- PÁG 9 — CONTATO & PRÓXIMOS PASSOS -->
-<div class="page page-inner">
-  <p class="label" style="margin-bottom:8px">${isPt ? "Próximos Passos" : "Next Steps"}</p>
-  <h2 class="section-title" style="margin-bottom:20px">${isPt ? "Como avançar" : "How to proceed"}</h2>
-  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:32px">
-    ${[
-      [isPt ? "01 · NDA" : "01 · NDA", isPt ? "Assinar o Acordo de Confidencialidade para acesso ao dataroom completo" : "Sign NDA for full dataroom access"],
-      [isPt ? "02 · Due Diligence" : "02 · Due Diligence", isPt ? "Revisão de documentação financeira, jurídica e operacional" : "Review of financial, legal and operational documentation"],
-      [isPt ? "03 · LOI" : "03 · LOI", isPt ? "Carta de Intenções com termos preliminares da transação" : "Letter of Intent with preliminary transaction terms"],
-    ].map(([label, desc]) => `
-    <div style="background:#162744;border:1px solid #243A66;border-radius:8px;padding:16px;border-top:2px solid #C9A84C">
-      <p style="font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#C9A84C;margin-bottom:8px">${label}</p>
-      <p style="font-size:11px;color:#9BAFC5;line-height:1.6">${desc}</p>
-    </div>`).join("")}
+<!-- ═══ 05. FATORES DE RISCO ═══ -->
+<div class="section page-break">
+  <div class="section-header">
+    <div class="section-number">0${hasFinanceiro && hasCenarios ? "5" : hasFinanceiro || hasCenarios ? "4" : "3"}</div>
+    <h2 class="section-title">${isPt ? "Fatores de <span>Risco</span>" : "Risk <span>Factors</span>"}</h2>
   </div>
-  <div class="divider"></div>
-  <div style="display:flex;align-items:center;gap:20px;margin-top:28px;padding:20px;background:#162744;border:1px solid rgba(201,168,76,0.2);border-radius:10px">
-    <img src="/v3-logo-flat-gold-alpha.png" alt="V3 Partners" style="height:48px;width:auto;flex-shrink:0;">
+  ${riscos.length > 0 ? `
+  <table class="risk-table">
+    <thead><tr>
+      <th>${isPt ? "Risco" : "Risk"}</th>
+      <th>${isPt ? "Nível" : "Level"}</th>
+      <th>${isPt ? "Descrição" : "Description"}</th>
+      <th>${isPt ? "Mitigação" : "Mitigation"}</th>
+    </tr></thead>
+    <tbody>
+      ${riscos.map(r => `
+      <tr>
+        <td style="color:var(--cream);font-weight:600">${r.descricao.split("–")[0].split(":")[0].trim().substring(0,50)}</td>
+        <td><span class="risk-badge ${nivelClass(r.nivel)}">${r.nivel.toUpperCase()}</span></td>
+        <td style="color:var(--muted)">${r.descricao}</td>
+        <td style="color:var(--muted)">${r.mitigacao}</td>
+      </tr>`).join("")}
+    </tbody>
+  </table>` : `<p style="color:var(--muted);font-size:13px">${isPt ? "Análise de risco disponível no data room após NDA." : "Risk analysis available in data room after NDA."}</p>`}
+</div>
+
+<!-- ═══ 06. ESTRUTURA DA TRANSAÇÃO ═══ -->
+<div class="section section-alt page-break">
+  <div class="section-header">
+    <div class="section-number">0${hasFinanceiro && hasCenarios ? "6" : hasFinanceiro || hasCenarios ? "5" : "4"}</div>
+    <h2 class="section-title">${isPt ? "Estrutura da <span>Transação</span>" : "Transaction <span>Structure</span>"}</h2>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:40px">
     <div>
-      <p style="font-size:13px;font-weight:700;color:#F5F1E8;margin-bottom:4px">V3 Partners — Mesa M&A</p>
-      <p style="font-size:11px;color:#9BAFC5;margin-bottom:2px">João Lemos Netto · Head de Ativos e Originação</p>
-      <p style="font-size:11px;color:#9BAFC5">joao.lemos@v3partners.com.br · +55 21 98993-7178</p>
-      <p style="font-size:10px;color:#7A8FA8;margin-top:4px">Rua Visconde de Pirajá, 414, Sala 718 — Ipanema, Rio de Janeiro · v3partners.com.br</p>
+      <h3 style="font-size:15px;color:var(--white);margin-bottom:16px">${isPt ? "Parâmetros da Operação" : "Transaction Parameters"}</h3>
+      <div class="info-card">
+        ${val("tipo_operacao") ? `<div class="info-row"><span class="info-label">${isPt?"Tipo de operação":"Transaction type"}</span><span class="info-value">${val("tipo_operacao")}</span></div>` : ""}
+        ${deal.deal_value ? `<div class="info-row"><span class="info-label">${isPt?"Valuation pedido":"Asking valuation"}</span><span class="info-value gold">${formatBRL(deal.deal_value)}</span></div>` : ""}
+        ${val("divida_total") ? `<div class="info-row"><span class="info-label">${isPt?"Passivo":"Liability"}</span><span class="info-value amber">${val("divida_total")}</span></div>` : ""}
+        ${val("processos_judiciais") ? `<div class="info-row"><span class="info-label">${isPt?"Processos judiciais":"Litigation"}</span><span class="info-value ${val("processos_judiciais").toLowerCase().includes("sem") ? "green" : "amber"}">${val("processos_judiciais")}</span></div>` : ""}
+        ${deal.code ? `<div class="info-row"><span class="info-label">${isPt?"Processo V3":"V3 Process"}</span><span class="info-value">${deal.code}</span></div>` : ""}
+      </div>
+    </div>
+    <div>
+      <h3 style="font-size:15px;color:var(--white);margin-bottom:16px">${isPt ? "Próximos Passos Recomendados" : "Recommended Next Steps"}</h3>
+      <div style="display:flex;flex-direction:column;gap:12px">
+        ${[
+          [isPt ? "Data Room" : "Data Room", isPt ? "Solicitar acesso ao data room: DRE auditada 3 anos, contratos de locação, matrículas e certidões negativas." : "Request data room access: 3-year audited P&L, lease contracts, registrations and negative certificates."],
+          [isPt ? "Laudo de Avaliação" : "Valuation Report", isPt ? "Contratar avaliador independente (MRICS) para emissão de laudo imobiliário formal com comparativos de mercado." : "Hire independent appraiser (MRICS) for formal real estate appraisal with market comparables."],
+          [isPt ? "Due Diligence Jurídica" : "Legal Due Diligence", isPt ? "Verificar natureza das pendências declaradas, certidões de ônus reais e status do regime tributário." : "Verify declared liabilities, encumbrance certificates and tax regime status."],
+          [isPt ? "LOI Não-Vinculante" : "Non-Binding LOI", isPt ? "Emitir Letter of Intent com valuation indicativo sujeito a due diligence, prazo e condições suspensivas." : "Issue Letter of Intent with indicative valuation subject to due diligence, timeline and conditions."],
+          [isPt ? "SPA e Closing" : "SPA & Closing", isPt ? "Estruturar SPA com mecanismos de price adjustment baseados em EBITDA verificado e taxa de ocupação." : "Structure SPA with price adjustment mechanisms based on verified EBITDA and occupancy rate."],
+        ].map(([label, desc], i) => `
+        <div style="display:flex;gap:12px;align-items:flex-start">
+          <div style="width:28px;height:28px;background:rgba(201,168,76,0.15);border:1px solid rgba(201,168,76,0.3);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--gold);flex-shrink:0">${String(i+1).padStart(2,"0")}</div>
+          <div>
+            <p style="font-size:13px;color:var(--cream);font-weight:600">${label}</p>
+            <p style="font-size:12px;color:var(--muted)">${desc}</p>
+          </div>
+        </div>`).join("")}
+      </div>
     </div>
   </div>
-  ${pg()}
+</div>
+
+<!-- ═══ FOOTER ═══ -->
+<div class="doc-footer">
+  <div class="footer-logo">
+    <img src="/v3-logo-flat-gold-alpha.png" alt="V3 Partners">
+  </div>
+  <div class="footer-info">
+    <strong style="color:var(--cream)">V3 Partners · Mesa de M&A</strong><br>
+    Rua Visconde de Pirajá, 414, Sala 718 — Ipanema, Rio de Janeiro · RJ<br>
+    <a href="https://v3partners.com.br">v3partners.com.br</a> · <span style="color:var(--gold)">joao.lemos@v3partners.com.br</span>
+  </div>
+  <div class="footer-ref">
+    <strong>${deal.code ?? "V3 Partners"}</strong>
+    CIM · ${new Date().toLocaleDateString(isPt ? "pt-BR" : "en-US", { month: "long", year: "numeric" })}<br>
+    ${isPt ? "Documento Confidencial — NDA Exigido" : "Confidential Document — NDA Required"}
+  </div>
 </div>
 
 </body></html>`;
