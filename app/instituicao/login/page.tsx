@@ -31,6 +31,16 @@ export default function InstituicaoLoginPage() {
       sessionStorage.setItem("instituicao_id", data.instituicao_id);
       sessionStorage.setItem("instituicao_nome", data.nome);
 
+      // Garante que não há sessão Supabase ativa que conflite com a plataforma interna
+      try {
+        const { createClient } = await import("@supabase/supabase-js");
+        const sb = createClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL!,
+          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+        );
+        await sb.auth.signOut();
+      } catch {}
+
       window.location.href = "/instituicao/dashboard";
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Erro ao fazer login.");
