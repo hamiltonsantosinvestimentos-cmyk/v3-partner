@@ -7,6 +7,7 @@ import type { UserRole } from "@/lib/constants";
 import { WelcomeWizard } from "@/components/onboarding/welcome-wizard";
 import { LocationGate } from "@/components/onboarding/location-gate";
 import { SubscriptionGuard } from "./subscription-guard";
+import { ChatFloatWidget } from "@/components/chat/chat-float-widget";
 
 interface PlatformShellProps {
   user: {
@@ -54,6 +55,14 @@ export function PlatformShell({ user, notificationCount, children }: PlatformShe
           </div>
         </div>
       )}
+
+      {/* Chat flutuante — visível em todas as páginas da plataforma */}
+      <ChatFloatWidget
+        profileId={user.id}
+        profileName={user.full_name}
+        role={user.role}
+        isAdmin={["ADMIN", "GESTAO", "MESA_OPERACIONAL"].includes(user.role)}
+      />
 
       {/* Main content */}
       <div className="flex-1 flex flex-col overflow-hidden">
