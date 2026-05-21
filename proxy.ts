@@ -1,12 +1,20 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
-const PUBLIC_ROUTES = ["/login", "/auth/callback", "/auth/update-password", "/unauthorized", "/api/demo-login", "/api/auth/login", "/c/", "/api/captacao/", "/mf/", "/api/ma-captacao/", "/api/migrate-ma-captacao", "/assinar/", "/api/contratos/", "/api/cpf-validate", "/cadastro-partner", "/api/cadastro-partner", "/api/setup/check", "/status-cadastro", "/api/cadastro-partner/status", "/p/"];
+const PUBLIC_ROUTES = ["/login", "/auth/callback", "/auth/update-password", "/unauthorized", "/api/demo-login", "/api/auth/login", "/c/", "/api/captacao/", "/mf/", "/api/ma-captacao/", "/api/migrate-ma-captacao", "/assinar/", "/api/contratos/", "/api/cpf-validate", "/cadastro-partner", "/api/cadastro-partner", "/api/setup/check", "/status-cadastro", "/api/cadastro-partner/status", "/p/", "/vdr/", "/api/investor/"];
 
 const IS_DEMO = false;
 
 export async function proxy(request: NextRequest) {
-  const { pathname } = request.nextUrl;
+  const { pathname, searchParams } = request.nextUrl;
+
+  // Rotas VDR — captura parâmetros de rastreamento de grupo antes de liberar
+  if (pathname.startsWith("/vdr/") || pathname.startsWith("/api/investor/")) {
+    const response = NextResponse.next();
+    response.headers.set("x-vdr-group", searchParams.get("grp") ?? "direct");
+    response.headers.set("x-vdr-side",  searchParams.get("side") ?? "buyer");
+    return response;
+  }
 
   // Rotas públicas — sem verificação de sessão
   if (PUBLIC_ROUTES.some((r) => pathname.startsWith(r))) {
