@@ -91,7 +91,7 @@ export async function GET(req: NextRequest) {
       level1_notes, level2_notes, level3_notes,
       level1_at, level2_at, level3_at, created_at,
       valor_credito_atual, comissao_mandato_perc, comissao_instituicao_perc,
-      instituicao_encaminhada,
+      instituicao_encaminhada, instituicao_feedback,
       pending_reason, pending_responsible, pending_at,
       pending_resolved_at, pending_resolved_by,
       metadata,

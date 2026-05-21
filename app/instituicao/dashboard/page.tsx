@@ -6,6 +6,7 @@ import {
   Building2, LogOut, RefreshCw, FileText, Clock, AlertTriangle,
   CheckCircle2, Search, ChevronRight, Loader2, TrendingUp
 } from "lucide-react";
+import { InstituicaoPropostaModal } from "@/components/instituicao/proposta-modal";
 
 type Proposta = {
   id: string;
@@ -41,6 +42,7 @@ function formatDate(dateStr: string) {
 
 export default function InstituicaoDashboard() {
   const [nome, setNome] = useState("");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [propostas, setPropostas] = useState<Proposta[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -231,7 +233,7 @@ export default function InstituicaoDashboard() {
               </thead>
               <tbody className="divide-y divide-[#243A66]/40">
                 {filtered.map(p => (
-                  <tr key={p.id} className="hover:bg-[#162744]/40 transition-colors group">
+                  <tr key={p.id} onClick={() => setSelectedId(p.id)} className="hover:bg-[#162744]/40 transition-colors group cursor-pointer">
                     <td className="px-4 py-3.5">
                       <span className="text-[#C9A84C] font-mono text-xs font-bold">{p.code}</span>
                     </td>
@@ -276,6 +278,15 @@ export default function InstituicaoDashboard() {
           Exibindo apenas propostas nas etapas Análise e Pendência direcionadas a {nome} · Dados atualizados a cada acesso
         </p>
       </main>
+
+      {/* Modal de detalhe */}
+      {selectedId && nome && (
+        <InstituicaoPropostaModal
+          proposalId={selectedId}
+          instituicaoNome={nome}
+          onClose={() => setSelectedId(null)}
+        />
+      )}
     </div>
   );
 }

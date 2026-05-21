@@ -117,6 +117,7 @@ export interface ProposalFull {
   mesa_comments?: MesaComment[];
   metadata?: ProposalMeta;
   instituicao_encaminhada?: string | null;
+  instituicao_feedback?: { instituicao: string; status: string; observacao: string; updated_at: string }[] | null;
   // Campos de pendência
   pending_reason?: string | null;
   pending_responsible?: string | null;
@@ -2174,6 +2175,46 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
                     )}
                   </div>
                 )}
+              </div>
+            );
+          })()}
+
+          {/* ── Parecer das Instituições ── */}
+          {(() => {
+            const feedbacks = proposal.instituicao_feedback;
+            if (!feedbacks || feedbacks.length === 0) return null;
+            const fbStatusLabel: Record<string, { label: string; color: string }> = {
+              EM_ANALISE:     { label: "Em Análise",           color: "bg-blue-500/10 text-blue-400 border-blue-500/30" },
+              DOCS_PENDENTES: { label: "Documentos Pendentes", color: "bg-amber-500/10 text-amber-400 border-amber-500/30" },
+              PRE_APROVADO:   { label: "Pré-Aprovado",         color: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30" },
+              REPROVADO:      { label: "Reprovado",            color: "bg-red-500/10 text-red-400 border-red-500/30" },
+            };
+            return (
+              <div className="p-4 rounded-xl border border-[#C9A84C]/25 bg-[#C9A84C]/5 space-y-3">
+                <p className="text-xs font-semibold text-[#C9A84C] flex items-center gap-1.5">
+                  <Building2 className="w-3.5 h-3.5" /> Parecer das Instituições
+                </p>
+                <div className="space-y-2">
+                  {feedbacks.map((fb, i) => {
+                    const fbInfo = fbStatusLabel[fb.status] ?? { label: fb.status, color: "bg-secondary text-muted-foreground border-border" };
+                    return (
+                      <div key={i} className="bg-secondary/40 border border-border rounded-lg p-3 space-y-1.5">
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <span className="text-xs font-bold text-foreground">{fb.instituicao}</span>
+                          <div className="flex items-center gap-2">
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${fbInfo.color}`}>{fbInfo.label}</span>
+                            <span className="text-[10px] text-muted-foreground">
+                              {new Date(fb.updated_at).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                            </span>
+                          </div>
+                        </div>
+                        {fb.observacao && (
+                          <p className="text-xs text-muted-foreground leading-relaxed">{fb.observacao}</p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             );
           })()}
