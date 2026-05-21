@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import {
   Building2, Plus, X, ChevronRight,
-  BarChart2, Mail, Circle, FileText,
+  BarChart2, BarChart3, Mail, Circle, FileText,
   Paperclip, Trash2, ExternalLink, Upload, Copy, CheckCheck,
   MessageSquare, Send, Zap, FileImage, FileSignature,
   ArrowLeftRight, Pencil, Check, Loader2,
@@ -14,6 +14,8 @@ import { MA_PIPELINE } from "@/components/ma/ma-client";
 import { ForjaPanel } from "@/components/ma/forja-panel";
 import { ContratoPanel } from "@/components/ma/contrato-panel";
 import { InvestorMatchPanel } from "@/components/ma/investor-match-panel";
+import { DealAnalyticsPanel } from "@/components/ma/deal-analytics-panel";
+import { DealQAPanel } from "@/components/ma/deal-qa-panel";
 import { NovoDealForm } from "@/components/ma/novo-deal-form";
 import { DealFormEditorClient } from "@/components/ma/deal-form-editor-client";
 
@@ -183,7 +185,7 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
   const [cards, setCards] = useState<MaCard[]>(initialDeals);
   const [operators, setOperators] = useState<MesaOperator[]>([]);
   const [selectedCard, setSelectedCard] = useState<MaCard | null>(null);
-  const [detailTab, setDetailTab] = useState<"detalhes" | "forja" | "criativos" | "contrato" | "matches">("detalhes");
+  const [detailTab, setDetailTab] = useState<"detalhes" | "forja" | "criativos" | "contrato" | "matches" | "analytics" | "qa">("detalhes");
   const [showNewCard, setShowNewCard] = useState(false);
   const [showFullForm, setShowFullForm] = useState(false);
   const [showNewOp, setShowNewOp] = useState(false);
@@ -778,6 +780,8 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
               {([
                 { id: "detalhes" as const, label: "Detalhes", icon: <FileText size={12} /> },
                 { id: "forja" as const, label: "FORJA", icon: <Zap size={12} /> },
+                { id: "analytics" as const, label: "Analytics", icon: <BarChart3 size={12} /> },
+                { id: "qa" as const, label: "Q&A", icon: <MessageSquare size={12} /> },
                 { id: "matches" as const, label: "Matches", icon: <ArrowLeftRight size={12} /> },
                 { id: "criativos" as const, label: "Criativos", icon: <FileImage size={12} /> },
                 { id: "contrato" as const, label: "NDA / Mandato", icon: <FileSignature size={12} /> },
@@ -1026,6 +1030,22 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
                       </div>
                     )}
                   </div>
+                </div>
+              );
+            }
+
+            if (detailTab === "analytics") {
+              return (
+                <div className="mt-2">
+                  <DealAnalyticsPanel dealId={selectedCard.id} />
+                </div>
+              );
+            }
+
+            if (detailTab === "qa") {
+              return (
+                <div className="mt-2">
+                  <DealQAPanel dealId={selectedCard.id} userRole={userRole} />
                 </div>
               );
             }
