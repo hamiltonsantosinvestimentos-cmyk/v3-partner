@@ -67,6 +67,9 @@ function sanitizeDeal(deal: Record<string, unknown>): Record<string, unknown> {
 }
 
 // Baixa PDFs do Supabase Storage e retorna base64 payload
+// Limite Claude API: 32MB por arquivo (base64 ~1.37x → limite raw ~23MB para segurança)
+const PDF_SIZE_LIMIT_BYTES = 23 * 1024 * 1024; // 23MB raw → ~31.5MB base64
+
 async function fetchPdfs(dealId: string, docIds: string[]): Promise<PdfPayload[]> {
   const svc = sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
   const { data: deal } = await svc
@@ -86,6 +89,13 @@ async function fetchPdfs(dealId: string, docIds: string[]): Promise<PdfPayload[]
     if (error || !fileData) continue;
 
     const buf = await fileData.arrayBuffer();
+
+    // Pula arquivos acima do limite suportado pela Claude API
+    if (buf.byteLength > PDF_SIZE_LIMIT_BYTES) {
+      console.warn(`[forja-validate] ${doc.file_name} ignorado: ${(buf.byteLength/1024/1024).toFixed(1)}MB > limite 23MB`);
+      continue;
+    }
+
     const lower = doc.file_name.toLowerCase();
     const mediaType =
       lower.endsWith(".pdf") ? "application/pdf" :
@@ -132,31 +142,61 @@ export async function POST(req: NextRequest) {
 
     const hasDocs = pdfs.length > 0;
 
-    // FASE 1 — só validação (rápida, sem narrativa)
+    // FASE 1 — validação com precisão cirúrgica
     const systemPrompt =
-      "Você é o FORJA, validador de deals M&A da V3 Partners. " +
+      "Você é o FORJA, validador de deals M&A da V3 Partners. Atue como analista sênior de M&A — extraia dados com precisão absoluta.\n\n" +
+
+      // Campos críticos a validar SEMPRE
+      "CAMPOS CRÍTICOS para qualquer deal (validar se presentes, sinalizar como missing se ausentes):\n" +
+      "Financeiro: receita_anual, ebitda_anual, noi_anual, despesas_operacionais, divida_total, cap_rate\n" +
+      "Ativo: area_construida, localizacao_completa, ano_fundacao, tipo_operacao, regime_tributario\n" +
+      "Legal: processos_judiciais, pendencias_declaradas, cnpj, nda_status\n" +
+      "Valuation: deal_value, metodologia_valuation, multiplo_ebitda, valor_por_m2\n" +
+      "Operacional: taxa_ocupacao, numero_locatarios, ancoras, contratos_vigencia\n\n" +
+
       (hasDocs
-        ? "Você recebeu documentos reais. Valide os dados CONTRA os documentos, identifique discrepâncias e adicione doc_insights com descobertas dos documentos.\n\n"
+        ? "DOCUMENTOS RECEBIDOS — analise com precisão cirúrgica:\n" +
+          "1. Extraia VALORES EXATOS (números, datas, percentuais) — nunca arredonde\n" +
+          "2. Identifique DISCREPÂNCIAS entre o que o deal declara e o que os documentos mostram\n" +
+          "3. Capture DADOS NÃO DECLARADOS que aparecem nos docs mas não estão no deal\n" +
+          "4. Sinalize RED FLAGS: valores inconsistentes, dados contraditórios, pendências não declaradas\n\n"
         : "") +
-      "Retorne APENAS um JSON válido, sem markdown:\n" +
+
+      "Retorne APENAS JSON válido, sem markdown, sem texto antes ou depois:\n" +
       "{\n" +
-      '  "score": <número 0-100>,\n' +
-      '  "validated": [ { "field": "<campo>", "value": "<valor>", "note": "<observação>", "doc_confirmed": <bool> } ],\n' +
-      '  "corrected": [ { "field": "<campo>", "original": "<val>", "corrected": "<val>", "reason": "<motivo>" } ],\n' +
-      '  "missing": [ { "field": "<campo>", "impact": "<impacto>", "priority": "ALTA" | "MEDIA" | "BAIXA" } ],\n' +
-      (hasDocs ? '  "doc_insights": [ { "doc": "<arquivo>", "finding": "<achado>" } ],\n' : "") +
-      '  "recommendation": "APROVADO" | "APROVADO_COM_RESSALVAS" | "PENDENTE" | "BLOQUEADO",\n' +
-      '  "recommendation_note": "<justificativa 1 frase>"\n' +
-      "}\n\n" +
-      "Regras:\n" +
-      "- validated: máximo 12 campos mais relevantes para M&A\n" +
-      "- missing: TODOS os campos obrigatórios ausentes\n" +
-      "- corrected: TODAS as inconsistências encontradas\n" +
-      "- score ≥ 80 dados completos → APROVADO | 60-79 → APROVADO_COM_RESSALVAS | 40-59 → PENDENTE | <40 → BLOQUEADO\n" +
+      '  "score": <0-100>,\n' +
+      '  "validated": [\n' +
+      '    { "field": "<nome_campo>", "value": "<valor_exato>", "note": "<evidência ou fonte>", "doc_confirmed": <bool> }\n' +
+      '  ],\n' +
+      '  "corrected": [\n' +
+      '    { "field": "<campo>", "original": "<valor_declarado>", "corrected": "<valor_real_do_doc>", "reason": "<evidência direta>" }\n' +
+      '  ],\n' +
+      '  "missing": [\n' +
+      '    { "field": "<campo_ausente>", "impact": "<impacto específico no deal>", "priority": "ALTA" | "MEDIA" | "BAIXA" }\n' +
+      '  ],\n' +
       (hasDocs
-        ? "- Dados conflitam com docs → corrected com doc_source | docs confirmam → doc_confirmed: true\n"
+        ? '  "doc_insights": [\n' +
+          '    { "doc": "<nome_arquivo>", "finding": "<achado específico com valor/data exatos>" }\n' +
+          '  ],\n'
         : "") +
-      "- Retorne APENAS o JSON, sem texto adicional.";
+      '  "recommendation": "APROVADO" | "APROVADO_COM_RESSALVAS" | "PENDENTE" | "BLOQUEADO",\n' +
+      '  "recommendation_note": "<justificativa objetiva em 1 frase com dado concreto>"\n' +
+      "}\n\n" +
+
+      "REGRAS DE SCORING:\n" +
+      "≥ 80: dados financeiros auditados + legal limpo + valuation sustentado → APROVADO\n" +
+      "60-79: dados operacionais OK mas pendências documentais → APROVADO_COM_RESSALVAS\n" +
+      "40-59: dados incompletos ou inconsistências relevantes → PENDENTE\n" +
+      "< 40: dados críticos ausentes ou red flags sérios → BLOQUEADO\n\n" +
+
+      "REGRAS DE PRECISÃO:\n" +
+      "- validated: até 15 campos (inclua TODOS os financeiros encontrados)\n" +
+      "- corrected: TODAS as divergências, sem exceção\n" +
+      "- missing: TODOS os campos críticos ausentes listados acima\n" +
+      "- doc_insights: mínimo 3 por documento analisado\n" +
+      (hasDocs ? "- Dados dos docs têm PRIORIDADE ABSOLUTA sobre dados declarados no deal\n" : "") +
+      "- Valores monetários: sempre em R$ com centavos quando disponíveis\n" +
+      "- Retorne APENAS o JSON.";
 
     // Monta conteúdo da mensagem: documentos primeiro, depois texto
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -181,9 +221,10 @@ export async function POST(req: NextRequest) {
     // Sem PDFs → Haiku (validação pura, ~5s)
     // Com PDFs → Sonnet (necessário para leitura de documentos)
     const model = hasDocs ? "claude-sonnet-4-6" : "claude-haiku-4-5-20251001";
-    // Fase 1 só precisa de tokens para validated/corrected/missing — sem narrativa
-    // 3000 para Haiku (deal com muitos campos preenchidos), 4000 para Sonnet com PDFs
-    const maxTokensPhase1 = hasDocs ? 4000 : 3000;
+    // Fase 1: análise de precisão cirúrgica
+    // Haiku sem docs: 3000 (validação estrutural)
+    // Sonnet com docs: 6000 (extração cirúrgica de financeiro, discrepâncias, insights)
+    const maxTokensPhase1 = hasDocs ? 6000 : 3000;
 
     const message = await client.messages.create({
       model,
