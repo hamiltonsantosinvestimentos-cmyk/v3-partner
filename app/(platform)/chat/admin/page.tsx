@@ -51,7 +51,7 @@ export default async function ChatAdminPage({ searchParams }: PageProps) {
     .in("role", ["PARTNER", "PARTNER_PRO"])
     .order("full_name", { ascending: true });
 
-  const rooms: ChatRoom[] = await Promise.all(
+  const partnerRooms: ChatRoom[] = await Promise.all(
     (partners ?? []).map(
       async (p: { id: string; full_name: string | null; role: string }) => {
         const room_id = `partner_${p.id}`;
@@ -87,6 +87,36 @@ export default async function ChatAdminPage({ searchParams }: PageProps) {
       }
     )
   );
+
+  // Busca salas de instituições que tiveram mensagens
+  const { data: instMsgs } = await db
+    .from("chat_messages")
+    .select("room_id, sender_name, content, created_at")
+    .like("room_id", "instituicao_%")
+    .order("created_at", { ascending: false });
+
+  const instRoomsMap = new Map<string, ChatRoom>();
+  for (const msg of instMsgs ?? []) {
+    const room_id = msg.room_id as string;
+    if (!instRoomsMap.has(room_id)) {
+      const inst_id = room_id.replace("instituicao_", "");
+      const { data: inst } = await db.from("instituicoes").select("id, nome").eq("id", inst_id).single();
+      instRoomsMap.set(room_id, {
+        room_id,
+        partner_id: inst_id,
+        partner_name: inst?.nome ?? "Instituição",
+        partner_role: "INSTITUICAO",
+        last_message: {
+          content: msg.content as string,
+          sender_name: msg.sender_name as string,
+          created_at: msg.created_at as string,
+        },
+        unread_count: 0,
+      });
+    }
+  }
+
+  const rooms: ChatRoom[] = [...Array.from(instRoomsMap.values()), ...partnerRooms];
 
   // Ordena por última mensagem mais recente
   rooms.sort((a, b) => {

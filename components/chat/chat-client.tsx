@@ -117,7 +117,11 @@ export function ChatClient({ roomId, profile, isAdmin, rooms = [] }: ChatClientP
 
   const fetchMessages = useCallback(async (rid: string) => {
     try {
-      const res = await fetch(`/api/chat/messages?room_id=${encodeURIComponent(rid)}`);
+      const isInst = rid.startsWith("instituicao_");
+      const endpoint = isInst
+        ? `/api/instituicao/chat/admin?room_id=${encodeURIComponent(rid)}`
+        : `/api/chat/messages?room_id=${encodeURIComponent(rid)}`;
+      const res = await fetch(endpoint);
       if (!res.ok) return;
       const data = await res.json() as { messages: ChatMessage[] };
       const msgs = data.messages ?? [];
@@ -187,7 +191,9 @@ export function ChatClient({ roomId, profile, isAdmin, rooms = [] }: ChatClientP
 
     setSending(true);
     try {
-      const res = await fetch("/api/chat/messages", {
+      const isInst = activeRoom.startsWith("instituicao_");
+      const endpoint = isInst ? "/api/instituicao/chat/admin" : "/api/chat/messages";
+      const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ room_id: activeRoom, content: trimmed }),
@@ -338,7 +344,7 @@ export function ChatClient({ roomId, profile, isAdmin, rooms = [] }: ChatClientP
                   {activeRoomData.partner_name}
                 </h3>
                 <p className="text-[10px] text-[#7A8FA8]">
-                  {activeRoomData.partner_role === "PARTNER_PRO" ? "Partner PRO" : "Partner"} · Chat direto
+                  {activeRoomData.partner_role === "INSTITUICAO" ? "Instituição Financeira" : activeRoomData.partner_role === "PARTNER_PRO" ? "Partner PRO" : "Partner"} · Chat direto
                 </p>
               </>
             ) : (
