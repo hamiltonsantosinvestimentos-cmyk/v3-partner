@@ -31,6 +31,7 @@ interface Proposal {
   imovel_cidade?: string; imovel_estado?: string;
   metadata?: Record<string, unknown>;
   instituicao_encaminhada?: string | null;
+  instituicao_feedback?: { instituicao: string; status: string; observacao: string; updated_at: string }[] | null;
 }
 
 interface CreditDeskClientProps {
@@ -106,6 +107,7 @@ export function CreditDeskClient({ proposals: initial, level, currentUser }: Cre
           comissao_instituicao_perc: p.comissao_instituicao_perc as number | undefined,
           metadata: p.metadata as Record<string, unknown> | undefined,
           instituicao_encaminhada: p.instituicao_encaminhada as string | null | undefined,
+          instituicao_feedback: p.instituicao_feedback as { instituicao: string; status: string; observacao: string; updated_at: string }[] | null | undefined,
         })));
       })
       .catch(err => console.error("[credit-proposals load]", err));

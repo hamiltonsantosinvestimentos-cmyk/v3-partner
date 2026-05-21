@@ -62,6 +62,7 @@ interface ProposalCard {
   comissao_instituicao_perc?: number;
   metadata?: Record<string, unknown>;
   instituicao_encaminhada?: string | null;
+  instituicao_feedback?: { instituicao: string; status: string; observacao: string; updated_at: string }[] | null;
   // Campos de pendência
   pending_reason?: string | null;
   pending_responsible?: string | null;
