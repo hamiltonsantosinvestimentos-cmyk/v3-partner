@@ -24,31 +24,36 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-// ─── Temporizador de 30 dias ─────────────────────────────────────────────────
+// ─── Trial manual (só quando trial_expires_at estiver definido) ──────────────
 const TRIAL_DAYS = 30;
 
-function getDaysLeft(createdAt: string, trialExpiresAt?: string | null): number {
-  if (trialExpiresAt) {
-    const expires = new Date(trialExpiresAt).getTime();
-    const diff = Math.floor((expires - Date.now()) / (1000 * 60 * 60 * 24));
-    return Math.max(diff, 0);
+function getDaysLeft(trialExpiresAt?: string | null): number {
+  if (!trialExpiresAt) return -1; // sem trial configurado
+  const expires = new Date(trialExpiresAt).getTime();
+  const diff = Math.floor((expires - Date.now()) / (1000 * 60 * 60 * 24));
+  return Math.max(diff, 0);
+}
+
+function isExpired(trialExpiresAt?: string | null): boolean {
+  if (!trialExpiresAt) return false; // sem trial = nunca expira automaticamente
+  return getDaysLeft(trialExpiresAt) === 0;
+}
+
+function TrialBadge({ trialExpiresAt, isActive }: { createdAt: string; trialExpiresAt?: string | null; isActive: boolean }) {
+  if (!trialExpiresAt) {
+    return (
+      <div className="w-40">
+        <div className="flex items-center gap-1.5">
+          <ShieldCheck className="w-3.5 h-3.5 text-[#7A8FA8] flex-shrink-0" />
+          <span className="text-[11px] text-[#7A8FA8]">Sem trial</span>
+        </div>
+      </div>
+    );
   }
-  const created = new Date(createdAt).getTime();
-  const now = Date.now();
-  const elapsed = Math.floor((now - created) / (1000 * 60 * 60 * 24));
-  return Math.max(TRIAL_DAYS - elapsed, 0);
-}
 
-function isExpired(createdAt: string, trialExpiresAt?: string | null): boolean {
-  return getDaysLeft(createdAt, trialExpiresAt) === 0;
-}
-
-function TrialBadge({ createdAt, trialExpiresAt, isActive }: { createdAt: string; trialExpiresAt?: string | null; isActive: boolean }) {
-  const daysLeft = getDaysLeft(createdAt, trialExpiresAt);
+  const daysLeft = getDaysLeft(trialExpiresAt);
   const pct = Math.round((daysLeft / TRIAL_DAYS) * 100);
-  const expireDate = trialExpiresAt
-    ? new Date(trialExpiresAt).toLocaleDateString("pt-BR")
-    : new Date(new Date(createdAt).getTime() + TRIAL_DAYS * 86400000).toLocaleDateString("pt-BR");
+  const expireDate = new Date(trialExpiresAt).toLocaleDateString("pt-BR");
 
   if (daysLeft === 0) {
     return (
@@ -60,13 +65,13 @@ function TrialBadge({ createdAt, trialExpiresAt, isActive }: { createdAt: string
         <div className="h-2 rounded-full bg-red-500/20 overflow-hidden">
           <div className="h-full w-0 rounded-full bg-red-500" />
         </div>
-        <span className="text-[10px] text-red-400/60 mt-0.5 block">Bloqueado automaticamente</span>
+        <span className="text-[10px] text-red-400/60 mt-0.5 block">Expirou em {expireDate}</span>
       </div>
     );
   }
 
-  const barColor   = daysLeft > 10 ? "bg-emerald-500" : daysLeft > 3 ? "bg-amber-400" : "bg-red-500";
-  const textColor  = daysLeft > 10 ? "text-emerald-400" : daysLeft > 3 ? "text-amber-400" : "text-red-400";
+  const barColor  = daysLeft > 10 ? "bg-emerald-500" : daysLeft > 3 ? "bg-amber-400" : "bg-red-500";
+  const textColor = daysLeft > 10 ? "text-emerald-400" : daysLeft > 3 ? "text-amber-400" : "text-red-400";
 
   return (
     <div className="w-40">
@@ -123,9 +128,9 @@ export function UsersClient({ initialUsers }: UsersClientProps) {
     document_cpf: "",
   });
 
-  // Auto-bloqueia usuários com trial expirado
+  // Auto-bloqueia apenas quando trial_expires_at estiver definido e já vencido
   useEffect(() => {
-    const expired = users.filter((u) => u.is_active && isExpired(u.created_at, u.trial_expires_at));
+    const expired = users.filter((u) => u.is_active && u.trial_expires_at && isExpired(u.trial_expires_at));
     if (expired.length === 0) return;
     expired.forEach(async (u) => {
       const res = await fetch(`/api/usuarios/${u.id}`, {
@@ -346,8 +351,8 @@ export function UsersClient({ initialUsers }: UsersClientProps) {
   const activeCount = users.filter((u) => u.is_active).length;
   const partnerCount = users.filter((u) => u.role === "PARTNER").length;
   const partnerProCount = users.filter((u) => u.role === "PARTNER_PRO").length;
-  const expiredCount = users.filter((u) => isExpired(u.created_at, u.trial_expires_at)).length;
-  const expiringCount = users.filter((u) => !isExpired(u.created_at, u.trial_expires_at) && getDaysLeft(u.created_at, u.trial_expires_at) <= 5).length;
+  const expiredCount = users.filter((u) => u.trial_expires_at && isExpired(u.trial_expires_at)).length;
+  const expiringCount = users.filter((u) => u.trial_expires_at && !isExpired(u.trial_expires_at) && getDaysLeft(u.trial_expires_at) <= 5).length;
 
   return (
     <div className="space-y-5 animate-fade-in">
@@ -475,7 +480,7 @@ export function UsersClient({ initialUsers }: UsersClientProps) {
                           <Pencil className="w-3.5 h-3.5" />
                         </button>
                         {/* Botão de desbloqueio — só aparece se expirado/inativo */}
-                        {!user.is_active && isExpired(user.created_at, user.trial_expires_at) ? (
+                        {!user.is_active && user.trial_expires_at && isExpired(user.trial_expires_at) ? (
                           <button
                             onClick={() => handleToggleActive(user)}
                             className="p-1.5 rounded hover:bg-secondary transition-colors text-emerald-400 hover:text-emerald-300"
