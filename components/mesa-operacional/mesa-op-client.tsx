@@ -1407,6 +1407,7 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
             comissao_instituicao_perc: p.comissao_instituicao_perc as number | undefined,
             metadata: meta ?? undefined,
             instituicao_encaminhada: p.instituicao_encaminhada as string | null | undefined,
+            instituicao_feedback: p.instituicao_feedback as { instituicao: string; status: string; observacao: string; updated_at: string }[] | null | undefined,
             pending_reason: p.pending_reason as string | null | undefined,
             pending_responsible: p.pending_responsible as string | null | undefined,
             pending_at: p.pending_at as string | null | undefined,
