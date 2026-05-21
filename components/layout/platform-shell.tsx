@@ -1,13 +1,18 @@
 "use client";
 
 import React, { useState } from "react";
+import dynamic from "next/dynamic";
 import { Sidebar } from "./sidebar";
 import { Topbar } from "./topbar";
 import type { UserRole } from "@/lib/constants";
 import { WelcomeWizard } from "@/components/onboarding/welcome-wizard";
 import { LocationGate } from "@/components/onboarding/location-gate";
 import { SubscriptionGuard } from "./subscription-guard";
-import { ChatFloatWidget } from "@/components/chat/chat-float-widget";
+
+const ChatFloatWidget = dynamic(
+  () => import("@/components/chat/chat-float-widget").then(m => m.ChatFloatWidget),
+  { ssr: false }
+);
 
 interface PlatformShellProps {
   user: {
