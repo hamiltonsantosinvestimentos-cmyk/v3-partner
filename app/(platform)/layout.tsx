@@ -90,10 +90,6 @@ export default async function PlatformLayout({
       // silently ignore notification errors
     }
 
-    const isPartner = ["PARTNER", "PARTNER_PRO"].includes(profile.role);
-    const isAdminRole = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"].includes(profile.role);
-    const { ChatToastListener } = await import("@/components/chat/chat-toast-listener");
-
     return (
       <>
         <PlatformShell
@@ -111,13 +107,6 @@ export default async function PlatformLayout({
           {children}
         </PlatformShell>
         <PWAInstallPrompt />
-        {(isPartner || isAdminRole) && (
-          <ChatToastListener
-            profileId={profile.id}
-            roomId={isPartner ? `partner_${profile.id}` : ""}
-            isAdmin={isAdminRole}
-          />
-        )}
       </>
     );
   } catch (err) {
