@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import {
   Building2, Plus, X, ChevronRight,
-  BarChart2, BarChart3, Mail, Circle, FileText,
+  BarChart2, Mail, Circle, FileText,
   Paperclip, Trash2, ExternalLink, Upload, Copy, CheckCheck,
   MessageSquare, Send, Zap, FileImage, FileSignature,
   ArrowLeftRight, Pencil, Check, Loader2,
@@ -791,7 +791,7 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
               {([
                 { id: "detalhes" as const, label: "Detalhes", icon: <FileText size={12} /> },
                 { id: "forja" as const, label: "FORJA", icon: <Zap size={12} /> },
-                { id: "analytics" as const, label: "Analytics", icon: <BarChart3 size={12} /> },
+                { id: "analytics" as const, label: "Analytics", icon: <BarChart2 size={12} /> },
                 { id: "qa" as const, label: "Q&A", icon: <MessageSquare size={12} /> },
                 { id: "matches" as const, label: "Matches", icon: <ArrowLeftRight size={12} /> },
                 { id: "criativos" as const, label: "Criativos", icon: <FileImage size={12} /> },
