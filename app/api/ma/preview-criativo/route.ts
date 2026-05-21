@@ -44,6 +44,44 @@ function getForjaData(ad: any) {
   };
 }
 
+// Constrói métricas ricas a partir de financial_projections — substitui os 3 itens genéricos
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function buildMetricasFromFP(fp: any, deal: any): { label: string; value: string; sub?: string }[] {
+  if (!fp) return [];
+  const m: { label: string; value: string; sub?: string }[] = [];
+
+  // Receita bruta realizada mais recente
+  const receitas: { ano: number; tipo: string; valor: number }[] = fp.receita ?? [];
+  const realizadas = receitas.filter(r => r.tipo === "realizado").sort((a, b) => b.ano - a.ano);
+  if (realizadas[0]) {
+    m.push({ label: `Receita Bruta ${realizadas[0].ano}`, value: formatBRL(realizadas[0].valor), sub: "realizado" });
+  }
+
+  // NOI cenário base
+  const noi = fp.scenarios?.base?.noi_anual;
+  if (noi) m.push({ label: "NOI Cenário Base", value: formatBRL(noi), sub: "anual projetado" });
+
+  // Cap Rate base
+  const capBase = fp.scenarios?.base?.cap_rate;
+  if (capBase) m.push({ label: "Cap Rate Base", value: `${(capBase * 100).toFixed(1)}%`, sub: "cenário conservador" });
+
+  // Valuation com expansão
+  const valExp = fp.scenarios?.expansao?.valuation;
+  if (valExp && deal.deal_value && valExp > deal.deal_value) {
+    m.push({ label: "Upside c/ Expansão", value: formatBRL(valExp), sub: "+3 pavimentos projetado" });
+  }
+
+  // Cap Rate expansão
+  const capExp = fp.scenarios?.expansao?.cap_rate;
+  if (capExp) m.push({ label: "Cap Rate Expansão", value: `${(capExp * 100).toFixed(1)}%`, sub: "pós-obra projetado" });
+
+  // NOI expansão
+  const noiExp = fp.scenarios?.expansao?.noi_anual;
+  if (noiExp) m.push({ label: "NOI c/ Expansão", value: formatBRL(noiExp), sub: "anual pós-expansão" });
+
+  return m;
+}
+
 // Renderiza tese_investimento como bullets (array) ou parágrafo (string legado)
 function renderTese(tese: string[] | string, style = "font-size:12px;color:#7A8FA8;line-height:1.7"): string {
   if (Array.isArray(tese) && tese.length > 0) {
@@ -77,7 +115,10 @@ function buildCIM(deal: any, lang: string): string {
     ? forja.tese
     : isPt ? (ad.tese_investimento ?? "") : (ad.tese_investimento_en ?? ad.tese_investimento ?? "");
 
-  const metricas: { label: string; value: string; sub?: string }[] = ad.metricas ?? [];
+  // Métricas: prioriza financial_projections (dados reais dos PDFs) sobre os genéricos do kit-ia
+  const richMetricas = buildMetricasFromFP(ad.financial_projections, deal);
+  const metricas: { label: string; value: string; sub?: string }[] =
+    richMetricas.length > 0 ? richMetricas : (ad.metricas ?? []);
   const diferenciais: string[] = ad.diferenciais ?? [];
   const riscos: { nivel: string; descricao: string; mitigacao: string }[] = ad.riscos ?? [];
 

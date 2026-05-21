@@ -60,6 +60,35 @@ export async function POST(req: NextRequest) {
       ? `FORJA score ${ad.forja_score}, narrativa: ${forjaResult.narrative_pt ?? ""}`
       : "";
 
+    // Constrói metricas a partir de financial_projections quando disponível
+    const fp = ad.financial_projections as Record<string, unknown> | undefined;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const builtMetricas: { label: string; value: string; sub?: string }[] = (() => {
+      if (!fp) return [
+        { label: "Valor", value: valor, sub: "deal" },
+        { label: "Múltiplo", value: multiplo, sub: "EBITDA" },
+        { label: "Setor", value: setor, sub: "segmento" },
+      ];
+      const fmt = (v: number) =>
+        v >= 1e9 ? `R$ ${(v/1e9).toFixed(1)}B` : v >= 1e6 ? `R$ ${(v/1e6).toFixed(1)}M` : `R$ ${v.toLocaleString("pt-BR")}`;
+      const receitas = (fp.receita as { ano: number; tipo: string; valor: number }[] ?? [])
+        .filter(r => r.tipo === "realizado").sort((a, b) => b.ano - a.ano);
+      const sc = fp.scenarios as Record<string, { noi_anual?: number; cap_rate?: number; valuation?: number }> | undefined;
+      const m: { label: string; value: string; sub?: string }[] = [];
+      if (receitas[0]) m.push({ label: `Receita ${receitas[0].ano}`, value: fmt(receitas[0].valor), sub: "realizado" });
+      if (sc?.base?.noi_anual) m.push({ label: "NOI Base", value: fmt(sc.base.noi_anual), sub: "anual projetado" });
+      if (sc?.base?.cap_rate) m.push({ label: "Cap Rate", value: `${(sc.base.cap_rate*100).toFixed(1)}%`, sub: "cenário base" });
+      if (sc?.expansao?.valuation && deal.deal_value && sc.expansao.valuation > deal.deal_value)
+        m.push({ label: "Upside", value: fmt(sc.expansao.valuation as number), sub: "+3 pav. projetado" });
+      if (sc?.expansao?.noi_anual) m.push({ label: "NOI Expansão", value: fmt(sc.expansao.noi_anual), sub: "pós-obra" });
+      if (sc?.expansao?.cap_rate) m.push({ label: "Cap Rate Exp.", value: `${(sc.expansao.cap_rate*100).toFixed(1)}%`, sub: "pós-expansão" });
+      return m.length > 0 ? m : [
+        { label: "Valor", value: valor, sub: "deal" },
+        { label: "Múltiplo", value: multiplo, sub: "EBITDA" },
+        { label: "Setor", value: setor, sub: "segmento" },
+      ];
+    })();
+
     const { default: Anthropic } = await import("@anthropic-ai/sdk");
     const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -78,10 +107,10 @@ STRICT limits per field (exceed = invalid):
 - linkedin_post_en: max 400 chars, emojis ok, no company name
 - linkedin_story_ptbr: max 80 chars
 - linkedin_story_en: max 80 chars
-- diferenciais: exactly 3 strings, max 60 chars each
-- riscos: exactly 2 objects
+- diferenciais: exactly 3 strings, max 80 chars each (use real data from context)
+- riscos: exactly 2 objects with real risks based on the deal context
 
-{"descricao_ptbr":"...","descricao_en":"...","teaser_ptbr":"...","teaser_en":"...","linkedin_post_ptbr":"...","linkedin_post_en":"...","linkedin_story_ptbr":"...","linkedin_story_en":"...","diferenciais":["...","...","..."],"metricas":[{"label":"Valor","value":"${valor}","sub":"deal"},{"label":"Múltiplo","value":"${multiplo}","sub":"EBITDA"},{"label":"Setor","value":"${setor}","sub":"segmento"}],"riscos":[{"nivel":"BAIXO","descricao":"...","mitigacao":"..."},{"nivel":"MÉDIO","descricao":"...","mitigacao":"..."}]}`;
+{"descricao_ptbr":"...","descricao_en":"...","teaser_ptbr":"...","teaser_en":"...","linkedin_post_ptbr":"...","linkedin_post_en":"...","linkedin_story_ptbr":"...","linkedin_story_en":"...","diferenciais":["...","...","..."],"riscos":[{"nivel":"BAIXO","descricao":"...","mitigacao":"..."},{"nivel":"MÉDIO","descricao":"...","mitigacao":"..."}]}`;
 
     const message = await client.messages.create({
       model: "claude-haiku-4-5-20251001",
@@ -95,11 +124,12 @@ STRICT limits per field (exceed = invalid):
     const raw = content.text.trim().replace(/^```json\s*/i, "").replace(/```\s*$/i, "");
     const kitContent = JSON.parse(raw);
 
-    // Salva conteúdo gerado em asset_data — sempre funciona independente das tabelas
+    // Salva conteúdo gerado em asset_data — metricas computadas de financial_projections têm prioridade
     await svc.from("ma_deals").update({
       asset_data: {
         ...ad,
         ...kitContent,
+        metricas: builtMetricas,   // substitui as genéricas do kit com dados reais
         kit_gerado_at: new Date().toISOString(),
         kit_job_id: jobId,
       },
