@@ -421,15 +421,10 @@ function buildCIM(deal: any, lang: string, investor?: InvestorInfo | null): stri
     .tenant-table tr{break-inside:avoid!important;page-break-inside:avoid!important}
     .status-badge{font-size:8px!important;padding:1px 5px!important}
 
-    /* ── FOOTER DO DOCUMENTO ── */
-    .doc-footer{
-      padding:12px 24px!important;
-      break-inside:avoid!important;page-break-inside:avoid!important;
-      -webkit-print-color-adjust:exact!important;
-    }
-    .footer-logo img{height:10mm!important;opacity:0.6!important}
-    .footer-info{font-size:9px!important}
-    .footer-ref{font-size:9px!important}
+    /* ── FOOTER HTML: oculto em print ──
+       Timbrado Puppeteer (footer template) já exibe logo + CNPJ + Pág X/Y
+       Manter doc-footer visível evita sobreposição de logomarca na última página */
+    .doc-footer{display:none!important}
 
     /* ── TIPOGRAFIA GLOBAL ── */
     h1{font-size:16px!important;letter-spacing:-0.5px!important}
@@ -501,7 +496,7 @@ function buildCIM(deal: any, lang: string, investor?: InvestorInfo | null): stri
   }
   .cover-logo-wrap{display:block}  /* bloco simples — sem flex */
   .cover-logo-img{
-    height:52px;width:auto;
+    height:60px;width:auto;          /* brandbook: 56–80px em capa CIM */
     image-rendering:crisp-edges;
     filter:drop-shadow(0 0 10px rgba(201,168,76,.25));
     display:block;
