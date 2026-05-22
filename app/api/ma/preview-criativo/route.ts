@@ -239,17 +239,32 @@ function buildCIM(deal: any, lang: string, investor?: InvestorInfo | null): stri
   body{font-family:'DM Sans',sans-serif;background:var(--navy);color:var(--cream);font-size:14px;line-height:1.6;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
   @media print{
     /* ── CONFIG DA PÁGINA ── */
-    @page{size:A4 portrait;margin:10mm 12mm}
-    @page:first{margin-top:0;margin-bottom:0}
+    @page{size:A4 portrait;margin:17mm 0 13mm 0}
+    /* FIX 1: capa sem timbrado — margin zero remove espaço do header/footer na pág 1 */
+    /* Embutido no HTML (não via addStyleTag) para ser processado no layout inicial */
+    @page:first{margin:0!important}
 
-    /* ── BASE — preserva cores exatas, escala fontes para A4 ── */
-    html,body{
+    /* ── FIX 2: FUNDO SÓLIDO NAVY — sem borda branca em nenhuma direção ──
+       html (não só body) preenche o canvas completo da página no Puppeteer/Chrome,
+       incluindo áreas de margem. Cor exata do manual V3: Navy Deep #09081A.
+       Margem lateral = 0 no pdf() → fundo navy chega até a borda física do papel. */
+    html{
+      background:#09081A!important;
+      -webkit-print-color-adjust:exact!important;
+      print-color-adjust:exact!important;
+      height:100%!important;
+    }
+    body{
       background:#09081A!important;color:#F5F1E8!important;
-      font-size:10px!important;line-height:1.4!important;
+      font-size:9px!important;line-height:1.4!important;
       -webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;
+      min-height:100%!important;
+    }
+    /* FIX 3: padding interno das seções = 14mm (margem lateral do pdf() é 0) */
+    .section,.section-alt{
+      padding-left:14mm!important;padding-right:14mm!important;
     }
     *{box-shadow:none!important;text-shadow:none!important}
-    /* Remove overflow que bloqueia break-inside */
     *{overflow:visible!important}
 
     /* ── COVER: A4 full-bleed, 3 zonas, sem timbrado (@page :first margin=0) ── */
@@ -294,13 +309,11 @@ function buildCIM(deal: any, lang: string, investor?: InvestorInfo | null): stri
     .cover-process-code{font-size:10pt!important}
     .cover-process-date{font-size:8pt!important}
 
-    /* ── SEÇÕES: compactadas, break controlado ── */
+    /* ── FIX 3: SEÇÕES COMPACTAS — máximo aproveitamento do papel ── */
     .section,.section-alt{
-      padding:18px 24px!important;
-      break-inside:avoid-page;
-      page-break-inside:avoid;
-      -webkit-print-color-adjust:exact!important;
-      print-color-adjust:exact!important;
+      padding-top:14px!important;padding-bottom:14px!important;
+      break-inside:avoid-page;page-break-inside:avoid;
+      -webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;
     }
     .section{background:#09081A!important}
     .section-alt{background:#0F0E2A!important}

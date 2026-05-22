@@ -249,10 +249,16 @@ export async function GET(request: NextRequest) {
     // Injeta CSS adicional de print (complementa o @media print do HTML)
     await page.addStyleTag({ content: printCss });
 
-    // ── Gera PDF com timbrado profissional ────────────────────────────────────
-    // R3: right/left = 0 (sem bordas brancas laterais)
-    // R7: top = header(~13mm) + gap(4mm) = 17mm | bottom = footer(~9mm) + gap(4mm) = 13mm
-    // R6: preferCSSPageSize:true → @page portrait/landscape do CSS
+    // FIX 1: @page :first injetado ANTES do pdf() — garante sem timbrado na capa
+    // FIX 2: margin lateral = 0 — html navy preenche até a borda física do papel
+    await page.addStyleTag({ content: `
+      @page :first { margin: 0 !important; }
+      @page { size: A4 portrait; margin: 17mm 0 13mm 0; }
+      html, body { background: #09081A !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+      body { min-height: 100% !important; }
+      .section, .section-alt { padding-left: 14mm !important; padding-right: 14mm !important; }
+    ` });
+
     const pdfBuffer = await page.pdf({
       preferCSSPageSize:   true,
       printBackground:     true,
@@ -260,10 +266,10 @@ export async function GET(request: NextRequest) {
       headerTemplate,
       footerTemplate,
       margin: {
-        top:    "17mm",  // R7: header 13mm + gap 4mm
-        right:  "6mm",   // R3: html{background:#09081A} preenche esta margem — sem borda branca
-        bottom: "13mm",  // R7: footer 9mm + gap 4mm
-        left:   "6mm",   // R3: idem — html background naval preenche, não aparece branco
+        top:    "17mm",  // header 13mm + gap 4mm
+        right:  "0",     // FIX 2: zero → html #09081A cobre até a borda
+        bottom: "13mm",  // footer 9mm + gap 4mm
+        left:   "0",     // FIX 2: idem
       },
     });
 
