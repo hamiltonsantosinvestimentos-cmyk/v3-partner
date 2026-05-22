@@ -1,14 +1,16 @@
 /**
- * /api/ma/cim-pdf — Gerador de PDF profissional V3 Partners
+ * /api/ma/cim-pdf — Gerador PDF profissional V3 Partners
  *
- * REGRAS DE IMPRESSÃO (v3_print_standards no Supabase):
- * R1. html{background:#09081A} preenche canvas completo + margens (não só body)
- * R2. @page :first{margin:0} → sem timbrado na capa (capa tem logo própria)
- * R3. margin left/right = 0 no pdf() → sem bordas brancas laterais
- * R4. overflow:visible global + break-inside:avoid-page em todos containers
- * R5. font-size explícito em cada elemento do template (Puppeteer padrão = 0)
- * R6. preferCSSPageSize:true → respeita @page portrait/landscape do CSS
- * R7. margin.top = header(13mm) + gap(4mm) = 17mm | margin.bottom = footer(9mm) + gap(4mm) = 13mm
+ * ARQUITETURA: 2 PDFs → merge via pdf-lib
+ *   PDF A: capa (pág 1) — sem header/footer, margin zero, full-bleed navy
+ *   PDF B: conteúdo (pág 2+) — com timbrado (header+footer)
+ *   MERGE: pdf-lib combina A + B em documento único
+ *
+ * PROBLEMAS RESOLVIDOS:
+ *   1. Header na capa ELIMINADO — PDF A não usa displayHeaderFooter
+ *   2. Fundo navy sólido — html+body background + margin zero
+ *   3. Espaço otimizado — sections sem page-break-before obrigatório
+ *   4. Footer última página — pdf-lib controla paginação exata
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -17,13 +19,13 @@ import { createClient as sc } from "@supabase/supabase-js";
 export const maxDuration = 60;
 export const dynamic    = "force-dynamic";
 
-// Tokens V4.2 — verificados linha a linha contra v3-brandbook-v4-2-final.html
+// Tokens V3 V4.2 — fonte da verdade: v3-brandbook-v4-2-final.html
 const V3 = {
-  nd: "#09081A",  // Navy Deep    — fundo absoluto, html canvas, timbrado
-  go: "#C9A84C",  // Gold         — acento, código, número de página
-  gl: "#E8C97A",  // Gold Light   — labels <12px
-  cr: "#F5F1E8",  // Cream V4     — texto principal
-  mu: "#9BAFC5",  // Muted V4     — texto secundário, razão social
+  nd: "#09081A",
+  go: "#C9A84C",
+  gl: "#E8C97A",
+  cr: "#F5F1E8",
+  mu: "#9BAFC5",
 };
 
 async function launchBrowser() {
@@ -51,6 +53,32 @@ async function launchBrowser() {
   });
 }
 
+// CSS injetado em ambos os PDFs — garante navy em toda a área da página
+const BASE_PRINT_CSS = `
+  @page { size: A4 portrait; margin: 0; }
+  html, body {
+    background: #09081A !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    height: 100% !important;
+    min-height: 100% !important;
+  }
+  /* Camada de fundo que cobre toda a área incluindo gaps entre seções */
+  body::before {
+    content: '';
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: #09081A;
+    z-index: -1;
+    -webkit-print-color-adjust: exact !important;
+  }
+  * { box-shadow: none !important; overflow: visible !important; }
+  .section, .section-alt {
+    padding-left: 14mm !important;
+    padding-right: 14mm !important;
+  }
+`;
+
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const dealId   = searchParams.get("dealId");
@@ -63,35 +91,28 @@ export async function GET(request: NextRequest) {
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL
     ?? `https://${request.headers.get("host") ?? "app.v3partners.com.br"}`;
 
-  // ── Dados do deal ──────────────────────────────────────────────────────────
+  // Dados do deal
   const { data: deal } = await db
-    .from("ma_deals")
-    .select("code, target_company, asset_data")
-    .eq("id", dealId)
-    .single();
-
+    .from("ma_deals").select("code, target_company").eq("id", dealId).single();
   const dealCode = deal?.code ?? "";
   const dealName = (deal?.target_company ?? "").replace(/\/.*/, "").trim().slice(0, 40);
 
-  // ── VDR token → watermark ──────────────────────────────────────────────────
+  // VDR token
   let investorParam = "";
   if (vdrToken) {
     const { data: inv } = await db
-      .from("deal_room_invites")
-      .select("investor_name, investor_company")
-      .eq("token", vdrToken)
-      .single();
+      .from("deal_room_invites").select("investor_name, investor_company").eq("token", vdrToken).single();
     if (inv) investorParam = `&vdr_token=${encodeURIComponent(vdrToken)}`;
   }
 
-  // ── Logo base64 (R5: header templates não carregam URLs externas) ──────────
+  // Logo base64 para o timbrado
   let logoBase64 = "";
   try {
     const lr = await fetch(`${baseUrl}/v3-logo-flat-gold-alpha.png`);
     if (lr.ok) logoBase64 = `data:image/png;base64,${Buffer.from(await lr.arrayBuffer()).toString("base64")}`;
-  } catch { /* logo opcional */ }
+  } catch { /* opcional */ }
 
-  // ── HTML do CIM ───────────────────────────────────────────────────────────
+  // HTML do CIM
   const cimUrl = `${baseUrl}/api/ma/preview-criativo?dealId=${dealId}&type=cim&lang=${lang}${investorParam}`;
   let cimHtml: string;
   try {
@@ -107,173 +128,104 @@ export async function GET(request: NextRequest) {
     day: "2-digit", month: "short", year: "numeric",
   });
 
-  // ── Templates do timbrado (R5: font-size explícito, hex hardcoded) ─────────
-  //
-  // Header/footer templates rodam em iframe isolado — SEM CSS da página.
-  // font-size OBRIGATÓRIO em cada elemento (padrão Puppeteer = 0 → invisível).
-  // CSS variables (var(--gold)) NÃO funcionam aqui → hex hardcoded sempre.
-  // background com -webkit-print-color-adjust:exact no container raiz.
-  // padding em px (não mm — bug Puppeteer em templates).
-  // width:100% com padding:0 e box-sizing:border-box → alinha com margens do pdf().
-
+  // Templates do timbrado (font-size explícito — Puppeteer padrão = 0)
   const headerTemplate = `
     <div style="
-      width:100%;margin:0;padding:8px 42px;
+      width:100%;margin:0;padding:7px 42px;
       display:flex;align-items:center;justify-content:space-between;
-      background:${V3.nd};
-      border-bottom:2px solid ${V3.go};
-      -webkit-print-color-adjust:exact;
-      box-sizing:border-box;
-      font-family:Arial,Helvetica,sans-serif;
+      background:${V3.nd};border-bottom:2px solid ${V3.go};
+      -webkit-print-color-adjust:exact;box-sizing:border-box;
+      font-family:Arial,sans-serif;
     ">
       <div style="display:flex;align-items:center;gap:10px">
         ${logoBase64 ? `<img src="${logoBase64}" style="height:20px;width:auto;display:block">` : ""}
         <div>
-          <div style="font-size:8px;font-weight:700;color:${V3.cr};letter-spacing:1.5px;text-transform:uppercase;line-height:1.3">
-            V3 Partners &middot; Mesa de M&amp;A
-          </div>
-          <div style="font-size:7px;color:${V3.mu};margin-top:1px;line-height:1.3">
-            ${dealName}
-          </div>
+          <div style="font-size:8px;font-weight:700;color:${V3.cr};letter-spacing:1.5px;text-transform:uppercase;line-height:1.3">V3 Partners &middot; Mesa de M&amp;A</div>
+          <div style="font-size:7px;color:${V3.mu};margin-top:1px;line-height:1.3">${dealName}</div>
         </div>
       </div>
       <div style="text-align:right">
-        <div style="font-size:8px;font-weight:700;color:${V3.go};letter-spacing:1px;line-height:1.3">
-          ${dealCode}
-        </div>
-        <div style="font-size:7px;color:${V3.mu};margin-top:1px;line-height:1.3">
-          CONFIDENCIAL &middot; NDA
-        </div>
+        <div style="font-size:8px;font-weight:700;color:${V3.go};letter-spacing:1px;line-height:1.3">${dealCode}</div>
+        <div style="font-size:7px;color:${V3.mu};margin-top:1px;line-height:1.3">CONFIDENCIAL &middot; NDA</div>
       </div>
-    </div>
-  `;
+    </div>`;
 
   const footerTemplate = `
     <div style="
-      width:100%;margin:0;padding:6px 42px;
+      width:100%;margin:0;padding:5px 42px;
       display:flex;align-items:center;justify-content:space-between;
-      background:${V3.nd};
-      border-top:1px solid rgba(201,168,76,0.3);
-      -webkit-print-color-adjust:exact;
-      box-sizing:border-box;
-      font-family:Arial,Helvetica,sans-serif;
+      background:${V3.nd};border-top:1px solid rgba(201,168,76,0.3);
+      -webkit-print-color-adjust:exact;box-sizing:border-box;
+      font-family:Arial,sans-serif;
     ">
-      <div style="font-size:7px;color:${V3.mu};line-height:1.4">
-        V3 Partners Solu&ccedil;&otilde;es Ltda &middot; CNPJ 14.219.287/0001-50 &middot; v3partners.com.br
-      </div>
-      <div style="font-size:7px;color:${V3.mu};text-align:center;line-height:1.4">
-        Confidencial &middot; NDA Exigido &middot; ${printDate}
-      </div>
-      <div style="font-size:8px;font-weight:700;color:${V3.go};text-align:right;line-height:1.4">
-        P&aacute;g.&nbsp;<span class="pageNumber"></span>&nbsp;/&nbsp;<span class="totalPages"></span>
-      </div>
-    </div>
-  `;
-
-  // ── CSS de print injetado via Puppeteer (além do @media print do HTML) ─────
-  const printCss = `
-    @media print {
-
-      /* R1 — html preenche canvas inteiro (margens, última página) */
-      html {
-        background: ${V3.nd} !important;
-        -webkit-print-color-adjust: exact !important;
-        print-color-adjust: exact !important;
-        height: 100% !important;
-      }
-      body {
-        background: ${V3.nd} !important;
-        min-height: 100% !important;
-        -webkit-print-color-adjust: exact !important;
-      }
-
-      /* R2 — sem timbrado na capa (primeira página tem logo própria) */
-      @page :first {
-        margin-top: 0 !important;
-        margin-bottom: 0 !important;
-        margin-left: 0 !important;
-        margin-right: 0 !important;
-      }
-
-      /* R3 — margem lateral 6mm no pdf() preenchida por html{background:navy} */
-      /* Sem override de padding — cada seção usa seu próprio espaçamento */
-      /* NÃO sobrescrever cover padding — causa corte lateral dos títulos */
-
-      /* R4 — overflow:visible libera o algoritmo de quebra de página */
-      * { overflow: visible !important; }
-
-      /* R4 — break-inside em todos os containers de conteúdo */
-      .section, .section-alt,
-      .cover,
-      .exec-grid,
-      .info-card, .info-row,
-      .kpi-card, .kpi-grid, .kpi-grid-3,
-      .thesis-item, .thesis-grid,
-      .upside-scenario,
-      .fin-grid, .fin-table tr,
-      .risk-table tr,
-      .tenant-table tr,
-      .doc-footer {
-        break-inside: avoid-page !important;
-        page-break-inside: avoid !important;
-      }
-
-      /* R4 — orphans/widows: evita linhas soltas no topo/base de páginas */
-      p, li, span { orphans: 4; widows: 4; }
-
-      /* R6 — orientação detectada via CSS */
-      @page          { size: A4 portrait; }
-      @page landscape { size: A4 landscape; }
-    }
-  `;
+      <div style="font-size:7px;color:${V3.mu};line-height:1.4">V3 Partners Solu&ccedil;&otilde;es Ltda &middot; CNPJ 14.219.287/0001-50 &middot; v3partners.com.br</div>
+      <div style="font-size:7px;color:${V3.mu};text-align:center;line-height:1.4">Confidencial &middot; NDA &middot; ${printDate}</div>
+      <div style="font-size:8px;font-weight:700;color:${V3.go};text-align:right;line-height:1.4">P&aacute;g.&nbsp;<span class="pageNumber"></span>&nbsp;/&nbsp;<span class="totalPages"></span></div>
+    </div>`;
 
   let browser;
   try {
     browser = await launchBrowser();
     const page = await browser.newPage();
-
     await page.setViewport({ width: 1240, height: 1754, deviceScaleFactor: 1 });
     await page.setContent(cimHtml, { waitUntil: "networkidle0", timeout: 45000 });
     await page.evaluate(() => document.fonts.ready);
 
-    // R1 — define background no html programaticamente (garante último página)
-    await page.evaluate((navyHex: string) => {
-      const html = document.documentElement;
-      html.style.background = navyHex;
-      html.style.setProperty("-webkit-print-color-adjust", "exact");
-      html.style.setProperty("print-color-adjust", "exact");
-      document.body.style.background = navyHex;
-      document.body.style.minHeight = "100%";
+    // Garante navy no html programaticamente
+    await page.evaluate((navy: string) => {
+      document.documentElement.style.background = navy;
+      document.documentElement.style.setProperty("-webkit-print-color-adjust", "exact");
+      document.body.style.background = navy;
     }, V3.nd);
 
-    // Injeta CSS adicional de print (complementa o @media print do HTML)
-    await page.addStyleTag({ content: printCss });
+    await page.addStyleTag({ content: BASE_PRINT_CSS });
 
-    // FIX 1: @page :first injetado ANTES do pdf() — garante sem timbrado na capa
-    // FIX 2: margin lateral = 0 — html navy preenche até a borda física do papel
-    await page.addStyleTag({ content: `
-      @page :first { margin: 0 !important; }
-      @page { size: A4 portrait; margin: 17mm 0 13mm 0; }
-      html, body { background: #09081A !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-      body { min-height: 100% !important; }
-      .section, .section-alt { padding-left: 14mm !important; padding-right: 14mm !important; }
-    ` });
-
-    const pdfBuffer = await page.pdf({
-      preferCSSPageSize:   true,
-      printBackground:     true,
-      displayHeaderFooter: true,
-      headerTemplate,
-      footerTemplate,
-      margin: {
-        top:    "17mm",  // header 13mm + gap 4mm
-        right:  "0",     // FIX 2: zero → html #09081A cobre até a borda
-        bottom: "13mm",  // footer 9mm + gap 4mm
-        left:   "0",     // FIX 2: idem
-      },
+    // ── PDF A: CAPA (página 1) — sem header/footer, full-bleed ────────────
+    const coverPdf = await page.pdf({
+      preferCSSPageSize: true,
+      printBackground:   true,
+      displayHeaderFooter: false,   // SEM timbrado na capa
+      pageRanges:        "1",
+      margin:            { top: "0", right: "0", bottom: "0", left: "0" },
     });
 
-    // Registra download na fila blockchain
+    // ── PDF B: CONTEÚDO (páginas 2+) — com timbrado ───────────────────────
+    const contentPdf = await page.pdf({
+      preferCSSPageSize: true,
+      printBackground:   true,
+      displayHeaderFooter: true,    // COM timbrado nas páginas de conteúdo
+      headerTemplate,
+      footerTemplate,
+      pageRanges:        "2-",
+      margin:            { top: "17mm", right: "0", bottom: "13mm", left: "0" },
+    });
+
+    // ── MERGE: pdf-lib une capa + conteúdo ───────────────────────────────
+    const { PDFDocument } = await import("pdf-lib");
+
+    const finalDoc   = await PDFDocument.create();
+    const coverDoc   = await PDFDocument.load(coverPdf);
+    const contentDoc = await PDFDocument.load(contentPdf);
+
+    // Copia a capa (página 1)
+    const [coverPage] = await finalDoc.copyPages(coverDoc, [0]);
+    finalDoc.addPage(coverPage);
+
+    // Copia todas as páginas de conteúdo
+    const contentPageIndices = Array.from({ length: contentDoc.getPageCount() }, (_, i) => i);
+    const contentPages = await finalDoc.copyPages(contentDoc, contentPageIndices);
+    contentPages.forEach(p => finalDoc.addPage(p));
+
+    // Metadata
+    finalDoc.setTitle(`CIM — ${deal?.target_company ?? dealCode}`);
+    finalDoc.setAuthor("V3 Partners — Mesa de M&A");
+    finalDoc.setSubject("Memorando de Informação Confidencial");
+    finalDoc.setKeywords(["V3 Partners", "CIM", dealCode, "M&A", "Confidencial"]);
+    finalDoc.setCreationDate(new Date());
+
+    const mergedPdf = await finalDoc.save();
+
+    // Registra na fila blockchain
     if (vdrToken) {
       const { data: inv } = await db
         .from("deal_room_invites").select("id").eq("token", vdrToken).single();
@@ -286,18 +238,16 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Nome do arquivo
-    const company  = (deal?.target_company ?? "CIM")
-      .replace(/[^a-zA-Z0-9\s]/g, "").split(" ").slice(0, 3).join("_");
+    const company  = (deal?.target_company ?? "CIM").replace(/[^a-zA-Z0-9\s]/g, "").split(" ").slice(0, 3).join("_");
     const date     = new Date().toISOString().slice(0, 10);
     const filename = `V3_CIM_${company}_${dealCode}_${date}.pdf`;
 
-    return new Response(pdfBuffer, {
+    return new Response(mergedPdf, {
       status: 200,
       headers: {
         "Content-Type":        "application/pdf",
         "Content-Disposition": `attachment; filename="${filename}"`,
-        "Content-Length":      pdfBuffer.byteLength.toString(),
+        "Content-Length":      mergedPdf.byteLength.toString(),
         "Cache-Control":       "no-store",
       },
     });

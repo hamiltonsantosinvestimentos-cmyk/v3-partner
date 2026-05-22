@@ -318,9 +318,12 @@ function buildCIM(deal: any, lang: string, investor?: InvestorInfo | null): stri
     .section{background:#09081A!important}
     .section-alt{background:#0F0E2A!important}
 
-    /* Quebra de página ANTES de cada seção marcada */
+    /* FIX 3: SEM page-break-before automático em seções
+       Conteúdo flui naturalmente → menos páginas, melhor aproveitamento do papel
+       Única quebra obrigatória: após a capa (.cover já tem break-after:page) */
     .section.page-break,.section-alt.page-break{
-      page-break-before:always!important;break-before:page!important;
+      /* page-break-before REMOVIDO — deixa o Chrome paginar conforme o espaço */
+      break-before:auto;
     }
 
     /* Header da seção — não quebrar */
