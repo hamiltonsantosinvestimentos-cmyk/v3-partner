@@ -243,7 +243,7 @@ function StageSLAModal({ open, onClose, proposal, stage, globalSla, onConfirm }:
   const daysUntil = date ? Math.ceil((parseLocalDate(date).setHours(23,59,59,999) - Date.now()) / 86400000) : 0;
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.7)" }}>
+    <div className="fixed inset-0 z-[9999] flex items-start justify-center p-4 pt-10" style={{ background: "rgba(0,0,0,0.7)" }}>
       <div className="w-full max-w-sm rounded-2xl" style={{ background: "#111F35", border: "1px solid rgba(201,168,76,0.2)" }}>
         <div className="px-5 py-4 space-y-1" style={{ borderBottom: "1px solid rgba(201,168,76,0.1)" }}>
           <div className="flex items-center gap-2">
@@ -314,7 +314,7 @@ function SLAConfigModal({ open, onClose, config, onSave }: {
 
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-start justify-center p-4 pt-10 bg-black/60 backdrop-blur-sm">
       <div className="bg-card border border-border rounded-2xl w-full max-w-sm animate-fade-in">
         <div className="flex items-center justify-between px-6 py-4 border-b border-border">
           <div className="flex items-center gap-2">
@@ -398,7 +398,7 @@ function NovoTicketModal({ open, onClose, onSubmit }: {
 
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-start justify-center p-4 pt-10 bg-black/60 backdrop-blur-sm">
       <div className="bg-card border border-border rounded-2xl w-full max-w-md animate-fade-in">
         <div className="flex items-center justify-between px-6 py-4 border-b border-border">
           <h2 className="text-base font-bold text-white">Abrir Novo Ticket</h2>
@@ -652,7 +652,7 @@ function PendingModal({ open, onClose, ticket, onConfirm }: {
 
   if (!open || !ticket) return null;
   return (
-    <div className="fixed inset-0 z-[90] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[90] flex items-start justify-center p-4 pt-10 bg-black/70 backdrop-blur-sm">
       <div className="bg-card border border-[#FF6B6B]/30 rounded-2xl w-full max-w-md animate-fade-in">
         <div className="flex items-center justify-between px-6 py-4 border-b border-border">
           <div className="flex items-center gap-2">
@@ -740,7 +740,7 @@ function ResolveModal({ open, onClose, ticket, onConfirm }: {
 
   if (!open || !ticket) return null;
   return (
-    <div className="fixed inset-0 z-[90] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[90] flex items-start justify-center p-4 pt-10 bg-black/70 backdrop-blur-sm">
       <div className="bg-card border border-[#4ADE80]/30 rounded-2xl w-full max-w-sm animate-fade-in">
         <div className="flex items-center gap-2 px-6 py-4 border-b border-border">
           <CheckCircle2 className="w-4 h-4 text-[#4ADE80]" />
@@ -955,7 +955,7 @@ function TicketDetailModal({ open, onClose, ticket, currentUser, onUpdated, onOp
   if (!open || !ticket) return null;
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[80] flex items-start justify-center p-4 pt-10 bg-black/70 backdrop-blur-sm">
       <div className="bg-card border border-border rounded-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
         {/* Header */}
         <div className="flex items-start justify-between px-6 py-4 border-b border-border flex-shrink-0">
@@ -1274,7 +1274,7 @@ function EditarPropostaModal({ open, onClose, proposal, onSaved }: {
   };
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[80] flex items-start justify-center p-4 pt-10 bg-black/70 backdrop-blur-sm">
       <div className="bg-card border border-border rounded-2xl w-full max-w-md">
         <div className="flex items-center justify-between px-6 py-4 border-b border-border">
           <div>
@@ -2633,7 +2633,7 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
 
       {/* ── Modal de Pendência — Deal/Proposta ── */}
       {pendingProposalTarget && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.7)" }}>
+        <div className="fixed inset-0 z-[9999] flex items-start justify-center p-4 pt-10" style={{ background: "rgba(0,0,0,0.7)" }}>
           <div className="w-full max-w-md rounded-2xl p-6 space-y-4" style={{ background: "#111F35", border: "1px solid rgba(201,168,76,0.2)" }}>
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: "rgba(255,107,107,0.15)" }}>
@@ -2673,7 +2673,7 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
 
       {/* ── Modal Rápido: Aprovar ── */}
       {quickAction?.type === "aprovar" && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[70] flex items-start justify-center p-4 pt-10 bg-black/70 backdrop-blur-sm">
           <div className="bg-card border border-emerald-500/30 rounded-2xl w-full max-w-sm">
             <div className="flex items-center gap-2 px-5 py-4 border-b border-border">
               <CheckCircle2 className="w-4 h-4 text-emerald-400" />
@@ -2711,7 +2711,7 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
 
       {/* ── Modal Rápido: Reprovar ── */}
       {quickAction?.type === "reprovar" && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[70] flex items-start justify-center p-4 pt-10 bg-black/70 backdrop-blur-sm">
           <div className="bg-card border border-red-500/30 rounded-2xl w-full max-w-sm">
             <div className="flex items-center gap-2 px-5 py-4 border-b border-border">
               <XCircle className="w-4 h-4 text-red-400" />

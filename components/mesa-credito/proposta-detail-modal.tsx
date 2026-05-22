@@ -1775,7 +1775,7 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
   const prevStage = activeIdx > 0 ? PIPELINE_STAGES[activeIdx - 1] : null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/60 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-start justify-center p-4 pt-10 sm:pt-10 sm:px-6 bg-black/60 backdrop-blur-sm">
       <div className="bg-card border border-border rounded-2xl w-full max-w-4xl max-h-[90vh] flex flex-col animate-fade-in">
         {/* Header */}
         <div className="flex items-start justify-between px-6 py-4 border-b border-border">
@@ -3276,7 +3276,7 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
 
       {/* ── Modal: Aprovar ── */}
       {showAprovar && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[70] flex items-start justify-center p-4 pt-10 bg-black/70 backdrop-blur-sm">
           <div className="bg-card border border-emerald-500/30 rounded-2xl w-full max-w-sm animate-fade-in">
             <div className="flex items-center gap-2 px-5 py-4 border-b border-border">
               <CheckCircle2 className="w-4 h-4 text-emerald-400" />
@@ -3314,7 +3314,7 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
 
       {/* ── Modal: Reprovar ── */}
       {showReprovar && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[70] flex items-start justify-center p-4 pt-10 bg-black/70 backdrop-blur-sm">
           <div className="bg-card border border-red-500/30 rounded-2xl w-full max-w-sm animate-fade-in">
             <div className="flex items-center gap-2 px-5 py-4 border-b border-border">
               <X className="w-4 h-4 text-red-400" />
@@ -3347,7 +3347,7 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
 
       {/* ── Modal: Escalar Nível ── */}
       {showEscalar && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[70] flex items-start justify-center p-4 pt-10 bg-black/70 backdrop-blur-sm">
           <div className="bg-card border border-amber-500/30 rounded-2xl w-full max-w-sm animate-fade-in">
             <div className="flex items-center gap-2 px-5 py-4 border-b border-border">
               <ArrowRight className="w-4 h-4 text-amber-400" />
@@ -3382,7 +3382,7 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
 
       {/* ── Modal: Compilar Documentos ── */}
       {showCompile && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[60] flex items-start justify-center p-4 pt-10 bg-black/70 backdrop-blur-sm">
           <div className="bg-card border border-border rounded-2xl w-full max-w-lg animate-fade-in">
             <div className="flex items-center justify-between px-6 py-4 border-b border-border">
               <div>
@@ -3459,7 +3459,7 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
 
       {/* ── Modal: Solicitar Correção ao Partner ── */}
       {solicitarDoc && (
-        <div className="fixed inset-0 z-[220] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[220] flex items-start justify-center p-4 pt-10 bg-black/70 backdrop-blur-sm">
           <div className="bg-[#111F35] border border-[#243A66] rounded-2xl w-full max-w-md shadow-2xl">
             <div className="flex items-center justify-between px-6 py-4 border-b border-[#243A66]">
               <div className="flex items-center gap-2">
@@ -3511,7 +3511,7 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
 
       {/* ── Modal: Editar Proposta ── */}
       {showEdit && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[60] flex items-start justify-center p-4 pt-10 bg-black/70 backdrop-blur-sm">
           <div className="bg-card border border-border rounded-2xl w-full max-w-2xl max-h-[90vh] flex flex-col animate-fade-in">
             {/* Header */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-border">
