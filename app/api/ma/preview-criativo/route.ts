@@ -201,6 +201,24 @@ function buildCIM(deal: any, lang: string): string {
   const hasFinanceiro = receitas.length > 0 || !!despesas;
   const hasCenarios = cenarios.length > 0;
 
+  // Valuation breakdown — imóveis penhorados + créditos judiciais + soma de partes
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const vb = ad.valuation_breakdown as any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const imovelPenhorados: { origem: string; qtd_imoveis: number; localizacao: string; valor_estimado: number; valor_esperado: number; probabilidade_realizacao: number; nota: string }[] = ad.imoveis_penhorados ?? [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const creditosJudiciais: { origem: string; valor_face: number; valor_esperado: number; probabilidade_realizacao: number; nota: string }[] = ad.creditos_judiciais ?? [];
+  const hasValuation = !!vb || imovelPenhorados.length > 0;
+
+  // Contagem dinâmica de seções numeradas
+  let secN = 2; // 01 sumário, 02 destaques já fixos
+  const nextSec = () => `0${++secN}`;
+  const secFinanceiro  = hasFinanceiro  ? nextSec() : "";
+  const secCenarios    = hasCenarios    ? nextSec() : "";
+  const secValuation   = hasValuation   ? nextSec() : "";
+  const secRiscos      = nextSec();
+  const secEstrutura   = nextSec();
+
   return `<!DOCTYPE html><html lang="${lang}"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>CIM — ${deal.target_company} | V3 Partners</title>
@@ -316,6 +334,14 @@ function buildCIM(deal: any, lang: string): string {
   .divider{height:1px;background:rgba(255,255,255,0.06);margin:32px 0}
   .mt-16{margin-top:16px}.mt-24{margin-top:24px}.mt-32{margin-top:32px}.mb-24{margin-bottom:24px}
   a{color:var(--gold);text-decoration:none}
+  /* TENANT / VALUATION TABLE */
+  .tenant-table{width:100%;border-collapse:collapse;font-size:12px}
+  .tenant-table th{background:rgba(201,168,76,0.1);color:var(--gold);font-size:10px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;padding:10px 14px;text-align:left;border-bottom:1px solid rgba(201,168,76,0.2)}
+  .tenant-table td{padding:10px 14px;border-bottom:1px solid rgba(255,255,255,0.04);color:var(--cream)}
+  .status-badge{display:inline-flex;align-items:center;gap:4px;border-radius:4px;padding:2px 8px;font-size:10px;font-weight:600;letter-spacing:1px;text-transform:uppercase}
+  .status-active{background:rgba(76,175,125,0.12);color:var(--green-ok);border:1px solid rgba(76,175,125,0.3)}
+  .status-vacant{background:rgba(224,85,85,0.08);color:var(--red-risk);border:1px solid rgba(224,85,85,0.2)}
+  .status-indet{background:rgba(155,175,197,0.1);color:var(--muted);border:1px solid rgba(155,175,197,0.2)}
 </style>
 </head>
 <body>
@@ -403,10 +429,10 @@ function buildCIM(deal: any, lang: string): string {
 </div>
 
 ${hasFinanceiro ? `
-<!-- ═══ 03. DESEMPENHO FINANCEIRO ═══ -->
+<!-- ═══ DESEMPENHO FINANCEIRO ═══ -->
 <div class="section page-break">
   <div class="section-header">
-    <div class="section-number">03</div>
+    <div class="section-number">${secFinanceiro}</div>
     <h2 class="section-title">${isPt ? "Desempenho <span>Financeiro</span>" : "Financial <span>Performance</span>"}</h2>
   </div>
   <div class="fin-grid">
@@ -460,10 +486,10 @@ ${hasFinanceiro ? `
 </div>` : ""}
 
 ${hasCenarios ? `
-<!-- ═══ 04. CENÁRIOS DE RETORNO ═══ -->
+<!-- ═══ CENÁRIOS DE RETORNO ═══ -->
 <div class="section${hasFinanceiro ? "" : " page-break"} section-alt">
   <div class="section-header">
-    <div class="section-number">0${hasFinanceiro ? "4" : "3"}</div>
+    <div class="section-number">${secCenarios}</div>
     <h2 class="section-title">${isPt ? "Cenários de <span>Retorno</span>" : "Return <span>Scenarios</span>"}</h2>
   </div>
   <div style="display:grid;grid-template-columns:repeat(${cenarios.length},1fr);gap:20px;margin-bottom:32px">
@@ -486,10 +512,105 @@ ${hasCenarios ? `
   </div>
 </div>` : ""}
 
-<!-- ═══ 05. FATORES DE RISCO ═══ -->
+${hasValuation ? `
+<!-- ═══ COMPOSIÇÃO DO VALUATION ═══ -->
 <div class="section page-break">
   <div class="section-header">
-    <div class="section-number">0${hasFinanceiro && hasCenarios ? "5" : hasFinanceiro || hasCenarios ? "4" : "3"}</div>
+    <div class="section-number">${secValuation}</div>
+    <h2 class="section-title">${isPt ? "Composição do <span>Valuation</span>" : "Valuation <span>Breakdown</span>"}</h2>
+  </div>
+  ${vb ? `
+  <p style="color:var(--muted);font-size:13px;margin-bottom:24px;line-height:1.7">
+    ${isPt
+      ? "Análise V3 Partners — valuation decomposto por componente com probabilidade de realização ponderada. Valores do vendedor reproduzidos para transparência; validação por laudo independente obrigatória antes de qualquer LOI vinculante."
+      : "V3 Partners analysis — valuation decomposed by component with weighted probability of realization. Seller values reproduced for transparency; independent appraisal required before any binding LOI."}
+  </p>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:32px;margin-bottom:32px">
+    <div>
+      <table class="tenant-table">
+        <thead><tr>
+          <th>${isPt ? "Componente" : "Component"}</th>
+          <th>${isPt ? "Valor Pedido" : "Asking Value"}</th>
+          <th>${isPt ? "Esperado V3" : "V3 Expected"}</th>
+          <th>Status</th>
+        </tr></thead>
+        <tbody>
+          ${vb.ativo_imobiliario_principal ? `
+          <tr>
+            <td style="color:var(--cream);font-weight:600">${isPt ? "Ativo imobiliário (prédio + terreno)" : "Real estate asset (building + land)"}</td>
+            <td style="color:var(--cream);font-weight:600">${formatBRL(vb.ativo_imobiliario_principal.valor_vendedor)}</td>
+            <td style="color:var(--cream);font-weight:600">${formatBRL(vb.ativo_imobiliario_principal.valor_vendedor)}</td>
+            <td><span class="status-badge status-indet">${isPt ? "Validar laudo" : "Validate appraisal"}</span></td>
+          </tr>` : ""}
+          ${vb.aco_estrutural_expansao ? `
+          <tr>
+            <td style="color:var(--cream)">${isPt ? "Aço estrutural +4 andares" : "Structural steel +4 floors"}</td>
+            <td>${formatBRL(vb.aco_estrutural_expansao.valor_vendedor)}</td>
+            <td>${formatBRL(vb.aco_estrutural_expansao.valor_vendedor)}</td>
+            <td><span class="status-badge status-indet">${isPt ? "Confirmar fisicamente" : "Physically confirm"}</span></td>
+          </tr>` : ""}
+          ${vb.fundo_de_comercio ? `
+          <tr>
+            <td style="color:var(--cream)">${isPt ? "Fundo de comércio (1º shopping do Brasil)" : "Goodwill (1st Brazilian mall)"}</td>
+            <td>${formatBRL(vb.fundo_de_comercio.valor_vendedor)}</td>
+            <td style="color:var(--amber)">${formatBRL(vb.fundo_de_comercio.valor_vendedor / 2)}</td>
+            <td><span class="status-badge status-indet">${isPt ? "Subjetivo — negociável" : "Subjective — negotiable"}</span></td>
+          </tr>` : ""}
+          ${vb.imoveis_penhorados_total ? `
+          <tr style="background:rgba(76,175,125,0.04)">
+            <td style="color:var(--green-ok);font-weight:600">${isPt ? "6 imóveis penhorados (Tijuca + Barra)" : "6 seized properties (Tijuca + Barra)"}</td>
+            <td style="color:var(--green-ok)">${formatBRL(vb.imoveis_penhorados_total.valor_face_total)}</td>
+            <td style="color:var(--green-ok);font-weight:700">${formatBRL(vb.imoveis_penhorados_total.valor_esperado_ponderado)}</td>
+            <td><span class="status-badge status-active">${isPt ? "Ativo real" : "Real asset"}</span></td>
+          </tr>` : ""}
+          ${vb.creditos_judiciais_total ? `
+          <tr>
+            <td style="color:var(--cream)">${isPt ? "Créditos judiciais (Americanas + ICMS)" : "Judicial credits (Americanas + ICMS)"}</td>
+            <td style="color:var(--amber)">${formatBRL(vb.creditos_judiciais_total.valor_face_total)}</td>
+            <td style="color:var(--amber)">${formatBRL(vb.creditos_judiciais_total.valor_esperado_ponderado)}</td>
+            <td><span class="status-badge status-vacant">${isPt ? "Risco judicial" : "Judicial risk"}</span></td>
+          </tr>` : ""}
+          ${vb.passivo_iptu ? `
+          <tr style="border-top:1px solid rgba(224,85,85,0.3)">
+            <td style="color:var(--red-risk)">${isPt ? "(-) IPTU Concilia Rio" : "(-) Municipal tax IPTU"}</td>
+            <td style="color:var(--red-risk)">(${formatBRL(Math.abs(vb.passivo_iptu.valor))})</td>
+            <td style="color:var(--red-risk)">(${formatBRL(Math.abs(vb.passivo_iptu.valor))})</td>
+            <td><span class="status-badge status-vacant">${isPt ? "Ônus fiscal" : "Tax lien"}</span></td>
+          </tr>` : ""}
+          <tr style="border-top:2px solid rgba(201,168,76,0.4)">
+            <td style="color:var(--gold);font-weight:700;font-size:14px">${isPt ? "TOTAL" : "TOTAL"}</td>
+            <td style="color:var(--gold);font-weight:700;font-size:16px">${deal.deal_value ? formatBRL(deal.deal_value) : "—"}</td>
+            <td style="color:var(--gold);font-weight:700;font-size:16px">${vb.total_valor_esperado_v3?.subtotal_com_fundo_comercio_50pct ? formatBRL(vb.total_valor_esperado_v3.subtotal_com_fundo_comercio_50pct) : "—"}</td>
+            <td></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:16px">
+      <div class="exec-highlight">
+        <p><strong>${isPt ? "Visão V3 sobre o valuation:" : "V3 view on valuation:"}</strong> ${vb.total_valor_esperado_v3?.nota ?? (isPt ? "Análise V3 indica gap entre valuation pedido e valor esperado ponderado. Negociação deve focar no fundo de comércio e nos créditos judiciais contra Americanas." : "V3 analysis indicates gap between asking valuation and weighted expected value. Negotiation should focus on goodwill and judicial credits against Americanas.")}</p>
+      </div>
+      ${imovelPenhorados.length > 0 ? `
+      <div class="info-card">
+        <div class="info-card-header">${isPt ? "Imóveis Penhorados — Ativos Reais" : "Seized Properties — Real Assets"}</div>
+        ${imovelPenhorados.map(ip => `
+        <div class="info-row">
+          <span class="info-label">${ip.origem} · ${ip.qtd_imoveis} ${isPt ? "imóvel(is)" : "property(ies)"} · ${ip.localizacao}</span>
+          <span class="info-value green">${formatBRL(ip.valor_esperado)} <span style="font-size:10px;color:var(--muted)">(${(ip.probabilidade_realizacao*100).toFixed(0)}%)</span></span>
+        </div>`).join("")}
+        <div class="info-row" style="border-top:1px solid rgba(76,175,125,0.3)">
+          <span class="info-label" style="color:var(--cream);font-weight:600">${isPt ? "Total esperado ponderado" : "Total weighted expected"}</span>
+          <span class="info-value green">${formatBRL(imovelPenhorados.reduce((s,ip) => s + ip.valor_esperado, 0))}</span>
+        </div>
+      </div>` : ""}
+    </div>
+  </div>` : ""}
+</div>` : ""}
+
+<!-- ═══ FATORES DE RISCO ═══ -->
+<div class="section page-break">
+  <div class="section-header">
+    <div class="section-number">${secRiscos}</div>
     <h2 class="section-title">${isPt ? "Fatores de <span>Risco</span>" : "Risk <span>Factors</span>"}</h2>
   </div>
   ${riscos.length > 0 ? `
@@ -512,10 +633,10 @@ ${hasCenarios ? `
   </table>` : `<p style="color:var(--muted);font-size:13px">${isPt ? "Análise de risco disponível no data room após NDA." : "Risk analysis available in data room after NDA."}</p>`}
 </div>
 
-<!-- ═══ 06. ESTRUTURA DA TRANSAÇÃO ═══ -->
+<!-- ═══ ESTRUTURA DA TRANSAÇÃO ═══ -->
 <div class="section section-alt page-break">
   <div class="section-header">
-    <div class="section-number">0${hasFinanceiro && hasCenarios ? "6" : hasFinanceiro || hasCenarios ? "5" : "4"}</div>
+    <div class="section-number">${secEstrutura}</div>
     <h2 class="section-title">${isPt ? "Estrutura da <span>Transação</span>" : "Transaction <span>Structure</span>"}</h2>
   </div>
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:40px">
