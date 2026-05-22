@@ -4,7 +4,8 @@ import { DEMO_DEALS } from "@/lib/demo-data";
 
 const IS_DEMO = false;
 
-const FONT = `https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800;1,9..40,400&display=swap`;
+// DM Sans (operacional) + Cormorant Garamond (cerimônial — capas CIM)
+const FONT = `https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800;1,9..40,400&family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400;1,600&display=swap`;
 
 const CSS_BASE = `
   *{margin:0;padding:0;box-sizing:border-box}
@@ -251,23 +252,47 @@ function buildCIM(deal: any, lang: string, investor?: InvestorInfo | null): stri
     /* Remove overflow que bloqueia break-inside */
     *{overflow:visible!important}
 
-    /* ── COVER: A4 exato, quebra obrigatória depois ── */
+    /* ── COVER: A4 full-bleed, 3 zonas, sem timbrado (@page :first margin=0) ── */
     .cover{
-      min-height:277mm!important;max-height:277mm!important;
+      min-height:297mm!important;
       background:#09081A!important;
       -webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;
       page-break-after:always!important;break-after:page!important;
       overflow:hidden!important;
-      padding:24px 32px!important;
     }
-    .cover-logo img{height:12mm!important;width:auto!important}
-    .cover-title{font-size:22px!important;letter-spacing:-0.5px!important}
-    .cover-subtitle{font-size:12px!important}
+    /* Zonas calibradas por φ em A4 */
+    /* Zona 1: logo sozinha, topo esquerdo */
+    .cover-z1{padding:14mm 14mm 0!important;align-items:flex-start!important;justify-content:flex-start!important}
+    .cover-logo-label{display:none!important}
+    /* φ: padding-bottom 22% → título no ponto áureo 113mm */
+    .cover-z2{padding:0 14mm!important;padding-bottom:22%!important}
+    .cover-z3{padding:8mm 14mm 14mm!important}
+    /* φ: métricas ocupam 100% da largura com proporção de caixa φ:1 */
+    .cover-metrics{max-width:100%!important;width:100%!important}
+    .cover-metric{min-height:22mm!important;padding:10px 12px!important}
+    /* Logo capa: 22mm (dentro do range 20–28mm do brandbook) */
+    .cover-logo-img{height:22mm!important;width:auto!important}
+    /* Cormorant Garamond 600 Italic: 62px → 46pt */
+    .cover-title{font-size:46pt!important;line-height:1.02!important;letter-spacing:-0.02em!important}
+    /* DM Sans 300 subtítulo: 18px → 14pt */
+    .cover-subtitle{font-size:14pt!important;font-weight:300!important}
+    /* Location: 12px → 9pt */
+    .cover-location{font-size:9pt!important;margin-bottom:28pt!important}
+    /* Eyebrow: 8px → 6pt — Gold Light #E8C97A obrigatório */
+    .cover-eyebrow{font-size:6pt!important;color:#E8C97A!important;margin-bottom:14pt!important}
+    .cover-eyebrow-badge{font-size:7pt!important}
+    /* Métricas: valor 20px → 15pt | labels 9px → 7pt */
     .cover-metrics{max-width:100%!important}
-    .cover-metric{padding:12px 16px!important}
-    .cover-metric-value{font-size:16px!important}
-    .cover-confidential{padding:8px 14px!important}
-    .cover-confidential p{font-size:9px!important}
+    .cover-metric{padding:14px 16px!important}
+    .cover-metric-value{font-size:15pt!important}
+    .cover-metric-label{font-size:7pt!important}
+    .cover-metric-sub{font-size:7pt!important}
+    /* Legal */
+    .cover-confidential{padding:10px 14px!important;max-width:340px!important}
+    .cover-confidential-title{font-size:7pt!important}
+    .cover-confidential-text{font-size:8pt!important;line-height:1.5!important}
+    .cover-process-code{font-size:10pt!important}
+    .cover-process-date{font-size:8pt!important}
 
     /* ── SEÇÕES: compactadas, break controlado ── */
     .section,.section-alt{
@@ -416,30 +441,162 @@ function buildCIM(deal: any, lang: string, investor?: InvestorInfo | null): stri
       font-family:'DM Sans',sans-serif;
     }
   }
-  /* COVER */
-  .cover{min-height:100vh;background:var(--navy);display:flex;flex-direction:column;justify-content:space-between;padding:60px;position:relative;overflow:hidden}
-  .cover::before{content:'';position:absolute;top:0;left:0;right:0;height:4px;background:linear-gradient(90deg,var(--gold-dark),var(--gold),var(--gold-light))}
-  .cover-grid{position:absolute;inset:0;background-image:linear-gradient(rgba(201,168,76,0.04)1px,transparent 1px),linear-gradient(90deg,rgba(201,168,76,0.04)1px,transparent 1px);background-size:60px 60px;pointer-events:none}
-  .cover-logo{display:flex;align-items:center;gap:16px}
-  .cover-logo img{height:48px}
-  .cover-logo-label{font-size:11px;font-weight:600;letter-spacing:3px;color:var(--muted);text-transform:uppercase;border-left:1px solid var(--gold);padding-left:16px}
-  .cover-center{flex:1;display:flex;flex-direction:column;justify-content:center;padding:60px 0;position:relative;z-index:1}
-  .cover-badge{display:inline-flex;align-items:center;gap:8px;background:rgba(201,168,76,0.12);border:1px solid rgba(201,168,76,0.3);border-radius:4px;padding:6px 14px;font-size:11px;font-weight:600;letter-spacing:2px;color:var(--gold);text-transform:uppercase;margin-bottom:32px;width:fit-content}
-  .cover-badge::before{content:'';width:6px;height:6px;background:var(--gold);border-radius:50%}
-  .cover-title{font-size:48px;font-weight:700;line-height:1.1;color:var(--white);margin-bottom:8px;letter-spacing:-1px}
-  .cover-subtitle{font-size:20px;font-weight:300;color:var(--muted);margin-bottom:48px;letter-spacing:0.5px}
-  .cover-metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:rgba(255,255,255,0.06);border-radius:12px;overflow:hidden;max-width:800px}
-  .cover-metric{background:var(--navy-light);padding:24px;position:relative}
-  .cover-metric::after{content:'';position:absolute;bottom:0;left:24px;right:24px;height:2px;background:var(--gold);opacity:0.3}
-  .cover-metric-label{font-size:10px;font-weight:600;letter-spacing:2px;color:var(--muted);text-transform:uppercase;margin-bottom:8px}
-  .cover-metric-value{font-size:22px;font-weight:700;color:var(--gold);line-height:1}
-  .cover-metric-sub{font-size:11px;color:var(--muted);margin-top:4px}
-  .cover-footer{display:flex;justify-content:space-between;align-items:flex-end;position:relative;z-index:1}
-  .cover-confidential{background:rgba(224,85,85,0.12);border:1px solid rgba(224,85,85,0.3);border-radius:6px;padding:12px 20px;max-width:500px}
-  .cover-confidential strong{color:var(--red-risk);display:block;font-size:11px;letter-spacing:2px;text-transform:uppercase;margin-bottom:4px}
-  .cover-confidential p{font-size:11px;color:var(--muted);line-height:1.5}
-  .cover-date{text-align:right;font-size:11px;color:var(--muted)}
-  .cover-date strong{display:block;color:var(--cream);font-size:13px;margin-bottom:2px}
+  /* ══════════════════════════════════════════════════════
+     COVER — 3 ZONAS (brandbook V4.2 + regra dos terços)
+     Zona 1 (identidade ~18%) | Zona 2 (título ~52%, centro óptico 38%) | Zona 3 (legal ~30%)
+     ══════════════════════════════════════════════════════ */
+  .cover{
+    min-height:100vh;
+    background:var(--navy);
+    display:flex;flex-direction:column;
+    position:relative;overflow:hidden;
+  }
+  /* Linha gold premium no topo */
+  .cover::before{
+    content:'';position:absolute;top:0;left:0;right:0;height:4px;
+    background:linear-gradient(90deg,#A8873A,#C9A84C,#E8C97A 50%,#C9A84C,#A8873A);
+    z-index:2;
+  }
+  /* Grid sutil 72px (brandbook) */
+  .cover-grid{
+    position:absolute;inset:0;
+    background-image:
+      linear-gradient(rgba(201,168,76,0.04)1px,transparent 1px),
+      linear-gradient(90deg,rgba(201,168,76,0.04)1px,transparent 1px);
+    background-size:72px 72px;pointer-events:none;z-index:0;
+  }
+  /* Glare radial central */
+  .cover-glare{
+    position:absolute;inset:0;
+    background:radial-gradient(ellipse 70% 55% at 50% 42%,rgba(201,168,76,0.05) 0%,transparent 65%);
+    pointer-events:none;z-index:0;
+  }
+
+  /* ════════════════════════════════════════════════════
+     ZONA 1 — Logo sozinha, colada ao topo esquerdo
+     Nenhum outro elemento nesta zona — apenas a marca
+     ════════════════════════════════════════════════════ */
+  .cover-z1{
+    padding:48px 60px 0;
+    display:flex;
+    align-items:flex-start;
+    justify-content:flex-start;  /* logo ancorada à esquerda */
+    position:relative;z-index:1;
+  }
+  .cover-logo-wrap{display:block}  /* bloco simples — sem flex */
+  .cover-logo-img{
+    height:52px;width:auto;
+    image-rendering:crisp-edges;
+    filter:drop-shadow(0 0 10px rgba(201,168,76,.25));
+    display:block;
+  }
+  /* label oculto — logo sozinha na capa */
+  .cover-logo-label{ display:none }
+  .cover-eyebrow-badge{
+    display:inline-flex;align-items:center;gap:8px;
+    background:rgba(201,168,76,0.1);border:1px solid rgba(201,168,76,0.25);
+    border-radius:3px;padding:7px 16px;
+    font-size:9px;font-weight:700;letter-spacing:0.2em;text-transform:uppercase;
+    color:var(--gold);white-space:nowrap;
+  }
+
+  /* ════════════════════════════════════════════════════
+     ZONA 2 — Título no ponto áureo (113,4mm do topo)
+     padding-bottom:22% desloca o centro geométrico do
+     flex para coincidir com 113mm = 297 ÷ φ²
+     ════════════════════════════════════════════════════ */
+  .cover-z2{
+    flex:1;
+    display:flex;flex-direction:column;justify-content:center;
+    padding:0 60px;
+    padding-bottom:22%;          /* ← φ: posiciona título no ponto áureo 113mm */
+    position:relative;z-index:1;
+  }
+  .cover-eyebrow{
+    font-size:8px;font-weight:700;letter-spacing:0.35em;text-transform:uppercase;
+    color:#E8C97A;/* Gold Light — label abaixo de 12px, obrigatório */
+    margin-bottom:24px;
+  }
+  /* Cormorant Garamond Italic 600 — exclusivo para título de capa CIM */
+  .cover-title{
+    font-family:'Cormorant Garamond',Georgia,serif;
+    font-style:italic;font-weight:600;
+    font-size:62px;line-height:1.02;letter-spacing:-0.02em;
+    color:#F5F1E8;/* Cream V4 */
+    margin-bottom:12px;
+  }
+  .cover-subtitle{
+    font-family:'DM Sans',sans-serif;
+    font-size:18px;font-weight:300;
+    color:#9BAFC5;letter-spacing:0.02em;
+    margin-bottom:6px;
+  }
+  .cover-location{
+    font-size:12px;color:#9BAFC5;margin-bottom:52px;
+    font-weight:400;letter-spacing:0.01em;
+  }
+  /* ════════════════════════════════════════════════════
+     Barra de 4 métricas — proporção áurea φ:1
+     Cada box: largura ÷ φ = altura → 1 box ≈ 46mm × 28mm
+     Alinhamento: todos os boxes com mesma altura mínima
+     ════════════════════════════════════════════════════ */
+  .cover-metrics{
+    display:grid;grid-template-columns:repeat(4,1fr);
+    gap:1px;
+    background:rgba(255,255,255,0.06);
+    border-radius:8px;
+    max-width:100%;              /* φ: ocupa toda a largura disponível */
+    align-items:stretch;         /* φ: todos os boxes com mesma altura */
+  }
+  .cover-metric{
+    background:#1A1836;
+    padding:20px 22px;
+    min-height:80px;             /* φ: 46mm/φ = 28mm ≈ 80px → proporção áurea */
+    display:flex;flex-direction:column;justify-content:space-between;
+    position:relative;
+  }
+  .cover-metric::after{
+    content:'';position:absolute;bottom:0;left:0;right:0;
+    height:2px;background:linear-gradient(90deg,transparent,#C9A84C,transparent);
+    opacity:0.3;
+  }
+  .cover-metric-label{
+    font-size:9px;font-weight:600;letter-spacing:0.18em;text-transform:uppercase;
+    color:#9BAFC5;margin-bottom:6px;
+    white-space:nowrap;          /* impede quebra de linha no label */
+  }
+  .cover-metric-value{
+    font-size:20px;font-weight:700;color:#C9A84C;
+    line-height:1;margin-bottom:4px;
+    white-space:nowrap;
+  }
+  .cover-metric-sub{font-size:9px;color:#9BAFC5;white-space:nowrap}
+
+  /* ════════════════════════════════════════════════════
+     ZONA 3 — Legal (seção áurea inferior: 297÷φ = 183mm)
+     align-items:flex-end mantém conteúdo na base da zona
+     ════════════════════════════════════════════════════ */
+  .cover-z3{
+    padding:32px 60px 52px;
+    display:flex;justify-content:space-between;
+    align-items:flex-end;        /* φ: ancora conteúdo na base */
+    position:relative;z-index:1;
+  }
+  .cover-confidential{
+    background:rgba(224,85,85,0.1);border:1px solid rgba(224,85,85,0.25);
+    border-radius:4px;padding:14px 20px;max-width:480px;
+  }
+  .cover-confidential-title{
+    font-size:9px;font-weight:700;letter-spacing:0.2em;text-transform:uppercase;
+    color:#E05555;margin-bottom:6px;
+  }
+  .cover-confidential-text{font-size:10px;color:#9BAFC5;line-height:1.6}
+  .cover-process{text-align:right}
+  .cover-process-code{
+    font-size:13px;font-weight:700;color:#C9A84C;
+    letter-spacing:0.05em;margin-bottom:4px;
+  }
+  .cover-process-date{font-size:10px;color:#9BAFC5;line-height:1.5}
   /* SECTIONS */
   .section{padding:60px;border-bottom:1px solid rgba(255,255,255,0.05)}
   .section-alt{background:var(--navy-mid)}
@@ -529,33 +686,90 @@ function buildCIM(deal: any, lang: string, investor?: InvestorInfo | null): stri
 </head>
 <body>
 
-<!-- ═══ CAPA ═══ -->
+<!-- ═══════════════════════════════════════════════════════
+     CAPA — 3 ZONAS (Regra dos Terços + Centro Óptico 38%)
+     ═══════════════════════════════════════════════════════ -->
 <div class="cover">
   <div class="cover-grid"></div>
-  <div class="cover-logo">
-    <img src="/v3-logo-flat-gold-alpha.png" alt="V3 Partners">
-    <span class="cover-logo-label">${isPt ? "Memorando de Informação Confidencial" : "Confidential Information Memorandum"}</span>
+  <div class="cover-glare"></div>
+
+  <!-- ZONA 1: Logo sozinha — topo esquerdo, sem outros elementos -->
+  <div class="cover-z1">
+    <div class="cover-logo-wrap">
+      <img src="/v3-logo-flat-gold-alpha.png" alt="V3 Partners" class="cover-logo-img">
+    </div>
   </div>
-  <div class="cover-center">
-    <div class="cover-badge">${deal.sector}${val("tipo_operacao") ? " · " + val("tipo_operacao") : ""}</div>
-    <div class="cover-title">${deal.target_company}</div>
-    <div class="cover-subtitle">${deal.location ?? ""}${anosOp ? " · " + anosOp : ""}</div>
+
+  <!-- ZONA 2: Badge + Título no ponto áureo + Métricas -->
+  <div class="cover-z2">
+    <div class="cover-eyebrow-badge" style="margin-bottom:32px;width:fit-content">
+      ${deal.sector}${val("tipo_operacao") ? " &nbsp;·&nbsp; " + val("tipo_operacao") : ""}
+    </div>
+    <div class="cover-eyebrow">${isPt ? "OPORTUNIDADE DE INVESTIMENTO · V3 PARTNERS" : "INVESTMENT OPPORTUNITY · V3 PARTNERS"}</div>
+
+    <!-- Cormorant Garamond Italic 600 — exclusivo capa CIM (brandbook V4.2 cap.03) -->
+    <div class="cover-title">
+      ${deal.target_company.includes("/")
+        ? deal.target_company.split("/")[0].trim()
+        : deal.target_company}
+    </div>
+
+    ${deal.target_company.includes("/") ? `
+    <div class="cover-subtitle">${deal.target_company.split("/")[1].trim()}</div>` : ""}
+
+    <div class="cover-location">
+      ${deal.sector}${deal.location ? " &nbsp;·&nbsp; " + deal.location : ""}${anosOp ? " &nbsp;·&nbsp; " + anosOp : ""}
+    </div>
+
+    <!-- Barra de 4 métricas — dados reais do Supabase -->
     <div class="cover-metrics">
-      ${deal.deal_value ? `<div class="cover-metric"><div class="cover-metric-label">Valuation</div><div class="cover-metric-value">${formatBRL(deal.deal_value)}</div><div class="cover-metric-sub">${val("tipo_operacao") || "Deal"}</div></div>` : ""}
-      ${receitaReal ? `<div class="cover-metric"><div class="cover-metric-label">Receita ${receitaReal.ano}</div><div class="cover-metric-value">${formatBRL(receitaReal.valor)}</div><div class="cover-metric-sub">${yoy ? "+"+yoy.toFixed(1)+"% vs "+receitaAnt?.ano : "realizado"}</div></div>` : ""}
-      ${val("area_construida") ? `<div class="cover-metric"><div class="cover-metric-label">${isPt ? "Área Construída" : "Gross Area"}</div><div class="cover-metric-value">${val("area_construida")}</div><div class="cover-metric-sub">${isPt ? "área total" : "total area"}</div></div>` : ""}
-      ${anosOp ? `<div class="cover-metric"><div class="cover-metric-label">${isPt ? "Operação" : "Operation"}</div><div class="cover-metric-value">${anosOp}</div><div class="cover-metric-sub">${foundingYear ? "Desde " + foundingYear : ""}</div></div>` : (sc?.base?.cap_rate ? `<div class="cover-metric"><div class="cover-metric-label">Cap Rate Base</div><div class="cover-metric-value">${(sc.base.cap_rate*100).toFixed(1)}%</div><div class="cover-metric-sub">cenário conservador</div></div>` : "")}
+      ${deal.deal_value ? `
+      <div class="cover-metric">
+        <div class="cover-metric-label">${isPt ? "Valuation" : "Valuation"}</div>
+        <div class="cover-metric-value">${formatBRL(deal.deal_value)}</div>
+        <div class="cover-metric-sub">${val("tipo_operacao") || (isPt ? "100% das cotas" : "100% stake")}</div>
+      </div>` : ""}
+      ${receitaReal ? `
+      <div class="cover-metric">
+        <div class="cover-metric-label">${isPt ? "Receita " + receitaReal.ano : "Revenue " + receitaReal.ano}</div>
+        <div class="cover-metric-value">${formatBRL(receitaReal.valor)}</div>
+        <div class="cover-metric-sub">${yoy ? "+" + yoy.toFixed(1) + "% YoY" : isPt ? "realizado" : "realized"}</div>
+      </div>` : ""}
+      ${val("area_construida") ? `
+      <div class="cover-metric">
+        <div class="cover-metric-label">${isPt ? "Área Construída" : "Built Area"}</div>
+        <div class="cover-metric-value">${val("area_construida").replace(" m²","")}<span style="font-size:12px;font-weight:400"> m²</span></div>
+        <div class="cover-metric-sub">${isPt ? "GLA atual" : "current GLA"}</div>
+      </div>` : ""}
+      ${anosOp ? `
+      <div class="cover-metric">
+        <div class="cover-metric-label">${isPt ? "Operação" : "Operation"}</div>
+        <div class="cover-metric-value">${anosOp}</div>
+        <div class="cover-metric-sub">${foundingYear ? (isPt ? "Desde " : "Since ") + foundingYear : ""}</div>
+      </div>` : sc?.base?.cap_rate ? `
+      <div class="cover-metric">
+        <div class="cover-metric-label">Cap Rate</div>
+        <div class="cover-metric-value">${(sc.base.cap_rate*100).toFixed(1)}%</div>
+        <div class="cover-metric-sub">${isPt ? "cenário base" : "base case"}</div>
+      </div>` : ""}
     </div>
   </div>
-  <div class="cover-footer">
+
+  <!-- ZONA 3: Legal (bottom 30%) -->
+  <div class="cover-z3">
     <div class="cover-confidential">
-      <strong>${isPt ? "Documento Estritamente Confidencial" : "Strictly Confidential Document"}</strong>
-      <p>${isPt ? "Este memorando é destinado exclusivamente ao destinatário identificado e está protegido por Acordo de Confidencialidade (NDA). A reprodução, distribuição ou divulgação não autorizada deste documento é expressamente proibida." : "This memorandum is intended solely for the identified recipient and is protected by a Non-Disclosure Agreement (NDA). Unauthorized reproduction, distribution or disclosure is expressly prohibited."}</p>
+      <div class="cover-confidential-title">${isPt ? "Documento Estritamente Confidencial" : "Strictly Confidential Document"}</div>
+      <div class="cover-confidential-text">${isPt
+        ? "Este memorando é destinado exclusivamente ao destinatário autorizado e protegido por NDA. A reprodução ou divulgação não autorizada é expressamente proibida."
+        : "This memorandum is intended solely for the authorized recipient and is protected by NDA. Unauthorized reproduction or disclosure is expressly prohibited."
+      }</div>
     </div>
-    <div class="cover-date">
-      <strong>${deal.code ?? ""}</strong>
-      ${new Date().toLocaleDateString(isPt ? "pt-BR" : "en-US", { month: "long", year: "numeric" })}<br>
-      <span style="color:var(--gold)">V3 Partners · Mesa de M&A</span>
+    <div class="cover-process">
+      <div class="cover-process-code">${deal.code ?? ""}</div>
+      <div class="cover-process-date">
+        V3 Partners · Mesa de M&amp;A<br>
+        ${new Date().toLocaleDateString(isPt ? "pt-BR" : "en-US", { month: "long", year: "numeric" })}
+      </div>
     </div>
   </div>
 </div>

@@ -195,16 +195,9 @@ export async function GET(request: NextRequest) {
         margin-right: 0 !important;
       }
 
-      /* R3 — sem bordas brancas laterais (margem lateral = 0 no pdf()) */
-      /* Espaçamento interno garantido por padding nas seções abaixo */
-      .section, .section-alt {
-        padding-left: 42px !important;
-        padding-right: 42px !important;
-      }
-      .cover {
-        padding-left: 0 !important;
-        padding-right: 0 !important;
-      }
+      /* R3 — margem lateral 6mm no pdf() preenchida por html{background:navy} */
+      /* Sem override de padding — cada seção usa seu próprio espaçamento */
+      /* NÃO sobrescrever cover padding — causa corte lateral dos títulos */
 
       /* R4 — overflow:visible libera o algoritmo de quebra de página */
       * { overflow: visible !important; }
@@ -268,9 +261,9 @@ export async function GET(request: NextRequest) {
       footerTemplate,
       margin: {
         top:    "17mm",  // R7: header 13mm + gap 4mm
-        right:  "0",     // R3: sem borda branca lateral
+        right:  "6mm",   // R3: html{background:#09081A} preenche esta margem — sem borda branca
         bottom: "13mm",  // R7: footer 9mm + gap 4mm
-        left:   "0",     // R3: sem borda branca lateral
+        left:   "6mm",   // R3: idem — html background naval preenche, não aparece branco
       },
     });
 
