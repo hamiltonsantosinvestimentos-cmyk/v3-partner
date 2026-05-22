@@ -121,6 +121,7 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
       nda_text:     room.nda_required ? (room.nda_text ?? DEFAULT_NDA_TEXT) : null,
     },
     deal: {
+      id:             room.deal_id,
       v3_code:        deal?.v3_code ?? null,
       legacy_code:    deal?.code ?? null,
       target_company: deal?.target_company ?? null,

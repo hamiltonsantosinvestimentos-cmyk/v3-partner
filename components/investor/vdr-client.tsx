@@ -144,6 +144,41 @@ export function VdrClient({ v3Code, token }: VdrClientProps) {
     document.addEventListener("visibilitychange", logDuration, { once: true });
   };
 
+  // ── Download PDF profissional (Puppeteer server-side) ──
+  const [downloadingPdf, setDownloadingPdf] = useState<string | null>(null);
+
+  const handleDownloadPdf = async (doc: Document) => {
+    if (doc.locked || doc.doc_type !== "cim" || !data) return;
+    setDownloadingPdf(doc.id);
+    try {
+      // deal.id vem do RoomData — tipado como string | null
+      const dealId = (data.deal as unknown as Record<string,string>)?.id ?? "";
+      if (!dealId) { alert("Deal ID não encontrado."); return; }
+
+      const finalUrl = `/api/ma/cim-pdf?dealId=${encodeURIComponent(dealId)}&vdr_token=${encodeURIComponent(token)}&lang=pt-br`;
+      const res = await fetch(finalUrl);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        alert((err as {error?: string}).error ?? "Erro ao gerar PDF — tente novamente.");
+        return;
+      }
+      const blob = await res.blob();
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement("a");
+      a.href = url;
+      // Nome do arquivo vem do Content-Disposition do servidor
+      const cd = res.headers.get("Content-Disposition") ?? "";
+      const fn = cd.match(/filename="([^"]+)"/)?.[1] ?? `V3_CIM_${token.slice(0,8)}.pdf`;
+      a.download = fn;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } finally {
+      setDownloadingPdf(null);
+    }
+  };
+
   const allChecked = ndaChecked.every(Boolean);
 
   // ─── Render ─────────────────────────────────────────────────────────────────
@@ -259,10 +294,8 @@ export function VdrClient({ v3Code, token }: VdrClientProps) {
               <div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                   {data.documents.map(doc => (
-                    <div key={doc.id} onClick={() => !doc.locked && handleOpenDoc(doc)}
-                      style={{ background: V3.navyMid, border: `1px solid ${V3.navyBrd}`, borderRadius: 10, padding: "14px 18px", display: "flex", alignItems: "center", gap: 14, cursor: doc.locked ? "not-allowed" : "pointer", opacity: doc.locked ? 0.5 : 1, transition: "all 0.15s" }}
-                      onMouseEnter={e => { if (!doc.locked) (e.currentTarget as HTMLDivElement).style.borderColor = V3.gold; }}
-                      onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.borderColor = V3.navyBrd; }}>
+                    <div key={doc.id}
+                      style={{ background: V3.navyMid, border: `1px solid ${V3.navyBrd}`, borderRadius: 10, padding: "14px 18px", display: "flex", alignItems: "center", gap: 14, opacity: doc.locked ? 0.5 : 1, transition: "all 0.15s" }}>
                       <div style={{ width: 36, height: 36, borderRadius: 8, background: doc.locked ? `${V3.muted}15` : `${V3.gold}15`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                         <FileText style={{ width: 18, height: 18, color: doc.locked ? V3.muted : V3.gold }} />
                       </div>
@@ -272,9 +305,28 @@ export function VdrClient({ v3Code, token }: VdrClientProps) {
                           {doc.doc_type}{doc.file_size_bytes ? ` · ${(doc.file_size_bytes / 1024 / 1024).toFixed(1)} MB` : ""}
                         </div>
                       </div>
-                      {doc.locked ? <Lock style={{ width: 16, height: 16, color: V3.muted, flexShrink: 0 }} />
-                        : openingDoc === doc.id ? <Clock style={{ width: 16, height: 16, color: V3.gold, flexShrink: 0 }} />
-                        : <ExternalLink style={{ width: 16, height: 16, color: V3.muted, flexShrink: 0 }} />}
+                      {/* Botões de ação */}
+                      <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+                        {/* Abrir no browser */}
+                        <button
+                          onClick={() => !doc.locked && handleOpenDoc(doc)}
+                          disabled={doc.locked || openingDoc === doc.id}
+                          style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 6, border: `1px solid ${doc.locked ? V3.navyBrd : V3.navyBrd}`, background: "transparent", color: doc.locked ? V3.muted : V3.muted, fontSize: 11, fontWeight: 600, cursor: doc.locked ? "not-allowed" : "pointer", fontFamily: "inherit" }}>
+                          {openingDoc === doc.id ? <Clock style={{ width: 13, height: 13 }} /> : <ExternalLink style={{ width: 13, height: 13 }} />}
+                          {openingDoc === doc.id ? "Abrindo..." : "Abrir"}
+                        </button>
+                        {/* Download PDF profissional — somente para CIM */}
+                        {doc.doc_type === "cim" && !doc.locked && (
+                          <button
+                            onClick={() => handleDownloadPdf(doc)}
+                            disabled={downloadingPdf === doc.id}
+                            style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 6, border: `1px solid ${V3.gold}44`, background: `${V3.gold}12`, color: V3.gold, fontSize: 11, fontWeight: 700, cursor: downloadingPdf === doc.id ? "wait" : "pointer", fontFamily: "inherit", letterSpacing: 0.5 }}>
+                            {downloadingPdf === doc.id ? <Clock style={{ width: 13, height: 13 }} /> : <span style={{ fontSize: 13 }}>⬇</span>}
+                            {downloadingPdf === doc.id ? "Gerando PDF..." : "PDF"}
+                          </button>
+                        )}
+                        {doc.locked && <Lock style={{ width: 16, height: 16, color: V3.muted }} />}
+                      </div>
                     </div>
                   ))}
                 </div>
