@@ -1,34 +1,41 @@
+/**
+ * /api/ma/cim-pdf — Gerador de PDF profissional V3 Partners
+ *
+ * REGRAS DE IMPRESSÃO (v3_print_standards no Supabase):
+ * R1. html{background:#09081A} preenche canvas completo + margens (não só body)
+ * R2. @page :first{margin:0} → sem timbrado na capa (capa tem logo própria)
+ * R3. margin left/right = 0 no pdf() → sem bordas brancas laterais
+ * R4. overflow:visible global + break-inside:avoid-page em todos containers
+ * R5. font-size explícito em cada elemento do template (Puppeteer padrão = 0)
+ * R6. preferCSSPageSize:true → respeita @page portrait/landscape do CSS
+ * R7. margin.top = header(13mm) + gap(4mm) = 17mm | margin.bottom = footer(9mm) + gap(4mm) = 13mm
+ */
+
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as sc } from "@supabase/supabase-js";
 
 export const maxDuration = 60;
 export const dynamic    = "force-dynamic";
 
-// ── Tokens V3 V4.2 (fonte da verdade: v3-brandbook-v4-2-final.html) ──────────
+// Tokens V4.2 — verificados linha a linha contra v3-brandbook-v4-2-final.html
 const V3 = {
-  nd:  "#09081A",  // Navy Deep — fundo absoluto
-  nb:  "#13223A",  // Navy Base V4
-  nc:  "#162744",  // Navy Card
-  nm:  "#243A66",  // Navy Surface
-  go:  "#C9A84C",  // Gold — acento ≥12px/700
-  gl:  "#E8C97A",  // Gold Light — labels
-  cr:  "#F5F1E8",  // Cream V4
-  mu:  "#9BAFC5",  // Muted V4
-  pt:  "#F5F6F8",  // Platinum — impressão A4 (nunca tela)
+  nd: "#09081A",  // Navy Deep    — fundo absoluto, html canvas, timbrado
+  go: "#C9A84C",  // Gold         — acento, código, número de página
+  gl: "#E8C97A",  // Gold Light   — labels <12px
+  cr: "#F5F1E8",  // Cream V4     — texto principal
+  mu: "#9BAFC5",  // Muted V4     — texto secundário, razão social
 };
 
-// ── Lança browser (prod = chromium-min serverless | dev = Chrome local) ──────
 async function launchBrowser() {
   if (process.env.NODE_ENV === "production") {
     const chromium = await import("@sparticuz/chromium-min");
     const puppeteer = await import("puppeteer-core");
-    const executablePath = await chromium.default.executablePath(
-      "https://github.com/Sparticuz/chromium/releases/download/v133.0.0/chromium-v133.0.0-pack.tar"
-    );
     return puppeteer.default.launch({
       args: [...(chromium.default.args ?? []), "--no-sandbox", "--disable-setuid-sandbox"],
       defaultViewport: { width: 1240, height: 1754 },
-      executablePath,
+      executablePath: await chromium.default.executablePath(
+        "https://github.com/Sparticuz/chromium/releases/download/v133.0.0/chromium-v133.0.0-pack.tar"
+      ),
       headless: true,
     });
   }
@@ -56,7 +63,7 @@ export async function GET(request: NextRequest) {
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL
     ?? `https://${request.headers.get("host") ?? "app.v3partners.com.br"}`;
 
-  // ── 1. Dados do deal ──────────────────────────────────────────────────────
+  // ── Dados do deal ──────────────────────────────────────────────────────────
   const { data: deal } = await db
     .from("ma_deals")
     .select("code, target_company, asset_data")
@@ -64,10 +71,9 @@ export async function GET(request: NextRequest) {
     .single();
 
   const dealCode = deal?.code ?? "";
-  const dealName = (deal?.target_company ?? "")
-    .replace(/\/.*/, "").trim().slice(0, 40);
+  const dealName = (deal?.target_company ?? "").replace(/\/.*/, "").trim().slice(0, 40);
 
-  // ── 2. Token VDR → parâmetro de watermark ────────────────────────────────
+  // ── VDR token → watermark ──────────────────────────────────────────────────
   let investorParam = "";
   if (vdrToken) {
     const { data: inv } = await db
@@ -78,21 +84,20 @@ export async function GET(request: NextRequest) {
     if (inv) investorParam = `&vdr_token=${encodeURIComponent(vdrToken)}`;
   }
 
-  // ── 3. Logo como base64 (header/footer templates não carregam URLs externas) ─
+  // ── Logo base64 (R5: header templates não carregam URLs externas) ──────────
   let logoBase64 = "";
   try {
-    const lr  = await fetch(`${baseUrl}/v3-logo-flat-gold-alpha.png`);
+    const lr = await fetch(`${baseUrl}/v3-logo-flat-gold-alpha.png`);
     if (lr.ok) logoBase64 = `data:image/png;base64,${Buffer.from(await lr.arrayBuffer()).toString("base64")}`;
   } catch { /* logo opcional */ }
 
-  // ── 4. HTML do CIM ───────────────────────────────────────────────────────
+  // ── HTML do CIM ───────────────────────────────────────────────────────────
   const cimUrl = `${baseUrl}/api/ma/preview-criativo?dealId=${dealId}&type=cim&lang=${lang}${investorParam}`;
   let cimHtml: string;
   try {
     const res = await fetch(cimUrl, { headers: { "User-Agent": "V3-PDF-Engine/1.0" } });
     if (!res.ok) throw new Error(`HTML fetch ${res.status}`);
     cimHtml = await res.text();
-    // Injeta <base> para que caminhos relativos resolvam via page.setContent()
     cimHtml = cimHtml.replace("<head>", `<head><base href="${baseUrl}">`);
   } catch (e) {
     return NextResponse.json({ error: `Erro ao carregar CIM: ${e}` }, { status: 500 });
@@ -102,50 +107,42 @@ export async function GET(request: NextRequest) {
     day: "2-digit", month: "short", year: "numeric",
   });
 
-  // ── 5. Templates do timbrado ─────────────────────────────────────────────
+  // ── Templates do timbrado (R5: font-size explícito, hex hardcoded) ─────────
   //
-  // REGRA PUPPETEER: header/footer rodam em iframe isolado — sem CSS da página.
-  //   • font-size DEVE ser declarado em CADA elemento (padrão = 0 → invisível)
-  //   • CSS variables da página NÃO existem aqui → usar hex hardcoded
-  //   • background só renderiza com -webkit-print-color-adjust:exact no próprio elemento
-  //   • largura útil = calc(100% - 2 * margin.left/right) → usar margin nos templates
-  //   • NÃO usar unidades mm em padding (bug Puppeteer) → usar px
-  //
-  // Brandbook: Gold=#C9A84C · GoldLight=#E8C97A · Cream=#F5F1E8 · Muted=#9BAFC5 · NavyDeep=#09081A
+  // Header/footer templates rodam em iframe isolado — SEM CSS da página.
+  // font-size OBRIGATÓRIO em cada elemento (padrão Puppeteer = 0 → invisível).
+  // CSS variables (var(--gold)) NÃO funcionam aqui → hex hardcoded sempre.
+  // background com -webkit-print-color-adjust:exact no container raiz.
+  // padding em px (não mm — bug Puppeteer em templates).
+  // width:100% com padding:0 e box-sizing:border-box → alinha com margens do pdf().
 
   const headerTemplate = `
     <div style="
-      width:100%;
-      margin:0;
-      padding:6px 42px;
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
+      width:100%;margin:0;padding:8px 42px;
+      display:flex;align-items:center;justify-content:space-between;
       background:${V3.nd};
-      border-bottom:1.5px solid ${V3.go};
+      border-bottom:2px solid ${V3.go};
       -webkit-print-color-adjust:exact;
-      font-family:Arial,sans-serif;
       box-sizing:border-box;
+      font-family:Arial,Helvetica,sans-serif;
     ">
-      <!-- ESQUERDA: logo + identidade -->
       <div style="display:flex;align-items:center;gap:10px">
-        ${logoBase64 ? `<img src="${logoBase64}" style="height:22px;width:auto;display:block;opacity:1">` : ""}
+        ${logoBase64 ? `<img src="${logoBase64}" style="height:20px;width:auto;display:block">` : ""}
         <div>
           <div style="font-size:8px;font-weight:700;color:${V3.cr};letter-spacing:1.5px;text-transform:uppercase;line-height:1.3">
-            V3 Partners · Mesa de M&amp;A
+            V3 Partners &middot; Mesa de M&amp;A
           </div>
           <div style="font-size:7px;color:${V3.mu};margin-top:1px;line-height:1.3">
             ${dealName}
           </div>
         </div>
       </div>
-      <!-- DIREITA: código + classificação -->
       <div style="text-align:right">
         <div style="font-size:8px;font-weight:700;color:${V3.go};letter-spacing:1px;line-height:1.3">
           ${dealCode}
         </div>
         <div style="font-size:7px;color:${V3.mu};margin-top:1px;line-height:1.3">
-          CONFIDENCIAL · NDA
+          CONFIDENCIAL &middot; NDA
         </div>
       </div>
     </div>
@@ -153,79 +150,127 @@ export async function GET(request: NextRequest) {
 
   const footerTemplate = `
     <div style="
-      width:100%;
-      margin:0;
-      padding:5px 42px;
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
+      width:100%;margin:0;padding:6px 42px;
+      display:flex;align-items:center;justify-content:space-between;
       background:${V3.nd};
       border-top:1px solid rgba(201,168,76,0.3);
       -webkit-print-color-adjust:exact;
-      font-family:Arial,sans-serif;
       box-sizing:border-box;
+      font-family:Arial,Helvetica,sans-serif;
     ">
-      <!-- ESQUERDA: razão social -->
       <div style="font-size:7px;color:${V3.mu};line-height:1.4">
-        V3 Partners Soluções Ltda · CNPJ 14.219.287/0001-50 · v3partners.com.br
+        V3 Partners Solu&ccedil;&otilde;es Ltda &middot; CNPJ 14.219.287/0001-50 &middot; v3partners.com.br
       </div>
-      <!-- CENTRO: confidencialidade + data -->
       <div style="font-size:7px;color:${V3.mu};text-align:center;line-height:1.4">
-        Confidencial · NDA Exigido · ${printDate}
+        Confidencial &middot; NDA Exigido &middot; ${printDate}
       </div>
-      <!-- DIREITA: número de página -->
       <div style="font-size:8px;font-weight:700;color:${V3.go};text-align:right;line-height:1.4">
-        Pág.&#32;<span class="pageNumber"></span>/<span class="totalPages"></span>
+        P&aacute;g.&nbsp;<span class="pageNumber"></span>&nbsp;/&nbsp;<span class="totalPages"></span>
       </div>
     </div>
   `;
 
-  // ── 6. Puppeteer → PDF ───────────────────────────────────────────────────
+  // ── CSS de print injetado via Puppeteer (além do @media print do HTML) ─────
+  const printCss = `
+    @media print {
+
+      /* R1 — html preenche canvas inteiro (margens, última página) */
+      html {
+        background: ${V3.nd} !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+        height: 100% !important;
+      }
+      body {
+        background: ${V3.nd} !important;
+        min-height: 100% !important;
+        -webkit-print-color-adjust: exact !important;
+      }
+
+      /* R2 — sem timbrado na capa (primeira página tem logo própria) */
+      @page :first {
+        margin-top: 0 !important;
+        margin-bottom: 0 !important;
+        margin-left: 0 !important;
+        margin-right: 0 !important;
+      }
+
+      /* R3 — sem bordas brancas laterais (margem lateral = 0 no pdf()) */
+      /* Espaçamento interno garantido por padding nas seções abaixo */
+      .section, .section-alt {
+        padding-left: 42px !important;
+        padding-right: 42px !important;
+      }
+      .cover {
+        padding-left: 0 !important;
+        padding-right: 0 !important;
+      }
+
+      /* R4 — overflow:visible libera o algoritmo de quebra de página */
+      * { overflow: visible !important; }
+
+      /* R4 — break-inside em todos os containers de conteúdo */
+      .section, .section-alt,
+      .cover,
+      .exec-grid,
+      .info-card, .info-row,
+      .kpi-card, .kpi-grid, .kpi-grid-3,
+      .thesis-item, .thesis-grid,
+      .upside-scenario,
+      .fin-grid, .fin-table tr,
+      .risk-table tr,
+      .tenant-table tr,
+      .doc-footer {
+        break-inside: avoid-page !important;
+        page-break-inside: avoid !important;
+      }
+
+      /* R4 — orphans/widows: evita linhas soltas no topo/base de páginas */
+      p, li, span { orphans: 4; widows: 4; }
+
+      /* R6 — orientação detectada via CSS */
+      @page          { size: A4 portrait; }
+      @page landscape { size: A4 landscape; }
+    }
+  `;
+
   let browser;
   try {
     browser = await launchBrowser();
     const page = await browser.newPage();
 
     await page.setViewport({ width: 1240, height: 1754, deviceScaleFactor: 1 });
-
-    // Injeta HTML — base href garante que logo e fontes resolvam
     await page.setContent(cimHtml, { waitUntil: "networkidle0", timeout: 45000 });
-
-    // Aguarda Google Fonts (DM Sans) antes de gerar
     await page.evaluate(() => document.fonts.ready);
 
-    // Injeta CSS adicional para calibrar espaço do timbrado
-    // O @page do HTML define margens do conteúdo; Puppeteer sobrescreve com margin abaixo.
-    // Matching: margin.top deve = header height + gap acima do conteúdo
-    //           margin.bottom deve = footer height + gap abaixo do conteúdo
-    // Header template ~13px padding + 22px logo = ~35px ≈ 13mm
-    // Footer template ~10px padding + 14px texto = ~24px ≈ 9mm
-    // gap seguro: +4mm cada lado
-    // → top = 13 + 4 = 17mm | bottom = 9 + 4 = 13mm
-    await page.addStyleTag({ content: `
-      @media print {
-        /* Espaço de timbrado: top 17mm (header) + bottom 13mm (footer) */
-        @page { size: A4 portrait; margin: 17mm 14mm 13mm 14mm; }
-        /* Detecta landscape automaticamente via @page landscape */
-        @page landscape { size: A4 landscape; margin: 14mm 17mm 13mm 17mm; }
-        /* Cover não precisa do gap extra — ocupa a página inteira */
-        .cover { page-break-after: always !important; }
-      }
-    ` });
+    // R1 — define background no html programaticamente (garante último página)
+    await page.evaluate((navyHex: string) => {
+      const html = document.documentElement;
+      html.style.background = navyHex;
+      html.style.setProperty("-webkit-print-color-adjust", "exact");
+      html.style.setProperty("print-color-adjust", "exact");
+      document.body.style.background = navyHex;
+      document.body.style.minHeight = "100%";
+    }, V3.nd);
 
+    // Injeta CSS adicional de print (complementa o @media print do HTML)
+    await page.addStyleTag({ content: printCss });
+
+    // ── Gera PDF com timbrado profissional ────────────────────────────────────
+    // R3: right/left = 0 (sem bordas brancas laterais)
+    // R7: top = header(~13mm) + gap(4mm) = 17mm | bottom = footer(~9mm) + gap(4mm) = 13mm
+    // R6: preferCSSPageSize:true → @page portrait/landscape do CSS
     const pdfBuffer = await page.pdf({
-      // preferCSSPageSize:true → respeita @page do CSS (portrait/landscape)
-      // e detecta automaticamente a orientação de cada página
-      preferCSSPageSize: true,
-      printBackground:   true,
+      preferCSSPageSize:   true,
+      printBackground:     true,
       displayHeaderFooter: true,
       headerTemplate,
       footerTemplate,
       margin: {
-        top:    "17mm",  // espaço para header (~13mm) + 4mm gap
-        right:  "14mm",  // brandbook: margin 13mm 14mm
-        bottom: "13mm",  // espaço para footer (~9mm) + 4mm gap
-        left:   "14mm",
+        top:    "17mm",  // R7: header 13mm + gap 4mm
+        right:  "0",     // R3: sem borda branca lateral
+        bottom: "13mm",  // R7: footer 9mm + gap 4mm
+        left:   "0",     // R3: sem borda branca lateral
       },
     });
 
