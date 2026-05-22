@@ -73,11 +73,12 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
     }
   }
 
-  // 5. Gerar URL — URL direta (CIM dinâmico, links externos) ou Storage assinada
+  // 5. Gerar URL — URL direta (CIM dinâmico) ou Storage assinada
   let docUrl: string;
   if (doc.storage_path.startsWith("http://") || doc.storage_path.startsWith("https://")) {
-    // URL direta — CIM gerado on-demand ou qualquer link externo
-    docUrl = doc.storage_path;
+    // CIM gerado on-demand — injeta vdr_token para watermark personalizada
+    const sep = doc.storage_path.includes("?") ? "&" : "?";
+    docUrl = `${doc.storage_path}${sep}vdr_token=${encodeURIComponent(token)}`;
   } else {
     // Path de Storage Supabase — gera signed URL por 1 hora
     const { data: signedData, error: urlErr } = await db.storage

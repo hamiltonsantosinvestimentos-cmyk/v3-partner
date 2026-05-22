@@ -100,7 +100,7 @@ function renderTese(tese: string[] | string, style = "font-size:12px;color:#7A8F
 
 // ── CIM — fiel ao modelo de referência V3 (engenharia reversa completa) ─────
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function buildCIM(deal: any, lang: string): string {
+function buildCIM(deal: any, lang: string, investor?: InvestorInfo | null): string {
   const ad = deal.asset_data ?? {};
   const isPt = lang === "pt-br";
   const forja = getForjaData(ad);
@@ -236,7 +236,36 @@ function buildCIM(deal: any, lang: string): string {
   }
   *{margin:0;padding:0;box-sizing:border-box}
   body{font-family:'DM Sans',sans-serif;background:var(--navy);color:var(--cream);font-size:14px;line-height:1.6;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
-  @media print{@page{size:A4;margin:12mm}body{font-size:11px}.page-break{page-break-before:always}.no-print{display:none}}
+  @media print{
+    @page{size:A4 portrait;margin:13mm 12mm}
+    html,body{background:#09081A!important;color:#F5F1E8!important;font-size:11px!important;line-height:1.5!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
+    *,*::before,*::after{box-shadow:none!important;text-shadow:none!important}
+    .cover{min-height:297mm!important;background:#09081A!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;page-break-after:always;break-after:page}
+    .cover img{height:15mm!important;width:auto!important}
+    .section{padding:30px!important;background:#09081A!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;break-inside:avoid;page-break-inside:avoid}
+    .section-alt{padding:30px!important;background:#0F0E2A!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;break-inside:avoid;page-break-inside:avoid}
+    .section.page-break,.section-alt.page-break{page-break-before:always!important;break-before:page!important}
+    .section-header{break-inside:avoid;page-break-inside:avoid;margin-bottom:20px!important}
+    .exec-grid{display:grid!important;grid-template-columns:1fr 280px!important;gap:20px!important;break-inside:avoid;page-break-inside:avoid}
+    .info-card{background:#1A1836!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;break-inside:avoid;page-break-inside:avoid}
+    .info-row,.kpi-grid,.thesis-grid{break-inside:avoid;page-break-inside:avoid}
+    .kpi-card{background:#0F0E2A!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;break-inside:avoid;page-break-inside:avoid}
+    .kpi-value{font-size:18px!important;font-weight:800!important;color:#C9A84C!important}
+    .thesis-item,.upside-scenario{background:#1A1836!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;break-inside:avoid;page-break-inside:avoid}
+    .risk-table,.tenant-table{width:100%!important;border-collapse:collapse!important;break-inside:avoid;page-break-inside:avoid}
+    .risk-table tr,.tenant-table tr{break-inside:avoid;page-page-break-inside:avoid}
+    .risk-table th,.tenant-table th{background:#0F0E2A!important;color:#E2C97A!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
+    .risk-table td,.tenant-table td{color:#9BAFC5!important}
+    .doc-footer{border-top:1px solid rgba(255,255,255,0.08)!important;padding-top:8px!important;break-inside:avoid;page-break-inside:avoid}
+    h1{font-size:18px!important}h2{font-size:14px!important}h3{font-size:11px!important}
+    p,li,td,th{font-size:11px!important;line-height:1.5!important}
+    .no-print,nav,button,[data-no-print]{display:none!important}
+    a[href]::after{content:none!important}
+    /* Watermark impressa — visível apenas em print */
+    .v3-watermark{display:block!important;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%) rotate(-35deg);font-size:44px;font-weight:800;color:rgba(201,168,76,0.09);white-space:nowrap;pointer-events:none;z-index:9999;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;font-family:'DM Sans',sans-serif}
+    /* Ocultar watermark de tela em print */
+    .v3-watermark-screen{display:none!important}
+  }
   /* COVER */
   .cover{min-height:100vh;background:var(--navy);display:flex;flex-direction:column;justify-content:space-between;padding:60px;position:relative;overflow:hidden}
   .cover::before{content:'';position:absolute;top:0;left:0;right:0;height:4px;background:linear-gradient(90deg,var(--gold-dark),var(--gold),var(--gold-light))}
@@ -737,8 +766,42 @@ ${hasValuation ? `
     <strong>${deal.code ?? "V3 Partners"}</strong>
     CIM · ${new Date().toLocaleDateString(isPt ? "pt-BR" : "en-US", { month: "long", year: "numeric" })}<br>
     ${isPt ? "Documento Confidencial — NDA Exigido" : "Confidential Document — NDA Required"}
+    ${investor ? `<br><span style="font-size:10px;color:var(--muted)">${isPt ? "Emitido para" : "Issued to"}: ${investor.name}${investor.company ? " · " + investor.company : ""}</span>` : ""}
   </div>
 </div>
+
+${investor ? `
+<!-- WATERMARK OCULTA EM TELA, VISÍVEL APENAS EM PRINT -->
+<div class="v3-watermark" style="display:none">
+  CONFIDENCIAL · ${investor.name.toUpperCase()}${investor.company ? " · " + investor.company.toUpperCase() : ""} · ${new Date().toLocaleDateString("pt-BR")}
+</div>
+
+<script>
+(function() {
+  var printed = false;
+  function registerPrint() {
+    if (printed) return;
+    printed = true;
+    fetch('/api/investor/vdr/${investor.token}/print', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      keepalive: true,
+      body: JSON.stringify({
+        doc_type: 'cim',
+        deal_id:  '${deal.id}',
+        deal_code: '${deal.code ?? ""}',
+        timestamp: new Date().toISOString()
+      })
+    });
+  }
+  window.addEventListener('beforeprint', registerPrint);
+  if (window.matchMedia) {
+    window.matchMedia('print').addEventListener('change', function(e) {
+      if (e.matches) registerPrint();
+    });
+  }
+})();
+<\/script>` : ""}
 
 </body></html>`;
 }
@@ -1197,16 +1260,21 @@ function injectFormat(html: string, format: string, type: string): string {
   return html;
 }
 
+type InvestorInfo = { name: string; email: string; company: string | null; token: string };
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const dealId = searchParams.get("dealId");
-  const type = searchParams.get("type") ?? "cim";
-  const lang = searchParams.get("lang") ?? "pt-br";
-  const format = searchParams.get("format") ?? "";
+  const dealId    = searchParams.get("dealId");
+  const type      = searchParams.get("type") ?? "cim";
+  const lang      = searchParams.get("lang") ?? "pt-br";
+  const format    = searchParams.get("format") ?? "";
+  const vdrToken  = searchParams.get("vdr_token") ?? "";
 
   if (!dealId) {
     return NextResponse.json({ error: "dealId obrigatório" }, { status: 400 });
   }
+
+  const svc = sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let deal: any = null;
@@ -1214,12 +1282,6 @@ export async function GET(request: Request) {
   if (IS_DEMO) {
     deal = DEMO_DEALS.find((d) => d.id === dealId) ?? null;
   } else {
-    // Service client — bypassa RLS para que o preview funcione sem sessão ativa
-    // (necessário para aba anônima e compartilhamento de links)
-    const svc = sc(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
-    );
     const { data } = await svc.from("ma_deals").select("*").eq("id", dealId).single();
     deal = data;
   }
@@ -1234,12 +1296,28 @@ export async function GET(request: Request) {
     );
   }
 
+  // Busca dados do investidor via vdr_token para watermark personalizada
+  let investor: InvestorInfo | null = null;
+  if (vdrToken && type === "cim") {
+    const { data: inv } = await svc
+      .from("deal_room_invites")
+      .select("investor_name, investor_email, investor_company, token")
+      .eq("token", vdrToken)
+      .single();
+    if (inv) investor = {
+      name:    inv.investor_name,
+      email:   inv.investor_email,
+      company: inv.investor_company ?? null,
+      token:   inv.token,
+    };
+  }
+
   let html = "";
   switch (type) {
     case "teaser":        html = buildTeaser(deal, lang); break;
     case "linkedin_post": html = buildLinkedInPost(deal, lang); break;
     case "linkedin_story":html = buildLinkedInStory(deal, lang); break;
-    default:              html = buildCIM(deal, lang);
+    default:              html = buildCIM(deal, lang, investor);
   }
 
   if (format) html = injectFormat(html, format, type);
