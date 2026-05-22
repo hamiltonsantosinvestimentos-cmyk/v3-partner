@@ -201,6 +201,10 @@ function buildCIM(deal: any, lang: string): string {
   const hasFinanceiro = receitas.length > 0 || !!despesas;
   const hasCenarios = cenarios.length > 0;
 
+  // Tese estratégica de posicionamento (João Lemos)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const te = ad.tese_estrategica as any;
+
   // Valuation breakdown — imóveis penhorados + créditos judiciais + soma de partes
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const vb = ad.valuation_breakdown as any;
@@ -386,6 +390,53 @@ function buildCIM(deal: any, lang: string): string {
   <div class="exec-grid">
     <div>
       ${desc.split(/\.\s+/).filter(Boolean).map(p => `<p class="exec-lead">${p}${p.endsWith(".") ? "" : "."}</p>`).slice(0,3).join("")}
+
+      ${te ? `
+      <!-- TESE ESTRATÉGICA DE POSICIONAMENTO -->
+      <div style="margin-top:24px;background:rgba(201,168,76,0.06);border:1px solid rgba(201,168,76,0.2);border-radius:10px;overflow:hidden">
+        <div style="background:rgba(201,168,76,0.12);border-bottom:1px solid rgba(201,168,76,0.2);padding:12px 18px;display:flex;align-items:center;gap:10px">
+          <div style="width:6px;height:6px;border-radius:50%;background:var(--gold);flex-shrink:0"></div>
+          <span style="font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--gold)">${isPt ? "Visão Estratégica de Posicionamento" : "Strategic Positioning Vision"}</span>
+        </div>
+        <div style="padding:16px 18px">
+          <p style="font-size:13px;font-weight:600;color:var(--cream);margin-bottom:14px;line-height:1.4">${te.posicionamento ?? ""}</p>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+            ${(te.mix_servicos?.length || te.mix_varejo?.length) ? `
+            <div>
+              ${te.mix_servicos?.length ? `
+              <p style="font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--gold);margin-bottom:8px">${isPt ? "Serviços & Âncoras" : "Services & Anchors"}</p>
+              <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px">
+                ${te.mix_servicos.map((s: string) => `<span style="background:rgba(155,175,197,0.1);border:1px solid rgba(155,175,197,0.2);border-radius:4px;padding:2px 8px;font-size:10px;color:var(--muted)">${s}</span>`).join("")}
+              </div>` : ""}
+              ${te.mix_varejo?.length ? `
+              <p style="font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--gold);margin-bottom:8px">${isPt ? "Mix Varejo" : "Retail Mix"}</p>
+              <div style="display:flex;flex-wrap:wrap;gap:5px">
+                ${te.mix_varejo.map((s: string) => `<span style="background:rgba(201,168,76,0.1);border:1px solid rgba(201,168,76,0.2);border-radius:4px;padding:2px 8px;font-size:10px;color:var(--gold-light)">${s}</span>`).join("")}
+              </div>` : ""}
+            </div>` : ""}
+            ${(te.diferenciais_estrategicos?.length || te.restricoes_posicionamento?.length || te.comparaveis?.length) ? `
+            <div>
+              ${te.comparaveis?.length ? `
+              <p style="font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--gold);margin-bottom:6px">${isPt ? "Análogos de Mercado" : "Market Comps"}</p>
+              <p style="font-size:11px;color:var(--muted);margin-bottom:10px">${te.comparaveis.join(" · ")}</p>` : ""}
+              ${te.diferenciais_estrategicos?.length ? `
+              <p style="font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--gold);margin-bottom:6px">${isPt ? "Diferenciais" : "Key Differentials"}</p>
+              ${te.diferenciais_estrategicos.map((d: string) => `
+              <div style="display:flex;gap:6px;align-items:flex-start;margin-bottom:5px">
+                <span style="color:var(--green-ok);font-size:10px;margin-top:1px;flex-shrink:0">✓</span>
+                <span style="font-size:11px;color:var(--muted);line-height:1.4">${d}</span>
+              </div>`).join("")}` : ""}
+              ${te.restricoes_posicionamento?.length ? `
+              <p style="font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--amber);margin-bottom:6px;margin-top:8px">${isPt ? "Restrições de Posicionamento" : "Positioning Constraints"}</p>
+              ${te.restricoes_posicionamento.map((r: string) => `
+              <div style="display:flex;gap:6px;align-items:flex-start;margin-bottom:5px">
+                <span style="color:var(--amber);font-size:10px;margin-top:1px;flex-shrink:0">⚠</span>
+                <span style="font-size:11px;color:var(--muted);line-height:1.4">${r}</span>
+              </div>`).join("")}` : ""}
+            </div>` : ""}
+          </div>
+        </div>
+      </div>` : ""}
     </div>
     <div>
       <div class="info-card">
