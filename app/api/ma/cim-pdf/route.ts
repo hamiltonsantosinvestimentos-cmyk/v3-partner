@@ -64,6 +64,13 @@ export async function GET(request: NextRequest) {
     const res = await fetch(cimUrl, { headers: { "User-Agent": "V3-PDF-Engine/1.0" } });
     if (!res.ok) throw new Error(`HTML fetch failed: ${res.status}`);
     cimHtml = await res.text();
+
+    // FIX 1: injeta <base href> para que caminhos relativos (logo, fontes)
+    // resolvam corretamente quando usamos page.setContent() sem URL de base
+    cimHtml = cimHtml.replace(
+      "<head>",
+      `<head><base href="${baseUrl}">`
+    );
   } catch (fetchErr) {
     return NextResponse.json({ error: `Não foi possível carregar o CIM: ${fetchErr}` }, { status: 500 });
   }

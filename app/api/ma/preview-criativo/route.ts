@@ -237,34 +237,184 @@ function buildCIM(deal: any, lang: string, investor?: InvestorInfo | null): stri
   *{margin:0;padding:0;box-sizing:border-box}
   body{font-family:'DM Sans',sans-serif;background:var(--navy);color:var(--cream);font-size:14px;line-height:1.6;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
   @media print{
-    @page{size:A4 portrait;margin:13mm 12mm}
-    html,body{background:#09081A!important;color:#F5F1E8!important;font-size:11px!important;line-height:1.5!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
-    *,*::before,*::after{box-shadow:none!important;text-shadow:none!important}
-    .cover{min-height:297mm!important;background:#09081A!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;page-break-after:always;break-after:page}
-    .cover img{height:15mm!important;width:auto!important}
-    .section{padding:30px!important;background:#09081A!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;break-inside:avoid;page-break-inside:avoid}
-    .section-alt{padding:30px!important;background:#0F0E2A!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;break-inside:avoid;page-break-inside:avoid}
-    .section.page-break,.section-alt.page-break{page-break-before:always!important;break-before:page!important}
-    .section-header{break-inside:avoid;page-break-inside:avoid;margin-bottom:20px!important}
-    .exec-grid{display:grid!important;grid-template-columns:1fr 280px!important;gap:20px!important;break-inside:avoid;page-break-inside:avoid}
-    .info-card{background:#1A1836!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;break-inside:avoid;page-break-inside:avoid}
-    .info-row,.kpi-grid,.thesis-grid{break-inside:avoid;page-break-inside:avoid}
-    .kpi-card{background:#0F0E2A!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;break-inside:avoid;page-break-inside:avoid}
-    .kpi-value{font-size:18px!important;font-weight:800!important;color:#C9A84C!important}
-    .thesis-item,.upside-scenario{background:#1A1836!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;break-inside:avoid;page-break-inside:avoid}
-    .risk-table,.tenant-table{width:100%!important;border-collapse:collapse!important;break-inside:avoid;page-break-inside:avoid}
-    .risk-table tr,.tenant-table tr{break-inside:avoid;page-page-break-inside:avoid}
-    .risk-table th,.tenant-table th{background:#0F0E2A!important;color:#E2C97A!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
-    .risk-table td,.tenant-table td{color:#9BAFC5!important}
-    .doc-footer{border-top:1px solid rgba(255,255,255,0.08)!important;padding-top:8px!important;break-inside:avoid;page-break-inside:avoid}
-    h1{font-size:18px!important}h2{font-size:14px!important}h3{font-size:11px!important}
-    p,li,td,th{font-size:11px!important;line-height:1.5!important}
+    /* ── CONFIG DA PÁGINA ── */
+    @page{size:A4 portrait;margin:10mm 12mm}
+    @page:first{margin-top:0;margin-bottom:0}
+
+    /* ── BASE — preserva cores exatas, escala fontes para A4 ── */
+    html,body{
+      background:#09081A!important;color:#F5F1E8!important;
+      font-size:10px!important;line-height:1.4!important;
+      -webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;
+    }
+    *{box-shadow:none!important;text-shadow:none!important}
+    /* Remove overflow que bloqueia break-inside */
+    *{overflow:visible!important}
+
+    /* ── COVER: A4 exato, quebra obrigatória depois ── */
+    .cover{
+      min-height:277mm!important;max-height:277mm!important;
+      background:#09081A!important;
+      -webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;
+      page-break-after:always!important;break-after:page!important;
+      overflow:hidden!important;
+      padding:24px 32px!important;
+    }
+    .cover-logo img{height:12mm!important;width:auto!important}
+    .cover-title{font-size:22px!important;letter-spacing:-0.5px!important}
+    .cover-subtitle{font-size:12px!important}
+    .cover-metrics{max-width:100%!important}
+    .cover-metric{padding:12px 16px!important}
+    .cover-metric-value{font-size:16px!important}
+    .cover-confidential{padding:8px 14px!important}
+    .cover-confidential p{font-size:9px!important}
+
+    /* ── SEÇÕES: compactadas, break controlado ── */
+    .section,.section-alt{
+      padding:18px 24px!important;
+      break-inside:avoid-page;
+      page-break-inside:avoid;
+      -webkit-print-color-adjust:exact!important;
+      print-color-adjust:exact!important;
+    }
+    .section{background:#09081A!important}
+    .section-alt{background:#0F0E2A!important}
+
+    /* Quebra de página ANTES de cada seção marcada */
+    .section.page-break,.section-alt.page-break{
+      page-break-before:always!important;break-before:page!important;
+    }
+
+    /* Header da seção — não quebrar */
+    .section-header{
+      break-inside:avoid!important;page-break-inside:avoid!important;
+      margin-bottom:12px!important;
+    }
+    .section-number{width:28px!important;height:28px!important;font-size:11px!important}
+    .section-title{font-size:16px!important}
+
+    /* ── EXEC GRID: proporções A4 ── */
+    .exec-grid{
+      grid-template-columns:1fr 220px!important;
+      gap:14px!important;
+      break-inside:avoid!important;
+    }
+    .exec-lead{font-size:10px!important;line-height:1.5!important;margin-bottom:10px!important}
+    .exec-highlight{padding:10px 14px!important;margin-top:10px!important}
+    .exec-highlight p{font-size:10px!important;line-height:1.5!important}
+
+    /* ── INFO CARD ── */
+    .info-card{
+      background:#1A1836!important;
+      -webkit-print-color-adjust:exact!important;
+      break-inside:avoid!important;page-break-inside:avoid!important;
+    }
+    .info-card-header{padding:8px 14px!important;font-size:9px!important}
+    .info-row{padding:7px 14px!important}
+    .info-label{font-size:9px!important}
+    .info-value{font-size:10px!important}
+
+    /* ── KPI GRID: 4 colunas compactadas ── */
+    .kpi-grid{
+      gap:8px!important;margin-bottom:16px!important;
+      break-inside:avoid!important;page-break-inside:avoid!important;
+    }
+    .kpi-card{
+      padding:12px 14px!important;
+      background:#0F0E2A!important;
+      -webkit-print-color-adjust:exact!important;
+      break-inside:avoid!important;page-break-inside:avoid!important;
+    }
+    .kpi-label{font-size:8px!important;margin-bottom:6px!important}
+    .kpi-value{font-size:18px!important;margin-bottom:3px!important;color:#C9A84C!important}
+    .kpi-sub{font-size:9px!important}
+    .kpi-badge{font-size:9px!important;padding:2px 6px!important;margin-top:4px!important}
+
+    /* ── THESIS GRID ── */
+    .thesis-grid{gap:8px!important;break-inside:avoid!important}
+    .thesis-item{
+      padding:12px 14px!important;gap:10px!important;
+      background:#1A1836!important;
+      -webkit-print-color-adjust:exact!important;
+      break-inside:avoid!important;page-break-inside:avoid!important;
+    }
+    .thesis-num{width:24px!important;height:24px!important;font-size:11px!important;flex-shrink:0!important}
+    .thesis-content h4{font-size:10px!important;margin-bottom:4px!important}
+    .thesis-content p{font-size:9px!important;line-height:1.4!important}
+
+    /* ── FIN TABLE ── */
+    .fin-grid{gap:14px!important}
+    .fin-table td{padding:6px 0!important;font-size:10px!important}
+    .info-card-header + table{padding:10px 14px!important}
+
+    /* ── UPSIDE SCENARIOS ── */
+    .upside-scenario{
+      background:#1A1836!important;
+      -webkit-print-color-adjust:exact!important;
+      break-inside:avoid!important;page-break-inside:avoid!important;
+    }
+    .upside-header{padding:10px 16px!important}
+    .upside-header h3{font-size:12px!important}
+    .upside-body{padding:12px 16px!important}
+    .upside-metric{padding:4px 0!important;font-size:10px!important}
+
+    /* ── RISK TABLE ── */
+    .risk-table{width:100%!important;border-collapse:collapse!important}
+    .risk-table th{
+      background:#0F0E2A!important;color:#E2C97A!important;
+      padding:7px 10px!important;font-size:8px!important;
+      -webkit-print-color-adjust:exact!important;
+    }
+    .risk-table td{padding:8px 10px!important;font-size:9px!important;vertical-align:top!important}
+    .risk-table tr{break-inside:avoid!important;page-break-inside:avoid!important}
+    .risk-badge{font-size:8px!important;padding:2px 6px!important}
+
+    /* ── TENANT TABLE (valuation) ── */
+    .tenant-table{width:100%!important;border-collapse:collapse!important;break-inside:avoid!important}
+    .tenant-table th{
+      background:#0F0E2A!important;color:#E2C97A!important;
+      padding:6px 10px!important;font-size:8px!important;
+      -webkit-print-color-adjust:exact!important;
+    }
+    .tenant-table td{padding:7px 10px!important;font-size:9px!important}
+    .tenant-table tr{break-inside:avoid!important;page-break-inside:avoid!important}
+    .status-badge{font-size:8px!important;padding:1px 5px!important}
+
+    /* ── FOOTER DO DOCUMENTO ── */
+    .doc-footer{
+      padding:12px 24px!important;
+      break-inside:avoid!important;page-break-inside:avoid!important;
+      -webkit-print-color-adjust:exact!important;
+    }
+    .footer-logo img{height:10mm!important;opacity:0.6!important}
+    .footer-info{font-size:9px!important}
+    .footer-ref{font-size:9px!important}
+
+    /* ── TIPOGRAFIA GLOBAL ── */
+    h1{font-size:16px!important;letter-spacing:-0.5px!important}
+    h2{font-size:13px!important}
+    h3{font-size:11px!important}
+    p,li,span{font-size:10px!important;line-height:1.45!important}
+    td,th{font-size:10px!important}
+
+    /* ── UTILS ── */
     .no-print,nav,button,[data-no-print]{display:none!important}
     a[href]::after{content:none!important}
-    /* Watermark impressa — visível apenas em print */
-    .v3-watermark{display:block!important;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%) rotate(-35deg);font-size:44px;font-weight:800;color:rgba(201,168,76,0.09);white-space:nowrap;pointer-events:none;z-index:9999;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;font-family:'DM Sans',sans-serif}
-    /* Ocultar watermark de tela em print */
-    .v3-watermark-screen{display:none!important}
+    .divider{margin:12px 0!important}
+    .mt-16,.mt-24,.mt-32{margin-top:8px!important}
+    .mb-24{margin-bottom:8px!important}
+
+    /* ── WATERMARK: visível apenas em print ── */
+    .v3-watermark{
+      display:block!important;position:fixed;
+      top:50%;left:50%;
+      transform:translate(-50%,-50%) rotate(-35deg);
+      font-size:40px;font-weight:800;
+      color:rgba(201,168,76,0.07);
+      white-space:nowrap;pointer-events:none;z-index:9999;
+      -webkit-print-color-adjust:exact!important;
+      font-family:'DM Sans',sans-serif;
+    }
   }
   /* COVER */
   .cover{min-height:100vh;background:var(--navy);display:flex;flex-direction:column;justify-content:space-between;padding:60px;position:relative;overflow:hidden}
