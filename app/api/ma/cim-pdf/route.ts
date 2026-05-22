@@ -75,6 +75,75 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: `Não foi possível carregar o CIM: ${fetchErr}` }, { status: 500 });
   }
 
+  // ── Busca logo como base64 para o timbrado ──
+  // Header/footer templates não carregam URLs externas — precisa de data: URI
+  let logoBase64 = "";
+  try {
+    const logoRes = await fetch(`${baseUrl}/v3-logo-flat-gold-alpha.png`);
+    if (logoRes.ok) {
+      const logoBuffer = await logoRes.arrayBuffer();
+      logoBase64 = `data:image/png;base64,${Buffer.from(logoBuffer).toString("base64")}`;
+    }
+  } catch { /* logo opcional no timbrado */ }
+
+  // ── Busca dados do deal para o timbrado ──
+  const { data: dealInfo } = await db
+    .from("ma_deals")
+    .select("code, target_company, asset_data")
+    .eq("id", dealId)
+    .single();
+
+  const dealCode    = dealInfo?.code ?? "";
+  const dealName    = (dealInfo?.target_company ?? "").split("/")[0].trim().slice(0, 40);
+  const printDate   = new Date().toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" });
+
+  // ── Templates do papel timbrado — inline styles obrigatório (sem CSS externo) ──
+  const headerTemplate = `
+    <div style="
+      width:100%;padding:0 12mm;height:16mm;
+      display:flex;align-items:center;justify-content:space-between;
+      background:#09081A;
+      border-bottom:2px solid #C9A84C;
+      box-sizing:border-box;
+      -webkit-print-color-adjust:exact;
+      font-family:'DM Sans',Arial,sans-serif;
+    ">
+      <div style="display:flex;align-items:center;gap:10px">
+        ${logoBase64 ? `<img src="${logoBase64}" style="height:20px;width:auto;display:block">` : ""}
+        <div>
+          <div style="font-size:8px;font-weight:700;color:#F5F1E8;letter-spacing:1.5px;text-transform:uppercase">V3 Partners · Mesa de M&A</div>
+          <div style="font-size:7px;color:#9BAFC5;margin-top:1px">${dealName}</div>
+        </div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:8px;font-weight:700;color:#C9A84C;letter-spacing:1px">${dealCode}</div>
+        <div style="font-size:7px;color:#9BAFC5;margin-top:1px">MEMORANDO CONFIDENCIAL</div>
+      </div>
+    </div>
+  `;
+
+  const footerTemplate = `
+    <div style="
+      width:100%;padding:0 12mm;height:12mm;
+      display:flex;align-items:center;justify-content:space-between;
+      background:#09081A;
+      border-top:1px solid rgba(201,168,76,0.25);
+      box-sizing:border-box;
+      -webkit-print-color-adjust:exact;
+      font-family:'DM Sans',Arial,sans-serif;
+    ">
+      <div style="font-size:7px;color:#9BAFC5">
+        V3 Partners Soluções Ltda · CNPJ 14.219.287/0001-50 · v3partners.com.br
+      </div>
+      <div style="font-size:7px;color:#9BAFC5;text-align:center">
+        Confidencial · NDA Exigido · ${printDate}
+      </div>
+      <div style="font-size:7px;color:#C9A84C;font-weight:700;text-align:right">
+        Pág. <span class="pageNumber" style="color:#C9A84C"></span>/<span class="totalPages" style="color:#C9A84C"></span>
+      </div>
+    </div>
+  `;
+
   // ── Puppeteer: injeta HTML e gera PDF ──
   let browser;
   try {
@@ -83,18 +152,26 @@ export async function GET(request: NextRequest) {
 
     await page.setViewport({ width: 1240, height: 1754, deviceScaleFactor: 1 });
 
-    // Injeta HTML diretamente — sem navegação HTTP, sem auth issues
+    // Injeta HTML — base href já inserido, caminhos relativos resolvem corretamente
     await page.setContent(cimHtml, { waitUntil: "networkidle0", timeout: 45000 });
 
-    // Aguarda Google Fonts (DM Sans) carregarem
+    // Aguarda DM Sans carregar via Google Fonts
     await page.evaluate(() => document.fonts.ready);
 
-    // Gera PDF — printBackground preserva navy #09081A, gold, todos os fundos
+    // Gera PDF com timbrado profissional em cada página
+    // top/bottom maior para abrigar header (16mm) e footer (12mm)
     const pdfBuffer = await page.pdf({
-      format:            "A4",
-      printBackground:   true,
-      margin:            { top: "12mm", right: "12mm", bottom: "12mm", left: "12mm" },
-      displayHeaderFooter: false,
+      format:              "A4",
+      printBackground:     true,
+      displayHeaderFooter: true,
+      headerTemplate,
+      footerTemplate,
+      margin: {
+        top:    "22mm",   // espaço para o cabeçalho
+        right:  "12mm",
+        bottom: "18mm",   // espaço para o rodapé
+        left:   "12mm",
+      },
       preferCSSPageSize: false,
     });
 
@@ -117,14 +194,9 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Nome do arquivo
-    const { data: deal } = await db
-      .from("ma_deals")
-      .select("code, target_company")
-      .eq("id", dealId)
-      .single();
-    const code    = deal?.code ?? dealId.slice(0, 8);
-    const company = (deal?.target_company ?? "CIM")
+    // Nome do arquivo — usa dealInfo já buscado antes do Puppeteer
+    const code    = dealCode || dealId.slice(0, 8);
+    const company = (dealInfo?.target_company ?? "CIM")
       .replace(/[^a-zA-Z0-9\s]/g, "")
       .split(" ")
       .slice(0, 3)
