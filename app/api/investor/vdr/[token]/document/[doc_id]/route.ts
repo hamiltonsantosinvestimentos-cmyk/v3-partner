@@ -73,13 +73,20 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
     }
   }
 
-  // 5. Gerar URL assinada (1 hora)
-  const { data: signedData, error: urlErr } = await db.storage
-    .from("ma-documents")
-    .createSignedUrl(doc.storage_path, 3600);
-
-  if (urlErr || !signedData?.signedUrl) {
-    return NextResponse.json({ error: "Erro ao gerar URL de acesso." }, { status: 500 });
+  // 5. Gerar URL — URL direta (CIM dinâmico, links externos) ou Storage assinada
+  let docUrl: string;
+  if (doc.storage_path.startsWith("http://") || doc.storage_path.startsWith("https://")) {
+    // URL direta — CIM gerado on-demand ou qualquer link externo
+    docUrl = doc.storage_path;
+  } else {
+    // Path de Storage Supabase — gera signed URL por 1 hora
+    const { data: signedData, error: urlErr } = await db.storage
+      .from("ma-documents")
+      .createSignedUrl(doc.storage_path, 3600);
+    if (urlErr || !signedData?.signedUrl) {
+      return NextResponse.json({ error: "Erro ao gerar URL de acesso." }, { status: 500 });
+    }
+    docUrl = signedData.signedUrl;
   }
 
   // 6. Registrar visualização
@@ -101,7 +108,7 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
     .eq("id", invite.id);
 
   return NextResponse.json({
-    url:         signedData.signedUrl,
+    url:         docUrl,
     expires_in:  3600,
     view_id:     viewRecord?.id ?? null,
     doc_label:   doc.label,
