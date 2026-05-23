@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { createNotification, notifyByRoles } from "@/lib/notify";
+import { notifyChatMensagemPartner } from "@/lib/email";
 
 function svc() {
   return sc(
@@ -109,6 +110,24 @@ export async function POST(req: NextRequest) {
       type: "info",
       action_url: "/chat",
     }).catch(() => {});
+
+    // Email para o partner
+    svc()
+      .from("profiles")
+      .select("email, full_name")
+      .eq("id", partnerId)
+      .single()
+      .then(({ data: partner }) => {
+        if (partner?.email) {
+          notifyChatMensagemPartner({
+            partnerEmail: partner.email,
+            partnerName: partner.full_name ?? "Partner",
+            senderName: profile.full_name ?? "Mesa V3",
+            preview: content.trim().slice(0, 200),
+          }).catch(() => {});
+        }
+      })
+      .catch(() => {});
   } else {
     // Mensagem de partner → notifica admins e gestão
     const partnerName = profile.full_name ?? "Partner";

@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
+import { notifyChatMensagemInstituicao } from "@/lib/email";
 
 const ADMIN_ROLES = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"];
 
@@ -63,5 +64,25 @@ export async function POST(request: Request) {
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // Email para a instituição (fire-and-forget)
+  const inst_id = room_id.replace("instituicao_", "");
+  svc()
+    .from("instituicoes")
+    .select("email, nome")
+    .eq("id", inst_id)
+    .single()
+    .then(({ data: inst }) => {
+      if (inst?.email) {
+        notifyChatMensagemInstituicao({
+          instituicaoEmail: inst.email,
+          instituicaoNome: inst.nome ?? "Instituição",
+          senderName: profile.full_name ?? "Mesa V3",
+          preview: content.trim().slice(0, 200),
+        }).catch(() => {});
+      }
+    })
+    .catch(() => {});
+
   return NextResponse.json({ message: msg }, { status: 201 });
 }

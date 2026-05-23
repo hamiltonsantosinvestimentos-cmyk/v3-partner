@@ -1086,3 +1086,96 @@ export async function notifyFollowUpsDodia(opts: {
     })
   );
 }
+
+// ── Notificação de nova mensagem no chat — para partner ────────────────────
+export async function notifyChatMensagemPartner(opts: {
+  partnerEmail: string;
+  partnerName: string;
+  senderName: string;
+  preview: string;
+}): Promise<void> {
+  const body = `
+    <p style="color:#C8D4E3;font-size:14px;margin:0 0 4px;">Olá, <strong>${opts.partnerName}</strong>!</p>
+    <p style="color:#7A96AF;font-size:13px;margin:0 0 20px;">
+      Você recebeu uma nova mensagem da equipe V3 Partners.
+    </p>
+    <div style="background:#0D1C2E;border-radius:10px;padding:20px;margin-bottom:16px;border-left:3px solid #C9A84C;">
+      <p style="margin:0 0 6px;font-size:11px;font-weight:700;color:#C9A84C;letter-spacing:0.08em;">MENSAGEM DE ${opts.senderName.toUpperCase()}</p>
+      <p style="margin:0;font-size:14px;color:#F0ECE4;line-height:1.6;">"${opts.preview}"</p>
+    </div>
+    <p style="color:#7A96AF;font-size:12px;">Acesse a plataforma para responder.</p>
+  `;
+  await send(
+    opts.partnerEmail,
+    `💬 Nova mensagem da Mesa V3 Partners`,
+    template("Nova mensagem no chat", body, {
+      label: "Abrir Chat",
+      url:   "https://app.v3partners.com.br/chat",
+    })
+  );
+}
+
+// ── Notificação de nova mensagem no chat — para instituição ───────────────
+export async function notifyChatMensagemInstituicao(opts: {
+  instituicaoEmail: string;
+  instituicaoNome: string;
+  senderName: string;
+  preview: string;
+}): Promise<void> {
+  const body = `
+    <p style="color:#C8D4E3;font-size:14px;margin:0 0 4px;">Olá, <strong>${opts.instituicaoNome}</strong>!</p>
+    <p style="color:#7A96AF;font-size:13px;margin:0 0 20px;">
+      A equipe Mesa V3 Partners enviou uma mensagem para você.
+    </p>
+    <div style="background:#0D1C2E;border-radius:10px;padding:20px;margin-bottom:16px;border-left:3px solid #C9A84C;">
+      <p style="margin:0 0 6px;font-size:11px;font-weight:700;color:#C9A84C;letter-spacing:0.08em;">MENSAGEM DE ${opts.senderName.toUpperCase()}</p>
+      <p style="margin:0;font-size:14px;color:#F0ECE4;line-height:1.6;">"${opts.preview}"</p>
+    </div>
+    <p style="color:#7A96AF;font-size:12px;">Acesse o portal da instituição para responder.</p>
+  `;
+  await send(
+    opts.instituicaoEmail,
+    `💬 Nova mensagem da Mesa V3 Partners`,
+    template("Nova mensagem no chat", body, {
+      label: "Acessar Portal",
+      url:   "https://app.v3partners.com.br/instituicao/dashboard",
+    })
+  );
+}
+
+// ── Notificação de mudança de etapa na proposta — para partner ─────────────
+export async function notifyPropostaEtapaPartner(opts: {
+  partnerEmail: string;
+  partnerName: string;
+  propostaId: string;
+  clienteNome: string;
+  etapaAnterior: string;
+  etapaNova: string;
+  observacao?: string;
+}): Promise<void> {
+  const body = `
+    <p style="color:#C8D4E3;font-size:14px;margin:0 0 4px;">Olá, <strong>${opts.partnerName}</strong>!</p>
+    <p style="color:#7A96AF;font-size:13px;margin:0 0 20px;">
+      Sua proposta teve uma atualização de status na Mesa Operacional.
+    </p>
+    <div style="background:#0D1C2E;border-radius:10px;padding:20px;margin-bottom:16px;">
+      <p style="margin:0 0 12px;font-size:11px;font-weight:700;color:#C9A84C;letter-spacing:0.08em;">PROPOSTA ATUALIZADA</p>
+      <p style="margin:0 0 8px;font-size:14px;font-weight:600;color:#F0ECE4;">${opts.clienteNome}</p>
+      <div style="display:flex;align-items:center;gap:12px;margin:12px 0;">
+        <span style="font-size:12px;color:#7A96AF;background:#1B3050;padding:4px 10px;border-radius:6px;">${opts.etapaAnterior}</span>
+        <span style="color:#C9A84C;font-size:14px;">→</span>
+        <span style="font-size:12px;font-weight:700;color:#F0ECE4;background:#C9A84C20;border:1px solid #C9A84C50;padding:4px 10px;border-radius:6px;">${opts.etapaNova}</span>
+      </div>
+      ${opts.observacao ? `<p style="margin:12px 0 0;font-size:13px;color:#C8D4E3;border-top:1px solid #1B3050;padding-top:12px;">${opts.observacao}</p>` : ""}
+    </div>
+    <p style="color:#7A96AF;font-size:12px;">Acesse a plataforma para ver os detalhes completos.</p>
+  `;
+  await send(
+    opts.partnerEmail,
+    `📋 Proposta atualizada — ${opts.clienteNome}`,
+    template("Atualização de proposta", body, {
+      label: "Ver Proposta",
+      url:   "https://app.v3partners.com.br/mesa-credito",
+    })
+  );
+}
