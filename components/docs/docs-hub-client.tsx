@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { FileText, Lock, BookOpen, ChevronRight, Shield, GitBranch } from "lucide-react";
+import { FileText, Lock, BookOpen, ChevronRight, Shield, GitBranch, Download, Loader2 } from "lucide-react";
+import { useState } from "react";
 
 interface Props {
   userRole: string;
@@ -14,6 +15,26 @@ const GOV_ROLES  = ["ADMIN", "GESTAO", "MESA"];
 export function DocsHubClient({ userRole, userName }: Props) {
   const canSeeTech = TECH_ROLES.includes(userRole);
   const canSeeGov  = GOV_ROLES.includes(userRole);
+  const [downloadingManual, setDownloadingManual] = useState(false);
+
+  async function handleDownloadManual() {
+    setDownloadingManual(true);
+    try {
+      const res = await fetch("/api/docs/manual-pdf");
+      if (!res.ok) throw new Error("Erro ao gerar PDF");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "manual-v3-partners.pdf";
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      alert("Erro ao gerar o manual. Tente novamente.");
+    } finally {
+      setDownloadingManual(false);
+    }
+  }
 
   return (
     <div className="min-h-screen" style={{ background: "#09081A", color: "#F0ECE4" }}>
@@ -192,6 +213,49 @@ export function DocsHubClient({ userRole, userName }: Props) {
             </Link>
           </div>
         )}
+
+        {/* Manual da Plataforma — Download PDF */}
+        <div className="mt-6">
+          <button onClick={handleDownloadManual} disabled={downloadingManual} className="block w-full text-left group">
+            <div
+              className="rounded-xl p-6 transition-all duration-200 group-hover:border-[#C9A84C]/40"
+              style={{ background: "#111F35", border: "1px solid #162744" }}
+            >
+              <div className="flex items-start justify-between mb-4">
+                <div
+                  className="rounded-lg flex items-center justify-center"
+                  style={{ width: 44, height: 44, background: "rgba(201,168,76,0.1)", border: "1px solid rgba(201,168,76,0.2)" }}
+                >
+                  <Download size={20} color="#C9A84C" />
+                </div>
+                <div className="flex items-center gap-2">
+                  {downloadingManual
+                    ? <Loader2 size={16} color="#C9A84C" className="animate-spin" />
+                    : <ChevronRight size={16} color="#7A8FA8" className="group-hover:translate-x-1 transition-transform" />}
+                </div>
+              </div>
+              <div
+                className="inline-block mb-3"
+                style={{ fontSize: 9, fontWeight: 700, letterSpacing: 2, textTransform: "uppercase", color: "#C9A84C", background: "rgba(201,168,76,0.1)", border: "1px solid rgba(201,168,76,0.2)", padding: "3px 10px", borderRadius: 20 }}
+              >
+                Todos · PDF
+              </div>
+              <h2 style={{ fontSize: 20, fontWeight: 700, color: "#F0ECE4", marginBottom: 8 }}>
+                {downloadingManual ? "Gerando PDF..." : "Manual Completo da Plataforma"}
+              </h2>
+              <p style={{ color: "#7A8FA8", fontSize: 13, lineHeight: 1.7 }}>
+                Manual didático completo com todos os módulos: Dashboard, CRM, Mesa de Crédito, M&A, Chat, IA, Academy e Financeiro. Gerado em PDF com identidade visual V3.
+              </p>
+              <div className="mt-4 flex flex-wrap gap-2">
+                {["14 páginas", "Todos os módulos", "PDF", "Didático"].map(tag => (
+                  <span key={tag} style={{ fontSize: 10, color: "#7A8FA8", background: "#162744", padding: "2px 8px", borderRadius: 4 }}>
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </button>
+        </div>
 
         {/* Info footer */}
         <div
