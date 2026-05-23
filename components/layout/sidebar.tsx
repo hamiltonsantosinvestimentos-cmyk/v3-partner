@@ -131,7 +131,7 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       {
         href: "/docs", label: "Manuais", icon: "BookOpen",
-        roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL", "FINANCEIRO", "PARTNER", "PARTNER_PRO"],
+        roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL", "FINANCEIRO"],
         children: [
           { href: "/docs/usuario",  label: "Manual do Usuário",  roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL", "FINANCEIRO"] },
           { href: "/docs/tecnico",  label: "Manual Técnico",     roles: ["ADMIN", "GESTAO"] },

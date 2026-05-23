@@ -56,6 +56,43 @@ export function DocsHubClient({ userRole, userName }: Props) {
           </p>
         </div>
 
+        {/* Manual Completo da Plataforma — Download PDF */}
+        <div className="mb-6">
+          <button onClick={handleDownloadManual} disabled={downloadingManual} className="block w-full text-left group">
+            <div
+              className="rounded-xl p-6 transition-all duration-200 group-hover:border-[#C9A84C]/40"
+              style={{ background: "#111F35", border: "1px solid #C9A84C30" }}
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div
+                    className="rounded-lg flex items-center justify-center flex-shrink-0"
+                    style={{ width: 48, height: 48, background: "rgba(201,168,76,0.15)", border: "1px solid rgba(201,168,76,0.3)" }}
+                  >
+                    {downloadingManual
+                      ? <Loader2 size={22} color="#C9A84C" className="animate-spin" />
+                      : <Download size={22} color="#C9A84C" />}
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 2, textTransform: "uppercase", color: "#C9A84C", background: "rgba(201,168,76,0.1)", border: "1px solid rgba(201,168,76,0.2)", padding: "2px 8px", borderRadius: 20 }}>
+                        PDF · 14 páginas
+                      </span>
+                    </div>
+                    <h2 style={{ fontSize: 18, fontWeight: 700, color: "#F0ECE4", marginBottom: 2 }}>
+                      {downloadingManual ? "Gerando PDF..." : "Manual Completo da Plataforma"}
+                    </h2>
+                    <p style={{ color: "#7A8FA8", fontSize: 12 }}>
+                      Dashboard · CRM · Mesa de Crédito · M&A · Chat · IA · Academy · Financeiro
+                    </p>
+                  </div>
+                </div>
+                <ChevronRight size={18} color="#C9A84C" className="group-hover:translate-x-1 transition-transform flex-shrink-0" />
+              </div>
+            </div>
+          </button>
+        </div>
+
         {/* Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
@@ -213,49 +250,6 @@ export function DocsHubClient({ userRole, userName }: Props) {
             </Link>
           </div>
         )}
-
-        {/* Manual da Plataforma — Download PDF */}
-        <div className="mt-6">
-          <button onClick={handleDownloadManual} disabled={downloadingManual} className="block w-full text-left group">
-            <div
-              className="rounded-xl p-6 transition-all duration-200 group-hover:border-[#C9A84C]/40"
-              style={{ background: "#111F35", border: "1px solid #162744" }}
-            >
-              <div className="flex items-start justify-between mb-4">
-                <div
-                  className="rounded-lg flex items-center justify-center"
-                  style={{ width: 44, height: 44, background: "rgba(201,168,76,0.1)", border: "1px solid rgba(201,168,76,0.2)" }}
-                >
-                  <Download size={20} color="#C9A84C" />
-                </div>
-                <div className="flex items-center gap-2">
-                  {downloadingManual
-                    ? <Loader2 size={16} color="#C9A84C" className="animate-spin" />
-                    : <ChevronRight size={16} color="#7A8FA8" className="group-hover:translate-x-1 transition-transform" />}
-                </div>
-              </div>
-              <div
-                className="inline-block mb-3"
-                style={{ fontSize: 9, fontWeight: 700, letterSpacing: 2, textTransform: "uppercase", color: "#C9A84C", background: "rgba(201,168,76,0.1)", border: "1px solid rgba(201,168,76,0.2)", padding: "3px 10px", borderRadius: 20 }}
-              >
-                Todos · PDF
-              </div>
-              <h2 style={{ fontSize: 20, fontWeight: 700, color: "#F0ECE4", marginBottom: 8 }}>
-                {downloadingManual ? "Gerando PDF..." : "Manual Completo da Plataforma"}
-              </h2>
-              <p style={{ color: "#7A8FA8", fontSize: 13, lineHeight: 1.7 }}>
-                Manual didático completo com todos os módulos: Dashboard, CRM, Mesa de Crédito, M&A, Chat, IA, Academy e Financeiro. Gerado em PDF com identidade visual V3.
-              </p>
-              <div className="mt-4 flex flex-wrap gap-2">
-                {["14 páginas", "Todos os módulos", "PDF", "Didático"].map(tag => (
-                  <span key={tag} style={{ fontSize: 10, color: "#7A8FA8", background: "#162744", padding: "2px 8px", borderRadius: 4 }}>
-                    {tag}
-                  </span>
-                ))}
-              </div>
-            </div>
-          </button>
-        </div>
 
         {/* Info footer */}
         <div
