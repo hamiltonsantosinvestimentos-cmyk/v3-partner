@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import Image from "next/image";
-import { ChevronRight, X, Menu, Check, Plus, ArrowRight, TrendingUp, Shield, Zap } from "lucide-react";
+import { ChevronRight, X, Menu, Check, Plus, ArrowRight, TrendingUp, Shield, Zap, MapPin } from "lucide-react";
 
 // ── Paleta V3 ──────────────────────────────────────────────────────────────
 const G  = "#C9A84C";
@@ -93,15 +93,14 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 }
 
 // ── CTABtn ─────────────────────────────────────────────────────────────────
-function CTABtn({ onClick, children, outline = false, large = false, full = false }: {
-  onClick: () => void; children: React.ReactNode;
-  outline?: boolean; large?: boolean; full?: boolean;
+function CTABtn({ onClick, children, outline = false, large = false }: {
+  onClick: () => void; children: React.ReactNode; outline?: boolean; large?: boolean;
 }) {
   const [hov, setHov] = useState(false);
   return (
     <button onClick={onClick}
       onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
-      className={`inline-flex items-center justify-center gap-2 font-bold transition-all${full ? " w-full" : ""}`}
+      className="inline-flex items-center justify-center gap-2 font-bold transition-all"
       style={{
         background: outline ? "transparent" : hov ? G2 : G,
         color: outline ? (hov ? G2 : G) : N,
@@ -131,7 +130,7 @@ function FAQItem({ n, q, a }: { n: number; q: string; a: string }) {
           <Plus size={17} />
         </div>
       </div>
-      <div style={{ maxHeight: open ? 420 : 0, overflow: "hidden", transition: "max-height 0.4s cubic-bezier(.4,0,.2,1)" }}>
+      <div style={{ maxHeight: open ? 440 : 0, overflow: "hidden", transition: "max-height 0.4s cubic-bezier(.4,0,.2,1)" }}>
         <p style={{ fontSize: 14, color: MT, lineHeight: 1.9, paddingBottom: 22 }}>{a}</p>
       </div>
     </div>
@@ -142,7 +141,7 @@ function FAQItem({ n, q, a }: { n: number; q: string; a: string }) {
 function ParallaxOrb({ top, left, size, delay }: { top: string; left: string; size: number; delay: number }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    const h = () => { if (ref.current) ref.current.style.transform = `translateY(${window.scrollY * 0.10 + delay}px)`; };
+    const h = () => { if (ref.current) ref.current.style.transform = `translateY(${window.scrollY * 0.09 + delay}px)`; };
     window.addEventListener("scroll", h, { passive: true });
     return () => window.removeEventListener("scroll", h);
   }, [delay]);
@@ -173,7 +172,7 @@ function StepCard({ n, title, body, delay = 0 }: { n: string; title: string; bod
   return (
     <Reveal delay={delay}>
       <div className="relative p-7 rounded-xl h-full" style={{ background: N2, border: `1px solid ${N4}` }}>
-        <div style={{ fontSize: "clamp(52px, 6vw, 72px)", fontWeight: 900, color: `${G}18`, lineHeight: 1, marginBottom: 16, letterSpacing: -2 }}>{n}</div>
+        <div style={{ fontSize: "clamp(52px, 6vw, 68px)", fontWeight: 900, color: `${G}18`, lineHeight: 1, marginBottom: 16, letterSpacing: -2 }}>{n}</div>
         <p style={{ fontWeight: 800, fontSize: 15, color: G, marginBottom: 8 }}>{title}</p>
         <p style={{ fontSize: 13, color: MT, lineHeight: 1.8 }}>{body}</p>
       </div>
@@ -208,6 +207,33 @@ function SolucaoCard({ titulo, desc, tags, delay = 0 }: { titulo: string; desc: 
         <h3 style={{ fontWeight: 800, fontSize: 13, color: hov ? G : CR, textTransform: "uppercase" as const, letterSpacing: 1.5, marginBottom: 7, transition: "color 0.2s" }}>{titulo}</h3>
         <p style={{ fontSize: 13, color: MT, lineHeight: 1.7, marginBottom: 9 }}>{desc}</p>
         <p style={{ fontSize: 10, color: G, fontWeight: 700, letterSpacing: 0.5 }}>{tags}</p>
+      </div>
+    </Reveal>
+  );
+}
+
+// ── CityBadge ──────────────────────────────────────────────────────────────
+function CityBadge({ city, state, status, delay = 0 }: { city: string; state: string; status: "ativa" | "abrindo" | "disponivel"; delay?: number }) {
+  const colors = {
+    ativa:      { bg: `${G}15`, border: `${G}40`, dot: G,         text: G,         label: "Ativa" },
+    abrindo:    { bg: `${N4}60`, border: N4,       dot: "#E8C97A", text: CR,         label: "Abrindo" },
+    disponivel: { bg: N3,        border: N4,        dot: MT,        text: MT,         label: "Disponível" },
+  };
+  const c = colors[status];
+  return (
+    <Reveal delay={delay}>
+      <div className="flex items-center justify-between px-4 py-3 rounded-lg" style={{ background: c.bg, border: `1px solid ${c.border}` }}>
+        <div className="flex items-center gap-3">
+          <MapPin size={13} color={c.dot} />
+          <div>
+            <p style={{ fontSize: 13, fontWeight: 700, color: c.text, lineHeight: 1 }}>{city}</p>
+            <p style={{ fontSize: 10, color: MT, marginTop: 2 }}>{state}</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <div style={{ width: 6, height: 6, borderRadius: "50%", background: c.dot }} />
+          <span style={{ fontSize: 10, color: c.dot, fontWeight: 700, letterSpacing: 1 }}>{c.label}</span>
+        </div>
       </div>
     </Reveal>
   );
@@ -270,7 +296,8 @@ export function LandingPageClient() {
       }}>
         <div className="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between gap-4">
           <p style={{ fontSize: 13, fontWeight: 600, color: CR }} className="hidden sm:block">
-            Partners V3 ganham até <span style={{ color: G }}>50% por operação.</span> Vagas limitadas por região.
+            V3 em expansão nacional —{" "}
+            <span style={{ color: G }}>vagas abertas por região. Garanta a sua praça.</span>
           </p>
           <button onClick={() => go("form")}
             className="flex items-center gap-2 font-bold ml-auto transition-all hover:opacity-85"
@@ -294,7 +321,7 @@ export function LandingPageClient() {
             <span style={{ fontWeight: 900, fontSize: 13, color: G, letterSpacing: 3.5 }}>V3 PARTNERS</span>
           </div>
           <div className="hidden md:flex items-center gap-8">
-            {[["Como funciona", "como"], ["Planos", "planos"], ["Soluções", "solucoes"], ["FAQ", "faq"]].map(([l, id]) => (
+            {[["Expansão", "expansao"], ["Como funciona", "como"], ["Planos", "planos"], ["FAQ", "faq"]].map(([l, id]) => (
               <button key={id} onClick={() => go(id)} style={{ fontSize: 12, fontWeight: 500, color: MT, letterSpacing: 0.5 }} className="hover:text-white transition-colors">{l}</button>
             ))}
           </div>
@@ -308,7 +335,7 @@ export function LandingPageClient() {
         </div>
         {menuOpen && (
           <div className="md:hidden px-6 py-4 space-y-1" style={{ background: "rgba(9,8,26,0.99)", borderTop: `1px solid ${N4}` }}>
-            {[["Como funciona", "como"], ["Planos", "planos"], ["Soluções", "solucoes"], ["FAQ", "faq"], ["Solicitar vaga", "form"]].map(([l, id]) => (
+            {[["Expansão", "expansao"], ["Como funciona", "como"], ["Planos", "planos"], ["FAQ", "faq"], ["Solicitar vaga", "form"]].map(([l, id]) => (
               <button key={id} onClick={() => go(id)} className="block w-full text-left py-3 text-sm" style={{ color: CR, borderBottom: `1px solid ${N4}` }}>{l}</button>
             ))}
           </div>
@@ -316,68 +343,71 @@ export function LandingPageClient() {
       </nav>
 
       {/* ═══════════════════════════════════════════════════════════════
-          01 · HERO — Dor primeiro, solução depois
+          01 · HERO — Expansão nacional, seja o primeiro da sua região
       ═══════════════════════════════════════════════════════════════ */}
       <section style={{ minHeight: "100vh", display: "flex", alignItems: "center", background: N, position: "relative", overflow: "hidden" }}>
         <div style={{ position: "absolute", inset: 0, backgroundImage: `linear-gradient(${N4}15 1px, transparent 1px), linear-gradient(to right, ${N4}15 1px, transparent 1px)`, backgroundSize: "72px 72px", opacity: 0.45 }} />
         <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: `linear-gradient(90deg, transparent, ${G}, transparent)` }} />
-        <ParallaxOrb top="5%"  left="58%" size={800} delay={0}  />
-        <ParallaxOrb top="55%" left="-8%" size={500} delay={18} />
-        <ParallaxOrb top="75%" left="78%" size={320} delay={8}  />
+        <ParallaxOrb top="5%"  left="60%" size={750} delay={0} />
+        <ParallaxOrb top="55%" left="-6%" size={480} delay={15} />
+        <ParallaxOrb top="72%" left="80%" size={320} delay={8} />
         <div style={{ position: "absolute", inset: 0, background: `radial-gradient(ellipse 80% 80% at 50% 50%, transparent 30%, ${N} 100%)`, pointerEvents: "none" }} />
 
         <div className="max-w-5xl mx-auto px-6 relative w-full" style={{ paddingTop: 160, paddingBottom: 120 }}>
 
-          {/* Badge */}
+          {/* Badge de expansão */}
           <Reveal direction="none">
-            <div className="inline-flex items-center gap-2 mb-8" style={{ background: `${G}12`, border: `1px solid ${G}30`, borderRadius: 40, padding: "6px 18px" }}>
-              <div style={{ width: 6, height: 6, borderRadius: "50%", background: G }} />
-              <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: 2.5, color: G }}>LICENCIAMENTO V3 PARTNERS</span>
+            <div className="inline-flex items-center gap-2 mb-8" style={{ background: `${G}12`, border: `1px solid ${G}30`, borderRadius: 40, padding: "6px 20px" }}>
+              <div style={{ width: 7, height: 7, borderRadius: "50%", background: G, boxShadow: `0 0 8px ${G}` }} />
+              <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: 2.5, color: G }}>EXPANSÃO NACIONAL 2026 · VAGAS ABERTAS</span>
             </div>
           </Reveal>
 
           {/* Headline */}
           <Reveal direction="up" delay={80}>
-            <h1 style={{ fontSize: "clamp(38px, 7vw, 82px)", fontWeight: 900, lineHeight: 1.02, color: CR, letterSpacing: -1.5, marginBottom: 0, maxWidth: 900 }}>
-              Enquanto você lê isso, um consultor está
+            <h1 style={{ fontSize: "clamp(36px, 6.5vw, 78px)", fontWeight: 900, lineHeight: 1.02, color: CR, letterSpacing: -1.5, marginBottom: 0, maxWidth: 860 }}>
+              A V3 Partners está chegando
             </h1>
           </Reveal>
           <Reveal direction="up" delay={160}>
-            <h1 style={{
-              fontSize: "clamp(38px, 7vw, 82px)", fontWeight: 900, lineHeight: 1.02, letterSpacing: -1.5, marginBottom: 32,
-              background: `linear-gradient(125deg, ${G} 0%, ${G2} 55%, ${G} 100%)`,
-              WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text",
-            }}>
-              embolsando R$400 mil em comissão.
+            <h1 style={{ fontSize: "clamp(36px, 6.5vw, 78px)", fontWeight: 900, lineHeight: 1.02, letterSpacing: -1.5, marginBottom: 10 }}>
+              <span style={{ background: `linear-gradient(125deg, ${G} 0%, ${G2} 55%, ${G} 100%)`, WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text" }}>
+                à sua região.
+              </span>
+            </h1>
+          </Reveal>
+          <Reveal direction="up" delay={220}>
+            <h1 style={{ fontSize: "clamp(36px, 6.5vw, 78px)", fontWeight: 900, lineHeight: 1.02, color: CR, letterSpacing: -1.5, marginBottom: 36 }}>
+              Seja o primeiro.
             </h1>
           </Reveal>
 
-          <Reveal direction="up" delay={240}>
-            <p style={{ fontSize: "clamp(16px, 1.8vw, 20px)", color: MT, lineHeight: 1.8, maxWidth: 660, marginBottom: 14 }}>
-              No V3 Partner Program, um único negócio fechado pode render até <strong style={{ color: CR }}>R$400.000 em comissão</strong> — com até 50% do resultado de cada operação indo direto para você.
+          <Reveal direction="up" delay={300}>
+            <p style={{ fontSize: "clamp(16px, 1.8vw, 20px)", color: MT, lineHeight: 1.8, maxWidth: 680, marginBottom: 14 }}>
+              Estamos expandindo nossa rede de Partners por todo o Brasil. <strong style={{ color: CR }}>Uma vaga por praça.</strong> Quem chegar primeiro garante exclusividade de território em uma boutique institucional de crédito estruturado, M&A e soluções financeiras high ticket.
             </p>
-            <p style={{ fontSize: "clamp(15px, 1.6vw, 17px)", color: `${CR}90`, lineHeight: 1.75, maxWidth: 660, marginBottom: 52, fontStyle: "italic" }}>
-              Enquanto isso, a maioria dos consultores ainda opera com 0,5% a 2% em produtos convencionais. Essa diferença é o nosso programa.
+            <p style={{ fontSize: "clamp(15px, 1.5vw, 17px)", color: `${CR}85`, lineHeight: 1.75, maxWidth: 640, marginBottom: 52, fontStyle: "italic" }}>
+              Comissões de 30% a 50% por operação. Tickets de R$200K a R$20M. Suporte institucional completo. Você origina — a V3 estrutura e fecha.
             </p>
           </Reveal>
 
-          <Reveal direction="up" delay={320}>
+          <Reveal direction="up" delay={380}>
             <div className="flex flex-wrap gap-4">
-              <CTABtn onClick={() => go("form")} large>Quero garantir minha vaga</CTABtn>
-              <CTABtn onClick={() => go("como")} outline large>Ver como funciona</CTABtn>
+              <CTABtn onClick={() => go("form")} large>Garantir minha vaga</CTABtn>
+              <CTABtn onClick={() => go("expansao")} outline large>Ver cidades abertas</CTABtn>
             </div>
           </Reveal>
 
-          {/* Credibility numbers */}
+          {/* Numbers */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-20">
             {[
-              { n: 50, suf: "%",  pre: "até ", label: "de comissão por operação" },
-              { n: 4,  suf: "",              label: "verticais de alto ticket" },
-              { n: 400, suf: "K+", pre: "R$", label: "por operação possível" },
-              { n: 10,  suf: "+",            label: "módulos na plataforma" },
+              { n: 27,  suf: "",   label: "estados sendo mapeados" },
+              { n: 50,  suf: "%",  pre: "até ", label: "de comissão por operação" },
+              { n: 400, suf: "K+", pre: "R$",   label: "por operação possível" },
+              { n: 4,   suf: "",   label: "verticais de alto ticket" },
             ].map(({ n, suf, label, pre = "" }, i) => (
-              <Reveal key={label} delay={420 + i * 70}>
-                <div className="rounded-2xl p-6 text-center" style={{ background: "rgba(17,31,53,0.75)", border: `1px solid ${N4}`, backdropFilter: "blur(16px)" }}>
+              <Reveal key={label} delay={440 + i * 65}>
+                <div className="rounded-2xl p-6 text-center" style={{ background: "rgba(17,31,53,0.8)", border: `1px solid ${N4}`, backdropFilter: "blur(16px)" }}>
                   <p style={{ fontSize: "clamp(24px, 3.5vw, 36px)", fontWeight: 900, color: G, lineHeight: 1 }}>
                     {pre}<Counter to={n} suffix={suf} />
                   </p>
@@ -389,17 +419,15 @@ export function LandingPageClient() {
         </div>
       </section>
 
-      {/* ═══════════════════════════════════════════════════════════════
-          02 · CREDIBILITY BAR
-      ═══════════════════════════════════════════════════════════════ */}
+      {/* ── CREDIBILITY BAR ─────────────────────────────────────────────── */}
       <div style={{ background: N2, borderTop: `1px solid ${N4}`, borderBottom: `1px solid ${N4}`, padding: "20px 0" }}>
         <div className="max-w-5xl mx-auto px-6">
           <div className="flex flex-wrap items-center justify-center gap-8 md:gap-16">
             {[
               { icon: "🏛️", text: "Boutique institucional multiproduto" },
-              { icon: "⚡", text: "Infraestrutura Bloxs S.A." },
-              { icon: "🔒", text: "KYC, Compliance e RLS" },
+              { icon: "📈", text: "Crédito, M&A e Securitização" },
               { icon: "🤖", text: "IA FORJA proprietária" },
+              { icon: "⚖️", text: "Compliance e KYC integrados" },
               { icon: "📜", text: "CNPJ 14.219.287/0001-50" },
             ].map(({ icon, text }) => (
               <div key={text} className="flex items-center gap-2.5">
@@ -412,78 +440,45 @@ export function LandingPageClient() {
       </div>
 
       {/* ═══════════════════════════════════════════════════════════════
-          03 · DOR — Você se identifica?
+          02 · O QUE É — Boutique institucional em expansão
       ═══════════════════════════════════════════════════════════════ */}
       <section style={{ background: N, padding: "110px 0", position: "relative", overflow: "hidden" }}>
         <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 1, background: `linear-gradient(90deg, transparent, ${G}30, transparent)` }} />
-        <div className="max-w-5xl mx-auto px-6">
-          <SectionLabel>A realidade de quem está de fora</SectionLabel>
-          <Reveal>
-            <h2 style={{ fontSize: "clamp(22px, 3.5vw, 44px)", fontWeight: 800, color: CR, lineHeight: 1.25, marginBottom: 14, maxWidth: 780 }}>
-              Você está no mercado financeiro — mas está sendo pago como deveria?
-            </h2>
-          </Reveal>
-          <Reveal delay={100}>
-            <p style={{ fontSize: 16, color: MT, lineHeight: 1.85, maxWidth: 680, marginBottom: 56 }}>
-              A maioria dos profissionais de finanças opera com produtos limitados, comissões mínimas e sem acesso à mesa institucional. O resultado: clientes de alto padrão fecham com boutiques que você nunca vai conseguir concorrer — até agora.
-            </p>
-          </Reveal>
-          <div className="grid sm:grid-cols-2 md:grid-cols-4 gap-4">
-            <PainCard delay={0}   icon="😤" title="Clientes pedem o que você não tem"       body="Empresas precisam de crédito estruturado, M&A, FIDC — e você não tem onde encaminhar. Perde o negócio." />
-            <PainCard delay={80}  icon="💸" title="Comissão de 1% enquanto outros levam 50%" body="Na mesma operação que você ganha R$5.000, um partner institucional embolsa R$200.000. A diferença é o produto." />
-            <PainCard delay={160} icon="🏗️" title="Sem estrutura para fechar o grande"       body="Operação de R$5M exige análise, compliance, jurídico, IA. Sem infraestrutura, a oportunidade vai embora." />
-            <PainCard delay={240} icon="📉" title="Sem credencial institucional"              body="Grandes empresas e investidores exigem boutique com track record. Você tem o relacionamento — falta o endosso." />
-          </div>
-          <Reveal delay={300}>
-            <div className="rounded-2xl p-8 mt-12" style={{ background: `${G}0A`, border: `1px solid ${G}25` }}>
-              <p style={{ fontSize: "clamp(17px, 2.2vw, 22px)", fontWeight: 700, color: CR, lineHeight: 1.55, margin: 0 }}>
-                Esse problema tem solução. E ela não exige que você mude de carreira —{" "}
-                <span style={{ color: G }}>só que você mude a prateleira de produtos que oferece.</span>
-              </p>
-            </div>
-          </Reveal>
-        </div>
-      </section>
-
-      {/* ═══════════════════════════════════════════════════════════════
-          04 · SOLUÇÃO — O que é o programa
-      ═══════════════════════════════════════════════════════════════ */}
-      <section style={{ background: N2, padding: "110px 0", position: "relative" }}>
-        <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 1, background: `linear-gradient(90deg, transparent, ${G}40, transparent)` }} />
-        <div className="max-w-5xl mx-auto px-6">
-          <SectionLabel>A solução</SectionLabel>
+        <div style={{ position: "absolute", inset: 0, background: `radial-gradient(ellipse 55% 55% at 50% 50%, ${G}06 0%, transparent 70%)`, pointerEvents: "none" }} />
+        <div className="max-w-5xl mx-auto px-6 relative">
+          <SectionLabel>O que é a V3 Partners</SectionLabel>
           <div className="grid md:grid-cols-2 gap-16 items-center">
             <div>
               <Reveal direction="left">
-                <h2 style={{ fontSize: "clamp(26px, 4vw, 48px)", fontWeight: 900, color: CR, lineHeight: 1.2, marginBottom: 24 }}>
-                  O V3 Partner Program coloca você dentro do mercado institucional.
+                <h2 style={{ fontSize: "clamp(24px, 3.5vw, 44px)", fontWeight: 900, color: CR, lineHeight: 1.2, marginBottom: 24 }}>
+                  Uma boutique financeira institucional. Não um banco. Não uma corretora. Algo maior.
                 </h2>
               </Reveal>
               <Reveal direction="left" delay={100}>
                 <p style={{ fontSize: 16, color: MT, lineHeight: 1.9, marginBottom: 20 }}>
-                  A V3 Partners é uma boutique financeira institucional especializada em crédito estruturado, M&A, securitização e real estate. Você traz o relacionamento. Nós trazemos a estrutura, o compliance, a tecnologia e o endosso institucional.
+                  A V3 Partners é especializada em operações de crédito estruturado, M&A (fusões e aquisições), securitização de recebíveis e real estate. Atuamos com soluções financeiras que o mercado convencional não entrega — tickets a partir de R$200 mil, com análise institucional e estruturação completa.
                 </p>
               </Reveal>
               <Reveal direction="left" delay={180}>
                 <p style={{ fontSize: 16, color: MT, lineHeight: 1.9, marginBottom: 40 }}>
-                  Com infraestrutura <strong style={{ color: CR }}>Bloxs S.A.</strong> para tokenização, KYC e liquidação OTC/cripto 24/7, você opera no mesmo nível das maiores boutiques do país — com o seu nome na frente.
+                  Nossa expansão nacional abre uma oportunidade única: ser o <strong style={{ color: CR }}>representante V3 na sua cidade</strong>, com exclusividade de praça, suporte da mesa institucional e uma plataforma com IA proprietária para operar no nível das maiores boutiques do país.
                 </p>
               </Reveal>
               <Reveal delay={240}>
-                <CTABtn onClick={() => go("form")}>Quero fazer parte</CTABtn>
+                <CTABtn onClick={() => go("form")}>Quero ser o Partner da minha cidade</CTABtn>
               </Reveal>
             </div>
             <div className="grid grid-cols-2 gap-4">
               {[
                 ["🏛️", "Crédito Estruturado",   "CGI, FIDC, CRI, Home Equity"],
-                ["📈", "M&A & Deal Rooms",       "IA FORJA, Teaser, CIM"],
-                ["🌐", "Cross-Border 24/7",      "OTC, cripto, liquidação"],
+                ["📈", "M&A & Deal Rooms",       "IA FORJA, Teaser, CIM, VDR"],
+                ["💎", "Securitização",           "Recebíveis, precatórios, FIDC"],
                 ["🏗️", "Real Estate",            "SLB, BTS, BTR, Fundos"],
-                ["🤖", "7 Squads de IA",         "especializados por vertical"],
-                ["⚖️", "Compliance & KYC",       "trilha, risco, auditoria"],
+                ["🤖", "Plataforma com IA",      "7 squads especializados"],
+                ["⚖️", "Compliance & KYC",       "Trilha, risco, auditoria"],
               ].map(([icon, t, d], i) => (
                 <Reveal key={t} delay={i * 65}>
-                  <div className="rounded-xl p-5 h-full" style={{ background: N3, border: `1px solid ${N4}` }}>
+                  <div className="rounded-xl p-5 h-full" style={{ background: N2, border: `1px solid ${N4}` }}>
                     <div className="text-xl mb-3">{icon}</div>
                     <p style={{ fontWeight: 700, fontSize: 13, color: CR, marginBottom: 4 }}>{t}</p>
                     <p style={{ fontSize: 11, color: MT, lineHeight: 1.5 }}>{d}</p>
@@ -496,26 +491,188 @@ export function LandingPageClient() {
       </section>
 
       {/* ═══════════════════════════════════════════════════════════════
-          05 · COMO FUNCIONA — 4 passos simples
+          03 · DOR — O que acontece com quem fica de fora
       ═══════════════════════════════════════════════════════════════ */}
-      <section id="como" style={{ background: N, padding: "110px 0", position: "relative" }}>
+      <section style={{ background: N2, padding: "110px 0", position: "relative" }}>
+        <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 1, background: `linear-gradient(90deg, transparent, ${G}40, transparent)` }} />
+        <div className="max-w-5xl mx-auto px-6">
+          <SectionLabel>Por que agir agora</SectionLabel>
+          <Reveal>
+            <h2 style={{ fontSize: "clamp(22px, 3.5vw, 44px)", fontWeight: 800, color: CR, lineHeight: 1.25, marginBottom: 14, maxWidth: 820 }}>
+              Toda expansão abre janelas. E fecha logo depois.
+            </h2>
+          </Reveal>
+          <Reveal delay={80}>
+            <p style={{ fontSize: 16, color: MT, lineHeight: 1.85, maxWidth: 700, marginBottom: 52 }}>
+              Quando uma boutique institucional entra em uma nova praça, o primeiro parceiro que se posiciona captura o território. Depois que as vagas fecham, a única forma de entrar é esperar — se é que outra vaga abre. Isso é o que está acontecendo agora.
+            </p>
+          </Reveal>
+          <div className="grid sm:grid-cols-2 md:grid-cols-4 gap-4">
+            <PainCard delay={0}   icon="🗺️" title="Sua praça ainda está aberta"          body="A maioria das cidades brasileiras ainda não tem um Partner V3 ativo. A janela para ser o primeiro está aberta — mas não por muito tempo." />
+            <PainCard delay={80}  icon="💸" title="Comissão de 1% enquanto outros levam 50%" body="Na mesma operação que você ganha R$5.000 com produto convencional, um Partner institucional embolsa R$200.000. A diferença é o produto." />
+            <PainCard delay={160} icon="🏗️" title="Sem estrutura, a oportunidade vai embora" body="Operação de R$5M exige análise, compliance, IA e jurídico. Sem infraestrutura institucional, o cliente leva para quem tem." />
+            <PainCard delay={240} icon="📉" title="Network valioso, produto limitado"       body="Você conhece empresários, executivos, CFOs. Mas o produto que carrega não corresponde ao tamanho da oportunidade que eles representam." />
+          </div>
+          <Reveal delay={300}>
+            <div className="rounded-2xl p-8 mt-12" style={{ background: `${G}0A`, border: `1px solid ${G}25` }}>
+              <p style={{ fontSize: "clamp(17px, 2.2vw, 22px)", fontWeight: 700, color: CR, lineHeight: 1.55, margin: 0 }}>
+                A V3 está chegando na sua cidade.{" "}
+                <span style={{ color: G }}>A vaga de Partner é para quem agir primeiro — não para quem pensar mais.</span>
+              </p>
+            </div>
+          </Reveal>
+        </div>
+      </section>
+
+      {/* ═══════════════════════════════════════════════════════════════
+          04 · EXPANSÃO — Mapa de cidades
+      ═══════════════════════════════════════════════════════════════ */}
+      <section id="expansao" style={{ background: N, padding: "110px 0", position: "relative", overflow: "hidden" }}>
         <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 1, background: `linear-gradient(90deg, transparent, ${G}30, transparent)` }} />
-        <div style={{ position: "absolute", inset: 0, background: `radial-gradient(ellipse 55% 55% at 50% 50%, ${G}06 0%, transparent 70%)`, pointerEvents: "none" }} />
+        <div style={{ position: "absolute", inset: 0, background: `radial-gradient(ellipse 60% 55% at 50% 50%, ${G}07 0%, transparent 70%)`, pointerEvents: "none" }} />
+        <ParallaxOrb top="10%" left="75%" size={500} delay={5} />
         <div className="max-w-5xl mx-auto px-6 relative">
+          <SectionLabel>Status de expansão por região</SectionLabel>
+          <Reveal>
+            <h2 style={{ fontSize: "clamp(22px, 3.2vw, 40px)", fontWeight: 800, color: CR, lineHeight: 1.25, marginBottom: 16, maxWidth: 760 }}>
+              Uma praça. Um Partner. Exclusividade garantida.
+            </h2>
+          </Reveal>
+          <Reveal delay={80}>
+            <p style={{ fontSize: 16, color: MT, lineHeight: 1.8, maxWidth: 680, marginBottom: 52 }}>
+              Cada cidade opera com um único representante V3 licenciado. Isso garante foco, qualidade no atendimento e proteção do território do Partner ativo. Veja o status das principais praças.
+            </p>
+          </Reveal>
+
+          <div className="grid md:grid-cols-3 gap-10 mb-14">
+            {/* Sudeste */}
+            <div>
+              <Reveal>
+                <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: 3, color: G, marginBottom: 14 }}>SUDESTE</p>
+              </Reveal>
+              <div className="space-y-2.5">
+                <CityBadge delay={0}   city="São Paulo"      state="SP" status="ativa"      />
+                <CityBadge delay={60}  city="Rio de Janeiro" state="RJ" status="abrindo"    />
+                <CityBadge delay={120} city="Belo Horizonte" state="MG" status="abrindo"    />
+                <CityBadge delay={180} city="Campinas"       state="SP" status="disponivel" />
+                <CityBadge delay={240} city="Ribeirão Preto" state="SP" status="disponivel" />
+                <CityBadge delay={300} city="Vitória"        state="ES" status="disponivel" />
+              </div>
+            </div>
+            {/* Sul + Centro-Oeste */}
+            <div>
+              <Reveal>
+                <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: 3, color: G, marginBottom: 14 }}>SUL · CENTRO-OESTE</p>
+              </Reveal>
+              <div className="space-y-2.5">
+                <CityBadge delay={0}   city="Curitiba"          state="PR" status="abrindo"    />
+                <CityBadge delay={60}  city="Porto Alegre"       state="RS" status="disponivel" />
+                <CityBadge delay={120} city="Florianópolis"      state="SC" status="disponivel" />
+                <CityBadge delay={180} city="Brasília"           state="DF" status="abrindo"    />
+                <CityBadge delay={240} city="Goiânia"            state="GO" status="disponivel" />
+                <CityBadge delay={300} city="Campo Grande"       state="MS" status="disponivel" />
+              </div>
+            </div>
+            {/* Norte + Nordeste */}
+            <div>
+              <Reveal>
+                <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: 3, color: G, marginBottom: 14 }}>NORTE · NORDESTE</p>
+              </Reveal>
+              <div className="space-y-2.5">
+                <CityBadge delay={0}   city="Salvador"    state="BA" status="abrindo"    />
+                <CityBadge delay={60}  city="Fortaleza"   state="CE" status="disponivel" />
+                <CityBadge delay={120} city="Recife"      state="PE" status="disponivel" />
+                <CityBadge delay={180} city="Manaus"      state="AM" status="disponivel" />
+                <CityBadge delay={240} city="Belém"       state="PA" status="disponivel" />
+                <CityBadge delay={300} city="Maceió"      state="AL" status="disponivel" />
+              </div>
+            </div>
+          </div>
+
+          {/* Legenda */}
+          <Reveal>
+            <div className="flex flex-wrap gap-6 mb-12">
+              {[
+                { dot: G,         label: "Ativa — vaga ocupada" },
+                { dot: G2,        label: "Abrindo — processo em andamento" },
+                { dot: MT,        label: "Disponível — vaga aberta" },
+              ].map(({ dot, label }) => (
+                <div key={label} className="flex items-center gap-2">
+                  <div style={{ width: 8, height: 8, borderRadius: "50%", background: dot, flexShrink: 0 }} />
+                  <span style={{ fontSize: 12, color: MT }}>{label}</span>
+                </div>
+              ))}
+            </div>
+          </Reveal>
+
+          <Reveal delay={100}>
+            <div className="rounded-xl p-6 mb-10" style={{ background: N2, border: `1px solid ${N4}` }}>
+              <p style={{ fontSize: 14, color: MT, lineHeight: 1.8 }}>
+                <strong style={{ color: CR }}>Sua cidade não está na lista?</strong>{" "}
+                Não importa. Estamos mapeando o Brasil inteiro. Preencha o formulário, informe sua cidade e nossa equipe avalia a abertura da praça junto com você.
+              </p>
+            </div>
+          </Reveal>
+
+          <Reveal delay={140}>
+            <CTABtn onClick={() => go("form")}>Verificar minha praça</CTABtn>
+          </Reveal>
+        </div>
+      </section>
+
+      {/* ═══════════════════════════════════════════════════════════════
+          05 · COMO FUNCIONA — 4 passos
+      ═══════════════════════════════════════════════════════════════ */}
+      <section id="como" style={{ background: N2, padding: "110px 0", position: "relative" }}>
+        <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 1, background: `linear-gradient(90deg, transparent, ${G}40, transparent)` }} />
+        <div className="max-w-5xl mx-auto px-6">
           <SectionLabel>Como funciona</SectionLabel>
           <Reveal>
             <h2 style={{ fontSize: "clamp(22px, 3.2vw, 38px)", fontWeight: 800, color: CR, lineHeight: 1.3, marginBottom: 56, maxWidth: 680 }}>
-              Quatro passos. Do zero à primeira comissão.
+              Do licenciamento à primeira comissão. Quatro passos.
             </h2>
           </Reveal>
           <div className="grid sm:grid-cols-2 md:grid-cols-4 gap-5 mb-14">
-            <StepCard delay={0}   n="01" title="Licencie-se"  body="Escolha seu plano, assine o contrato digitalmente e receba acesso à plataforma em até 24h." />
-            <StepCard delay={90}  n="02" title="Capacite-se"  body="Complete o onboarding no Academy V3. Treinamentos, materiais e reuniões semanais com a mesa." />
-            <StepCard delay={180} n="03" title="Origine"      body="Traga clientes. A V3 analisa, estrutura, conduz o compliance e fecha a operação com qualidade institucional." />
-            <StepCard delay={270} n="04" title="Receba"       body="Sua comissão é rastreada em tempo real na plataforma e paga após a liquidação da operação." />
+            <StepCard delay={0}   n="01" title="Licencie-se" body="Escolha seu plano, assine o contrato digitalmente e receba acesso à plataforma V3 em até 24 horas." />
+            <StepCard delay={90}  n="02" title="Capacite-se" body="Onboarding guiado pelo Academy V3. Materiais comerciais, reuniões semanais de capacitação com a mesa." />
+            <StepCard delay={180} n="03" title="Origine"     body="Você traz o cliente. A V3 analisa, estrutura, conduz o compliance e fecha a operação com qualidade institucional." />
+            <StepCard delay={270} n="04" title="Receba"      body="Sua comissão (30% ou 50%) é rastreada em tempo real na plataforma e paga após a liquidação da operação." />
           </div>
-          <Reveal delay={320}>
-            <CTABtn onClick={() => go("form")}>Começar agora</CTABtn>
+
+          {/* Divisão de trabalho */}
+          <Reveal delay={300}>
+            <div className="rounded-2xl overflow-hidden" style={{ border: `1px solid ${N4}` }}>
+              <div className="grid grid-cols-2" style={{ borderBottom: `1px solid ${N4}` }}>
+                <div className="px-8 py-5" style={{ background: N3, borderRight: `1px solid ${N4}` }}>
+                  <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: 2.5, color: MT }}>VOCÊ FAZ</p>
+                </div>
+                <div className="px-8 py-5" style={{ background: `${G}0C` }}>
+                  <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: 2.5, color: G }}>A V3 FAZ</p>
+                </div>
+              </div>
+              {[
+                ["Prospecta e apresenta o produto", "Analisa e estrutura a operação"],
+                ["Qualifica o cliente e coleta documentos", "Conduz compliance e KYC"],
+                ["Acompanha o relacionamento", "Negocia com fundos e instituições"],
+                ["Participa das reuniões estratégicas", "Garante qualidade institucional"],
+                ["Recebe 30% a 50% do resultado", "Opera como mandatária da operação"],
+              ].map(([voce, v3], i) => (
+                <div key={i} className="grid grid-cols-2" style={{ borderBottom: i < 4 ? `1px solid ${N4}` : "none" }}>
+                  <div className="px-8 py-4" style={{ background: N3, borderRight: `1px solid ${N4}` }}>
+                    <p style={{ fontSize: 13, color: MT }}>{voce}</p>
+                  </div>
+                  <div className="px-8 py-4" style={{ background: `${G}06` }}>
+                    <p style={{ fontSize: 13, color: CR, fontWeight: 500 }}>{v3}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Reveal>
+
+          <Reveal delay={350}>
+            <div className="mt-10">
+              <CTABtn onClick={() => go("form")}>Começar agora</CTABtn>
+            </div>
           </Reveal>
         </div>
       </section>
@@ -523,8 +680,8 @@ export function LandingPageClient() {
       {/* ═══════════════════════════════════════════════════════════════
           06 · COMPARAÇÃO — V3 vs mercado convencional
       ═══════════════════════════════════════════════════════════════ */}
-      <section style={{ background: N2, padding: "110px 0", position: "relative" }}>
-        <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 1, background: `linear-gradient(90deg, transparent, ${G}40, transparent)` }} />
+      <section style={{ background: N, padding: "110px 0", position: "relative" }}>
+        <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 1, background: `linear-gradient(90deg, transparent, ${G}30, transparent)` }} />
         <div className="max-w-5xl mx-auto px-6">
           <SectionLabel>Por que o V3 Partner Program é diferente</SectionLabel>
           <Reveal>
@@ -532,11 +689,8 @@ export function LandingPageClient() {
               A diferença entre ganhar 1% e ganhar 50% é o produto que você carrega.
             </h2>
           </Reveal>
-
-          {/* Comparison table */}
           <div className="rounded-2xl overflow-hidden mb-14" style={{ border: `1px solid ${N4}` }}>
-            {/* Header */}
-            <div className="grid grid-cols-3 gap-2 px-6 py-4" style={{ background: N3, borderBottom: `1px solid ${N4}` }}>
+            <div className="grid grid-cols-3 gap-2 px-6 py-4" style={{ background: N2, borderBottom: `1px solid ${N4}` }}>
               <p style={{ fontSize: 11, fontWeight: 700, color: MT, letterSpacing: 2 }}></p>
               <div className="text-center rounded-lg py-2" style={{ background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)" }}>
                 <p style={{ fontSize: 11, fontWeight: 700, color: "#EF4444", letterSpacing: 1.5 }}>MERCADO CONVENCIONAL</p>
@@ -547,51 +701,50 @@ export function LandingPageClient() {
             </div>
             <div className="px-6">
               <CompareRow delay={0}   label="Comissão média"        bad="0,5% a 2%"              good="30% a 50%" />
-              <CompareRow delay={60}  label="Ticket mínimo"         bad="R$5K a R$50K"           good="R$200.000+" />
-              <CompareRow delay={120} label="Portfólio"             bad="CDB, seguros, fundos"   good="Crédito estruturado, M&A, FIDC" />
-              <CompareRow delay={180} label="Suporte operacional"   bad="Nenhum"                 good="Mesa institucional dedicada" />
-              <CompareRow delay={240} label="Tecnologia"            bad="Planilha ou CRM básico" good="SaaS próprio + 7 squads de IA" />
-              <CompareRow delay={300} label="Credencial"            bad="Produto commodity"      good="Boutique institucional" />
-              <CompareRow delay={360} label="Potencial por deal"    bad="R$500 a R$5.000"        good="R$10.000 a R$400.000+" />
+              <CompareRow delay={55}  label="Ticket mínimo"         bad="R$5K a R$50K"           good="R$200.000+" />
+              <CompareRow delay={110} label="Portfólio"             bad="CDB, seguros, fundos"   good="Crédito estruturado, M&A, FIDC" />
+              <CompareRow delay={165} label="Suporte operacional"   bad="Nenhum"                 good="Mesa institucional dedicada" />
+              <CompareRow delay={220} label="Tecnologia"            bad="Planilha ou CRM básico" good="SaaS próprio + 7 squads de IA" />
+              <CompareRow delay={275} label="Credencial"            bad="Produto commodity"      good="Boutique institucional" />
+              <CompareRow delay={330} label="Potencial por operação" bad="R$500 a R$5.000"       good="R$10.000 a R$400.000+" />
             </div>
           </div>
-
-          <Reveal delay={380}>
+          <Reveal delay={350}>
             <CTABtn onClick={() => go("form")}>Quero operar no nível institucional</CTABtn>
           </Reveal>
         </div>
       </section>
 
       {/* ═══════════════════════════════════════════════════════════════
-          07 · SOLUÇÕES — O que você distribui
+          07 · SOLUÇÕES — Portfólio completo
       ═══════════════════════════════════════════════════════════════ */}
-      <section id="solucoes" style={{ background: N, padding: "110px 0", position: "relative" }}>
+      <section id="solucoes" style={{ background: N2, padding: "110px 0", position: "relative" }}>
         <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 1, background: `linear-gradient(90deg, transparent, ${G}30, transparent)` }} />
         <div className="max-w-5xl mx-auto px-6">
-          <SectionLabel>Portfólio completo de soluções</SectionLabel>
+          <SectionLabel>Portfólio de soluções</SectionLabel>
           <Reveal>
             <h2 style={{ fontSize: "clamp(22px, 3.2vw, 38px)", fontWeight: 800, color: CR, lineHeight: 1.3, marginBottom: 16, maxWidth: 700 }}>
-              Você vende o que as empresas realmente precisam.
+              Você vende o que as empresas realmente precisam e os bancos não entregam.
             </h2>
           </Reveal>
           <Reveal delay={80}>
             <p style={{ fontSize: 16, color: MT, lineHeight: 1.8, maxWidth: 660, marginBottom: 52 }}>
-              Produtos que os bancos de varejo não oferecem. Soluções que empresários pagam bem para ter acesso. Operações que mudam o tamanho do resultado de quem os origina.
+              Cada solução abaixo é uma oportunidade de comissão real, com ticket elevado e margem institucional. O Partner V3 distribui o portfólio completo da boutique.
             </p>
           </Reveal>
           <div className="grid md:grid-cols-2 gap-x-16">
             <div style={{ borderTop: `1px solid ${N4}` }}>
-              <SolucaoCard delay={0}   titulo="Crédito com Garantia Imobiliária"   desc="Capital de giro, alavancagem patrimonial e aquisições com garantia real. Ticket médio R$800K a R$5M." tags="Home Equity · CGI PJ · CRI · Giro Equity · Financiamentos" />
-              <SolucaoCard delay={60}  titulo="Securitização de Recebíveis"         desc="Transforme ativos futuros em capital imediato. Estruturas ágeis para empresas com recebíveis recorrentes." tags="FIDC · CRI · Precatórios · Cessão de Crédito · Notas Comerciais" />
-              <SolucaoCard delay={120} titulo="M&A — Fusões e Aquisições"           desc="Compra, venda e fusão de empresas com análise estratégica via IA proprietária FORJA. Deals a partir de R$2M." tags="Valuation · NDA · Teaser Cego · CIM · Deal Rooms · Matching IA" />
-              <SolucaoCard delay={180} titulo="Crédito Corporativo Estruturado"     desc="Soluções completas para fortalecer caixa, adquirir ativos e escalar empresas em crescimento acelerado." tags="Capital de Giro · Leasing · Consórcio Prime · Cash Collateral" />
-              <SolucaoCard delay={240} titulo="Crédito Agro"                        desc="Soluções financeiras para produtores rurais e agroindústrias com volumes de R$300K a R$20M." tags="CPR · Fundo Agro · Sale & Leaseback · Maquinários · Custeio" />
+              <SolucaoCard delay={0}   titulo="Crédito com Garantia Imobiliária"   desc="Capital de giro, alavancagem e aquisições com garantia real. Ticket médio R$800K a R$5M." tags="Home Equity · CGI PJ · CRI · Giro Equity · Financiamentos" />
+              <SolucaoCard delay={60}  titulo="Securitização de Recebíveis"         desc="Converta ativos futuros em capital imediato. Ideal para empresas com recebíveis recorrentes." tags="FIDC · CRI · Precatórios · Cessão de Crédito · Notas Comerciais" />
+              <SolucaoCard delay={120} titulo="M&A — Fusões e Aquisições"           desc="Compra, venda e fusão com análise estratégica via IA proprietária FORJA. Deals a partir de R$2M." tags="Valuation · Teaser Cego · CIM · Deal Rooms · Matching IA" />
+              <SolucaoCard delay={180} titulo="Crédito Corporativo Estruturado"     desc="Soluções completas para fortalecer caixa, adquirir ativos e escalar operações." tags="Capital de Giro · Leasing · Consórcio Prime · Cash Collateral" />
+              <SolucaoCard delay={240} titulo="Crédito Agro"                        desc="Financiamento para produtores rurais e agroindústrias com volumes de R$300K a R$20M." tags="CPR · Fundo Agro · Sale & Leaseback · Maquinários · Custeio" />
             </div>
             <div style={{ borderTop: `1px solid ${N4}` }}>
-              <SolucaoCard delay={0}   titulo="Real Estate Estruturado"             desc="Financiamento e estruturação para projetos imobiliários de alto padrão com retorno acima do mercado." tags="SLB · BTS · BTR · Fundos Imobiliários · Incorporação" />
-              <SolucaoCard delay={60}  titulo="Operações Internacionais"            desc="Capital global e estruturas cross-border com liquidação OTC e cripto 24/7 via Bloxs S.A." tags="ACC · ACE · Câmbio · Cross-Border OTC · Cripto 24/7" />
-              <SolucaoCard delay={120} titulo="Mineração & Commodities"             desc="Soluções para produtores e traders de metais preciosos e commodities com estrutura internacional." tags="Ouro · Lítio · Metais Preciosos · Financiamento de Projetos" />
-              <SolucaoCard delay={180} titulo="Split Fiscal Inteligente"            desc="Eficiência tributária que maximiza a margem líquida sem mudar a operação da empresa." tags="Split de Pagamentos · Conta Técnica · Compliance Tributário" />
+              <SolucaoCard delay={0}   titulo="Real Estate Estruturado"             desc="Financiamento para projetos imobiliários de alto padrão. Estruturas que o mercado convencional não oferece." tags="SLB · BTS · BTR · Fundos Imobiliários · Incorporação" />
+              <SolucaoCard delay={60}  titulo="Operações Internacionais"            desc="Capital global e estruturas cross-border com liquidação internacional ágil e segura." tags="ACC · ACE · Câmbio Internacional · Cross-Border · OTC" />
+              <SolucaoCard delay={120} titulo="Mineração & Commodities"             desc="Soluções para produtores e traders de metais preciosos e commodities com estrutura especializada." tags="Ouro · Lítio · Metais Preciosos · Financiamento de Projetos" />
+              <SolucaoCard delay={180} titulo="Split Fiscal Inteligente"            desc="Eficiência tributária que maximiza a margem líquida sem alterar a operação da empresa." tags="Split de Pagamentos · Conta Técnica · Compliance Tributário" />
               <SolucaoCard delay={240} titulo="Operações Distressed"                desc="Alternativas reais para empresas com restrição. Onde o mercado fecha a porta, a V3 abre uma janela." tags="Fundo Estressado · Home Equity Distressed · Recebíveis Restritivos" />
             </div>
           </div>
@@ -606,25 +759,22 @@ export function LandingPageClient() {
       {/* ═══════════════════════════════════════════════════════════════
           08 · QUEM PODE SER
       ═══════════════════════════════════════════════════════════════ */}
-      <section style={{ background: N2, padding: "110px 0", position: "relative" }}>
+      <section style={{ background: N, padding: "110px 0", position: "relative" }}>
         <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 1, background: `linear-gradient(90deg, transparent, ${G}30, transparent)` }} />
         <div className="max-w-5xl mx-auto px-6">
           <SectionLabel>Este programa é para você se...</SectionLabel>
           <div className="grid md:grid-cols-2 gap-x-16">
             <div style={{ borderTop: `1px solid ${N4}` }}>
               {[
-                ["💼", "Você quer entrar no mercado financeiro com estrutura real", "não com um curso e uma planilha — mas com mesa, produto, compliance e tecnologia de boutique."],
+                ["💼", "Você quer entrar no mercado financeiro com estrutura real", "— não com um curso e uma planilha, mas com mesa, produto, compliance e tecnologia de boutique."],
                 ["📊", "Você já tem network de empresários e executivos", "e sabe que eles precisam de crédito, capital e estruturação que o banco não entrega."],
                 ["💰", "Você quer comissões proporcionais ao seu esforço", "e está cansado de trabalhar duro por 1% em operações que valem milhões."],
-                ["🏦", "Você é contador, gestor financeiro ou CFO", "e tem acesso direto à realidade financeira das empresas — e quer monetizar isso."],
+                ["🏦", "Você é contador, gestor financeiro ou CFO", "com acesso direto à realidade financeira das empresas — e quer monetizar isso."],
               ].map(([icon, bold, rest], i) => (
                 <Reveal key={bold} delay={i * 60}>
                   <div className="flex items-start gap-4 py-5" style={{ borderBottom: `1px solid ${N4}` }}>
-                    <div className="flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center text-lg"
-                      style={{ background: `${G}12`, border: `1px solid ${G}20` }}>{icon}</div>
-                    <p style={{ fontSize: 14, color: MT, lineHeight: 1.8 }}>
-                      <strong style={{ color: CR }}>{bold}</strong> {rest}
-                    </p>
+                    <div className="flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center text-lg" style={{ background: `${G}12`, border: `1px solid ${G}20` }}>{icon}</div>
+                    <p style={{ fontSize: 14, color: MT, lineHeight: 1.8 }}><strong style={{ color: CR }}>{bold}</strong>{rest}</p>
                   </div>
                 </Reveal>
               ))}
@@ -633,22 +783,19 @@ export function LandingPageClient() {
               {[
                 ["⚖️", "Você é advogado empresarial, societário ou tributário", "e lida com fusões, aquisições e reestruturações que envolvem capital e operações financeiras."],
                 ["🏛️", "Você é correspondente bancário ou consultor de crédito", "e quer liberdade operacional, produtos mais inteligentes e comissões superiores."],
-                ["🏗️", "Você é corretor de imóveis comerciais ou de alto padrão", "e seus clientes são empresários que precisam de estruturação, não só de financiamento."],
+                ["🏗️", "Você é corretor de imóveis comerciais ou de alto padrão", "com clientes que são empresários que precisam de estruturação, não só de financiamento."],
                 ["🚀", "Você quer empreender no mercado financeiro", "sem abrir uma corretora do zero — usando a estrutura, a marca e a credencial da V3 como base."],
               ].map(([icon, bold, rest], i) => (
                 <Reveal key={bold} delay={i * 60}>
                   <div className="flex items-start gap-4 py-5" style={{ borderBottom: `1px solid ${N4}` }}>
-                    <div className="flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center text-lg"
-                      style={{ background: `${G}12`, border: `1px solid ${G}20` }}>{icon}</div>
-                    <p style={{ fontSize: 14, color: MT, lineHeight: 1.8 }}>
-                      <strong style={{ color: CR }}>{bold}</strong> {rest}
-                    </p>
+                    <div className="flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center text-lg" style={{ background: `${G}12`, border: `1px solid ${G}20` }}>{icon}</div>
+                    <p style={{ fontSize: 14, color: MT, lineHeight: 1.8 }}><strong style={{ color: CR }}>{bold}</strong>{rest}</p>
                   </div>
                 </Reveal>
               ))}
             </div>
           </div>
-          <Reveal delay={180}>
+          <Reveal delay={200}>
             <div className="rounded-2xl px-8 py-7 mt-12 mb-10" style={{ background: `${G}0C`, border: `1px solid ${G}25` }}>
               <p style={{ fontSize: "clamp(16px, 2vw, 20px)", color: CR, fontWeight: 700, lineHeight: 1.6, margin: 0 }}>
                 A principal qualificação não é diploma ou experiência prévia.{" "}
@@ -657,7 +804,7 @@ export function LandingPageClient() {
               </p>
             </div>
           </Reveal>
-          <Reveal delay={220}>
+          <Reveal delay={240}>
             <CTABtn onClick={() => go("form")}>Esse sou eu — quero solicitar minha vaga</CTABtn>
           </Reveal>
         </div>
@@ -666,9 +813,9 @@ export function LandingPageClient() {
       {/* ═══════════════════════════════════════════════════════════════
           09 · PLANOS
       ═══════════════════════════════════════════════════════════════ */}
-      <section id="planos" style={{ background: N, padding: "110px 0", position: "relative" }}>
+      <section id="planos" style={{ background: N2, padding: "110px 0", position: "relative" }}>
         <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 1, background: `linear-gradient(90deg, transparent, ${G}40, transparent)` }} />
-        <div style={{ position: "absolute", inset: 0, background: `radial-gradient(ellipse 60% 50% at 50% 50%, ${G}06 0%, transparent 70%)`, pointerEvents: "none" }} />
+        <div style={{ position: "absolute", inset: 0, background: `radial-gradient(ellipse 60% 50% at 50% 50%, ${G}05 0%, transparent 70%)`, pointerEvents: "none" }} />
         <div className="max-w-5xl mx-auto px-6 relative">
           <SectionLabel>Modelos de licenciamento</SectionLabel>
           <Reveal>
@@ -678,25 +825,25 @@ export function LandingPageClient() {
           </Reveal>
           <Reveal delay={80}>
             <p style={{ fontSize: 16, color: MT, lineHeight: 1.8, maxWidth: 620, marginBottom: 52 }}>
-              Você não precisa começar no topo. Mas precisa começar. Todo Partner pode evoluir de plano à medida que escala seus resultados.
+              Você pode evoluir de plano à medida que escala seus resultados. O importante é começar — antes que sua praça seja ocupada.
             </p>
           </Reveal>
 
-          <div className="grid md:grid-cols-3 gap-5 mb-14">
+          <div className="grid md:grid-cols-3 gap-5 mb-10">
             {[
               {
                 titulo: "V3 Partner Entry",
                 comissao: "30%",
                 badge: null,
-                desc: "Para quem quer ativar rápido. Crédito N1 e N2, CRM, IA integrada e Academy base. A porta de entrada para o mercado institucional.",
-                items: ["Crédito N1 e N2", "CRM + IA integrada", "Academy base", "Chat com a mesa", "Suporte semanal"],
+                desc: "Para quem quer ativar rápido. Acesso às soluções mais demandadas, CRM, IA integrada e Academy base.",
+                items: ["Crédito N1 e N2", "CRM + IA integrada", "Academy base", "Chat com a mesa", "Suporte operacional semanal"],
                 d: 0,
               },
               {
                 titulo: "V3 Partner",
                 comissao: "30%",
                 badge: "Mais escolhido",
-                desc: "Estrutura completa para operar com amplitude. Crédito N3, consórcio corporativo, relatórios e mesa de crédito completa.",
+                desc: "Estrutura completa para operar com amplitude. Mesa de crédito completa, consórcio corporativo, relatórios e KPIs.",
                 items: ["Crédito N1, N2 e N3", "Mesa de crédito completa", "Relatórios e KPIs", "Consórcio corporativo", "Academy completo"],
                 d: 100,
               },
@@ -704,14 +851,14 @@ export function LandingPageClient() {
                 titulo: "V3 Partner PRO",
                 comissao: "50%",
                 badge: null,
-                desc: "Máxima rentabilidade e máxima credencial. M&A, Deal Rooms, co-branding e a maior comissão do mercado.",
+                desc: "Máxima rentabilidade e máxima credencial. Mesa M&A, Deal Rooms, co-branding V3 e a maior comissão do mercado.",
                 items: ["Tudo do Partner +", "Mesa M&A dedicada", "Deal Rooms e VDR", "Co-branding V3", "Academy M&A avançado"],
                 d: 200,
               },
             ].map(({ titulo, comissao, badge, desc, items, d }) => (
               <Reveal key={titulo} delay={d}>
-                <div className="rounded-xl flex flex-col gap-4 h-full overflow-hidden" style={{
-                  background: badge ? `${G}0F` : N2,
+                <div className="rounded-xl flex flex-col h-full overflow-hidden" style={{
+                  background: badge ? `${G}0F` : N3,
                   border: `1px solid ${badge ? G + "55" : N4}`,
                   position: "relative",
                 }}>
@@ -721,9 +868,9 @@ export function LandingPageClient() {
                       <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: 2, color: G, background: `${G}20`, border: `1px solid ${G}40`, padding: "4px 10px", borderRadius: 20, display: "inline-block", alignSelf: "flex-start" }}>{badge}</div>
                     )}
                     <div>
-                      <h3 style={{ fontWeight: 900, fontSize: 17, color: badge ? G : CR, marginBottom: 6 }}>{titulo}</h3>
+                      <h3 style={{ fontWeight: 900, fontSize: 17, color: badge ? G : CR, marginBottom: 8 }}>{titulo}</h3>
                       <div className="flex items-baseline gap-1.5">
-                        <span style={{ fontSize: "clamp(28px, 3.5vw, 40px)", fontWeight: 900, color: G, lineHeight: 1 }}>{comissao}</span>
+                        <span style={{ fontSize: "clamp(30px, 3.5vw, 42px)", fontWeight: 900, color: G, lineHeight: 1 }}>{comissao}</span>
                         <span style={{ fontSize: 13, color: MT }}>de comissão por operação</span>
                       </div>
                     </div>
@@ -748,14 +895,13 @@ export function LandingPageClient() {
             ))}
           </div>
 
-          {/* Scarcity note */}
           <Reveal delay={320}>
-            <div className="rounded-xl p-6 flex items-start gap-4" style={{ background: N2, border: `1px solid ${N4}` }}>
-              <div style={{ fontSize: 20, flexShrink: 0 }}>⚠️</div>
+            <div className="rounded-xl p-6 flex items-start gap-4" style={{ background: N3, border: `1px solid ${N4}` }}>
+              <div style={{ fontSize: 20, flexShrink: 0 }}>📍</div>
               <div>
-                <p style={{ fontWeight: 700, fontSize: 13, color: CR, marginBottom: 4 }}>Vagas limitadas por região</p>
+                <p style={{ fontWeight: 700, fontSize: 13, color: CR, marginBottom: 4 }}>Vaga única por praça · Exclusividade garantida</p>
                 <p style={{ fontSize: 13, color: MT, lineHeight: 1.7 }}>
-                  O programa de licenciamento V3 é seletivo. Aceitamos um número controlado de Partners por praça para garantir exclusividade de território, qualidade no atendimento e resultado efetivo para todos os licenciados.
+                  O programa é seletivo e territorial. Uma praça — um Partner. Isso garante que seu território é protegido e que a V3 direciona todos os leads e indicações da região para você. Quando a vaga fecha, fecha.
                 </p>
               </div>
             </div>
@@ -764,9 +910,9 @@ export function LandingPageClient() {
       </section>
 
       {/* ═══════════════════════════════════════════════════════════════
-          10 · SOBRE + NUMBERS
+          10 · SOBRE A V3
       ═══════════════════════════════════════════════════════════════ */}
-      <section style={{ background: N2, padding: "110px 0", position: "relative" }}>
+      <section style={{ background: N, padding: "110px 0", position: "relative" }}>
         <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 1, background: `linear-gradient(90deg, transparent, ${G}30, transparent)` }} />
         <div className="max-w-5xl mx-auto px-6">
           <SectionLabel>Quem está atrás da estrutura</SectionLabel>
@@ -774,7 +920,7 @@ export function LandingPageClient() {
             <div>
               <Reveal direction="left">
                 <h2 style={{ fontSize: "clamp(22px, 3.2vw, 38px)", fontWeight: 800, color: CR, lineHeight: 1.3, marginBottom: 24 }}>
-                  Uma boutique construída para fazer você ganhar.
+                  Fundada por especialistas. Construída para fazer o Partner ganhar.
                 </h2>
               </Reveal>
               <Reveal direction="left" delay={100}>
@@ -784,25 +930,25 @@ export function LandingPageClient() {
               </Reveal>
               <Reveal direction="left" delay={160}>
                 <p style={{ fontSize: 15, color: MT, lineHeight: 1.9, marginBottom: 20 }}>
-                  Operamos com infraestrutura <strong style={{ color: CR }}>Bloxs S.A.</strong> — a mesma base tecnológica de tokenização, KYC e liquidação OTC/cripto 24/7 usada pelas maiores fintechs institucionais do país.
+                  Nossa plataforma SaaS proprietária integra CRM, mesa de crédito (N1/N2/N3), mesa M&A com IA FORJA, Deal Rooms, Academy, rastreamento de comissões e 7 squads de IA especializados — tudo o que um Partner precisa para operar com credencial institucional.
                 </p>
               </Reveal>
               <Reveal direction="left" delay={220}>
                 <p style={{ fontSize: 15, color: MT, lineHeight: 1.9 }}>
-                  Nossa missão é simples:{" "}
-                  <strong style={{ color: G }}>transformar profissionais com relacionamento em protagonistas do mercado financeiro institucional.</strong>
+                  Nossa missão com a expansão:{" "}
+                  <strong style={{ color: G }}>levar a capacidade da V3 para cada praça do Brasil, com um representante local que conhece o mercado e os players da região.</strong>
                 </p>
               </Reveal>
             </div>
             <div className="grid grid-cols-2 gap-4">
               {[
-                { n: 3,  suf: "",   label: "sócios especialistas",  desc: "finanças · originação · compliance" },
-                { n: 7,  suf: "",   label: "squads de IA",          desc: "especializados por vertical" },
-                { n: 10, suf: "+",  label: "módulos na plataforma", desc: "do CRM ao M&A" },
-                { n: 50, suf: "%",  label: "comissão máxima",       desc: "Partner PRO" },
+                { n: 3,  suf: "",   label: "sócios fundadores",    desc: "finanças · originação · compliance" },
+                { n: 7,  suf: "",   label: "squads de IA",         desc: "especializados por vertical" },
+                { n: 10, suf: "+",  label: "módulos integrados",   desc: "do CRM ao M&A" },
+                { n: 50, suf: "%",  label: "comissão máxima",      desc: "Partner PRO" },
               ].map(({ n, suf, label, desc }, i) => (
                 <Reveal key={label} delay={i * 75}>
-                  <div className="rounded-2xl p-6 text-center" style={{ background: N3, border: `1px solid ${N4}` }}>
+                  <div className="rounded-2xl p-6 text-center" style={{ background: N2, border: `1px solid ${N4}` }}>
                     <p style={{ fontSize: "clamp(28px, 3vw, 38px)", fontWeight: 900, color: G, lineHeight: 1 }}>
                       <Counter to={n} suffix={suf} />
                     </p>
@@ -817,32 +963,32 @@ export function LandingPageClient() {
       </section>
 
       {/* ═══════════════════════════════════════════════════════════════
-          11 · QUOTE — Aspiracional
+          11 · QUOTE — Fechamento emocional
       ═══════════════════════════════════════════════════════════════ */}
-      <section style={{ background: N, padding: "100px 0", position: "relative", overflow: "hidden" }}>
+      <section style={{ background: N2, padding: "100px 0", position: "relative", overflow: "hidden" }}>
         <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 1, background: `linear-gradient(90deg, transparent, ${G}30, transparent)` }} />
-        <div style={{ position: "absolute", inset: 0, background: `radial-gradient(ellipse 60% 60% at 50% 50%, ${G}07 0%, transparent 70%)`, pointerEvents: "none" }} />
+        <div style={{ position: "absolute", inset: 0, background: `radial-gradient(ellipse 60% 55% at 50% 50%, ${G}07 0%, transparent 70%)`, pointerEvents: "none" }} />
         <div className="max-w-4xl mx-auto px-6 text-center relative">
           <Reveal>
-            <div style={{ fontSize: 56, color: `${G}40`, lineHeight: 1, marginBottom: 24, fontFamily: "Georgia, serif" }}>"</div>
+            <div style={{ fontSize: 60, color: `${G}35`, lineHeight: 1, marginBottom: 28, fontFamily: "Georgia, serif" }}>"</div>
             <p style={{ fontSize: "clamp(20px, 3vw, 34px)", fontWeight: 800, color: CR, lineHeight: 1.4, marginBottom: 24 }}>
-              O mercado financeiro institucional sempre existiu. O que mudou é que agora você pode entrar nele sem ser um banco.
+              A expansão da V3 abre território. Quem chega primeiro constrói uma carreira. Quem espera, assiste.
             </p>
             <div style={{ width: 48, height: 2, background: G, margin: "0 auto 24px" }} />
-            <p style={{ fontSize: 13, color: MT, fontWeight: 600, letterSpacing: 1.5 }}>V3 PARTNERS · BOUTIQUE INSTITUCIONAL</p>
+            <p style={{ fontSize: 13, color: MT, fontWeight: 600, letterSpacing: 1.5 }}>V3 PARTNERS · EXPANSÃO NACIONAL 2026</p>
           </Reveal>
-          <Reveal delay={150}>
+          <Reveal delay={140}>
             <div className="mt-14">
-              <CTABtn onClick={() => go("form")} large>Quero entrar nesse mercado</CTABtn>
+              <CTABtn onClick={() => go("form")} large>Garantir território agora</CTABtn>
             </div>
           </Reveal>
         </div>
       </section>
 
       {/* ═══════════════════════════════════════════════════════════════
-          12 · FAQ — Objeções respondidas
+          12 · FAQ
       ═══════════════════════════════════════════════════════════════ */}
-      <section id="faq" style={{ background: N2, padding: "110px 0", position: "relative" }}>
+      <section id="faq" style={{ background: N, padding: "110px 0", position: "relative" }}>
         <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 1, background: `linear-gradient(90deg, transparent, ${G}30, transparent)` }} />
         <div className="max-w-5xl mx-auto px-6">
           <SectionLabel>Perguntas frequentes</SectionLabel>
@@ -855,7 +1001,7 @@ export function LandingPageClient() {
               </Reveal>
               <Reveal delay={80}>
                 <p style={{ fontSize: 15, color: MT, lineHeight: 1.85, marginBottom: 36 }}>
-                  Respondemos aqui as dúvidas mais comuns. Se tiver alguma que não está na lista, nossa equipe responde em até 24h úteis após você preencher o formulário.
+                  Se sua dúvida não estiver aqui, nossa equipe responde em até 24h úteis após você preencher o formulário de interesse.
                 </p>
               </Reveal>
               <Reveal delay={140}>
@@ -865,14 +1011,14 @@ export function LandingPageClient() {
             <Reveal direction="right">
               <div style={{ borderTop: `1px solid ${N4}` }}>
                 {[
-                  { q: "Preciso de experiência no mercado financeiro para ser Partner?", a: "Não. A principal qualificação é a disposição de trazer negócios à mesa. A V3 oferece toda a capacitação técnica pelo Academy, com suporte prático da mesa operacional desde o primeiro dia." },
-                  { q: "Qual é o potencial real de ganho como Partner?", a: "Depende do volume que você origina. Um partner ativo que fecha 2-3 operações por mês em crédito estruturado pode gerar R$30K a R$120K mensais. Em M&A, uma operação acima de R$10M pode gerar R$200K a R$400K em comissão única." },
-                  { q: "Quanto tempo até receber a primeira comissão?", a: "Em crédito estruturado, o ciclo médio é de 30 a 90 dias. Em split fiscal e antecipação de recebíveis, pode ser mais rápido. Em M&A, de 3 a 12 meses. A plataforma rastreia o status de cada operação em tempo real." },
-                  { q: "Posso manter minha profissão atual enquanto sou Partner?", a: "Sim. A parceria V3 é não exclusiva. Você pode manter todas as suas atividades profissionais. A plataforma foi desenhada para uso assíncrono — você opera no seu ritmo, no seu horário." },
-                  { q: "Como funciona o processo de licenciamento?", a: "Você preenche o formulário nesta página. Nossa equipe entra em contato em até 24h úteis. Após alinhamento, você assina o contrato digitalmente e recebe acesso à plataforma em até 24h." },
-                  { q: "Qual a diferença entre Partner e Partner PRO?", a: "Além da comissão maior (50% vs 30%), o PRO tem acesso ao crédito N3 (acima de R$5M), Mesa M&A dedicada, co-branding V3, Deal Rooms com VDR e Academy M&A avançado." },
-                  { q: "A V3 me apoia nas negociações com os clientes?", a: "Sim. A mesa operacional da V3 acompanha cada operação. Você origina o cliente, participa das reuniões estratégicas e conta com o respaldo institucional da V3 em todas as etapas." },
-                  { q: "Como são calculadas e pagas as comissões?", a: "Sua comissão é rastreada em tempo real na plataforma, por operação e por status. O pagamento é feito após a liquidação de cada operação, de forma transparente e auditável." },
+                  { q: "O que significa exclusividade de praça?", a: "Cada cidade opera com um único Partner V3 ativo. Quando você licencia sua praça, todos os leads e indicações originados naquela região são direcionados para você. Nenhum outro Partner pode atuar na mesma praça enquanto o contrato estiver ativo." },
+                  { q: "Preciso de experiência no mercado financeiro?", a: "Não. A principal qualificação é a disposição de trazer negócios à mesa. A V3 oferece toda a capacitação técnica pelo Academy, com suporte prático da mesa operacional desde o primeiro dia." },
+                  { q: "Qual o potencial real de ganho?", a: "Depende do volume que você origina. Um Partner ativo que fecha 2-3 operações por mês em crédito estruturado pode gerar R$30K a R$120K mensais. Em M&A, uma única operação acima de R$10M pode gerar R$200K a R$400K em comissão." },
+                  { q: "Quanto tempo até a primeira comissão?", a: "Em crédito estruturado, o ciclo médio é de 30 a 90 dias. Em operações de split fiscal e antecipação de recebíveis pode ser mais rápido. Em M&A, de 3 a 12 meses. A plataforma rastreia o status de cada operação em tempo real." },
+                  { q: "Posso manter minha profissão atual?", a: "Sim. A parceria V3 é não exclusiva. Você pode manter todas as suas atividades profissionais. A plataforma foi projetada para uso assíncrono — você opera no seu ritmo e no seu horário." },
+                  { q: "Qual a diferença entre Partner e Partner PRO?", a: "O Partner PRO tem comissão maior (50% vs 30%), acesso ao crédito N3 (acima de R$5M), Mesa M&A dedicada, co-branding V3, Deal Rooms com VDR e Academy M&A avançado." },
+                  { q: "Como funciona o suporte da V3 durante as operações?", a: "A mesa operacional da V3 acompanha cada operação. Você origina o cliente, participa das reuniões estratégicas e conta com o respaldo institucional da V3 em todas as etapas — da análise à liquidação." },
+                  { q: "Como são pagas as comissões?", a: "Sua comissão é rastreada em tempo real na plataforma, por operação e por status. O pagamento é feito após a liquidação, de forma transparente e auditável diretamente na plataforma." },
                 ].map(({ q, a }, i) => <FAQItem key={q} n={i + 1} q={q} a={a} />)}
               </div>
             </Reveal>
@@ -881,40 +1027,38 @@ export function LandingPageClient() {
       </section>
 
       {/* ═══════════════════════════════════════════════════════════════
-          13 · CTA FINAL — Urgência + fechamento
+          13 · CTA FINAL — Urgência e fechamento
       ═══════════════════════════════════════════════════════════════ */}
-      <section style={{ background: N, padding: "110px 0", position: "relative", overflow: "hidden" }}>
+      <section style={{ background: N2, padding: "110px 0", position: "relative", overflow: "hidden" }}>
         <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: `linear-gradient(90deg, transparent, ${G}, transparent)` }} />
         <div style={{ position: "absolute", inset: 0, background: `radial-gradient(ellipse 70% 70% at 50% 50%, ${G}08 0%, transparent 70%)`, pointerEvents: "none" }} />
-        <ParallaxOrb top="0%"  left="10%"  size={600} delay={0} />
-        <ParallaxOrb top="20%" left="75%"  size={400} delay={12} />
+        <ParallaxOrb top="0%"  left="5%"  size={600} delay={0} />
+        <ParallaxOrb top="20%" left="78%" size={400} delay={10} />
         <div className="max-w-3xl mx-auto px-6 text-center relative">
           <Reveal>
-            <div className="inline-flex items-center gap-2 mb-8" style={{ background: `${G}12`, border: `1px solid ${G}30`, borderRadius: 40, padding: "6px 18px" }}>
-              <div style={{ width: 6, height: 6, borderRadius: "50%", background: G, animation: "pulse 1.5s infinite" }} />
-              <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: 2.5, color: G }}>VAGAS ABERTAS EM SELEÇÃO</span>
+            <div className="inline-flex items-center gap-2 mb-8" style={{ background: `${G}12`, border: `1px solid ${G}30`, borderRadius: 40, padding: "7px 20px" }}>
+              <div style={{ width: 7, height: 7, borderRadius: "50%", background: G, boxShadow: `0 0 8px ${G}` }} />
+              <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: 2.5, color: G }}>VAGAS ABERTAS · EXPANSÃO 2026</span>
             </div>
           </Reveal>
           <Reveal delay={80}>
             <h2 style={{ fontSize: "clamp(28px, 5vw, 58px)", fontWeight: 900, color: CR, lineHeight: 1.1, marginBottom: 20, letterSpacing: -1 }}>
-              A cadeira está disponível.
+              Sua cidade tem uma vaga.
               <br />
-              <span style={{ color: G }}>Por quanto tempo, não sabemos.</span>
+              <span style={{ color: G }}>Por quanto tempo, depende de você.</span>
             </h2>
           </Reveal>
           <Reveal delay={160}>
             <p style={{ fontSize: "clamp(15px, 1.8vw, 18px)", color: MT, lineHeight: 1.85, marginBottom: 44 }}>
-              Toda semana, Partners V3 fecham operações que transformam seus resultados. O mercado não espera. As vagas na sua região são limitadas. O melhor momento para entrar foi ontem. O segundo melhor é agora.
+              A expansão da V3 abre uma janela rara: entrar como Partner exclusivo em uma boutique institucional em crescimento, com portfólio completo, tecnologia proprietária e suporte de mesa. Quando essa vaga fecha na sua praça, fecha definitivamente.
             </p>
           </Reveal>
           <Reveal delay={240}>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <CTABtn onClick={() => go("form")} large>Garantir minha vaga agora</CTABtn>
-            </div>
+            <CTABtn onClick={() => go("form")} large>Garantir minha praça agora</CTABtn>
           </Reveal>
           <Reveal delay={300}>
             <p style={{ fontSize: 12, color: `${MT}80`, marginTop: 20 }}>
-              Sem compromisso. Nossa equipe entra em contato em até 24h úteis.
+              Sem compromisso imediato. Nossa equipe entra em contato em até 24h úteis.
             </p>
           </Reveal>
         </div>
@@ -923,7 +1067,7 @@ export function LandingPageClient() {
       {/* ═══════════════════════════════════════════════════════════════
           14 · FORMULÁRIO
       ═══════════════════════════════════════════════════════════════ */}
-      <section id="form" style={{ background: N2, padding: "110px 0", position: "relative" }}>
+      <section id="form" style={{ background: N, padding: "110px 0", position: "relative" }}>
         <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: `linear-gradient(90deg, transparent, ${G}, transparent)` }} />
         <div style={{ position: "absolute", inset: 0, background: `radial-gradient(ellipse 50% 60% at 50% 0%, ${G}08 0%, transparent 70%)`, pointerEvents: "none" }} />
         <div className="max-w-2xl mx-auto px-6 relative">
@@ -931,15 +1075,15 @@ export function LandingPageClient() {
 
           {sent ? (
             <Reveal>
-              <div className="rounded-2xl p-14 text-center" style={{ background: N3, border: `1px solid ${G}40` }}>
+              <div className="rounded-2xl p-14 text-center" style={{ background: N2, border: `1px solid ${G}40` }}>
                 <div className="w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6" style={{ background: `${G}15`, border: `1px solid ${G}35` }}>
                   <Check size={32} color={G} />
                 </div>
                 <h3 style={{ fontWeight: 900, fontSize: 26, color: CR, marginBottom: 14 }}>Solicitação recebida!</h3>
                 <p style={{ color: MT, fontSize: 15, lineHeight: 1.85 }}>
                   Obrigado, <strong style={{ color: CR }}>{formData.nome}</strong>!{" "}
-                  Nossa equipe de Novos Negócios vai entrar em contato pelo e-mail{" "}
-                  <strong style={{ color: G }}>{formData.email}</strong> em até 24 horas úteis.
+                  Nossa equipe de Expansão V3 vai entrar em contato pelo e-mail{" "}
+                  <strong style={{ color: G }}>{formData.email}</strong> em até 24 horas úteis para verificar a disponibilidade da sua praça.
                 </p>
               </div>
             </Reveal>
@@ -947,12 +1091,12 @@ export function LandingPageClient() {
             <>
               <Reveal>
                 <h2 style={{ fontSize: "clamp(22px, 3.2vw, 36px)", fontWeight: 800, color: CR, lineHeight: 1.3, marginBottom: 14 }}>
-                  Preencha abaixo e nossa equipe entra em contato.
+                  Preencha abaixo. Nossa equipe verifica sua praça e entra em contato.
                 </h2>
               </Reveal>
               <Reveal delay={80}>
                 <p style={{ fontSize: 15, color: MT, lineHeight: 1.8, marginBottom: 40 }}>
-                  Não é venda online. É um processo seletivo. Vamos entender seu perfil, apresentar o programa completo e alinhar expectativas antes de qualquer decisão.
+                  Não é venda automática. É um processo seletivo. Vamos entender seu perfil, verificar a disponibilidade da sua praça e apresentar o programa completo antes de qualquer decisão.
                 </p>
               </Reveal>
               <Reveal direction="up" delay={120}>
@@ -962,7 +1106,7 @@ export function LandingPageClient() {
                     <input type="text" value={formData.nome} onChange={e => setFormData(f => ({ ...f, nome: e.target.value }))}
                       placeholder="Seu nome completo" required
                       className="w-full px-5 py-4 text-sm focus:outline-none transition-all"
-                      style={{ background: N3, border: `1px solid ${N4}`, borderRadius: 4, color: CR }} />
+                      style={{ background: N2, border: `1px solid ${N4}`, borderRadius: 4, color: CR }} />
                   </div>
                   <div className="grid sm:grid-cols-2 gap-4">
                     <div>
@@ -970,15 +1114,22 @@ export function LandingPageClient() {
                       <input type="email" value={formData.email} onChange={e => setFormData(f => ({ ...f, email: e.target.value }))}
                         placeholder="seu@email.com" required
                         className="w-full px-5 py-4 text-sm focus:outline-none"
-                        style={{ background: N3, border: `1px solid ${N4}`, borderRadius: 4, color: CR }} />
+                        style={{ background: N2, border: `1px solid ${N4}`, borderRadius: 4, color: CR }} />
                     </div>
                     <div>
                       <label style={{ fontSize: 10, fontWeight: 700, color: MT, letterSpacing: 2, display: "block", marginBottom: 8 }}>WHATSAPP *</label>
                       <input type="tel" value={formData.telefone} onChange={e => setFormData(f => ({ ...f, telefone: e.target.value }))}
                         placeholder="(11) 99999-9999" required
                         className="w-full px-5 py-4 text-sm focus:outline-none"
-                        style={{ background: N3, border: `1px solid ${N4}`, borderRadius: 4, color: CR }} />
+                        style={{ background: N2, border: `1px solid ${N4}`, borderRadius: 4, color: CR }} />
                     </div>
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 10, fontWeight: 700, color: MT, letterSpacing: 2, display: "block", marginBottom: 8 }}>CIDADE E ESTADO *</label>
+                    <input type="text" value={formData.segmento} onChange={e => setFormData(f => ({ ...f, segmento: e.target.value }))}
+                      placeholder="Ex: Campinas - SP, Porto Alegre - RS, Salvador - BA..."
+                      className="w-full px-5 py-4 text-sm focus:outline-none"
+                      style={{ background: N2, border: `1px solid ${N4}`, borderRadius: 4, color: CR }} />
                   </div>
                   <div className="grid sm:grid-cols-2 gap-4">
                     <div>
@@ -986,22 +1137,15 @@ export function LandingPageClient() {
                       <input type="text" value={formData.instagram} onChange={e => setFormData(f => ({ ...f, instagram: e.target.value }))}
                         placeholder="@seuperfil"
                         className="w-full px-5 py-4 text-sm focus:outline-none"
-                        style={{ background: N3, border: `1px solid ${N4}`, borderRadius: 4, color: CR }} />
+                        style={{ background: N2, border: `1px solid ${N4}`, borderRadius: 4, color: CR }} />
                     </div>
                     <div>
                       <label style={{ fontSize: 10, fontWeight: 700, color: MT, letterSpacing: 2, display: "block", marginBottom: 8 }}>LINKEDIN</label>
                       <input type="text" value={formData.linkedin} onChange={e => setFormData(f => ({ ...f, linkedin: e.target.value }))}
                         placeholder="linkedin.com/in/..."
                         className="w-full px-5 py-4 text-sm focus:outline-none"
-                        style={{ background: N3, border: `1px solid ${N4}`, borderRadius: 4, color: CR }} />
+                        style={{ background: N2, border: `1px solid ${N4}`, borderRadius: 4, color: CR }} />
                     </div>
-                  </div>
-                  <div>
-                    <label style={{ fontSize: 10, fontWeight: 700, color: MT, letterSpacing: 2, display: "block", marginBottom: 8 }}>RAMO DE ATUAÇÃO</label>
-                    <input type="text" value={formData.segmento} onChange={e => setFormData(f => ({ ...f, segmento: e.target.value }))}
-                      placeholder="Ex: Consultor financeiro, Advogado, Corretor, Contador..."
-                      className="w-full px-5 py-4 text-sm focus:outline-none"
-                      style={{ background: N3, border: `1px solid ${N4}`, borderRadius: 4, color: CR }} />
                   </div>
                   <div>
                     <label style={{ fontSize: 10, fontWeight: 700, color: MT, letterSpacing: 2, display: "block", marginBottom: 10 }}>LICENCIAMENTO DE INTERESSE</label>
@@ -1013,7 +1157,7 @@ export function LandingPageClient() {
                       ].map(([val, label, sub]) => (
                         <button key={val} type="button" onClick={() => setFormData(f => ({ ...f, plano: val }))}
                           className="py-4 px-3 text-left transition-all"
-                          style={{ background: formData.plano === val ? `${G}18` : N3, border: `1px solid ${formData.plano === val ? G + "70" : N4}`, borderRadius: 4 }}>
+                          style={{ background: formData.plano === val ? `${G}18` : N2, border: `1px solid ${formData.plano === val ? G + "70" : N4}`, borderRadius: 4 }}>
                           <p style={{ fontSize: 12, fontWeight: 700, color: formData.plano === val ? G : CR, marginBottom: 2 }}>{label}</p>
                           <p style={{ fontSize: 10, color: MT }}>{sub}</p>
                         </button>
@@ -1026,13 +1170,13 @@ export function LandingPageClient() {
                   <button type="submit" disabled={sending}
                     className="w-full py-5 font-bold transition-all hover:opacity-88 mt-2"
                     style={{ background: G, color: N, borderRadius: 4, fontSize: 12, letterSpacing: 2.5, textTransform: "uppercase", opacity: sending ? 0.7 : 1 }}>
-                    {sending ? "ENVIANDO..." : "SOLICITAR MINHA VAGA"}
+                    {sending ? "VERIFICANDO..." : "VERIFICAR DISPONIBILIDADE DA MINHA PRAÇA"}
                   </button>
                   <div className="flex flex-col sm:flex-row items-center justify-center gap-6 pt-2">
                     {[
-                      [Shield, "Sem spam, jamais"],
-                      [Zap, "Retorno em até 24h"],
-                      [TrendingUp, "Sem compromisso inicial"],
+                      [Shield,      "Sem spam, jamais"],
+                      [Zap,         "Retorno em até 24h"],
+                      [TrendingUp,  "Sem compromisso inicial"],
                     ].map(([Icon, text]) => (
                       <div key={text as string} className="flex items-center gap-2">
                         <Icon size={13} color={G} />
