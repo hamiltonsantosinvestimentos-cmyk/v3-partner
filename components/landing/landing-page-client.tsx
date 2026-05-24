@@ -500,10 +500,7 @@ export function LandingPageClient() {
             {/* Partner */}
             <div className="rounded-2xl p-8 lg:mt-8" style={{ background: N2, border: `1px solid ${N4}` }}>
               <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: 2, color: G, marginBottom: 20 }}>V3 PARTNER</p>
-              <div className="mb-2">
-                <span style={{ fontSize: 48, fontWeight: 900, color: CR, lineHeight: 1 }}>R$197</span>
-              </div>
-              <p style={{ fontSize: 12, color: MT, marginBottom: 28 }}>por mês · 30% de comissão</p>
+              <p style={{ fontSize: 12, color: MT, marginBottom: 28 }}>30% de comissão sobre operações fechadas</p>
               <div className="space-y-3 mb-8">
                 {["Acesso à plataforma completa", "CRM + IA com 7 squads", "Mesa de Crédito N1 e N2", "Academy completo", "Chat com a mesa", "Dashboard e relatórios", "Consórcio e marketplace"].map(i => (
                   <div key={i} className="flex items-center gap-3">
@@ -532,10 +529,7 @@ export function LandingPageClient() {
                   MAIS POPULAR
                 </div>
               </div>
-              <div className="mb-2">
-                <span style={{ fontSize: 48, fontWeight: 900, color: CR, lineHeight: 1 }}>R$397</span>
-              </div>
-              <p style={{ fontSize: 12, color: G, marginBottom: 28, fontWeight: 600 }}>por mês · 50% de comissão</p>
+              <p style={{ fontSize: 12, color: G, marginBottom: 28, fontWeight: 600 }}>50% de comissão sobre operações fechadas</p>
               <div className="space-y-3 mb-8">
                 {[
                   ["Tudo do Partner +", true],
@@ -802,8 +796,8 @@ export function LandingPageClient() {
                     <label style={{ fontSize: 10, fontWeight: 700, color: MT, letterSpacing: 1.5, display: "block", marginBottom: 10 }}>PLANO DE INTERESSE</label>
                     <div className="grid grid-cols-2 gap-3">
                       {[
-                        ["PARTNER", "V3 Partner", "R$197/mês · 30%"],
-                        ["PARTNER_PRO", "V3 Partner PRO", "R$397/mês · 50%"],
+                        ["PARTNER", "V3 Partner", "30% de comissão"],
+                        ["PARTNER_PRO", "V3 Partner PRO", "50% de comissão"],
                       ].map(([val, label, sub]) => (
                         <button key={val} type="button"
                           onClick={() => setFormData(f => ({ ...f, plano: val }))}
