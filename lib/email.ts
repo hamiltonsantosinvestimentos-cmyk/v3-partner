@@ -958,8 +958,9 @@ export async function notifyNovoLeadParceiro(opts: {
   telefone: string;
   segmento: string;
   plano: string;
+  instagram?: string;
+  linkedin?: string;
 }): Promise<void> {
-  const planoLabel = opts.plano === "PARTNER_PRO" ? "V3 Partner PRO — R$397/mês (50%)" : "V3 Partner — R$197/mês (30%)";
   const adminEmail = process.env.ADMIN_EMAIL || "operacional@v3partners.com.br";
   const body = `
     <p style="color:#7A96AF;font-size:14px;margin:0 0 20px;">
@@ -968,21 +969,23 @@ export async function notifyNovoLeadParceiro(opts: {
     ${row("Nome", opts.nome)}
     ${row("E-mail", opts.email)}
     ${row("Telefone / WhatsApp", opts.telefone)}
-    ${opts.segmento ? row("Segmento", opts.segmento) : ""}
+    ${opts.segmento ? row("Ramo de atuação", opts.segmento) : ""}
+    ${opts.instagram ? row("Instagram", opts.instagram) : ""}
+    ${opts.linkedin ? row("LinkedIn", opts.linkedin) : ""}
     <div style="margin-top:16px;padding:14px 18px;background:#13243D;border-radius:8px;border-left:3px solid #C4922E;">
-      <p style="margin:0 0 4px;font-size:11px;color:#7A96AF;">Plano de interesse</p>
-      <p style="margin:0;font-size:15px;font-weight:800;color:#C4922E;">${planoLabel}</p>
+      <p style="margin:0 0 4px;font-size:11px;color:#7A96AF;">Licenciamento de interesse</p>
+      <p style="margin:0;font-size:15px;font-weight:800;color:#C4922E;">${opts.plano}</p>
     </div>
     <p style="color:#7A96AF;font-size:12px;margin-top:16px;">
-      Acesse o CRM para ver o lead e iniciar o processo de onboarding.
+      Acesse a Prospecção para ver o lead e iniciar o processo de onboarding.
     </p>
   `;
   await send(
     adminEmail,
     `🔔 Novo lead na landing page — ${opts.nome}`,
     template("Novo Interesse de Partner", body, {
-      label: "Ver no CRM",
-      url: "https://app.v3partners.com.br/crm",
+      label: "Ver na Prospecção",
+      url: "https://app.v3partners.com.br/prospeccao",
     })
   );
 }

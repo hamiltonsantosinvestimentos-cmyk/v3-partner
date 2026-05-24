@@ -11,12 +11,9 @@ function serviceClient() {
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const { nome, email, telefone, segmento, plano } = body as {
-    nome?: string;
-    email?: string;
-    telefone?: string;
-    segmento?: string;
-    plano?: string;
+  const { nome, email, telefone, segmento, plano, instagram, linkedin } = body as {
+    nome?: string; email?: string; telefone?: string;
+    segmento?: string; plano?: string; instagram?: string; linkedin?: string;
   };
 
   if (!nome || !email || !telefone) {
@@ -24,12 +21,19 @@ export async function POST(req: NextRequest) {
   }
 
   const supabase = serviceClient();
-  const planoLabel = plano === "PARTNER_PRO" ? "PARTNER_PRO" : "PARTNER";
-  const notas = `Lead captado pela landing page /parceiro. Plano de interesse: ${planoLabel === "PARTNER_PRO" ? "Partner PRO (R$397/mês - 50%)" : "Partner (R$197/mês - 30%)"}${segmento ? `\nSegmento: ${segmento}` : ""}`;
+  const planoLabel = plano ?? "PARTNER";
+  const extras = [
+    segmento   ? `Segmento: ${segmento}`   : "",
+    instagram  ? `Instagram: ${instagram}` : "",
+    linkedin   ? `LinkedIn: ${linkedin}`   : "",
+    `Licenciamento de interesse: ${planoLabel}`,
+  ].filter(Boolean).join("\n");
+
+  const notas = `Lead captado pela landing page /parceiro.\n${extras}`;
 
   const { error } = await supabase.from("prospeccao_leads").insert({
     nome,
-    email:    email || null,
+    email:    email   || null,
     telefone: telefone || null,
     origem:   "landing_parceiro",
     notas,
@@ -42,7 +46,7 @@ export async function POST(req: NextRequest) {
   }
 
   // Notifica equipe V3 — fire-and-forget
-  notifyNovoLeadParceiro({ nome, email, telefone, segmento: segmento || "", plano: planoLabel }).catch(() => {});
+  notifyNovoLeadParceiro({ nome, email, telefone, segmento: segmento || "", plano: planoLabel, instagram: instagram || "", linkedin: linkedin || "" }).catch(() => {});
 
   return NextResponse.json({ success: true });
 }
