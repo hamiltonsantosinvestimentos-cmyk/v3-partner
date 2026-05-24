@@ -24,22 +24,16 @@ export async function POST(req: NextRequest) {
   }
 
   const supabase = serviceClient();
-  const code = `LP-${Date.now().toString(36).toUpperCase()}`;
   const planoLabel = plano === "PARTNER_PRO" ? "PARTNER_PRO" : "PARTNER";
-  const notes = `Lead captado pela landing page /parceiro. Plano de interesse: ${planoLabel === "PARTNER_PRO" ? "Partner PRO (R$397/mês - 50%)" : "Partner (R$197/mês - 30%)"}`;
+  const notas = `Lead captado pela landing page /parceiro. Plano de interesse: ${planoLabel === "PARTNER_PRO" ? "Partner PRO (R$397/mês - 50%)" : "Partner (R$197/mês - 30%)"}${segmento ? `\nSegmento: ${segmento}` : ""}`;
 
-  const { error } = await supabase.from("crm_leads").insert({
-    code,
-    name:             nome,
-    email,
-    phone:            telefone,
-    segment:          segmento || null,
-    status:           "prospect",
-    source:           "landing_parceiro",
-    notes,
-    person_type:      "PF",
-    annual_revenue:   0,
-    interactions:     [],
+  const { error } = await supabase.from("prospeccao_leads").insert({
+    nome,
+    email:    email || null,
+    telefone: telefone || null,
+    origem:   "landing_parceiro",
+    notas,
+    etapa:    "prospect",
   });
 
   if (error) {
