@@ -951,6 +951,42 @@ export async function notifyLembreteOnboardingEtapa(opts: {
   );
 }
 
+/** Equipe V3: novo lead da landing page /parceiro */
+export async function notifyNovoLeadParceiro(opts: {
+  nome: string;
+  email: string;
+  telefone: string;
+  segmento: string;
+  plano: string;
+}): Promise<void> {
+  const planoLabel = opts.plano === "PARTNER_PRO" ? "V3 Partner PRO — R$397/mês (50%)" : "V3 Partner — R$197/mês (30%)";
+  const adminEmail = process.env.ADMIN_EMAIL || "operacional@v3partners.com.br";
+  const body = `
+    <p style="color:#7A96AF;font-size:14px;margin:0 0 20px;">
+      Um novo lead preencheu o formulário da landing page e aguarda qualificação.
+    </p>
+    ${row("Nome", opts.nome)}
+    ${row("E-mail", opts.email)}
+    ${row("Telefone / WhatsApp", opts.telefone)}
+    ${opts.segmento ? row("Segmento", opts.segmento) : ""}
+    <div style="margin-top:16px;padding:14px 18px;background:#13243D;border-radius:8px;border-left:3px solid #C4922E;">
+      <p style="margin:0 0 4px;font-size:11px;color:#7A96AF;">Plano de interesse</p>
+      <p style="margin:0;font-size:15px;font-weight:800;color:#C4922E;">${planoLabel}</p>
+    </div>
+    <p style="color:#7A96AF;font-size:12px;margin-top:16px;">
+      Acesse o CRM para ver o lead e iniciar o processo de onboarding.
+    </p>
+  `;
+  await send(
+    adminEmail,
+    `🔔 Novo lead na landing page — ${opts.nome}`,
+    template("Novo Interesse de Partner", body, {
+      label: "Ver no CRM",
+      url: "https://app.v3partners.com.br/crm",
+    })
+  );
+}
+
 /** Fornecedor: novo lead recebido pelo marketplace */
 export async function notifyMarketplaceLead(opts: {
   supplierEmail: string;
