@@ -2,7 +2,12 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import Image from "next/image";
-import { ChevronRight, X, Menu, Check, Plus, ArrowRight, TrendingUp, Shield, Zap, MapPin } from "lucide-react";
+import {
+  ChevronRight, X, Menu, Check, Plus, ArrowRight,
+  TrendingUp, Shield, Zap, BarChart2, PieChart,
+  DollarSign, Building2, Globe, Award, Cpu, FileText,
+  Users, MapPin, Star, ArrowUpRight,
+} from "lucide-react";
 
 // ── Paleta V3 ──────────────────────────────────────────────────────────────
 const G  = "#C9A84C";
@@ -19,11 +24,9 @@ function useInView(threshold = 0.12, once = true) {
   const ref = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(false);
   useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
+    const el = ref.current; if (!el) return;
     const obs = new IntersectionObserver(([e]) => {
       if (e.isIntersecting) { setVisible(true); if (once) obs.disconnect(); }
-      else if (!once) setVisible(false);
     }, { threshold });
     obs.observe(el);
     return () => obs.disconnect();
@@ -37,15 +40,11 @@ function Reveal({ children, delay = 0, direction = "up", className = "" }: {
   direction?: "up" | "left" | "right" | "none"; className?: string;
 }) {
   const { ref, visible } = useInView();
-  const transforms: Record<string, string> = {
-    up: "translateY(36px)", left: "translateX(-36px)",
-    right: "translateX(36px)", none: "none",
-  };
+  const t: Record<string, string> = { up: "translateY(36px)", left: "translateX(-40px)", right: "translateX(40px)", none: "none" };
   return (
     <div ref={ref} className={className} style={{
-      opacity: visible ? 1 : 0,
-      transform: visible ? "none" : transforms[direction],
-      transition: `opacity 0.65s ease ${delay}ms, transform 0.65s cubic-bezier(.22,.68,0,1.2) ${delay}ms`,
+      opacity: visible ? 1 : 0, transform: visible ? "none" : t[direction],
+      transition: `opacity 0.7s ease ${delay}ms, transform 0.7s cubic-bezier(.22,.68,0,1.2) ${delay}ms`,
     }}>{children}</div>
   );
 }
@@ -79,8 +78,6 @@ function GoldLine() {
   const { ref, visible } = useInView(0.1);
   return <div ref={ref} style={{ width: visible ? 48 : 0, height: 2, background: G, transition: "width 0.55s ease", flexShrink: 0 }} />;
 }
-
-// ── SectionLabel ───────────────────────────────────────────────────────────
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
     <Reveal direction="left">
@@ -93,23 +90,22 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 }
 
 // ── CTABtn ─────────────────────────────────────────────────────────────────
-function CTABtn({ onClick, children, outline = false, large = false }: {
-  onClick: () => void; children: React.ReactNode; outline?: boolean; large?: boolean;
+function CTABtn({ onClick, children, outline = false, large = false, full = false }: {
+  onClick: () => void; children: React.ReactNode; outline?: boolean; large?: boolean; full?: boolean;
 }) {
   const [hov, setHov] = useState(false);
   return (
-    <button onClick={onClick}
-      onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
-      className="inline-flex items-center justify-center gap-2 font-bold transition-all"
+    <button onClick={onClick} onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
+      className={`inline-flex items-center justify-center gap-2 font-bold transition-all${full ? " w-full" : ""}`}
       style={{
         background: outline ? "transparent" : hov ? G2 : G,
         color: outline ? (hov ? G2 : G) : N,
         border: `2px solid ${hov ? G2 : G}`,
-        padding: large ? "17px 48px" : "13px 32px",
+        padding: large ? "18px 52px" : "13px 32px",
         borderRadius: 3, fontSize: large ? 13 : 12,
         letterSpacing: 2.2, textTransform: "uppercase" as const,
         transform: hov ? "translateY(-2px)" : "none",
-        boxShadow: hov && !outline ? `0 14px 36px ${G}45` : "none",
+        boxShadow: hov && !outline ? `0 14px 40px ${G}50` : "none",
         transition: "all 0.22s ease",
       }}>
       {children} <ChevronRight size={14} />
@@ -123,9 +119,7 @@ function FAQItem({ n, q, a }: { n: number; q: string; a: string }) {
   return (
     <div onClick={() => setOpen(o => !o)} style={{ borderBottom: `1px solid ${N4}`, cursor: "pointer" }}>
       <div className="flex items-start justify-between py-5 gap-4">
-        <p style={{ fontWeight: 600, fontSize: 15, color: open ? G : CR, lineHeight: 1.45, transition: "color 0.2s" }}>
-          {n}. {q}
-        </p>
+        <p style={{ fontWeight: 600, fontSize: 15, color: open ? G : CR, lineHeight: 1.45, transition: "color 0.2s" }}>{n}. {q}</p>
         <div className="flex-shrink-0 mt-0.5" style={{ color: G, transform: open ? "rotate(45deg)" : "none", transition: "transform 0.3s" }}>
           <Plus size={17} />
         </div>
@@ -138,104 +132,366 @@ function FAQItem({ n, q, a }: { n: number; q: string; a: string }) {
 }
 
 // ── ParallaxOrb ────────────────────────────────────────────────────────────
-function ParallaxOrb({ top, left, size, delay }: { top: string; left: string; size: number; delay: number }) {
+function ParallaxOrb({ top, left, size, delay, color = G }: {
+  top: string; left: string; size: number; delay: number; color?: string;
+}) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const h = () => { if (ref.current) ref.current.style.transform = `translateY(${window.scrollY * 0.09 + delay}px)`; };
     window.addEventListener("scroll", h, { passive: true });
     return () => window.removeEventListener("scroll", h);
   }, [delay]);
+  return <div ref={ref} style={{ position: "absolute", top, left, width: size, height: size, borderRadius: "50%", background: `radial-gradient(circle, ${color}0D 0%, transparent 70%)`, pointerEvents: "none" }} />;
+}
+
+// ── PLATFORM MOCKUP ────────────────────────────────────────────────────────
+function PlatformMockup() {
+  const { ref, visible } = useInView(0.1);
   return (
     <div ref={ref} style={{
-      position: "absolute", top, left, width: size, height: size,
-      borderRadius: "50%", background: `radial-gradient(circle, ${G}0D 0%, transparent 70%)`,
-      pointerEvents: "none",
-    }} />
-  );
-}
-
-// ── PainCard ───────────────────────────────────────────────────────────────
-function PainCard({ icon, title, body, delay = 0 }: { icon: string; title: string; body: string; delay?: number }) {
-  return (
-    <Reveal delay={delay}>
-      <div className="rounded-xl p-6 h-full" style={{ background: N3, border: `1px solid ${N4}` }}>
-        <div className="text-2xl mb-4">{icon}</div>
-        <p style={{ fontWeight: 700, fontSize: 14, color: CR, marginBottom: 8, lineHeight: 1.4 }}>{title}</p>
-        <p style={{ fontSize: 13, color: MT, lineHeight: 1.75 }}>{body}</p>
-      </div>
-    </Reveal>
-  );
-}
-
-// ── StepCard ───────────────────────────────────────────────────────────────
-function StepCard({ n, title, body, delay = 0 }: { n: string; title: string; body: string; delay?: number }) {
-  return (
-    <Reveal delay={delay}>
-      <div className="relative p-7 rounded-xl h-full" style={{ background: N2, border: `1px solid ${N4}` }}>
-        <div style={{ fontSize: "clamp(52px, 6vw, 68px)", fontWeight: 900, color: `${G}18`, lineHeight: 1, marginBottom: 16, letterSpacing: -2 }}>{n}</div>
-        <p style={{ fontWeight: 800, fontSize: 15, color: G, marginBottom: 8 }}>{title}</p>
-        <p style={{ fontSize: 13, color: MT, lineHeight: 1.8 }}>{body}</p>
-      </div>
-    </Reveal>
-  );
-}
-
-// ── CompareRow ─────────────────────────────────────────────────────────────
-function CompareRow({ label, bad, good, delay = 0 }: { label: string; bad: string; good: string; delay?: number }) {
-  return (
-    <Reveal delay={delay}>
-      <div className="grid grid-cols-3 gap-2 py-4" style={{ borderBottom: `1px solid ${N4}` }}>
-        <p style={{ fontSize: 12, color: MT, fontWeight: 600, display: "flex", alignItems: "center" }}>{label}</p>
-        <div className="rounded-lg px-3 py-2 text-center" style={{ background: "rgba(239,68,68,0.06)", border: "1px solid rgba(239,68,68,0.15)" }}>
-          <p style={{ fontSize: 12, color: "#EF4444", fontWeight: 500 }}>{bad}</p>
+      opacity: visible ? 1 : 0, transform: visible ? "none" : "translateY(40px) scale(0.97)",
+      transition: "opacity 0.9s ease 200ms, transform 0.9s cubic-bezier(.22,.68,0,1.2) 200ms",
+    }}>
+      {/* Browser frame */}
+      <div style={{ borderRadius: 12, overflow: "hidden", border: `1px solid ${N4}`, background: N2, boxShadow: `0 40px 80px rgba(0,0,0,0.6), 0 0 0 1px ${N4}` }}>
+        {/* Browser chrome */}
+        <div style={{ background: N3, padding: "10px 16px", borderBottom: `1px solid ${N4}`, display: "flex", alignItems: "center", gap: 8 }}>
+          <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#EF4444" }} />
+          <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#F59E0B" }} />
+          <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#10B981" }} />
+          <div style={{ flex: 1, background: N4, borderRadius: 4, padding: "4px 12px", marginLeft: 8 }}>
+            <span style={{ fontSize: 10, color: MT }}>v3partners.com.br/dashboard</span>
+          </div>
         </div>
-        <div className="rounded-lg px-3 py-2 text-center" style={{ background: `${G}0E`, border: `1px solid ${G}30` }}>
-          <p style={{ fontSize: 12, color: G, fontWeight: 700 }}>{good}</p>
+        {/* Dashboard layout */}
+        <div style={{ display: "flex", height: 340 }}>
+          {/* Sidebar */}
+          <div style={{ width: 52, background: N, borderRight: `1px solid ${N4}`, display: "flex", flexDirection: "column", alignItems: "center", padding: "16px 0", gap: 14 }}>
+            <div style={{ width: 28, height: 28, borderRadius: 6, background: `${G}20`, border: `1px solid ${G}40`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <BarChart2 size={13} color={G} />
+            </div>
+            {[Building2, FileText, DollarSign, Globe, Cpu, Users].map((Icon, i) => (
+              <div key={i} style={{ width: 28, height: 28, borderRadius: 6, background: N3, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <Icon size={12} color={MT} />
+              </div>
+            ))}
+          </div>
+          {/* Main area */}
+          <div style={{ flex: 1, padding: 16, overflow: "hidden" }}>
+            {/* Top row KPIs */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, marginBottom: 12 }}>
+              {[
+                { label: "Pipeline Ativo", value: "R$ 4,2M", up: true },
+                { label: "Comissões", value: "R$ 312K", up: true },
+                { label: "Operações", value: "23", up: true },
+                { label: "Conversão", value: "34%", up: false },
+              ].map(({ label, value, up }) => (
+                <div key={label} style={{ background: N3, borderRadius: 6, padding: "8px 10px", border: `1px solid ${N4}` }}>
+                  <p style={{ fontSize: 8, color: MT, marginBottom: 4 }}>{label}</p>
+                  <p style={{ fontSize: 13, fontWeight: 900, color: G, lineHeight: 1 }}>{value}</p>
+                  <p style={{ fontSize: 7, color: up ? "#10B981" : "#F59E0B", marginTop: 3 }}>{up ? "▲" : "▼"} {up ? "+18%" : "-2%"} vs mês</p>
+                </div>
+              ))}
+            </div>
+            {/* Chart area + sidebar */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 140px", gap: 8, marginBottom: 8 }}>
+              {/* Fake chart */}
+              <div style={{ background: N3, borderRadius: 6, padding: 10, border: `1px solid ${N4}` }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                  <p style={{ fontSize: 8, color: MT, fontWeight: 600 }}>Pipeline M&A + Crédito</p>
+                  <div style={{ display: "flex", gap: 4 }}>
+                    {["1M", "3M", "6M"].map(t => (
+                      <span key={t} style={{ fontSize: 7, color: t === "3M" ? G : MT, background: t === "3M" ? `${G}20` : "transparent", padding: "1px 4px", borderRadius: 2 }}>{t}</span>
+                    ))}
+                  </div>
+                </div>
+                {/* Bars */}
+                <div style={{ display: "flex", alignItems: "flex-end", gap: 4, height: 70 }}>
+                  {[45, 60, 40, 80, 55, 95, 70, 85, 100, 72, 88, 65].map((h, i) => (
+                    <div key={i} style={{ flex: 1, borderRadius: "2px 2px 0 0", background: i === 6 ? G : `${G}30`, height: `${h}%`, transition: "height 0.5s ease" }} />
+                  ))}
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
+                  {["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"].map(m => (
+                    <span key={m} style={{ fontSize: 6, color: MT }}>{m}</span>
+                  ))}
+                </div>
+              </div>
+              {/* Mini pie + list */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                <div style={{ background: N3, borderRadius: 6, padding: 8, border: `1px solid ${N4}`, flex: 1 }}>
+                  <p style={{ fontSize: 7, color: MT, marginBottom: 6, fontWeight: 600 }}>Por Vertical</p>
+                  {[["M&A", 38, G], ["Crédito", 32, G2], ["Real Estate", 18, "#7A8FA8"], ["Outros", 12, N4]].map(([l, pct, c]) => (
+                    <div key={l as string} style={{ marginBottom: 4 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
+                        <span style={{ fontSize: 7, color: MT }}>{l}</span>
+                        <span style={{ fontSize: 7, color: c as string, fontWeight: 700 }}>{pct}%</span>
+                      </div>
+                      <div style={{ height: 3, borderRadius: 2, background: N4 }}>
+                        <div style={{ height: "100%", width: `${pct}%`, borderRadius: 2, background: c as string }} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+            {/* Operations list */}
+            <div style={{ background: N3, borderRadius: 6, padding: 8, border: `1px solid ${N4}` }}>
+              <p style={{ fontSize: 8, color: MT, fontWeight: 600, marginBottom: 6 }}>Operações Recentes</p>
+              {[
+                ["TechCorp Ltda", "M&A — Aquisição", "R$ 8,4M", "Due Diligence"],
+                ["Grupo Aliança", "CGI — Crédito", "R$ 2,1M", "Aprovado"],
+                ["Fazenda Nova", "CPR Agro", "R$ 1,6M", "Análise"],
+              ].map(([co, op, val, status]) => (
+                <div key={co as string} style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 0", borderBottom: `1px solid ${N4}` }}>
+                  <div style={{ width: 22, height: 22, borderRadius: 4, background: `${G}15`, border: `1px solid ${G}25`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    <Building2 size={10} color={G} />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <p style={{ fontSize: 8, color: CR, fontWeight: 600 }}>{co}</p>
+                    <p style={{ fontSize: 7, color: MT }}>{op}</p>
+                  </div>
+                  <p style={{ fontSize: 8, fontWeight: 700, color: G }}>{val}</p>
+                  <span style={{ fontSize: 7, padding: "2px 6px", borderRadius: 10, background: status === "Aprovado" ? "#10B98120" : `${G}15`, color: status === "Aprovado" ? "#10B981" : G, border: `1px solid ${status === "Aprovado" ? "#10B98130" : G + "25"}` }}>{status}</span>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
-    </Reveal>
+      {/* Glow */}
+      <div style={{ position: "absolute", bottom: -40, left: "50%", transform: "translateX(-50%)", width: "80%", height: 80, background: `radial-gradient(ellipse, ${G}25 0%, transparent 70%)`, pointerEvents: "none" }} />
+    </div>
   );
 }
 
-// ── SolucaoCard ────────────────────────────────────────────────────────────
-function SolucaoCard({ titulo, desc, tags, delay = 0 }: { titulo: string; desc: string; tags: string; delay?: number }) {
+// ── MODULE CARD ────────────────────────────────────────────────────────────
+function ModuleCard({ icon, title, desc, delay = 0 }: { icon: React.ReactNode; title: string; desc: string; delay?: number }) {
   const [hov, setHov] = useState(false);
   return (
     <Reveal delay={delay}>
       <div onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
-        style={{ borderBottom: `1px solid ${N4}`, paddingTop: 26, paddingBottom: 26, paddingLeft: hov ? 14 : 0, transition: "padding-left 0.22s ease" }}>
-        <h3 style={{ fontWeight: 800, fontSize: 13, color: hov ? G : CR, textTransform: "uppercase" as const, letterSpacing: 1.5, marginBottom: 7, transition: "color 0.2s" }}>{titulo}</h3>
-        <p style={{ fontSize: 13, color: MT, lineHeight: 1.7, marginBottom: 9 }}>{desc}</p>
-        <p style={{ fontSize: 10, color: G, fontWeight: 700, letterSpacing: 0.5 }}>{tags}</p>
+        style={{ background: hov ? `${G}0C` : N3, border: `1px solid ${hov ? G + "40" : N4}`, borderRadius: 10, padding: "22px 20px", transition: "all 0.25s ease", cursor: "default" }}>
+        <div style={{ color: hov ? G : MT, marginBottom: 12, transition: "color 0.25s" }}>{icon}</div>
+        <p style={{ fontSize: 13, fontWeight: 700, color: hov ? G : CR, marginBottom: 6, transition: "color 0.25s" }}>{title}</p>
+        <p style={{ fontSize: 12, color: MT, lineHeight: 1.7 }}>{desc}</p>
       </div>
     </Reveal>
   );
 }
 
-// ── CityBadge ──────────────────────────────────────────────────────────────
-function CityBadge({ city, state, status, delay = 0 }: { city: string; state: string; status: "ativa" | "abrindo" | "disponivel"; delay?: number }) {
-  const colors = {
-    ativa:      { bg: `${G}15`, border: `${G}40`, dot: G,         text: G,         label: "Ativa" },
-    abrindo:    { bg: `${N4}60`, border: N4,       dot: "#E8C97A", text: CR,         label: "Abrindo" },
-    disponivel: { bg: N3,        border: N4,        dot: MT,        text: MT,         label: "Disponível" },
-  };
-  const c = colors[status];
+// ── PROFILE CARD ───────────────────────────────────────────────────────────
+function ProfileCard({ icon, title, desc, delay = 0 }: { icon: string; title: string; desc: string; delay?: number }) {
   return (
     <Reveal delay={delay}>
-      <div className="flex items-center justify-between px-4 py-3 rounded-lg" style={{ background: c.bg, border: `1px solid ${c.border}` }}>
-        <div className="flex items-center gap-3">
-          <MapPin size={13} color={c.dot} />
+      <div className="flex items-start gap-4 py-5" style={{ borderBottom: `1px solid ${N4}` }}>
+        <div style={{ width: 42, height: 42, borderRadius: 10, background: `${G}10`, border: `1px solid ${G}20`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>{icon}</div>
+        <div>
+          <p style={{ fontSize: 14, fontWeight: 700, color: CR, marginBottom: 5, lineHeight: 1.3 }}>{title}</p>
+          <p style={{ fontSize: 13, color: MT, lineHeight: 1.75 }}>{desc}</p>
+        </div>
+      </div>
+    </Reveal>
+  );
+}
+
+// ── PLAN CARD ──────────────────────────────────────────────────────────────
+function PlanCard({ titulo, comissao, tag, featured, items, onClick, delay = 0 }: {
+  titulo: string; comissao: string; tag: string | null; featured: boolean;
+  items: string[]; onClick: () => void; delay?: number;
+}) {
+  const [hov, setHov] = useState(false);
+  return (
+    <Reveal delay={delay}>
+      <div onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
+        style={{ borderRadius: 14, overflow: "hidden", border: `1px solid ${featured || hov ? G + "55" : N4}`, background: featured ? `${G}0F` : N2, position: "relative", transition: "border-color 0.25s, transform 0.25s", transform: hov ? "translateY(-4px)" : "none" }}>
+        {featured && <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: `linear-gradient(90deg, ${G}, ${G2}, ${G})` }} />}
+        <div style={{ padding: 28 }}>
+          {tag && <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: 2, color: G, background: `${G}20`, border: `1px solid ${G}40`, padding: "4px 12px", borderRadius: 20, display: "inline-block", marginBottom: 14 }}>{tag}</div>}
+          <h3 style={{ fontWeight: 900, fontSize: 18, color: featured ? G : CR, marginBottom: 6 }}>{titulo}</h3>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: 20 }}>
+            <span style={{ fontSize: 42, fontWeight: 900, color: G, lineHeight: 1 }}>{comissao}</span>
+            <span style={{ fontSize: 13, color: MT }}>de comissão</span>
+          </div>
+          <div style={{ borderTop: `1px solid ${N4}`, paddingTop: 20, marginBottom: 24 }}>
+            {items.map(it => (
+              <div key={it} style={{ display: "flex", alignItems: "flex-start", gap: 10, marginBottom: 10 }}>
+                <div style={{ width: 16, height: 16, borderRadius: "50%", background: `${G}20`, border: `1px solid ${G}40`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: 1 }}>
+                  <Check size={9} color={G} />
+                </div>
+                <p style={{ fontSize: 13, color: MT, lineHeight: 1.5 }}>{it}</p>
+              </div>
+            ))}
+          </div>
+          <button onClick={onClick} className="w-full py-3.5 font-bold text-xs transition-all hover:opacity-85"
+            style={{ background: featured ? G : "transparent", color: featured ? N : G, border: `1.5px solid ${G}`, borderRadius: 6, letterSpacing: 1.5, textTransform: "uppercase" as const }}>
+            Solicitar acesso
+          </button>
+        </div>
+      </div>
+    </Reveal>
+  );
+}
+
+// ── CITY BADGE ─────────────────────────────────────────────────────────────
+function CityBadge({ city, state, status, delay = 0 }: { city: string; state: string; status: "ativa" | "abrindo" | "disponivel"; delay?: number }) {
+  const c = {
+    ativa:      { bg: `${G}15`, border: `${G}40`, dot: G, text: G, label: "Ativa" },
+    abrindo:    { bg: `${N4}60`, border: N4, dot: G2, text: CR, label: "Abrindo" },
+    disponivel: { bg: N3, border: N4, dot: MT, text: MT, label: "Disponível" },
+  }[status];
+  return (
+    <Reveal delay={delay}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", borderRadius: 8, background: c.bg, border: `1px solid ${c.border}` }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <MapPin size={12} color={c.dot} />
           <div>
             <p style={{ fontSize: 13, fontWeight: 700, color: c.text, lineHeight: 1 }}>{city}</p>
             <p style={{ fontSize: 10, color: MT, marginTop: 2 }}>{state}</p>
           </div>
         </div>
-        <div className="flex items-center gap-1.5">
+        <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
           <div style={{ width: 6, height: 6, borderRadius: "50%", background: c.dot }} />
-          <span style={{ fontSize: 10, color: c.dot, fontWeight: 700, letterSpacing: 1 }}>{c.label}</span>
+          <span style={{ fontSize: 10, color: c.dot, fontWeight: 700 }}>{c.label}</span>
         </div>
       </div>
     </Reveal>
+  );
+}
+
+// ── MARKET VISUAL ──────────────────────────────────────────────────────────
+function MarketVisual() {
+  const { ref, visible } = useInView(0.1);
+  const bars = [62, 45, 78, 55, 90, 68, 85, 72, 95, 80, 88, 76];
+  return (
+    <div ref={ref} style={{
+      opacity: visible ? 1 : 0, transform: visible ? "none" : "translateX(40px)",
+      transition: "opacity 0.8s ease 200ms, transform 0.8s cubic-bezier(.22,.68,0,1.2) 200ms",
+    }}>
+      <div style={{ borderRadius: 16, overflow: "hidden", border: `1px solid ${N4}`, background: N2, boxShadow: `0 24px 60px rgba(0,0,0,0.5)` }}>
+        {/* Header */}
+        <div style={{ background: N3, padding: "14px 20px", borderBottom: `1px solid ${N4}`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div>
+            <p style={{ fontSize: 11, fontWeight: 700, color: CR }}>Mesa de Crédito & M&A</p>
+            <p style={{ fontSize: 10, color: MT }}>Pipeline consolidado · Tempo real</p>
+          </div>
+          <div style={{ display: "flex", gap: 4 }}>
+            {["N1", "N2", "N3", "M&A"].map((t, i) => (
+              <span key={t} style={{ fontSize: 9, fontWeight: 700, color: i === 3 ? G : MT, background: i === 3 ? `${G}20` : N4, padding: "3px 8px", borderRadius: 4 }}>{t}</span>
+            ))}
+          </div>
+        </div>
+        {/* Chart */}
+        <div style={{ padding: "20px 20px 12px" }}>
+          <div style={{ display: "flex", alignItems: "flex-end", gap: 6, height: 120, marginBottom: 8 }}>
+            {bars.map((h, i) => (
+              <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 3, height: "100%" }}>
+                <div style={{ flex: 1, display: "flex", alignItems: "flex-end", width: "100%" }}>
+                  <div style={{
+                    width: "100%", borderRadius: "3px 3px 0 0",
+                    height: `${h}%`,
+                    background: i === 10 ? `linear-gradient(180deg, ${G2}, ${G})` : i % 3 === 0 ? `${G}40` : `${G}25`,
+                    boxShadow: i === 10 ? `0 0 12px ${G}60` : "none",
+                    transition: `height ${0.4 + i * 0.05}s ease`,
+                  }} />
+                </div>
+              </div>
+            ))}
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between" }}>
+            {["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"].map(m => (
+              <span key={m} style={{ fontSize: 8, color: MT }}>{m}</span>
+            ))}
+          </div>
+        </div>
+        {/* Bottom metrics */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", borderTop: `1px solid ${N4}` }}>
+          {[
+            { label: "Volume Total", val: "R$ 42M" },
+            { label: "Comissões Pagas", val: "R$ 8,4M" },
+            { label: "Partners Ativos", val: "127" },
+          ].map(({ label, val }, i) => (
+            <div key={label} style={{ padding: "14px 16px", borderRight: i < 2 ? `1px solid ${N4}` : "none" }}>
+              <p style={{ fontSize: 9, color: MT, marginBottom: 4 }}>{label}</p>
+              <p style={{ fontSize: 16, fontWeight: 900, color: G }}>{val}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── FORJA VISUAL ───────────────────────────────────────────────────────────
+function ForjaVisual() {
+  const { ref, visible } = useInView(0.1);
+  return (
+    <div ref={ref} style={{
+      opacity: visible ? 1 : 0, transform: visible ? "none" : "translateX(-40px)",
+      transition: "opacity 0.8s ease 200ms, transform 0.8s cubic-bezier(.22,.68,0,1.2) 200ms",
+    }}>
+      <div style={{ borderRadius: 16, border: `1px solid ${N4}`, background: N2, overflow: "hidden", boxShadow: `0 24px 60px rgba(0,0,0,0.5)` }}>
+        {/* Header */}
+        <div style={{ background: N3, padding: "14px 20px", borderBottom: `1px solid ${N4}`, display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ width: 28, height: 28, borderRadius: 6, background: `${G}20`, border: `1px solid ${G}40`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <Cpu size={14} color={G} />
+          </div>
+          <div>
+            <p style={{ fontSize: 11, fontWeight: 700, color: CR }}>IA FORJA · Análise em andamento</p>
+            <p style={{ fontSize: 9, color: G }}>● Processando — Fase 2 de 2</p>
+          </div>
+        </div>
+        {/* Phases */}
+        <div style={{ padding: 20 }}>
+          {[
+            { phase: "Fase 1", label: "Score & Validação", done: true, pct: 100 },
+            { phase: "Fase 2", label: "Narrativa & Tese de Investimento", done: false, pct: 68 },
+          ].map(({ phase, label, done, pct }) => (
+            <div key={phase} style={{ marginBottom: 16 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                <div style={{ display: "flex", items: "center", gap: 6 }}>
+                  <div style={{ width: 16, height: 16, borderRadius: "50%", background: done ? `${G}30` : `${N4}`, border: `1px solid ${done ? G : N4}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    {done && <Check size={9} color={G} />}
+                  </div>
+                  <span style={{ fontSize: 11, color: done ? CR : MT, fontWeight: done ? 600 : 400 }}>{phase} · {label}</span>
+                </div>
+                <span style={{ fontSize: 11, color: G, fontWeight: 700 }}>{pct}%</span>
+              </div>
+              <div style={{ height: 4, borderRadius: 2, background: N4 }}>
+                <div style={{ height: "100%", width: `${pct}%`, borderRadius: 2, background: done ? G : `linear-gradient(90deg, ${G}, ${G2})`, boxShadow: done ? "none" : `0 0 8px ${G}60` }} />
+              </div>
+            </div>
+          ))}
+          {/* Output preview */}
+          <div style={{ background: N3, borderRadius: 8, padding: "12px 14px", marginTop: 8, border: `1px solid ${N4}` }}>
+            <p style={{ fontSize: 9, fontWeight: 700, color: G, letterSpacing: 1.5, marginBottom: 8 }}>SAÍDA GERADA</p>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+              {[
+                ["Score FORJA", "87/100"],
+                ["Tese de Inv.", "Gerada ✓"],
+                ["Teaser Cego", "Pronto ✓"],
+                ["CIM", "Em geração"],
+              ].map(([l, v]) => (
+                <div key={l} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontSize: 10, color: MT }}>{l}</span>
+                  <span style={{ fontSize: 10, color: G, fontWeight: 700 }}>{v}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          {/* Matching */}
+          <div style={{ background: N3, borderRadius: 8, padding: "12px 14px", marginTop: 8, border: `1px solid ${N4}` }}>
+            <p style={{ fontSize: 9, fontWeight: 700, color: G, letterSpacing: 1.5, marginBottom: 8 }}>TOP INVESTORS MATCH</p>
+            {["Fundo A · São Paulo · ✓ Setor", "Fundo B · Rio de Janeiro · ✓ Ticket", "Fundo C · Brasília · ✓ Perfil"].map((inv, i) => (
+              <div key={i} style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+                <Star size={9} color={G} />
+                <span style={{ fontSize: 10, color: MT }}>{inv}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -254,7 +510,7 @@ export function LandingPageClient() {
   const [formError, setFormError] = useState("");
 
   useEffect(() => {
-    const h = () => { setScrolled(window.scrollY > 40); setShowSticky(window.scrollY > 600); };
+    const h = () => { setScrolled(window.scrollY > 40); setShowSticky(window.scrollY > 700); };
     window.addEventListener("scroll", h, { passive: true });
     return () => window.removeEventListener("scroll", h);
   }, []);
@@ -281,6 +537,13 @@ export function LandingPageClient() {
     finally { setSending(false); }
   }
 
+  const NAV = [
+    ["A Plataforma", "plataforma"],
+    ["Expansão", "expansao"],
+    ["Planos", "planos"],
+    ["FAQ", "faq"],
+  ];
+
   return (
     <div style={{ background: N, color: CR, fontFamily: "'DM Sans', sans-serif", overflowX: "hidden" }}>
       <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -289,15 +552,15 @@ export function LandingPageClient() {
       {/* ── STICKY BAR ──────────────────────────────────────────────────── */}
       <div style={{
         position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 50,
-        background: "rgba(9,8,26,0.97)", backdropFilter: "blur(20px)",
+        background: "rgba(9,8,26,0.97)", backdropFilter: "blur(24px)",
         borderTop: `1px solid ${N4}`,
         transform: showSticky ? "translateY(0)" : "translateY(100%)",
         transition: "transform 0.4s cubic-bezier(.4,0,.2,1)",
       }}>
-        <div className="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between gap-4">
+        <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between gap-4">
           <p style={{ fontSize: 13, fontWeight: 600, color: CR }} className="hidden sm:block">
-            V3 em expansão nacional —{" "}
-            <span style={{ color: G }}>vagas abertas por região. Garanta a sua praça.</span>
+            V3 Partners · Expansão Nacional 2026 —{" "}
+            <span style={{ color: G }}>vagas abertas por região.</span>
           </p>
           <button onClick={() => go("form")}
             className="flex items-center gap-2 font-bold ml-auto transition-all hover:opacity-85"
@@ -311,103 +574,127 @@ export function LandingPageClient() {
       <nav style={{
         position: "fixed", top: 0, left: 0, right: 0, zIndex: 40,
         background: scrolled ? "rgba(9,8,26,0.97)" : "transparent",
-        backdropFilter: scrolled ? "blur(20px)" : "none",
+        backdropFilter: scrolled ? "blur(24px)" : "none",
         borderBottom: scrolled ? `1px solid ${N4}` : "none",
         transition: "all 0.3s ease",
       }}>
-        <div className="max-w-5xl mx-auto px-6 flex items-center justify-between" style={{ height: 72 }}>
-          <div className="flex items-center gap-3">
-            <Image src="/logo.jpg" alt="V3 Partners" width={34} height={34} className="rounded-lg" />
-            <span style={{ fontWeight: 900, fontSize: 13, color: G, letterSpacing: 3.5 }}>V3 PARTNERS</span>
+        <div className="max-w-6xl mx-auto px-6 flex items-center justify-between" style={{ height: 72 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <Image src="/logo.jpg" alt="V3 Partners" width={36} height={36} style={{ borderRadius: 8 }} />
+            <div>
+              <span style={{ fontWeight: 900, fontSize: 12, color: G, letterSpacing: 3.5, display: "block" }}>V3 PARTNERS</span>
+              <span style={{ fontSize: 9, color: MT, letterSpacing: 2, display: "block", lineHeight: 1 }}>BOUTIQUE INSTITUCIONAL</span>
+            </div>
           </div>
           <div className="hidden md:flex items-center gap-8">
-            {[["Expansão", "expansao"], ["Como funciona", "como"], ["Planos", "planos"], ["FAQ", "faq"]].map(([l, id]) => (
+            {NAV.map(([l, id]) => (
               <button key={id} onClick={() => go(id)} style={{ fontSize: 12, fontWeight: 500, color: MT, letterSpacing: 0.5 }} className="hover:text-white transition-colors">{l}</button>
             ))}
           </div>
-          <button onClick={() => go("form")} className="hidden md:block font-bold transition-all hover:opacity-85"
+          <button onClick={() => go("form")} className="hidden md:flex items-center gap-2 font-bold hover:opacity-85 transition-all"
             style={{ background: G, color: N, padding: "9px 22px", borderRadius: 3, fontSize: 11, letterSpacing: 2, textTransform: "uppercase" }}>
-            Solicitar vaga
+            Seja Partner
           </button>
           <button onClick={() => setMenuOpen(o => !o)} className="md:hidden" style={{ color: CR }}>
             {menuOpen ? <X size={22} /> : <Menu size={22} />}
           </button>
         </div>
         {menuOpen && (
-          <div className="md:hidden px-6 py-4 space-y-1" style={{ background: "rgba(9,8,26,0.99)", borderTop: `1px solid ${N4}` }}>
-            {[["Expansão", "expansao"], ["Como funciona", "como"], ["Planos", "planos"], ["FAQ", "faq"], ["Solicitar vaga", "form"]].map(([l, id]) => (
-              <button key={id} onClick={() => go(id)} className="block w-full text-left py-3 text-sm" style={{ color: CR, borderBottom: `1px solid ${N4}` }}>{l}</button>
+          <div className="md:hidden px-6 py-4" style={{ background: "rgba(9,8,26,0.99)", borderTop: `1px solid ${N4}` }}>
+            {[...NAV, ["Seja Partner", "form"]].map(([l, id]) => (
+              <button key={id} onClick={() => go(id)} className="block w-full text-left py-3.5 text-sm font-medium" style={{ color: CR, borderBottom: `1px solid ${N4}` }}>{l}</button>
             ))}
           </div>
         )}
       </nav>
 
       {/* ═══════════════════════════════════════════════════════════════
-          01 · HERO — Expansão nacional, seja o primeiro da sua região
+          01 · HERO — Statement máximo
       ═══════════════════════════════════════════════════════════════ */}
       <section style={{ minHeight: "100vh", display: "flex", alignItems: "center", background: N, position: "relative", overflow: "hidden" }}>
-        <div style={{ position: "absolute", inset: 0, backgroundImage: `linear-gradient(${N4}15 1px, transparent 1px), linear-gradient(to right, ${N4}15 1px, transparent 1px)`, backgroundSize: "72px 72px", opacity: 0.45 }} />
+        {/* Grid bg */}
+        <div style={{ position: "absolute", inset: 0, backgroundImage: `linear-gradient(${N4}14 1px, transparent 1px), linear-gradient(to right, ${N4}14 1px, transparent 1px)`, backgroundSize: "72px 72px", opacity: 0.5 }} />
+        {/* Gold top line */}
         <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: `linear-gradient(90deg, transparent, ${G}, transparent)` }} />
-        <ParallaxOrb top="5%"  left="60%" size={750} delay={0} />
-        <ParallaxOrb top="55%" left="-6%" size={480} delay={15} />
-        <ParallaxOrb top="72%" left="80%" size={320} delay={8} />
-        <div style={{ position: "absolute", inset: 0, background: `radial-gradient(ellipse 80% 80% at 50% 50%, transparent 30%, ${N} 100%)`, pointerEvents: "none" }} />
+        {/* Orbs */}
+        <ParallaxOrb top="0%"   left="55%" size={900} delay={0} />
+        <ParallaxOrb top="60%"  left="-5%" size={500} delay={18} />
+        <ParallaxOrb top="75%"  left="78%" size={320} delay={8} />
+        {/* Vignette */}
+        <div style={{ position: "absolute", inset: 0, background: `radial-gradient(ellipse 85% 85% at 50% 50%, transparent 25%, ${N} 100%)`, pointerEvents: "none" }} />
 
-        <div className="max-w-5xl mx-auto px-6 relative w-full" style={{ paddingTop: 160, paddingBottom: 120 }}>
+        <div className="max-w-6xl mx-auto px-6 relative w-full" style={{ paddingTop: 160, paddingBottom: 80 }}>
+          <div className="grid md:grid-cols-2 gap-16 items-center">
+            {/* Left — copy */}
+            <div>
+              <Reveal direction="none">
+                <div style={{ display: "inline-flex", alignItems: "center", gap: 8, background: `${G}12`, border: `1px solid ${G}30`, borderRadius: 40, padding: "6px 20px", marginBottom: 28 }}>
+                  <div style={{ width: 7, height: 7, borderRadius: "50%", background: G, boxShadow: `0 0 8px ${G}` }} />
+                  <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: 2.5, color: G }}>EXPANSÃO NACIONAL 2026 · VAGAS ABERTAS</span>
+                </div>
+              </Reveal>
 
-          {/* Badge de expansão */}
-          <Reveal direction="none">
-            <div className="inline-flex items-center gap-2 mb-8" style={{ background: `${G}12`, border: `1px solid ${G}30`, borderRadius: 40, padding: "6px 20px" }}>
-              <div style={{ width: 7, height: 7, borderRadius: "50%", background: G, boxShadow: `0 0 8px ${G}` }} />
-              <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: 2.5, color: G }}>EXPANSÃO NACIONAL 2026 · VAGAS ABERTAS</span>
+              <Reveal direction="up" delay={80}>
+                <h1 style={{ fontSize: "clamp(36px, 5.5vw, 68px)", fontWeight: 900, lineHeight: 1.02, color: CR, letterSpacing: -1.5, marginBottom: 0 }}>
+                  Seja o Partner V3
+                </h1>
+              </Reveal>
+              <Reveal direction="up" delay={150}>
+                <h1 style={{ fontSize: "clamp(36px, 5.5vw, 68px)", fontWeight: 900, lineHeight: 1.02, letterSpacing: -1.5, marginBottom: 0 }}>
+                  <span style={{ background: `linear-gradient(125deg, ${G} 0%, ${G2} 55%, ${G} 100%)`, WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text" }}>
+                    da sua cidade.
+                  </span>
+                </h1>
+              </Reveal>
+              <Reveal direction="up" delay={220}>
+                <p style={{ fontSize: "clamp(16px, 1.7vw, 19px)", color: MT, lineHeight: 1.85, maxWidth: 560, marginBottom: 14, marginTop: 24 }}>
+                  A V3 Partners está em expansão nacional. Licenciamos um único Partner por praça — com acesso exclusivo à nossa plataforma institucional de crédito estruturado, M&A e soluções financeiras high ticket.
+                </p>
+                <p style={{ fontSize: "clamp(15px, 1.4vw, 17px)", color: `${CR}80`, lineHeight: 1.75, maxWidth: 540, marginBottom: 44, fontStyle: "italic" }}>
+                  Você origina. A V3 estrutura, opera e paga comissões de 30% a 50% por operação.
+                </p>
+              </Reveal>
+
+              <Reveal direction="up" delay={300}>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginBottom: 48 }}>
+                  <CTABtn onClick={() => go("form")} large>Garantir minha vaga</CTABtn>
+                  <CTABtn onClick={() => go("plataforma")} outline large>Ver a plataforma</CTABtn>
+                </div>
+              </Reveal>
+
+              {/* Mini trust row */}
+              <Reveal direction="up" delay={380}>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 20 }}>
+                  {[
+                    [Shield, "Boutique institucional"],
+                    [Award, "Exclusividade por praça"],
+                    [TrendingUp, "30% a 50% de comissão"],
+                  ].map(([Icon, text]) => (
+                    <div key={text as string} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <Icon size={13} color={G} />
+                      <span style={{ fontSize: 12, color: MT, fontWeight: 500 }}>{text as string}</span>
+                    </div>
+                  ))}
+                </div>
+              </Reveal>
             </div>
-          </Reveal>
 
-          {/* Headline */}
-          <Reveal direction="up" delay={80}>
-            <h1 style={{ fontSize: "clamp(36px, 6.5vw, 78px)", fontWeight: 900, lineHeight: 1.02, color: CR, letterSpacing: -1.5, marginBottom: 0, maxWidth: 860 }}>
-              A V3 Partners está chegando
-            </h1>
-          </Reveal>
-          <Reveal direction="up" delay={160}>
-            <h1 style={{ fontSize: "clamp(36px, 6.5vw, 78px)", fontWeight: 900, lineHeight: 1.02, letterSpacing: -1.5, marginBottom: 10 }}>
-              <span style={{ background: `linear-gradient(125deg, ${G} 0%, ${G2} 55%, ${G} 100%)`, WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text" }}>
-                à sua região.
-              </span>
-            </h1>
-          </Reveal>
-          <Reveal direction="up" delay={220}>
-            <h1 style={{ fontSize: "clamp(36px, 6.5vw, 78px)", fontWeight: 900, lineHeight: 1.02, color: CR, letterSpacing: -1.5, marginBottom: 36 }}>
-              Seja o primeiro.
-            </h1>
-          </Reveal>
-
-          <Reveal direction="up" delay={300}>
-            <p style={{ fontSize: "clamp(16px, 1.8vw, 20px)", color: MT, lineHeight: 1.8, maxWidth: 680, marginBottom: 14 }}>
-              Estamos expandindo nossa rede de Partners por todo o Brasil. <strong style={{ color: CR }}>Uma vaga por praça.</strong> Quem chegar primeiro garante exclusividade de território em uma boutique institucional de crédito estruturado, M&A e soluções financeiras high ticket.
-            </p>
-            <p style={{ fontSize: "clamp(15px, 1.5vw, 17px)", color: `${CR}85`, lineHeight: 1.75, maxWidth: 640, marginBottom: 52, fontStyle: "italic" }}>
-              Comissões de 30% a 50% por operação. Tickets de R$200K a R$20M. Suporte institucional completo. Você origina — a V3 estrutura e fecha.
-            </p>
-          </Reveal>
-
-          <Reveal direction="up" delay={380}>
-            <div className="flex flex-wrap gap-4">
-              <CTABtn onClick={() => go("form")} large>Garantir minha vaga</CTABtn>
-              <CTABtn onClick={() => go("expansao")} outline large>Ver cidades abertas</CTABtn>
+            {/* Right — Platform mockup */}
+            <div style={{ position: "relative" }}>
+              <PlatformMockup />
             </div>
-          </Reveal>
+          </div>
 
-          {/* Numbers */}
+          {/* Stats row */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-20">
             {[
-              { n: 27,  suf: "",   label: "estados sendo mapeados" },
-              { n: 50,  suf: "%",  pre: "até ", label: "de comissão por operação" },
-              { n: 400, suf: "K+", pre: "R$",   label: "por operação possível" },
-              { n: 4,   suf: "",   label: "verticais de alto ticket" },
-            ].map(({ n, suf, label, pre = "" }, i) => (
-              <Reveal key={label} delay={440 + i * 65}>
-                <div className="rounded-2xl p-6 text-center" style={{ background: "rgba(17,31,53,0.8)", border: `1px solid ${N4}`, backdropFilter: "blur(16px)" }}>
+              { n: 50,  suf: "%",  pre: "até ",  label: "de comissão por operação" },
+              { n: 400, suf: "K+", pre: "R$",    label: "por operação possível" },
+              { n: 10,  suf: "+",  pre: "",       label: "módulos na plataforma" },
+              { n: 27,  suf: "",   pre: "",       label: "estados em expansão" },
+            ].map(({ n, suf, label, pre }, i) => (
+              <Reveal key={label} delay={420 + i * 65}>
+                <div style={{ background: "rgba(17,31,53,0.85)", border: `1px solid ${N4}`, borderRadius: 14, padding: "22px", textAlign: "center", backdropFilter: "blur(16px)" }}>
                   <p style={{ fontSize: "clamp(24px, 3.5vw, 36px)", fontWeight: 900, color: G, lineHeight: 1 }}>
                     {pre}<Counter to={n} suffix={suf} />
                   </p>
@@ -420,18 +707,19 @@ export function LandingPageClient() {
       </section>
 
       {/* ── CREDIBILITY BAR ─────────────────────────────────────────────── */}
-      <div style={{ background: N2, borderTop: `1px solid ${N4}`, borderBottom: `1px solid ${N4}`, padding: "20px 0" }}>
-        <div className="max-w-5xl mx-auto px-6">
-          <div className="flex flex-wrap items-center justify-center gap-8 md:gap-16">
+      <div style={{ background: N2, borderTop: `1px solid ${N4}`, borderBottom: `1px solid ${N4}`, padding: "18px 0" }}>
+        <div className="max-w-6xl mx-auto px-6">
+          <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: "20px 48px" }}>
             {[
-              { icon: "🏛️", text: "Boutique institucional multiproduto" },
-              { icon: "📈", text: "Crédito, M&A e Securitização" },
-              { icon: "🤖", text: "IA FORJA proprietária" },
-              { icon: "⚖️", text: "Compliance e KYC integrados" },
-              { icon: "📜", text: "CNPJ 14.219.287/0001-50" },
-            ].map(({ icon, text }) => (
-              <div key={text} className="flex items-center gap-2.5">
-                <span style={{ fontSize: 16 }}>{icon}</span>
+              ["🏛️", "Boutique multiproduto"],
+              ["📈", "Crédito · M&A · Securitização"],
+              ["🤖", "IA FORJA proprietária"],
+              ["⚖️", "Compliance e KYC integrados"],
+              ["🔒", "Plataforma SaaS exclusiva"],
+              ["📜", "CNPJ 14.219.287/0001-50"],
+            ].map(([icon, text]) => (
+              <div key={text} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontSize: 15 }}>{icon}</span>
                 <span style={{ fontSize: 11, color: MT, fontWeight: 500 }}>{text}</span>
               </div>
             ))}
@@ -440,228 +728,297 @@ export function LandingPageClient() {
       </div>
 
       {/* ═══════════════════════════════════════════════════════════════
-          02 · O QUE É — Boutique institucional em expansão
+          02 · QUEM É A V3 — Identidade institucional
       ═══════════════════════════════════════════════════════════════ */}
-      <section style={{ background: N, padding: "110px 0", position: "relative", overflow: "hidden" }}>
+      <section style={{ background: N, padding: "120px 0", position: "relative", overflow: "hidden" }}>
         <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 1, background: `linear-gradient(90deg, transparent, ${G}30, transparent)` }} />
-        <div style={{ position: "absolute", inset: 0, background: `radial-gradient(ellipse 55% 55% at 50% 50%, ${G}06 0%, transparent 70%)`, pointerEvents: "none" }} />
-        <div className="max-w-5xl mx-auto px-6 relative">
-          <SectionLabel>O que é a V3 Partners</SectionLabel>
-          <div className="grid md:grid-cols-2 gap-16 items-center">
+        <div style={{ position: "absolute", inset: 0, background: `radial-gradient(ellipse 55% 50% at 50% 50%, ${G}06 0%, transparent 70%)`, pointerEvents: "none" }} />
+        <div className="max-w-6xl mx-auto px-6 relative">
+          <SectionLabel>Quem é a V3 Partners</SectionLabel>
+          <div className="grid md:grid-cols-2 gap-20 items-center">
             <div>
               <Reveal direction="left">
-                <h2 style={{ fontSize: "clamp(24px, 3.5vw, 44px)", fontWeight: 900, color: CR, lineHeight: 1.2, marginBottom: 24 }}>
-                  Uma boutique financeira institucional. Não um banco. Não uma corretora. Algo maior.
+                <h2 style={{ fontSize: "clamp(26px, 4vw, 50px)", fontWeight: 900, color: CR, lineHeight: 1.15, marginBottom: 24 }}>
+                  Uma boutique financeira institucional construída para{" "}
+                  <span style={{ color: G }}>operar onde os bancos não chegam.</span>
                 </h2>
               </Reveal>
               <Reveal direction="left" delay={100}>
                 <p style={{ fontSize: 16, color: MT, lineHeight: 1.9, marginBottom: 20 }}>
-                  A V3 Partners é especializada em operações de crédito estruturado, M&A (fusões e aquisições), securitização de recebíveis e real estate. Atuamos com soluções financeiras que o mercado convencional não entrega — tickets a partir de R$200 mil, com análise institucional e estruturação completa.
+                  Fundada por <strong style={{ color: CR }}>Hamilton Santos</strong> (finanças e cross-border), <strong style={{ color: CR }}>João Lemos Netto</strong> (originação e ativos) e <strong style={{ color: CR }}>Robson Lino</strong> (compliance e operações), a V3 Partners é uma boutique multiproduto especializada em operações que o mercado convencional não estrutura.
                 </p>
               </Reveal>
               <Reveal direction="left" delay={180}>
                 <p style={{ fontSize: 16, color: MT, lineHeight: 1.9, marginBottom: 40 }}>
-                  Nossa expansão nacional abre uma oportunidade única: ser o <strong style={{ color: CR }}>representante V3 na sua cidade</strong>, com exclusividade de praça, suporte da mesa institucional e uma plataforma com IA proprietária para operar no nível das maiores boutiques do país.
+                  Crédito estruturado de alto valor, M&A para empresas que crescem ou precisam de capital, securitização de recebíveis, real estate e operações internacionais. Tudo com análise institucional, compliance robusto e tecnologia proprietária.
                 </p>
               </Reveal>
-              <Reveal delay={240}>
-                <CTABtn onClick={() => go("form")}>Quero ser o Partner da minha cidade</CTABtn>
-              </Reveal>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              {[
-                ["🏛️", "Crédito Estruturado",   "CGI, FIDC, CRI, Home Equity"],
-                ["📈", "M&A & Deal Rooms",       "IA FORJA, Teaser, CIM, VDR"],
-                ["💎", "Securitização",           "Recebíveis, precatórios, FIDC"],
-                ["🏗️", "Real Estate",            "SLB, BTS, BTR, Fundos"],
-                ["🤖", "Plataforma com IA",      "7 squads especializados"],
-                ["⚖️", "Compliance & KYC",       "Trilha, risco, auditoria"],
-              ].map(([icon, t, d], i) => (
-                <Reveal key={t} delay={i * 65}>
-                  <div className="rounded-xl p-5 h-full" style={{ background: N2, border: `1px solid ${N4}` }}>
-                    <div className="text-xl mb-3">{icon}</div>
-                    <p style={{ fontWeight: 700, fontSize: 13, color: CR, marginBottom: 4 }}>{t}</p>
-                    <p style={{ fontSize: 11, color: MT, lineHeight: 1.5 }}>{d}</p>
-                  </div>
-                </Reveal>
-              ))}
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ═══════════════════════════════════════════════════════════════
-          03 · DOR — O que acontece com quem fica de fora
-      ═══════════════════════════════════════════════════════════════ */}
-      <section style={{ background: N2, padding: "110px 0", position: "relative" }}>
-        <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 1, background: `linear-gradient(90deg, transparent, ${G}40, transparent)` }} />
-        <div className="max-w-5xl mx-auto px-6">
-          <SectionLabel>Por que agir agora</SectionLabel>
-          <Reveal>
-            <h2 style={{ fontSize: "clamp(22px, 3.5vw, 44px)", fontWeight: 800, color: CR, lineHeight: 1.25, marginBottom: 14, maxWidth: 820 }}>
-              Toda expansão abre janelas. E fecha logo depois.
-            </h2>
-          </Reveal>
-          <Reveal delay={80}>
-            <p style={{ fontSize: 16, color: MT, lineHeight: 1.85, maxWidth: 700, marginBottom: 52 }}>
-              Quando uma boutique institucional entra em uma nova praça, o primeiro parceiro que se posiciona captura o território. Depois que as vagas fecham, a única forma de entrar é esperar — se é que outra vaga abre. Isso é o que está acontecendo agora.
-            </p>
-          </Reveal>
-          <div className="grid sm:grid-cols-2 md:grid-cols-4 gap-4">
-            <PainCard delay={0}   icon="🗺️" title="Sua praça ainda está aberta"          body="A maioria das cidades brasileiras ainda não tem um Partner V3 ativo. A janela para ser o primeiro está aberta — mas não por muito tempo." />
-            <PainCard delay={80}  icon="💸" title="Comissão de 1% enquanto outros levam 50%" body="Na mesma operação que você ganha R$5.000 com produto convencional, um Partner institucional embolsa R$200.000. A diferença é o produto." />
-            <PainCard delay={160} icon="🏗️" title="Sem estrutura, a oportunidade vai embora" body="Operação de R$5M exige análise, compliance, IA e jurídico. Sem infraestrutura institucional, o cliente leva para quem tem." />
-            <PainCard delay={240} icon="📉" title="Network valioso, produto limitado"       body="Você conhece empresários, executivos, CFOs. Mas o produto que carrega não corresponde ao tamanho da oportunidade que eles representam." />
-          </div>
-          <Reveal delay={300}>
-            <div className="rounded-2xl p-8 mt-12" style={{ background: `${G}0A`, border: `1px solid ${G}25` }}>
-              <p style={{ fontSize: "clamp(17px, 2.2vw, 22px)", fontWeight: 700, color: CR, lineHeight: 1.55, margin: 0 }}>
-                A V3 está chegando na sua cidade.{" "}
-                <span style={{ color: G }}>A vaga de Partner é para quem agir primeiro — não para quem pensar mais.</span>
-              </p>
-            </div>
-          </Reveal>
-        </div>
-      </section>
-
-      {/* ═══════════════════════════════════════════════════════════════
-          04 · EXPANSÃO — Mapa de cidades
-      ═══════════════════════════════════════════════════════════════ */}
-      <section id="expansao" style={{ background: N, padding: "110px 0", position: "relative", overflow: "hidden" }}>
-        <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 1, background: `linear-gradient(90deg, transparent, ${G}30, transparent)` }} />
-        <div style={{ position: "absolute", inset: 0, background: `radial-gradient(ellipse 60% 55% at 50% 50%, ${G}07 0%, transparent 70%)`, pointerEvents: "none" }} />
-        <ParallaxOrb top="10%" left="75%" size={500} delay={5} />
-        <div className="max-w-5xl mx-auto px-6 relative">
-          <SectionLabel>Status de expansão por região</SectionLabel>
-          <Reveal>
-            <h2 style={{ fontSize: "clamp(22px, 3.2vw, 40px)", fontWeight: 800, color: CR, lineHeight: 1.25, marginBottom: 16, maxWidth: 760 }}>
-              Uma praça. Um Partner. Exclusividade garantida.
-            </h2>
-          </Reveal>
-          <Reveal delay={80}>
-            <p style={{ fontSize: 16, color: MT, lineHeight: 1.8, maxWidth: 680, marginBottom: 52 }}>
-              Cada cidade opera com um único representante V3 licenciado. Isso garante foco, qualidade no atendimento e proteção do território do Partner ativo. Veja o status das principais praças.
-            </p>
-          </Reveal>
-
-          <div className="grid md:grid-cols-3 gap-10 mb-14">
-            {/* Sudeste */}
-            <div>
-              <Reveal>
-                <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: 3, color: G, marginBottom: 14 }}>SUDESTE</p>
-              </Reveal>
-              <div className="space-y-2.5">
-                <CityBadge delay={0}   city="São Paulo"      state="SP" status="ativa"      />
-                <CityBadge delay={60}  city="Rio de Janeiro" state="RJ" status="abrindo"    />
-                <CityBadge delay={120} city="Belo Horizonte" state="MG" status="abrindo"    />
-                <CityBadge delay={180} city="Campinas"       state="SP" status="disponivel" />
-                <CityBadge delay={240} city="Ribeirão Preto" state="SP" status="disponivel" />
-                <CityBadge delay={300} city="Vitória"        state="ES" status="disponivel" />
-              </div>
-            </div>
-            {/* Sul + Centro-Oeste */}
-            <div>
-              <Reveal>
-                <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: 3, color: G, marginBottom: 14 }}>SUL · CENTRO-OESTE</p>
-              </Reveal>
-              <div className="space-y-2.5">
-                <CityBadge delay={0}   city="Curitiba"          state="PR" status="abrindo"    />
-                <CityBadge delay={60}  city="Porto Alegre"       state="RS" status="disponivel" />
-                <CityBadge delay={120} city="Florianópolis"      state="SC" status="disponivel" />
-                <CityBadge delay={180} city="Brasília"           state="DF" status="abrindo"    />
-                <CityBadge delay={240} city="Goiânia"            state="GO" status="disponivel" />
-                <CityBadge delay={300} city="Campo Grande"       state="MS" status="disponivel" />
-              </div>
-            </div>
-            {/* Norte + Nordeste */}
-            <div>
-              <Reveal>
-                <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: 3, color: G, marginBottom: 14 }}>NORTE · NORDESTE</p>
-              </Reveal>
-              <div className="space-y-2.5">
-                <CityBadge delay={0}   city="Salvador"    state="BA" status="abrindo"    />
-                <CityBadge delay={60}  city="Fortaleza"   state="CE" status="disponivel" />
-                <CityBadge delay={120} city="Recife"      state="PE" status="disponivel" />
-                <CityBadge delay={180} city="Manaus"      state="AM" status="disponivel" />
-                <CityBadge delay={240} city="Belém"       state="PA" status="disponivel" />
-                <CityBadge delay={300} city="Maceió"      state="AL" status="disponivel" />
-              </div>
-            </div>
-          </div>
-
-          {/* Legenda */}
-          <Reveal>
-            <div className="flex flex-wrap gap-6 mb-12">
-              {[
-                { dot: G,         label: "Ativa — vaga ocupada" },
-                { dot: G2,        label: "Abrindo — processo em andamento" },
-                { dot: MT,        label: "Disponível — vaga aberta" },
-              ].map(({ dot, label }) => (
-                <div key={label} className="flex items-center gap-2">
-                  <div style={{ width: 8, height: 8, borderRadius: "50%", background: dot, flexShrink: 0 }} />
-                  <span style={{ fontSize: 12, color: MT }}>{label}</span>
+              <Reveal delay={260}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                  {[
+                    ["3", "sócios especialistas"],
+                    ["4", "verticais de receita"],
+                    ["7", "squads de IA"],
+                    ["10+", "módulos integrados"],
+                  ].map(([val, label]) => (
+                    <div key={label} style={{ background: N2, border: `1px solid ${N4}`, borderRadius: 10, padding: "16px 18px" }}>
+                      <p style={{ fontSize: 28, fontWeight: 900, color: G, lineHeight: 1 }}>{val}</p>
+                      <p style={{ fontSize: 12, color: MT, marginTop: 4 }}>{label}</p>
+                    </div>
+                  ))}
                 </div>
-              ))}
+              </Reveal>
             </div>
+            {/* Right — market visual */}
+            <MarketVisual />
+          </div>
+        </div>
+      </section>
+
+      {/* ═══════════════════════════════════════════════════════════════
+          03 · PLATAFORMA — O que o Partner tem nas mãos
+      ═══════════════════════════════════════════════════════════════ */}
+      <section id="plataforma" style={{ background: N2, padding: "120px 0", position: "relative" }}>
+        <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 1, background: `linear-gradient(90deg, transparent, ${G}40, transparent)` }} />
+        <div className="max-w-6xl mx-auto px-6">
+          <SectionLabel>A Plataforma V3</SectionLabel>
+          <Reveal>
+            <h2 style={{ fontSize: "clamp(24px, 3.5vw, 46px)", fontWeight: 900, color: CR, lineHeight: 1.2, marginBottom: 16, maxWidth: 820 }}>
+              Quando você se torna Partner V3, uma plataforma institucional completa fica nas suas mãos.
+            </h2>
+          </Reveal>
+          <Reveal delay={80}>
+            <p style={{ fontSize: 16, color: MT, lineHeight: 1.85, maxWidth: 720, marginBottom: 60 }}>
+              Não é um CRM simples. É um SaaS proprietário com módulos integrados de crédito, M&A, academy, IA, marketplace, comissões e compliance — tudo desenhado para você operar no nível das maiores boutiques do Brasil.
+            </p>
           </Reveal>
 
-          <Reveal delay={100}>
-            <div className="rounded-xl p-6 mb-10" style={{ background: N2, border: `1px solid ${N4}` }}>
-              <p style={{ fontSize: 14, color: MT, lineHeight: 1.8 }}>
-                <strong style={{ color: CR }}>Sua cidade não está na lista?</strong>{" "}
-                Não importa. Estamos mapeando o Brasil inteiro. Preencha o formulário, informe sua cidade e nossa equipe avalia a abertura da praça junto com você.
-              </p>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-16">
+            <ModuleCard delay={0}   icon={<BarChart2 size={22} />}   title="Dashboard & KPIs em Tempo Real"        desc="Acompanhe seu pipeline, comissões, operações e metas em um painel centralizado. Dados ao vivo de cada negócio." />
+            <ModuleCard delay={60}  icon={<Building2 size={22} />}   title="Mesa de Crédito — 3 Níveis"            desc="N1 (varejo), N2 (estruturado) e N3 (high ticket acima de R$5M). Mesa dedicada por nível com análise institucional." />
+            <ModuleCard delay={120} icon={<Cpu size={22} />}         title="Mesa M&A + IA FORJA"                   desc="IA proprietária para análise, scoring, narrativa de investimento, teaser cego, CIM e matching de investidores." />
+            <ModuleCard delay={180} icon={<FileText size={22} />}    title="Deal Rooms & VDR"                      desc="Workspaces persistentes por deal com Virtual Data Room, upload de documentos e histórico completo." />
+            <ModuleCard delay={240} icon={<Users size={22} />}       title="CRM Integrado"                         desc="Gestão completa de contatos, leads, follow-ups e histórico. Todos os seus clientes em um único lugar." />
+            <ModuleCard delay={300} icon={<Globe size={22} />}       title="Marketplace de Produtos"              desc="Acesso ao catálogo de soluções financeiras e produtos curados para oferecer à sua carteira de clientes." />
+            <ModuleCard delay={360} icon={<Award size={22} />}       title="Academy V3"                           desc="Trilha de capacitação completa. Treinamentos, certificados, materiais de apoio e atualização contínua." />
+            <ModuleCard delay={420} icon={<DollarSign size={22} />}  title="Comissões & Relatórios"               desc="Rastreamento em tempo real de cada operação. Relatórios de comissão, histórico de pagamentos e projeções." />
+            <ModuleCard delay={480} icon={<Shield size={22} />}      title="Compliance & KYC"                     desc="Módulo integrado de conformidade, análise de risco, trilha de auditoria e gestão de documentos por operação." />
+          </div>
+
+          {/* FORJA feature highlight */}
+          <div className="grid md:grid-cols-2 gap-16 items-center mt-4">
+            <ForjaVisual />
+            <div>
+              <Reveal direction="right">
+                <div style={{ display: "inline-flex", alignItems: "center", gap: 8, background: `${G}12`, border: `1px solid ${G}25`, borderRadius: 40, padding: "4px 14px", marginBottom: 20 }}>
+                  <Cpu size={11} color={G} />
+                  <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 2, color: G }}>IA FORJA · EXCLUSIVO V3</span>
+                </div>
+              </Reveal>
+              <Reveal direction="right" delay={80}>
+                <h3 style={{ fontSize: "clamp(22px, 3vw, 36px)", fontWeight: 800, color: CR, lineHeight: 1.25, marginBottom: 20 }}>
+                  A IA mais avançada do mercado para estruturação de M&A.
+                </h3>
+              </Reveal>
+              <Reveal direction="right" delay={160}>
+                <p style={{ fontSize: 15, color: MT, lineHeight: 1.9, marginBottom: 20 }}>
+                  A FORJA é nossa IA proprietária de 2 fases. Na Fase 1, analisa o deal e gera um score institucional com validação completa. Na Fase 2, produz a narrativa de investimento, tese, teaser cego e CIM — documentos que as maiores boutiques cobram R$80K para entregar.
+                </p>
+              </Reveal>
+              <Reveal direction="right" delay={220}>
+                <p style={{ fontSize: 15, color: MT, lineHeight: 1.9, marginBottom: 32 }}>
+                  Como Partner V3, você usa a FORJA com seus clientes — entregando material de M&A de qualidade institucional sem precisar de uma equipe de analistas.
+                </p>
+              </Reveal>
+              <Reveal direction="right" delay={280}>
+                <CTABtn onClick={() => go("form")}>Quero acesso à plataforma</CTABtn>
+              </Reveal>
             </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ═══════════════════════════════════════════════════════════════
+          04 · O QUE FAZEMOS — Verticais
+      ═══════════════════════════════════════════════════════════════ */}
+      <section style={{ background: N, padding: "120px 0", position: "relative", overflow: "hidden" }}>
+        <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 1, background: `linear-gradient(90deg, transparent, ${G}30, transparent)` }} />
+        <div style={{ position: "absolute", inset: 0, background: `radial-gradient(ellipse 60% 50% at 50% 50%, ${G}06 0%, transparent 70%)`, pointerEvents: "none" }} />
+        <div className="max-w-6xl mx-auto px-6 relative">
+          <SectionLabel>O que fazemos</SectionLabel>
+          <Reveal>
+            <h2 style={{ fontSize: "clamp(24px, 3.5vw, 44px)", fontWeight: 900, color: CR, lineHeight: 1.2, marginBottom: 16, maxWidth: 800 }}>
+              Quatro verticais de alto valor. Um portfólio que o mercado convencional não distribui.
+            </h2>
+          </Reveal>
+          <Reveal delay={80}>
+            <p style={{ fontSize: 16, color: MT, lineHeight: 1.85, maxWidth: 720, marginBottom: 60 }}>
+              Cada vertical foi escolhida por uma razão: ticket elevado, margem institucional e demanda real de empresas que não encontram esse tipo de solução nos bancos de varejo.
+            </p>
           </Reveal>
 
-          <Reveal delay={140}>
-            <CTABtn onClick={() => go("form")}>Verificar minha praça</CTABtn>
+          <div className="grid md:grid-cols-2 gap-6 mb-14">
+            {[
+              {
+                num: "01",
+                icon: <DollarSign size={22} />,
+                title: "Securitização de Crédito e Recebíveis",
+                desc: "CGI, precatórios, CRI, FIDC, Home Equity, Crédito Agro. Operações a partir de R$200K com análise institucional completa e colocação junto a fundos qualificados.",
+                tags: ["CGI", "FIDC", "CRI", "Precatórios", "Home Equity", "Agro"],
+                delay: 0,
+              },
+              {
+                num: "02",
+                icon: <Building2 size={22} />,
+                title: "M&A — Fusões, Aquisições e Reestruturações",
+                desc: "Compra, venda e fusão de empresas com análise estratégica via IA FORJA. Deal Rooms, teaser cego, CIM e matching com investidores institucionais e fundos.",
+                tags: ["Valuation", "Teaser", "CIM", "Deal Rooms", "Matching IA"],
+                delay: 80,
+              },
+              {
+                num: "03",
+                icon: <Globe size={22} />,
+                title: "Real Estate Estruturado e Cross-Border",
+                desc: "SLB, BTS, BTR, fundos imobiliários e operações internacionais com capital global. Estruturas que o corretor e o banco de varejo não conseguem entregar.",
+                tags: ["SLB", "BTS", "BTR", "Fundos", "Cross-Border", "OTC"],
+                delay: 160,
+              },
+              {
+                num: "04",
+                icon: <TrendingUp size={22} />,
+                title: "Mineração, Commodities e Operações Distressed",
+                desc: "Lítio, ouro, metais preciosos, operações para empresas com restrição e reestruturações. Soluções onde o mercado fecha a porta e a V3 abre uma janela.",
+                tags: ["Ouro", "Lítio", "Commodities", "Distressed", "Split Fiscal"],
+                delay: 240,
+              },
+            ].map(({ num, icon, title, desc, tags, delay }) => (
+              <Reveal key={num} delay={delay}>
+                <div style={{ background: N2, border: `1px solid ${N4}`, borderRadius: 14, overflow: "hidden" }}>
+                  <div style={{ padding: "28px 28px 20px", borderBottom: `1px solid ${N4}` }}>
+                    <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, marginBottom: 16 }}>
+                      <span style={{ fontSize: 56, fontWeight: 900, color: `${G}18`, lineHeight: 1, letterSpacing: -2 }}>{num}</span>
+                      <div style={{ color: G, flexShrink: 0, marginTop: 4 }}>{icon}</div>
+                    </div>
+                    <h3 style={{ fontWeight: 800, fontSize: 18, color: CR, lineHeight: 1.3, marginBottom: 12 }}>{title}</h3>
+                    <p style={{ fontSize: 14, color: MT, lineHeight: 1.8 }}>{desc}</p>
+                  </div>
+                  <div style={{ padding: "14px 28px", display: "flex", flexWrap: "wrap", gap: 6 }}>
+                    {tags.map(tag => (
+                      <span key={tag} style={{ fontSize: 10, color: G, background: `${G}12`, border: `1px solid ${G}25`, padding: "3px 10px", borderRadius: 20, fontWeight: 600 }}>{tag}</span>
+                    ))}
+                  </div>
+                </div>
+              </Reveal>
+            ))}
+          </div>
+
+          <Reveal delay={300}>
+            <CTABtn onClick={() => go("form")}>Quero distribuir essas soluções</CTABtn>
           </Reveal>
         </div>
       </section>
 
       {/* ═══════════════════════════════════════════════════════════════
-          05 · COMO FUNCIONA — 4 passos
+          05 · PERFIL — Quem é o Partner V3
       ═══════════════════════════════════════════════════════════════ */}
-      <section id="como" style={{ background: N2, padding: "110px 0", position: "relative" }}>
+      <section style={{ background: N2, padding: "120px 0", position: "relative" }}>
         <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 1, background: `linear-gradient(90deg, transparent, ${G}40, transparent)` }} />
-        <div className="max-w-5xl mx-auto px-6">
-          <SectionLabel>Como funciona</SectionLabel>
+        <div className="max-w-6xl mx-auto px-6">
+          <SectionLabel>Perfil do Partner V3</SectionLabel>
+          <div className="grid md:grid-cols-2 gap-20 items-start">
+            <div>
+              <Reveal direction="left">
+                <h2 style={{ fontSize: "clamp(24px, 3.5vw, 44px)", fontWeight: 900, color: CR, lineHeight: 1.2, marginBottom: 20 }}>
+                  Você não precisa ser do mercado financeiro. Precisa ter o perfil certo.
+                </h2>
+              </Reveal>
+              <Reveal direction="left" delay={100}>
+                <p style={{ fontSize: 16, color: MT, lineHeight: 1.9, marginBottom: 32 }}>
+                  Os melhores Partners V3 não são os que mais conhecem de finanças. São os que têm relacionamento com empresários, executivos e tomadores de decisão — e a inteligência de conectar problemas às soluções certas.
+                </p>
+              </Reveal>
+              <Reveal delay={180}>
+                <div style={{ background: `${G}0C`, border: `1px solid ${G}25`, borderRadius: 12, padding: "20px 24px", marginBottom: 36 }}>
+                  <p style={{ fontSize: "clamp(16px, 2vw, 20px)", fontWeight: 700, color: CR, lineHeight: 1.6, margin: 0 }}>
+                    A principal qualificação:{" "}
+                    <span style={{ color: G }}>a disposição de trazer negócios à mesa.</span>{" "}
+                    O resto, a V3 ensina.
+                  </p>
+                </div>
+              </Reveal>
+              <Reveal delay={240}>
+                <CTABtn onClick={() => go("form")}>Esse sou eu — quero me candidatar</CTABtn>
+              </Reveal>
+            </div>
+            <div style={{ borderTop: `1px solid ${N4}` }}>
+              <ProfileCard delay={0}   icon="💼" title="Consultores e advisors financeiros" desc="Que querem ampliar o portfólio com produtos institucionais — crédito estruturado, M&A e securitização com ticket e comissão compatíveis com seu nível de atuação." />
+              <ProfileCard delay={60}  icon="📊" title="Contadores, CFOs e gestores financeiros" desc="Com acesso direto à realidade financeira das empresas. Sabem antes de qualquer outro quando a empresa precisa de crédito, capital ou reestruturação." />
+              <ProfileCard delay={120} icon="⚖️" title="Advogados empresariais e societários" desc="Que acompanham fusões, aquisições, reestruturações e processos que invariavelmente envolvem capital, M&A e operações estruturadas." />
+              <ProfileCard delay={180} icon="🏛️" title="Correspondentes bancários" desc="Que querem liberdade operacional, produtos mais inteligentes e comissões muito superiores às que o modelo bancário convencional oferece." />
+              <ProfileCard delay={240} icon="🏗️" title="Corretores de imóveis comerciais e de alto padrão" desc="Cujos clientes são empresários e investidores que precisam de estruturação financeira — não só de financiamento de varejo." />
+              <ProfileCard delay={300} icon="🚀" title="Empreendedores e executivos em transição" desc="Que querem construir uma carreira independente no mercado financeiro com a credencial e a estrutura de uma boutique institucional." />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ═══════════════════════════════════════════════════════════════
+          06 · COMO FUNCIONA — Divisão clara
+      ═══════════════════════════════════════════════════════════════ */}
+      <section style={{ background: N, padding: "120px 0", position: "relative", overflow: "hidden" }}>
+        <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 1, background: `linear-gradient(90deg, transparent, ${G}30, transparent)` }} />
+        <div style={{ position: "absolute", inset: 0, background: `radial-gradient(ellipse 55% 50% at 50% 50%, ${G}06 0%, transparent 70%)`, pointerEvents: "none" }} />
+        <ParallaxOrb top="10%" left="80%" size={500} delay={5} />
+        <div className="max-w-6xl mx-auto px-6 relative">
+          <SectionLabel>Como funciona a parceria</SectionLabel>
           <Reveal>
-            <h2 style={{ fontSize: "clamp(22px, 3.2vw, 38px)", fontWeight: 800, color: CR, lineHeight: 1.3, marginBottom: 56, maxWidth: 680 }}>
-              Do licenciamento à primeira comissão. Quatro passos.
+            <h2 style={{ fontSize: "clamp(24px, 3.5vw, 44px)", fontWeight: 900, color: CR, lineHeight: 1.2, marginBottom: 56, maxWidth: 700 }}>
+              Você origina. A V3 estrutura e opera. Você recebe.
             </h2>
           </Reveal>
-          <div className="grid sm:grid-cols-2 md:grid-cols-4 gap-5 mb-14">
-            <StepCard delay={0}   n="01" title="Licencie-se" body="Escolha seu plano, assine o contrato digitalmente e receba acesso à plataforma V3 em até 24 horas." />
-            <StepCard delay={90}  n="02" title="Capacite-se" body="Onboarding guiado pelo Academy V3. Materiais comerciais, reuniões semanais de capacitação com a mesa." />
-            <StepCard delay={180} n="03" title="Origine"     body="Você traz o cliente. A V3 analisa, estrutura, conduz o compliance e fecha a operação com qualidade institucional." />
-            <StepCard delay={270} n="04" title="Receba"      body="Sua comissão (30% ou 50%) é rastreada em tempo real na plataforma e paga após a liquidação da operação." />
+
+          {/* Steps */}
+          <div className="grid sm:grid-cols-2 md:grid-cols-4 gap-5 mb-16">
+            {[
+              { n: "01", title: "Licencie-se", body: "Escolha seu plano, assine digitalmente e acesse a plataforma em até 24h. Onboarding guiado pela equipe V3." },
+              { n: "02", title: "Capacite-se", body: "Complete o Academy V3. Materiais, treinamentos semanais com a mesa, suporte operacional desde o primeiro dia." },
+              { n: "03", title: "Origine negócios", body: "Você identifica oportunidades na sua rede. A V3 analisa, estrutura, conduz compliance e fecha institucionalmente." },
+              { n: "04", title: "Receba a comissão", body: "30% ou 50% do resultado líquido, rastreado em tempo real na plataforma e pago após liquidação da operação." },
+            ].map(({ n, title, body }, i) => (
+              <Reveal key={n} delay={i * 90}>
+                <div style={{ background: N2, border: `1px solid ${N4}`, borderRadius: 12, padding: "28px 24px", height: "100%" }}>
+                  <div style={{ fontSize: "clamp(52px, 6vw, 66px)", fontWeight: 900, color: `${G}18`, lineHeight: 1, marginBottom: 16, letterSpacing: -2 }}>{n}</div>
+                  <p style={{ fontWeight: 800, fontSize: 15, color: G, marginBottom: 10 }}>{title}</p>
+                  <p style={{ fontSize: 13, color: MT, lineHeight: 1.8 }}>{body}</p>
+                </div>
+              </Reveal>
+            ))}
           </div>
 
-          {/* Divisão de trabalho */}
+          {/* Division table */}
           <Reveal delay={300}>
-            <div className="rounded-2xl overflow-hidden" style={{ border: `1px solid ${N4}` }}>
-              <div className="grid grid-cols-2" style={{ borderBottom: `1px solid ${N4}` }}>
-                <div className="px-8 py-5" style={{ background: N3, borderRight: `1px solid ${N4}` }}>
+            <div style={{ borderRadius: 14, overflow: "hidden", border: `1px solid ${N4}` }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", borderBottom: `1px solid ${N4}` }}>
+                <div style={{ background: N3, borderRight: `1px solid ${N4}`, padding: "14px 24px" }}>
                   <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: 2.5, color: MT }}>VOCÊ FAZ</p>
                 </div>
-                <div className="px-8 py-5" style={{ background: `${G}0C` }}>
+                <div style={{ background: `${G}0C`, padding: "14px 24px" }}>
                   <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: 2.5, color: G }}>A V3 FAZ</p>
                 </div>
               </div>
               {[
-                ["Prospecta e apresenta o produto", "Analisa e estrutura a operação"],
-                ["Qualifica o cliente e coleta documentos", "Conduz compliance e KYC"],
-                ["Acompanha o relacionamento", "Negocia com fundos e instituições"],
-                ["Participa das reuniões estratégicas", "Garante qualidade institucional"],
-                ["Recebe 30% a 50% do resultado", "Opera como mandatária da operação"],
+                ["Prospecta e identifica oportunidades", "Analisa viabilidade e estrutura a operação"],
+                ["Apresenta o produto ao cliente", "Conduz compliance, KYC e due diligence"],
+                ["Qualifica e coleta documentos iniciais", "Negocia com fundos e instituições financeiras"],
+                ["Acompanha o relacionamento com o cliente", "Garante qualidade e padrão institucional"],
+                ["Participa das reuniões estratégicas", "Opera como mandatária e emite documentos"],
+                ["Recebe 30% a 50% do resultado", "Fecha, liquida e paga a comissão"],
               ].map(([voce, v3], i) => (
-                <div key={i} className="grid grid-cols-2" style={{ borderBottom: i < 4 ? `1px solid ${N4}` : "none" }}>
-                  <div className="px-8 py-4" style={{ background: N3, borderRight: `1px solid ${N4}` }}>
+                <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr 1fr", borderBottom: i < 5 ? `1px solid ${N4}` : "none" }}>
+                  <div style={{ background: N3, borderRight: `1px solid ${N4}`, padding: "14px 24px" }}>
                     <p style={{ fontSize: 13, color: MT }}>{voce}</p>
                   </div>
-                  <div className="px-8 py-4" style={{ background: `${G}06` }}>
+                  <div style={{ background: `${G}06`, padding: "14px 24px" }}>
                     <p style={{ fontSize: 13, color: CR, fontWeight: 500 }}>{v3}</p>
                   </div>
                 </div>
@@ -669,8 +1026,8 @@ export function LandingPageClient() {
             </div>
           </Reveal>
 
-          <Reveal delay={350}>
-            <div className="mt-10">
+          <Reveal delay={360}>
+            <div style={{ marginTop: 40 }}>
               <CTABtn onClick={() => go("form")}>Começar agora</CTABtn>
             </div>
           </Reveal>
@@ -678,230 +1035,157 @@ export function LandingPageClient() {
       </section>
 
       {/* ═══════════════════════════════════════════════════════════════
-          06 · COMPARAÇÃO — V3 vs mercado convencional
+          07 · EXPANSÃO — Mapa de cidades
       ═══════════════════════════════════════════════════════════════ */}
-      <section style={{ background: N, padding: "110px 0", position: "relative" }}>
-        <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 1, background: `linear-gradient(90deg, transparent, ${G}30, transparent)` }} />
-        <div className="max-w-5xl mx-auto px-6">
-          <SectionLabel>Por que o V3 Partner Program é diferente</SectionLabel>
-          <Reveal>
-            <h2 style={{ fontSize: "clamp(22px, 3.2vw, 38px)", fontWeight: 800, color: CR, lineHeight: 1.3, marginBottom: 48, maxWidth: 680 }}>
-              A diferença entre ganhar 1% e ganhar 50% é o produto que você carrega.
-            </h2>
-          </Reveal>
-          <div className="rounded-2xl overflow-hidden mb-14" style={{ border: `1px solid ${N4}` }}>
-            <div className="grid grid-cols-3 gap-2 px-6 py-4" style={{ background: N2, borderBottom: `1px solid ${N4}` }}>
-              <p style={{ fontSize: 11, fontWeight: 700, color: MT, letterSpacing: 2 }}></p>
-              <div className="text-center rounded-lg py-2" style={{ background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)" }}>
-                <p style={{ fontSize: 11, fontWeight: 700, color: "#EF4444", letterSpacing: 1.5 }}>MERCADO CONVENCIONAL</p>
-              </div>
-              <div className="text-center rounded-lg py-2" style={{ background: `${G}10`, border: `1px solid ${G}35` }}>
-                <p style={{ fontSize: 11, fontWeight: 700, color: G, letterSpacing: 1.5 }}>V3 PARTNER</p>
-              </div>
-            </div>
-            <div className="px-6">
-              <CompareRow delay={0}   label="Comissão média"        bad="0,5% a 2%"              good="30% a 50%" />
-              <CompareRow delay={55}  label="Ticket mínimo"         bad="R$5K a R$50K"           good="R$200.000+" />
-              <CompareRow delay={110} label="Portfólio"             bad="CDB, seguros, fundos"   good="Crédito estruturado, M&A, FIDC" />
-              <CompareRow delay={165} label="Suporte operacional"   bad="Nenhum"                 good="Mesa institucional dedicada" />
-              <CompareRow delay={220} label="Tecnologia"            bad="Planilha ou CRM básico" good="SaaS próprio + 7 squads de IA" />
-              <CompareRow delay={275} label="Credencial"            bad="Produto commodity"      good="Boutique institucional" />
-              <CompareRow delay={330} label="Potencial por operação" bad="R$500 a R$5.000"       good="R$10.000 a R$400.000+" />
-            </div>
-          </div>
-          <Reveal delay={350}>
-            <CTABtn onClick={() => go("form")}>Quero operar no nível institucional</CTABtn>
-          </Reveal>
-        </div>
-      </section>
-
-      {/* ═══════════════════════════════════════════════════════════════
-          07 · SOLUÇÕES — Portfólio completo
-      ═══════════════════════════════════════════════════════════════ */}
-      <section id="solucoes" style={{ background: N2, padding: "110px 0", position: "relative" }}>
-        <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 1, background: `linear-gradient(90deg, transparent, ${G}30, transparent)` }} />
-        <div className="max-w-5xl mx-auto px-6">
-          <SectionLabel>Portfólio de soluções</SectionLabel>
-          <Reveal>
-            <h2 style={{ fontSize: "clamp(22px, 3.2vw, 38px)", fontWeight: 800, color: CR, lineHeight: 1.3, marginBottom: 16, maxWidth: 700 }}>
-              Você vende o que as empresas realmente precisam e os bancos não entregam.
-            </h2>
-          </Reveal>
-          <Reveal delay={80}>
-            <p style={{ fontSize: 16, color: MT, lineHeight: 1.8, maxWidth: 660, marginBottom: 52 }}>
-              Cada solução abaixo é uma oportunidade de comissão real, com ticket elevado e margem institucional. O Partner V3 distribui o portfólio completo da boutique.
-            </p>
-          </Reveal>
-          <div className="grid md:grid-cols-2 gap-x-16">
-            <div style={{ borderTop: `1px solid ${N4}` }}>
-              <SolucaoCard delay={0}   titulo="Crédito com Garantia Imobiliária"   desc="Capital de giro, alavancagem e aquisições com garantia real. Ticket médio R$800K a R$5M." tags="Home Equity · CGI PJ · CRI · Giro Equity · Financiamentos" />
-              <SolucaoCard delay={60}  titulo="Securitização de Recebíveis"         desc="Converta ativos futuros em capital imediato. Ideal para empresas com recebíveis recorrentes." tags="FIDC · CRI · Precatórios · Cessão de Crédito · Notas Comerciais" />
-              <SolucaoCard delay={120} titulo="M&A — Fusões e Aquisições"           desc="Compra, venda e fusão com análise estratégica via IA proprietária FORJA. Deals a partir de R$2M." tags="Valuation · Teaser Cego · CIM · Deal Rooms · Matching IA" />
-              <SolucaoCard delay={180} titulo="Crédito Corporativo Estruturado"     desc="Soluções completas para fortalecer caixa, adquirir ativos e escalar operações." tags="Capital de Giro · Leasing · Consórcio Prime · Cash Collateral" />
-              <SolucaoCard delay={240} titulo="Crédito Agro"                        desc="Financiamento para produtores rurais e agroindústrias com volumes de R$300K a R$20M." tags="CPR · Fundo Agro · Sale & Leaseback · Maquinários · Custeio" />
-            </div>
-            <div style={{ borderTop: `1px solid ${N4}` }}>
-              <SolucaoCard delay={0}   titulo="Real Estate Estruturado"             desc="Financiamento para projetos imobiliários de alto padrão. Estruturas que o mercado convencional não oferece." tags="SLB · BTS · BTR · Fundos Imobiliários · Incorporação" />
-              <SolucaoCard delay={60}  titulo="Operações Internacionais"            desc="Capital global e estruturas cross-border com liquidação internacional ágil e segura." tags="ACC · ACE · Câmbio Internacional · Cross-Border · OTC" />
-              <SolucaoCard delay={120} titulo="Mineração & Commodities"             desc="Soluções para produtores e traders de metais preciosos e commodities com estrutura especializada." tags="Ouro · Lítio · Metais Preciosos · Financiamento de Projetos" />
-              <SolucaoCard delay={180} titulo="Split Fiscal Inteligente"            desc="Eficiência tributária que maximiza a margem líquida sem alterar a operação da empresa." tags="Split de Pagamentos · Conta Técnica · Compliance Tributário" />
-              <SolucaoCard delay={240} titulo="Operações Distressed"                desc="Alternativas reais para empresas com restrição. Onde o mercado fecha a porta, a V3 abre uma janela." tags="Fundo Estressado · Home Equity Distressed · Recebíveis Restritivos" />
-            </div>
-          </div>
-          <Reveal delay={280}>
-            <div className="mt-14">
-              <CTABtn onClick={() => go("form")}>Quero distribuir essas soluções</CTABtn>
-            </div>
-          </Reveal>
-        </div>
-      </section>
-
-      {/* ═══════════════════════════════════════════════════════════════
-          08 · QUEM PODE SER
-      ═══════════════════════════════════════════════════════════════ */}
-      <section style={{ background: N, padding: "110px 0", position: "relative" }}>
-        <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 1, background: `linear-gradient(90deg, transparent, ${G}30, transparent)` }} />
-        <div className="max-w-5xl mx-auto px-6">
-          <SectionLabel>Este programa é para você se...</SectionLabel>
-          <div className="grid md:grid-cols-2 gap-x-16">
-            <div style={{ borderTop: `1px solid ${N4}` }}>
-              {[
-                ["💼", "Você quer entrar no mercado financeiro com estrutura real", "— não com um curso e uma planilha, mas com mesa, produto, compliance e tecnologia de boutique."],
-                ["📊", "Você já tem network de empresários e executivos", "e sabe que eles precisam de crédito, capital e estruturação que o banco não entrega."],
-                ["💰", "Você quer comissões proporcionais ao seu esforço", "e está cansado de trabalhar duro por 1% em operações que valem milhões."],
-                ["🏦", "Você é contador, gestor financeiro ou CFO", "com acesso direto à realidade financeira das empresas — e quer monetizar isso."],
-              ].map(([icon, bold, rest], i) => (
-                <Reveal key={bold} delay={i * 60}>
-                  <div className="flex items-start gap-4 py-5" style={{ borderBottom: `1px solid ${N4}` }}>
-                    <div className="flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center text-lg" style={{ background: `${G}12`, border: `1px solid ${G}20` }}>{icon}</div>
-                    <p style={{ fontSize: 14, color: MT, lineHeight: 1.8 }}><strong style={{ color: CR }}>{bold}</strong>{rest}</p>
-                  </div>
-                </Reveal>
-              ))}
-            </div>
-            <div style={{ borderTop: `1px solid ${N4}` }}>
-              {[
-                ["⚖️", "Você é advogado empresarial, societário ou tributário", "e lida com fusões, aquisições e reestruturações que envolvem capital e operações financeiras."],
-                ["🏛️", "Você é correspondente bancário ou consultor de crédito", "e quer liberdade operacional, produtos mais inteligentes e comissões superiores."],
-                ["🏗️", "Você é corretor de imóveis comerciais ou de alto padrão", "com clientes que são empresários que precisam de estruturação, não só de financiamento."],
-                ["🚀", "Você quer empreender no mercado financeiro", "sem abrir uma corretora do zero — usando a estrutura, a marca e a credencial da V3 como base."],
-              ].map(([icon, bold, rest], i) => (
-                <Reveal key={bold} delay={i * 60}>
-                  <div className="flex items-start gap-4 py-5" style={{ borderBottom: `1px solid ${N4}` }}>
-                    <div className="flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center text-lg" style={{ background: `${G}12`, border: `1px solid ${G}20` }}>{icon}</div>
-                    <p style={{ fontSize: 14, color: MT, lineHeight: 1.8 }}><strong style={{ color: CR }}>{bold}</strong>{rest}</p>
-                  </div>
-                </Reveal>
-              ))}
-            </div>
-          </div>
-          <Reveal delay={200}>
-            <div className="rounded-2xl px-8 py-7 mt-12 mb-10" style={{ background: `${G}0C`, border: `1px solid ${G}25` }}>
-              <p style={{ fontSize: "clamp(16px, 2vw, 20px)", color: CR, fontWeight: 700, lineHeight: 1.6, margin: 0 }}>
-                A principal qualificação não é diploma ou experiência prévia.{" "}
-                <span style={{ color: G }}>É a disposição de trazer negócios à mesa.</span>{" "}
-                O resto a V3 ensina.
-              </p>
-            </div>
-          </Reveal>
-          <Reveal delay={240}>
-            <CTABtn onClick={() => go("form")}>Esse sou eu — quero solicitar minha vaga</CTABtn>
-          </Reveal>
-        </div>
-      </section>
-
-      {/* ═══════════════════════════════════════════════════════════════
-          09 · PLANOS
-      ═══════════════════════════════════════════════════════════════ */}
-      <section id="planos" style={{ background: N2, padding: "110px 0", position: "relative" }}>
+      <section id="expansao" style={{ background: N2, padding: "120px 0", position: "relative" }}>
         <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 1, background: `linear-gradient(90deg, transparent, ${G}40, transparent)` }} />
-        <div style={{ position: "absolute", inset: 0, background: `radial-gradient(ellipse 60% 50% at 50% 50%, ${G}05 0%, transparent 70%)`, pointerEvents: "none" }} />
-        <div className="max-w-5xl mx-auto px-6 relative">
-          <SectionLabel>Modelos de licenciamento</SectionLabel>
-          <Reveal>
-            <h2 style={{ fontSize: "clamp(22px, 3.2vw, 38px)", fontWeight: 800, color: CR, lineHeight: 1.3, marginBottom: 16, maxWidth: 700 }}>
-              Escolha o nível de operação que faz sentido para você agora.
-            </h2>
-          </Reveal>
-          <Reveal delay={80}>
-            <p style={{ fontSize: 16, color: MT, lineHeight: 1.8, maxWidth: 620, marginBottom: 52 }}>
-              Você pode evoluir de plano à medida que escala seus resultados. O importante é começar — antes que sua praça seja ocupada.
-            </p>
-          </Reveal>
-
-          <div className="grid md:grid-cols-3 gap-5 mb-10">
-            {[
-              {
-                titulo: "V3 Partner Entry",
-                comissao: "30%",
-                badge: null,
-                desc: "Para quem quer ativar rápido. Acesso às soluções mais demandadas, CRM, IA integrada e Academy base.",
-                items: ["Crédito N1 e N2", "CRM + IA integrada", "Academy base", "Chat com a mesa", "Suporte operacional semanal"],
-                d: 0,
-              },
-              {
-                titulo: "V3 Partner",
-                comissao: "30%",
-                badge: "Mais escolhido",
-                desc: "Estrutura completa para operar com amplitude. Mesa de crédito completa, consórcio corporativo, relatórios e KPIs.",
-                items: ["Crédito N1, N2 e N3", "Mesa de crédito completa", "Relatórios e KPIs", "Consórcio corporativo", "Academy completo"],
-                d: 100,
-              },
-              {
-                titulo: "V3 Partner PRO",
-                comissao: "50%",
-                badge: null,
-                desc: "Máxima rentabilidade e máxima credencial. Mesa M&A, Deal Rooms, co-branding V3 e a maior comissão do mercado.",
-                items: ["Tudo do Partner +", "Mesa M&A dedicada", "Deal Rooms e VDR", "Co-branding V3", "Academy M&A avançado"],
-                d: 200,
-              },
-            ].map(({ titulo, comissao, badge, desc, items, d }) => (
-              <Reveal key={titulo} delay={d}>
-                <div className="rounded-xl flex flex-col h-full overflow-hidden" style={{
-                  background: badge ? `${G}0F` : N3,
-                  border: `1px solid ${badge ? G + "55" : N4}`,
-                  position: "relative",
-                }}>
-                  {badge && <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: `linear-gradient(90deg, ${G}, ${G2})` }} />}
-                  <div className="p-7 flex flex-col gap-4 flex-1">
-                    {badge && (
-                      <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: 2, color: G, background: `${G}20`, border: `1px solid ${G}40`, padding: "4px 10px", borderRadius: 20, display: "inline-block", alignSelf: "flex-start" }}>{badge}</div>
-                    )}
-                    <div>
-                      <h3 style={{ fontWeight: 900, fontSize: 17, color: badge ? G : CR, marginBottom: 8 }}>{titulo}</h3>
-                      <div className="flex items-baseline gap-1.5">
-                        <span style={{ fontSize: "clamp(30px, 3.5vw, 42px)", fontWeight: 900, color: G, lineHeight: 1 }}>{comissao}</span>
-                        <span style={{ fontSize: 13, color: MT }}>de comissão por operação</span>
-                      </div>
+        <div className="max-w-6xl mx-auto px-6">
+          <SectionLabel>Expansão nacional 2026</SectionLabel>
+          <div className="grid md:grid-cols-2 gap-16 items-start">
+            <div>
+              <Reveal direction="left">
+                <h2 style={{ fontSize: "clamp(24px, 3.5vw, 44px)", fontWeight: 900, color: CR, lineHeight: 1.2, marginBottom: 20 }}>
+                  Uma praça. Um Partner. Exclusividade garantida.
+                </h2>
+              </Reveal>
+              <Reveal direction="left" delay={100}>
+                <p style={{ fontSize: 16, color: MT, lineHeight: 1.9, marginBottom: 20 }}>
+                  Cada cidade opera com um único representante V3 licenciado. Quando sua praça está ativa, todos os leads e indicações originados na região são direcionados para você. Nenhum outro Partner pode atuar na mesma praça.
+                </p>
+              </Reveal>
+              <Reveal direction="left" delay={180}>
+                <p style={{ fontSize: 16, color: MT, lineHeight: 1.9, marginBottom: 32 }}>
+                  Estamos mapeando o Brasil inteiro. As vagas das principais praças estão abertas agora — e fecham quando são preenchidas.
+                </p>
+              </Reveal>
+              <Reveal delay={240}>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 32 }}>
+                  {[
+                    { dot: G,  label: "Ativa" },
+                    { dot: G2, label: "Abrindo" },
+                    { dot: MT, label: "Disponível" },
+                  ].map(({ dot, label }) => (
+                    <div key={label} style={{ display: "flex", alignItems: "center", gap: 6, background: N3, border: `1px solid ${N4}`, borderRadius: 20, padding: "5px 12px" }}>
+                      <div style={{ width: 7, height: 7, borderRadius: "50%", background: dot }} />
+                      <span style={{ fontSize: 11, color: MT, fontWeight: 500 }}>{label}</span>
                     </div>
-                    <p style={{ fontSize: 13, color: MT, lineHeight: 1.75 }}>{desc}</p>
-                    <div className="space-y-2.5 pt-4 flex-1" style={{ borderTop: `1px solid ${N4}` }}>
-                      {items.map(it => (
-                        <div key={it} className="flex items-center gap-2.5">
-                          <div className="w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: `${G}20`, border: `1px solid ${G}40` }}>
-                            <Check size={9} color={G} />
-                          </div>
-                          <p style={{ fontSize: 12, color: MT }}>{it}</p>
-                        </div>
-                      ))}
-                    </div>
-                    <button onClick={() => go("form")} className="mt-4 w-full py-3.5 rounded-lg font-bold text-xs transition-all hover:opacity-85"
-                      style={{ background: badge ? G : "transparent", color: badge ? N : G, border: `1px solid ${G}`, letterSpacing: 1.5, textTransform: "uppercase" }}>
-                      Solicitar acesso
-                    </button>
-                  </div>
+                  ))}
                 </div>
               </Reveal>
-            ))}
+              <Reveal delay={280}>
+                <div style={{ background: `${G}0A`, border: `1px solid ${G}22`, borderRadius: 10, padding: "16px 20px", marginBottom: 32 }}>
+                  <p style={{ fontSize: 13, color: MT, lineHeight: 1.7 }}>
+                    <strong style={{ color: CR }}>Sua cidade não está na lista?</strong>{" "}
+                    Sem problema. Preencha o formulário com sua cidade e nossa equipe avalia a abertura da praça com você.
+                  </p>
+                </div>
+              </Reveal>
+              <Reveal delay={320}>
+                <CTABtn onClick={() => go("form")}>Verificar minha praça</CTABtn>
+              </Reveal>
+            </div>
+
+            {/* City grids */}
+            <div>
+              <Reveal direction="right">
+                <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: 3, color: G, marginBottom: 12 }}>SUDESTE</p>
+              </Reveal>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginBottom: 20 }}>
+                <CityBadge delay={0}   city="São Paulo"      state="SP" status="ativa"      />
+                <CityBadge delay={50}  city="Rio de Janeiro" state="RJ" status="abrindo"    />
+                <CityBadge delay={100} city="Belo Horizonte" state="MG" status="abrindo"    />
+                <CityBadge delay={150} city="Campinas"       state="SP" status="disponivel" />
+                <CityBadge delay={200} city="Ribeirão Preto" state="SP" status="disponivel" />
+                <CityBadge delay={250} city="Vitória"        state="ES" status="disponivel" />
+              </div>
+              <Reveal direction="right" delay={80}>
+                <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: 3, color: G, marginBottom: 12 }}>SUL · CENTRO-OESTE</p>
+              </Reveal>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginBottom: 20 }}>
+                <CityBadge delay={0}   city="Curitiba"     state="PR" status="abrindo"    />
+                <CityBadge delay={50}  city="Porto Alegre" state="RS" status="disponivel" />
+                <CityBadge delay={100} city="Brasília"     state="DF" status="abrindo"    />
+                <CityBadge delay={150} city="Florianópolis" state="SC" status="disponivel" />
+              </div>
+              <Reveal direction="right" delay={120}>
+                <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: 3, color: G, marginBottom: 12 }}>NORTE · NORDESTE</p>
+              </Reveal>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+                <CityBadge delay={0}   city="Salvador"  state="BA" status="abrindo"    />
+                <CityBadge delay={50}  city="Fortaleza" state="CE" status="disponivel" />
+                <CityBadge delay={100} city="Recife"    state="PE" status="disponivel" />
+                <CityBadge delay={150} city="Manaus"    state="AM" status="disponivel" />
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ═══════════════════════════════════════════════════════════════
+          08 · PLANOS — Modalidades sem valores
+      ═══════════════════════════════════════════════════════════════ */}
+      <section id="planos" style={{ background: N, padding: "120px 0", position: "relative", overflow: "hidden" }}>
+        <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 1, background: `linear-gradient(90deg, transparent, ${G}40, transparent)` }} />
+        <div style={{ position: "absolute", inset: 0, background: `radial-gradient(ellipse 60% 50% at 50% 50%, ${G}06 0%, transparent 70%)`, pointerEvents: "none" }} />
+        <div className="max-w-6xl mx-auto px-6 relative">
+          <SectionLabel>Modalidades de licenciamento</SectionLabel>
+          <Reveal>
+            <h2 style={{ fontSize: "clamp(24px, 3.5vw, 44px)", fontWeight: 900, color: CR, lineHeight: 1.2, marginBottom: 16, maxWidth: 760 }}>
+              Três modalidades. Você escolhe o nível que faz sentido agora — e evolui conforme cresce.
+            </h2>
+          </Reveal>
+          <Reveal delay={80}>
+            <p style={{ fontSize: 16, color: MT, lineHeight: 1.85, maxWidth: 660, marginBottom: 56 }}>
+              Cada modalidade dá acesso a um conjunto específico de ferramentas e verticais da V3. Sem compromisso de longo prazo. A conversa sobre condições e investimento acontece no contato com nossa equipe.
+            </p>
+          </Reveal>
+
+          <div className="grid md:grid-cols-3 gap-6 mb-12">
+            <PlanCard
+              delay={0} titulo="V3 Partner Entry" comissao="30%" tag={null} featured={false}
+              onClick={() => go("form")}
+              items={[
+                "Crédito N1 e N2 (até R$5M)",
+                "Plataforma V3 com CRM integrado",
+                "Academy V3 — módulo base",
+                "Chat com a mesa de crédito",
+                "Suporte operacional semanal",
+                "30% de comissão por operação",
+              ]}
+            />
+            <PlanCard
+              delay={100} titulo="V3 Partner" comissao="30%" tag="Mais escolhido" featured={true}
+              onClick={() => go("form")}
+              items={[
+                "Crédito N1, N2 e N3 (acima de R$5M)",
+                "Mesa de crédito completa",
+                "Consórcio corporativo",
+                "Relatórios e KPIs avançados",
+                "Academy V3 — trilha completa",
+                "30% de comissão por operação",
+              ]}
+            />
+            <PlanCard
+              delay={200} titulo="V3 Partner PRO" comissao="50%" tag={null} featured={false}
+              onClick={() => go("form")}
+              items={[
+                "Tudo do Partner +",
+                "Mesa M&A dedicada + IA FORJA",
+                "Deal Rooms e VDR exclusivo",
+                "Co-branding V3 Partners",
+                "Academy M&A avançado",
+                "50% de comissão por operação",
+              ]}
+            />
           </div>
 
           <Reveal delay={320}>
-            <div className="rounded-xl p-6 flex items-start gap-4" style={{ background: N3, border: `1px solid ${N4}` }}>
+            <div style={{ background: N2, border: `1px solid ${N4}`, borderRadius: 12, padding: "20px 24px", display: "flex", alignItems: "flex-start", gap: 14 }}>
               <div style={{ fontSize: 20, flexShrink: 0 }}>📍</div>
               <div>
                 <p style={{ fontWeight: 700, fontSize: 13, color: CR, marginBottom: 4 }}>Vaga única por praça · Exclusividade garantida</p>
                 <p style={{ fontSize: 13, color: MT, lineHeight: 1.7 }}>
-                  O programa é seletivo e territorial. Uma praça — um Partner. Isso garante que seu território é protegido e que a V3 direciona todos os leads e indicações da região para você. Quando a vaga fecha, fecha.
+                  O programa é seletivo e territorial. Uma praça — um Partner. Leads e indicações da sua região são direcionados exclusivamente para você. Quando a vaga fecha, fecha definitivamente. O investimento de entrada e as condições são apresentadas pela nossa equipe no contato inicial.
                 </p>
               </div>
             </div>
@@ -910,98 +1194,59 @@ export function LandingPageClient() {
       </section>
 
       {/* ═══════════════════════════════════════════════════════════════
-          10 · SOBRE A V3
+          09 · QUOTE + CTA Urgência
       ═══════════════════════════════════════════════════════════════ */}
-      <section style={{ background: N, padding: "110px 0", position: "relative" }}>
-        <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 1, background: `linear-gradient(90deg, transparent, ${G}30, transparent)` }} />
-        <div className="max-w-5xl mx-auto px-6">
-          <SectionLabel>Quem está atrás da estrutura</SectionLabel>
-          <div className="grid md:grid-cols-2 gap-16 items-center">
-            <div>
-              <Reveal direction="left">
-                <h2 style={{ fontSize: "clamp(22px, 3.2vw, 38px)", fontWeight: 800, color: CR, lineHeight: 1.3, marginBottom: 24 }}>
-                  Fundada por especialistas. Construída para fazer o Partner ganhar.
-                </h2>
-              </Reveal>
-              <Reveal direction="left" delay={100}>
-                <p style={{ fontSize: 15, color: MT, lineHeight: 1.9, marginBottom: 20 }}>
-                  A V3 Partners nasceu da união de <strong style={{ color: CR }}>Hamilton Santos</strong> (finanças e cross-border), <strong style={{ color: CR }}>João Lemos Netto</strong> (originação e ativos) e <strong style={{ color: CR }}>Robson Lino</strong> (compliance e operações) — três especialistas que entenderam que o mercado precisava de uma boutique que trabalhasse para o partner, não contra ele.
-                </p>
-              </Reveal>
-              <Reveal direction="left" delay={160}>
-                <p style={{ fontSize: 15, color: MT, lineHeight: 1.9, marginBottom: 20 }}>
-                  Nossa plataforma SaaS proprietária integra CRM, mesa de crédito (N1/N2/N3), mesa M&A com IA FORJA, Deal Rooms, Academy, rastreamento de comissões e 7 squads de IA especializados — tudo o que um Partner precisa para operar com credencial institucional.
-                </p>
-              </Reveal>
-              <Reveal direction="left" delay={220}>
-                <p style={{ fontSize: 15, color: MT, lineHeight: 1.9 }}>
-                  Nossa missão com a expansão:{" "}
-                  <strong style={{ color: G }}>levar a capacidade da V3 para cada praça do Brasil, com um representante local que conhece o mercado e os players da região.</strong>
-                </p>
-              </Reveal>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              {[
-                { n: 3,  suf: "",   label: "sócios fundadores",    desc: "finanças · originação · compliance" },
-                { n: 7,  suf: "",   label: "squads de IA",         desc: "especializados por vertical" },
-                { n: 10, suf: "+",  label: "módulos integrados",   desc: "do CRM ao M&A" },
-                { n: 50, suf: "%",  label: "comissão máxima",      desc: "Partner PRO" },
-              ].map(({ n, suf, label, desc }, i) => (
-                <Reveal key={label} delay={i * 75}>
-                  <div className="rounded-2xl p-6 text-center" style={{ background: N2, border: `1px solid ${N4}` }}>
-                    <p style={{ fontSize: "clamp(28px, 3vw, 38px)", fontWeight: 900, color: G, lineHeight: 1 }}>
-                      <Counter to={n} suffix={suf} />
-                    </p>
-                    <p style={{ fontSize: 12, color: CR, fontWeight: 600, marginTop: 8 }}>{label}</p>
-                    <p style={{ fontSize: 10, color: MT, marginTop: 3 }}>{desc}</p>
-                  </div>
-                </Reveal>
-              ))}
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ═══════════════════════════════════════════════════════════════
-          11 · QUOTE — Fechamento emocional
-      ═══════════════════════════════════════════════════════════════ */}
-      <section style={{ background: N2, padding: "100px 0", position: "relative", overflow: "hidden" }}>
-        <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 1, background: `linear-gradient(90deg, transparent, ${G}30, transparent)` }} />
-        <div style={{ position: "absolute", inset: 0, background: `radial-gradient(ellipse 60% 55% at 50% 50%, ${G}07 0%, transparent 70%)`, pointerEvents: "none" }} />
+      <section style={{ background: N2, padding: "120px 0", position: "relative", overflow: "hidden" }}>
+        <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: `linear-gradient(90deg, transparent, ${G}, transparent)` }} />
+        <div style={{ position: "absolute", inset: 0, background: `radial-gradient(ellipse 70% 70% at 50% 50%, ${G}08 0%, transparent 70%)`, pointerEvents: "none" }} />
+        <ParallaxOrb top="0%"  left="5%"  size={600} delay={0} />
+        <ParallaxOrb top="20%" left="78%" size={400} delay={10} />
         <div className="max-w-4xl mx-auto px-6 text-center relative">
           <Reveal>
-            <div style={{ fontSize: 60, color: `${G}35`, lineHeight: 1, marginBottom: 28, fontFamily: "Georgia, serif" }}>"</div>
-            <p style={{ fontSize: "clamp(20px, 3vw, 34px)", fontWeight: 800, color: CR, lineHeight: 1.4, marginBottom: 24 }}>
-              A expansão da V3 abre território. Quem chega primeiro constrói uma carreira. Quem espera, assiste.
+            <div style={{ fontSize: 64, color: `${G}35`, lineHeight: 1, marginBottom: 28, fontFamily: "Georgia, serif" }}>"</div>
+            <p style={{ fontSize: "clamp(22px, 3.5vw, 38px)", fontWeight: 800, color: CR, lineHeight: 1.35, marginBottom: 24 }}>
+              O mercado financeiro institucional sempre existiu. O que mudou é que agora você pode entrar nele — com estrutura, tecnologia e credencial — sem precisar montar uma boutique do zero.
             </p>
             <div style={{ width: 48, height: 2, background: G, margin: "0 auto 24px" }} />
-            <p style={{ fontSize: 13, color: MT, fontWeight: 600, letterSpacing: 1.5 }}>V3 PARTNERS · EXPANSÃO NACIONAL 2026</p>
+            <p style={{ fontSize: 12, color: MT, fontWeight: 600, letterSpacing: 2 }}>V3 PARTNERS · BOUTIQUE INSTITUCIONAL · EXPANSÃO 2026</p>
           </Reveal>
-          <Reveal delay={140}>
-            <div className="mt-14">
-              <CTABtn onClick={() => go("form")} large>Garantir território agora</CTABtn>
+          <Reveal delay={160}>
+            <div style={{ marginTop: 56 }}>
+              <div style={{ display: "inline-flex", alignItems: "center", gap: 8, background: `${G}12`, border: `1px solid ${G}30`, borderRadius: 40, padding: "7px 20px", marginBottom: 28 }}>
+                <div style={{ width: 7, height: 7, borderRadius: "50%", background: G, boxShadow: `0 0 8px ${G}` }} />
+                <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: 2.5, color: G }}>VAGAS ABERTAS · EXPANSÃO 2026</span>
+              </div>
+              <h3 style={{ fontSize: "clamp(26px, 4vw, 52px)", fontWeight: 900, color: CR, lineHeight: 1.1, marginBottom: 18, letterSpacing: -1 }}>
+                Sua cidade tem uma vaga.
+                <br />
+                <span style={{ color: G }}>Depende de você ocupar.</span>
+              </h3>
+              <p style={{ fontSize: "clamp(15px, 1.7vw, 18px)", color: MT, lineHeight: 1.85, marginBottom: 40, maxWidth: 620, margin: "0 auto 40px" }}>
+                Quando a vaga da sua praça fechar, a próxima oportunidade de entrar depende de uma desistência. Não espere para decidir.
+              </p>
+              <CTABtn onClick={() => go("form")} large>Garantir minha praça agora</CTABtn>
             </div>
           </Reveal>
         </div>
       </section>
 
       {/* ═══════════════════════════════════════════════════════════════
-          12 · FAQ
+          10 · FAQ
       ═══════════════════════════════════════════════════════════════ */}
-      <section id="faq" style={{ background: N, padding: "110px 0", position: "relative" }}>
+      <section id="faq" style={{ background: N, padding: "120px 0", position: "relative" }}>
         <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 1, background: `linear-gradient(90deg, transparent, ${G}30, transparent)` }} />
-        <div className="max-w-5xl mx-auto px-6">
+        <div className="max-w-6xl mx-auto px-6">
           <SectionLabel>Perguntas frequentes</SectionLabel>
           <div className="grid md:grid-cols-2 gap-16 items-start">
             <div>
               <Reveal>
-                <h2 style={{ fontSize: "clamp(22px, 3.2vw, 36px)", fontWeight: 800, color: CR, lineHeight: 1.3, marginBottom: 20 }}>
-                  Tudo que você quer saber antes de decidir.
+                <h2 style={{ fontSize: "clamp(22px, 3.2vw, 38px)", fontWeight: 800, color: CR, lineHeight: 1.3, marginBottom: 20 }}>
+                  Tire suas dúvidas antes de decidir.
                 </h2>
               </Reveal>
               <Reveal delay={80}>
                 <p style={{ fontSize: 15, color: MT, lineHeight: 1.85, marginBottom: 36 }}>
-                  Se sua dúvida não estiver aqui, nossa equipe responde em até 24h úteis após você preencher o formulário de interesse.
+                  Se sua dúvida não estiver aqui, nossa equipe responde em até 24h úteis após você preencher o formulário.
                 </p>
               </Reveal>
               <Reveal delay={140}>
@@ -1012,13 +1257,13 @@ export function LandingPageClient() {
               <div style={{ borderTop: `1px solid ${N4}` }}>
                 {[
                   { q: "O que significa exclusividade de praça?", a: "Cada cidade opera com um único Partner V3 ativo. Quando você licencia sua praça, todos os leads e indicações originados naquela região são direcionados para você. Nenhum outro Partner pode atuar na mesma praça enquanto o contrato estiver ativo." },
-                  { q: "Preciso de experiência no mercado financeiro?", a: "Não. A principal qualificação é a disposição de trazer negócios à mesa. A V3 oferece toda a capacitação técnica pelo Academy, com suporte prático da mesa operacional desde o primeiro dia." },
-                  { q: "Qual o potencial real de ganho?", a: "Depende do volume que você origina. Um Partner ativo que fecha 2-3 operações por mês em crédito estruturado pode gerar R$30K a R$120K mensais. Em M&A, uma única operação acima de R$10M pode gerar R$200K a R$400K em comissão." },
-                  { q: "Quanto tempo até a primeira comissão?", a: "Em crédito estruturado, o ciclo médio é de 30 a 90 dias. Em operações de split fiscal e antecipação de recebíveis pode ser mais rápido. Em M&A, de 3 a 12 meses. A plataforma rastreia o status de cada operação em tempo real." },
-                  { q: "Posso manter minha profissão atual?", a: "Sim. A parceria V3 é não exclusiva. Você pode manter todas as suas atividades profissionais. A plataforma foi projetada para uso assíncrono — você opera no seu ritmo e no seu horário." },
-                  { q: "Qual a diferença entre Partner e Partner PRO?", a: "O Partner PRO tem comissão maior (50% vs 30%), acesso ao crédito N3 (acima de R$5M), Mesa M&A dedicada, co-branding V3, Deal Rooms com VDR e Academy M&A avançado." },
-                  { q: "Como funciona o suporte da V3 durante as operações?", a: "A mesa operacional da V3 acompanha cada operação. Você origina o cliente, participa das reuniões estratégicas e conta com o respaldo institucional da V3 em todas as etapas — da análise à liquidação." },
-                  { q: "Como são pagas as comissões?", a: "Sua comissão é rastreada em tempo real na plataforma, por operação e por status. O pagamento é feito após a liquidação, de forma transparente e auditável diretamente na plataforma." },
+                  { q: "Preciso de experiência no mercado financeiro?", a: "Não é obrigatório. A principal qualificação é a disposição de trazer negócios à mesa e o relacionamento com empresários e tomadores de decisão. A V3 oferece a capacitação técnica pelo Academy V3, com suporte prático desde o primeiro dia." },
+                  { q: "Qual o potencial real de ganho como Partner?", a: "Depende do volume e dos produtos que você origina. Em crédito estruturado, um Partner ativo pode gerar R$30K a R$120K mensais. Em M&A, uma única operação acima de R$10M pode gerar de R$200K a R$400K em comissão única." },
+                  { q: "Quanto tempo até a primeira comissão?", a: "Em crédito estruturado, o ciclo médio é de 30 a 90 dias. Em operações de split fiscal pode ser mais rápido. Em M&A, de 3 a 12 meses. A plataforma rastreia o status de cada operação em tempo real, com transparência total." },
+                  { q: "Posso manter minha profissão atual?", a: "Sim. A parceria V3 é não exclusiva. Você pode manter todas as suas atividades profissionais. A plataforma foi projetada para uso assíncrono — você opera no seu ritmo, no seu horário, sem exigência de dedicação exclusiva." },
+                  { q: "Qual a diferença entre Partner e Partner PRO?", a: "O Partner PRO tem comissão de 50% (vs 30%), acesso à Mesa M&A com IA FORJA, Deal Rooms com VDR, co-branding V3 Partners e Academy M&A avançado. Também opera em crédito N3 (acima de R$5M) com mais suporte dedicado." },
+                  { q: "Como é o suporte da V3 nas operações?", a: "A mesa operacional da V3 acompanha cada operação. Você origina o cliente, participa das reuniões estratégicas e conta com o respaldo institucional da V3 — da análise à liquidação. Você nunca opera sozinho." },
+                  { q: "Como são pagas as comissões?", a: "Sua comissão é rastreada em tempo real na plataforma, por operação e por status. O pagamento acontece após a liquidação da operação, de forma transparente e auditável diretamente no seu painel." },
                 ].map(({ q, a }, i) => <FAQItem key={q} n={i + 1} q={q} a={a} />)}
               </div>
             </Reveal>
@@ -1027,47 +1272,9 @@ export function LandingPageClient() {
       </section>
 
       {/* ═══════════════════════════════════════════════════════════════
-          13 · CTA FINAL — Urgência e fechamento
+          11 · FORMULÁRIO
       ═══════════════════════════════════════════════════════════════ */}
-      <section style={{ background: N2, padding: "110px 0", position: "relative", overflow: "hidden" }}>
-        <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: `linear-gradient(90deg, transparent, ${G}, transparent)` }} />
-        <div style={{ position: "absolute", inset: 0, background: `radial-gradient(ellipse 70% 70% at 50% 50%, ${G}08 0%, transparent 70%)`, pointerEvents: "none" }} />
-        <ParallaxOrb top="0%"  left="5%"  size={600} delay={0} />
-        <ParallaxOrb top="20%" left="78%" size={400} delay={10} />
-        <div className="max-w-3xl mx-auto px-6 text-center relative">
-          <Reveal>
-            <div className="inline-flex items-center gap-2 mb-8" style={{ background: `${G}12`, border: `1px solid ${G}30`, borderRadius: 40, padding: "7px 20px" }}>
-              <div style={{ width: 7, height: 7, borderRadius: "50%", background: G, boxShadow: `0 0 8px ${G}` }} />
-              <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: 2.5, color: G }}>VAGAS ABERTAS · EXPANSÃO 2026</span>
-            </div>
-          </Reveal>
-          <Reveal delay={80}>
-            <h2 style={{ fontSize: "clamp(28px, 5vw, 58px)", fontWeight: 900, color: CR, lineHeight: 1.1, marginBottom: 20, letterSpacing: -1 }}>
-              Sua cidade tem uma vaga.
-              <br />
-              <span style={{ color: G }}>Por quanto tempo, depende de você.</span>
-            </h2>
-          </Reveal>
-          <Reveal delay={160}>
-            <p style={{ fontSize: "clamp(15px, 1.8vw, 18px)", color: MT, lineHeight: 1.85, marginBottom: 44 }}>
-              A expansão da V3 abre uma janela rara: entrar como Partner exclusivo em uma boutique institucional em crescimento, com portfólio completo, tecnologia proprietária e suporte de mesa. Quando essa vaga fecha na sua praça, fecha definitivamente.
-            </p>
-          </Reveal>
-          <Reveal delay={240}>
-            <CTABtn onClick={() => go("form")} large>Garantir minha praça agora</CTABtn>
-          </Reveal>
-          <Reveal delay={300}>
-            <p style={{ fontSize: 12, color: `${MT}80`, marginTop: 20 }}>
-              Sem compromisso imediato. Nossa equipe entra em contato em até 24h úteis.
-            </p>
-          </Reveal>
-        </div>
-      </section>
-
-      {/* ═══════════════════════════════════════════════════════════════
-          14 · FORMULÁRIO
-      ═══════════════════════════════════════════════════════════════ */}
-      <section id="form" style={{ background: N, padding: "110px 0", position: "relative" }}>
+      <section id="form" style={{ background: N2, padding: "120px 0", position: "relative" }}>
         <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: `linear-gradient(90deg, transparent, ${G}, transparent)` }} />
         <div style={{ position: "absolute", inset: 0, background: `radial-gradient(ellipse 50% 60% at 50% 0%, ${G}08 0%, transparent 70%)`, pointerEvents: "none" }} />
         <div className="max-w-2xl mx-auto px-6 relative">
@@ -1075,15 +1282,14 @@ export function LandingPageClient() {
 
           {sent ? (
             <Reveal>
-              <div className="rounded-2xl p-14 text-center" style={{ background: N2, border: `1px solid ${G}40` }}>
-                <div className="w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6" style={{ background: `${G}15`, border: `1px solid ${G}35` }}>
+              <div style={{ background: N3, border: `1px solid ${G}40`, borderRadius: 16, padding: "56px 40px", textAlign: "center" }}>
+                <div style={{ width: 80, height: 80, borderRadius: "50%", background: `${G}15`, border: `1px solid ${G}35`, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 24px" }}>
                   <Check size={32} color={G} />
                 </div>
                 <h3 style={{ fontWeight: 900, fontSize: 26, color: CR, marginBottom: 14 }}>Solicitação recebida!</h3>
                 <p style={{ color: MT, fontSize: 15, lineHeight: 1.85 }}>
-                  Obrigado, <strong style={{ color: CR }}>{formData.nome}</strong>!{" "}
-                  Nossa equipe de Expansão V3 vai entrar em contato pelo e-mail{" "}
-                  <strong style={{ color: G }}>{formData.email}</strong> em até 24 horas úteis para verificar a disponibilidade da sua praça.
+                  Obrigado, <strong style={{ color: CR }}>{formData.nome}</strong>! Nossa equipe de Expansão V3 vai entrar em contato pelo e-mail{" "}
+                  <strong style={{ color: G }}>{formData.email}</strong> em até 24 horas úteis para verificar a disponibilidade da sua praça e apresentar o programa completo.
                 </p>
               </div>
             </Reveal>
@@ -1095,60 +1301,66 @@ export function LandingPageClient() {
                 </h2>
               </Reveal>
               <Reveal delay={80}>
-                <p style={{ fontSize: 15, color: MT, lineHeight: 1.8, marginBottom: 40 }}>
-                  Não é venda automática. É um processo seletivo. Vamos entender seu perfil, verificar a disponibilidade da sua praça e apresentar o programa completo antes de qualquer decisão.
+                <p style={{ fontSize: 15, color: MT, lineHeight: 1.8, marginBottom: 36 }}>
+                  Não é uma compra online. É um processo seletivo. Vamos entender seu perfil, verificar a disponibilidade da sua praça e apresentar o programa completo antes de qualquer decisão.
                 </p>
               </Reveal>
-              <Reveal direction="up" delay={120}>
-                <form onSubmit={handleSubmit} className="space-y-4">
+
+              <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                <Reveal direction="up" delay={120}>
                   <div>
                     <label style={{ fontSize: 10, fontWeight: 700, color: MT, letterSpacing: 2, display: "block", marginBottom: 8 }}>NOME COMPLETO *</label>
                     <input type="text" value={formData.nome} onChange={e => setFormData(f => ({ ...f, nome: e.target.value }))}
                       placeholder="Seu nome completo" required
-                      className="w-full px-5 py-4 text-sm focus:outline-none transition-all"
-                      style={{ background: N2, border: `1px solid ${N4}`, borderRadius: 4, color: CR }} />
+                      className="w-full focus:outline-none transition-all"
+                      style={{ background: N3, border: `1px solid ${N4}`, borderRadius: 5, color: CR, padding: "14px 18px", fontSize: 14 }} />
                   </div>
+                </Reveal>
+                <Reveal direction="up" delay={150}>
                   <div className="grid sm:grid-cols-2 gap-4">
                     <div>
                       <label style={{ fontSize: 10, fontWeight: 700, color: MT, letterSpacing: 2, display: "block", marginBottom: 8 }}>E-MAIL *</label>
                       <input type="email" value={formData.email} onChange={e => setFormData(f => ({ ...f, email: e.target.value }))}
-                        placeholder="seu@email.com" required
-                        className="w-full px-5 py-4 text-sm focus:outline-none"
-                        style={{ background: N2, border: `1px solid ${N4}`, borderRadius: 4, color: CR }} />
+                        placeholder="seu@email.com" required className="w-full focus:outline-none"
+                        style={{ background: N3, border: `1px solid ${N4}`, borderRadius: 5, color: CR, padding: "14px 18px", fontSize: 14 }} />
                     </div>
                     <div>
                       <label style={{ fontSize: 10, fontWeight: 700, color: MT, letterSpacing: 2, display: "block", marginBottom: 8 }}>WHATSAPP *</label>
                       <input type="tel" value={formData.telefone} onChange={e => setFormData(f => ({ ...f, telefone: e.target.value }))}
-                        placeholder="(11) 99999-9999" required
-                        className="w-full px-5 py-4 text-sm focus:outline-none"
-                        style={{ background: N2, border: `1px solid ${N4}`, borderRadius: 4, color: CR }} />
+                        placeholder="(11) 99999-9999" required className="w-full focus:outline-none"
+                        style={{ background: N3, border: `1px solid ${N4}`, borderRadius: 5, color: CR, padding: "14px 18px", fontSize: 14 }} />
                     </div>
                   </div>
+                </Reveal>
+                <Reveal direction="up" delay={180}>
                   <div>
                     <label style={{ fontSize: 10, fontWeight: 700, color: MT, letterSpacing: 2, display: "block", marginBottom: 8 }}>CIDADE E ESTADO *</label>
                     <input type="text" value={formData.segmento} onChange={e => setFormData(f => ({ ...f, segmento: e.target.value }))}
-                      placeholder="Ex: Campinas - SP, Porto Alegre - RS, Salvador - BA..."
-                      className="w-full px-5 py-4 text-sm focus:outline-none"
-                      style={{ background: N2, border: `1px solid ${N4}`, borderRadius: 4, color: CR }} />
+                      placeholder="Ex: Campinas - SP, Porto Alegre - RS, Fortaleza - CE..."
+                      className="w-full focus:outline-none"
+                      style={{ background: N3, border: `1px solid ${N4}`, borderRadius: 5, color: CR, padding: "14px 18px", fontSize: 14 }} />
                   </div>
+                </Reveal>
+                <Reveal direction="up" delay={200}>
                   <div className="grid sm:grid-cols-2 gap-4">
                     <div>
                       <label style={{ fontSize: 10, fontWeight: 700, color: MT, letterSpacing: 2, display: "block", marginBottom: 8 }}>INSTAGRAM</label>
                       <input type="text" value={formData.instagram} onChange={e => setFormData(f => ({ ...f, instagram: e.target.value }))}
-                        placeholder="@seuperfil"
-                        className="w-full px-5 py-4 text-sm focus:outline-none"
-                        style={{ background: N2, border: `1px solid ${N4}`, borderRadius: 4, color: CR }} />
+                        placeholder="@seuperfil" className="w-full focus:outline-none"
+                        style={{ background: N3, border: `1px solid ${N4}`, borderRadius: 5, color: CR, padding: "14px 18px", fontSize: 14 }} />
                     </div>
                     <div>
                       <label style={{ fontSize: 10, fontWeight: 700, color: MT, letterSpacing: 2, display: "block", marginBottom: 8 }}>LINKEDIN</label>
                       <input type="text" value={formData.linkedin} onChange={e => setFormData(f => ({ ...f, linkedin: e.target.value }))}
-                        placeholder="linkedin.com/in/..."
-                        className="w-full px-5 py-4 text-sm focus:outline-none"
-                        style={{ background: N2, border: `1px solid ${N4}`, borderRadius: 4, color: CR }} />
+                        placeholder="linkedin.com/in/..." className="w-full focus:outline-none"
+                        style={{ background: N3, border: `1px solid ${N4}`, borderRadius: 5, color: CR, padding: "14px 18px", fontSize: 14 }} />
                     </div>
                   </div>
+                </Reveal>
+
+                <Reveal direction="up" delay={220}>
                   <div>
-                    <label style={{ fontSize: 10, fontWeight: 700, color: MT, letterSpacing: 2, display: "block", marginBottom: 10 }}>LICENCIAMENTO DE INTERESSE</label>
+                    <label style={{ fontSize: 10, fontWeight: 700, color: MT, letterSpacing: 2, display: "block", marginBottom: 10 }}>MODALIDADE DE INTERESSE</label>
                     <div className="grid sm:grid-cols-3 gap-3">
                       {[
                         ["PARTNER_ENTRY", "V3 Partner Entry", "30% · Entrada"],
@@ -1157,35 +1369,38 @@ export function LandingPageClient() {
                       ].map(([val, label, sub]) => (
                         <button key={val} type="button" onClick={() => setFormData(f => ({ ...f, plano: val }))}
                           className="py-4 px-3 text-left transition-all"
-                          style={{ background: formData.plano === val ? `${G}18` : N2, border: `1px solid ${formData.plano === val ? G + "70" : N4}`, borderRadius: 4 }}>
+                          style={{ background: formData.plano === val ? `${G}18` : N3, border: `1px solid ${formData.plano === val ? G + "70" : N4}`, borderRadius: 6 }}>
                           <p style={{ fontSize: 12, fontWeight: 700, color: formData.plano === val ? G : CR, marginBottom: 2 }}>{label}</p>
                           <p style={{ fontSize: 10, color: MT }}>{sub}</p>
                         </button>
                       ))}
                     </div>
                   </div>
-                  {formError && (
-                    <p style={{ fontSize: 12, color: "#EF4444", padding: "10px 14px", borderRadius: 4, background: "#EF444412", border: "1px solid #EF444428" }}>{formError}</p>
-                  )}
-                  <button type="submit" disabled={sending}
-                    className="w-full py-5 font-bold transition-all hover:opacity-88 mt-2"
-                    style={{ background: G, color: N, borderRadius: 4, fontSize: 12, letterSpacing: 2.5, textTransform: "uppercase", opacity: sending ? 0.7 : 1 }}>
+                </Reveal>
+
+                {formError && (
+                  <p style={{ fontSize: 12, color: "#EF4444", padding: "10px 14px", borderRadius: 5, background: "#EF444412", border: "1px solid #EF444428" }}>{formError}</p>
+                )}
+
+                <Reveal direction="up" delay={240}>
+                  <button type="submit" disabled={sending} className="w-full font-bold transition-all hover:opacity-88"
+                    style={{ background: G, color: N, borderRadius: 5, fontSize: 12, letterSpacing: 2.5, textTransform: "uppercase", padding: "18px 0", opacity: sending ? 0.7 : 1 }}>
                     {sending ? "VERIFICANDO..." : "VERIFICAR DISPONIBILIDADE DA MINHA PRAÇA"}
                   </button>
-                  <div className="flex flex-col sm:flex-row items-center justify-center gap-6 pt-2">
-                    {[
-                      [Shield,      "Sem spam, jamais"],
-                      [Zap,         "Retorno em até 24h"],
-                      [TrendingUp,  "Sem compromisso inicial"],
-                    ].map(([Icon, text]) => (
-                      <div key={text as string} className="flex items-center gap-2">
-                        <Icon size={13} color={G} />
-                        <span style={{ fontSize: 11, color: MT }}>{text as string}</span>
+                  <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: "10px 28px", marginTop: 16 }}>
+                    {([
+                      [Shield, "Sem spam, jamais"],
+                      [Zap, "Retorno em até 24h"],
+                      [ArrowUpRight, "Sem compromisso inicial"],
+                    ] as [typeof Shield, string][]).map(([Icon, text]) => (
+                      <div key={text} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <Icon size={12} color={G} />
+                        <span style={{ fontSize: 11, color: MT }}>{text}</span>
                       </div>
                     ))}
                   </div>
-                </form>
-              </Reveal>
+                </Reveal>
+              </form>
             </>
           )}
         </div>
@@ -1193,13 +1408,17 @@ export function LandingPageClient() {
 
       {/* ── FOOTER ──────────────────────────────────────────────────────── */}
       <footer style={{ background: N, borderTop: `1px solid ${N4}` }}>
-        <div className="max-w-5xl mx-auto px-6 py-10 flex flex-col md:flex-row items-center justify-between gap-6">
-          <div className="flex items-center gap-3">
-            <Image src="/logo.jpg" alt="V3 Partners" width={30} height={30} className="rounded-lg" />
+        <div className="max-w-6xl mx-auto px-6 py-12 flex flex-col md:flex-row items-center justify-between gap-6">
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <Image src="/logo.jpg" alt="V3 Partners" width={32} height={32} style={{ borderRadius: 8 }} />
             <div>
               <p style={{ fontWeight: 900, fontSize: 12, color: G, letterSpacing: 3.5 }}>V3 PARTNERS</p>
               <p style={{ fontSize: 10, color: MT, marginTop: 1 }}>V3 Partners Soluções Ltda · CNPJ 14.219.287/0001-50</p>
             </div>
+          </div>
+          <div style={{ display: "flex", gap: 20 }}>
+            <a href="/seja-fornecedor" style={{ fontSize: 12, color: MT, fontWeight: 500 }} className="hover:text-white transition-colors">Marketplace Fornecedores</a>
+            <a href="/fornecedor/login" style={{ fontSize: 12, color: MT, fontWeight: 500 }} className="hover:text-white transition-colors">Portal Fornecedor</a>
           </div>
           <p style={{ fontSize: 11, color: `${MT}80` }}>© 2026 V3 Partners · Todos os direitos reservados.</p>
         </div>
