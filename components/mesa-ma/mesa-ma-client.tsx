@@ -12,6 +12,7 @@ import { ExportButton } from "@/components/financeiro/export-button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { MA_PIPELINE } from "@/components/ma/ma-client";
 import { ForjaPanel } from "@/components/ma/forja-panel";
+import { DocumentRequestPanel } from "@/components/ma/document-request-panel";
 import { ContratoPanel } from "@/components/ma/contrato-panel";
 import { InvestorMatchPanel } from "@/components/ma/investor-match-panel";
 import dynamic from "next/dynamic";
@@ -196,7 +197,7 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
   const [cards, setCards] = useState<MaCard[]>(initialDeals);
   const [operators, setOperators] = useState<MesaOperator[]>([]);
   const [selectedCard, setSelectedCard] = useState<MaCard | null>(null);
-  const [detailTab, setDetailTab] = useState<"detalhes" | "forja" | "criativos" | "contrato" | "matches" | "analytics" | "qa">("detalhes");
+  const [detailTab, setDetailTab] = useState<"detalhes" | "forja" | "criativos" | "contrato" | "matches" | "analytics" | "qa" | "doc-requests">("detalhes");
   const [showNewCard, setShowNewCard] = useState(false);
   const [showFullForm, setShowFullForm] = useState(false);
   const [showNewOp, setShowNewOp] = useState(false);
@@ -796,6 +797,7 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
                 { id: "matches" as const, label: "Matches", icon: <ArrowLeftRight size={12} /> },
                 { id: "criativos" as const, label: "Criativos", icon: <FileImage size={12} /> },
                 { id: "contrato" as const, label: "NDA / Mandato", icon: <FileSignature size={12} /> },
+                { id: "doc-requests" as const, label: "Docs", icon: <FileText size={12} /> },
               ]).map(tab => (
                 <button
                   key={tab.id}
@@ -1098,6 +1100,22 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
                       )}
                     </div>
                   </div>
+                </div>
+              );
+            }
+
+            if (detailTab === "doc-requests") {
+              type MF = { field: string; impact: string; priority: "ALTA" | "MEDIA" | "BAIXA" };
+              const forjaResult = selectedCard.asset_data?.forja_result as { missing?: MF[] } | null;
+              const missingFields: MF[] = forjaResult?.missing ?? [];
+              return (
+                <div className="mt-2">
+                  <DocumentRequestPanel
+                    dealId={selectedCard.id}
+                    dealCode={selectedCard.code ?? selectedCard.id.slice(0, 8).toUpperCase()}
+                    missingFields={missingFields}
+                    forjaSnapshotAt={(selectedCard.asset_data?.forja_validated_at as string) ?? null}
+                  />
                 </div>
               );
             }
