@@ -449,7 +449,7 @@ function ForjaVisual() {
           ].map(({ phase, label, done, pct }) => (
             <div key={phase} style={{ marginBottom: 16 }}>
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-                <div style={{ display: "flex", items: "center", gap: 6 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                   <div style={{ width: 16, height: 16, borderRadius: "50%", background: done ? `${G}30` : `${N4}`, border: `1px solid ${done ? G : N4}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
                     {done && <Check size={9} color={G} />}
                   </div>

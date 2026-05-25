@@ -112,22 +112,22 @@ export async function POST(req: NextRequest) {
     }).catch(() => {});
 
     // Email para o partner
-    svc()
-      .from("profiles")
-      .select("email, full_name")
-      .eq("id", partnerId)
-      .single()
-      .then(({ data: partner }) => {
-        if (partner?.email) {
-          notifyChatMensagemPartner({
-            partnerEmail: partner.email,
-            partnerName: partner.full_name ?? "Partner",
-            senderName: profile.full_name ?? "Mesa V3",
-            preview: content.trim().slice(0, 200),
-          }).catch(() => {});
-        }
-      })
-      .catch(() => {});
+    void Promise.resolve(
+      svc()
+        .from("profiles")
+        .select("email, full_name")
+        .eq("id", partnerId)
+        .single()
+    ).then(({ data: partner }) => {
+      if (partner?.email) {
+        void notifyChatMensagemPartner({
+          partnerEmail: partner.email,
+          partnerName: partner.full_name ?? "Partner",
+          senderName: profile.full_name ?? "Mesa V3",
+          preview: content.trim().slice(0, 200),
+        }).catch(() => {});
+      }
+    }).catch(() => {});
   } else {
     // Mensagem de partner → notifica admins e gestão
     const partnerName = profile.full_name ?? "Partner";

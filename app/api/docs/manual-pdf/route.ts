@@ -13,7 +13,7 @@ export async function GET() {
   try {
     const buffer = await renderToBuffer(React.createElement(ManualPlataformaPDF));
 
-    return new NextResponse(buffer, {
+    return new NextResponse(buffer as unknown as BodyInit, {
       status: 200,
       headers: {
         "Content-Type": "application/pdf",

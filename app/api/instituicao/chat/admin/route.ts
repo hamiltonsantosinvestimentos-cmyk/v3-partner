@@ -67,22 +67,22 @@ export async function POST(request: Request) {
 
   // Email para a instituição (fire-and-forget)
   const inst_id = room_id.replace("instituicao_", "");
-  svc()
-    .from("instituicoes")
-    .select("email, nome")
-    .eq("id", inst_id)
-    .single()
-    .then(({ data: inst }) => {
-      if (inst?.email) {
-        notifyChatMensagemInstituicao({
-          instituicaoEmail: inst.email,
-          instituicaoNome: inst.nome ?? "Instituição",
-          senderName: profile.full_name ?? "Mesa V3",
-          preview: content.trim().slice(0, 200),
-        }).catch(() => {});
-      }
-    })
-    .catch(() => {});
+  void Promise.resolve(
+    svc()
+      .from("instituicoes")
+      .select("email, nome")
+      .eq("id", inst_id)
+      .single()
+  ).then(({ data: inst }) => {
+    if (inst?.email) {
+      void notifyChatMensagemInstituicao({
+        instituicaoEmail: inst.email,
+        instituicaoNome: inst.nome ?? "Instituição",
+        senderName: profile.full_name ?? "Mesa V3",
+        preview: content.trim().slice(0, 200),
+      }).catch(() => {});
+    }
+  }).catch(() => {});
 
   return NextResponse.json({ message: msg }, { status: 201 });
 }

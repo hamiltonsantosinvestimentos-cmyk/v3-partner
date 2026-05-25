@@ -560,7 +560,7 @@ export function SupplierLandingClient() {
           <div className="grid sm:grid-cols-2 md:grid-cols-4 gap-5 mb-14">
             <StepCard delay={0}   n="01" title="Cadastre-se" body="Preencha o formulário com dados da empresa, descrição dos produtos e defina as categorias. Aprovação em até 48h." />
             <StepCard delay={90}  n="02" title="Publique produtos" body="Acesse o painel do fornecedor, adicione seus produtos com descrição, preço, imagens e defina a comissão para os Partners." />
-            <StepCard delay={180} n="03" title="A IA faz o matching" desc="Nosso sistema combina seu produto com os Partners mais qualificados da rede e notifica automaticamente os top 5." body="Nosso sistema combina seu produto com os Partners mais qualificados da rede e notifica automaticamente os top 5." />
+            <StepCard delay={180} n="03" title="A IA faz o matching" body="Nosso sistema combina seu produto com os Partners mais qualificados da rede e notifica automaticamente os top 5." />
             <StepCard delay={270} n="04" title="Receba os leads" body="Os Partners levam seu produto para os clientes. Você acompanha os leads em tempo real no painel e fecha diretamente." />
           </div>
 
