@@ -1,0 +1,1 @@
+-- Applied directly on Supabase remote. Placeholder for history sync.

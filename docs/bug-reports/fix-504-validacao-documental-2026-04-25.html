@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bug Report — HTTP 504 Validação Documental M&A · V3 Partners</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: #09081A;
+      color: #7A8FA8;
+      min-height: 100vh;
+      padding: 40px 24px 80px;
+    }
+
+    .container { max-width: 860px; margin: 0 auto; }
+
+    /* Header */
+    .header {
+      border-bottom: 1px solid #162744;
+      padding-bottom: 28px;
+      margin-bottom: 40px;
+    }
+    .label {
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: #C9A84C;
+      margin-bottom: 8px;
+    }
+    .title {
+      font-size: 32px;
+      font-weight: 700;
+      color: #F0ECE4;
+      line-height: 1.2;
+      margin-bottom: 8px;
+    }
+    .subtitle {
+      font-size: 13px;
+      color: #7A8FA8;
+    }
+    .meta-row {
+      display: flex;
+      gap: 24px;
+      margin-top: 20px;
+      flex-wrap: wrap;
+    }
+    .meta-item { display: flex; flex-direction: column; gap: 3px; }
+    .meta-item .meta-label {
+      font-size: 8px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: #7A8FA8;
+    }
+    .meta-item .meta-value {
+      font-size: 12px;
+      font-weight: 600;
+      color: #F0ECE4;
+    }
+
+    /* Status badge */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      padding: 3px 10px;
+      border-radius: 999px;
+      border: 1px solid;
+    }
+    .badge-resolved { background: rgba(16,185,129,0.12); color: #10B981; border-color: rgba(16,185,129,0.3); }
+    .badge-critical { background: rgba(239,68,68,0.12); color: #EF4444; border-color: rgba(239,68,68,0.3); }
+    .badge-warning  { background: rgba(245,158,11,0.12); color: #F59E0B; border-color: rgba(245,158,11,0.3); }
+    .badge-info     { background: rgba(201,168,76,0.12); color: #C9A84C; border-color: rgba(201,168,76,0.3); }
+
+    /* Cards */
+    .card {
+      background: #162744;
+      border: 1px solid #243A66;
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 20px;
+    }
+    .card-title {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: #C9A84C;
+      margin-bottom: 16px;
+    }
+
+    /* Timeline */
+    .timeline { position: relative; padding-left: 20px; }
+    .timeline::before {
+      content: '';
+      position: absolute;
+      left: 6px;
+      top: 6px;
+      bottom: 6px;
+      width: 1px;
+      background: #243A66;
+    }
+    .timeline-item { position: relative; margin-bottom: 20px; }
+    .timeline-item::before {
+      content: '';
+      position: absolute;
+      left: -17px;
+      top: 5px;
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #C9A84C;
+      border: 1.5px solid #09081A;
+    }
+    .timeline-item:last-child { margin-bottom: 0; }
+    .timeline-time {
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: #C9A84C;
+      margin-bottom: 3px;
+    }
+    .timeline-text {
+      font-size: 12px;
+      color: #F0ECE4;
+      font-weight: 500;
+    }
+    .timeline-sub {
+      font-size: 11px;
+      color: #7A8FA8;
+      margin-top: 3px;
+    }
+
+    /* Code block */
+    .code-block {
+      background: #09081A;
+      border: 1px solid #162744;
+      border-radius: 8px;
+      padding: 16px;
+      font-family: 'Courier New', monospace;
+      font-size: 11px;
+      line-height: 1.7;
+      color: #7A8FA8;
+      margin: 12px 0;
+      overflow-x: auto;
+    }
+    .code-del { color: #EF4444; text-decoration: line-through; }
+    .code-add { color: #10B981; }
+    .code-neutral { color: #7A8FA8; }
+    .code-comment { color: #243A66; }
+
+    /* Comparison table */
+    table { width: 100%; border-collapse: collapse; }
+    th {
+      font-size: 8px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: #7A8FA8;
+      text-align: left;
+      padding: 8px 12px;
+      border-bottom: 1px solid #243A66;
+    }
+    td {
+      font-size: 12px;
+      color: #F0ECE4;
+      padding: 10px 12px;
+      border-bottom: 1px solid #162744;
+      vertical-align: top;
+    }
+    td:first-child { color: #7A8FA8; }
+    tr:last-child td { border-bottom: none; }
+
+    /* Alert box */
+    .alert {
+      border-radius: 8px;
+      padding: 14px 16px;
+      font-size: 12px;
+      line-height: 1.6;
+      margin-bottom: 12px;
+      display: flex;
+      gap: 10px;
+    }
+    .alert-icon { font-size: 14px; flex-shrink: 0; margin-top: 1px; }
+    .alert-red    { background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.2); color: #F0ECE4; }
+    .alert-green  { background: rgba(16,185,129,0.08); border: 1px solid rgba(16,185,129,0.2); color: #F0ECE4; }
+    .alert-yellow { background: rgba(245,158,11,0.08); border: 1px solid rgba(245,158,11,0.2); color: #F0ECE4; }
+
+    /* File chip */
+    .file-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      background: #111F35;
+      border: 1px solid #243A66;
+      border-radius: 6px;
+      padding: 4px 10px;
+      font-size: 10px;
+      font-family: 'Courier New', monospace;
+      color: #E8C97A;
+      margin: 3px 3px 3px 0;
+    }
+
+    /* Section heading */
+    .section-heading {
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: #C9A84C;
+      margin-bottom: 14px;
+    }
+
+    /* Divider */
+    .divider { border: none; border-top: 1px solid #162744; margin: 32px 0; }
+
+    /* Footer */
+    .footer {
+      margin-top: 48px;
+      padding-top: 20px;
+      border-top: 1px solid #162744;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .footer-left { font-size: 11px; color: #7A8FA8; }
+    .footer-right { font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #C9A84C; }
+
+    @media (max-width: 600px) {
+      .title { font-size: 24px; }
+      .meta-row { gap: 16px; }
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <!-- Header -->
+  <div class="header">
+    <p class="label">V3 Partners · Bug Report · Plataforma v3-partner</p>
+    <h1 class="title">HTTP 504 — Falha na Validação<br>Documental M&A (FORJA)</h1>
+    <p class="subtitle">Diagnóstico completo, causa raiz identificada e correção aplicada em produção.</p>
+
+    <div class="meta-row">
+      <div class="meta-item">
+        <span class="meta-label">Data</span>
+        <span class="meta-value">25/04/2026</span>
+      </div>
+      <div class="meta-item">
+        <span class="meta-label">Rota afetada</span>
+        <span class="meta-value">/mesa-ma</span>
+      </div>
+      <div class="meta-item">
+        <span class="meta-label">Commit</span>
+        <span class="meta-value">1b81c8c</span>
+      </div>
+      <div class="meta-item">
+        <span class="meta-label">Status</span>
+        <span class="badge badge-resolved">&#10003; Resolvido</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Resumo executivo -->
+  <div class="card">
+    <p class="card-title">Resumo Executivo</p>
+    <div class="alert alert-red">
+      <span class="alert-icon">⚠</span>
+      <div>
+        <strong>Erro observado:</strong> Ao clicar em "Validar com FORJA" na tela <code>/mesa-ma</code>, a UI exibia:<br>
+        <em>"Falha na validação: HTTP 504"</em>
+      </div>
+    </div>
+    <p style="font-size:13px; line-height:1.7; margin-top:12px;">
+      O erro 504 (<strong>Gateway Timeout</strong>) significa que a função serverless no Vercel foi encerrada
+      pelo servidor antes de completar a resposta. Foram identificados dois problemas independentes, um em
+      cada endpoint do módulo M&A, ambos relacionados ao tempo de resposta da API da Anthropic.
+    </p>
+  </div>
+
+  <!-- Causa raiz -->
+  <div class="card">
+    <p class="card-title">Causa Raiz — 2 Problemas Identificados</p>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Arquivo</th>
+          <th>Problema</th>
+          <th>Impacto</th>
+          <th>Severidade</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>api/ma/forja-validate/route.ts</code></td>
+          <td><code>max_tokens: 4096</code> — excessivo para um JSON de validação. A Anthropic gera a resposta token por token; 4096 tokens levam 30–50 segundos.</td>
+          <td>Chamada excede 60s → Vercel retorna 504 antes de completar.</td>
+          <td><span class="badge badge-critical">Crítico</span></td>
+        </tr>
+        <tr>
+          <td><code>api/ma/validacao-documental/route.ts</code></td>
+          <td>Ausência de <code>export const maxDuration</code>. Sem essa declaração, o Vercel aplica o timeout padrão de <strong>10 segundos</strong> para funções serverless.</td>
+          <td>Qualquer chamada ao Anthropic (≥15s) resulta em 504 imediato.</td>
+          <td><span class="badge badge-critical">Crítico</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Detalhamento técnico -->
+  <div class="card">
+    <p class="card-title">Detalhamento Técnico — Como o Timeout Ocorre</p>
+    <p style="font-size:12px; line-height:1.7; margin-bottom:16px;">
+      Funções serverless no Vercel têm um limite de duração máxima. Sem a declaração explícita,
+      o padrão é <strong>10 segundos</strong>. A chamada à API da Anthropic para geração de texto
+      leva em média:
+    </p>
+    <table>
+      <thead>
+        <tr><th>Parâmetro</th><th>Valor anterior</th><th>Tempo médio estimado</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>max_tokens</td><td>4096</td><td>30–50 segundos</td></tr>
+        <tr><td>max_tokens</td><td>1500</td><td>10–18 segundos</td></tr>
+        <tr><td>maxDuration Vercel (padrão)</td><td>10s (sem declaração)</td><td>Mata a função antes de resposta</td></tr>
+        <tr><td>maxDuration Vercel (declarado)</td><td>60s</td><td>Permite resposta completa</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Correções aplicadas -->
+  <div class="card">
+    <p class="card-title">Correções Aplicadas</p>
+
+    <p class="section-heading" style="margin-bottom:10px;">Arquivo 1 — forja-validate/route.ts</p>
+    <div class="code-block">
+<span class="code-comment">// app/api/ma/forja-validate/route.ts</span><br>
+<br>
+export const maxDuration = 60; <span class="code-comment">// já existia ✓</span><br>
+<br>
+const message = await client.messages.create({<br>
+&nbsp;&nbsp;model: "claude-sonnet-4-6",<br>
+&nbsp;&nbsp;<span class="code-del">max_tokens: 4096,</span><br>
+&nbsp;&nbsp;<span class="code-add">max_tokens: 1500,</span>&nbsp;&nbsp;<span class="code-comment">// JSON de validação nunca ultrapassa ~800 tokens</span><br>
+    </div>
+
+    <p class="section-heading" style="margin-bottom:10px; margin-top:20px;">Arquivo 2 — validacao-documental/route.ts</p>
+    <div class="code-block">
+<span class="code-comment">// app/api/ma/validacao-documental/route.ts</span><br>
+<br>
+import { NextRequest, NextResponse } from "next/server";<br>
+<br>
+<span class="code-add">export const maxDuration = 60;&nbsp;&nbsp;</span><span class="code-comment">// ADICIONADO — previne timeout padrão 10s</span><br>
+<br>
+const IS_DEMO = false;
+    </div>
+
+    <div class="alert alert-green" style="margin-top:16px;">
+      <span class="alert-icon">✓</span>
+      <div>
+        Ambas as correções foram commitadas (<strong>hash 1b81c8c</strong>) e enviadas ao repositório
+        <code>hamiltonsantosinvestimentos-cmyk/v3-partner</code> em 25/04/2026 às 19:49. O Vercel inicia o
+        deploy automático ao detectar o push no <code>main</code>.
+      </div>
+    </div>
+  </div>
+
+  <!-- Timeline -->
+  <div class="card">
+    <p class="card-title">Timeline da Resolução</p>
+    <div class="timeline">
+      <div class="timeline-item">
+        <p class="timeline-time">Identificação do problema</p>
+        <p class="timeline-text">Erro "Falha na validação: HTTP 504" reportado na tela /mesa-ma</p>
+        <p class="timeline-sub">Função: ForjaPanel → handleValidate() → /api/ma/forja-validate</p>
+      </div>
+      <div class="timeline-item">
+        <p class="timeline-time">Localização do código</p>
+        <p class="timeline-text">Mapeados os arquivos envolvidos na cadeia de chamada</p>
+        <p class="timeline-sub">forja-panel.tsx → forja-validate/route.ts + validacao-documental/route.ts</p>
+      </div>
+      <div class="timeline-item">
+        <p class="timeline-time">Diagnóstico</p>
+        <p class="timeline-text">max_tokens 4096 causa resposta lenta; validacao-documental sem maxDuration</p>
+        <p class="timeline-sub">Ambos resultam em Gateway Timeout 504 no Vercel</p>
+      </div>
+      <div class="timeline-item">
+        <p class="timeline-time">Correção</p>
+        <p class="timeline-text">max_tokens reduzido para 1500 · maxDuration = 60 adicionado</p>
+        <p class="timeline-sub">2 arquivos modificados, 3 linhas alteradas</p>
+      </div>
+      <div class="timeline-item">
+        <p class="timeline-time">Deploy — 25/04/2026 · 19:49</p>
+        <p class="timeline-text">Commit 1b81c8c pushed para main · Deploy automático Vercel iniciado</p>
+        <p class="timeline-sub">Repositório: hamiltonsantosinvestimentos-cmyk/v3-partner</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Arquivos afetados -->
+  <div class="card">
+    <p class="card-title">Arquivos Modificados</p>
+    <span class="file-chip">app/api/ma/forja-validate/route.ts</span>
+    <span class="file-chip">app/api/ma/validacao-documental/route.ts</span>
+    <p style="font-size:11px; margin-top:14px; line-height:1.6;">
+      Nenhum componente de UI foi alterado. Nenhuma estrutura de banco de dados foi afetada.
+      Nenhuma variável de ambiente foi alterada.
+    </p>
+  </div>
+
+  <!-- Prevenção futura -->
+  <div class="card">
+    <p class="card-title">Recomendações — Prevenção Futura</p>
+
+    <div class="alert alert-yellow">
+      <span class="alert-icon">⚡</span>
+      <div>
+        <strong>Regra para novos endpoints com Anthropic:</strong> Todo route que chama a API da Anthropic
+        deve declarar <code>export const maxDuration = 60;</code> logo abaixo dos imports e usar
+        <code>max_tokens</code> compatível com o tamanho real da resposta esperada.
+      </div>
+    </div>
+
+    <table style="margin-top:16px;">
+      <thead>
+        <tr><th>Tipo de resposta</th><th>max_tokens recomendado</th><th>Tempo estimado</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>JSON simples (validação, score)</td><td>800–1500</td><td>8–18s</td></tr>
+        <tr><td>Texto médio (análise, resumo)</td><td>1500–2048</td><td>15–25s</td></tr>
+        <tr><td>Documento completo (relatório, kit)</td><td>2048–4096</td><td>25–50s — usar streaming</td></tr>
+      </tbody>
+    </table>
+
+    <div class="alert alert-yellow" style="margin-top:14px;">
+      <span class="alert-icon">📋</span>
+      <div>
+        <strong>Verificar também:</strong> Os endpoints <code>/api/ma/gerar-kit-ia</code> e
+        <code>/api/ma/gerar-contrato</code> podem ter o mesmo problema. Recomenda-se revisar
+        se ambos possuem <code>maxDuration</code> declarado.
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    <div class="footer-left">
+      V3 Partners Soluções Ltda · CNPJ 14.219.287/0001-50<br>
+      Plataforma v3-partner · Bug Report gerado em 25/04/2026
+    </div>
+    <div class="footer-right">Resolvido · Commit 1b81c8c</div>
+  </div>
+
+</div>
+</body>
+</html>

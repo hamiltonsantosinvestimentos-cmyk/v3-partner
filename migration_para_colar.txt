@@ -1,0 +1,137 @@
+BEGIN;
+
+DO $$ BEGIN
+  CREATE TYPE assessment_status AS ENUM ('rascunho','completo','em_analise','promovido','descartado');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  CREATE TYPE assessment_origem AS ENUM ('site_publico','portal_interno','reuniao');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  CREATE TYPE instrumento_recomendado AS ENUM ('CRI_VERDE','TOKEN_RWA','FIDC_ESG','EQUITY_TOKEN','MA_ESTRUTURADO','INDEFINIDO');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  CREATE TYPE meeting_type AS ENUM ('presencial','remoto','call','whatsapp');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  CREATE TYPE meeting_status AS ENUM ('agendada','realizada','cancelada','remarcada');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+CREATE TABLE IF NOT EXISTS deal_assessments (
+  id                        UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  lead_nome                 TEXT NOT NULL,
+  lead_email                TEXT,
+  lead_telefone             TEXT,
+  empresa_nome              TEXT NOT NULL,
+  empresa_cnpj              TEXT,
+  projeto_estagio           TEXT,
+  municipio_contrato        TEXT,
+  spe_status                TEXT,
+  fontes_receita            JSONB,
+  receita_anual_projecao    TEXT,
+  offtake_contrato          TEXT,
+  carbono_tco2e_estimativa  TEXT,
+  carbono_certificacao      TEXT,
+  tokenizacao_motivo        TEXT,
+  garantias                 JSONB,
+  investidores_existentes   TEXT,
+  valor_captacao_necessario TEXT,
+  valor_captacao_brl        NUMERIC(18,2),
+  orcamento_estruturacao    TEXT,
+  instrumento_recomendado   instrumento_recomendado DEFAULT 'INDEFINIDO',
+  score_qualificacao        SMALLINT CHECK (score_qualificacao BETWEEN 0 AND 5),
+  diagnostico_notas         TEXT,
+  diagnostico_gerado_em     TIMESTAMPTZ,
+  origem                    assessment_origem NOT NULL DEFAULT 'site_publico',
+  status                    assessment_status NOT NULL DEFAULT 'rascunho',
+  deal_intake_id            UUID REFERENCES deal_intakes(id) ON DELETE SET NULL,
+  ma_deal_id                UUID,
+  created_by                UUID REFERENCES profiles(id) ON DELETE SET NULL,
+  created_at                TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at                TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+DROP TRIGGER IF EXISTS trg_deal_assessments_updated_at ON deal_assessments;
+CREATE TRIGGER trg_deal_assessments_updated_at
+  BEFORE UPDATE ON deal_assessments
+  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+ALTER TABLE deal_assessments ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "deal_assessments_admin_gestao_all" ON deal_assessments
+  FOR ALL TO authenticated USING (get_user_role() IN ('ADMIN','GESTAO'));
+
+CREATE POLICY "deal_assessments_mesa_select" ON deal_assessments
+  FOR SELECT TO authenticated USING (get_user_role() = 'MESA_OPERACIONAL');
+
+CREATE POLICY "deal_assessments_mesa_insert" ON deal_assessments
+  FOR INSERT TO authenticated WITH CHECK (get_user_role() = 'MESA_OPERACIONAL');
+
+CREATE POLICY "deal_assessments_anon_insert" ON deal_assessments
+  FOR INSERT TO anon WITH CHECK (origem = 'site_publico');
+
+CREATE INDEX IF NOT EXISTS idx_deal_assessments_status ON deal_assessments(status, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_deal_assessments_instrumento ON deal_assessments(instrumento_recomendado);
+CREATE INDEX IF NOT EXISTS idx_deal_assessments_deal_intake ON deal_assessments(deal_intake_id) WHERE deal_intake_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_deal_assessments_ma_deal ON deal_assessments(ma_deal_id) WHERE ma_deal_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_deal_assessments_email ON deal_assessments(lead_email) WHERE lead_email IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS business_meetings (
+  id                   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  empresa_nome         TEXT NOT NULL,
+  contato_nome         TEXT NOT NULL,
+  contato_email        TEXT,
+  contato_telefone     TEXT,
+  meeting_date         DATE NOT NULL,
+  meeting_type         meeting_type NOT NULL DEFAULT 'remoto',
+  status               meeting_status NOT NULL DEFAULT 'agendada',
+  participantes_v3     JSONB DEFAULT '[]'::jsonb,
+  pauta                TEXT,
+  notas                TEXT,
+  proximo_passo        TEXT,
+  prazo_proximo_passo  DATE,
+  assessment_id        UUID REFERENCES deal_assessments(id) ON DELETE SET NULL,
+  deal_intake_id       UUID REFERENCES deal_intakes(id) ON DELETE SET NULL,
+  ma_deal_id           UUID,
+  conducted_by         UUID NOT NULL REFERENCES profiles(id) ON DELETE RESTRICT,
+  created_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at           TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+DROP TRIGGER IF EXISTS trg_business_meetings_updated_at ON business_meetings;
+CREATE TRIGGER trg_business_meetings_updated_at
+  BEFORE UPDATE ON business_meetings
+  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+ALTER TABLE business_meetings ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "business_meetings_admin_gestao_all" ON business_meetings
+  FOR ALL TO authenticated USING (get_user_role() IN ('ADMIN','GESTAO'));
+
+CREATE POLICY "business_meetings_mesa_select" ON business_meetings
+  FOR SELECT TO authenticated USING (get_user_role() = 'MESA_OPERACIONAL');
+
+CREATE POLICY "business_meetings_mesa_insert" ON business_meetings
+  FOR INSERT TO authenticated WITH CHECK (get_user_role() = 'MESA_OPERACIONAL' AND conducted_by = auth.uid());
+
+CREATE POLICY "business_meetings_mesa_update_own" ON business_meetings
+  FOR UPDATE TO authenticated
+  USING (get_user_role() = 'MESA_OPERACIONAL' AND conducted_by = auth.uid())
+  WITH CHECK (get_user_role() = 'MESA_OPERACIONAL' AND conducted_by = auth.uid());
+
+CREATE INDEX IF NOT EXISTS idx_business_meetings_date ON business_meetings(meeting_date DESC);
+CREATE INDEX IF NOT EXISTS idx_business_meetings_status ON business_meetings(status, meeting_date DESC);
+CREATE INDEX IF NOT EXISTS idx_business_meetings_conducted_by ON business_meetings(conducted_by, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_business_meetings_assessment ON business_meetings(assessment_id) WHERE assessment_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_business_meetings_deal_intake ON business_meetings(deal_intake_id) WHERE deal_intake_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_business_meetings_ma_deal ON business_meetings(ma_deal_id) WHERE ma_deal_id IS NOT NULL;
+
+COMMIT;
