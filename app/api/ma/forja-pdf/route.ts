@@ -79,7 +79,7 @@ export async function POST(req: NextRequest) {
 
     const message = await client.messages.create({
       model: "claude-sonnet-4-6",
-      max_tokens: 2000,
+      max_tokens: 4000,
       system:
         "Você é o FORJA, extrator inteligente de dados de documentos M&A da V3 Partners. " +
         "Analise o documento e extraia todos os dados relevantes para uma operação de M&A. " +

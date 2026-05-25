@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as sc } from "@supabase/supabase-js";
+import { extractUF, extractMatchingFields, stripJsonFences, safeJsonParse } from "@/lib/ma/forja-utils";
 
 export const maxDuration = 60;
 
@@ -70,7 +71,7 @@ function sanitizeDeal(deal: Record<string, unknown>): Record<string, unknown> {
 // Limite Claude API: 32MB por arquivo (base64 ~1.37x → limite raw ~23MB para segurança)
 const PDF_SIZE_LIMIT_BYTES = 23 * 1024 * 1024; // 23MB raw → ~31.5MB base64
 
-async function fetchPdfs(dealId: string, docIds: string[]): Promise<PdfPayload[]> {
+async function fetchPdfs(dealId: string, docIds: string[]): Promise<{ pdfs: PdfPayload[]; skippedDocs: string[] }> {
   const svc = sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
   const { data: deal } = await svc
     .from("ma_deals")
@@ -82,11 +83,12 @@ async function fetchPdfs(dealId: string, docIds: string[]): Promise<PdfPayload[]
   const selected = docs.filter((d) => docIds.includes(d.doc_id));
 
   const results: PdfPayload[] = [];
+  const skippedDocs: string[] = [];
   for (const doc of selected) {
     const { data: fileData, error } = await svc.storage
       .from("ma-documents")
       .download(doc.storage_path);
-    if (error || !fileData) continue;
+    if (error || !fileData) { skippedDocs.push(doc.file_name); continue; }
 
     const buf = await fileData.arrayBuffer();
 
@@ -109,7 +111,7 @@ async function fetchPdfs(dealId: string, docIds: string[]): Promise<PdfPayload[]
       mediaType,
     });
   }
-  return results;
+  return { pdfs: results, skippedDocs };
 }
 
 export async function POST(req: NextRequest) {
@@ -135,10 +137,10 @@ export async function POST(req: NextRequest) {
     const contextoForja = (deal?.asset_data as Record<string,unknown> | undefined)?.contexto_forja as string | undefined;
 
     // Carrega PDFs se foram selecionados
-    const pdfs: PdfPayload[] =
+    const { pdfs, skippedDocs } =
       doc_ids?.length && dealId
         ? await fetchPdfs(dealId, doc_ids)
-        : [];
+        : { pdfs: [] as PdfPayload[], skippedDocs: [] as string[] };
 
     const hasDocs = pdfs.length > 0;
 
@@ -230,7 +232,7 @@ export async function POST(req: NextRequest) {
       model,
       max_tokens: maxTokensPhase1,
       system: systemPrompt,
-      messages: [{ role: "user", content: hasDocs ? userContent : userContent[0].text }],
+      messages: [{ role: "user", content: userContent }],
     });
 
     if (message.stop_reason === "max_tokens") {
@@ -247,8 +249,9 @@ export async function POST(req: NextRequest) {
     // Narrativa e tese são geradas em /api/ma/forja-narrative (chamada separada do cliente)
     return NextResponse.json({
       ...parsed,
-      docs_analyzed: pdfs.length,
-      narrative_pending: true, // sinaliza ao cliente para chamar forja-narrative
+      docs_analyzed:    pdfs.length,
+      skipped_docs:     skippedDocs,
+      narrative_pending: true,
     });
   } catch (error) {
     console.error("[forja-validate] ERRO:", JSON.stringify(error, null, 2));

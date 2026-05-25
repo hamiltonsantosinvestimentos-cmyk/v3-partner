@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
+import { mapMissingToDocRequests } from "@/lib/ma/document-request-mapper";
 
 function serviceClient() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -102,6 +103,56 @@ export async function POST(req: NextRequest) {
     if (!deal?.location && extracted.location) dealColumnUpdates.location = extracted.location;
     if (!deal?.sector   && extracted.sector)   dealColumnUpdates.sector   = extracted.sector;
 
+  } else if (action === "save_forja_with_request") {
+    // Igual a save_forja, mas cria pedido de documentos automaticamente para campos ALTA/MEDIA
+    if (!forja_result) return NextResponse.json({ error: "forja_result obrigatório" }, { status: 400 });
+
+    const validated: ValidatedField[] = Array.isArray(forja_result.validated) ? forja_result.validated : [];
+    const extracted = extractMatchingFields(validated);
+    const forjaTs = new Date().toISOString();
+
+    newAssetData = {
+      ...currentAssetData,
+      forja_result,
+      forja_status:       forja_result.recommendation,
+      forja_score:        forja_result.score,
+      forja_validated_at: forjaTs,
+      ...(extracted.uf          && { uf_extraido:             extracted.uf }),
+      ...(extracted.tipoOperacao && { tipo_operacao_extraida: extracted.tipoOperacao }),
+    };
+
+    if (!deal?.location && extracted.location) dealColumnUpdates.location = extracted.location;
+    if (!deal?.sector   && extracted.sector)   dealColumnUpdates.sector   = extracted.sector;
+
+    // Auto-gera pedido de documentos se houver campos ALTA/MEDIA ausentes
+    const missing = Array.isArray(forja_result.missing) ? forja_result.missing : [];
+    const relevantMissing = missing.filter(
+      (m: { priority: string }) => m.priority === "ALTA" || m.priority === "MEDIA"
+    );
+
+    if (relevantMissing.length > 0) {
+      // Verifica se já existe pedido ativo para não duplicar
+      const { data: existing } = await svc
+        .from("ma_document_requests")
+        .select("id")
+        .eq("deal_id", deal_id)
+        .in("status", ["pending", "sent", "partial"])
+        .maybeSingle();
+
+      if (!existing) {
+        const docItems = mapMissingToDocRequests(relevantMissing);
+        if (docItems.length > 0) {
+          await svc.from("ma_document_requests").insert({
+            deal_id,
+            forja_snapshot_at: forjaTs,
+            requested_by:      user.id,
+            documents:         docItems,
+            status:            "pending",
+          });
+        }
+      }
+    }
+
   } else if (action === "liberar_kit") {
     newAssetData = { ...currentAssetData, kit_liberado: true, kit_liberado_at: new Date().toISOString() };
   } else if (action === "bloquear_kit") {
@@ -122,5 +173,24 @@ export async function POST(req: NextRequest) {
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ ok: true, asset_data: data.asset_data, updated_columns: dealColumnUpdates });
+
+  // Verifica se houve criação de pedido de documentos (para feedback no frontend)
+  let docRequestId: string | null = null;
+  if (action === "save_forja_with_request") {
+    const { data: req } = await svc
+      .from("ma_document_requests")
+      .select("id")
+      .eq("deal_id", deal_id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    docRequestId = req?.id ?? null;
+  }
+
+  return NextResponse.json({
+    ok:              true,
+    asset_data:      data.asset_data,
+    updated_columns: dealColumnUpdates,
+    ...(docRequestId && { doc_request_id: docRequestId }),
+  });
 }
