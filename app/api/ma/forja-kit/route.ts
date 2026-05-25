@@ -2,56 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { mapMissingToDocRequests } from "@/lib/ma/document-request-mapper";
+import { extractUF, extractMatchingFields, type ValidatedField } from "@/lib/ma/forja-utils";
 
 function serviceClient() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 }
 
 const ADMIN_ROLES = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"] as const;
-
-type ValidatedField = { field: string; value: string; note?: string };
-
-// Extrai UF/estado de uma string de localização
-function extractUF(loc: string): string | null {
-  const ufMatch = loc.match(/\b(AC|AL|AM|AP|BA|CE|DF|ES|GO|MA|MG|MS|MT|PA|PB|PE|PI|PR|RJ|RN|RO|RR|RS|SC|SE|SP|TO)\b/);
-  if (ufMatch) return ufMatch[1];
-  const estadoMap: Record<string, string> = {
-    "rio de janeiro": "RJ", "são paulo": "SP", "minas gerais": "MG",
-    "bahia": "BA", "paraná": "PR", "rio grande do sul": "RS",
-    "pernambuco": "PE", "ceará": "CE", "goiás": "GO",
-    "santa catarina": "SC", "mato grosso": "MT", "mato grosso do sul": "MS",
-  };
-  const lower = loc.toLowerCase();
-  for (const [estado, uf] of Object.entries(estadoMap)) {
-    if (lower.includes(estado)) return uf;
-  }
-  return null;
-}
-
-// Extrai dados relevantes para matching dos campos validated do FORJA
-function extractMatchingFields(validated: ValidatedField[]): {
-  location?: string; sector?: string; tipoOperacao?: string; uf?: string;
-} {
-  const result: ReturnType<typeof extractMatchingFields> = {};
-
-  for (const v of validated) {
-    const f = v.field.toLowerCase();
-    if ((f === "location" || f === "localizacao") && v.value && v.value !== "—") {
-      result.location = v.value;
-      result.uf = extractUF(v.value) ?? undefined;
-    }
-    if (f === "sector" && v.value && v.value !== "—") {
-      result.sector = v.value;
-    }
-    if ((f === "tipooperacao" || f === "tipo_operacao" || f === "deal_type") && v.value) {
-      result.tipoOperacao = v.value;
-    }
-    if (f === "municipio_uf" && !result.uf) {
-      result.uf = extractUF(v.value) ?? undefined;
-    }
-  }
-  return result;
-}
 
 // POST — salva resultado FORJA ou libera/bloqueia KIT (apenas admin/gestao/mesa)
 export async function POST(req: NextRequest) {

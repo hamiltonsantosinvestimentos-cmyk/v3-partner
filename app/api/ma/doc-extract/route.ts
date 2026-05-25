@@ -128,14 +128,31 @@ Retorne APENAS JSON válido:
 // ─── Route Handler ────────────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
-
   const svc = serviceClient();
-  const { data: profile } = await svc.from("profiles").select("role").eq("id", user.id).single();
-  if (!WRITE_ROLES.includes(profile?.role as typeof WRITE_ROLES[number])) {
-    return NextResponse.json({ error: "Apenas a Mesa pode extrair documentos" }, { status: 403 });
+
+  // Suporta dois modos de autenticação:
+  // 1. Cookie (browser/UI) — fluxo padrão da Mesa
+  // 2. x-cron-secret header — chamadas server-to-server do n8n (W9)
+  const cronSecret = req.headers.get("x-cron-secret");
+  const isCronCall  = cronSecret && cronSecret === process.env.CRON_SECRET;
+
+  let extractedById: string;
+
+  if (isCronCall) {
+    // Usa o ID do sistema (primeiro ADMIN do projeto) como extracted_by
+    const { data: adminProfile } = await svc
+      .from("profiles").select("id").eq("role", "ADMIN").limit(1).single();
+    extractedById = adminProfile?.id ?? "00000000-0000-0000-0000-000000000000";
+  } else {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+
+    const { data: profile } = await svc.from("profiles").select("role").eq("id", user.id).single();
+    if (!WRITE_ROLES.includes(profile?.role as typeof WRITE_ROLES[number])) {
+      return NextResponse.json({ error: "Apenas a Mesa pode extrair documentos" }, { status: 403 });
+    }
+    extractedById = user.id;
   }
 
   if (!process.env.ANTHROPIC_API_KEY) {
@@ -154,7 +171,7 @@ export async function POST(req: NextRequest) {
     .from("ma_document_extractions")
     .insert({
       deal_id, doc_id, doc_name: "", storage_path: "",
-      status: "processing", extracted_by: user.id,
+      status: "processing", extracted_by: extractedById,
       batch_id: batch_id ?? null,
     })
     .select("id")

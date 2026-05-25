@@ -182,7 +182,7 @@ components/
 
 **Projeto:** `sbmuashewklfhdyyuezr` (V3 PARTNERS PRO)
 
-**Total: 57 tabelas — todas com RLS habilitado.**
+**Total: 79 tabelas — todas com RLS habilitado.**
 
 **Core / Auth:**
 - `profiles` — usuários com role, plan, Cora customer_id
