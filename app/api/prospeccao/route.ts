@@ -86,7 +86,7 @@ export async function POST(req: NextRequest) {
   const db = svc();
 
   // Busca nome do responsável se não foi passado
-  let respNome = responsavel_nome ?? null;
+  let respNome: string | null = responsavel_nome ?? null;
   if (responsavel_id && !respNome) {
     const { data: resp } = await db.from("profiles").select("full_name").eq("id", responsavel_id).single();
     respNome = (resp as { full_name: string } | null)?.full_name ?? null;

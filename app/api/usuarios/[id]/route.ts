@@ -79,7 +79,7 @@ export async function PATCH(
     new_data: updateData,
     old_data: null,
     ip_address: null,
-  }).then(() => {}).catch(() => {});
+  }).then(() => {}, () => {});
 
   return NextResponse.json(data);
 }

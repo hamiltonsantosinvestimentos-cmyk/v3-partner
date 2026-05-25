@@ -24,7 +24,7 @@ export async function GET(req: NextRequest) {
 
   try {
     const res = await coraFetch(path);
-    const data = await res.json();
+    const data = await res.json() as { message?: string };
     if (!res.ok) return NextResponse.json({ error: data?.message ?? "Erro Cora" }, { status: res.status });
     return NextResponse.json(data);
   } catch (e: unknown) {

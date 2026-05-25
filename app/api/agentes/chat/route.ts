@@ -104,10 +104,11 @@ async function runWithTools(
       });
     }
 
+    // QW-4: cache_control no system prompt — reduz ~80% custo em sessões longas
     const response = await anthropic.messages.create({
       model: "claude-sonnet-4-6",
       max_tokens: 4096,
-      system,
+      system: [{ type: "text", text: system, cache_control: { type: "ephemeral" } }],
       messages: currentMessages,
       ...(activeTools ? { tools: activeTools } : {}),
     });
@@ -152,7 +153,7 @@ async function runWithTools(
   const finalResponse = await anthropic.messages.create({
     model: "claude-sonnet-4-6",
     max_tokens: 4096,
-    system,
+    system: [{ type: "text", text: system, cache_control: { type: "ephemeral" } }],
     messages: [...currentMessages, { role: "user", content: "Sintetize suas pesquisas e entregue a resposta estruturada agora." }],
   });
   return finalResponse.content
@@ -172,12 +173,12 @@ export async function POST(req: NextRequest) {
     squad_id: string;
     message: string;
     session_id?: string;
-    history?: Message[];
     workspace_id?: string;
     workspace_context?: string;
+    // QW-6: history removido do contrato do cliente — carregado do banco server-side
   };
 
-  const { squad_id, message, session_id, history = [], workspace_id, workspace_context } = body;
+  const { squad_id, message, session_id, workspace_id, workspace_context } = body;
 
   const squad = SQUADS[squad_id];
   if (!squad) return NextResponse.json({ error: "Squad inválido" }, { status: 400 });
@@ -186,13 +187,28 @@ export async function POST(req: NextRequest) {
   const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
   if (!apiKey) return NextResponse.json({ error: "API key não configurada" }, { status: 500 });
 
+  // Inicializa service client antes do Claude — necessário para buscar histórico
+  const svc = sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+
+  // QW-6: carrega histórico do banco (nunca do cliente — previne prompt injection via history)
+  let dbHistory: Message[] = [];
+  if (session_id) {
+    const { data: existingSession } = await svc
+      .from("agent_sessions")
+      .select("messages")
+      .eq("id", session_id)
+      .eq("user_id", user.id)
+      .single();
+    dbHistory = (existingSession?.messages as Message[]) ?? [];
+  }
+
   // Injeta contexto do workspace no system prompt se disponível
   const systemPrompt = workspace_context
     ? `${squad.prompt}\n\n---\nCONTEXTO DO DEAL WORKSPACE:\n${workspace_context}\n\nUse este contexto como base para suas análises. As informações acima foram coletadas por outros squads sobre este mesmo deal.`
     : squad.prompt;
 
   const claudeMessages = [
-    ...history.map(m => ({ role: m.role as "user" | "assistant", content: m.content })),
+    ...dbHistory.map(m => ({ role: m.role as "user" | "assistant", content: m.content })),
     { role: "user" as const, content: message },
   ];
 
@@ -206,12 +222,12 @@ export async function POST(req: NextRequest) {
       // Market Scout — com tool_use de busca
       assistantText = await runWithTools(anthropic, systemPrompt, claudeMessages);
     } else {
-      // Squads padrão — sem tools
-      const maxTokens = squad.maxTokens ?? 4096; // default aumentado de 2048 para 4096
+      // Squads padrão — QW-4: cache_control no system prompt
+      const maxTokens = squad.maxTokens ?? 4096;
       const response = await anthropic.messages.create({
         model: "claude-sonnet-4-6",
         max_tokens: maxTokens,
-        system: systemPrompt,
+        system: [{ type: "text", text: systemPrompt, cache_control: { type: "ephemeral" } }],
         messages: claudeMessages,
       });
       assistantText = response.content
@@ -222,12 +238,11 @@ export async function POST(req: NextRequest) {
 
     const now = new Date().toISOString();
     const newMessages: Message[] = [
-      ...history,
+      ...dbHistory,
       { role: "user", content: message, ts: now },
       { role: "assistant", content: assistantText, ts: now },
     ];
 
-    const svc = sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
     let finalSessionId = session_id;
 
     if (session_id) {
@@ -258,6 +273,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ response: assistantText, session_id: finalSessionId });
   } catch (err) {
     console.error("[agentes/chat]", err);
-    return NextResponse.json({ error: err instanceof Error ? err.message : "Erro interno" }, { status: 500 });
+    // MED-02: não vazar detalhes internos de erro para o cliente
+    return NextResponse.json({ error: "Erro interno no processamento" }, { status: 500 });
   }
 }

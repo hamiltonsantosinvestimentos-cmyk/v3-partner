@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
     const diasRestantes = Math.floor((new Date(p.trial_expires_at!).getTime() - now) / 86400000);
     await createNotification({
       user_id: p.id,
-      type: "subscription",
+      type: "info",
       title: diasRestantes === 0
         ? "⚠️ Sua assinatura vence hoje!"
         : `⚠️ Sua assinatura vence em ${diasRestantes} dia${diasRestantes === 1 ? "" : "s"}`,

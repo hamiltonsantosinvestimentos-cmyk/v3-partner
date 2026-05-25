@@ -342,5 +342,6 @@ function CertificadoPDF({ c }: { c: ContratoPDFData }) {
 
 export async function gerarCertificadoPDF(c: ContratoPDFData): Promise<Buffer> {
   const element = React.createElement(CertificadoPDF, { c });
-  return renderToBuffer(element) as Promise<Buffer>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return renderToBuffer(element as any) as Promise<Buffer>;
 }

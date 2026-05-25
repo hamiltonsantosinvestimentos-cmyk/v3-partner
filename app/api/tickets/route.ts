@@ -168,7 +168,7 @@ export async function PATCH(req: NextRequest) {
 
   // Marca resolved_at quando concluído
   const updateData: Record<string, unknown> = { ...restFields, updated_at: new Date().toISOString() };
-  if (fields.status === "COMPLETED" || fields.status === "RESOLVED") {
+  if (fields.status === "COMPLETED") {
     updateData.resolved_at = new Date().toISOString();
   }
 

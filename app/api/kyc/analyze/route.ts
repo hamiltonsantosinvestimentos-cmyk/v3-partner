@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import type { Json } from "@/types/supabase";
 
 const IS_DEMO =
   !process.env.NEXT_PUBLIC_SUPABASE_URL ||
@@ -177,7 +178,7 @@ export async function POST(req: Request) {
       risk_label,
       verdict,
       sources_used,
-      raw_data,
+      raw_data: raw_data as unknown as Json,
     })
     .select()
     .single();

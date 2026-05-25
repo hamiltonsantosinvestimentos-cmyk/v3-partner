@@ -19,7 +19,7 @@ export default async function ContratoParceriaPage() {
     .eq("id", user.id)
     .single();
 
-  const plano = profile?.role === "PARTNER_PRO" ? "PARTNER_PRO" : "PARTNER";
+  const plano: "PARTNER" | "PARTNER_PRO" = profile?.role === "PARTNER_PRO" ? "PARTNER_PRO" : "PARTNER";
 
   // Busca dados do cadastro para pré-preencher o contrato
   const svc = sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);

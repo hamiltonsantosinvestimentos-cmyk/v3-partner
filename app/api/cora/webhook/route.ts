@@ -132,7 +132,7 @@ export async function POST(req: NextRequest) {
             action_url: "/financeiro",
             read: false,
           }))
-        ).catch(() => {});
+        ).then(null, () => {});
       }
     }
 
@@ -165,7 +165,7 @@ export async function POST(req: NextRequest) {
         message: `Sua mensalidade foi confirmada. Acesso garantido até ${newExpiry.toLocaleDateString("pt-BR")}.`,
         action_url: "/minha-assinatura",
         read: false,
-      }).catch(() => {});
+      }).then(null, () => {});
 
       // Gera cobrança do mês seguinte automaticamente (#8)
       await gerarProximaCobranca(db, sub.partner_id, sub.plano);

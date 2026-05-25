@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const ALLOWED_ORIGINS = [
-  "https://jlnetto35.github.io",
-  "http://localhost:3000",
-  "http://127.0.0.1:5500",
-];
+// QW-3: 127.0.0.1:5500 (setup local Hamilton) só ativo fora de produção
+const ALLOWED_ORIGINS_PROD = ["https://jlnetto35.github.io"];
+const ALLOWED_ORIGINS_DEV  = [...ALLOWED_ORIGINS_PROD, "http://localhost:3000", "http://127.0.0.1:5500"];
+const ALLOWED_ORIGINS = process.env.NODE_ENV === "production" ? ALLOWED_ORIGINS_PROD : ALLOWED_ORIGINS_DEV;
 
 function corsHeaders(origin: string | null) {
   const allowed = origin && ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
@@ -25,14 +24,20 @@ export async function POST(req: NextRequest) {
   const origin = req.headers.get("origin");
   const headers = corsHeaders(origin);
 
-  // API key vem do header ou da env var do servidor
+  // QW-1: autenticação obrigatória — endpoint nunca é público
+  const { createClient } = await import("@/lib/supabase/server");
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401, headers });
+
+  // API key: do header (uso local do Hamilton) ou da env var do servidor
   const clientKey = req.headers.get("x-api-key");
   const apiKey = clientKey || process.env.ANTHROPIC_API_KEY;
 
   if (!apiKey) {
     return NextResponse.json(
       { error: "API key não configurada" },
-      { status: 401, headers }
+      { status: 500, headers }
     );
   }
 

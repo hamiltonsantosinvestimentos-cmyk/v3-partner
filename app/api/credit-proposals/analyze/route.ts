@@ -126,11 +126,10 @@ DOCUMENTOS ANEXADOS (${docs.length}):
 ${docTexts.join("\n")}
 `;
 
-  const prompt = `Você é um analista sênior de crédito de uma boutique financeira brasileira (V3 Partners) especializada em securitização, real estate e crédito estruturado.
+  // QW-4: system estático separado do contexto dinâmico — permite prompt caching
+  const ANALYST_SYSTEM = `Você é um analista sênior de crédito de uma boutique financeira brasileira (V3 Partners) especializada em securitização, real estate e crédito estruturado. Analise a proposta fornecida e gere um relatório completo para o Comitê de Crédito usando a tool "relatorio_comite". Preencha todos os campos obrigatórios com base exclusivamente nos dados da proposta.`;
 
-Analise a proposta abaixo e gere um relatório completo para apresentação ao Comitê de Crédito, seguindo EXATAMENTE o formato JSON especificado.
-
-${contextoProposta}
+  const prompt = `${contextoProposta}
 
 Retorne APENAS um objeto JSON válido com EXATAMENTE esta estrutura (sem markdown, sem texto extra):
 
@@ -164,6 +163,7 @@ Retorne APENAS um objeto JSON válido com EXATAMENTE esta estrutura (sem markdow
     const response = await anthropic.messages.create({
       model: "claude-sonnet-4-6",
       max_tokens: 4096,
+      system: [{ type: "text", text: ANALYST_SYSTEM, cache_control: { type: "ephemeral" } }],
       tools: [{
         name: "relatorio_comite",
         description: "Gera o relatório estruturado de comitê de crédito",

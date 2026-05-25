@@ -100,7 +100,7 @@ export default async function ComissoesPage() {
       role={profile.role}
       commissions={(commissions ?? []) as Parameters<typeof ComissoesPartnerClient>[0]["commissions"]}
       partners={partners}
-      marketplaceLeads={(marketplaceLeads ?? []) as Parameters<typeof ComissoesPartnerClient>[0]["marketplaceLeads"]}
+      marketplaceLeads={(marketplaceLeads ?? []) as unknown as Parameters<typeof ComissoesPartnerClient>[0]["marketplaceLeads"]}
     />
   );
 }

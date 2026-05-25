@@ -168,7 +168,7 @@ export async function GET(request: NextRequest) {
     browser = await launchBrowser();
     const page = await browser.newPage();
     await page.setViewport({ width: 1240, height: 1754, deviceScaleFactor: 1 });
-    await page.setContent(cimHtml, { waitUntil: "networkidle0", timeout: 45000 });
+    await page.setContent(cimHtml, { waitUntil: "load", timeout: 45000 });
     await page.evaluate(() => document.fonts.ready);
 
     // Garante navy no html programaticamente
@@ -242,7 +242,7 @@ export async function GET(request: NextRequest) {
     const date     = new Date().toISOString().slice(0, 10);
     const filename = `V3_CIM_${company}_${dealCode}_${date}.pdf`;
 
-    return new Response(mergedPdf, {
+    return new Response(Buffer.from(mergedPdf), {
       status: 200,
       headers: {
         "Content-Type":        "application/pdf",

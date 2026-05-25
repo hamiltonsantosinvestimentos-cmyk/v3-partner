@@ -72,11 +72,8 @@ export async function proxy(request: NextRequest) {
 
     return supabaseResponse;
   } catch {
-    // Se o middleware falhar (ex: Supabase indisponível), deixa a página tratar
-    if (pathname === "/") {
-      return NextResponse.redirect(new URL("/dashboard", request.url));
-    }
-    return NextResponse.next();
+    // QW-2: fail-closed — nunca liberar rotas protegidas quando Supabase indisponível
+    return NextResponse.redirect(new URL("/login?error=auth_unavailable", request.url));
   }
 }
 

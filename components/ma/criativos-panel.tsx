@@ -107,8 +107,8 @@ export function CriativosPanel({ dealId, dealName, isDemo = false, isAdmin = fal
           .order("created_at", { ascending: false }),
       ]);
 
-      setLatestJob(jobsRes.data?.[0] ?? null);
-      setFiles(filesRes.data ?? []);
+      setLatestJob((jobsRes.data?.[0] ?? null) as unknown as CreativeJob | null);
+      setFiles((filesRes.data ?? []) as unknown as CreativeFile[]);
     } catch (e) {
       console.error("CriativosPanel loadData error:", e);
     } finally {

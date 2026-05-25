@@ -793,7 +793,7 @@ function buildCIM(deal: any, lang: string, investor?: InvestorInfo | null): stri
   </div>
   <div class="exec-grid">
     <div>
-      ${desc.split(/\.\s+/).filter(Boolean).map(p => `<p class="exec-lead">${p}${p.endsWith(".") ? "" : "."}</p>`).slice(0,3).join("")}
+      ${(desc.split(/\.\s+/) as string[]).filter((p: string) => Boolean(p)).map((p: string) => `<p class="exec-lead">${p}${p.endsWith(".") ? "" : "."}</p>`).slice(0,3).join("")}
 
       ${te ? `
       <!-- TESE ESTRATÉGICA DE POSICIONAMENTO -->

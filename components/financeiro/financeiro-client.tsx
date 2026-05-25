@@ -230,7 +230,7 @@ function VisaoGeralTab() {
                 <CartesianGrid strokeDasharray="3 3" stroke="#122036" />
                 <XAxis dataKey="mes" tick={{ fill: "#7A8FA8", fontSize: 10 }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fill: "#7A8FA8", fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={v => `R$${(v / 1000).toFixed(0)}k`} />
-                <Tooltip contentStyle={{ backgroundColor: "#091221", border: "1px solid rgba(196,146,46,0.2)", borderRadius: 10, fontSize: 12 }} formatter={(v: number) => formatMoeda(v)} />
+                <Tooltip contentStyle={{ backgroundColor: "#091221", border: "1px solid rgba(196,146,46,0.2)", borderRadius: 10, fontSize: 12 }} formatter={(v) => formatMoeda(Number(v) || 0)} />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
                 <Bar dataKey="Receita" fill="#C9A84C" radius={[4, 4, 0, 0]} />
                 <Bar dataKey="Despesas" fill="#3B5273" radius={[4, 4, 0, 0]} />
@@ -1942,7 +1942,7 @@ function DRETab() {
                 <CartesianGrid strokeDasharray="3 3" stroke="#122036" />
                 <XAxis dataKey="mes" tick={{ fill: "#7A8FA8", fontSize: 10 }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fill: "#7A8FA8", fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={v => `R$${(v / 1000).toFixed(0)}k`} />
-                <Tooltip contentStyle={{ backgroundColor: "#091221", border: "1px solid rgba(196,146,46,0.2)", borderRadius: 10, fontSize: 12 }} formatter={(v: number) => formatMoeda(v)} />
+                <Tooltip contentStyle={{ backgroundColor: "#091221", border: "1px solid rgba(196,146,46,0.2)", borderRadius: 10, fontSize: 12 }} formatter={(v) => formatMoeda(Number(v) || 0)} />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
                 <Area type="monotone" dataKey="Receita" stroke="#C9A84C" fill="url(#gradRec)" strokeWidth={2} />
                 <Area type="monotone" dataKey="Lucro" stroke="#22C55E" fill="url(#gradLuc)" strokeWidth={2} />
@@ -2641,7 +2641,7 @@ function AssinaturasTab() {
               <YAxis tick={{ fill: "#7A8FA8", fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={v => `R$${(v / 1000).toFixed(0)}k`} />
               <Tooltip
                 contentStyle={{ backgroundColor: "#091221", border: "1px solid rgba(196,146,46,0.2)", borderRadius: 10, fontSize: 12 }}
-                formatter={(v: number) => formatMoeda(v)}
+                formatter={(v) => formatMoeda(Number(v) || 0)}
               />
               <Bar dataKey="Receita" fill="#C9A84C" radius={[4, 4, 0, 0]} />
             </BarChart>

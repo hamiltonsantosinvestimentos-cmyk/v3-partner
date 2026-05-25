@@ -237,7 +237,7 @@ export function AcademyAdmin({ ytLinks, onLinksChange }: AcademyAdminProps) {
       body: JSON.stringify({ video_id: videoId, ...data }),
     });
     if (res.ok) {
-      setOverrides(prev => ({ ...prev, [videoId]: { video_id: videoId, ...prev[videoId], ...data } }));
+      setOverrides(prev => ({ ...prev, [videoId]: { ...prev[videoId], ...data, video_id: videoId } }));
     }
   }
 

@@ -296,7 +296,7 @@ export function CoraPanel() {
                     tickFormatter={v => `R$${(v/1000).toFixed(0)}k`} />
                   <Tooltip
                     contentStyle={{ background: "#0D1929", border: "1px solid #243A66", borderRadius: 8, fontSize: 11 }}
-                    formatter={(v: number) => [fmtBRL(v * 100), ""]}
+                    formatter={(v) => [fmtBRL((Number(v) || 0) * 100), ""]}
                   />
                   <Area type="monotone" dataKey="pago" name="Pago" stroke="#10b981" fill="url(#gradPago)" strokeWidth={2} />
                   <Area type="monotone" dataKey="pendente" name="Pendente" stroke="#C9A84C" fill="url(#gradPendente)" strokeWidth={2} />

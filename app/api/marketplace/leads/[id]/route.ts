@@ -76,7 +76,7 @@ export async function PATCH(
         productName: product?.name ?? "Produto",
         supplierName: product?.supplier?.company_name ?? "Fornecedor",
         novoStatus: status,
-      }).catch(() => {});
+      }).then(null, () => {});
     }
 
     // In-app notification for the partner who owns this lead
@@ -97,7 +97,7 @@ export async function PATCH(
         message: `Seu lead "${clientName}" para ${productName} foi atualizado para: ${statusLabel}`,
         type: "info",
         action_url: "/marketplace?tab=leads",
-      }).then(() => {}).catch(() => {});
+      }).then(() => {}, () => {});
     }
   }
 

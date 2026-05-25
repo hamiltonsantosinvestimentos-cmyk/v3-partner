@@ -194,6 +194,9 @@ export function PerfilClient({ initialProfile }: { initialProfile: ProfileData }
     GESTAO:           { label: "Gestão",         color: "#60A5FA", desc: "Acesso total exceto Usuários", commission: "—" },
     MESA_OPERACIONAL: { label: "Mesa Operacional", color: "#34D399", desc: "Operações e suporte", commission: "—" },
     FINANCEIRO:       { label: "Financeiro",     color: "#FB923C", desc: "Módulos financeiros", commission: "—" },
+    SDR:              { label: "SDR",            color: "#94A3B8", desc: "Prospecção ativa",    commission: "—" },
+    CLOSER:           { label: "Closer",         color: "#94A3B8", desc: "Fechamento",          commission: "—" },
+    FORNECEDOR:       { label: "Fornecedor",     color: "#94A3B8", desc: "Acesso fornecedor",   commission: "—" },
   };
   const plan = PLAN_INFO[profile.role] ?? PLAN_INFO.PARTNER;
 

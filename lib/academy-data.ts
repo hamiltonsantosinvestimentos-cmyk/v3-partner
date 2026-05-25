@@ -132,6 +132,7 @@ export const ACADEMY_CATEGORIES: VideoCategory[] = [
         level: "Intermediário",
         gradient: "from-amber-600 via-orange-600 to-amber-700",
         accentColor: "#D97706",
+        tags: [],
         featured: true,
       },
       {
@@ -199,6 +200,7 @@ export const ACADEMY_CATEGORIES: VideoCategory[] = [
         level: "Avançado",
         gradient: "from-purple-600 via-violet-700 to-purple-800",
         accentColor: "#7C3AED",
+        tags: [],
         featured: true,
       },
       {
@@ -252,6 +254,7 @@ export const ACADEMY_CATEGORIES: VideoCategory[] = [
         level: "Iniciante",
         gradient: "from-emerald-600 via-teal-600 to-emerald-700",
         accentColor: "#059669",
+        tags: [],
         featured: true,
       },
       {
@@ -319,6 +322,7 @@ export const ACADEMY_CATEGORIES: VideoCategory[] = [
         level: "Iniciante",
         gradient: "from-orange-600 via-red-600 to-orange-700",
         accentColor: "#EA580C",
+        tags: [],
         featured: true,
         required: true,
       },
@@ -373,6 +377,7 @@ export const ACADEMY_CATEGORIES: VideoCategory[] = [
         level: "Iniciante",
         gradient: "from-cyan-600 via-sky-600 to-cyan-700",
         accentColor: "#0891B2",
+        tags: [],
         featured: true,
       },
       {
@@ -426,6 +431,7 @@ export const ACADEMY_CATEGORIES: VideoCategory[] = [
         level: "Iniciante",
         gradient: "from-slate-600 via-gray-600 to-slate-700",
         accentColor: "#475569",
+        tags: [],
         featured: true,
         required: true,
       },

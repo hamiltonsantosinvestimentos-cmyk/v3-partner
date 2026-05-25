@@ -27,10 +27,7 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   turbopack: {},
   typescript: {
-    ignoreBuildErrors: true,
-  },
-  eslint: {
-    ignoreDuringBuilds: true,
+    ignoreBuildErrors: false,
   },
   // Externaliza chromium/puppeteer do bundle webpack — necessário para Vercel serverless
   serverExternalPackages: ["@sparticuz/chromium-min", "puppeteer-core"],

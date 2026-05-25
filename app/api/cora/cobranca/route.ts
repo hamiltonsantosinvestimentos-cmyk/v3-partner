@@ -66,7 +66,7 @@ export async function POST(req: NextRequest) {
       idempotencyKey: randomUUID(),
     });
 
-    const data = await res.json();
+    const data = await res.json() as { message?: string };
 
     if (!res.ok) {
       return NextResponse.json({ error: data?.message ?? "Erro Cora", details: data }, { status: res.status });
@@ -140,7 +140,7 @@ export async function DELETE(req: NextRequest) {
       idempotencyKey: randomUUID(),
     });
     if (!res.ok) {
-      const data = await res.json();
+      const data = await res.json() as { message?: string };
       return NextResponse.json({ error: data?.message ?? "Erro Cora" }, { status: res.status });
     }
     return NextResponse.json({ ok: true });

@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Ticket não está com status pendente" }, { status: 400 });
     }
 
-    const requester = ticket.requester as { id: string; full_name: string; email: string | null } | null;
+    const requester = ticket.requester as unknown as { id: string; full_name: string; email: string | null } | null;
     partnerId = requester?.id ?? ticket.requester_id ?? null;
     partnerName = requester?.full_name ?? "Partner";
     partnerEmail = requester?.email ?? null;
@@ -238,7 +238,7 @@ export async function POST(req: NextRequest) {
       .from("credit_desk_proposals")
       .update({ reminder_sent_at: new Date().toISOString() } as Record<string, unknown>)
       .eq("id", entityId)
-      .catch(() => {}); // coluna pode não existir, ignora erro
+      .then(null, () => {}); // coluna pode não existir, ignora erro
   }
 
   return NextResponse.json({ ok: true, emailSent, chatSent });

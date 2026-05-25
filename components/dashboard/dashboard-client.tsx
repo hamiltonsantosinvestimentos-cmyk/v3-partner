@@ -696,7 +696,7 @@ export function DashboardClient({
                     color: "#E8EDF5",
                     fontSize: "12px",
                   }}
-                  formatter={(value: number) => [formatCurrency(value), "Volume"]}
+                  formatter={(value) => [formatCurrency(Number(value) || 0), "Volume"]}
                 />
                 <Area
                   type="monotone"

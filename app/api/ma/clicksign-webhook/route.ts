@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
     const { data: dealRows, error: findError } = await supabase
       .from("ma_deals")
       .select("id, stage")
-      .eq("clicksign_envelope_id", document.key)
+      .filter("clicksign_envelope_id", "eq", document.key)
       .limit(1);
 
     const deal = dealRows?.[0] as { id: string; stage: string } | undefined;

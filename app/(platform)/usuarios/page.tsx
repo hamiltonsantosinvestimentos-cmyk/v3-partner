@@ -3,6 +3,7 @@
 import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
 import { Users, GraduationCap } from "lucide-react";
+import type { UserRole } from "@/lib/constants";
 
 const UsersClient = dynamic(
   () => import("@/components/usuarios/users-client").then((m) => m.UsersClient),
@@ -19,14 +20,14 @@ const IS_DEMO = false;
 type Tab = "usuarios" | "onboarding";
 
 export default function UsuariosPage() {
-  const [users, setUsers] = useState<{ id: string; email: string; full_name: string | null; role: string; phone: string | null; document_cpf: string | null; is_active: boolean; created_at: string }[]>([]);
+  const [users, setUsers] = useState<{ id: string; email: string; full_name: string | null; role: UserRole; phone: string | null; document_cpf: string | null; is_active: boolean; created_at: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<Tab>("usuarios");
 
   useEffect(() => {
     if (IS_DEMO) {
       import("@/lib/demo-data").then(({ DEMO_USERS }) => {
-        setUsers(DEMO_USERS as typeof users);
+        setUsers(DEMO_USERS as unknown as typeof users);
         setLoading(false);
       });
       return;

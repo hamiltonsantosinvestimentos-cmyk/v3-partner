@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient as sc } from "@supabase/supabase-js";
+import type Anthropic from "@anthropic-ai/sdk";
 
 const IS_DEMO = false;
 
@@ -475,7 +476,7 @@ export async function POST(request: Request) {
       model: "claude-opus-4-6",
       max_tokens: 8096,
       system: dynamicSystemPrompt,
-      messages,
+      messages: messages as Anthropic.Messages.MessageParam[],
     });
 
     const readableStream = new ReadableStream({

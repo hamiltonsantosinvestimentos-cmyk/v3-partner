@@ -29,7 +29,7 @@ export async function GET(
   if (error || !data) return NextResponse.json({ error: "Produto não encontrado" }, { status: 404 });
 
   // Increment views async (don't await — coluna pode não existir ainda)
-  svc.from("marketplace_products").update({ views: ((data as { views?: number }).views ?? 0) + 1 }).eq("id", id).then(() => {}).catch(() => {});
+  svc.from("marketplace_products").update({ views: ((data as { views?: number }).views ?? 0) + 1 }).eq("id", id).then(() => {}, () => {});
 
   return NextResponse.json({ product: data });
 }

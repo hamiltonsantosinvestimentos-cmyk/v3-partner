@@ -97,7 +97,7 @@ export async function POST(req: NextRequest) {
       }),
       idempotencyKey: randomUUID(),
     });
-    if (res.ok) coraData = await res.json();
+    if (res.ok) coraData = await res.json() as typeof coraData;
   } catch (e) {
     console.error("Erro Cora:", e);
   }

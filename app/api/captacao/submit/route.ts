@@ -101,7 +101,7 @@ export async function POST(req: NextRequest) {
     etapa:                    "prospect",
     created_by:               link.partner_id,
     crm_lead_id:              (lead as { id: string }).id,
-  }).then(() => {}).catch(() => {}); // fire-and-forget, não bloqueia resposta
+  }).then(() => {}, () => {}); // fire-and-forget, não bloqueia resposta
 
   return NextResponse.json({ ok: true, code: lead.code });
 }

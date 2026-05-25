@@ -41,7 +41,7 @@ export async function GET() {
   if (error) {
     const { data: partnersFallback } = await svc()
       .from("profiles")
-      .select("id, full_name, email, role, created_at, is_active")
+      .select("id, full_name, email, role, created_at, is_active, trial_expires_at")
       .in("role", ["PARTNER", "PARTNER_PRO"])
       .order("created_at", { ascending: false });
     finalPartners = partnersFallback;
@@ -221,7 +221,7 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: `Erro Cora: ${errData.message ?? coraRes.status}` }, { status: 502 });
     }
 
-    coraData = await coraRes.json();
+    coraData = await coraRes.json() as typeof coraData;
 
     await svc().from("partner_subscriptions").insert({
       partner_id:      partnerId,

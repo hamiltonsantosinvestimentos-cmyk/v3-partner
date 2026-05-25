@@ -18,7 +18,8 @@ export async function POST(req: NextRequest) {
     const { createClient } = await import("@/lib/supabase/server");
     const supabase = await createClient();
 
-    const { error: dbError } = await supabase
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error: dbError } = await (supabase as any)
       .from("comunidade_prospects")
       .insert({
         codigo,
