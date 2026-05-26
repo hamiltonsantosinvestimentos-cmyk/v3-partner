@@ -32,6 +32,17 @@ interface Proposal {
   metadata?: Record<string, unknown>;
   instituicao_encaminhada?: string | null;
   instituicao_feedback?: { instituicao: string; status: string; observacao: string; updated_at: string }[] | null;
+  level1_notes?: string | null;
+  level2_notes?: string | null;
+  level3_notes?: string | null;
+  level1_at?: string | null;
+  level2_at?: string | null;
+  level3_at?: string | null;
+  pending_reason?: string | null;
+  pending_responsible?: string | null;
+  pending_at?: string | null;
+  pending_resolved_at?: string | null;
+  pending_resolved_by?: string | null;
 }
 
 interface CreditDeskClientProps {
@@ -108,6 +119,17 @@ export function CreditDeskClient({ proposals: initial, level, currentUser }: Cre
           metadata: p.metadata as Record<string, unknown> | undefined,
           instituicao_encaminhada: p.instituicao_encaminhada as string | null | undefined,
           instituicao_feedback: p.instituicao_feedback as { instituicao: string; status: string; observacao: string; updated_at: string }[] | null | undefined,
+          level1_notes: p.level1_notes as string | null | undefined,
+          level2_notes: p.level2_notes as string | null | undefined,
+          level3_notes: p.level3_notes as string | null | undefined,
+          level1_at: p.level1_at as string | null | undefined,
+          level2_at: p.level2_at as string | null | undefined,
+          level3_at: p.level3_at as string | null | undefined,
+          pending_reason: p.pending_reason as string | null | undefined,
+          pending_responsible: p.pending_responsible as string | null | undefined,
+          pending_at: p.pending_at as string | null | undefined,
+          pending_resolved_at: p.pending_resolved_at as string | null | undefined,
+          pending_resolved_by: p.pending_resolved_by as string | null | undefined,
         })));
       })
       .catch(err => console.error("[credit-proposals load]", err));

@@ -29,6 +29,17 @@ interface Proposal {
   imovel_endereco?: string; imovel_valor_medio?: number;
   imovel_cidade?: string; imovel_estado?: string;
   metadata?: Record<string, unknown>;
+  level1_notes?: string | null;
+  level2_notes?: string | null;
+  level3_notes?: string | null;
+  level1_at?: string | null;
+  level2_at?: string | null;
+  level3_at?: string | null;
+  pending_reason?: string | null;
+  pending_responsible?: string | null;
+  pending_at?: string | null;
+  pending_resolved_at?: string | null;
+  pending_resolved_by?: string | null;
 }
 
 interface CreditDeskLevel1ClientProps {
@@ -85,6 +96,17 @@ export function CreditDeskLevel1Client({ proposals: initial, currentUser }: Cred
             comissao_mandato_perc: p.comissao_mandato_perc as number | undefined,
             comissao_instituicao_perc: p.comissao_instituicao_perc as number | undefined,
             metadata: meta ?? undefined,
+            level1_notes: p.level1_notes as string | null | undefined,
+            level2_notes: p.level2_notes as string | null | undefined,
+            level3_notes: p.level3_notes as string | null | undefined,
+            level1_at: p.level1_at as string | null | undefined,
+            level2_at: p.level2_at as string | null | undefined,
+            level3_at: p.level3_at as string | null | undefined,
+            pending_reason: p.pending_reason as string | null | undefined,
+            pending_responsible: p.pending_responsible as string | null | undefined,
+            pending_at: p.pending_at as string | null | undefined,
+            pending_resolved_at: p.pending_resolved_at as string | null | undefined,
+            pending_resolved_by: p.pending_resolved_by as string | null | undefined,
           };
         }));
       })
