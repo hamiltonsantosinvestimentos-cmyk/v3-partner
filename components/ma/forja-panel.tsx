@@ -103,7 +103,11 @@ export function ForjaPanel({ deal, dealId, savedResult, onSaved, onReportSaved }
     setDocsLoading(true);
     fetch(`/api/ma/documents?deal_id=${dealId}`)
       .then((r) => r.json())
-      .then((data) => setDocs(Array.isArray(data.documents) ? data.documents : []))
+      .then((data) => {
+        const loaded = Array.isArray(data.documents) ? data.documents : [];
+        setDocs(loaded);
+        if (loaded.length > 0) setShowDocs(true);
+      })
       .catch(() => setDocs([]))
       .finally(() => setDocsLoading(false));
   }, [dealId]);

@@ -56,6 +56,16 @@ function sanitizeDeal(deal: Record<string, unknown>): Record<string, unknown> {
     "deal_value", "metodologia_valuation", "multiplo_ebitda", "valor_por_m2",
     "taxa_ocupacao", "numero_locatarios", "ancoras", "contratos_vigencia",
     "garantias", "prazo_operacao", "descricao_ativo", "contexto_forja",
+    // Campos do formulário de 6 etapas (novo-deal-form) — anteriormente stripados
+    "financeiro",        // { receita, ebitda, lucro } por ano
+    "juridico",          // { tem_processos, detalhes_processos, tem_pendencias, licencas }
+    "tipo_participante", // "Vendedor" | "Comprador" | "Intermediario"
+    "tipoOperacao",      // tipo de operação M&A
+    "founding_year",     // ano de fundação
+    "produtos_servicos", // descrição de produtos/serviços
+    "mercado_atendido",  // mercado alvo
+    "numero_funcionarios", "modelo_negocio", "diferencial_competitivo",
+    "razao_social", "nome_fantasia", "setor_atuacao",
   ]);
 
   function stripEmpty(obj: unknown): unknown {
