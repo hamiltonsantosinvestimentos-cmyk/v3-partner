@@ -1819,7 +1819,7 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         code: p.code, title: p.title, client_name: p.client_name,
-        client_cpf_cnpj: (p as Record<string, unknown>).cpf_cnpj ?? null,
+        client_cpf_cnpj: (p as unknown as Record<string, unknown>).cpf_cnpj ?? null,
         credit_line: p.credit_line, requested_value: p.requested_value,
         current_level: npLevel,
         partner_id: npPartnerId || null,
