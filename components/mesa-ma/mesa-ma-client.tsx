@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import {
-  Building2, Plus, X, ChevronRight,
+  Building2, Plus, X, ChevronRight, ChevronLeft,
   BarChart2, Mail, Circle, FileText,
   Paperclip, Trash2, ExternalLink, Upload, Copy, CheckCheck,
   MessageSquare, Send, Zap, FileImage, FileSignature,
@@ -90,6 +90,17 @@ const PIPELINE_TO_DB: Record<string, string> = {
   negociacao:    "NEGOTIATION",
   due_diligence: "DUE_DILIGENCE",
   aprovacao:     "CLOSING",
+};
+
+// Probabilidade padrão por fase — atualizada automaticamente ao mover
+const STAGE_DEFAULT_PROBABILITY: Record<string, number> = {
+  prospeccao:    10,
+  qualificacao:  20,
+  viabilidade:   35,
+  estruturacao:  50,
+  negociacao:    65,
+  due_diligence: 75,
+  aprovacao:     90,
 };
 const ROLES_MA = ["Analista Jr.", "Analista", "Analista Sênior", "Especialista M&A", "Gestor"];
 
@@ -383,21 +394,26 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
   const avgProb = cards.length ? Math.round(cards.reduce((a, c) => a + c.probability, 0) / cards.length) : 0;
   const lastStageId = maStages[maStages.length - 1]?.id ?? "closing";
 
-  const handleAdvanceStage = (card: MaCard) => {
-    const next = nextStage(card.stage, maStages);
-    if (!next) return;
-    setCards(prev => prev.map(c => c.id === card.id ? { ...c, stage: next } : c));
-    setSelectedCard(prev => prev ? { ...prev, stage: next } : null);
+  const handleMoveStage = (card: MaCard, targetStageId: string) => {
+    if (targetStageId === card.stage) return;
+    const newProb = STAGE_DEFAULT_PROBABILITY[targetStageId] ?? card.probability;
+    setCards(prev => prev.map(c => c.id === card.id ? { ...c, stage: targetStageId, probability: newProb } : c));
+    setSelectedCard(prev => prev ? { ...prev, stage: targetStageId, probability: newProb } : null);
 
-    // Persiste no banco
-    const dbStage = PIPELINE_TO_DB[next];
+    const dbStage = PIPELINE_TO_DB[targetStageId];
     if (dbStage) {
       fetch("/api/ma-deals", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: card.id, stage: dbStage }),
+        body: JSON.stringify({ id: card.id, stage: dbStage, probability_percent: newProb }),
       }).catch(() => {});
     }
+  };
+
+  const handleAdvanceStage = (card: MaCard) => {
+    const next = nextStage(card.stage, maStages);
+    if (!next) return;
+    handleMoveStage(card, next);
   };
 
   const handleDeleteCard = async (card: MaCard) => {
@@ -1577,20 +1593,47 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
                   </div>
                 </div>
 
-                {nextStageData && (
-                  <button
-                    onClick={() => handleAdvanceStage(selectedCard)}
-                    className="w-full flex items-center justify-center gap-2 rounded-lg bg-[#C9A84C]/15 border border-[#C9A84C]/40 text-[#C9A84C] text-sm font-medium py-2.5 hover:bg-[#C9A84C]/25 transition-colors"
+                {/* ── Mover Fase ── */}
+                <div className="rounded-xl border border-[#122036] bg-[#0F1E35] p-3 space-y-2.5">
+                  <p className="text-[10px] font-bold tracking-widest uppercase text-[#7A8FA8]">Mover Fase</p>
+                  <select
+                    value={selectedCard.stage}
+                    onChange={e => handleMoveStage(selectedCard, e.target.value)}
+                    className="w-full rounded-lg border border-[#122036] bg-[#091221] text-[#E8EDF5] text-sm px-3 py-2.5 focus:outline-none focus:border-[#C9A84C] transition-colors"
                   >
-                    Avançar para {nextStageData.label}
-                    <ChevronRight size={16} />
-                  </button>
-                )}
-                {!nextStageData && (
-                  <div className="text-center py-2">
-                    <span className="text-xs text-emerald-400">Operação na etapa final — {maStages[maStages.length - 1]?.label}</span>
+                    {maStages.map(s => (
+                      <option key={s.id} value={s.id}>{s.label}</option>
+                    ))}
+                  </select>
+                  <div className="flex gap-2">
+                    {(() => {
+                      const idx = maStages.findIndex(s => s.id === selectedCard.stage);
+                      const prev = idx > 0 ? maStages[idx - 1] : null;
+                      const next = idx < maStages.length - 1 ? maStages[idx + 1] : null;
+                      return (
+                        <>
+                          <button
+                            onClick={() => prev && handleMoveStage(selectedCard, prev.id)}
+                            disabled={!prev}
+                            className="flex-1 flex items-center justify-center gap-1.5 rounded-lg border border-[#122036] text-[#7A8FA8] text-xs py-2 hover:text-[#E8EDF5] hover:border-[#243A66] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                          >
+                            <ChevronLeft size={12} /> Voltar
+                          </button>
+                          <button
+                            onClick={() => next && handleMoveStage(selectedCard, next.id)}
+                            disabled={!next}
+                            className="flex-1 flex items-center justify-center gap-1.5 rounded-lg bg-[#C9A84C]/15 border border-[#C9A84C]/40 text-[#C9A84C] text-xs py-2 hover:bg-[#C9A84C]/25 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                          >
+                            Avançar <ChevronRight size={12} />
+                          </button>
+                        </>
+                      );
+                    })()}
                   </div>
-                )}
+                  <p className="text-[9px] text-[#5A7490]">
+                    Probabilidade atualiza automaticamente ao mover fase · valor atual: <span style={{ color: probColor(selectedCard.probability) }}>{selectedCard.probability}%</span>
+                  </p>
+                </div>
 
                 {/* Transferir deal */}
                 {["ADMIN", "GESTAO"].includes(userRole) && (
