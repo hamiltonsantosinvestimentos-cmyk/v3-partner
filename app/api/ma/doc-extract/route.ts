@@ -205,6 +205,43 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "deal_id e doc_id são obrigatórios" }, { status: 400 });
   }
 
+  // Guard anti-duplicata: devolve extração existente sem chamar Claude novamente
+  const { data: existing } = await svc
+    .from("ma_document_extractions")
+    .select("id, status, confiabilidade, dados_extraidos, campos_baixa_confianca, pendencias, tipo_documento, resumo")
+    .eq("deal_id", deal_id)
+    .eq("doc_id", doc_id)
+    .neq("status", "error")
+    .maybeSingle();
+
+  if (existing) {
+    if (existing.status === "confirmed" || existing.status === "processing") {
+      return NextResponse.json({
+        error: existing.status === "confirmed"
+          ? "Documento já confirmado — dados persistidos no deal."
+          : "Extração em andamento — aguarde antes de tentar novamente.",
+        duplicate: true,
+        extraction_id: existing.id,
+      }, { status: 409 });
+    }
+    // done | needs_review → retorna extração existente sem custo de IA
+    return NextResponse.json({
+      ok:                    true,
+      extraction_id:         existing.id as string,
+      tipo_documento:        (existing.tipo_documento as string) ?? "",
+      dados_extraidos:       (existing.dados_extraidos as Record<string, unknown>) ?? {},
+      confiabilidade:        (existing.confiabilidade as number) ?? 0,
+      campos_baixa_confianca: Array.isArray(existing.campos_baixa_confianca)
+        ? (existing.campos_baixa_confianca as unknown[]).length : 0,
+      pendencias:            Array.isArray(existing.pendencias)
+        ? (existing.pendencias as unknown[]).length : 0,
+      requer_revisao_humana: existing.status === "needs_review",
+      status:                existing.status as string,
+      resumo:                (existing.resumo as string) ?? "",
+      cached:                true,
+    });
+  }
+
   // Marca extração como em processamento (evita corrida se chamado em paralelo)
   const { data: extraction, error: insertErr } = await svc
     .from("ma_document_extractions")

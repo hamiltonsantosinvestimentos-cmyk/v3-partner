@@ -41,6 +41,13 @@ type DocEntry = {
   url?: string | null;
 };
 
+type ExtractionStatus = {
+  id: string;
+  status: string;
+  confiabilidade: number;
+  tipo_documento: string;
+};
+
 // ─── Config ───────────────────────────────────────────────────────────────────
 
 const REC_CONFIG = {
@@ -91,22 +98,35 @@ export function ForjaPanel({ deal, dealId, savedResult, onSaved, onReportSaved }
   const [docsLoading, setDocsLoading]   = useState(false);
   const [selectedDocIds, setSelectedDocIds] = useState<string[]>([]);
   const [showDocs, setShowDocs]         = useState(false);
+  const [extractions, setExtractions]   = useState<Record<string, ExtractionStatus>>({});
 
   // OCR extraction + modal
   const [extractingDocId, setExtractingDocId]     = useState<string | null>(null);
   const [extractionResult, setExtractionResult]   = useState<ExtractionSummary | null>(null);
   const [extractError, setExtractError]           = useState<Record<string, string>>({});
 
-  // Carrega documentos do deal
+  // Carrega documentos e extrações existentes em paralelo
   useEffect(() => {
     if (!dealId) return;
     setDocsLoading(true);
-    fetch(`/api/ma/documents?deal_id=${dealId}`)
-      .then((r) => r.json())
-      .then((data) => {
-        const loaded = Array.isArray(data.documents) ? data.documents : [];
+    Promise.all([
+      fetch(`/api/ma/documents?deal_id=${dealId}`).then((r) => r.json()),
+      fetch(`/api/ma/doc-extract?deal_id=${dealId}`).then((r) => r.json()).catch(() => ({ extractions: [] })),
+    ])
+      .then(([docsData, extData]) => {
+        const loaded = Array.isArray(docsData.documents) ? docsData.documents : [];
         setDocs(loaded);
         if (loaded.length > 0) setShowDocs(true);
+        const map: Record<string, ExtractionStatus> = {};
+        for (const ext of (extData.extractions ?? []) as Array<Record<string, unknown>>) {
+          map[ext.doc_id as string] = {
+            id:             ext.id as string,
+            status:         ext.status as string,
+            confiabilidade: (ext.confiabilidade as number) ?? 0,
+            tipo_documento: (ext.tipo_documento as string) ?? "",
+          };
+        }
+        setExtractions(map);
       })
       .catch(() => setDocs([]))
       .finally(() => setDocsLoading(false));
@@ -139,7 +159,7 @@ export function ForjaPanel({ deal, dealId, savedResult, onSaved, onReportSaved }
       };
       if (!res.ok || !data.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
 
-      // Busca detalhes completos para o modal
+      // Busca detalhes completos e atualiza mapa de status por documento
       const detailRes = await fetch(`/api/ma/doc-extract?deal_id=${dealId}`);
       const detailData = await detailRes.json() as {
         extractions?: Array<{
@@ -151,6 +171,13 @@ export function ForjaPanel({ deal, dealId, savedResult, onSaved, onReportSaved }
           status: string; resumo: string;
         }>;
       };
+      // Atualiza badges de status por documento
+      const newMap: Record<string, ExtractionStatus> = {};
+      for (const e of (detailData.extractions ?? [])) {
+        newMap[e.doc_id] = { id: e.id, status: e.status, confiabilidade: e.confiabilidade, tipo_documento: e.tipo_documento ?? "" };
+      }
+      setExtractions(newMap);
+
       const ext = detailData.extractions?.find((e) => e.id === data.extraction_id);
       if (ext) {
         setExtractionResult({
@@ -584,18 +611,63 @@ export function ForjaPanel({ deal, dealId, savedResult, onSaved, onReportSaved }
                               {new Date(doc.uploaded_at).toLocaleDateString("pt-BR")}
                             </span>
                           </button>
-                          <button
-                            onClick={() => handleExtractDoc(doc)}
-                            disabled={!!extractingDocId}
-                            title="Extrair dados via OCR e persistir no deal"
-                            className="flex items-center gap-1 px-2 py-1 rounded-md text-[9px] font-bold uppercase tracking-wide border border-[#C9A84C]/30 text-[#C9A84C] hover:bg-[#C9A84C]/10 disabled:opacity-40 disabled:cursor-not-allowed flex-shrink-0 transition-colors"
-                          >
-                            {extractingDocId === doc.doc_id
-                              ? <Loader2 className="w-2.5 h-2.5 animate-spin" />
-                              : <DatabaseZap className="w-2.5 h-2.5" />
-                            }
-                            {extractingDocId === doc.doc_id ? "Extraindo..." : "Persistir"}
-                          </button>
+                          <div className="flex items-center gap-1.5 flex-shrink-0">
+                            {extractions[doc.doc_id] && (
+                              <span className={`text-[8px] font-bold uppercase px-1.5 py-0.5 rounded border flex-shrink-0 ${
+                                extractions[doc.doc_id].status === "confirmed"
+                                  ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
+                                  : extractions[doc.doc_id].status === "processing"
+                                  ? "bg-[#243A66]/50 border-[#243A66] text-[#9BAFC5] animate-pulse"
+                                  : "bg-amber-500/10 border-amber-500/30 text-amber-400"
+                              }`}>
+                                {extractions[doc.doc_id].status === "confirmed"
+                                  ? `OK ${extractions[doc.doc_id].confiabilidade}%`
+                                  : extractions[doc.doc_id].status === "processing"
+                                  ? "Processando"
+                                  : `${extractions[doc.doc_id].confiabilidade}%`}
+                              </span>
+                            )}
+                            <button
+                              onClick={() => handleExtractDoc(doc)}
+                              disabled={
+                                !!extractingDocId ||
+                                extractions[doc.doc_id]?.status === "confirmed" ||
+                                extractions[doc.doc_id]?.status === "processing"
+                              }
+                              title={
+                                extractions[doc.doc_id]?.status === "confirmed"
+                                  ? "Dados já confirmados e persistidos no deal"
+                                  : extractions[doc.doc_id]?.status === "processing"
+                                  ? "Extração em andamento — aguarde"
+                                  : extractions[doc.doc_id]?.status === "done" || extractions[doc.doc_id]?.status === "needs_review"
+                                  ? "Abrir resultado da extração para confirmar"
+                                  : "Extrair dados via OCR e persistir no deal"
+                              }
+                              className={`flex items-center gap-1 px-2 py-1 rounded-md text-[9px] font-bold uppercase tracking-wide border flex-shrink-0 transition-colors ${
+                                extractions[doc.doc_id]?.status === "confirmed"
+                                  ? "border-emerald-500/20 text-emerald-400/50 bg-emerald-500/5 cursor-not-allowed"
+                                  : extractions[doc.doc_id]?.status === "processing"
+                                  ? "border-[#243A66] text-[#9BAFC5]/50 cursor-not-allowed"
+                                  : extractions[doc.doc_id]?.status === "done" || extractions[doc.doc_id]?.status === "needs_review"
+                                  ? "border-amber-500/30 text-amber-400 hover:bg-amber-500/10 disabled:opacity-40 disabled:cursor-not-allowed"
+                                  : "border-[#C9A84C]/30 text-[#C9A84C] hover:bg-[#C9A84C]/10 disabled:opacity-40 disabled:cursor-not-allowed"
+                              }`}
+                            >
+                              {extractingDocId === doc.doc_id
+                                ? <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                                : extractions[doc.doc_id]?.status === "confirmed"
+                                ? <CheckCheck className="w-2.5 h-2.5" />
+                                : <DatabaseZap className="w-2.5 h-2.5" />
+                              }
+                              {extractingDocId === doc.doc_id
+                                ? "Extraindo..."
+                                : extractions[doc.doc_id]?.status === "confirmed"
+                                ? "Confirmado"
+                                : extractions[doc.doc_id]?.status === "done" || extractions[doc.doc_id]?.status === "needs_review"
+                                ? "Revisar"
+                                : "Persistir"}
+                            </button>
+                          </div>
                         </div>
                         {extractError[doc.doc_id] && (
                           <p className="text-[10px] text-red-400 pl-8 flex items-center gap-1">
