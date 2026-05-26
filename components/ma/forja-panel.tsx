@@ -7,9 +7,10 @@ import { Badge } from "@/components/ui/badge";
 import {
   CheckCircle, AlertTriangle, XCircle, Zap, ChevronDown, ChevronUp,
   FileImage, Loader2, FileText, CheckSquare, Square, ShieldCheck,
-  Download, Send, CheckCheck,
+  Download, Send, CheckCheck, DatabaseZap,
 } from "lucide-react";
 import Link from "next/link";
+import { ConfirmacaoExtracaoModal, type ExtractionSummary } from "@/components/ma/ConfirmacaoExtracaoModal";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -91,6 +92,11 @@ export function ForjaPanel({ deal, dealId, savedResult, onSaved, onReportSaved }
   const [selectedDocIds, setSelectedDocIds] = useState<string[]>([]);
   const [showDocs, setShowDocs]         = useState(false);
 
+  // OCR extraction + modal
+  const [extractingDocId, setExtractingDocId]     = useState<string | null>(null);
+  const [extractionResult, setExtractionResult]   = useState<ExtractionSummary | null>(null);
+  const [extractError, setExtractError]           = useState<Record<string, string>>({});
+
   // Carrega documentos do deal
   useEffect(() => {
     if (!dealId) return;
@@ -106,6 +112,62 @@ export function ForjaPanel({ deal, dealId, savedResult, onSaved, onReportSaved }
     setSelectedDocIds((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
     );
+
+  const handleExtractDoc = async (doc: DocEntry) => {
+    setExtractingDocId(doc.doc_id);
+    setExtractError((prev) => { const n = { ...prev }; delete n[doc.doc_id]; return n; });
+    try {
+      const res = await fetch("/api/ma/doc-extract", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ deal_id: dealId, doc_id: doc.doc_id }),
+      });
+      const data = await res.json() as {
+        ok?: boolean; error?: string;
+        extraction_id?: string; tipo_documento?: string;
+        dados_extraidos?: Record<string, unknown>;
+        confiabilidade?: number;
+        campos_baixa_confianca?: number;
+        pendencias?: number;
+        requer_revisao_humana?: boolean;
+        status?: string;
+        resumo?: string;
+      };
+      if (!res.ok || !data.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
+
+      // Busca detalhes completos para o modal
+      const detailRes = await fetch(`/api/ma/doc-extract?deal_id=${dealId}`);
+      const detailData = await detailRes.json() as {
+        extractions?: Array<{
+          id: string; doc_id: string; doc_name: string;
+          tipo_documento: string; confiabilidade: number;
+          dados_extraidos: Record<string, unknown>;
+          campos_baixa_confianca: Array<{ campo: string; confianca: number; evidencia: string }>;
+          pendencias: string[];
+          status: string; resumo: string;
+        }>;
+      };
+      const ext = detailData.extractions?.find((e) => e.id === data.extraction_id);
+      if (ext) {
+        setExtractionResult({
+          extraction_id:          ext.id,
+          doc_name:               ext.doc_name,
+          tipo_documento:         ext.tipo_documento,
+          confiabilidade:         ext.confiabilidade,
+          dados_extraidos:        ext.dados_extraidos ?? {},
+          campos_baixa_confianca: ext.campos_baixa_confianca ?? [],
+          pendencias:             ext.pendencias ?? [],
+          status:                 ext.status,
+          resumo:                 ext.resumo ?? "",
+        });
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setExtractError((prev) => ({ ...prev, [doc.doc_id]: msg }));
+    } finally {
+      setExtractingDocId(null);
+    }
+  };
 
   const handleValidate = async () => {
     setLoading(true);
@@ -498,25 +560,45 @@ export function ForjaPanel({ deal, dealId, savedResult, onSaved, onReportSaved }
                   {docs.map((doc) => {
                     const selected = selectedDocIds.includes(doc.doc_id);
                     return (
-                      <button
-                        key={doc.doc_id}
-                        onClick={() => toggleDoc(doc.doc_id)}
-                        className={`w-full flex items-center gap-3 p-2.5 rounded-lg border transition-colors text-left ${
+                      <div key={doc.doc_id} className="space-y-1">
+                        <div className={`w-full flex items-center gap-3 p-2.5 rounded-lg border transition-colors ${
                           selected
                             ? "border-[#C9A84C]/40 bg-[#C9A84C]/5"
-                            : "border-[#243A66] bg-[#111F35] hover:border-[#243A66]/80"
-                        }`}
-                      >
-                        {selected
-                          ? <CheckSquare className="w-3.5 h-3.5 text-[#C9A84C] flex-shrink-0" />
-                          : <Square className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-                        }
-                        <FileText className="w-3 h-3 text-muted-foreground flex-shrink-0" />
-                        <span className="text-xs text-[#F0ECE4] flex-1 truncate">{doc.file_name}</span>
-                        <span className="text-[10px] text-muted-foreground flex-shrink-0">
-                          {new Date(doc.uploaded_at).toLocaleDateString("pt-BR")}
-                        </span>
-                      </button>
+                            : "border-[#243A66] bg-[#111F35]"
+                        }`}>
+                          <button
+                            onClick={() => toggleDoc(doc.doc_id)}
+                            className="flex items-center gap-3 flex-1 min-w-0 text-left"
+                          >
+                            {selected
+                              ? <CheckSquare className="w-3.5 h-3.5 text-[#C9A84C] flex-shrink-0" />
+                              : <Square className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                            }
+                            <FileText className="w-3 h-3 text-muted-foreground flex-shrink-0" />
+                            <span className="text-xs text-[#F0ECE4] flex-1 truncate">{doc.file_name}</span>
+                            <span className="text-[10px] text-muted-foreground flex-shrink-0">
+                              {new Date(doc.uploaded_at).toLocaleDateString("pt-BR")}
+                            </span>
+                          </button>
+                          <button
+                            onClick={() => handleExtractDoc(doc)}
+                            disabled={!!extractingDocId}
+                            title="Extrair dados via OCR e persistir no deal"
+                            className="flex items-center gap-1 px-2 py-1 rounded-md text-[9px] font-bold uppercase tracking-wide border border-[#C9A84C]/30 text-[#C9A84C] hover:bg-[#C9A84C]/10 disabled:opacity-40 disabled:cursor-not-allowed flex-shrink-0 transition-colors"
+                          >
+                            {extractingDocId === doc.doc_id
+                              ? <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                              : <DatabaseZap className="w-2.5 h-2.5" />
+                            }
+                            {extractingDocId === doc.doc_id ? "Extraindo..." : "Persistir"}
+                          </button>
+                        </div>
+                        {extractError[doc.doc_id] && (
+                          <p className="text-[10px] text-red-400 pl-8 flex items-center gap-1">
+                            <XCircle className="w-3 h-3" />{extractError[doc.doc_id]}
+                          </p>
+                        )}
+                      </div>
                     );
                   })}
                   {docs.length > 0 && (
@@ -663,6 +745,20 @@ export function ForjaPanel({ deal, dealId, savedResult, onSaved, onReportSaved }
             ))}
           </CardContent>
         </Card>
+      )}
+
+      {/* Modal de confirmação de extração OCR */}
+      {extractionResult && (
+        <ConfirmacaoExtracaoModal
+          dealId={dealId}
+          extraction={extractionResult}
+          currentAssetData={(deal?.asset_data as Record<string, unknown> | undefined) ?? {}}
+          onConfirmed={() => {
+            setExtractionResult(null);
+            if (onSaved) onSaved(result!);
+          }}
+          onClose={() => setExtractionResult(null)}
+        />
       )}
 
       {/* Indicador fase 2 */}

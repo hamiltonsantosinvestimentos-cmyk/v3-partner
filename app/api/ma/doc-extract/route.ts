@@ -125,6 +125,45 @@ Retorne APENAS JSON válido:
   "requer_revisao_humana": <true se confiabilidade_final < 70 ou flags críticas>
 }`;
 
+// ─── GET: lista extrações de um deal ─────────────────────────────────────────
+
+export async function GET(req: NextRequest) {
+  const svc = serviceClient();
+
+  const cronSecret = req.headers.get("x-cron-secret");
+  const isCronCall  = cronSecret && cronSecret === process.env.CRON_SECRET;
+
+  if (!isCronCall) {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+
+    const { data: profile } = await svc.from("profiles").select("role").eq("id", user.id).single();
+    if (!WRITE_ROLES.includes(profile?.role as typeof WRITE_ROLES[number])) {
+      return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
+    }
+  }
+
+  const { searchParams } = new URL(req.url);
+  const dealId = searchParams.get("deal_id");
+  if (!dealId) return NextResponse.json({ error: "deal_id é obrigatório" }, { status: 400 });
+
+  const { data, error } = await svc
+    .from("ma_document_extractions")
+    .select(`
+      id, doc_id, doc_name, tipo_documento, confiabilidade,
+      dados_extraidos, campos_baixa_confianca, pendencias,
+      status, resumo, confirmed_at, confirmed_by, extracted_at
+    `)
+    .eq("deal_id", dealId)
+    .in("status", ["done", "needs_review", "confirmed"])
+    .order("extracted_at", { ascending: false });
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  return NextResponse.json({ extractions: data ?? [] });
+}
+
 // ─── Route Handler ────────────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
