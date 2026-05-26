@@ -224,9 +224,9 @@ export async function POST(req: NextRequest) {
     // Com PDFs → Sonnet (necessário para leitura de documentos)
     const model = hasDocs ? "claude-sonnet-4-6" : "claude-haiku-4-5-20251001";
     // Fase 1: análise de precisão cirúrgica
-    // Haiku sem docs: 3000 (validação estrutural)
-    // Sonnet com docs: 6000 (extração cirúrgica de financeiro, discrepâncias, insights)
-    const maxTokensPhase1 = hasDocs ? 6000 : 3000;
+    // Haiku sem docs: 5000 (deals com muitos campos)
+    // Sonnet com docs: 12000 (extração financeira completa com PDFs)
+    const maxTokensPhase1 = hasDocs ? 12000 : 5000;
 
     const message = await client.messages.create({
       model,
