@@ -18,6 +18,7 @@ import {
   type OperationStatus, type TicketPriority,
 } from "@/lib/constants";
 import { PropostaDetailModal, PIPELINE_STAGES, type ProposalFull, type MesaComment } from "@/components/mesa-credito/proposta-detail-modal";
+import { NovaPropostaModal } from "@/components/mesa-credito/nova-proposta-modal";
 
 // ─── Tipos ─────────────────────────────────────────────────────────────────
 interface Ticket {
@@ -1434,6 +1435,15 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
   }, []);
 
   const [novoTicket, setNovoTicket] = useState(false);
+  // ─── Nova Proposta ───────────────────────────────────────────────────────
+  const [npSelector, setNpSelector] = useState(false);
+  const [npOpen, setNpOpen] = useState(false);
+  const [npLevel, setNpLevel] = useState<"NIVEL_1" | "NIVEL_2" | "NIVEL_3">("NIVEL_1");
+  const [npPartnerId, setNpPartnerId] = useState("");
+  const [npPartnerName, setNpPartnerName] = useState("");
+  const [npPartners, setNpPartners] = useState<{ id: string; full_name: string }[]>([]);
+  const [npPartnersLoading, setNpPartnersLoading] = useState(false);
+  const [npPartnerSearch, setNpPartnerSearch] = useState("");
   // ─── Estado de pendência ─────────────────────────────────────────────────
   const [pendingTarget, setPendingTarget] = useState<Ticket | null>(null);
   const [resolveTarget, setResolveTarget] = useState<Ticket | null>(null);
@@ -1780,6 +1790,53 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
     EXPIRADO:               { label: "Expirado",               color: "text-gray-400",    bg: "bg-gray-500/10" },
   };
 
+  function openNpSelector() {
+    setNpPartnerId(""); setNpPartnerName(""); setNpPartnerSearch(""); setNpLevel("NIVEL_1");
+    setNpPartnersLoading(true);
+    fetch("/api/partners")
+      .then(r => r.json())
+      .then(d => setNpPartners(d.partners ?? []))
+      .catch(() => {})
+      .finally(() => setNpPartnersLoading(false));
+    setNpSelector(true);
+  }
+
+  const handleNewProposal = useCallback(async (proposal: Record<string, unknown>): Promise<string> => {
+    const p = proposal as unknown as ProposalCard;
+    const raw = proposal as Record<string, unknown>;
+    const metadata = (raw.metadata as Record<string, unknown>) ?? {
+      client_type: raw.client_type, email: raw.email, telefone: raw.telefone,
+      prazo: raw.prazo, finalidade: raw.finalidade,
+      restricao_cliente: raw.restricao_cliente, imoveis: raw.imoveis,
+    };
+    const res = await fetch("/api/credit-proposals", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        code: p.code, title: p.title, client_name: p.client_name,
+        client_cpf_cnpj: (p as Record<string, unknown>).cpf_cnpj ?? null,
+        credit_line: p.credit_line, requested_value: p.requested_value,
+        current_level: npLevel,
+        partner_id: npPartnerId || null,
+        metadata,
+      }),
+    });
+    const json = await res.json();
+    if (json.ok && json.proposal) {
+      setProposals(prev => [{
+        ...p, id: json.proposal.id,
+        partner_id: npPartnerId || json.proposal.partner_id,
+        partner_name: npPartnerName || json.proposal.partner_name,
+        current_level: npLevel,
+        metadata: json.proposal.metadata ?? metadata,
+      }, ...prev]);
+      return json.proposal.id as string;
+    }
+    if (typeof json.error === "string") throw new Error(json.error);
+    throw new Error("Erro ao salvar proposta. Tente novamente.");
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [npLevel, npPartnerId, npPartnerName]);
+
   // ─── Métricas ─────────────────────────────────────────────────────────────
   const openCount = tickets.filter((t) => ["PENDING", "IN_REVIEW"].includes(t.status)).length;
   const urgentCount = tickets.filter((t) => t.priority === "URGENT").length;
@@ -1893,6 +1950,9 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
               <Settings className="w-4 h-4" />
             </button>
           )}
+          <Button size="sm" variant="outline" onClick={openNpSelector}>
+            <Plus className="w-4 h-4 mr-1.5" /> Nova Proposta
+          </Button>
           <Button size="sm" onClick={() => setNovoTicket(true)}>
             <Plus className="w-4 h-4 mr-1.5" /> Novo Ticket
           </Button>
@@ -2708,6 +2768,77 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
           </div>
         </div>
       )}
+
+      {/* ── Seletor Nova Proposta ── */}
+      {npSelector && (
+        <div className="fixed inset-0 z-[70] flex items-start justify-center p-4 pt-10 bg-black/70 backdrop-blur-sm">
+          <div className="bg-card border border-border rounded-2xl w-full max-w-sm">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+              <div className="flex items-center gap-2">
+                <FileText className="w-4 h-4 text-[#C9A84C]" />
+                <h3 className="text-sm font-bold text-white">Nova Proposta</h3>
+              </div>
+              <button onClick={() => setNpSelector(false)} className="w-7 h-7 rounded-lg hover:bg-secondary flex items-center justify-center text-muted-foreground hover:text-white transition-colors">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="px-5 py-5 space-y-4">
+              <div>
+                <label className="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wide mb-2">Nível</label>
+                <div className="flex gap-2">
+                  {(["NIVEL_1", "NIVEL_2", "NIVEL_3"] as const).map((l) => (
+                    <button key={l} onClick={() => setNpLevel(l)}
+                      className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-colors border ${npLevel === l ? "bg-[#C9A84C]/15 text-[#E8C97A] border-[#C9A84C]/40" : "border-border text-muted-foreground hover:bg-secondary"}`}>
+                      {l === "NIVEL_1" ? "Nível 1" : l === "NIVEL_2" ? "Nível 2" : "Nível 3"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wide mb-2">Partner</label>
+                <div className="relative mb-1">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                  <input
+                    value={npPartnerSearch}
+                    onChange={e => setNpPartnerSearch(e.target.value)}
+                    placeholder={npPartnerName || "Buscar partner..."}
+                    className="w-full h-8 pl-8 pr-3 text-xs bg-secondary border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
+                  />
+                </div>
+                {npPartnersLoading ? (
+                  <p className="text-xs text-muted-foreground px-1 py-2">Carregando...</p>
+                ) : (
+                  <div className="max-h-40 overflow-y-auto rounded-lg border border-border bg-secondary">
+                    {npPartners
+                      .filter(p => !npPartnerSearch || p.full_name.toLowerCase().includes(npPartnerSearch.toLowerCase()))
+                      .map(p => (
+                        <button key={p.id} onClick={() => { setNpPartnerId(p.id); setNpPartnerName(p.full_name); setNpPartnerSearch(""); }}
+                          className={`w-full text-left px-3 py-2 text-xs transition-colors hover:bg-[#C9A84C]/10 ${npPartnerId === p.id ? "text-[#E8C97A] font-semibold" : "text-foreground"}`}>
+                          {p.full_name}
+                        </button>
+                      ))}
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="px-5 py-4 border-t border-border flex gap-2 justify-end">
+              <Button size="sm" variant="outline" onClick={() => setNpSelector(false)}>Cancelar</Button>
+              <Button size="sm" disabled={!npPartnerId} onClick={() => { setNpSelector(false); setNpOpen(true); }}>
+                Continuar
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <NovaPropostaModal
+        open={npOpen}
+        onClose={() => setNpOpen(false)}
+        level={npLevel}
+        partnerName={npPartnerName}
+        partnerId={npPartnerId}
+        onSubmit={handleNewProposal}
+      />
 
       {/* ── Modal Rápido: Reprovar ── */}
       {quickAction?.type === "reprovar" && (
