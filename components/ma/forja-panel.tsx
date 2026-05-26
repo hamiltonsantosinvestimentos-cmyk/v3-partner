@@ -97,7 +97,7 @@ export function ForjaPanel({ deal, dealId, savedResult, onSaved, onReportSaved }
   const [docs, setDocs]                 = useState<DocEntry[]>([]);
   const [docsLoading, setDocsLoading]   = useState(false);
   const [selectedDocIds, setSelectedDocIds] = useState<string[]>([]);
-  const [showDocs, setShowDocs]         = useState(false);
+  const [showDocs, setShowDocs]         = useState(true);
   const [extractions, setExtractions]   = useState<Record<string, ExtractionStatus>>({});
 
   // OCR extraction + modal

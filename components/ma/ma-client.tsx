@@ -166,10 +166,10 @@ interface MaClientProps {
   userRole?: string;
 }
 
-const ADMIN_ROLES = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"];
+const INTERNAL_MA_ROLES = ["ADMIN", "GESTAO", "MESA"];
 
 export function MaClient({ deals, userId = "", userName = "", userRole = "PARTNER" }: MaClientProps) {
-  const isAdmin = ADMIN_ROLES.includes(userRole);
+  const isAdmin = INTERNAL_MA_ROLES.includes(userRole);
   const [localDeals, setLocalDeals] = useState(deals);
   const [showNewDeal, setShowNewDeal] = useState(false);
   const [showFullForm, setShowFullForm] = useState(false);
@@ -619,8 +619,8 @@ export function MaClient({ deals, userId = "", userName = "", userRole = "PARTNE
                   })()}
                 </div>
 
-                {/* FORJA — admin vê painel completo, partner vê status somente leitura */}
-                {isAdmin ? (
+                {/* FORJA — exclusivo time interno (ADMIN / GESTAO / MESA) */}
+                {isAdmin && (
                   <ForjaPanel
                     deal={{
                       id: selectedDeal.id,
@@ -656,42 +656,6 @@ export function MaClient({ deals, userId = "", userName = "", userRole = "PARTNE
                       setSelectedDeal(prev => prev ? { ...prev, asset_data: newAssetData } : null);
                     }}
                   />
-                ) : (
-                  (() => {
-                    const ad = selectedDeal.asset_data as Record<string, unknown> | null;
-                    const fs = ad?.forja_status as string | undefined;
-                    const score = ad?.forja_score as number | undefined;
-                    const validatedAt = ad?.forja_validated_at as string | undefined;
-                    const statusConfig: Record<string, { label: string; color: string; bg: string }> = {
-                      APROVADO: { label: "Aprovado", color: "text-emerald-400", bg: "bg-emerald-500/10 border-emerald-500/20" },
-                      APROVADO_COM_RESSALVAS: { label: "Aprovado com Ressalvas", color: "text-amber-400", bg: "bg-amber-500/10 border-amber-500/20" },
-                      PENDENTE: { label: "Pendente", color: "text-orange-400", bg: "bg-orange-500/10 border-orange-500/20" },
-                      BLOQUEADO: { label: "Bloqueado", color: "text-red-400", bg: "bg-red-500/10 border-red-500/20" },
-                    };
-                    const cfg = fs ? statusConfig[fs] : null;
-                    return (
-                      <div>
-                        <p className="text-xs text-[#7A8FA8] mb-2 flex items-center gap-1.5">
-                          <span className="text-[#C9A84C]">⚡</span> Validação FORJA
-                        </p>
-                        <div className={`px-3 py-2.5 rounded-lg border ${cfg ? cfg.bg : "bg-[#0F1E35] border-[#122036]"} flex items-center justify-between gap-2`}>
-                          <div>
-                            <p className={`text-xs font-semibold ${cfg ? cfg.color : "text-[#7A8FA8]"}`}>
-                              {cfg ? cfg.label : "Aguardando validação pela Mesa M&A"}
-                            </p>
-                            {validatedAt && (
-                              <p className="text-[10px] text-[#5A7490] mt-0.5">
-                                Validado em {new Date(validatedAt).toLocaleDateString("pt-BR")}
-                              </p>
-                            )}
-                          </div>
-                          {score !== undefined && (
-                            <span className={`text-sm font-bold ${cfg ? cfg.color : "text-[#7A8FA8]"}`}>{score}/100</span>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })()
                 )}
 
                 {/* Kit de Criativos — liberado pela Mesa M&A */}

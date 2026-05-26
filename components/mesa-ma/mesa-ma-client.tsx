@@ -830,29 +830,39 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
 
           {/* Tabs do detalhe */}
           {selectedCard && (
-            <div className="flex gap-0 border-b border-[#122036] mb-2 overflow-x-auto flex-shrink-0">
-              {([
-                { id: "detalhes" as const, label: "Detalhes", icon: <FileText size={12} /> },
-                { id: "forja" as const, label: "FORJA", icon: <Zap size={12} /> },
-                { id: "analytics" as const, label: "Analytics", icon: <BarChart2 size={12} /> },
-                { id: "qa" as const, label: "Q&A", icon: <MessageSquare size={12} /> },
-                { id: "matches" as const, label: "Matches", icon: <ArrowLeftRight size={12} /> },
-                { id: "criativos" as const, label: "Criativos", icon: <FileImage size={12} /> },
-                { id: "contrato" as const, label: "NDA / Mandato", icon: <FileSignature size={12} /> },
-                { id: "doc-requests" as const, label: "Docs", icon: <FileText size={12} /> },
-              ]).map(tab => (
-                <button
-                  key={tab.id}
-                  onClick={() => setDetailTab(tab.id)}
-                  className={`flex items-center gap-1.5 px-4 py-2 text-xs font-medium border-b-2 transition-colors flex-shrink-0 ${
-                    detailTab === tab.id
-                      ? "border-[#C9A84C] text-[#C9A84C]"
-                      : "border-transparent text-[#7A8FA8] hover:text-[#E8EDF5]"
-                  }`}
-                >
-                  {tab.icon}{tab.label}
-                </button>
-              ))}
+            <div className="flex border-b border-[#122036] mb-2 items-center">
+              <div className="flex gap-0 overflow-x-auto flex-1">
+                {([
+                  { id: "detalhes" as const, label: "Detalhes", icon: <FileText size={12} /> },
+                  { id: "forja" as const, label: "FORJA", icon: <Zap size={12} /> },
+                  { id: "analytics" as const, label: "Analytics", icon: <BarChart2 size={12} /> },
+                  { id: "qa" as const, label: "Q&A", icon: <MessageSquare size={12} /> },
+                  { id: "matches" as const, label: "Matches", icon: <ArrowLeftRight size={12} /> },
+                  { id: "criativos" as const, label: "Criativos", icon: <FileImage size={12} /> },
+                  { id: "contrato" as const, label: "NDA / Mandato", icon: <FileSignature size={12} /> },
+                  { id: "doc-requests" as const, label: "Docs", icon: <FileText size={12} /> },
+                ]).map(tab => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setDetailTab(tab.id)}
+                    className={`flex items-center gap-1.5 px-4 py-2 text-xs font-medium border-b-2 transition-colors flex-shrink-0 ${
+                      detailTab === tab.id
+                        ? "border-[#C9A84C] text-[#C9A84C]"
+                        : "border-transparent text-[#7A8FA8] hover:text-[#E8EDF5]"
+                    }`}
+                  >
+                    {tab.icon}{tab.label}
+                  </button>
+                ))}
+              </div>
+              <button
+                onClick={() => setDetailTab("forja")}
+                title="Inserir / conciliar dados via OCR"
+                className="flex-shrink-0 flex items-center gap-1 px-2 py-1 mx-2 rounded border border-[#C9A84C]/30 text-[#C9A84C]/70 hover:text-[#C9A84C] hover:border-[#C9A84C]/60 hover:bg-[#C9A84C]/8 transition-colors"
+              >
+                <DatabaseZap className="w-3 h-3" />
+                <span className="text-[9px] font-bold uppercase tracking-wide">OCR</span>
+              </button>
             </div>
           )}
 
