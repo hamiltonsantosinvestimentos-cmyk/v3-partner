@@ -6,7 +6,7 @@ import {
   BarChart2, Mail, Circle, FileText,
   Paperclip, Trash2, ExternalLink, Upload, Copy, CheckCheck,
   MessageSquare, Send, Zap, FileImage, FileSignature,
-  ArrowLeftRight, Pencil, Check, Loader2,
+  ArrowLeftRight, Pencil, Check, Loader2, DatabaseZap,
 } from "lucide-react";
 import { ExportButton } from "@/components/financeiro/export-button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -145,9 +145,17 @@ function nextStage(current: string, stages: MaStage[]): string | null {
 }
 
 // ─── Kanban Card ──────────────────────────────────────────────────────────────
-function KanbanCardItem({ card, stages, onClick }: { card: MaCard; stages: MaStage[]; onClick: () => void }) {
+function KanbanCardItem({
+  card, stages, onClick, onOpenForja,
+}: {
+  card: MaCard;
+  stages: MaStage[];
+  onClick: () => void;
+  onOpenForja: () => void;
+}) {
   const stage = stages.find(s => s.id === card.stage);
   const isInvestidor = card.tipo_participante === "Investidor";
+  const forjaStatus = card.asset_data?.forja_status as string | undefined;
   return (
     <div
       onClick={onClick}
@@ -183,20 +191,32 @@ function KanbanCardItem({ card, stages, onClick }: { card: MaCard; stages: MaSta
           <div className="h-full rounded-full transition-all" style={{ width: `${card.probability}%`, background: probColor(card.probability) }} />
         </div>
       </div>
-      <p className="text-[10px] text-[#7A8FA8]">{card.responsible}</p>
-      {/* FORJA + KIT status badges */}
-      <div className="flex items-center gap-1.5 mt-2 flex-wrap">
-        {(() => {
-          const forjaStatus = card.asset_data?.forja_status as string | undefined;
-          if (!forjaStatus) return <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-[#122036] text-[#7A8FA8]">FORJA Pendente</span>;
-          if (forjaStatus === "APROVADO") return <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400">⚡ FORJA OK</span>;
-          if (forjaStatus === "APROVADO_COM_RESSALVAS") return <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-400">⚡ FORJA Res.</span>;
-          if (forjaStatus === "BLOQUEADO") return <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-red-500/15 text-red-400">⚡ Bloqueado</span>;
-          return <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-orange-500/15 text-orange-400">⚡ Pendente</span>;
-        })()}
-        {Boolean(card.asset_data?.kit_liberado) && (
-          <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-[#C9A84C]/15 text-[#C9A84C]">KIT ✓</span>
-        )}
+      <p className="text-[10px] text-[#7A8FA8] mb-2">{card.responsible}</p>
+
+      {/* Footer: FORJA/KIT badges + botão de inserção de dados */}
+      <div className="flex items-center justify-between gap-2 pt-1.5 border-t border-[#122036]">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {(() => {
+            if (!forjaStatus) return <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-[#122036] text-[#7A8FA8]">FORJA Pendente</span>;
+            if (forjaStatus === "APROVADO") return <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400">⚡ FORJA OK</span>;
+            if (forjaStatus === "APROVADO_COM_RESSALVAS") return <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-400">⚡ FORJA Res.</span>;
+            if (forjaStatus === "BLOQUEADO") return <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-red-500/15 text-red-400">⚡ Bloqueado</span>;
+            return <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-orange-500/15 text-orange-400">⚡ Pendente</span>;
+          })()}
+          {Boolean(card.asset_data?.kit_liberado) && (
+            <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-[#C9A84C]/15 text-[#C9A84C]">KIT ✓</span>
+          )}
+        </div>
+
+        {/* Botão de inserção / conciliação de dados OCR */}
+        <button
+          onClick={(e) => { e.stopPropagation(); onOpenForja(); }}
+          title="Inserir / conciliar dados via OCR"
+          className="flex items-center gap-1 px-1.5 py-0.5 rounded border border-[#C9A84C]/25 text-[#C9A84C]/70 hover:text-[#C9A84C] hover:border-[#C9A84C]/50 hover:bg-[#C9A84C]/8 transition-colors flex-shrink-0"
+        >
+          <DatabaseZap className="w-3 h-3" />
+          <span className="text-[9px] font-bold uppercase tracking-wide">OCR</span>
+        </button>
       </div>
     </div>
   );
@@ -648,7 +668,13 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
                     {/* Cards */}
                     <div className="space-y-2 min-h-[100px] rounded-xl border border-[#122036]/60 bg-[#09081A]/50 p-2">
                       {stageCards.map(card => (
-                        <KanbanCardItem key={card.id} card={card} stages={maStages} onClick={() => setSelectedCard(card)} />
+                        <KanbanCardItem
+                          key={card.id}
+                          card={card}
+                          stages={maStages}
+                          onClick={() => setSelectedCard(card)}
+                          onOpenForja={() => { setDetailTab("forja"); setSelectedCard(card); }}
+                        />
                       ))}
                       {stageCards.length === 0 && (
                         <div className="h-16 flex items-center justify-center">
