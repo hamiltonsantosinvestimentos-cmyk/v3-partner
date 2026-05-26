@@ -46,6 +46,18 @@ function sanitizeDeal(deal: Record<string, unknown>): Record<string, unknown> {
     "storage_id", "file_size_bytes", "uploaded_at",
   ]);
 
+  // Campos permitidos dentro de asset_data — evita enviar JSONB completo
+  const ASSET_DATA_ALLOW = new Set([
+    "valor_total", "receita_anual", "ebitda_anual", "noi_anual",
+    "despesas_operacionais", "divida_total", "cap_rate",
+    "area_construida", "area_terreno", "localizacao_completa", "uf", "municipio",
+    "ano_fundacao", "tipo_operacao", "regime_tributario",
+    "processos_judiciais", "pendencias_declaradas", "cnpj", "nda_status",
+    "deal_value", "metodologia_valuation", "multiplo_ebitda", "valor_por_m2",
+    "taxa_ocupacao", "numero_locatarios", "ancoras", "contratos_vigencia",
+    "garantias", "prazo_operacao", "descricao_ativo", "contexto_forja",
+  ]);
+
   function stripEmpty(obj: unknown): unknown {
     if (obj === null || obj === undefined || obj === "") return undefined;
     if (Array.isArray(obj)) {
@@ -64,7 +76,29 @@ function sanitizeDeal(deal: Record<string, unknown>): Record<string, unknown> {
     return obj;
   }
 
-  return (stripEmpty(deal) ?? {}) as Record<string, unknown>;
+  const cleaned = (stripEmpty(deal) ?? {}) as Record<string, unknown>;
+
+  // Filtra asset_data para manter apenas campos relevantes para FORJA
+  if (cleaned.asset_data && typeof cleaned.asset_data === "object") {
+    const ad = cleaned.asset_data as Record<string, unknown>;
+    const filteredAd: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(ad)) {
+      if (ASSET_DATA_ALLOW.has(k) && v !== null && v !== undefined && v !== "") {
+        filteredAd[k] = v;
+      }
+    }
+    cleaned.asset_data = Object.keys(filteredAd).length ? filteredAd : undefined;
+  }
+
+  // Garante payload máximo de 12KB para o LLM (deals muito grandes podem travar o output)
+  const json = JSON.stringify(cleaned);
+  if (json.length > 12000) {
+    const trimmed = { ...cleaned };
+    delete trimmed.asset_data;
+    return trimmed;
+  }
+
+  return cleaned;
 }
 
 // Baixa PDFs do Supabase Storage e retorna base64 payload
@@ -192,7 +226,7 @@ export async function POST(req: NextRequest) {
       "< 40: dados críticos ausentes ou red flags sérios → BLOQUEADO\n\n" +
 
       "REGRAS DE PRECISÃO:\n" +
-      "- validated: até 15 campos (inclua TODOS os financeiros encontrados)\n" +
+      "- validated: até 10 campos (priorize financeiros e legais)\n" +
       "- corrected: TODAS as divergências, sem exceção\n" +
       "- missing: TODOS os campos críticos ausentes listados acima\n" +
       "- doc_insights: mínimo 3 por documento analisado\n" +
@@ -224,9 +258,9 @@ export async function POST(req: NextRequest) {
     // Com PDFs → Sonnet (necessário para leitura de documentos)
     const model = hasDocs ? "claude-sonnet-4-6" : "claude-haiku-4-5-20251001";
     // Fase 1: análise de precisão cirúrgica
-    // Haiku sem docs: 5000 (deals com muitos campos)
+    // Haiku sem docs: 8000 (próximo do limite do modelo — deals complexos)
     // Sonnet com docs: 12000 (extração financeira completa com PDFs)
-    const maxTokensPhase1 = hasDocs ? 12000 : 5000;
+    const maxTokensPhase1 = hasDocs ? 12000 : 8000;
 
     const message = await client.messages.create({
       model,
