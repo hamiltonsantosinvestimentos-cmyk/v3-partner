@@ -1198,6 +1198,7 @@ function EditarPropostaModal({ open, onClose, proposal, onSaved }: {
   const [creditLine, setCreditLine] = useState("");
   const [saving, setSaving] = useState(false);
   const [partnerSearch, setPartnerSearch] = useState("");
+  const [regras, setRegras] = useState<{ nome: string; nivel: string }[]>([]);
 
   useEffect(() => {
     if (!open || !proposal) return;
@@ -1206,18 +1207,22 @@ function EditarPropostaModal({ open, onClose, proposal, onSaved }: {
     setCreditLine(proposal.credit_line ?? "");
     setPartnerSearch("");
     setPartnersLoading(true);
-    fetch("/api/partners")
-      .then(r => r.json())
-      .then(d => setPartners(d.partners ?? []))
-      .catch(() => {})
-      .finally(() => setPartnersLoading(false));
+    Promise.all([
+      fetch("/api/partners").then(r => r.json()),
+      fetch("/api/regras-linhas").then(r => r.json()),
+    ]).then(([partnersData, regrasData]) => {
+      setPartners(partnersData.partners ?? []);
+      setRegras((regrasData.regras ?? []).map((r: Record<string, unknown>) => ({ nome: r.nome as string, nivel: r.nivel as string })));
+    }).catch(() => {}).finally(() => setPartnersLoading(false));
   }, [open, proposal]);
 
+  const linesForLevel = regras.filter(r => r.nivel === level).map(r => r.nome);
+  const availableLines = linesForLevel.length > 0 ? linesForLevel : CREDIT_DESK_LINES[level];
+
   useEffect(() => {
-    const lines = CREDIT_DESK_LINES[level];
-    if (!lines.includes(creditLine)) setCreditLine(lines[0] ?? "");
+    if (!availableLines.includes(creditLine)) setCreditLine(availableLines[0] ?? "");
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [level]);
+  }, [level, regras]);
 
   async function handleSave() {
     if (!proposal) return;
@@ -1348,7 +1353,7 @@ function EditarPropostaModal({ open, onClose, proposal, onSaved }: {
               onChange={e => setCreditLine(e.target.value)}
               className="w-full h-9 px-3 text-sm bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
             >
-              {CREDIT_DESK_LINES[level].map(line => (
+              {availableLines.map(line => (
                 <option key={line} value={line}>{line}</option>
               ))}
             </select>
