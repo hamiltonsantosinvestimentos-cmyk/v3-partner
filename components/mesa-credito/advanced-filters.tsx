@@ -328,6 +328,7 @@ export interface SLAInfo {
   sla:          SLAStatus;
   stage:        string;
   stageChangedAt: string | null;
+  targetDate:   string | null;  // data-alvo definida na mesa operacional (sla_override)
 }
 
 export function getSLAInfo(proposal: {
@@ -340,8 +341,12 @@ export function getSLAInfo(proposal: {
   const stage  = proposal.stage ?? "RECEBIDO";
 
   if (finals.includes(proposal.status) || stage === "FINALIZADO") {
-    return { hoursElapsed: 0, hoursLimit: Infinity, hoursLeft: Infinity, pct: 0, sla: "ok", stage, stageChangedAt: null };
+    return { hoursElapsed: 0, hoursLimit: Infinity, hoursLeft: Infinity, pct: 0, sla: "ok", stage, stageChangedAt: null, targetDate: null };
   }
+
+  // Data-alvo definida na mesa operacional via sla_override
+  const slaOverride = proposal.metadata?.sla_override as Record<string, string> | null | undefined;
+  const targetDate  = slaOverride?.[stage] ?? null;
 
   // Usa stage_changed_at do metadata (reseta por etapa) ou created_at como fallback
   const stageChangedAt = (proposal.metadata?.stage_changed_at as string | null) ?? null;
@@ -358,7 +363,7 @@ export function getSLAInfo(proposal: {
   else if (hoursLeft <= hoursLimit * 0.2)     sla = "critical";  // últimos 20%
   else if (hoursLeft <= hoursLimit * 0.5)     sla = "warning";   // últimos 50%
 
-  return { hoursElapsed, hoursLimit, hoursLeft, pct, sla, stage, stageChangedAt };
+  return { hoursElapsed, hoursLimit, hoursLeft, pct, sla, stage, stageChangedAt, targetDate };
 }
 
 function fmtHours(h: number): string {
@@ -371,6 +376,34 @@ function fmtHours(h: number): string {
   if (h < 1)  return `${Math.round(h * 60)}min`;
   if (h < 24) return `${Math.round(h)}h`;
   return `${Math.round(h / 24)}d`;
+}
+
+/** Data-alvo de SLA definida na mesa operacional. Sempre visível quando presente. */
+export function SLATargetDate({ targetDate }: { targetDate: string | null }) {
+  if (!targetDate) return null;
+  const date = new Date(targetDate + "T00:00:00-03:00");
+  const now  = new Date();
+  const diffDays = Math.ceil((date.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+  const label = date.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+
+  let colorClass = "text-emerald-400 border-emerald-500/30 bg-emerald-500/10";
+  if (diffDays < 0)      colorClass = "text-red-400 border-red-500/30 bg-red-500/10";
+  else if (diffDays <= 1) colorClass = "text-red-400 border-red-500/30 bg-red-500/10";
+  else if (diffDays <= 3) colorClass = "text-amber-400 border-amber-500/30 bg-amber-500/10";
+
+  const diffLabel = diffDays < 0
+    ? `venceu há ${Math.abs(diffDays)}d`
+    : diffDays === 0 ? "hoje"
+    : `${diffDays}d restantes`;
+
+  return (
+    <span
+      title={`Retorno SLA: ${date.toLocaleDateString("pt-BR")} — ${diffLabel}`}
+      className={`inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded border ${colorClass}`}
+    >
+      📅 {label}
+    </span>
+  );
 }
 
 export function SLABadge({ sla, hoursLeft, hoursLimit, pct }: {

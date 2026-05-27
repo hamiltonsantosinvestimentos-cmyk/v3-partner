@@ -10,7 +10,7 @@ import { STATUS_LABELS, STATUS_COLORS, type OperationStatus } from "@/lib/consta
 import { NovaPropostaModal } from "./nova-proposta-modal";
 import { PropostaDetailModal, type ProposalFull } from "./proposta-detail-modal";
 import {
-  AdvancedFilters, applyFilters, getSLAInfo, SLABadge,
+  AdvancedFilters, applyFilters, getSLAInfo, SLABadge, SLATargetDate,
   EMPTY_FILTERS, type FilterState,
 } from "./advanced-filters";
 
@@ -249,7 +249,7 @@ export function CreditDeskLevel1Client({ proposals: initial, currentUser }: Cred
                   ) : (
                     cards.map((p) => {
                       const slaInfo = getSLAInfo(p);
-                      const { sla, hoursLeft, hoursLimit, pct } = slaInfo;
+                      const { sla, hoursLeft, hoursLimit, pct, targetDate } = slaInfo;
                       return (
                         <div key={p.id} onClick={() => setDetailProposal(p)}
                           className={`bg-card border rounded-lg p-3 cursor-pointer hover:border-primary/40 hover:bg-card/80 transition-all space-y-2 group ${
@@ -266,16 +266,19 @@ export function CreditDeskLevel1Client({ proposals: initial, currentUser }: Cred
                             <Badge variant="info" className="text-[9px] truncate max-w-[100px]">{p.credit_line}</Badge>
                             <span className="text-[10px] font-bold text-emerald-400 flex-shrink-0">{formatCurrency(p.requested_value)}</span>
                           </div>
-                          {sla !== "ok" && (
-                            <div className="space-y-1">
-                              <div className="h-1 rounded-full bg-white/10 overflow-hidden">
-                                <div className={`h-full rounded-full transition-all ${
-                                  sla === "expired" || sla === "critical" ? "bg-red-500" : "bg-amber-400"
-                                }`} style={{ width: `${pct}%` }} />
-                              </div>
-                              <SLABadge sla={sla} hoursLeft={hoursLeft} hoursLimit={hoursLimit} pct={pct} />
-                            </div>
-                          )}
+                          <div className="flex items-center gap-1 flex-wrap">
+                            <SLATargetDate targetDate={targetDate} />
+                            {sla !== "ok" && (
+                              <>
+                                <div className="h-1 w-full rounded-full bg-white/10 overflow-hidden">
+                                  <div className={`h-full rounded-full transition-all ${
+                                    sla === "expired" || sla === "critical" ? "bg-red-500" : "bg-amber-400"
+                                  }`} style={{ width: `${pct}%` }} />
+                                </div>
+                                <SLABadge sla={sla} hoursLeft={hoursLeft} hoursLimit={hoursLimit} pct={pct} />
+                              </>
+                            )}
+                          </div>
                         </div>
                       );
                     })
@@ -312,7 +315,7 @@ export function CreditDeskLevel1Client({ proposals: initial, currentUser }: Cred
                 </thead>
                 <tbody>
                   {filtered.map((p) => {
-                    const { sla, hoursLeft, hoursLimit, pct, hoursElapsed } = getSLAInfo(p);
+                    const { sla, hoursLeft, hoursLimit, pct, hoursElapsed, targetDate } = getSLAInfo(p);
                     const hoursLeftDisplay = hoursLeft === Infinity ? null : hoursLeft;
                     return (
                       <tr key={p.id}
@@ -329,14 +332,17 @@ export function CreditDeskLevel1Client({ proposals: initial, currentUser }: Cred
                         <td className="px-4 py-3 text-right font-semibold text-white">{formatCurrency(p.requested_value)}</td>
                         <td className="px-4 py-3 text-right font-semibold text-emerald-400">{p.approved_value ? formatCurrency(p.approved_value) : "—"}</td>
                         <td className="px-4 py-3 text-xs text-muted-foreground">{p.stage ?? "RECEBIDO"}</td>
-                        <td className="px-4 py-3 min-w-[100px]">
-                          {sla === "ok" ? (
-                            <span className="text-xs text-muted-foreground">
-                              {hoursElapsed < 24 ? `${Math.round(hoursElapsed)}h` : `${Math.round(hoursElapsed / 24)}d`}
-                            </span>
-                          ) : (
-                            <SLABadge sla={sla} hoursLeft={hoursLeftDisplay ?? 0} hoursLimit={hoursLimit} pct={pct} />
-                          )}
+                        <td className="px-4 py-3 min-w-[120px]">
+                          <div className="flex items-center gap-1 flex-wrap">
+                            <SLATargetDate targetDate={targetDate} />
+                            {sla === "ok" ? (
+                              <span className="text-xs text-muted-foreground">
+                                {hoursElapsed < 24 ? `${Math.round(hoursElapsed)}h` : `${Math.round(hoursElapsed / 24)}d`}
+                              </span>
+                            ) : (
+                              <SLABadge sla={sla} hoursLeft={hoursLeftDisplay ?? 0} hoursLimit={hoursLimit} pct={pct} />
+                            )}
+                          </div>
                         </td>
                         <td className="px-4 py-3">
                           <Badge className={STATUS_COLORS[p.status as OperationStatus]}>{STATUS_LABELS[p.status as OperationStatus]}</Badge>
