@@ -14,12 +14,21 @@ export const CORA_BASE = `https://${CORA_BASE_HOST}`;
 
 const CLIENT_ID = process.env.CORA_CLIENT_ID!;
 
+function normalizePem(raw: string): string {
+  return raw
+    .replace(/\\n/g, "\n")   // literal \n → newline
+    .replace(/\\r/g, "")     // remove \r
+    .replace(/\r\n/g, "\n")  // Windows CRLF → LF
+    .replace(/\r/g, "\n")    // lone CR → LF
+    .trim();
+}
+
 function getCert(): string {
-  return (process.env.CORA_CERTIFICATE ?? "").replace(/\\n/g, "\n");
+  return normalizePem(process.env.CORA_CERTIFICATE ?? "");
 }
 
 function getKey(): string {
-  return (process.env.CORA_PRIVATE_KEY ?? "").replace(/\\n/g, "\n");
+  return normalizePem(process.env.CORA_PRIVATE_KEY ?? "");
 }
 
 // Faz uma requisição HTTPS com mTLS usando o módulo nativo do Node
