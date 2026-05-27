@@ -2,9 +2,10 @@
 
 import { useState } from "react";
 import {
-  Users, CheckCircle2, XCircle, Clock, Eye,
-  X, FileText, Download, AlertTriangle, UserPlus,
-  ChevronDown, Building2, User, Search, Loader2, TableProperties,
+  CheckCircle2, XCircle, Clock, Eye,
+  X, FileText, UserPlus,
+  Building2, User, Search, Loader2, TableProperties,
+  CreditCard, RefreshCw, Copy, ExternalLink, QrCode, Ban,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -33,6 +34,34 @@ interface Registration {
   status: "PENDENTE" | "APROVADO" | "REPROVADO" | "EM_ANALISE";
   observacao?: string;
   created_at: string;
+  // Cora
+  cora_invoice_id?: string | null;
+  cora_invoice_status?: string | null;
+  cora_amount_cents?: number | null;
+  cora_payment_url?: string | null;
+  cora_pix_emv?: string | null;
+  cora_boleto_pdf?: string | null;
+}
+
+const PAGAMENTO_CONFIG: Record<string, { label: string; cls: string }> = {
+  PAID:      { label: "Pago",      cls: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" },
+  PENDING:   { label: "Pendente",  cls: "bg-amber-500/20 text-amber-400 border-amber-500/30" },
+  CANCELLED: { label: "Cancelado", cls: "bg-red-500/20 text-red-400 border-red-500/30" },
+  EXPIRED:   { label: "Expirado",  cls: "bg-red-500/20 text-red-400 border-red-500/30" },
+};
+
+function PagamentoBadge({ status }: { status?: string | null }) {
+  if (!status) return (
+    <span className="inline-flex items-center gap-1 text-[9px] font-semibold px-1.5 py-0.5 rounded border bg-[#243A66]/40 text-[#7A8FA8] border-[#243A66]">
+      <CreditCard className="w-2.5 h-2.5" /> Sem cobrança
+    </span>
+  );
+  const cfg = PAGAMENTO_CONFIG[status] ?? { label: status, cls: "bg-secondary text-muted-foreground border-border" };
+  return (
+    <span className={cn("inline-flex items-center gap-1 text-[9px] font-semibold px-1.5 py-0.5 rounded border", cfg.cls)}>
+      <CreditCard className="w-2.5 h-2.5" /> {cfg.label}
+    </span>
+  );
 }
 
 const STATUS_CONFIG = {
@@ -69,19 +98,37 @@ function ModalDetalhe({
   reg,
   onClose,
   onAcao,
+  onUpdateCoraStatus,
 }: {
   reg: Registration;
   onClose: () => void;
   onAcao: (id: string, acao: "APROVAR" | "REPROVAR" | "EM_ANALISE", obs?: string) => Promise<void>;
+  onUpdateCoraStatus: (id: string, status: string) => void;
 }) {
   const [obs, setObs] = useState(reg.observacao ?? "");
   const [loading, setLoading] = useState<string | null>(null);
+  const [pixCopiado, setPixCopiado] = useState(false);
+  const [coraStatus, setCoraStatus] = useState(reg.cora_invoice_status);
 
   const acionar = async (acao: "APROVAR" | "REPROVAR" | "EM_ANALISE") => {
     setLoading(acao);
     await onAcao(reg.id, acao, obs);
     setLoading(null);
     onClose();
+  };
+
+  const verificarPagamento = async () => {
+    if (!reg.cora_invoice_id) return;
+    setLoading("VERIFICAR");
+    try {
+      const res = await fetch(`/api/cora/invoice-status?invoiceId=${reg.cora_invoice_id}&regId=${reg.id}`);
+      const data = await res.json() as { status?: string };
+      if (data.status) {
+        setCoraStatus(data.status);
+        onUpdateCoraStatus(reg.id, data.status);
+      }
+    } catch { /* silencioso */ }
+    setLoading(null);
   };
 
   const nome = reg.tipo_pessoa === "PF" ? reg.nome_completo : reg.razao_social;
@@ -175,6 +222,79 @@ function ModalDetalhe({
                 <p className="text-xs text-muted-foreground">Nenhum documento anexado</p>
               )}
             </div>
+          </div>
+
+          {/* Cobrança Cora */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs font-semibold text-[#C9A84C] uppercase tracking-wide">Cobrança Cora</p>
+              {reg.cora_invoice_id && (
+                <button
+                  onClick={verificarPagamento}
+                  disabled={loading === "VERIFICAR"}
+                  className="flex items-center gap-1 text-[10px] text-[#7A8FA8] hover:text-white transition-colors disabled:opacity-50"
+                >
+                  <RefreshCw className={cn("w-3 h-3", loading === "VERIFICAR" && "animate-spin")} />
+                  Verificar status
+                </button>
+              )}
+            </div>
+            {!reg.cora_invoice_id ? (
+              <p className="text-xs text-muted-foreground">Nenhuma cobrança gerada.</p>
+            ) : (
+              <div className="space-y-2">
+                {/* Status + valor */}
+                <div className="flex items-center gap-3 p-3 rounded-xl bg-[#0D1929] border border-[#243A66]">
+                  <PagamentoBadge status={coraStatus} />
+                  {reg.cora_amount_cents && (
+                    <span className="text-sm font-bold text-[#C9A84C]">
+                      {(reg.cora_amount_cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                    </span>
+                  )}
+                  {coraStatus === "PAID" && (
+                    <span className="ml-auto flex items-center gap-1 text-[10px] text-emerald-400 font-semibold">
+                      <CheckCircle2 className="w-3 h-3" /> Pagamento confirmado
+                    </span>
+                  )}
+                </div>
+                {/* PIX */}
+                {reg.cora_pix_emv && coraStatus !== "PAID" && (
+                  <div className="flex gap-2">
+                    <div className="flex-1 px-3 py-2 rounded-lg bg-[#0A1628] border border-[#243A66] text-[10px] font-mono text-[#7A8FA8] truncate">
+                      {reg.cora_pix_emv}
+                    </div>
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(reg.cora_pix_emv!);
+                        setPixCopiado(true);
+                        setTimeout(() => setPixCopiado(false), 2000);
+                      }}
+                      className={cn(
+                        "flex-shrink-0 flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-bold transition-colors",
+                        pixCopiado ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30" : "bg-[#C9A84C] hover:bg-[#E8C97A] text-[#09081A]"
+                      )}
+                    >
+                      <Copy className="w-3 h-3" /> {pixCopiado ? "Copiado!" : "Pix"}
+                    </button>
+                  </div>
+                )}
+                {/* Links */}
+                <div className="flex gap-2 flex-wrap">
+                  {reg.cora_boleto_pdf && (
+                    <a href={reg.cora_boleto_pdf} target="_blank" rel="noopener noreferrer"
+                      className="flex items-center gap-1 text-[10px] text-[#7A8FA8] hover:text-white border border-[#243A66] px-2.5 py-1.5 rounded-lg transition-colors">
+                      <FileText className="w-3 h-3" /> Boleto PDF
+                    </a>
+                  )}
+                  {reg.cora_payment_url && (
+                    <a href={reg.cora_payment_url} target="_blank" rel="noopener noreferrer"
+                      className="flex items-center gap-1 text-[10px] text-[#C9A84C] hover:text-[#E8C97A] border border-[#C9A84C]/30 px-2.5 py-1.5 rounded-lg transition-colors">
+                      <ExternalLink className="w-3 h-3" /> Ver cobrança
+                    </a>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Observação */}
@@ -337,6 +457,12 @@ export function AdminCadastrosClient({
     }
   };
 
+  const handleUpdateCoraStatus = (id: string, status: string) => {
+    setRegs((prev) => prev.map((r) => r.id === id ? { ...r, cora_invoice_status: status } : r));
+    // Atualiza o registro selecionado se estiver aberto
+    setSelecionado((prev) => prev?.id === id ? { ...prev, cora_invoice_status: status } : prev);
+  };
+
   return (
     <div className="space-y-6 animate-fade-in">
       {showSetup && <SetupBanner />}
@@ -434,6 +560,7 @@ export function AdminCadastrosClient({
                   )}>
                     {reg.plano === "PARTNER_PRO" ? "PRO" : "PARTNER"}
                   </span>
+                  <PagamentoBadge status={reg.cora_invoice_status} />
                 </div>
                 <p className="text-xs text-muted-foreground mt-0.5">{reg.email} · {doc}</p>
               </div>
@@ -472,6 +599,7 @@ export function AdminCadastrosClient({
           reg={selecionado}
           onClose={() => setSelecionado(null)}
           onAcao={handleAcao}
+          onUpdateCoraStatus={handleUpdateCoraStatus}
         />
       )}
     </div>
