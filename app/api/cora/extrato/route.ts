@@ -16,11 +16,11 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const start = searchParams.get("start"); // "YYYY-MM-DD"
   const end = searchParams.get("end");     // "YYYY-MM-DD"
-  const page = searchParams.get("page") ?? "0";
+  const page = searchParams.get("page") ?? "1";
 
-  let path = `/v2/statements?page=${page}&limit=50`;
-  if (start) path += `&start_date=${start}`;
-  if (end) path += `&end_date=${end}`;
+  let path = `/bank-statement/statement?page=${page}&perPage=50`;
+  if (start) path += `&start=${start}`;
+  if (end) path += `&end=${end}`;
 
   try {
     const res = await coraFetch(path);

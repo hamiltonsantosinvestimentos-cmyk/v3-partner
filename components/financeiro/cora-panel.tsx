@@ -21,6 +21,13 @@ interface Lancamento {
   balance_after?: number;
   category?: string;
 }
+interface CoraEntry {
+  id: string;
+  type: "CREDIT" | "DEBIT";
+  amount: number;
+  createdAt: string;
+  transaction?: { description?: string; type?: string };
+}
 interface Cobranca {
   id: string;
   status: string;
@@ -97,8 +104,14 @@ export function CoraPanel() {
       if (sData.available !== undefined || sData.balance !== undefined) {
         setSaldo({ available: sData.available ?? sData.balance ?? 0, blocked: sData.blocked ?? 0 });
       }
-      if (eData.items) setLancamentos(eData.items);
-      else if (Array.isArray(eData)) setLancamentos(eData);
+      const entries: CoraEntry[] = eData.entries ?? eData.items ?? (Array.isArray(eData) ? eData : []);
+      setLancamentos(entries.map((e: CoraEntry) => ({
+        id: e.id,
+        description: e.transaction?.description ?? e.transaction?.type ?? e.type,
+        amount: e.amount,
+        type: e.type,
+        created_at: e.createdAt,
+      })));
 
       const rawList: Cobranca[] = cData.invoices ?? cData.items ?? (Array.isArray(cData) ? cData : []);
       setCobrancas(rawList.filter((c) => c && typeof c === "object" && c.id));
