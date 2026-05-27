@@ -55,15 +55,28 @@ Dado o transcript de uma reunião comercial, extraia em JSON:
 
 Responda APENAS com JSON válido, sem markdown, sem texto fora do JSON.`;
 
-export async function POST(req: NextRequest) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+const SERVICE_USER_ID = "d0af8eaa-9f3c-4e7a-b8c6-613736524317";
 
+export async function POST(req: NextRequest) {
   const db = svc();
-  const { data: profile } = await db.from("profiles").select("role").eq("id", user.id).single();
-  if (!ALLOWED.includes(profile?.role ?? "")) {
-    return NextResponse.json({ error: "Acesso restrito à Mesa M&A" }, { status: 403 });
+  let userId: string;
+
+  const serviceToken = req.headers.get("x-v3-service-token");
+  const validToken = process.env.V3_INGEST_SECRET;
+
+  if (validToken && serviceToken === validToken) {
+    // Headless call from n8n — use João's user_id, no cookie auth needed
+    userId = SERVICE_USER_ID;
+  } else {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+
+    const { data: profile } = await db.from("profiles").select("role").eq("id", user.id).single();
+    if (!ALLOWED.includes(profile?.role ?? "")) {
+      return NextResponse.json({ error: "Acesso restrito à Mesa M&A" }, { status: 403 });
+    }
+    userId = user.id;
   }
 
   const body = await req.json();
@@ -87,7 +100,7 @@ export async function POST(req: NextRequest) {
     .select("id")
     .eq("title", title)
     .eq("meeting_date", meeting_date)
-    .eq("user_id", user.id)
+    .eq("user_id", userId)
     .maybeSingle();
 
   if (existing) {
@@ -181,7 +194,7 @@ export async function POST(req: NextRequest) {
         deal_value: dealCtx.ticket_estimado_r > 0 ? dealCtx.ticket_estimado_r : null,
         stage: (dealCtx.etapa_sugerida ?? "PROSPECTING") as "PROSPECTING",
         status: "DRAFT" as "DRAFT",
-        created_by: user.id,
+        created_by: userId,
         notes: `Criado automaticamente via reunião "${title}" em ${meeting_date}`,
         tags: ["originacao", "meeting-intel"],
         asset_data: {
@@ -217,7 +230,7 @@ export async function POST(req: NextRequest) {
       notas: summary,
       proximo_passo: (dealCtx?.proximos_passos ?? []).join(" | ") || null,
       ma_deal_id: dealId,
-      conducted_by: user.id,
+      conducted_by: userId,
     })
     .select("id")
     .single();
@@ -228,7 +241,7 @@ export async function POST(req: NextRequest) {
   const { data: ms } = await db
     .from("meeting_summaries")
     .insert({
-      user_id: user.id,
+      user_id: userId,
       title,
       transcript: transcript.slice(0, 50000),
       summary,
