@@ -266,7 +266,7 @@ export async function POST(req: NextRequest) {
 
     if (!deal) throw new Error("Deal não encontrado");
 
-    type DocEntry = { doc_id: string; file_name: string; storage_path: string };
+    type DocEntry = { doc_id: string; file_name: string; storage_path: string; file_size_bytes?: number };
     const docs: DocEntry[] = Array.isArray(deal.documents) ? deal.documents : [];
     const doc = docs.find(d => d.doc_id === doc_id);
     if (!doc) throw new Error("Documento não encontrado no deal");
@@ -276,7 +276,50 @@ export async function POST(req: NextRequest) {
       .update({ doc_name: doc.file_name, storage_path: doc.storage_path })
       .eq("id", extractionId);
 
-    // Download do arquivo
+    // ── Roteamento por tamanho: PDFs > 4MB vão para extração async via n8n W9 ──
+    const ASYNC_THRESHOLD = 4 * 1024 * 1024; // 4MB
+    const fileSizeBytes = doc.file_size_bytes;
+
+    if (fileSizeBytes && fileSizeBytes > ASYNC_THRESHOLD) {
+      if (fileSizeBytes > 32 * 1024 * 1024) {
+        // > 32MB: rejeita — acima do limite da Anthropic Files API
+        await svc.from("ma_document_extractions")
+          .update({ status: "error", error_message: "Arquivo maior que 32MB. Comprima o PDF e reenvie." })
+          .eq("id", extractionId);
+        return NextResponse.json({
+          error: "Arquivo maior que 32MB. Comprima o PDF (Adobe → Reduzir tamanho) e reenvie.",
+        }, { status: 413 });
+      }
+
+      // 4MB–32MB: delega ao n8n W9 via webhook async
+      await svc.from("ma_document_extractions")
+        .update({ status: "queued", processing_mode: "async", file_size_bytes: fileSizeBytes })
+        .eq("id", extractionId);
+
+      const n8nBase = process.env.N8N_API_URL?.replace("/api/v1", "");
+      if (n8nBase) {
+        fetch(`${n8nBase}/webhook/v3-doc-extract-large`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "x-cron-secret": process.env.CRON_SECRET ?? "" },
+          body: JSON.stringify({
+            deal_id,
+            doc_id,
+            extraction_id: extractionId,
+            storage_path: doc.storage_path,
+            file_size_bytes: fileSizeBytes,
+          }),
+        }).catch(console.error); // fire and forget
+      }
+
+      return NextResponse.json({
+        ok:            true,
+        extraction_id: extractionId,
+        status:        "queued",
+        message:       `PDF grande (${Math.round(fileSizeBytes / 1024 / 1024 * 10) / 10}MB) — extração assíncrona iniciada. Aguarde ~2 minutos.`,
+      });
+    }
+
+    // Download do arquivo (fluxo sync para arquivos ≤ 4MB)
     const { data: fileData, error: downloadErr } = await svc.storage
       .from("ma-documents")
       .download(doc.storage_path);
@@ -399,6 +442,8 @@ export async function POST(req: NextRequest) {
     await svc.from("ma_document_extractions").update({
       doc_name:                doc.file_name,
       storage_path:            doc.storage_path,
+      file_size_bytes:         fileSizeBytes ?? null,
+      processing_mode:         "sync",
       tipo_documento:          phase1.tipo_documento,
       dados_extraidos:         dadosFlat,
       pendencias:              [...phase1.pendencias, ...phase2.flags],

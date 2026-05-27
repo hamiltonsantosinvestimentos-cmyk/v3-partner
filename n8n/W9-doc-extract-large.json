@@ -1,0 +1,268 @@
+{
+  "name": "W9 — Doc Extract Large (PDF OCR Assíncrono)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "v3-doc-extract-large",
+        "responseMode": "onReceived",
+        "responseData": "firstEntryJson",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook W9",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "v3-doc-extract-large"
+    },
+    {
+      "parameters": {
+        "authentication": "headerAuth",
+        "requestMethod": "PATCH",
+        "url": "={{ $env.NEXT_PUBLIC_SUPABASE_URL }}/rest/v1/ma_document_extractions?id=eq.{{ $json.body.extraction_id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" },
+            { "name": "Prefer", "value": "return=minimal" }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "body",
+              "value": "={ \"status\": \"processing\", \"error_message\": null }"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-processing",
+      "name": "Set status = processing",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [480, 300]
+    },
+    {
+      "parameters": {
+        "authentication": "headerAuth",
+        "requestMethod": "GET",
+        "url": "={{ $env.NEXT_PUBLIC_SUPABASE_URL }}/storage/v1/object/sign/ma-documents/{{ $('Webhook W9').item.json.body.storage_path }}?expiresIn=3600",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "get-signed-url",
+      "name": "Get signed URL",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [720, 300]
+    },
+    {
+      "parameters": {
+        "authentication": "headerAuth",
+        "requestMethod": "GET",
+        "url": "={{ $json.signedURL }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "id": "download-pdf",
+      "name": "Download PDF",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [960, 300]
+    },
+    {
+      "parameters": {
+        "authentication": "headerAuth",
+        "requestMethod": "POST",
+        "url": "https://api.anthropic.com/v1/files",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-api-key", "value": "={{ $env.ANTHROPIC_API_KEY }}" },
+            { "name": "anthropic-version", "value": "2023-06-01" },
+            { "name": "anthropic-beta", "value": "files-api-2025-04-14" }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            { "name": "file", "value": "={{ $binary.data }}", "parameterType": "formBinaryData", "inputDataFieldName": "data" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "upload-to-files-api",
+      "name": "Upload to Anthropic Files API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1200, 300]
+    },
+    {
+      "parameters": {
+        "authentication": "headerAuth",
+        "requestMethod": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-api-key", "value": "={{ $env.ANTHROPIC_API_KEY }}" },
+            { "name": "anthropic-version", "value": "2023-06-01" },
+            { "name": "anthropic-beta", "value": "files-api-2025-04-14" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"claude-sonnet-4-6\",\n  \"max_tokens\": 4000,\n  \"system\": \"Você é um especialista em análise de documentos de M&A (Fusões e Aquisições) para a V3 Partners, uma boutique de securitização e estruturação financeira. Extraia dados estruturados do documento fornecido. Responda SOMENTE com JSON válido, sem markdown.\",\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": [\n        {\n          \"type\": \"document\",\n          \"source\": { \"type\": \"file\", \"file_id\": \"{{ $json.id }}\" }\n        },\n        {\n          \"type\": \"text\",\n          \"text\": \"Analise este documento de M&A e extraia os seguintes campos em formato JSON:\\n\\n{\\n  \\\"tipo_documento\\\": \\\"(ex: Contrato Social, Balanço Patrimonial, DRE, Certidão, NDA, Laudo de Avaliação, Matrícula, etc.)\\\",\\n  \\\"dados_extraidos\\\": {\\n    \\\"razao_social\\\": null,\\n    \\\"cnpj\\\": null,\\n    \\\"socios\\\": [],\\n    \\\"capital_social\\\": null,\\n    \\\"receita_anual\\\": null,\\n    \\\"ebitda\\\": null,\\n    \\\"valor_ativo\\\": null,\\n    \\\"data_referencia\\\": null,\\n    \\\"outros_campos\\\": {}\\n  },\\n  \\\"resumo\\\": \\\"Resumo de 2-3 frases sobre o documento\\\",\\n  \\\"confiabilidade\\\": 0,\\n  \\\"campos_baixa_confianca\\\": [],\\n  \\\"pendencias\\\": []\\n}\\n\\nPara confiabilidade: 0-100 indicando certeza dos dados extraídos.\\nPara campos_baixa_confianca: lista de strings com nomes de campos incertos.\\nPara pendencias: lista de strings com informações não encontradas mas importantes.\"\n        }\n      ]\n    }\n  ]\n}",
+        "options": {}
+      },
+      "id": "claude-phase1",
+      "name": "Claude Phase 1 — Extração OCR",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1440, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse Claude response and structure extraction data\nconst claudeResponse = $input.item.json;\nconst webhook = $('Webhook W9').item.json.body;\n\nlet extracted = {};\ntry {\n  const content = claudeResponse.content?.[0]?.text ?? '{}';\n  // Remove markdown code blocks if present\n  const cleaned = content.replace(/```json\\n?/g, '').replace(/```\\n?/g, '').trim();\n  extracted = JSON.parse(cleaned);\n} catch (e) {\n  extracted = {\n    tipo_documento: 'Desconhecido',\n    dados_extraidos: {},\n    resumo: 'Falha ao parsear resposta do Claude.',\n    confiabilidade: 0,\n    campos_baixa_confianca: [],\n    pendencias: ['Revisão manual necessária']\n  };\n}\n\nconst status = (extracted.confiabilidade ?? 0) >= 60\n  ? 'done'\n  : 'needs_review';\n\nreturn [{\n  json: {\n    extraction_id: webhook.extraction_id,\n    deal_id: webhook.deal_id,\n    doc_id: webhook.doc_id,\n    tipo_documento: extracted.tipo_documento ?? 'Desconhecido',\n    dados_extraidos: extracted.dados_extraidos ?? {},\n    resumo: extracted.resumo ?? '',\n    confiabilidade: extracted.confiabilidade ?? 0,\n    campos_baixa_confianca: extracted.campos_baixa_confianca ?? [],\n    pendencias: extracted.pendencias ?? [],\n    status,\n    requer_revisao_humana: status === 'needs_review',\n    anthropic_file_id: $('Upload to Anthropic Files API').item.json.id\n  }\n}];"
+      },
+      "id": "parse-result",
+      "name": "Parse & Structure Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1680, 300]
+    },
+    {
+      "parameters": {
+        "authentication": "headerAuth",
+        "requestMethod": "PATCH",
+        "url": "={{ $env.NEXT_PUBLIC_SUPABASE_URL }}/rest/v1/ma_document_extractions?id=eq.{{ $json.extraction_id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" },
+            { "name": "Prefer", "value": "return=minimal" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"status\": \"{{ $json.status }}\",\n  \"tipo_documento\": \"{{ $json.tipo_documento }}\",\n  \"dados_extraidos\": {{ JSON.stringify($json.dados_extraidos) }},\n  \"resumo\": \"{{ $json.resumo }}\",\n  \"confiabilidade\": {{ $json.confiabilidade }},\n  \"campos_baixa_confianca\": {{ JSON.stringify($json.campos_baixa_confianca) }},\n  \"pendencias\": {{ JSON.stringify($json.pendencias) }},\n  \"requer_revisao_humana\": {{ $json.requer_revisao_humana }},\n  \"anthropic_file_id\": \"{{ $json.anthropic_file_id }}\",\n  \"processed_at\": \"{{ new Date().toISOString() }}\"\n}",
+        "options": {}
+      },
+      "id": "update-extraction",
+      "name": "Update extraction in Supabase",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1920, 300]
+    },
+    {
+      "parameters": {
+        "authentication": "headerAuth",
+        "requestMethod": "DELETE",
+        "url": "https://api.anthropic.com/v1/files/{{ $('Parse & Structure Result').item.json.anthropic_file_id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-api-key", "value": "={{ $env.ANTHROPIC_API_KEY }}" },
+            { "name": "anthropic-version", "value": "2023-06-01" },
+            { "name": "anthropic-beta", "value": "files-api-2025-04-14" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "cleanup-file",
+      "name": "Cleanup Anthropic file",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2160, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Error handler — update extraction status to 'error' in Supabase\nconst error = $input.item.json.error?.message ?? 'Erro desconhecido no W9';\nconst webhook = $('Webhook W9').item?.json?.body ?? {};\n\nreturn [{\n  json: {\n    extraction_id: webhook.extraction_id,\n    error_message: String(error).substring(0, 500)\n  }\n}];"
+      },
+      "id": "error-handler",
+      "name": "Error Handler",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1200, 520]
+    },
+    {
+      "parameters": {
+        "authentication": "headerAuth",
+        "requestMethod": "PATCH",
+        "url": "={{ $env.NEXT_PUBLIC_SUPABASE_URL }}/rest/v1/ma_document_extractions?id=eq.{{ $json.extraction_id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" },
+            { "name": "Prefer", "value": "return=minimal" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"status\": \"error\", \"error_message\": \"{{ $json.error_message }}\" }",
+        "options": {}
+      },
+      "id": "set-error-status",
+      "name": "Set status = error",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1440, 520]
+    }
+  ],
+  "connections": {
+    "Webhook W9": {
+      "main": [[{ "node": "Set status = processing", "type": "main", "index": 0 }]]
+    },
+    "Set status = processing": {
+      "main": [[{ "node": "Get signed URL", "type": "main", "index": 0 }]]
+    },
+    "Get signed URL": {
+      "main": [[{ "node": "Download PDF", "type": "main", "index": 0 }]]
+    },
+    "Download PDF": {
+      "main": [[{ "node": "Upload to Anthropic Files API", "type": "main", "index": 0 }]]
+    },
+    "Upload to Anthropic Files API": {
+      "main": [[{ "node": "Claude Phase 1 — Extração OCR", "type": "main", "index": 0 }]]
+    },
+    "Claude Phase 1 — Extração OCR": {
+      "main": [[{ "node": "Parse & Structure Result", "type": "main", "index": 0 }]]
+    },
+    "Parse & Structure Result": {
+      "main": [[{ "node": "Update extraction in Supabase", "type": "main", "index": 0 }]]
+    },
+    "Update extraction in Supabase": {
+      "main": [[{ "node": "Cleanup Anthropic file", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "W0-error-catch"
+  },
+  "staticData": null,
+  "tags": [{ "name": "V3", "createdAt": "2026-05-27" }, { "name": "M&A", "createdAt": "2026-05-27" }],
+  "triggerCount": 1,
+  "updatedAt": "2026-05-27T00:00:00.000Z",
+  "versionId": "1"
+}

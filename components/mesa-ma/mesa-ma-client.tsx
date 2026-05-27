@@ -310,6 +310,7 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
   const [cardDocs, setCardDocs] = useState<DocEntry[]>([]);
   const [docsLoading, setDocsLoading] = useState(false);
   const [uploadingDoc, setUploadingDoc] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<number>(0);
   const [copiedDoc, setCopiedDoc] = useState<string | null>(null);
   const detailFileRef = useRef<HTMLInputElement>(null);
 
@@ -1521,20 +1522,67 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
                       for (const file of files) {
                         const docId = `doc_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
                         setUploadingDoc(docId);
-                        const form = new FormData();
-                        form.append("file", file);
-                        form.append("deal_id", selectedCard.id);
-                        form.append("doc_id", docId);
+                        setUploadProgress(0);
                         try {
-                          const res = await fetch("/api/ma/documents", { method: "POST", body: form });
-                          const json = await res.json();
-                          if (json.ok && json.document) {
-                            setCardDocs(prev => [...prev, { ...json.document }]);
+                          if (file.size > 4 * 1024 * 1024) {
+                            // Arquivo grande: upload direto ao Supabase Storage via URL assinada
+                            const urlRes = await fetch(
+                              `/api/ma/documents/upload-url?deal_id=${selectedCard.id}&doc_id=${encodeURIComponent(docId)}&file_name=${encodeURIComponent(file.name)}`
+                            );
+                            if (!urlRes.ok) throw new Error((await urlRes.json()).error ?? "Erro ao obter URL");
+                            const { token, storagePath } = await urlRes.json() as { signedUrl: string; token: string; storagePath: string };
+
+                            // Upload via XHR para ter progresso real
+                            await new Promise<void>((resolve, reject) => {
+                              const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+                              const xhr = new XMLHttpRequest();
+                              xhr.open("PUT", `${supabaseUrl}/storage/v1/object/upload/sign/ma-documents/${storagePath}?token=${token}`);
+                              xhr.setRequestHeader("Content-Type", file.type || "application/pdf");
+                              xhr.upload.onprogress = (ev) => {
+                                if (ev.lengthComputable) setUploadProgress(Math.round((ev.loaded / ev.total) * 100));
+                              };
+                              xhr.onload = () => xhr.status < 300 ? resolve() : reject(new Error(`Storage: ${xhr.status}`));
+                              xhr.onerror = () => reject(new Error("Falha na conexão com o storage"));
+                              xhr.send(file);
+                            });
+
+                            setUploadProgress(100);
+
+                            // Registra metadados
+                            const regRes = await fetch("/api/ma/documents/register", {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({
+                                deal_id: selectedCard.id, doc_id: docId,
+                                file_name: file.name, storage_path: storagePath,
+                                file_size_bytes: file.size,
+                              }),
+                            });
+                            const regJson = await regRes.json();
+                            if (regJson.ok && regJson.document) {
+                              setCardDocs(prev => [...prev, { ...regJson.document }]);
+                            } else {
+                              alert(regJson.error ?? "Erro ao registrar arquivo");
+                            }
                           } else {
-                            alert(json.error ?? "Erro ao enviar arquivo");
+                            // Arquivo pequeno (≤ 4MB): fluxo original via FormData
+                            const form = new FormData();
+                            form.append("file", file);
+                            form.append("deal_id", selectedCard.id);
+                            form.append("doc_id", docId);
+                            const res = await fetch("/api/ma/documents", { method: "POST", body: form });
+                            const json = await res.json();
+                            if (json.ok && json.document) {
+                              setCardDocs(prev => [...prev, { ...json.document }]);
+                            } else {
+                              alert(json.error ?? "Erro ao enviar arquivo");
+                            }
                           }
-                        } catch { alert("Erro ao enviar arquivo"); }
+                        } catch (err) {
+                          alert(err instanceof Error ? err.message : "Erro ao enviar arquivo");
+                        }
                         setUploadingDoc(null);
+                        setUploadProgress(0);
                       }
                     }}
                   />
@@ -1580,9 +1628,24 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
                         </div>
                       ))}
                       {uploadingDoc && (
-                        <div className="flex items-center gap-2 px-2.5 py-2 rounded-lg bg-[#0F1E35] border border-dashed border-[#C9A84C]/40">
-                          <div className="w-3 h-3 border-2 border-[#C9A84C]/40 border-t-[#C9A84C] rounded-full animate-spin flex-shrink-0" />
-                          <span className="text-xs text-[#7A8FA8]">Enviando...</span>
+                        <div className="px-2.5 py-2 rounded-lg bg-[#0F1E35] border border-dashed border-[#C9A84C]/40">
+                          <div className="flex items-center gap-2 mb-1.5">
+                            <div className="w-3 h-3 border-2 border-[#C9A84C]/40 border-t-[#C9A84C] rounded-full animate-spin flex-shrink-0" />
+                            <span className="text-xs text-[#7A8FA8] flex-1">
+                              {uploadProgress > 0 ? `Enviando... ${uploadProgress}%` : "Preparando envio..."}
+                            </span>
+                            {uploadProgress > 0 && (
+                              <span className="text-[10px] font-bold text-[#C9A84C]">{uploadProgress}%</span>
+                            )}
+                          </div>
+                          {uploadProgress > 0 && (
+                            <div className="h-1 rounded-full bg-[#122036] overflow-hidden">
+                              <div
+                                className="h-full rounded-full transition-all duration-300"
+                                style={{ width: `${uploadProgress}%`, background: uploadProgress === 100 ? "#10B981" : "#C9A84C" }}
+                              />
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>

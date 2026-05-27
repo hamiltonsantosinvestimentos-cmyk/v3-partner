@@ -132,6 +132,33 @@ export function ForjaPanel({ deal, dealId, savedResult, onSaved, onReportSaved }
       .finally(() => setDocsLoading(false));
   }, [dealId]);
 
+  // Polling: re-fetch extraction status every 10s while any doc is queued or processing
+  useEffect(() => {
+    const hasActive = Object.values(extractions).some(
+      (e) => e.status === "queued" || e.status === "processing"
+    );
+    if (!hasActive || !dealId) return;
+
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/ma/doc-extract?deal_id=${dealId}`);
+        const data = await res.json() as { extractions?: Array<Record<string, unknown>> };
+        const newMap: Record<string, ExtractionStatus> = {};
+        for (const ext of (data.extractions ?? [])) {
+          newMap[ext.doc_id as string] = {
+            id:             ext.id as string,
+            status:         ext.status as string,
+            confiabilidade: (ext.confiabilidade as number) ?? 0,
+            tipo_documento: (ext.tipo_documento as string) ?? "",
+          };
+        }
+        setExtractions(newMap);
+      } catch { /* ignore network errors during poll */ }
+    }, 10_000);
+
+    return () => clearInterval(interval);
+  }, [dealId, extractions]);
+
   const toggleDoc = (id: string) =>
     setSelectedDocIds((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
@@ -616,12 +643,16 @@ export function ForjaPanel({ deal, dealId, savedResult, onSaved, onReportSaved }
                               <span className={`text-[8px] font-bold uppercase px-1.5 py-0.5 rounded border flex-shrink-0 ${
                                 extractions[doc.doc_id].status === "confirmed"
                                   ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
+                                  : extractions[doc.doc_id].status === "queued"
+                                  ? "bg-[#243A66]/50 border-[#243A66] text-[#C9A84C] animate-pulse"
                                   : extractions[doc.doc_id].status === "processing"
                                   ? "bg-[#243A66]/50 border-[#243A66] text-[#9BAFC5] animate-pulse"
                                   : "bg-amber-500/10 border-amber-500/30 text-amber-400"
                               }`}>
                                 {extractions[doc.doc_id].status === "confirmed"
                                   ? `OK ${extractions[doc.doc_id].confiabilidade}%`
+                                  : extractions[doc.doc_id].status === "queued"
+                                  ? "Na fila"
                                   : extractions[doc.doc_id].status === "processing"
                                   ? "Processando"
                                   : `${extractions[doc.doc_id].confiabilidade}%`}
@@ -632,11 +663,14 @@ export function ForjaPanel({ deal, dealId, savedResult, onSaved, onReportSaved }
                               disabled={
                                 !!extractingDocId ||
                                 extractions[doc.doc_id]?.status === "confirmed" ||
+                                extractions[doc.doc_id]?.status === "queued" ||
                                 extractions[doc.doc_id]?.status === "processing"
                               }
                               title={
                                 extractions[doc.doc_id]?.status === "confirmed"
                                   ? "Dados já confirmados e persistidos no deal"
+                                  : extractions[doc.doc_id]?.status === "queued"
+                                  ? "PDF grande na fila de processamento — atualizado automaticamente"
                                   : extractions[doc.doc_id]?.status === "processing"
                                   ? "Extração em andamento — aguarde"
                                   : extractions[doc.doc_id]?.status === "done" || extractions[doc.doc_id]?.status === "needs_review"
@@ -646,7 +680,7 @@ export function ForjaPanel({ deal, dealId, savedResult, onSaved, onReportSaved }
                               className={`flex items-center gap-1 px-2 py-1 rounded-md text-[9px] font-bold uppercase tracking-wide border flex-shrink-0 transition-colors ${
                                 extractions[doc.doc_id]?.status === "confirmed"
                                   ? "border-emerald-500/20 text-emerald-400/50 bg-emerald-500/5 cursor-not-allowed"
-                                  : extractions[doc.doc_id]?.status === "processing"
+                                  : extractions[doc.doc_id]?.status === "queued" || extractions[doc.doc_id]?.status === "processing"
                                   ? "border-[#243A66] text-[#9BAFC5]/50 cursor-not-allowed"
                                   : extractions[doc.doc_id]?.status === "done" || extractions[doc.doc_id]?.status === "needs_review"
                                   ? "border-amber-500/30 text-amber-400 hover:bg-amber-500/10 disabled:opacity-40 disabled:cursor-not-allowed"
@@ -657,12 +691,16 @@ export function ForjaPanel({ deal, dealId, savedResult, onSaved, onReportSaved }
                                 ? <Loader2 className="w-2.5 h-2.5 animate-spin" />
                                 : extractions[doc.doc_id]?.status === "confirmed"
                                 ? <CheckCheck className="w-2.5 h-2.5" />
+                                : extractions[doc.doc_id]?.status === "queued"
+                                ? <Loader2 className="w-2.5 h-2.5 animate-spin" />
                                 : <DatabaseZap className="w-2.5 h-2.5" />
                               }
                               {extractingDocId === doc.doc_id
                                 ? "Extraindo..."
                                 : extractions[doc.doc_id]?.status === "confirmed"
                                 ? "Confirmado"
+                                : extractions[doc.doc_id]?.status === "queued"
+                                ? "Na fila"
                                 : extractions[doc.doc_id]?.status === "done" || extractions[doc.doc_id]?.status === "needs_review"
                                 ? "Revisar"
                                 : "Persistir"}
