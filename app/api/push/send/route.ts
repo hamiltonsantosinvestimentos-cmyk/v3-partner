@@ -9,15 +9,20 @@ function svc() {
   );
 }
 
-webpush.setVapidDetails(
-  process.env.VAPID_EMAIL ?? "mailto:admin@v3partners.com.br",
-  process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!,
-  process.env.VAPID_PRIVATE_KEY!
-);
-
 // POST — envia push para um usuário (uso interno/server-side apenas)
 // Chamado internamente por outras APIs, não diretamente pelo cliente.
 export async function POST(req: NextRequest) {
+  const vapidPublic = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+  const vapidPrivate = process.env.VAPID_PRIVATE_KEY;
+  if (!vapidPublic || !vapidPrivate) {
+    return NextResponse.json({ error: "VAPID keys não configuradas" }, { status: 503 });
+  }
+  webpush.setVapidDetails(
+    process.env.VAPID_EMAIL ?? "mailto:admin@v3partners.com.br",
+    vapidPublic,
+    vapidPrivate
+  );
+
   // Verificação de segurança: apenas chamadas internas com service role key
   const authHeader = req.headers.get("x-internal-secret");
   if (authHeader !== process.env.SUPABASE_SERVICE_ROLE_KEY) {
