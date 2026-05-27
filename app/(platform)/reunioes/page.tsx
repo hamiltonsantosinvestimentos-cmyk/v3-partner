@@ -26,7 +26,7 @@ export default async function ReunioesPage() {
 
   const { data: summaries } = await svc
     .from("meeting_summaries")
-    .select("id, title, summary, action_items, participants, duration_minutes, meeting_date, created_at")
+    .select("id, title, summary, action_items, participants, duration_minutes, meeting_date, created_at, source, ma_deal_id")
     .eq("user_id", user.id)
     .order("created_at", { ascending: false })
     .limit(20);

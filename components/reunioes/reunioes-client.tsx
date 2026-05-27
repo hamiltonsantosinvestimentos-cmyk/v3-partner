@@ -14,6 +14,8 @@ import {
   Calendar,
   Clock,
   Users,
+  TrendingUp,
+  Tag,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -38,6 +40,12 @@ interface GeneratedResult {
   sentiment: string;
   meeting_date: string;
   created_at: string;
+}
+
+interface MAIngestResult {
+  deal_code: string | null;
+  deal_id: string | null;
+  action_items_created: number;
 }
 
 interface Profile {
@@ -97,6 +105,8 @@ export function ReunioesClient({ profile, initialSummaries }: ReunioesClientProp
 
   // UI state
   const [isLoading, setIsLoading] = useState(false);
+  const [isSavingToMA, setIsSavingToMA] = useState(false);
+  const [maResult, setMaResult] = useState<MAIngestResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [mode, setMode] = useState<"new" | "detail">("new");
@@ -188,8 +198,44 @@ export function ReunioesClient({ profile, initialSummaries }: ReunioesClientProp
     }
   }, [generatedResult]);
 
+  const handleSaveToMA = useCallback(async () => {
+    if (!generatedResult) return;
+    setIsSavingToMA(true);
+    try {
+      const participants = participantsInput
+        .split(",")
+        .map((p) => p.trim())
+        .filter(Boolean);
+
+      const res = await fetch("/api/ma/meetings/ingest", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          source: "manual",
+          title: generatedResult.title,
+          transcript: transcript.trim(),
+          meeting_date: generatedResult.meeting_date,
+          duration_minutes: duration ? parseInt(duration, 10) : undefined,
+          participants,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error ?? "Erro ao salvar no pipeline M&A.");
+        return;
+      }
+      setMaResult({ deal_code: data.deal_code, deal_id: data.deal_id, action_items_created: data.action_items_created });
+    } catch {
+      setError("Falha ao conectar ao pipeline M&A.");
+    } finally {
+      setIsSavingToMA(false);
+    }
+  }, [generatedResult, participantsInput, transcript, duration]);
+
   const handleNewMeeting = () => {
     setGeneratedResult(null);
+    setMaResult(null);
     setTitle("");
     setParticipantsInput("");
     setDuration("");
@@ -428,6 +474,10 @@ export function ReunioesClient({ profile, initialSummaries }: ReunioesClientProp
             onCopy={handleCopy}
             copied={copied}
             onNew={handleNewMeeting}
+            onSaveToMA={handleSaveToMA}
+            isSavingToMA={isSavingToMA}
+            maResult={maResult}
+            userRole={profile.role}
           />
         )}
       </div>
@@ -550,17 +600,27 @@ function DetailView({
   );
 }
 
+const MA_ROLES = ["ADMIN", "GESTAO"];
+
 // ── Result View ───────────────────────────────────────────────────────────────
 function ResultView({
   result,
   onCopy,
   copied,
   onNew,
+  onSaveToMA,
+  isSavingToMA,
+  maResult,
+  userRole,
 }: {
   result: GeneratedResult;
   onCopy: () => void;
   copied: boolean;
   onNew: () => void;
+  onSaveToMA: () => void;
+  isSavingToMA: boolean;
+  maResult: MAIngestResult | null;
+  userRole: string;
 }) {
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -587,6 +647,26 @@ function ResultView({
             )}
             {copied ? "Copiado!" : "Copiar resumo"}
           </button>
+          {MA_ROLES.includes(userRole) && !maResult && (
+            <button
+              onClick={onSaveToMA}
+              disabled={isSavingToMA}
+              className="flex items-center gap-1.5 text-xs bg-[#162744] text-[#9BAFC5] border border-[#243A66] hover:border-[#C9A84C]/40 hover:text-[#C9A84C] disabled:opacity-40 disabled:cursor-not-allowed transition-colors px-3 py-1.5 rounded-lg font-medium"
+            >
+              {isSavingToMA ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <TrendingUp className="w-3.5 h-3.5" />
+              )}
+              {isSavingToMA ? "Salvando..." : "Salvar no Pipeline M&A"}
+            </button>
+          )}
+          {maResult?.deal_code && (
+            <div className="flex items-center gap-1.5 text-xs bg-[#C9A84C]/10 text-[#C9A84C] border border-[#C9A84C]/30 px-3 py-1.5 rounded-lg font-medium">
+              <Tag className="w-3.5 h-3.5" />
+              {maResult.deal_code}
+            </div>
+          )}
           <button
             onClick={onNew}
             className="flex items-center gap-1.5 text-xs bg-[#C9A84C]/15 text-[#C9A84C] border border-[#C9A84C]/30 hover:bg-[#C9A84C]/25 transition-colors px-3 py-1.5 rounded-lg font-medium"
