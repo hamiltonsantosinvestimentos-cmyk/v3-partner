@@ -10,7 +10,7 @@ import { STATUS_LABELS, STATUS_COLORS, type OperationStatus } from "@/lib/consta
 import { NovaPropostaModal } from "./nova-proposta-modal";
 import { PropostaDetailModal, type ProposalFull } from "./proposta-detail-modal";
 import {
-  AdvancedFilters, applyFilters, getSLAInfo, SLABadge, SLATargetDate,
+  AdvancedFilters, applyFilters, getSLAInfo, SLATargetDate,
   EMPTY_FILTERS, type FilterState,
 } from "./advanced-filters";
 
@@ -248,13 +248,10 @@ export function CreditDeskLevel1Client({ proposals: initial, currentUser }: Cred
                     <div className="flex items-center justify-center py-8 text-[11px] text-muted-foreground/40">Vazio</div>
                   ) : (
                     cards.map((p) => {
-                      const slaInfo = getSLAInfo(p);
-                      const { sla, hoursLeft, hoursLimit, pct, targetDate } = slaInfo;
+                      const { targetDate } = getSLAInfo(p);
                       return (
                         <div key={p.id} onClick={() => setDetailProposal(p)}
-                          className={`bg-card border rounded-lg p-3 cursor-pointer hover:border-primary/40 hover:bg-card/80 transition-all space-y-2 group ${
-                            sla === "expired" || sla === "critical" ? "border-red-500/40" : sla === "warning" ? "border-amber-500/40" : "border-border/60"
-                          }`}>
+                          className="bg-card border border-border/60 rounded-lg p-3 cursor-pointer hover:border-primary/40 hover:bg-card/80 transition-all space-y-2 group">
                           <div className="flex items-center justify-between gap-1">
                             <span className="font-mono text-[9px] text-muted-foreground truncate">{p.code}</span>
                             <Badge className={`${STATUS_COLORS[p.status as OperationStatus]} text-[9px] px-1.5 py-0 leading-4`}>
@@ -266,19 +263,7 @@ export function CreditDeskLevel1Client({ proposals: initial, currentUser }: Cred
                             <Badge variant="info" className="text-[9px] truncate max-w-[100px]">{p.credit_line}</Badge>
                             <span className="text-[10px] font-bold text-emerald-400 flex-shrink-0">{formatCurrency(p.requested_value)}</span>
                           </div>
-                          <div className="flex items-center gap-1 flex-wrap">
-                            <SLATargetDate targetDate={targetDate} />
-                            {sla !== "ok" && (
-                              <>
-                                <div className="h-1 w-full rounded-full bg-white/10 overflow-hidden">
-                                  <div className={`h-full rounded-full transition-all ${
-                                    sla === "expired" || sla === "critical" ? "bg-red-500" : "bg-amber-400"
-                                  }`} style={{ width: `${pct}%` }} />
-                                </div>
-                                <SLABadge sla={sla} hoursLeft={hoursLeft} hoursLimit={hoursLimit} pct={pct} />
-                              </>
-                            )}
-                          </div>
+                          {targetDate && <SLATargetDate targetDate={targetDate} />}
                         </div>
                       );
                     })
@@ -315,15 +300,10 @@ export function CreditDeskLevel1Client({ proposals: initial, currentUser }: Cred
                 </thead>
                 <tbody>
                   {filtered.map((p) => {
-                    const { sla, hoursLeft, hoursLimit, pct, hoursElapsed, targetDate } = getSLAInfo(p);
-                    const hoursLeftDisplay = hoursLeft === Infinity ? null : hoursLeft;
+                    const { targetDate } = getSLAInfo(p);
                     return (
                       <tr key={p.id}
-                        className={`border-b border-border/30 cursor-pointer transition-colors ${
-                          sla === "expired" || sla === "critical" ? "bg-red-500/5 hover:bg-red-500/10"
-                          : sla === "warning" ? "bg-amber-500/5 hover:bg-amber-500/10"
-                          : "hover:bg-secondary/50"
-                        }`}
+                        className="border-b border-border/30 cursor-pointer transition-colors hover:bg-secondary/50"
                         onClick={() => setDetailProposal(p)}>
                         <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{p.code}</td>
                         <td className="px-4 py-3 font-medium text-foreground max-w-36 truncate">{p.client_name}</td>
@@ -332,17 +312,8 @@ export function CreditDeskLevel1Client({ proposals: initial, currentUser }: Cred
                         <td className="px-4 py-3 text-right font-semibold text-white">{formatCurrency(p.requested_value)}</td>
                         <td className="px-4 py-3 text-right font-semibold text-emerald-400">{p.approved_value ? formatCurrency(p.approved_value) : "—"}</td>
                         <td className="px-4 py-3 text-xs text-muted-foreground">{p.stage ?? "RECEBIDO"}</td>
-                        <td className="px-4 py-3 min-w-[120px]">
-                          <div className="flex items-center gap-1 flex-wrap">
-                            <SLATargetDate targetDate={targetDate} />
-                            {sla === "ok" ? (
-                              <span className="text-xs text-muted-foreground">
-                                {hoursElapsed < 24 ? `${Math.round(hoursElapsed)}h` : `${Math.round(hoursElapsed / 24)}d`}
-                              </span>
-                            ) : (
-                              <SLABadge sla={sla} hoursLeft={hoursLeftDisplay ?? 0} hoursLimit={hoursLimit} pct={pct} />
-                            )}
-                          </div>
+                        <td className="px-4 py-3">
+                          <SLATargetDate targetDate={targetDate} />
                         </td>
                         <td className="px-4 py-3">
                           <Badge className={STATUS_COLORS[p.status as OperationStatus]}>{STATUS_LABELS[p.status as OperationStatus]}</Badge>
