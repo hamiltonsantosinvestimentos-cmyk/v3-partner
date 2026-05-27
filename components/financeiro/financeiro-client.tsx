@@ -1958,12 +1958,37 @@ function DRETab() {
 // ─── TAB: FLUXO DE CAIXA ─────────────────────────────────────────────────────
 
 function FluxoCaixaTab() {
-  const entradas = DEMO_MOVIMENTOS.filter(m => m.tipo === "ENTRADA").reduce((s, m) => s + m.valor, 0);
-  const saidas = DEMO_MOVIMENTOS.filter(m => m.tipo === "SAIDA").reduce((s, m) => s + m.valor, 0);
-  const saldoFinal = SALDO_INICIAL_MARCO + entradas - saidas;
+  const [movimentos, setMovimentos] = useState<(import("@/lib/demo-data-financeiro").MovimentoCaixa)[]>([]);
+  const [loadingFluxo, setLoadingFluxo] = useState(true);
 
-  let saldoAcum = SALDO_INICIAL_MARCO;
-  const movComSaldo = DEMO_MOVIMENTOS.map(m => {
+  useEffect(() => {
+    fetch("/api/financeiro?type=ASSINATURA_PAGAMENTO")
+      .then(r => r.json())
+      .then((d: { records?: Array<{ id: string; data: { partnerNome?: string; valor?: number; mes?: number; ano?: number; dataPagamento?: string }; created_at: string }> }) => {
+        const records = d.records ?? [];
+        const movs = records.map(r => ({
+          id: r.id,
+          data: r.data.dataPagamento ?? r.created_at.split("T")[0],
+          descricao: `Assinatura — ${r.data.partnerNome ?? "Partner"}`,
+          tipo: "ENTRADA" as const,
+          categoria: "Assinatura",
+          valor: r.data.valor ?? 0,
+          mes: r.data.mes ?? new Date(r.created_at).getMonth() + 1,
+          ano: r.data.ano ?? new Date(r.created_at).getFullYear(),
+        }));
+        movs.sort((a, b) => a.data.localeCompare(b.data));
+        setMovimentos(movs);
+      })
+      .catch(() => {})
+      .finally(() => setLoadingFluxo(false));
+  }, []);
+
+  const entradas = movimentos.filter(m => m.tipo === "ENTRADA").reduce((s, m) => s + m.valor, 0);
+  const saidas = movimentos.filter(m => m.tipo === "SAIDA").reduce((s, m) => s + m.valor, 0);
+  const saldoFinal = entradas - saidas;
+
+  let saldoAcum = 0;
+  const movComSaldo = movimentos.map(m => {
     saldoAcum += m.tipo === "ENTRADA" ? m.valor : -m.valor;
     return { ...m, saldoApos: saldoAcum };
   });
@@ -1973,7 +1998,7 @@ function FluxoCaixaTab() {
       <div className="flex justify-end">
         <ExportButton opts={{
           titulo: "Fluxo de Caixa",
-          mes: "Março / 2026",
+          mes: new Date().toLocaleDateString("pt-BR", { month: "long", year: "numeric" }),
           colunas: [
             { header: "Data", key: "data", format: "date", width: 14 },
             { header: "Descrição", key: "descricao", width: 35 },
@@ -1985,12 +2010,11 @@ function FluxoCaixaTab() {
           dados: movComSaldo,
         }} />
       </div>
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-3 gap-4">
         {[
-          { label: "Saldo Inicial", value: SALDO_INICIAL_MARCO, color: "#7A8FA8" },
           { label: "Total Entradas", value: entradas, color: "#22C55E" },
           { label: "Total Saídas", value: saidas, color: "#EF4444" },
-          { label: "Saldo Final", value: saldoFinal, color: "#C9A84C" },
+          { label: "Saldo", value: saldoFinal, color: "#C9A84C" },
         ].map(k => (
           <div key={k.label} className="bg-[#091221] border border-[#122036] rounded-xl p-4">
             <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">{k.label}</p>
@@ -1999,40 +2023,52 @@ function FluxoCaixaTab() {
         ))}
       </div>
 
-      <Card>
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="border-b border-border/40">
-                  {["Data", "Descrição", "Categoria", "Tipo", "Valor", "Saldo Após"].map(h => (
-                    <th key={h} className="text-left px-4 py-3 text-muted-foreground font-semibold uppercase tracking-wide text-[10px]">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {movComSaldo.map((m, i) => (
-                  <tr key={m.id} className={`border-b border-border/20 hover:bg-secondary/30 transition-colors ${i % 2 === 0 ? "" : "bg-[#091221]/40"}`}>
-                    <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">{new Date(m.data + "T00:00:00").toLocaleDateString("pt-BR")}</td>
-                    <td className="px-4 py-3 text-white">{m.descricao}</td>
-                    <td className="px-4 py-3"><span className="text-[10px] bg-secondary px-2 py-0.5 rounded-full text-muted-foreground">{m.categoria}</span></td>
-                    <td className="px-4 py-3">
-                      <span className={`flex items-center gap-1 ${m.tipo === "ENTRADA" ? "text-emerald-400" : "text-red-400"}`}>
-                        {m.tipo === "ENTRADA" ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
-                        {m.tipo === "ENTRADA" ? "Entrada" : "Saída"}
-                      </span>
-                    </td>
-                    <td className={`px-4 py-3 font-semibold ${m.tipo === "ENTRADA" ? "text-emerald-400" : "text-red-400"}`}>
-                      {m.tipo === "ENTRADA" ? "+" : "-"}{formatMoeda(m.valor)}
-                    </td>
-                    <td className="px-4 py-3 font-bold text-white">{formatMoeda(m.saldoApos)}</td>
+      {loadingFluxo ? (
+        <div className="flex items-center justify-center py-16 text-muted-foreground gap-2">
+          <Loader2 className="w-4 h-4 animate-spin" /> Carregando movimentos...
+        </div>
+      ) : (
+        <Card>
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-border/40">
+                    {["Data", "Descrição", "Categoria", "Tipo", "Valor", "Saldo Após"].map(h => (
+                      <th key={h} className="text-left px-4 py-3 text-muted-foreground font-semibold uppercase tracking-wide text-[10px]">{h}</th>
+                    ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
+                </thead>
+                <tbody>
+                  {movComSaldo.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="text-center py-12 text-muted-foreground text-xs">
+                        Nenhum movimento registrado. Registre pagamentos na aba Assinaturas.
+                      </td>
+                    </tr>
+                  ) : movComSaldo.map((m, i) => (
+                    <tr key={m.id} className={`border-b border-border/20 hover:bg-secondary/30 transition-colors ${i % 2 === 0 ? "" : "bg-[#091221]/40"}`}>
+                      <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">{new Date(m.data + "T00:00:00").toLocaleDateString("pt-BR")}</td>
+                      <td className="px-4 py-3 text-white">{m.descricao}</td>
+                      <td className="px-4 py-3"><span className="text-[10px] bg-secondary px-2 py-0.5 rounded-full text-muted-foreground">{m.categoria}</span></td>
+                      <td className="px-4 py-3">
+                        <span className={`flex items-center gap-1 ${m.tipo === "ENTRADA" ? "text-emerald-400" : "text-red-400"}`}>
+                          {m.tipo === "ENTRADA" ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
+                          {m.tipo === "ENTRADA" ? "Entrada" : "Saída"}
+                        </span>
+                      </td>
+                      <td className={`px-4 py-3 font-semibold ${m.tipo === "ENTRADA" ? "text-emerald-400" : "text-red-400"}`}>
+                        {m.tipo === "ENTRADA" ? "+" : "-"}{formatMoeda(m.valor)}
+                      </td>
+                      <td className="px-4 py-3 font-bold text-white">{formatMoeda(m.saldoApos)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
