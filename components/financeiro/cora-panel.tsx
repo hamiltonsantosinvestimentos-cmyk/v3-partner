@@ -26,7 +26,17 @@ interface CoraEntry {
   type: "CREDIT" | "DEBIT";
   amount: number;
   createdAt: string;
-  transaction?: { description?: string; type?: string };
+  transaction?: {
+    description?: string;
+    type?: string;
+    counterParty?: { name?: string; identity?: string };
+  };
+}
+interface ExtratoSummary {
+  startBalance: number;
+  endBalance: number;
+  creditTotal: number;
+  debitTotal: number;
 }
 interface Cobranca {
   id: string;
@@ -83,6 +93,7 @@ export function CoraPanel() {
   const [tab, setTab] = useState<"extrato" | "cobrancas" | "dashboard">("dashboard");
   const [saldo, setSaldo] = useState<Saldo | null>(null);
   const [lancamentos, setLancamentos] = useState<Lancamento[]>([]);
+  const [extratoSummary, setExtratoSummary] = useState<ExtratoSummary | null>(null);
   const [cobrancas, setCobrancas] = useState<Cobranca[]>([]);
   const [statusFilter, setStatusFilter] = useState("");
   const [loading, setLoading] = useState(true);
@@ -112,13 +123,22 @@ export function CoraPanel() {
         setSaldo({ available: sData.available ?? sData.balance ?? 0, blocked: sData.blocked ?? 0 });
       }
       const entries: CoraEntry[] = eData.entries ?? eData.items ?? (Array.isArray(eData) ? eData : []);
-      setLancamentos(entries.map((e: CoraEntry) => ({
-        id: e.id,
-        description: e.transaction?.description ?? e.transaction?.type ?? e.type,
-        amount: e.amount,
-        type: e.type,
-        created_at: e.createdAt,
-      })));
+      setLancamentos(entries.map((e: CoraEntry) => {
+        const counterParty = e.transaction?.counterParty?.name;
+        const txDesc = e.transaction?.description ?? e.transaction?.type;
+        const description = counterParty
+          ? `${counterParty}${txDesc ? ` — ${txDesc}` : ""}`
+          : (txDesc ?? e.type);
+        return { id: e.id, description, amount: e.amount, type: e.type, created_at: e.createdAt };
+      }));
+      if (eData.start || eData.end || eData.aggregations) {
+        setExtratoSummary({
+          startBalance: eData.start?.balance ?? 0,
+          endBalance: eData.end?.balance ?? 0,
+          creditTotal: eData.aggregations?.creditTotal ?? 0,
+          debitTotal: eData.aggregations?.debitTotal ?? 0,
+        });
+      }
 
       const rawList: Cobranca[] = cData.invoices ?? cData.items ?? (Array.isArray(cData) ? cData : []);
       setCobrancas(rawList.filter((c) => c && typeof c === "object" && c.id));
@@ -357,7 +377,29 @@ export function CoraPanel() {
 
       {/* ── Extrato ── */}
       {tab === "extrato" && (
-        <div className="space-y-2">
+        <div className="space-y-3">
+          {/* Resumo do período */}
+          {extratoSummary && (
+            <div className="grid grid-cols-2 gap-2">
+              <div className="p-3 rounded-xl border border-[#243A66] bg-[#0D1929]">
+                <p className="text-[10px] text-muted-foreground mb-1 uppercase tracking-wide">Saldo Inicial</p>
+                <p className="text-sm font-bold text-[#F0ECE4]">{fmtBRL(extratoSummary.startBalance)}</p>
+              </div>
+              <div className="p-3 rounded-xl border border-[#243A66] bg-[#0D1929]">
+                <p className="text-[10px] text-muted-foreground mb-1 uppercase tracking-wide">Saldo Final</p>
+                <p className="text-sm font-bold text-[#C9A84C]">{fmtBRL(extratoSummary.endBalance)}</p>
+              </div>
+              <div className="p-3 rounded-xl border border-emerald-500/20 bg-emerald-500/5">
+                <p className="text-[10px] text-muted-foreground mb-1 uppercase tracking-wide">Total Entradas</p>
+                <p className="text-sm font-bold text-emerald-400">+{fmtBRL(extratoSummary.creditTotal)}</p>
+              </div>
+              <div className="p-3 rounded-xl border border-red-500/20 bg-red-500/5">
+                <p className="text-[10px] text-muted-foreground mb-1 uppercase tracking-wide">Total Saídas</p>
+                <p className="text-sm font-bold text-red-400">-{fmtBRL(extratoSummary.debitTotal)}</p>
+              </div>
+            </div>
+          )}
+
           {loading && <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>}
           {!loading && lancamentos.length === 0 && (
             <div className="text-center py-8 text-muted-foreground text-sm">Nenhum lançamento encontrado.</div>
