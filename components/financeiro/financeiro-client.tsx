@@ -1968,7 +1968,7 @@ function FluxoCaixaTab() {
         const records = d.records ?? [];
         const movs = records.map(r => ({
           id: r.id,
-          data: r.data.dataPagamento ?? r.created_at.split("T")[0],
+          data: (r.data.dataPagamento ?? r.created_at).split("T")[0],
           descricao: `Assinatura — ${r.data.partnerNome ?? "Partner"}`,
           tipo: "ENTRADA" as const,
           categoria: "Assinatura",
