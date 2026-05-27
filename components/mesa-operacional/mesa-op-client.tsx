@@ -1449,6 +1449,9 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
   const [npPartners, setNpPartners] = useState<{ id: string; full_name: string }[]>([]);
   const [npPartnersLoading, setNpPartnersLoading] = useState(false);
   const [npPartnerSearch, setNpPartnerSearch] = useState("");
+  // ─── OCR automático (ao entrar em TRIAGEM) ───────────────────────────────
+  const [ocrAutoRunning, setOcrAutoRunning] = useState<Record<string, boolean>>({});
+
   // ─── Estado de pendência ─────────────────────────────────────────────────
   const [pendingTarget, setPendingTarget] = useState<Ticket | null>(null);
   const [resolveTarget, setResolveTarget] = useState<Ticket | null>(null);
@@ -1902,6 +1905,28 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id: proposalId, stage: newStage }),
     }).catch(() => {});
+
+    // Auto-dispara OCR quando proposta entra em TRIAGEM
+    if (newStage === "TRIAGEM") {
+      setOcrAutoRunning(prev => ({ ...prev, [proposalId]: true }));
+      fetch("/api/credit-proposals/ocr-batch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ proposal_id: proposalId }),
+      })
+        .then(r => r.ok ? r.json() : Promise.reject())
+        .then((data) => {
+          setOcrAutoRunning(prev => { const n = { ...prev }; delete n[proposalId]; return n; });
+          if (data?.ocr_results) {
+            setProposals(prev => prev.map(p => p.id === proposalId
+              ? { ...p, metadata: { ...(p.metadata ?? {}), ocr_results: data.ocr_results, ocr_resumo_geral: data.resumo_geral, ocr_analyzed_at: new Date().toISOString() } }
+              : p
+            ));
+          }
+        })
+        .catch(() => { setOcrAutoRunning(prev => { const n = { ...prev }; delete n[proposalId]; return n; }); });
+    }
+
     // Auto-abre modal de SLA para a nova etapa (exceto FINALIZADO)
     if (newStage !== "FINALIZADO" && SLA_STAGES.includes(newStage as SlaStage)) {
       const proposal = proposals.find(p => p.id === proposalId);
@@ -2204,6 +2229,37 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
                               )}
                             </div>
                           )}
+
+                          {/* Badge OCR automático — validação de documentos */}
+                          {ocrAutoRunning[p.id] ? (
+                            <div className="mt-1.5 flex items-center gap-1.5 px-2 py-1 rounded-lg bg-[#C9A84C]/10 border border-[#C9A84C]/30">
+                              <svg className="w-3 h-3 text-[#C9A84C] animate-spin flex-shrink-0" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                              </svg>
+                              <span className="text-[10px] font-semibold text-[#C9A84C]">Validando documentos...</span>
+                            </div>
+                          ) : (() => {
+                            const ocrResults = p.metadata?.ocr_results as Array<{ resumo: string }> | undefined;
+                            const resumoGeral = (p.metadata?.ocr_resumo_geral as string) ??
+                              (ocrResults?.length
+                                ? (ocrResults.some(r => r.resumo === "reprovado") ? "reprovado"
+                                  : ocrResults.some(r => r.resumo === "atencao") ? "atencao" : "aprovado")
+                                : null);
+                            if (!resumoGeral) return null;
+                            const cfg = {
+                              aprovado: { bg: "bg-emerald-500/15", border: "border-emerald-500/30", text: "text-emerald-400", icon: "✓", label: "Docs OK" },
+                              atencao:  { bg: "bg-amber-500/15",  border: "border-amber-500/30",  text: "text-amber-400",  icon: "⚠", label: "Atenção" },
+                              reprovado:{ bg: "bg-red-500/15",    border: "border-red-500/30",    text: "text-red-400",    icon: "✗", label: "Doc errado" },
+                            }[resumoGeral] ?? null;
+                            if (!cfg) return null;
+                            return (
+                              <div className={`mt-1.5 flex items-center gap-1 px-2 py-1 rounded-lg border ${cfg.bg} ${cfg.border}`}
+                                title={`Validação OCR: ${resumoGeral}`}>
+                                <span className={`text-[10px] font-bold ${cfg.text}`}>{cfg.icon} {cfg.label}</span>
+                              </div>
+                            );
+                          })()}
 
                           {/* Bloco de pendência — exibido quando stage = PENDENCIA */}
                           {p.stage === "PENDENCIA" && (

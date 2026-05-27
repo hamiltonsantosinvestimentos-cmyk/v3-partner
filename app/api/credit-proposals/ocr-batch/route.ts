@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import type { OcrResultado } from "@/app/api/ocr-validar/route";
+import { CHECKLISTS, DEFAULT_CHECKLIST, getDocLabel } from "@/lib/checklists";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -35,7 +36,8 @@ async function analyzeOneDoc(
   docId: string,
   docLabel: string,
   storagePath: string,
-  proposalContext: Record<string, string>
+  proposalContext: Record<string, string>,
+  expectedLabel?: string
 ): Promise<OcrResultado> {
   // Gera URL assinada (60 min)
   const { data: urlData } = await svc().storage.from(BUCKET).createSignedUrl(storagePath, 3600);
@@ -80,7 +82,23 @@ async function analyzeOneDoc(
 
   const ctxLines = Object.entries(proposalContext).map(([k, v]) => `- ${k}: ${v}`).join("\n");
   const systemPrompt = `Você é um sistema de validação documental. Analise documentos e retorne APENAS JSON válido, sem nenhum texto antes ou depois. Nunca use markdown.`;
-  const userPrompt = `Analise este documento (${docLabel}) e compare com os dados da proposta:\n\n${ctxLines}\n\nRetorne exatamente este JSON:\n{"tipo_documento":"string","campos":[{"campo":"string","extraido":"string ou null","esperado":"string ou null","status":"ok ou divergente ou ausente ou info","mensagem":"string curta"}],"resumo":"aprovado ou atencao ou reprovado","observacoes":"string"}\n\nStatus: ok=confere, divergente=não confere, ausente=não encontrado, info=sem comparação. Resumo: aprovado=tudo ok, atencao=divergência menor, reprovado=divergência crítica ou vencido.`;
+
+  const tipoEsperado = expectedLabel ?? docLabel;
+  const tipoInstruction = expectedLabel
+    ? `ATENÇÃO: O documento esperado para este campo é: "${expectedLabel}". O arquivo enviado chama-se "${docLabel}".
+PRIMEIRA VERIFICAÇÃO OBRIGATÓRIA: confirme se o documento visualizado É REALMENTE um(a) "${expectedLabel}". Se NÃO for esse tipo de documento, defina resumo="reprovado" e inclua um campo com status="divergente" e mensagem explicando o tipo real identificado.`
+    : `Documento: ${docLabel}`;
+
+  const userPrompt = `${tipoInstruction}
+
+Dados da proposta:
+${ctxLines}
+
+Retorne exatamente este JSON (sem markdown):
+{"tipo_documento":"string","campos":[{"campo":"string","extraido":"string ou null","esperado":"string ou null","status":"ok ou divergente ou ausente ou info","mensagem":"string curta"}],"resumo":"aprovado ou atencao ou reprovado","observacoes":"string"}
+
+Status: ok=confere, divergente=não confere, ausente=não encontrado, info=sem comparação.
+Resumo: aprovado=documento correto e dados ok, atencao=divergência menor, reprovado=documento errado OU divergência crítica.`;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const mediaBlock: any = isPdf
@@ -156,12 +174,22 @@ export async function POST(req: NextRequest) {
     "Renda/Faturamento": meta.renda_mensal ? fmtCurrency(meta.renda_mensal as number) : meta.faturamento_mensal ? fmtCurrency(meta.faturamento_mensal as number) : "Não informado",
   };
 
+  // Monta mapa doc_id → label esperado pelo checklist
+  const clientType = ((meta.client_type as string) === "PJ" ? "PJ" : "PF") as "PF" | "PJ";
+  const creditLine = proposal.credit_line ?? "";
+  const checklistDocs = CHECKLISTS[creditLine]?.[clientType] ?? DEFAULT_CHECKLIST[clientType];
+  const expectedLabelMap: Record<string, string> = {};
+  for (const item of checklistDocs) {
+    expectedLabelMap[item.id] = item.label;
+  }
+
   // Processa TODOS os documentos anexados (sem deduplicação por doc_id)
   // OCR sequencial para não sobrecarregar API
   const ocrResults: OcrResultado[] = [];
   for (const doc of docs) {
+    const expectedLabel = getDocLabel(doc.doc_id, creditLine, clientType) ?? expectedLabelMap[doc.doc_id];
     try {
-      const resultado = await analyzeOneDoc(doc.doc_id, doc.file_name, doc.storage_path, proposalContext);
+      const resultado = await analyzeOneDoc(doc.doc_id, doc.file_name, doc.storage_path, proposalContext, expectedLabel);
       ocrResults.push(resultado);
     } catch (e) {
       ocrResults.push({
