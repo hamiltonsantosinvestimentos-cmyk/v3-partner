@@ -6,7 +6,7 @@ import {
   CreditCard, Receipt, ChevronLeft, ChevronRight,
   ArrowUpRight, ArrowDownRight, CheckCircle2, Clock,
   AlertCircle, RefreshCw, Plus, Download, Eye, Trash2, Pencil,
-  Crown, ShieldCheck, XCircle, Loader2, Ban, RotateCcw, Building2,
+  Crown, ShieldCheck, XCircle, Loader2, Ban, RotateCcw, Building2, X,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ExportButton } from "@/components/financeiro/export-button";
@@ -1957,64 +1957,257 @@ function DRETab() {
 
 // ─── TAB: FLUXO DE CAIXA ─────────────────────────────────────────────────────
 
-function FluxoCaixaTab() {
-  const [movimentos, setMovimentos] = useState<(import("@/lib/demo-data-financeiro").MovimentoCaixa)[]>([]);
-  const [loadingFluxo, setLoadingFluxo] = useState(true);
+type FonteMovimento = "ASSINATURA" | "CORA" | "MANUAL";
 
-  useEffect(() => {
-    fetch("/api/financeiro?type=ASSINATURA_PAGAMENTO")
-      .then(r => r.json())
-      .then((d: { records?: Array<{ id: string; data: { partnerNome?: string; valor?: number; mes?: number; ano?: number; dataPagamento?: string }; created_at: string }> }) => {
-        const records = d.records ?? [];
-        const movs = records.map(r => ({
-          id: r.id,
-          data: (r.data.dataPagamento ?? r.created_at).split("T")[0],
-          descricao: `Assinatura — ${r.data.partnerNome ?? "Partner"}`,
-          tipo: "ENTRADA" as const,
-          categoria: "Assinatura",
-          valor: r.data.valor ?? 0,
-          mes: r.data.mes ?? new Date(r.created_at).getMonth() + 1,
-          ano: r.data.ano ?? new Date(r.created_at).getFullYear(),
-        }));
-        movs.sort((a, b) => a.data.localeCompare(b.data));
-        setMovimentos(movs);
-      })
-      .catch(() => {})
-      .finally(() => setLoadingFluxo(false));
+interface MovimentoFluxo {
+  id: string;
+  data: string;         // YYYY-MM-DD
+  descricao: string;
+  tipo: "ENTRADA" | "SAIDA";
+  categoria: string;
+  valor: number;        // em reais
+  fonte: FonteMovimento;
+  saldoApos?: number;
+}
+
+const CATEGORIAS_FLUXO = [
+  "Assinatura", "Comissão", "Serviço", "Consultoria",
+  "Transferência", "Despesa Operacional", "Impostos",
+  "Folha de Pagamento", "Fornecedor", "Outros",
+];
+
+interface ManualForm {
+  data: string;
+  descricao: string;
+  tipo: "ENTRADA" | "SAIDA";
+  categoria: string;
+  valor: string;
+}
+
+function NovoMovimentoModal({ onClose, onSalvar }: {
+  onClose: () => void;
+  onSalvar: (mov: MovimentoFluxo) => void;
+}) {
+  const today = new Date().toISOString().split("T")[0];
+  const [form, setForm] = useState<ManualForm>({
+    data: today, descricao: "", tipo: "ENTRADA", categoria: "Outros", valor: "",
+  });
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const up = (k: keyof ManualForm, v: string) => setForm(f => ({ ...f, [k]: v }));
+
+  const salvar = async () => {
+    if (!form.descricao || !form.valor || !form.data) { setErr("Preencha todos os campos"); return; }
+    const valorNum = parseFloat(form.valor.replace(",", "."));
+    if (isNaN(valorNum) || valorNum <= 0) { setErr("Valor inválido"); return; }
+    setSaving(true); setErr(null);
+    try {
+      const res = await fetch("/api/financeiro", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "FLUXO_MANUAL",
+          data: { descricao: form.descricao, tipo: form.tipo, categoria: form.categoria, valor: valorNum, data: form.data },
+        }),
+      });
+      const d = await res.json() as { ok?: boolean; record?: { id: string }; error?: string };
+      if (!res.ok) { setErr(d.error ?? "Erro ao salvar"); return; }
+      onSalvar({
+        id: d.record?.id ?? crypto.randomUUID(),
+        data: form.data,
+        descricao: form.descricao,
+        tipo: form.tipo,
+        categoria: form.categoria,
+        valor: valorNum,
+        fonte: "MANUAL",
+      });
+      onClose();
+    } catch (e) { setErr(String(e)); }
+    setSaving(false);
+  };
+
+  const inputCls = "w-full h-9 px-3 text-sm rounded-lg border bg-[#0A1628] border-[#243A66] text-[#F0ECE4] placeholder:text-[#3A5070] focus:outline-none focus:ring-1 focus:ring-[#C9A84C]/50";
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      <div className="bg-[#111F35] border border-[#243A66] rounded-2xl w-full max-w-md">
+        <div className="flex items-center justify-between p-5 border-b border-[#243A66]">
+          <p className="text-sm font-bold text-white">Novo Lançamento Manual</p>
+          <button onClick={onClose}><X className="w-4 h-4 text-muted-foreground hover:text-white" /></button>
+        </div>
+        <div className="p-5 space-y-4">
+          {/* Tipo */}
+          <div className="grid grid-cols-2 gap-2">
+            {(["ENTRADA", "SAIDA"] as const).map(t => (
+              <button key={t} onClick={() => up("tipo", t)}
+                className={`py-2.5 rounded-xl text-sm font-bold border transition-colors ${form.tipo === t
+                  ? t === "ENTRADA" ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-400" : "bg-red-500/20 border-red-500/40 text-red-400"
+                  : "border-[#243A66] text-muted-foreground hover:text-white"}`}>
+                {t === "ENTRADA" ? "↑ Entrada" : "↓ Saída"}
+              </button>
+            ))}
+          </div>
+          {/* Data + Valor */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs text-[#7A8FA8] mb-1">Data *</label>
+              <input type="date" value={form.data} onChange={e => up("data", e.target.value)} className={inputCls} />
+            </div>
+            <div>
+              <label className="block text-xs text-[#7A8FA8] mb-1">Valor (R$) *</label>
+              <input value={form.valor} onChange={e => up("valor", e.target.value)} placeholder="0,00" className={inputCls} />
+            </div>
+          </div>
+          {/* Descrição */}
+          <div>
+            <label className="block text-xs text-[#7A8FA8] mb-1">Descrição *</label>
+            <input value={form.descricao} onChange={e => up("descricao", e.target.value)} placeholder="Ex: Pagamento cliente X" className={inputCls} />
+          </div>
+          {/* Categoria */}
+          <div>
+            <label className="block text-xs text-[#7A8FA8] mb-1">Categoria</label>
+            <select value={form.categoria} onChange={e => up("categoria", e.target.value)}
+              className={inputCls}>
+              {CATEGORIAS_FLUXO.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+          {err && <p className="text-xs text-red-400 flex items-center gap-1"><AlertCircle className="w-3 h-3" />{err}</p>}
+          <button onClick={salvar} disabled={saving}
+            className="w-full py-2.5 rounded-xl bg-[#C9A84C] hover:bg-[#E8C97A] text-[#09081A] text-sm font-bold transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
+            {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> Salvando...</> : "Salvar Lançamento"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FonteBadge({ fonte }: { fonte: FonteMovimento }) {
+  const map: Record<FonteMovimento, string> = {
+    ASSINATURA: "bg-[#C9A84C]/15 text-[#C9A84C] border-[#C9A84C]/30",
+    CORA: "bg-[#FF7A00]/15 text-[#FF7A00] border-[#FF7A00]/30",
+    MANUAL: "bg-blue-500/15 text-blue-400 border-blue-500/30",
+  };
+  const labels: Record<FonteMovimento, string> = { ASSINATURA: "Assinatura", CORA: "Cora", MANUAL: "Manual" };
+  return (
+    <span className={`text-[9px] font-semibold border px-1.5 py-0.5 rounded ${map[fonte]}`}>{labels[fonte]}</span>
+  );
+}
+
+function FluxoCaixaTab() {
+  const now = new Date();
+  const [mes, setMes] = useState(now.getMonth() + 1);
+  const [ano, setAno] = useState(now.getFullYear());
+  const [movimentos, setMovimentos] = useState<MovimentoFluxo[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showModal, setShowModal] = useState(false);
+
+  const carregar = useCallback(async (m: number, a: number) => {
+    setLoading(true);
+    try {
+      const pad = (n: number) => String(n).padStart(2, "0");
+      const lastDay = new Date(a, m, 0).getDate();
+      const start = `${a}-${pad(m)}-01`;
+      const end = `${a}-${pad(m)}-${lastDay}`;
+
+      const [recRes, coraRes] = await Promise.all([
+        fetch("/api/financeiro"),
+        fetch(`/api/cora/extrato?start=${start}&end=${end}`),
+      ]);
+      const [recData, coraData] = await Promise.all([recRes.json(), coraRes.json()]);
+
+      const movs: MovimentoFluxo[] = [];
+
+      // 1) Assinaturas + lançamentos manuais
+      const records: Array<{ id: string; type: string; data: Record<string, unknown>; created_at: string }> =
+        recData.records ?? [];
+      for (const r of records) {
+        if (r.type === "ASSINATURA_PAGAMENTO") {
+          const d = r.data as { partnerNome?: string; valor?: number; mes?: number; ano?: number; dataPagamento?: string };
+          const dataMov = (d.dataPagamento ?? r.created_at).split("T")[0];
+          const [yyyy, mm] = dataMov.split("-").map(Number);
+          if (mm !== m || yyyy !== a) continue;
+          movs.push({ id: r.id, data: dataMov, descricao: `Assinatura — ${d.partnerNome ?? "Partner"}`, tipo: "ENTRADA", categoria: "Assinatura", valor: d.valor ?? 0, fonte: "ASSINATURA" });
+        } else if (r.type === "FLUXO_MANUAL") {
+          const d = r.data as { descricao?: string; tipo?: string; categoria?: string; valor?: number; data?: string };
+          const dataMov = (d.data ?? r.created_at).split("T")[0];
+          const [yyyy, mm] = dataMov.split("-").map(Number);
+          if (mm !== m || yyyy !== a) continue;
+          movs.push({ id: r.id, data: dataMov, descricao: d.descricao ?? "Lançamento manual", tipo: (d.tipo as "ENTRADA" | "SAIDA") ?? "ENTRADA", categoria: d.categoria ?? "Outros", valor: d.valor ?? 0, fonte: "MANUAL" });
+        }
+      }
+
+      // 2) Extrato Cora
+      const entries: Array<{ id: string; type: string; amount: number; createdAt: string; transaction?: { description?: string; type?: string; counterParty?: { name?: string } } }> =
+        coraData.entries ?? coraData.items ?? [];
+      for (const e of entries) {
+        const dataMov = e.createdAt ? e.createdAt.split("T")[0] : start;
+        const counterParty = e.transaction?.counterParty?.name;
+        const txDesc = e.transaction?.description ?? e.transaction?.type;
+        const descricao = counterParty ? `${counterParty}${txDesc ? ` — ${txDesc}` : ""}` : (txDesc ?? e.type);
+        movs.push({ id: `cora-${e.id}`, data: dataMov, descricao, tipo: e.type === "CREDIT" ? "ENTRADA" : "SAIDA", categoria: e.type === "CREDIT" ? "Transferência" : "Transferência", valor: e.amount / 100, fonte: "CORA" });
+      }
+
+      movs.sort((a, b) => a.data.localeCompare(b.data));
+      setMovimentos(movs);
+    } catch { /* silencioso */ }
+    setLoading(false);
   }, []);
 
-  const entradas = movimentos.filter(m => m.tipo === "ENTRADA").reduce((s, m) => s + m.valor, 0);
-  const saidas = movimentos.filter(m => m.tipo === "SAIDA").reduce((s, m) => s + m.valor, 0);
-  const saldoFinal = entradas - saidas;
+  useEffect(() => { carregar(mes, ano); }, [mes, ano, carregar]);
 
-  let saldoAcum = 0;
+  const handleAdicionarManual = (mov: MovimentoFluxo) => {
+    setMovimentos(prev => [...prev, mov].sort((a, b) => a.data.localeCompare(b.data)));
+  };
+
+  const entradas = movimentos.filter(m => m.tipo === "ENTRADA").reduce((s, m) => s + m.valor, 0);
+  const saidas   = movimentos.filter(m => m.tipo === "SAIDA").reduce((s, m) => s + m.valor, 0);
+  const saldo    = entradas - saidas;
+
+  let acum = 0;
   const movComSaldo = movimentos.map(m => {
-    saldoAcum += m.tipo === "ENTRADA" ? m.valor : -m.valor;
-    return { ...m, saldoApos: saldoAcum };
+    acum += m.tipo === "ENTRADA" ? m.valor : -m.valor;
+    return { ...m, saldoApos: acum };
   });
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-end">
-        <ExportButton opts={{
-          titulo: "Fluxo de Caixa",
-          mes: new Date().toLocaleDateString("pt-BR", { month: "long", year: "numeric" }),
-          colunas: [
-            { header: "Data", key: "data", format: "date", width: 14 },
-            { header: "Descrição", key: "descricao", width: 35 },
-            { header: "Categoria", key: "categoria", width: 18 },
-            { header: "Tipo", key: "tipo", width: 10 },
-            { header: "Valor", key: "valor", format: "moeda", width: 18 },
-            { header: "Saldo Após", key: "saldoApos", format: "moeda", width: 18 },
-          ],
-          dados: movComSaldo,
-        }} />
+      {/* Toolbar */}
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <MonthSelector mes={mes} ano={ano} onChange={(m, a) => { setMes(m); setAno(a); }} />
+        <div className="flex items-center gap-2">
+          <button onClick={() => carregar(mes, ano)} disabled={loading}
+            className="p-2 rounded-lg border border-[#243A66] text-[#7A8FA8] hover:text-white transition-colors">
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
+          </button>
+          <button onClick={() => setShowModal(true)}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#C9A84C] hover:bg-[#E8C97A] text-[#09081A] text-xs font-bold transition-colors">
+            <Plus className="w-3.5 h-3.5" /> Novo Lançamento
+          </button>
+          <ExportButton opts={{
+            titulo: "Fluxo de Caixa",
+            mes: `${MESES_PT[mes - 1]}/${ano}`,
+            colunas: [
+              { header: "Data", key: "data", format: "date", width: 14 },
+              { header: "Descrição", key: "descricao", width: 35 },
+              { header: "Categoria", key: "categoria", width: 18 },
+              { header: "Fonte", key: "fonte", width: 12 },
+              { header: "Tipo", key: "tipo", width: 10 },
+              { header: "Valor", key: "valor", format: "moeda", width: 18 },
+              { header: "Saldo Após", key: "saldoApos", format: "moeda", width: 18 },
+            ],
+            dados: movComSaldo,
+          }} />
+        </div>
       </div>
+
+      {/* KPIs */}
       <div className="grid grid-cols-3 gap-4">
         {[
           { label: "Total Entradas", value: entradas, color: "#22C55E" },
-          { label: "Total Saídas", value: saidas, color: "#EF4444" },
-          { label: "Saldo", value: saldoFinal, color: "#C9A84C" },
+          { label: "Total Saídas",   value: saidas,   color: "#EF4444" },
+          { label: "Saldo do Mês",   value: saldo,    color: saldo >= 0 ? "#C9A84C" : "#EF4444" },
         ].map(k => (
           <div key={k.label} className="bg-[#091221] border border-[#122036] rounded-xl p-4">
             <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">{k.label}</p>
@@ -2023,9 +2216,10 @@ function FluxoCaixaTab() {
         ))}
       </div>
 
-      {loadingFluxo ? (
+      {/* Tabela */}
+      {loading ? (
         <div className="flex items-center justify-center py-16 text-muted-foreground gap-2">
-          <Loader2 className="w-4 h-4 animate-spin" /> Carregando movimentos...
+          <Loader2 className="w-4 h-4 animate-spin" /> Carregando...
         </div>
       ) : (
         <Card>
@@ -2034,7 +2228,7 @@ function FluxoCaixaTab() {
               <table className="w-full text-xs">
                 <thead>
                   <tr className="border-b border-border/40">
-                    {["Data", "Descrição", "Categoria", "Tipo", "Valor", "Saldo Após"].map(h => (
+                    {["Data", "Descrição", "Categoria", "Fonte", "Tipo", "Valor", "Saldo Após"].map(h => (
                       <th key={h} className="text-left px-4 py-3 text-muted-foreground font-semibold uppercase tracking-wide text-[10px]">{h}</th>
                     ))}
                   </tr>
@@ -2042,15 +2236,17 @@ function FluxoCaixaTab() {
                 <tbody>
                   {movComSaldo.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="text-center py-12 text-muted-foreground text-xs">
-                        Nenhum movimento registrado. Registre pagamentos na aba Assinaturas.
+                      <td colSpan={7} className="text-center py-12 text-muted-foreground text-xs">
+                        Nenhum movimento em {MESES_PT[mes - 1]}/{ano}.<br />
+                        <span className="text-[10px]">Os lançamentos do Cora e das Assinaturas aparecem aqui automaticamente.</span>
                       </td>
                     </tr>
                   ) : movComSaldo.map((m, i) => (
                     <tr key={m.id} className={`border-b border-border/20 hover:bg-secondary/30 transition-colors ${i % 2 === 0 ? "" : "bg-[#091221]/40"}`}>
-                      <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">{new Date(m.data + "T00:00:00").toLocaleDateString("pt-BR")}</td>
-                      <td className="px-4 py-3 text-white">{m.descricao}</td>
+                      <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">{new Date(m.data + "T12:00:00").toLocaleDateString("pt-BR")}</td>
+                      <td className="px-4 py-3 text-white max-w-[220px] truncate" title={m.descricao}>{m.descricao}</td>
                       <td className="px-4 py-3"><span className="text-[10px] bg-secondary px-2 py-0.5 rounded-full text-muted-foreground">{m.categoria}</span></td>
+                      <td className="px-4 py-3"><FonteBadge fonte={m.fonte} /></td>
                       <td className="px-4 py-3">
                         <span className={`flex items-center gap-1 ${m.tipo === "ENTRADA" ? "text-emerald-400" : "text-red-400"}`}>
                           {m.tipo === "ENTRADA" ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
@@ -2060,7 +2256,7 @@ function FluxoCaixaTab() {
                       <td className={`px-4 py-3 font-semibold ${m.tipo === "ENTRADA" ? "text-emerald-400" : "text-red-400"}`}>
                         {m.tipo === "ENTRADA" ? "+" : "-"}{formatMoeda(m.valor)}
                       </td>
-                      <td className="px-4 py-3 font-bold text-white">{formatMoeda(m.saldoApos)}</td>
+                      <td className="px-4 py-3 font-bold text-white">{formatMoeda(m.saldoApos ?? 0)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -2068,6 +2264,13 @@ function FluxoCaixaTab() {
             </div>
           </CardContent>
         </Card>
+      )}
+
+      {showModal && (
+        <NovoMovimentoModal
+          onClose={() => setShowModal(false)}
+          onSalvar={handleAdicionarManual}
+        />
       )}
     </div>
   );
