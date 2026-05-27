@@ -53,7 +53,14 @@ function fmtBRL(centavos: number) {
   return (centavos / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 function fmtDate(s: string) {
-  return new Date(s + (s.length === 10 ? "T12:00:00" : "")).toLocaleDateString("pt-BR");
+  if (!s) return "—";
+  // tenta ISO ou YYYY-MM-DD
+  let d = new Date(s.length === 10 ? s + "T12:00:00" : s);
+  if (!isNaN(d.getTime())) return d.toLocaleDateString("pt-BR");
+  // tenta DD/MM/YYYY
+  const m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+  if (m) { d = new Date(`${m[3]}-${m[2]}-${m[1]}T12:00:00`); }
+  return isNaN(d.getTime()) ? s : d.toLocaleDateString("pt-BR");
 }
 
 const STATUS_LABEL: Record<string, { label: string; cls: string }> = {
