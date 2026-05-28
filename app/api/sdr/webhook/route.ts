@@ -6,17 +6,6 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-// Armazena o último QR code em memória para exibição
-let lastQrCode: { base64: string; timestamp: number } | null = null;
-
-export async function GET() {
-  // Endpoint para consultar o QR code atual
-  if (lastQrCode && Date.now() - lastQrCode.timestamp < 60000) {
-    return NextResponse.json({ qrcode: lastQrCode.base64 });
-  }
-  return NextResponse.json({ qrcode: null });
-}
-
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -26,11 +15,12 @@ export async function POST(req: NextRequest) {
 
     // ── QR Code gerado ──────────────────────────────────────────────────────
     if (event === "qrcode.updated" && data?.qrcode?.base64) {
-      lastQrCode = {
-        base64: data.qrcode.base64,
-        timestamp: Date.now(),
-      };
-      console.log("[SDR Webhook] QR code recebido e armazenado");
+      await supabase.from("sdr_config").upsert({
+        key: "qrcode",
+        value: data.qrcode.base64,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "key" });
+      console.log("[SDR Webhook] QR code salvo no Supabase");
       return NextResponse.json({ ok: true });
     }
 
@@ -38,9 +28,19 @@ export async function POST(req: NextRequest) {
     if (event === "connection.update") {
       const state = data?.state;
       console.log(`[SDR Webhook] Conexão WhatsApp: ${state}`);
+      await supabase.from("sdr_config").upsert({
+        key: "connection_state",
+        value: state ?? "unknown",
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "key" });
 
       if (state === "open") {
-        lastQrCode = null; // Limpa QR após conectar
+        // Limpa QR após conectar
+        await supabase.from("sdr_config").upsert({
+          key: "qrcode",
+          value: null,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: "key" });
         console.log("[SDR Webhook] WhatsApp CONECTADO!");
       }
       return NextResponse.json({ ok: true });
@@ -63,7 +63,6 @@ export async function POST(req: NextRequest) {
 
       console.log(`[SDR Webhook] Mensagem de ${phone}: ${messageText.substring(0, 80)}`);
 
-      // Salva a mensagem no Supabase
       await supabase.from("sdr_conversas").insert({
         phone,
         role: "user",
@@ -71,7 +70,6 @@ export async function POST(req: NextRequest) {
         instance: instance || "v3-sdr-whatsapp",
       });
 
-      // Processa com o agente SDR
       await processarMensagemSDR(phone, messageText, instance || "v3-sdr-whatsapp");
     }
 
@@ -84,7 +82,6 @@ export async function POST(req: NextRequest) {
 
 async function processarMensagemSDR(phone: string, mensagem: string, instance: string) {
   try {
-    // Busca histórico da conversa
     const { data: historico } = await supabase
       .from("sdr_conversas")
       .select("role, content")
@@ -97,7 +94,6 @@ async function processarMensagemSDR(phone: string, mensagem: string, instance: s
       content: h.content,
     }));
 
-    // Chama Claude com o prompt SDR
     const { default: Anthropic } = await import("@anthropic-ai/sdk");
     const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
 
@@ -132,10 +128,8 @@ Seu objetivo é qualificar leads e agendar apresentações da plataforma V3 Part
     });
 
     const resposta = response.content[0].type === "text" ? response.content[0].text : "";
-
     if (!resposta) return;
 
-    // Salva resposta do agente
     await supabase.from("sdr_conversas").insert({
       phone,
       role: "assistant",
@@ -143,7 +137,6 @@ Seu objetivo é qualificar leads e agendar apresentações da plataforma V3 Part
       instance,
     });
 
-    // Envia resposta pelo WhatsApp via Evolution API
     await fetch(
       `${process.env.EVOLUTION_API_URL}/message/sendText/${instance}`,
       {
@@ -152,10 +145,7 @@ Seu objetivo é qualificar leads e agendar apresentações da plataforma V3 Part
           "Content-Type": "application/json",
           apikey: process.env.EVOLUTION_API_KEY!,
         },
-        body: JSON.stringify({
-          number: phone,
-          text: resposta,
-        }),
+        body: JSON.stringify({ number: phone, text: resposta }),
       }
     );
 
