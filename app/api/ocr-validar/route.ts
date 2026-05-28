@@ -27,13 +27,12 @@ async function getUser() {
   return { user, profile };
 }
 
-async function fetchDocumentAsBase64(url: string): Promise<{ base64: string; mimeType: string } | null> {
+async function fetchDocumentBuffer(url: string): Promise<{ buffer: Buffer; mimeType: string } | null> {
   try {
     const res = await fetch(url);
     if (!res.ok) return null;
     const contentType = res.headers.get("content-type") ?? "image/jpeg";
-    const buffer = await res.arrayBuffer();
-    const base64 = Buffer.from(buffer).toString("base64");
+    const buffer = Buffer.from(await res.arrayBuffer());
     let mimeType = contentType.split(";")[0].trim();
     if (!mimeType || mimeType === "application/octet-stream") {
       const lower = url.toLowerCase();
@@ -41,10 +40,44 @@ async function fetchDocumentAsBase64(url: string): Promise<{ base64: string; mim
       else if (lower.endsWith(".png")) mimeType = "image/png";
       else mimeType = "image/jpeg";
     }
-    return { base64, mimeType };
+    return { buffer, mimeType };
   } catch {
     return null;
   }
+}
+
+async function uploadToFilesApi(buffer: Buffer, mimeType: string, filename: string): Promise<string | null> {
+  try {
+    const formData = new FormData();
+    formData.append("file", new Blob([new Uint8Array(buffer)], { type: mimeType }), filename);
+    const res = await fetch("https://api.anthropic.com/v1/files", {
+      method: "POST",
+      headers: {
+        "x-api-key": process.env.ANTHROPIC_API_KEY!,
+        "anthropic-version": "2023-06-01",
+        "anthropic-beta": "files-api-2025-04-14",
+      },
+      body: formData,
+    });
+    if (!res.ok) return null;
+    const data = await res.json() as { id: string };
+    return data.id ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function deleteFromFilesApi(fileId: string): Promise<void> {
+  try {
+    await fetch(`https://api.anthropic.com/v1/files/${fileId}`, {
+      method: "DELETE",
+      headers: {
+        "x-api-key": process.env.ANTHROPIC_API_KEY!,
+        "anthropic-version": "2023-06-01",
+        "anthropic-beta": "files-api-2025-04-14",
+      },
+    });
+  } catch { /* fire and forget */ }
 }
 
 export async function POST(req: NextRequest) {
@@ -64,7 +97,7 @@ export async function POST(req: NextRequest) {
 
   if (!doc_url) return NextResponse.json({ error: "URL do documento obrigatória" }, { status: 400 });
 
-  const docData = await fetchDocumentAsBase64(doc_url);
+  const docData = await fetchDocumentBuffer(doc_url);
   if (!docData) {
     return NextResponse.json({ error: "Não foi possível acessar o documento. O link pode ter expirado." }, { status: 400 });
   }
@@ -83,6 +116,12 @@ export async function POST(req: NextRequest) {
       } as OcrResultado,
     });
   }
+
+  const fileExt = isPdf ? "pdf" : docData.mimeType.includes("png") ? "png" : "jpg";
+  const filename = `${doc_id}.${fileExt}`;
+
+  // Upload para Files API — suporta PDFs grandes sem limite de base64
+  const fileId = await uploadToFilesApi(docData.buffer, docData.mimeType, filename);
 
   try {
     const Anthropic = (await import("@anthropic-ai/sdk")).default;
@@ -105,13 +144,25 @@ Status dos campos: ok=confere, divergente=não confere, ausente=não encontrado,
 Resumo: aprovado=tudo ok, atencao=divergência menor, reprovado=divergência crítica ou vencido.`;
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const mediaBlock: any = isPdf
-      ? { type: "document", source: { type: "base64", media_type: "application/pdf", data: docData.base64 } }
-      : { type: "image", source: { type: "base64", media_type: docData.mimeType, data: docData.base64 } };
+    let mediaBlock: any;
+    if (fileId) {
+      // Files API — melhor para PDFs grandes, sem limite de base64
+      mediaBlock = isPdf
+        ? { type: "document", source: { type: "file", file_id: fileId } }
+        : { type: "image", source: { type: "file", file_id: fileId } };
+    } else {
+      // Fallback base64 se upload falhar
+      const base64 = docData.buffer.toString("base64");
+      mediaBlock = isPdf
+        ? { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64 } }
+        : { type: "image", source: { type: "base64", media_type: docData.mimeType, data: base64 } };
+    }
 
     const message = await anthropic.messages.create({
       model: "claude-sonnet-4-6",
       max_tokens: 1500,
+      // @ts-expect-error files-api beta header
+      betas: ["files-api-2025-04-14"],
       system: systemPrompt,
       messages: [
         {
@@ -123,8 +174,6 @@ Resumo: aprovado=tudo ok, atencao=divergência menor, reprovado=divergência cr�
     });
 
     const rawText = message.content[0].type === "text" ? message.content[0].text : "";
-
-    // Limpa e extrai JSON
     const cleaned = rawText.replace(/```json\s*/gi, "").replace(/```\s*/g, "").trim();
     const start = cleaned.indexOf("{");
     const end = cleaned.lastIndexOf("}");
@@ -133,8 +182,7 @@ Resumo: aprovado=tudo ok, atencao=divergência menor, reprovado=divergência cr�
       throw new Error(`JSON não encontrado na resposta: ${cleaned.slice(0, 200)}`);
     }
 
-    const jsonStr = cleaned.slice(start, end + 1);
-    const parsed = JSON.parse(jsonStr);
+    const parsed = JSON.parse(cleaned.slice(start, end + 1));
 
     const resultado: OcrResultado = {
       doc_id,
@@ -149,5 +197,7 @@ Resumo: aprovado=tudo ok, atencao=divergência menor, reprovado=divergência cr�
     const msg = e instanceof Error ? e.message : "Erro ao processar OCR";
     console.error("[OCR] Erro:", msg);
     return NextResponse.json({ error: msg }, { status: 500 });
+  } finally {
+    if (fileId) await deleteFromFilesApi(fileId);
   }
 }

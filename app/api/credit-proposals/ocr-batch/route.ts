@@ -14,13 +14,12 @@ function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 }
 
-async function fetchDocumentAsBase64(url: string): Promise<{ base64: string; mimeType: string } | null> {
+async function fetchDocumentBuffer(url: string): Promise<{ buffer: Buffer; mimeType: string } | null> {
   try {
     const res = await fetch(url);
     if (!res.ok) return null;
     const contentType = res.headers.get("content-type") ?? "image/jpeg";
-    const buffer = await res.arrayBuffer();
-    const base64 = Buffer.from(buffer).toString("base64");
+    const buffer = Buffer.from(await res.arrayBuffer());
     let mimeType = contentType.split(";")[0].trim();
     if (!mimeType || mimeType === "application/octet-stream") {
       const lower = url.toLowerCase();
@@ -28,8 +27,40 @@ async function fetchDocumentAsBase64(url: string): Promise<{ base64: string; mim
       else if (lower.endsWith(".png")) mimeType = "image/png";
       else mimeType = "image/jpeg";
     }
-    return { base64, mimeType };
+    return { buffer, mimeType };
   } catch { return null; }
+}
+
+async function uploadToFilesApi(buffer: Buffer, mimeType: string, filename: string): Promise<string | null> {
+  try {
+    const formData = new FormData();
+    formData.append("file", new Blob([new Uint8Array(buffer)], { type: mimeType }), filename);
+    const res = await fetch("https://api.anthropic.com/v1/files", {
+      method: "POST",
+      headers: {
+        "x-api-key": process.env.ANTHROPIC_API_KEY!,
+        "anthropic-version": "2023-06-01",
+        "anthropic-beta": "files-api-2025-04-14",
+      },
+      body: formData,
+    });
+    if (!res.ok) return null;
+    const data = await res.json() as { id: string };
+    return data.id ?? null;
+  } catch { return null; }
+}
+
+async function deleteFromFilesApi(fileId: string): Promise<void> {
+  try {
+    await fetch(`https://api.anthropic.com/v1/files/${fileId}`, {
+      method: "DELETE",
+      headers: {
+        "x-api-key": process.env.ANTHROPIC_API_KEY!,
+        "anthropic-version": "2023-06-01",
+        "anthropic-beta": "files-api-2025-04-14",
+      },
+    });
+  } catch { /* fire and forget */ }
 }
 
 async function analyzeOneDoc(
@@ -53,7 +84,7 @@ async function analyzeOneDoc(
     };
   }
 
-  const docData = await fetchDocumentAsBase64(signedUrl);
+  const docData = await fetchDocumentBuffer(signedUrl);
   if (!docData) {
     return {
       doc_id: docId,
@@ -80,10 +111,13 @@ async function analyzeOneDoc(
   const Anthropic = (await import("@anthropic-ai/sdk")).default;
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
+  // Upload para Files API — suporta PDFs grandes sem limite de base64
+  const fileExt = isPdf ? "pdf" : docData.mimeType.includes("png") ? "png" : "jpg";
+  const fileId = await uploadToFilesApi(docData.buffer, docData.mimeType, `${docId}.${fileExt}`);
+
   const ctxLines = Object.entries(proposalContext).map(([k, v]) => `- ${k}: ${v}`).join("\n");
   const systemPrompt = `Você é um sistema de validação documental. Analise documentos e retorne APENAS JSON válido, sem nenhum texto antes ou depois. Nunca use markdown.`;
 
-  const tipoEsperado = expectedLabel ?? docLabel;
   const tipoInstruction = expectedLabel
     ? `ATENÇÃO: O documento esperado para este campo é: "${expectedLabel}". O arquivo enviado chama-se "${docLabel}".
 PRIMEIRA VERIFICAÇÃO OBRIGATÓRIA: confirme se o documento visualizado É REALMENTE um(a) "${expectedLabel}". Se NÃO for esse tipo de documento, defina resumo="reprovado" e inclua um campo com status="divergente" e mensagem explicando o tipo real identificado.`
@@ -101,17 +135,32 @@ Status: ok=confere, divergente=não confere, ausente=não encontrado, info=sem c
 Resumo: aprovado=documento correto e dados ok, atencao=divergência menor, reprovado=documento errado OU divergência crítica.`;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const mediaBlock: any = isPdf
-    ? { type: "document", source: { type: "base64", media_type: "application/pdf", data: docData.base64 } }
-    : { type: "image", source: { type: "base64", media_type: docData.mimeType, data: docData.base64 } };
+  let mediaBlock: any;
+  if (fileId) {
+    mediaBlock = isPdf
+      ? { type: "document", source: { type: "file", file_id: fileId } }
+      : { type: "image", source: { type: "file", file_id: fileId } };
+  } else {
+    const base64 = docData.buffer.toString("base64");
+    mediaBlock = isPdf
+      ? { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64 } }
+      : { type: "image", source: { type: "base64", media_type: docData.mimeType, data: base64 } };
+  }
 
-  const message = await anthropic.messages.create({
-    model: "claude-haiku-4-5-20251001",
-    max_tokens: 1500,
-    system: systemPrompt,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    messages: [{ role: "user", content: [mediaBlock, { type: "text", text: userPrompt }] as any }],
-  });
+  let message;
+  try {
+    message = await anthropic.messages.create({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 1500,
+      // @ts-expect-error files-api beta header
+      betas: fileId ? ["files-api-2025-04-14"] : [],
+      system: systemPrompt,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      messages: [{ role: "user", content: [mediaBlock, { type: "text", text: userPrompt }] as any }],
+    });
+  } finally {
+    if (fileId) await deleteFromFilesApi(fileId);
+  }
 
   const rawText = message.content[0].type === "text" ? message.content[0].text : "";
   const cleaned = rawText.replace(/```json\s*/gi, "").replace(/```\s*/g, "").trim();

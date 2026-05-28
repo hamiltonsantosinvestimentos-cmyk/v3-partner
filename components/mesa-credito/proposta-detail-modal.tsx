@@ -1254,8 +1254,9 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
         setContratoStatus("error");
         setContratoMsg(json.error ?? "Erro ao enviar contrato.");
       } else {
+        const clientEmail = (proposal.metadata as Record<string, unknown>)?.email as string | undefined;
         setContratoStatus("sent");
-        setContratoMsg(`Contrato enviado para ${proposal.email ?? "o cliente"}!`);
+        setContratoMsg(`Contrato enviado para ${clientEmail ?? proposal.email ?? "o cliente"}!`);
       }
     } catch {
       setContratoStatus("error");
@@ -3207,22 +3208,27 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
                 Compilar Documentos
               </Button>
             )}
-            {canChangeStage && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleEnviarContrato}
-                disabled={sendingContrato}
-                className="gap-1.5 border-[#C9A84C]/40 text-[#C9A84C] hover:bg-[#C9A84C]/10"
-              >
-                {sendingContrato ? (
-                  <span className="w-3.5 h-3.5 rounded-full border-2 border-[#C9A84C] border-t-transparent animate-spin" />
-                ) : (
-                  <Send className="w-3.5 h-3.5" />
-                )}
-                Enviar Contrato
-              </Button>
-            )}
+            {canChangeStage && (() => {
+              const hasEmail = !!((proposal.metadata as Record<string, unknown>)?.email as string | undefined);
+              return (
+                <div title={!hasEmail ? "Cadastre o e-mail do cliente antes de enviar o contrato" : undefined}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleEnviarContrato}
+                    disabled={sendingContrato || !hasEmail}
+                    className="gap-1.5 border-[#C9A84C]/40 text-[#C9A84C] hover:bg-[#C9A84C]/10 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    {sendingContrato ? (
+                      <span className="w-3.5 h-3.5 rounded-full border-2 border-[#C9A84C] border-t-transparent animate-spin" />
+                    ) : (
+                      <Send className="w-3.5 h-3.5" />
+                    )}
+                    Enviar Contrato
+                  </Button>
+                </div>
+              );
+            })()}
           </div>
           {canChangeStage && activeIdx > 0 && prevStage && !isEmAprovacao && (
             <Button size="sm" variant="outline" onClick={goBack} className="gap-2 border-border text-muted-foreground hover:text-white">

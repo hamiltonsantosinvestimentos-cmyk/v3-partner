@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { notifyContratoCliente, notifyContratoV3Rep } from "@/lib/email";
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://v3-partner.vercel.app";
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.v3partners.com.br";
 const V3_REP_EMAIL = process.env.EMAIL_MESA_OPERACIONAL ?? process.env.EMAIL_ADMIN ?? "mesa@v3partners.com.br";
 
 export async function POST(req: NextRequest) {
@@ -65,6 +65,31 @@ export async function POST(req: NextRequest) {
         .from("contratos_mandato")
         .update({ expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() })
         .eq("id", existing.id);
+      // Reenvia email ao cliente com link atualizado
+      const signingUrlExisting = `${APP_URL}/assinar/${token}`;
+      const expiresAtExisting = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+      await Promise.allSettled([
+        notifyContratoCliente({
+          clientEmail,
+          clientName: proposal.client_name,
+          proposalCode: proposal.code,
+          creditLine: proposal.credit_line,
+          requestedValue: proposal.requested_value,
+          signingUrl: signingUrlExisting,
+          expiresAt: expiresAtExisting,
+        }),
+        notifyContratoV3Rep({
+          repEmail: V3_REP_EMAIL,
+          clientName: proposal.client_name,
+          clientEmail,
+          proposalCode: proposal.code,
+          creditLine: proposal.credit_line,
+          requestedValue: proposal.requested_value,
+          commissionPerc: (proposal.comissao_mandato_perc as number) ?? 6.0,
+          signingUrl: signingUrlExisting,
+        }),
+      ]);
+      return NextResponse.json({ ok: true, token, signingUrl: signingUrlExisting, resent: true });
     } else {
       const commissionPerc = (proposal.comissao_mandato_perc as number) ?? 6.0;
       const telefone = (meta.telefone as string) ?? null;
