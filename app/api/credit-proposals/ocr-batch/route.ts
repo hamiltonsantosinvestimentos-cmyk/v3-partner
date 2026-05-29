@@ -147,9 +147,9 @@ Resumo: aprovado=documento correto e dados ok, atencao=divergência menor, repro
       : { type: "image", source: { type: "base64", media_type: docData.mimeType, data: base64 } };
   }
 
-  let message;
+  let rawText = "";
   try {
-    message = await anthropic.messages.create({
+    const message = await anthropic.messages.create({
       model: "claude-haiku-4-5-20251001",
       max_tokens: 1500,
       // @ts-expect-error files-api beta header
@@ -158,11 +158,14 @@ Resumo: aprovado=documento correto e dados ok, atencao=divergência menor, repro
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       messages: [{ role: "user", content: [mediaBlock, { type: "text", text: userPrompt }] as any }],
     });
+    rawText = message.content[0].type === "text" ? message.content[0].text : "";
+  } catch (err) {
+    const sdkMsg = err instanceof Error ? err.message : String(err);
+    throw new Error(`Claude API indisponível para OCR: ${sdkMsg}`);
   } finally {
     if (fileId) await deleteFromFilesApi(fileId);
   }
 
-  const rawText = message.content[0].type === "text" ? message.content[0].text : "";
   const cleaned = rawText.replace(/```json\s*/gi, "").replace(/```\s*/g, "").trim();
   const start = cleaned.indexOf("{");
   const end = cleaned.lastIndexOf("}");
@@ -278,8 +281,13 @@ export async function POST(req: NextRequest) {
       body: JSON.stringify({ proposal_id }),
     });
     if (analyzeRes.ok) {
-      const analyzeData = await analyzeRes.json();
-      aiAnalysis = analyzeData.analysis ?? null;
+      const ct = analyzeRes.headers.get("content-type") ?? "";
+      if (ct.includes("application/json")) {
+        const analyzeData = await analyzeRes.json();
+        aiAnalysis = analyzeData.analysis ?? null;
+      } else {
+        aiError = "Análise IA retornou resposta não-JSON (possível erro de deploy ou timeout)";
+      }
     } else {
       aiError = `Análise IA retornou ${analyzeRes.status}`;
     }
