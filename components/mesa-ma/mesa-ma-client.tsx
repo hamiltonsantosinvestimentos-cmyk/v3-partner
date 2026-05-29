@@ -337,6 +337,11 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
   const [transferError, setTransferError] = useState<string | null>(null);
   const [transferOk, setTransferOk] = useState(false);
 
+  // Link de upload externo (gerado pelo botão no tab FORJA)
+  const [uploadLinkUrl, setUploadLinkUrl]         = useState<string | null>(null);
+  const [uploadLinkLoading, setUploadLinkLoading] = useState(false);
+  const [uploadLinkCopied, setUploadLinkCopied]   = useState(false);
+
   // Contexto FORJA — campo livre por deal
   const [ctxForja, setCtxForja]   = useState("");
   const [ctxSaving, setCtxSaving] = useState(false);
@@ -353,6 +358,7 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
 
   useEffect(() => {
     if (!selectedCard) { setCardDocs([]); setDetailTab("detalhes"); setEditingCard(false); return; }
+    setUploadLinkUrl(null);
     // Inicializa contexto FORJA do card selecionado
     setCtxForja(((selectedCard.asset_data as Record<string,unknown> | undefined)?.contexto_forja as string) ?? "");
     setDocsLoading(true);
@@ -915,6 +921,64 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
                       setSelectedCard(p => p ? { ...p, asset_data: newAssetData } : null);
                     }}
                   />
+                  {/* Gerar Link de Upload — sempre visível no tab FORJA */}
+                  <div className="p-4 rounded-xl border border-[#122036] bg-[#091221]">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-xs font-semibold text-[#E8EDF5] flex items-center gap-1.5">
+                          <Upload size={13} className="text-[#C9A84C]" /> Link de Upload Externo
+                        </p>
+                        <p className="text-[10px] text-[#7A8FA8] mt-0.5">
+                          {uploadLinkUrl
+                            ? "Link válido por 14 dias — copie e envie ao cliente"
+                            : "Link seguro para cliente enviar documentos sem login"}
+                        </p>
+                      </div>
+                      {!uploadLinkUrl ? (
+                        <button
+                          onClick={async () => {
+                            if (!selectedCard || uploadLinkLoading) return;
+                            setUploadLinkLoading(true);
+                            try {
+                              const r = await fetch("/api/ma/upload-links", {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ deal_id: selectedCard.id }),
+                              });
+                              const data = await r.json();
+                              if (data.upload_url) setUploadLinkUrl(data.upload_url);
+                            } catch {
+                              // silencia — link não é crítico
+                            } finally {
+                              setUploadLinkLoading(false);
+                            }
+                          }}
+                          disabled={uploadLinkLoading}
+                          className="text-[10px] font-semibold text-[#C9A84C] px-3 py-1.5 rounded-lg border border-[#C9A84C]/40 bg-[#C9A84C]/10 hover:bg-[#C9A84C]/20 transition-colors disabled:opacity-50 flex-shrink-0"
+                        >
+                          {uploadLinkLoading ? "Gerando..." : "Gerar Link"}
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => {
+                            if (!uploadLinkUrl) return;
+                            navigator.clipboard.writeText(uploadLinkUrl).catch(() => {});
+                            setUploadLinkCopied(true);
+                            setTimeout(() => setUploadLinkCopied(false), 2000);
+                          }}
+                          className="text-[10px] font-semibold px-3 py-1.5 rounded-lg border transition-colors flex-shrink-0 text-emerald-400 border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20"
+                        >
+                          {uploadLinkCopied ? "✓ Copiado" : "Copiar Link"}
+                        </button>
+                      )}
+                    </div>
+                    {uploadLinkUrl && (
+                      <p className="mt-2 text-[10px] text-[#C9A84C] font-mono bg-[#09081A] rounded px-2 py-1.5 truncate select-all">
+                        {uploadLinkUrl}
+                      </p>
+                    )}
+                  </div>
+
                   {/* Liberar / Bloquear KIT — aparece após FORJA validada */}
                   {forjaAprovado && (
                     <div className="p-4 rounded-xl border border-[#122036] bg-[#091221]">
