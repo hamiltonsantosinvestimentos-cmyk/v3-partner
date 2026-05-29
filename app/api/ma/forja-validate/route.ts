@@ -350,6 +350,24 @@ export async function POST(req: NextRequest) {
     const raw = content.text.trim().replace(/^```json\s*/i, "").replace(/```\s*$/i, "");
     const parsed = JSON.parse(raw);
 
+    // Dispara notificações por email após validação (fire-and-forget)
+    // Só envia se score < 80 (PENDENTE ou BLOQUEADO) e houver pendências
+    if (dealId && parsed.missing?.length > 0 && (parsed.score ?? 100) < 80) {
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.v3partners.com.br";
+      fetch(`${baseUrl}/api/ma/forja-notify`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json", "x-cron-secret": process.env.CRON_SECRET ?? "" },
+        body: JSON.stringify({
+          deal_id:        dealId,
+          score:          parsed.score,
+          recommendation: parsed.recommendation,
+          missing:        parsed.missing ?? [],
+          corrected:      parsed.corrected ?? [],
+          doc_insights:   parsed.doc_insights ?? [],
+        }),
+      }).catch(e => console.error("[forja-validate] forja-notify:", e));
+    }
+
     // Fase 1 entrega validação sem narrativa
     // Narrativa e tese são geradas em /api/ma/forja-narrative (chamada separada do cliente)
     return NextResponse.json({

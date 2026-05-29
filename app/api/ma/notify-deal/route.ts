@@ -201,7 +201,7 @@ export async function POST(req: NextRequest) {
       }),
       resend.emails.send({
         from: "V3 Partners Plataforma <noreply@v3partners.com.br>",
-        to: "mesa@v3partners.com.br",
+        to: "deal@v3partners.com.br",
         subject: `[Novo Deal] ${dealCode} — ${dealName} · ${sector}`,
         html: buildMesaEmail(),
       }),
