@@ -1043,13 +1043,15 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
       if (!res.ok) throw new Error(json.error ?? "Erro ao processar OCR em lote");
 
       // Atualiza resultados OCR no estado local
-      if (Array.isArray(json.ocr_results)) {
-        const byDocId: Record<string, OcrResultado> = {};
-        for (const r of json.ocr_results as OcrResultado[]) {
-          byDocId[r.doc_id] = r;
-          setOcrStatus(prev => ({ ...prev, [r.doc_id]: "done" }));
+      // Usa ocr_resultados (Record<key, OcrResultado>) com chave doc_id::storage_path
+      if (json.ocr_resultados && typeof json.ocr_resultados === "object") {
+        const resultadosMap = json.ocr_resultados as Record<string, OcrResultado>;
+        const newStatus: Record<string, OcrStatus> = {};
+        for (const key of Object.keys(resultadosMap)) {
+          newStatus[key] = "done";
         }
-        setOcrResultados(prev => ({ ...prev, ...byDocId }));
+        setOcrStatus(prev => ({ ...prev, ...newStatus }));
+        setOcrResultados(prev => ({ ...prev, ...resultadosMap }));
       }
 
       // Atualiza análise IA com o resultado automático
@@ -1058,11 +1060,11 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
         setAnalisePdfB64(null);
         setAnaliseStatus("done");
         onProposalUpdate?.(proposal.id, {
-          metadata: { ...(proposal.metadata ?? {}), ai_analysis: json.ai_analysis, ocr_results: json.ocr_results } as typeof proposal.metadata,
+          metadata: { ...(proposal.metadata ?? {}), ai_analysis: json.ai_analysis, ocr_resultados: json.ocr_resultados } as typeof proposal.metadata,
         });
       } else {
         onProposalUpdate?.(proposal.id, {
-          metadata: { ...(proposal.metadata ?? {}), ocr_results: json.ocr_results } as typeof proposal.metadata,
+          metadata: { ...(proposal.metadata ?? {}), ocr_resultados: json.ocr_resultados } as typeof proposal.metadata,
         });
       }
 

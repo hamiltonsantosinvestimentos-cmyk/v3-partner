@@ -238,25 +238,35 @@ export async function POST(req: NextRequest) {
   // Processa TODOS os documentos anexados (sem deduplicação por doc_id)
   // OCR sequencial para não sobrecarregar API
   const ocrResults: OcrResultado[] = [];
+  // Formato Record para compatibilidade com o modal (chave: doc_id::storage_path)
+  const ocrResultados: Record<string, OcrResultado> = {};
   for (const doc of docs) {
     const expectedLabel = getDocLabel(doc.doc_id, creditLine, clientType) ?? expectedLabelMap[doc.doc_id];
     try {
       const resultado = await analyzeOneDoc(doc.doc_id, doc.file_name, doc.storage_path, proposalContext, expectedLabel);
       ocrResults.push(resultado);
+      // Chave no mesmo formato que o modal usa: ${doc.id}::${df.key}
+      const ocrKey = `${doc.doc_id}::${doc.storage_path}`;
+      ocrResultados[ocrKey] = resultado;
     } catch (e) {
-      ocrResults.push({
+      const errResultado: OcrResultado = {
         doc_id: doc.doc_id,
         tipo_documento: doc.file_name,
         campos: [{ campo: "Erro", extraido: null, esperado: null, status: "info", mensagem: e instanceof Error ? e.message : "Erro ao processar" }],
         resumo: "atencao",
         observacoes: "Erro ao processar este documento.",
-      });
+      };
+      ocrResults.push(errResultado);
+      ocrResultados[`${doc.doc_id}::${doc.storage_path}`] = errResultado;
     }
   }
 
   // Salva resultados de OCR no metadata
+  // ocr_resultados: formato Record (lido pelo modal)
+  // ocr_results: formato Array (legado, mantido para compatibilidade)
   const updatedMeta = {
     ...meta,
+    ocr_resultados: { ...(meta.ocr_resultados as Record<string, unknown> ?? {}), ...ocrResultados },
     ocr_results: ocrResults,
     ocr_analyzed_at: new Date().toISOString(),
     ocr_analyzed_by: profile?.full_name ?? "Mesa",
@@ -304,6 +314,7 @@ export async function POST(req: NextRequest) {
     ok: true,
     total_docs: docs.length,
     ocr_results: ocrResults,
+    ocr_resultados: ocrResultados,
     resumo_geral: resumoGeral,
     ai_analysis: aiAnalysis,
     ai_error: aiError,
