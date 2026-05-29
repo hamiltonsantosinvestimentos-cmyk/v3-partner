@@ -73,6 +73,14 @@ export async function POST(req: NextRequest) {
         instance: instance || "v3-sdr-whatsapp",
       });
 
+      // Cria/atualiza registro de lead com preview da última mensagem
+      await supabase.from("sdr_leads").upsert({
+        phone,
+        last_message_at: new Date().toISOString(),
+        last_message_preview: messageText.slice(0, 80),
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "phone", ignoreDuplicates: false });
+
       await processarMensagemSDR(phone, messageText, instance || "v3-sdr-whatsapp");
     }
 

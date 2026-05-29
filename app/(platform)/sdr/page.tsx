@@ -11,7 +11,7 @@ export default async function SdrPage() {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("role")
+    .select("role, full_name")
     .eq("id", user.id)
     .single();
 
@@ -19,5 +19,10 @@ export default async function SdrPage() {
     redirect("/unauthorized");
   }
 
-  return <SdrClient />;
+  return (
+    <SdrClient
+      currentUserId={user.id}
+      currentUserName={profile?.full_name ?? "Usuário"}
+    />
+  );
 }

@@ -34,6 +34,7 @@ const createSchema = z.object({
   current_level:   z.enum(["NIVEL_1","NIVEL_2","NIVEL_3"]),
   notes:           z.string().max(2000).optional().nullable(),
   metadata:        z.record(z.string(), z.unknown()).optional().nullable(),
+  partner_id:      z.string().uuid().optional().nullable(),
 });
 
 const patchSchema = z.object({
