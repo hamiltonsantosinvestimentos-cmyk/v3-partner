@@ -23,7 +23,7 @@ function svc() {
 }
 
 // GET — verifica validade do token (usado pela página pública)
-export async function GET(_req: NextRequest, { params }: { params: { token: string } }) {
+export async function GET(_req: NextRequest, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
 
   const { data: tokenRow } = await svc()
@@ -55,7 +55,7 @@ export async function GET(_req: NextRequest, { params }: { params: { token: stri
 }
 
 // POST — recebe o upload do arquivo
-export async function POST(req: NextRequest, { params }: { params: { token: string } }) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
 
