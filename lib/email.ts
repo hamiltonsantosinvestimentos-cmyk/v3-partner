@@ -1218,3 +1218,38 @@ export async function notifyPropostaEtapaPartner(opts: {
     })
   );
 }
+
+/** SDR: agendamento automático detectado no WhatsApp */
+export async function notifyAgendamentoSDR(opts: {
+  responsavelEmail: string;
+  responsavelNome: string;
+  phone: string;
+  nomeLead: string | null;
+  dataHora: string | null;
+}): Promise<void> {
+  const displayName = opts.nomeLead ?? opts.phone;
+  const body = `
+    <p style="color:#7A96AF;font-size:14px;margin:0 0 20px;">
+      O Agente SDR (Matheus) detectou que um lead confirmou interesse em uma reunião. Confirme o link do Google Meet com o lead.
+    </p>
+    <div style="margin:0 0 20px;padding:18px 20px;background:#13243D;border-radius:10px;border-left:4px solid #C4922E;">
+      <p style="margin:0 0 4px;font-size:11px;font-weight:700;letter-spacing:1px;color:#C4922E;text-transform:uppercase;">Reunião Confirmada</p>
+      <p style="margin:0;font-size:20px;font-weight:800;color:#E5B96A;">${opts.dataHora ?? "Horário a confirmar"}</p>
+    </div>
+    ${row("Lead", displayName)}
+    ${row("WhatsApp", opts.phone)}
+    ${row("Responsável", opts.responsavelNome)}
+    <p style="color:#7A96AF;font-size:12px;margin-top:20px;">
+      O lead foi marcado automaticamente como <strong style="color:#E5B96A;">Agendado</strong> na aba SDR.
+      Acesse a plataforma para ver o histórico da conversa e enviar o link da reunião.
+    </p>
+  `;
+  await send(
+    opts.responsavelEmail,
+    `📅 Reunião agendada via SDR — ${displayName}`,
+    template(`Agendamento confirmado — ${opts.dataHora ?? "horário a confirmar"}`, body, {
+      label: "Ver Conversa no SDR",
+      url: "https://app.v3partners.com.br/sdr",
+    })
+  );
+}

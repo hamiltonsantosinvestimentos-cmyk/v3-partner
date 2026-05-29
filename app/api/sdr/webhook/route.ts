@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { notifyAgendamentoSDR } from "@/lib/email";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -38,7 +39,6 @@ export async function POST(req: NextRequest) {
       }, { onConflict: "key" });
 
       if (state === "open") {
-        // Limpa QR após conectar
         await supabase.from("sdr_config").upsert({
           key: "qrcode",
           value: null,
@@ -90,6 +90,119 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: String(e) }, { status: 500 });
   }
 }
+
+// ── Detecção de agendamento via Haiku ───────────────────────────────────────
+
+type AgendamentoDetect = {
+  agendado: boolean;
+  data_hora: string | null;
+  nome_lead: string | null;
+};
+
+async function detectarAgendamento(
+  userMsg: string,
+  botMsg: string
+): Promise<AgendamentoDetect> {
+  try {
+    const { default: Anthropic } = await import("@anthropic-ai/sdk");
+    const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
+
+    const result = await anthropic.messages.create({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 150,
+      messages: [{
+        role: "user",
+        content: `Analise se estas mensagens de WhatsApp confirmam um agendamento de reunião.
+Um agendamento é confirmado quando o usuário aceita ou sugere data/hora E o agente confirma.
+Retorne APENAS JSON sem markdown:
+{"agendado":true ou false,"data_hora":"data e hora extraída em português ex: 05/06 às 15h ou null","nome_lead":"nome mencionado pelo usuário ou null"}
+
+Usuário: "${userMsg.slice(0, 300)}"
+Agente: "${botMsg.slice(0, 300)}"
+JSON:`,
+      }],
+    });
+
+    const text = result.content[0].type === "text" ? result.content[0].text : "{}";
+    const start = text.indexOf("{");
+    const end = text.lastIndexOf("}");
+    if (start === -1 || end === -1) return { agendado: false, data_hora: null, nome_lead: null };
+    return JSON.parse(text.slice(start, end + 1)) as AgendamentoDetect;
+  } catch {
+    return { agendado: false, data_hora: null, nome_lead: null };
+  }
+}
+
+// ── Aplica agendamento: tag + status + email ────────────────────────────────
+
+async function processarAgendamento(
+  phone: string,
+  dataHora: string | null,
+  nomeLead: string | null
+) {
+  try {
+    // Busca dados atuais do lead (tags existentes + responsável)
+    const { data: lead } = await supabase
+      .from("sdr_leads")
+      .select("tags, responsavel_id, nome, status")
+      .eq("phone", phone)
+      .single();
+
+    // Só processa se ainda não estava agendado (evita duplicar notificações)
+    if (lead?.status === "agendado" || lead?.status === "convertido") return;
+
+    const tagsAtuais: string[] = Array.isArray(lead?.tags) ? lead.tags : [];
+    const novasTags = tagsAtuais.includes("Agendado")
+      ? tagsAtuais
+      : [...tagsAtuais, "Agendado"];
+
+    // Atualiza lead: status + tags
+    await supabase.from("sdr_leads").upsert({
+      phone,
+      status: "agendado",
+      tags: novasTags,
+      nome: nomeLead ?? lead?.nome ?? null,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "phone", ignoreDuplicates: false });
+
+    console.log(`[SDR Webhook] Agendamento detectado para ${phone} — ${dataHora ?? "sem horário definido"}`);
+
+    // Envia email ao responsável se houver um atribuído
+    if (lead?.responsavel_id) {
+      const { data: responsavel } = await supabase
+        .from("profiles")
+        .select("full_name, email")
+        .eq("id", lead.responsavel_id)
+        .single();
+
+      if (responsavel?.email) {
+        await notifyAgendamentoSDR({
+          responsavelEmail: responsavel.email,
+          responsavelNome: responsavel.full_name ?? "Responsável",
+          phone,
+          nomeLead: nomeLead ?? lead?.nome ?? null,
+          dataHora,
+        });
+        console.log(`[SDR Webhook] E-mail de agendamento enviado para ${responsavel.email}`);
+      }
+    } else {
+      // Sem responsável: notifica admin padrão
+      const adminEmail = process.env.ADMIN_EMAIL ?? "operacional@v3partners.com.br";
+      await notifyAgendamentoSDR({
+        responsavelEmail: adminEmail,
+        responsavelNome: "Equipe V3",
+        phone,
+        nomeLead: nomeLead ?? lead?.nome ?? null,
+        dataHora,
+      });
+      console.log(`[SDR Webhook] E-mail de agendamento enviado para admin (sem responsável atribuído)`);
+    }
+  } catch (e) {
+    console.error("[SDR Webhook] Erro ao processar agendamento:", e);
+  }
+}
+
+// ── Processa mensagem SDR ───────────────────────────────────────────────────
 
 async function processarMensagemSDR(phone: string, mensagem: string, instance: string) {
   try {
@@ -168,6 +281,14 @@ Você representa uma empresa séria e de alto padrão. Seu tom é profissional, 
     );
 
     console.log(`[SDR Webhook] Resposta enviada para ${phone}`);
+
+    // Detecta se houve agendamento na troca de mensagens (fire-and-forget)
+    detectarAgendamento(mensagem, resposta).then(detect => {
+      if (detect.agendado) {
+        processarAgendamento(phone, detect.data_hora, detect.nome_lead);
+      }
+    }).catch(e => console.error("[SDR Webhook] Erro na detecção de agendamento:", e));
+
   } catch (e) {
     console.error("[SDR Webhook] Erro ao processar mensagem:", e);
   }
