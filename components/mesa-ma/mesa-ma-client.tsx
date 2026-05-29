@@ -341,6 +341,9 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
   const [transferError, setTransferError] = useState<string | null>(null);
   const [transferOk, setTransferOk] = useState(false);
 
+  // Badge de não lidos por deal na aba Timeline
+  const [timelineUnread, setTimelineUnread] = useState<Record<string, number>>({});
+
   // Link de upload externo (gerado pelo botão no tab FORJA)
   const [uploadLinkUrl, setUploadLinkUrl]         = useState<string | null>(null);
   const [uploadLinkLoading, setUploadLinkLoading] = useState(false);
@@ -363,6 +366,15 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
   useEffect(() => {
     if (!selectedCard) { setCardDocs([]); setDetailTab("detalhes"); setEditingCard(false); return; }
     setUploadLinkUrl(null);
+    // Busca contagem de notificações não lidas para o badge da aba Timeline
+    fetch(`/api/ma/timeline?deal_id=${selectedCard.id}&count_only=true`)
+      .then(r => r.json())
+      .then(({ unread_count }: { unread_count?: number }) => {
+        if (typeof unread_count === "number" && unread_count > 0) {
+          setTimelineUnread(prev => ({ ...prev, [selectedCard.id]: unread_count }));
+        }
+      })
+      .catch(() => {});
     // Inicializa contexto FORJA do card selecionado
     setCtxForja(((selectedCard.asset_data as Record<string,unknown> | undefined)?.contexto_forja as string) ?? "");
     setDocsLoading(true);
@@ -853,19 +865,34 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
                   { id: "contrato" as const, label: "NDA / Mandato", icon: <FileSignature size={12} /> },
                   { id: "doc-requests" as const, label: "Docs", icon: <FileText size={12} /> },
                   { id: "timeline" as const, label: "Timeline", icon: <Clock size={12} /> },
-                ]).map(tab => (
-                  <button
-                    key={tab.id}
-                    onClick={() => setDetailTab(tab.id)}
-                    className={`flex items-center gap-1.5 px-4 py-2 text-xs font-medium border-b-2 transition-colors flex-shrink-0 ${
-                      detailTab === tab.id
-                        ? "border-[#C9A84C] text-[#C9A84C]"
-                        : "border-transparent text-[#7A8FA8] hover:text-[#E8EDF5]"
-                    }`}
-                  >
-                    {tab.icon}{tab.label}
-                  </button>
-                ))}
+                ]).map(tab => {
+                  const isTimeline = tab.id === "timeline";
+                  const unread = isTimeline && selectedCard ? (timelineUnread[selectedCard.id] ?? 0) : 0;
+                  return (
+                    <button
+                      key={tab.id}
+                      onClick={() => {
+                        setDetailTab(tab.id);
+                        if (isTimeline && selectedCard && unread > 0) {
+                          fetch(`/api/ma/timeline?deal_id=${selectedCard.id}`, { method: "PATCH" }).catch(() => {});
+                          setTimelineUnread(prev => ({ ...prev, [selectedCard.id]: 0 }));
+                        }
+                      }}
+                      className={`relative flex items-center gap-1.5 px-4 py-2 text-xs font-medium border-b-2 transition-colors flex-shrink-0 ${
+                        detailTab === tab.id
+                          ? "border-[#C9A84C] text-[#C9A84C]"
+                          : "border-transparent text-[#7A8FA8] hover:text-[#E8EDF5]"
+                      }`}
+                    >
+                      {tab.icon}{tab.label}
+                      {unread > 0 && (
+                        <span className="ml-0.5 min-w-[16px] h-4 flex items-center justify-center rounded-full bg-[#C9A84C] text-[#09081A] text-[9px] font-bold px-1">
+                          {unread > 9 ? "9+" : unread}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
               <button
                 onClick={() => setDetailTab("forja")}

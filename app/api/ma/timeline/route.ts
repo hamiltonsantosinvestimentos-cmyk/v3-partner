@@ -48,6 +48,17 @@ export async function GET(req: NextRequest) {
   const dealId = searchParams.get("deal_id");
   if (!dealId) return NextResponse.json({ error: "deal_id obrigatório" }, { status: 400 });
 
+  // Modo count_only — retorna apenas contagem de notificações não lidas do deal
+  if (searchParams.get("count_only") === "true") {
+    const { count } = await svc()
+      .from("notifications")
+      .select("id", { count: "exact", head: true })
+      .like("action_url", `/mesa-ma?deal=${dealId}%`)
+      .eq("user_id", user.id)
+      .eq("read", false);
+    return NextResponse.json({ unread_count: count ?? 0 });
+  }
+
   const events: TimelineEvent[] = [];
 
   // 1. Stage changes from ma_deal_history
@@ -115,4 +126,24 @@ export async function GET(req: NextRequest) {
   );
 
   return NextResponse.json({ events: events.slice(0, 50) });
+}
+
+// PATCH — marca notificações do deal como lidas para o usuário atual
+export async function PATCH(req: NextRequest) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const { searchParams } = new URL(req.url);
+  const dealId = searchParams.get("deal_id");
+  if (!dealId) return NextResponse.json({ error: "deal_id obrigatório" }, { status: 400 });
+
+  await svc()
+    .from("notifications")
+    .update({ read: true })
+    .like("action_url", `/mesa-ma?deal=${dealId}%`)
+    .eq("user_id", user.id)
+    .eq("read", false);
+
+  return NextResponse.json({ ok: true });
 }
