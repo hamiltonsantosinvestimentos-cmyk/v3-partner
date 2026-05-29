@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { extractUF, extractMatchingFields, stripJsonFences, safeJsonParse } from "@/lib/ma/forja-utils";
 
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 type DocEntry = {
   doc_id: string;
