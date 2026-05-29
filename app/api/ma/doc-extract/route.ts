@@ -319,7 +319,7 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // Download do arquivo (fluxo sync para arquivos ≤ 4MB)
+    // Download do arquivo
     const { data: fileData, error: downloadErr } = await svc.storage
       .from("ma-documents")
       .download(doc.storage_path);
@@ -327,6 +327,34 @@ export async function POST(req: NextRequest) {
     if (downloadErr || !fileData) throw new Error(`Download falhou: ${downloadErr?.message ?? "arquivo não encontrado"}`);
 
     const buf = await fileData.arrayBuffer();
+
+    // Guard pós-download: se o arquivo é > 4MB mas file_size_bytes não estava no metadata,
+    // rerotar para W9 async para evitar timeout do Vercel.
+    if (buf.byteLength > ASYNC_THRESHOLD) {
+      const actualBytes = buf.byteLength;
+      if (actualBytes > 32 * 1024 * 1024) {
+        await svc.from("ma_document_extractions")
+          .update({ status: "error", error_message: "Arquivo maior que 32MB. Comprima o PDF e reenvie." })
+          .eq("id", extractionId);
+        return NextResponse.json({ error: "Arquivo maior que 32MB. Comprima o PDF e reenvie." }, { status: 413 });
+      }
+      await svc.from("ma_document_extractions")
+        .update({ status: "queued", processing_mode: "async", file_size_bytes: actualBytes })
+        .eq("id", extractionId);
+      const n8nBase = process.env.N8N_API_URL?.replace("/api/v1", "");
+      if (n8nBase) {
+        fetch(`${n8nBase}/webhook/v3-doc-extract-large`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "x-cron-secret": process.env.CRON_SECRET ?? "" },
+          body: JSON.stringify({ deal_id, doc_id, extraction_id: extractionId, storage_path: doc.storage_path, file_size_bytes: actualBytes }),
+        }).catch(console.error);
+      }
+      return NextResponse.json({
+        ok: true, extraction_id: extractionId, status: "queued",
+        message: `PDF grande (${(actualBytes / 1024 / 1024).toFixed(1)}MB) — extração assíncrona via W9. Aguarde ~2 min.`,
+      });
+    }
+
     const base64 = Buffer.from(buf).toString("base64");
 
     const lower = doc.file_name.toLowerCase();
