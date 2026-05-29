@@ -644,7 +644,9 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
   // ── OCR state ─────────────────────────────────────────────────────────────
   type OcrStatus = "idle" | "loading" | "done" | "error";
   interface OcrField { campo: string; extraido: string | null; esperado: string | null; status: "ok" | "divergente" | "ausente" | "info"; mensagem: string; }
-  interface OcrResultado { doc_id: string; tipo_documento: string; campos: OcrField[]; resumo: "aprovado" | "atencao" | "reprovado"; observacoes: string; }
+  interface OcrDocCheck { documento_esperado: string; documento_encontrado: string; cliente_confere: boolean; resumo_linha: string; status: "ok" | "atencao" | "reprovado"; }
+  interface OcrExtratoInfo { banco: string; periodo: string; media_entrada_mensal: number | null; media_entrada_formatada: string; }
+  interface OcrResultado { doc_id: string; tipo_documento: string; campos: OcrField[]; resumo: "aprovado" | "atencao" | "reprovado"; observacoes: string; doc_check?: OcrDocCheck; extrato_info?: OcrExtratoInfo; }
 
   // Carrega resultados OCR já salvos no metadata ao abrir o modal
   const savedOcrResultados = (proposal?.metadata?.ocr_resultados ?? {}) as Record<string, OcrResultado>;
