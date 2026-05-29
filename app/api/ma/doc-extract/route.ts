@@ -276,11 +276,12 @@ export async function POST(req: NextRequest) {
       .update({ doc_name: doc.file_name, storage_path: doc.storage_path })
       .eq("id", extractionId);
 
-    // ── Roteamento por tamanho: PDFs > 4MB vão para extração async via n8n W9 ──
-    const ASYNC_THRESHOLD = 4 * 1024 * 1024; // 4MB
-    const fileSizeBytes = doc.file_size_bytes;
+    // ── Roteamento: TODOS os PDFs vão para W9 async (elimina timeout Vercel) ──
+    // Threshold = 0 força sempre async via n8n Render (sem limite de 60s)
+    const ASYNC_THRESHOLD = 0;
+    const fileSizeBytes = doc.file_size_bytes ?? 1; // assume >0 para garantir routing
 
-    if (fileSizeBytes && fileSizeBytes > ASYNC_THRESHOLD) {
+    if (fileSizeBytes > ASYNC_THRESHOLD) {
       if (fileSizeBytes > 32 * 1024 * 1024) {
         // > 32MB: rejeita — acima do limite da Anthropic Files API
         await svc.from("ma_document_extractions")
