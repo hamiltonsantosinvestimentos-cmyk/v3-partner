@@ -16,7 +16,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as sc } from "@supabase/supabase-js";
 
-export const maxDuration = 60;
+export const maxDuration = 300;
 export const dynamic    = "force-dynamic";
 
 // Tokens V3 V4.2 — fonte da verdade: v3-brandbook-v4-2-final.html

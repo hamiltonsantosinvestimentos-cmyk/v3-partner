@@ -4,7 +4,7 @@ import { createClient as sc } from "@supabase/supabase-js";
 import type { DocRequestItem } from "@/lib/ma/document-request-mapper";
 import { DOC_TIPO_LABEL } from "@/lib/ma/document-request-mapper";
 
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 const WRITE_ROLES = ["ADMIN", "GESTAO", "MESA_OPERACIONAL", "MESA"] as const;
 

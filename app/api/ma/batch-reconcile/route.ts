@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 const ADMIN_ROLES = ["ADMIN", "GESTAO"] as const;
 

@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { stripJsonFences, safeJsonParse } from "@/lib/ma/forja-utils";
 
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 const WRITE_ROLES = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"] as const;
 
