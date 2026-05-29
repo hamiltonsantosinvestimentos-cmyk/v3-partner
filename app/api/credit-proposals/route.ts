@@ -137,6 +137,11 @@ export async function POST(req: NextRequest) {
       .from("credit_desk_proposals").select("id", { count: "exact", head: true });
     const code = d.code ?? `CRED-26-${String((count ?? 0) + 1).padStart(4, "0")}`;
 
+    // Se admin/gestao enviou um partner_id específico no payload (ex: convertendo lead de um partner), usa ele
+    // Caso contrário usa o usuário autenticado
+    const isAdmin = ADMIN_ROLES.includes(profile?.role as typeof ADMIN_ROLES[number]);
+    const effectivePartnerId = (isAdmin && d.partner_id) ? d.partner_id : user.id;
+
     const { data, error } = await serviceClient().from("credit_desk_proposals").insert({
       code,
       title:           d.title,
@@ -147,7 +152,7 @@ export async function POST(req: NextRequest) {
       current_level:   d.current_level,
       status:          "PENDING",
       stage:           "RECEBIDO",
-      partner_id:      user.id,
+      partner_id:      effectivePartnerId,
       created_by:      user.id,
       metadata:        d.metadata ?? {},
     }).select().single();
