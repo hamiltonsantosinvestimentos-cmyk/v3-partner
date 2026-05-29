@@ -269,10 +269,35 @@ export async function POST(req: NextRequest) {
 
   const insights = (doc_insights ?? []).map(i => `${i.doc}: ${i.finding}`);
 
-  const portalUrl  = "https://app.v3partners.com.br/mesa-ma";
-  const uploadUrl  = upload_token
-    ? `https://app.v3partners.com.br/upload/${upload_token}`
+  const baseAppUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.v3partners.com.br";
+  const portalUrl  = `${baseAppUrl}/mesa-ma`;
+
+  // Gera token de upload automaticamente se não foi fornecido
+  // Assim clientes/partners externos recebem link seguro sem precisar de login
+  let uploadUrl: string | undefined = upload_token
+    ? `${baseAppUrl}/upload/${upload_token}`
     : undefined;
+
+  if (!uploadUrl) {
+    try {
+      const { data: tokenRow } = await svc()
+        .from("deal_upload_tokens")
+        .insert({
+          deal_id,
+          label:      `Pendências FORJA — ${dealCodigo}`,
+          expires_at: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
+          max_uses:   30,
+          created_by: (deal.created_by as string) ?? "00000000-0000-0000-0000-000000000000",
+        })
+        .select("token")
+        .single();
+      if (tokenRow?.token) {
+        uploadUrl = `${baseAppUrl}/upload/${tokenRow.token}`;
+      }
+    } catch (e) {
+      console.error("[forja-notify] Erro ao gerar upload token:", e);
+    }
+  }
 
   const { Resend } = await import("resend");
   const resend = new Resend(resendKey);
