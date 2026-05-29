@@ -11,12 +11,29 @@ export interface OcrField {
   mensagem: string;
 }
 
+export interface OcrDocCheck {
+  documento_esperado: string;   // ex: "CNH", "Extrato Bancário"
+  documento_encontrado: string; // ex: "CNH", "Fatura Cartão" (o que o OCR viu)
+  cliente_confere: boolean;     // nome/CPF do cliente bate?
+  resumo_linha: string;         // ex: "CNH = CNH do cliente ✓ ok"
+  status: "ok" | "atencao" | "reprovado";
+}
+
+export interface OcrExtratoInfo {
+  banco: string;                  // ex: "Nubank", "Itaú", "Bradesco"
+  periodo: string;                // ex: "Jan/2025 – Mar/2025"
+  media_entrada_mensal: number | null; // valor numérico em R$
+  media_entrada_formatada: string;     // ex: "R$ 4.250,00"
+}
+
 export interface OcrResultado {
   doc_id: string;
   tipo_documento: string;
   campos: OcrField[];
   resumo: "aprovado" | "atencao" | "reprovado";
   observacoes: string;
+  doc_check?: OcrDocCheck;
+  extrato_info?: OcrExtratoInfo;
 }
 
 async function getUser() {
@@ -131,17 +148,44 @@ export async function POST(req: NextRequest) {
       .map(([k, v]) => `- ${k}: ${v}`)
       .join("\n");
 
-    const systemPrompt = `Você é um sistema de validação documental. Analise documentos e retorne APENAS JSON válido, sem nenhum texto antes ou depois. Nunca use markdown.`;
+    const systemPrompt = `Você é um sistema de validação documental brasileiro. Analise documentos e retorne APENAS JSON válido, sem nenhum texto antes ou depois. Nunca use markdown.`;
+
+    const isExtrato = /extrato|bancári|bank|statement/i.test(doc_label);
 
     const userPrompt = `Analise este documento (${doc_label}) e compare com os dados da proposta:
 
 ${ctxLines}
 
 Retorne exatamente este JSON (sem markdown, sem explicações):
-{"tipo_documento":"string","campos":[{"campo":"string","extraido":"string ou null","esperado":"string ou null","status":"ok ou divergente ou ausente ou info","mensagem":"string curta"}],"resumo":"aprovado ou atencao ou reprovado","observacoes":"string"}
+{
+  "tipo_documento": "nome real do documento encontrado",
+  "campos": [
+    {"campo":"string","extraido":"string ou null","esperado":"string ou null","status":"ok|divergente|ausente|info","mensagem":"string curta"}
+  ],
+  "resumo": "aprovado|atencao|reprovado",
+  "observacoes": "string",
+  "doc_check": {
+    "documento_esperado": "${doc_label}",
+    "documento_encontrado": "tipo real do documento visto no arquivo",
+    "cliente_confere": true ou false,
+    "resumo_linha": "ex: CNH = CNH do cliente ✓ ok  OU  Extrato Bancário = Extrato Itaú ✓ ok",
+    "status": "ok|atencao|reprovado"
+  }${isExtrato ? `,
+  "extrato_info": {
+    "banco": "nome do banco/instituição ex: Nubank, Itaú, Bradesco, Caixa, Santander, Inter, C6",
+    "periodo": "período coberto ex: Jan/2025 – Mar/2025",
+    "media_entrada_mensal": número em reais ou null se não identificável,
+    "media_entrada_formatada": "ex: R$ 4.250,00 ou null"
+  }` : ""}
+}
 
-Status dos campos: ok=confere, divergente=não confere, ausente=não encontrado, info=sem comparação.
-Resumo: aprovado=tudo ok, atencao=divergência menor, reprovado=divergência crítica ou vencido.`;
+Regras:
+- Status dos campos: ok=confere, divergente=não confere, ausente=não encontrado, info=sem comparação
+- Resumo: aprovado=tudo ok, atencao=divergência menor, reprovado=divergência crítica ou documento vencido
+- doc_check.cliente_confere: true se nome/CPF do cliente da proposta bate com o documento
+- doc_check.resumo_linha: frase curta de conferência no formato "TipoEsperado = TipoEncontrado ✓ ok" ou "⚠ divergência"${isExtrato ? `
+- extrato_info.media_entrada_mensal: some todas as entradas/créditos e divida pelos meses do período` : ""}
+- Retorne APENAS o JSON, zero texto adicional`;
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let mediaBlock: any;
@@ -190,6 +234,8 @@ Resumo: aprovado=tudo ok, atencao=divergência menor, reprovado=divergência cr�
       campos: Array.isArray(parsed.campos) ? parsed.campos : [],
       resumo: (["aprovado", "atencao", "reprovado"].includes(parsed.resumo) ? parsed.resumo : "atencao") as OcrResultado["resumo"],
       observacoes: parsed.observacoes ?? "",
+      ...(parsed.doc_check ? { doc_check: parsed.doc_check as OcrResultado["doc_check"] } : {}),
+      ...(parsed.extrato_info ? { extrato_info: parsed.extrato_info as OcrResultado["extrato_info"] } : {}),
     };
 
     return NextResponse.json({ resultado });

@@ -2807,8 +2807,43 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
                                 const r = fileOcrResultado;
                                 const resumoCor = r.resumo === "aprovado" ? "emerald" : r.resumo === "atencao" ? "amber" : "red";
                                 const resumoIcon = r.resumo === "aprovado" ? "✓" : r.resumo === "atencao" ? "⚠" : "✗";
+                                const checkCor = r.doc_check?.status === "ok" ? "emerald" : r.doc_check?.status === "atencao" ? "amber" : "red";
                               return (
                                 <div className={`rounded-lg border p-2.5 space-y-2 bg-${resumoCor}-500/5 border-${resumoCor}-500/20`}>
+
+                                  {/* ── Linha de check do documento ── */}
+                                  {r.doc_check && (
+                                    <div className={`flex items-center justify-between px-2 py-1.5 rounded-md bg-${checkCor}-500/10 border border-${checkCor}-500/25`}>
+                                      <span className={`text-[11px] font-semibold text-${checkCor}-400`}>
+                                        {r.doc_check.resumo_linha}
+                                      </span>
+                                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-${checkCor}-500/20 text-${checkCor}-400 uppercase tracking-wide`}>
+                                        {r.doc_check.status}
+                                      </span>
+                                    </div>
+                                  )}
+
+                                  {/* ── Dados do extrato bancário ── */}
+                                  {r.extrato_info && (
+                                    <div className="flex items-center gap-3 px-2 py-1.5 rounded-md bg-[#C9A84C]/8 border border-[#C9A84C]/25">
+                                      <div className="flex-1 min-w-0">
+                                        <span className="text-[9px] font-bold text-[#C9A84C] uppercase tracking-wider block">Banco / Instituição</span>
+                                        <span className="text-[11px] font-semibold text-foreground">{r.extrato_info.banco}</span>
+                                        {r.extrato_info.periodo && (
+                                          <span className="text-[9px] text-muted-foreground ml-2">{r.extrato_info.periodo}</span>
+                                        )}
+                                      </div>
+                                      {r.extrato_info.media_entrada_formatada && (
+                                        <div className="text-right flex-shrink-0">
+                                          <span className="text-[9px] font-bold text-[#C9A84C] uppercase tracking-wider block">Média de Entrada</span>
+                                          <span className="text-[12px] font-bold text-emerald-400">{r.extrato_info.media_entrada_formatada}</span>
+                                          <span className="text-[8px] text-muted-foreground block">/mês</span>
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
+
+                                  {/* ── Header status geral ── */}
                                   <div className="flex items-center justify-between">
                                     <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
                                       {r.tipo_documento}
@@ -2817,6 +2852,8 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
                                       {resumoIcon} {r.resumo.toUpperCase()}
                                     </span>
                                   </div>
+
+                                  {/* ── Campos extraídos ── */}
                                   <div className="space-y-1">
                                     {r.campos.map((campo, ci) => {
                                       const cor = campo.status === "ok" ? "text-emerald-400" : campo.status === "divergente" ? "text-red-400" : campo.status === "ausente" ? "text-amber-400" : "text-muted-foreground";
@@ -2835,6 +2872,7 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
                                       );
                                     })}
                                   </div>
+
                                   {r.observacoes && (
                                     <p className="text-[10px] text-muted-foreground/80 italic border-t border-border pt-1.5">{r.observacoes}</p>
                                   )}
@@ -2871,6 +2909,39 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
                     );
                   })}
                 </div>
+                {/* ── Resumo consolidado de extratos bancários ── */}
+                {(() => {
+                  const extratosResumo = (proposal.metadata as Record<string, unknown>)?.extratos_resumo as Array<{
+                    banco: string; periodos: string; media_entrada_formatada: string | null; quantidade_extratos: number;
+                  }> | undefined;
+                  if (!extratosResumo?.length) return null;
+                  return (
+                    <div className="mt-3 rounded-lg border border-[#C9A84C]/30 bg-[#C9A84C]/5 p-3">
+                      <p className="text-[9px] font-bold text-[#C9A84C] uppercase tracking-wider mb-2">
+                        Resumo de Extratos Bancários
+                      </p>
+                      <div className="space-y-2">
+                        {extratosResumo.map((e, i) => (
+                          <div key={i} className="flex items-center justify-between py-1 border-b border-[#C9A84C]/15 last:border-0">
+                            <div>
+                              <span className="text-[11px] font-semibold text-foreground">{e.banco}</span>
+                              {e.periodos && <span className="text-[9px] text-muted-foreground ml-2">{e.periodos}</span>}
+                              <span className="text-[9px] text-muted-foreground ml-2">({e.quantidade_extratos} extrato{e.quantidade_extratos !== 1 ? "s" : ""})</span>
+                            </div>
+                            <div className="text-right">
+                              <span className="text-[9px] text-muted-foreground block">Média de Entrada</span>
+                              <span className="text-[12px] font-bold text-emerald-400">
+                                {e.media_entrada_formatada ?? "—"}
+                              </span>
+                              <span className="text-[8px] text-muted-foreground">/mês</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 <p className="text-[10px] text-muted-foreground">* Obrigatório — anexe o arquivo e o documento será marcado automaticamente</p>
               </div>
             );

@@ -261,6 +261,27 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // Agrega dados de extratos bancários por banco
+  const extratosPorBanco: Record<string, { medias: number[]; periodos: string[] }> = {};
+  for (const r of ocrResults) {
+    if (r.extrato_info) {
+      const banco = r.extrato_info.banco ?? "Não identificado";
+      if (!extratosPorBanco[banco]) extratosPorBanco[banco] = { medias: [], periodos: [] };
+      if (r.extrato_info.media_entrada_mensal != null) {
+        extratosPorBanco[banco].medias.push(r.extrato_info.media_entrada_mensal);
+      }
+      if (r.extrato_info.periodo) extratosPorBanco[banco].periodos.push(r.extrato_info.periodo);
+    }
+  }
+  const fmt = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
+  const extratos_resumo = Object.entries(extratosPorBanco).map(([banco, d]) => ({
+    banco,
+    periodos: [...new Set(d.periodos)].join(", "),
+    media_entrada_mensal: d.medias.length ? d.medias.reduce((a, b) => a + b, 0) / d.medias.length : null,
+    media_entrada_formatada: d.medias.length ? fmt(d.medias.reduce((a, b) => a + b, 0) / d.medias.length) : null,
+    quantidade_extratos: d.medias.length,
+  }));
+
   // Salva resultados de OCR no metadata
   // ocr_resultados: formato Record (lido pelo modal)
   // ocr_results: formato Array (legado, mantido para compatibilidade)
@@ -268,6 +289,7 @@ export async function POST(req: NextRequest) {
     ...meta,
     ocr_resultados: { ...(meta.ocr_resultados as Record<string, unknown> ?? {}), ...ocrResultados },
     ocr_results: ocrResults,
+    extratos_resumo,
     ocr_analyzed_at: new Date().toISOString(),
     ocr_analyzed_by: profile?.full_name ?? "Mesa",
   };
@@ -315,6 +337,7 @@ export async function POST(req: NextRequest) {
     total_docs: docs.length,
     ocr_results: ocrResults,
     ocr_resultados: ocrResultados,
+    extratos_resumo,
     resumo_geral: resumoGeral,
     ai_analysis: aiAnalysis,
     ai_error: aiError,
