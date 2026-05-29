@@ -11,6 +11,9 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { event, instance, data } = body;
 
+    // Ignora chamadas do webhook global (duplicatas)
+    if (body.local?.includes("Global")) return NextResponse.json({ ok: true });
+
     console.log(`[SDR Webhook] evento: ${event} | instância: ${instance}`);
 
     // ── QR Code gerado ──────────────────────────────────────────────────────
