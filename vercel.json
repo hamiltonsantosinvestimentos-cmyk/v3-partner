@@ -3,7 +3,7 @@
   "crons": [
     {
       "path": "/api/cron/n8n-keepalive",
-      "schedule": "*/10 * * * *"
+      "schedule": "0 8 * * *"
     },
     {
       "path": "/api/contratos/lembrete",
