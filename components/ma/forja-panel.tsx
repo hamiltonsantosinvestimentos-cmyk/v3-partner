@@ -173,6 +173,11 @@ export function ForjaPanel({ deal, dealId, savedResult, onSaved, onReportSaved }
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ deal_id: dealId, doc_id: doc.doc_id }),
       });
+      // Guard: Vercel pode retornar texto puro em caso de erro/crash
+      const ct = res.headers.get("content-type") ?? "";
+      if (!ct.includes("application/json")) {
+        throw new Error(`Serviço de extração indisponível (${res.status})`);
+      }
       const data = await res.json() as {
         ok?: boolean; error?: string;
         extraction_id?: string; tipo_documento?: string;
