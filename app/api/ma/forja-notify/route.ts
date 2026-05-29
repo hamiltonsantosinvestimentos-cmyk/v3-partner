@@ -299,6 +299,20 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // Insert de timeline (fire-and-forget — não bloqueia os emails)
+  if (responsavelId) {
+    void Promise.resolve(
+      svc().from("notifications").insert({
+        user_id:    responsavelId,
+        title:      `FORJA: ${recLabel(recommendation)} (${score}/100)`,
+        message:    `Deal ${dealCodigo}${pendencias.length > 0 ? ` · ${pendencias.length} pendência${pendencias.length > 1 ? "s" : ""}` : " · sem pendências"}`,
+        type:       "deal",
+        read:       false,
+        action_url: `/mesa-ma?deal=${deal_id}`,
+      })
+    ).catch(() => {});
+  }
+
   const { Resend } = await import("resend");
   const resend = new Resend(resendKey);
 

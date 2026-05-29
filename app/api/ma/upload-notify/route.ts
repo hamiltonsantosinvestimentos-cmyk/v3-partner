@@ -36,14 +36,29 @@ export async function POST(req: NextRequest) {
   // Busca dados do deal
   const { data: deal } = await svc()
     .from("ma_deals")
-    .select("v3_code, code, target_company, sector")
+    .select("v3_code, code, target_company, sector, assigned_to, created_by")
     .eq("id", deal_id)
     .single();
 
-  const dealCodigo = (deal?.v3_code ?? deal?.code ?? deal_id.slice(0, 8)).toString();
-  const dealNome   = (deal?.target_company ?? "Deal").toString();
-  const fileKb     = Math.round(file_size / 1024);
-  const isOcr      = mime_type === "application/pdf";
+  const dealCodigo    = (deal?.v3_code ?? deal?.code ?? deal_id.slice(0, 8)).toString();
+  const dealNome      = (deal?.target_company ?? "Deal").toString();
+  const fileKb        = Math.round(file_size / 1024);
+  const isOcr         = mime_type === "application/pdf";
+  const responsavelId = (deal?.assigned_to ?? deal?.created_by) as string | undefined;
+
+  // Insert de timeline (fire-and-forget — não bloqueia o email)
+  if (responsavelId) {
+    void Promise.resolve(
+      svc().from("notifications").insert({
+        user_id:    responsavelId,
+        title:      `Documento recebido: ${file_name}`,
+        message:    `${file_name} (${fileKb} KB) via link "${token_label}"${isOcr ? " · OCR W9 disparado" : ""}`,
+        type:       "deal",
+        read:       false,
+        action_url: `/mesa-ma?deal=${deal_id}`,
+      })
+    ).catch(() => {});
+  }
 
   const hoje = new Date().toLocaleString("pt-BR", {
     day: "2-digit", month: "2-digit", year: "numeric",

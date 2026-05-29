@@ -6,7 +6,7 @@ import {
   BarChart2, Mail, Circle, FileText,
   Paperclip, Trash2, ExternalLink, Upload, Copy, CheckCheck,
   MessageSquare, Send, Zap, FileImage, FileSignature,
-  ArrowLeftRight, Pencil, Check, Loader2, DatabaseZap,
+  ArrowLeftRight, Pencil, Check, Loader2, DatabaseZap, Clock,
 } from "lucide-react";
 import { ExportButton } from "@/components/financeiro/export-button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -26,6 +26,10 @@ const DealQAPanel = dynamic(
 );
 const DealRoomPanel = dynamic(
   () => import("@/components/ma/deal-room-panel").then(m => m.DealRoomPanel),
+  { ssr: false }
+);
+const DealTimeline = dynamic(
+  () => import("@/components/ma/deal-timeline").then(m => m.DealTimeline),
   { ssr: false }
 );
 import { NovoDealForm } from "@/components/ma/novo-deal-form";
@@ -228,7 +232,7 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
   const [cards, setCards] = useState<MaCard[]>(initialDeals);
   const [operators, setOperators] = useState<MesaOperator[]>([]);
   const [selectedCard, setSelectedCard] = useState<MaCard | null>(null);
-  const [detailTab, setDetailTab] = useState<"detalhes" | "forja" | "criativos" | "contrato" | "matches" | "analytics" | "qa" | "doc-requests">("detalhes");
+  const [detailTab, setDetailTab] = useState<"detalhes" | "forja" | "criativos" | "contrato" | "matches" | "analytics" | "qa" | "doc-requests" | "timeline">("detalhes");
   const [showNewCard, setShowNewCard] = useState(false);
   const [showFullForm, setShowFullForm] = useState(false);
   const [showNewOp, setShowNewOp] = useState(false);
@@ -848,6 +852,7 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
                   { id: "criativos" as const, label: "Criativos", icon: <FileImage size={12} /> },
                   { id: "contrato" as const, label: "NDA / Mandato", icon: <FileSignature size={12} /> },
                   { id: "doc-requests" as const, label: "Docs", icon: <FileText size={12} /> },
+                  { id: "timeline" as const, label: "Timeline", icon: <Clock size={12} /> },
                 ]).map(tab => (
                   <button
                     key={tab.id}
@@ -1217,6 +1222,14 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
                       )}
                     </div>
                   </div>
+                </div>
+              );
+            }
+
+            if (detailTab === "timeline") {
+              return (
+                <div className="mt-2">
+                  <DealTimeline dealId={selectedCard.id} />
                 </div>
               );
             }
