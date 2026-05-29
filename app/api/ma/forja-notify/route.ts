@@ -235,24 +235,29 @@ export async function POST(req: NextRequest) {
   const resendKey = process.env.RESEND_API_KEY;
   if (!resendKey) return NextResponse.json({ ok: true, mode: "demo" });
 
-  // Busca dados do deal e do partner
+  // Busca dados do deal
   const { data: deal } = await svc()
     .from("ma_deals")
-    .select(`
-      id, code, v3_code, target_company, sector, deal_value,
-      asset_data,
-      partner:profiles!partner_id(id, full_name, email),
-      responsible
-    `)
+    .select("id, code, v3_code, target_company, sector, deal_value, asset_data, partner_id, responsible")
     .eq("id", deal_id)
     .single();
 
   if (!deal) return NextResponse.json({ error: "Deal não encontrado" }, { status: 404 });
 
-  const dealCodigo  = (deal.v3_code ?? deal.code ?? deal_id.slice(0, 8)).toString();
-  const dealNome    = (deal.target_company ?? "Deal").toString();
-  const partnerInfo = deal.partner as { full_name?: string; email?: string } | null;
-  const assetData   = (deal.asset_data ?? {}) as Record<string, unknown>;
+  // Busca partner separadamente (FK pode ter nome diferente)
+  let partnerInfo: { full_name?: string; email?: string } | null = null;
+  if (deal.partner_id) {
+    const { data: partner } = await svc()
+      .from("profiles")
+      .select("id, full_name, email")
+      .eq("id", deal.partner_id)
+      .single();
+    partnerInfo = partner;
+  }
+
+  const dealCodigo = (deal.v3_code ?? deal.code ?? deal_id.slice(0, 8)).toString();
+  const dealNome   = (deal.target_company ?? "Deal").toString();
+  const assetData  = (deal.asset_data ?? {}) as Record<string, unknown>;
 
   // Monta listas de pendências legíveis
   const pendencias = (missing ?? []).slice(0, 8).map(m => {
