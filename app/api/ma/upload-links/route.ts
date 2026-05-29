@@ -36,10 +36,10 @@ export async function POST(req: NextRequest) {
   const { deal_id, label, expires_days = 14, max_uses = 20 } = body;
   if (!deal_id) return NextResponse.json({ error: "deal_id obrigatório" }, { status: 400 });
 
-  // Verifica se o deal existe e pega o partner_id
+  // Verifica se o deal existe
   const { data: deal } = await svc()
     .from("ma_deals")
-    .select("id, code, v3_code, partner_id")
+    .select("id, code, v3_code")
     .eq("id", deal_id)
     .single();
 
@@ -52,7 +52,6 @@ export async function POST(req: NextRequest) {
     .from("deal_upload_tokens")
     .insert({
       deal_id,
-      partner_id:  deal.partner_id ?? null,
       label:       label ?? null,
       expires_at:  expiresAt.toISOString(),
       max_uses,
