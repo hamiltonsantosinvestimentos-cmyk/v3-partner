@@ -235,24 +235,25 @@ export async function POST(req: NextRequest) {
   const resendKey = process.env.RESEND_API_KEY;
   if (!resendKey) return NextResponse.json({ ok: true, mode: "demo" });
 
-  // Busca dados do deal
+  // Busca dados do deal (colunas reais da tabela ma_deals)
   const { data: deal } = await svc()
     .from("ma_deals")
-    .select("id, code, v3_code, target_company, sector, deal_value, asset_data, partner_id, responsible")
+    .select("id, code, v3_code, target_company, sector, deal_value, asset_data, assigned_to, created_by")
     .eq("id", deal_id)
     .single();
 
   if (!deal) return NextResponse.json({ error: "Deal não encontrado" }, { status: 404 });
 
-  // Busca partner separadamente (FK pode ter nome diferente)
+  // Busca usuário responsável (assigned_to) para incluir no email
   let partnerInfo: { full_name?: string; email?: string } | null = null;
-  if (deal.partner_id) {
-    const { data: partner } = await svc()
+  const responsavelId = (deal.assigned_to ?? deal.created_by) as string | null;
+  if (responsavelId) {
+    const { data: responsavel } = await svc()
       .from("profiles")
       .select("id, full_name, email")
-      .eq("id", deal.partner_id)
+      .eq("id", responsavelId)
       .single();
-    partnerInfo = partner;
+    partnerInfo = responsavel;
   }
 
   const dealCodigo = (deal.v3_code ?? deal.code ?? deal_id.slice(0, 8)).toString();
@@ -283,9 +284,11 @@ export async function POST(req: NextRequest) {
     "joao.lemos@v3partners.com.br",
     "deal@v3partners.com.br",
   ];
-  if (deal.responsible && typeof deal.responsible === "string" &&
-      deal.responsible !== "joao.lemos@v3partners.com.br") {
-    mesaDestinatarios.push(deal.responsible);
+  // Adiciona email do responsável se diferente dos fixos
+  if (partnerInfo?.email &&
+      partnerInfo.email !== "joao.lemos@v3partners.com.br" &&
+      partnerInfo.email !== "deal@v3partners.com.br") {
+    mesaDestinatarios.push(partnerInfo.email);
   }
 
   sends.push(
