@@ -115,6 +115,40 @@ function sanitizeDeal(deal: Record<string, unknown>): Record<string, unknown> {
 // Limite Claude API: 32MB por arquivo (base64 ~1.37x → limite raw ~23MB para segurança)
 const PDF_SIZE_LIMIT_BYTES = 23 * 1024 * 1024; // 23MB raw → ~31.5MB base64
 
+// ─── Dados pré-extraídos do banco ────────────────────────────────────────────
+
+type ExtractedDoc = {
+  doc_id:                 string;
+  doc_name:               string | null;
+  tipo_documento:         string | null;
+  dados_extraidos:        Record<string, unknown>;
+  campos_baixa_confianca: string[];
+  pendencias:             string[];
+  resumo:                 string | null;
+  confiabilidade:         number;
+};
+
+// Consulta ma_document_extractions para docs já processados pelo doc-extract / W9.
+// Retorna: extracted (docs com dados prontos) + missingDocIds (sem extração → fallback PDF).
+async function fetchExtractedDocs(dealId: string, docIds: string[]): Promise<{
+  extracted: ExtractedDoc[];
+  missingDocIds: string[];
+}> {
+  const svc = sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+  const { data } = await svc
+    .from("ma_document_extractions")
+    .select("doc_id, doc_name, tipo_documento, dados_extraidos, campos_baixa_confianca, pendencias, resumo, confiabilidade")
+    .eq("deal_id", dealId)
+    .in("doc_id", docIds)
+    .in("status", ["done", "confirmed", "needs_review"])
+    .order("confiabilidade", { ascending: false });
+
+  const extracted = (data ?? []) as ExtractedDoc[];
+  const extractedSet = new Set(extracted.map(e => e.doc_id));
+  const missingDocIds = docIds.filter(id => !extractedSet.has(id));
+  return { extracted, missingDocIds };
+}
+
 async function fetchPdfs(dealId: string, docIds: string[]): Promise<{ pdfs: PdfPayload[]; skippedDocs: string[] }> {
   const svc = sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
   const { data: deal } = await svc
@@ -180,13 +214,20 @@ export async function POST(req: NextRequest) {
     // Contexto adicional fornecido pelo usuário — injetado no prompt
     const contextoForja = (deal?.asset_data as Record<string,unknown> | undefined)?.contexto_forja as string | undefined;
 
-    // Carrega PDFs se foram selecionados
-    const { pdfs, skippedDocs } =
+    // PRIORIDADE 1: dados já extraídos em ma_document_extractions (sem timeout, sem custo extra)
+    // PRIORIDADE 2: fallback para leitura direta do PDF (Sonnet, mais lento)
+    const { extracted: extractedDocs, missingDocIds } =
       doc_ids?.length && dealId
-        ? await fetchPdfs(dealId, doc_ids)
+        ? await fetchExtractedDocs(dealId, doc_ids)
+        : { extracted: [] as ExtractedDoc[], missingDocIds: [] as string[] };
+
+    const { pdfs, skippedDocs } =
+      missingDocIds.length && dealId
+        ? await fetchPdfs(dealId, missingDocIds)
         : { pdfs: [] as PdfPayload[], skippedDocs: [] as string[] };
 
-    const hasDocs = pdfs.length > 0;
+    const hasRawPdfs    = pdfs.length > 0;
+    const hasDocs       = hasRawPdfs || extractedDocs.length > 0;
 
     // FASE 1 — validação com precisão cirúrgica
     const systemPrompt =
@@ -244,9 +285,27 @@ export async function POST(req: NextRequest) {
       "- Valores monetários: sempre em R$ com centavos quando disponíveis\n" +
       "- Retorne APENAS o JSON.";
 
-    // Monta conteúdo da mensagem: documentos primeiro, depois texto
+    // Monta contexto de documentos pré-extraídos como texto compacto
+    const avgConfianca = extractedDocs.length > 0
+      ? Math.round(extractedDocs.reduce((s, e) => s + e.confiabilidade, 0) / extractedDocs.length)
+      : 0;
+
+    const extractedContext = extractedDocs.length > 0
+      ? `DADOS PRÉ-EXTRAÍDOS — ${extractedDocs.length} doc(s), confiança média ${avgConfianca}%\n` +
+        `(Extraídos pelo sistema doc-extract / W9. Campos com valor=null não foram encontrados no documento.)\n\n` +
+        extractedDocs.map(e =>
+          `=== ${e.doc_name ?? e.doc_id} | ${e.tipo_documento ?? "Documento"} | confiança ${e.confiabilidade}% ===\n` +
+          `Resumo: ${e.resumo ?? "Sem resumo"}\n` +
+          `Dados: ${JSON.stringify(e.dados_extraidos, null, 2)}\n` +
+          (e.pendencias.length > 0 ? `Pendências: ${e.pendencias.join(", ")}\n` : "") +
+          (e.campos_baixa_confianca.length > 0 ? `Baixa confiança: ${e.campos_baixa_confianca.join(", ")}\n` : "")
+        ).join("\n\n")
+      : "";
+
+    // Monta conteúdo da mensagem: PDFs brutos (fallback) + texto dos extraídos + deal JSON
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const userContent: any[] = [
+      // PDFs brutos — apenas docs sem extração prévia
       ...pdfs.map((pdf) =>
         pdf.mediaType === "application/pdf"
           ? { type: "document", source: { type: "base64", media_type: "application/pdf", data: pdf.base64 }, title: pdf.fileName }
@@ -255,22 +314,24 @@ export async function POST(req: NextRequest) {
       {
         type: "text",
         text: (hasDocs
-          ? `Analise este deal M&A e valide contra os ${pdfs.length} documento(s) fornecido(s):\n\n`
+          ? `Analise este deal M&A e valide contra os documentos fornecidos` +
+            (extractedDocs.length > 0 ? ` (${extractedDocs.length} pré-extraídos` : "") +
+            (hasRawPdfs ? `${extractedDocs.length > 0 ? " + " : " ("}${pdfs.length} PDF(s) brutos` : "") +
+            (hasDocs ? `)` : "") +
+            `:\n\n`
           : `Analise este deal M&A:\n\n`) +
+          (extractedContext ? extractedContext + "\n\n" : "") +
           (contextoForja?.trim()
-            ? `CONTEXTO ADICIONAL (fornecido pela Mesa — considerar na análise):\n${contextoForja}\n\n`
+            ? `CONTEXTO ADICIONAL (fornecido pela Mesa):\n${contextoForja}\n\n`
             : "") +
           JSON.stringify(cleanDeal, null, 2),
       },
     ];
 
-    // Sem PDFs → Haiku (validação pura, ~5s)
-    // Com PDFs → Sonnet (necessário para leitura de documentos)
-    const model = hasDocs ? "claude-sonnet-4-6" : "claude-haiku-4-5-20251001";
-    // Fase 1: análise de precisão cirúrgica
-    // Haiku sem docs: 8000 (próximo do limite do modelo — deals complexos)
-    // Sonnet com docs: 12000 (extração financeira completa com PDFs)
-    const maxTokensPhase1 = hasDocs ? 12000 : 8000;
+    // Modelo: Sonnet só se houver PDFs brutos (visão necessária)
+    // Haiku: sem docs, ou quando todos os docs têm extração prévia (~5-8s vs 60+s)
+    const model = hasRawPdfs ? "claude-sonnet-4-6" : "claude-haiku-4-5-20251001";
+    const maxTokensPhase1 = hasRawPdfs ? 12000 : 8000;
 
     const message = await client.messages.create({
       model,
