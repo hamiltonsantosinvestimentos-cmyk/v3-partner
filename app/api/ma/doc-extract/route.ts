@@ -299,24 +299,34 @@ export async function POST(req: NextRequest) {
 
       const n8nBase = process.env.N8N_API_URL?.replace("/api/v1", "");
       if (n8nBase) {
-        fetch(`${n8nBase}/webhook/v3-doc-extract-large`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "x-cron-secret": process.env.CRON_SECRET ?? "" },
-          body: JSON.stringify({
-            deal_id,
-            doc_id,
-            extraction_id: extractionId,
-            storage_path: doc.storage_path,
-            file_size_bytes: fileSizeBytes,
-          }),
-        }).catch(console.error); // fire and forget
+        // AWAIT para garantir que o webhook seja entregue antes da função Vercel terminar
+        // n8n responde em < 1s com {"message":"Workflow was started"} — sem timeout
+        try {
+          await fetch(`${n8nBase}/webhook/v3-doc-extract-large`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "x-cron-secret": process.env.CRON_SECRET ?? "" },
+            body: JSON.stringify({
+              deal_id,
+              doc_id,
+              extraction_id: extractionId,
+              storage_path:  doc.storage_path,
+              bucket:        "ma-documents",
+            }),
+          });
+        } catch (e) {
+          console.error("[doc-extract] W9 webhook falhou:", e);
+          await svc.from("ma_document_extractions")
+            .update({ status: "error", error_message: "W9 indisponível — tente novamente em 1 min" })
+            .eq("id", extractionId);
+          return NextResponse.json({ error: "W9 indisponível. Tente novamente em 1 minuto." }, { status: 503 });
+        }
       }
 
       return NextResponse.json({
         ok:            true,
         extraction_id: extractionId,
         status:        "queued",
-        message:       `PDF grande (${Math.round(fileSizeBytes / 1024 / 1024 * 10) / 10}MB) — extração assíncrona iniciada. Aguarde ~2 minutos.`,
+        message:       "Extração iniciada — W9 processando. Acompanhe o badge do documento.",
       });
     }
 
