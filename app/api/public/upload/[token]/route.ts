@@ -173,13 +173,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
       method: "POST",
       headers: { "Content-Type": "application/json", "x-cron-secret": process.env.CRON_SECRET ?? "" },
       body: JSON.stringify({
-        deal_id:   tokenRow.deal_id,
-        doc_id:    docId,
-        file_name: safeName,
-        file_size: buf.byteLength,
-        mime_type: file.type,
-        token_label: tokenRow.label,
-        ip_address:  ip,
+        deal_id:      tokenRow.deal_id,
+        doc_id:       docId,
+        file_name:    safeName,
+        file_size:    buf.byteLength,
+        mime_type:    file.type,
+        token_label:  tokenRow.label,
+        ip_address:   ip,
+        storage_path: storagePath,
+        bucket:       "ma-documents",
       }),
     }).catch(e => console.error("[public/upload] W11 webhook:", e));
   }

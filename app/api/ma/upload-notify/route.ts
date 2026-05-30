@@ -16,16 +16,18 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json() as {
-    deal_id:     string;
-    doc_id:      string;
-    file_name:   string;
-    file_size:   number;
-    mime_type:   string;
-    token_label: string;
-    ip_address?: string;
+    deal_id:      string;
+    doc_id:       string;
+    file_name:    string;
+    file_size:    number;
+    mime_type:    string;
+    token_label:  string;
+    ip_address?:  string;
+    storage_path?: string;
+    bucket?:       string;
   };
 
-  const { deal_id, doc_id, file_name, file_size, mime_type, token_label } = body;
+  const { deal_id, doc_id, file_name, file_size, mime_type, token_label, storage_path, bucket } = body;
   if (!deal_id || !file_name) {
     return NextResponse.json({ error: "deal_id e file_name obrigatórios" }, { status: 400 });
   }
@@ -45,6 +47,17 @@ export async function POST(req: NextRequest) {
   const fileKb        = Math.round(file_size / 1024);
   const isOcr         = mime_type === "application/pdf";
   const responsavelId = (deal?.assigned_to ?? deal?.created_by) as string | undefined;
+
+  // Cria registro de extração para PDFs — extraction_id é retornado para W11 disparar W9
+  let extractionId: string | null = null;
+  if (isOcr && storage_path) {
+    const { data: ext } = await svc()
+      .from("ma_document_extractions")
+      .insert({ deal_id, status: "pending", file_name })
+      .select("id")
+      .single();
+    extractionId = ext?.id ?? null;
+  }
 
   // Insert de timeline (fire-and-forget — não bloqueia o email)
   if (responsavelId) {
@@ -82,7 +95,7 @@ export async function POST(req: NextRequest) {
       subject: `[Upload] ${file_name} recebido — ${dealCodigo}`,
       html,
     });
-    return NextResponse.json({ ok: true, deal_code: dealCodigo });
+    return NextResponse.json({ ok: true, deal_code: dealCodigo, extraction_id: extractionId });
   } catch (err) {
     console.error("[upload-notify]", err);
     return NextResponse.json(
