@@ -1,0 +1,13 @@
+{
+  "id": "W1AcbCbp9dOMmrdk",
+  "name": "W4-Meetings — Intel Semanal (sáb 8h30 BRT)",
+  "active": true,
+  "schedule": "30 8 * * 6",
+  "description": "Busca business_meetings + action_items da semana no Supabase, gera relatório HTML V4.2 com Claude Sonnet e envia via Resend para joao.lemos@v3partners.com.br",
+  "nodes": ["Schedule — Sáb 8h30 BRT", "Buscar Reuniões da Semana", "Buscar Action Items da Semana", "Claude Sonnet — Relatório HTML V3", "Enviar Email Resend — João"],
+  "resend_from": "noreply@v3partners.com.br",
+  "resend_to": ["joao.lemos@v3partners.com.br"],
+  "logo_url": "https://app.v3partners.com.br/v3-logo-flat-gold-alpha.png",
+  "last_updated": "2026-05-30",
+  "notes": "User-Agent header obrigatório no nó Resend para evitar bloqueio Cloudflare. Prompt deve incluir identidade V4.2 completa."
+}
