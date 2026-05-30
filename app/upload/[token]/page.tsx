@@ -122,12 +122,13 @@ export default function UploadPage() {
                    alt="V3 Partners" width={120} height={40} style={{ objectFit: "contain" }} />
           </div>
           <div style={styles.successIcon}>✓</div>
-          <h2 style={{ ...styles.title, color: "#A8D5B5" }}>Documentos recebidos</h2>
+          <h2 style={{ ...styles.title, color: "#A8D5B5" }}>Documentação recebida</h2>
           <p style={styles.mutedText}>{message}</p>
           <p style={{ ...styles.mutedText, marginTop: 12 }}>
-            Nossa equipe irá analisar os documentos e entrará em contato em breve.
+            A documentação foi registrada com segurança pela Mesa M&A da V3 Partners.
+            Nossa equipe entrará em contato para confirmar o recebimento e os próximos passos.
           </p>
-          <p style={{ ...styles.footer }}>V3 Partners · deal@v3partners.com.br</p>
+          <p style={{ ...styles.footer }}>V3 Partners Soluções Ltda · deal@v3partners.com.br</p>
         </div>
       </div>
     );
