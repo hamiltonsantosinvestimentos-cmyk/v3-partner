@@ -29,15 +29,5 @@
       "path": "/api/cron/cold-leads",
       "schedule": "0 9 * * 1,3,5"
     }
-  ],
-  "experimentalServices": {
-    "frontend": {
-      "routePrefix": "/",
-      "framework": "nextjs"
-    },
-    "creative-engine": {
-      "entrypoint": "services/creative-engine",
-      "routePrefix": "/_/creative-engine"
-    }
-  }
+  ]
 }
