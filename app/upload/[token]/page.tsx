@@ -99,8 +99,8 @@ export default function UploadPage() {
       <div style={styles.page}>
         <div style={styles.card}>
           <div style={styles.logoWrap}>
-            <Image src="https://raw.githubusercontent.com/Jlnetto35/v3-portal/main/assets/v3-symbol-gold-alpha.png"
-                   alt="V3 Partners" width={48} height={48} />
+            <Image src="/v3-logo-flat-gold-alpha.png"
+                   alt="V3 Partners" width={120} height={40} style={{ objectFit: "contain" }} />
           </div>
           <h2 style={{ ...styles.title, color: "#F4A0A0" }}>Link inválido</h2>
           <p style={styles.mutedText}>{tokenInfo?.reason ?? "Este link não é válido ou expirou."}</p>
@@ -118,8 +118,8 @@ export default function UploadPage() {
       <div style={styles.page}>
         <div style={styles.card}>
           <div style={styles.logoWrap}>
-            <Image src="https://raw.githubusercontent.com/Jlnetto35/v3-portal/main/assets/v3-symbol-gold-alpha.png"
-                   alt="V3 Partners" width={48} height={48} />
+            <Image src="/v3-logo-flat-gold-alpha.png"
+                   alt="V3 Partners" width={120} height={40} style={{ objectFit: "contain" }} />
           </div>
           <div style={styles.successIcon}>✓</div>
           <h2 style={{ ...styles.title, color: "#A8D5B5" }}>Documentos recebidos</h2>
@@ -138,8 +138,8 @@ export default function UploadPage() {
       <div style={styles.card}>
         {/* Logo */}
         <div style={styles.logoWrap}>
-          <Image src="https://raw.githubusercontent.com/Jlnetto35/v3-portal/main/assets/v3-symbol-gold-alpha.png"
-                 alt="V3 Partners" width={48} height={48} />
+          <Image src="/v3-logo-flat-gold-alpha.png"
+                 alt="V3 Partners" width={120} height={40} style={{ objectFit: "contain" }} />
         </div>
 
         <h1 style={styles.title}>Envio de Documentos</h1>
@@ -157,7 +157,7 @@ export default function UploadPage() {
 
         {/* Aviso de segurança */}
         <div style={styles.notice}>
-          <p style={{ margin: 0, fontSize: 12, color: "#7A96AF", lineHeight: 1.5 }}>
+          <p style={{ margin: 0, fontSize: 12, color: "#9BAFC5", lineHeight: 1.5 }}>
             Este é um canal seguro e privado. Seus documentos são enviados diretamente
             para a equipe da V3 Partners e não ficam acessíveis publicamente.
           </p>
@@ -173,7 +173,7 @@ export default function UploadPage() {
           <p style={{ margin: 0, fontSize: 14, color: "#C9A84C", fontWeight: 600 }}>
             Clique ou arraste os arquivos aqui
           </p>
-          <p style={{ margin: "6px 0 0", fontSize: 11, color: "#7A96AF" }}>
+          <p style={{ margin: "6px 0 0", fontSize: 11, color: "#9BAFC5" }}>
             PDF, imagens, Excel, Word — máx. 32 MB por arquivo
           </p>
           <input
@@ -192,7 +192,7 @@ export default function UploadPage() {
             {files.map((f, i) => (
               <div key={i} style={styles.fileItem}>
                 <span style={{ fontSize: 13, color: "#C8D4E3", flex: 1 }}>{f.name}</span>
-                <span style={{ fontSize: 11, color: "#7A96AF", marginRight: 12 }}>{fmtSize(f.size)}</span>
+                <span style={{ fontSize: 11, color: "#9BAFC5", marginRight: 12 }}>{fmtSize(f.size)}</span>
                 <button
                   onClick={() => setFiles(prev => prev.filter((_, j) => j !== i))}
                   style={styles.removeBtn}
@@ -241,7 +241,7 @@ export default function UploadPage() {
 const styles: Record<string, React.CSSProperties> = {
   page: {
     minHeight:      "100vh",
-    background:     "#07101E",
+    background:     "#09081A",
     display:        "flex",
     alignItems:     "center",
     justifyContent: "center",
@@ -271,7 +271,7 @@ const styles: Record<string, React.CSSProperties> = {
   mutedText: {
     margin:     "4px 0 0",
     fontSize:   13,
-    color:      "#7A96AF",
+    color:      "#9BAFC5",
     lineHeight: 1.6,
   },
   notice: {
@@ -302,7 +302,7 @@ const styles: Record<string, React.CSSProperties> = {
   removeBtn: {
     background:  "transparent",
     border:      "none",
-    color:       "#7A96AF",
+    color:       "#9BAFC5",
     cursor:      "pointer",
     fontSize:    14,
     padding:     "0 4px",
