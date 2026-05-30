@@ -271,6 +271,38 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // 5. Criar notificações de follow-up no portal
+  const JOAO_ID = "d0af8eaa-9f3c-4e7a-b8c6-613736524317";
+  const notifs: { user_id: string; title: string; message: string; type: string; action_url: string | null }[] = [];
+
+  // Notificação de resumo da reunião
+  notifs.push({
+    user_id: userId === JOAO_ID ? JOAO_ID : userId,
+    title: `Reunião ingerida: ${dealCtx?.empresa ?? title}`,
+    message: `${meeting_date} · ${actionItems.length} action items · ${dealCode ? `Deal ${dealCode}` : "sem deal"}. ${summary.slice(0, 120)}...`,
+    type: "meeting_intel",
+    action_url: dealId ? `/mesa-ma?deal=${dealId}` : "/mesa-ma",
+  });
+
+  // Follow-up por action item com prazo
+  for (const a of actionItems) {
+    const isJoao = a.assignee.toLowerCase().includes("joão") || a.assignee.toLowerCase().includes("joao") || a.assignee.toLowerCase().includes("lemos");
+    if (isJoao) {
+      const prazoStr = a.due_date ? ` · prazo ${new Date(a.due_date).toLocaleDateString("pt-BR")}` : "";
+      notifs.push({
+        user_id: JOAO_ID,
+        title: `Follow-up: ${a.action.slice(0, 60)}`,
+        message: `De: ${title} (${meeting_date})${prazoStr}. ${a.action}`,
+        type: "followup",
+        action_url: dealId ? `/mesa-ma?deal=${dealId}` : "/mesa-ma",
+      });
+    }
+  }
+
+  if (notifs.length > 0) {
+    await db.from("notifications").insert(notifs);
+  }
+
   return NextResponse.json(
     {
       meeting_id: businessMeetingId,
