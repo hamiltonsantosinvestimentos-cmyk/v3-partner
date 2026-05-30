@@ -171,7 +171,7 @@ export async function POST(req: NextRequest) {
       type: "deal",
       title: `Novo Deal M&A — ${code}`,
       message: `${partnerName} cadastrou: ${d.company}${d.sector ? ` · ${d.sector}` : ""}`,
-      action_url: "/mesa-ma",
+      action_url: `/mesa-ma?deal=${data.id}`,
     });
 
     return NextResponse.json({
@@ -229,6 +229,19 @@ export async function PATCH(req: NextRequest) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   logAudit({ userId: user.id, userName: profile?.full_name, action: "UPDATE", entity: "ma_deals", entityId: id, newData: fields as Record<string, unknown> });
+
+  // Notificação quando comentário é adicionado — fire-and-forget, não bloqueia resposta
+  if (fields.comments !== undefined && fields.comments.length > 0) {
+    const last = fields.comments[fields.comments.length - 1];
+    const preview = last.text.length > 80 ? `${last.text.slice(0, 80)}…` : last.text;
+    const dealCode = (data as { code?: string } | null)?.code ?? id.slice(0, 8);
+    void notifyByRoles(["ADMIN", "GESTAO"], {
+      type: "deal",
+      title: `Comentário — ${dealCode}`,
+      message: `${last.author}: "${preview}"`,
+      action_url: `/mesa-ma?deal=${id}`,
+    });
+  }
 
   return NextResponse.json({ ok: true, deal: data });
 }

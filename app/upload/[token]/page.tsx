@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef } from "react";
 import { useParams } from "next/navigation";
+import Image from "next/image";
 
 type TokenInfo = {
   valid:      boolean;
