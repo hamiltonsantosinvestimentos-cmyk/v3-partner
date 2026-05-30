@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useRef } from "react";
 import { useParams } from "next/navigation";
-import Image from "next/image";
 
 type TokenInfo = {
   valid:      boolean;
@@ -99,8 +98,7 @@ export default function UploadPage() {
       <div style={styles.page}>
         <div style={styles.card}>
           <div style={styles.logoWrap}>
-            <Image src="/v3-logo-flat-gold-alpha.png"
-                   alt="V3 Partners" width={120} height={40} style={{ objectFit: "contain" }} />
+            <img src="/v3-logo-flat-gold-alpha.png" alt="V3 Partners" style={{ height: 40, width: "auto" }} />
           </div>
           <h2 style={{ ...styles.title, color: "#F4A0A0" }}>Link inválido</h2>
           <p style={styles.mutedText}>{tokenInfo?.reason ?? "Este link não é válido ou expirou."}</p>
@@ -118,8 +116,7 @@ export default function UploadPage() {
       <div style={styles.page}>
         <div style={styles.card}>
           <div style={styles.logoWrap}>
-            <Image src="/v3-logo-flat-gold-alpha.png"
-                   alt="V3 Partners" width={120} height={40} style={{ objectFit: "contain" }} />
+            <img src="/v3-logo-flat-gold-alpha.png" alt="V3 Partners" style={{ height: 40, width: "auto" }} />
           </div>
           <div style={styles.successIcon}>✓</div>
           <h2 style={{ ...styles.title, color: "#A8D5B5" }}>Documentação recebida</h2>
@@ -158,9 +155,9 @@ export default function UploadPage() {
 
         {/* Aviso de segurança */}
         <div style={styles.notice}>
-          <p style={{ margin: 0, fontSize: 12, color: "#9BAFC5", lineHeight: 1.5 }}>
+          <p style={{ margin: 0, fontSize: 12, color: "#F5F1E8", lineHeight: 1.5 }}>
             Este é um canal seguro e privado. Seus documentos são enviados diretamente
-            para a equipe da V3 Partners e não ficam acessíveis publicamente.
+            para a equipe de V3 Partners e não ficam acessíveis publicamente.
           </p>
         </div>
 
