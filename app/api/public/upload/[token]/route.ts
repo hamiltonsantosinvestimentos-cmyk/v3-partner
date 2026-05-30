@@ -101,9 +101,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
     return NextResponse.json({ error: "Arquivo maior que 32MB." }, { status: 413 });
   }
 
-  // Sanitiza nome do arquivo
+  // Sanitiza nome — normaliza para ASCII (remove acentos) antes de substituir caracteres inválidos
   const safeName = file.name
-    .replace(/[^a-zA-Z0-9._\-À-ɏ]/g, "_")
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-zA-Z0-9._\-]/g, "_")
     .replace(/_{2,}/g, "_")
     .slice(0, 200);
 
