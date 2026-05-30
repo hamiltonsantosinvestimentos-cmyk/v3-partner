@@ -1,0 +1,187 @@
+{
+  "name": "W6 — Buy-Side Demand Intake",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "v3-buy-side-intake",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "w6-webhook-trigger",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "v3-buy-side-intake"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Normaliza o payload recebido de qualquer fonte externa\n// (Typeform, landing page, formulário manual, etc.)\nconst body = $input.first().json.body ?? $input.first().json;\n\nconst normalized = {\n  nome_contato: body.nome_contato ?? body.name ?? body.nome ?? \"\",\n  email:        body.email ?? \"\",\n  telefone:     body.telefone ?? body.phone ?? body.tel ?? null,\n  empresa:      body.empresa ?? body.company ?? null,\n  cnpj:         body.cnpj ?? null,\n  setores:      Array.isArray(body.setores) ? body.setores\n                : body.setor ? [body.setor]\n                : body.sector ? [body.sector]\n                : [],\n  ufs:          Array.isArray(body.ufs) ? body.ufs\n                : body.uf ? [body.uf]\n                : [],\n  ticket_min:   Number(body.ticket_min ?? body.ticketMin ?? body.min ?? 0),\n  ticket_max:   Number(body.ticket_max ?? body.ticketMax ?? body.max ?? 0),\n  tipos_operacao: Array.isArray(body.tipos_operacao) ? body.tipos_operacao : [],\n  criterios:    body.criterios ?? body.criteria ?? body.notas ?? null,\n  origem:       body.origem ?? \"n8n_w6\",\n};\n\n// Validação básica\nconst errors = [];\nif (!normalized.nome_contato) errors.push(\"nome_contato obrigatório\");\nif (!normalized.email)        errors.push(\"email obrigatório\");\nif (!normalized.setores.length) errors.push(\"setores[] obrigatório\");\nif (!normalized.ticket_min)   errors.push(\"ticket_min obrigatório\");\nif (!normalized.ticket_max)   errors.push(\"ticket_max obrigatório\");\n\nif (errors.length) {\n  throw new Error(\"Payload inválido: \" + errors.join(\" | \"));\n}\n\nreturn [{ json: { normalized, _valid: true } }];"
+      },
+      "id": "w6-normalize",
+      "name": "Normalizar Dados",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://app.v3partners.com.br/api/webhook/v3-buy-side-intake",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-webhook-secret",
+              "value": "={{ $env.WEBHOOK_SECRET }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": []
+        },
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.normalized) }}",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "w6-post-portal",
+      "name": "POST Portal V3",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.demand_id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "w6-check-success",
+      "name": "Sucesso?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: true, demand_id: $json.demand_id, matches_found: $json.matches_found, notified: $json.notified }) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "w6-respond-ok",
+      "name": "Responder OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1120, 200]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: false, error: $json.error ?? \"Erro no portal\" }) }}",
+        "options": {
+          "responseCode": 500
+        }
+      },
+      "id": "w6-respond-error",
+      "name": "Responder Erro",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1120, 420]
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Normalizar Dados",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalizar Dados": {
+      "main": [
+        [
+          {
+            "node": "POST Portal V3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "POST Portal V3": {
+      "main": [
+        [
+          {
+            "node": "Sucesso?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sucesso?": {
+      "main": [
+        [
+          {
+            "node": "Responder OK",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder Erro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "createdAt": "2026-05-29T00:00:00.000Z",
+      "updatedAt": "2026-05-29T00:00:00.000Z",
+      "id": "w6-tag",
+      "name": "buy-side"
+    }
+  ],
+  "triggerCount": 1,
+  "updatedAt": "2026-05-29T00:00:00.000Z",
+  "versionId": "v1"
+}
