@@ -1,0 +1,20 @@
+name: n8n Keep-Alive (7h BRT)
+
+on:
+  schedule:
+    - cron: '0 10 * * *'  # 10:00 UTC = 07:00 BRT
+  workflow_dispatch:       # disparo manual se necessário
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Acordar n8n Render
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 60 https://n8n-514n.onrender.com/healthz)
+          echo "n8n health status: $STATUS"
+          if [ "$STATUS" != "200" ]; then
+            echo "Aviso: n8n retornou status $STATUS — Render pode estar iniciando"
+            exit 0
+          fi
+          echo "n8n acordado com sucesso"
