@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as sc } from "@supabase/supabase-js";
+import { createHmac } from "crypto";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -20,23 +21,23 @@ interface ClickSignWebhookPayload {
 }
 
 export async function POST(request: NextRequest) {
-  // Valida o webhook secret para evitar chamadas não autorizadas
   const webhookSecret = process.env.CLICKSIGN_WEBHOOK_SECRET;
+  const rawBody = await request.text();
+
+  // Validação HMAC-SHA256: ClickSign assina o body com o secret
   if (webhookSecret) {
-    const receivedSecret =
-      request.headers.get("x-clicksign-hmac-sha256") ??
-      request.headers.get("x-webhook-secret");
-    if (receivedSecret !== webhookSecret) {
-      console.warn("[clicksign-webhook] Webhook secret inválido — rejeitado");
+    const receivedSig = request.headers.get("x-clicksign-hmac-sha256") ?? "";
+    const expectedSig = createHmac("sha256", webhookSecret).update(rawBody).digest("hex");
+    if (receivedSig !== expectedSig) {
+      console.warn("[clicksign-webhook] HMAC inválido — rejeitado");
       return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
     }
   }
 
   let payload: ClickSignWebhookPayload;
   try {
-    payload = await request.json();
+    payload = JSON.parse(rawBody);
   } catch {
-    // Retorna 200 sempre para evitar retry do ClickSign
     return NextResponse.json({ ok: true });
   }
 
