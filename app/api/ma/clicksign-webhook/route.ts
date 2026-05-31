@@ -1,4 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createClient as sc } from "@supabase/supabase-js";
+
+function svc() {
+  return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+}
 
 const IS_DEMO = false;
 
@@ -54,58 +59,54 @@ export async function POST(request: NextRequest) {
 
   // ─── PRODUÇÃO — Atualiza Supabase ─────────────────────────────────────────
   try {
-    const { createClient } = await import("@/lib/supabase/server");
-    const supabase = await createClient();
+    const db = svc();
 
-    // Busca o deal pelo envelopeId (documentKey do ClickSign)
-    const { data: dealRows, error: findError } = await supabase
-      .from("ma_deals")
-      .select("id, stage")
-      .filter("clicksign_envelope_id", "eq", document.key)
-      .limit(1);
+    // Busca deal pelo clicksign_key (ma_deals) ou proposal pelo clicksign_key (commercial_proposals)
+    const [{ data: dealRows }, { data: proposalRows }] = await Promise.all([
+      db.from("ma_deals").select("id, stage").eq("clicksign_envelope_id", document.key).limit(1),
+      db.from("commercial_proposals").select("id").eq("clicksign_key", document.key).limit(1),
+    ]);
 
+    // Atualiza proposta comercial se encontrada
+    if (proposalRows && proposalRows.length > 0) {
+      const proposal = proposalRows[0] as { id: string };
+      const isSigned = event.name === "close" || event.name === "auto_close";
+      await db.from("commercial_proposals").update({
+        status:    isSigned ? "signed" : "viewed",
+        ...(isSigned && { signed_at: new Date().toISOString() }),
+        ...(!isSigned && { viewed_at: new Date().toISOString() }),
+      }).eq("id", proposal.id);
+
+      if (isSigned) {
+        void db.from("proposal_messages").insert({
+          proposal_id: proposal.id,
+          sender_id:   "00000000-0000-0000-0000-000000000000",
+          sender_name: "ClickSign",
+          sender_role: "SYSTEM",
+          content:     `Proposta assinada digitalmente via ClickSign — envelope ${document.key}.`,
+          type:        "system_event",
+        });
+      }
+    }
+
+    // Atualiza deal M&A se encontrado
     const deal = dealRows?.[0] as { id: string; stage: string } | undefined;
-
-    if (findError || !deal) {
-      console.warn(
-        "[clicksign-webhook] Deal não encontrado para envelope:",
-        document.key
-      );
-      // Retorna 200 para evitar retry
-      return NextResponse.json({ ok: true, not_found: true });
+    if (deal) {
+      const updates: Record<string, string> = {
+        contract_status:    "SIGNED",
+        contract_signed_at: new Date().toISOString(),
+      };
+      if (deal.stage === "PROSPECTING" || deal.stage === "APPROACH") {
+        updates.stage = "QUALIFICATION";
+      }
+      await db.from("ma_deals").update(updates).eq("id", deal.id);
+      void db.from("ma_deal_history").insert({
+        deal_id:     deal.id,
+        event_type:  "CONTRACT_SIGNED",
+        description: `Contrato assinado via ClickSign — envelope ${document.key}`,
+        created_at:  new Date().toISOString(),
+      });
     }
-
-    // Atualiza o status do contrato e avança o stage se necessário
-    const updates: Record<string, string> = {
-      contract_status: "SIGNED",
-      contract_signed_at: new Date().toISOString(),
-    };
-
-    // Avança o deal para QUALIFICATION se ainda estava na etapa anterior
-    if (deal.stage === "PROSPECTING" || deal.stage === "APPROACH") {
-      updates.stage = "QUALIFICATION";
-    }
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error: updateError } = await (supabase as any)
-      .from("ma_deals")
-      .update(updates)
-      .eq("id", deal.id);
-
-    if (updateError) {
-      console.error("[clicksign-webhook] Erro ao atualizar deal:", updateError);
-    } else {
-      console.log("[clicksign-webhook] Deal atualizado:", deal.id, updates);
-    }
-
-    // Registra histórico
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (supabase as any).from("ma_deal_history").insert({
-      deal_id: deal.id,
-      event_type: "CONTRACT_SIGNED",
-      description: `Contrato assinado via ClickSign — envelope ${document.key}`,
-      created_at: new Date().toISOString(),
-    });
   } catch (err) {
     console.error("[clicksign-webhook] Erro:", err);
     // Retorna 200 mesmo com erro para evitar retry
