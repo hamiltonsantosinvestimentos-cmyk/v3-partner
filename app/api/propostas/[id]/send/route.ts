@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 
-const ALLOWED = ["ADMIN", "GESTAO", "MESA"];
+const ALLOWED = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"];
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -122,7 +122,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     proposal_id: id,
     sender_id:   user.id,
     sender_name: profile?.full_name ?? "Mesa M&A",
-    sender_role: profile?.role ?? "MESA",
+    sender_role: profile?.role ?? "MESA_OPERACIONAL",
     content:     `Proposta enviada para ${proposal.recipient_name}${proposal.recipient_company ? ` (${proposal.recipient_company})` : ""} via email${proposal.partner_name ? ` · CC: ${proposal.partner_name}` : ""}.`,
     type:        "system_event",
   });

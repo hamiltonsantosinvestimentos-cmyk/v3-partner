@@ -53,11 +53,11 @@ ALTER TABLE proposal_messages    ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "proposals_mesa_all" ON commercial_proposals
   FOR ALL TO authenticated
-  USING (get_user_role() IN ('ADMIN', 'GESTAO', 'MESA'));
+  USING (get_user_role() IN ('ADMIN', 'GESTAO', 'MESA_OPERACIONAL'));
 
 CREATE POLICY "proposal_messages_mesa_all" ON proposal_messages
   FOR ALL TO authenticated
-  USING (get_user_role() IN ('ADMIN', 'GESTAO', 'MESA'));
+  USING (get_user_role() IN ('ADMIN', 'GESTAO', 'MESA_OPERACIONAL'));
 
 -- Índices
 CREATE INDEX IF NOT EXISTS idx_commercial_proposals_created_by ON commercial_proposals(created_by);

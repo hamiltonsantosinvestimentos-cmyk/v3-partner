@@ -70,7 +70,7 @@ const NAV_SECTIONS: NavSection[] = [
       { href: "/hub", label: "Hub de Deals", icon: "Layers", roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL", "FINANCEIRO"] },
       { href: "/prompts", label: "Banco de Prompts", icon: "BookMarked", roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL", "FINANCEIRO"] },
       { href: "/mesa-ma", label: "Mesa M&A", icon: "Handshake", roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL"] },
-      { href: "/propostas", label: "Propostas", icon: "FileCheck2", roles: ["ADMIN", "GESTAO", "MESA"] },
+      { href: "/propostas", label: "Propostas", icon: "FileCheck2", roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL"] },
       { href: "/ma/oportunidades", label: "Deal Discovery", icon: "Radar", roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL"] },
       { href: "/mesa-operacional", label: "Mesa Operacional", icon: "Headphones", roles: ["ADMIN", "MESA_OPERACIONAL", "GESTAO"] },
       { href: "/mesa-consorcio-op", label: "Mesa Consórcio", icon: "Settings2", roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL"] },

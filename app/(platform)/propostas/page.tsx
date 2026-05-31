@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { PropostasClient } from "@/components/propostas/propostas-client";
 
-const ALLOWED = ["ADMIN", "GESTAO", "MESA"];
+const ALLOWED = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"];
 
 export default async function PropostasPage() {
   const supabase = await createClient();

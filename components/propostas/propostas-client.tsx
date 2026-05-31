@@ -98,7 +98,7 @@ const MSG_CONFIG: Record<MsgType, { icon: React.ElementType; color: string; labe
   client_update: { icon: Send,          color: V3.green,  label: "Cliente"      },
 };
 
-const ALLOWED = ["ADMIN", "GESTAO", "MESA"];
+const ALLOWED = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function fmtBRL(v?: number) {
