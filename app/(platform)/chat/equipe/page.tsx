@@ -12,7 +12,7 @@ function svc() {
   );
 }
 
-const ALLOWED_ROLES = ["ADMIN", "GESTAO", "MESA_OPERACIONAL", "MESA", "FINANCEIRO"];
+const ALLOWED_ROLES = ["ADMIN", "GESTAO", "MESA_OPERACIONAL", "FINANCEIRO"];
 
 export default async function ChatEquipePage() {
   const supabase = await createClient();

@@ -40,7 +40,7 @@ const NAV_SECTIONS: NavSection[] = [
       { href: "/crm", label: "CRM", icon: "ContactRound", roles: ["ADMIN", "PARTNER", "PARTNER_PRO"] },
       { href: "/chat", label: "Chat Mesa V3", icon: "MessageSquare", roles: ["PARTNER", "PARTNER_PRO"] },
       { href: "/chat/admin", label: "Chat Partners", icon: "MessageSquare", roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL"] },
-      { href: "/chat/equipe", label: "Chat Equipe", icon: "UsersRound", roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL", "MESA", "FINANCEIRO"] },
+      { href: "/chat/equipe", label: "Chat Equipe", icon: "UsersRound", roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL", "FINANCEIRO"] },
       {
         href: "/prospeccao", label: "Prospecção Partners", icon: "Radar",
         roles: ["ADMIN", "SDR", "CLOSER", "GESTAO"],

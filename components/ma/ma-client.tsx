@@ -166,7 +166,7 @@ interface MaClientProps {
   userRole?: string;
 }
 
-const INTERNAL_MA_ROLES = ["ADMIN", "GESTAO", "MESA"];
+const INTERNAL_MA_ROLES = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"];
 
 export function MaClient({ deals, userId = "", userName = "", userRole = "PARTNER" }: MaClientProps) {
   const isAdmin = INTERNAL_MA_ROLES.includes(userRole);

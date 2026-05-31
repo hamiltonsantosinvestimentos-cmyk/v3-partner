@@ -39,7 +39,7 @@ export async function GET(req: NextRequest) {
     .eq("id", user.id)
     .single();
 
-  const ALLOWED = ["ADMIN", "GESTAO", "MESA"];
+  const ALLOWED = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"];
   if (!ALLOWED.includes(profile?.role ?? "")) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }

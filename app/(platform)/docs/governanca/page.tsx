@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Governança · V3 Partners" };
 
-const ALLOWED = ["ADMIN", "GESTAO", "MESA"];
+const ALLOWED = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"];
 
 export default async function GovernancaPage() {
   const { createClient } = await import("@/lib/supabase/server");

@@ -10,7 +10,7 @@ interface Props {
 }
 
 const TECH_ROLES = ["ADMIN", "GESTAO"];
-const GOV_ROLES  = ["ADMIN", "GESTAO", "MESA"];
+const GOV_ROLES  = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"];
 
 export function DocsHubClient({ userRole, userName }: Props) {
   const canSeeTech = TECH_ROLES.includes(userRole);

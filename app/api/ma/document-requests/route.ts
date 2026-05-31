@@ -6,7 +6,7 @@ import type { DocRequestItem } from "@/lib/ma/document-request-mapper";
 
 export const maxDuration = 300;
 
-const WRITE_ROLES = ["ADMIN", "GESTAO", "MESA_OPERACIONAL", "MESA"] as const;
+const WRITE_ROLES = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"] as const;
 
 function serviceClient() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
