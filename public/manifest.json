@@ -4,8 +4,8 @@
   "description": "Plataforma de gestão para parceiros e operações financeiras",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#050C18",
-  "theme_color": "#C4922E",
+  "background_color": "#09081A",
+  "theme_color": "#C9A84C",
   "orientation": "portrait-primary",
   "icons": [
     {
