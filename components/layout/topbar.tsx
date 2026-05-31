@@ -104,7 +104,7 @@ export function Topbar({ user, onMenuClick, notificationCount = 0 }: TopbarProps
     "Plataforma";
 
   return (
-    <header className="h-14 flex items-center px-4 gap-3 relative"
+    <header className="h-14 flex items-center px-4 gap-3 relative z-[100]"
       style={{
         background: "linear-gradient(180deg, rgba(9,8,26,0.98) 0%, rgba(9,8,26,0.95) 100%)",
         borderBottom: "1px solid rgba(201,168,76,0.08)",
