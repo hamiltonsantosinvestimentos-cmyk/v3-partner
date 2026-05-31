@@ -142,7 +142,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       <label style={{
         display: "block", fontSize: 9, fontWeight: 700,
         letterSpacing: "0.15em", textTransform: "uppercase",
-        color: V3.gold, marginBottom: 6,
+        color: V3.goldL, marginBottom: 6,
       }}>{label}</label>
       {children}
     </div>
@@ -331,7 +331,7 @@ export function PropostasClient({
         <div className="grid grid-cols-4 gap-3">
           {kpis.map(k => (
             <div key={k.label} style={{ background: V3.navyC, border: `1px solid ${V3.navyM}`, borderRadius: 8, padding: "12px 16px" }}>
-              <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.15em", textTransform: "uppercase", color: V3.gold, margin: "0 0 4px" }}>{k.label}</p>
+              <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.15em", textTransform: "uppercase", color: V3.goldL, margin: "0 0 4px" }}>{k.label}</p>
               <p style={{ fontSize: 22, fontWeight: 800, color: k.color, margin: 0 }}>{k.value}</p>
             </div>
           ))}
@@ -390,7 +390,7 @@ export function PropostasClient({
                         {p.recipient_company && ` — ${p.recipient_company}`}
                       </span>
                       {p.value && (
-                        <span style={{ fontSize: 11, color: V3.gold, fontWeight: 600 }}>{fmtBRL(p.value)}</span>
+                        <span style={{ fontSize: 11, color: V3.goldL, fontWeight: 700 }}>{fmtBRL(p.value)}</span>
                       )}
                       {p.partner_name && (
                         <span className="flex items-center gap-1" style={{ fontSize: 10, color: V3.muted }}>
@@ -463,7 +463,7 @@ export function PropostasClient({
                 <div style={{ display: "grid", gap: 14 }}>
                   {/* Destinatário */}
                   <div style={{ background: V3.navyC, border: `1px solid ${V3.navyM}`, borderRadius: 8, padding: 14 }}>
-                    <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.15em", textTransform: "uppercase", color: V3.gold, margin: "0 0 8px" }}>Destinatário</p>
+                    <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.15em", textTransform: "uppercase", color: V3.goldL, margin: "0 0 8px" }}>Destinatário</p>
                     <div style={{ display: "grid", gap: 4 }}>
                       <span className="flex items-center gap-2" style={{ fontSize: 12, color: V3.cream }}>
                         <User size={11} color={V3.muted} /> {selected.recipient_name}
@@ -482,19 +482,19 @@ export function PropostasClient({
                   {/* Serviço + Valor */}
                   <div className="grid grid-cols-2 gap-3">
                     <div style={{ background: V3.navyC, border: `1px solid ${V3.navyM}`, borderRadius: 8, padding: 14 }}>
-                      <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.15em", textTransform: "uppercase", color: V3.gold, margin: "0 0 4px" }}>Serviço</p>
+                      <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.15em", textTransform: "uppercase", color: V3.goldL, margin: "0 0 4px" }}>Serviço</p>
                       <p style={{ fontSize: 13, fontWeight: 600, color: V3.cream, margin: 0 }}>{SERVICE_LABELS[selected.service_type]}</p>
                     </div>
                     <div style={{ background: V3.navyC, border: `1px solid ${V3.navyM}`, borderRadius: 8, padding: 14 }}>
-                      <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.15em", textTransform: "uppercase", color: V3.gold, margin: "0 0 4px" }}>Valor</p>
-                      <p style={{ fontSize: 13, fontWeight: 600, color: V3.gold, margin: 0 }}>{fmtBRL(selected.value)}</p>
+                      <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.15em", textTransform: "uppercase", color: V3.goldL, margin: "0 0 4px" }}>Valor</p>
+                      <p style={{ fontSize: 13, fontWeight: 700, color: V3.gold, margin: 0 }}>{fmtBRL(selected.value)}</p>
                     </div>
                   </div>
 
                   {/* Partner CC */}
                   {selected.partner_name && (
                     <div style={{ background: `rgba(201,168,76,.05)`, borderLeft: `3px solid ${V3.gold}`, borderRadius: "0 6px 6px 0", padding: "10px 14px" }}>
-                      <p style={{ fontSize: 10, color: V3.gold, fontWeight: 600, margin: "0 0 2px" }}>Partner em cópia</p>
+                      <p style={{ fontSize: 10, color: V3.goldL, fontWeight: 700, margin: "0 0 2px" }}>Partner em cópia</p>
                       <p style={{ fontSize: 12, color: V3.muted, margin: 0 }}>{selected.partner_name} — {selected.partner_email}</p>
                     </div>
                   )}
@@ -502,7 +502,7 @@ export function PropostasClient({
                   {/* Descrição */}
                   {selected.description && (
                     <div style={{ background: V3.navyC, border: `1px solid ${V3.navyM}`, borderRadius: 8, padding: 14 }}>
-                      <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.15em", textTransform: "uppercase", color: V3.gold, margin: "0 0 6px" }}>Descrição da Proposta</p>
+                      <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.15em", textTransform: "uppercase", color: V3.goldL, margin: "0 0 6px" }}>Descrição da Proposta</p>
                       <p style={{ fontSize: 12, color: V3.muted, lineHeight: 1.7, margin: 0, whiteSpace: "pre-wrap" }}>{selected.description}</p>
                     </div>
                   )}
@@ -707,7 +707,7 @@ export function PropostasClient({
             <div style={{ padding: 24 }}>
               <div className="flex items-center justify-between mb-5">
                 <div>
-                  <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.15em", textTransform: "uppercase", color: V3.gold, margin: "0 0 2px" }}>Nova Proposta</p>
+                  <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.15em", textTransform: "uppercase", color: V3.goldL, margin: "0 0 2px" }}>Nova Proposta</p>
                   <h2 style={{ fontSize: 16, fontWeight: 700, color: V3.cream, margin: 0 }}>Criar proposta comercial</h2>
                 </div>
                 <button onClick={() => setShowNew(false)} style={{ background: "none", border: "none", cursor: "pointer", color: V3.muted }}>

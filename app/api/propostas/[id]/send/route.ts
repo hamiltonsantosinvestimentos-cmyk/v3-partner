@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
+import { buildPropostaHTML } from "@/components/propostas/proposta-template";
 
 const ALLOWED = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"];
 
@@ -35,6 +36,20 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   let clicksign_url  = "";
   let clicksign_key  = "";
 
+  // Gerar HTML da proposta (usado em ClickSign + email)
+  const proposalHTML = buildPropostaHTML({
+    code:               proposal.code,
+    title:              proposal.title,
+    service_type:       proposal.service_type,
+    recipient_name:     proposal.recipient_name,
+    recipient_email:    proposal.recipient_email,
+    recipient_company:  proposal.recipient_company ?? undefined,
+    value:              proposal.value ? Number(proposal.value) : undefined,
+    description:        proposal.description ?? undefined,
+    sender_name:        profile?.full_name ?? "Mesa M&A",
+    date:               new Date().toISOString(),
+  });
+
   // ── 1. Criar documento no ClickSign ──────────────────────────────────────
   if (clicksignKey) {
     try {
@@ -47,18 +62,8 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
         body: JSON.stringify({
           document: {
             path: `/${proposal.code}-${Date.now()}.pdf`,
-            template: {
-              data: {
-                title: proposal.title,
-                service_type: proposal.service_type,
-                recipient_name: proposal.recipient_name,
-                recipient_company: proposal.recipient_company ?? "",
-                value: proposal.value ? `R$ ${Number(proposal.value).toLocaleString("pt-BR")}` : "A definir",
-                description: proposal.description ?? "",
-                sender_name: profile?.full_name ?? "V3 Partners",
-                date: new Date().toLocaleDateString("pt-BR"),
-              },
-            },
+            content: proposalHTML,
+          content_base64: Buffer.from(proposalHTML).toString("base64"),
           },
         }),
       });
@@ -101,7 +106,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
           to: toList,
           cc: ccList.length ? ccList : undefined,
           subject: `Proposta Comercial V3 Partners — ${proposal.title}`,
-          html: htmlBody,
+          html: proposalHTML,
         }),
       });
     } catch (e) {

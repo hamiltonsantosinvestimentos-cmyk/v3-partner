@@ -104,6 +104,31 @@ Retorne apenas o HTML completo, sem explicações.`,
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
+  // Bridge A: Hub → CRM (fire-and-forget, não bloqueia resposta)
+  if (inserted?.id) {
+    try {
+      const { count } = await svc.from("crm_leads").select("*", { count: "exact", head: true });
+      const crmCode = `CRM-26-${String((count ?? 0) + 1).padStart(4, "0")}`;
+      void svc.from("crm_leads").insert({
+        code:             crmCode,
+        name:             deal.empresa_nome,
+        person_type:      "PJ",
+        segment:          deal.setor ?? "M&A",
+        annual_revenue:   deal.valor_estimado ?? 0,
+        status:           "prospect",
+        source:           "hub",
+        product_interest: "ma",
+        credit_line:      "M&A",
+        notes:            deal.observacoes ?? null,
+        partner_id:       user.id,
+        partner_name:     user.email ?? "Partner",
+        created_by:       user.id,
+        interactions:     [],
+        metadata:         { deal_intake_id: inserted.id, tipo_operacao: deal.tipo_operacao },
+      });
+    } catch { /* CRM é best-effort — falha não afeta deal */ }
+  }
+
   return NextResponse.json({
     ok: true,
     deal_id: inserted.id,
