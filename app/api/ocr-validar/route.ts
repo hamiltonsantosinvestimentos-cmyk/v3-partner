@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
+export const maxDuration = 120;
+
 const ADMIN_ROLES = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"];
 
 export interface OcrField {
