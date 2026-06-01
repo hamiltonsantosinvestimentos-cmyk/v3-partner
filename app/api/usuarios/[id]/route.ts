@@ -104,12 +104,29 @@ export async function DELETE(
   const profile = profileData as { role: string } | null;
   if (profile?.role !== "ADMIN") return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
 
-  // Deleta profile explicitamente antes do auth user (evita FK constraint errors)
-  await supabase.from("profiles").delete().eq("id", id);
+  // Limpa tabelas que referenciam o usuário antes de deletar do Auth
+  await Promise.allSettled([
+    supabase.from("profiles").delete().eq("id", id),
+    supabase.from("notifications").delete().eq("user_id", id),
+    supabase.from("ai_conversations").delete().eq("user_id", id),
+    supabase.from("agent_sessions").delete().eq("user_id", id),
+  ]);
 
-  const { error: deleteError } = await supabase.auth.admin.deleteUser(id);
-  if (deleteError) {
-    return NextResponse.json({ error: deleteError.message }, { status: 500 });
+  // Usa REST API direta do Supabase Admin para garantir deleção mesmo com constraints
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+  const adminRes = await fetch(`${supabaseUrl}/auth/v1/admin/users/${id}`, {
+    method: "DELETE",
+    headers: {
+      "apikey": serviceKey,
+      "Authorization": `Bearer ${serviceKey}`,
+    },
+  });
+
+  if (!adminRes.ok) {
+    const body = await adminRes.json().catch(() => ({}));
+    const msg = (body as { msg?: string; message?: string })?.msg ?? (body as { msg?: string; message?: string })?.message ?? `Erro ${adminRes.status}`;
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 
   return NextResponse.json({ success: true });
