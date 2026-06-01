@@ -104,21 +104,76 @@ export async function DELETE(
   const profile = profileData as { role: string } | null;
   if (profile?.role !== "ADMIN") return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
 
-  // Nullifica FKs em tabelas que referenciam o usuário (não deleção, pois os registros devem ser preservados)
+  // Nullifica TODAS as FKs que referenciam profiles (preserva os registros)
+  const svc2 = svcClient();
   await Promise.allSettled([
-    supabase.from("credit_desk_proposals").update({ partner_id: null }).eq("partner_id", id),
-    supabase.from("ma_deals").update({ partner_id: null }).eq("partner_id", id),
-    supabase.from("partner_registrations").update({ user_id: null }).eq("user_id", id),
-    supabase.from("partner_contracts").update({ partner_id: null }).eq("partner_id", id),
-    supabase.from("crm_leads").update({ partner_id: null }).eq("partner_id", id),
+    // credit_desk_proposals
+    svc2.from("credit_desk_proposals").update({ partner_id: null }).eq("partner_id", id),
+    svc2.from("credit_desk_proposals").update({ created_by: null }).eq("created_by", id),
+    svc2.from("credit_desk_proposals").update({ level1_analyst_id: null }).eq("level1_analyst_id", id),
+    svc2.from("credit_desk_proposals").update({ level2_analyst_id: null }).eq("level2_analyst_id", id),
+    svc2.from("credit_desk_proposals").update({ level3_approver_id: null }).eq("level3_approver_id", id),
+    // crm_leads
+    svc2.from("crm_leads").update({ partner_id: null }).eq("partner_id", id),
+    svc2.from("crm_leads").update({ created_by: null }).eq("created_by", id),
+    // ma_deals
+    svc2.from("ma_deals").update({ partner_id: null }).eq("partner_id", id),
+    svc2.from("ma_deals").update({ assigned_to: null }).eq("assigned_to", id),
+    svc2.from("ma_deals").update({ created_by: null }).eq("created_by", id),
+    // ma_captacao_links
+    svc2.from("ma_captacao_links").update({ partner_id: null }).eq("partner_id", id),
+    // ma_deal_history
+    svc2.from("ma_deal_history").update({ changed_by: null }).eq("changed_by", id),
+    // captacao_links
+    svc2.from("captacao_links").update({ partner_id: null }).eq("partner_id", id),
+    // partner_registrations / contracts
+    svc2.from("partner_registrations").update({ user_id: null }).eq("user_id", id),
+    svc2.from("partner_contracts").update({ partner_id: null }).eq("partner_id", id),
+    // split_fiscal
+    svc2.from("split_fiscal").update({ partner_id: null }).eq("partner_id", id),
+    svc2.from("split_fiscal").update({ created_by: null }).eq("created_by", id),
+    svc2.from("split_fiscal").update({ approved_by: null }).eq("approved_by", id),
+    // prospeccao
+    svc2.from("prospeccao_leads").update({ partner_id: null }).eq("partner_id", id),
+    svc2.from("prospeccao_leads").update({ created_by: null }).eq("created_by", id),
+    svc2.from("prospeccao_leads").update({ indicado_por_partner_id: null }).eq("indicado_por_partner_id", id),
+    svc2.from("prospeccao_leads").update({ responsavel_id: null }).eq("responsavel_id", id),
+    svc2.from("prospeccao_followups").update({ created_by: null }).eq("created_by", id),
+    svc2.from("prospeccao_historico").update({ created_by: null }).eq("created_by", id),
+    // operacional
+    svc2.from("operational_tickets").update({ assigned_to: null }).eq("assigned_to", id),
+    svc2.from("operational_tickets").update({ requester_id: null }).eq("requester_id", id),
+    svc2.from("ticket_comments").update({ author_id: null }).eq("author_id", id),
+    // financeiro / investor / deal
+    svc2.from("financeiro_records").update({ created_by: null }).eq("created_by", id),
+    svc2.from("investor_profiles").update({ created_by: null }).eq("created_by", id),
+    svc2.from("deal_assessments").update({ created_by: null }).eq("created_by", id),
+    svc2.from("deal_opportunities").update({ created_by: null }).eq("created_by", id),
+    svc2.from("deal_rooms").update({ created_by: null }).eq("created_by", id),
+    svc2.from("deal_workspaces").update({ created_by: null }).eq("created_by", id),
+    svc2.from("deal_qa_messages").update({ sender_profile_id: null }).eq("sender_profile_id", id),
+    // kyc
+    svc2.from("kyc_access_log").update({ user_id: null }).eq("user_id", id),
+    svc2.from("kyc_analyses").update({ analyst_id: null }).eq("analyst_id", id),
+    svc2.from("kyc_api_keys").update({ updated_by: null }).eq("updated_by", id),
+    svc2.from("kyc_blacklist").update({ added_by: null }).eq("added_by", id),
+    // nps / push / chat
+    svc2.from("nps_responses").update({ partner_id: null }).eq("partner_id", id),
+    svc2.from("push_subscriptions").delete().eq("user_id", id),
+    svc2.from("chat_messages").update({ sender_id: null }).eq("sender_id", id),
+    svc2.from("team_chat_messages").update({ sender_id: null }).eq("sender_id", id),
+    // outros
+    svc2.from("creative_jobs").update({ created_by: null }).eq("created_by", id),
+    svc2.from("meeting_summaries").update({ user_id: null }).eq("user_id", id),
+    svc2.from("profiles").update({ created_by: null }).eq("created_by", id),
   ]);
 
   // Deleta registros que pertencem exclusivamente ao usuário
   await Promise.allSettled([
-    supabase.from("profiles").delete().eq("id", id),
-    supabase.from("notifications").delete().eq("user_id", id),
-    supabase.from("ai_conversations").delete().eq("user_id", id),
-    supabase.from("agent_sessions").delete().eq("user_id", id),
+    svc2.from("notifications").delete().eq("user_id", id),
+    svc2.from("ai_conversations").delete().eq("user_id", id),
+    svc2.from("agent_sessions").delete().eq("user_id", id),
+    svc2.from("profiles").delete().eq("id", id),
   ]);
 
   // Usa REST API direta do Supabase Admin para garantir deleção mesmo com constraints
