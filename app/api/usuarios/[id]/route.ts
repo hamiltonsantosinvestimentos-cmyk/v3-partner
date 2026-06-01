@@ -104,6 +104,9 @@ export async function DELETE(
   const profile = profileData as { role: string } | null;
   if (profile?.role !== "ADMIN") return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
 
+  // Deleta profile explicitamente antes do auth user (evita FK constraint errors)
+  await supabase.from("profiles").delete().eq("id", id);
+
   const { error: deleteError } = await supabase.auth.admin.deleteUser(id);
   if (deleteError) {
     return NextResponse.json({ error: deleteError.message }, { status: 500 });

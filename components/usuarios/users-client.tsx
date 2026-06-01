@@ -345,6 +345,13 @@ export function UsersClient({ initialUsers }: UsersClientProps) {
     const res = await fetch(`/api/usuarios/${user.id}`, { method: "DELETE" });
     if (res.ok) {
       setUsers(users.filter((u) => u.id !== user.id));
+    } else {
+      let msg = `Erro ${res.status}`;
+      try {
+        const json = await res.json();
+        if (json?.error) msg = json.error;
+      } catch { /* ignora */ }
+      alert(`Não foi possível excluir o usuário.\n\n${msg}`);
     }
   };
 
