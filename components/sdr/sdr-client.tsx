@@ -22,6 +22,7 @@ type SdrLead = {
   responsavel_id: string | null;
   responsavel_nome: string | null;
   status: string;
+  humano_ativo: boolean;
   last_message_at: string | null;
   last_message_preview: string | null;
   message_count: number;
@@ -108,6 +109,8 @@ export function SdrClient({ currentUserId, currentUserName }: SdrClientProps) {
   const [savingLead, setSavingLead] = useState(false);
   const [editNome, setEditNome] = useState(false);
   const [nomeInput, setNomeInput] = useState("");
+  const [humanMsg, setHumanMsg] = useState("");
+  const [sendingHuman, setSendingHuman] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const selectedLead = leads.find(l => l.phone === selectedPhone) ?? null;
@@ -213,6 +216,37 @@ export function SdrClient({ currentUserId, currentUserName }: SdrClientProps) {
   const handleAssignSelf = () => {
     if (!selectedLead) return;
     patchLead({ phone: selectedLead.phone, responsavel_id: currentUserId });
+  };
+
+  const handleToggleHumano = () => {
+    if (!selectedLead) return;
+    const next = !selectedLead.humano_ativo;
+    patchLead({ phone: selectedLead.phone, humano_ativo: next });
+    // Se assumindo, atribui automaticamente ao usuário atual se sem responsável
+    if (next && !selectedLead.responsavel_id) {
+      patchLead({ phone: selectedLead.phone, humano_ativo: next, responsavel_id: currentUserId });
+    }
+  };
+
+  const handleSendHuman = async () => {
+    if (!selectedLead || !humanMsg.trim()) return;
+    setSendingHuman(true);
+    try {
+      const res = await fetch("/api/sdr/enviar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone: selectedLead.phone, text: humanMsg.trim() }),
+      });
+      if (res.ok) {
+        setHumanMsg("");
+        await fetchConversas(selectedLead.phone);
+      } else {
+        const json = await res.json();
+        alert(json.error ?? "Erro ao enviar mensagem");
+      }
+    } finally {
+      setSendingHuman(false);
+    }
   };
 
   // ── QR status ─────────────────────────────────────────────────────────────
@@ -427,6 +461,16 @@ export function SdrClient({ currentUserId, currentUserName }: SdrClientProps) {
                       </div>
                       {/* Tags + status */}
                       <div style={{ display: "flex", gap: 4, marginTop: 4, flexWrap: "wrap" }}>
+                        {lead.humano_ativo && (
+                          <span style={{
+                            fontSize: 9, fontWeight: 700, letterSpacing: 0.5,
+                            padding: "2px 6px", borderRadius: 4,
+                            background: "#C9A84C20", color: "#C9A84C", border: "1px solid #C9A84C40",
+                            textTransform: "uppercase",
+                          }}>
+                            👤 Humano
+                          </span>
+                        )}
                         {lead.status !== "ativo" && (
                           <span style={{
                             fontSize: 9, fontWeight: 700, letterSpacing: 0.5,
@@ -757,18 +801,75 @@ export function SdrClient({ currentUserId, currentUserName }: SdrClientProps) {
               <div ref={messagesEndRef} />
             </div>
 
-            {/* Footer: automated notice */}
+            {/* Footer */}
             <div style={{
-              padding: "10px 20px",
               background: "#111F35",
               borderTop: "1px solid #243A66",
-              display: "flex", alignItems: "center", gap: 8,
               flexShrink: 0,
             }}>
-              <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#4ade80", boxShadow: "0 0 6px #4ade80" }} />
-              <span style={{ color: "#7A8FA8", fontSize: 12 }}>
-                Conversa automatizada pelo Agente SDR (Matheus) · Claude Sonnet 4.6
-              </span>
+              {/* Input humano (visível só quando humano_ativo) */}
+              {selectedLead.humano_ativo && (
+                <div style={{ padding: "10px 16px", display: "flex", gap: 8, borderBottom: "1px solid #243A66" }}>
+                  <input
+                    value={humanMsg}
+                    onChange={e => setHumanMsg(e.target.value)}
+                    onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSendHuman(); } }}
+                    placeholder="Digite uma mensagem como operador..."
+                    disabled={sendingHuman}
+                    style={{
+                      flex: 1, background: "#162744", border: "1px solid #243A66",
+                      borderRadius: 10, padding: "8px 14px",
+                      color: "#F0ECE4", fontSize: 13, outline: "none",
+                    }}
+                  />
+                  <button
+                    onClick={handleSendHuman}
+                    disabled={sendingHuman || !humanMsg.trim()}
+                    style={{
+                      background: sendingHuman || !humanMsg.trim() ? "#243A66" : "#C9A84C",
+                      border: "none", borderRadius: 10, padding: "8px 18px",
+                      color: sendingHuman || !humanMsg.trim() ? "#7A8FA8" : "#09081A",
+                      fontWeight: 700, fontSize: 13, cursor: "pointer",
+                    }}
+                  >
+                    {sendingHuman ? "..." : "Enviar"}
+                  </button>
+                </div>
+              )}
+
+              {/* Status bar */}
+              <div style={{ padding: "8px 20px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  {selectedLead.humano_ativo ? (
+                    <>
+                      <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#C9A84C", boxShadow: "0 0 6px #C9A84C" }} />
+                      <span style={{ color: "#C9A84C", fontSize: 12, fontWeight: 600 }}>
+                        Atendimento humano ativo · IA pausada
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#4ade80", boxShadow: "0 0 6px #4ade80" }} />
+                      <span style={{ color: "#7A8FA8", fontSize: 12 }}>
+                        Agente SDR (Matheus) respondendo automaticamente
+                      </span>
+                    </>
+                  )}
+                </div>
+                <button
+                  onClick={handleToggleHumano}
+                  disabled={savingLead}
+                  style={{
+                    background: selectedLead.humano_ativo ? "#4ade8015" : "#C9A84C15",
+                    border: `1px solid ${selectedLead.humano_ativo ? "#4ade80" : "#C9A84C"}`,
+                    borderRadius: 8, padding: "5px 14px",
+                    color: selectedLead.humano_ativo ? "#4ade80" : "#C9A84C",
+                    fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap",
+                  }}
+                >
+                  {selectedLead.humano_ativo ? "↩ Devolver para IA" : "👤 Assumir Atendimento"}
+                </button>
+              </div>
             </div>
           </div>
         ) : (

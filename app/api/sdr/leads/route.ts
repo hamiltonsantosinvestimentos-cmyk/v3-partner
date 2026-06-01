@@ -46,7 +46,7 @@ export async function GET() {
   // 2. Busca metadados dos leads
   const { data: leads } = await db
     .from("sdr_leads")
-    .select("phone, nome, tags, responsavel_id, status, last_message_at, last_message_preview");
+    .select("phone, nome, tags, responsavel_id, status, last_message_at, last_message_preview, humano_ativo");
 
   const leadsMap: Record<string, typeof leads extends (infer T)[] | null ? T : never> = {};
   for (const l of leads ?? []) leadsMap[l.phone] = l;
@@ -76,6 +76,7 @@ export async function GET() {
         responsavel_id: lead?.responsavel_id ?? null,
         responsavel_nome: lead?.responsavel_id ? (responsavelMap[lead.responsavel_id] ?? null) : null,
         status: lead?.status ?? "ativo",
+        humano_ativo: lead?.humano_ativo ?? false,
         last_message_at: conv.last_at,
         last_message_preview: conv.preview,
         message_count: conv.count,
@@ -97,6 +98,7 @@ export async function PATCH(req: NextRequest) {
     tags?: string[];
     responsavel_id?: string | null;
     status?: string;
+    humano_ativo?: boolean;
   };
 
   if (!body.phone) return NextResponse.json({ error: "phone obrigatório" }, { status: 400 });
@@ -106,6 +108,7 @@ export async function PATCH(req: NextRequest) {
   if (body.tags !== undefined) updateData.tags = body.tags;
   if (body.responsavel_id !== undefined) updateData.responsavel_id = body.responsavel_id;
   if (body.status !== undefined) updateData.status = body.status;
+  if (body.humano_ativo !== undefined) updateData.humano_ativo = body.humano_ativo;
 
   const { error } = await svc()
     .from("sdr_leads")

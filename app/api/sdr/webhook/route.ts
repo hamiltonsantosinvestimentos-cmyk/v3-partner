@@ -81,6 +81,18 @@ export async function POST(req: NextRequest) {
         updated_at: new Date().toISOString(),
       }, { onConflict: "phone", ignoreDuplicates: false });
 
+      // Verifica se atendimento humano está ativo — se sim, não responde com IA
+      const { data: leadData } = await supabase
+        .from("sdr_leads")
+        .select("humano_ativo")
+        .eq("phone", phone)
+        .single();
+
+      if (leadData?.humano_ativo) {
+        console.log(`[SDR Webhook] Atendimento humano ativo para ${phone} — IA pausada`);
+        return NextResponse.json({ ok: true });
+      }
+
       await processarMensagemSDR(phone, messageText, instance || "v3-sdr-whatsapp");
     }
 
