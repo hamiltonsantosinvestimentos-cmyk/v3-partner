@@ -989,9 +989,13 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ doc_id: ocrKey, doc_label: docLabel, doc_url: url, proposal_context: ctx }),
       });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? "Erro ao validar");
-      setOcrResultados(prev => ({ ...prev, [ocrKey]: json.resultado }));
+      const rawOcr = await res.text();
+      let json: Record<string, unknown> = {};
+      try { json = JSON.parse(rawOcr); } catch {
+        throw new Error(`Resposta inválida do servidor: ${rawOcr.slice(0, 120)}`);
+      }
+      if (!res.ok) throw new Error((json.error as string) ?? "Erro ao validar");
+      setOcrResultados(prev => ({ ...prev, [ocrKey]: json.resultado as OcrResultado }));
       setOcrStatus(prev => ({ ...prev, [ocrKey]: "done" }));
       // Persiste resultado no metadata para não perder ao recarregar
       const newMeta = { ...(proposal.metadata ?? {}), ocr_resultados: { ...(proposal.metadata?.ocr_resultados as Record<string, unknown> ?? {}), [ocrKey]: json.resultado } };
@@ -1033,45 +1037,104 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
 
   async function handleOcrBatch() {
     if (!proposal) return;
+    const docsComArquivo = Object.entries(uploadedFiles).filter(([, files]) => files.some(f => f.url));
+    if (docsComArquivo.length === 0) {
+      setOcrBatchProgress("Nenhum documento encontrado para analisar.");
+      return;
+    }
+
     setOcrBatchLoading(true);
-    setOcrBatchProgress("Iniciando análise OCR de todos os documentos...");
+
+    // Monta mapa de labels do checklist
+    const meta = proposal.metadata ?? {};
+    const clientType = ((meta.client_type ?? proposal.client_type) === "PJ" ? "PJ" : "PF") as "PF" | "PJ";
+    const checklistDocs = portfolioDocs[proposal.credit_line?.toLowerCase()]?.[clientType] ?? CHECKLISTS[proposal.credit_line]?.[clientType] ?? DEFAULT_CHECKLIST[clientType];
+    const labelMap: Record<string, string> = {};
+    checklistDocs.forEach(d => { labelMap[d.id] = d.label; });
+
+    // Monta contexto da proposta
+    const ctx: Record<string, string> = {
+      nome_cliente: proposal.client_name ?? "",
+      cpf_cnpj: proposal.client_cpf_cnpj ?? proposal.cpf_cnpj ?? "",
+      tipo_pessoa: (meta.client_type as string) ?? "PF",
+      linha_credito: proposal.credit_line ?? "",
+      valor_solicitado: `R$ ${(proposal.requested_value ?? 0).toLocaleString("pt-BR")}`,
+    };
+    if (meta.email) ctx.email = meta.email as string;
+    if (meta.telefone) ctx.telefone = meta.telefone as string;
+    if (meta.renda_mensal) ctx.renda_mensal = `R$ ${(meta.renda_mensal as number).toLocaleString("pt-BR")}`;
+    if (meta.faturamento_mensal) ctx.faturamento_mensal = `R$ ${(meta.faturamento_mensal as number).toLocaleString("pt-BR")}`;
+    if (meta.razao_social) ctx.razao_social = meta.razao_social as string;
+
+    // Conta total de arquivos
+    const totalArquivos = docsComArquivo.reduce((acc, [, files]) => acc + files.filter(f => f.url).length, 0);
+    let processados = 0;
+    const allResultados: Record<string, OcrResultado> = {};
+
     try {
-      const res = await fetch("/api/credit-proposals/ocr-batch", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ proposal_id: proposal.id }),
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? "Erro ao processar OCR em lote");
-
-      // Atualiza resultados OCR no estado local
-      // Usa ocr_resultados (Record<key, OcrResultado>) com chave doc_id::storage_path
-      if (json.ocr_resultados && typeof json.ocr_resultados === "object") {
-        const resultadosMap = json.ocr_resultados as Record<string, OcrResultado>;
-        const newStatus: Record<string, OcrStatus> = {};
-        for (const key of Object.keys(resultadosMap)) {
-          newStatus[key] = "done";
+      for (const [docId, files] of docsComArquivo) {
+        const label = labelMap[docId] ?? docId;
+        for (const file of files) {
+          if (!file.url) continue;
+          processados++;
+          setOcrBatchProgress(`Analisando documento ${processados}/${totalArquivos}: ${label}...`);
+          const ocrKey = `${docId}::${file.key}`;
+          setOcrStatus(prev => ({ ...prev, [ocrKey]: "loading" }));
+          try {
+            const res = await fetch("/api/ocr-validar", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ doc_id: ocrKey, doc_label: label, doc_url: file.url, proposal_context: ctx }),
+            });
+            const rawText = await res.text();
+            let json: Record<string, unknown> = {};
+            try { json = JSON.parse(rawText); } catch {
+              throw new Error(`Resposta inválida: ${rawText.slice(0, 120)}`);
+            }
+            if (!res.ok) throw new Error((json.error as string) ?? "Erro ao validar");
+            const resultado = json.resultado as OcrResultado;
+            allResultados[ocrKey] = resultado;
+            setOcrResultados(prev => ({ ...prev, [ocrKey]: resultado }));
+            setOcrStatus(prev => ({ ...prev, [ocrKey]: "done" }));
+          } catch (e) {
+            setOcrStatus(prev => ({ ...prev, [ocrKey]: "error" }));
+            setOcrErros(prev => ({ ...prev, [ocrKey]: e instanceof Error ? e.message : "Erro" }));
+          }
         }
-        setOcrStatus(prev => ({ ...prev, ...newStatus }));
-        setOcrResultados(prev => ({ ...prev, ...resultadosMap }));
       }
 
-      // Atualiza análise IA com o resultado automático
-      if (json.ai_analysis) {
-        setAnaliseData(json.ai_analysis);
-        setAnalisePdfB64(null);
-        setAnaliseStatus("done");
-        onProposalUpdate?.(proposal.id, {
-          metadata: { ...(proposal.metadata ?? {}), ai_analysis: json.ai_analysis, ocr_resultados: json.ocr_resultados } as typeof proposal.metadata,
+      // Persiste todos os resultados OCR no metadata
+      const newMeta = {
+        ...(proposal.metadata ?? {}),
+        ocr_resultados: { ...(proposal.metadata?.ocr_resultados as Record<string, unknown> ?? {}), ...allResultados },
+        ocr_analyzed_at: new Date().toISOString(),
+      };
+      onProposalUpdate?.(proposal.id, { metadata: newMeta as typeof proposal.metadata });
+      fetch("/api/credit-proposals", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: proposal.id, metadata: newMeta }),
+      }).catch(() => {});
+
+      // Dispara análise IA
+      setOcrBatchProgress("Gerando análise inteligente...");
+      try {
+        const analyzeRes = await fetch("/api/credit-proposals/analyze", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ proposal_id: proposal.id }),
         });
-      } else {
-        onProposalUpdate?.(proposal.id, {
-          metadata: { ...(proposal.metadata ?? {}), ocr_resultados: json.ocr_resultados } as typeof proposal.metadata,
-        });
-      }
+        const rawAnalyze = await analyzeRes.text();
+        let analyzeJson: Record<string, unknown> = {};
+        try { analyzeJson = JSON.parse(rawAnalyze); } catch { /* ignora erro de análise */ }
+        if (analyzeRes.ok && analyzeJson.analysis) {
+          setAnaliseData(analyzeJson.analysis as AnaliseIA);
+          setAnalisePdfB64(null);
+          setAnaliseStatus("done");
+        }
+      } catch { /* análise IA é best-effort */ }
 
       setOcrBatchProgress("");
-      // Navega automaticamente para aba de Análise IA
       setModalTab("analise_ia");
     } catch (e) {
       setOcrBatchProgress(`Erro: ${e instanceof Error ? e.message : "Falha ao processar"}`);
@@ -1773,6 +1836,16 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
   function goBack() {
     if (!proposal || activeIdx <= 0) return;
     onStageChange?.(proposal.id, PIPELINE_STAGES[activeIdx - 1].key);
+  }
+
+  function goToPendencia() {
+    if (!proposal) return;
+    onStageChange?.(proposal.id, "PENDENCIA");
+    fetch("/api/credit-proposals", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: proposal.id, stage: "PENDENCIA" }),
+    }).catch(() => {});
   }
 
   const isFinished = activeIdx === PIPELINE_STAGES.length - 1;
@@ -3309,6 +3382,17 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
             <Button size="sm" variant="outline" onClick={goBack} className="gap-2 border-border text-muted-foreground hover:text-white">
               <ArrowLeft className="w-4 h-4" />
               Retroceder para <span className={prevStage.color}>{prevStage.label}</span>
+            </Button>
+          )}
+          {canChangeStage && proposal?.stage !== "PENDENCIA" && !isFinished && !isEmAprovacao && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={goToPendencia}
+              className="gap-2 border-orange-500/40 text-orange-400 hover:bg-orange-500/10 hover:text-orange-300"
+            >
+              <AlertTriangle className="w-4 h-4" />
+              Pendência de Docs
             </Button>
           )}
           {canChangeStage && !isFinished && nextStage && !isEmAprovacao && (

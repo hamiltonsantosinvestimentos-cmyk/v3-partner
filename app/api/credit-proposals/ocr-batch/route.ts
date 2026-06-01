@@ -109,7 +109,10 @@ async function analyzeOneDoc(
   }
 
   const Anthropic = (await import("@anthropic-ai/sdk")).default;
-  const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  const anthropic = new Anthropic({
+    apiKey: process.env.ANTHROPIC_API_KEY,
+    defaultHeaders: { "anthropic-beta": "files-api-2025-04-14" },
+  });
 
   // Upload para Files API — suporta PDFs grandes sem limite de base64
   const fileExt = isPdf ? "pdf" : docData.mimeType.includes("png") ? "png" : "jpg";
@@ -152,8 +155,7 @@ Resumo: aprovado=documento correto e dados ok, atencao=divergência menor, repro
     const message = await anthropic.messages.create({
       model: "claude-haiku-4-5-20251001",
       max_tokens: 1500,
-      // @ts-expect-error files-api beta header
-      betas: fileId ? ["files-api-2025-04-14"] : [],
+
       system: systemPrompt,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       messages: [{ role: "user", content: [mediaBlock, { type: "text", text: userPrompt }] as any }],

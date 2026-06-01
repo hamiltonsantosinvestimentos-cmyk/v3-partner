@@ -15,6 +15,7 @@ export interface PortfolioLinha {
   nome: string;
   descricao: string | null;
   categoria: string | null;
+  nivel: "NIVEL_1" | "NIVEL_2" | "NIVEL_3" | null;
   publico_alvo: string | null;
   prazo_pagamento: string | null;
   taxas: string | null;

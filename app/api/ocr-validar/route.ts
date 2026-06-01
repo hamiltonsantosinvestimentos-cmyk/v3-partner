@@ -142,7 +142,10 @@ export async function POST(req: NextRequest) {
 
   try {
     const Anthropic = (await import("@anthropic-ai/sdk")).default;
-    const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+    const anthropic = new Anthropic({
+      apiKey: process.env.ANTHROPIC_API_KEY,
+      defaultHeaders: { "anthropic-beta": "files-api-2025-04-14" },
+    });
 
     const ctxLines = Object.entries(proposal_context)
       .map(([k, v]) => `- ${k}: ${v}`)
@@ -205,8 +208,7 @@ Regras:
     const message = await anthropic.messages.create({
       model: "claude-sonnet-4-6",
       max_tokens: 1500,
-      // @ts-expect-error files-api beta header
-      betas: ["files-api-2025-04-14"],
+
       system: systemPrompt,
       messages: [
         {

@@ -1198,7 +1198,7 @@ function EditarPropostaModal({ open, onClose, proposal, onSaved }: {
   const [creditLine, setCreditLine] = useState("");
   const [saving, setSaving] = useState(false);
   const [partnerSearch, setPartnerSearch] = useState("");
-  const [regras, setRegras] = useState<{ nome: string; nivel: string }[]>([]);
+  const [portfolioByNivel, setPortfolioByNivel] = useState<Record<string, string[]>>({});
 
   useEffect(() => {
     if (!open || !proposal) return;
@@ -1209,20 +1209,26 @@ function EditarPropostaModal({ open, onClose, proposal, onSaved }: {
     setPartnersLoading(true);
     Promise.all([
       fetch("/api/partners").then(r => r.json()),
-      fetch("/api/regras-linhas").then(r => r.json()),
-    ]).then(([partnersData, regrasData]) => {
+      fetch("/api/portfolio").then(r => r.json()),
+    ]).then(([partnersData, portfolioData]) => {
       setPartners(partnersData.partners ?? []);
-      setRegras((regrasData.regras ?? []).map((r: Record<string, unknown>) => ({ nome: r.nome as string, nivel: r.nivel as string })));
+      const map: Record<string, string[]> = {};
+      for (const linha of (portfolioData.linhas ?? [])) {
+        if (!linha.nivel) continue;
+        if (!map[linha.nivel]) map[linha.nivel] = [];
+        map[linha.nivel].push(linha.nome);
+      }
+      setPortfolioByNivel(map);
     }).catch(() => {}).finally(() => setPartnersLoading(false));
   }, [open, proposal]);
 
-  const linesForLevel = regras.filter(r => r.nivel === level).map(r => r.nome);
-  const availableLines = linesForLevel.length > 0 ? linesForLevel : CREDIT_DESK_LINES[level];
+  const portfolioLines = portfolioByNivel[level] ?? [];
+  const availableLines = portfolioLines.length > 0 ? portfolioLines : CREDIT_DESK_LINES[level];
 
   useEffect(() => {
     if (!availableLines.includes(creditLine)) setCreditLine(availableLines[0] ?? "");
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [level, regras]);
+  }, [level, portfolioByNivel]);
 
   async function handleSave() {
     if (!proposal) return;

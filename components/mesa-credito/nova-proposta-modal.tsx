@@ -747,6 +747,8 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
 
   // Portfolio docs (checklist dinâmico)
   const [portfolioDocs, setPortfolioDocs] = useState<Record<string, { PF: { id: string; label: string; required: boolean }[]; PJ: { id: string; label: string; required: boolean }[] }>>({});
+  // Linhas do portfolio agrupadas por nivel (vem do banco)
+  const [portfolioLinesByNivel, setPortfolioLinesByNivel] = useState<Record<string, string[]>>({});
 
   useEffect(() => {
     if (!open) return;
@@ -754,18 +756,24 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
       .then(r => r.json())
       .then(({ linhas }) => {
         if (!Array.isArray(linhas)) return;
-        const map: Record<string, { PF: { id: string; label: string; required: boolean }[]; PJ: { id: string; label: string; required: boolean }[] }> = {};
+        const docsMap: Record<string, { PF: { id: string; label: string; required: boolean }[]; PJ: { id: string; label: string; required: boolean }[] }> = {};
+        const nivelMap: Record<string, string[]> = {};
         for (const linha of linhas) {
           const toItems = (arr: { id: string; nome: string; obrigatorio: boolean }[]) =>
             arr.map(d => ({ id: d.id, label: d.nome, required: d.obrigatorio }));
           const pf = Array.isArray(linha.documentos_pf) && linha.documentos_pf.length > 0 ? toItems(linha.documentos_pf) : null;
           const pj = Array.isArray(linha.documentos_pj) && linha.documentos_pj.length > 0 ? toItems(linha.documentos_pj) : null;
           if (pf || pj) {
-            // chave normalizada para minúsculas — evita mismatch de capitalização
-            map[linha.nome.toLowerCase()] = { PF: pf ?? [], PJ: pj ?? [] };
+            docsMap[linha.nome.toLowerCase()] = { PF: pf ?? [], PJ: pj ?? [] };
+          }
+          // Agrupa nomes de linhas pelo nivel cadastrado no portfolio
+          if (linha.nivel) {
+            if (!nivelMap[linha.nivel]) nivelMap[linha.nivel] = [];
+            nivelMap[linha.nivel].push(linha.nome);
           }
         }
-        setPortfolioDocs(map);
+        setPortfolioDocs(docsMap);
+        setPortfolioLinesByNivel(nivelMap);
       })
       .catch(() => {});
   }, [open]);
@@ -774,7 +782,10 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
   const [cepLoading, setCepLoading] = useState(false);
   const [cepLoadingIdx, setCepLoadingIdx] = useState<number | null>(null);
 
-  const lines = LEVEL_LINES[level] ?? [];
+  // Usa linhas do portfolio pelo nivel se cadastradas, senão cai no hardcoded
+  const lines = (portfolioLinesByNivel[level] ?? []).length > 0
+    ? portfolioLinesByNivel[level]
+    : (LEVEL_LINES[level] ?? []);
   // Usa checklist do portfólio se disponível, senão cai no hardcoded
   const checklist = portfolioDocs[creditLine.toLowerCase()]?.[clientType] ?? (CHECKLISTS[creditLine]?.[clientType]) ?? DEFAULT_CHECKLIST[clientType];
 

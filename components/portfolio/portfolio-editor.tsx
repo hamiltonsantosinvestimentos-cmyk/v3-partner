@@ -60,8 +60,26 @@ const DOCS_PJ_PADRAO: Documento[] = [
   { id: "pj-16", nome: "IRPF do último exercício — Recibo",                obrigatorio: true },
 ];
 
+const NIVEIS = [
+  { value: "NIVEL_1", label: "N1 — Varejo" },
+  { value: "NIVEL_2", label: "N2 — Estruturado" },
+  { value: "NIVEL_3", label: "N3 — High Ticket" },
+];
+
+const NIVEL_BADGE: Record<string, string> = {
+  NIVEL_1: "bg-sky-500/20 border-sky-500/30 text-sky-400",
+  NIVEL_2: "bg-violet-500/20 border-violet-500/30 text-violet-400",
+  NIVEL_3: "bg-amber-500/20 border-amber-500/30 text-amber-400",
+};
+
+const NIVEL_LABEL: Record<string, string> = {
+  NIVEL_1: "N1",
+  NIVEL_2: "N2",
+  NIVEL_3: "N3",
+};
+
 const EMPTY: Omit<PortfolioLinha, "id" | "ativo" | "ordem"> = {
-  nome: "", descricao: null, categoria: "Imobiliário",
+  nome: "", descricao: null, categoria: "Imobiliário", nivel: null,
   publico_alvo: null, prazo_pagamento: null, taxas: null,
   outras_despesas: null, limite_credito: null, comprometimento_renda: null,
   aporte: null, amortizacao: null, perfil_garantia: null,
@@ -231,6 +249,11 @@ function LinhaEditRow({
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold text-white truncate">{linha.nome}</p>
           <div className="flex items-center gap-2 mt-0.5">
+            {linha.nivel && (
+              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${NIVEL_BADGE[linha.nivel] ?? ""}`}>
+                {NIVEL_LABEL[linha.nivel]}
+              </span>
+            )}
             {linha.categoria && (
               <p className="text-[10px] text-muted-foreground">{linha.categoria}</p>
             )}
@@ -283,8 +306,8 @@ function LinhaEditRow({
       {/* Edit form */}
       {open && (
         <div className="px-4 pb-4 border-t border-[#1B3050] space-y-4 pt-4">
-          {/* Nome + Categoria */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {/* Nome + Categoria + Nível */}
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
             <div className="sm:col-span-2 space-y-1">
               <label className="text-[10px] font-bold text-[#C9A84C] uppercase tracking-wide">Nome *</label>
               <input
@@ -302,6 +325,17 @@ function LinhaEditRow({
                 className={cn(inputCls, "h-[34px]")}
               >
                 {CATEGORIAS.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-[#C9A84C] uppercase tracking-wide">Nível</label>
+              <select
+                value={form.nivel ?? ""}
+                onChange={e => setForm(f => ({ ...f, nivel: (e.target.value || null) as PortfolioLinha["nivel"] }))}
+                className={cn(inputCls, "h-[34px]")}
+              >
+                <option value="">— sem nível —</option>
+                {NIVEIS.map(n => <option key={n.value} value={n.value}>{n.label}</option>)}
               </select>
             </div>
           </div>
@@ -426,7 +460,7 @@ function NovaLinhaForm({ onCreated }: { onCreated: (linha: PortfolioLinha) => vo
         </button>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
         <div className="sm:col-span-2 space-y-1">
           <label className="text-[10px] font-bold text-[#C9A84C] uppercase tracking-wide">Nome *</label>
           <input
@@ -445,6 +479,17 @@ function NovaLinhaForm({ onCreated }: { onCreated: (linha: PortfolioLinha) => vo
             className={cn(inputCls, "h-[34px]")}
           >
             {CATEGORIAS.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+        </div>
+        <div className="space-y-1">
+          <label className="text-[10px] font-bold text-[#C9A84C] uppercase tracking-wide">Nível</label>
+          <select
+            value={form.nivel ?? ""}
+            onChange={e => setForm(f => ({ ...f, nivel: (e.target.value || null) as PortfolioLinha["nivel"] }))}
+            className={cn(inputCls, "h-[34px]")}
+          >
+            <option value="">— sem nível —</option>
+            {NIVEIS.map(n => <option key={n.value} value={n.value}>{n.label}</option>)}
           </select>
         </div>
       </div>
@@ -591,11 +636,14 @@ export function PortfolioEditor() {
   return (
     <div className="space-y-5">
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
         {[
-          { label: "Total de Produtos", value: linhas.length, color: "text-[#C9A84C]" },
-          { label: "Ativos",            value: ativos.length, color: "text-emerald-400" },
-          { label: "Inativos",          value: inativos.length, color: "text-muted-foreground" },
+          { label: "Total",   value: linhas.length,                                  color: "text-[#C9A84C]" },
+          { label: "Ativos",  value: ativos.length,                                  color: "text-emerald-400" },
+          { label: "Inativos",value: inativos.length,                                color: "text-muted-foreground" },
+          { label: "N1",      value: linhas.filter(l => l.nivel === "NIVEL_1").length, color: "text-sky-400" },
+          { label: "N2",      value: linhas.filter(l => l.nivel === "NIVEL_2").length, color: "text-violet-400" },
+          { label: "N3",      value: linhas.filter(l => l.nivel === "NIVEL_3").length, color: "text-amber-400" },
         ].map(s => (
           <div key={s.label} className="bg-[#080F1C] border border-[#1B3050] rounded-xl p-3 text-center">
             <p className={cn("text-xl font-bold", s.color)}>{s.value}</p>
