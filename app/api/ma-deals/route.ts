@@ -231,6 +231,8 @@ export async function PATCH(req: NextRequest) {
   logAudit({ userId: user.id, userName: profile?.full_name, action: "UPDATE", entity: "ma_deals", entityId: id, newData: fields as Record<string, unknown> });
 
   // Bridge B: Ma_deals → CRM (sync de stage — fire-and-forget)
+  // Escopo restrito: apenas leads M&A (credit_line='M&A', source in hub/mesa_ma)
+  // Nunca toca leads de crédito, ENDI ou outros Kanbans
   if (fields.stage && typeof fields.stage === "string") {
     const STAGE_TO_CRM: Record<string, string> = {
       PROSPECTING: "prospect",    QUALIFICATION: "prospect",
@@ -242,28 +244,48 @@ export async function PATCH(req: NextRequest) {
     const crmStatus = STAGE_TO_CRM[fields.stage];
     if (crmStatus) {
       try {
+        // Busca lead M&A vinculado a este deal — duplo guard: metadata + credit_line
         const { data: existingLeads } = await svc
           .from("crm_leads")
           .select("id")
           .contains("metadata", { ma_deal_id: id })
+          .eq("credit_line", "M&A")
+          .in("source", ["hub", "mesa_ma"])
           .limit(1);
 
         if (existingLeads && existingLeads.length > 0) {
-          void svc.from("crm_leads").update({ status: crmStatus }).eq("id", existingLeads[0].id);
+          // Atualiza APENAS o lead M&A deste deal — nunca toca outros Kanbans
+          void svc.from("crm_leads")
+            .update({ status: crmStatus })
+            .eq("id", existingLeads[0].id)
+            .eq("credit_line", "M&A");
         } else if (data && (data as { assigned_to?: string; target_company?: string }).assigned_to) {
           const deal = data as { assigned_to: string; target_company?: string; sector?: string; deal_value?: number; code?: string };
-          const { count } = await svc.from("crm_leads").select("*", { count: "exact", head: true });
-          const crmCode = `CRM-26-${String((count ?? 0) + 1).padStart(4, "0")}`;
-          void svc.from("crm_leads").insert({
-            code: crmCode, name: deal.target_company ?? `Deal ${deal.code ?? id.slice(0,8)}`,
-            person_type: "PJ", segment: deal.sector ?? "M&A",
-            annual_revenue: deal.deal_value ?? 0, status: crmStatus,
-            source: "mesa_ma", product_interest: "ma", credit_line: "M&A",
-            partner_id: deal.assigned_to, created_by: user.id, interactions: [],
-            metadata: { ma_deal_id: id },
-          });
+          const companyName = deal.target_company ?? `Deal ${deal.code ?? id.slice(0, 8)}`;
+
+          // Anti-duplicata: verifica se já existe lead M&A para este partner + empresa
+          const { data: duplicate } = await svc
+            .from("crm_leads")
+            .select("id")
+            .eq("partner_id", deal.assigned_to)
+            .eq("name", companyName)
+            .eq("credit_line", "M&A")
+            .limit(1);
+
+          if (!duplicate || duplicate.length === 0) {
+            const { count } = await svc.from("crm_leads").select("*", { count: "exact", head: true });
+            const crmCode = `CRM-26-${String((count ?? 0) + 1).padStart(4, "0")}`;
+            void svc.from("crm_leads").insert({
+              code: crmCode, name: companyName,
+              person_type: "PJ", segment: deal.sector ?? "M&A",
+              annual_revenue: deal.deal_value ?? 0, status: crmStatus,
+              source: "mesa_ma", product_interest: "ma", credit_line: "M&A",
+              partner_id: deal.assigned_to, created_by: user.id, interactions: [],
+              metadata: { ma_deal_id: id },
+            });
+          }
         }
-      } catch { /* CRM é best-effort */ }
+      } catch { /* CRM é best-effort — nunca bloqueia o deal */ }
     }
   }
 
