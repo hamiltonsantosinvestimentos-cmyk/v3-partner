@@ -104,7 +104,16 @@ export async function DELETE(
   const profile = profileData as { role: string } | null;
   if (profile?.role !== "ADMIN") return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
 
-  // Limpa tabelas que referenciam o usuário antes de deletar do Auth
+  // Nullifica FKs em tabelas que referenciam o usuário (não deleção, pois os registros devem ser preservados)
+  await Promise.allSettled([
+    supabase.from("credit_desk_proposals").update({ partner_id: null }).eq("partner_id", id),
+    supabase.from("ma_deals").update({ partner_id: null }).eq("partner_id", id),
+    supabase.from("partner_registrations").update({ user_id: null }).eq("user_id", id),
+    supabase.from("partner_contracts").update({ partner_id: null }).eq("partner_id", id),
+    supabase.from("crm_leads").update({ partner_id: null }).eq("partner_id", id),
+  ]);
+
+  // Deleta registros que pertencem exclusivamente ao usuário
   await Promise.allSettled([
     supabase.from("profiles").delete().eq("id", id),
     supabase.from("notifications").delete().eq("user_id", id),
