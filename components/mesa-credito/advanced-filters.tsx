@@ -348,11 +348,29 @@ export function getSLAInfo(proposal: {
   const slaOverride = proposal.metadata?.sla_override as Record<string, string> | null | undefined;
   const targetDate  = slaOverride?.[stage] ?? null;
 
-  // Usa stage_changed_at do metadata (reseta por etapa) ou created_at como fallback
   const stageChangedAt = (proposal.metadata?.stage_changed_at as string | null) ?? null;
-  const baseDate  = stageChangedAt ? new Date(stageChangedAt) : new Date(proposal.created_at);
-  const now       = new Date();
+  const now = new Date();
 
+  // Se há data definida na mesa operacional, usa ela como referência principal
+  if (targetDate) {
+    const deadline = new Date(targetDate + "T23:59:59-03:00");
+    const totalMs  = deadline.getTime() - new Date(stageChangedAt ?? proposal.created_at).getTime();
+    const leftMs   = deadline.getTime() - now.getTime();
+    const pct      = Math.min(Math.round(((totalMs - leftMs) / totalMs) * 100), 100);
+    const daysLeft = leftMs / (1000 * 60 * 60 * 24);
+
+    let sla: SLAStatus = "ok";
+    if (daysLeft < 0)      sla = "expired";
+    else if (daysLeft <= 1) sla = "critical";
+    else if (daysLeft <= 3) sla = "warning";
+
+    // hoursLeft em horas para compatibilidade com fmtHours
+    const hoursLeft = leftMs / (1000 * 60 * 60);
+    return { hoursElapsed: (totalMs - leftMs) / (1000 * 60 * 60), hoursLimit: totalMs / (1000 * 60 * 60), hoursLeft, pct, sla, stage, stageChangedAt, targetDate };
+  }
+
+  // Fallback: cálculo por horas úteis quando não há data definida na mesa
+  const baseDate     = stageChangedAt ? new Date(stageChangedAt) : new Date(proposal.created_at);
   const hoursElapsed = businessHoursElapsed(baseDate, now);
   const hoursLimit   = SLA_HOURS_BY_STAGE[stage] ?? 20;
   const hoursLeft    = hoursLimit - hoursElapsed;
@@ -360,8 +378,8 @@ export function getSLAInfo(proposal: {
 
   let sla: SLAStatus = "ok";
   if (hoursLeft <= 0)                         sla = "expired";
-  else if (hoursLeft <= hoursLimit * 0.2)     sla = "critical";  // últimos 20%
-  else if (hoursLeft <= hoursLimit * 0.5)     sla = "warning";   // últimos 50%
+  else if (hoursLeft <= hoursLimit * 0.2)     sla = "critical";
+  else if (hoursLeft <= hoursLimit * 0.5)     sla = "warning";
 
   return { hoursElapsed, hoursLimit, hoursLeft, pct, sla, stage, stageChangedAt, targetDate };
 }
