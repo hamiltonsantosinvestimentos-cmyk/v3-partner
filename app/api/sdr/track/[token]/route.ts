@@ -26,7 +26,7 @@ export async function GET(
     }).eq("id", contato.id);
 
     // Incrementa contador de abertos na campanha
-    await svc().rpc("increment_campanha_abertos", { campanha_id: contato.campanha_id }).catch(() => {});
+    svc().rpc("increment_campanha_abertos", { campanha_id: contato.campanha_id }).then(() => {}).catch(() => {});
   }
 
   // Retorna GIF 1x1 transparente
