@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import Image from "next/image";
+import { CampanhasClient } from "./campanhas-client";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -104,6 +105,7 @@ export function SdrClient({ currentUserId, currentUserName }: SdrClientProps) {
   const [conversas, setConversas] = useState<Conversa[]>([]);
   const [loadingConversas, setLoadingConversas] = useState(false);
   const [search, setSearch] = useState("");
+  const [mainTab, setMainTab] = useState<"conversas" | "campanhas">("conversas");
   const [showQr, setShowQr] = useState(false);
   const [editTag, setEditTag] = useState(false);
   const [savingLead, setSavingLead] = useState(false);
@@ -302,6 +304,25 @@ export function SdrClient({ currentUserId, currentUserName }: SdrClientProps) {
             </h1>
           </div>
         </div>
+        {/* Tabs */}
+        <div style={{ display: "flex", gap: 4 }}>
+          {[{ key: "conversas", label: "💬 WhatsApp" }, { key: "campanhas", label: "📧 Campanhas" }].map(t => (
+            <button
+              key={t.key}
+              onClick={() => setMainTab(t.key as "conversas" | "campanhas")}
+              style={{
+                background: mainTab === t.key ? "#162744" : "transparent",
+                border: `1px solid ${mainTab === t.key ? "#C9A84C" : "#243A66"}`,
+                borderRadius: 8, padding: "6px 16px",
+                color: mainTab === t.key ? "#C9A84C" : "#7A8FA8",
+                fontSize: 12, fontWeight: 600, cursor: "pointer",
+              }}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           {/* Connection badge */}
           <div
@@ -371,8 +392,15 @@ export function SdrClient({ currentUserId, currentUserName }: SdrClientProps) {
         </div>
       )}
 
+      {/* ── Campanhas tab ───────────────────────────────────────────────────── */}
+      {mainTab === "campanhas" && (
+        <div style={{ flex: 1, overflowY: "auto", background: "#0D1B2E" }}>
+          <CampanhasClient />
+        </div>
+      )}
+
       {/* ── Main WhatsApp layout ─────────────────────────────────────────────── */}
-      <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
+      <div style={{ display: mainTab === "conversas" ? "flex" : "none", flex: 1, overflow: "hidden" }}>
 
         {/* ── Left panel: lista de conversas ───────────────────────────────── */}
         <div style={{
@@ -920,3 +948,4 @@ export function SdrClient({ currentUserId, currentUserName }: SdrClientProps) {
     </div>
   );
 }
+
