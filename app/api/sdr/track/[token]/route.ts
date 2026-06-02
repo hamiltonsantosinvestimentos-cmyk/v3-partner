@@ -25,8 +25,10 @@ export async function GET(
       aberto_at: new Date().toISOString(),
     }).eq("id", contato.id);
 
-    // Incrementa contador de abertos na campanha
-    svc().rpc("increment_campanha_abertos", { campanha_id: contato.campanha_id }).then(() => {}).catch(() => {});
+    // Incrementa contador de abertos na campanha (fire-and-forget)
+    void svc().from("sdr_campanhas").select("total_abertos").eq("id", contato.campanha_id).single().then(({ data }) => {
+      if (data) svc().from("sdr_campanhas").update({ total_abertos: (data.total_abertos ?? 0) + 1 }).eq("id", contato.campanha_id);
+    });
   }
 
   // Retorna GIF 1x1 transparente
