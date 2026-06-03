@@ -428,12 +428,27 @@ export function NovoDealForm({ isDemo, userId, onSuccess, onCancel }: NovoDealFo
 
       // Upload dos arquivos do step 6
       if (uploadedFiles.length > 0) {
+        const failed: string[] = [];
         for (const file of uploadedFiles) {
           const form = new FormData();
           form.append("file", file);
           form.append("deal_id", dealId);
           form.append("doc_id", `doc_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`);
-          await fetch("/api/ma/documents", { method: "POST", body: form }).catch(() => {});
+          try {
+            const upRes = await fetch("/api/ma/documents", { method: "POST", body: form });
+            if (!upRes.ok) {
+              const upJson = await upRes.json().catch(() => ({}));
+              failed.push(`${file.name}: ${(upJson as Record<string,unknown>).error ?? upRes.status}`);
+            }
+          } catch {
+            failed.push(`${file.name}: erro de rede`);
+          }
+        }
+        if (failed.length > 0) {
+          setError(`Deal criado, mas falha ao enviar ${failed.length} arquivo(s):\n${failed.join("\n")}`);
+          setSaving(false);
+          if (onSuccess) { onSuccess(dealId, dealCode); }
+          return;
         }
       }
 

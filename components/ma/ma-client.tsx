@@ -177,6 +177,7 @@ export function MaClient({ deals, userId = "", userName = "", userRole = "PARTNE
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [pendingNda, setPendingNda] = useState<File | null>(null);
   const [pendingMandato, setPendingMandato] = useState<File | null>(null);
+  const [createError, setCreateError] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [selectedDeal, setSelectedDeal] = useState<MaDeal | null>(null);
   const [newComment, setNewComment] = useState("");
@@ -256,6 +257,7 @@ export function MaClient({ deals, userId = "", userName = "", userRole = "PARTNE
   const handleCreateDeal = async () => {
     if (!newDeal.company || !newDeal.value) return;
     setIsCreating(true);
+    setCreateError(null);
     let createdId: string | null = null;
 
     try {
@@ -272,11 +274,22 @@ export function MaClient({ deals, userId = "", userName = "", userRole = "PARTNE
         }),
       });
       const json = await res.json();
-      if (json.card) {
-        createdId = json.card.id;
-        setLocalDeals(prev => [...prev, { ...json.card, stage: newDeal.stage, comments: [], asset_data: { tipo_participante: newDeal.tipo_participante } }]);
+      if (!res.ok || !json.card) {
+        setCreateError(typeof json.error === "string" ? json.error : `Erro ao criar deal (${res.status}). Tente novamente.`);
+        setIsCreating(false);
+        return;
       }
-    } catch {
+      createdId = json.card.id;
+      // API retorna `company`, mas MaDeal espera `target_company`
+      setLocalDeals(prev => [...prev, {
+        ...json.card,
+        target_company: json.card.company ?? newDeal.company,
+        stage: newDeal.stage,
+        comments: [],
+        asset_data: { tipo_participante: newDeal.tipo_participante },
+      }]);
+    } catch (e: unknown) {
+      setCreateError(e instanceof Error ? e.message : "Erro de rede. Tente novamente.");
       setIsCreating(false);
       return;
     }
@@ -314,6 +327,7 @@ export function MaClient({ deals, userId = "", userName = "", userRole = "PARTNE
     setPendingFiles([]);
     setPendingNda(null);
     setPendingMandato(null);
+    setCreateError(null);
     setIsCreating(false);
     setShowNewDeal(false);
   };
@@ -980,8 +994,14 @@ export function MaClient({ deals, userId = "", userName = "", userRole = "PARTNE
                 )}
               </div>
 
+              {createError && (
+                <div className="px-3 py-2.5 rounded-lg bg-red-500/10 border border-red-500/30 text-xs text-red-400">
+                  {createError}
+                </div>
+              )}
+
               <div className="flex gap-3 pt-2">
-                <button onClick={() => { setShowNewDeal(false); setPendingFiles([]); }}
+                <button onClick={() => { setShowNewDeal(false); setPendingFiles([]); setCreateError(null); }}
                   className="flex-1 rounded-lg border border-[#122036] text-[#7A8FA8] text-sm py-2.5 hover:text-[#E8EDF5] transition-colors">
                   Cancelar
                 </button>

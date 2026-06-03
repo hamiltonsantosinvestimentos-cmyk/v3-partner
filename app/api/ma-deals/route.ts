@@ -156,6 +156,48 @@ export async function POST(req: NextRequest) {
       newData: { code, company: d.company, assigned_to: insertPayload.assigned_to },
     });
 
+    // Bridge A — CRM: cria lead como Prospecção (fire-and-forget)
+    // Permite que o parceiro acompanhe o deal no CRM antes da Mesa assumir.
+    ;(async () => {
+      try {
+        const svcCrm = serviceClient();
+        // Anti-duplicata: verifica se já existe lead M&A para este partner + empresa
+        const { data: dup } = await svcCrm
+          .from("crm_leads")
+          .select("id")
+          .eq("partner_id", insertPayload.assigned_to)
+          .eq("name", d.company)
+          .eq("credit_line", "M&A")
+          .limit(1);
+
+        if (!dup || dup.length === 0) {
+          const { count } = await svcCrm.from("crm_leads").select("*", { count: "exact", head: true });
+          await svcCrm.from("crm_leads").insert({
+            code:             `CRM-26-${String((count ?? 0) + 1).padStart(4, "0")}`,
+            name:             d.company,
+            person_type:      "PJ",
+            segment:          d.sector ?? "M&A",
+            annual_revenue:   d.value ?? 0,
+            status:           "prospect",      // Prospecção — parceiro pode acompanhar no CRM
+            source:           "ativo",
+            product_interest: "ma",
+            credit_line:      "M&A",
+            partner_id:       insertPayload.assigned_to,
+            created_by:       user.id,
+            converted_to:     "ma",
+            interactions:     [{
+              id:         `intake-${Date.now()}`,
+              date:       new Date().toISOString().split("T")[0],
+              type:       "email",
+              notes:      `Deal ${code} cadastrado na Mesa M&A — aguardando qualificação.`,
+              author:     profile?.full_name ?? "Mesa V3",
+            }],
+            metadata: { ma_deal_id: data.id, ma_code: code },
+          });
+        }
+      } catch { /* CRM é best-effort */ }
+    })();
+
     // Notificações in-app (fire-and-forget)
     const partnerName = profile?.full_name ?? "Partner";
     // Confirmação para o próprio partner
@@ -290,14 +332,15 @@ export async function PATCH(req: NextRequest) {
               person_type:      "PJ",
               segment:          deal.sector ?? "M&A",
               annual_revenue:   deal.deal_value ?? 0,
-              status:           "ganho",          // CRM encerra aqui — Mesa assume
+              status:           "qualificado",    // Bridge via PATCH = já qualificado pela Mesa
               source:           "mesa_ma",
               product_interest: "ma",
               credit_line:      "M&A",
+              converted_to:     "ma",
               partner_id:       deal.assigned_to,
               created_by:       user.id,
               interactions:     [newInteraction], // primeira interação já registrada
-              metadata:         { ma_deal_id: id },
+              metadata:         { ma_deal_id: id, ma_code: (data as {code?: string})?.code },
             });
           }
         }
