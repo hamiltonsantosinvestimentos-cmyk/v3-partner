@@ -156,47 +156,45 @@ export async function POST(req: NextRequest) {
       newData: { code, company: d.company, assigned_to: insertPayload.assigned_to },
     });
 
-    // Bridge A — CRM: cria lead como Prospecção (fire-and-forget)
+    // Bridge A — CRM: cria lead como Prospecção (awaited para garantir execução em serverless)
     // Permite que o parceiro acompanhe o deal no CRM antes da Mesa assumir.
-    ;(async () => {
-      try {
-        const svcCrm = serviceClient();
-        // Anti-duplicata: verifica se já existe lead M&A para este partner + empresa
-        const { data: dup } = await svcCrm
-          .from("crm_leads")
-          .select("id")
-          .eq("partner_id", insertPayload.assigned_to)
-          .eq("name", d.company)
-          .eq("credit_line", "M&A")
-          .limit(1);
+    try {
+      const svcCrm = serviceClient();
+      // Anti-duplicata: verifica se já existe lead M&A para este partner + empresa
+      const { data: dup } = await svcCrm
+        .from("crm_leads")
+        .select("id")
+        .eq("partner_id", insertPayload.assigned_to)
+        .eq("name", d.company)
+        .eq("credit_line", "M&A")
+        .limit(1);
 
-        if (!dup || dup.length === 0) {
-          const { count } = await svcCrm.from("crm_leads").select("*", { count: "exact", head: true });
-          await svcCrm.from("crm_leads").insert({
-            code:             `CRM-26-${String((count ?? 0) + 1).padStart(4, "0")}`,
-            name:             d.company,
-            person_type:      "PJ",
-            segment:          d.sector ?? "M&A",
-            annual_revenue:   d.value ?? 0,
-            status:           "prospect",      // Prospecção — parceiro pode acompanhar no CRM
-            source:           "ativo",
-            product_interest: "ma",
-            credit_line:      "M&A",
-            partner_id:       insertPayload.assigned_to,
-            created_by:       user.id,
-            converted_to:     "ma",
-            interactions:     [{
-              id:         `intake-${Date.now()}`,
-              date:       new Date().toISOString().split("T")[0],
-              type:       "email",
-              notes:      `Deal ${code} cadastrado na Mesa M&A — aguardando qualificação.`,
-              author:     profile?.full_name ?? "Mesa V3",
-            }],
-            metadata: { ma_deal_id: data.id, ma_code: code },
-          });
-        }
-      } catch { /* CRM é best-effort */ }
-    })();
+      if (!dup || dup.length === 0) {
+        const { count } = await svcCrm.from("crm_leads").select("*", { count: "exact", head: true });
+        await svcCrm.from("crm_leads").insert({
+          code:             `CRM-26-${String((count ?? 0) + 1).padStart(4, "0")}`,
+          name:             d.company,
+          person_type:      "PJ",
+          segment:          d.sector ?? "M&A",
+          annual_revenue:   d.value ?? 0,
+          status:           "prospect",      // Prospecção — parceiro pode acompanhar no CRM
+          source:           "ativo",
+          product_interest: "ma",
+          credit_line:      "M&A",
+          partner_id:       insertPayload.assigned_to,
+          created_by:       user.id,
+          converted_to:     "ma",
+          interactions:     [{
+            id:         `intake-${Date.now()}`,
+            date:       new Date().toISOString().split("T")[0],
+            type:       "email",
+            notes:      `Deal ${code} cadastrado na Mesa M&A — aguardando qualificação.`,
+            author:     profile?.full_name ?? "Mesa V3",
+          }],
+          metadata: { ma_deal_id: data.id, ma_code: code },
+        });
+      }
+    } catch { /* CRM é best-effort — falha aqui não bloqueia o deal */ }
 
     // Notificações in-app (fire-and-forget)
     const partnerName = profile?.full_name ?? "Partner";
@@ -305,10 +303,10 @@ export async function PATCH(req: NextRequest) {
         };
 
         if (maLeads && maLeads.length > 0) {
-          // Lead existe — apenas appenda interação, status permanece "ganho"
+          // Lead existe — apenas appenda interação, status permanece como está
           const current = maLeads[0] as { id: string; interactions: unknown[] };
           const updatedInteractions = [...(Array.isArray(current.interactions) ? current.interactions : []), newInteraction];
-          void svc.from("crm_leads")
+          await svc.from("crm_leads")
             .update({ interactions: updatedInteractions })
             .eq("id", current.id);
         } else if (data && (data as { assigned_to?: string; target_company?: string }).assigned_to) {
@@ -326,7 +324,7 @@ export async function PATCH(req: NextRequest) {
 
           if (!dup || dup.length === 0) {
             const { count } = await svc.from("crm_leads").select("*", { count: "exact", head: true });
-            void svc.from("crm_leads").insert({
+            await svc.from("crm_leads").insert({
               code:             `CRM-26-${String((count ?? 0) + 1).padStart(4, "0")}`,
               name:             companyName,
               person_type:      "PJ",
