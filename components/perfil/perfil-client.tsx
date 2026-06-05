@@ -188,8 +188,10 @@ export function PerfilClient({ initialProfile }: { initialProfile: ProfileData }
   const initials = (profile.full_name ?? profile.email).split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase();
 
   const PLAN_INFO: Record<UserRole, { label: string; color: string; desc: string; commission: string }> = {
-    PARTNER:          { label: "V3 Partner",     color: "#C9A84C", desc: "R$ 197/mês", commission: "30% de comissionamento" },
-    PARTNER_PRO:      { label: "V3 Partner PRO", color: "#E8C97A", desc: "R$ 397/mês", commission: "50% + co-branding" },
+    STARTER:          { label: "V3 Starter",     color: "#22D3EE", desc: "R$ 297/mês", commission: "20% de comissionamento" },
+    PARTNER:          { label: "V3 Partner",     color: "#C9A84C", desc: "R$ 497/mês", commission: "30% de comissionamento" },
+    PARTNER_PRO:      { label: "V3 Partner PRO", color: "#E8C97A", desc: "R$ 897/mês", commission: "50% + co-branding" },
+    ENTERPRISE:       { label: "V3 Enterprise",  color: "#FBBF24", desc: "R$ 2.500+/mês", commission: "Negociável" },
     ADMIN:            { label: "Administrador",  color: "#A855F7", desc: "Acesso total", commission: "—" },
     GESTAO:           { label: "Gestão",         color: "#60A5FA", desc: "Acesso total exceto Usuários", commission: "—" },
     MESA_OPERACIONAL: { label: "Mesa Operacional", color: "#34D399", desc: "Operações e suporte", commission: "—" },
