@@ -37,8 +37,10 @@
 4. M&A e Negócios Cross-Border — fundos asiáticos e americanos
 
 **Rede de Partners:**
-- V3 Partner R$197/mês → role `PARTNER` → 30% comissionamento
-- V3 Partner PRO R$397/mês → role `PARTNER_PRO` → 50% + co-branding
+- V3 Starter R$297/mês → role `STARTER` → 20% comissionamento
+- V3 Partner R$497/mês → role `PARTNER` → 30% comissionamento
+- V3 Partner PRO R$897/mês → role `PARTNER_PRO` → 50% + co-branding
+- V3 Enterprise R$2.500+/mês → role `ENTERPRISE` → comissionamento negociável
 
 ---
 

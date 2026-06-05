@@ -4,8 +4,10 @@ import { coraFetch } from "@/lib/cora";
 import { randomUUID } from "crypto";
 
 const PLANO_VALOR: Record<string, number> = {
-  PARTNER: 19700,      // R$ 197,00 em centavos
-  PARTNER_PRO: 39700,  // R$ 397,00 em centavos
+  STARTER:     29700,   // R$ 297,00 em centavos
+  PARTNER:     49700,   // R$ 497,00 em centavos
+  PARTNER_PRO: 89700,   // R$ 897,00 em centavos
+  ENTERPRISE:  250000,  // R$ 2.500,00 em centavos
 };
 
 async function gerarCobrancaCora(params: {
@@ -23,7 +25,7 @@ async function gerarCobrancaCora(params: {
   paymentUrl?: string;
 }> {
   try {
-    const valor = PLANO_VALOR[params.plano] ?? 19700;
+    const valor = PLANO_VALOR[params.plano] ?? 29700;
     const vencimento = new Date();
     vencimento.setDate(vencimento.getDate() + 3); // 3 dias para pagar
     const vencStr = vencimento.toISOString().split("T")[0];
@@ -43,7 +45,12 @@ async function gerarCobrancaCora(params: {
         interest: { type: "MONTHLY_PERCENTAGE", value: 1 },
         fine: { type: "PERCENTAGE", value: 2 },
       },
-      services: [{ name: `V3 Partners — Adesão ${params.plano === "PARTNER_PRO" ? "Partner PRO" : "Partner"}`, amount: valor }],
+      services: [{ name: `V3 Partners — Adesão ${
+        params.plano === "ENTERPRISE" ? "Enterprise"
+        : params.plano === "PARTNER_PRO" ? "Partner PRO"
+        : params.plano === "STARTER" ? "Starter"
+        : "Partner"
+      }`, amount: valor }],
       notifications: {
         formats: ["EMAIL"],
         by_email: { should_notify: true },
@@ -95,7 +102,7 @@ export async function POST(req: NextRequest) {
     if (!plano || !tipoPessoa || !email || !telefone) {
       return NextResponse.json({ error: "Campos obrigatórios faltando" }, { status: 400 });
     }
-    if (!["PARTNER", "PARTNER_PRO"].includes(plano)) {
+    if (!["STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE"].includes(plano)) {
       return NextResponse.json({ error: "Plano inválido" }, { status: 400 });
     }
     if (!["PF", "PJ"].includes(tipoPessoa)) {
@@ -201,7 +208,7 @@ export async function POST(req: NextRequest) {
         cora_boleto_pdf:     cora.boletoPdf,
         cora_boleto_barcode: cora.boletoBarcode,
         cora_payment_url:    cora.paymentUrl,
-        cora_amount_cents:   PLANO_VALOR[plano] ?? 19700,
+        cora_amount_cents:   PLANO_VALOR[plano] ?? 29700,
       }).eq("id", regId);
     }
 
@@ -209,8 +216,11 @@ export async function POST(req: NextRequest) {
     try {
       const { Resend } = await import("resend");
       const resend = new Resend(process.env.RESEND_API_KEY);
-      const valorFmt = ((PLANO_VALOR[plano] ?? 19700) / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-      const planoLabel = plano === "PARTNER_PRO" ? "V3 Partner PRO" : "V3 Partner";
+      const valorFmt = ((PLANO_VALOR[plano] ?? 29700) / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+      const planoLabel = plano === "ENTERPRISE" ? "V3 Enterprise"
+        : plano === "PARTNER_PRO" ? "V3 Partner PRO"
+        : plano === "STARTER" ? "V3 Starter"
+        : "V3 Partner";
       const vencimento = new Date(Date.now() + 3 * 86400000).toLocaleDateString("pt-BR");
 
       await resend.emails.send({
@@ -267,7 +277,7 @@ export async function POST(req: NextRequest) {
         boletoPdf:    cora.boletoPdf,
         boletoBarcode: cora.boletoBarcode,
         paymentUrl:   cora.paymentUrl,
-        valor:        PLANO_VALOR[plano] ?? 19700,
+        valor:        PLANO_VALOR[plano] ?? 29700,
       },
     });
   } catch (err) {

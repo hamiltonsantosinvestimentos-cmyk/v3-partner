@@ -25,15 +25,33 @@ function fmtCEP(v: string) {
   return v.replace(/\D/g, "").replace(/(\d{5})(\d{3})/, "$1-$2");
 }
 
-type Plano = "PARTNER" | "PARTNER_PRO";
+type Plano = "STARTER" | "PARTNER" | "PARTNER_PRO" | "ENTERPRISE";
 type TipoPessoa = "PF" | "PJ";
 type Step = 1 | 2 | 3 | 4 | 5;
 
 const PLANOS = [
   {
+    id: "STARTER" as Plano,
+    nome: "V3 Starter",
+    preco: "R$ 297",
+    periodo: "/mês",
+    cor: "#7A8FA8",
+    icone: <Home className="w-6 h-6" />,
+    comissao: "20%",
+    descricao: "Para quem está começando no mercado financeiro e quer estruturar sua operação.",
+    beneficios: [
+      "Acesso à Mesa de Crédito N1",
+      "CRM integrado",
+      "20% de comissionamento",
+      "V3 IA Partner",
+      "Academy completo",
+      "Suporte por e-mail",
+    ],
+  },
+  {
     id: "PARTNER" as Plano,
     nome: "V3 Partner",
-    preco: "R$ 197",
+    preco: "R$ 497",
     periodo: "/mês",
     cor: "#C9A84C",
     icone: <Star className="w-6 h-6" />,
@@ -51,7 +69,7 @@ const PLANOS = [
   {
     id: "PARTNER_PRO" as Plano,
     nome: "V3 Partner PRO",
-    preco: "R$ 397",
+    preco: "R$ 897",
     periodo: "/mês",
     cor: "#E8C97A",
     icone: <Zap className="w-6 h-6" />,
@@ -65,6 +83,24 @@ const PLANOS = [
       "Co-branding V3 Partners",
       "Academy M&A avançado",
       "Suporte dedicado",
+    ],
+  },
+  {
+    id: "ENTERPRISE" as Plano,
+    nome: "V3 Enterprise",
+    preco: "R$ 2.500",
+    periodo: "+/mês",
+    cor: "#C9A84C",
+    icone: <Shield className="w-6 h-6" />,
+    comissao: "Negociável",
+    descricao: "Para estruturadores e escritórios com operações institucionais de grande porte.",
+    beneficios: [
+      "Acesso total à plataforma",
+      "Comissionamento negociável",
+      "White-label e co-branding completo",
+      "Gerente de conta dedicado",
+      "SLA prioritário",
+      "Integração personalizada",
     ],
   },
 ];
@@ -342,7 +378,10 @@ export function CadastroPartnerForm() {
   if (sucesso) {
     const valorFmt = cobranca?.valor
       ? (cobranca.valor / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
-      : plano === "PARTNER_PRO" ? "R$ 397,00" : "R$ 197,00";
+      : plano === "ENTERPRISE" ? "R$ 2.500,00+"
+      : plano === "PARTNER_PRO" ? "R$ 897,00"
+      : plano === "PARTNER" ? "R$ 497,00"
+      : "R$ 297,00";
 
     return (
       <div className="min-h-screen bg-[#09081A] py-8 px-4">
@@ -522,7 +561,7 @@ export function CadastroPartnerForm() {
                 <h2 className="text-xl font-bold text-[#F0ECE4]">Escolha seu plano</h2>
                 <p className="text-sm text-[#7A8FA8] mt-1">Selecione o plano que melhor se adapta ao seu perfil</p>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
                 {PLANOS.map((p) => (
                   <button
                     key={p.id}
@@ -793,7 +832,9 @@ export function CadastroPartnerForm() {
               <div className="bg-[#09081A] border border-[#243A66] rounded-xl p-4 space-y-2">
                 <p className="text-xs font-semibold text-[#C9A84C] uppercase tracking-wide mb-2">Resumo do cadastro</p>
                 {[
-                  ["Plano", plano === "PARTNER_PRO" ? "V3 Partner PRO — R$ 397/mês" : "V3 Partner — R$ 197/mês"],
+                  ["Plano", PLANOS.find((p) => p.id === plano)
+                    ? `${PLANOS.find((p) => p.id === plano)!.nome} — ${PLANOS.find((p) => p.id === plano)!.preco}${PLANOS.find((p) => p.id === plano)!.periodo}`
+                    : "—"],
                   ["Tipo", tipoPessoa === "PF" ? "Pessoa Física" : "Pessoa Jurídica"],
                   ["Nome", tipoPessoa === "PF" ? nomeCompleto : razaoSocial],
                   ["Documento", tipoPessoa === "PF" ? cpf : cnpj],
