@@ -6,8 +6,10 @@ function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 }
 
-const PRECO_PARTNER = 197;
-const PRECO_PRO = 397;
+const PRECO_STARTER   = 297;
+const PRECO_PARTNER   = 497;
+const PRECO_PRO       = 897;
+const PRECO_ENTERPRISE = 2500;
 
 /** GET /api/financeiro/metricas — MRR, ARR, Churn, Conversão, Crescimento */
 export async function GET() {
@@ -26,7 +28,7 @@ export async function GET() {
   const { data: allPartners } = await db
     .from("profiles")
     .select("id, full_name, email, role, is_active, trial_expires_at, created_at")
-    .in("role", ["PARTNER", "PARTNER_PRO"])
+    .in("role", ["STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE"])
     .order("created_at", { ascending: true });
 
   const partners = allPartners ?? [];
@@ -46,11 +48,13 @@ export async function GET() {
     return new Date(p.trial_expires_at) >= now;
   });
 
-  const ativosPartner = ativos.filter(p => p.role === "PARTNER").length;
-  const ativosPro = ativos.filter(p => p.role === "PARTNER_PRO").length;
+  const ativosStarter    = ativos.filter(p => p.role === "STARTER").length;
+  const ativosPartner    = ativos.filter(p => p.role === "PARTNER").length;
+  const ativosPro        = ativos.filter(p => p.role === "PARTNER_PRO").length;
+  const ativosEnterprise = ativos.filter(p => p.role === "ENTERPRISE").length;
 
   // MRR atual
-  const mrr = ativosPartner * PRECO_PARTNER + ativosPro * PRECO_PRO;
+  const mrr = ativosStarter * PRECO_STARTER + ativosPartner * PRECO_PARTNER + ativosPro * PRECO_PRO + ativosEnterprise * PRECO_ENTERPRISE;
   const arr = mrr * 12;
 
   // Partners novos este mês (criados em mesAtual/anoAtual)
@@ -93,8 +97,10 @@ export async function GET() {
   });
 
   const mrrMesAnterior =
+    ativosMesAnterior.filter(p => p.role === "STARTER").length * PRECO_STARTER +
     ativosMesAnterior.filter(p => p.role === "PARTNER").length * PRECO_PARTNER +
-    ativosMesAnterior.filter(p => p.role === "PARTNER_PRO").length * PRECO_PRO;
+    ativosMesAnterior.filter(p => p.role === "PARTNER_PRO").length * PRECO_PRO +
+    ativosMesAnterior.filter(p => p.role === "ENTERPRISE").length * PRECO_ENTERPRISE;
 
   const crescimentoMoM = mrrMesAnterior > 0
     ? Math.round(((mrr - mrrMesAnterior) / mrrMesAnterior) * 100 * 10) / 10
@@ -116,8 +122,10 @@ export async function GET() {
       if (!p.is_active && i > 0) continue;
       const expTime = p.trial_expires_at ? new Date(p.trial_expires_at).getTime() : Infinity;
       if (expTime < dTime) continue;
-      if (p.role === "PARTNER") countPartner++;
+      if (p.role === "STARTER") countPartner++;
+      else if (p.role === "PARTNER") countPartner++;
       else if (p.role === "PARTNER_PRO") countPro++;
+      else if (p.role === "ENTERPRISE") countPro++;
     }
     serie.push({
       mes: nomeMes,
@@ -179,8 +187,8 @@ export async function GET() {
     .sort((a, b) => a.diasRestantes - b.diasRestantes);
 
   // Tendências MoM para os KPIs secundários
-  const ativosMesAnteriorPartner = ativosMesAnterior.filter(p => p.role === "PARTNER").length;
-  const ativosMesAnteriorPro = ativosMesAnterior.filter(p => p.role === "PARTNER_PRO").length;
+  const ativosMesAnteriorPartner = ativosMesAnterior.filter(p => ["STARTER", "PARTNER"].includes(p.role)).length;
+  const ativosMesAnteriorPro = ativosMesAnterior.filter(p => ["PARTNER_PRO", "ENTERPRISE"].includes(p.role)).length;
   const totalAtivosMesAnterior = ativosMesAnteriorPartner + ativosMesAnteriorPro;
   const crescimentoPartnersM = totalAtivosMesAnterior > 0
     ? Math.round(((ativos.length - totalAtivosMesAnterior) / totalAtivosMesAnterior) * 100 * 10) / 10

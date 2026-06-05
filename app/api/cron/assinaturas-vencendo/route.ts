@@ -39,7 +39,7 @@ export async function GET(req: NextRequest) {
   const { data: partners } = await svc()
     .from("profiles")
     .select("id, full_name, email, role, trial_expires_at, created_at, is_active")
-    .in("role", ["PARTNER", "PARTNER_PRO"])
+    .in("role", ["STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE"])
     .eq("is_active", true);
 
   if (!partners || partners.length === 0) {
@@ -76,7 +76,7 @@ export async function GET(req: NextRequest) {
       ? new Date(p.trial_expires_at).getTime()
       : new Date(p.created_at).getTime() + 30 * 86400000;
     const dias = Math.max(Math.floor((expires - now.getTime()) / 86400000), 0);
-    const plano = p.role === "PARTNER_PRO" ? "Partner PRO" : "Partner";
+    const plano = p.role === "ENTERPRISE" ? "Enterprise" : p.role === "PARTNER_PRO" ? "Partner PRO" : p.role === "STARTER" ? "Starter" : "Partner";
     return `${p.full_name ?? p.email} (${plano}) — ${dias === 0 ? "vence hoje" : `vence em ${dias}d`}`;
   }).join("; ");
 

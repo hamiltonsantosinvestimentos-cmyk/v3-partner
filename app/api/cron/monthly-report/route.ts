@@ -24,7 +24,7 @@ export async function GET(req: NextRequest) {
   const { data: partners } = await svc()
     .from("profiles")
     .select("id, full_name, email, role")
-    .in("role", ["PARTNER", "PARTNER_PRO"])
+    .in("role", ["STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE"])
     .eq("is_active", true);
 
   if (!partners || partners.length === 0) {
@@ -96,7 +96,7 @@ export async function GET(req: NextRequest) {
       await sendMonthlyReport({
         partnerEmail: partner.email,
         partnerName: partner.full_name ?? partner.email,
-        plano: partner.role === "PARTNER_PRO" ? "Partner PRO" : "Partner",
+        plano: partner.role === "ENTERPRISE" ? "Enterprise" : partner.role === "PARTNER_PRO" ? "Partner PRO" : partner.role === "STARTER" ? "Starter" : "Partner",
         mes: mesLabel,
         totalRecebido,
         totalPendente,

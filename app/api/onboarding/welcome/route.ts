@@ -28,7 +28,7 @@ export async function POST() {
 
   if (!profile) return NextResponse.json({ ok: true });
 
-  const isPartner = ["PARTNER", "PARTNER_PRO"].includes(profile.role);
+  const isPartner = ["STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE"].includes(profile.role);
   if (!isPartner) return NextResponse.json({ ok: true });
 
   // Marca como enviado ANTES de enviar (evita race condition)

@@ -17,11 +17,11 @@ export async function POST() {
     .eq("id", user.id)
     .single();
 
-  if (!["PARTNER", "PARTNER_PRO"].includes(profile?.role ?? "")) {
+  if (!["STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE"].includes(profile?.role ?? "")) {
     return NextResponse.json({ error: "Não autorizado" }, { status: 403 });
   }
 
-  const planoLabel = profile?.role === "PARTNER_PRO" ? "Partner PRO" : "Partner";
+  const planoLabel = profile?.role === "ENTERPRISE" ? "Enterprise" : profile?.role === "PARTNER_PRO" ? "Partner PRO" : profile?.role === "STARTER" ? "Starter" : "Partner";
   const nome = profile?.full_name ?? profile?.email ?? "Partner";
 
   const expiresDate = profile?.trial_expires_at

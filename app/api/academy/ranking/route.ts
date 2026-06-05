@@ -22,7 +22,7 @@ export async function GET() {
   const { data: partners } = await svc()
     .from("profiles")
     .select("id, full_name, email, role")
-    .in("role", ["PARTNER", "PARTNER_PRO"])
+    .in("role", ["STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE"])
     .eq("is_active", true);
 
   if (!partners?.length) return NextResponse.json({ ranking: [] });

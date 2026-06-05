@@ -202,7 +202,7 @@ export async function POST(req: NextRequest) {
   }
 }
 
-const PARTNER_ROLES = ["PARTNER", "PARTNER_PRO"] as const;
+const PARTNER_ROLES = ["STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE"] as const;
 // Campos que um partner pode editar nas próprias propostas
 const PARTNER_ALLOWED_FIELDS = new Set(["title", "client_name", "client_cpf_cnpj", "requested_value", "metadata"]);
 

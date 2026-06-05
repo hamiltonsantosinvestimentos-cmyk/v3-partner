@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
     .single();
 
   const role = (profile as { role: string } | null)?.role ?? "";
-  if (!["PARTNER", "PARTNER_PRO"].includes(role)) {
+  if (!["STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE"].includes(role)) {
     return NextResponse.json({ error: "Apenas partners podem solicitar pagamento" }, { status: 403 });
   }
 

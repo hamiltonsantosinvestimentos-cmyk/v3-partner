@@ -16,7 +16,7 @@ export function SubscriptionGuard({ trialExpiresAt, isActive, role }: Subscripti
   const pathname = usePathname();
 
   // Só aplica a partners
-  if (!["PARTNER", "PARTNER_PRO"].includes(role)) return null;
+  if (!["STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE"].includes(role)) return null;
 
   // Não bloqueia nas páginas isentas
   if (EXEMPT_PATHS.some(p => pathname.startsWith(p))) return null;

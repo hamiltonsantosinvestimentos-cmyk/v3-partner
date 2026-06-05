@@ -89,11 +89,11 @@ export async function POST(request: Request) {
   // Onboarding automático para novos partners
   let emailStatus: { ok: boolean; erro?: string } = { ok: false, erro: "não é partner" };
 
-  if (["PARTNER", "PARTNER_PRO"].includes(role)) {
+  if (["STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE"].includes(role)) {
     const APP_URL = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_SITE_URL || "https://v3-partner.vercel.app";
     const resendKey = process.env.RESEND_API_KEY;
-    const planoLabel = role === "PARTNER_PRO" ? "V3 Partner PRO" : "V3 Partner";
-    const comissao   = role === "PARTNER_PRO" ? "50%" : "30%";
+    const planoLabel = role === "ENTERPRISE" ? "V3 Enterprise" : role === "PARTNER_PRO" ? "V3 Partner PRO" : role === "STARTER" ? "V3 Starter" : "V3 Partner";
+    const comissao   = role === "ENTERPRISE" ? "negociável" : role === "PARTNER_PRO" ? "50%" : role === "STARTER" ? "20%" : "30%";
     const nome       = full_name ?? "Parceiro";
 
     // Notificações internas (fire-and-forget)

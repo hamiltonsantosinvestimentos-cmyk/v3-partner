@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
 
   // Notifica partners quando um novo vídeo é adicionado
   if (is_new && video_title) {
-    await notifyByRoles(["PARTNER", "PARTNER_PRO"], {
+    await notifyByRoles(["STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE"], {
       title: "Nova aula no Academy! 🎓",
       message: `"${video_title}" já está disponível no V3 Academy.`,
       type: "info",

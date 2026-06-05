@@ -33,7 +33,7 @@ export async function GET() {
   const { data: partners, error } = await svc()
     .from("profiles")
     .select("id, full_name, email, role, created_at, is_active, trial_expires_at")
-    .in("role", ["PARTNER", "PARTNER_PRO"])
+    .in("role", ["STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE"])
     .order("created_at", { ascending: false });
 
   // Se trial_expires_at não existir ainda, tenta sem a coluna
@@ -42,7 +42,7 @@ export async function GET() {
     const { data: partnersFallback } = await svc()
       .from("profiles")
       .select("id, full_name, email, role, created_at, is_active, trial_expires_at")
-      .in("role", ["PARTNER", "PARTNER_PRO"])
+      .in("role", ["STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE"])
       .order("created_at", { ascending: false });
     finalPartners = partnersFallback;
   }

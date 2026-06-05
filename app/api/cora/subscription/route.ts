@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
     .single();
 
   const p = profile as { role: string; full_name: string; cpf?: string; cnpj?: string; email?: string } | null;
-  if (!p || !["PARTNER", "PARTNER_PRO"].includes(p.role)) {
+  if (!p || !["STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE"].includes(p.role)) {
     return NextResponse.json({ error: "Apenas partners podem gerar cobranças de assinatura" }, { status: 403 });
   }
 

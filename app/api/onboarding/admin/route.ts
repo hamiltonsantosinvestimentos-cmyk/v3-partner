@@ -30,7 +30,7 @@ export async function GET() {
   const { data: partners } = await svc()
     .from("profiles")
     .select("id, full_name, email, role, created_at, is_active, trial_expires_at")
-    .in("role", ["PARTNER", "PARTNER_PRO"])
+    .in("role", ["STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE"])
     .order("created_at", { ascending: false });
 
   if (!partners || partners.length === 0) {

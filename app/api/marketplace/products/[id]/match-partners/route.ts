@@ -37,7 +37,7 @@ export async function POST(
   const { data: partners, error: partErr } = await svc
     .from("profiles")
     .select("id, role, state, last_sign_in_at, metadata")
-    .in("role", ["PARTNER", "PARTNER_PRO"])
+    .in("role", ["STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE"])
     .not("state", "is", null);
 
   if (partErr || !partners) {

@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
     .single();
 
   const partnerRole = (profile as { role?: string } | null)?.role ?? "";
-  const isPartner = ["PARTNER", "PARTNER_PRO"].includes(partnerRole);
+  const isPartner = ["STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE"].includes(partnerRole);
   const isMesa = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"].includes(partnerRole);
 
   if (isPartner && (proposta as { partner_id?: string } | null)?.partner_id !== user.id) {

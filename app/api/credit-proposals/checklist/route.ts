@@ -16,7 +16,7 @@ async function getAuthedUser() {
   return { user, profile };
 }
 
-const ALLOWED_ROLES = ["ADMIN", "GESTAO", "MESA_OPERACIONAL", "FINANCEIRO", "PARTNER", "PARTNER_PRO"] as const;
+const ALLOWED_ROLES = ["ADMIN", "GESTAO", "MESA_OPERACIONAL", "FINANCEIRO", "STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE"] as const;
 
 // PATCH — salva estado do checklist (quais docs foram marcados)
 export async function PATCH(req: NextRequest) {

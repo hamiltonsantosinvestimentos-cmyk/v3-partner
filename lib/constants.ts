@@ -1,7 +1,9 @@
 export const USER_ROLES = {
   ADMIN: "ADMIN",
+  STARTER: "STARTER",
   PARTNER: "PARTNER",
   PARTNER_PRO: "PARTNER_PRO",
+  ENTERPRISE: "ENTERPRISE",
   MESA_OPERACIONAL: "MESA_OPERACIONAL",
   GESTAO: "GESTAO",
   FINANCEIRO: "FINANCEIRO",
@@ -14,8 +16,10 @@ export type UserRole = keyof typeof USER_ROLES;
 
 export const ROLE_LABELS: Record<UserRole, string> = {
   ADMIN: "Administrador",
-  PARTNER: "Partner",
-  PARTNER_PRO: "Partner PRO",
+  STARTER: "V3 Starter",
+  PARTNER: "V3 Partner",
+  PARTNER_PRO: "V3 Partner PRO",
+  ENTERPRISE: "V3 Enterprise",
   MESA_OPERACIONAL: "Mesa Operacional",
   GESTAO: "Gestão",
   FINANCEIRO: "Financeiro",
@@ -26,8 +30,10 @@ export const ROLE_LABELS: Record<UserRole, string> = {
 
 export const ROLE_COLORS: Record<UserRole, string> = {
   ADMIN: "bg-red-500/20 text-red-400 border-red-500/30",
+  STARTER: "bg-cyan-500/20 text-cyan-400 border-cyan-500/30",
   PARTNER: "bg-blue-500/20 text-blue-400 border-blue-500/30",
   PARTNER_PRO: "bg-violet-500/20 text-violet-400 border-violet-500/30",
+  ENTERPRISE: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30",
   MESA_OPERACIONAL: "bg-purple-500/20 text-purple-400 border-purple-500/30",
   GESTAO: "bg-amber-500/20 text-amber-400 border-amber-500/30",
   FINANCEIRO: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
