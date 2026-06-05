@@ -205,7 +205,7 @@ interface DashboardClientProps {
   userName: string;
   period?: string;
   userCreatedAt?: string | null;
-  revenueData?: Array<{ month: string; value: number }>;
+  revenueData?: Array<{ month: string; value: number; emAprovacao: number }>;
   redeHealth?: RedeHealth | null;
   kpis: {
     totalSplits: number;
@@ -667,12 +667,27 @@ export function DashboardClient({
                 Nenhuma operação registrada no período
               </div>
             ) : (
+            <>
+            <div className="flex items-center gap-4 mb-2">
+              <div className="flex items-center gap-1.5">
+                <div className="w-2.5 h-2.5 rounded-full bg-[#C9A84C]" />
+                <span className="text-[10px] text-[#7A8FA8]">Total</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <div className="w-2.5 h-2.5 rounded-full bg-[#60A5FA]" />
+                <span className="text-[10px] text-[#7A8FA8]">Em aprovação</span>
+              </div>
+            </div>
             <ResponsiveContainer width="100%" height={180}>
               <AreaChart data={revenueData}>
                 <defs>
                   <linearGradient id="goldGrad" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#C9A84C" stopOpacity={0.35} />
                     <stop offset="95%" stopColor="#C9A84C" stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id="blueGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#60A5FA" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="#60A5FA" stopOpacity={0} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#122036" />
@@ -696,7 +711,10 @@ export function DashboardClient({
                     color: "#E8EDF5",
                     fontSize: "12px",
                   }}
-                  formatter={(value) => [formatCurrency(Number(value) || 0), "Volume"]}
+                  formatter={(value, name) => [
+                    formatCurrency(Number(value) || 0),
+                    name === "emAprovacao" ? "Em aprovação" : "Total"
+                  ]}
                 />
                 <Area
                   type="monotone"
@@ -705,8 +723,17 @@ export function DashboardClient({
                   strokeWidth={2}
                   fill="url(#goldGrad)"
                 />
+                <Area
+                  type="monotone"
+                  dataKey="emAprovacao"
+                  stroke="#60A5FA"
+                  strokeWidth={2}
+                  fill="url(#blueGrad)"
+                  strokeDasharray="4 2"
+                />
               </AreaChart>
             </ResponsiveContainer>
+            </>
             )}
           </CardContent>
         </Card>

@@ -143,7 +143,7 @@ export default async function DashboardPage({
 
   let revenueQ = svc
     .from("credit_desk_proposals")
-    .select("created_at, requested_value")
+    .select("created_at, requested_value, status")
     .gte("created_at", dozeAtras.toISOString())
     .order("created_at", { ascending: true });
 
@@ -152,8 +152,9 @@ export default async function DashboardPage({
   const revenueResult = await Promise.allSettled([revenueQ]);
   const revenueRaw = revenueResult[0].status === "fulfilled" ? (revenueResult[0].value.data ?? []) : [];
 
-  // Agrupa por mês e soma o requested_value
+  // Agrupa por mês — total e em aprovação (PENDING + IN_REVIEW)
   const monthMap: Record<string, number> = {};
+  const monthMapAprov: Record<string, number> = {};
   const mesesPT = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
 
   for (let i = 11; i >= 0; i--) {
@@ -161,17 +162,23 @@ export default async function DashboardPage({
     d.setMonth(d.getMonth() - i);
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
     monthMap[key] = 0;
+    monthMapAprov[key] = 0;
   }
 
   for (const row of revenueRaw) {
     const d = new Date(row.created_at as string);
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-    if (key in monthMap) monthMap[key] += (row.requested_value as number) ?? 0;
+    if (key in monthMap) {
+      monthMap[key] += (row.requested_value as number) ?? 0;
+      if (["PENDING", "IN_REVIEW"].includes(row.status as string)) {
+        monthMapAprov[key] += (row.requested_value as number) ?? 0;
+      }
+    }
   }
 
   const revenueData = Object.entries(monthMap).map(([key, value]) => {
     const [, m] = key.split("-");
-    return { month: mesesPT[parseInt(m) - 1], value };
+    return { month: mesesPT[parseInt(m) - 1], value, emAprovacao: monthMapAprov[key] ?? 0 };
   });
 
   // Saúde da rede — só para ADMIN/GESTAO/FINANCEIRO
