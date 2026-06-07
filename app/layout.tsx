@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { PWARegister } from "@/components/pwa-register";
+import { ChunkErrorReload } from "@/components/chunk-error-reload";
 
 export const metadata: Metadata = {
   title: "V3 PARTNERS — Plataforma Financeira",
@@ -35,6 +36,7 @@ export default function RootLayout({
       </head>
       <body className="min-h-full bg-[#09081A]">
         <PWARegister />
+        <ChunkErrorReload />
         {children}
       </body>
     </html>
