@@ -99,6 +99,14 @@ export function DealAnalyticsPanel({ dealId }: DealAnalyticsPanelProps) {
 
   const proj = data.projections;
 
+  if (!proj) return (
+    <div className="flex items-center gap-2 p-4 rounded-lg"
+      style={{ background: `${V3.red}15`, border: `1px solid ${V3.red}30`, color: V3.red }}>
+      <AlertTriangle className="w-4 h-4" />
+      <span className="text-sm">Sem projeções financeiras cadastradas para este deal.</span>
+    </div>
+  );
+
   const receitaData = (proj.receita ?? []).map(r => ({ ano: String(r.ano), valor: r.valor }));
 
   const scenarioData = [
