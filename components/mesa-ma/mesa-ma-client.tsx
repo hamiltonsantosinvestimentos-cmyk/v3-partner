@@ -32,8 +32,8 @@ const DealTimeline = dynamic(
   () => import("@/components/ma/deal-timeline").then(m => m.DealTimeline),
   { ssr: false }
 );
-const BusinessPlanPanel = dynamic(
-  () => import("@/components/ma/business-plan-panel").then(m => m.BusinessPlanPanel),
+const BusinessPlanContainer = dynamic(
+  () => import("@/components/ma/business-plan/business-plan-container").then(m => m.BusinessPlanContainer),
   { ssr: false }
 );
 import { NovoDealForm } from "@/components/ma/novo-deal-form";
@@ -1219,7 +1219,7 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
             if (detailTab === "business-plan") {
               return (
                 <div className="mt-2">
-                  <BusinessPlanPanel
+                  <BusinessPlanContainer
                     dealId={selectedCard.id}
                     dealCode={selectedCard.code}
                     sector={selectedCard.sector}

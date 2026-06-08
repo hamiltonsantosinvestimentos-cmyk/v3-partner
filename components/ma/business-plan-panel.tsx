@@ -152,6 +152,12 @@ const ChartTooltip = ({ active, payload, label }: TooltipProps) => {
 };
 
 // ── Main Component ────────────────────────────────────────────────────────────
+/**
+ * @deprecated — substituído por BusinessPlanContainer
+ * (ver components/ma/business-plan/business-plan-container.tsx e
+ * docs/specs/2026-06-business-plan-engine.md). Não reutilizar nem montar
+ * genericamente — schema/copy hardcoded para o caso Nelblue (Agropecuária).
+ */
 export function BusinessPlanPanel({
   dealId,
   dealCode,
