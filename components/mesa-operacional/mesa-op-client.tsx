@@ -962,7 +962,7 @@ function TicketDetailModal({ open, onClose, ticket, currentUser, onUpdated, onOp
 
   return (
     <div className="fixed inset-0 z-[80] flex items-start justify-center p-4 pt-10 bg-black/70 backdrop-blur-sm">
-      <div className="bg-card border border-border rounded-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+      <div className="bg-card border border-border rounded-2xl w-full max-w-2xl max-h-[95vh] flex flex-col overflow-hidden">
         {/* Header */}
         <div className="flex items-start justify-between px-6 py-4 border-b border-border flex-shrink-0">
           <div>
@@ -979,7 +979,7 @@ function TicketDetailModal({ open, onClose, ticket, currentUser, onUpdated, onOp
         </div>
 
         {/* Body scrollável */}
-        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5 pb-6">
           {/* Detalhes */}
           <div className="grid grid-cols-2 gap-2">
             <div className="bg-secondary rounded-xl p-3">
