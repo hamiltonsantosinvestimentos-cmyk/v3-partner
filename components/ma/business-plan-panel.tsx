@@ -22,6 +22,15 @@ const C = {
 // ── Roles ────────────────────────────────────────────────────────────────────
 const EDIT_ROLES = ["ADMIN", "GESTAO"];
 
+// ── Guarda de setor ──────────────────────────────────────────────────────────
+// Este painel usa um schema e copy específicos do modelo de negócio da Nelblue
+// (genética bovina · IGG Select · exportação). NÃO é genérico — nunca remover
+// esta guarda nem reaproveitar o componente para outro setor sem reescrever o
+// conteúdo. Vazamento confirmado em 2026-06-07: copy da Nelblue (incluindo
+// nomes de pessoas físicas — Dr. Fábio / Prof. Neimar Severo) aparecia na aba
+// Business Plan de deals de outros setores (ex.: Araxá Metals · Mineração).
+const APPLICABLE_SECTORS = ["Agropecuária"];
+
 // ── Helpers ──────────────────────────────────────────────────────────────────
 const fmt = (n: number, prefix = "R$") =>
   `${prefix} ${n.toLocaleString("pt-BR", { minimumFractionDigits: 0 })}`;
@@ -146,10 +155,12 @@ const ChartTooltip = ({ active, payload, label }: TooltipProps) => {
 export function BusinessPlanPanel({
   dealId,
   dealCode,
+  sector,
   userRole,
 }: {
   dealId: string;
   dealCode?: string;
+  sector?: string | null;
   userRole: string;
 }) {
   const canEdit = EDIT_ROLES.includes(userRole);
@@ -191,6 +202,23 @@ export function BusinessPlanPanel({
       setSaving(false);
     }
   }, [dealId, data]);
+
+  // ── Guarda de aplicabilidade ─────────────────────────────────────────────────
+  // Defesa em profundidade: mesmo que este painel seja montado para um deal de
+  // outro setor (erro de roteamento na tela-mãe), ele se recusa a exibir o
+  // template/copy específico da Nelblue. Nunca remover.
+  if (!APPLICABLE_SECTORS.includes(sector ?? "")) {
+    return (
+      <div className="flex flex-col items-center justify-center h-48 text-center gap-2 text-[#9BAFC5]">
+        <BarChart2 size={20} className="opacity-40" />
+        <p className="text-sm font-semibold text-[#F5F1E8]">Business Plan não disponível para este setor</p>
+        <p className="text-[11px] max-w-xs">
+          Este painel utiliza um modelo financeiro específico do setor Agropecuária
+          {dealCode ? ` e não se aplica ao deal ${dealCode}` : " e não se aplica a este deal"}.
+        </p>
+      </div>
+    );
+  }
 
   // ── Computed ────────────────────────────────────────────────────────────────
   const cenarios = calcCenarios(data);

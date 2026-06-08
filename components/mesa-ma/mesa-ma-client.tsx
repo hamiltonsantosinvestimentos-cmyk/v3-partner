@@ -847,10 +847,10 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
 
       {/* ── CARD DETAIL MODAL ──────────────────────────────────── */}
       <Dialog open={!!selectedCard} onOpenChange={open => { if (!open) { setSelectedCard(null); setConfirmDelete(false); setEditingCard(false); } }}>
-        <DialogContent className="bg-[#091221] border border-[#122036] text-[#E8EDF5] max-w-2xl max-h-[92vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="text-[#E8EDF5] flex items-center gap-2 flex-wrap">
-              {selectedCard?.company}
+        <DialogContent className="bg-[#091221] border border-[#122036] text-[#E8EDF5] max-w-2xl max-h-[92vh] overflow-y-auto grid-cols-1">
+          <DialogHeader className="min-w-0 w-full">
+            <DialogTitle className="text-[#E8EDF5] flex items-center gap-2 flex-wrap min-w-0 w-full">
+              <span className="break-words">{selectedCard?.company}</span>
               <span className="text-xs font-normal text-[#7A8FA8]">{selectedCard?.code}</span>
               {selectedCard?.tipo_participante && (
                 <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
@@ -1222,6 +1222,7 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
                   <BusinessPlanPanel
                     dealId={selectedCard.id}
                     dealCode={selectedCard.code}
+                    sector={selectedCard.sector}
                     userRole={userRole}
                   />
                 </div>
