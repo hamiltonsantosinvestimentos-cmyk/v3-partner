@@ -68,7 +68,7 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (ticket) {
-      const requester = ticket.requester as { id: string; full_name: string } | null;
+      const requester = ticket.requester as unknown as { id: string; full_name: string } | null;
       const requesterId = requester?.id ?? ticket.requester_id;
       const requesterName = requester?.full_name ?? "Partner";
       const authorName = authorProfile?.full_name ?? "Mesa Operacional V3";
