@@ -1222,6 +1222,7 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
                   <BusinessPlanPanel
                     dealId={selectedCard.id}
                     dealCode={selectedCard.code}
+                    sector={selectedCard.sector}
                     userRole={userRole}
                   />
                 </div>
