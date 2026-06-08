@@ -63,14 +63,19 @@ export async function POST(req: NextRequest) {
     // Busca ticket + solicitante
     const { data: ticket } = await svc
       .from("operational_tickets")
-      .select(`id, code, title, requester_id, requester:profiles!operational_tickets_requester_id_fkey(id, full_name)`)
+      .select(`id, code, title, requester_id`)
       .eq("id", ticket_id)
       .single();
 
     if (ticket) {
-      const requester = ticket.requester as unknown as { id: string; full_name: string } | null;
-      const requesterId = requester?.id ?? ticket.requester_id;
-      const requesterName = requester?.full_name ?? "Partner";
+      const requesterId: string | null = ticket.requester_id ?? null;
+
+      // Busca nome do solicitante separadamente
+      let requesterName = "Partner";
+      if (requesterId) {
+        const { data: rp } = await svc.from("profiles").select("full_name").eq("id", requesterId).single();
+        requesterName = rp?.full_name ?? "Partner";
+      }
       const authorName = authorProfile?.full_name ?? "Mesa Operacional V3";
 
       // ── Email ────────────────────────────────────────────────────────────────
