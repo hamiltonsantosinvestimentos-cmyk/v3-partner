@@ -1153,45 +1153,46 @@ function TicketDetailModal({ open, onClose, ticket, currentUser, onUpdated, onOp
               </div>
             )}
             {/* Adicionar comentário */}
-            <div className="flex gap-2">
+            <div className="space-y-2">
               <textarea
                 value={newComment}
                 onChange={e => setNewComment(e.target.value)}
                 onKeyDown={e => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) handleAddComment(); }}
                 rows={2}
                 placeholder="Adicionar comentário... (Ctrl+Enter para enviar)"
-                className="flex-1 px-3 py-2 text-sm bg-secondary border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 resize-none"
+                className="w-full px-3 py-2 text-sm bg-secondary border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 resize-none"
               />
-              <div className="flex flex-col gap-1 self-end">
+              <div className="flex gap-2">
                 <Button
                   size="sm"
                   onClick={() => handleAddComment()}
                   disabled={!newComment.trim() || submittingComment}
-                  title="Enviar comentário"
+                  className="flex-1 gap-1.5"
                 >
                   {submittingComment
                     ? <span className="w-3 h-3 rounded-full border-2 border-white border-t-transparent animate-spin" />
                     : <MessageSquare className="w-3.5 h-3.5" />}
+                  Comentar
                 </Button>
                 <Button
                   size="sm"
                   variant="outline"
                   onClick={() => handleAddComment({ send_email: true })}
                   disabled={!newComment.trim() || submittingComment}
-                  title="Enviar comentário + notificar por e-mail"
-                  className="text-[#C9A84C] border-[#C9A84C]/40 hover:bg-[#C9A84C]/10"
+                  className="flex-1 gap-1.5"
                 >
                   <Mail className="w-3.5 h-3.5" />
+                  + E-mail
                 </Button>
                 <Button
                   size="sm"
                   variant="outline"
                   onClick={() => handleAddComment({ send_chat: true })}
                   disabled={!newComment.trim() || submittingComment}
-                  title="Enviar comentário + notificar por chat"
-                  className="text-blue-400 border-blue-400/40 hover:bg-blue-400/10"
+                  className="flex-1 gap-1.5"
                 >
                   <MessageCircle className="w-3.5 h-3.5" />
+                  + Chat
                 </Button>
               </div>
             </div>
