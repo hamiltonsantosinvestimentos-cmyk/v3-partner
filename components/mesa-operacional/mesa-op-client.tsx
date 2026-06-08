@@ -5,7 +5,7 @@ import {
   Headphones, Plus, ChevronRight, User, Building2,
   Clock, CheckCircle2, AlertCircle, Link2,
   LayoutGrid, List, Search, X, FileText, ArrowRight, ArrowLeft, MessageSquare, Trash2,
-  ScrollText, RefreshCw, XCircle, Download, Edit2, Users, Filter, Settings, Bell,
+  ScrollText, RefreshCw, XCircle, Download, Edit2, Users, Filter, Settings, Bell, Mail, MessageCircle,
 } from "lucide-react";
 import { ExportButton } from "@/components/financeiro/export-button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -935,14 +935,19 @@ function TicketDetailModal({ open, onClose, ticket, currentUser, onUpdated, onOp
     }
   }
 
-  async function handleAddComment() {
+  async function handleAddComment(opts?: { send_email?: boolean; send_chat?: boolean }) {
     if (!ticket || !newComment.trim()) return;
     setSubmittingComment(true);
     try {
       const res = await fetch("/api/tickets/comments", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ticket_id: ticket.id, content: newComment.trim() }),
+        body: JSON.stringify({
+          ticket_id: ticket.id,
+          content: newComment.trim(),
+          send_email: opts?.send_email ?? false,
+          send_chat: opts?.send_chat ?? false,
+        }),
       });
       const json = await res.json();
       if (json.comment) {
@@ -1157,11 +1162,38 @@ function TicketDetailModal({ open, onClose, ticket, currentUser, onUpdated, onOp
                 placeholder="Adicionar comentário... (Ctrl+Enter para enviar)"
                 className="flex-1 px-3 py-2 text-sm bg-secondary border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 resize-none"
               />
-              <Button size="sm" onClick={handleAddComment} disabled={!newComment.trim() || submittingComment} className="self-end">
-                {submittingComment
-                  ? <span className="w-3 h-3 rounded-full border-2 border-white border-t-transparent animate-spin" />
-                  : <MessageSquare className="w-3.5 h-3.5" />}
-              </Button>
+              <div className="flex flex-col gap-1 self-end">
+                <Button
+                  size="sm"
+                  onClick={() => handleAddComment()}
+                  disabled={!newComment.trim() || submittingComment}
+                  title="Enviar comentário"
+                >
+                  {submittingComment
+                    ? <span className="w-3 h-3 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                    : <MessageSquare className="w-3.5 h-3.5" />}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => handleAddComment({ send_email: true })}
+                  disabled={!newComment.trim() || submittingComment}
+                  title="Enviar comentário + notificar por e-mail"
+                  className="text-[#C9A84C] border-[#C9A84C]/40 hover:bg-[#C9A84C]/10"
+                >
+                  <Mail className="w-3.5 h-3.5" />
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => handleAddComment({ send_chat: true })}
+                  disabled={!newComment.trim() || submittingComment}
+                  title="Enviar comentário + notificar por chat"
+                  className="text-blue-400 border-blue-400/40 hover:bg-blue-400/10"
+                >
+                  <MessageCircle className="w-3.5 h-3.5" />
+                </Button>
+              </div>
             </div>
           </div>
         </div>
