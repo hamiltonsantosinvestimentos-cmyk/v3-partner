@@ -12,6 +12,8 @@ REGRAS ABSOLUTAS:
 4. Tom institucional, PT-BR, sem floreios, sem emojis.
 5. Estruture em seções: Visão Geral do Ativo · Premissas Financeiras · Cenários Projetados (se houver) · Riscos e Considerações.
 6. Omita seções sem dados suficientes — nunca generalize para parecer completo.
+7. Em claim_trace, source_path DEVE apontar para um valor ESCALAR (number, string, boolean), nunca para um array ou objeto completo. Para elementos de array, use notação de ponto: financial_projections.receita.0.valor (não receita[0]).
+8. source_value deve ser o valor primitivo EXATO encontrado naquele path — sem arredondamento, sem formatação.
 Responda em JSON estrito conforme o schema fornecido.`;
 
 export interface SanitizedBusinessPlanPayload {
@@ -47,7 +49,8 @@ const RESPONSE_JSON_SCHEMA = `{
     { "title": "<título da seção>", "body": "<corpo em markdown, 1-3 parágrafos>" }
   ],
   "claim_trace": [
-    { "claim": "<frase com a afirmação numérica>", "source_path": "<caminho exato no payload, ex: financial_projections.noi_mensal>", "source_value": <valor exatamente como está no payload> }
+    { "claim": "<frase com a afirmação numérica>", "source_path": "financial_projections.scenarios.base.valuation", "source_value": 355000000 },
+    { "claim": "<outro exemplo com item de array>", "source_path": "financial_projections.receita.0.valor", "source_value": 17056840.86 }
   ]
 }`;
 
@@ -79,6 +82,17 @@ function getByPath(source: Record<string, unknown>, path: string): unknown {
   }, source);
 }
 
+function claimValueMatches(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  // Floating-point tolerance for numbers
+  if (typeof a === "number" && typeof b === "number") return Math.abs(a - b) < 0.01;
+  // Deep equality fallback for objects/arrays
+  if (a !== null && b !== null && typeof a === "object" && typeof b === "object") {
+    return JSON.stringify(a) === JSON.stringify(b);
+  }
+  return false;
+}
+
 export function validateClaimTrace(
   claimTrace: ClaimTraceEntry[],
   sourceData: Record<string, unknown>
@@ -86,7 +100,7 @@ export function validateClaimTrace(
   if (!Array.isArray(claimTrace) || claimTrace.length === 0) return false;
   return claimTrace.every((claim) => {
     const value = getByPath(sourceData, claim.source_path);
-    return value !== undefined && value === claim.source_value;
+    return value !== undefined && claimValueMatches(value, claim.source_value);
   });
 }
 

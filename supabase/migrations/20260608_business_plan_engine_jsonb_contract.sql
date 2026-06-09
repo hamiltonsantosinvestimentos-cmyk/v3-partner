@@ -10,11 +10,12 @@ COMMENT ON COLUMN ma_deals.asset_data IS
   'narra; ver docs/specs/2026-06-business-plan-engine.md), forja_result, teaser_cego, '
   'tese_investimento.';
 
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_ma_deals_has_financial_projections
+-- CONCURRENTLY omitido: apply_migration executa em transação (incompatível).
+CREATE INDEX IF NOT EXISTS idx_ma_deals_has_financial_projections
   ON ma_deals USING gin ((asset_data -> 'financial_projections'))
   WHERE asset_data ? 'financial_projections';
 
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_ma_deals_sector_lower
+CREATE INDEX IF NOT EXISTS idx_ma_deals_sector_lower
   ON ma_deals (lower(sector));
 
 -- ROLLBACK:

@@ -72,9 +72,9 @@ export function RealEstatePanel({
   }
 
   const kpis: { label: string; claimSourcePath: string; format: (v: unknown) => string }[] = [
-    { label: "Receita", claimSourcePath: "financial_projections.receita", format: fmtBRL },
-    { label: "NOI Mensal", claimSourcePath: "financial_projections.noi_mensal", format: fmtBRL },
-    { label: "Vacância", claimSourcePath: "financial_projections.vacancia_pct", format: fmtPct },
+    { label: "Valuation Base", claimSourcePath: "financial_projections.scenarios.base.valuation", format: fmtBRL },
+    { label: "NOI Anual Base", claimSourcePath: "financial_projections.scenarios.base.noi_anual", format: fmtBRL },
+    { label: "Cap Rate Base", claimSourcePath: "financial_projections.scenarios.base.cap_rate", format: (v) => typeof v === "number" ? `${(v * 100).toFixed(2)}%` : "—" },
   ];
 
   return (
@@ -140,25 +140,30 @@ export function RealEstatePanel({
         ))}
       </div>
 
-      {financialProjections.scenarios && financialProjections.scenarios.length > 0 && (
+      {financialProjections.scenarios && Object.keys(financialProjections.scenarios).length > 0 && (
         <div className="rounded-xl border px-5 py-4" style={{ background: C.nc, borderColor: C.nm }}>
           <h4 className="text-xs font-bold uppercase tracking-widest" style={{ color: C.go }}>
             Cenários Projetados
           </h4>
           <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
-            {financialProjections.scenarios.map((scenario, i) => (
-              <div key={i} className="rounded-lg border px-3 py-2" style={{ borderColor: C.nm }}>
+            {Object.entries(financialProjections.scenarios).map(([nome, scenario]) => (
+              <div key={nome} className="rounded-lg border px-3 py-2" style={{ borderColor: C.nm }}>
                 <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: C.gl }}>
-                  {scenario.nome}
+                  {nome}
                 </p>
-                {scenario.receita_projetada !== undefined && (
+                {scenario.valuation !== undefined && (
                   <p className="mt-1 text-xs" style={{ color: C.cr }}>
-                    Receita: {fmtBRL(scenario.receita_projetada)}
+                    Valuation: {fmtBRL(scenario.valuation)}
                   </p>
                 )}
-                {scenario.noi_projetado !== undefined && (
-                  <p className="text-xs" style={{ color: C.cr }}>
-                    NOI: {fmtBRL(scenario.noi_projetado)}
+                {scenario.noi_anual !== undefined && (
+                  <p className="text-xs" style={{ color: C.mu }}>
+                    NOI: {fmtBRL(scenario.noi_anual)}
+                  </p>
+                )}
+                {scenario.cap_rate !== undefined && (
+                  <p className="text-xs" style={{ color: C.mu }}>
+                    Cap Rate: {(scenario.cap_rate * 100).toFixed(2)}%
                   </p>
                 )}
               </div>

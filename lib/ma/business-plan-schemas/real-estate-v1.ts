@@ -9,24 +9,41 @@ export interface RealEstateDespesasBreakdown {
   [categoria: string]: number | undefined;
 }
 
-export interface RealEstateScenario {
-  nome: string;
-  receita_projetada?: number;
-  noi_projetado?: number;
-  premissas?: string[];
+// Série histórica/projetada de receita
+export interface RealEstateReceitaEntry {
+  ano: number;
+  tipo: "realizado" | "projetado_base" | "projetado_expansao" | string;
+  valor: number;
+}
+
+// NOI mensal ponto-a-ponto
+export interface RealEstateNoiEntry {
+  mes: string; // YYYY-MM
+  valor: number;
+}
+
+// Vacância por pavimento/unidade
+export interface RealEstateVacanciaEntry {
+  pct: number;
+  pavimento: string;
+}
+
+// Cenário financeiro nomeado
+export interface RealEstateScenarioEntry {
+  cap_rate?: number;
+  noi_anual?: number;
+  valuation?: number;
+  [key: string]: number | undefined;
 }
 
 export interface RealEstateFinancialProjections {
-  receita: number;
-  noi_mensal: number;
-  vacancia_pct: number;
+  receita: RealEstateReceitaEntry[];
+  noi_mensal: RealEstateNoiEntry[];
+  vacancia_pct: RealEstateVacanciaEntry[];
   despesas_breakdown: RealEstateDespesasBreakdown;
-  scenarios?: RealEstateScenario[];
-  meta?: {
-    last_updated: string;
-    updated_by?: string;
-    updated_from_qa?: boolean;
-  };
+  scenarios?: Record<string, RealEstateScenarioEntry>;
+  last_updated?: string;
+  updated_from_qa?: unknown[];
 }
 
 export const REAL_ESTATE_REQUIRED_FIELDS = [
