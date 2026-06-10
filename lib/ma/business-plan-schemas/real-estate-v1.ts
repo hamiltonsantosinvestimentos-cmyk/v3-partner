@@ -1,4 +1,5 @@
 import type { SectorSchemaDefinition } from "./registry";
+import type { DREEntry, DFCEntry, IndicadoresBase } from "@/types/financial";
 
 export interface RealEstateDespesasBreakdown {
   condominio?: number;
@@ -28,22 +29,30 @@ export interface RealEstateVacanciaEntry {
   pavimento: string;
 }
 
-// Cenário financeiro nomeado
+// Cenário financeiro nomeado — inclui campos do Modelo 3-Statement
 export interface RealEstateScenarioEntry {
   cap_rate?: number;
+  yield_on_cost?: number;
   noi_anual?: number;
   valuation?: number;
+  desconto_aplicado_pct?: number;
   [key: string]: number | undefined;
 }
 
 export interface RealEstateFinancialProjections {
+  // Campos operacionais base (obrigatórios)
   receita: RealEstateReceitaEntry[];
   noi_mensal: RealEstateNoiEntry[];
   vacancia_pct: RealEstateVacanciaEntry[];
   despesas_breakdown: RealEstateDespesasBreakdown;
   scenarios?: Record<string, RealEstateScenarioEntry>;
+  // Campos 3-Statement (opcionais — populados diretamente ou derivados pelo enricher)
+  dre_projetada?: DREEntry[];
+  dfc_projetada?: DFCEntry[];
+  indicadores?: IndicadoresBase;
   last_updated?: string;
   updated_from_qa?: unknown[];
+  _enriched?: true;
 }
 
 export const REAL_ESTATE_REQUIRED_FIELDS = [

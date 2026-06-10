@@ -1,0 +1,410 @@
+import type { IntakeSchema } from "../engine/schema-registry";
+
+export const geneticaBovinaV1Schema: IntakeSchema = {
+  id: "genetica-bovina-v1",
+  label: "Melhoramento Genético Bovino",
+  sector: "agronegocio",
+  sub_sector: "genetica_bovina",
+  parent_schema_id: "agronegocio-v1",
+  tags: ["exportacao"],
+  sections: [
+    // ── 1. Auditoria do Preenchedor ───────────────────────────────
+    {
+      id: "auditoria_preenchedor",
+      title: "Identificação do Preenchedor",
+      description: "Dados do responsável pela inserção das informações. Obrigatórios para rastreabilidade e auditoria.",
+      fields: [
+        {
+          key: "nome_operador",
+          label: "Nome de quem realizou a inserção dos dados",
+          type: "text",
+          required: true,
+          placeholder: "Ex.: Dr. João Silva",
+        },
+        {
+          key: "cargo_operador",
+          label: "Cargo / Função na Empresa",
+          type: "text",
+          required: true,
+          placeholder: "Ex.: Diretor Comercial",
+        },
+        {
+          key: "email_operador",
+          label: "E-mail Corporativo",
+          type: "text",
+          required: true,
+          placeholder: "nome@empresa.com.br",
+        },
+      ],
+    },
+
+    // ── 2. Produção e Modelo de Comercialização ──────────────────
+    {
+      id: "producao_genetica",
+      title: "Dados de Produção — Genética",
+      description: "Capacidade produtiva atual do plantel e modelo de comercialização.",
+      fields: [
+        {
+          key: "n_matrizes_doadoras",
+          label: "Nº de matrizes doadoras em produção",
+          type: "number",
+          required: true,
+          min: 1,
+          placeholder: "Ex.: 120",
+          hint: "Fêmeas em protocolo ativo de doação de embriões.",
+        },
+        {
+          key: "taxa_prenhez_pct",
+          label: "Taxa de prenhez atual (%)",
+          type: "percentage",
+          required: true,
+          min: 0,
+          max: 100,
+          placeholder: "Ex.: 68",
+          hint: "Percentual de receptoras que ficam prenhes por ciclo.",
+        },
+        {
+          key: "embrioes_produzidos_mes",
+          label: "Embriões convencionais produzidos / mês",
+          type: "number",
+          required: true,
+          min: 0,
+          placeholder: "Ex.: 45",
+          hint: "Embriões sem sexagem. IGG Select é informado separadamente.",
+        },
+        {
+          key: "embrioes_vitrificados_estoque",
+          label: "Embriões vitrificados em estoque",
+          type: "number",
+          required: false,
+          min: 0,
+          placeholder: "Ex.: 380",
+          hint: "Estoque atual de embriões congelados disponíveis para venda.",
+        },
+        {
+          key: "racas_principais",
+          label: "Raças / linhagens principais",
+          type: "text",
+          required: false,
+          placeholder: "Ex.: Nelore PO, Angus, Simmental",
+        },
+        {
+          key: "modelo_venda",
+          label: "Modelo de Comercialização",
+          type: "select",
+          required: true,
+          options: [
+            "Venda de Kit de Sexagem",
+            "Kit Padronizado (Proporção M/F Pré-determinada)",
+          ],
+          hint: "Kit de Sexagem: cliente escolhe a proporção. Kit Padronizado: proporção M/F definida pelo operador.",
+        },
+      ],
+    },
+
+    // ── 3. Proporção M/F — condicional: Kit Padronizado ──────────
+    {
+      id: "proporcao_kit",
+      title: "Proporção Macho / Fêmea no Kit",
+      description: "Defina a alocação pré-determinada de machos e fêmeas no kit padrão.",
+      condition: {
+        field_equals: {
+          key: "modelo_venda",
+          value: "Kit Padronizado (Proporção M/F Pré-determinada)",
+        },
+      },
+      fields: [
+        {
+          key: "pct_machos_predeterminado",
+          label: "% de Machos Alocados no Kit",
+          type: "number",
+          required: false,
+          min: 0,
+          max: 100,
+          placeholder: "Ex.: 30",
+          hint: "Percentual de embriões machos por kit padrão.",
+        },
+        {
+          key: "pct_femeas_predeterminado",
+          label: "% de Fêmeas Alocadas no Kit",
+          type: "number",
+          required: false,
+          min: 0,
+          max: 100,
+          placeholder: "Ex.: 70",
+          hint: "Percentual de embriões fêmeas por kit padrão. Deve somar 100% com machos.",
+        },
+      ],
+    },
+
+    // ── 4. Exportação ─────────────────────────────────────────────
+    {
+      id: "exportacao",
+      title: "Exportação",
+      description: "Preenchimento obrigatório para operações com receita em dólar.",
+      fields: [
+        {
+          key: "embrioes_exportados_mes",
+          label: "Embriões convencionais exportados / mês (média)",
+          type: "number",
+          required: false,
+          min: 0,
+          placeholder: "Ex.: 12",
+        },
+        {
+          key: "paises_destino",
+          label: "Países de destino principais",
+          type: "text",
+          required: false,
+          placeholder: "Ex.: EUA, Colômbia, Uruguai, Paraguai",
+        },
+        {
+          key: "certificacoes_exportacao",
+          label: "Certificações para exportação",
+          type: "text",
+          required: false,
+          placeholder: "Ex.: USDA, MAPA/SDA, livre de aftosa",
+        },
+      ],
+    },
+
+    // ── 5. IGG Select — Embriões Sexados ──────────────────────────
+    {
+      id: "igg_select",
+      title: "IGG Select — Embriões Sexados",
+      description: "Produto separado do embrião convencional. Preencha se a operação comercializa sexagem bovina.",
+      fields: [
+        {
+          key: "embrioes_igg_select_mes",
+          label: "Embriões IGG Select produzidos / mês",
+          type: "number",
+          required: false,
+          min: 0,
+          placeholder: "Ex.: 20",
+          hint: "Quantidade mensal de embriões sexados. Informar separado da produção convencional.",
+        },
+        {
+          key: "embrioes_igg_select_exportados_mes",
+          label: "Dos IGG Select, quantos são exportados / mês",
+          type: "number",
+          required: false,
+          min: 0,
+          placeholder: "Ex.: 8",
+        },
+      ],
+    },
+
+    // ── 6. Tabela de Preços ───────────────────────────────────────
+    {
+      id: "precificacao",
+      title: "Tabela de Preços",
+      description: "Valores médios praticados. Câmbio do dia será buscado automaticamente (BACEN PTAX).",
+      fields: [
+        {
+          key: "preco_embriao_nacional_brl",
+          label: "Preço médio embrião convencional — nacional (R$)",
+          type: "currency",
+          required: true,
+          min: 0,
+          placeholder: "Ex.: 3.500",
+          hint: "Benchmark de mercado: R$ 4.500 (ABCZ 2024). Insira o valor praticado pelo ativo.",
+        },
+        {
+          key: "preco_embriao_exportacao_usd",
+          label: "Preço médio embrião convencional — exportação (USD)",
+          type: "currency_usd",
+          required: false,
+          min: 0,
+          placeholder: "Ex.: 850",
+          hint: "Benchmark de mercado: USD 850 (ABCZ 2024). Câmbio será capturado automaticamente.",
+        },
+        {
+          key: "preco_igg_select_nacional_brl",
+          label: "Preço médio embrião IGG Select — nacional (R$)",
+          type: "currency",
+          required: false,
+          min: 0,
+          placeholder: "Ex.: 8.500",
+          hint: "Embrião sexado nacional. Tipicamente 1,8–2,5× o preço do embrião convencional.",
+        },
+        {
+          key: "preco_igg_select_exportacao_usd",
+          label: "Preço médio embrião IGG Select — exportação (USD)",
+          type: "currency_usd",
+          required: false,
+          min: 0,
+          placeholder: "Ex.: 1.600",
+          hint: "Embrião sexado para exportação. Câmbio capturado automaticamente (BACEN PTAX).",
+        },
+        {
+          key: "preco_semen_dose_brl",
+          label: "Preço dose de sêmen (R$) — se aplicável",
+          type: "currency",
+          required: false,
+          min: 0,
+          placeholder: "Ex.: 180",
+        },
+      ],
+    },
+
+    // ── 7. Estrutura de Custos Operacionais ──────────────────────
+    {
+      id: "custos",
+      title: "Estrutura de Custos Operacionais",
+      fields: [
+        {
+          key: "custo_pessoal_mes_brl",
+          label: "Custo com pessoal / mês (R$)",
+          type: "currency",
+          required: false,
+          placeholder: "Ex.: 45.000",
+        },
+        {
+          key: "custo_insumos_mes_brl",
+          label: "Insumos (hormônios, material bio) / mês (R$)",
+          type: "currency",
+          required: false,
+          placeholder: "Ex.: 28.000",
+        },
+        {
+          key: "custo_veterinario_mes_brl",
+          label: "Honorários veterinários / mês (R$)",
+          type: "currency",
+          required: false,
+          placeholder: "Ex.: 12.000",
+        },
+        {
+          key: "custo_importado_usd_mes",
+          label: "Custos denominados em USD / mês (USD)",
+          type: "currency_usd",
+          required: false,
+          min: 0,
+          placeholder: "Ex.: 2.500",
+          hint: "Insumos ou equipamentos importados pagos em dólar — usado no cálculo de hedge natural.",
+        },
+        {
+          key: "capex_expansao_brl",
+          label: "Capex de expansão previsto (R$)",
+          type: "currency",
+          required: false,
+          placeholder: "Ex.: 350.000",
+          hint: "Investimentos planejados nos próximos 24 meses.",
+        },
+      ],
+    },
+
+    // ── 8. Custos de Produto e Ecossistema (novo) ─────────────────
+    {
+      id: "custos_ecossistema",
+      title: "Estrutura de Custos — Produto e Ecossistema",
+      description: "Custos unitários por embrião e comissionamento do canal de vendas via veterinário.",
+      fields: [
+        {
+          key: "custo_embriao_sem_sexagem",
+          label: "Custo Unitário do Embrião Sem Sexagem (R$)",
+          type: "currency",
+          required: true,
+          min: 0,
+          placeholder: "Ex.: 1.200",
+          hint: "Custo direto de produção por embrião convencional (insumos + mão de obra técnica).",
+        },
+        {
+          key: "custo_embriao_sexado",
+          label: "Custo Unitário do Embrião Sexado — IGG Select (R$)",
+          type: "currency",
+          required: true,
+          min: 0,
+          placeholder: "Ex.: 2.800",
+          hint: "Custo direto de produção por embrião sexado, incluindo tecnologia de sexagem.",
+        },
+        {
+          key: "margem_custo_marketing_pct",
+          label: "Margem de Custo de Marketing / Ecossistema (%)",
+          type: "percentage",
+          required: true,
+          min: 0,
+          max: 100,
+          placeholder: "Ex.: 8",
+          hint: "Percentual da receita alocado para marketing, distribuição e suporte ao ecossistema de vendas.",
+        },
+        {
+          key: "comissao_fixa_veterinario",
+          label: "Comissão Fixa por Embrião Vendido — Veterinário Indique/Insemine (R$)",
+          type: "currency",
+          required: true,
+          min: 0,
+          placeholder: "Ex.: 15",
+          hint: "Valor sugerido entre R$ 10,00 e R$ 25,00 por embrião vendido via canal veterinário.",
+        },
+      ],
+    },
+
+    // ── 9. Referências de Mercado ─────────────────────────────────
+    {
+      id: "referencias_mercado",
+      title: "Referências de Mercado",
+      description: "Valores pré-preenchidos com benchmarks ABCZ/Embrapa 2024. Edite somente se possuir dados mais recentes.",
+      fields: [
+        {
+          key: "crescimento_mercado_pct_aa",
+          label: "Crescimento do mercado de embriões (%/ano)",
+          type: "percentage",
+          required: false,
+          min: -50,
+          max: 100,
+          placeholder: "12",
+          hint: "Benchmark: 12%/ano (ABCZ 2024).",
+        },
+      ],
+    },
+
+    // ── 10. Módulo Startup (condicional: tag = startup) ───────────
+    {
+      id: "startup_metrics",
+      title: "Métricas de Startup",
+      description: "Preencha se a empresa operar no modelo startup (MRR recorrente, captação ativa).",
+      condition: { tag: "startup" },
+      fields: [
+        {
+          key: "mrr_atual_brl",
+          label: "MRR atual — receita mensal recorrente (R$)",
+          type: "currency",
+          required: false,
+          placeholder: "Ex.: 85.000",
+        },
+        {
+          key: "runway_meses",
+          label: "Runway atual (meses)",
+          type: "number",
+          required: false,
+          min: 0,
+          placeholder: "Ex.: 18",
+          hint: "Quantos meses de operação o caixa atual sustenta.",
+        },
+        {
+          key: "cac_brl",
+          label: "CAC — custo de aquisição de cliente (R$)",
+          type: "currency",
+          required: false,
+          placeholder: "Ex.: 4.200",
+        },
+        {
+          key: "ltv_brl",
+          label: "LTV — valor do tempo de vida do cliente (R$)",
+          type: "currency",
+          required: false,
+          placeholder: "Ex.: 32.000",
+        },
+        {
+          key: "churn_mensal_pct",
+          label: "Churn mensal (%)",
+          type: "percentage",
+          required: false,
+          min: 0,
+          max: 100,
+          placeholder: "Ex.: 2.5",
+        },
+      ],
+    },
+  ],
+};

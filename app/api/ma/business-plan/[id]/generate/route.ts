@@ -4,6 +4,7 @@ import { createClient as sc } from "@supabase/supabase-js";
 import { BUSINESS_PLAN_GENERATE_ROLES } from "@/lib/ma/business-plan-roles";
 import { getSchemaDefinition, resolveSchemaForSector } from "@/lib/ma/business-plan-schemas/registry";
 import { generateBusinessPlan, BusinessPlanGenerationError } from "@/lib/ma/business-plan-engine/generate";
+import { enrichREProjections } from "@/lib/ma/business-plan-engine/enrich";
 
 export const maxDuration = 60;
 
@@ -26,8 +27,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
+  const url = new URL(req.url);
+  const mode = url.searchParams.get("mode"); // "model3s" = análise 3-Statement sem persistência
   const body = (await req.json().catch(() => ({}))) as { force_regenerate?: boolean };
-  const forceRegenerate = body.force_regenerate === true;
+  const forceRegenerate = body.force_regenerate === true || mode === "model3s";
 
   const { data: deal, error } = await svc()
     .from("ma_deals")
@@ -80,13 +83,19 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const generatedBy = profile?.full_name ?? profile?.email ?? user.id;
 
+  // No modo 3-Statement: enriquecer o payload com DRE/DFC/Indicadores derivados
+  const projectionsForEngine =
+    mode === "model3s"
+      ? (enrichREProjections(validation.data as unknown as Parameters<typeof enrichREProjections>[0]) as unknown as Record<string, unknown>)
+      : (validation.data as unknown as Record<string, unknown>);
+
   let plan;
   try {
     plan = await generateBusinessPlan({
       sector: deal.sector ?? "",
       schemaId,
       dealReference: deal.code ?? deal.id,
-      financialProjections: validation.data as unknown as Record<string, unknown>,
+      financialProjections: projectionsForEngine,
       generatedBy,
     });
   } catch (err) {
@@ -95,6 +104,27 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       return NextResponse.json({ error: err.code, message: err.message }, { status });
     }
     return NextResponse.json({ error: "generation_failed" }, { status: 500 });
+  }
+
+  // Modo 3-Statement: retornar análise sem persistir (exercício de modelagem)
+  if (mode === "model3s") {
+    const cachedPlan = assetData.business_plan as { claim_trace?: unknown[] } | undefined;
+    return NextResponse.json({
+      success: true,
+      cached: false,
+      enriched: true,
+      deal_id: deal.id,
+      schema_id: schemaId,
+      business_plan: plan,
+      comparison: {
+        original_sections: cachedPlan
+          ? (cachedPlan as { narrative_sections?: unknown[] }).narrative_sections?.length ?? 0
+          : 0,
+        enriched_sections: plan.narrative_sections.length,
+        original_claims: cachedPlan?.claim_trace?.length ?? 0,
+        enriched_claims: plan.claim_trace.length,
+      },
+    });
   }
 
   const newAssetData = { ...assetData, business_plan: plan };

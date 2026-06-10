@@ -1,4 +1,5 @@
 import { realEstateSchemaV1 } from "./real-estate-v1";
+import { agronegocioV1Schema } from "./agronegocio-v1";
 
 export type SectorSchemaId =
   | "real-estate-v1"
@@ -40,7 +41,7 @@ export function resolveSchemaForSector(sector: string | null): SectorSchemaId | 
 
 export const SCHEMA_REGISTRY: Record<SectorSchemaId, SectorSchemaDefinition | null> = {
   "real-estate-v1": realEstateSchemaV1,
-  "agronegocio-v1": null,
+  "agronegocio-v1": agronegocioV1Schema,
   "energia-v1": null,
   "mineracao-v1": null,
   "credito-v1": null,

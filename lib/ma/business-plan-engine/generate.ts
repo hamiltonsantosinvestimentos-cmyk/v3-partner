@@ -1,5 +1,9 @@
 import { createHash } from "crypto";
 import type { SectorSchemaId } from "@/lib/ma/business-plan-schemas/registry";
+import {
+  AGRONEGOCIO_SYSTEM_PROMPT,
+  AGRONEGOCIO_RESPONSE_SCHEMA,
+} from "./prompts/agronegocio-v1";
 
 const BUSINESS_PLAN_MODEL = "claude-haiku-4-5-20251001"; // ADR-001: payload <800 tokens, sem PDFs
 const BUSINESS_PLAN_MAX_TOKENS = 4096; // ADR-003 default global
@@ -49,8 +53,11 @@ const RESPONSE_JSON_SCHEMA = `{
     { "title": "<título da seção>", "body": "<corpo em markdown, 1-3 parágrafos>" }
   ],
   "claim_trace": [
-    { "claim": "<frase com a afirmação numérica>", "source_path": "financial_projections.scenarios.base.valuation", "source_value": 355000000 },
-    { "claim": "<outro exemplo com item de array>", "source_path": "financial_projections.receita.0.valor", "source_value": 17056840.86 }
+    { "claim": "<valuation base>", "source_path": "financial_projections.scenarios.base.valuation", "source_value": 355000000 },
+    { "claim": "<receita realizada ano 0>", "source_path": "financial_projections.receita.0.valor", "source_value": 17056840.86 },
+    { "claim": "<ebitda projetado ano 0 — se dre_projetada presente>", "source_path": "financial_projections.dre_projetada.0.ebitda", "source_value": 7586361 },
+    { "claim": "<fluxo livre ano 0 — se dfc_projetada presente>", "source_path": "financial_projections.dfc_projetada.0.fluxo_caixa_livre", "source_value": 6904087 },
+    { "claim": "<TIR do investimento — se indicadores presente>", "source_path": "financial_projections.indicadores.irr", "source_value": 0.082 }
   ]
 }`;
 
@@ -131,10 +138,14 @@ export async function generateBusinessPlan(params: {
     financialProjections: params.financialProjections,
   });
 
+  const isAgronegocio = params.schemaId === "agronegocio-v1";
+  const activeSystemPrompt = isAgronegocio ? AGRONEGOCIO_SYSTEM_PROMPT : SYSTEM_PROMPT;
+  const activeResponseSchema = isAgronegocio ? AGRONEGOCIO_RESPONSE_SCHEMA : RESPONSE_JSON_SCHEMA;
+
   const userPrompt =
     `Gere o business plan narrativo para o ativo abaixo, com base EXCLUSIVAMENTE nos dados fornecidos.\n\n` +
     `Payload:\n${JSON.stringify(sanitizedPayload, null, 2)}\n\n` +
-    `Responda APENAS com JSON válido, sem markdown, no formato:\n${RESPONSE_JSON_SCHEMA}`;
+    `Responda APENAS com JSON válido, sem markdown, no formato:\n${activeResponseSchema}`;
 
   const { default: Anthropic } = await import("@anthropic-ai/sdk");
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
@@ -144,7 +155,7 @@ export async function generateBusinessPlan(params: {
     const msg = await client.messages.create({
       model: BUSINESS_PLAN_MODEL,
       max_tokens: BUSINESS_PLAN_MAX_TOKENS,
-      system: [{ type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } }],
+      system: [{ type: "text", text: activeSystemPrompt, cache_control: { type: "ephemeral" } }],
       messages: [{ role: "user", content: userPrompt }],
     });
     raw = (msg.content[0] as { text: string }).text

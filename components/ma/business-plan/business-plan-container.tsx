@@ -6,9 +6,11 @@ import { EmptyState } from "./empty-state";
 import { IncompleteDataState } from "./incomplete-data-state";
 import { UnsupportedSectorState } from "./unsupported-sector-state";
 import { RealEstatePanel } from "./panels/real-estate-panel";
+import { AgronegocionPanel } from "./panels/agronegocio-panel";
 import { canGenerateBusinessPlan } from "@/lib/ma/business-plan-roles";
 import type { GeneratedPlan } from "@/lib/ma/business-plan-engine/generate";
 import type { RealEstateFinancialProjections } from "@/lib/ma/business-plan-schemas/real-estate-v1";
+import type { AgronegocioFinancialProjections } from "@/lib/ma/business-plan-schemas/agronegocio-v1";
 
 const C = { nc: "#162744", nm: "#243A66", go: "#C9A84C", mu: "#9BAFC5" };
 
@@ -115,10 +117,21 @@ export function BusinessPlanContainer({ dealId, sector, dealCode, userRole }: Pr
   }
 
   if (data.schema_id === "real-estate-v1") {
-    const assetData = data.business_plan as GeneratedPlan;
     return (
       <RealEstatePanelLoader
-        plan={assetData}
+        plan={data.business_plan as GeneratedPlan}
+        dealId={dealId}
+        dealCode={data.deal_code ?? dealCode}
+        canGenerate={canGenerate}
+        onRegenerate={handleRegenerate}
+      />
+    );
+  }
+
+  if (data.schema_id === "agronegocio-v1") {
+    return (
+      <AgronegocionPanelLoader
+        plan={data.business_plan as GeneratedPlan}
         dealId={dealId}
         dealCode={data.deal_code ?? dealCode}
         canGenerate={canGenerate}
@@ -175,6 +188,57 @@ function RealEstatePanelLoader({
 
   return (
     <RealEstatePanel
+      plan={plan}
+      dealId={dealId}
+      dealCode={dealCode}
+      financialProjections={projections}
+      canGenerate={canGenerate}
+      onRegenerate={onRegenerate}
+    />
+  );
+}
+
+function AgronegocionPanelLoader({
+  plan,
+  dealId,
+  dealCode,
+  canGenerate,
+  onRegenerate,
+}: {
+  plan: GeneratedPlan;
+  dealId: string;
+  dealCode?: string;
+  canGenerate: boolean;
+  onRegenerate: () => Promise<void>;
+}) {
+  const [projections, setProjections] = useState<AgronegocioFinancialProjections | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      const res = await fetch(`/api/ma/projections/${dealId}`);
+      const json = await res.json();
+      if (!cancelled) {
+        setProjections((json.projections ?? null) as AgronegocioFinancialProjections | null);
+        setLoading(false);
+      }
+    }
+    load();
+    return () => { cancelled = true; };
+  }, [dealId]);
+
+  if (loading) return <PanelSkeleton />;
+  if (!projections) {
+    return (
+      <div className="rounded-2xl border px-8 py-10 text-center text-xs" style={{ background: C.nc, borderColor: C.nm, color: C.mu }}>
+        Dados financeiros não encontrados para auditoria do plano.
+      </div>
+    );
+  }
+
+  return (
+    <AgronegocionPanel
       plan={plan}
       dealId={dealId}
       dealCode={dealCode}

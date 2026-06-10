@@ -1,9 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { ChevronDown, Loader2, RefreshCw, ShieldCheck } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { ChevronDown, Loader2, RefreshCw, ShieldCheck, FlaskConical } from "lucide-react";
 import type { GeneratedPlan } from "@/lib/ma/business-plan-engine/generate";
 import type { RealEstateFinancialProjections } from "@/lib/ma/business-plan-schemas/real-estate-v1";
+import type { DREEntry, DFCEntry, IndicadoresBase } from "@/types/financial";
+import { enrichREProjections } from "@/lib/ma/business-plan-engine/enrich";
+import {
+  ChartReceita, ChartNOI, ChartVacancia, ChartCenarios,
+  ChartDRE, ChartDFC,
+} from "@/components/ma/business-plan/charts/real-estate-charts";
 
 const C = {
   nb: "#13223A", nc: "#162744", nm: "#243A66",
@@ -26,6 +32,13 @@ function getByPath(source: Record<string, unknown>, path: string): unknown {
   }, source);
 }
 
+interface EnrichedComparison {
+  original_sections: number;
+  enriched_sections: number;
+  original_claims: number;
+  enriched_claims: number;
+}
+
 interface Props {
   plan: GeneratedPlan;
   dealCode?: string;
@@ -46,8 +59,16 @@ export function RealEstatePanel({
   const [auditOpen, setAuditOpen] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
   const [isStale, setIsStale] = useState(false);
+  const [modelando, setModelando] = useState(false);
+  const [enrichedPlan, setEnrichedPlan] = useState<GeneratedPlan | null>(null);
+  const [enrichedComparison, setEnrichedComparison] = useState<EnrichedComparison | null>(null);
 
   const sourcePayload = { financial_projections: financialProjections } as unknown as Record<string, unknown>;
+
+  const enrichedFP = useMemo(
+    () => (enrichedPlan ? enrichREProjections(financialProjections) : null),
+    [enrichedPlan, financialProjections]
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -71,6 +92,26 @@ export function RealEstatePanel({
     }
   }
 
+  async function handleModel3S() {
+    setModelando(true);
+    setEnrichedPlan(null);
+    setEnrichedComparison(null);
+    try {
+      const res = await fetch(
+        `/api/ma/business-plan/${dealId}/generate?mode=model3s`,
+        { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }
+      );
+      if (!res.ok) return;
+      const json = await res.json();
+      if (json.business_plan) {
+        setEnrichedPlan(json.business_plan as GeneratedPlan);
+        setEnrichedComparison(json.comparison ?? null);
+      }
+    } finally {
+      setModelando(false);
+    }
+  }
+
   const kpis: { label: string; claimSourcePath: string; format: (v: unknown) => string }[] = [
     { label: "Valuation Base", claimSourcePath: "financial_projections.scenarios.base.valuation", format: fmtBRL },
     { label: "NOI Anual Base", claimSourcePath: "financial_projections.scenarios.base.noi_anual", format: fmtBRL },
@@ -89,15 +130,26 @@ export function RealEstatePanel({
           </p>
         </div>
         {canGenerate && (
-          <button
-            onClick={handleRegenerate}
-            disabled={regenerating}
-            className="flex items-center gap-2 rounded-lg border px-4 py-2 text-[10px] font-bold uppercase tracking-widest disabled:opacity-50"
-            style={{ borderColor: C.go, color: C.gl }}
-          >
-            {regenerating ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
-            Regenerar
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleModel3S}
+              disabled={modelando || regenerating}
+              className="flex items-center gap-2 rounded-lg border px-4 py-2 text-[10px] font-bold uppercase tracking-widest disabled:opacity-50"
+              style={{ borderColor: "#6366F1", color: "#a5b4fc" }}
+            >
+              {modelando ? <Loader2 size={12} className="animate-spin" /> : <FlaskConical size={12} />}
+              Modelo 3-Statement
+            </button>
+            <button
+              onClick={handleRegenerate}
+              disabled={regenerating || modelando}
+              className="flex items-center gap-2 rounded-lg border px-4 py-2 text-[10px] font-bold uppercase tracking-widest disabled:opacity-50"
+              style={{ borderColor: C.go, color: C.gl }}
+            >
+              {regenerating ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
+              Regenerar
+            </button>
+          </div>
         )}
       </div>
 
@@ -125,6 +177,14 @@ export function RealEstatePanel({
         })}
       </div>
 
+      {/* ── Gráficos operacionais permanentes ── */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <ChartReceita fp={financialProjections} />
+        <ChartNOI fp={financialProjections} />
+        <ChartVacancia fp={financialProjections} />
+        <ChartCenarios fp={financialProjections} />
+      </div>
+
       <div className="flex flex-col gap-4">
         {plan.narrative_sections.map((section, i) => (
           <div key={i} className="rounded-xl border px-5 py-4" style={{ background: C.nb, borderColor: C.nm }}>
@@ -139,6 +199,77 @@ export function RealEstatePanel({
           </div>
         ))}
       </div>
+
+      {/* ── Modelo 3-Statement (preview — não salvo) ── */}
+      {enrichedPlan && (
+        <div className="flex flex-col gap-4 rounded-xl border-2 px-5 py-4" style={{ borderColor: "#6366F1", background: "rgba(99,102,241,.06)" }}>
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#a5b4fc" }}>
+                Modelo 3-Statement · PREVIEW — não salvo
+              </p>
+              {enrichedComparison && (
+                <p className="mt-0.5 text-[9px]" style={{ color: C.mu }}>
+                  Seções: {enrichedComparison.original_sections} → {enrichedComparison.enriched_sections} ·
+                  Claims: {enrichedComparison.original_claims} → {enrichedComparison.enriched_claims}
+                </p>
+              )}
+            </div>
+            <button
+              onClick={() => { setEnrichedPlan(null); setEnrichedComparison(null); }}
+              className="text-[9px] font-bold uppercase tracking-widest px-3 py-1 rounded border"
+              style={{ borderColor: "#6366F1", color: "#a5b4fc" }}
+            >
+              Fechar
+            </button>
+          </div>
+
+          {/* Indicadores IRR / Payback / WCC */}
+          {(enrichedPlan as GeneratedPlan & { _enriched_payload?: { indicadores?: IndicadoresBase } })._enriched_payload?.indicadores && (() => {
+            const ind = (enrichedPlan as GeneratedPlan & { _enriched_payload?: { indicadores?: IndicadoresBase } })._enriched_payload!.indicadores!;
+            return (
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                {[
+                  { label: "TIR (IRR) — 10 anos", value: `${(ind.irr * 100).toFixed(1)}% a.a.` },
+                  { label: "Payback Nominal", value: `${ind.payback_nominal} anos` },
+                  { label: "Ciclo de Capital de Giro", value: `${ind.working_capital_cycle_days} dias` },
+                ].map((item) => (
+                  <div key={item.label} className="rounded-lg border px-3 py-2" style={{ borderColor: "#6366F1" }}>
+                    <p className="text-[9px] font-bold uppercase tracking-widest" style={{ color: "#a5b4fc" }}>{item.label}</p>
+                    <p className="mt-1 text-base font-bold" style={{ color: C.cr }}>{item.value}</p>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
+
+          {/* Narrativa enriquecida */}
+          <div className="flex flex-col gap-3">
+            {enrichedPlan.narrative_sections.map((section, i) => (
+              <div key={i} className="rounded-lg border px-4 py-3" style={{ background: C.nb, borderColor: "#4338ca" }}>
+                <h4 className="text-xs font-bold uppercase tracking-widest" style={{ color: "#a5b4fc" }}>{section.title}</h4>
+                <div className="mt-2 flex flex-col gap-2 text-xs leading-relaxed" style={{ color: C.mu }}>
+                  {section.body.split(/\n{2,}/).map((para, j) => <p key={j}>{para}</p>)}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Gráficos 3-Statement */}
+          {enrichedFP && (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <ChartDRE dre={enrichedFP.dre_projetada} />
+              <ChartDFC dfc={enrichedFP.dfc_projetada} />
+            </div>
+          )}
+
+          {/* Auditoria enriquecida */}
+          <p className="text-[9px] font-mono" style={{ color: C.mu }}>
+            <ShieldCheck size={10} className="inline mr-1" style={{ color: "#6366F1" }} />
+            {enrichedPlan.claim_trace.length} afirmações rastreadas · dados derivados matematicamente dos dados operacionais
+          </p>
+        </div>
+      )}
 
       {financialProjections.scenarios && Object.keys(financialProjections.scenarios).length > 0 && (
         <div className="rounded-xl border px-5 py-4" style={{ background: C.nc, borderColor: C.nm }}>
