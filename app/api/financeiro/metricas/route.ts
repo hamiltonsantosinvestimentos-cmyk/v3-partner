@@ -114,7 +114,7 @@ export async function GET() {
     const nomeMes = d.toLocaleString("pt-BR", { month: "short" });
     const dTime = d.getTime();
     const fimTime = fim.getTime();
-    let countPartner = 0, countPro = 0, novosNoMes = 0;
+    let countStarter = 0, countPartner = 0, countPro = 0, countEnterprise = 0, novosNoMes = 0;
     for (const p of partners) {
       const criadoTime = new Date(p.created_at).getTime();
       if (criadoTime >= dTime && criadoTime <= fimTime) novosNoMes++;
@@ -122,15 +122,15 @@ export async function GET() {
       if (!p.is_active && i > 0) continue;
       const expTime = p.trial_expires_at ? new Date(p.trial_expires_at).getTime() : Infinity;
       if (expTime < dTime) continue;
-      if (p.role === "STARTER") countPartner++;
+      if (p.role === "STARTER") countStarter++;
       else if (p.role === "PARTNER") countPartner++;
       else if (p.role === "PARTNER_PRO") countPro++;
-      else if (p.role === "ENTERPRISE") countPro++;
+      else if (p.role === "ENTERPRISE") countEnterprise++;
     }
     serie.push({
       mes: nomeMes,
-      mrr: countPartner * PRECO_PARTNER + countPro * PRECO_PRO,
-      partners: countPartner + countPro,
+      mrr: countStarter * PRECO_STARTER + countPartner * PRECO_PARTNER + countPro * PRECO_PRO + countEnterprise * PRECO_ENTERPRISE,
+      partners: countStarter + countPartner + countPro + countEnterprise,
       novos: novosNoMes,
     });
   }
@@ -208,8 +208,10 @@ export async function GET() {
     crescimentoTicketM,
     novosEsteMes,
     totalAtivos: ativos.length,
+    ativosStarter,
     ativosPartner,
     ativosPro,
+    ativosEnterprise,
     totalPartners: partners.length,
     ticketMedioMensal: Math.round(ticketMedioMensal * 100) / 100,
     ltv: Math.round(ltv),

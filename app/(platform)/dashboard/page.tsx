@@ -186,7 +186,7 @@ export default async function DashboardPage({
   if (["ADMIN", "GESTAO", "FINANCEIRO"].includes(role)) {
     try {
       const [partnersRes, comissoesRes] = await Promise.allSettled([
-        svc.from("profiles").select("id, role, trial_expires_at, created_at, is_active").in("role", ["PARTNER", "PARTNER_PRO"]),
+        svc.from("profiles").select("id, role, trial_expires_at, created_at, is_active").in("role", ["STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE"]),
         svc.from("commissions").select("commission_value, status").eq("status", "A_PAGAR"),
       ]);
 
@@ -210,10 +210,21 @@ export default async function DashboardPage({
         return dias >= 0 && dias <= 7;
       }).length;
 
+      const porPlano = {
+        STARTER:     ativos.filter((p: { role: string }) => p.role === "STARTER").length,
+        PARTNER:     ativos.filter((p: { role: string }) => p.role === "PARTNER").length,
+        PARTNER_PRO: ativos.filter((p: { role: string }) => p.role === "PARTNER_PRO").length,
+        ENTERPRISE:  ativos.filter((p: { role: string }) => p.role === "ENTERPRISE").length,
+      };
       redeHealth = {
         partnersAtivos: ativos.length,
-        partnersPRO: ativos.filter((p: { role: string }) => p.role === "PARTNER_PRO").length,
-        mrr: ativos.reduce((s: number, p: { role: string }) => s + (p.role === "PARTNER_PRO" ? 397 : 197), 0),
+        partnersPRO: porPlano.PARTNER_PRO,
+        porPlano,
+        mrr:
+          porPlano.STARTER     * 297  +
+          porPlano.PARTNER     * 497  +
+          porPlano.PARTNER_PRO * 897  +
+          porPlano.ENTERPRISE  * 2500,
         comissoesPendentes: comissoes.reduce((s: number, c: { commission_value: number }) => s + c.commission_value, 0),
         vencendo7d,
       };

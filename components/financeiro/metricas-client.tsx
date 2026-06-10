@@ -35,8 +35,10 @@ interface Metricas {
   crescimentoTicketM: number;
   novosEsteMes: number;
   totalAtivos: number;
+  ativosStarter: number;
   ativosPartner: number;
   ativosPro: number;
+  ativosEnterprise: number;
   totalPartners: number;
   ticketMedioMensal: number;
   ltv: number;
@@ -360,7 +362,7 @@ export function MetricasClient() {
         <MetricCard
           label="Partners Ativos"
           value={data.totalAtivos.toString()}
-          sub={`${data.ativosPartner} Partner · ${data.ativosPro} PRO`}
+          sub={`${data.ativosStarter} Starter · ${data.ativosPartner} Partner · ${data.ativosPro} PRO · ${data.ativosEnterprise} Enterprise`}
           icon={Users}
           color="#A78BFA"
           trend={data.crescimentoPartnersM}
@@ -505,8 +507,10 @@ export function MetricasClient() {
           <p className="text-sm font-semibold text-white mb-4">Composição da Base</p>
           <div className="space-y-4">
             {[
-              { label: "Partner (30%)", count: data.ativosPartner, color: "#60A5FA", pct: data.totalAtivos ? Math.round(data.ativosPartner / data.totalAtivos * 100) : 0 },
-              { label: "Partner PRO (50%)", count: data.ativosPro, color: GOLD, pct: data.totalAtivos ? Math.round(data.ativosPro / data.totalAtivos * 100) : 0 },
+              { label: "Starter — R$297/mês (20%)", count: data.ativosStarter, color: "#7A8FA8", pct: data.totalAtivos ? Math.round(data.ativosStarter / data.totalAtivos * 100) : 0 },
+              { label: "Partner — R$497/mês (30%)", count: data.ativosPartner, color: "#60A5FA", pct: data.totalAtivos ? Math.round(data.ativosPartner / data.totalAtivos * 100) : 0 },
+              { label: "Partner PRO — R$897/mês (50%)", count: data.ativosPro, color: GOLD, pct: data.totalAtivos ? Math.round(data.ativosPro / data.totalAtivos * 100) : 0 },
+              { label: "Enterprise — R$2.500/mês", count: data.ativosEnterprise, color: "#E8C97A", pct: data.totalAtivos ? Math.round(data.ativosEnterprise / data.totalAtivos * 100) : 0 },
               { label: "Total cadastros", count: data.totalPartners, color: "#A78BFA", pct: 100 },
               { label: "Taxa de ativos", count: data.totalPartners > 0 ? `${Math.round(data.totalAtivos / data.totalPartners * 100)}%` : "—", color: "#34D399", pct: data.totalPartners > 0 ? Math.round(data.totalAtivos / data.totalPartners * 100) : 0 },
             ].map(item => (
