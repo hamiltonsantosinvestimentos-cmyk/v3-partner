@@ -127,7 +127,6 @@ export function adaptGeneticaBovinaIntake(
   // ── Conventional embryo prices ────────────────────────────────
   const preco_nac_brl = data.preco_embriao_nacional_brl ?? 4500;
   const preco_exp_usd = data.preco_embriao_exportacao_usd ?? 850;
-  const preco_exp_brl = preco_exp_usd * fx.usd_brl;
 
   // ── IGG Select prices ─────────────────────────────────────────
   const preco_igg_nac_brl = data.preco_igg_select_nacional_brl ?? 0;
