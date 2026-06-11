@@ -30,8 +30,11 @@ const V3 = {
 
 async function launchBrowser() {
   if (process.env.NODE_ENV === "production") {
-    const chromium = await import("@sparticuz/chromium-min");
-    const puppeteer = await import("puppeteer-core");
+    // Variáveis evitam análise estática do Turbopack (resolvidas em runtime)
+    const chromiumPkg = "@sparticuz/chromium-min";
+    const puppeteerPkg = "puppeteer-core";
+    const chromium = await import(/* webpackIgnore: true */ chromiumPkg);
+    const puppeteer = await import(/* webpackIgnore: true */ puppeteerPkg);
     return puppeteer.default.launch({
       args: [...(chromium.default.args ?? []), "--no-sandbox", "--disable-setuid-sandbox"],
       defaultViewport: { width: 1240, height: 1754 },
@@ -201,7 +204,8 @@ export async function GET(request: NextRequest) {
     });
 
     // ── MERGE: pdf-lib une capa + conteúdo ───────────────────────────────
-    const { PDFDocument } = await import("pdf-lib");
+    const pdfLibPkg = "pdf-lib";
+    const { PDFDocument } = await import(/* webpackIgnore: true */ pdfLibPkg);
 
     const finalDoc   = await PDFDocument.create();
     const coverDoc   = await PDFDocument.load(coverPdf);

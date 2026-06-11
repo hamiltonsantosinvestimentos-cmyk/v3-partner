@@ -30,7 +30,7 @@ const nextConfig: NextConfig = {
     ignoreBuildErrors: false,
   },
   // Externaliza chromium/puppeteer do bundle webpack — necessário para Vercel serverless
-  serverExternalPackages: ["@sparticuz/chromium-min", "puppeteer-core"],
+  serverExternalPackages: ["@sparticuz/chromium-min", "puppeteer-core", "pdf-lib"],
   images: {
     imageSizes: [16, 32, 48, 64, 96, 100, 128, 256, 384],
     remotePatterns: [
