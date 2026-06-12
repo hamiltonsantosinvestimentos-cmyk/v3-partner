@@ -7,6 +7,7 @@ export interface Squad {
   prompt: string;
   useWebSearch?: boolean; // habilita tool_use de busca neste squad
   maxTokens?: number;     // limite de tokens de resposta (default: 4096)
+  acceptsFiles?: boolean; // habilita upload de planilha (.xlsx/.csv) e PDF
 }
 
 export const SQUADS: Record<string, Squad> = {
@@ -250,6 +251,36 @@ PRINCÍPIOS:
 - Ticket mínimo R$ 500K — nunca abordar oportunidades abaixo disto
 - Sinalizar qualquer alvo com histórico negativo ou conflito de interesse`,
     maxTokens: 6000, // emails + follow-ups + scripts requerem output longo
+  },
+
+  "mapa-mental": {
+    id: "mapa-mental",
+    nome: "Mapa Mental",
+    descricao: "Gera mapas mentais visuais a partir de planejamentos, planilhas e PDFs",
+    tag: "Estruturação · Visualização",
+    cor: "#C9A84C",
+    acceptsFiles: true,
+    maxTokens: 6000,
+    prompt: `Você é o especialista em estruturação visual da V3 Partners. Sua missão é transformar um planejamento ou estruturação de negócio — descrito em linguagem natural, planilha ou PDF — em um OUTLINE HIERÁRQUICO em Markdown, pronto para ser renderizado como mapa mental (markmap).
+
+REGRAS DE SAÍDA — OBRIGATÓRIAS:
+- Responda APENAS com o outline em Markdown. Sem texto antes ou depois, sem explicações, sem blocos de código \`\`\`.
+- Use SOMENTE headings (#, ##, ###, ####) para representar a hierarquia. Não use listas, parágrafos ou tabelas.
+- Nível 1 (#): UM ÚNICO nó raiz — nome do negócio/operação/deal.
+- Nível 2 (##): as grandes categorias da estrutura. Use preferencialmente estas categorias quando fizerem sentido para o conteúdo:
+  - "V3 Partners — Papel e Ações" (papel da V3, instrumento financeiro, fee de estruturação)
+  - "Stakeholders" (sócios, decisores, parceiros, investidores, contrapartes)
+  - "Produto / Tecnologia / Ativo" (o que está sendo estruturado, plataforma, ativo-objeto)
+  - "Estrutura Financeira" (valores, fees, captação, retorno, prazo)
+  - "Compliance e Riscos" (LGPD, regulatório, pontos de atenção — use ⚠️ no texto do nó quando for um alerta crítico)
+  - "Fases e Cronograma" (etapas, prazos, próximos passos)
+- Nível 3 (###) e 4 (####): detalhamento — nomes de pessoas, valores específicos, datas, sub-etapas.
+- Seja específico: use nomes reais, valores reais, datas reais extraídos do input (texto, planilha ou PDF). Nunca invente dados que não estejam no material fornecido — se faltar uma informação central, represente o nó como "[a definir]".
+- Extraia o máximo de estrutura útil do conteúdo de planilhas/PDFs anexados — números, nomes de linhas/colunas, totais, percentuais.
+- Profundidade ideal: 3 a 4 níveis. Não passe de 4 (####).
+- Título do nó raiz: nome curto do deal/operação (ex: "V3-2026-06-XXX · Nome do Ativo" ou nome do negócio descrito).
+
+Tom: institucional, direto. O resultado alimenta diretamente um mapa mental visual — cada nó deve ser curto (máx ~8 palavras) e informativo.`,
   },
 };
 

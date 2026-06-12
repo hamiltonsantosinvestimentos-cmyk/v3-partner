@@ -1,11 +1,11 @@
 "use client";
 
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import { Send, Plus, Bot, User, Copy, Check, Download, ChevronRight, Loader2, FileText, Briefcase } from "lucide-react";
+import { Send, Plus, Bot, User, Copy, Check, Download, ChevronRight, Loader2, FileText, Briefcase, Paperclip, X, ExternalLink } from "lucide-react";
 import { DealIntakeModal } from "@/components/hub/deal-intake-modal";
 import type { Squad } from "@/lib/squads";
 
-interface Message { role: "user" | "assistant"; content: string; ts?: string; }
+interface Message { role: "user" | "assistant"; content: string; ts?: string; html?: string; }
 interface Session { id: string; squad_id: string; title: string; updated_at: string; }
 
 interface Props {
@@ -36,8 +36,10 @@ export function AgentesClient({ squads, userName }: Props) {
   const [exportDone, setExportDone]       = useState(false);
   const [showDealModal, setShowDealModal] = useState(false);
   const [scoutPrefill, setScoutPrefill]   = useState<Record<string, string>>({});
+  const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Auto-scroll
   useEffect(() => {
@@ -63,6 +65,7 @@ export function AgentesClient({ squads, userName }: Props) {
     setMessages([]);
     setSessionId(null);
     setInput("");
+    setAttachedFiles([]);
     setSidebarOpen(false);
   }
 
@@ -84,6 +87,7 @@ export function AgentesClient({ squads, userName }: Props) {
     setMessages([]);
     setSessionId(null);
     setInput("");
+    setAttachedFiles([]);
   }
 
   // Send message
@@ -135,6 +139,66 @@ export function AgentesClient({ squads, userName }: Props) {
         content: "⚠️ Falha de conexão. Verifique sua internet e tente novamente.",
       }]);
     } finally {
+      setLoading(false);
+    }
+  }
+
+  // Abre o HTML do mapa mental em uma nova aba via Blob
+  function openMindmapHtml(html: string) {
+    const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    window.open(url, "_blank");
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  }
+
+  // Gerar Mapa Mental — texto + planilha/PDF anexados
+  async function generateMindmap() {
+    const text = input.trim();
+    if ((!text && attachedFiles.length === 0) || loading) return;
+
+    const fileNames = attachedFiles.map(f => f.name).join(", ");
+    const userMsg: Message = {
+      role: "user",
+      content: fileNames ? `${text}${text ? "\n\n" : ""}📎 ${fileNames}` : text,
+      ts: new Date().toISOString(),
+    };
+    setMessages(prev => [...prev, userMsg]);
+    setInput("");
+    setLoading(true);
+    if (textareaRef.current) textareaRef.current.style.height = "auto";
+
+    try {
+      const formData = new FormData();
+      formData.append("message", text);
+      if (sessionId) formData.append("session_id", sessionId);
+      attachedFiles.forEach(f => formData.append("files", f));
+
+      const res = await fetch("/api/agentes/mindmap", { method: "POST", body: formData });
+      const data = await res.json();
+
+      if (!res.ok) {
+        setMessages(prev => [...prev, {
+          role: "assistant",
+          content: `⚠️ Erro: ${data.error ?? "Falha ao gerar o mapa mental."}`,
+        }]);
+        return;
+      }
+
+      openMindmapHtml(data.html);
+
+      setMessages(prev => [...prev, {
+        role: "assistant",
+        content: `Mapa mental gerado: "${data.title}". Abri em uma nova aba — se o navegador bloqueou o pop-up, use o botão "Abrir Mapa Mental" abaixo.`,
+        html: data.html,
+        ts: new Date().toISOString(),
+      }]);
+    } catch {
+      setMessages(prev => [...prev, {
+        role: "assistant",
+        content: "⚠️ Falha de conexão. Verifique sua internet e tente novamente.",
+      }]);
+    } finally {
+      setAttachedFiles([]);
       setLoading(false);
     }
   }
@@ -395,8 +459,23 @@ IMPORTANTE:
     e.target.style.height = Math.min(e.target.scrollHeight, 160) + "px";
   }
 
+  function handleSend() {
+    if (activeSquad.acceptsFiles) generateMindmap();
+    else send();
+  }
+
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
-    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }
+  }
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const newFiles = Array.from(e.target.files ?? []);
+    setAttachedFiles(prev => [...prev, ...newFiles]);
+    e.target.value = "";
+  }
+
+  function removeAttachedFile(index: number) {
+    setAttachedFiles(prev => prev.filter((_, i) => i !== index));
   }
 
   return (
@@ -526,6 +605,7 @@ IMPORTANTE:
                   exportDone={exportDone}
                   onCreateDeal={activeSquad.id === "market-scout" && isLast ? openDealFromScout : undefined}
                   onSendToExecutor={activeSquad.id === "market-scout" && isLast ? sendToExecutor : undefined}
+                  onOpenMindmap={openMindmapHtml}
                 />
               );
             })
@@ -608,26 +688,68 @@ IMPORTANTE:
 
         {/* Input */}
         <div className="px-6 py-4 border-t border-[#243A66] bg-[#111F35] shrink-0">
+          {activeSquad.acceptsFiles && attachedFiles.length > 0 && (
+            <div className="flex flex-wrap gap-2 mb-2">
+              {attachedFiles.map((f, i) => (
+                <span
+                  key={i}
+                  className="flex items-center gap-1.5 text-[10px] text-[#C9A84C] bg-[#C9A84C]/10 border border-[#C9A84C]/30 rounded-full px-2.5 py-1"
+                >
+                  <FileText className="w-3 h-3" />
+                  {f.name}
+                  <button onClick={() => removeAttachedFile(i)} className="hover:text-[#F0ECE4] transition-colors">
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
           <div className="flex gap-3 items-end">
+            {activeSquad.acceptsFiles && (
+              <>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".pdf,.xlsx,.xls,.csv"
+                  multiple
+                  className="hidden"
+                  onChange={handleFileChange}
+                />
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  title="Anexar planilha (.xlsx/.csv) ou PDF"
+                  className="w-11 h-11 flex items-center justify-center bg-[#09081A] border border-[#243A66] hover:border-[#C9A84C] rounded-xl transition-colors shrink-0"
+                >
+                  <Paperclip className="w-4 h-4 text-[#7A8FA8]" />
+                </button>
+              </>
+            )}
             <textarea
               ref={textareaRef}
               value={input}
               onChange={handleInput}
               onKeyDown={handleKeyDown}
-              placeholder={`Pergunte ao ${activeSquad.nome}… (Enter para enviar, Shift+Enter para nova linha)`}
+              placeholder={
+                activeSquad.acceptsFiles
+                  ? "Descreva o planejamento de negócio ou anexe planilha/PDF… (Enter para enviar)"
+                  : `Pergunte ao ${activeSquad.nome}… (Enter para enviar, Shift+Enter para nova linha)`
+              }
               rows={1}
               className="flex-1 bg-[#09081A] border border-[#243A66] focus:border-[#C9A84C] rounded-xl px-4 py-3 text-sm text-[#F0ECE4] placeholder:text-[#7A8FA8] resize-none outline-none transition-colors leading-relaxed"
             />
             <button
-              onClick={send}
-              disabled={!input.trim() || loading}
+              onClick={handleSend}
+              disabled={(!input.trim() && attachedFiles.length === 0) || loading}
               className="w-11 h-11 flex items-center justify-center bg-[#C9A84C] hover:bg-[#E8C97A] disabled:opacity-40 disabled:cursor-not-allowed rounded-xl transition-colors shrink-0"
             >
               {loading ? <Loader2 className="w-4 h-4 text-[#09081A] animate-spin" /> : <Send className="w-4 h-4 text-[#09081A]" />}
             </button>
           </div>
           <p className="text-[#7A8FA8] text-[10px] mt-2 text-center">
-            Respostas geradas por IA · Valide informações críticas antes de agir · Sócio responsável: {activeSquad.id === "monitor-regulatorio" ? "Robson Lino" : "João Lemos"}
+            {activeSquad.acceptsFiles
+              ? "Mapas mentais gerados por IA · Pode levar até 30s · Revise antes de uso oficial · Anexos: .pdf, .xlsx, .xls, .csv (máx. 4MB)"
+              : <>Respostas geradas por IA · Valide informações críticas antes de agir · Sócio responsável: {activeSquad.id === "monitor-regulatorio" ? "Robson Lino" : "João Lemos"}</>
+            }
           </p>
         </div>
       </div>
@@ -672,6 +794,11 @@ function WelcomeScreen({ squad, onSuggest }: { squad: Squad; onSuggest: (t: stri
       "Mapeie os principais players do mercado de precatórios federais",
       "Analise o setor sucroalcooleiro: oportunidades e riscos para 2026/27",
     ],
+    "mapa-mental": [
+      "Estruture uma operação de SLB para um galpão logístico de R$ 8M: SPE, fee V3 de 6,5%, prazo de 18 meses",
+      "Anexe a planilha de projeção financeira de um deal e gere o mapa mental da estrutura completa",
+      "Mapeie a estrutura de uma securitização CRI: stakeholders, instrumento, fases e pontos de compliance",
+    ],
   };
 
   const sugestoes = SUGESTOES[squad.id] ?? [];
@@ -683,6 +810,13 @@ function WelcomeScreen({ squad, onSuggest }: { squad: Squad; onSuggest: (t: stri
       </div>
       <h2 className="text-[#F0ECE4] text-xl font-bold mb-1">{squad.nome}</h2>
       <p className="text-[#7A8FA8] text-sm mb-8 max-w-sm">{squad.descricao}</p>
+
+      {squad.acceptsFiles && (
+        <div className="flex items-center gap-2 text-[10px] text-[#C9A84C] bg-[#C9A84C]/10 border border-[#C9A84C]/30 rounded-full px-3 py-1.5 mb-6">
+          <Paperclip className="w-3 h-3" />
+          Aceita anexos: planilhas (.xlsx, .csv) e PDFs — use o clipe ao lado do campo de mensagem
+        </div>
+      )}
 
       {sugestoes.length > 0 && (
         <div className="w-full max-w-lg space-y-2">
@@ -702,11 +836,11 @@ function WelcomeScreen({ squad, onSuggest }: { squad: Squad; onSuggest: (t: stri
   );
 }
 
-function MessageBubble({ msg, squad, userName, copied, onCopy, copyId, isLastAssistant, onExport, exporting, exportDone, onCreateDeal, onSendToExecutor }: {
+function MessageBubble({ msg, squad, userName, copied, onCopy, copyId, isLastAssistant, onExport, exporting, exportDone, onCreateDeal, onSendToExecutor, onOpenMindmap }: {
   msg: Message; squad: Squad; userName: string;
   copied: string | null; onCopy: (c: string) => void; copyId: string;
   isLastAssistant?: boolean; onExport?: () => void; exporting?: boolean; exportDone?: boolean;
-  onCreateDeal?: () => void; onSendToExecutor?: () => void;
+  onCreateDeal?: () => void; onSendToExecutor?: () => void; onOpenMindmap?: (html: string) => void;
 }) {
   const isUser = msg.role === "user";
 
@@ -786,6 +920,17 @@ function MessageBubble({ msg, squad, userName, copied, onCopy, copyId, isLastAss
                 Gerar Plano de Ação
               </button>
             )}
+
+            {/* Botão Abrir Mapa Mental — reabre o HTML gerado em nova aba */}
+            {msg.html && onOpenMindmap && (
+              <button
+                onClick={() => onOpenMindmap(msg.html!)}
+                className="flex items-center gap-1.5 text-[10px] font-semibold px-3 py-1.5 rounded-lg transition-all bg-[#C9A84C] hover:bg-[#E8C97A] text-[#09081A]"
+              >
+                <ExternalLink className="w-3 h-3" />
+                Abrir Mapa Mental
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -795,6 +940,7 @@ function MessageBubble({ msg, squad, userName, copied, onCopy, copyId, isLastAss
 
 function ThinkingIndicator({ squad }: { squad: Squad }) {
   const isScout = squad.id === "market-scout";
+  const isMindmap = squad.id === "mapa-mental";
   return (
     <div className="flex gap-3">
       <div className="w-8 h-8 rounded-full bg-[#C9A84C]/20 flex items-center justify-center shrink-0">
@@ -803,7 +949,7 @@ function ThinkingIndicator({ squad }: { squad: Squad }) {
       <div className="bg-[#111F35] border border-[#243A66] rounded-2xl rounded-tl-sm px-4 py-3">
         <div className="flex gap-1 items-center">
           <span className="text-[#7A8FA8] text-xs">
-            {isScout ? "Market Scout mapeando mandatários" : `${squad.nome} está pensando`}
+            {isScout ? "Market Scout mapeando mandatários" : isMindmap ? "Mapa Mental estruturando o outline" : `${squad.nome} está pensando`}
           </span>
           <span className="flex gap-0.5">
             {[0,1,2].map(i => (
@@ -815,6 +961,11 @@ function ThinkingIndicator({ squad }: { squad: Squad }) {
         {isScout && (
           <p className="text-[#7A8FA8] text-[10px] mt-1">
             Pesquisando Buyer Side + Seller Side · Pode levar até 30s
+          </p>
+        )}
+        {isMindmap && (
+          <p className="text-[#7A8FA8] text-[10px] mt-1">
+            Lendo planejamento e anexos · Gerando estrutura visual · Pode levar até 30s
           </p>
         )}
       </div>
