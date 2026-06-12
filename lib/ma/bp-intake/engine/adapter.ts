@@ -3,8 +3,8 @@
 // FX snapshot must be passed in — never fetched here (pure-function contract).
 
 import type { FxSnapshot } from "./fx-service";
-import type { HedgeAnalysis } from "./hedge-calculator";
-import { calcularHedge } from "./hedge-calculator";
+import type { HedgeAnalysis, BgiViabilidadeResult } from "./hedge-calculator";
+import { calcularHedge, calcularViabilidadeBGI } from "./hedge-calculator";
 
 // ── Output types ──────────────────────────────────────────────────────────────
 
@@ -34,6 +34,7 @@ export interface AgronegocioProjections {
   horizon_years: number;
   fx_snapshot: FxSnapshot;
   hedge_analysis: HedgeAnalysis | null;
+  viabilidade_bgi?: BgiViabilidadeResult;
   anos: AgronegocioProjectionYear[];
   receita: Array<{ ano: number; tipo: string; valor: number }>;
   scenarios: {
@@ -54,6 +55,8 @@ export interface AgronegocioProjections {
     custo_unitario_igg_select_brl?: number;
     margem_custo_marketing_pct?: number;
     comissao_fixa_veterinario_brl?: number;
+    preco_arroba_boi_gordo_rs?: number;
+    custo_embriao_em_arrobas?: number;
   };
   benchmarks_aplicados: Record<string, number>;
 }
@@ -105,6 +108,11 @@ export interface GeneticaBovinaIntakeData {
   benchmark_crescimento_pessimista_pct?: number;
   benchmark_hedge_custo_ndf_pct?: number;
   benchmark_hedge_custo_opcao_pct?: number;
+  // B3 BGI — indicador CEPEA/B3 SP (R$/@), referência de liquidação do contrato futuro
+  benchmark_preco_arroba_boi_gordo_rs?: number;
+  // Preços de referência de mercado (fallback quando o formulário não informa)
+  benchmark_preco_medio_embriao_dom_brl?: number;
+  benchmark_preco_medio_embriao_exp_usd?: number;
 }
 
 const HORIZON = 10;
@@ -125,8 +133,10 @@ export function adaptGeneticaBovinaIntake(
   const embrioes_igg_nac_mes = Math.max(0, embrioes_igg_mes - embrioes_igg_exp_mes);
 
   // ── Conventional embryo prices ────────────────────────────────
-  const preco_nac_brl = data.preco_embriao_nacional_brl ?? 4500;
-  const preco_exp_usd = data.preco_embriao_exportacao_usd ?? 850;
+  // Fallback de mercado vem de market_benchmarks (preco_medio_embriao_dom_brl /
+  // preco_medio_embriao_exp_usd) — nunca valor fixo no código.
+  const preco_nac_brl = data.preco_embriao_nacional_brl ?? data.benchmark_preco_medio_embriao_dom_brl ?? 0;
+  const preco_exp_usd = data.preco_embriao_exportacao_usd ?? data.benchmark_preco_medio_embriao_exp_usd ?? 0;
 
   // ── IGG Select prices ─────────────────────────────────────────
   const preco_igg_nac_brl = data.preco_igg_select_nacional_brl ?? 0;
@@ -150,12 +160,32 @@ export function adaptGeneticaBovinaIntake(
   const margem_marketing_pct = (data.margem_custo_marketing_pct ?? 0) / 100;
   const comissao_vet_brl = data.comissao_fixa_veterinario ?? 0;
 
+  // ── B3 BGI (Boi Gordo) — viabilidade em arrobas-equivalentes ───
+  // Redenomina o custo/margem unitária do embrião usando o indicador
+  // CEPEA/B3 SP (R$/@) como unidade de conta — referência familiar ao
+  // pecuarista comprador. Não altera o P&L em BRL.
+  let viabilidade_bgi: BgiViabilidadeResult | undefined;
+  const preco_arroba_bgi = data.benchmark_preco_arroba_boi_gordo_rs;
+  if (preco_arroba_bgi && preco_arroba_bgi > 0 && custo_unitario_embriao > 0) {
+    viabilidade_bgi = calcularViabilidadeBGI({
+      custo_unitario_embriao_brl: custo_unitario_embriao,
+      preco_medio_embriao_brl: preco_nac_brl,
+      preco_arroba_boi_gordo_rs: preco_arroba_bgi,
+      custo_unitario_igg_select_brl: custo_unitario_igg > 0 ? custo_unitario_igg : undefined,
+      preco_medio_igg_select_brl: preco_igg_nac_brl > 0 ? preco_igg_nac_brl : undefined,
+    });
+  }
+
   // ── CAGR scenarios ────────────────────────────────────────────
-  // cagr_base (12%): central case — conservative, suitable for credit committees and Family Offices
-  // cagr_expansao (18%): upside stress — strictly for scenarios.expansao node only
-  const cagr_base = (data.crescimento_mercado_pct_aa ?? 12) / 100;
-  const cagr_expansao = (data.benchmark_crescimento_estabilizado_pct ?? 18) / 100;
-  const cagr_pessimista = (data.benchmark_crescimento_pessimista_pct ?? -5) / 100;
+  // cagr_base: central case (benchmark crescimento_mercado_pct_aa) — conservative,
+  //   suitable for credit committees and Family Offices
+  // cagr_expansao: upside stress (benchmark crescimento_estabilizado_pct) — strictly
+  //   for scenarios.expansao node only
+  // cagr_pessimista: downside (benchmark crescimento_pessimista_pct)
+  // All three sourced from market_benchmarks — no hardcoded percentages.
+  const cagr_base = (data.crescimento_mercado_pct_aa ?? 0) / 100;
+  const cagr_expansao = (data.benchmark_crescimento_estabilizado_pct ?? 0) / 100;
+  const cagr_pessimista = (data.benchmark_crescimento_pessimista_pct ?? 0) / 100;
 
   // ── Hedge analysis — includes IGG Select export USD ───────────
   const receita_usd_mes =
@@ -166,8 +196,8 @@ export function adaptGeneticaBovinaIntake(
       receita_usd_mes,
       custo_usd_mes,
       usd_brl: fx.usd_brl,
-      hedge_custo_ndf_pct: data.benchmark_hedge_custo_ndf_pct ?? 3.5,
-      hedge_custo_opcao_pct: data.benchmark_hedge_custo_opcao_pct ?? 5.2,
+      hedge_custo_ndf_pct: data.benchmark_hedge_custo_ndf_pct ?? 0,
+      hedge_custo_opcao_pct: data.benchmark_hedge_custo_opcao_pct ?? 0,
     });
   }
 
@@ -302,6 +332,10 @@ export function adaptGeneticaBovinaIntake(
   if (comissao_vet_brl > 0) {
     indicadores.comissao_fixa_veterinario_brl = comissao_vet_brl;
   }
+  if (viabilidade_bgi) {
+    indicadores.preco_arroba_boi_gordo_rs = viabilidade_bgi.preco_arroba_boi_gordo_rs;
+    indicadores.custo_embriao_em_arrobas = viabilidade_bgi.custo_embriao_em_arrobas;
+  }
 
   // ── Build benchmarks_aplicados ────────────────────────────────
   const benchmarks_aplicados: Record<string, number> = {
@@ -321,6 +355,9 @@ export function adaptGeneticaBovinaIntake(
   if (comissao_vet_brl > 0) {
     benchmarks_aplicados.comissao_fixa_veterinario_brl = comissao_vet_brl;
   }
+  if (viabilidade_bgi) {
+    benchmarks_aplicados.preco_arroba_boi_gordo_rs = viabilidade_bgi.preco_arroba_boi_gordo_rs;
+  }
 
   return {
     schema_id: "agronegocio-v1",
@@ -328,6 +365,7 @@ export function adaptGeneticaBovinaIntake(
     horizon_years: HORIZON,
     fx_snapshot: fx,
     hedge_analysis,
+    ...(viabilidade_bgi ? { viabilidade_bgi } : {}),
     anos,
     receita,
     scenarios,

@@ -17,6 +17,37 @@ const serviceClient = () =>
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 
+// Benchmark keys consumed by adaptGeneticaBovinaIntake() — sourced from market_benchmarks,
+// never hardcoded in the adapter's business logic.
+const AGRO_BENCHMARK_KEYS = [
+  "crescimento_mercado_pct_aa",
+  "crescimento_estabilizado_pct",
+  "crescimento_pessimista_pct",
+  "hedge_custo_ndf_pct",
+  "hedge_custo_opcao_pct",
+  "preco_arroba_boi_gordo_rs",
+  "preco_medio_embriao_dom_brl",
+  "preco_medio_embriao_exp_usd",
+] as const;
+
+async function fetchAgroBenchmarks(
+  sb: ReturnType<typeof serviceClient>
+): Promise<Record<string, number>> {
+  const { data } = await sb
+    .from("market_benchmarks")
+    .select("benchmark_key, value_numeric")
+    .eq("sector", "agronegocio")
+    .eq("sub_sector", "genetica_bovina")
+    .in("benchmark_key", AGRO_BENCHMARK_KEYS)
+    .is("valid_until", null);
+
+  const map: Record<string, number> = {};
+  for (const row of data ?? []) {
+    if (row.value_numeric !== null) map[row.benchmark_key] = row.value_numeric;
+  }
+  return map;
+}
+
 async function resolveToken(token: string) {
   const sb = serviceClient();
   const { data } = await sb
@@ -49,12 +80,22 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
   // Fetch FX for display (USD fields show BRL equivalent)
   const fx = await fetchFxRate();
 
+  // Market benchmarks — used by the form to show reference values (e.g. CAGR placeholder, BGI price)
+  const isGeneticaBovina =
+    subSector?.toLowerCase().includes("genética") ||
+    subSector?.toLowerCase().includes("genetica") ||
+    deal.sector?.toLowerCase().includes("agro");
+  const market_benchmarks = isGeneticaBovina
+    ? await fetchAgroBenchmarks(serviceClient())
+    : {};
+
   return NextResponse.json({
     schema_id: schema.id,
     schema_label: schema.label,
     deal_ref: (assetData.bp_intake_token as string).slice(0, 8), // no deal ID exposed
     expires_at: assetData.bp_intake_expires_at,
     fx_snapshot: fx,
+    market_benchmarks,
     schema,
   });
 }
@@ -86,6 +127,8 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: "LGPD consent required" }, { status: 422 });
   }
 
+  const sb = serviceClient();
+
   // Fetch FX for adapter
   const fx = await fetchFxRate();
 
@@ -99,7 +142,22 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   let projections: Record<string, unknown> | null = null;
   if (isGeneticaBovina) {
     try {
-      const intakeData = body.responses as GeneticaBovinaIntakeData;
+      // market_benchmarks is the single source of truth for these fields —
+      // never accepted from the public form (body.responses).
+      const benchmarks = await fetchAgroBenchmarks(sb);
+      const intakeData: GeneticaBovinaIntakeData = {
+        ...(body.responses as GeneticaBovinaIntakeData),
+        crescimento_mercado_pct_aa:
+          (body.responses.crescimento_mercado_pct_aa as number | undefined) ??
+          benchmarks.crescimento_mercado_pct_aa,
+        benchmark_crescimento_estabilizado_pct: benchmarks.crescimento_estabilizado_pct,
+        benchmark_crescimento_pessimista_pct: benchmarks.crescimento_pessimista_pct,
+        benchmark_hedge_custo_ndf_pct: benchmarks.hedge_custo_ndf_pct,
+        benchmark_hedge_custo_opcao_pct: benchmarks.hedge_custo_opcao_pct,
+        benchmark_preco_arroba_boi_gordo_rs: benchmarks.preco_arroba_boi_gordo_rs,
+        benchmark_preco_medio_embriao_dom_brl: benchmarks.preco_medio_embriao_dom_brl,
+        benchmark_preco_medio_embriao_exp_usd: benchmarks.preco_medio_embriao_exp_usd,
+      };
       projections = adaptGeneticaBovinaIntake(intakeData, fx) as unknown as Record<string, unknown>;
     } catch {
       // non-fatal — save raw responses, projections computed later
@@ -123,7 +181,6 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     submitterMetadata.submitted_by_email || body.respondent_email || "";
 
   // Persist into asset_data
-  const sb = serviceClient();
   const updatedAssetData: Record<string, unknown> = {
     ...(assetData ?? {}),
     intake_responses: { ...body.responses, metadata: submitterMetadata },

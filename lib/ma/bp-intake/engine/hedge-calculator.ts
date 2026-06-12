@@ -134,3 +134,102 @@ export function calcularHedge(input: HedgeInput): HedgeAnalysis {
     justificativa,
   };
 }
+
+// ── B3 BGI (Boi Gordo) — unit economics expressed in arroba-equivalents ────────
+// Pure functions — no I/O. preco_arroba_boi_gordo_rs is the CEPEA/B3 SP spot
+// indicator (R$/@), the reference used for financial settlement of the BGI
+// futures contract. Used here as a unit of account familiar to the buyer
+// persona (Brazilian cattle rancher), NOT as a direct cost driver of the
+// embryo P&L — embryo cost/price are independent of cattle prices.
+
+export interface BgiBreakEvenInput {
+  custo_unitario_embriao_brl: number; // R$ — production cost per embryo
+  preco_arroba_boi_gordo_rs: number;  // R$/@ — CEPEA/B3 SP spot indicator
+}
+
+// Converts a BRL cost into its arroba-of-boi-gordo equivalent:
+// "quantas arrobas de boi gordo um pecuarista precisaria vender para pagar este embrião".
+export function calcularPrecoBreakEvenBGI(input: BgiBreakEvenInput): number {
+  const { custo_unitario_embriao_brl, preco_arroba_boi_gordo_rs } = input;
+  if (preco_arroba_boi_gordo_rs <= 0) return 0;
+  return custo_unitario_embriao_brl / preco_arroba_boi_gordo_rs;
+}
+
+export interface BgiViabilidadeInput {
+  custo_unitario_embriao_brl: number;
+  preco_medio_embriao_brl: number;
+  preco_arroba_boi_gordo_rs: number;
+  custo_unitario_igg_select_brl?: number;
+  preco_medio_igg_select_brl?: number;
+}
+
+export interface BgiViabilidadeResult {
+  preco_arroba_boi_gordo_rs: number;
+  custo_embriao_em_arrobas: number;        // custo do embrião, em @ equivalentes
+  preco_venda_embriao_em_arrobas: number;  // preço de venda do embrião, em @ equivalentes
+  margem_unitaria_brl: number;
+  margem_unitaria_em_arrobas: number;      // margem por embrião, em @ equivalentes
+  margem_pct: number;
+  viavel: boolean;
+  classificacao: "Favoravel" | "Desfavoravel";
+  custo_igg_em_arrobas?: number;
+  margem_igg_em_arrobas?: number;
+}
+
+// Redenomina a margem unitária do embrião (já existente no P&L em BRL) em
+// arrobas-equivalentes de boi gordo. "viavel" = margem_unitaria_brl > 0 —
+// mesma lógica do P&L, apenas expressa na unidade que o comprador (pecuarista)
+// usa para precificar ativos.
+export function calcularViabilidadeBGI(input: BgiViabilidadeInput): BgiViabilidadeResult {
+  const {
+    custo_unitario_embriao_brl,
+    preco_medio_embriao_brl,
+    preco_arroba_boi_gordo_rs,
+    custo_unitario_igg_select_brl,
+    preco_medio_igg_select_brl,
+  } = input;
+
+  const custo_embriao_em_arrobas = calcularPrecoBreakEvenBGI({
+    custo_unitario_embriao_brl,
+    preco_arroba_boi_gordo_rs,
+  });
+  const preco_venda_embriao_em_arrobas =
+    preco_arroba_boi_gordo_rs > 0 ? preco_medio_embriao_brl / preco_arroba_boi_gordo_rs : 0;
+
+  const margem_unitaria_brl = preco_medio_embriao_brl - custo_unitario_embriao_brl;
+  const margem_unitaria_em_arrobas =
+    preco_arroba_boi_gordo_rs > 0 ? margem_unitaria_brl / preco_arroba_boi_gordo_rs : 0;
+  const margem_pct =
+    preco_medio_embriao_brl > 0 ? (margem_unitaria_brl / preco_medio_embriao_brl) * 100 : 0;
+
+  const viavel = margem_unitaria_brl > 0;
+
+  const result: BgiViabilidadeResult = {
+    preco_arroba_boi_gordo_rs,
+    custo_embriao_em_arrobas: parseFloat(custo_embriao_em_arrobas.toFixed(2)),
+    preco_venda_embriao_em_arrobas: parseFloat(preco_venda_embriao_em_arrobas.toFixed(2)),
+    margem_unitaria_brl: Math.round(margem_unitaria_brl),
+    margem_unitaria_em_arrobas: parseFloat(margem_unitaria_em_arrobas.toFixed(2)),
+    margem_pct: parseFloat(margem_pct.toFixed(2)),
+    viavel,
+    classificacao: viavel ? "Favoravel" : "Desfavoravel",
+  };
+
+  if (custo_unitario_igg_select_brl && custo_unitario_igg_select_brl > 0) {
+    result.custo_igg_em_arrobas = parseFloat(
+      calcularPrecoBreakEvenBGI({
+        custo_unitario_embriao_brl: custo_unitario_igg_select_brl,
+        preco_arroba_boi_gordo_rs,
+      }).toFixed(2)
+    );
+    if (preco_medio_igg_select_brl) {
+      const margem_igg_brl = preco_medio_igg_select_brl - custo_unitario_igg_select_brl;
+      result.margem_igg_em_arrobas =
+        preco_arroba_boi_gordo_rs > 0
+          ? parseFloat((margem_igg_brl / preco_arroba_boi_gordo_rs).toFixed(2))
+          : 0;
+    }
+  }
+
+  return result;
+}

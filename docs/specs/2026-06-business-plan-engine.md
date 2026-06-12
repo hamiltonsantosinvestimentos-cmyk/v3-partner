@@ -1,6 +1,8 @@
 # Feature Spec — Business Plan Engine (Mesa M&A)
 
-> Status: DRAFT — aguardando aprovação do BRIEF (seção 11)
+> Status: IMPLEMENTADO (Fase 1 Real Estate + Fase 2 Agronegócio) — ver Seção 14 para
+> divergências entre esta spec e o código real, incluindo um módulo inteiro
+> (Form/Intake Engine) construído sem adendo até 2026-06-11.
 > Autor: ORION (Arquiteto de Features V3 Partners)
 > Data: 2026-06-08
 > Sponsor de produto: João Lemos Netto (Head de Ativos)
@@ -844,3 +846,147 @@ Context V3:       Migration deve usar CREATE INDEX CONCURRENTLY (sem lock de tab
 - Zero tabela nova — `ma_deals.asset_data.financial_projections` / `.business_plan`
   permanecem fonte única (JSONB), conforme ADR já estabelecido em 2026-05-21.
 - Migration única: documental + 2 índices `CONCURRENTLY`, 100% reversível.
+
+---
+
+## 14. Adendo — Estado Real da Implementação vs. Spec (2026-06-11)
+
+> Auditoria de código realizada em 2026-06-11. Esta seção documenta o que **já existe
+> em produção** que diverge ou vai além do que esta spec descrevia, conforme gate de
+> governança ("o fluxograma/spec deve refletir o estado real do sistema").
+
+### 14.1 Resumo das divergências
+
+| # | O que a spec dizia (2026-06-08) | O que existe no código hoje | Impacto |
+|---|---|---|---|
+| 1 | `SCHEMA_REGISTRY["agronegocio-v1"] = null` — "Fase 2, não implementar agora" (Seções 5.1, 9) | **Implementado.** `lib/ma/business-plan-schemas/agronegocio-v1.ts` com `agronegocioV1Schema` ativo no registry, `requiredFields = ["anos","receita","scenarios","indicadores"]`, painel `agronegocio-panel.tsx` + `dynamic-metrics-charts.tsx` | Fase 2 entregue sem spec própria — esta seção documenta o que foi construído |
+| 2 | Seção 7 — motor de geração: 1 chamada Haiku, `narrative_sections[]` + `claim_trace[]` | Implementado conforme descrito em `generate.ts`, com prompt dedicado `lib/ma/business-plan-engine/prompts/agronegocio-v1.ts` (prompt por setor, não um único prompt genérico) | Estrutura de prompts ficou por-setor, não no único `SYSTEM_PROMPT` da Seção 7.3 — padrão melhor que o previsto, mas não documentado |
+| 3 | Seção 6.1 — `POST /api/ma/business-plan/[id]/generate` aceita `force_regenerate` | Implementado **+ parâmetro extra** `?mode=model3s`: roda `enrichREProjections()` (DRE/DFC/indicadores derivados) e retorna a análise **sem persistir** (`cached:false, enriched:true`) com bloco `comparison` (sections/claims original vs enriquecido) | Funcionalidade nova não prevista — "exercício de modelagem 3-Statement" ad-hoc, não documentado em nenhuma seção anterior |
+| 4 | (não mencionado) `lib/ma/business-plan-engine/enrich.ts` | Implementado — `enrichREProjections()` deriva DRE/DFC/Indicadores a partir de `financial_projections` antes de ir para o motor de narrativa, no modo `model3s` | Peça nova do motor, sem spec |
+| 5 | **Form/Intake Engine inteiro (`lib/ma/bp-intake/`)** — não existe nenhuma menção em nenhuma das 13 seções anteriores | Implementado integralmente: `engine/schema-registry.ts`, `engine/adapter.ts`, `engine/fx-service.ts`, `engine/hedge-calculator.ts`, `engine/conditional-logic.ts`, schemas `_base.ts` / `agronegocio-v1.ts` / `genetica-bovina-v1.ts` (10 seções), rotas `POST /api/ma/bp-intake/generate` (autenticada, gera token) e `GET\|POST /api/ma/bp-intake/[token]` (pública, gate por token+expiração+LGPD consent) | **Maior gap de documentação**: este módulo é o que efetivamente preenche `asset_data.financial_projections` para deals de Agronegócio/Genética Bovina via formulário público — é pré-requisito operacional do motor da Seção 7, mas nunca foi especificado |
+| 6 | Seção 5.3 — Agronegócio listado como "campos-chave previstos" (tabela), `comparativo_igg`, `fase_exportacao`, etc. | Schema `genetica-bovina-v1.ts` real tem **10 seções** de formulário (incluindo módulos condicionais por `tags`: `startup_metrics` se `tag: "startup"`) — estrutura muito mais rica que a tabela de "campos-chave previstos" | A spec subestimou o escopo real do sub-setor Genética Bovina |
+| 7 | Tabela `market_benchmarks` | Não mencionada na spec original (criada em migration separada `20260609_market_benchmarks.sql`, posterior a esta spec) | Ver gap detalhado em 14.3 |
+
+### 14.2 Fluxograma atualizado — Form Engine + Business Plan Engine (Genética Bovina)
+
+```mermaid
+flowchart TD
+    subgraph INTAKE["Form/Intake Engine — lib/ma/bp-intake (AUSENTE da spec original)"]
+        A1["Mesa (ADMIN/GESTAO/MESA):<br/>POST /api/ma/bp-intake/generate"] --> A2["Token aleatório (32 bytes hex)<br/>gravado em asset_data.bp_intake_token<br/>+ expires_at (default 30 dias)"]
+        A2 --> A3["URL pública:<br/>/intake/bp/{token}"]
+        A3 --> A4["GET /api/ma/bp-intake/{token}<br/>(sem auth — gate por token+expiração)"]
+        A4 --> A5{"resolveIntakeSchema(sector, sub_sector)"}
+        A5 -->|"sub_sector = genética bovina"| A6["genetica-bovina-v1<br/>10 seções (incl. módulo condicional<br/>'startup_metrics' se tag=startup)"]
+        A5 -->|"sector = agronegócio (genérico)"| A7["agronegocio-v1 (intake)"]
+        A5 -->|outro/sem match| A8["_base schema"]
+        A6 --> A9["Operador externo preenche form público<br/>+ aceite LGPD obrigatório"]
+        A9 --> A10["POST /api/ma/bp-intake/{token}<br/>{ responses, lgpd_consent: true }"]
+        A10 --> A11{"sub_sector contém 'genética/genetica'<br/>OU sector contém 'agro'?"}
+        A11 -->|sim| A12["adaptGeneticaBovinaIntake(responses, fx)<br/>→ scenarios, receita, indicadores,<br/>benchmarks_aplicados"]
+        A11 -->|não| A13["salva intake_responses<br/>SEM financial_projections"]
+        A12 --> A14["asset_data.financial_projections<br/>+ asset_data.intake_responses<br/>+ asset_data.fx_snapshot"]
+    end
+
+    subgraph BPENGINE["Business Plan Engine — Fase 2 Agronegócio (já ATIVO, spec dizia 'placeholder')"]
+        B1["GET /api/ma/business-plan/{id}"] --> B2{has_business_plan?}
+        B2 -->|true| B3["BusinessPlanContainer<br/>renderiza agronegocio-panel.tsx"]
+        B2 -->|false| B4["EmptyState /<br/>IncompleteDataState"]
+        B4 -->|"ADMIN/GESTAO clica Gerar"| B5["POST /api/ma/business-plan/{id}/generate<br/>?mode=model3s (opcional, não persiste)"]
+        B5 --> B6{resolveSchemaForSector}
+        B6 -->|agronegocio-v1| B7["agronegocioV1Schema.validate(<br/>financial_projections)"]
+        B7 -->|inválido| B8["422 incomplete_financial_data<br/>+ missing_fields"]
+        B7 -->|válido| B9{"mode === 'model3s'?"}
+        B9 -->|sim| B10["enrichREProjections()<br/>→ DRE / DFC / Indicadores derivados"]
+        B9 -->|não| B11["financial_projections direto"]
+        B10 --> B12["generateBusinessPlan()<br/>Claude Haiku +<br/>prompts/agronegocio-v1.ts"]
+        B11 --> B12
+        B12 --> B13{validateClaimTrace}
+        B13 -->|falha| B14["500 claim_trace_mismatch<br/>(não persiste)"]
+        B13 -->|ok| B15{"mode === 'model3s'?"}
+        B15 -->|sim| B16["200 — retorna plano + comparison<br/>(NÃO persiste)"]
+        B15 -->|não| B17["Persiste asset_data.business_plan"]
+        B17 --> B3
+    end
+
+    A14 -.."alimenta financial_projections<br/>consumido pela validação".-> B7
+
+    subgraph GAP["Gap identificado — market_benchmarks (Seção 14.3)"]
+        G1[("market_benchmarks<br/>11 seeds Genética Bovina<br/>ABCZ/Embrapa/V3/B3")]
+        G2["adapter.ts: campos benchmark_*<br/>declarados na interface<br/>(comentário: 'pre-loaded from<br/>market_benchmarks table')"]
+        G1 -. "JAMAIS lido por nenhuma rota" .-x G2
+        G2 --> G3["Fallback hardcoded literal:<br/>?? 18 / ?? -5 / ?? 3.5 / ?? 5.2"]
+    end
+```
+
+### 14.3 Gap identificado — `market_benchmarks` é uma tabela órfã
+
+A migration `supabase/migrations/20260609_market_benchmarks.sql` cria a tabela
+`market_benchmarks` (RLS habilitado, leitura para `authenticated`, escrita para
+`ADMIN`/`GESTAO`) e popula **11 seeds** para `sector='agronegocio', sub_sector='genetica_bovina'`,
+com fontes citadas (`ABCZ_Relatorio_2024`, `Embrapa_Genetica_2023`, `V3_Model_Internal`,
+`B3_BMF_2024`):
+
+| `benchmark_key` (seed) | Valor seed | Usado em algum lugar do código? |
+|---|---|---|
+| `crescimento_mercado_pct_aa` | 12.0% | **Sim, indiretamente** — existe como campo de formulário `crescimento_mercado_pct_aa` na seção "Referências de Mercado" do `genetica-bovina-v1.ts` (intake), com `placeholder: "12"` e hint citando o mesmo benchmark. Mas o valor vem do **preenchimento do operador**, não de uma leitura da tabela. |
+| `crescimento_estabilizado_pct` | 18.0% | Hardcoded como fallback `?? 18` em `adapter.ts` (`benchmark_crescimento_estabilizado_pct ?? 18` → vira `cagr_expansao`) |
+| `crescimento_pessimista_pct` | -5.0% | Hardcoded como fallback `?? -5` em `adapter.ts` (`benchmark_crescimento_pessimista_pct ?? -5` → `cagr_pessimista`) |
+| `hedge_custo_ndf_pct` | 3.5% | Hardcoded como fallback `?? 3.5` em `adapter.ts` |
+| `hedge_custo_opcao_pct` | 5.2% | Hardcoded como fallback `?? 5.2` em `adapter.ts` |
+| `crescimento_expansao_pct` | 28.0% | **Não.** Campo `benchmark_crescimento_expansao_pct` está declarado na interface `GeneticaBovinaIntakeData` (linha 104) mas não é lido nem usado em nenhum cálculo |
+| `preco_medio_embriao_dom_brl` | R$ 4.500 | **Não.** Sem campo correspondente no intake nem no adapter |
+| `preco_medio_embriao_exp_usd` | US$ 850 | **Não.** Sem campo correspondente |
+| `taxa_prenhez_mercado_pct` | 62.0% | **Não.** Sem campo correspondente |
+| `participacao_exportacao_pct` | 35.0% | **Não.** Sem campo correspondente |
+| `custo_operacional_pct_receita` | 55.0% | **Não.** Sem campo correspondente |
+
+**Diagnóstico:** a tabela `market_benchmarks` foi criada (com RLS, índice e seeds reais
+e bem documentados) aparentemente para ser a **fonte viva** dos parâmetros de
+`adapter.ts` — o próprio comentário do código (`// benchmarks from market_benchmarks
+table (pre-loaded)`, `lib/ma/bp-intake/engine/adapter.ts:102`) afirma isso. Na prática:
+
+1. Nenhuma rota (`/api/ma/bp-intake/*`, `/api/ma/business-plan/*`) faz `SELECT` em
+   `market_benchmarks`.
+2. Os 4 campos `benchmark_*` que o `adapter.ts` de fato usa (`estabilizado`,
+   `pessimista`, `hedge_ndf`, `hedge_opcao`) sempre caem no fallback hardcoded —
+   que **coincide numericamente** com os seeds, sugerindo que os literais foram
+   copiados manualmente da migration no momento da implementação, e depois as
+   duas fontes nunca mais foram sincronizadas.
+3. 5 dos 11 seeds (`preco_medio_embriao_*`, `taxa_prenhez_mercado_pct`,
+   `participacao_exportacao_pct`, `custo_operacional_pct_receita`) não têm
+   nenhum consumidor — nem como campo de formulário, nem como fallback.
+4. Se um ADMIN/GESTAO atualizar `market_benchmarks` via UI futura (a tabela já
+   tem policy de escrita pronta para isso), **nada muda** no resultado de
+   `adaptGeneticaBovinaIntake()` — os valores ficam presos no código.
+
+**Não é um problema de schema/RLS** (a tabela está corretamente desenhada e seria
+reaproveitável tal como está) — é uma **integração ausente**: falta o "fio" entre
+`market_benchmarks` e `adapter.ts`/`generate.ts`.
+
+### 14.4 Recomendações (não implementadas nesta sessão — apenas registradas)
+
+1. **Curto prazo (documentação):** atualizar o comentário em `adapter.ts:102` para
+   remover a afirmação "(pre-loaded)" — hoje é enganosa para qualquer dev que leia
+   o código depois.
+2. **Médio prazo (integração real):** se o objetivo é permitir que ADMIN/GESTAO
+   atualizem benchmarks sem deploy (a motivação original aparente da tabela), criar
+   um carregamento server-side em `GET /api/ma/bp-intake/[token]` (mesmo ponto onde
+   `fetchFxRate()` já é chamado) que busca `market_benchmarks` por
+   `(sector, sub_sector)` e injeta os 4 campos `benchmark_*` consumidos hoje —
+   substituindo os literais hardcoded em `adapter.ts`.
+3. **Decisão a tomar com João/Hamilton:** os 5 seeds não-utilizados
+   (`preco_medio_embriao_*`, `taxa_prenhez_mercado_pct`, `participacao_exportacao_pct`,
+   `custo_operacional_pct_receita`) — ou (a) mapear para novos campos do schema
+   `genetica-bovina-v1.ts` / cálculos do `adapter.ts`, ou (b) remover da seed se
+   não houver uso planejado (evita "dado morto" na tabela).
+4. Nenhuma das ações acima é bloqueante — o fluxo atual funciona fim-a-fim porque
+   os fallbacks hardcoded cobrem os 4 campos realmente usados. É débito técnico de
+   **manutenibilidade/governança**, não um bug funcional.
+
+### 14.5 Próximo passo sugerido
+
+Dado que o Form/Intake Engine (`lib/ma/bp-intake/`) é um módulo completo, em
+produção, e totalmente ausente desta spec — considerar um **spec própria
+retroativa** (`docs/specs/2026-06-bp-intake-engine.md`) cobrindo: schema registry,
+adapter, fx-service, hedge-calculator, conditional-logic e as 2 rotas públicas/
+autenticadas — para que o próximo agente não repita esta auditoria do zero.

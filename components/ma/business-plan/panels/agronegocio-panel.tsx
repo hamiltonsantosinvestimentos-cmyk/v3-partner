@@ -16,7 +16,9 @@ const C = {
 };
 
 const fmt = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
+const fmtBRL2 = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const fmtPct = (v: number) => `${v.toFixed(1)}%`;
+const fmtArroba = (v: number) => `${v.toFixed(2)} @`;
 const fmtM = (v: number) =>
   v >= 1e9 ? `R$${(v / 1e9).toFixed(1)}Bi`
   : v >= 1e6 ? `R$${(v / 1e6).toFixed(1)}M`
@@ -43,6 +45,7 @@ export function AgronegocionPanel({ plan, financialProjections: fp, canGenerate,
   const ano0 = fp.anos?.[0];
   const ano5 = fp.anos?.[4];
   const hedge = fp.hedge_analysis as Record<string, unknown> | null | undefined;
+  const bgi = fp.viabilidade_bgi as Record<string, unknown> | undefined;
 
   // Detect sector-specific metrics for conditional chart rendering.
   // Check presence of keys in anos[0] (commodity fields) or indicadores (securitização).
@@ -176,6 +179,56 @@ export function AgronegocionPanel({ plan, financialProjections: fp, canGenerate,
           </div>
           {!!hedge.justificativa && (
             <p className="text-[10px] mt-1" style={{ color: C.mu }}>{String(hedge.justificativa)}</p>
+          )}
+        </div>
+      )}
+
+      {/* ── B3 BGI (Boi Gordo) — viabilidade em arrobas-equivalentes (conditional) ─ */}
+      {bgi && (
+        <div
+          className="rounded-xl border p-3 space-y-1"
+          style={{ background: "#0d1f35", borderColor: "#1c3d6e" }}
+        >
+          <div className="flex items-center gap-1.5 mb-2">
+            <BarChart2 size={12} style={{ color: C.go }} />
+            <span className="text-[9px] font-bold uppercase tracking-widest" style={{ color: C.gl }}>
+              BGI vs Custo Unitário Embrião — Arrobas-Equivalentes (CEPEA/B3 SP)
+            </span>
+          </div>
+          <div className="grid grid-cols-2 gap-2 text-xs">
+            <div>
+              <span style={{ color: C.mu }}>Indicador B3 BGI (R$/@): </span>
+              <span style={{ color: C.cr }}>{fmtBRL2.format(bgi.preco_arroba_boi_gordo_rs as number)}</span>
+            </div>
+            <div>
+              <span style={{ color: C.mu }}>Custo do embrião em @: </span>
+              <span style={{ color: C.cr }}>{fmtArroba(bgi.custo_embriao_em_arrobas as number)}</span>
+            </div>
+            <div>
+              <span style={{ color: C.mu }}>Preço de venda em @: </span>
+              <span style={{ color: C.cr }}>{fmtArroba(bgi.preco_venda_embriao_em_arrobas as number)}</span>
+            </div>
+            <div>
+              <span style={{ color: C.mu }}>Margem em @: </span>
+              <span style={{ color: C.cr }}>
+                {fmtArroba(bgi.margem_unitaria_em_arrobas as number)} ({fmtPct(bgi.margem_pct as number)})
+              </span>
+            </div>
+          </div>
+          <p
+            className="text-[10px] mt-1 font-semibold"
+            style={{ color: bgi.classificacao === "Favoravel" ? C.go : C.mu }}
+          >
+            Classificação: {String(bgi.classificacao)} — margem unitária de {fmt.format(bgi.margem_unitaria_brl as number)},
+            equivalente a {fmtArroba(bgi.margem_unitaria_em_arrobas as number)} de boi gordo ao preço de referência CEPEA/B3 SP.
+          </p>
+          {bgi.custo_igg_em_arrobas !== undefined && (
+            <p className="text-[10px]" style={{ color: C.mu }}>
+              IGG Select: custo de {fmtArroba(bgi.custo_igg_em_arrobas as number)}
+              {bgi.margem_igg_em_arrobas !== undefined
+                ? ` · margem de ${fmtArroba(bgi.margem_igg_em_arrobas as number)}`
+                : ""}
+            </p>
           )}
         </div>
       )}

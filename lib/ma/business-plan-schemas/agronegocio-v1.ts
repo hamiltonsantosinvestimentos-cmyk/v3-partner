@@ -29,6 +29,7 @@ export interface AgronegocioFinancialProjections {
   };
   fx_snapshot?: { usd_brl: number; source: string; date: string; fetched_at: string };
   hedge_analysis?: Record<string, unknown> | null;
+  viabilidade_bgi?: Record<string, unknown>;
   benchmarks_aplicados?: Record<string, number>;
 }
 
