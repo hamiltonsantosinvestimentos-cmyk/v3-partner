@@ -15,7 +15,8 @@ export type AuditEntity =
   | "crm_leads"
   | "commissions"
   | "notifications"
-  | "kyc";
+  | "kyc"
+  | "logistics_items";
 
 interface AuditParams {
   userId: string;
