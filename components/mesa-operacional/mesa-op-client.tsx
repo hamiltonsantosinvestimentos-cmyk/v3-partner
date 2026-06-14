@@ -1163,37 +1163,35 @@ function TicketDetailModal({ open, onClose, ticket, currentUser, onUpdated, onOp
                 className="w-full px-3 py-2 text-sm bg-secondary border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 resize-none"
               />
               <div className="flex gap-2">
-                <Button
-                  size="sm"
+                <button
                   onClick={() => handleAddComment()}
                   disabled={!newComment.trim() || submittingComment}
-                  className="flex-1 gap-1.5"
+                  className="flex-1 flex items-center justify-center gap-1.5 h-8 px-3 rounded-lg text-xs font-semibold transition-colors disabled:opacity-40"
+                  style={{ background: "#C9A84C", color: "#09081A" }}
                 >
                   {submittingComment
-                    ? <span className="w-3 h-3 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                    ? <span className="w-3 h-3 rounded-full border-2 border-current border-t-transparent animate-spin" />
                     : <MessageSquare className="w-3.5 h-3.5" />}
                   Comentar
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
+                </button>
+                <button
                   onClick={() => handleAddComment({ send_email: true })}
                   disabled={!newComment.trim() || submittingComment}
-                  className="flex-1 gap-1.5"
+                  className="flex-1 flex items-center justify-center gap-1.5 h-8 px-3 rounded-lg text-xs font-semibold transition-colors disabled:opacity-40"
+                  style={{ background: "#162744", color: "#C9A84C", border: "1px solid rgba(201,168,76,0.4)" }}
                 >
                   <Mail className="w-3.5 h-3.5" />
                   + E-mail
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
+                </button>
+                <button
                   onClick={() => handleAddComment({ send_chat: true })}
                   disabled={!newComment.trim() || submittingComment}
-                  className="flex-1 gap-1.5"
+                  className="flex-1 flex items-center justify-center gap-1.5 h-8 px-3 rounded-lg text-xs font-semibold transition-colors disabled:opacity-40"
+                  style={{ background: "#162744", color: "#C9A84C", border: "1px solid rgba(201,168,76,0.4)" }}
                 >
                   <MessageCircle className="w-3.5 h-3.5" />
                   + Chat
-                </Button>
+                </button>
               </div>
             </div>
           </div>

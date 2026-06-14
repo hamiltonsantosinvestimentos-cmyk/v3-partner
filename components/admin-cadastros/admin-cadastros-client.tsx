@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils";
 
 interface Registration {
   id: string;
-  plano: "PARTNER" | "PARTNER_PRO";
+  plano: "STARTER" | "PARTNER" | "PARTNER_PRO" | "ENTERPRISE";
   tipo_pessoa: "PF" | "PJ";
   email: string;
   telefone: string;
@@ -161,7 +161,10 @@ function ModalDetalhe({
             <div>
               <p className="text-xs font-semibold text-[#C9A84C]">Plano solicitado</p>
               <p className="text-sm font-bold text-foreground">
-                {reg.plano === "PARTNER_PRO" ? "V3 Partner PRO — R$ 397/mês" : "V3 Partner — R$ 197/mês"}
+                {reg.plano === "STARTER" ? "V3 Starter — R$ 297/mês"
+                  : reg.plano === "PARTNER" ? "V3 Partner — R$ 497/mês"
+                  : reg.plano === "PARTNER_PRO" ? "V3 Partner PRO — R$ 897/mês"
+                  : "V3 Enterprise — R$ 2.500+/mês"}
               </p>
             </div>
           </div>

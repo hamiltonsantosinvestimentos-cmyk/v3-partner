@@ -423,11 +423,11 @@ export function CadastroTrial() {
               <p className="text-xs text-[#7A8FA8]">
                 Após o período trial, converta para{" "}
                 <span className="text-[#C9A84C] font-semibold">
-                  V3 Partner (R$197/mês)
+                  V3 Partner (R$497/mês)
                 </span>{" "}
                 ou{" "}
                 <span className="text-[#C9A84C] font-semibold">
-                  V3 Partner PRO (R$397/mês)
+                  V3 Partner PRO (R$897/mês)
                 </span>{" "}
                 para acesso completo à plataforma.
               </p>

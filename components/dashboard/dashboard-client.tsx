@@ -478,9 +478,10 @@ export function DashboardClient({
 
       {/* Saúde da Rede — só para ADMIN/GESTAO */}
       {redeHealth && ["ADMIN", "GESTAO", "FINANCEIRO"].includes(role) && (
-        <div className="rounded-xl border border-[#C9A84C]/20 bg-[#C9A84C]/5 p-4">
-          <p className="text-[10px] font-bold text-[#C9A84C] uppercase tracking-widest mb-3">Saúde da Rede de Partners</p>
-          <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+        <div className="rounded-xl border border-[#C9A84C]/20 bg-[#C9A84C]/5 p-4 space-y-3">
+          <p className="text-[10px] font-bold text-[#C9A84C] uppercase tracking-widest">Saúde da Rede de Partners</p>
+          {/* KPIs principais */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             <div className="flex items-center gap-2.5">
               <div className="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center flex-shrink-0">
                 <Users className="w-4 h-4 text-emerald-400" />
@@ -488,15 +489,6 @@ export function DashboardClient({
               <div>
                 <p className="text-lg font-bold text-white">{redeHealth.partnersAtivos}</p>
                 <p className="text-[10px] text-muted-foreground">Partners Ativos</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-lg bg-amber-500/20 flex items-center justify-center flex-shrink-0">
-                <Crown className="w-4 h-4 text-amber-400" />
-              </div>
-              <div>
-                <p className="text-lg font-bold text-white">{redeHealth.partnersPRO}</p>
-                <p className="text-[10px] text-muted-foreground">Partners PRO</p>
               </div>
             </div>
             <div className="flex items-center gap-2.5">
@@ -526,6 +518,21 @@ export function DashboardClient({
                 <p className="text-[10px] text-muted-foreground">Vencendo em 7d</p>
               </div>
             </div>
+          </div>
+          {/* Breakdown por plano */}
+          <div className="grid grid-cols-4 gap-2 pt-1 border-t border-[#C9A84C]/10">
+            {[
+              { key: "STARTER",     label: "Starter",     color: "#7A8FA8", preco: "R$297" },
+              { key: "PARTNER",     label: "Partner",     color: "#C9A84C", preco: "R$497" },
+              { key: "PARTNER_PRO", label: "Partner PRO", color: "#E8C97A", preco: "R$897" },
+              { key: "ENTERPRISE",  label: "Enterprise",  color: "#C9A84C", preco: "R$2.5k" },
+            ].map(({ key, label, color, preco }) => (
+              <div key={key} className="rounded-lg p-2.5 text-center" style={{ background: "rgba(0,0,0,0.2)", border: `1px solid ${color}20` }}>
+                <p className="text-xl font-bold" style={{ color }}>{redeHealth.porPlano[key as keyof typeof redeHealth.porPlano]}</p>
+                <p className="text-[10px] font-semibold" style={{ color }}>{label}</p>
+                <p className="text-[9px] text-muted-foreground">{preco}/mês</p>
+              </div>
+            ))}
           </div>
         </div>
       )}

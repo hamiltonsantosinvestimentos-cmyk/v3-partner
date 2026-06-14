@@ -10,6 +10,7 @@ export const USER_ROLES = {
   FORNECEDOR: "FORNECEDOR",
   SDR: "SDR",
   CLOSER: "CLOSER",
+  INSTITUICAO: "INSTITUICAO",
 } as const;
 
 export type UserRole = keyof typeof USER_ROLES;
@@ -26,6 +27,7 @@ export const ROLE_LABELS: Record<UserRole, string> = {
   FORNECEDOR: "Fornecedor",
   SDR: "SDR",
   CLOSER: "Closer",
+  INSTITUICAO: "Instituição",
 };
 
 export const ROLE_COLORS: Record<UserRole, string> = {
@@ -40,6 +42,7 @@ export const ROLE_COLORS: Record<UserRole, string> = {
   FORNECEDOR: "bg-teal-500/20 text-teal-400 border-teal-500/30",
   SDR: "bg-sky-500/20 text-sky-400 border-sky-500/30",
   CLOSER: "bg-orange-500/20 text-orange-400 border-orange-500/30",
+  INSTITUICAO: "bg-indigo-500/20 text-indigo-400 border-indigo-500/30",
 };
 
 // Marketplace

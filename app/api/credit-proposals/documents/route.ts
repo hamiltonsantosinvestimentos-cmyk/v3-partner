@@ -147,7 +147,7 @@ export async function GET(req: NextRequest) {
       const { data } = await svc.storage
         .from(BUCKET)
         .createSignedUrl(doc.storage_path, SIGNED_URL_EXPIRES);
-      return { ...doc, url: data?.signedUrl ?? null };
+      return { ...doc, file_key: doc.storage_path, url: data?.signedUrl ?? null };
     })
   );
 
