@@ -454,10 +454,16 @@ export function LogisticaClient({ category, initialItems }: { category: Category
                           <a
                             href={url} target="_blank" rel="noopener noreferrer"
                             onClick={(e) => e.stopPropagation()}
-                            style={{ display: "flex", color: V3.gold, padding: 4, borderRadius: 4 }}
+                            style={{
+                              display: "flex", alignItems: "center", gap: 4,
+                              background: V3.gold, color: V3.navy,
+                              borderRadius: 6, padding: "6px 10px",
+                              fontSize: 10, fontWeight: 700, textDecoration: "none",
+                              whiteSpace: "nowrap", fontFamily: "'DM Sans', sans-serif",
+                            }}
                             title="Buscar passagem no Google Flights"
                           >
-                            <ExternalLink size={14} />
+                            <ExternalLink size={12} /> Cotar
                           </a>
                         ) : null;
                       })()}
