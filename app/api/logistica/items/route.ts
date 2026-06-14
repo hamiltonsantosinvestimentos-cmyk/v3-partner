@@ -38,6 +38,7 @@ const createSchema = z.object({
   current_price: z.number().optional().nullable(),
   currency:      z.string().max(8).default("BRL"),
   status:        z.enum(["monitorando", "reservado", "concluido", "cancelado"]).default("monitorando"),
+  trip_type:     z.enum(["ida", "ida_e_volta"]).optional().nullable(),
   notes:         z.string().max(2000).optional().nullable(),
 });
 
@@ -91,6 +92,7 @@ export async function POST(req: NextRequest) {
     current_price: d.current_price ?? null,
     currency:      d.currency,
     status:        d.status,
+    trip_type:     d.category === "voo" ? (d.trip_type ?? "ida_e_volta") : null,
     notes:         d.notes ?? null,
     created_by:    user.id,
   }).select().single();

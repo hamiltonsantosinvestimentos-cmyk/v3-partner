@@ -37,6 +37,7 @@ const patchSchema = z.object({
   current_price: z.number().optional().nullable(),
   currency:      z.string().max(8).optional(),
   status:        z.enum(["monitorando", "reservado", "concluido", "cancelado"]).optional(),
+  trip_type:     z.enum(["ida", "ida_e_volta"]).optional().nullable(),
   notes:         z.string().max(2000).optional().nullable(),
 });
 

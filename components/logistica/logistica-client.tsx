@@ -33,6 +33,7 @@ type LogisticsItem = {
   destination?: string | null;
   origin_iata?: string | null;
   destination_iata?: string | null;
+  trip_type?: "ida" | "ida_e_volta" | null;
   start_date?: string | null;
   end_date?: string | null;
   provider?: string | null;
@@ -60,6 +61,7 @@ type Form = {
   destination: string;
   origin_iata: string;
   destination_iata: string;
+  trip_type: "ida" | "ida_e_volta";
   start_date: string;
   end_date: string;
   provider: string;
@@ -72,6 +74,7 @@ type Form = {
 
 const EMPTY_FORM: Form = {
   title: "", origin: "", destination: "", origin_iata: "", destination_iata: "",
+  trip_type: "ida_e_volta",
   start_date: "", end_date: "",
   provider: "", target_price: "", current_price: "", currency: "BRL",
   status: "monitorando", notes: "",
@@ -207,6 +210,7 @@ export function LogisticaClient({ category, initialItems }: { category: Category
       destination: item.destination ?? "",
       origin_iata: item.origin_iata ?? "",
       destination_iata: item.destination_iata ?? "",
+      trip_type: item.trip_type ?? "ida_e_volta",
       start_date: item.start_date ?? "",
       end_date: item.end_date ?? "",
       provider: item.provider ?? "",
@@ -238,6 +242,7 @@ export function LogisticaClient({ category, initialItems }: { category: Category
       destination: isVoo ? destinationIata : (form.destination || null),
       origin_iata: originIata,
       destination_iata: destinationIata,
+      trip_type: isVoo ? form.trip_type : null,
       start_date: form.start_date || null,
       end_date: form.end_date || null,
       provider: form.provider || null,
@@ -397,6 +402,11 @@ export function LogisticaClient({ category, initialItems }: { category: Category
                             {item.origin || "—"} <ArrowRight size={10} /> {item.destination || "—"}
                           </span>
                         )}
+                        {category === "voo" && item.trip_type && (
+                          <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: V3.muted }}>
+                            {item.trip_type === "ida" ? "Somente ida" : "Ida e volta"}
+                          </span>
+                        )}
                         {!cfg.showRoute && item.destination && <span>{item.destination}</span>}
                         {item.provider && <span style={{ color: V3.navyM }}>•</span>}
                         {item.provider && <span>{item.provider}</span>}
@@ -490,6 +500,12 @@ export function LogisticaClient({ category, initialItems }: { category: Category
                       value={form.destination_iata} maxLength={3} placeholder="MIA"
                       onChange={e => setForm({ ...form, destination_iata: e.target.value.toUpperCase().replace(/[^A-Z]/g, "").slice(0, 3) })}
                     />
+                  </Field>
+                  <Field label="Tipo de Viagem">
+                    <select style={inputStyle} value={form.trip_type} onChange={e => setForm({ ...form, trip_type: e.target.value as "ida" | "ida_e_volta" })}>
+                      <option value="ida_e_volta">Ida e volta</option>
+                      <option value="ida">Somente ida</option>
+                    </select>
                   </Field>
                 </>
               ) : (
