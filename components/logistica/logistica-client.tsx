@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import {
   Plus, X, Loader2, Plane, Car, Building2, Trash2, Pencil,
-  TrendingDown, TrendingUp, Minus, ArrowRight,
+  TrendingDown, TrendingUp, Minus, ArrowRight, ExternalLink,
 } from "lucide-react";
 
 // ─── Paleta V4.2 ────────────────────────────────────────────────────────────
@@ -119,6 +119,20 @@ function fmtMoney(v?: number | null, currency = "BRL") {
 function fmtDate(iso?: string | null) {
   if (!iso) return "—";
   return new Date(iso + (iso.length === 10 ? "T00:00:00" : "")).toLocaleDateString("pt-BR");
+}
+
+// Monta link de busca no Google Flights a partir dos códigos IATA e datas do voo
+function flightSearchUrl(
+  originIata?: string | null,
+  destinationIata?: string | null,
+  startDate?: string | null,
+  endDate?: string | null,
+  tripType?: "ida" | "ida_e_volta" | null,
+): string | null {
+  if (!originIata || originIata.length !== 3 || !destinationIata || destinationIata.length !== 3 || !startDate) return null;
+  let q = `Flights from ${originIata} to ${destinationIata} on ${startDate}`;
+  if (tripType !== "ida" && endDate) q += ` through ${endDate}`;
+  return `https://www.google.com/travel/flights?q=${encodeURIComponent(q)}`;
 }
 
 const inputStyle: React.CSSProperties = {
@@ -434,6 +448,19 @@ export function LogisticaClient({ category, initialItems }: { category: Category
                           </p>
                         )}
                       </div>
+                      {category === "voo" && (() => {
+                        const url = flightSearchUrl(item.origin_iata, item.destination_iata, item.start_date, item.end_date, item.trip_type);
+                        return url ? (
+                          <a
+                            href={url} target="_blank" rel="noopener noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            style={{ display: "flex", color: V3.gold, padding: 4, borderRadius: 4 }}
+                            title="Buscar passagem no Google Flights"
+                          >
+                            <ExternalLink size={14} />
+                          </a>
+                        ) : null;
+                      })()}
                       <button
                         onClick={(e) => { e.stopPropagation(); handleDelete(item.id); }}
                         style={{ background: "transparent", border: "none", color: V3.muted, cursor: "pointer", padding: 4 }}
@@ -528,6 +555,22 @@ export function LogisticaClient({ category, initialItems }: { category: Category
                 <input type="date" style={inputStyle} value={form.end_date} onChange={e => setForm({ ...form, end_date: e.target.value })} />
               </Field>
             </div>
+
+            {category === "voo" && (() => {
+              const url = flightSearchUrl(form.origin_iata, form.destination_iata, form.start_date, form.end_date, form.trip_type);
+              return url ? (
+                <a
+                  href={url} target="_blank" rel="noopener noreferrer"
+                  className="flex items-center gap-2"
+                  style={{
+                    color: V3.gold, fontSize: 11, fontWeight: 700,
+                    textDecoration: "none", marginBottom: 14, marginTop: -6,
+                  }}
+                >
+                  <ExternalLink size={13} /> Buscar passagem no Google Flights
+                </a>
+              ) : null;
+            })()}
 
             <Field label={cfg.providerLabel}>
               <input style={inputStyle} value={form.provider} onChange={e => setForm({ ...form, provider: e.target.value })} />
