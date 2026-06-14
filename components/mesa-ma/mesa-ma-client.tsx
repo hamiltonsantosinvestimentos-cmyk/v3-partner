@@ -32,8 +32,8 @@ const DealTimeline = dynamic(
   () => import("@/components/ma/deal-timeline").then(m => m.DealTimeline),
   { ssr: false }
 );
-const BusinessPlanPanel = dynamic(
-  () => import("@/components/ma/business-plan-panel").then(m => m.BusinessPlanPanel),
+const BusinessPlanContainer = dynamic(
+  () => import("@/components/ma/business-plan/business-plan-container").then(m => m.BusinessPlanContainer),
   { ssr: false }
 );
 import { NovoDealForm } from "@/components/ma/novo-deal-form";
@@ -1217,9 +1217,57 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
             }
 
             if (detailTab === "business-plan") {
+              const intakeToken = (selectedCard.asset_data as Record<string, unknown>)?.bp_intake_token as string | undefined;
+              const intakeUrl = intakeToken
+                ? `${typeof window !== "undefined" ? window.location.origin : "https://app.v3partners.com.br"}/intake/bp/${intakeToken}`
+                : null;
+
               return (
-                <div className="mt-2">
-                  <BusinessPlanPanel
+                <div className="mt-2 space-y-3">
+                  {/* Gerar Link de Intake */}
+                  <div className="p-3 rounded-xl border border-[#243A66] bg-[#162744]">
+                    <div className="flex items-center justify-between gap-2">
+                      <div>
+                        <p className="text-[10px] font-semibold text-[#E8C97A]">Link de Captação de KPIs</p>
+                        <p className="text-[9px] text-[#9BAFC5] mt-0.5">
+                          Envie ao contador ou equipe financeira do deal para preenchimento remoto
+                        </p>
+                      </div>
+                      {intakeUrl ? (
+                        <button
+                          onClick={() => { navigator.clipboard.writeText(intakeUrl); }}
+                          className="flex items-center gap-1 text-[9px] font-semibold text-[#C9A84C] px-2.5 py-1 rounded-lg border border-[#C9A84C]/40 bg-[#C9A84C]/10 hover:bg-[#C9A84C]/20 transition-colors flex-shrink-0"
+                        >
+                          <Copy size={10} /> Copiar link
+                        </button>
+                      ) : (
+                        <button
+                          onClick={async () => {
+                            if (!selectedCard) return;
+                            const res = await fetch("/api/ma/bp-intake/generate", {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ deal_id: selectedCard.id }),
+                            });
+                            const json = await res.json();
+                            if (res.ok && json.token) {
+                              const newAssetData = { ...(selectedCard.asset_data ?? {}), bp_intake_token: json.token, bp_intake_expires_at: json.expires_at };
+                              setCards(prev => prev.map(c => c.id === selectedCard.id ? { ...c, asset_data: newAssetData } : c));
+                              setSelectedCard(prev => prev ? { ...prev, asset_data: newAssetData } : null);
+                            }
+                          }}
+                          className="text-[9px] font-semibold text-[#C9A84C] px-2.5 py-1 rounded-lg border border-[#C9A84C]/40 bg-[#C9A84C]/10 hover:bg-[#C9A84C]/20 transition-colors flex-shrink-0"
+                        >
+                          Gerar Link
+                        </button>
+                      )}
+                    </div>
+                    {intakeUrl && (
+                      <p className="text-[8px] mt-1.5 truncate" style={{ color: "#9BAFC5" }}>{intakeUrl}</p>
+                    )}
+                  </div>
+
+                  <BusinessPlanContainer
                     dealId={selectedCard.id}
                     dealCode={selectedCard.code}
                     sector={selectedCard.sector}
