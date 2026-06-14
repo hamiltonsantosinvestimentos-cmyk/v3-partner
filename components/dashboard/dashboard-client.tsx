@@ -184,6 +184,12 @@ function TrialBanner({ createdAt, role }: { createdAt: string; role: string }) {
 interface RedeHealth {
   partnersAtivos: number;
   partnersPRO: number;
+  porPlano: {
+    STARTER: number;
+    PARTNER: number;
+    PARTNER_PRO: number;
+    ENTERPRISE: number;
+  };
   mrr: number;
   comissoesPendentes: number;
   vencendo7d: number;

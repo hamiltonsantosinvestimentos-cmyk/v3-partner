@@ -218,7 +218,7 @@ export async function GET(request: NextRequest) {
     // Copia todas as páginas de conteúdo
     const contentPageIndices = Array.from({ length: contentDoc.getPageCount() }, (_, i) => i);
     const contentPages = await finalDoc.copyPages(contentDoc, contentPageIndices);
-    contentPages.forEach(p => finalDoc.addPage(p));
+    contentPages.forEach((p: unknown) => finalDoc.addPage(p));
 
     // Metadata
     finalDoc.setTitle(`CIM — ${deal?.target_company ?? dealCode}`);
