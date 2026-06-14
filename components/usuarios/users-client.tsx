@@ -619,7 +619,7 @@ export function UsersClient({ initialUsers }: UsersClientProps) {
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent position="popper" className="z-[9999]">
                     {Object.entries(ROLE_LABELS).map(([key, label]) => (
                       <SelectItem key={key} value={key}>
                         {label}
@@ -699,7 +699,7 @@ export function UsersClient({ initialUsers }: UsersClientProps) {
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent position="popper" className="z-[9999]">
                     {Object.entries(ROLE_LABELS).map(([key, label]) => (
                       <SelectItem key={key} value={key}>
                         {label}

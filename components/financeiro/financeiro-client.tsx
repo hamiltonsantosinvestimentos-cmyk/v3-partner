@@ -2762,7 +2762,7 @@ function AssinaturasTab() {
     if (!payPartner) return;
     setPayLoading(true);
     const now = new Date();
-    const valor = payPartner.role === "PARTNER_PRO" ? 397 : 197;
+    const valor = payPartner.role === "PARTNER_PRO" ? 897 : payPartner.role === "STARTER" ? 297 : payPartner.role === "ENTERPRISE" ? 2500 : 497;
     try {
       await fetch("/api/financeiro/assinaturas", {
         method: "POST",
@@ -2786,13 +2786,14 @@ function AssinaturasTab() {
   }
 
   // KPIs
-  const totalPartners = partners.length;
+  const ROLES_PAGANTES = ["STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE"];
+  const totalPartners = partners.filter(p => ROLES_PAGANTES.includes(p.role)).length;
   const totalPRO = partners.filter(p => p.role === "PARTNER_PRO").length;
   const ativos = partners.filter(p => {
     const s = calcStatus(p);
-    return p.is_active && s.dias > 0;
+    return p.is_active && s.dias > 0 && ROLES_PAGANTES.includes(p.role);
   });
-  const mrr = ativos.reduce((s, p) => s + (p.role === "PARTNER_PRO" ? 397 : 197), 0);
+  const mrr = ativos.reduce((s, p) => s + (p.role === "PARTNER_PRO" ? 897 : p.role === "STARTER" ? 297 : p.role === "ENTERPRISE" ? 2500 : 497), 0);
   const vencendo = partners.filter(p => { const s = calcStatus(p); return s.dias > 0 && s.dias <= 15; }).length;
   const inadimplentes = partners.filter(p => { const s = calcStatus(p); return !p.is_active || s.dias === 0; }).length;
 
@@ -2957,7 +2958,7 @@ function AssinaturasTab() {
                 )}
                 {filtered.map(p => {
                   const status = calcStatus(p);
-                  const valor = p.role === "PARTNER_PRO" ? 397 : 197;
+                  const valor = p.role === "PARTNER_PRO" ? 897 : p.role === "STARTER" ? 297 : p.role === "ENTERPRISE" ? 2500 : 497;
                   const expDate = p.trial_expires_at
                     ? new Date(p.trial_expires_at).toLocaleDateString("pt-BR")
                     : new Date(new Date(p.created_at).getTime() + 30 * 86400000).toLocaleDateString("pt-BR");
@@ -3144,8 +3145,8 @@ function AssinaturasTab() {
             </div>
             <div className="space-y-1 text-sm">
               <p className="text-muted-foreground">Partner: <span className="text-foreground font-medium">{payPartner.full_name ?? payPartner.email}</span></p>
-              <p className="text-muted-foreground">Plano: <span className="text-foreground font-medium">{payPartner.role === "PARTNER_PRO" ? "Partner PRO" : "Partner"}</span></p>
-              <p className="text-muted-foreground">Valor: <span className="text-[#C9A84C] font-bold">{formatMoeda(payPartner.role === "PARTNER_PRO" ? 397 : 197)}</span></p>
+              <p className="text-muted-foreground">Plano: <span className="text-foreground font-medium">{payPartner.role === "PARTNER_PRO" ? "Partner PRO" : payPartner.role === "STARTER" ? "Starter" : payPartner.role === "ENTERPRISE" ? "Enterprise" : "Partner"}</span></p>
+              <p className="text-muted-foreground">Valor: <span className="text-[#C9A84C] font-bold">{formatMoeda(payPartner.role === "PARTNER_PRO" ? 897 : payPartner.role === "STARTER" ? 297 : payPartner.role === "ENTERPRISE" ? 2500 : 497)}</span></p>
             </div>
             <div>
               <label className="block text-xs text-muted-foreground mb-1">Observações (opcional)</label>

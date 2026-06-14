@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
   if (!isMesa) return NextResponse.json({ error: "Apenas a Mesa pode adicionar comentários" }, { status: 403 });
 
   const body = await req.json();
-  const { proposal_id, text } = body;
+  const { proposal_id, text, send_email, send_chat } = body;
   if (!proposal_id || !text?.trim()) {
     return NextResponse.json({ error: "proposal_id e text são obrigatórios" }, { status: 400 });
   }
@@ -80,6 +80,9 @@ export async function POST(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
+  let emailSent = false;
+  let chatSent = false;
+
   // Notifica o partner (fire-and-forget)
   if (proposal.partner_id) {
     const { data: partnerProfile } = await svc
@@ -89,7 +92,7 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (partnerProfile) {
-      // Notificação interna na plataforma
+      // Notificação interna na plataforma (sempre)
       svc.from("notifications").insert({
         user_id: partnerProfile.id,
         title: `Novo comentário na proposta ${proposal.code ?? ""}`,
@@ -99,7 +102,7 @@ export async function POST(req: NextRequest) {
         read: false,
       }).then(() => {}, () => {});
 
-      // E-mail — profiles.email pode ser null, busca em auth.users
+      // E-mail — sempre envia (ou somente se send_email explícito quando implementado)
       const emailFinal: string | null = partnerProfile.email ?? null;
       let resolvedEmail = emailFinal;
       if (!resolvedEmail) {
@@ -107,19 +110,39 @@ export async function POST(req: NextRequest) {
         resolvedEmail = authUser?.user?.email ?? null;
       }
 
-      if (resolvedEmail) {
-        notifyComentarioProposta({
-          partnerEmail: resolvedEmail,
-          partnerName: partnerProfile.full_name ?? "Parceiro",
-          proposalCode: proposal.code ?? proposal_id,
-          proposalTitle: proposal.title ?? "",
-          creditLine: proposal.credit_line ?? "",
-          autor,
-          comentario: text.trim(),
-        });
+      if (resolvedEmail && send_email !== false) {
+        try {
+          notifyComentarioProposta({
+            partnerEmail: resolvedEmail,
+            partnerName: partnerProfile.full_name ?? "Parceiro",
+            proposalCode: proposal.code ?? proposal_id,
+            proposalTitle: proposal.title ?? "",
+            creditLine: proposal.credit_line ?? "",
+            autor,
+            comentario: text.trim(),
+          });
+          emailSent = true;
+        } catch { /* silent */ }
+      }
+
+      // Chat (mensagem interna na plataforma)
+      if (send_chat) {
+        try {
+          const chatContent = `💬 Comentário na proposta ${proposal.code ?? ""} — ${proposal.title ?? ""}:\n\n${text.trim()}`;
+          const { error: chatErr } = await svc
+            .from("chat_messages")
+            .insert({
+              room_id: `partner_${partnerProfile.id}`,
+              sender_id: user.id,
+              sender_name: autor,
+              sender_role: profile?.role ?? "MESA_OPERACIONAL",
+              content: chatContent,
+            });
+          chatSent = !chatErr;
+        } catch { /* silent */ }
       }
     }
   }
 
-  return NextResponse.json({ ok: true, comment: newComment });
+  return NextResponse.json({ ok: true, comment: newComment, emailSent, chatSent });
 }

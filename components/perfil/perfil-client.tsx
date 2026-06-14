@@ -199,6 +199,7 @@ export function PerfilClient({ initialProfile }: { initialProfile: ProfileData }
     SDR:              { label: "SDR",            color: "#94A3B8", desc: "Prospecção ativa",    commission: "—" },
     CLOSER:           { label: "Closer",         color: "#94A3B8", desc: "Fechamento",          commission: "—" },
     FORNECEDOR:       { label: "Fornecedor",     color: "#94A3B8", desc: "Acesso fornecedor",   commission: "—" },
+    INSTITUICAO:      { label: "Instituição",    color: "#818CF8", desc: "Portal institucional", commission: "—" },
   };
   const plan = PLAN_INFO[profile.role] ?? PLAN_INFO.PARTNER;
 

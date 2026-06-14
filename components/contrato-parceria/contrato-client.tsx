@@ -8,7 +8,7 @@ import { FileText, CheckCircle2, Loader2, AlertCircle, ScrollText } from "lucide
 interface DadosContrato {
   userId: string;
   registrationId: string | null;
-  plano: "PARTNER" | "PARTNER_PRO";
+  plano: "STARTER" | "PARTNER" | "PARTNER_PRO" | "ENTERPRISE";
   email: string;
   telefone: string;
   razaoSocial: string;
@@ -54,7 +54,7 @@ export function ContratoClient({ dados }: { dados: DadosContrato }) {
   const contratoRef = useRef<HTMLDivElement>(null);
 
   const planoLabel   = dados.plano === "PARTNER_PRO" ? "Partner PRO" : "Partner";
-  const valorMensal  = dados.plano === "PARTNER_PRO" ? "R$ 397,00" : "R$ 197,00";
+  const valorMensal  = dados.plano === "PARTNER_PRO" ? "R$ 897,00" : "R$ 497,00";
   const comissao     = dados.plano === "PARTNER_PRO" ? "50%" : "30%";
   const agora        = new Date();
   const dataHoje     = agora.toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" });

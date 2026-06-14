@@ -19,7 +19,16 @@ export default async function ContratoParceriaPage() {
     .eq("id", user.id)
     .single();
 
-  const plano: "PARTNER" | "PARTNER_PRO" = profile?.role === "PARTNER_PRO" ? "PARTNER_PRO" : "PARTNER";
+  // Roles internos não assinam contrato — vai direto pro dashboard
+  const ROLES_INTERNOS = ["ADMIN", "SDR", "CLOSER", "GESTAO", "MESA_OPERACIONAL", "FINANCEIRO", "FORNECEDOR"];
+  if (profile?.role && ROLES_INTERNOS.includes(profile.role)) redirect("/dashboard");
+
+  const role = profile?.role as string | undefined;
+  const plano: "STARTER" | "PARTNER" | "PARTNER_PRO" | "ENTERPRISE" =
+    role === "PARTNER_PRO" ? "PARTNER_PRO"
+    : role === "STARTER" ? "STARTER"
+    : role === "ENTERPRISE" ? "ENTERPRISE"
+    : "PARTNER";
 
   // Busca dados do cadastro para pré-preencher o contrato
   const svc = sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
