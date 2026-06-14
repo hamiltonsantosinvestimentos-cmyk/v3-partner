@@ -18,10 +18,18 @@ async function getAuthedUser() {
 
 const ALLOWED_ROLES = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"] as const;
 
+// Código IATA: normaliza para maiúsculas e exige 3 letras quando informado
+const iataField = z.preprocess(
+  (v) => (typeof v === "string" && v.trim() !== "" ? v.trim().toUpperCase() : null),
+  z.string().regex(/^[A-Z]{3}$/, "Código IATA deve ter 3 letras (ex.: GIG)").nullable()
+).optional();
+
 const patchSchema = z.object({
   title:         z.string().min(3).max(200).optional(),
   origin:        z.string().max(120).optional().nullable(),
   destination:   z.string().max(120).optional().nullable(),
+  origin_iata:      iataField,
+  destination_iata: iataField,
   start_date:    z.string().optional().nullable(),
   end_date:      z.string().optional().nullable(),
   provider:      z.string().max(120).optional().nullable(),
@@ -49,8 +57,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const fields = parsed.data;
 
   const svc = serviceClient();
-  const { data: existing } = await svc.from("logistics_items").select("category, current_price, currency").eq("id", id).single();
-  if (!existing) return NextResponse.json({ error: "Item não encontrado" }, { status: 404 });
+  const { data: existing } = await svc.from("logistics_items").select("category, current_price, currency, deleted_at").eq("id", id).single();
+  if (!existing || existing.deleted_at) return NextResponse.json({ error: "Item não encontrado" }, { status: 404 });
 
   const { data, error } = await svc
     .from("logistics_items")
@@ -75,7 +83,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   return NextResponse.json({ ok: true, item: data });
 }
 
-// DELETE — remove item de logística
+// DELETE — soft delete do item de logística (preserva histórico de preço para análise futura)
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const { user, profile } = await getAuthedUser();
@@ -84,7 +92,10 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
     return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
   }
 
-  const { error } = await serviceClient().from("logistics_items").delete().eq("id", id);
+  const { error } = await serviceClient()
+    .from("logistics_items")
+    .update({ deleted_at: new Date().toISOString() })
+    .eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   logAudit({ userId: user.id, userName: profile?.full_name, action: "DELETE", entity: "logistics_items", entityId: id });

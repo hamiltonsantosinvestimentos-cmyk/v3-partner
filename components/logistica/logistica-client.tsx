@@ -31,6 +31,8 @@ type LogisticsItem = {
   title: string;
   origin?: string | null;
   destination?: string | null;
+  origin_iata?: string | null;
+  destination_iata?: string | null;
   start_date?: string | null;
   end_date?: string | null;
   provider?: string | null;
@@ -56,6 +58,8 @@ type Form = {
   title: string;
   origin: string;
   destination: string;
+  origin_iata: string;
+  destination_iata: string;
   start_date: string;
   end_date: string;
   provider: string;
@@ -67,7 +71,8 @@ type Form = {
 };
 
 const EMPTY_FORM: Form = {
-  title: "", origin: "", destination: "", start_date: "", end_date: "",
+  title: "", origin: "", destination: "", origin_iata: "", destination_iata: "",
+  start_date: "", end_date: "",
   provider: "", target_price: "", current_price: "", currency: "BRL",
   status: "monitorando", notes: "",
 };
@@ -200,6 +205,8 @@ export function LogisticaClient({ category, initialItems }: { category: Category
       title: item.title,
       origin: item.origin ?? "",
       destination: item.destination ?? "",
+      origin_iata: item.origin_iata ?? "",
+      destination_iata: item.destination_iata ?? "",
       start_date: item.start_date ?? "",
       end_date: item.end_date ?? "",
       provider: item.provider ?? "",
@@ -220,19 +227,27 @@ export function LogisticaClient({ category, initialItems }: { category: Category
     setHistory([]);
   };
 
-  const buildPayload = () => ({
-    title: form.title,
-    origin: form.origin || null,
-    destination: form.destination || null,
-    start_date: form.start_date || null,
-    end_date: form.end_date || null,
-    provider: form.provider || null,
-    target_price: form.target_price ? Number(form.target_price) : null,
-    current_price: form.current_price ? Number(form.current_price) : null,
-    currency: form.currency || "BRL",
-    status: form.status,
-    notes: form.notes || null,
-  });
+  const buildPayload = () => {
+    const isVoo = category === "voo";
+    // Para Voos, origem/destino são os próprios códigos IATA (normalizados a 3 letras)
+    const originIata = isVoo && form.origin_iata.length === 3 ? form.origin_iata : null;
+    const destinationIata = isVoo && form.destination_iata.length === 3 ? form.destination_iata : null;
+    return {
+      title: form.title,
+      origin: isVoo ? originIata : (form.origin || null),
+      destination: isVoo ? destinationIata : (form.destination || null),
+      origin_iata: originIata,
+      destination_iata: destinationIata,
+      start_date: form.start_date || null,
+      end_date: form.end_date || null,
+      provider: form.provider || null,
+      target_price: form.target_price ? Number(form.target_price) : null,
+      current_price: form.current_price ? Number(form.current_price) : null,
+      currency: form.currency || "BRL",
+      status: form.status,
+      notes: form.notes || null,
+    };
+  };
 
   const handleSave = async () => {
     if (!form.title.trim()) return;
@@ -460,12 +475,33 @@ export function LogisticaClient({ category, initialItems }: { category: Category
             </Field>
 
             <div className="grid grid-cols-2 gap-3">
-              <Field label={cfg.originLabel}>
-                <input style={inputStyle} value={form.origin} onChange={e => setForm({ ...form, origin: e.target.value })} />
-              </Field>
-              <Field label={cfg.destinationLabel}>
-                <input style={inputStyle} value={form.destination} onChange={e => setForm({ ...form, destination: e.target.value })} />
-              </Field>
+              {category === "voo" ? (
+                <>
+                  <Field label="Origem (IATA)">
+                    <input
+                      style={{ ...inputStyle, fontFamily: "monospace", letterSpacing: "0.2em", textTransform: "uppercase" }}
+                      value={form.origin_iata} maxLength={3} placeholder="GIG"
+                      onChange={e => setForm({ ...form, origin_iata: e.target.value.toUpperCase().replace(/[^A-Z]/g, "").slice(0, 3) })}
+                    />
+                  </Field>
+                  <Field label="Destino (IATA)">
+                    <input
+                      style={{ ...inputStyle, fontFamily: "monospace", letterSpacing: "0.2em", textTransform: "uppercase" }}
+                      value={form.destination_iata} maxLength={3} placeholder="MIA"
+                      onChange={e => setForm({ ...form, destination_iata: e.target.value.toUpperCase().replace(/[^A-Z]/g, "").slice(0, 3) })}
+                    />
+                  </Field>
+                </>
+              ) : (
+                <>
+                  <Field label={cfg.originLabel}>
+                    <input style={inputStyle} value={form.origin} onChange={e => setForm({ ...form, origin: e.target.value })} />
+                  </Field>
+                  <Field label={cfg.destinationLabel}>
+                    <input style={inputStyle} value={form.destination} onChange={e => setForm({ ...form, destination: e.target.value })} />
+                  </Field>
+                </>
+              )}
             </div>
 
             <div className="grid grid-cols-2 gap-3">

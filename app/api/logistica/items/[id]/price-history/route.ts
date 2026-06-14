@@ -60,6 +60,27 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const d = parsed.data;
 
   const svc = serviceClient();
+
+  // Idempotência — evita duplicar snapshot se o último preço registrado nos
+  // últimos 15 min já tem o mesmo valor (proteção contra polling repetido do n8n/Amadeus)
+  const { data: last } = await svc
+    .from("logistics_price_history")
+    .select("id, price, currency, checked_at")
+    .eq("item_id", id)
+    .order("checked_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const FIFTEEN_MIN_MS = 15 * 60 * 1000;
+  if (
+    last &&
+    last.price === d.price &&
+    last.currency === d.currency &&
+    Date.now() - new Date(last.checked_at).getTime() < FIFTEEN_MIN_MS
+  ) {
+    return NextResponse.json({ ok: true, entry: last, deduped: true });
+  }
+
   const { data, error } = await svc.from("logistics_price_history").insert({
     item_id: id,
     price: d.price,

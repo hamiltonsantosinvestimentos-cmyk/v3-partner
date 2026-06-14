@@ -18,11 +18,19 @@ async function getAuthedUser() {
 
 const ALLOWED_ROLES = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"] as const;
 
+// Código IATA: normaliza para maiúsculas e exige 3 letras quando informado
+const iataField = z.preprocess(
+  (v) => (typeof v === "string" && v.trim() !== "" ? v.trim().toUpperCase() : null),
+  z.string().regex(/^[A-Z]{3}$/, "Código IATA deve ter 3 letras (ex.: GIG)").nullable()
+).optional();
+
 const createSchema = z.object({
   category:      z.enum(["voo", "carro", "locacao"]),
   title:         z.string().min(3, "Título muito curto").max(200),
   origin:        z.string().max(120).optional().nullable(),
   destination:   z.string().max(120).optional().nullable(),
+  origin_iata:      iataField,
+  destination_iata: iataField,
   start_date:    z.string().optional().nullable(),
   end_date:      z.string().optional().nullable(),
   provider:      z.string().max(120).optional().nullable(),
@@ -45,7 +53,7 @@ export async function GET(req: NextRequest) {
   const category = searchParams.get("category");
 
   const svc = serviceClient();
-  let query = svc.from("logistics_items").select("*").order("start_date", { ascending: true, nullsFirst: false });
+  let query = svc.from("logistics_items").select("*").is("deleted_at", null).order("start_date", { ascending: true, nullsFirst: false });
   if (category) query = query.eq("category", category);
 
   const { data, error } = await query;
@@ -74,6 +82,8 @@ export async function POST(req: NextRequest) {
     title:         d.title,
     origin:        d.origin ?? null,
     destination:   d.destination ?? null,
+    origin_iata:      d.origin_iata ?? null,
+    destination_iata: d.destination_iata ?? null,
     start_date:    d.start_date ?? null,
     end_date:      d.end_date ?? null,
     provider:      d.provider ?? null,
