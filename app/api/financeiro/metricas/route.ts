@@ -32,6 +32,35 @@ export async function GET() {
     .order("created_at", { ascending: true });
 
   const partners = allPartners ?? [];
+
+  // Preços contratados reais (da tabela partner_subscriptions — mais recente por partner)
+  const subMap: Record<string, number> = {};
+  try {
+    const partnerIds = partners.map((p: { id: string }) => p.id);
+    if (partnerIds.length > 0) {
+      const { data: subs } = await db
+        .from("partner_subscriptions")
+        .select("partner_id, amount_cents, created_at")
+        .in("partner_id", partnerIds)
+        .order("created_at", { ascending: false });
+      for (const s of (subs ?? []) as { partner_id: string; amount_cents: number }[]) {
+        if (!subMap[s.partner_id] && s.amount_cents > 0) {
+          subMap[s.partner_id] = s.amount_cents;
+        }
+      }
+    }
+  } catch { /* tabela pode não existir */ }
+
+  // Preço efetivo por partner (contratado ou padrão do plano)
+  const PLANO_PADRAO: Record<string, number> = {
+    STARTER: PRECO_STARTER * 100,
+    PARTNER: PRECO_PARTNER * 100,
+    PARTNER_PRO: PRECO_PRO * 100,
+    ENTERPRISE: PRECO_ENTERPRISE * 100,
+  };
+  function getValorCents(p: { id: string; role: string }): number {
+    return subMap[p.id] ?? PLANO_PADRAO[p.role] ?? PRECO_PARTNER * 100;
+  }
   const now = new Date();
   const mesAtual = now.getMonth() + 1;
   const anoAtual = now.getFullYear();
@@ -53,8 +82,8 @@ export async function GET() {
   const ativosPro        = ativos.filter(p => p.role === "PARTNER_PRO").length;
   const ativosEnterprise = ativos.filter(p => p.role === "ENTERPRISE").length;
 
-  // MRR atual
-  const mrr = ativosStarter * PRECO_STARTER + ativosPartner * PRECO_PARTNER + ativosPro * PRECO_PRO + ativosEnterprise * PRECO_ENTERPRISE;
+  // MRR atual (soma dos valores contratados reais de cada partner ativo)
+  const mrr = Math.round(ativos.reduce((sum, p) => sum + getValorCents(p) / 100, 0));
   const arr = mrr * 12;
 
   // Partners novos este mês (criados em mesAtual/anoAtual)
@@ -96,11 +125,7 @@ export async function GET() {
     return new Date(p.trial_expires_at) >= inicioMesAnterior;
   });
 
-  const mrrMesAnterior =
-    ativosMesAnterior.filter(p => p.role === "STARTER").length * PRECO_STARTER +
-    ativosMesAnterior.filter(p => p.role === "PARTNER").length * PRECO_PARTNER +
-    ativosMesAnterior.filter(p => p.role === "PARTNER_PRO").length * PRECO_PRO +
-    ativosMesAnterior.filter(p => p.role === "ENTERPRISE").length * PRECO_ENTERPRISE;
+  const mrrMesAnterior = Math.round(ativosMesAnterior.reduce((sum, p) => sum + getValorCents(p) / 100, 0));
 
   const crescimentoMoM = mrrMesAnterior > 0
     ? Math.round(((mrr - mrrMesAnterior) / mrrMesAnterior) * 100 * 10) / 10
@@ -114,7 +139,7 @@ export async function GET() {
     const nomeMes = d.toLocaleString("pt-BR", { month: "short" });
     const dTime = d.getTime();
     const fimTime = fim.getTime();
-    let countStarter = 0, countPartner = 0, countPro = 0, countEnterprise = 0, novosNoMes = 0;
+    let mrrMes = 0, countAtivos = 0, novosNoMes = 0;
     for (const p of partners) {
       const criadoTime = new Date(p.created_at).getTime();
       if (criadoTime >= dTime && criadoTime <= fimTime) novosNoMes++;
@@ -122,15 +147,13 @@ export async function GET() {
       if (!p.is_active && i > 0) continue;
       const expTime = p.trial_expires_at ? new Date(p.trial_expires_at).getTime() : Infinity;
       if (expTime < dTime) continue;
-      if (p.role === "STARTER") countStarter++;
-      else if (p.role === "PARTNER") countPartner++;
-      else if (p.role === "PARTNER_PRO") countPro++;
-      else if (p.role === "ENTERPRISE") countEnterprise++;
+      mrrMes += getValorCents(p) / 100;
+      countAtivos++;
     }
     serie.push({
       mes: nomeMes,
-      mrr: countStarter * PRECO_STARTER + countPartner * PRECO_PARTNER + countPro * PRECO_PRO + countEnterprise * PRECO_ENTERPRISE,
-      partners: countStarter + countPartner + countPro + countEnterprise,
+      mrr: Math.round(mrrMes),
+      partners: countAtivos,
       novos: novosNoMes,
     });
   }
