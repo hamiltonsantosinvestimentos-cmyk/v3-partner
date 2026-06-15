@@ -57,12 +57,23 @@ export async function POST(req: NextRequest) {
   const expires_at = new Date();
   expires_at.setDate(expires_at.getDate() + expires_days);
 
+  const existingAssetData = deal.asset_data as Record<string, unknown> ?? {};
+
+  // Token de visitante/observador — separado do token de preenchimento.
+  // Não expira por data: o acesso é gated por contract_status (ver
+  // /api/ma/bp-intake/observador/[token]). Gerado uma única vez e
+  // reaproveitado em regenerações do link de intake.
+  const observerToken =
+    (existingAssetData.bp_observer_token as string | undefined) ??
+    randomBytes(24).toString("hex");
+
   const updatedAssetData = {
-    ...(deal.asset_data as Record<string, unknown> ?? {}),
+    ...existingAssetData,
     bp_intake_token: token,
     bp_intake_expires_at: expires_at.toISOString(),
     bp_intake_generated_by: user.id,
     bp_intake_generated_at: new Date().toISOString(),
+    bp_observer_token: observerToken,
   };
 
   const { error: updateErr } = await supabase
@@ -77,6 +88,13 @@ export async function POST(req: NextRequest) {
   const host = req.headers.get("host") ?? "app.v3partners.com.br";
   const protocol = host.includes("localhost") ? "http" : "https";
   const url = `${protocol}://${host}/intake/bp/${token}`;
+  const observador_url = `${protocol}://${host}/intake/observador/${observerToken}`;
 
-  return NextResponse.json({ token, url, expires_at: expires_at.toISOString() });
+  return NextResponse.json({
+    token,
+    url,
+    expires_at: expires_at.toISOString(),
+    observer_token: observerToken,
+    observador_url,
+  });
 }

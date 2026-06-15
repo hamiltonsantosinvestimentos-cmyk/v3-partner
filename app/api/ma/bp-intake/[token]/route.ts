@@ -110,6 +110,15 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
 
   const { deal, assetData } = resolved;
 
+  // Single-use lock — primeira submissão trava o token. Para correções, a Mesa
+  // gera um novo link via /api/ma/bp-intake/generate (sobrescreve bp_intake_token).
+  if (assetData.intake_locked === true) {
+    return NextResponse.json(
+      { error: "Formulário já preenchido. Solicite um novo link à equipe V3 Partners para correções." },
+      { status: 409 }
+    );
+  }
+
   let body: {
     responses: Record<string, unknown>;
     lgpd_consent: boolean;
@@ -185,6 +194,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     ...(assetData ?? {}),
     intake_responses: { ...body.responses, metadata: submitterMetadata },
     intake_submitted_at: new Date().toISOString(),
+    intake_locked: true,
     intake_lgpd_consent: true,
     intake_lgpd_consent_at: new Date().toISOString(),
     ...(primaryEmail ? { intake_respondent_email: primaryEmail } : {}),
