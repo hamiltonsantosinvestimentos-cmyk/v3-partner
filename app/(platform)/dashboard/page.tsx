@@ -193,6 +193,25 @@ export default async function DashboardPage({
       const partners = partnersRes.status === "fulfilled" ? (partnersRes.value.data ?? []) : [];
       const comissoes = comissoesRes.status === "fulfilled" ? (comissoesRes.value.data ?? []) : [];
 
+      // Preços contratados reais por partner (partner_subscriptions)
+      const PLANO_PADRAO: Record<string, number> = { STARTER: 297, PARTNER: 497, PARTNER_PRO: 897, ENTERPRISE: 2500 };
+      const subMapDash: Record<string, number> = {};
+      try {
+        const partnerIds = partners.map((p: { id: string }) => p.id);
+        if (partnerIds.length > 0) {
+          const { data: subsData } = await svc
+            .from("partner_subscriptions")
+            .select("partner_id, amount_cents, created_at")
+            .in("partner_id", partnerIds)
+            .order("created_at", { ascending: false });
+          for (const s of (subsData ?? []) as { partner_id: string; amount_cents: number }[]) {
+            if (!subMapDash[s.partner_id] && s.amount_cents > 0) {
+              subMapDash[s.partner_id] = s.amount_cents / 100;
+            }
+          }
+        }
+      } catch { /* ignora */ }
+
       const now = Date.now();
       const ativos = partners.filter((p: { is_active: boolean; trial_expires_at: string | null; created_at: string }) => {
         if (!p.is_active) return false;
@@ -216,15 +235,18 @@ export default async function DashboardPage({
         PARTNER_PRO: ativos.filter((p: { role: string }) => p.role === "PARTNER_PRO").length,
         ENTERPRISE:  ativos.filter((p: { role: string }) => p.role === "ENTERPRISE").length,
       };
+
+      // MRR usando valor real contratado de cada partner ativo
+      const mrr = Math.round(
+        ativos.reduce((sum: number, p: { id: string; role: string }) =>
+          sum + (subMapDash[p.id] ?? PLANO_PADRAO[p.role] ?? 497), 0)
+      );
+
       redeHealth = {
         partnersAtivos: ativos.length,
         partnersPRO: porPlano.PARTNER_PRO,
         porPlano,
-        mrr:
-          porPlano.STARTER     * 297  +
-          porPlano.PARTNER     * 497  +
-          porPlano.PARTNER_PRO * 897  +
-          porPlano.ENTERPRISE  * 2500,
+        mrr,
         comissoesPendentes: comissoes.reduce((s: number, c: { commission_value: number }) => s + c.commission_value, 0),
         vencendo7d,
       };
