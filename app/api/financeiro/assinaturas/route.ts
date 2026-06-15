@@ -165,14 +165,23 @@ export async function PATCH(req: NextRequest) {
       if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    // Salva o valor contratado no cadastro original (grandfathering)
+    // Salva o valor contratado
     if (valor_cents && valor_cents > 0) {
-      await svc()
-        .from("partner_registrations")
-        .update({ cora_amount_cents: valor_cents })
-        .eq("partner_id", partnerId);
+      // Busca email do partner para atualizar partner_registrations (linkado por email)
+      const { data: profileData } = await svc()
+        .from("profiles")
+        .select("email, role")
+        .eq("id", partnerId)
+        .single();
 
-      // Atualiza também a última subscription se existir
+      if (profileData?.email) {
+        await svc()
+          .from("partner_registrations")
+          .update({ cora_amount_cents: valor_cents })
+          .eq("email", profileData.email);
+      }
+
+      // Atualiza subscription existente OU cria uma nova com o valor correto
       const { data: lastSub } = await svc()
         .from("partner_subscriptions")
         .select("id")
@@ -180,8 +189,23 @@ export async function PATCH(req: NextRequest) {
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
+
       if (lastSub) {
-        await svc().from("partner_subscriptions").update({ amount_cents: valor_cents }).eq("id", lastSub.id);
+        await svc()
+          .from("partner_subscriptions")
+          .update({ amount_cents: valor_cents })
+          .eq("id", lastSub.id);
+      } else {
+        // Cria registro de subscription para guardar o valor contratado
+        const venc = new Date();
+        venc.setDate(venc.getDate() + 30);
+        await svc().from("partner_subscriptions").insert({
+          partner_id:   partnerId,
+          plano:        role ?? profileData?.role ?? "PARTNER",
+          amount_cents: valor_cents,
+          due_date:     venc.toISOString().split("T")[0],
+          status:       "MANUAL",
+        });
       }
     }
 
