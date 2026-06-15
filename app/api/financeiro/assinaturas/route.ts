@@ -179,7 +179,22 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: "CPF/CNPJ não encontrado para este partner. Atualize o cadastro." }, { status: 422 });
     }
 
-    const valor = PLANO_VALOR[pp.role] ?? 19700;
+    // Preço base do plano atual
+    let valor = PLANO_VALOR[pp.role] ?? 29700;
+
+    // Grandfathering: se o partner tem um preço contratado menor no cadastro original, usa ele
+    const { data: regOriginal } = await svc()
+      .from("partner_registrations")
+      .select("cora_amount_cents")
+      .eq("email", pp.email ?? "")
+      .not("cora_amount_cents", "is", null)
+      .order("created_at", { ascending: true }) // registro mais antigo = preço original contratado
+      .limit(1)
+      .maybeSingle();
+
+    if (regOriginal?.cora_amount_cents && regOriginal.cora_amount_cents < valor) {
+      valor = regOriginal.cora_amount_cents; // mantém preço contratado
+    }
 
     // Vencimento = data de expiração do partner (ou +30 dias se já venceu)
     const expiry = pp.trial_expires_at ? new Date(pp.trial_expires_at) : new Date();
@@ -215,7 +230,12 @@ export async function PATCH(req: NextRequest) {
           interest: { type: "MONTHLY_PERCENTAGE", value: 1 },
           fine: { type: "PERCENTAGE", value: 2 },
         },
-        services: [{ name: `V3 Partners — Mensalidade ${pp.role === "PARTNER_PRO" ? "Partner PRO" : "Partner"}`, amount: valor }],
+        services: [{ name: `V3 Partners — Mensalidade ${
+          pp.role === "ENTERPRISE" ? "Enterprise"
+          : pp.role === "PARTNER_PRO" ? "Partner PRO"
+          : pp.role === "STARTER" ? "Starter"
+          : "Partner"
+        }`, amount: valor }],
         notifications: { formats: ["EMAIL"], by_email: { should_notify: true } },
       }),
       idempotencyKey: randomUUID(),
