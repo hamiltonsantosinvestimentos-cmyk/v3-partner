@@ -1,9 +1,15 @@
 // Adapter math test — mirrors adapter.ts exactly, pure JS
 // Runs without compilation: node scripts/test-bp-adapter.mjs
 // Uses NELBLUE (MA-26-013) realistic parameters from the Vendedor brief.
+// Inclui Capital Stacking — Modelo A (MVP Orgânico) vs Modelo B (Expansão
+// Institucional + Giro Rápido).
 
 const HORIZON = 10;
 const FX_FALLBACK = 5.75;
+
+// Indicador B3 BGI (Boi Gordo, CEPEA/B3 SP) usado como referência de revenda no
+// Giro Rápido quando o formulário não informa um preço de arroba específico.
+const BGI_INDEX_FALLBACK_BRL = 346.0;
 
 // ── Hedge calculator (mirrors hedge-calculator.ts) ────────────────────
 function calcularHedge({ receita_usd_mes, custo_usd_mes, usd_brl, hedge_custo_ndf_pct, hedge_custo_opcao_pct }) {
@@ -28,6 +34,48 @@ function calcularHedge({ receita_usd_mes, custo_usd_mes, usd_brl, hedge_custo_nd
   };
 }
 
+// ── Gera a série de 10 anos (receita/custo/EBITDA) para um dado CAGR ─────────
+// Mirrors buildYearSeries() in adapter.ts — compartilhada pelo Modelo A
+// (cagr_base) e pelo Modelo B (cagr_expansao), mesma unit economics.
+function buildYearSeries(cagr, b) {
+  const anos = [];
+  const receita = [];
+
+  for (let y = 0; y < HORIZON; y++) {
+    const growth = Math.pow(1 + cagr, y);
+
+    const rec_nac_brl = b.rec_nac_base * growth;
+    const rec_exp_usd = b.rec_exp_usd_base * growth;
+    const rec_exp_brl = b.rec_exp_brl_base * growth;
+    const rec_total_brl = rec_nac_brl + rec_exp_brl;
+
+    const custo_op_brl = b.custo_fixo_mes_brl * 12 * growth;
+
+    const ebitda = rec_total_brl - custo_op_brl;
+    const margem = rec_total_brl > 0 ? (ebitda / rec_total_brl) * 100 : 0;
+
+    anos.push({
+      ano: b.baseYear + y,
+      receita_brl: Math.round(rec_nac_brl),
+      receita_usd: Math.round(rec_exp_usd),
+      receita_total_brl: Math.round(rec_total_brl),
+      custo_operacional_brl: Math.round(custo_op_brl),
+      ebitda_brl: Math.round(ebitda),
+      margem_ebitda_pct: parseFloat(margem.toFixed(2)),
+      fcl_brl: Math.round(ebitda),
+      embrioes_nacionais: Math.round(b.embrioes_nac_mes * growth) * 12,
+      embrioes_exportados: Math.round(b.embrioes_exp_mes * growth) * 12,
+    });
+
+    receita.push(
+      { ano: b.baseYear + y, tipo: "Nacional BRL", valor: Math.round(rec_nac_brl) },
+      { ano: b.baseYear + y, tipo: "Exportação BRL", valor: Math.round(rec_exp_brl) },
+    );
+  }
+
+  return { anos, receita };
+}
+
 // ── Adapter (mirrors adapter.ts exactly) ────────────────────────────
 function adaptGeneticaBovinaIntake(data, fx) {
   const taxa_prenhez = data.taxa_prenhez_pct ?? 62;
@@ -42,9 +90,10 @@ function adaptGeneticaBovinaIntake(data, fx) {
   const custo_insumos = data.custo_insumos_mes_brl ?? 0;
   const custo_vet = data.custo_veterinario_mes_brl ?? 0;
   const custo_usd_mes = data.custo_importado_usd_mes ?? 0;
-  const custo_total_mes_brl = custo_pessoal + custo_insumos + custo_vet + custo_usd_mes * fx.usd_brl;
+  const custo_fixo_mes_brl = custo_pessoal + custo_insumos + custo_vet + custo_usd_mes * fx.usd_brl;
 
-  // CAGR scenarios — cagr_base is the MAIN projection curve (12%)
+  // CAGR scenarios — cagr_base é a curva do Modelo A (MVP Orgânico, 12%);
+  // cagr_expansao é a curva do Modelo B (Expansão Institucional, 18%)
   const cagr_base = (data.crescimento_mercado_pct_aa ?? 12) / 100;
   const cagr_expansao = (data.benchmark_crescimento_estabilizado_pct ?? 18) / 100;
   const cagr_pessimista = (data.benchmark_crescimento_pessimista_pct ?? -5) / 100;
@@ -65,39 +114,115 @@ function adaptGeneticaBovinaIntake(data, fx) {
   const rec_exp_usd_base = embrioes_exp_mes * 12 * preco_exp_usd;
   const rec_exp_brl_base = rec_exp_usd_base * fx.usd_brl;
 
-  const anos = [];
-  const receita = [];
-  const currentYear = 2026;
+  const baseYear = 2026;
 
-  for (let y = 0; y < HORIZON; y++) {
-    const growth = Math.pow(1 + cagr_base, y);
-    const rec_nac_brl = rec_nac_base * growth;
-    const rec_exp_usd = rec_exp_usd_base * growth;
-    const rec_exp_brl = rec_exp_brl_base * growth;
-    const rec_total_brl = rec_nac_brl + rec_exp_brl;
-    const custo_op_brl = custo_total_mes_brl * 12 * growth;
-    const ebitda = rec_total_brl - custo_op_brl;
-    const margem = rec_total_brl > 0 ? (ebitda / rec_total_brl) * 100 : 0;
+  const yearSeriesBases = {
+    baseYear,
+    rec_nac_base,
+    rec_exp_usd_base,
+    rec_exp_brl_base,
+    custo_fixo_mes_brl,
+    embrioes_nac_mes,
+    embrioes_exp_mes,
+  };
 
-    anos.push({
-      ano: currentYear + y,
-      receita_brl: Math.round(rec_nac_brl),
-      receita_usd: Math.round(rec_exp_usd),
-      receita_total_brl: Math.round(rec_total_brl),
-      custo_operacional_brl: Math.round(custo_op_brl),
-      ebitda_brl: Math.round(ebitda),
-      margem_ebitda_pct: parseFloat(margem.toFixed(2)),
-      embrioes_nacionais: Math.round(embrioes_nac_mes * growth) * 12,
-      embrioes_exportados: Math.round(embrioes_exp_mes * growth) * 12,
-    });
-    receita.push(
-      { ano: currentYear + y, tipo: "Nacional BRL", valor: Math.round(rec_nac_brl) },
-      { ano: currentYear + y, tipo: "Exportação BRL", valor: Math.round(rec_exp_brl) },
-    );
-  }
+  // ── Modelo A (MVP Orgânico) e Modelo B (Expansão Institucional) ────
+  const seriesA = buildYearSeries(cagr_base, yearSeriesBases);
+  const seriesB = buildYearSeries(cagr_expansao, yearSeriesBases);
 
-  const ebitda_terminal = anos[anos.length - 1]?.ebitda_brl ?? 0;
-  const ebitda_y5 = anos[4]?.ebitda_brl ?? 0;
+  // ── Capital Stacking — Fase 1 (Capex originador) e Fase 2 (capital
+  // institucional + Giro Rápido) ─────────────────────────────────────
+  const capexFase1 = data.capex_fase1_producao_brl ?? 0;
+  const aporteFase2 = data.aporte_fase2_institucional_brl ?? 0;
+  const instrumentoFase2 =
+    data.instrumento_fase2 === "Dívida Estruturada"
+      ? "divida_estruturada"
+      : data.instrumento_fase2 === "Equity Sênior"
+        ? "equity_senior"
+        : "nao_definido";
+
+  const giroCabecas = data.giro_gado_cabecas ?? 0;
+  const giroArrobasCompra = data.giro_gado_arrobas_compra ?? 0;
+  const giroPrecoCompra = data.giro_gado_preco_arroba_compra_brl ?? 0;
+  const giroArrobasDesmame = data.giro_gado_arrobas_desmame ?? 0;
+  const giroMesesAteVenda = data.giro_gado_meses_ate_venda ?? 12;
+  const precoArrobaBgi = data.benchmark_preco_arroba_boi_gordo_rs ?? BGI_INDEX_FALLBACK_BRL;
+
+  // Giro Rápido: capital de giro investido na compra de receptoras (Ano 1) e
+  // receita de revenda travada via B3 BGI no ano correspondente ao prazo de
+  // engorda/desmame. Fluxo SEGREGADO — não entra em receita_total_brl/ebitda.
+  const capital_giro_brl = giroCabecas * giroArrobasCompra * giroPrecoCompra;
+  const receita_giro_brl = giroCabecas * giroArrobasDesmame * precoArrobaBgi;
+  const resultado_giro_brl = receita_giro_brl - capital_giro_brl;
+  const ano_resultado_idx = Math.min(HORIZON - 1, Math.max(0, Math.round(giroMesesAteVenda / 12)));
+
+  // Modelo A: FCL = EBITDA − Capex Fase 1 (apenas no Ano 1)
+  const anosA = seriesA.anos.map((entry, idx) => ({
+    ...entry,
+    fcl_brl: Math.round(entry.ebitda_brl - (idx === 0 ? capexFase1 : 0)),
+  }));
+
+  // Modelo B: FCL = EBITDA − Capex Fase 1 − Capital de Giro (Ano 1) +
+  // Resultado do Giro Rápido (no ano de revenda)
+  const anosB = seriesB.anos.map((entry, idx) => {
+    let fcl = entry.ebitda_brl;
+    if (idx === 0) fcl -= capexFase1;
+    if (idx === 0) fcl -= capital_giro_brl;
+    if (idx === ano_resultado_idx) fcl += resultado_giro_brl;
+    return { ...entry, fcl_brl: Math.round(fcl) };
+  });
+
+  const modelo_a = {
+    label: "Modelo A — MVP Orgânico",
+    cagr_aplicado_pct: cagr_base * 100,
+    anos: anosA,
+    receita: seriesA.receita,
+  };
+
+  const modelo_b = {
+    label: "Modelo B — Expansão Institucional",
+    cagr_aplicado_pct: cagr_expansao * 100,
+    anos: anosB,
+    receita: seriesB.receita,
+  };
+
+  const capital_stack = {
+    fase_1: {
+      label: "Fase 1 — Capex Originador",
+      fonte: "Cotas de Investimento Tokenizadas (RWA) — Produtores Rurais Parceiros",
+      capex_brl: capexFase1,
+      descricao:
+        "Capex inicial do centro de melhoramento genético (infraestrutura, laboratórios, matrizes doadoras), " +
+        "aportado pelos produtores rurais parceiros via cotas de investimento tokenizadas com lastro em ativo real.",
+    },
+    fase_2: {
+      label: "Fase 2 — Capital de Aceleração Institucional",
+      fonte: "Capital Institucional Externo",
+      aporte_brl: aporteFase2,
+      instrumento: instrumentoFase2,
+      estrategia:
+        "Giro Rápido — aquisição de receptoras no mercado físico com revenda travada via B3 BGI (Boi Gordo)",
+      descricao:
+        "O aporte institucional financia a aquisição de gado receptor no mercado físico; a revenda é projetada " +
+        "ao indicador B3 BGI (CEPEA/B3 SP), e o lote serve de base de recepção para os embriões sexados do centro " +
+        "genético, acelerando a escala de produção do Modelo B frente ao Modelo A.",
+      ...(giroCabecas > 0
+        ? {
+            giro_gado: {
+              cabecas: giroCabecas,
+              capital_giro_brl: Math.round(capital_giro_brl),
+              receita_giro_brl: Math.round(receita_giro_brl),
+              resultado_giro_brl: Math.round(resultado_giro_brl),
+              ano_resultado: baseYear + ano_resultado_idx,
+              preco_arroba_bgi_brl: precoArrobaBgi,
+            },
+          }
+        : {}),
+    },
+  };
+
+  const ebitda_terminal = anosA[anosA.length - 1]?.ebitda_brl ?? 0;
+  const ebitda_y5 = anosA[4]?.ebitda_brl ?? 0;
 
   const scenarios = {
     base: {
@@ -123,8 +248,9 @@ function adaptGeneticaBovinaIntake(data, fx) {
     horizon_years: HORIZON,
     fx_snapshot: fx,
     hedge_analysis,
-    anos,
-    receita,
+    // Espelhos do Modelo A — Zero Breaking Changes para consumidores existentes
+    anos: modelo_a.anos,
+    receita: modelo_a.receita,
     scenarios,
     indicadores: {
       embrioes_produzidos_mes: embrioes_mes,
@@ -139,6 +265,9 @@ function adaptGeneticaBovinaIntake(data, fx) {
       cagr_expansao_pct: cagr_expansao * 100,
       cagr_pessimista_pct: cagr_pessimista * 100,
     },
+    modelo_a,
+    modelo_b,
+    capital_stack,
   };
 }
 
@@ -159,6 +288,16 @@ const NELBLUE_INPUT = {
   benchmark_crescimento_pessimista_pct: -5,
   benchmark_hedge_custo_ndf_pct: 3.5,
   benchmark_hedge_custo_opcao_pct: 5.2,
+  // ── Capital Stacking — Fase 1 (Capex Originador) + Fase 2 (Capital
+  // Institucional / Giro Rápido) ────────────────────────────────────
+  capex_fase1_producao_brl: 2500000,
+  aporte_fase2_institucional_brl: 8000000,
+  instrumento_fase2: "Dívida Estruturada",
+  giro_gado_cabecas: 500,
+  giro_gado_arrobas_compra: 18,
+  giro_gado_preco_arroba_compra_brl: 280,
+  giro_gado_arrobas_desmame: 24,
+  giro_gado_meses_ate_venda: 12,
 };
 
 const FX = { usd_brl: FX_FALLBACK, source: "fallback", date: "2026-06-09", fetched_at: new Date().toISOString() };
@@ -166,7 +305,7 @@ const FX = { usd_brl: FX_FALLBACK, source: "fallback", date: "2026-06-09", fetch
 const result = adaptGeneticaBovinaIntake(NELBLUE_INPUT, FX);
 
 // ── Assertions ──────────────────────────────────────────────────────
-console.log("=== ADAPTER TEST — NELBLUE (MA-26-013) ===\n");
+console.log("=== ADAPTER TEST — NELBLUE (MA-26-013) — Capital Stacking ===\n");
 
 // 1. Year-0 math verification
 const y0 = result.anos[0];
@@ -225,7 +364,59 @@ if (result.hedge_analysis) {
   console.log(`    Custo NDF anual: R$${result.hedge_analysis.custo_anual_ndf_brl.toLocaleString("pt-BR")}\n`);
 }
 
-// 8. Summary financials
+// 8. modelo_a / modelo_b — CAGRs aplicados e alias de raiz (Zero Breaking Changes)
+const { modelo_a, modelo_b, capital_stack } = result;
+console.log(`[8] Modelo A / Modelo B — CAGR aplicado:`);
+console.log(`    modelo_a.cagr_aplicado_pct: ${modelo_a.cagr_aplicado_pct}% (expected 12) ${modelo_a.cagr_aplicado_pct === 12 ? "✓" : "✗ FAIL"}`);
+console.log(`    modelo_b.cagr_aplicado_pct: ${modelo_b.cagr_aplicado_pct}% (expected 18) ${modelo_b.cagr_aplicado_pct === 18 ? "✓" : "✗ FAIL"}`);
+const rootAliasOk = result.anos[0].fcl_brl === modelo_a.anos[0].fcl_brl && result.receita.length === modelo_a.receita.length;
+console.log(`    root anos/receita === modelo_a (alias): ${rootAliasOk ? "✓" : "✗ FAIL"}\n`);
+
+// 9. Capex Fase 1 — FCL Modelo A Ano 1 = EBITDA Ano 1 − Capex Fase 1
+const capexFase1 = NELBLUE_INPUT.capex_fase1_producao_brl;
+const expectedFclA0 = modelo_a.anos[0].ebitda_brl - capexFase1;
+console.log(`[9] Modelo A — FCL Ano 1 = EBITDA − Capex Fase 1:`);
+console.log(`    Expected: ${expectedFclA0.toLocaleString("pt-BR")}`);
+console.log(`    Got:      ${modelo_a.anos[0].fcl_brl.toLocaleString("pt-BR")}`);
+console.log(`    PASS: ${modelo_a.anos[0].fcl_brl === expectedFclA0 ? "✓" : "✗ FAIL"}\n`);
+
+// 10. Giro Rápido — capital de giro, receita travada via BGI fallback (R$346) e resultado
+const giroCabecas = NELBLUE_INPUT.giro_gado_cabecas;
+const capitalGiroEsperado = giroCabecas * NELBLUE_INPUT.giro_gado_arrobas_compra * NELBLUE_INPUT.giro_gado_preco_arroba_compra_brl;
+const receitaGiroEsperada = giroCabecas * NELBLUE_INPUT.giro_gado_arrobas_desmame * BGI_INDEX_FALLBACK_BRL;
+const resultadoGiroEsperado = receitaGiroEsperada - capitalGiroEsperado;
+const giroGado = capital_stack.fase_2.giro_gado;
+console.log(`[10] Giro Rápido (fallback BGI R$${BGI_INDEX_FALLBACK_BRL}):`);
+console.log(`    capital_giro_brl:   esperado ${capitalGiroEsperado.toLocaleString("pt-BR")} | got ${giroGado.capital_giro_brl.toLocaleString("pt-BR")} ${giroGado.capital_giro_brl === capitalGiroEsperado ? "✓" : "✗ FAIL"}`);
+console.log(`    receita_giro_brl:   esperado ${receitaGiroEsperada.toLocaleString("pt-BR")} | got ${giroGado.receita_giro_brl.toLocaleString("pt-BR")} ${giroGado.receita_giro_brl === receitaGiroEsperada ? "✓" : "✗ FAIL"}`);
+console.log(`    resultado_giro_brl: esperado ${resultadoGiroEsperado.toLocaleString("pt-BR")} | got ${giroGado.resultado_giro_brl.toLocaleString("pt-BR")} ${giroGado.resultado_giro_brl === resultadoGiroEsperado ? "✓" : "✗ FAIL"}`);
+console.log(`    preco_arroba_bgi_brl: ${giroGado.preco_arroba_bgi_brl} (expected ${BGI_INDEX_FALLBACK_BRL}) ${giroGado.preco_arroba_bgi_brl === BGI_INDEX_FALLBACK_BRL ? "✓" : "✗ FAIL"}\n`);
+
+// 11. Modelo B — FCL Ano 1 = EBITDA − Capex Fase 1 − Capital de Giro; FCL Ano 2 = EBITDA + Resultado do Giro
+const expectedFclB0 = modelo_b.anos[0].ebitda_brl - capexFase1 - capitalGiroEsperado;
+const anoResultadoIdx = Math.min(HORIZON - 1, Math.max(0, Math.round(NELBLUE_INPUT.giro_gado_meses_ate_venda / 12)));
+const expectedFclB1 = modelo_b.anos[anoResultadoIdx].ebitda_brl + resultadoGiroEsperado;
+console.log(`[11] Modelo B — FCL com Giro Rápido injetado:`);
+console.log(`    Ano 1 (ano_idx=0): esperado ${Math.round(expectedFclB0).toLocaleString("pt-BR")} | got ${modelo_b.anos[0].fcl_brl.toLocaleString("pt-BR")} ${modelo_b.anos[0].fcl_brl === Math.round(expectedFclB0) ? "✓" : "✗ FAIL"}`);
+console.log(`    Ano ${anoResultadoIdx + 1} (ano_idx=${anoResultadoIdx}): esperado ${Math.round(expectedFclB1).toLocaleString("pt-BR")} | got ${modelo_b.anos[anoResultadoIdx].fcl_brl.toLocaleString("pt-BR")} ${modelo_b.anos[anoResultadoIdx].fcl_brl === Math.round(expectedFclB1) ? "✓" : "✗ FAIL"}`);
+console.log(`    giro_gado.ano_resultado: ${giroGado.ano_resultado} (expected ${2026 + anoResultadoIdx}) ${giroGado.ano_resultado === 2026 + anoResultadoIdx ? "✓" : "✗ FAIL"}\n`);
+
+// 12. Giro Rápido segregado — receita_total_brl/ebitda_brl NÃO são afetados pelo Giro
+const recIgualA0 = modelo_a.anos[0].receita_total_brl === modelo_b.anos[0].receita_total_brl;
+const ebitdaIgualA0 = modelo_a.anos[0].ebitda_brl === modelo_b.anos[0].ebitda_brl;
+console.log(`[12] Giro Rápido segregado (não polui receita/EBITDA recorrentes em Ano 1):`);
+console.log(`    receita_total_brl A === B (y0, mesmo growth^0=1): ${recIgualA0 ? "✓" : "✗ FAIL"}`);
+console.log(`    ebitda_brl A === B (y0, mesmo growth^0=1):        ${ebitdaIgualA0 ? "✓" : "✗ FAIL"}\n`);
+
+// 13. capital_stack — estrutura Fase 1 / Fase 2
+console.log(`[13] capital_stack:`);
+console.log(`    fase_1.capex_brl: ${capital_stack.fase_1.capex_brl.toLocaleString("pt-BR")} (expected ${capexFase1.toLocaleString("pt-BR")}) ${capital_stack.fase_1.capex_brl === capexFase1 ? "✓" : "✗ FAIL"}`);
+console.log(`    fase_2.aporte_brl: ${capital_stack.fase_2.aporte_brl.toLocaleString("pt-BR")} (expected ${NELBLUE_INPUT.aporte_fase2_institucional_brl.toLocaleString("pt-BR")}) ${capital_stack.fase_2.aporte_brl === NELBLUE_INPUT.aporte_fase2_institucional_brl ? "✓" : "✗ FAIL"}`);
+console.log(`    fase_2.instrumento: ${capital_stack.fase_2.instrumento} (expected divida_estruturada) ${capital_stack.fase_2.instrumento === "divida_estruturada" ? "✓" : "✗ FAIL"}`);
+console.log(`    fase_1.fonte: ${capital_stack.fase_1.fonte}`);
+console.log(`    fase_2.fonte: ${capital_stack.fase_2.fonte}\n`);
+
+// 14. Summary financials
 console.log("=== FINANCIAL SUMMARY ===");
 console.log(`Receita Ano 1:     R$${y0.receita_total_brl.toLocaleString("pt-BR")}`);
 console.log(`EBITDA  Ano 1:     R$${y0.ebitda_brl.toLocaleString("pt-BR")} (${y0.margem_ebitda_pct}%)`);
@@ -234,6 +425,13 @@ console.log(`EBITDA  Ano 10:    R$${result.anos[9].ebitda_brl.toLocaleString("pt
 console.log(`ValTerminal Base:  R$${s.base.valor_terminal_brl.toLocaleString("pt-BR")}`);
 console.log(`ValTerminal Exp:   R$${s.expansao.valor_terminal_brl.toLocaleString("pt-BR")}`);
 console.log(`ValTerminal Cons:  R$${s.pessimista.valor_terminal_brl.toLocaleString("pt-BR")}`);
+console.log(`\n--- Modelo A (MVP Orgânico, CAGR ${modelo_a.cagr_aplicado_pct}%) ---`);
+console.log(`FCL Ano 1:  R$${modelo_a.anos[0].fcl_brl.toLocaleString("pt-BR")}`);
+console.log(`FCL Ano 10: R$${modelo_a.anos[9].fcl_brl.toLocaleString("pt-BR")}`);
+console.log(`\n--- Modelo B (Expansão Institucional, CAGR ${modelo_b.cagr_aplicado_pct}%) ---`);
+console.log(`FCL Ano 1:  R$${modelo_b.anos[0].fcl_brl.toLocaleString("pt-BR")}`);
+console.log(`FCL Ano 2:  R$${modelo_b.anos[1].fcl_brl.toLocaleString("pt-BR")} (ponto de virada — Giro Rápido)`);
+console.log(`FCL Ano 10: R$${modelo_b.anos[9].fcl_brl.toLocaleString("pt-BR")}`);
 
 // Output the full projections JSON for DB injection
 const fs = await import("fs");

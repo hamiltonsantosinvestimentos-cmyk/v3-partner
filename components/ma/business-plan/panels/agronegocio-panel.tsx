@@ -3,7 +3,10 @@
 import { useState } from "react";
 import { Loader2, TrendingUp, DollarSign, BarChart2, Shield } from "lucide-react";
 import type { GeneratedPlan } from "@/lib/ma/business-plan-engine/generate";
-import type { AgronegocioFinancialProjections } from "@/lib/ma/business-plan-schemas/agronegocio-v1";
+import type {
+  AgronegocioFinancialProjections,
+  AgronegocioProjectionYear,
+} from "@/lib/ma/business-plan-schemas/agronegocio-v1";
 import {
   ChartTimeSeries,
   ChartCenariosAgrupado,
@@ -35,6 +38,7 @@ interface Props {
 
 export function AgronegocionPanel({ plan, financialProjections: fp, canGenerate, onRegenerate }: Props) {
   const [regenerating, setRegenerating] = useState(false);
+  const [modelo, setModelo] = useState<"A" | "B">("A");
 
   async function handleRegen() {
     setRegenerating(true);
@@ -42,23 +46,62 @@ export function AgronegocionPanel({ plan, financialProjections: fp, canGenerate,
     setRegenerating(false);
   }
 
-  const ano0 = fp.anos?.[0];
-  const ano5 = fp.anos?.[4];
+  const hasCapitalStacking = !!(fp.modelo_a && fp.modelo_b);
+  const activeModel = (modelo === "B" && fp.modelo_b) ? fp.modelo_b : fp.modelo_a;
+  const activeAnos: AgronegocioProjectionYear[] = activeModel?.anos ?? fp.anos ?? [];
+
+  const ano0 = activeAnos[0];
+  const ano5 = activeAnos[4];
   const hedge = fp.hedge_analysis as Record<string, unknown> | null | undefined;
   const bgi = fp.viabilidade_bgi as Record<string, unknown> | undefined;
 
   // Detect sector-specific metrics for conditional chart rendering.
   // Check presence of keys in anos[0] (commodity fields) or indicadores (securitização).
-  const firstYear = fp.anos?.[0] as ChartRow | undefined;
+  const firstYear = activeAnos[0] as ChartRow | undefined;
   const hasCommodityMetric = firstYear !== undefined && typeof firstYear.margem_por_tonelada === "number";
   const hasSecuritizacaoMetric =
     fp.indicadores !== undefined && typeof fp.indicadores.prazo_medio_carteira === "number";
 
   // Cast anos to ChartRow[] for the generic chart component (number extends unknown).
-  const anosRows = (fp.anos ?? []) as ChartRow[];
+  const anosRows = activeAnos as ChartRow[];
+
+  // ── Capital Stacking — FCL comparativo Modelo A vs Modelo B ──────────────
+  const giroGado = fp.capital_stack?.fase_2?.giro_gado;
+  const pontoDeViradaAno = giroGado?.ano_resultado;
+  const fclComparativoRows: ChartRow[] = hasCapitalStacking
+    ? (fp.modelo_a!.anos.map((anoA, idx) => ({
+        ano: anoA.ano,
+        fcl_modelo_a: anoA.fcl_brl,
+        fcl_modelo_b: fp.modelo_b!.anos[idx]?.fcl_brl ?? 0,
+      })) as ChartRow[])
+    : [];
 
   return (
     <div className="space-y-4">
+      {/* ── Capital Stacking — seletor de modelo ──────────────── */}
+      {hasCapitalStacking && (
+        <div className="flex items-center gap-2">
+          <span className="text-[9px] font-bold uppercase tracking-widest" style={{ color: C.gl }}>
+            Modelo de Projeção:
+          </span>
+          <div className="flex rounded-lg border overflow-hidden" style={{ borderColor: C.nm }}>
+            {(["A", "B"] as const).map((m) => (
+              <button
+                key={m}
+                onClick={() => setModelo(m)}
+                className="px-3 py-1 text-[10px] font-semibold transition-colors"
+                style={{
+                  background: modelo === m ? C.go : C.nc,
+                  color: modelo === m ? C.nd : C.mu,
+                }}
+              >
+                {m === "A" ? fp.modelo_a!.label : fp.modelo_b!.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* ── KPI strip ─────────────────────────────────────────── */}
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         {[
@@ -83,7 +126,7 @@ export function AgronegocionPanel({ plan, financialProjections: fp, canGenerate,
       {anosRows.length > 0 && (
         <div className="rounded-xl border p-4" style={{ background: C.nc, borderColor: C.nm }}>
           <ChartTimeSeries
-            title="Receita Total e EBITDA — Projeção 10 Anos (CAGR Base 12%)"
+            title={`Receita Total e EBITDA — Projeção 10 Anos (CAGR ${activeModel ? fmtPct(activeModel.cagr_aplicado_pct) : "Base 12%"})`}
             data={anosRows}
             xKey="ano"
             series={[
@@ -93,6 +136,30 @@ export function AgronegocionPanel({ plan, financialProjections: fp, canGenerate,
             formatY={fmtM}
             height={220}
           />
+        </div>
+      )}
+
+      {/* ── Capital Stacking — FCL comparativo Modelo A vs Modelo B ─ */}
+      {hasCapitalStacking && fclComparativoRows.length > 0 && (
+        <div className="rounded-xl border p-4" style={{ background: C.nc, borderColor: C.nm }}>
+          <ChartTimeSeries
+            title="Fluxo de Caixa Livre — Modelo A vs Modelo B (Capital Stacking)"
+            data={fclComparativoRows}
+            xKey="ano"
+            series={[
+              { key: "fcl_modelo_a", label: "FCL — Modelo A (MVP Orgânico)",          color: C.mu, gradientId: "fclA" },
+              { key: "fcl_modelo_b", label: "FCL — Modelo B (Expansão Institucional)", color: C.go, gradientId: "fclB" },
+            ]}
+            formatY={fmtM}
+            height={220}
+          />
+          {giroGado && pontoDeViradaAno !== undefined && (
+            <p className="text-[10px] mt-2" style={{ color: C.gl }}>
+              Ponto de virada — Ano {pontoDeViradaAno}: resultado do Giro Rápido de{" "}
+              {fmt.format(giroGado.resultado_giro_brl)} ({giroGado.cabecas} cabeças) projetado para o FCL do
+              Modelo B, refletindo a aceleração via aporte institucional (Fase 2).
+            </p>
+          )}
         </div>
       )}
 

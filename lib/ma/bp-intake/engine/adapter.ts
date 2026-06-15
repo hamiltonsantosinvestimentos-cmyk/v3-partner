@@ -17,6 +17,7 @@ export interface AgronegocioProjectionYear {
   custo_operacional_brl: number;
   ebitda_brl: number;
   margem_ebitda_pct: number;
+  fcl_brl: number;
   embrioes_nacionais: number;
   embrioes_exportados: number;
   embrioes_igg_select?: number;
@@ -28,6 +29,47 @@ export interface AgronegocioScenarioEntry {
   valor_terminal_brl: number;
 }
 
+// Envelope de projeção isolada por modelo (Modelo A — MVP Orgânico /
+// Modelo B — Expansão Institucional). Cada modelo tem sua própria curva
+// de crescimento (cagr_aplicado_pct) e séries de anos/receita.
+export interface AgronegocioModelResult {
+  label: string;
+  cagr_aplicado_pct: number;
+  anos: AgronegocioProjectionYear[];
+  receita: Array<{ ano: number; tipo: string; valor: number }>;
+}
+
+// Engrenagem de Giro Rápido (aquisição de receptoras + revenda travada via B3 BGI)
+// — segregada da receita recorrente de biotecnologia, atua apenas no FCL do Modelo B.
+export interface AgronegocioGiroGado {
+  cabecas: number;
+  capital_giro_brl: number;
+  receita_giro_brl: number;
+  resultado_giro_brl: number;
+  ano_resultado: number;
+  preco_arroba_bgi_brl: number;
+}
+
+// Esteira de Capital Stacking — Fase 1 (Capex originador via cotas tokenizadas
+// dos produtores rurais) + Fase 2 (capital institucional externo genérico).
+export interface AgronegocioCapitalStack {
+  fase_1: {
+    label: string;
+    fonte: string;
+    capex_brl: number;
+    descricao: string;
+  };
+  fase_2: {
+    label: string;
+    fonte: string;
+    aporte_brl: number;
+    instrumento: "divida_estruturada" | "equity_senior" | "nao_definido";
+    estrategia: string;
+    descricao: string;
+    giro_gado?: AgronegocioGiroGado;
+  };
+}
+
 export interface AgronegocioProjections {
   schema_id: "agronegocio-v1";
   sub_sector: "genetica_bovina";
@@ -35,6 +77,9 @@ export interface AgronegocioProjections {
   fx_snapshot: FxSnapshot;
   hedge_analysis: HedgeAnalysis | null;
   viabilidade_bgi?: BgiViabilidadeResult;
+  // Espelhos do modelo_a — mantidos no nível raiz para compatibilidade retroativa
+  // (Zero Breaking Changes). Qualquer consumidor existente continua funcionando
+  // sem alteração, lendo exatamente a mesma série do Modelo A.
   anos: AgronegocioProjectionYear[];
   receita: Array<{ ano: number; tipo: string; valor: number }>;
   scenarios: {
@@ -59,6 +104,11 @@ export interface AgronegocioProjections {
     custo_embriao_em_arrobas?: number;
   };
   benchmarks_aplicados: Record<string, number>;
+  // Nós isolados de Capital Stacking — Modelo A (MVP Orgânico), Modelo B
+  // (Expansão Institucional + Giro Rápido) e a esteira de capital aplicada.
+  modelo_a: AgronegocioModelResult;
+  modelo_b: AgronegocioModelResult;
+  capital_stack: AgronegocioCapitalStack;
 }
 
 // ── Adapter: Genética Bovina ──────────────────────────────────────────────────
@@ -113,9 +163,124 @@ export interface GeneticaBovinaIntakeData {
   // Preços de referência de mercado (fallback quando o formulário não informa)
   benchmark_preco_medio_embriao_dom_brl?: number;
   benchmark_preco_medio_embriao_exp_usd?: number;
+  // captacao_capital — Capital Stacking (Fase 1 Capex originador + Fase 2 capital
+  // institucional + Giro Rápido). Todos opcionais — zero impacto se não informados.
+  capex_fase1_producao_brl?: number;
+  aporte_fase2_institucional_brl?: number;
+  instrumento_fase2?: string; // "Dívida Estruturada" | "Equity Sênior"
+  giro_gado_cabecas?: number;
+  giro_gado_arrobas_compra?: number;
+  giro_gado_preco_arroba_compra_brl?: number;
+  giro_gado_arrobas_desmame?: number;
+  giro_gado_meses_ate_venda?: number;
 }
 
 const HORIZON = 10;
+
+// Indicador B3 BGI (Boi Gordo, CEPEA/B3 SP) usado como referência de revenda no
+// Giro Rápido quando o formulário não informa um preço de arroba específico.
+const BGI_INDEX_FALLBACK_BRL = 346.0;
+
+interface YearSeriesBases {
+  baseYear: number;
+  rec_nac_base: number;
+  rec_exp_usd_base: number;
+  rec_exp_brl_base: number;
+  rec_igg_nac_base: number;
+  rec_igg_exp_brl_base: number;
+  custo_fixo_mes_brl: number;
+  embrioes_nac_mes: number;
+  embrioes_exp_mes: number;
+  embrioes_igg_mes: number;
+  custo_unitario_embriao: number;
+  custo_unitario_igg: number;
+  margem_marketing_pct: number;
+  comissao_vet_brl: number;
+}
+
+// Gera a série de 10 anos (receita/custo/EBITDA) para um dado CAGR. Compartilhada
+// pelo Modelo A (cagr_base) e pelo Modelo B (cagr_expansao) — mesma unit economics,
+// trajetória de crescimento diferente.
+function buildYearSeries(
+  cagr: number,
+  b: YearSeriesBases
+): { anos: AgronegocioProjectionYear[]; receita: AgronegocioProjections["receita"] } {
+  const anos: AgronegocioProjectionYear[] = [];
+  const receita: AgronegocioProjections["receita"] = [];
+
+  for (let y = 0; y < HORIZON; y++) {
+    const growth = Math.pow(1 + cagr, y);
+
+    // Revenue — conventional
+    const rec_nac_brl = b.rec_nac_base * growth;
+    const rec_exp_usd = b.rec_exp_usd_base * growth;
+    const rec_exp_brl = b.rec_exp_brl_base * growth;
+
+    // Revenue — IGG Select
+    const rec_igg_nac_brl = b.rec_igg_nac_base * growth;
+    const rec_igg_exp_brl = b.rec_igg_exp_brl_base * growth;
+    const rec_igg_total_brl = rec_igg_nac_brl + rec_igg_exp_brl;
+
+    const rec_total_brl = rec_nac_brl + rec_exp_brl + rec_igg_total_brl;
+
+    // Costs
+    const custo_fixo_brl = b.custo_fixo_mes_brl * 12 * growth;
+
+    // Unit product costs grow with production volume
+    const embrioes_nac_anual = b.embrioes_nac_mes * 12 * growth;
+    const embrioes_exp_anual = b.embrioes_exp_mes * 12 * growth;
+    const embrioes_igg_anual = b.embrioes_igg_mes * 12 * growth;
+    const custo_produto_brl =
+      (embrioes_nac_anual + embrioes_exp_anual) * b.custo_unitario_embriao +
+      embrioes_igg_anual * b.custo_unitario_igg;
+
+    // Marketing margin (% of revenue) — grows with revenue
+    const custo_marketing_brl = rec_total_brl * b.margem_marketing_pct;
+
+    // Vet channel commission (per embryo sold) — grows with volume
+    const custo_comissao_brl =
+      (embrioes_nac_anual + embrioes_exp_anual + embrioes_igg_anual) * b.comissao_vet_brl;
+
+    const custo_op_brl =
+      custo_fixo_brl + custo_produto_brl + custo_marketing_brl + custo_comissao_brl;
+
+    const ebitda = rec_total_brl - custo_op_brl;
+    const margem = rec_total_brl > 0 ? (ebitda / rec_total_brl) * 100 : 0;
+
+    const yearEntry: AgronegocioProjectionYear = {
+      ano: b.baseYear + y,
+      receita_brl: Math.round(rec_nac_brl),
+      receita_usd: Math.round(rec_exp_usd),
+      receita_total_brl: Math.round(rec_total_brl),
+      custo_operacional_brl: Math.round(custo_op_brl),
+      ebitda_brl: Math.round(ebitda),
+      margem_ebitda_pct: parseFloat(margem.toFixed(2)),
+      fcl_brl: Math.round(ebitda),
+      embrioes_nacionais: Math.round(b.embrioes_nac_mes * growth) * 12,
+      embrioes_exportados: Math.round(b.embrioes_exp_mes * growth) * 12,
+    };
+
+    if (b.embrioes_igg_mes > 0) {
+      yearEntry.receita_igg_select_brl = Math.round(rec_igg_total_brl);
+      yearEntry.embrioes_igg_select = Math.round(embrioes_igg_anual);
+    }
+
+    anos.push(yearEntry);
+
+    receita.push(
+      { ano: b.baseYear + y, tipo: "Nacional BRL", valor: Math.round(rec_nac_brl) },
+      { ano: b.baseYear + y, tipo: "Exportação BRL", valor: Math.round(rec_exp_brl) }
+    );
+    if (rec_igg_nac_brl > 0) {
+      receita.push({ ano: b.baseYear + y, tipo: "IGG Select Nacional BRL", valor: Math.round(rec_igg_nac_brl) });
+    }
+    if (rec_igg_exp_brl > 0) {
+      receita.push({ ano: b.baseYear + y, tipo: "IGG Select Exportação BRL", valor: Math.round(rec_igg_exp_brl) });
+    }
+  }
+
+  return { anos, receita };
+}
 
 export function adaptGeneticaBovinaIntake(
   data: GeneticaBovinaIntakeData,
@@ -178,9 +343,9 @@ export function adaptGeneticaBovinaIntake(
 
   // ── CAGR scenarios ────────────────────────────────────────────
   // cagr_base: central case (benchmark crescimento_mercado_pct_aa) — conservative,
-  //   suitable for credit committees and Family Offices
-  // cagr_expansao: upside stress (benchmark crescimento_estabilizado_pct) — strictly
-  //   for scenarios.expansao node only
+  //   suitable for credit committees and Family Offices — curva do Modelo A
+  // cagr_expansao: upside (benchmark crescimento_estabilizado_pct) — curva do
+  //   Modelo B (Expansão Institucional) e do scenarios.expansao
   // cagr_pessimista: downside (benchmark crescimento_pessimista_pct)
   // All three sourced from market_benchmarks — no hardcoded percentages.
   const cagr_base = (data.crescimento_mercado_pct_aa ?? 0) / 100;
@@ -208,86 +373,129 @@ export function adaptGeneticaBovinaIntake(
   const rec_igg_nac_base = embrioes_igg_nac_mes * 12 * preco_igg_nac_brl;
   const rec_igg_exp_brl_base = embrioes_igg_exp_mes * 12 * preco_igg_exp_brl;
 
-  const anos: AgronegocioProjectionYear[] = [];
-  const receita: AgronegocioProjections["receita"] = [];
   const baseYear = new Date().getFullYear();
 
-  for (let y = 0; y < HORIZON; y++) {
-    const growth = Math.pow(1 + cagr_base, y);
+  const yearSeriesBases: YearSeriesBases = {
+    baseYear,
+    rec_nac_base,
+    rec_exp_usd_base,
+    rec_exp_brl_base,
+    rec_igg_nac_base,
+    rec_igg_exp_brl_base,
+    custo_fixo_mes_brl,
+    embrioes_nac_mes,
+    embrioes_exp_mes,
+    embrioes_igg_mes,
+    custo_unitario_embriao,
+    custo_unitario_igg,
+    margem_marketing_pct,
+    comissao_vet_brl,
+  };
 
-    // Revenue — conventional
-    const rec_nac_brl = rec_nac_base * growth;
-    const rec_exp_usd = rec_exp_usd_base * growth;
-    const rec_exp_brl = rec_exp_brl_base * growth;
+  // ── Modelo A (MVP Orgânico) e Modelo B (Expansão Institucional) ────
+  const seriesA = buildYearSeries(cagr_base, yearSeriesBases);
+  const seriesB = buildYearSeries(cagr_expansao, yearSeriesBases);
 
-    // Revenue — IGG Select
-    const rec_igg_nac_brl = rec_igg_nac_base * growth;
-    const rec_igg_exp_brl = rec_igg_exp_brl_base * growth;
-    const rec_igg_total_brl = rec_igg_nac_brl + rec_igg_exp_brl;
+  // ── Capital Stacking — Fase 1 (Capex originador) e Fase 2 (capital
+  // institucional + Giro Rápido) ─────────────────────────────────────
+  const capexFase1 = data.capex_fase1_producao_brl ?? 0;
+  const aporteFase2 = data.aporte_fase2_institucional_brl ?? 0;
+  const instrumentoFase2: AgronegocioCapitalStack["fase_2"]["instrumento"] =
+    data.instrumento_fase2 === "Dívida Estruturada"
+      ? "divida_estruturada"
+      : data.instrumento_fase2 === "Equity Sênior"
+        ? "equity_senior"
+        : "nao_definido";
 
-    const rec_total_brl = rec_nac_brl + rec_exp_brl + rec_igg_total_brl;
+  const giroCabecas = data.giro_gado_cabecas ?? 0;
+  const giroArrobasCompra = data.giro_gado_arrobas_compra ?? 0;
+  const giroPrecoCompra = data.giro_gado_preco_arroba_compra_brl ?? 0;
+  const giroArrobasDesmame = data.giro_gado_arrobas_desmame ?? 0;
+  const giroMesesAteVenda = data.giro_gado_meses_ate_venda ?? 12;
+  const precoArrobaBgi = data.benchmark_preco_arroba_boi_gordo_rs ?? BGI_INDEX_FALLBACK_BRL;
 
-    // Costs
-    const custo_fixo_brl = custo_fixo_mes_brl * 12 * growth;
+  // Giro Rápido: capital de giro investido na compra de receptoras (Ano 1) e
+  // receita de revenda travada via B3 BGI no ano correspondente ao prazo de
+  // engorda/desmame. Fluxo SEGREGADO — não entra em receita_total_brl/ebitda.
+  const capital_giro_brl = giroCabecas * giroArrobasCompra * giroPrecoCompra;
+  const receita_giro_brl = giroCabecas * giroArrobasDesmame * precoArrobaBgi;
+  const resultado_giro_brl = receita_giro_brl - capital_giro_brl;
+  const ano_resultado_idx = Math.min(
+    HORIZON - 1,
+    Math.max(0, Math.round(giroMesesAteVenda / 12))
+  );
 
-    // Unit product costs grow with production volume
-    const embrioes_nac_anual = embrioes_nac_mes * 12 * growth;
-    const embrioes_exp_anual = embrioes_exp_mes * 12 * growth;
-    const embrioes_igg_anual = embrioes_igg_mes * 12 * growth;
-    const custo_produto_brl =
-      (embrioes_nac_anual + embrioes_exp_anual) * custo_unitario_embriao +
-      embrioes_igg_anual * custo_unitario_igg;
+  // Modelo A: FCL = EBITDA − Capex Fase 1 (apenas no Ano 1)
+  const anosA: AgronegocioProjectionYear[] = seriesA.anos.map((entry, idx) => ({
+    ...entry,
+    fcl_brl: Math.round(entry.ebitda_brl - (idx === 0 ? capexFase1 : 0)),
+  }));
 
-    // Marketing margin (% of revenue) — grows with revenue
-    const custo_marketing_brl = rec_total_brl * margem_marketing_pct;
+  // Modelo B: FCL = EBITDA − Capex Fase 1 − Capital de Giro (Ano 1) +
+  // Resultado do Giro Rápido (no ano de revenda)
+  const anosB: AgronegocioProjectionYear[] = seriesB.anos.map((entry, idx) => {
+    let fcl = entry.ebitda_brl;
+    if (idx === 0) fcl -= capexFase1;
+    if (idx === 0) fcl -= capital_giro_brl;
+    if (idx === ano_resultado_idx) fcl += resultado_giro_brl;
+    return { ...entry, fcl_brl: Math.round(fcl) };
+  });
 
-    // Vet channel commission (per embryo sold) — grows with volume
-    const custo_comissao_brl =
-      (embrioes_nac_anual + embrioes_exp_anual + embrioes_igg_anual) * comissao_vet_brl;
+  const modelo_a: AgronegocioModelResult = {
+    label: "Modelo A — MVP Orgânico",
+    cagr_aplicado_pct: cagr_base * 100,
+    anos: anosA,
+    receita: seriesA.receita,
+  };
 
-    const custo_op_brl =
-      custo_fixo_brl + custo_produto_brl + custo_marketing_brl + custo_comissao_brl;
+  const modelo_b: AgronegocioModelResult = {
+    label: "Modelo B — Expansão Institucional",
+    cagr_aplicado_pct: cagr_expansao * 100,
+    anos: anosB,
+    receita: seriesB.receita,
+  };
 
-    const ebitda = rec_total_brl - custo_op_brl;
-    const margem = rec_total_brl > 0 ? (ebitda / rec_total_brl) * 100 : 0;
-
-    const yearEntry: AgronegocioProjectionYear = {
-      ano: baseYear + y,
-      receita_brl: Math.round(rec_nac_brl),
-      receita_usd: Math.round(rec_exp_usd),
-      receita_total_brl: Math.round(rec_total_brl),
-      custo_operacional_brl: Math.round(custo_op_brl),
-      ebitda_brl: Math.round(ebitda),
-      margem_ebitda_pct: parseFloat(margem.toFixed(2)),
-      embrioes_nacionais: Math.round(embrioes_nac_mes * growth) * 12,
-      embrioes_exportados: Math.round(embrioes_exp_mes * growth) * 12,
-    };
-
-    if (embrioes_igg_mes > 0) {
-      yearEntry.receita_igg_select_brl = Math.round(rec_igg_total_brl);
-      yearEntry.embrioes_igg_select = Math.round(embrioes_igg_anual);
-    }
-
-    anos.push(yearEntry);
-
-    receita.push(
-      { ano: baseYear + y, tipo: "Nacional BRL", valor: Math.round(rec_nac_brl) },
-      { ano: baseYear + y, tipo: "Exportação BRL", valor: Math.round(rec_exp_brl) }
-    );
-    if (rec_igg_nac_brl > 0) {
-      receita.push({ ano: baseYear + y, tipo: "IGG Select Nacional BRL", valor: Math.round(rec_igg_nac_brl) });
-    }
-    if (rec_igg_exp_brl > 0) {
-      receita.push({ ano: baseYear + y, tipo: "IGG Select Exportação BRL", valor: Math.round(rec_igg_exp_brl) });
-    }
-  }
+  const capital_stack: AgronegocioCapitalStack = {
+    fase_1: {
+      label: "Fase 1 — Capex Originador",
+      fonte: "Cotas de Investimento Tokenizadas (RWA) — Produtores Rurais Parceiros",
+      capex_brl: capexFase1,
+      descricao:
+        "Capex inicial do centro de melhoramento genético (infraestrutura, laboratórios, matrizes doadoras), " +
+        "aportado pelos produtores rurais parceiros via cotas de investimento tokenizadas com lastro em ativo real.",
+    },
+    fase_2: {
+      label: "Fase 2 — Capital de Aceleração Institucional",
+      fonte: "Capital Institucional Externo",
+      aporte_brl: aporteFase2,
+      instrumento: instrumentoFase2,
+      estrategia:
+        "Giro Rápido — aquisição de receptoras no mercado físico com revenda travada via B3 BGI (Boi Gordo)",
+      descricao:
+        "O aporte institucional financia a aquisição de gado receptor no mercado físico; a revenda é projetada " +
+        "ao indicador B3 BGI (CEPEA/B3 SP), e o lote serve de base de recepção para os embriões sexados do centro " +
+        "genético, acelerando a escala de produção do Modelo B frente ao Modelo A.",
+      ...(giroCabecas > 0
+        ? {
+            giro_gado: {
+              cabecas: giroCabecas,
+              capital_giro_brl: Math.round(capital_giro_brl),
+              receita_giro_brl: Math.round(receita_giro_brl),
+              resultado_giro_brl: Math.round(resultado_giro_brl),
+              ano_resultado: baseYear + ano_resultado_idx,
+              preco_arroba_bgi_brl: precoArrobaBgi,
+            } satisfies AgronegocioGiroGado,
+          }
+        : {}),
+    },
+  };
 
   // ── Terminal values ───────────────────────────────────────────
   // base: year-10 EBITDA (12% curve) × 8× EV/EBITDA
   // expansao: year-5 EBITDA extrapolated 5y at 18% × 10× (higher multiple at peak growth)
   // pessimista: year-5 EBITDA extrapolated 5y at -5% × 6×
-  const ebitda_terminal = anos[anos.length - 1]?.ebitda_brl ?? 0;
-  const ebitda_y5 = anos[4]?.ebitda_brl ?? 0;
+  const ebitda_terminal = anosA[anosA.length - 1]?.ebitda_brl ?? 0;
+  const ebitda_y5 = anosA[4]?.ebitda_brl ?? 0;
 
   const scenarios: AgronegocioProjections["scenarios"] = {
     base: {
@@ -366,10 +574,14 @@ export function adaptGeneticaBovinaIntake(
     fx_snapshot: fx,
     hedge_analysis,
     ...(viabilidade_bgi ? { viabilidade_bgi } : {}),
-    anos,
-    receita,
+    // Espelhos do Modelo A — Zero Breaking Changes para consumidores existentes
+    anos: modelo_a.anos,
+    receita: modelo_a.receita,
     scenarios,
     indicadores,
     benchmarks_aplicados,
+    modelo_a,
+    modelo_b,
+    capital_stack,
   };
 }

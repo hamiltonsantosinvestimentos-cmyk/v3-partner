@@ -6,7 +6,7 @@
     "usd_brl": 5.75,
     "source": "fallback",
     "date": "2026-06-09",
-    "fetched_at": "2026-06-11T16:47:01.570Z"
+    "fetched_at": "2026-06-15T16:38:05.979Z"
   },
   "hedge_analysis": {
     "taxa_hedge_natural_pct": 12.35,
@@ -26,6 +26,7 @@
       "custo_operacional_brl": 1348500,
       "ebitda_brl": 3388860,
       "margem_ebitda_pct": 71.53,
+      "fcl_brl": 888860,
       "embrioes_nacionais": 696,
       "embrioes_exportados": 264
     },
@@ -37,6 +38,7 @@
       "custo_operacional_brl": 1510320,
       "ebitda_brl": 3795523,
       "margem_ebitda_pct": 71.53,
+      "fcl_brl": 3795523,
       "embrioes_nacionais": 780,
       "embrioes_exportados": 300
     },
@@ -48,6 +50,7 @@
       "custo_operacional_brl": 1691558,
       "ebitda_brl": 4250986,
       "margem_ebitda_pct": 71.53,
+      "fcl_brl": 4250986,
       "embrioes_nacionais": 876,
       "embrioes_exportados": 336
     },
@@ -59,6 +62,7 @@
       "custo_operacional_brl": 1894545,
       "ebitda_brl": 4761104,
       "margem_ebitda_pct": 71.53,
+      "fcl_brl": 4761104,
       "embrioes_nacionais": 972,
       "embrioes_exportados": 372
     },
@@ -70,6 +74,7 @@
       "custo_operacional_brl": 2121891,
       "ebitda_brl": 5332437,
       "margem_ebitda_pct": 71.53,
+      "fcl_brl": 5332437,
       "embrioes_nacionais": 1092,
       "embrioes_exportados": 420
     },
@@ -81,6 +86,7 @@
       "custo_operacional_brl": 2376518,
       "ebitda_brl": 5972329,
       "margem_ebitda_pct": 71.53,
+      "fcl_brl": 5972329,
       "embrioes_nacionais": 1224,
       "embrioes_exportados": 468
     },
@@ -92,6 +98,7 @@
       "custo_operacional_brl": 2661700,
       "ebitda_brl": 6689009,
       "margem_ebitda_pct": 71.53,
+      "fcl_brl": 6689009,
       "embrioes_nacionais": 1368,
       "embrioes_exportados": 516
     },
@@ -103,6 +110,7 @@
       "custo_operacional_brl": 2981104,
       "ebitda_brl": 7491690,
       "margem_ebitda_pct": 71.53,
+      "fcl_brl": 7491690,
       "embrioes_nacionais": 1536,
       "embrioes_exportados": 588
     },
@@ -114,6 +122,7 @@
       "custo_operacional_brl": 3338836,
       "ebitda_brl": 8390693,
       "margem_ebitda_pct": 71.53,
+      "fcl_brl": 8390693,
       "embrioes_nacionais": 1728,
       "embrioes_exportados": 648
     },
@@ -125,6 +134,7 @@
       "custo_operacional_brl": 3739497,
       "ebitda_brl": 9397576,
       "margem_ebitda_pct": 71.53,
+      "fcl_brl": 9397576,
       "embrioes_nacionais": 1932,
       "embrioes_exportados": 732
     }
@@ -260,5 +270,485 @@
     "cagr_base_pct": 12,
     "cagr_expansao_pct": 18,
     "cagr_pessimista_pct": -5
+  },
+  "modelo_a": {
+    "label": "Modelo A — MVP Orgânico",
+    "cagr_aplicado_pct": 12,
+    "anos": [
+      {
+        "ano": 2026,
+        "receita_brl": 3340800,
+        "receita_usd": 242880,
+        "receita_total_brl": 4737360,
+        "custo_operacional_brl": 1348500,
+        "ebitda_brl": 3388860,
+        "margem_ebitda_pct": 71.53,
+        "fcl_brl": 888860,
+        "embrioes_nacionais": 696,
+        "embrioes_exportados": 264
+      },
+      {
+        "ano": 2027,
+        "receita_brl": 3741696,
+        "receita_usd": 272026,
+        "receita_total_brl": 5305843,
+        "custo_operacional_brl": 1510320,
+        "ebitda_brl": 3795523,
+        "margem_ebitda_pct": 71.53,
+        "fcl_brl": 3795523,
+        "embrioes_nacionais": 780,
+        "embrioes_exportados": 300
+      },
+      {
+        "ano": 2028,
+        "receita_brl": 4190700,
+        "receita_usd": 304669,
+        "receita_total_brl": 5942544,
+        "custo_operacional_brl": 1691558,
+        "ebitda_brl": 4250986,
+        "margem_ebitda_pct": 71.53,
+        "fcl_brl": 4250986,
+        "embrioes_nacionais": 876,
+        "embrioes_exportados": 336
+      },
+      {
+        "ano": 2029,
+        "receita_brl": 4693583,
+        "receita_usd": 341229,
+        "receita_total_brl": 6655650,
+        "custo_operacional_brl": 1894545,
+        "ebitda_brl": 4761104,
+        "margem_ebitda_pct": 71.53,
+        "fcl_brl": 4761104,
+        "embrioes_nacionais": 972,
+        "embrioes_exportados": 372
+      },
+      {
+        "ano": 2030,
+        "receita_brl": 5256813,
+        "receita_usd": 382176,
+        "receita_total_brl": 7454328,
+        "custo_operacional_brl": 2121891,
+        "ebitda_brl": 5332437,
+        "margem_ebitda_pct": 71.53,
+        "fcl_brl": 5332437,
+        "embrioes_nacionais": 1092,
+        "embrioes_exportados": 420
+      },
+      {
+        "ano": 2031,
+        "receita_brl": 5887631,
+        "receita_usd": 428038,
+        "receita_total_brl": 8348847,
+        "custo_operacional_brl": 2376518,
+        "ebitda_brl": 5972329,
+        "margem_ebitda_pct": 71.53,
+        "fcl_brl": 5972329,
+        "embrioes_nacionais": 1224,
+        "embrioes_exportados": 468
+      },
+      {
+        "ano": 2032,
+        "receita_brl": 6594147,
+        "receita_usd": 479402,
+        "receita_total_brl": 9350709,
+        "custo_operacional_brl": 2661700,
+        "ebitda_brl": 6689009,
+        "margem_ebitda_pct": 71.53,
+        "fcl_brl": 6689009,
+        "embrioes_nacionais": 1368,
+        "embrioes_exportados": 516
+      },
+      {
+        "ano": 2033,
+        "receita_brl": 7385444,
+        "receita_usd": 536930,
+        "receita_total_brl": 10472794,
+        "custo_operacional_brl": 2981104,
+        "ebitda_brl": 7491690,
+        "margem_ebitda_pct": 71.53,
+        "fcl_brl": 7491690,
+        "embrioes_nacionais": 1536,
+        "embrioes_exportados": 588
+      },
+      {
+        "ano": 2034,
+        "receita_brl": 8271698,
+        "receita_usd": 601362,
+        "receita_total_brl": 11729529,
+        "custo_operacional_brl": 3338836,
+        "ebitda_brl": 8390693,
+        "margem_ebitda_pct": 71.53,
+        "fcl_brl": 8390693,
+        "embrioes_nacionais": 1728,
+        "embrioes_exportados": 648
+      },
+      {
+        "ano": 2035,
+        "receita_brl": 9264302,
+        "receita_usd": 673525,
+        "receita_total_brl": 13137072,
+        "custo_operacional_brl": 3739497,
+        "ebitda_brl": 9397576,
+        "margem_ebitda_pct": 71.53,
+        "fcl_brl": 9397576,
+        "embrioes_nacionais": 1932,
+        "embrioes_exportados": 732
+      }
+    ],
+    "receita": [
+      {
+        "ano": 2026,
+        "tipo": "Nacional BRL",
+        "valor": 3340800
+      },
+      {
+        "ano": 2026,
+        "tipo": "Exportação BRL",
+        "valor": 1396560
+      },
+      {
+        "ano": 2027,
+        "tipo": "Nacional BRL",
+        "valor": 3741696
+      },
+      {
+        "ano": 2027,
+        "tipo": "Exportação BRL",
+        "valor": 1564147
+      },
+      {
+        "ano": 2028,
+        "tipo": "Nacional BRL",
+        "valor": 4190700
+      },
+      {
+        "ano": 2028,
+        "tipo": "Exportação BRL",
+        "valor": 1751845
+      },
+      {
+        "ano": 2029,
+        "tipo": "Nacional BRL",
+        "valor": 4693583
+      },
+      {
+        "ano": 2029,
+        "tipo": "Exportação BRL",
+        "valor": 1962066
+      },
+      {
+        "ano": 2030,
+        "tipo": "Nacional BRL",
+        "valor": 5256813
+      },
+      {
+        "ano": 2030,
+        "tipo": "Exportação BRL",
+        "valor": 2197514
+      },
+      {
+        "ano": 2031,
+        "tipo": "Nacional BRL",
+        "valor": 5887631
+      },
+      {
+        "ano": 2031,
+        "tipo": "Exportação BRL",
+        "valor": 2461216
+      },
+      {
+        "ano": 2032,
+        "tipo": "Nacional BRL",
+        "valor": 6594147
+      },
+      {
+        "ano": 2032,
+        "tipo": "Exportação BRL",
+        "valor": 2756562
+      },
+      {
+        "ano": 2033,
+        "tipo": "Nacional BRL",
+        "valor": 7385444
+      },
+      {
+        "ano": 2033,
+        "tipo": "Exportação BRL",
+        "valor": 3087349
+      },
+      {
+        "ano": 2034,
+        "tipo": "Nacional BRL",
+        "valor": 8271698
+      },
+      {
+        "ano": 2034,
+        "tipo": "Exportação BRL",
+        "valor": 3457831
+      },
+      {
+        "ano": 2035,
+        "tipo": "Nacional BRL",
+        "valor": 9264302
+      },
+      {
+        "ano": 2035,
+        "tipo": "Exportação BRL",
+        "valor": 3872771
+      }
+    ]
+  },
+  "modelo_b": {
+    "label": "Modelo B — Expansão Institucional",
+    "cagr_aplicado_pct": 18,
+    "anos": [
+      {
+        "ano": 2026,
+        "receita_brl": 3340800,
+        "receita_usd": 242880,
+        "receita_total_brl": 4737360,
+        "custo_operacional_brl": 1348500,
+        "ebitda_brl": 3388860,
+        "margem_ebitda_pct": 71.53,
+        "fcl_brl": -1631140,
+        "embrioes_nacionais": 696,
+        "embrioes_exportados": 264
+      },
+      {
+        "ano": 2027,
+        "receita_brl": 3942144,
+        "receita_usd": 286598,
+        "receita_total_brl": 5590085,
+        "custo_operacional_brl": 1591230,
+        "ebitda_brl": 3998855,
+        "margem_ebitda_pct": 71.53,
+        "fcl_brl": 5630855,
+        "embrioes_nacionais": 816,
+        "embrioes_exportados": 312
+      },
+      {
+        "ano": 2028,
+        "receita_brl": 4651730,
+        "receita_usd": 338186,
+        "receita_total_brl": 6596300,
+        "custo_operacional_brl": 1877651,
+        "ebitda_brl": 4718649,
+        "margem_ebitda_pct": 71.53,
+        "fcl_brl": 4718649,
+        "embrioes_nacionais": 972,
+        "embrioes_exportados": 372
+      },
+      {
+        "ano": 2029,
+        "receita_brl": 5489041,
+        "receita_usd": 399060,
+        "receita_total_brl": 7783634,
+        "custo_operacional_brl": 2215629,
+        "ebitda_brl": 5568005,
+        "margem_ebitda_pct": 71.53,
+        "fcl_brl": 5568005,
+        "embrioes_nacionais": 1140,
+        "embrioes_exportados": 432
+      },
+      {
+        "ano": 2030,
+        "receita_brl": 6477069,
+        "receita_usd": 470890,
+        "receita_total_brl": 9184688,
+        "custo_operacional_brl": 2614442,
+        "ebitda_brl": 6570246,
+        "margem_ebitda_pct": 71.53,
+        "fcl_brl": 6570246,
+        "embrioes_nacionais": 1344,
+        "embrioes_exportados": 516
+      },
+      {
+        "ano": 2031,
+        "receita_brl": 7642941,
+        "receita_usd": 555651,
+        "receita_total_brl": 10837932,
+        "custo_operacional_brl": 3085041,
+        "ebitda_brl": 7752891,
+        "margem_ebitda_pct": 71.53,
+        "fcl_brl": 7752891,
+        "embrioes_nacionais": 1596,
+        "embrioes_exportados": 600
+      },
+      {
+        "ano": 2032,
+        "receita_brl": 9018671,
+        "receita_usd": 655668,
+        "receita_total_brl": 12788760,
+        "custo_operacional_brl": 3640349,
+        "ebitda_brl": 9148411,
+        "margem_ebitda_pct": 71.53,
+        "fcl_brl": 9148411,
+        "embrioes_nacionais": 1884,
+        "embrioes_exportados": 708
+      },
+      {
+        "ano": 2033,
+        "receita_brl": 10642031,
+        "receita_usd": 773688,
+        "receita_total_brl": 15090737,
+        "custo_operacional_brl": 4295612,
+        "ebitda_brl": 10795125,
+        "margem_ebitda_pct": 71.53,
+        "fcl_brl": 10795125,
+        "embrioes_nacionais": 2220,
+        "embrioes_exportados": 840
+      },
+      {
+        "ano": 2034,
+        "receita_brl": 12557597,
+        "receita_usd": 912952,
+        "receita_total_brl": 17807069,
+        "custo_operacional_brl": 5068822,
+        "ebitda_brl": 12738248,
+        "margem_ebitda_pct": 71.53,
+        "fcl_brl": 12738248,
+        "embrioes_nacionais": 2616,
+        "embrioes_exportados": 996
+      },
+      {
+        "ano": 2035,
+        "receita_brl": 14817964,
+        "receita_usd": 1077283,
+        "receita_total_brl": 21012342,
+        "custo_operacional_brl": 5981210,
+        "ebitda_brl": 15031132,
+        "margem_ebitda_pct": 71.53,
+        "fcl_brl": 15031132,
+        "embrioes_nacionais": 3084,
+        "embrioes_exportados": 1176
+      }
+    ],
+    "receita": [
+      {
+        "ano": 2026,
+        "tipo": "Nacional BRL",
+        "valor": 3340800
+      },
+      {
+        "ano": 2026,
+        "tipo": "Exportação BRL",
+        "valor": 1396560
+      },
+      {
+        "ano": 2027,
+        "tipo": "Nacional BRL",
+        "valor": 3942144
+      },
+      {
+        "ano": 2027,
+        "tipo": "Exportação BRL",
+        "valor": 1647941
+      },
+      {
+        "ano": 2028,
+        "tipo": "Nacional BRL",
+        "valor": 4651730
+      },
+      {
+        "ano": 2028,
+        "tipo": "Exportação BRL",
+        "valor": 1944570
+      },
+      {
+        "ano": 2029,
+        "tipo": "Nacional BRL",
+        "valor": 5489041
+      },
+      {
+        "ano": 2029,
+        "tipo": "Exportação BRL",
+        "valor": 2294593
+      },
+      {
+        "ano": 2030,
+        "tipo": "Nacional BRL",
+        "valor": 6477069
+      },
+      {
+        "ano": 2030,
+        "tipo": "Exportação BRL",
+        "valor": 2707619
+      },
+      {
+        "ano": 2031,
+        "tipo": "Nacional BRL",
+        "valor": 7642941
+      },
+      {
+        "ano": 2031,
+        "tipo": "Exportação BRL",
+        "valor": 3194991
+      },
+      {
+        "ano": 2032,
+        "tipo": "Nacional BRL",
+        "valor": 9018671
+      },
+      {
+        "ano": 2032,
+        "tipo": "Exportação BRL",
+        "valor": 3770089
+      },
+      {
+        "ano": 2033,
+        "tipo": "Nacional BRL",
+        "valor": 10642031
+      },
+      {
+        "ano": 2033,
+        "tipo": "Exportação BRL",
+        "valor": 4448705
+      },
+      {
+        "ano": 2034,
+        "tipo": "Nacional BRL",
+        "valor": 12557597
+      },
+      {
+        "ano": 2034,
+        "tipo": "Exportação BRL",
+        "valor": 5249472
+      },
+      {
+        "ano": 2035,
+        "tipo": "Nacional BRL",
+        "valor": 14817964
+      },
+      {
+        "ano": 2035,
+        "tipo": "Exportação BRL",
+        "valor": 6194377
+      }
+    ]
+  },
+  "capital_stack": {
+    "fase_1": {
+      "label": "Fase 1 — Capex Originador",
+      "fonte": "Cotas de Investimento Tokenizadas (RWA) — Produtores Rurais Parceiros",
+      "capex_brl": 2500000,
+      "descricao": "Capex inicial do centro de melhoramento genético (infraestrutura, laboratórios, matrizes doadoras), aportado pelos produtores rurais parceiros via cotas de investimento tokenizadas com lastro em ativo real."
+    },
+    "fase_2": {
+      "label": "Fase 2 — Capital de Aceleração Institucional",
+      "fonte": "Capital Institucional Externo",
+      "aporte_brl": 8000000,
+      "instrumento": "divida_estruturada",
+      "estrategia": "Giro Rápido — aquisição de receptoras no mercado físico com revenda travada via B3 BGI (Boi Gordo)",
+      "descricao": "O aporte institucional financia a aquisição de gado receptor no mercado físico; a revenda é projetada ao indicador B3 BGI (CEPEA/B3 SP), e o lote serve de base de recepção para os embriões sexados do centro genético, acelerando a escala de produção do Modelo B frente ao Modelo A.",
+      "giro_gado": {
+        "cabecas": 500,
+        "capital_giro_brl": 2520000,
+        "receita_giro_brl": 4152000,
+        "resultado_giro_brl": 1632000,
+        "ano_resultado": 2027,
+        "preco_arroba_bgi_brl": 346
+      }
+    }
   }
 }

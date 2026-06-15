@@ -6,7 +6,7 @@ export const geneticaBovinaV1Schema: IntakeSchema = {
   sector: "agronegocio",
   sub_sector: "genetica_bovina",
   parent_schema_id: "agronegocio-v1",
-  tags: ["exportacao"],
+  tags: ["exportacao", "capital_stacking"],
   sections: [
     // ── 1. Auditoria do Preenchedor ───────────────────────────────
     {
@@ -358,7 +358,82 @@ export const geneticaBovinaV1Schema: IntakeSchema = {
       ],
     },
 
-    // ── 10. Módulo Startup (condicional: tag = startup) ───────────
+    // ── 10. Capital Stacking — Fase 1 (Capex Originador) + Fase 2 (Capital
+    // Institucional / Giro Rápido) ────────────────────────────────
+    {
+      id: "captacao_capital",
+      title: "Captação de Capital — Esteira de Investimento",
+      description: "Estrutura de capital em duas fases: Capex inicial dos produtores rurais parceiros (Fase 1) e aporte institucional de aceleração (Fase 2). Todos os campos são opcionais.",
+      condition: { tag: "capital_stacking" },
+      fields: [
+        {
+          key: "capex_fase1_producao_brl",
+          label: "Capex Fase 1 — Capacidade de Produção (R$)",
+          type: "currency",
+          required: false,
+          placeholder: "Ex.: 2.500.000",
+          hint: "Capex inicial aportado pelos produtores rurais parceiros (cotas tokenizadas — Fase 1).",
+        },
+        {
+          key: "aporte_fase2_institucional_brl",
+          label: "Aporte Fase 2 — Capital Institucional (R$)",
+          type: "currency",
+          required: false,
+          placeholder: "Ex.: 8.000.000",
+          hint: "Capital de aceleração institucional para Giro Rápido e expansão.",
+        },
+        {
+          key: "instrumento_fase2",
+          label: "Instrumento de Captação — Fase 2",
+          type: "select",
+          required: false,
+          options: ["Dívida Estruturada", "Equity Sênior"],
+        },
+        {
+          key: "giro_gado_cabecas",
+          label: "Giro Rápido — Nº de Cabeças",
+          type: "number",
+          required: false,
+          min: 0,
+          placeholder: "Ex.: 500",
+        },
+        {
+          key: "giro_gado_arrobas_compra",
+          label: "Giro Rápido — Arrobas por Cabeça (Compra)",
+          type: "number",
+          required: false,
+          min: 0,
+          placeholder: "Ex.: 18",
+        },
+        {
+          key: "giro_gado_preco_arroba_compra_brl",
+          label: "Giro Rápido — Preço da Arroba na Compra (R$)",
+          type: "currency",
+          required: false,
+          min: 0,
+          placeholder: "Ex.: 280",
+        },
+        {
+          key: "giro_gado_arrobas_desmame",
+          label: "Giro Rápido — Arrobas por Cabeça no Desmame",
+          type: "number",
+          required: false,
+          min: 0,
+          placeholder: "Ex.: 24",
+        },
+        {
+          key: "giro_gado_meses_ate_venda",
+          label: "Giro Rápido — Meses até a Venda",
+          type: "number",
+          required: false,
+          min: 1,
+          placeholder: "12",
+          hint: "Padrão: 12 meses.",
+        },
+      ],
+    },
+
+    // ── 11. Módulo Startup (condicional: tag = startup) ───────────
     {
       id: "startup_metrics",
       title: "Métricas de Startup",
