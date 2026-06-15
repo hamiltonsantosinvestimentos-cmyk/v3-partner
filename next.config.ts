@@ -41,6 +41,23 @@ const nextConfig: NextConfig = {
       { protocol: "https", hostname: "sbmuashewklfhdyyuezr.supabase.co" },
     ],
   },
+  async redirects() {
+    return [
+      {
+        source: "/:path*",
+        has: [{ type: "host", value: "v3-partner.vercel.app" }],
+        destination: "https://app.v3partners.com.br/:path*",
+        permanent: true,
+      },
+      {
+        source: "/:path*",
+        has: [{ type: "host", value: "v3-partner-hamiltonsantosinvestimentos-2666s-projects.vercel.app" }],
+        destination: "https://app.v3partners.com.br/:path*",
+        permanent: true,
+      },
+    ];
+  },
+
   async headers() {
     // Headers para rotas de conteúdo em iframe (prompts e relatórios)
     const iframeContentHeaders = securityHeaders
