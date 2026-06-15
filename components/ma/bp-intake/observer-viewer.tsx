@@ -1,5 +1,6 @@
 import type { IntakeSchema, IntakeField } from "@/lib/ma/bp-intake/engine/schema-registry";
 import type { AgronegocioProjections } from "@/lib/ma/bp-intake/engine/adapter";
+import { getVisibleSections, deriveActiveTags, type FormState } from "@/lib/ma/bp-intake/engine/conditional-logic";
 
 // Read-only viewer — "Observador Ilimitado". Sem formulários, sem mutação.
 // Renderiza intake_responses + financial_projections já persistidos em asset_data.
@@ -86,7 +87,11 @@ export function ObserverViewer({
           )}
         </div>
 
-        {schema.sections.map((section) => (
+        {getVisibleSections(
+          schema.sections,
+          intakeResponses as FormState,
+          deriveActiveTags(schema.tags, intakeResponses as FormState)
+        ).map((section) => (
           <section key={section.id} className="rounded-xl p-4 space-y-3" style={{ background: C.nc, border: `1px solid ${C.nm}` }}>
             <h2 className="text-sm font-semibold" style={{ color: C.go }}>{section.title}</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
