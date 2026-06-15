@@ -6,7 +6,7 @@ import {
   Save, Mail, Phone, FileText, Calendar, Clock, CheckCircle2,
   AlertCircle, Eye, EyeOff, LogOut, Key, Lock, Smartphone,
   Globe, Moon, Sun, ChevronRight, Upload, X, Info,
-  Banknote, Award, Activity,
+  Banknote, Award, Activity, Link2, ExternalLink,
 } from "lucide-react";
 import { ROLE_LABELS, type UserRole } from "@/lib/constants";
 import { formatDate } from "@/lib/utils";
@@ -22,6 +22,10 @@ interface ProfileData {
   created_at: string;
   last_login_at: string | null;
   is_active: boolean;
+  cobranding_slug: string | null;
+  cobranding_bio: string | null;
+  cobranding_whatsapp: string | null;
+  cobranding_instagram: string | null;
 }
 
 type Tab = "perfil" | "seguranca" | "notificacoes" | "plano" | "preferencias";
@@ -100,6 +104,13 @@ export function PerfilClient({ initialProfile }: { initialProfile: ProfileData }
   const [phone, setPhone] = useState(profile.phone ?? "");
   const [cpf, setCpf] = useState(profile.document_cpf ?? "");
 
+  // Co-branding / Mini-site
+  const [cobSlug, setCobSlug] = useState(profile.cobranding_slug ?? "");
+  const [cobBio, setCobBio] = useState(profile.cobranding_bio ?? "");
+  const [cobWhatsapp, setCobWhatsapp] = useState(profile.cobranding_whatsapp ?? "");
+  const [cobInstagram, setCobInstagram] = useState(profile.cobranding_instagram ?? "");
+  const [savingCob, setSavingCob] = useState(false);
+
   // Segurança
   const [resetLoading, setResetLoading] = useState(false);
   const [resetSent, setResetSent] = useState(false);
@@ -134,6 +145,30 @@ export function PerfilClient({ initialProfile }: { initialProfile: ProfileData }
       showToast("Perfil atualizado com sucesso!", "success");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleSaveCobranding() {
+    const slugClean = cobSlug.trim().toLowerCase().replace(/[^a-z0-9-]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
+    setSavingCob(true);
+    try {
+      const res = await fetch("/api/profile", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          cobranding_slug: slugClean || null,
+          cobranding_bio: cobBio.trim() || null,
+          cobranding_whatsapp: cobWhatsapp.trim() || null,
+          cobranding_instagram: cobInstagram.trim() || null,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) { showToast(json.error ?? "Erro ao salvar mini-site.", "error"); return; }
+      setCobSlug(slugClean);
+      setProfile(prev => ({ ...prev, cobranding_slug: slugClean || null, cobranding_bio: cobBio || null, cobranding_whatsapp: cobWhatsapp || null, cobranding_instagram: cobInstagram || null }));
+      showToast("Mini-site atualizado com sucesso!", "success");
+    } finally {
+      setSavingCob(false);
     }
   }
 
@@ -351,6 +386,99 @@ export function PerfilClient({ initialProfile }: { initialProfile: ProfileData }
                     <p className="text-xs font-semibold text-[#F0ECE4]">{item.value}</p>
                   </div>
                 ))}
+              </div>
+            </div>
+
+            {/* Mini-site / Co-branding */}
+            <div className="p-6 rounded-2xl border border-[#C9A84C]/20 bg-[#0A1628]/60 space-y-4"
+              style={{ boxShadow: "0 0 0 1px rgba(201,168,76,0.08)" }}>
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h2 className="text-sm font-bold text-[#F0ECE4] flex items-center gap-2">
+                    <Globe className="w-4 h-4 text-[#C9A84C]" /> Meu Mini-Site V3
+                  </h2>
+                  <p className="text-xs text-[#7A8FA8] mt-1">
+                    Configure sua página pública com formulário de captação direto ao seu CRM.
+                  </p>
+                </div>
+                {cobSlug && (
+                  <a
+                    href={`/p/${cobSlug}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#C9A84C]/10 text-[#E8C97A] border border-[#C9A84C]/25 hover:bg-[#C9A84C]/20 transition-all"
+                  >
+                    <ExternalLink className="w-3 h-3" /> Ver meu site
+                  </a>
+                )}
+              </div>
+
+              {/* URL preview */}
+              <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-[#111F35] border border-[#1E3050]">
+                <Link2 className="w-3.5 h-3.5 text-[#C9A84C] flex-shrink-0" />
+                <span className="text-xs text-[#7A8FA8]">app.v3partners.com.br/p/</span>
+                <span className="text-xs font-bold text-[#E8C97A] break-all">
+                  {cobSlug || <span className="text-[#3A5070] font-normal italic">seu-slug-aqui</span>}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-[#7A8FA8] mb-1.5">
+                    Slug da URL <span className="text-[#C9A84C]">*</span>
+                  </label>
+                  <input
+                    value={cobSlug}
+                    onChange={e => setCobSlug(e.target.value)}
+                    placeholder="ex: joao-silva"
+                    className="w-full h-9 px-3 text-sm rounded-lg border border-[#1E3050] bg-[#111F35] text-[#F0ECE4] placeholder:text-[#3A5070] focus:outline-none focus:ring-1 focus:ring-[#C9A84C]/50 focus:border-[#C9A84C]/50 transition-colors"
+                  />
+                  <p className="text-[10px] text-[#3A5070] mt-1">Apenas letras minúsculas, números e hífens</p>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-[#7A8FA8] mb-1.5">WhatsApp</label>
+                  <input
+                    value={cobWhatsapp}
+                    onChange={e => setCobWhatsapp(e.target.value)}
+                    placeholder="(11) 99999-0000"
+                    className="w-full h-9 px-3 text-sm rounded-lg border border-[#1E3050] bg-[#111F35] text-[#F0ECE4] placeholder:text-[#3A5070] focus:outline-none focus:ring-1 focus:ring-[#C9A84C]/50 focus:border-[#C9A84C]/50 transition-colors"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-[#7A8FA8] mb-1.5">Instagram</label>
+                  <input
+                    value={cobInstagram}
+                    onChange={e => setCobInstagram(e.target.value)}
+                    placeholder="@seuperfil"
+                    className="w-full h-9 px-3 text-sm rounded-lg border border-[#1E3050] bg-[#111F35] text-[#F0ECE4] placeholder:text-[#3A5070] focus:outline-none focus:ring-1 focus:ring-[#C9A84C]/50 focus:border-[#C9A84C]/50 transition-colors"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-[#7A8FA8] mb-1.5">Bio / Apresentação</label>
+                <textarea
+                  value={cobBio}
+                  onChange={e => setCobBio(e.target.value)}
+                  rows={3}
+                  placeholder="Ex: Especialista em estruturação financeira e M&A. Atendo empresas com faturamento acima de R$5M que buscam crescimento com capital inteligente."
+                  className="w-full px-3 py-2.5 text-sm rounded-lg border border-[#1E3050] bg-[#111F35] text-[#F0ECE4] placeholder:text-[#3A5070] focus:outline-none focus:ring-1 focus:ring-[#C9A84C]/50 focus:border-[#C9A84C]/50 transition-colors resize-none"
+                />
+                <p className="text-[10px] text-[#3A5070] mt-1">Aparece no hero do seu mini-site · máx. 200 caracteres recomendado</p>
+              </div>
+
+              <div className="flex items-center justify-between pt-1">
+                <p className="text-[10px] text-[#3A5070]">
+                  Os leads captados vão direto para o seu CRM
+                </p>
+                <button
+                  onClick={handleSaveCobranding}
+                  disabled={savingCob || !cobSlug.trim()}
+                  className="flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-semibold bg-[#C9A84C] text-[#09081A] hover:bg-[#E8C97A] transition-all disabled:opacity-50"
+                >
+                  <Save className="w-4 h-4" />
+                  {savingCob ? "Salvando..." : "Salvar mini-site"}
+                </button>
               </div>
             </div>
           </div>

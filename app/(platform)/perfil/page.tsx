@@ -13,7 +13,7 @@ export default async function PerfilPage() {
   const svc = sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
   const { data: profile } = await svc
     .from("profiles")
-    .select("id, full_name, email, role, avatar_url, phone, document_cpf, created_at, last_login_at, is_active")
+    .select("id, full_name, email, role, avatar_url, phone, document_cpf, created_at, last_login_at, is_active, cobranding_slug, cobranding_bio, cobranding_whatsapp, cobranding_instagram")
     .eq("id", user.id)
     .single();
 
