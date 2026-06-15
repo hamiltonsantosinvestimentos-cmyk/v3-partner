@@ -2762,7 +2762,7 @@ function AssinaturasTab() {
     if (!payPartner) return;
     setPayLoading(true);
     const now = new Date();
-    const valor = payPartner.role === "PARTNER_PRO" ? 897 : payPartner.role === "STARTER" ? 297 : payPartner.role === "ENTERPRISE" ? 2500 : 497;
+    const valor = getValorPartner(payPartner);
     try {
       await fetch("/api/financeiro/assinaturas", {
         method: "POST",
@@ -2785,6 +2785,14 @@ function AssinaturasTab() {
     }
   }
 
+  // Preço efetivo por partner: usa amount_cents da última cobrança Cora (preço contratado) ou fallback do plano
+  const PLANO_PADRAO: Record<string, number> = { STARTER: 297, PARTNER: 497, PARTNER_PRO: 897, ENTERPRISE: 2500 };
+  function getValorPartner(p: PartnerRow): number {
+    const sub = coraByPartner[p.id];
+    if (sub?.amount_cents && sub.amount_cents > 0) return sub.amount_cents / 100;
+    return PLANO_PADRAO[p.role] ?? 497;
+  }
+
   // KPIs
   const ROLES_PAGANTES = ["STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE"];
   const totalPartners = partners.filter(p => ROLES_PAGANTES.includes(p.role)).length;
@@ -2793,7 +2801,7 @@ function AssinaturasTab() {
     const s = calcStatus(p);
     return p.is_active && s.dias > 0 && ROLES_PAGANTES.includes(p.role);
   });
-  const mrr = ativos.reduce((s, p) => s + (p.role === "PARTNER_PRO" ? 897 : p.role === "STARTER" ? 297 : p.role === "ENTERPRISE" ? 2500 : 497), 0);
+  const mrr = ativos.reduce((s, p) => s + getValorPartner(p), 0);
   const vencendo = partners.filter(p => { const s = calcStatus(p); return s.dias > 0 && s.dias <= 15; }).length;
   const inadimplentes = partners.filter(p => { const s = calcStatus(p); return !p.is_active || s.dias === 0; }).length;
 
@@ -2958,7 +2966,7 @@ function AssinaturasTab() {
                 )}
                 {filtered.map(p => {
                   const status = calcStatus(p);
-                  const valor = p.role === "PARTNER_PRO" ? 897 : p.role === "STARTER" ? 297 : p.role === "ENTERPRISE" ? 2500 : 497;
+                  const valor = getValorPartner(p);
                   const expDate = p.trial_expires_at
                     ? new Date(p.trial_expires_at).toLocaleDateString("pt-BR")
                     : new Date(new Date(p.created_at).getTime() + 30 * 86400000).toLocaleDateString("pt-BR");
