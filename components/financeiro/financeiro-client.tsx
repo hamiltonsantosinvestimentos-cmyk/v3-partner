@@ -2694,6 +2694,12 @@ function AssinaturasTab() {
   const [payObs, setPayObs] = useState("");
   const [payLoading, setPayLoading] = useState(false);
 
+  // Modal de edição
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editPartner, setEditPartner] = useState<PartnerRow | null>(null);
+  const [editForm, setEditForm] = useState({ full_name: "", role: "", valor: "", vencimento: "" });
+  const [editLoading, setEditLoading] = useState(false);
+
   // Filtro/busca
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState<"todos" | "ativas" | "vencendo" | "vencidas" | "suspensas">("todos");
@@ -2756,6 +2762,49 @@ function AssinaturasTab() {
     setLoteResult({ ok, skip });
     setGerandoLote(false);
     await fetchData();
+  }
+
+  function openEdit(p: PartnerRow) {
+    const expDate = p.trial_expires_at
+      ? new Date(p.trial_expires_at).toISOString().split("T")[0]
+      : new Date(new Date(p.created_at).getTime() + 30 * 86400000).toISOString().split("T")[0];
+    setEditPartner(p);
+    setEditForm({
+      full_name: p.full_name ?? "",
+      role: p.role,
+      valor: String(getValorPartner(p)),
+      vencimento: expDate,
+    });
+    setShowEditModal(true);
+  }
+
+  async function handleSaveEdit() {
+    if (!editPartner) return;
+    setEditLoading(true);
+    try {
+      const valorCents = Math.round(parseFloat(editForm.valor) * 100);
+      const res = await fetch("/api/financeiro/assinaturas", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          partnerId: editPartner.id,
+          action: "editar",
+          full_name: editForm.full_name.trim() || undefined,
+          role: editForm.role,
+          valor_cents: valorCents > 0 ? valorCents : undefined,
+          trial_expires_at: editForm.vencimento ? new Date(editForm.vencimento + "T23:59:59").toISOString() : undefined,
+        }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({})) as { error?: string };
+        alert(d.error ?? "Erro ao salvar alterações.");
+        return;
+      }
+      setShowEditModal(false);
+      await fetchData();
+    } finally {
+      setEditLoading(false);
+    }
   }
 
   async function handlePagar() {
@@ -3032,6 +3081,15 @@ function AssinaturasTab() {
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-end gap-1.5">
+                          {/* Editar */}
+                          <button
+                            onClick={() => openEdit(p)}
+                            title="Editar assinatura"
+                            className="p-1.5 rounded-lg text-blue-400 border border-blue-500/20 hover:bg-blue-500/10 transition-colors"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+
                           {/* Registrar pagamento */}
                           <button
                             onClick={() => { setPayPartner(p); setShowPayModal(true); }}
@@ -3141,6 +3199,81 @@ function AssinaturasTab() {
         </Card>
       )}
 
+      {/* Modal de edição */}
+      {showEditModal && editPartner && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-[#111F35] border border-border/40 rounded-2xl p-6 w-full max-w-md shadow-2xl space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-base font-bold text-white flex items-center gap-2">
+                <Pencil className="w-4 h-4 text-[#C9A84C]" /> Editar Assinatura
+              </h2>
+              <button onClick={() => setShowEditModal(false)} className="text-muted-foreground hover:text-foreground">
+                <XCircle className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs text-muted-foreground mb-1">Nome completo</label>
+                <input
+                  value={editForm.full_name}
+                  onChange={e => setEditForm(f => ({ ...f, full_name: e.target.value }))}
+                  className="w-full bg-card border border-border/40 rounded-lg px-3 py-2 text-sm text-foreground outline-none focus:ring-1 focus:ring-[#C9A84C]/40"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-muted-foreground mb-1">Plano</label>
+                <select
+                  value={editForm.role}
+                  onChange={e => setEditForm(f => ({ ...f, role: e.target.value }))}
+                  className="w-full bg-card border border-border/40 rounded-lg px-3 py-2 text-sm text-foreground outline-none focus:ring-1 focus:ring-[#C9A84C]/40"
+                >
+                  <option value="STARTER">V3 Starter</option>
+                  <option value="PARTNER">V3 Partner</option>
+                  <option value="PARTNER_PRO">V3 Partner PRO</option>
+                  <option value="ENTERPRISE">V3 Enterprise</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs text-muted-foreground mb-1">Valor mensalidade (R$)</label>
+                <input
+                  type="number"
+                  value={editForm.valor}
+                  onChange={e => setEditForm(f => ({ ...f, valor: e.target.value }))}
+                  placeholder="Ex: 197"
+                  className="w-full bg-card border border-border/40 rounded-lg px-3 py-2 text-sm text-foreground outline-none focus:ring-1 focus:ring-[#C9A84C]/40"
+                />
+                <p className="text-[10px] text-muted-foreground mt-1">Valor contratado — usado em cobranças e registros</p>
+              </div>
+              <div>
+                <label className="block text-xs text-muted-foreground mb-1">Data de vencimento</label>
+                <input
+                  type="date"
+                  value={editForm.vencimento}
+                  onChange={e => setEditForm(f => ({ ...f, vencimento: e.target.value }))}
+                  className="w-full bg-card border border-border/40 rounded-lg px-3 py-2 text-sm text-foreground outline-none focus:ring-1 focus:ring-[#C9A84C]/40"
+                />
+              </div>
+            </div>
+            <div className="flex gap-2 pt-1">
+              <button
+                onClick={() => setShowEditModal(false)}
+                className="flex-1 border border-border/40 text-muted-foreground rounded-lg py-2 text-sm hover:text-foreground transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleSaveEdit}
+                disabled={editLoading}
+                className="flex-1 bg-[#C9A84C] text-[#09081A] font-bold rounded-lg py-2 text-sm hover:bg-[#E8C97A] transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {editLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                Salvar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Modal de pagamento */}
       {showPayModal && payPartner && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
@@ -3154,7 +3287,7 @@ function AssinaturasTab() {
             <div className="space-y-1 text-sm">
               <p className="text-muted-foreground">Partner: <span className="text-foreground font-medium">{payPartner.full_name ?? payPartner.email}</span></p>
               <p className="text-muted-foreground">Plano: <span className="text-foreground font-medium">{payPartner.role === "PARTNER_PRO" ? "Partner PRO" : payPartner.role === "STARTER" ? "Starter" : payPartner.role === "ENTERPRISE" ? "Enterprise" : "Partner"}</span></p>
-              <p className="text-muted-foreground">Valor: <span className="text-[#C9A84C] font-bold">{formatMoeda(payPartner.role === "PARTNER_PRO" ? 897 : payPartner.role === "STARTER" ? 297 : payPartner.role === "ENTERPRISE" ? 2500 : 497)}</span></p>
+              <p className="text-muted-foreground">Valor: <span className="text-[#C9A84C] font-bold">{formatMoeda(getValorPartner(payPartner))}</span></p>
             </div>
             <div>
               <label className="block text-xs text-muted-foreground mb-1">Observações (opcional)</label>

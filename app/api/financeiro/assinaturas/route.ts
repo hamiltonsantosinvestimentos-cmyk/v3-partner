@@ -147,6 +147,44 @@ export async function PATCH(req: NextRequest) {
       .eq("id", partnerId);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
+  } else if (action === "editar") {
+    const { full_name, role, valor_cents, trial_expires_at } = body as {
+      full_name?: string;
+      role?: string;
+      valor_cents?: number;
+      trial_expires_at?: string;
+    };
+
+    const updateProfile: Record<string, unknown> = {};
+    if (full_name) updateProfile.full_name = full_name;
+    if (role) updateProfile.role = role;
+    if (trial_expires_at) updateProfile.trial_expires_at = trial_expires_at;
+
+    if (Object.keys(updateProfile).length > 0) {
+      const { error } = await svc().from("profiles").update(updateProfile).eq("id", partnerId);
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    // Salva o valor contratado no cadastro original (grandfathering)
+    if (valor_cents && valor_cents > 0) {
+      await svc()
+        .from("partner_registrations")
+        .update({ cora_amount_cents: valor_cents })
+        .eq("partner_id", partnerId);
+
+      // Atualiza também a última subscription se existir
+      const { data: lastSub } = await svc()
+        .from("partner_subscriptions")
+        .select("id")
+        .eq("partner_id", partnerId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (lastSub) {
+        await svc().from("partner_subscriptions").update({ amount_cents: valor_cents }).eq("id", lastSub.id);
+      }
+    }
+
   } else if (action === "gerar_cobranca_cora") {
     // Gera cobrança Cora para um partner específico
     const { data: p } = await svc()
