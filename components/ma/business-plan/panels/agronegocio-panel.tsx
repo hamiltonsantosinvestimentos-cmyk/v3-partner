@@ -20,12 +20,14 @@ const C = {
 
 const fmt = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 const fmtBRL2 = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const fmtPct = (v: number) => `${v.toFixed(1)}%`;
-const fmtArroba = (v: number) => `${v.toFixed(2)} @`;
-const fmtM = (v: number) =>
-  v >= 1e9 ? `R$${(v / 1e9).toFixed(1)}Bi`
-  : v >= 1e6 ? `R$${(v / 1e6).toFixed(1)}M`
-  : `R$${(v / 1e3).toFixed(0)}K`;
+const fmtPct = (v: number | null | undefined) => (v == null ? "—" : `${v.toFixed(1)}%`);
+const fmtArroba = (v: number | null | undefined) => (v == null ? "—" : `${v.toFixed(2)} @`);
+const fmtM = (v: number | null | undefined) => {
+  if (v == null) return "—";
+  return v >= 1e9 ? `R$${(v / 1e9).toFixed(1)}Bi`
+    : v >= 1e6 ? `R$${(v / 1e6).toFixed(1)}M`
+    : `R$${(v / 1e3).toFixed(0)}K`;
+};
 
 interface Props {
   plan: GeneratedPlan;
@@ -315,7 +317,7 @@ export function AgronegocionPanel({ plan, financialProjections: fp, canGenerate,
       {/* ── FX snapshot ───────────────────────────────────────── */}
       {fp.fx_snapshot && (
         <p className="text-[9px]" style={{ color: C.mu }}>
-          Câmbio aplicado: USD/BRL {fp.fx_snapshot.usd_brl.toFixed(4)} · fonte: {fp.fx_snapshot.source} · {fp.fx_snapshot.date}
+          Câmbio aplicado: USD/BRL {fp.fx_snapshot.usd_brl?.toFixed(4) ?? "—"} · fonte: {fp.fx_snapshot.source} · {fp.fx_snapshot.date}
         </p>
       )}
 
