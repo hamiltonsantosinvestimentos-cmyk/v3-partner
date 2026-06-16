@@ -3436,10 +3436,10 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
               <X className="w-3.5 h-3.5" /> Reprovar
             </Button>
           )}
-          {/* ── Botões de aprovação — apenas em "Em Aprovação" ── */}
-          {canChangeStage && isEmAprovacao && (
+          {/* ── Botão Aprovar — disponível em qualquer estágio ── */}
+          {canChangeStage && !isFinished && proposal?.status !== "APPROVED" && proposal?.status !== "REJECTED" && (
             <div className="flex items-center gap-2 flex-wrap">
-              {proximosNiveis.length > 0 && (
+              {isEmAprovacao && proximosNiveis.length > 0 && (
                 <Button size="sm" variant="outline" onClick={() => setShowEscalar(true)}
                   className="gap-1.5 border-amber-500/40 text-amber-400 hover:bg-amber-500/10">
                   <ArrowRight className="w-3.5 h-3.5" /> Escalar Nível
