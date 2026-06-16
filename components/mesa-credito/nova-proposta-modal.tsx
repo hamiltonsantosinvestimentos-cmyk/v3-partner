@@ -864,8 +864,16 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
 
   function handleFileChange(docId: string, e: React.ChangeEvent<HTMLInputElement>) {
     const files = e.target.files;
-    if (files) {
-      Array.from(files).forEach((file) => queueFile(docId, file));
+    if (files && files.length > 0) {
+      const newFiles: UploadedFile[] = Array.from(files).map((file) => ({
+        fileKey: `${docId}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        docId,
+        name: file.name,
+        size: Math.max(1, Math.round(file.size / 1024)),
+        status: "pending" as const,
+        file,
+      }));
+      setUploadedFiles((prev) => [...prev, ...newFiles]);
     }
     e.target.value = "";
   }
