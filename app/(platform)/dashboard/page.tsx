@@ -41,7 +41,6 @@ export default async function DashboardPage({
         userName={session.full_name || "Usuário"}
         period={period}
         kpis={{
-          totalSplits: DEMO_SPLITS.length,
           totalDeals: DEMO_DEALS.length,
           openTickets: DEMO_TICKETS.filter((t) =>
             ["PENDING", "IN_REVIEW"].includes(t.status)
@@ -50,10 +49,6 @@ export default async function DashboardPage({
             ["PENDING", "IN_REVIEW"].includes(p.status)
           ).length,
         }}
-        recentSplits={DEMO_SPLITS.slice(0, 5).map((s) => ({
-          id: s.id, code: s.code, title: s.title,
-          status: s.status, total_value: s.total_value, created_at: s.created_at,
-        }))}
         recentDeals={DEMO_DEALS.slice(0, 5).map((d) => ({
           id: d.id, code: d.code, title: d.title,
           stage: d.stage, deal_value: d.deal_value,
@@ -91,47 +86,39 @@ export default async function DashboardPage({
   const svc = sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 
   // Contadores — partner vê só os seus, admin vê todos
-  let splitCountQ = svc.from("split_fiscal").select("*", { count: "exact", head: true });
   let dealCountQ  = svc.from("ma_deals").select("*", { count: "exact", head: true });
   let propCountQ  = svc.from("credit_desk_proposals").select("*", { count: "exact", head: true }).in("status", ["PENDING", "IN_REVIEW"]);
   let ticketCountQ = svc.from("operational_tickets").select("*", { count: "exact", head: true }).in("status", ["PENDING", "IN_REVIEW"]);
 
   if (!isAdmin) {
-    splitCountQ = splitCountQ.or(`created_by.eq.${uid},partner_id.eq.${uid}`) as typeof splitCountQ;
     dealCountQ  = dealCountQ.or(`created_by.eq.${uid},assigned_to.eq.${uid}`) as typeof dealCountQ;
     propCountQ  = propCountQ.eq("partner_id", uid) as typeof propCountQ;
     ticketCountQ = ticketCountQ.eq("created_by", uid) as typeof ticketCountQ;
   }
   if (since) {
-    splitCountQ  = splitCountQ.gte("created_at", since) as typeof splitCountQ;
     dealCountQ   = dealCountQ.gte("created_at", since) as typeof dealCountQ;
     propCountQ   = propCountQ.gte("created_at", since) as typeof propCountQ;
   }
 
-  const countsResult = await Promise.allSettled([splitCountQ, dealCountQ, ticketCountQ, propCountQ]);
-  const totalSplits   = countsResult[0].status === "fulfilled" ? (countsResult[0].value.count ?? 0) : 0;
-  const totalDeals    = countsResult[1].status === "fulfilled" ? (countsResult[1].value.count ?? 0) : 0;
-  const totalTickets  = countsResult[2].status === "fulfilled" ? (countsResult[2].value.count ?? 0) : 0;
-  const totalProposals = countsResult[3].status === "fulfilled" ? (countsResult[3].value.count ?? 0) : 0;
+  const countsResult = await Promise.allSettled([dealCountQ, ticketCountQ, propCountQ]);
+  const totalDeals    = countsResult[0].status === "fulfilled" ? (countsResult[0].value.count ?? 0) : 0;
+  const totalTickets  = countsResult[1].status === "fulfilled" ? (countsResult[1].value.count ?? 0) : 0;
+  const totalProposals = countsResult[2].status === "fulfilled" ? (countsResult[2].value.count ?? 0) : 0;
 
   // Recentes — mesmo filtro
-  let splitsQ = svc.from("split_fiscal").select("id, code, title, status, total_value, created_at").order("created_at", { ascending: false }).limit(5);
   let dealsQ  = svc.from("ma_deals").select("id, code, title, stage, deal_value, target_company, created_at").order("created_at", { ascending: false }).limit(5);
   let propsQ  = svc.from("credit_desk_proposals").select("id, code, title, client_name, requested_value, current_level, status, created_at").order("created_at", { ascending: false }).limit(5);
 
   if (!isAdmin) {
-    splitsQ = splitsQ.or(`created_by.eq.${uid},partner_id.eq.${uid}`) as typeof splitsQ;
     dealsQ  = dealsQ.or(`created_by.eq.${uid},assigned_to.eq.${uid}`) as typeof dealsQ;
     propsQ  = propsQ.eq("partner_id", uid) as typeof propsQ;
   }
   if (since) {
-    splitsQ = splitsQ.gte("created_at", since) as typeof splitsQ;
     dealsQ  = dealsQ.gte("created_at", since) as typeof dealsQ;
     propsQ  = propsQ.gte("created_at", since) as typeof propsQ;
   }
 
-  const [splitsResult, dealsResult, propsResult] = await Promise.allSettled([splitsQ, dealsQ, propsQ]);
-  const recentSplits    = splitsResult.status === "fulfilled" ? (splitsResult.value.data ?? []) : [];
+  const [dealsResult, propsResult] = await Promise.allSettled([dealsQ, propsQ]);
   const recentDeals     = dealsResult.status  === "fulfilled" ? (dealsResult.value.data  ?? []) : [];
   const recentProposals = propsResult.status  === "fulfilled" ? (propsResult.value.data  ?? []) : [];
 
@@ -274,19 +261,15 @@ export default async function DashboardPage({
   const fimMesAnterior = new Date(agora.getFullYear(), agora.getMonth(), 0, 23, 59, 59).toISOString();
 
   // Contagens do mês anterior para comparativo MoM
-  let splitsMesAntQ = svc.from("split_fiscal").select("*", { count: "exact", head: true }).gte("created_at", inicioMesAnterior).lte("created_at", fimMesAnterior);
   let dealsMesAntQ  = svc.from("ma_deals").select("*", { count: "exact", head: true }).gte("created_at", inicioMesAnterior).lte("created_at", fimMesAnterior);
   let propsMesAntQ  = svc.from("credit_desk_proposals").select("*", { count: "exact", head: true }).gte("created_at", inicioMesAnterior).lte("created_at", fimMesAnterior);
 
-  let splitsMesAtualQ = svc.from("split_fiscal").select("*", { count: "exact", head: true }).gte("created_at", inicioMesAtual);
   let dealsMesAtualQ  = svc.from("ma_deals").select("*", { count: "exact", head: true }).gte("created_at", inicioMesAtual);
   let propsMesAtualQ  = svc.from("credit_desk_proposals").select("*", { count: "exact", head: true }).gte("created_at", inicioMesAtual);
 
   if (!isAdmin) {
-    splitsMesAntQ = splitsMesAntQ.or(`created_by.eq.${uid},partner_id.eq.${uid}`) as typeof splitsMesAntQ;
     dealsMesAntQ  = dealsMesAntQ.or(`created_by.eq.${uid},assigned_to.eq.${uid}`) as typeof dealsMesAntQ;
     propsMesAntQ  = propsMesAntQ.eq("partner_id", uid) as typeof propsMesAntQ;
-    splitsMesAtualQ = splitsMesAtualQ.or(`created_by.eq.${uid},partner_id.eq.${uid}`) as typeof splitsMesAtualQ;
     dealsMesAtualQ  = dealsMesAtualQ.or(`created_by.eq.${uid},assigned_to.eq.${uid}`) as typeof dealsMesAtualQ;
     propsMesAtualQ  = propsMesAtualQ.eq("partner_id", uid) as typeof propsMesAtualQ;
   }
@@ -299,19 +282,17 @@ export default async function DashboardPage({
 
   const [
     followUpsResult,
-    splitsMesAntResult, dealsMesAntResult, propsMesAntResult,
-    splitsMesAtualResult, dealsMesAtualResult, propsMesAtualResult,
+    dealsMesAntResult, propsMesAntResult,
+    dealsMesAtualResult, propsMesAtualResult,
   ] = await Promise.allSettled([
     followUpsQ,
-    splitsMesAntQ, dealsMesAntQ, propsMesAntQ,
-    splitsMesAtualQ, dealsMesAtualQ, propsMesAtualQ,
+    dealsMesAntQ, propsMesAntQ,
+    dealsMesAtualQ, propsMesAtualQ,
   ]);
 
   const followUps = followUpsResult.status === "fulfilled" ? (followUpsResult.value.data ?? []) : [];
-  const splitsMesAnt  = splitsMesAntResult.status === "fulfilled"  ? (splitsMesAntResult.value.count  ?? 0) : 0;
   const dealsMesAnt   = dealsMesAntResult.status === "fulfilled"   ? (dealsMesAntResult.value.count   ?? 0) : 0;
   const propsMesAnt   = propsMesAntResult.status === "fulfilled"   ? (propsMesAntResult.value.count   ?? 0) : 0;
-  const splitsMesAtual = splitsMesAtualResult.status === "fulfilled" ? (splitsMesAtualResult.value.count ?? 0) : 0;
   const dealsMesAtual  = dealsMesAtualResult.status === "fulfilled"  ? (dealsMesAtualResult.value.count ?? 0) : 0;
   const propsMesAtual  = propsMesAtualResult.status === "fulfilled"  ? (propsMesAtualResult.value.count ?? 0) : 0;
 
@@ -321,7 +302,6 @@ export default async function DashboardPage({
   }
 
   const kpiChanges = {
-    splits: momChange(splitsMesAtual, splitsMesAnt),
     deals:  momChange(dealsMesAtual,  dealsMesAnt),
     proposals: momChange(propsMesAtual, propsMesAnt),
   };
@@ -481,7 +461,6 @@ export default async function DashboardPage({
       revenueData={revenueData}
       redeHealth={redeHealth}
       kpis={{
-        totalSplits: totalSplits,
         totalDeals: totalDeals,
         openTickets: totalTickets,
         pendingProposals: totalProposals,
@@ -492,7 +471,6 @@ export default async function DashboardPage({
       metaMes={metaMes}
       topPartners={topPartners}
       benchmarkData={benchmarkData}
-      recentSplits={recentSplits as Parameters<typeof DashboardClient>[0]["recentSplits"]}
       recentDeals={recentDeals as Parameters<typeof DashboardClient>[0]["recentDeals"]}
       recentProposals={recentProposals as Parameters<typeof DashboardClient>[0]["recentProposals"]}
       followUps={followUps as Parameters<typeof DashboardClient>[0]["followUps"]}

@@ -214,13 +214,11 @@ interface DashboardClientProps {
   revenueData?: Array<{ month: string; value: number; emAprovacao: number }>;
   redeHealth?: RedeHealth | null;
   kpis: {
-    totalSplits: number;
     totalDeals: number;
     openTickets: number;
     pendingProposals: number;
   };
   kpiChanges?: {
-    splits?: number;
     deals?: number;
     proposals?: number;
   };
@@ -228,14 +226,6 @@ interface DashboardClientProps {
   comissoesAPagar?: number;
   metaMes?: MetaMes | null;
   topPartners?: Array<{ id: string; full_name: string; count: number }>;
-  recentSplits: Array<{
-    id: string;
-    code: string;
-    title: string;
-    status: string;
-    total_value: number;
-    created_at: string;
-  }>;
   recentDeals: Array<{
     id: string;
     code: string;
@@ -279,7 +269,6 @@ export function DashboardClient({
   comissoesAPagar = 0,
   metaMes,
   topPartners = [],
-  recentSplits,
   recentDeals,
   recentProposals = [],
   followUps = [],
@@ -304,13 +293,12 @@ export function DashboardClient({
   }
 
   const operationsData = [
-    { name: "Split Fiscal", valor: kpis.totalSplits },
     { name: "M&A", valor: kpis.totalDeals },
     { name: "Mesa Crédito", valor: kpis.pendingProposals },
     { name: "Tickets", valor: kpis.openTickets },
   ];
 
-  const totalOperacoes = kpis.totalSplits + kpis.totalDeals + kpis.pendingProposals + kpis.openTickets;
+  const totalOperacoes = kpis.totalDeals + kpis.pendingProposals + kpis.openTickets;
 
   // ── Compute completedSteps for OnboardingChecklist ──────────────────────────
   const completedSteps: string[] = ["account_created"];
@@ -319,7 +307,7 @@ export function DashboardClient({
   // Has marketplace leads → "first_lead_sent" done
   if (marketplaceLeads > 0) completedSteps.push("first_lead_sent");
   // Has any split or deal → involved in the platform
-  if (kpis.totalSplits > 0 || kpis.totalDeals > 0) completedSteps.push("marketplace_explored");
+  if (kpis.totalDeals > 0) completedSteps.push("marketplace_explored");
   // Has crm follow-ups (only accessible if has contacts) → crm step done
   if (followUps.length > 0) completedSteps.push("crm_contact");
 
@@ -422,15 +410,7 @@ export function DashboardClient({
       {role === "PARTNER" && <UpgradeNudge />}
 
       {/* KPI Grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <KpiCard
-          title="Split Fiscal"
-          value={kpis.totalSplits}
-          icon={<TrendingUp className="w-5 h-5 text-blue-400" />}
-          color="bg-blue-500/20"
-          subtitle="operações totais"
-          change={kpiChanges?.splits}
-        />
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
         <KpiCard
           title="Deals M&A"
           value={kpis.totalDeals}
@@ -622,7 +602,6 @@ export function DashboardClient({
             onClick={() => {
               const rows = [
                 ["Métrica", "Valor"],
-                ["Split Fiscal", kpis.totalSplits],
                 ["Deals M&A", kpis.totalDeals],
                 ["Tickets Abertos", kpis.openTickets],
                 ["Propostas Crédito", kpis.pendingProposals],
@@ -794,51 +773,6 @@ export function DashboardClient({
 
       {/* Recent Activity */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Recent Splits */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm font-semibold flex items-center justify-between">
-              <span>Últimas Operações Split Fiscal</span>
-              <a href="/split-fiscal" className="text-xs text-[#C9A84C] hover:text-[#E8C97A] transition-colors">
-                Ver todas →
-              </a>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {recentSplits.length === 0 ? (
-              <div className="text-center py-6">
-                <p className="text-muted-foreground text-sm">Nenhuma operação encontrada</p>
-              </div>
-            ) : (
-              recentSplits.map((split) => (
-                <div
-                  key={split.id}
-                  className="flex items-center justify-between py-2 border-b border-border/30 last:border-0"
-                >
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-foreground truncate">
-                      {split.title}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {split.code} · {formatDate(split.created_at)}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2 ml-3">
-                    <span className="text-sm font-semibold text-white">
-                      {formatCurrency(split.total_value)}
-                    </span>
-                    <Badge
-                      className={`text-[10px] ${STATUS_COLORS[split.status as OperationStatus]}`}
-                    >
-                      {STATUS_LABELS[split.status as OperationStatus]}
-                    </Badge>
-                  </div>
-                </div>
-              ))
-            )}
-          </CardContent>
-        </Card>
-
         {/* Recent M&A */}
         <Card>
           <CardHeader>

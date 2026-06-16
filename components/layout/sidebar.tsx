@@ -96,7 +96,6 @@ const NAV_SECTIONS: NavSection[] = [
           { href: "/simulador-homecash", label: "HomeCash", roles: ["ADMIN", "GESTAO", "STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE", "MESA_OPERACIONAL"] },
         ],
       },
-      { href: "/split-fiscal", label: "Split Fiscal", icon: "PieChart", roles: ["ADMIN", "PARTNER", "PARTNER_PRO", "ENTERPRISE", "GESTAO"] },
       { href: "/ma", label: "M&A", icon: "Building2", roles: ["ADMIN", "GESTAO", "PARTNER", "PARTNER_PRO", "ENTERPRISE", "MESA_OPERACIONAL"] },
       {
         href: "/consorcio", label: "Consórcio", icon: "Trophy",
@@ -132,7 +131,6 @@ const NAV_SECTIONS: NavSection[] = [
           { href: "/academy?cat=estruturado", label: "Crédito Estruturado", roles: ["ADMIN", "STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE", "MESA_OPERACIONAL", "GESTAO"] },
           { href: "/academy?cat=high-ticket", label: "High Ticket", roles: ["ADMIN", "STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE", "MESA_OPERACIONAL", "GESTAO"] },
           { href: "/academy?cat=ma", label: "M&A", roles: ["ADMIN", "GESTAO", "PARTNER_PRO", "ENTERPRISE"] },
-          { href: "/academy?cat=split-fiscal", label: "Split Fiscal", roles: ["ADMIN", "PARTNER", "PARTNER_PRO", "ENTERPRISE", "GESTAO"] },
           { href: "/academy?cat=consorcio", label: "Consórcio", roles: ["ADMIN", "STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE", "MESA_OPERACIONAL", "GESTAO"] },
           { href: "/academy?cat=compliance", label: "Compliance", roles: ["ADMIN", "STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE", "MESA_OPERACIONAL", "GESTAO"] },
         ],
