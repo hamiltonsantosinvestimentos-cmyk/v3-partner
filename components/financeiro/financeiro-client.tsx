@@ -6,7 +6,7 @@ import {
   CreditCard, Receipt, ChevronLeft, ChevronRight,
   ArrowUpRight, ArrowDownRight, CheckCircle2, Clock,
   AlertCircle, RefreshCw, Plus, Download, Eye, Trash2, Pencil,
-  Crown, ShieldCheck, XCircle, Loader2, Ban, RotateCcw, Building2, X,
+  Crown, ShieldCheck, XCircle, Loader2, Ban, RotateCcw, Building2, X, History,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ExportButton } from "@/components/financeiro/export-button";
@@ -2700,6 +2700,31 @@ function AssinaturasTab() {
   const [editForm, setEditForm] = useState({ full_name: "", role: "", valor: "", vencimento: "" });
   const [editLoading, setEditLoading] = useState(false);
 
+  // Drawer de histórico
+  interface SubHistRow { id: string; status: string; cora_invoice_id?: string; amount_cents: number; due_date: string; pix_emv?: string; pix_qr_code?: string; boleto_pdf?: string; paid_at?: string; created_at: string; plano?: string }
+  interface ManualHistRow { id: string; data: { valor: number; mes: number; ano: number; observacoes?: string; dataPagamento: string }; created_at: string }
+  const [showHistDrawer, setShowHistDrawer] = useState(false);
+  const [histPartner, setHistPartner] = useState<PartnerRow | null>(null);
+  const [histSubs, setHistSubs] = useState<SubHistRow[]>([]);
+  const [histManual, setHistManual] = useState<ManualHistRow[]>([]);
+  const [histLoading, setHistLoading] = useState(false);
+
+  async function openHistorico(p: PartnerRow) {
+    setHistPartner(p);
+    setShowHistDrawer(true);
+    setHistLoading(true);
+    try {
+      const res = await fetch(`/api/financeiro/assinaturas?partnerId=${p.id}`);
+      if (res.ok) {
+        const d = await res.json();
+        setHistSubs(d.subs ?? []);
+        setHistManual(d.manual ?? []);
+      }
+    } finally {
+      setHistLoading(false);
+    }
+  }
+
   // Filtro/busca
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState<"todos" | "ativas" | "vencendo" | "vencidas" | "suspensas">("todos");
@@ -3081,6 +3106,15 @@ function AssinaturasTab() {
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-end gap-1.5">
+                          {/* Histórico */}
+                          <button
+                            onClick={() => openHistorico(p)}
+                            title="Ver histórico de pagamentos"
+                            className="p-1.5 rounded-lg text-purple-400 border border-purple-500/20 hover:bg-purple-500/10 transition-colors"
+                          >
+                            <History className="w-3.5 h-3.5" />
+                          </button>
+
                           {/* Editar */}
                           <button
                             onClick={() => openEdit(p)}
@@ -3270,6 +3304,149 @@ function AssinaturasTab() {
                 Salvar
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Drawer de histórico do partner */}
+      {showHistDrawer && histPartner && (
+        <div className="fixed inset-0 z-50 flex justify-end">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowHistDrawer(false)} />
+          <div className="relative w-full max-w-lg bg-[#111F35] border-l border-border/40 shadow-2xl flex flex-col h-full overflow-hidden">
+            {/* Header */}
+            <div className="flex items-start justify-between p-5 border-b border-border/30">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <History className="w-4 h-4 text-purple-400" />
+                  <h2 className="text-base font-bold text-white">Histórico de Pagamentos</h2>
+                </div>
+                <p className="text-sm text-muted-foreground">{histPartner.full_name ?? histPartner.email}</p>
+                <p className="text-xs text-muted-foreground">{histPartner.email} · <PlanBadge role={histPartner.role} /></p>
+              </div>
+              <button onClick={() => setShowHistDrawer(false)} className="text-muted-foreground hover:text-foreground mt-0.5">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Corpo */}
+            <div className="flex-1 overflow-y-auto p-5 space-y-6">
+              {histLoading ? (
+                <div className="flex items-center justify-center h-40 gap-2 text-muted-foreground">
+                  <Loader2 className="w-5 h-5 animate-spin" /> Carregando...
+                </div>
+              ) : (histSubs.length === 0 && histManual.length === 0) ? (
+                <div className="flex flex-col items-center justify-center h-40 text-muted-foreground text-sm gap-2">
+                  <History className="w-8 h-8 opacity-30" />
+                  Nenhum registro encontrado para este partner.
+                </div>
+              ) : (
+                <>
+                  {/* Cobranças Cora */}
+                  {histSubs.length > 0 && (
+                    <div>
+                      <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3">Cobranças Cora ({histSubs.length})</h3>
+                      <div className="relative pl-4">
+                        <div className="absolute left-1.5 top-0 bottom-0 w-px bg-border/30" />
+                        <div className="space-y-4">
+                          {histSubs.map(s => {
+                            const isPaid = s.status === "PAID";
+                            const isPending = ["PENDING", "OPEN"].includes(s.status);
+                            const dot = isPaid ? "bg-emerald-400" : isPending ? "bg-amber-400" : "bg-red-400";
+                            const labelColor = isPaid ? "text-emerald-400" : isPending ? "text-amber-400" : "text-red-400";
+                            const labelText = isPaid ? "Paga" : isPending ? "Pendente" : s.status === "MANUAL" ? "Manual" : "Cancelada";
+                            return (
+                              <div key={s.id} className="relative">
+                                <div className={`absolute -left-[11px] top-1.5 w-2 h-2 rounded-full ${dot} border-2 border-[#111F35]`} />
+                                <div className="bg-card/50 border border-border/30 rounded-xl p-3.5 space-y-2">
+                                  <div className="flex items-center justify-between">
+                                    <span className={`text-xs font-bold ${labelColor}`}>{labelText}</span>
+                                    <span className="text-sm font-bold text-[#C9A84C]">
+                                      {s.amount_cents > 0 ? formatMoeda(s.amount_cents / 100) : "—"}
+                                    </span>
+                                  </div>
+                                  <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                                    <span>Vencimento: <span className="text-foreground">{new Date(s.due_date + "T12:00:00").toLocaleDateString("pt-BR")}</span></span>
+                                    <span>Plano: <span className="text-foreground">{s.plano ?? "—"}</span></span>
+                                    {s.paid_at && <span className="col-span-2">Pago em: <span className="text-emerald-400">{new Date(s.paid_at).toLocaleDateString("pt-BR")}</span></span>}
+                                    {s.cora_invoice_id && <span className="col-span-2 font-mono text-[10px] opacity-60">ID: {s.cora_invoice_id}</span>}
+                                  </div>
+                                  {s.pix_emv && (
+                                    <div className="mt-1 p-2 bg-background/30 rounded-lg">
+                                      <p className="text-[10px] text-muted-foreground mb-0.5">PIX (copia e cola)</p>
+                                      <p className="text-[10px] font-mono text-foreground break-all line-clamp-2">{s.pix_emv}</p>
+                                    </div>
+                                  )}
+                                  {s.boleto_pdf && (
+                                    <a href={s.boleto_pdf} target="_blank" rel="noopener noreferrer" className="text-[10px] text-[#C9A84C] hover:underline flex items-center gap-1">
+                                      <Download className="w-3 h-3" /> Baixar Boleto PDF
+                                    </a>
+                                  )}
+                                  <p className="text-[10px] text-muted-foreground/60">
+                                    Gerada em {new Date(s.created_at).toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                                  </p>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Pagamentos manuais */}
+                  {histManual.length > 0 && (
+                    <div>
+                      <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3">Pagamentos Manuais ({histManual.length})</h3>
+                      <div className="relative pl-4">
+                        <div className="absolute left-1.5 top-0 bottom-0 w-px bg-border/30" />
+                        <div className="space-y-4">
+                          {histManual.map(m => (
+                            <div key={m.id} className="relative">
+                              <div className="absolute -left-[11px] top-1.5 w-2 h-2 rounded-full bg-emerald-400 border-2 border-[#111F35]" />
+                              <div className="bg-card/50 border border-border/30 rounded-xl p-3.5 space-y-1.5">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-xs font-bold text-emerald-400">Pago (manual)</span>
+                                  <span className="text-sm font-bold text-emerald-400">{formatMoeda(m.data.valor)}</span>
+                                </div>
+                                <div className="text-xs text-muted-foreground">
+                                  Referência: <span className="text-foreground">{MESES_PT[(m.data.mes ?? 1) - 1]}/{m.data.ano}</span>
+                                </div>
+                                {m.data.observacoes && (
+                                  <p className="text-xs text-muted-foreground italic">&ldquo;{m.data.observacoes}&rdquo;</p>
+                                )}
+                                <p className="text-[10px] text-muted-foreground/60">
+                                  Registrado em {new Date(m.data.dataPagamento ?? m.created_at).toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" })}
+                                </p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+
+            {/* Footer com resumo */}
+            {!histLoading && (histSubs.length > 0 || histManual.length > 0) && (
+              <div className="p-4 border-t border-border/30 bg-background/20">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">
+                    Total recebido (manual):
+                  </span>
+                  <span className="font-bold text-emerald-400">
+                    {formatMoeda(histManual.reduce((s, m) => s + (m.data.valor ?? 0), 0))}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-sm mt-1">
+                  <span className="text-muted-foreground">Cobranças Cora pagas:</span>
+                  <span className="font-bold text-[#C9A84C]">
+                    {formatMoeda(histSubs.filter(s => s.status === "PAID").reduce((s, sub) => s + sub.amount_cents / 100, 0))}
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

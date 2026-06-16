@@ -27,12 +27,36 @@ async function getAuthedAdmin() {
   return { user, profile };
 }
 
-// GET — lista todos os partners com dados de assinatura
-export async function GET() {
+// GET — lista todos os partners com dados de assinatura (ou histórico de um partner específico)
+export async function GET(req: NextRequest) {
   const { user, profile } = await getAuthedAdmin();
   if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   if (!["ADMIN", "FINANCEIRO"].includes(profile?.role ?? "")) {
     return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
+  }
+
+  // Histórico de um partner específico
+  const { searchParams } = new URL(req.url);
+  const partnerId = searchParams.get("partnerId");
+  if (partnerId) {
+    const [subsRes, manualRes] = await Promise.allSettled([
+      svc()
+        .from("partner_subscriptions")
+        .select("id, partner_id, status, cora_invoice_id, amount_cents, due_date, pix_emv, pix_qr_code, boleto_pdf, paid_at, created_at, plano")
+        .eq("partner_id", partnerId)
+        .order("created_at", { ascending: false }),
+      svc()
+        .from("financeiro_records")
+        .select("id, data, created_at")
+        .eq("type", "ASSINATURA_PAGAMENTO")
+        .order("created_at", { ascending: false }),
+    ]);
+
+    const subs = subsRes.status === "fulfilled" ? (subsRes.value.data ?? []) : [];
+    const allManual = manualRes.status === "fulfilled" ? (manualRes.value.data ?? []) : [];
+    const manual = allManual.filter((r: { data: { partnerId?: string } }) => r.data?.partnerId === partnerId);
+
+    return NextResponse.json({ subs, manual });
   }
 
   const { data: partners, error } = await svc()
