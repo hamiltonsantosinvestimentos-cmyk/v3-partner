@@ -176,23 +176,23 @@ export async function POST(req: NextRequest) {
       }
     } catch { /* notificação é opcional, nunca bloqueia a resposta */ }
 
-    // Notificações in-app (fire-and-forget)
+    // Notificações in-app (awaited para evitar cancelamento em serverless Vercel)
     const partnerName = profile?.full_name ?? "Partner";
-    // Confirmação para o próprio partner
-    createNotification({
-      user_id: user.id,
-      type: "proposal",
-      title: "Proposta de crédito enviada",
-      message: `${code} — ${d.client_name} · ${d.credit_line}`,
-      action_url: "/mesa-credito",
-    });
-    // Alerta para a mesa
-    notifyByRoles(["ADMIN", "GESTAO", "MESA_OPERACIONAL"], {
-      type: "proposal",
-      title: `Nova Proposta — ${code}`,
-      message: `${partnerName}: ${d.client_name} · ${d.credit_line} · ${new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(d.requested_value)}`,
-      action_url: `/mesa-credito/${d.current_level.toLowerCase().replace("_", "-")}`,
-    });
+    await Promise.allSettled([
+      createNotification({
+        user_id: user.id,
+        type: "proposal",
+        title: "Proposta de crédito enviada",
+        message: `${code} — ${d.client_name} · ${d.credit_line}`,
+        action_url: "/mesa-credito",
+      }),
+      notifyByRoles(["ADMIN", "GESTAO", "MESA_OPERACIONAL"], {
+        type: "proposal",
+        title: `Nova Proposta — ${code}`,
+        message: `${partnerName}: ${d.client_name} · ${d.credit_line} · ${new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(d.requested_value)}`,
+        action_url: `/mesa-credito/${d.current_level.toLowerCase().replace("_", "-")}`,
+      }),
+    ]);
 
     return NextResponse.json({ ok: true, proposal: data });
   } catch (err) {

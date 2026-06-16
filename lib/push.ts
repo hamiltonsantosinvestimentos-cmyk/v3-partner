@@ -54,13 +54,18 @@ export async function sendPushNotification(payload: PushPayload): Promise<void> 
 
     const expiredEndpoints: string[] = [];
 
+    const timeout = (ms: number) => new Promise<never>((_, reject) => setTimeout(() => reject(new Error("push timeout")), ms));
+
     await Promise.allSettled(
       subscriptions.map(async (sub) => {
         try {
-          await webpush.sendNotification(
-            { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
-            pushPayload
-          );
+          await Promise.race([
+            webpush.sendNotification(
+              { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+              pushPayload
+            ),
+            timeout(4000),
+          ]);
         } catch (err: unknown) {
           const status = (err as { statusCode?: number }).statusCode;
           if (status === 410 || status === 404) {
