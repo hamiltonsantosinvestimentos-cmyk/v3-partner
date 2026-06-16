@@ -116,11 +116,29 @@ export async function GET(req: NextRequest) {
     }
   } catch { coraByPartner = {}; }
 
+  // Cobranças Cora pagas nos últimos 6 meses (para o gráfico)
+  let coraPaidHistory: { amount_cents: number; paid_at: string }[] = [];
+  try {
+    const sixMonthsAgo = new Date();
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+    const { data: paidSubs } = await svc()
+      .from("partner_subscriptions")
+      .select("amount_cents, paid_at, due_date, created_at")
+      .eq("status", "PAID")
+      .gte("created_at", sixMonthsAgo.toISOString())
+      .order("paid_at", { ascending: false });
+    coraPaidHistory = (paidSubs ?? []).map((s: { amount_cents: number; paid_at?: string; due_date?: string; created_at: string }) => ({
+      amount_cents: s.amount_cents,
+      paid_at: s.paid_at ?? s.due_date ?? s.created_at,
+    }));
+  } catch { coraPaidHistory = []; }
+
   return NextResponse.json({
     partners: finalPartners ?? [],
     pendingNotifs: pendingNotifs ?? [],
     payments,
     coraByPartner,
+    coraPaidHistory,
   });
 }
 

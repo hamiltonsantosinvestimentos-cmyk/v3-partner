@@ -2683,6 +2683,7 @@ function AssinaturasTab() {
   const [payments, setPayments] = useState<PaymentRecord[]>([]);
   const [pendingNotifs, setPendingNotifs] = useState<PendingNotif[]>([]);
   const [coraByPartner, setCoraByPartner] = useState<Record<string, CoraSubRow>>({});
+  const [coraPaidHistory, setCoraPaidHistory] = useState<{ amount_cents: number; paid_at: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [gerandoLote, setGerandoLote] = useState(false);
@@ -2739,6 +2740,7 @@ function AssinaturasTab() {
         setPayments(d.payments ?? []);
         setPendingNotifs(d.pendingNotifs ?? []);
         setCoraByPartner(d.coraByPartner ?? {});
+        setCoraPaidHistory(d.coraPaidHistory ?? []);
       }
     } finally {
       setLoading(false);
@@ -2879,19 +2881,27 @@ function AssinaturasTab() {
   const vencendo = partners.filter(p => { const s = calcStatus(p); return s.dias > 0 && s.dias <= 15; }).length;
   const inadimplentes = partners.filter(p => { const s = calcStatus(p); return !p.is_active || s.dias === 0; }).length;
 
-  // Gráfico MRR mensal (últimos 6 meses simulados a partir de pagamentos)
+  // Gráfico MRR mensal (últimos 6 meses — pagamentos manuais + cobranças Cora pagas)
   const mrrChart = useMemo(() => {
     const now = new Date();
     return Array.from({ length: 6 }, (_, i) => {
       const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1);
       const m = d.getMonth() + 1;
       const a = d.getFullYear();
-      const total = payments
+      // Pagamentos manuais registrados
+      const manual = payments
         .filter(p => p.data.mes === m && p.data.ano === a)
         .reduce((s, p) => s + p.data.valor, 0);
-      return { mes: `${MESES_PT[m - 1]}/${String(a).slice(2)}`, Receita: total };
+      // Cobranças Cora com status PAID, agrupadas por mês de paid_at
+      const cora = coraPaidHistory
+        .filter(c => {
+          const dt = new Date(c.paid_at);
+          return dt.getMonth() + 1 === m && dt.getFullYear() === a;
+        })
+        .reduce((s, c) => s + c.amount_cents / 100, 0);
+      return { mes: `${MESES_PT[m - 1]}/${String(a).slice(2)}`, Manual: manual, Cora: Math.round(cora), Receita: manual + Math.round(cora) };
     });
-  }, [payments]);
+  }, [payments, coraPaidHistory]);
 
   // Filtro de partners
   const filtered = useMemo(() => {
@@ -2951,21 +2961,28 @@ function AssinaturasTab() {
       {/* Gráfico de receita mensal de assinaturas */}
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
-            Receita de Assinaturas — Últimos 6 Meses
-          </CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+              Receita de Assinaturas — Últimos 6 Meses
+            </CardTitle>
+            <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
+              <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: "#C9A84C" }} />Cora (Pix/Boleto)</span>
+              <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: "#4ADE80" }} />Manual</span>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           <ResponsiveContainer width="100%" height={180}>
             <BarChart data={mrrChart}>
               <CartesianGrid strokeDasharray="3 3" stroke="#122036" />
               <XAxis dataKey="mes" tick={{ fill: "#7A8FA8", fontSize: 10 }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fill: "#7A8FA8", fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={v => `R$${(v / 1000).toFixed(0)}k`} />
+              <YAxis tick={{ fill: "#7A8FA8", fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={v => `R$${(v / 1000).toFixed(1)}k`} />
               <Tooltip
                 contentStyle={{ backgroundColor: "#091221", border: "1px solid rgba(196,146,46,0.2)", borderRadius: 10, fontSize: 12 }}
-                formatter={(v) => formatMoeda(Number(v) || 0)}
+                formatter={(v, name) => [formatMoeda(Number(v) || 0), name === "Cora" ? "Cora (Pix/Boleto)" : name === "Manual" ? "Manual" : String(name)]}
               />
-              <Bar dataKey="Receita" fill="#C9A84C" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="Cora" stackId="a" fill="#C9A84C" />
+              <Bar dataKey="Manual" stackId="a" fill="#4ADE80" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </CardContent>
