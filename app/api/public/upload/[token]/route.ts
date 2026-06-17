@@ -4,22 +4,37 @@ import { createHash } from "crypto";
 
 export const maxDuration = 60;
 
-// MIME types permitidos
 const ALLOWED_MIMES = new Set([
   "application/pdf",
   "image/jpeg",
   "image/jpg",
   "image/png",
-  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",     // .xlsx
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document", // .docx
-  "application/msword",  // .doc
-  "application/vnd.ms-excel",                                              // .xls
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/msword",
+  "application/vnd.ms-excel",
 ]);
 
-const MAX_FILE_SIZE = 32 * 1024 * 1024; // 32MB
+const MAX_FILE_SIZE = 32 * 1024 * 1024;
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+}
+
+function sanitizeAscii(name: string): string {
+  return name
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-zA-Z0-9._\-]/g, "_")
+    .replace(/_{2,}/g, "_")
+    .slice(0, 100);
+}
+
+function sectorToVertical(sector: string): "MA" | "Credito" | "Consorcios" {
+  const s = (sector ?? "").toLowerCase();
+  if (s.includes("credito") || s.includes("recebiv")) return "Credito";
+  if (s.includes("consorcio") || s.includes("consórcio")) return "Consorcios";
+  return "MA";
 }
 
 // GET — verifica validade do token (usado pela página pública)
@@ -101,7 +116,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
     return NextResponse.json({ error: "Arquivo maior que 32MB." }, { status: 413 });
   }
 
-  // Sanitiza nome — normaliza para ASCII (remove acentos) antes de substituir caracteres inválidos
   const safeName = file.name
     .normalize("NFD")
     .replace(/[̀-ͯ]/g, "")
@@ -111,13 +125,54 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
 
   const timestamp  = Date.now();
   const docId      = `upload_${timestamp}_${Math.random().toString(36).slice(2, 8)}`;
-  const storagePath = `${tokenRow.deal_id}/${docId}_${safeName}`;
   const fileHash   = createHash("sha256").update(buf).digest("hex");
 
-  // Upload para Supabase Storage
+  const { data: deal } = await svc()
+    .from("ma_deals")
+    .select("v3_code, sector, target_company, assigned_to, created_by, documents")
+    .eq("id", tokenRow.deal_id)
+    .single();
+
+  const hasGovernance = !!(deal?.v3_code && deal?.sector);
+  let bucket: string;
+  let storagePath: string;
+  let vertical: string | undefined;
+
+  if (hasGovernance) {
+    vertical = sectorToVertical(deal.sector);
+    const safeClient = sanitizeAscii(deal.target_company || "Deal");
+    const govBase = `${vertical}/${deal.v3_code}_${safeClient}`;
+    storagePath = `${govBase}/04_Due_Diligence/${docId}_${safeName}`;
+    bucket = "v3-docs-publico";
+
+    const { data: existing } = await svc()
+      .from("folder_registry")
+      .select("id")
+      .eq("deal_code", deal.v3_code)
+      .limit(1)
+      .maybeSingle();
+
+    if (!existing) {
+      const userId = deal.assigned_to ?? deal.created_by;
+      if (userId) {
+        try {
+          await svc().rpc("create_deal_folder", {
+            p_vertical: vertical,
+            p_deal_code: deal.v3_code,
+            p_client_name: safeClient,
+            p_user_id: userId,
+          });
+        } catch { /* folder may already exist — unique constraint */ }
+      }
+    }
+  } else {
+    storagePath = `${tokenRow.deal_id}/${docId}_${safeName}`;
+    bucket = "ma-documents";
+  }
+
   const { error: uploadErr } = await svc()
     .storage
-    .from("ma-documents")
+    .from(bucket)
     .upload(storagePath, buf, {
       contentType: file.type,
       upsert:      false,
@@ -140,14 +195,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
     ip_address:   ip,
   });
 
-  // Adiciona documento ao deal (ma_deals.documents array)
-  const { data: deal } = await svc()
-    .from("ma_deals")
-    .select("documents")
-    .eq("id", tokenRow.deal_id)
-    .single();
-
-  const existingDocs = Array.isArray(deal?.documents) ? deal.documents : [];
+  const existingDocs = Array.isArray(deal?.documents) ? (deal.documents as Record<string, unknown>[]) : [];
   await svc().from("ma_deals").update({
     documents: [
       ...existingDocs,
@@ -183,7 +231,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
         token_label:  tokenRow.label,
         ip_address:   ip,
         storage_path: storagePath,
-        bucket:       "ma-documents",
+        bucket,
+        ...(hasGovernance && { vertical, deal_code: deal.v3_code }),
       }),
     }).catch(e => console.error("[public/upload] W11 webhook:", e));
   }
