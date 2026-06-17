@@ -102,6 +102,11 @@ export interface AgronegocioProjections {
     comissao_fixa_veterinario_brl?: number;
     preco_arroba_boi_gordo_rs?: number;
     custo_embriao_em_arrobas?: number;
+    rc_diferencial_vs_nelore_pct?: number;
+    aol_bn_por_100kg?: number;
+    aol_controle_por_100kg?: number;
+    aol_vantagem_pct?: number;
+    doadoras_ativas?: number;
   };
   benchmarks_aplicados: Record<string, number>;
   // Nós isolados de Capital Stacking — Modelo A (MVP Orgânico), Modelo B
@@ -173,6 +178,11 @@ export interface GeneticaBovinaIntakeData {
   giro_gado_preco_arroba_compra_brl?: number;
   giro_gado_arrobas_desmame?: number;
   giro_gado_meses_ate_venda?: number;
+  // diferenciais_biologicos — override NelBlue defaults when OCR-extracted values are available
+  rc_diferencial_pct?: number;
+  aol_bn_por_100kg?: number;
+  aol_controle_por_100kg?: number;
+  n_matrizes_doadoras_ativas?: number;
 }
 
 const HORIZON = 10;
@@ -180,6 +190,14 @@ const HORIZON = 10;
 // Indicador B3 BGI (Boi Gordo, CEPEA/B3 SP) usado como referência de revenda no
 // Giro Rápido quando o formulário não informa um preço de arroba específico.
 const BGI_INDEX_FALLBACK_BRL = 346.0;
+
+// NelBlue biological benchmarks — OCR-extracted, Dossie 17-4-24 + Frigorífico Mafrig Nov 2023 (n=32)
+// RC +2.37pp (weighted avg BN 60.31% vs NN Lítio AJ 57.94%, p<0.0000108) justifies Modelo A CAGR 12%.
+// AOL +16.4% (BN avg 15.72/100kg vs Nelore 13.50) justifies Modelo B CAGR 18% + B3 BGI hedge.
+const NELBLUE_DOADORAS_ATIVAS_DEFAULT = 23;
+const NELBLUE_RC_DIFERENCIAL_VS_NELORE_PCT = 2.37;
+const NELBLUE_AOL_BN_POR_100KG = 15.72;
+const NELBLUE_AOL_NELORE_POR_100KG = 13.50;
 
 interface YearSeriesBases {
   baseYear: number;
@@ -351,6 +369,13 @@ export function adaptGeneticaBovinaIntake(
   const cagr_base = (data.crescimento_mercado_pct_aa ?? 0) / 100;
   const cagr_expansao = (data.benchmark_crescimento_estabilizado_pct ?? 0) / 100;
   const cagr_pessimista = (data.benchmark_crescimento_pessimista_pct ?? 0) / 100;
+
+  // ── Biological differentials — NelBlue OCR-extracted with fallback to field constants ──
+  const doadoras_ativas = data.n_matrizes_doadoras_ativas ?? data.n_matrizes_doadoras ?? NELBLUE_DOADORAS_ATIVAS_DEFAULT;
+  const rc_diferencial = data.rc_diferencial_pct ?? NELBLUE_RC_DIFERENCIAL_VS_NELORE_PCT;
+  const aol_bn = data.aol_bn_por_100kg ?? NELBLUE_AOL_BN_POR_100KG;
+  const aol_ctrl = data.aol_controle_por_100kg ?? NELBLUE_AOL_NELORE_POR_100KG;
+  const aol_vantagem = aol_ctrl > 0 ? ((aol_bn - aol_ctrl) / aol_ctrl) * 100 : 0;
 
   // ── Hedge analysis — includes IGG Select export USD ───────────
   const receita_usd_mes =
@@ -544,6 +569,11 @@ export function adaptGeneticaBovinaIntake(
     indicadores.preco_arroba_boi_gordo_rs = viabilidade_bgi.preco_arroba_boi_gordo_rs;
     indicadores.custo_embriao_em_arrobas = viabilidade_bgi.custo_embriao_em_arrobas;
   }
+  indicadores.rc_diferencial_vs_nelore_pct = parseFloat(rc_diferencial.toFixed(2));
+  indicadores.aol_bn_por_100kg = aol_bn;
+  indicadores.aol_controle_por_100kg = aol_ctrl;
+  indicadores.aol_vantagem_pct = parseFloat(aol_vantagem.toFixed(2));
+  indicadores.doadoras_ativas = doadoras_ativas;
 
   // ── Build benchmarks_aplicados ────────────────────────────────
   const benchmarks_aplicados: Record<string, number> = {
@@ -566,6 +596,9 @@ export function adaptGeneticaBovinaIntake(
   if (viabilidade_bgi) {
     benchmarks_aplicados.preco_arroba_boi_gordo_rs = viabilidade_bgi.preco_arroba_boi_gordo_rs;
   }
+  benchmarks_aplicados.rc_diferencial_vs_nelore_pct = parseFloat(rc_diferencial.toFixed(2));
+  benchmarks_aplicados.aol_vantagem_vs_nelore_pct = parseFloat(aol_vantagem.toFixed(2));
+  benchmarks_aplicados.doadoras_ativas = doadoras_ativas;
 
   return {
     schema_id: "agronegocio-v1",
