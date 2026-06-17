@@ -20,18 +20,22 @@ async function getAuthedUser() {
 
 const ADMIN_ROLES = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"] as const;
 
+const ORIGIN_VERTICALS = ["MA", "Credito", "Consorcios"] as const;
+
 const createSchema = z.object({
-  company:             z.string().min(1, "Nome da empresa obrigatório").max(200),
-  title:               z.string().max(300).optional(),
-  sector:              z.string().max(100).optional().nullable(),
-  value:               z.number().nonnegative().optional().nullable(),
-  notes:               z.string().max(5000).optional().nullable(),
-  code:                z.string().max(50).optional(),
-  tipo_participante:   z.enum(["Vendedor", "Investidor"]).optional(),
-  location:            z.string().max(200).optional().nullable(),
-  asset_data:          z.record(z.string(), z.unknown()).optional(),
-  probability_percent: z.number().int().min(0).max(100).optional(),
-  assigned_to:         z.string().uuid().optional(),
+  company:                z.string().min(1, "Nome da empresa obrigatório").max(200),
+  title:                  z.string().max(300).optional(),
+  sector:                 z.string().max(100).optional().nullable(),
+  value:                  z.number().nonnegative().optional().nullable(),
+  notes:                  z.string().max(5000).optional().nullable(),
+  code:                   z.string().max(50).optional(),
+  tipo_participante:      z.enum(["Vendedor", "Investidor"]).optional(),
+  location:               z.string().max(200).optional().nullable(),
+  asset_data:             z.record(z.string(), z.unknown()).optional(),
+  probability_percent:    z.number().int().min(0).max(100).optional(),
+  assigned_to:            z.string().uuid().optional(),
+  origin_vertical:        z.enum(ORIGIN_VERTICALS).optional(),
+  originator_profile_id:  z.string().uuid().optional(),
 });
 
 const dealCommentSchema = z.object({
@@ -42,18 +46,20 @@ const dealCommentSchema = z.object({
 });
 
 const patchSchema = z.object({
-  id:                  z.string().uuid("ID inválido"),
-  target_company:      z.string().min(1).max(200).optional(),
-  sector:              z.string().max(100).optional().nullable(),
-  location:            z.string().max(200).optional().nullable(),
-  deal_value:          z.number().positive().optional().nullable(),
-  stage:               z.enum(["PROSPECTING","QUALIFICATION","IOI","PROPOSAL","DUE_DILIGENCE","NEGOTIATION","CLOSING","CLOSED_WON","CLOSED_LOST"]).optional(),
-  probability_percent: z.number().int().min(0).max(100).optional().nullable(),
-  notes:               z.string().max(2000).optional().nullable(),
-  comments:            z.array(dealCommentSchema).optional(),
-  assigned_to:         z.string().uuid().optional().nullable(),
-  expected_close_date: z.string().optional().nullable(),
-  asset_data:          z.record(z.string(), z.unknown()).optional(),
+  id:                     z.string().uuid("ID inválido"),
+  target_company:         z.string().min(1).max(200).optional(),
+  sector:                 z.string().max(100).optional().nullable(),
+  location:               z.string().max(200).optional().nullable(),
+  deal_value:             z.number().positive().optional().nullable(),
+  stage:                  z.enum(["PROSPECTING","QUALIFICATION","IOI","PROPOSAL","DUE_DILIGENCE","NEGOTIATION","CLOSING","CLOSED_WON","CLOSED_LOST"]).optional(),
+  probability_percent:    z.number().int().min(0).max(100).optional().nullable(),
+  notes:                  z.string().max(2000).optional().nullable(),
+  comments:               z.array(dealCommentSchema).optional(),
+  assigned_to:            z.string().uuid().optional().nullable(),
+  expected_close_date:    z.string().optional().nullable(),
+  asset_data:             z.record(z.string(), z.unknown()).optional(),
+  origin_vertical:        z.enum(ORIGIN_VERTICALS).optional(),
+  originator_profile_id:  z.string().uuid().optional().nullable(),
 });
 
 // Monta select com join de partner — usa nome da coluna para evitar problema com nome do FK constraint
@@ -118,18 +124,27 @@ export async function POST(req: NextRequest) {
     const { count } = await svcPost.from("ma_deals").select("*", { count: "exact", head: true });
     const code = d.code ?? `MA-26-${String((count ?? 0) + 1).padStart(3, "0")}`;
 
+    function deriveVertical(sector: string | null | undefined): "MA" | "Credito" | "Consorcios" {
+      const s = (sector ?? "").toLowerCase();
+      if (s.includes("credito") || s.includes("recebiv")) return "Credito";
+      if (s.includes("consorcio") || s.includes("consórcio")) return "Consorcios";
+      return "MA";
+    }
+
     const insertPayload = {
       code,
-      title:               d.title ?? d.company,
-      target_company:      d.company,
-      sector:              d.sector ?? null,
-      deal_value:          d.value ?? null,
-      stage:               "PROSPECTING" as const,
-      probability_percent: d.probability_percent ?? 10,
-      notes:               d.notes ?? null,
-      assigned_to:         d.assigned_to ?? user.id,
-      created_by:          user.id,
-      location:            d.location ?? null,
+      title:                  d.title ?? d.company,
+      target_company:         d.company,
+      sector:                 d.sector ?? null,
+      deal_value:             d.value ?? null,
+      stage:                  "PROSPECTING" as const,
+      probability_percent:    d.probability_percent ?? 10,
+      notes:                  d.notes ?? null,
+      assigned_to:            d.assigned_to ?? user.id,
+      created_by:             user.id,
+      location:               d.location ?? null,
+      origin_vertical:        d.origin_vertical ?? deriveVertical(d.sector),
+      originator_profile_id:  d.originator_profile_id ?? user.id,
       asset_data: {
         ...(d.tipo_participante ? { tipo_participante: d.tipo_participante } : {}),
         ...(d.asset_data ?? {}),
@@ -253,9 +268,20 @@ export async function PATCH(req: NextRequest) {
   const isAdmin = ADMIN_ROLES.includes(profile?.role as typeof ADMIN_ROLES[number]);
 
   if (!isAdmin) {
-    const { data: existing } = await svc.from("ma_deals").select("assigned_to, created_by").eq("id", id).single();
+    const { data: existing } = await svc.from("ma_deals").select("assigned_to, created_by, originator_profile_id").eq("id", id).single();
     if (!existing || (existing.assigned_to !== user.id && existing.created_by !== user.id)) {
       return NextResponse.json({ error: "Sem permissão para editar este deal" }, { status: 403 });
+    }
+  }
+
+  if (profile?.role === "MESA_OPERACIONAL" && (fields.asset_data !== undefined || fields.stage !== undefined)) {
+    const { data: dealCheck } = await svc.from("ma_deals").select("originator_profile_id").eq("id", id).single();
+    if (!dealCheck?.originator_profile_id) {
+      console.error(`[ma-deals PATCH] GOVERNANCE_VIOLATION: MESA_OPERACIONAL ${user.id} tentou alterar deal ${id} sem originator_profile_id`);
+      return NextResponse.json({
+        error: "GOVERNANCE_VIOLATION: Deal sem originador associado. Associe um originador antes de alterar dados ou estágio.",
+        code: "MISSING_ORIGINATOR",
+      }, { status: 422 });
     }
   }
 
