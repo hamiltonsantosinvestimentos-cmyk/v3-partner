@@ -5,8 +5,15 @@ import { logAudit } from "@/lib/audit";
 
 export const dynamic = "force-dynamic";
 
-const BUCKET = "credit-documents";
-const SIGNED_URL_EXPIRES = 20 * 24 * 60 * 60; // 20 dias em segundos
+const DEFAULT_BUCKET = "credit-documents";
+const GOVERNED_BUCKET = "v3-docs-publico";
+const SIGNED_URL_EXPIRES = 20 * 24 * 60 * 60;
+
+function resolveBucket(doc: { storage_path?: string; bucket?: string }): string {
+  if (doc.bucket) return doc.bucket;
+  if (doc.storage_path?.startsWith("Credito/") || doc.storage_path?.startsWith("MA/") || doc.storage_path?.startsWith("Administracao/")) return GOVERNED_BUCKET;
+  return DEFAULT_BUCKET;
+}
 
 function serviceClient() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -71,7 +78,7 @@ export async function POST(req: NextRequest) {
   // Upload para o Storage (não remove arquivos anteriores do mesmo doc_id)
   const bytes = await file.arrayBuffer();
   const { error: uploadError } = await svc.storage
-    .from(BUCKET)
+    .from(DEFAULT_BUCKET)
     .upload(storagePath, bytes, { contentType: file.type, upsert: true });
 
   if (uploadError) {
@@ -80,7 +87,7 @@ export async function POST(req: NextRequest) {
 
   // Gera signed URL com 20 dias de validade
   const { data: signedData } = await svc.storage
-    .from(BUCKET)
+    .from(DEFAULT_BUCKET)
     .createSignedUrl(storagePath, SIGNED_URL_EXPIRES);
 
   // Adiciona novo doc à lista (múltiplos arquivos por doc_id são permitidos)
@@ -100,7 +107,7 @@ export async function POST(req: NextRequest) {
 
   if (updateError) {
     // Remove o arquivo do storage pois não conseguimos salvar o registro
-    await svc.storage.from(BUCKET).remove([storagePath]);
+    await svc.storage.from(DEFAULT_BUCKET).remove([storagePath]);
     return NextResponse.json({ error: `Erro ao salvar no banco: ${updateError.message}` }, { status: 500 });
   }
 
@@ -144,8 +151,9 @@ export async function GET(req: NextRequest) {
   // Gera signed URLs para todos os documentos
   const docsWithUrls = await Promise.all(
     docs.map(async (doc) => {
+      const bucket = resolveBucket(doc);
       const { data } = await svc.storage
-        .from(BUCKET)
+        .from(bucket)
         .createSignedUrl(doc.storage_path, SIGNED_URL_EXPIRES);
       return { ...doc, file_key: doc.storage_path, url: data?.signedUrl ?? null };
     })
@@ -193,7 +201,7 @@ export async function DELETE(req: NextRequest) {
   if (docsToRemove.length === 0) return NextResponse.json({ error: "Documento não encontrado" }, { status: 404 });
 
   // Remove do Storage
-  await svc.storage.from(BUCKET).remove(docsToRemove.map((d) => d.storage_path));
+  await svc.storage.from(DEFAULT_BUCKET).remove(docsToRemove.map((d) => d.storage_path));
 
   // Atualiza JSONB
   const storagesToRemove = new Set(docsToRemove.map((d) => d.storage_path));

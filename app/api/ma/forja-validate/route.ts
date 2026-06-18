@@ -1,3 +1,4 @@
+import { resolveBucket } from "@/lib/storage-bucket";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { extractUF, extractMatchingFields, stripJsonFences, safeJsonParse } from "@/lib/ma/forja-utils";
@@ -164,7 +165,7 @@ async function fetchPdfs(dealId: string, docIds: string[]): Promise<{ pdfs: PdfP
   const skippedDocs: string[] = [];
   for (const doc of selected) {
     const { data: fileData, error } = await svc.storage
-      .from("ma-documents")
+      .from(resolveBucket(storagePath))
       .download(doc.storage_path);
     if (error || !fileData) { skippedDocs.push(doc.file_name); continue; }
 

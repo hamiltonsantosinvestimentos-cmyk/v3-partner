@@ -1,3 +1,4 @@
+import { resolveBucket } from "@/lib/storage-bucket";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
@@ -266,11 +267,11 @@ export async function POST(req: NextRequest) {
 
   let reportUrl = "";
   const { error: uploadErr } = await svc.storage
-    .from("ma-documents")
+    .from(resolveBucket(storagePath))
     .upload(storagePath, htmlBytes, { contentType: "text/html; charset=utf-8", upsert: false });
 
   if (!uploadErr) {
-    const { data: signed } = await svc.storage.from("ma-documents").createSignedUrl(storagePath, 7 * 24 * 60 * 60);
+    const { data: signed } = await svc.storage.from(resolveBucket(storagePath)).createSignedUrl(storagePath, 7 * 24 * 60 * 60);
     reportUrl = signed?.signedUrl ?? "";
   }
 

@@ -4,8 +4,9 @@ import { createClient as sc } from "@supabase/supabase-js";
 
 export const dynamic = "force-dynamic";
 
-const BUCKET = "ma-documents";
-const SIGNED_URL_EXPIRES = 20 * 24 * 60 * 60; // 20 dias
+const DEFAULT_BUCKET = "ma-documents";
+const GOVERNED_BUCKET = "v3-docs-publico";
+const SIGNED_URL_EXPIRES = 20 * 24 * 60 * 60;
 
 function serviceClient() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -25,7 +26,14 @@ type DocEntry = {
   storage_path: string;
   uploaded_at: string;
   uploaded_by: string;
+  bucket?: string;
 };
+
+function resolveBucket(doc: DocEntry): string {
+  if (doc.bucket) return doc.bucket;
+  if (doc.storage_path.startsWith("MA/") || doc.storage_path.startsWith("Credito/") || doc.storage_path.startsWith("Administracao/")) return GOVERNED_BUCKET;
+  return DEFAULT_BUCKET;
+}
 
 // POST — upload de documento
 export async function POST(req: NextRequest) {
@@ -58,12 +66,12 @@ export async function POST(req: NextRequest) {
   const existingDocs: DocEntry[] = Array.isArray(deal.documents) ? deal.documents : [];
   const oldDoc = existingDocs.find((d) => d.doc_id === docId);
   if (oldDoc) {
-    await svc.storage.from(BUCKET).remove([oldDoc.storage_path]);
+    await svc.storage.from(resolveBucket(oldDoc)).remove([oldDoc.storage_path]);
   }
 
   const bytes = await file.arrayBuffer();
   const { error: uploadError } = await svc.storage
-    .from(BUCKET)
+    .from(DEFAULT_BUCKET)
     .upload(storagePath, bytes, { contentType: file.type, upsert: true });
 
   if (uploadError) {
@@ -71,7 +79,7 @@ export async function POST(req: NextRequest) {
   }
 
   const { data: signedData } = await svc.storage
-    .from(BUCKET)
+    .from(DEFAULT_BUCKET)
     .createSignedUrl(storagePath, SIGNED_URL_EXPIRES);
 
   const newDoc: DocEntry = {
@@ -121,8 +129,9 @@ export async function GET(req: NextRequest) {
 
   const docsWithUrls = await Promise.all(
     docs.map(async (doc) => {
+      const bucket = resolveBucket(doc);
       const { data } = await svc.storage
-        .from(BUCKET)
+        .from(bucket)
         .createSignedUrl(doc.storage_path, SIGNED_URL_EXPIRES);
       return { ...doc, url: data?.signedUrl ?? null };
     })
@@ -156,7 +165,7 @@ export async function DELETE(req: NextRequest) {
   const docToRemove = docs.find((d) => d.doc_id === docId);
   if (!docToRemove) return NextResponse.json({ error: "Documento não encontrado" }, { status: 404 });
 
-  await svc.storage.from(BUCKET).remove([docToRemove.storage_path]);
+  await svc.storage.from(resolveBucket(docToRemove)).remove([docToRemove.storage_path]);
 
   const updatedDocs = docs.filter((d) => d.doc_id !== docId);
   await svc.from("ma_deals").update({ documents: updatedDocs }).eq("id", dealId);

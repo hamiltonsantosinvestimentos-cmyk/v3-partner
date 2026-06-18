@@ -1,3 +1,4 @@
+import { resolveBucket } from "@/lib/storage-bucket";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
@@ -332,7 +333,7 @@ export async function POST(req: NextRequest) {
 
     // Download do arquivo
     const { data: fileData, error: downloadErr } = await svc.storage
-      .from("ma-documents")
+      .from(resolveBucket(storagePath))
       .download(doc.storage_path);
 
     if (downloadErr || !fileData) throw new Error(`Download falhou: ${downloadErr?.message ?? "arquivo não encontrado"}`);

@@ -1,3 +1,4 @@
+import { resolveBucket } from "@/lib/storage-bucket";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
@@ -48,7 +49,7 @@ export async function POST(req: NextRequest) {
     if (!doc) return NextResponse.json({ error: "Documento não encontrado no deal" }, { status: 404 });
 
     const { data: fileData, error: downloadError } = await svc.storage
-      .from("ma-documents")
+      .from(resolveBucket(storagePath))
       .download(doc.storage_path);
 
     if (downloadError || !fileData) {

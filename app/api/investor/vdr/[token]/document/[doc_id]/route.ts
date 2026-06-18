@@ -81,8 +81,10 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
     docUrl = `${doc.storage_path}${sep}vdr_token=${encodeURIComponent(token)}`;
   } else {
     // Path de Storage Supabase — gera signed URL por 1 hora
+    const vdrBucket = (doc.storage_path.startsWith("MA/") || doc.storage_path.startsWith("Credito/") || doc.storage_path.startsWith("Administracao/"))
+      ? "v3-docs-publico" : "ma-documents";
     const { data: signedData, error: urlErr } = await db.storage
-      .from("ma-documents")
+      .from(vdrBucket)
       .createSignedUrl(doc.storage_path, 3600);
     if (urlErr || !signedData?.signedUrl) {
       return NextResponse.json({ error: "Erro ao gerar URL de acesso." }, { status: 500 });
