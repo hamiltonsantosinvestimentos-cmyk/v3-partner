@@ -10,7 +10,7 @@ import {
   Trophy, GraduationCap, Handshake, Settings2, Medal,
   ContactRound, DollarSign, Wallet, Zap, Target, ShieldCheck, Calculator, UserPlus, ClipboardList, BadgeCheck, Layers, BarChart2, BookMarked, BotMessageSquare,
   ShoppingBag, Radar, BookOpen, FileText, UserPlus2, MessageSquare, BarChart3, Video, UsersRound,
-  FileCheck2, Plane,
+  FileCheck2, Plane, FolderOpen,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -22,7 +22,7 @@ const iconMap = {
   Settings2, Medal, ContactRound, DollarSign, Wallet, Zap,
   Target, ShieldCheck, Calculator, UserPlus, ClipboardList, BadgeCheck, Layers, BarChart2, BookMarked, BotMessageSquare,
   ShoppingBag, Radar, BookOpen, FileText, UserPlus2, MessageSquare, BarChart3, Video, UsersRound,
-  FileCheck2, Plane,
+  FileCheck2, Plane, FolderOpen,
 };
 
 interface NavSubItem { href: string; label: string; roles: string[]; }
@@ -69,6 +69,7 @@ const NAV_SECTIONS: NavSection[] = [
       { href: "/relatorios", label: "Relatórios V3", icon: "BarChart2", roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL", "FINANCEIRO"] },
       { href: "/hub", label: "Hub de Deals", icon: "Layers", roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL", "FINANCEIRO"] },
       { href: "/prompts", label: "Banco de Prompts", icon: "BookMarked", roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL", "FINANCEIRO"] },
+      { href: "/pasta-publica", label: "Pasta Publica", icon: "FolderOpen", roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL", "FINANCEIRO"] },
       { href: "/mesa-ma", label: "Mesa M&A", icon: "Handshake", roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL"] },
       { href: "/propostas", label: "Propostas", icon: "FileCheck2", roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL"] },
       { href: "/ma/oportunidades", label: "Deal Discovery", icon: "Radar", roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL"] },
