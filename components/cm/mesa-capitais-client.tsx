@@ -4,9 +4,10 @@ import React, { useState, useEffect, useCallback } from "react";
 import {
   BarChart3, Users, Gavel, DollarSign, Play,
   Loader2, AlertTriangle, CheckCircle2, Clock,
-  ArrowRight, RefreshCw, Shield,
+  ArrowRight, RefreshCw, Shield, Bot, Upload, Mic,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { AssetAssistant } from "./asset-assistant";
 
 interface Listing {
   id: string;
@@ -63,6 +64,8 @@ export function MesaCapitaisClient() {
   const [runningMatch, setRunningMatch] = useState(false);
   const [tab, setTab] = useState<"kanban" | "matches" | "bids">("kanban");
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [assistantListing, setAssistantListing] = useState<{ id: string; anonymous_id: string } | null>(null);
+  const [uploadingDoc, setUploadingDoc] = useState<string | null>(null);
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
@@ -96,6 +99,24 @@ export function MesaCapitaisClient() {
       fetchAll();
     } catch { alert("Erro ao executar matchmaking"); }
     finally { setRunningMatch(false); }
+  };
+
+  const handleUploadDoc = async (listingId: string, file: File) => {
+    setUploadingDoc(listingId);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const isAudio = /\.(mp3|ogg|wav|m4a|webm)$/i.test(file.name);
+      formData.append("document_type", isAudio ? "AUDIO" : "OUTRO");
+      const res = await fetch(`/api/cm/listings/${listingId}/documents`, { method: "POST", body: formData });
+      const json = await res.json();
+      if (res.ok) {
+        alert(`${isAudio ? "Áudio" : "Documento"} enviado. ${isAudio ? "Transcrição em andamento via Whisper." : ""}`);
+      } else {
+        alert(json.error ?? "Erro no upload");
+      }
+    } catch { alert("Erro de conexão"); }
+    finally { setUploadingDoc(null); }
   };
 
   const handleBidAction = async (bidId: string, action: string, commissionPercent = 7) => {
@@ -196,6 +217,25 @@ export function MesaCapitaisClient() {
                       {(l.cm_bids?.[0] as any)?.count > 0 && (
                         <div className="text-[9px] text-orange-400 mt-1">{(l.cm_bids[0] as any).count} proposta(s)</div>
                       )}
+                      <div className="flex gap-1 mt-2">
+                        <button
+                          onClick={() => setAssistantListing({ id: l.id, anonymous_id: l.anonymous_id })}
+                          title="Assistente do Ativo"
+                          className="flex-1 flex items-center justify-center gap-1 px-1 py-1 bg-[#C9A84C]/10 border border-[#C9A84C]/20 rounded text-[#C9A84C] text-[8px] font-bold hover:bg-[#C9A84C]/20 transition"
+                        >
+                          <Bot size={10} /> IA
+                        </button>
+                        <label
+                          title="Upload doc ou áudio"
+                          className="flex-1 flex items-center justify-center gap-1 px-1 py-1 bg-[#162744] border border-[#9BAFC5]/15 rounded text-[#9BAFC5] text-[8px] font-bold hover:bg-[#162744]/80 transition cursor-pointer"
+                        >
+                          {uploadingDoc === l.id ? <Loader2 size={10} className="animate-spin" /> : <Upload size={10} />}
+                          Doc
+                          <input type="file" className="hidden" accept=".pdf,.mp3,.ogg,.wav,.m4a,.webm,.jpg,.png"
+                            onChange={(e) => { if (e.target.files?.[0]) handleUploadDoc(l.id, e.target.files[0]); }}
+                          />
+                        </label>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -279,6 +319,15 @@ export function MesaCapitaisClient() {
             </div>
           ))}
         </div>
+      )}
+
+      {/* Assistente do Ativo */}
+      {assistantListing && (
+        <AssetAssistant
+          listingId={assistantListing.id}
+          anonymousId={assistantListing.anonymous_id}
+          onClose={() => setAssistantListing(null)}
+        />
       )}
     </div>
   );

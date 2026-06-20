@@ -76,22 +76,31 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   if (insertError) return NextResponse.json({ error: insertError.message }, { status: 500 });
 
-  if (file.type === "application/pdf" && process.env.N8N_WEBHOOK_URL) {
-    try {
-      await fetch(`${process.env.N8N_WEBHOOK_URL}/webhook/v3-doc-extract-large`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          extraction_id: doc.id,
-          storage_path: storagePath,
-          bucket: "documents",
-          listing_id: id,
-          anonymous_id: listing.anonymous_id,
-          source: "cm_marketplace",
-        }),
-      });
-    } catch (ocrErr) {
-      console.error("[CM Documents] OCR webhook failed:", ocrErr);
+  const AUDIO_TYPES = ["audio/mpeg", "audio/ogg", "audio/wav", "audio/mp4", "audio/webm"];
+  const isAudio = AUDIO_TYPES.includes(file.type) || /\.(mp3|ogg|wav|m4a|webm)$/i.test(file.name);
+  const isPdf = file.type === "application/pdf";
+
+  if (process.env.N8N_WEBHOOK_URL) {
+    const webhookPath = isAudio ? "v3-cm-audio-intake" : isPdf ? "v3-doc-extract-large" : null;
+    if (webhookPath) {
+      try {
+        await fetch(`${process.env.N8N_WEBHOOK_URL}/webhook/${webhookPath}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            extraction_id: doc.id,
+            storage_path: storagePath,
+            bucket: "documents",
+            listing_id: id,
+            anonymous_id: listing.anonymous_id,
+            source: "cm_marketplace",
+            file_type: isAudio ? "audio" : "pdf",
+            original_filename: file.name,
+          }),
+        });
+      } catch (webhookErr) {
+        console.error(`[CM Documents] ${webhookPath} webhook failed:`, webhookErr);
+      }
     }
   }
 
