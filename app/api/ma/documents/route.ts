@@ -97,7 +97,7 @@ export async function POST(req: NextRequest) {
     .eq("id", dealId);
 
   if (updateError) {
-    await svc.storage.from(BUCKET).remove([storagePath]);
+    await svc.storage.from(DEFAULT_BUCKET).remove([storagePath]);
     return NextResponse.json({ error: `Erro ao salvar no banco: ${updateError.message}` }, { status: 500 });
   }
 

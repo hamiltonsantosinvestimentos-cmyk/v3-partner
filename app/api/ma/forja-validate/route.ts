@@ -165,7 +165,7 @@ async function fetchPdfs(dealId: string, docIds: string[]): Promise<{ pdfs: PdfP
   const skippedDocs: string[] = [];
   for (const doc of selected) {
     const { data: fileData, error } = await svc.storage
-      .from(resolveBucket(storagePath))
+      .from(resolveBucket(doc.storage_path))
       .download(doc.storage_path);
     if (error || !fileData) { skippedDocs.push(doc.file_name); continue; }
 

@@ -904,6 +904,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "cm_bids_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "cm_vitrine_public"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "cm_bids_reviewed_by_fkey"
             columns: ["reviewed_by"]
             isOneToOne: false
@@ -1029,6 +1036,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "cm_commission_splits_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "cm_vitrine_public"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "cm_commission_splits_override_approved_by_fkey"
             columns: ["override_approved_by"]
             isOneToOne: false
@@ -1096,6 +1110,13 @@ export type Database = {
             referencedRelation: "cm_asset_listings"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "cm_escrow_operations_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "cm_vitrine_public"
+            referencedColumns: ["id"]
+          },
         ]
       }
       cm_listing_documents: {
@@ -1143,6 +1164,13 @@ export type Database = {
             referencedRelation: "cm_asset_listings"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "cm_listing_documents_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "cm_vitrine_public"
+            referencedColumns: ["id"]
+          },
         ]
       }
       cm_risk_scores: {
@@ -1181,6 +1209,13 @@ export type Database = {
             referencedRelation: "cm_asset_listings"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "cm_risk_scores_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "cm_vitrine_public"
+            referencedColumns: ["id"]
+          },
         ]
       }
       cm_status_transitions: {
@@ -1217,6 +1252,13 @@ export type Database = {
             columns: ["listing_id"]
             isOneToOne: false
             referencedRelation: "cm_asset_listings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cm_status_transitions_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "cm_vitrine_public"
             referencedColumns: ["id"]
           },
         ]
@@ -1281,6 +1323,13 @@ export type Database = {
             columns: ["parent_listing_id"]
             isOneToOne: false
             referencedRelation: "cm_asset_listings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cm_tranches_parent_listing_id_fkey"
+            columns: ["parent_listing_id"]
+            isOneToOne: false
+            referencedRelation: "cm_vitrine_public"
             referencedColumns: ["id"]
           },
         ]
@@ -7148,6 +7197,72 @@ export type Database = {
       }
     }
     Views: {
+      cm_vitrine_public: {
+        Row: {
+          allows_tranching: boolean | null
+          anonymous_id: string | null
+          asset_type: Database["public"]["Enums"]["cm_asset_type"] | null
+          created_at: string | null
+          desagio_pretendido: number | null
+          ente_devedor: string | null
+          esfera: string | null
+          id: string | null
+          listing_status:
+            | Database["public"]["Enums"]["cm_listing_status"]
+            | null
+          natureza: string | null
+          prazo_estimado_meses: number | null
+          risk_score: number | null
+          tir_estimada: number | null
+          tribunal: string | null
+          valor_atualizado: number | null
+          valor_face: number | null
+          vpl: number | null
+        }
+        Insert: {
+          allows_tranching?: boolean | null
+          anonymous_id?: string | null
+          asset_type?: Database["public"]["Enums"]["cm_asset_type"] | null
+          created_at?: string | null
+          desagio_pretendido?: number | null
+          ente_devedor?: string | null
+          esfera?: string | null
+          id?: string | null
+          listing_status?:
+            | Database["public"]["Enums"]["cm_listing_status"]
+            | null
+          natureza?: string | null
+          prazo_estimado_meses?: number | null
+          risk_score?: number | null
+          tir_estimada?: number | null
+          tribunal?: string | null
+          valor_atualizado?: number | null
+          valor_face?: number | null
+          vpl?: number | null
+        }
+        Update: {
+          allows_tranching?: boolean | null
+          anonymous_id?: string | null
+          asset_type?: Database["public"]["Enums"]["cm_asset_type"] | null
+          created_at?: string | null
+          desagio_pretendido?: number | null
+          ente_devedor?: string | null
+          esfera?: string | null
+          id?: string | null
+          listing_status?:
+            | Database["public"]["Enums"]["cm_listing_status"]
+            | null
+          natureza?: string | null
+          prazo_estimado_meses?: number | null
+          risk_score?: number | null
+          tir_estimada?: number | null
+          tribunal?: string | null
+          valor_atualizado?: number | null
+          valor_face?: number | null
+          vpl?: number | null
+        }
+        Relationships: []
+      }
       v_kyc_monthly_usage: {
         Row: {
           analyses_this_month: number | null
