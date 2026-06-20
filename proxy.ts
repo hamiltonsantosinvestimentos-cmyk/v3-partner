@@ -21,6 +21,11 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // Server-to-server: n8n workflows com Bearer CRON_SECRET bypass
+  if (pathname.startsWith("/api/cm/") && request.headers.get("authorization") === `Bearer ${process.env.CRON_SECRET}`) {
+    return NextResponse.next();
+  }
+
   // Demo mode
   if (IS_DEMO) {
     const demoSession = request.cookies.get("v3_demo_session");
