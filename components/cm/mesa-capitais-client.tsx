@@ -5,6 +5,7 @@ import {
   BarChart3, Users, Gavel, DollarSign, Play,
   Loader2, AlertTriangle, CheckCircle2, Clock,
   ArrowRight, RefreshCw, Shield, Bot, Upload, Mic,
+  Link2, Copy, Plus,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AssetAssistant } from "./asset-assistant";
@@ -69,6 +70,8 @@ export function MesaCapitaisClient() {
   const [selectedListing, setSelectedListing] = useState<Listing | null>(null);
   const [listingDocs, setListingDocs] = useState<any[]>([]);
   const [docsLoading, setDocsLoading] = useState(false);
+  const [intakeUrl, setIntakeUrl] = useState<string | null>(null);
+  const [generatingLink, setGeneratingLink] = useState(false);
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
@@ -124,6 +127,7 @@ export function MesaCapitaisClient() {
 
   const openListingDetail = async (listing: Listing) => {
     setSelectedListing(listing);
+    setIntakeUrl(null);
     setDocsLoading(true);
     try {
       const res = await fetch(`/api/cm/listings/${listing.id}/documents`);
@@ -161,6 +165,33 @@ export function MesaCapitaisClient() {
     finally { setActionLoading(null); }
   };
 
+  const generateIntakeLink = async (listingId?: string) => {
+    setGeneratingLink(true);
+    setIntakeUrl(null);
+    try {
+      const res = await fetch("/api/cm/intake/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(listingId ? { listing_id: listingId } : {}),
+      });
+      const json = await res.json();
+      if (res.ok) {
+        setIntakeUrl(json.url);
+        if (!listingId) fetchAll();
+      } else {
+        alert(json.error ?? "Erro ao gerar link");
+      }
+    } catch { alert("Erro de conexão"); }
+    finally { setGeneratingLink(false); }
+  };
+
+  const copyLink = () => {
+    if (intakeUrl) {
+      navigator.clipboard.writeText(intakeUrl);
+      alert("Link copiado!");
+    }
+  };
+
   const totalVolume = listings.reduce((s, l) => s + Number(l.valor_face), 0);
   const naVitrine = listings.filter((l) => ["ativo_vitrine", "proposta_recebida"].includes(l.listing_status)).length;
   const propostas = bids.length;
@@ -179,13 +210,22 @@ export function MesaCapitaisClient() {
           <h1 className="text-2xl font-bold text-[#F5F1E8]">Mesa de Capitais</h1>
           <p className="text-sm text-[#9BAFC5]">Painel do Head de Ativos</p>
         </div>
-        <button
-          onClick={runMatchmaking} disabled={runningMatch}
-          className="flex items-center gap-2 px-4 py-2 bg-[#C9A84C] text-[#09081A] rounded-lg text-sm font-bold hover:bg-[#D4B96A] transition disabled:opacity-50"
-        >
-          {runningMatch ? <Loader2 size={16} className="animate-spin" /> : <Play size={16} />}
-          Executar Matchmaking
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => generateIntakeLink()} disabled={generatingLink}
+            className="flex items-center gap-2 px-4 py-2 border border-[#C9A84C]/30 text-[#C9A84C] rounded-lg text-sm font-medium hover:bg-[#C9A84C]/10 transition disabled:opacity-50"
+          >
+            {generatingLink ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
+            Novo Ativo
+          </button>
+          <button
+            onClick={runMatchmaking} disabled={runningMatch}
+            className="flex items-center gap-2 px-4 py-2 bg-[#C9A84C] text-[#09081A] rounded-lg text-sm font-bold hover:bg-[#D4B96A] transition disabled:opacity-50"
+          >
+            {runningMatch ? <Loader2 size={16} className="animate-spin" /> : <Play size={16} />}
+            Executar Matchmaking
+          </button>
+        </div>
       </div>
 
       {/* KPIs */}
@@ -364,6 +404,26 @@ export function MesaCapitaisClient() {
             {/* Acoes */}
             <div className="px-4 space-y-2">
               <div className="text-[10px] text-[#C9A84C] font-bold uppercase tracking-wider mb-2">Acoes</div>
+              <button
+                onClick={() => { generateIntakeLink(selectedListing.id); }}
+                disabled={generatingLink}
+                className="w-full flex items-center gap-3 px-4 py-3 bg-emerald-500/10 border border-emerald-500/20 rounded-lg text-emerald-400 text-xs font-bold hover:bg-emerald-500/20 transition disabled:opacity-50"
+              >
+                {generatingLink ? <Loader2 size={16} className="animate-spin" /> : <Link2 size={16} />}
+                Gerar Link Cedente
+              </button>
+              {intakeUrl && (
+                <div className="bg-[#162744] border border-[#C9A84C]/20 rounded-lg p-3">
+                  <div className="text-[9px] text-[#C9A84C] font-bold uppercase mb-1">Link para o Cedente</div>
+                  <div className="flex items-center gap-2">
+                    <input readOnly value={intakeUrl} className="flex-1 bg-[#09081A] border border-[#9BAFC5]/10 rounded px-2 py-1.5 text-[10px] text-[#F5F1E8] truncate" />
+                    <button onClick={copyLink} className="p-1.5 bg-[#C9A84C]/10 rounded hover:bg-[#C9A84C]/20 transition">
+                      <Copy size={12} className="text-[#C9A84C]" />
+                    </button>
+                  </div>
+                  <p className="text-[9px] text-[#9BAFC5] mt-1.5">Envie este link ao cedente. Formulario publico, sem login.</p>
+                </div>
+              )}
               <button
                 onClick={() => { setAssistantListing({ id: selectedListing.id, anonymous_id: selectedListing.anonymous_id }); }}
                 className="w-full flex items-center gap-3 px-4 py-3 bg-[#C9A84C]/10 border border-[#C9A84C]/20 rounded-lg text-[#C9A84C] text-xs font-bold hover:bg-[#C9A84C]/20 transition"
