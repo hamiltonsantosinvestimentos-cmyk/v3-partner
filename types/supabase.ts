@@ -581,6 +581,66 @@ export type Database = {
           },
         ]
       }
+      carousel_jobs: {
+        Row: {
+          arquetipo: string
+          canal: string
+          caption_instagram: string | null
+          caption_linkedin: string | null
+          created_at: string
+          error_msg: string | null
+          hook_extra: string | null
+          id: string
+          output_dir: string | null
+          png_paths: string[] | null
+          requested_by: string | null
+          screenshot_path: string | null
+          slug: string | null
+          status: string
+          updated_at: string
+          url: string
+          whatsapp_from: string | null
+        }
+        Insert: {
+          arquetipo?: string
+          canal?: string
+          caption_instagram?: string | null
+          caption_linkedin?: string | null
+          created_at?: string
+          error_msg?: string | null
+          hook_extra?: string | null
+          id?: string
+          output_dir?: string | null
+          png_paths?: string[] | null
+          requested_by?: string | null
+          screenshot_path?: string | null
+          slug?: string | null
+          status?: string
+          updated_at?: string
+          url: string
+          whatsapp_from?: string | null
+        }
+        Update: {
+          arquetipo?: string
+          canal?: string
+          caption_instagram?: string | null
+          caption_linkedin?: string | null
+          created_at?: string
+          error_msg?: string | null
+          hook_extra?: string | null
+          id?: string
+          output_dir?: string | null
+          png_paths?: string[] | null
+          requested_by?: string | null
+          screenshot_path?: string | null
+          slug?: string | null
+          status?: string
+          updated_at?: string
+          url?: string
+          whatsapp_from?: string | null
+        }
+        Relationships: []
+      }
       chat_messages: {
         Row: {
           content: string
@@ -626,6 +686,737 @@ export type Database = {
           },
         ]
       }
+      cm_asset_listings: {
+        Row: {
+          allows_tranching: boolean
+          anonymous_id: string
+          asset_type: Database["public"]["Enums"]["cm_asset_type"]
+          conditional_blocks: Json | null
+          created_at: string
+          created_by: string | null
+          desagio_pretendido: number | null
+          ente_devedor: string | null
+          esfera: string | null
+          expires_at: string | null
+          head_approved_at: string | null
+          head_approved_by: string | null
+          id: string
+          listing_status: Database["public"]["Enums"]["cm_listing_status"]
+          ma_deal_id: string | null
+          meeting_validated_at: string | null
+          metadata: Json
+          natureza: string | null
+          nda_document_url: string | null
+          nda_signed_at: string | null
+          numero_processo: string | null
+          ocr_validation: Json | null
+          prazo_estimado_meses: number | null
+          risk_details: Json | null
+          risk_score: number | null
+          seller_cpf_cnpj: string | null
+          seller_name: string
+          seller_profile_id: string | null
+          tir_estimada: number | null
+          tribunal: string | null
+          updated_at: string
+          valor_atualizado: number | null
+          valor_face: number
+          vpl: number | null
+        }
+        Insert: {
+          allows_tranching?: boolean
+          anonymous_id: string
+          asset_type: Database["public"]["Enums"]["cm_asset_type"]
+          conditional_blocks?: Json | null
+          created_at?: string
+          created_by?: string | null
+          desagio_pretendido?: number | null
+          ente_devedor?: string | null
+          esfera?: string | null
+          expires_at?: string | null
+          head_approved_at?: string | null
+          head_approved_by?: string | null
+          id?: string
+          listing_status?: Database["public"]["Enums"]["cm_listing_status"]
+          ma_deal_id?: string | null
+          meeting_validated_at?: string | null
+          metadata?: Json
+          natureza?: string | null
+          nda_document_url?: string | null
+          nda_signed_at?: string | null
+          numero_processo?: string | null
+          ocr_validation?: Json | null
+          prazo_estimado_meses?: number | null
+          risk_details?: Json | null
+          risk_score?: number | null
+          seller_cpf_cnpj?: string | null
+          seller_name: string
+          seller_profile_id?: string | null
+          tir_estimada?: number | null
+          tribunal?: string | null
+          updated_at?: string
+          valor_atualizado?: number | null
+          valor_face: number
+          vpl?: number | null
+        }
+        Update: {
+          allows_tranching?: boolean
+          anonymous_id?: string
+          asset_type?: Database["public"]["Enums"]["cm_asset_type"]
+          conditional_blocks?: Json | null
+          created_at?: string
+          created_by?: string | null
+          desagio_pretendido?: number | null
+          ente_devedor?: string | null
+          esfera?: string | null
+          expires_at?: string | null
+          head_approved_at?: string | null
+          head_approved_by?: string | null
+          id?: string
+          listing_status?: Database["public"]["Enums"]["cm_listing_status"]
+          ma_deal_id?: string | null
+          meeting_validated_at?: string | null
+          metadata?: Json
+          natureza?: string | null
+          nda_document_url?: string | null
+          nda_signed_at?: string | null
+          numero_processo?: string | null
+          ocr_validation?: Json | null
+          prazo_estimado_meses?: number | null
+          risk_details?: Json | null
+          risk_score?: number | null
+          seller_cpf_cnpj?: string | null
+          seller_name?: string
+          seller_profile_id?: string | null
+          tir_estimada?: number | null
+          tribunal?: string | null
+          updated_at?: string
+          valor_atualizado?: number | null
+          valor_face?: number
+          vpl?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cm_asset_listings_head_approved_by_fkey"
+            columns: ["head_approved_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cm_asset_listings_head_approved_by_fkey"
+            columns: ["head_approved_by"]
+            isOneToOne: false
+            referencedRelation: "v_kyc_monthly_usage"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "cm_asset_listings_ma_deal_id_fkey"
+            columns: ["ma_deal_id"]
+            isOneToOne: false
+            referencedRelation: "ma_deals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cm_asset_listings_seller_profile_id_fkey"
+            columns: ["seller_profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cm_asset_listings_seller_profile_id_fkey"
+            columns: ["seller_profile_id"]
+            isOneToOne: false
+            referencedRelation: "v_kyc_monthly_usage"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      cm_bids: {
+        Row: {
+          bid_value: number
+          buyer_profile_id: string | null
+          created_at: string
+          created_by: string | null
+          desagio_oferecido: number | null
+          expires_at: string | null
+          id: string
+          listing_id: string
+          notes: string | null
+          payment_details: Json | null
+          payment_type: Database["public"]["Enums"]["cm_payment_type"]
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: Database["public"]["Enums"]["cm_bid_status"]
+          tir_pretendida: number | null
+          updated_at: string
+        }
+        Insert: {
+          bid_value: number
+          buyer_profile_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          desagio_oferecido?: number | null
+          expires_at?: string | null
+          id?: string
+          listing_id: string
+          notes?: string | null
+          payment_details?: Json | null
+          payment_type?: Database["public"]["Enums"]["cm_payment_type"]
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: Database["public"]["Enums"]["cm_bid_status"]
+          tir_pretendida?: number | null
+          updated_at?: string
+        }
+        Update: {
+          bid_value?: number
+          buyer_profile_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          desagio_oferecido?: number | null
+          expires_at?: string | null
+          id?: string
+          listing_id?: string
+          notes?: string | null
+          payment_details?: Json | null
+          payment_type?: Database["public"]["Enums"]["cm_payment_type"]
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: Database["public"]["Enums"]["cm_bid_status"]
+          tir_pretendida?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cm_bids_buyer_profile_id_fkey"
+            columns: ["buyer_profile_id"]
+            isOneToOne: false
+            referencedRelation: "investor_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cm_bids_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "cm_asset_listings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cm_bids_reviewed_by_fkey"
+            columns: ["reviewed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cm_bids_reviewed_by_fkey"
+            columns: ["reviewed_by"]
+            isOneToOne: false
+            referencedRelation: "v_kyc_monthly_usage"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      cm_buyer_alerts: {
+        Row: {
+          channel: string
+          created_at: string
+          demand_id: string | null
+          id: string
+          investor_profile_id: string
+          is_active: boolean
+          last_triggered_at: string | null
+        }
+        Insert: {
+          channel?: string
+          created_at?: string
+          demand_id?: string | null
+          id?: string
+          investor_profile_id: string
+          is_active?: boolean
+          last_triggered_at?: string | null
+        }
+        Update: {
+          channel?: string
+          created_at?: string
+          demand_id?: string | null
+          id?: string
+          investor_profile_id?: string
+          is_active?: boolean
+          last_triggered_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cm_buyer_alerts_demand_id_fkey"
+            columns: ["demand_id"]
+            isOneToOne: false
+            referencedRelation: "investor_demands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cm_buyer_alerts_investor_profile_id_fkey"
+            columns: ["investor_profile_id"]
+            isOneToOne: false
+            referencedRelation: "investor_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cm_commission_splits: {
+        Row: {
+          bid_id: string | null
+          commission_total_percent: number
+          commission_total_value: number
+          created_at: string
+          id: string
+          listing_id: string
+          maximum_exceeded: boolean
+          minimum_enforced: boolean
+          override_approved_by: string | null
+          split_buy_value: number
+          split_platform_value: number
+          split_sell_value: number
+          status: string
+          valor_face: number
+        }
+        Insert: {
+          bid_id?: string | null
+          commission_total_percent: number
+          commission_total_value: number
+          created_at?: string
+          id?: string
+          listing_id: string
+          maximum_exceeded?: boolean
+          minimum_enforced?: boolean
+          override_approved_by?: string | null
+          split_buy_value: number
+          split_platform_value: number
+          split_sell_value: number
+          status?: string
+          valor_face: number
+        }
+        Update: {
+          bid_id?: string | null
+          commission_total_percent?: number
+          commission_total_value?: number
+          created_at?: string
+          id?: string
+          listing_id?: string
+          maximum_exceeded?: boolean
+          minimum_enforced?: boolean
+          override_approved_by?: string | null
+          split_buy_value?: number
+          split_platform_value?: number
+          split_sell_value?: number
+          status?: string
+          valor_face?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cm_commission_splits_bid_id_fkey"
+            columns: ["bid_id"]
+            isOneToOne: false
+            referencedRelation: "cm_bids"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cm_commission_splits_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "cm_asset_listings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cm_commission_splits_override_approved_by_fkey"
+            columns: ["override_approved_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cm_commission_splits_override_approved_by_fkey"
+            columns: ["override_approved_by"]
+            isOneToOne: false
+            referencedRelation: "v_kyc_monthly_usage"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      cm_escrow_operations: {
+        Row: {
+          bid_id: string | null
+          closed_at: string | null
+          contract_url: string | null
+          created_at: string
+          escrow_provider: string | null
+          escrow_value: number
+          id: string
+          listing_id: string
+          opened_at: string
+          status: string
+        }
+        Insert: {
+          bid_id?: string | null
+          closed_at?: string | null
+          contract_url?: string | null
+          created_at?: string
+          escrow_provider?: string | null
+          escrow_value: number
+          id?: string
+          listing_id: string
+          opened_at?: string
+          status?: string
+        }
+        Update: {
+          bid_id?: string | null
+          closed_at?: string | null
+          contract_url?: string | null
+          created_at?: string
+          escrow_provider?: string | null
+          escrow_value?: number
+          id?: string
+          listing_id?: string
+          opened_at?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cm_escrow_operations_bid_id_fkey"
+            columns: ["bid_id"]
+            isOneToOne: false
+            referencedRelation: "cm_bids"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cm_escrow_operations_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "cm_asset_listings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cm_listing_documents: {
+        Row: {
+          created_at: string
+          document_type: string
+          file_size_bytes: number | null
+          id: string
+          listing_id: string
+          ocr_result: Json | null
+          original_filename: string | null
+          storage_path: string
+          validated_at: string | null
+          validation_status: string
+        }
+        Insert: {
+          created_at?: string
+          document_type: string
+          file_size_bytes?: number | null
+          id?: string
+          listing_id: string
+          ocr_result?: Json | null
+          original_filename?: string | null
+          storage_path: string
+          validated_at?: string | null
+          validation_status?: string
+        }
+        Update: {
+          created_at?: string
+          document_type?: string
+          file_size_bytes?: number | null
+          id?: string
+          listing_id?: string
+          ocr_result?: Json | null
+          original_filename?: string | null
+          storage_path?: string
+          validated_at?: string | null
+          validation_status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cm_listing_documents_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "cm_asset_listings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cm_risk_scores: {
+        Row: {
+          calculated_by: string
+          components: Json
+          created_at: string
+          id: string
+          listing_id: string
+          model_version: string
+          score: number
+        }
+        Insert: {
+          calculated_by?: string
+          components?: Json
+          created_at?: string
+          id?: string
+          listing_id: string
+          model_version?: string
+          score: number
+        }
+        Update: {
+          calculated_by?: string
+          components?: Json
+          created_at?: string
+          id?: string
+          listing_id?: string
+          model_version?: string
+          score?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cm_risk_scores_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "cm_asset_listings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cm_status_transitions: {
+        Row: {
+          changed_by: string | null
+          created_at: string
+          from_status: Database["public"]["Enums"]["cm_listing_status"]
+          id: string
+          listing_id: string
+          reason: string | null
+          to_status: Database["public"]["Enums"]["cm_listing_status"]
+        }
+        Insert: {
+          changed_by?: string | null
+          created_at?: string
+          from_status: Database["public"]["Enums"]["cm_listing_status"]
+          id?: string
+          listing_id: string
+          reason?: string | null
+          to_status: Database["public"]["Enums"]["cm_listing_status"]
+        }
+        Update: {
+          changed_by?: string | null
+          created_at?: string
+          from_status?: Database["public"]["Enums"]["cm_listing_status"]
+          id?: string
+          listing_id?: string
+          reason?: string | null
+          to_status?: Database["public"]["Enums"]["cm_listing_status"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cm_status_transitions_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "cm_asset_listings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cm_tranches: {
+        Row: {
+          bid_id: string | null
+          buyer_profile_id: string | null
+          cessao_contract_url: string | null
+          created_at: string
+          id: string
+          parent_listing_id: string
+          percentage: number
+          status: Database["public"]["Enums"]["cm_tranche_status"]
+          tranche_code: string
+          tranche_value: number
+          updated_at: string
+        }
+        Insert: {
+          bid_id?: string | null
+          buyer_profile_id?: string | null
+          cessao_contract_url?: string | null
+          created_at?: string
+          id?: string
+          parent_listing_id: string
+          percentage: number
+          status?: Database["public"]["Enums"]["cm_tranche_status"]
+          tranche_code: string
+          tranche_value: number
+          updated_at?: string
+        }
+        Update: {
+          bid_id?: string | null
+          buyer_profile_id?: string | null
+          cessao_contract_url?: string | null
+          created_at?: string
+          id?: string
+          parent_listing_id?: string
+          percentage?: number
+          status?: Database["public"]["Enums"]["cm_tranche_status"]
+          tranche_code?: string
+          tranche_value?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cm_tranches_bid_id_fkey"
+            columns: ["bid_id"]
+            isOneToOne: false
+            referencedRelation: "cm_bids"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cm_tranches_buyer_profile_id_fkey"
+            columns: ["buyer_profile_id"]
+            isOneToOne: false
+            referencedRelation: "investor_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cm_tranches_parent_listing_id_fkey"
+            columns: ["parent_listing_id"]
+            isOneToOne: false
+            referencedRelation: "cm_asset_listings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      commercial_proposals: {
+        Row: {
+          clicksign_key: string | null
+          clicksign_url: string | null
+          code: string
+          created_at: string
+          created_by: string
+          deal_code_ref: string | null
+          deal_id: string | null
+          description: string | null
+          expires_at: string | null
+          fund_name: string | null
+          id: string
+          meeting_at: string | null
+          meeting_link: string | null
+          metadata: Json
+          partner_email: string | null
+          partner_id: string | null
+          partner_name: string | null
+          recipient_company: string | null
+          recipient_email: string
+          recipient_name: string
+          sent_at: string | null
+          service_type: string
+          signed_at: string | null
+          status: string
+          tec_percentage: number | null
+          title: string
+          updated_at: string
+          value: number | null
+          viewed_at: string | null
+        }
+        Insert: {
+          clicksign_key?: string | null
+          clicksign_url?: string | null
+          code: string
+          created_at?: string
+          created_by: string
+          deal_code_ref?: string | null
+          deal_id?: string | null
+          description?: string | null
+          expires_at?: string | null
+          fund_name?: string | null
+          id?: string
+          meeting_at?: string | null
+          meeting_link?: string | null
+          metadata?: Json
+          partner_email?: string | null
+          partner_id?: string | null
+          partner_name?: string | null
+          recipient_company?: string | null
+          recipient_email: string
+          recipient_name: string
+          sent_at?: string | null
+          service_type?: string
+          signed_at?: string | null
+          status?: string
+          tec_percentage?: number | null
+          title: string
+          updated_at?: string
+          value?: number | null
+          viewed_at?: string | null
+        }
+        Update: {
+          clicksign_key?: string | null
+          clicksign_url?: string | null
+          code?: string
+          created_at?: string
+          created_by?: string
+          deal_code_ref?: string | null
+          deal_id?: string | null
+          description?: string | null
+          expires_at?: string | null
+          fund_name?: string | null
+          id?: string
+          meeting_at?: string | null
+          meeting_link?: string | null
+          metadata?: Json
+          partner_email?: string | null
+          partner_id?: string | null
+          partner_name?: string | null
+          recipient_company?: string | null
+          recipient_email?: string
+          recipient_name?: string
+          sent_at?: string | null
+          service_type?: string
+          signed_at?: string | null
+          status?: string
+          tec_percentage?: number | null
+          title?: string
+          updated_at?: string
+          value?: number | null
+          viewed_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "commercial_proposals_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "commercial_proposals_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "v_kyc_monthly_usage"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "commercial_proposals_deal_id_fkey"
+            columns: ["deal_id"]
+            isOneToOne: false
+            referencedRelation: "ma_deals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "commercial_proposals_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "commercial_proposals_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "v_kyc_monthly_usage"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
       commissions: {
         Row: {
           code: string
@@ -634,6 +1425,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           id: string
+          minimum_enforced: boolean | null
           notes: string | null
           operation_closed_at: string | null
           operation_code: string | null
@@ -641,8 +1433,12 @@ export type Database = {
           operation_id: string | null
           operation_type: string
           operation_value: number
+          override_approved_by: string | null
           partner_id: string
           payment_date: string | null
+          split_buy: number | null
+          split_platform: number | null
+          split_sell: number | null
           status: string
           updated_at: string
         }
@@ -653,6 +1449,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: string
+          minimum_enforced?: boolean | null
           notes?: string | null
           operation_closed_at?: string | null
           operation_code?: string | null
@@ -660,8 +1457,12 @@ export type Database = {
           operation_id?: string | null
           operation_type: string
           operation_value?: number
+          override_approved_by?: string | null
           partner_id: string
           payment_date?: string | null
+          split_buy?: number | null
+          split_platform?: number | null
+          split_sell?: number | null
           status?: string
           updated_at?: string
         }
@@ -672,6 +1473,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: string
+          minimum_enforced?: boolean | null
           notes?: string | null
           operation_closed_at?: string | null
           operation_code?: string | null
@@ -679,8 +1481,12 @@ export type Database = {
           operation_id?: string | null
           operation_type?: string
           operation_value?: number
+          override_approved_by?: string | null
           partner_id?: string
           payment_date?: string | null
+          split_buy?: number | null
+          split_platform?: number | null
+          split_sell?: number | null
           status?: string
           updated_at?: string
         }
@@ -1977,6 +2783,134 @@ export type Database = {
         }
         Relationships: []
       }
+      deal_upload_audit: {
+        Row: {
+          deal_id: string
+          file_hash: string | null
+          file_name: string
+          file_size: number | null
+          id: string
+          ip_address: string | null
+          mime_type: string | null
+          storage_path: string
+          token_id: string
+          uploaded_at: string
+        }
+        Insert: {
+          deal_id: string
+          file_hash?: string | null
+          file_name: string
+          file_size?: number | null
+          id?: string
+          ip_address?: string | null
+          mime_type?: string | null
+          storage_path: string
+          token_id: string
+          uploaded_at?: string
+        }
+        Update: {
+          deal_id?: string
+          file_hash?: string | null
+          file_name?: string
+          file_size?: number | null
+          id?: string
+          ip_address?: string | null
+          mime_type?: string | null
+          storage_path?: string
+          token_id?: string
+          uploaded_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "deal_upload_audit_token_id_fkey"
+            columns: ["token_id"]
+            isOneToOne: false
+            referencedRelation: "deal_upload_tokens"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      deal_upload_tokens: {
+        Row: {
+          created_at: string
+          created_by: string
+          deal_id: string
+          expires_at: string
+          id: string
+          label: string | null
+          max_uses: number
+          partner_id: string | null
+          status: string
+          token: string
+          updated_at: string
+          used_count: number
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          deal_id: string
+          expires_at?: string
+          id?: string
+          label?: string | null
+          max_uses?: number
+          partner_id?: string | null
+          status?: string
+          token?: string
+          updated_at?: string
+          used_count?: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          deal_id?: string
+          expires_at?: string
+          id?: string
+          label?: string | null
+          max_uses?: number
+          partner_id?: string | null
+          status?: string
+          token?: string
+          updated_at?: string
+          used_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "deal_upload_tokens_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "deal_upload_tokens_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "v_kyc_monthly_usage"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "deal_upload_tokens_deal_id_fkey"
+            columns: ["deal_id"]
+            isOneToOne: false
+            referencedRelation: "ma_deals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "deal_upload_tokens_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "deal_upload_tokens_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "v_kyc_monthly_usage"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
       deal_workspaces: {
         Row: {
           context: string | null
@@ -2041,6 +2975,66 @@ export type Database = {
             columns: ["deal_intake_id"]
             isOneToOne: false
             referencedRelation: "deal_intakes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      demand_matches: {
+        Row: {
+          buyer_viewed_at: string | null
+          created_at: string
+          deal_id: string | null
+          demand_id: string
+          id: string
+          listing_id: string | null
+          match_reasons: Json
+          match_type: string | null
+          notification_sent: boolean | null
+          score: number
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          buyer_viewed_at?: string | null
+          created_at?: string
+          deal_id?: string | null
+          demand_id: string
+          id?: string
+          listing_id?: string | null
+          match_reasons?: Json
+          match_type?: string | null
+          notification_sent?: boolean | null
+          score?: number
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          buyer_viewed_at?: string | null
+          created_at?: string
+          deal_id?: string | null
+          demand_id?: string
+          id?: string
+          listing_id?: string | null
+          match_reasons?: Json
+          match_type?: string | null
+          notification_sent?: boolean | null
+          score?: number
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "demand_matches_deal_id_fkey"
+            columns: ["deal_id"]
+            isOneToOne: false
+            referencedRelation: "ma_deals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "demand_matches_demand_id_fkey"
+            columns: ["demand_id"]
+            isOneToOne: false
+            referencedRelation: "investor_demands"
             referencedColumns: ["id"]
           },
         ]
@@ -2125,6 +3119,130 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      document_chunks: {
+        Row: {
+          chunk_index: number
+          content: string
+          created_at: string
+          embedding: string
+          folder_id: string
+          id: string
+          is_pii_masked: boolean
+          metadata: Json | null
+          pii_mask_method: string | null
+          storage_path: string | null
+          updated_at: string
+        }
+        Insert: {
+          chunk_index: number
+          content: string
+          created_at?: string
+          embedding: string
+          folder_id: string
+          id?: string
+          is_pii_masked?: boolean
+          metadata?: Json | null
+          pii_mask_method?: string | null
+          storage_path?: string | null
+          updated_at?: string
+        }
+        Update: {
+          chunk_index?: number
+          content?: string
+          created_at?: string
+          embedding?: string
+          folder_id?: string
+          id?: string
+          is_pii_masked?: boolean
+          metadata?: Json | null
+          pii_mask_method?: string | null
+          storage_path?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "document_chunks_folder_id_fkey"
+            columns: ["folder_id"]
+            isOneToOne: false
+            referencedRelation: "folder_registry"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      document_quarantine: {
+        Row: {
+          attempted_path: string
+          detected_at: string
+          file_name: string
+          file_size: number | null
+          governance_log_id: string | null
+          id: string
+          reason: string
+          resolved_at: string | null
+          resolved_by: string | null
+          status: string
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          attempted_path: string
+          detected_at?: string
+          file_name: string
+          file_size?: number | null
+          governance_log_id?: string | null
+          id?: string
+          reason: string
+          resolved_at?: string | null
+          resolved_by?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          attempted_path?: string
+          detected_at?: string
+          file_name?: string
+          file_size?: number | null
+          governance_log_id?: string | null
+          id?: string
+          reason?: string
+          resolved_at?: string | null
+          resolved_by?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "document_quarantine_resolved_by_fkey"
+            columns: ["resolved_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "document_quarantine_resolved_by_fkey"
+            columns: ["resolved_by"]
+            isOneToOne: false
+            referencedRelation: "v_kyc_monthly_usage"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "document_quarantine_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "document_quarantine_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "v_kyc_monthly_usage"
+            referencedColumns: ["user_id"]
+          },
+        ]
       }
       document_views: {
         Row: {
@@ -2258,6 +3376,192 @@ export type Database = {
           },
         ]
       }
+      folder_access_grants: {
+        Row: {
+          expires_at: string | null
+          folder_id: string
+          granted_at: string
+          granted_by: string | null
+          id: string
+          permission: string
+          reason: string | null
+          user_id: string
+        }
+        Insert: {
+          expires_at?: string | null
+          folder_id: string
+          granted_at?: string
+          granted_by?: string | null
+          id?: string
+          permission: string
+          reason?: string | null
+          user_id: string
+        }
+        Update: {
+          expires_at?: string | null
+          folder_id?: string
+          granted_at?: string
+          granted_by?: string | null
+          id?: string
+          permission?: string
+          reason?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "folder_access_grants_folder_id_fkey"
+            columns: ["folder_id"]
+            isOneToOne: false
+            referencedRelation: "folder_registry"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "folder_access_grants_granted_by_fkey"
+            columns: ["granted_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "folder_access_grants_granted_by_fkey"
+            columns: ["granted_by"]
+            isOneToOne: false
+            referencedRelation: "v_kyc_monthly_usage"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "folder_access_grants_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "folder_access_grants_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "v_kyc_monthly_usage"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      folder_governance_log: {
+        Row: {
+          created_at: string
+          deal_code: string | null
+          details: Json | null
+          event_type: string
+          id: string
+          ip_address: string | null
+          severity: string
+          target_path: string | null
+          user_id: string | null
+          user_name: string | null
+          vertical: string | null
+        }
+        Insert: {
+          created_at?: string
+          deal_code?: string | null
+          details?: Json | null
+          event_type: string
+          id?: string
+          ip_address?: string | null
+          severity?: string
+          target_path?: string | null
+          user_id?: string | null
+          user_name?: string | null
+          vertical?: string | null
+        }
+        Update: {
+          created_at?: string
+          deal_code?: string | null
+          details?: Json | null
+          event_type?: string
+          id?: string
+          ip_address?: string | null
+          severity?: string
+          target_path?: string | null
+          user_id?: string | null
+          user_name?: string | null
+          vertical?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "folder_governance_log_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "folder_governance_log_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "v_kyc_monthly_usage"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      folder_registry: {
+        Row: {
+          client_name: string | null
+          created_at: string
+          created_by: string | null
+          deal_code: string | null
+          depth: number
+          full_path: string
+          id: string
+          metadata: Json | null
+          parent_path: string | null
+          status: string
+          updated_at: string
+          vertical: string
+        }
+        Insert: {
+          client_name?: string | null
+          created_at?: string
+          created_by?: string | null
+          deal_code?: string | null
+          depth?: number
+          full_path: string
+          id?: string
+          metadata?: Json | null
+          parent_path?: string | null
+          status?: string
+          updated_at?: string
+          vertical: string
+        }
+        Update: {
+          client_name?: string | null
+          created_at?: string
+          created_by?: string | null
+          deal_code?: string | null
+          depth?: number
+          full_path?: string
+          id?: string
+          metadata?: Json | null
+          parent_path?: string | null
+          status?: string
+          updated_at?: string
+          vertical?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "folder_registry_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "folder_registry_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "v_kyc_monthly_usage"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
       generated_reports: {
         Row: {
           created_at: string
@@ -2265,6 +3569,7 @@ export type Database = {
           id: string
           opportunities_found: number | null
           opportunities_scanned_at: string | null
+          output_type: string
           session_id: string | null
           squad_id: string
           title: string
@@ -2276,6 +3581,7 @@ export type Database = {
           id?: string
           opportunities_found?: number | null
           opportunities_scanned_at?: string | null
+          output_type?: string
           session_id?: string | null
           squad_id: string
           title: string
@@ -2287,6 +3593,7 @@ export type Database = {
           id?: string
           opportunities_found?: number | null
           opportunities_scanned_at?: string | null
+          output_type?: string
           session_id?: string | null
           squad_id?: string
           title?: string
@@ -2334,6 +3641,109 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      investor_demands: {
+        Row: {
+          alerta_ativo: boolean | null
+          asset_types_preferidos: string[] | null
+          cnpj: string | null
+          created_at: string
+          created_by: string | null
+          criterios: string | null
+          desagio_min: number | null
+          email: string
+          empresa: string | null
+          id: string
+          investor_profile_id: string | null
+          jurisdicao_alvo: string[] | null
+          natureza_preferida: string[] | null
+          nome_contato: string
+          notas: string | null
+          origem: string
+          setores: string[]
+          status: string
+          telefone: string | null
+          ticket_max: number
+          ticket_min: number
+          tipos_operacao: string[]
+          ufs: string[]
+          updated_at: string
+        }
+        Insert: {
+          alerta_ativo?: boolean | null
+          asset_types_preferidos?: string[] | null
+          cnpj?: string | null
+          created_at?: string
+          created_by?: string | null
+          criterios?: string | null
+          desagio_min?: number | null
+          email: string
+          empresa?: string | null
+          id?: string
+          investor_profile_id?: string | null
+          jurisdicao_alvo?: string[] | null
+          natureza_preferida?: string[] | null
+          nome_contato: string
+          notas?: string | null
+          origem?: string
+          setores?: string[]
+          status?: string
+          telefone?: string | null
+          ticket_max?: number
+          ticket_min?: number
+          tipos_operacao?: string[]
+          ufs?: string[]
+          updated_at?: string
+        }
+        Update: {
+          alerta_ativo?: boolean | null
+          asset_types_preferidos?: string[] | null
+          cnpj?: string | null
+          created_at?: string
+          created_by?: string | null
+          criterios?: string | null
+          desagio_min?: number | null
+          email?: string
+          empresa?: string | null
+          id?: string
+          investor_profile_id?: string | null
+          jurisdicao_alvo?: string[] | null
+          natureza_preferida?: string[] | null
+          nome_contato?: string
+          notas?: string | null
+          origem?: string
+          setores?: string[]
+          status?: string
+          telefone?: string | null
+          ticket_max?: number
+          ticket_min?: number
+          tipos_operacao?: string[]
+          ufs?: string[]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "investor_demands_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "investor_demands_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "v_kyc_monthly_usage"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "investor_demands_investor_profile_id_fkey"
+            columns: ["investor_profile_id"]
+            isOneToOne: false
+            referencedRelation: "investor_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       investor_profiles: {
         Row: {
@@ -2630,6 +4040,219 @@ export type Database = {
           },
         ]
       }
+      logistics_items: {
+        Row: {
+          category: string
+          created_at: string
+          created_by: string | null
+          currency: string
+          current_price: number | null
+          deleted_at: string | null
+          destination: string | null
+          destination_iata: string | null
+          end_date: string | null
+          id: string
+          notes: string | null
+          origin: string | null
+          origin_iata: string | null
+          provider: string | null
+          start_date: string | null
+          status: string
+          target_price: number | null
+          title: string
+          trip_type: string | null
+          updated_at: string
+        }
+        Insert: {
+          category: string
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          current_price?: number | null
+          deleted_at?: string | null
+          destination?: string | null
+          destination_iata?: string | null
+          end_date?: string | null
+          id?: string
+          notes?: string | null
+          origin?: string | null
+          origin_iata?: string | null
+          provider?: string | null
+          start_date?: string | null
+          status?: string
+          target_price?: number | null
+          title: string
+          trip_type?: string | null
+          updated_at?: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          current_price?: number | null
+          deleted_at?: string | null
+          destination?: string | null
+          destination_iata?: string | null
+          end_date?: string | null
+          id?: string
+          notes?: string | null
+          origin?: string | null
+          origin_iata?: string | null
+          provider?: string | null
+          start_date?: string | null
+          status?: string
+          target_price?: number | null
+          title?: string
+          trip_type?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "logistics_items_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "logistics_items_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "v_kyc_monthly_usage"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      logistics_price_history: {
+        Row: {
+          checked_at: string
+          currency: string
+          id: string
+          item_id: string | null
+          price: number
+          source: string | null
+        }
+        Insert: {
+          checked_at?: string
+          currency?: string
+          id?: string
+          item_id?: string | null
+          price: number
+          source?: string | null
+        }
+        Update: {
+          checked_at?: string
+          currency?: string
+          id?: string
+          item_id?: string | null
+          price?: number
+          source?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "logistics_price_history_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "logistics_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ma_batch_reconciliations: {
+        Row: {
+          avg_confiabilidade: number | null
+          batch_name: string | null
+          completed_at: string | null
+          created_at: string
+          created_by: string | null
+          deal_id: string
+          divergences_found: number
+          docs_error: number
+          docs_needs_review: number
+          docs_processed: number
+          docs_success: number
+          fields_high_confidence: number
+          fields_low_confidence: number
+          id: string
+          report_html: string | null
+          report_url: string | null
+          started_at: string | null
+          status: string
+          total_docs: number
+          total_fields_extracted: number
+          updated_at: string
+        }
+        Insert: {
+          avg_confiabilidade?: number | null
+          batch_name?: string | null
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          deal_id: string
+          divergences_found?: number
+          docs_error?: number
+          docs_needs_review?: number
+          docs_processed?: number
+          docs_success?: number
+          fields_high_confidence?: number
+          fields_low_confidence?: number
+          id?: string
+          report_html?: string | null
+          report_url?: string | null
+          started_at?: string | null
+          status?: string
+          total_docs?: number
+          total_fields_extracted?: number
+          updated_at?: string
+        }
+        Update: {
+          avg_confiabilidade?: number | null
+          batch_name?: string | null
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          deal_id?: string
+          divergences_found?: number
+          docs_error?: number
+          docs_needs_review?: number
+          docs_processed?: number
+          docs_success?: number
+          fields_high_confidence?: number
+          fields_low_confidence?: number
+          id?: string
+          report_html?: string | null
+          report_url?: string | null
+          started_at?: string | null
+          status?: string
+          total_docs?: number
+          total_fields_extracted?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ma_batch_reconciliations_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ma_batch_reconciliations_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "v_kyc_monthly_usage"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "ma_batch_reconciliations_deal_id_fkey"
+            columns: ["deal_id"]
+            isOneToOne: false
+            referencedRelation: "ma_deals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ma_captacao_links: {
         Row: {
           active: boolean
@@ -2734,6 +4357,8 @@ export type Database = {
           buyer_name: string | null
           code: string
           comments: Json | null
+          contract_signed_at: string | null
+          contract_status: string
           cover_photo_url: string | null
           created_at: string
           created_by: string
@@ -2747,6 +4372,8 @@ export type Database = {
           legacy_code: string | null
           location: string | null
           notes: string | null
+          origin_vertical: string | null
+          originator_profile_id: string | null
           probability_percent: number | null
           revenue_ttm: number | null
           sector: string | null
@@ -2766,6 +4393,8 @@ export type Database = {
           buyer_name?: string | null
           code: string
           comments?: Json | null
+          contract_signed_at?: string | null
+          contract_status?: string
           cover_photo_url?: string | null
           created_at?: string
           created_by: string
@@ -2779,6 +4408,8 @@ export type Database = {
           legacy_code?: string | null
           location?: string | null
           notes?: string | null
+          origin_vertical?: string | null
+          originator_profile_id?: string | null
           probability_percent?: number | null
           revenue_ttm?: number | null
           sector?: string | null
@@ -2798,6 +4429,8 @@ export type Database = {
           buyer_name?: string | null
           code?: string
           comments?: Json | null
+          contract_signed_at?: string | null
+          contract_status?: string
           cover_photo_url?: string | null
           created_at?: string
           created_by?: string
@@ -2811,6 +4444,8 @@ export type Database = {
           legacy_code?: string | null
           location?: string | null
           notes?: string | null
+          origin_vertical?: string | null
+          originator_profile_id?: string | null
           probability_percent?: number | null
           revenue_ttm?: number | null
           sector?: string | null
@@ -2852,6 +4487,325 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_kyc_monthly_usage"
             referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "ma_deals_originator_profile_id_fkey"
+            columns: ["originator_profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ma_deals_originator_profile_id_fkey"
+            columns: ["originator_profile_id"]
+            isOneToOne: false
+            referencedRelation: "v_kyc_monthly_usage"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      ma_document_extractions: {
+        Row: {
+          anthropic_file_id: string | null
+          batch_id: string | null
+          campos_baixa_confianca: Json | null
+          confiabilidade: number | null
+          confiabilidade_por_campo: Json | null
+          confirmed_at: string | null
+          confirmed_by: string | null
+          created_at: string
+          dados_extraidos: Json | null
+          deal_id: string
+          doc_id: string
+          doc_name: string
+          error_message: string | null
+          extracted_at: string
+          extracted_by: string | null
+          file_name: string | null
+          file_size_bytes: number | null
+          id: string
+          model_used: string
+          partner_id: string | null
+          pendencias: Json | null
+          processing_mode: string | null
+          resumo: string | null
+          source_id: string | null
+          source_type: string | null
+          status: string
+          storage_path: string
+          tipo_documento: string | null
+          updated_at: string
+          validade: string | null
+          validation_flags: Json | null
+        }
+        Insert: {
+          anthropic_file_id?: string | null
+          batch_id?: string | null
+          campos_baixa_confianca?: Json | null
+          confiabilidade?: number | null
+          confiabilidade_por_campo?: Json | null
+          confirmed_at?: string | null
+          confirmed_by?: string | null
+          created_at?: string
+          dados_extraidos?: Json | null
+          deal_id: string
+          doc_id: string
+          doc_name: string
+          error_message?: string | null
+          extracted_at?: string
+          extracted_by?: string | null
+          file_name?: string | null
+          file_size_bytes?: number | null
+          id?: string
+          model_used?: string
+          partner_id?: string | null
+          pendencias?: Json | null
+          processing_mode?: string | null
+          resumo?: string | null
+          source_id?: string | null
+          source_type?: string | null
+          status?: string
+          storage_path: string
+          tipo_documento?: string | null
+          updated_at?: string
+          validade?: string | null
+          validation_flags?: Json | null
+        }
+        Update: {
+          anthropic_file_id?: string | null
+          batch_id?: string | null
+          campos_baixa_confianca?: Json | null
+          confiabilidade?: number | null
+          confiabilidade_por_campo?: Json | null
+          confirmed_at?: string | null
+          confirmed_by?: string | null
+          created_at?: string
+          dados_extraidos?: Json | null
+          deal_id?: string
+          doc_id?: string
+          doc_name?: string
+          error_message?: string | null
+          extracted_at?: string
+          extracted_by?: string | null
+          file_name?: string | null
+          file_size_bytes?: number | null
+          id?: string
+          model_used?: string
+          partner_id?: string | null
+          pendencias?: Json | null
+          processing_mode?: string | null
+          resumo?: string | null
+          source_id?: string | null
+          source_type?: string | null
+          status?: string
+          storage_path?: string
+          tipo_documento?: string | null
+          updated_at?: string
+          validade?: string | null
+          validation_flags?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_extraction_batch"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "ma_batch_reconciliations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ma_document_extractions_confirmed_by_fkey"
+            columns: ["confirmed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ma_document_extractions_confirmed_by_fkey"
+            columns: ["confirmed_by"]
+            isOneToOne: false
+            referencedRelation: "v_kyc_monthly_usage"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "ma_document_extractions_deal_id_fkey"
+            columns: ["deal_id"]
+            isOneToOne: false
+            referencedRelation: "ma_deals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ma_document_extractions_extracted_by_fkey"
+            columns: ["extracted_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ma_document_extractions_extracted_by_fkey"
+            columns: ["extracted_by"]
+            isOneToOne: false
+            referencedRelation: "v_kyc_monthly_usage"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "ma_document_extractions_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ma_document_extractions_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "v_kyc_monthly_usage"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      ma_document_requests: {
+        Row: {
+          created_at: string
+          deadline: string | null
+          deal_id: string
+          documents: Json
+          email_sent: boolean
+          email_sent_at: string | null
+          forja_snapshot_at: string | null
+          id: string
+          notes: string | null
+          partner_email: string | null
+          requested_by: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          deadline?: string | null
+          deal_id: string
+          documents?: Json
+          email_sent?: boolean
+          email_sent_at?: string | null
+          forja_snapshot_at?: string | null
+          id?: string
+          notes?: string | null
+          partner_email?: string | null
+          requested_by?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          deadline?: string | null
+          deal_id?: string
+          documents?: Json
+          email_sent?: boolean
+          email_sent_at?: string | null
+          forja_snapshot_at?: string | null
+          id?: string
+          notes?: string | null
+          partner_email?: string | null
+          requested_by?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ma_document_requests_deal_id_fkey"
+            columns: ["deal_id"]
+            isOneToOne: false
+            referencedRelation: "ma_deals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ma_document_requests_requested_by_fkey"
+            columns: ["requested_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ma_document_requests_requested_by_fkey"
+            columns: ["requested_by"]
+            isOneToOne: false
+            referencedRelation: "v_kyc_monthly_usage"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      market_benchmarks: {
+        Row: {
+          benchmark_key: string
+          benchmark_label: string
+          created_at: string | null
+          created_by: string | null
+          id: string
+          sector: string
+          source: string | null
+          source_doc_id: string | null
+          sub_sector: string | null
+          unit: string | null
+          updated_at: string | null
+          valid_from: string
+          valid_until: string | null
+          value_numeric: number | null
+          value_text: string | null
+        }
+        Insert: {
+          benchmark_key: string
+          benchmark_label: string
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          sector: string
+          source?: string | null
+          source_doc_id?: string | null
+          sub_sector?: string | null
+          unit?: string | null
+          updated_at?: string | null
+          valid_from?: string
+          valid_until?: string | null
+          value_numeric?: number | null
+          value_text?: string | null
+        }
+        Update: {
+          benchmark_key?: string
+          benchmark_label?: string
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          sector?: string
+          source?: string | null
+          source_doc_id?: string | null
+          sub_sector?: string | null
+          unit?: string | null
+          updated_at?: string | null
+          valid_from?: string
+          valid_until?: string | null
+          value_numeric?: number | null
+          value_text?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "market_benchmarks_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "market_benchmarks_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "v_kyc_monthly_usage"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "market_benchmarks_source_doc_id_fkey"
+            columns: ["source_doc_id"]
+            isOneToOne: false
+            referencedRelation: "docs_ingeridos"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -3122,14 +5076,66 @@ export type Database = {
         }
         Relationships: []
       }
+      meeting_action_items: {
+        Row: {
+          action: string
+          assignee: string
+          assignee_user_id: string | null
+          created_at: string
+          due_date: string | null
+          id: string
+          meeting_id: string
+          source: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          action: string
+          assignee: string
+          assignee_user_id?: string | null
+          created_at?: string
+          due_date?: string | null
+          id?: string
+          meeting_id: string
+          source?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          action?: string
+          assignee?: string
+          assignee_user_id?: string | null
+          created_at?: string
+          due_date?: string | null
+          id?: string
+          meeting_id?: string
+          source?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meeting_action_items_meeting_id_fkey"
+            columns: ["meeting_id"]
+            isOneToOne: false
+            referencedRelation: "business_meetings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       meeting_summaries: {
         Row: {
           action_items: string[] | null
+          business_meeting_id: string | null
           created_at: string | null
           duration_minutes: number | null
+          fathom_url: string | null
           id: string
+          ma_deal_id: string | null
           meeting_date: string | null
           participants: string[] | null
+          processed_by: string | null
+          source: string | null
           summary: string
           title: string
           transcript: string
@@ -3137,11 +5143,16 @@ export type Database = {
         }
         Insert: {
           action_items?: string[] | null
+          business_meeting_id?: string | null
           created_at?: string | null
           duration_minutes?: number | null
+          fathom_url?: string | null
           id?: string
+          ma_deal_id?: string | null
           meeting_date?: string | null
           participants?: string[] | null
+          processed_by?: string | null
+          source?: string | null
           summary: string
           title: string
           transcript: string
@@ -3149,17 +5160,36 @@ export type Database = {
         }
         Update: {
           action_items?: string[] | null
+          business_meeting_id?: string | null
           created_at?: string | null
           duration_minutes?: number | null
+          fathom_url?: string | null
           id?: string
+          ma_deal_id?: string | null
           meeting_date?: string | null
           participants?: string[] | null
+          processed_by?: string | null
+          source?: string | null
           summary?: string
           title?: string
           transcript?: string
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "meeting_summaries_business_meeting_id_fkey"
+            columns: ["business_meeting_id"]
+            isOneToOne: false
+            referencedRelation: "business_meetings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meeting_summaries_ma_deal_id_fkey"
+            columns: ["ma_deal_id"]
+            isOneToOne: false
+            referencedRelation: "ma_deals"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "meeting_summaries_user_id_fkey"
             columns: ["user_id"]
@@ -3170,6 +5200,42 @@ export type Database = {
           {
             foreignKeyName: "meeting_summaries_user_id_fkey"
             columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "v_kyc_monthly_usage"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      mesa_sla_config: {
+        Row: {
+          config: Json
+          id: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          config?: Json
+          id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          config?: Json
+          id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mesa_sla_config_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mesa_sla_config_updated_by_fkey"
+            columns: ["updated_by"]
             isOneToOne: false
             referencedRelation: "v_kyc_monthly_usage"
             referencedColumns: ["user_id"]
@@ -3767,6 +5833,7 @@ export type Database = {
           documentos_pj: Json
           id: string
           limite_credito: string | null
+          nivel: string | null
           nome: string
           ordem: number | null
           outras_despesas: string | null
@@ -3793,6 +5860,7 @@ export type Database = {
           documentos_pj?: Json
           id?: string
           limite_credito?: string | null
+          nivel?: string | null
           nome: string
           ordem?: number | null
           outras_despesas?: string | null
@@ -3819,6 +5887,7 @@ export type Database = {
           documentos_pj?: Json
           id?: string
           limite_credito?: string | null
+          nivel?: string | null
           nome?: string
           ordem?: number | null
           outras_despesas?: string | null
@@ -3830,6 +5899,72 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: []
+      }
+      precatorio_leads: {
+        Row: {
+          created_at: string
+          credor: string
+          ente_devedor: string
+          estagio: string
+          id: string
+          natureza: string
+          numero_processo: string
+          observacoes: string | null
+          partner_id: string
+          prazo_estimado_meses: number
+          tribunal: string
+          updated_at: string
+          valor_atualizado: number
+          valor_face: number
+        }
+        Insert: {
+          created_at?: string
+          credor: string
+          ente_devedor: string
+          estagio?: string
+          id?: string
+          natureza?: string
+          numero_processo?: string
+          observacoes?: string | null
+          partner_id: string
+          prazo_estimado_meses?: number
+          tribunal?: string
+          updated_at?: string
+          valor_atualizado?: number
+          valor_face?: number
+        }
+        Update: {
+          created_at?: string
+          credor?: string
+          ente_devedor?: string
+          estagio?: string
+          id?: string
+          natureza?: string
+          numero_processo?: string
+          observacoes?: string | null
+          partner_id?: string
+          prazo_estimado_meses?: number
+          tribunal?: string
+          updated_at?: string
+          valor_atualizado?: number
+          valor_face?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "precatorio_leads_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "precatorio_leads_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "v_kyc_monthly_usage"
+            referencedColumns: ["user_id"]
+          },
+        ]
       }
       privacy_consents: {
         Row: {
@@ -3948,6 +6083,64 @@ export type Database = {
           {
             foreignKeyName: "profiles_created_by_fkey"
             columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "v_kyc_monthly_usage"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      proposal_messages: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          metadata: Json
+          proposal_id: string
+          sender_id: string
+          sender_name: string
+          sender_role: string
+          type: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          id?: string
+          metadata?: Json
+          proposal_id: string
+          sender_id: string
+          sender_name: string
+          sender_role: string
+          type?: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          metadata?: Json
+          proposal_id?: string
+          sender_id?: string
+          sender_name?: string
+          sender_role?: string
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "proposal_messages_proposal_id_fkey"
+            columns: ["proposal_id"]
+            isOneToOne: false
+            referencedRelation: "commercial_proposals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "proposal_messages_sender_id_fkey"
+            columns: ["sender_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "proposal_messages_sender_id_fkey"
+            columns: ["sender_id"]
             isOneToOne: false
             referencedRelation: "v_kyc_monthly_usage"
             referencedColumns: ["user_id"]
@@ -4311,6 +6504,221 @@ export type Database = {
         }
         Relationships: []
       }
+      sdr_campanha_contatos: {
+        Row: {
+          aberto_at: string | null
+          campanha_id: string | null
+          email: string
+          enviado_at: string | null
+          erro: string | null
+          id: string
+          nome: string | null
+          status: string | null
+          track_token: string | null
+        }
+        Insert: {
+          aberto_at?: string | null
+          campanha_id?: string | null
+          email: string
+          enviado_at?: string | null
+          erro?: string | null
+          id?: string
+          nome?: string | null
+          status?: string | null
+          track_token?: string | null
+        }
+        Update: {
+          aberto_at?: string | null
+          campanha_id?: string | null
+          email?: string
+          enviado_at?: string | null
+          erro?: string | null
+          id?: string
+          nome?: string | null
+          status?: string | null
+          track_token?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sdr_campanha_contatos_campanha_id_fkey"
+            columns: ["campanha_id"]
+            isOneToOne: false
+            referencedRelation: "sdr_campanhas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sdr_campanhas: {
+        Row: {
+          assunto: string
+          created_at: string | null
+          created_by: string | null
+          enviada_at: string | null
+          id: string
+          nome: string
+          status: string | null
+          template_html: string
+          total_abertos: number | null
+          total_contatos: number | null
+          total_enviados: number | null
+        }
+        Insert: {
+          assunto: string
+          created_at?: string | null
+          created_by?: string | null
+          enviada_at?: string | null
+          id?: string
+          nome: string
+          status?: string | null
+          template_html: string
+          total_abertos?: number | null
+          total_contatos?: number | null
+          total_enviados?: number | null
+        }
+        Update: {
+          assunto?: string
+          created_at?: string | null
+          created_by?: string | null
+          enviada_at?: string | null
+          id?: string
+          nome?: string
+          status?: string | null
+          template_html?: string
+          total_abertos?: number | null
+          total_contatos?: number | null
+          total_enviados?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sdr_campanhas_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sdr_campanhas_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "v_kyc_monthly_usage"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      sdr_config: {
+        Row: {
+          key: string
+          updated_at: string
+          value: string | null
+        }
+        Insert: {
+          key: string
+          updated_at?: string
+          value?: string | null
+        }
+        Update: {
+          key?: string
+          updated_at?: string
+          value?: string | null
+        }
+        Relationships: []
+      }
+      sdr_conversas: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          instance: string
+          phone: string
+          role: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          id?: string
+          instance?: string
+          phone: string
+          role: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          instance?: string
+          phone?: string
+          role?: string
+        }
+        Relationships: []
+      }
+      sdr_leads: {
+        Row: {
+          humano_ativo: boolean | null
+          last_message_at: string | null
+          last_message_preview: string | null
+          nome: string | null
+          phone: string
+          responsavel_id: string | null
+          status: string | null
+          tags: string[] | null
+          updated_at: string | null
+        }
+        Insert: {
+          humano_ativo?: boolean | null
+          last_message_at?: string | null
+          last_message_preview?: string | null
+          nome?: string | null
+          phone: string
+          responsavel_id?: string | null
+          status?: string | null
+          tags?: string[] | null
+          updated_at?: string | null
+        }
+        Update: {
+          humano_ativo?: boolean | null
+          last_message_at?: string | null
+          last_message_preview?: string | null
+          nome?: string | null
+          phone?: string
+          responsavel_id?: string | null
+          status?: string | null
+          tags?: string[] | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sdr_leads_responsavel_id_fkey"
+            columns: ["responsavel_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sdr_leads_responsavel_id_fkey"
+            columns: ["responsavel_id"]
+            isOneToOne: false
+            referencedRelation: "v_kyc_monthly_usage"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      sdr_optouts: {
+        Row: {
+          created_at: string | null
+          email: string
+          motivo: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          email: string
+          motivo?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          email?: string
+          motivo?: string | null
+        }
+        Relationships: []
+      }
       split_fiscal: {
         Row: {
           approved_at: string | null
@@ -4501,6 +6909,68 @@ export type Database = {
           require_socio?: boolean | null
         }
         Relationships: []
+      }
+      tec_acceptances: {
+        Row: {
+          accepted_at: string | null
+          accepted_by: string | null
+          accepted_email: string | null
+          created_at: string
+          expires_at: string
+          id: string
+          ip_address: string | null
+          negativation_clause: string
+          penalty_clause: string
+          proposal_id: string
+          status: string
+          tec_percentage: number
+          token: string
+          updated_at: string
+          user_agent: string | null
+        }
+        Insert: {
+          accepted_at?: string | null
+          accepted_by?: string | null
+          accepted_email?: string | null
+          created_at?: string
+          expires_at?: string
+          id?: string
+          ip_address?: string | null
+          negativation_clause?: string
+          penalty_clause?: string
+          proposal_id: string
+          status?: string
+          tec_percentage: number
+          token?: string
+          updated_at?: string
+          user_agent?: string | null
+        }
+        Update: {
+          accepted_at?: string | null
+          accepted_by?: string | null
+          accepted_email?: string | null
+          created_at?: string
+          expires_at?: string
+          id?: string
+          ip_address?: string | null
+          negativation_clause?: string
+          penalty_clause?: string
+          proposal_id?: string
+          status?: string
+          tec_percentage?: number
+          token?: string
+          updated_at?: string
+          user_agent?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tec_acceptances_proposal_id_fkey"
+            columns: ["proposal_id"]
+            isOneToOne: false
+            referencedRelation: "commercial_proposals"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       ticket_comments: {
         Row: {
@@ -4751,7 +7221,36 @@ export type Database = {
       }
     }
     Functions: {
+      calculate_cm_commission_split: {
+        Args: { p_commission_percent: number; p_valor_face: number }
+        Returns: Json
+      }
+      calculate_cm_financials: {
+        Args: {
+          p_desagio?: number
+          p_prazo_meses?: number
+          p_tir?: number
+          p_valor_face: number
+        }
+        Returns: Json
+      }
+      create_deal_folder: {
+        Args: {
+          p_client_name: string
+          p_deal_code: string
+          p_user_id: string
+          p_vertical: string
+        }
+        Returns: string
+      }
       extractuf: { Args: { p_location: string }; Returns: string }
+      generate_cm_anonymous_id: {
+        Args: {
+          p_asset_type: Database["public"]["Enums"]["cm_asset_type"]
+          p_esfera?: string
+        }
+        Returns: string
+      }
       generate_v3_deal_code: {
         Args: { p_date?: string; p_sector_code: string }
         Returns: string
@@ -4759,6 +7258,20 @@ export type Database = {
       get_user_role: {
         Args: never
         Returns: Database["public"]["Enums"]["user_role"]
+      }
+      match_cm_listings_to_demands: { Args: never; Returns: number }
+      match_deals_for_investor: {
+        Args: { p_demand_id: string }
+        Returns: {
+          deal_id: string
+          reasons: Json
+          score: number
+          setor: string
+          title: string
+          uf: string
+          v3_code: string
+          valor: number
+        }[]
       }
       match_investors_for_deal: {
         Args: { p_deal_id: string }
@@ -4779,10 +7292,37 @@ export type Database = {
           ufs: string[]
         }[]
       }
+      search_documents_rag: {
+        Args: {
+          p_limit?: number
+          p_query_embedding: string
+          p_similarity_threshold?: number
+          p_user_id: string
+          p_vertical?: string
+        }
+        Returns: {
+          chunk_id: string
+          content: string
+          deal_code: string
+          folder_path: string
+          is_pii_masked: boolean
+          similarity: number
+        }[]
+      }
+      transition_cm_listing_status: {
+        Args: {
+          p_listing_id: string
+          p_new_status: Database["public"]["Enums"]["cm_listing_status"]
+          p_reason?: string
+          p_user_id?: string
+        }
+        Returns: boolean
+      }
       user_can_access_team_room: {
         Args: { p_room_id: string; p_user_id: string }
         Returns: boolean
       }
+      validate_folder_path: { Args: { p_path: string }; Returns: boolean }
       vdr_compute_event_hash: {
         Args: {
           p_deal_code: string
@@ -4803,6 +7343,33 @@ export type Database = {
         | "em_analise"
         | "promovido"
         | "descartado"
+      cm_asset_type:
+        | "precatorio"
+        | "direito_creditorio"
+        | "cgi"
+        | "cri"
+        | "fidc"
+        | "outros"
+      cm_bid_status:
+        | "pendente"
+        | "aceita"
+        | "recusada"
+        | "contra_proposta"
+        | "expirada"
+      cm_listing_status:
+        | "reuniao_validada"
+        | "formulario_preenchido"
+        | "nda_assinado"
+        | "em_analise"
+        | "aprovado_head"
+        | "ativo_vitrine"
+        | "proposta_recebida"
+        | "em_escrow_due_diligence"
+        | "liquidado"
+        | "cancelado"
+        | "expirado"
+      cm_payment_type: "a_vista" | "parcelado" | "escrow"
+      cm_tranche_status: "disponivel" | "reservada" | "vendida" | "cancelada"
       credit_desk_level: "NIVEL_1" | "NIVEL_2" | "NIVEL_3"
       deal_stage:
         | "PROSPECTING"
@@ -4837,11 +7404,13 @@ export type Database = {
         | "indicacao"
         | "evento"
         | "inbound"
+        | "whatsapp_audio"
       setor_v3:
         | "credito_recebiveis"
         | "real_estate"
         | "mineracao_commodities"
         | "ma_cross_border"
+        | "outro"
       status_intake: "novo" | "em_analise" | "deal_card_gerado" | "arquivado"
       ticket_priority: "LOW" | "MEDIUM" | "HIGH" | "URGENT"
       tipo_operacao_v3: "venda" | "fusao" | "captacao" | "estruturacao"
@@ -4854,6 +7423,9 @@ export type Database = {
         | "FINANCEIRO"
         | "SDR"
         | "CLOSER"
+        | "STARTER"
+        | "ENTERPRISE"
+        | "INSTITUICAO"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -4990,6 +7562,36 @@ export const Constants = {
         "promovido",
         "descartado",
       ],
+      cm_asset_type: [
+        "precatorio",
+        "direito_creditorio",
+        "cgi",
+        "cri",
+        "fidc",
+        "outros",
+      ],
+      cm_bid_status: [
+        "pendente",
+        "aceita",
+        "recusada",
+        "contra_proposta",
+        "expirada",
+      ],
+      cm_listing_status: [
+        "reuniao_validada",
+        "formulario_preenchido",
+        "nda_assinado",
+        "em_analise",
+        "aprovado_head",
+        "ativo_vitrine",
+        "proposta_recebida",
+        "em_escrow_due_diligence",
+        "liquidado",
+        "cancelado",
+        "expirado",
+      ],
+      cm_payment_type: ["a_vista", "parcelado", "escrow"],
+      cm_tranche_status: ["disponivel", "reservada", "vendida", "cancelada"],
       credit_desk_level: ["NIVEL_1", "NIVEL_2", "NIVEL_3"],
       deal_stage: [
         "PROSPECTING",
@@ -5027,12 +7629,14 @@ export const Constants = {
         "indicacao",
         "evento",
         "inbound",
+        "whatsapp_audio",
       ],
       setor_v3: [
         "credito_recebiveis",
         "real_estate",
         "mineracao_commodities",
         "ma_cross_border",
+        "outro",
       ],
       status_intake: ["novo", "em_analise", "deal_card_gerado", "arquivado"],
       ticket_priority: ["LOW", "MEDIUM", "HIGH", "URGENT"],
@@ -5046,6 +7650,9 @@ export const Constants = {
         "FINANCEIRO",
         "SDR",
         "CLOSER",
+        "STARTER",
+        "ENTERPRISE",
+        "INSTITUICAO",
       ],
     },
   },
