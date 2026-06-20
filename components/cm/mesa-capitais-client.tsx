@@ -72,6 +72,9 @@ export function MesaCapitaisClient() {
   const [docsLoading, setDocsLoading] = useState(false);
   const [intakeUrl, setIntakeUrl] = useState<string | null>(null);
   const [generatingLink, setGeneratingLink] = useState(false);
+  const [dealRoomUrl, setDealRoomUrl] = useState<string | null>(null);
+  const [creatingRoom, setCreatingRoom] = useState(false);
+  const [roomInvites, setRoomInvites] = useState<any[]>([]);
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
@@ -125,10 +128,41 @@ export function MesaCapitaisClient() {
     finally { setUploadingDoc(null); }
   };
 
+  const createDealRoom = async (listingId: string) => {
+    setCreatingRoom(true);
+    setDealRoomUrl(null);
+    try {
+      const res = await fetch("/api/cm/deal-room", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ listing_id: listingId, expires_days: 30 }),
+      });
+      const json = await res.json();
+      if (res.ok) {
+        setDealRoomUrl(json.url);
+        loadRoomInvites(listingId);
+      } else {
+        alert(json.error ?? "Erro ao criar Deal Room");
+      }
+    } catch { alert("Erro de conexão"); }
+    finally { setCreatingRoom(false); }
+  };
+
+  const loadRoomInvites = async (listingId: string) => {
+    try {
+      const res = await fetch(`/api/cm/deal-room?listing_id=${listingId}`);
+      const json = await res.json();
+      setRoomInvites(json.invites ?? []);
+    } catch { setRoomInvites([]); }
+  };
+
   const openListingDetail = async (listing: Listing) => {
     setSelectedListing(listing);
     setIntakeUrl(null);
+    setDealRoomUrl(null);
+    setRoomInvites([]);
     setDocsLoading(true);
+    loadRoomInvites(listing.id);
     try {
       const res = await fetch(`/api/cm/listings/${listing.id}/documents`);
       const json = await res.json();
@@ -430,6 +464,39 @@ export function MesaCapitaisClient() {
               >
                 <Bot size={16} /> Assistente do Ativo (IA)
               </button>
+              <button
+                onClick={() => createDealRoom(selectedListing.id)}
+                disabled={creatingRoom}
+                className="w-full flex items-center gap-3 px-4 py-3 bg-[#162744] border border-[#9BAFC5]/15 rounded-lg text-[#F5F1E8] text-xs font-bold hover:bg-[#162744]/80 transition disabled:opacity-50"
+              >
+                {creatingRoom ? <Loader2 size={16} className="animate-spin" /> : <Shield size={16} />}
+                Criar Deal Room (Comprador)
+              </button>
+              {dealRoomUrl && (
+                <div className="bg-[#162744] border border-emerald-500/20 rounded-lg p-3">
+                  <div className="text-[9px] text-emerald-400 font-bold uppercase mb-1">Link Deal Room</div>
+                  <div className="flex items-center gap-2">
+                    <input readOnly value={dealRoomUrl} className="flex-1 bg-[#09081A] border border-[#9BAFC5]/10 rounded px-2 py-1.5 text-[10px] text-[#F5F1E8] truncate" />
+                    <button onClick={() => { navigator.clipboard.writeText(dealRoomUrl); alert("Link copiado!"); }} className="p-1.5 bg-emerald-500/10 rounded hover:bg-emerald-500/20 transition">
+                      <Copy size={12} className="text-emerald-400" />
+                    </button>
+                  </div>
+                  <p className="text-[9px] text-[#9BAFC5] mt-1.5">Comprador precisa aceitar NDA antes de ver documentos. Expira em 30 dias.</p>
+                </div>
+              )}
+              {roomInvites.length > 0 && (
+                <div className="bg-[#12112A] border border-[#9BAFC5]/10 rounded-lg p-3">
+                  <div className="text-[9px] text-[#C9A84C] font-bold uppercase mb-2">Convites Ativos ({roomInvites.length})</div>
+                  {roomInvites.slice(0, 5).map((inv: any) => (
+                    <div key={inv.id} className="flex items-center justify-between py-1 text-[10px]">
+                      <span className="text-[#F5F1E8]">{inv.buyer_name || inv.buyer_email || "Sem nome"}</span>
+                      <span className={inv.nda_accepted ? "text-emerald-400" : "text-[#9BAFC5]"}>
+                        {inv.nda_accepted ? "NDA aceito" : "Pendente"}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
               <label className="w-full flex items-center gap-3 px-4 py-3 bg-[#162744] border border-[#9BAFC5]/15 rounded-lg text-[#9BAFC5] text-xs font-bold hover:bg-[#162744]/80 transition cursor-pointer">
                 {uploadingDoc === selectedListing.id ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
                 Upload Documento / Audio
