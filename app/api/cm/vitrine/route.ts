@@ -6,10 +6,17 @@ function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 }
 
+function isCronCall(req: NextRequest): boolean {
+  const auth = req.headers.get("authorization");
+  return !!auth && auth === `Bearer ${process.env.CRON_SECRET}`;
+}
+
 export async function GET(req: NextRequest) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+  if (!isCronCall(req)) {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+  }
 
   const { searchParams } = new URL(req.url);
   const assetType = searchParams.get("asset_type");

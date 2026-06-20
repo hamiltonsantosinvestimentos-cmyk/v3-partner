@@ -9,6 +9,11 @@ function svc() {
 
 const ADMIN_ROLES = ["ADMIN", "GESTAO"];
 
+function isCronCall(req: NextRequest): boolean {
+  const auth = req.headers.get("authorization");
+  return !!auth && auth === `Bearer ${process.env.CRON_SECRET}`;
+}
+
 async function getCallerRole(req: NextRequest) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -19,8 +24,11 @@ async function getCallerRole(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const caller = await getCallerRole(req);
-  if (!caller) return NextResponse.json({ error: "Não autorizado — apenas ADMIN/GESTAO" }, { status: 401 });
+  const cron = isCronCall(req);
+  if (!cron) {
+    const caller = await getCallerRole(req);
+    if (!caller) return NextResponse.json({ error: "Não autorizado — apenas ADMIN/GESTAO" }, { status: 401 });
+  }
 
   const { data: matchCount } = await svc().rpc("match_cm_listings_to_demands");
 
