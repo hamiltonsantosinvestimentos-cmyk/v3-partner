@@ -66,6 +66,9 @@ export function MesaCapitaisClient() {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [assistantListing, setAssistantListing] = useState<{ id: string; anonymous_id: string } | null>(null);
   const [uploadingDoc, setUploadingDoc] = useState<string | null>(null);
+  const [selectedListing, setSelectedListing] = useState<Listing | null>(null);
+  const [listingDocs, setListingDocs] = useState<any[]>([]);
+  const [docsLoading, setDocsLoading] = useState(false);
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
@@ -117,6 +120,30 @@ export function MesaCapitaisClient() {
       }
     } catch { alert("Erro de conexão"); }
     finally { setUploadingDoc(null); }
+  };
+
+  const openListingDetail = async (listing: Listing) => {
+    setSelectedListing(listing);
+    setDocsLoading(true);
+    try {
+      const res = await fetch(`/api/cm/listings/${listing.id}/documents`);
+      const json = await res.json();
+      setListingDocs(json.documents ?? []);
+    } catch { setListingDocs([]); }
+    finally { setDocsLoading(false); }
+  };
+
+  const handleStatusTransition = async (listingId: string, newStatus: string) => {
+    try {
+      const res = await fetch(`/api/cm/listings/${listingId}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ new_status: newStatus }),
+      });
+      const json = await res.json();
+      if (res.ok) { alert("Status atualizado"); fetchAll(); setSelectedListing(null); }
+      else alert(json.error ?? "Erro ao transicionar status");
+    } catch { alert("Erro de conexão"); }
   };
 
   const handleBidAction = async (bidId: string, action: string, commissionPercent = 7) => {
@@ -206,7 +233,7 @@ export function MesaCapitaisClient() {
                 </div>
                 <div className="bg-[#09081A]/50 rounded-b-lg p-2 min-h-[200px] space-y-2">
                   {items.map((l) => (
-                    <div key={l.id} className="bg-[#12112A] border border-[#9BAFC5]/10 rounded-md p-3">
+                    <div key={l.id} onClick={() => openListingDetail(l)} className="bg-[#12112A] border border-[#9BAFC5]/10 rounded-md p-3 cursor-pointer hover:border-[#C9A84C]/30 transition">
                       <div className="text-[9px] text-[#C9A84C] font-bold">{l.anonymous_id}</div>
                       <div className="text-xs text-[#F5F1E8] font-semibold">{formatBRL(Number(l.valor_face))}</div>
                       {l.risk_score && (
@@ -217,25 +244,9 @@ export function MesaCapitaisClient() {
                       {(l.cm_bids?.[0] as any)?.count > 0 && (
                         <div className="text-[9px] text-orange-400 mt-1">{(l.cm_bids[0] as any).count} proposta(s)</div>
                       )}
-                      <div className="flex gap-1 mt-2">
-                        <button
-                          onClick={() => setAssistantListing({ id: l.id, anonymous_id: l.anonymous_id })}
-                          title="Assistente do Ativo"
-                          className="flex-1 flex items-center justify-center gap-1 px-1 py-1 bg-[#C9A84C]/10 border border-[#C9A84C]/20 rounded text-[#C9A84C] text-[8px] font-bold hover:bg-[#C9A84C]/20 transition"
-                        >
-                          <Bot size={10} /> IA
-                        </button>
-                        <label
-                          title="Upload doc ou áudio"
-                          className="flex-1 flex items-center justify-center gap-1 px-1 py-1 bg-[#162744] border border-[#9BAFC5]/15 rounded text-[#9BAFC5] text-[8px] font-bold hover:bg-[#162744]/80 transition cursor-pointer"
-                        >
-                          {uploadingDoc === l.id ? <Loader2 size={10} className="animate-spin" /> : <Upload size={10} />}
-                          Doc
-                          <input type="file" className="hidden" accept=".pdf,.mp3,.ogg,.wav,.m4a,.webm,.jpg,.png"
-                            onChange={(e) => { if (e.target.files?.[0]) handleUploadDoc(l.id, e.target.files[0]); }}
-                          />
-                        </label>
-                      </div>
+                      {Number((l.cm_listing_documents?.[0] as any)?.count) > 0 && (
+                        <div className="text-[9px] text-[#9BAFC5] mt-1">{(l.cm_listing_documents[0] as any).count} doc(s)</div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -318,6 +329,109 @@ export function MesaCapitaisClient() {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Painel Lateral — Detalhe do Listing */}
+      {selectedListing && (
+        <div className="fixed inset-0 z-40 flex justify-end bg-black/50" onClick={() => setSelectedListing(null)}>
+          <div className="w-full max-w-md bg-[#09081A] border-l border-[#C9A84C]/20 h-full overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="p-5 border-b border-[#C9A84C]/20 flex items-center justify-between">
+              <div>
+                <div className="text-[10px] text-[#C9A84C] font-bold tracking-wider">{selectedListing.anonymous_id}</div>
+                <div className="text-lg font-bold text-[#F5F1E8]">{formatBRL(Number(selectedListing.valor_face))}</div>
+                <div className="text-xs text-[#9BAFC5] mt-1">Status: <span className="text-[#F5F1E8]">{selectedListing.listing_status.replace(/_/g, " ")}</span></div>
+              </div>
+              <button onClick={() => setSelectedListing(null)} className="text-[#9BAFC5] hover:text-[#F5F1E8] text-xl">&times;</button>
+            </div>
+
+            {/* KPIs do Ativo */}
+            <div className="grid grid-cols-3 gap-2 p-4">
+              <div className="bg-[#12112A] rounded-lg p-3 text-center">
+                <div className={cn("text-lg font-bold", selectedListing.risk_score && selectedListing.risk_score >= 70 ? "text-emerald-400" : selectedListing.risk_score && selectedListing.risk_score >= 50 ? "text-[#C9A84C]" : "text-red-400")}>{selectedListing.risk_score ?? "—"}</div>
+                <div className="text-[8px] text-[#9BAFC5] uppercase">Score</div>
+              </div>
+              <div className="bg-[#12112A] rounded-lg p-3 text-center">
+                <div className="text-lg font-bold text-[#C9A84C]">{selectedListing.desagio_pretendido ?? "—"}%</div>
+                <div className="text-[8px] text-[#9BAFC5] uppercase">Desagio</div>
+              </div>
+              <div className="bg-[#12112A] rounded-lg p-3 text-center">
+                <div className="text-lg font-bold text-[#F5F1E8]">{(selectedListing.cm_bids?.[0] as any)?.count ?? 0}</div>
+                <div className="text-[8px] text-[#9BAFC5] uppercase">Propostas</div>
+              </div>
+            </div>
+
+            {/* Acoes */}
+            <div className="px-4 space-y-2">
+              <div className="text-[10px] text-[#C9A84C] font-bold uppercase tracking-wider mb-2">Acoes</div>
+              <button
+                onClick={() => { setAssistantListing({ id: selectedListing.id, anonymous_id: selectedListing.anonymous_id }); }}
+                className="w-full flex items-center gap-3 px-4 py-3 bg-[#C9A84C]/10 border border-[#C9A84C]/20 rounded-lg text-[#C9A84C] text-xs font-bold hover:bg-[#C9A84C]/20 transition"
+              >
+                <Bot size={16} /> Assistente do Ativo (IA)
+              </button>
+              <label className="w-full flex items-center gap-3 px-4 py-3 bg-[#162744] border border-[#9BAFC5]/15 rounded-lg text-[#9BAFC5] text-xs font-bold hover:bg-[#162744]/80 transition cursor-pointer">
+                {uploadingDoc === selectedListing.id ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
+                Upload Documento / Audio
+                <input type="file" className="hidden" accept=".pdf,.mp3,.ogg,.wav,.m4a,.webm,.jpg,.png,.jpeg"
+                  onChange={(e) => { if (e.target.files?.[0]) handleUploadDoc(selectedListing.id, e.target.files[0]); }}
+                />
+              </label>
+            </div>
+
+            {/* Transicoes de Status */}
+            <div className="px-4 mt-4 space-y-2">
+              <div className="text-[10px] text-[#C9A84C] font-bold uppercase tracking-wider mb-2">Transicionar Status</div>
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { from: "reuniao_validada", to: "formulario_preenchido", label: "Formulario OK" },
+                  { from: "formulario_preenchido", to: "nda_assinado", label: "NDA Assinado" },
+                  { from: "nda_assinado", to: "em_analise", label: "Iniciar Analise" },
+                  { from: "em_analise", to: "aprovado_head", label: "Aprovar (Head)" },
+                  { from: "aprovado_head", to: "ativo_vitrine", label: "Publicar Vitrine" },
+                ].filter((t) => t.from === selectedListing.listing_status).map((t) => (
+                  <button key={t.to} onClick={() => handleStatusTransition(selectedListing.id, t.to)}
+                    className="px-3 py-2 bg-emerald-600/20 border border-emerald-500/30 rounded-lg text-emerald-400 text-xs font-bold hover:bg-emerald-600/30 transition">
+                    {t.label} &rarr;
+                  </button>
+                ))}
+                <button onClick={() => handleStatusTransition(selectedListing.id, "cancelado")}
+                  className="px-3 py-2 bg-red-600/10 border border-red-500/20 rounded-lg text-red-400 text-xs hover:bg-red-600/20 transition">
+                  Cancelar
+                </button>
+              </div>
+            </div>
+
+            {/* Documentos */}
+            <div className="px-4 mt-4 pb-6">
+              <div className="text-[10px] text-[#C9A84C] font-bold uppercase tracking-wider mb-2">Documentos ({listingDocs.length})</div>
+              {docsLoading ? (
+                <div className="flex justify-center py-4"><Loader2 size={16} className="animate-spin text-[#C9A84C]" /></div>
+              ) : listingDocs.length === 0 ? (
+                <div className="text-xs text-[#9BAFC5] py-4 text-center">Nenhum documento anexado</div>
+              ) : (
+                <div className="space-y-2">
+                  {listingDocs.map((doc: any) => (
+                    <div key={doc.id} className="bg-[#12112A] border border-[#9BAFC5]/10 rounded-lg p-3">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="text-xs text-[#F5F1E8] font-medium">{doc.original_filename ?? "Documento"}</div>
+                          <div className="text-[10px] text-[#9BAFC5]">{doc.document_type} &middot; {doc.validation_status}</div>
+                        </div>
+                        {doc.document_type === "AUDIO" && <Mic size={14} className="text-[#C9A84C]" />}
+                      </div>
+                      {doc.ocr_result && (
+                        <div className="mt-2 p-2 bg-[#09081A] rounded text-[10px] text-[#9BAFC5] max-h-24 overflow-y-auto">
+                          {typeof doc.ocr_result === "string" ? doc.ocr_result.substring(0, 300) : (doc.ocr_result.transcription ?? JSON.stringify(doc.ocr_result)).substring(0, 300)}
+                          {(typeof doc.ocr_result === "string" ? doc.ocr_result : JSON.stringify(doc.ocr_result)).length > 300 && "..."}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       )}
 
