@@ -5,7 +5,7 @@ import {
   BarChart3, Users, Gavel, DollarSign, Play,
   Loader2, AlertTriangle, CheckCircle2, Clock,
   ArrowRight, RefreshCw, Shield, Bot, Upload, Mic,
-  Link2, Copy, Plus,
+  Link2, Copy, Plus, FileText,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AssetAssistant } from "./asset-assistant";
@@ -75,6 +75,9 @@ export function MesaCapitaisClient() {
   const [dealRoomUrl, setDealRoomUrl] = useState<string | null>(null);
   const [creatingRoom, setCreatingRoom] = useState(false);
   const [roomInvites, setRoomInvites] = useState<any[]>([]);
+  const [contractTemplates, setContractTemplates] = useState<any[]>([]);
+  const [generatingContract, setGeneratingContract] = useState(false);
+  const [contractResult, setContractResult] = useState<any>(null);
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
@@ -156,13 +159,43 @@ export function MesaCapitaisClient() {
     } catch { setRoomInvites([]); }
   };
 
+  const loadContractTemplates = async () => {
+    try {
+      const res = await fetch("/api/contracts/templates?vertical=capital_markets");
+      const json = await res.json();
+      setContractTemplates(json.templates ?? []);
+    } catch { setContractTemplates([]); }
+  };
+
+  const generateContract = async (listingId: string, templateId: string) => {
+    setGeneratingContract(true);
+    setContractResult(null);
+    try {
+      const res = await fetch("/api/contracts/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ template_id: templateId, listing_id: listingId, commission_percent: 7 }),
+      });
+      const json = await res.json();
+      if (res.ok) {
+        setContractResult(json);
+        alert(`Contrato "${json.contract.contract_title}" gerado (${json.variables_resolved} variaveis injetadas)`);
+      } else {
+        alert(json.error ?? "Erro ao gerar contrato");
+      }
+    } catch { alert("Erro de conexão"); }
+    finally { setGeneratingContract(false); }
+  };
+
   const openListingDetail = async (listing: Listing) => {
     setSelectedListing(listing);
     setIntakeUrl(null);
     setDealRoomUrl(null);
     setRoomInvites([]);
+    setContractResult(null);
     setDocsLoading(true);
     loadRoomInvites(listing.id);
+    loadContractTemplates();
     try {
       const res = await fetch(`/api/cm/listings/${listing.id}/documents`);
       const json = await res.json();
@@ -495,6 +528,24 @@ export function MesaCapitaisClient() {
                       </span>
                     </div>
                   ))}
+                </div>
+              )}
+              {contractTemplates.length > 0 && (
+                <div className="bg-[#12112A] border border-[#9BAFC5]/10 rounded-lg p-3">
+                  <div className="text-[9px] text-[#C9A84C] font-bold uppercase mb-2">Gerar Contrato</div>
+                  {contractTemplates.map((t: any) => (
+                    <button key={t.id} onClick={() => generateContract(selectedListing.id, t.id)}
+                      disabled={generatingContract}
+                      className="w-full flex items-center gap-2 px-3 py-2 mb-1 bg-[#162744] border border-[#9BAFC5]/10 rounded-md text-[#F5F1E8] text-[11px] font-medium hover:border-[#C9A84C]/30 transition disabled:opacity-50">
+                      {generatingContract ? <Loader2 size={12} className="animate-spin" /> : <FileText size={12} className="text-[#C9A84C]" />}
+                      {t.template_name}
+                    </button>
+                  ))}
+                  {contractResult && (
+                    <div className="mt-2 p-2 bg-emerald-500/10 border border-emerald-500/20 rounded text-[10px] text-emerald-400">
+                      Contrato gerado: {contractResult.contract?.contract_title} · Status: {contractResult.contract?.status_signature}
+                    </div>
+                  )}
                 </div>
               )}
               <label className="w-full flex items-center gap-3 px-4 py-3 bg-[#162744] border border-[#9BAFC5]/15 rounded-lg text-[#9BAFC5] text-xs font-bold hover:bg-[#162744]/80 transition cursor-pointer">
