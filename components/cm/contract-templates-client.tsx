@@ -35,7 +35,7 @@ const VERTICAL_COLORS: Record<string, string> = {
   colaboradores: "bg-pink-500 text-white",
 };
 
-const SAMPLE_VARS = `Variaveis disponiveis (use entre {{chaves}}):
+const SAMPLE_VARS = `Variáveis disponíveis (use entre {{chaves}}):
 
 CEDENTE: {{nome_cedente}}, {{cpf_cnpj_cedente}}
 ATIVO: {{tipo_ativo}}, {{anonymous_id}}, {{ente_devedor}}, {{esfera}}, {{tribunal}}, {{natureza}}, {{numero_processo}}
@@ -126,7 +126,7 @@ export function ContractTemplatesClient() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-[#F5F1E8]">Central de Contratos</h1>
-          <p className="text-sm text-[#9BAFC5]">Biblioteca de minutas com injecao automatica de variaveis</p>
+          <p className="text-sm text-[#9BAFC5]">Biblioteca de minutas com injeção automática de variáveis</p>
         </div>
         <button onClick={startNew} className="flex items-center gap-2 px-4 py-2 bg-[#C9A84C] text-[#09081A] rounded-lg text-sm font-bold hover:bg-[#E8C97A] transition">
           <Plus size={16} /> Nova Minuta
@@ -150,7 +150,7 @@ export function ContractTemplatesClient() {
           {loading ? (
             <div className="flex justify-center py-12"><Loader2 className="animate-spin text-[#C9A84C]" /></div>
           ) : templates.length === 0 ? (
-            <div className="text-center py-12 text-[#9BAFC5] text-sm">Nenhuma minuta cadastrada.</div>
+            <div className="text-center py-12 text-[#9BAFC5] text-sm">Nenhuma minuta cadastrada</div>
           ) : templates.map((t) => (
             <div key={t.id} onClick={() => selectTemplate(t)}
               className={cn("bg-[#12112A] border rounded-lg p-4 cursor-pointer transition",
@@ -164,7 +164,7 @@ export function ContractTemplatesClient() {
               </div>
               <div className="text-sm font-bold text-[#F5F1E8]">{t.template_name}</div>
               <div className="text-[10px] text-[#9BAFC5] mt-1">
-                {(t.variables_map?.length ?? 0)} variaveis · {new Date(t.created_at).toLocaleDateString("pt-BR")}
+                {(t.variables_map?.length ?? 0)} variáveis · {new Date(t.created_at).toLocaleDateString("pt-BR")}
               </div>
             </div>
           ))}
@@ -216,7 +216,7 @@ export function ContractTemplatesClient() {
 
               <textarea value={formBody} onChange={(e) => setFormBody(e.target.value)}
                 className="w-full bg-[#162744] border border-[#9BAFC5]/15 rounded-lg px-4 py-3 text-sm text-[#F5F1E8] focus:border-[#C9A84C]/50 focus:outline-none font-mono min-h-[350px] resize-y"
-                placeholder="Digite o texto da minuta usando {{variaveis}} entre chaves..." />
+                placeholder="Digite o texto da minuta usando {{variáveis}} entre chaves..." />
 
               {detectedVars.length > 0 && (
                 <div className="mt-2 flex flex-wrap gap-1">
@@ -240,7 +240,7 @@ export function ContractTemplatesClient() {
                 <button onClick={handleSave} disabled={saving || !formName || !formBody}
                   className="flex items-center gap-2 px-6 py-2.5 bg-[#C9A84C] text-[#09081A] rounded-lg text-sm font-bold hover:bg-[#E8C97A] disabled:opacity-40 transition">
                   {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-                  {isNew ? "Criar Minuta" : "Salvar Alteracoes"}
+                  {isNew ? "Criar Minuta" : "Salvar Alterações"}
                 </button>
               </div>
             </div>

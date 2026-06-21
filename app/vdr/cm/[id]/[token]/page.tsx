@@ -51,14 +51,14 @@ export default function CmDealRoomPage() {
         {state === "loading" && (
           <div className="flex flex-col items-center justify-center min-h-[50vh]">
             <Loader2 className="w-8 h-8 animate-spin text-[#C9A84C] mb-4" />
-            <p className="text-sm text-[#9BAFC5]">Carregando Deal Room...</p>
+            <p className="text-sm text-[#9BAFC5]">Carregando Deal Room</p>
           </div>
         )}
 
         {state === "error" && (
           <div className="flex flex-col items-center justify-center min-h-[50vh] text-center">
             <AlertTriangle className="w-12 h-12 text-red-400 mb-4" />
-            <h2 className="text-xl font-bold text-[#F5F1E8] mb-2">Acesso Indisponível</h2>
+            <h2 className="text-xl font-bold text-[#F5F1E8] mb-2">Acesso indisponível</h2>
             <p className="text-sm text-[#9BAFC5]">{errorMsg}</p>
             <p className="text-xs text-[#9BAFC5]/50 mt-6">Entre em contato: deal@v3partners.com.br</p>
           </div>

@@ -179,7 +179,7 @@ export function MesaCapitaisClient() {
       const json = await res.json();
       if (res.ok) {
         setContractResult(json);
-        alert(`Contrato "${json.contract.contract_title}" gerado (${json.variables_resolved} variaveis injetadas)`);
+        alert(`Contrato "${json.contract.contract_title}" gerado (${json.variables_resolved} variáveis injetadas)`);
       } else {
         alert(json.error ?? "Erro ao gerar contrato");
       }
@@ -460,7 +460,7 @@ export function MesaCapitaisClient() {
               </div>
               <div className="bg-[#12112A] rounded-lg p-3 text-center">
                 <div className="text-lg font-bold text-[#C9A84C]">{selectedListing.desagio_pretendido ?? "—"}%</div>
-                <div className="text-[8px] text-[#9BAFC5] uppercase">Desagio</div>
+                <div className="text-[8px] text-[#9BAFC5] uppercase">Deságio</div>
               </div>
               <div className="bg-[#12112A] rounded-lg p-3 text-center">
                 <div className="text-lg font-bold text-[#F5F1E8]">{(selectedListing.cm_bids?.[0] as any)?.count ?? 0}</div>
@@ -468,9 +468,9 @@ export function MesaCapitaisClient() {
               </div>
             </div>
 
-            {/* Acoes */}
+            {/* Ações */}
             <div className="px-4 space-y-2">
-              <div className="text-[10px] text-[#C9A84C] font-bold uppercase tracking-wider mb-2">Acoes</div>
+              <div className="text-[10px] text-[#C9A84C] font-bold uppercase tracking-wider mb-2">Ações</div>
               <button
                 onClick={() => { generateIntakeLink(selectedListing.id); }}
                 disabled={generatingLink}
@@ -488,7 +488,7 @@ export function MesaCapitaisClient() {
                       <Copy size={12} className="text-[#C9A84C]" />
                     </button>
                   </div>
-                  <p className="text-[9px] text-[#9BAFC5] mt-1.5">Envie este link ao cedente. Formulario publico, sem login.</p>
+                  <p className="text-[9px] text-[#9BAFC5] mt-1.5">Envie este link ao cedente. Formulário público, sem login.</p>
                 </div>
               )}
               <button
@@ -559,12 +559,12 @@ export function MesaCapitaisClient() {
 
             {/* Transicoes de Status */}
             <div className="px-4 mt-4 space-y-2">
-              <div className="text-[10px] text-[#C9A84C] font-bold uppercase tracking-wider mb-2">Transicionar Status</div>
+              <div className="text-[10px] text-[#C9A84C] font-bold uppercase tracking-wider mb-2">Transição de Status</div>
               <div className="flex flex-wrap gap-2">
                 {[
-                  { from: "reuniao_validada", to: "formulario_preenchido", label: "Formulario OK" },
+                  { from: "reuniao_validada", to: "formulario_preenchido", label: "Formulário OK" },
                   { from: "formulario_preenchido", to: "nda_assinado", label: "NDA Assinado" },
-                  { from: "nda_assinado", to: "em_analise", label: "Iniciar Analise" },
+                  { from: "nda_assinado", to: "em_analise", label: "Iniciar Análise" },
                   { from: "em_analise", to: "aprovado_head", label: "Aprovar (Head)" },
                   { from: "aprovado_head", to: "ativo_vitrine", label: "Publicar Vitrine" },
                 ].filter((t) => t.from === selectedListing.listing_status).map((t) => (

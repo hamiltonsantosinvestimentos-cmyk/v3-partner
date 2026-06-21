@@ -8,7 +8,7 @@ const STEPS = [
   { label: "Ativo", key: "ativo" },
   { label: "Financeiro", key: "financeiro" },
   { label: "Documentos", key: "documentos" },
-  { label: "NDA e Envio", key: "nda" },
+  { label: "NDA e envio", key: "nda" },
 ];
 
 const ASSET_TYPES = [
@@ -88,7 +88,7 @@ export function IntakeWizard({ token, prefill, anonymousId }: IntakeWizardProps)
         <div className="w-16 h-16 rounded-full bg-emerald-500/20 flex items-center justify-center mb-6">
           <CheckCircle2 className="w-8 h-8 text-emerald-400" />
         </div>
-        <h2 className="text-2xl font-bold text-[#F5F1E8] mb-3">Formulário Enviado</h2>
+        <h2 className="text-2xl font-bold text-[#F5F1E8] mb-3">Formulário enviado</h2>
         <p className="text-[#9BAFC5] max-w-md">
           Seus dados foram recebidos pela equipe V3 Partners. Entraremos em contato para dar andamento à análise do seu ativo.
         </p>

@@ -58,14 +58,14 @@ export default function CmIntakePage() {
         {state === "loading" && (
           <div className="flex flex-col items-center justify-center min-h-[50vh]">
             <Loader2 className="w-8 h-8 animate-spin text-[#C9A84C] mb-4" />
-            <p className="text-sm text-[#9BAFC5]">Carregando formulário...</p>
+            <p className="text-sm text-[#9BAFC5]">Carregando formulário</p>
           </div>
         )}
 
         {state === "error" && (
           <div className="flex flex-col items-center justify-center min-h-[50vh] text-center">
             <AlertTriangle className="w-12 h-12 text-red-400 mb-4" />
-            <h2 className="text-xl font-bold text-[#F5F1E8] mb-2">Link Inválido</h2>
+            <h2 className="text-xl font-bold text-[#F5F1E8] mb-2">Link inválido</h2>
             <p className="text-sm text-[#9BAFC5]">{errorMsg}</p>
             <p className="text-xs text-[#9BAFC5]/50 mt-6">Entre em contato: deal@v3partners.com.br</p>
           </div>
@@ -76,7 +76,7 @@ export default function CmIntakePage() {
             <div className="w-16 h-16 rounded-full bg-[#C9A84C]/10 flex items-center justify-center mb-6">
               <AlertTriangle className="w-8 h-8 text-[#C9A84C]" />
             </div>
-            <h2 className="text-xl font-bold text-[#F5F1E8] mb-2">Formulário Já Enviado</h2>
+            <h2 className="text-xl font-bold text-[#F5F1E8] mb-2">Formulário já enviado</h2>
             <p className="text-sm text-[#9BAFC5] max-w-md">{errorMsg}</p>
             <p className="text-xs text-[#9BAFC5]/50 mt-6">Entre em contato: deal@v3partners.com.br</p>
           </div>

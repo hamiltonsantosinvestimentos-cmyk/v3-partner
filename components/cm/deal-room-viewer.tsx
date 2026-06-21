@@ -45,14 +45,14 @@ export function DealRoomViewer({ token, initialData }: DealRoomViewerProps) {
         <h2 className="text-xl font-bold text-[#F5F1E8] mb-2">Termo de Confidencialidade</h2>
         <p className="text-sm text-[#9BAFC5] mb-6">
           Para acessar os documentos do ativo <span className="text-[#C9A84C] font-bold">{data.listing?.anonymous_id}</span>,
-          e necessario aceitar o termo de confidencialidade.
+          é necessário aceitar o termo de confidencialidade.
         </p>
 
         <div className="bg-[#162744] border border-[#9BAFC5]/10 rounded-lg p-6 mb-6 text-left max-h-[250px] overflow-y-auto text-xs text-[#9BAFC5]/80 leading-relaxed">
-          <p className="mb-3">Pelo presente termo, declaro que manterei em sigilo absoluto todas as informacoes acessadas nesta sala de documentos, incluindo dados financeiros, juridicos e operacionais do ativo identificado pelo codigo {data.listing?.anonymous_id}.</p>
-          <p className="mb-3">Comprometo-me a nao divulgar, compartilhar ou utilizar as informacoes para qualquer finalidade diferente da analise de viabilidade da operacao de cessao/aquisicao proposta pela V3 Partners Solucoes Ltda (CNPJ 14.219.287/0001-50).</p>
-          <p className="mb-3">O descumprimento deste termo sujeita o infrator as penalidades previstas em lei, incluindo indenizacao por perdas e danos.</p>
-          <p>Os dados de acesso (IP, data, horario) serao registrados para fins de auditoria e compliance, conforme LGPD Art. 7, inc. V.</p>
+          <p className="mb-3">Pelo presente termo, declaro que manterei em sigilo absoluto todas as informações acessadas nesta sala de documentos, incluindo dados financeiros, jurídicos e operacionais do ativo identificado pelo código {data.listing?.anonymous_id}.</p>
+          <p className="mb-3">Comprometo-me a não divulgar, compartilhar ou utilizar as informações para qualquer finalidade diferente da análise de viabilidade da operação de cessão/aquisição proposta pela V3 Partners Soluções Ltda (CNPJ 14.219.287/0001-50).</p>
+          <p className="mb-3">O descumprimento deste termo sujeita o infrator às penalidades previstas em lei, incluindo indenização por perdas e danos.</p>
+          <p>Os dados de acesso (IP, data, horário) serão registrados para fins de auditoria e compliance, conforme LGPD Art. 7, inc. V.</p>
         </div>
 
         {error && <p className="text-sm text-red-400 mb-4">{error}</p>}
@@ -112,7 +112,7 @@ export function DealRoomViewer({ token, initialData }: DealRoomViewerProps) {
       </div>
       {(!data.documents || data.documents.length === 0) ? (
         <div className="text-center py-12 text-[#9BAFC5] text-sm">
-          Nenhum documento disponivel nesta sala.
+          Nenhum documento disponível nesta sala.
         </div>
       ) : (
         <div className="space-y-2">
