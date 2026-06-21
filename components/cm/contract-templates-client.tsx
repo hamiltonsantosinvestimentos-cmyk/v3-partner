@@ -19,12 +19,20 @@ const VERTICAL_LABELS: Record<string, string> = {
   capital_markets: "Bolsa de Ativos",
   credito: "Mesa de Credito",
   ma: "M&A",
+  institucional: "Institucional",
+  clientes: "Clientes / Partners",
+  talent_pool: "Talent Pool",
+  colaboradores: "Colaboradores",
 };
 
 const VERTICAL_COLORS: Record<string, string> = {
   capital_markets: "bg-[#C9A84C] text-[#09081A]",
   credito: "bg-emerald-500 text-white",
   ma: "bg-blue-500 text-white",
+  institucional: "bg-purple-500 text-white",
+  clientes: "bg-orange-500 text-white",
+  talent_pool: "bg-cyan-500 text-[#09081A]",
+  colaboradores: "bg-pink-500 text-white",
 };
 
 const SAMPLE_VARS = `Variaveis disponiveis (use entre {{chaves}}):
@@ -126,7 +134,7 @@ export function ContractTemplatesClient() {
       </div>
 
       <div className="flex gap-2 mb-4">
-        {["", "capital_markets", "credito", "ma"].map((v) => (
+        {["", "capital_markets", "credito", "ma", "institucional", "clientes", "talent_pool", "colaboradores"].map((v) => (
           <button key={v} onClick={() => setFilterVertical(v)}
             className={cn("px-3 py-1.5 rounded-md text-xs font-medium transition",
               filterVertical === v ? "bg-[#C9A84C] text-[#09081A]" : "bg-[#162744] text-[#9BAFC5] hover:text-[#F5F1E8]"
@@ -185,6 +193,10 @@ export function ContractTemplatesClient() {
                     <option value="capital_markets">Bolsa de Ativos</option>
                     <option value="credito">Mesa de Credito</option>
                     <option value="ma">M&A</option>
+                    <option value="institucional">Institucional</option>
+                    <option value="clientes">Clientes / Partners</option>
+                    <option value="talent_pool">Talent Pool</option>
+                    <option value="colaboradores">Colaboradores</option>
                   </select>
                 </div>
               </div>
