@@ -96,7 +96,7 @@ export default async function RelatoriosPage() {
   if (!TEAM_ROLES.includes(userRole)) {
     return (
       <div className="flex items-center justify-center h-64">
-        <p className="text-[#7A8FA8] text-sm">Acesso restrito ao time interno.</p>
+        <p className="text-[#9BAFC5] text-sm">Acesso restrito ao time interno.</p>
       </div>
     );
   }

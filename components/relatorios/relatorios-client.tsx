@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { BarChart2, Calendar, Layers, TrendingUp, Bot, ExternalLink, Zap, CheckCircle2, Loader2, X } from "lucide-react";
+import { BarChart2, Calendar, Layers, TrendingUp, Bot, ExternalLink, Zap, CheckCircle2, Loader2, X, Users } from "lucide-react";
 
 export interface Report {
   id: string;
@@ -41,15 +41,22 @@ const SQUAD_NAMES: Record<string, string> = {
   "estrategista": "Estrategista",
   "monitor-regulatorio": "Monitor Regulatório",
   "pesquisador": "Pesquisador de Mercado",
+  "meeting-intel": "Inteligência de Reuniões",
+  "w4-meetings": "Relatório Semanal de Reuniões",
 };
 
-export function ReportosClient({ reports, generatedReports = [], userRole }: Props) {
-  const [filter, setFilter] = useState<"todos" | "diario" | "setor" | "gerados">("todos");
+const MEETING_SQUAD_IDS = new Set(["meeting-intel", "w4-meetings"]);
 
-  const filtered = filter === "gerados" ? [] : (filter === "todos" ? reports : reports.filter(r => r.type === filter));
+export function ReportosClient({ reports, generatedReports = [], userRole }: Props) {
+  const [filter, setFilter] = useState<"todos" | "diario" | "setor" | "reunioes" | "gerados">("todos");
+
+  const filtered = filter === "gerados" || filter === "reunioes" ? [] : (filter === "todos" ? reports : reports.filter(r => r.type === filter));
   const diarios = reports.filter(r => r.type === "diario").length;
   const setores = reports.filter(r => r.type === "setor").length;
+  const meetingReports = generatedReports.filter(r => MEETING_SQUAD_IDS.has(r.squad_id));
+  const squadReports = generatedReports.filter(r => !MEETING_SQUAD_IDS.has(r.squad_id));
   const showGenerated = filter === "todos" || filter === "gerados";
+  const showMeetings = filter === "todos" || filter === "reunioes";
 
   return (
     <div className="min-h-screen bg-[#09081A] p-6">
@@ -73,7 +80,8 @@ export function ReportosClient({ reports, generatedReports = [], userRole }: Pro
             { key: "todos", label: `Todos (${reports.length + generatedReports.length})` },
             { key: "diario", label: `Diários (${diarios})` },
             { key: "setor", label: `Setoriais (${setores})` },
-            { key: "gerados", label: `Gerados por IA (${generatedReports.length})` },
+            { key: "reunioes", label: `Reuniões (${meetingReports.length})` },
+            { key: "gerados", label: `Gerados por IA (${squadReports.length})` },
           ].map(({ key, label }) => (
             <button
               key={key}
@@ -91,10 +99,10 @@ export function ReportosClient({ reports, generatedReports = [], userRole }: Pro
       </div>
 
       {/* Grid */}
-      {filtered.length === 0 && !(showGenerated && generatedReports.length > 0) ? (
+      {filtered.length === 0 && !(showGenerated && squadReports.length > 0) && !(showMeetings && meetingReports.length > 0) ? (
         <div className="flex flex-col items-center justify-center h-64 text-center">
           <BarChart2 className="w-12 h-12 text-[#243A66] mb-4" />
-          <p className="text-[#7A8FA8] text-sm">Nenhum relatório encontrado.</p>
+          <p className="text-[#9BAFC5] text-sm">Nenhum relatório encontrado.</p>
         </div>
       ) : (
         <div className="space-y-8">
@@ -107,15 +115,30 @@ export function ReportosClient({ reports, generatedReports = [], userRole }: Pro
             </div>
           )}
 
-          {/* Generated Reports */}
-          {showGenerated && generatedReports.length > 0 && (
+          {/* Meeting Reports */}
+          {showMeetings && meetingReports.length > 0 && (
+            <div>
+              <div className="flex items-center gap-2 mb-4">
+                <Users className="w-4 h-4 text-[#C9A84C]" />
+                <span className="text-[#C9A84C] text-[10px] font-bold tracking-[2px] uppercase">Inteligência de Reuniões</span>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                {meetingReports.map(r => (
+                  <GeneratedReportCard key={r.id} report={r} />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Generated Reports — Squads IA */}
+          {showGenerated && squadReports.length > 0 && (
             <div>
               <div className="flex items-center gap-2 mb-4">
                 <Bot className="w-4 h-4 text-[#C9A84C]" />
                 <span className="text-[#C9A84C] text-[10px] font-bold tracking-[2px] uppercase">Gerados por IA — Squads V3</span>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                {generatedReports.map(r => (
+                {squadReports.map(r => (
                   <GeneratedReportCard key={r.id} report={r} />
                 ))}
               </div>
