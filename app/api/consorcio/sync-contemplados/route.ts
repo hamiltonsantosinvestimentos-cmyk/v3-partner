@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 const ADMIN_ROLES = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"] as const;
 const SOURCE_URL = "https://contempladosrs.com.br/area-do-parceiro";
@@ -15,21 +15,6 @@ function svc() {
 function parseBRL(raw: string): number {
   if (!raw) return 0;
   return parseFloat(raw.replace(/[R$\s.]/g, "").replace(",", ".")) || 0;
-}
-
-interface ScrapedLetter {
-  type: "IMOVEL" | "VEICULO" | "SERVICO" | "OUTROS";
-  credit_value: number;
-  admin: string;
-  group_name: string | null;
-  quota: string | null;
-  status: "DISPONIVEL" | "NEGOCIACAO";
-  asking_price: number;
-  discount: number;
-  source_ref: string; // hash para deduplicação
-  parcelas_raw: string | null;
-  taxa_transf: number;
-  fundo_comum: number;
 }
 
 function parseCategory(cat: string): "IMOVEL" | "VEICULO" | "SERVICO" | "OUTROS" {
@@ -44,95 +29,129 @@ function parseStatus(s: string): "DISPONIVEL" | "NEGOCIACAO" {
   return s.toLowerCase().includes("reserv") ? "NEGOCIACAO" : "DISPONIVEL";
 }
 
-/** Extrai linhas de uma tabela HTML simples sem cheerio */
-function parseTable(html: string): ScrapedLetter[] {
-  const letters: ScrapedLetter[] = [];
-
-  // Encontra todas as linhas <tr>
-  const rowRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
-  let rowMatch;
-
-  while ((rowMatch = rowRegex.exec(html)) !== null) {
-    const row = rowMatch[1];
-    // Extrai células <td>
-    const cellRegex = /<td[^>]*>([\s\S]*?)<\/td>/gi;
-    const cells: string[] = [];
-    let cellMatch;
-    while ((cellMatch = cellRegex.exec(row)) !== null) {
-      // Remove tags HTML e decode HTML entities
-      const text = cellMatch[1]
-        .replace(/<[^>]+>/g, "")
-        .replace(/&nbsp;/g, " ")
-        .replace(/&amp;/g, "&")
-        .replace(/&lt;/g, "<")
-        .replace(/&gt;/g, ">")
-        .replace(/&#8209;/g, "-")
-        .replace(/\s+/g, " ")
-        .trim();
-      cells.push(text);
-    }
-
-    // Espera ao menos 6 células: Categoria, Crédito, Entrada, Parcelas, Taxa, Fundo, Disponibilidade, Obs
-    if (cells.length < 6) continue;
-
-    const categoria = cells[0];
-    // Pula linhas de cabeçalho
-    if (!categoria) continue;
-    const catLower = categoria.toLowerCase();
-    if (catLower === "categoria" || catLower === "tipo" || catLower === "cat.") continue;
-
-    const creditValue = parseBRL(cells[1]);
-    if (creditValue <= 0) continue;
-
-    const entrada = parseBRL(cells[2]);
-    const parcelasRaw = cells[3] || null;
-    const taxaTransf = parseBRL(cells[4]);
-    const fundoComum = parseBRL(cells[5]);
-    const disponibilidade = cells[6] || "Disponível";
-    const administradora = cells[7] || "Contemplados RS";
-
-    // Desconto = (crédito - entrada) / crédito * 100
-    const discount = creditValue > 0 && entrada > 0
-      ? Math.round(((creditValue - entrada) / creditValue) * 100 * 10) / 10
-      : 0;
-
-    // Hash simples para deduplicação
-    const sourceRef = `${categoria}-${creditValue}-${entrada}-${administradora}`.toLowerCase().replace(/\s+/g, "-");
-
-    letters.push({
-      type: parseCategory(categoria),
-      credit_value: creditValue,
-      admin: administradora,
-      group_name: null,
-      quota: parcelasRaw,
-      status: parseStatus(disponibilidade),
-      asking_price: entrada,
-      discount,
-      source_ref: sourceRef,
-      parcelas_raw: parcelasRaw,
-      taxa_transf: taxaTransf,
-      fundo_comum: fundoComum,
+async function launchBrowser() {
+  if (process.env.NODE_ENV === "production") {
+    const chromiumPkg = "@sparticuz/chromium-min";
+    const puppeteerPkg = "puppeteer-core";
+    const chromium = await import(/* webpackIgnore: true */ chromiumPkg);
+    const puppeteer = await import(/* webpackIgnore: true */ puppeteerPkg);
+    return puppeteer.default.launch({
+      args: [...(chromium.default.args ?? []), "--no-sandbox", "--disable-setuid-sandbox"],
+      executablePath: await chromium.default.executablePath(
+        "https://github.com/Sparticuz/chromium/releases/download/v133.0.0/chromium-v133.0.0-pack.tar"
+      ),
+      headless: true,
     });
   }
-
-  return letters;
+  const puppeteer = await import("puppeteer-core");
+  return puppeteer.default.launch({
+    args: ["--no-sandbox"],
+    executablePath:
+      process.platform === "win32"
+        ? "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"
+        : "/usr/bin/google-chrome",
+    headless: true,
+  });
 }
 
-async function fetchPage(url: string): Promise<string> {
-  const res = await fetch(url, {
-    headers: {
-      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36",
-      "Accept": "text/html,application/xhtml+xml",
-      "Accept-Language": "pt-BR,pt;q=0.9",
-    },
-    next: { revalidate: 0 },
-  });
-  if (!res.ok) throw new Error(`HTTP ${res.status} ao buscar ${url}`);
-  return res.text();
+interface ScrapedLetter {
+  type: "IMOVEL" | "VEICULO" | "SERVICO" | "OUTROS";
+  credit_value: number;
+  admin: string;
+  status: "DISPONIVEL" | "NEGOCIACAO";
+  asking_price: number;
+  discount: number;
+  source_ref: string;
+  parcelas_raw: string | null;
+  parcelas_qtd: number | null;
+  parcela_valor: number | null;
+  taxa_transf: number;
+  fundo_comum: number;
+}
+
+async function scrapeLetters(): Promise<ScrapedLetter[]> {
+  const browser = await launchBrowser();
+  try {
+    const page = await browser.newPage();
+    await page.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36");
+    await page.goto(SOURCE_URL, { waitUntil: "networkidle2", timeout: 30000 });
+
+    // Aguarda a tabela aparecer
+    await page.waitForSelector("table", { timeout: 15000 }).catch(() => {});
+
+    // Extrai todas as linhas da tabela via DOM
+    const rows = await page.evaluate(() => {
+      const results: string[][] = [];
+      document.querySelectorAll("table tr").forEach(tr => {
+        const cells: string[] = [];
+        tr.querySelectorAll("td, th").forEach(td => {
+          cells.push((td.textContent ?? "").trim().replace(/\s+/g, " "));
+        });
+        if (cells.length >= 6) results.push(cells);
+      });
+      return results;
+    });
+
+    const letters: ScrapedLetter[] = [];
+
+    for (const cells of rows) {
+      const categoria = cells[0];
+      if (!categoria) continue;
+      const catLower = categoria.toLowerCase();
+      // Pula cabeçalhos
+      if (catLower === "categoria" || catLower === "tipo" || catLower.includes("observ")) continue;
+
+      const creditValue = parseBRL(cells[1]);
+      if (creditValue <= 0) continue;
+
+      const entrada = parseBRL(cells[2]);
+      const parcelasRaw = cells[3]?.trim() || null;
+      const taxaTransf = parseBRL(cells[4]);
+      const fundoComum = parseBRL(cells[5]);
+      const disponibilidade = cells[6] || "Disponível";
+      const administradora = cells[7] || "Contemplados RS";
+
+      // Parse parcelas: "184x7869,00" → qtd=184, valor=7869
+      let parcelas_qtd: number | null = null;
+      let parcela_valor: number | null = null;
+      if (parcelasRaw) {
+        const m = parcelasRaw.replace(/\s/g, "").match(/^(\d+)[xX×]([0-9.,]+)/);
+        if (m) {
+          parcelas_qtd = parseInt(m[1], 10);
+          parcela_valor = parseBRL(m[2]);
+        }
+      }
+
+      const discount = creditValue > 0 && entrada > 0
+        ? Math.round(((creditValue - entrada) / creditValue) * 100 * 10) / 10
+        : 0;
+
+      const sourceRef = `${categoria}-${creditValue}-${entrada}-${parcelasRaw}-${administradora}`
+        .toLowerCase().replace(/[^a-z0-9-]/g, "-").substring(0, 200);
+
+      letters.push({
+        type: parseCategory(categoria),
+        credit_value: creditValue,
+        admin: administradora,
+        status: parseStatus(disponibilidade),
+        asking_price: entrada,
+        discount,
+        source_ref: sourceRef,
+        parcelas_raw: parcelasRaw,
+        parcelas_qtd,
+        parcela_valor,
+        taxa_transf: taxaTransf,
+        fundo_comum: fundoComum,
+      });
+    }
+
+    return letters;
+  } finally {
+    await browser.close();
+  }
 }
 
 export async function POST() {
-  // Auth
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
@@ -143,29 +162,27 @@ export async function POST() {
     return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
   }
 
-  // Scraping somente das cartas contempladas
-  let html1 = "";
+  let allLetters: ScrapedLetter[] = [];
   try {
-    html1 = await fetchPage(SOURCE_URL);
+    allLetters = await scrapeLetters();
   } catch (e) {
     return NextResponse.json({ error: `Erro ao buscar portal: ${String(e)}` }, { status: 502 });
   }
 
-  const allLetters = parseTable(html1);
-
   if (allLetters.length === 0) {
-    return NextResponse.json({ error: "Nenhuma carta encontrada no portal. O site pode ter mudado de estrutura." }, { status: 422 });
+    return NextResponse.json({ error: "Nenhuma carta encontrada no portal." }, { status: 422 });
   }
 
-  // Busca cartas já existentes com source_ref para deduplicar
+  // Busca existentes para deduplicar
   const { data: existing } = await svc()
     .from("consorcio_cartas")
     .select("id, source_ref, status")
     .not("source_ref", "is", null);
 
-  const existingRefs = new Set((existing ?? []).map((r: { source_ref: string }) => r.source_ref));
+  const existingMap = new Map(
+    (existing ?? []).map((r: { id: string; source_ref: string; status: string }) => [r.source_ref, r])
+  );
 
-  // Conta cartas existentes para gerar códigos
   const { count } = await svc()
     .from("consorcio_cartas")
     .select("*", { count: "exact", head: true });
@@ -175,10 +192,9 @@ export async function POST() {
   const toUpdate = [];
 
   for (const letter of allLetters) {
-    if (existingRefs.has(letter.source_ref)) {
-      // Atualiza status se mudou
-      const existing_entry = (existing ?? []).find((r: { source_ref: string }) => r.source_ref === letter.source_ref);
-      if (existing_entry && existing_entry.status !== letter.status) {
+    const existing_entry = existingMap.get(letter.source_ref);
+    if (existing_entry) {
+      if (existing_entry.status !== letter.status) {
         toUpdate.push({ id: existing_entry.id, status: letter.status });
       }
       continue;
@@ -187,24 +203,13 @@ export async function POST() {
     const code = `CARTA-26-${String(counter).padStart(3, "0")}`;
     counter++;
 
-    // Parse parcelas: "201x4858" → qtd=201, valor=4858
-    let parcelas_qtd: number | null = null;
-    let parcela_valor: number | null = null;
-    if (letter.parcelas_raw) {
-      const parcelasMatch = letter.parcelas_raw.match(/(\d+)\s*[xX×]\s*([\d.,]+)/);
-      if (parcelasMatch) {
-        parcelas_qtd = parseInt(parcelasMatch[1], 10);
-        parcela_valor = parseBRL(parcelasMatch[2]);
-      }
-    }
-
     toInsert.push({
       code,
       type: letter.type,
       credit_value: letter.credit_value,
       admin: letter.admin,
-      group_name: letter.group_name,
-      quota: letter.quota,
+      group_name: null,
+      quota: letter.parcelas_raw,
       status: letter.status,
       asking_price: letter.asking_price,
       discount: letter.discount,
@@ -213,8 +218,8 @@ export async function POST() {
       metadata: {
         taxa_transf: letter.taxa_transf,
         fundo_comum: letter.fundo_comum,
-        parcelas_qtd,
-        parcela_valor,
+        parcelas_qtd: letter.parcelas_qtd,
+        parcela_valor: letter.parcela_valor,
         entrada: letter.asking_price,
       },
     });
