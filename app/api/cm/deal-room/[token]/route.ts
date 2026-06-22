@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as sc } from "@supabase/supabase-js";
+import { createHash } from "crypto";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -104,16 +105,23 @@ export async function POST(
     return NextResponse.json({ success: true, message: "NDA já aceito" });
 
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+  const userAgent = req.headers.get("user-agent") ?? "unknown";
+  const timestamp = new Date().toISOString();
+
+  const hashPayload = `${access.id}|${token}|${ip}|${userAgent}|${timestamp}|nda_accepted`;
+  const ndaHash = createHash("sha256").update(hashPayload).digest("hex");
 
   const { error } = await svc()
     .from("cm_deal_room_access")
     .update({
       nda_accepted: true,
-      nda_accepted_at: new Date().toISOString(),
+      nda_accepted_at: timestamp,
       nda_ip_address: ip,
+      nda_hash: ndaHash,
+      geo_location: req.headers.get("cf-ipcountry") ?? req.headers.get("x-vercel-ip-country") ?? null,
     })
     .eq("id", access.id);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ success: true, message: "NDA aceito. Documentos liberados." });
+  return NextResponse.json({ success: true, message: "NDA aceito. Documentos liberados.", nda_hash: ndaHash });
 }

@@ -76,7 +76,8 @@ const NAV_SECTIONS: NavSection[] = [
         roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL"],
         children: [
           { href: "/bolsa", label: "Vitrine", roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL", "STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE"] },
-          { href: "/bolsa/mesa", label: "Mesa de Capitais", roles: ["ADMIN", "GESTAO"] },
+          { href: "/bolsa/mesa", label: "Mesa de Capitais", roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL"] },
+          { href: "/bolsa/mesa/contratos", label: "Central de Contratos", roles: ["ADMIN", "GESTAO"] },
         ],
       },
       { href: "/propostas", label: "Propostas", icon: "FileCheck2", roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL"] },
