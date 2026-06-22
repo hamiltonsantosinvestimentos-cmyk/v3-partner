@@ -60,15 +60,15 @@ export function BidModal({ listing, onClose, onSuccess }: BidModalProps) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="bg-[#12112A] border border-[#C9A84C]/30 rounded-xl w-full max-w-md p-6">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
+      <div className="bg-[#12112A] border border-[#C9A84C]/30 rounded-xl w-full max-w-md p-6 relative" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
         <div className="flex justify-between items-center mb-5">
           <div>
             <div className="text-[10px] text-[#C9A84C] font-bold tracking-wider">{listing.anonymous_id}</div>
             <div className="text-sm font-bold text-[#F5F1E8]">Fazer Oferta de Compra</div>
           </div>
-          <button onClick={onClose} className="text-[#9BAFC5] hover:text-[#F5F1E8]"><X size={18} /></button>
+          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full text-[#9BAFC5] hover:text-[#F5F1E8] hover:bg-[#F5F1E8]/10 transition"><X size={18} /></button>
         </div>
 
         {/* Info */}
