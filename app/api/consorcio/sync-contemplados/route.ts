@@ -80,13 +80,14 @@ async function scrapeLetters(): Promise<ScrapedLetter[]> {
     const page = await browser.newPage();
     await page.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36");
 
-    // ── Navega para área do parceiro (pode conter form de login embutido) ─────
-    await page.goto(SOURCE_URL, { waitUntil: "networkidle2", timeout: 30000 });
+    // ── Navega para área do parceiro (usa "load" — networkidle2 falha em SPAs) ─
+    await page.goto(SOURCE_URL, { waitUntil: "load", timeout: 60000 });
 
     // ── Login (se houver campo de senha na página atual) ──────────────────────
     if (email && senha) {
+      // Aguarda até 8s pelo campo de senha aparecer (pode ser renderizado por JS)
       const senhaSel = 'input[type="password"]';
-      const hasSenha = await page.$(senhaSel);
+      const hasSenha = await page.waitForSelector(senhaSel, { timeout: 8000 }).catch(() => null);
 
       if (hasSenha) {
         // Encontrou formulário de login — preenche
@@ -103,21 +104,32 @@ async function scrapeLetters(): Promise<ScrapedLetter[]> {
         }
         await page.type(senhaSel, senha, { delay: 30 });
 
-        await Promise.all([
-          page.waitForNavigation({ waitUntil: "networkidle2", timeout: 30000 }),
-          page.keyboard.press("Enter"),
-        ]);
+        // Clica no botão de submit (mais robusto que Enter em SPAs)
+        const submitBtn = await page.$('button[type="submit"], input[type="submit"], button:not([type])');
+        if (submitBtn) {
+          await submitBtn.click();
+        } else {
+          await page.keyboard.press("Enter");
+        }
 
+        // Aguarda redirecionamento ou desaparecimento do form (até 15s)
+        await page.waitForFunction(
+          () => !document.querySelector('input[type="password"]'),
+          { timeout: 15000 }
+        ).catch(() => {});
+
+        // Aguarda conteúdo carregar
+        await new Promise(r => setTimeout(r, 3000));
         console.log("[sync-contemplados] pós-login URL:", page.url());
       } else {
-        // Sem form de login — captura HTML para diagnóstico
+        // Sem form de login visível — pode já estar logado ou redirecionar
         const html = await page.evaluate(() => document.body.innerHTML.substring(0, 3000));
         console.log("[sync-contemplados] sem form login. URL:", page.url(), "| HTML:", html);
       }
     }
 
-    // Aguarda a tabela aparecer
-    await page.waitForSelector("table", { timeout: 15000 }).catch(() => {});
+    // Aguarda a tabela aparecer (até 20s)
+    await page.waitForSelector("table", { timeout: 20000 }).catch(() => {});
 
     // Debug: captura URL final e título para diagnóstico
     const debugUrl   = page.url();
