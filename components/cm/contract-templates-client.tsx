@@ -152,26 +152,9 @@ export function ContractTemplatesClient() {
           <h1 className="text-2xl font-bold text-[#F5F1E8]">Central de Contratos</h1>
           <p className="text-sm text-[#9BAFC5]">Biblioteca de minutas com injeção automática de variáveis</p>
         </div>
-        <div className="flex items-center gap-2">
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".txt,.docx,.pdf"
-            onChange={handleFileUpload}
-            className="hidden"
-          />
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            disabled={uploading}
-            className="flex items-center gap-2 px-4 py-2 bg-[#162744] text-[#F5F1E8] border border-[#9BAFC5]/20 rounded-lg text-sm font-medium hover:bg-[#243A66] disabled:opacity-40 transition"
-          >
-            {uploading ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
-            {uploading ? "Processando..." : "Upload Minuta"}
-          </button>
-          <button onClick={startNew} className="flex items-center gap-2 px-4 py-2 bg-[#C9A84C] text-[#09081A] rounded-lg text-sm font-bold hover:bg-[#E8C97A] transition">
-            <Plus size={16} /> Nova Minuta
-          </button>
-        </div>
+        <button onClick={startNew} className="flex items-center gap-2 px-4 py-2 bg-[#C9A84C] text-[#09081A] rounded-lg text-sm font-bold hover:bg-[#E8C97A] transition">
+          <Plus size={16} /> Nova Minuta
+        </button>
       </div>
 
       <div className="flex gap-2 mb-4">
@@ -240,6 +223,25 @@ export function ContractTemplatesClient() {
                     <option value="colaboradores">Colaboradores</option>
                   </select>
                 </div>
+              </div>
+
+              <div className="mb-3 flex items-center gap-2">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".txt,.docx,.pdf"
+                  onChange={handleFileUpload}
+                  className="hidden"
+                />
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploading}
+                  className="flex items-center gap-2 px-3 py-2 bg-[#162744] text-[#F5F1E8] border border-[#9BAFC5]/20 rounded-lg text-xs font-medium hover:bg-[#243A66] disabled:opacity-40 transition"
+                >
+                  {uploading ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+                  {uploading ? "Processando..." : "Importar documento (.txt, .docx, .pdf)"}
+                </button>
+                <span className="text-[10px] text-[#9BAFC5]">Anexe um arquivo para preencher o corpo da minuta automaticamente</span>
               </div>
 
               <div className="mb-2 flex items-center justify-between">
