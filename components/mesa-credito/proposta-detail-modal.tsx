@@ -558,7 +558,7 @@ function PendingBanner({ proposal, canChangeStage, onProposalUpdate, onStageChan
 
 export function PropostaDetailModal({ open, onClose, proposal, onStageChange, onProposalUpdate, canChangeStage, canEditValorSolicitado, canCompileDocuments, canEditInstituicao }: PropostaDetailModalProps) {
   // ── Modal tab ─────────────────────────────────────────────────────────────
-  type ModalTab = "detalhes" | "recomendacao" | "documentos" | "comentarios" | "analise_ia";
+  type ModalTab = "detalhes" | "recomendacao" | "documentos" | "comentarios" | "analise_ia" | "chat_ia";
   const [modalTab, setModalTab] = useState<ModalTab>("detalhes");
   const bodyRef = React.useRef<HTMLDivElement>(null);
 
@@ -570,6 +570,50 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
     }
   }, [open, proposal?.id]);
   const [rulesKey] = useState(0);
+
+  // ── Chat IA state ─────────────────────────────────────────────────────────
+  interface ChatMessage { role: "user" | "assistant"; content: string; ts: string; }
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [chatInput, setChatInput] = useState("");
+  const [chatLoading, setChatLoading] = useState(false);
+  const [chatSessionId, setChatSessionId] = useState<string | null>(null);
+  const chatEndRef = React.useRef<HTMLDivElement>(null);
+
+  // Reseta chat ao trocar de proposta
+  useEffect(() => {
+    if (open && proposal) {
+      setChatMessages([]);
+      setChatInput("");
+      setChatSessionId(null);
+    }
+  }, [open, proposal?.id]);
+
+  useEffect(() => {
+    if (modalTab === "chat_ia") chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [chatMessages, modalTab]);
+
+  async function handleChatSend() {
+    if (!chatInput.trim() || chatLoading || !proposal) return;
+    const userMsg: ChatMessage = { role: "user", content: chatInput.trim(), ts: new Date().toISOString() };
+    setChatMessages(prev => [...prev, userMsg]);
+    setChatInput("");
+    setChatLoading(true);
+    try {
+      const res = await fetch("/api/mesa/chat-deal", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ proposal_id: proposal.id, message: userMsg.content, session_id: chatSessionId }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Erro desconhecido");
+      setChatMessages(prev => [...prev, { role: "assistant", content: json.response, ts: new Date().toISOString() }]);
+      if (json.session_id) setChatSessionId(json.session_id);
+    } catch (e) {
+      setChatMessages(prev => [...prev, { role: "assistant", content: `Erro: ${String(e)}`, ts: new Date().toISOString() }]);
+    } finally {
+      setChatLoading(false);
+    }
+  }
 
   // ── Análise IA state ──────────────────────────────────────────────────────
   type AnaliseStatus = "idle" | "loading" | "done" | "error";
@@ -1895,6 +1939,7 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
             { id: "documentos",    label: "Documentos" },
             { id: "comentarios",   label: "Comentários" },
             { id: "analise_ia",    label: "🧠 Análise IA" },
+            { id: "chat_ia",       label: "💬 Chat IA" },
           ] as { id: ModalTab; label: string }[]).map(t => (
             <button key={t.id} onClick={() => setModalTab(t.id)}
               className={`px-3 py-2.5 text-xs font-semibold border-b-2 transition-colors ${
@@ -1910,7 +1955,7 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
         {/* Body */}
         <div ref={bodyRef} className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
           {/* ── Seção Detalhes e Recomendação ── */}
-          <div className={modalTab === "documentos" || modalTab === "comentarios" || modalTab === "analise_ia" ? "hidden" : "contents"}>
+          <div className={modalTab === "documentos" || modalTab === "comentarios" || modalTab === "analise_ia" || modalTab === "chat_ia" ? "hidden" : "contents"}>
 
           {/* ── Banner de Pendência de Stage ── visível quando stage = PENDENCIA */}
           {proposal.stage === "PENDENCIA" && (
@@ -3375,6 +3420,93 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
               )}
             </div>
           )}
+
+          {/* ── Aba Chat IA ── */}
+          {modalTab === "chat_ia" && (
+            <div className="flex flex-col h-[520px]">
+              {/* Header */}
+              <div className="flex items-center gap-2 mb-3 flex-shrink-0">
+                <MessageCircle className="w-4 h-4" style={{ color: "#C9A84C" }} />
+                <p className="text-sm font-bold text-white">Chat IA — Análise do Cliente</p>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#C9A84C]/15 text-[#E8C97A] font-semibold">
+                  {proposal.client_name}
+                </span>
+              </div>
+
+              {/* Mensagens */}
+              <div className="flex-1 overflow-y-auto space-y-3 pr-1 mb-3">
+                {chatMessages.length === 0 && (
+                  <div className="flex flex-col items-center justify-center h-full gap-3 py-8">
+                    <MessageCircle className="w-10 h-10 text-[#C9A84C]/30" />
+                    <p className="text-xs text-[#7A8FA8] text-center max-w-xs">
+                      Pergunte sobre o cliente, riscos, documentação, linha de crédito recomendada ou qualquer dúvida operacional.
+                    </p>
+                    <div className="flex flex-wrap gap-2 justify-center">
+                      {[
+                        "Qual o risco desta operação?",
+                        "O que falta de documentação?",
+                        "Qual linha de crédito indica?",
+                        "Pontos críticos do cliente",
+                      ].map(s => (
+                        <button
+                          key={s}
+                          onClick={() => { setChatInput(s); }}
+                          className="text-[10px] px-2.5 py-1.5 rounded-lg border border-[#C9A84C]/30 text-[#E8C97A] hover:bg-[#C9A84C]/10 transition-colors"
+                        >
+                          {s}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {chatMessages.map((msg, i) => (
+                  <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+                    <div
+                      className={`max-w-[85%] px-3 py-2.5 rounded-xl text-xs leading-relaxed whitespace-pre-wrap ${
+                        msg.role === "user"
+                          ? "bg-[#C9A84C]/15 text-[#F0ECE4] rounded-br-sm"
+                          : "bg-[#162744] text-[#F0ECE4] rounded-bl-sm"
+                      }`}
+                      style={{ border: msg.role === "user" ? "1px solid rgba(201,168,76,0.25)" : "1px solid rgba(255,255,255,0.06)" }}
+                    >
+                      {msg.content}
+                    </div>
+                  </div>
+                ))}
+                {chatLoading && (
+                  <div className="flex justify-start">
+                    <div className="px-3 py-2.5 rounded-xl bg-[#162744] border border-white/6 flex items-center gap-2">
+                      <span className="w-3 h-3 rounded-full border-2 border-[#C9A84C] border-t-transparent animate-spin" />
+                      <span className="text-[10px] text-[#7A8FA8]">Analisando…</span>
+                    </div>
+                  </div>
+                )}
+                <div ref={chatEndRef} />
+              </div>
+
+              {/* Input */}
+              <div className="flex gap-2 flex-shrink-0">
+                <input
+                  value={chatInput}
+                  onChange={e => setChatInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleChatSend(); } }}
+                  placeholder="Pergunte sobre o cliente, risco, documentação..."
+                  disabled={chatLoading}
+                  className="flex-1 h-9 px-3 text-sm rounded-lg outline-none disabled:opacity-50"
+                  style={{ background: "#162744", border: "1px solid rgba(201,168,76,0.2)", color: "#F0ECE4" }}
+                />
+                <button
+                  onClick={handleChatSend}
+                  disabled={chatLoading || !chatInput.trim()}
+                  className="w-9 h-9 rounded-lg flex items-center justify-center transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  style={{ background: "rgba(201,168,76,0.15)", border: "1px solid rgba(201,168,76,0.3)" }}
+                >
+                  <Send className="w-4 h-4" style={{ color: "#C9A84C" }} />
+                </button>
+              </div>
+            </div>
+          )}
+
           <div className="flex items-center justify-between gap-2 flex-wrap">
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" onClick={onClose}>Fechar</Button>
