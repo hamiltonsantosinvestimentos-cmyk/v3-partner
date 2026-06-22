@@ -85,12 +85,37 @@ async function scrapeLetters(): Promise<ScrapedLetter[]> {
     if (email && senha) {
       await page.goto(LOGIN_URL, { waitUntil: "networkidle2", timeout: 30000 });
 
-      // Preenche campos de login (tenta seletores comuns)
-      const emailSel = 'input[type="email"], input[name="email"], input[name="usuario"], input[name="login"]';
-      const senhaSel = 'input[type="password"]';
+      // Inspeciona os inputs disponíveis para diagnóstico
+      const inputsFound = await page.evaluate(() => {
+        return Array.from(document.querySelectorAll("input")).map(i => ({
+          type: i.type, name: i.name, id: i.id,
+          placeholder: i.placeholder, className: i.className.substring(0, 60),
+        }));
+      });
+      console.log("[sync-contemplados] inputs encontrados:", JSON.stringify(inputsFound));
 
-      await page.waitForSelector(emailSel, { timeout: 10000 });
-      await page.type(emailSel, email, { delay: 30 });
+      // Senha — sempre type=password
+      const senhaSel = 'input[type="password"]';
+      const hasSenha = await page.$(senhaSel);
+      if (!hasSenha) {
+        const pageHtml = await page.evaluate(() => document.body.innerHTML.substring(0, 2000));
+        throw new Error(`Campo senha não encontrado. URL: ${page.url()} | HTML: ${pageHtml}`);
+      }
+
+      // Email/usuário — tenta qualquer input não-password e não-hidden visível
+      const emailInput = await page.evaluateHandle(() => {
+        const inputs = Array.from(document.querySelectorAll("input"));
+        return inputs.find(i =>
+          i.type !== "password" && i.type !== "hidden" && i.type !== "submit" &&
+          i.type !== "checkbox" && i.type !== "radio" && i.offsetParent !== null
+        ) ?? null;
+      });
+
+      if (!emailInput.asElement()) {
+        throw new Error(`Campo email não encontrado. Inputs: ${JSON.stringify(inputsFound)}`);
+      }
+
+      await emailInput.asElement()!.type(email, { delay: 30 });
       await page.type(senhaSel, senha, { delay: 30 });
 
       // Submete o formulário
@@ -98,6 +123,8 @@ async function scrapeLetters(): Promise<ScrapedLetter[]> {
         page.waitForNavigation({ waitUntil: "networkidle2", timeout: 30000 }),
         page.keyboard.press("Enter"),
       ]);
+
+      console.log("[sync-contemplados] pós-login URL:", page.url());
     }
 
     // ── Navega para a área do parceiro ────────────────────────────────────────
