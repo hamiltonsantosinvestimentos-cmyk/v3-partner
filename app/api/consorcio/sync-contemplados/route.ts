@@ -6,7 +6,6 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 120;
 
 const ADMIN_ROLES = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"] as const;
-const LOGIN_URL  = "https://contempladosrs.com.br/login";
 const SOURCE_URL = "https://contempladosrs.com.br/area-do-parceiro";
 
 function svc() {
@@ -81,54 +80,41 @@ async function scrapeLetters(): Promise<ScrapedLetter[]> {
     const page = await browser.newPage();
     await page.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36");
 
-    // ── Login ─────────────────────────────────────────────────────────────────
+    // ── Navega para área do parceiro (pode conter form de login embutido) ─────
+    await page.goto(SOURCE_URL, { waitUntil: "networkidle2", timeout: 30000 });
+
+    // ── Login (se houver campo de senha na página atual) ──────────────────────
     if (email && senha) {
-      await page.goto(LOGIN_URL, { waitUntil: "networkidle2", timeout: 30000 });
-
-      // Inspeciona os inputs disponíveis para diagnóstico
-      const inputsFound = await page.evaluate(() => {
-        return Array.from(document.querySelectorAll("input")).map(i => ({
-          type: i.type, name: i.name, id: i.id,
-          placeholder: i.placeholder, className: i.className.substring(0, 60),
-        }));
-      });
-      console.log("[sync-contemplados] inputs encontrados:", JSON.stringify(inputsFound));
-
-      // Senha — sempre type=password
       const senhaSel = 'input[type="password"]';
       const hasSenha = await page.$(senhaSel);
-      if (!hasSenha) {
-        const pageHtml = await page.evaluate(() => document.body.innerHTML.substring(0, 2000));
-        throw new Error(`Campo senha não encontrado. URL: ${page.url()} | HTML: ${pageHtml}`);
+
+      if (hasSenha) {
+        // Encontrou formulário de login — preenche
+        const emailInput = await page.evaluateHandle(() => {
+          const inputs = Array.from(document.querySelectorAll("input"));
+          return inputs.find(i =>
+            i.type !== "password" && i.type !== "hidden" && i.type !== "submit" &&
+            i.type !== "checkbox" && i.type !== "radio" && i.offsetParent !== null
+          ) ?? null;
+        });
+
+        if (emailInput.asElement()) {
+          await emailInput.asElement()!.type(email, { delay: 30 });
+        }
+        await page.type(senhaSel, senha, { delay: 30 });
+
+        await Promise.all([
+          page.waitForNavigation({ waitUntil: "networkidle2", timeout: 30000 }),
+          page.keyboard.press("Enter"),
+        ]);
+
+        console.log("[sync-contemplados] pós-login URL:", page.url());
+      } else {
+        // Sem form de login — captura HTML para diagnóstico
+        const html = await page.evaluate(() => document.body.innerHTML.substring(0, 3000));
+        console.log("[sync-contemplados] sem form login. URL:", page.url(), "| HTML:", html);
       }
-
-      // Email/usuário — tenta qualquer input não-password e não-hidden visível
-      const emailInput = await page.evaluateHandle(() => {
-        const inputs = Array.from(document.querySelectorAll("input"));
-        return inputs.find(i =>
-          i.type !== "password" && i.type !== "hidden" && i.type !== "submit" &&
-          i.type !== "checkbox" && i.type !== "radio" && i.offsetParent !== null
-        ) ?? null;
-      });
-
-      if (!emailInput.asElement()) {
-        throw new Error(`Campo email não encontrado. Inputs: ${JSON.stringify(inputsFound)}`);
-      }
-
-      await emailInput.asElement()!.type(email, { delay: 30 });
-      await page.type(senhaSel, senha, { delay: 30 });
-
-      // Submete o formulário
-      await Promise.all([
-        page.waitForNavigation({ waitUntil: "networkidle2", timeout: 30000 }),
-        page.keyboard.press("Enter"),
-      ]);
-
-      console.log("[sync-contemplados] pós-login URL:", page.url());
     }
-
-    // ── Navega para a área do parceiro ────────────────────────────────────────
-    await page.goto(SOURCE_URL, { waitUntil: "networkidle2", timeout: 30000 });
 
     // Aguarda a tabela aparecer
     await page.waitForSelector("table", { timeout: 15000 }).catch(() => {});
