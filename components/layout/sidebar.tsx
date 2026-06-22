@@ -72,12 +72,19 @@ const NAV_SECTIONS: NavSection[] = [
       { href: "/pasta-publica", label: "Pasta Publica", icon: "FolderOpen", roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL", "FINANCEIRO"] },
       { href: "/mesa-ma", label: "Mesa M&A", icon: "Handshake", roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL"] },
       {
+        href: "/juridico/contratos", label: "Central de Contratos", icon: "FileText",
+        roles: ["ADMIN", "GESTAO"],
+        children: [
+          { href: "/juridico/contratos", label: "Contratos e Minutas", roles: ["ADMIN", "GESTAO"] },
+          { href: "/juridico/contratos/assinados", label: "Contratos Assinados", roles: ["ADMIN", "GESTAO"] },
+        ],
+      },
+      {
         href: "/bolsa", label: "Bolsa de Ativos", icon: "Gavel",
         roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL"],
         children: [
           { href: "/bolsa", label: "Vitrine", roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL", "STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE"] },
           { href: "/bolsa/mesa", label: "Mesa de Capitais", roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL"] },
-          { href: "/bolsa/mesa/contratos", label: "Central de Contratos", roles: ["ADMIN", "GESTAO"] },
         ],
       },
       { href: "/propostas", label: "Propostas", icon: "FileCheck2", roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL"] },
@@ -190,8 +197,27 @@ interface SidebarProps { role: UserRole; onClose?: () => void; }
 
 export function Sidebar({ role, onClose }: SidebarProps) {
   const pathname = usePathname();
-  const [expandedItems, setExpandedItems] = useState<string[]>(["/mesa-credito"]);
+  const [expandedItems, setExpandedItems] = useState<string[]>(() => {
+    const initial = ["/mesa-credito"];
+    return initial;
+  });
+  const navRef = React.useRef<HTMLElement>(null);
   const [academyProgress, setAcademyProgress] = useState<{ completed: number; total: number } | null>(null);
+
+  React.useEffect(() => {
+    const parentItem = NAV_SECTIONS
+      .flatMap(s => s.items)
+      .find(item => item.children?.some(c => pathname.startsWith(c.href)) || pathname.startsWith(item.href));
+    if (parentItem?.children && !expandedItems.includes(parentItem.href)) {
+      setExpandedItems(prev => [...prev, parentItem.href]);
+    }
+    setTimeout(() => {
+      if (navRef.current) {
+        const active = navRef.current.querySelector('[data-active="true"]');
+        if (active) active.scrollIntoView({ block: "center", behavior: "smooth" });
+      }
+    }, 100);
+  }, [pathname]);
 
   React.useEffect(() => {
     fetch("/api/academy/progress")
@@ -251,7 +277,7 @@ export function Sidebar({ role, onClose }: SidebarProps) {
       </div>
 
       {/* ── NAVIGATION ── */}
-      <nav className="flex-1 overflow-y-auto py-3 px-2.5 space-y-0.5 scrollbar-thin">
+      <nav ref={navRef} className="flex-1 overflow-y-auto py-3 px-2.5 space-y-0.5 scrollbar-thin">
         {NAV_SECTIONS.map(section => {
           const visibleItems = section.items.filter(item => item.roles.includes(role));
           if (!visibleItems.length) return null;
@@ -269,7 +295,7 @@ export function Sidebar({ role, onClose }: SidebarProps) {
                 const filteredChildren = item.children?.filter(c => c.roles.includes(role));
 
                 return (
-                  <div key={item.href}>
+                  <div key={item.href} data-active={isActive ? "true" : undefined}>
                     {hasChildren ? (
                       <button onClick={() => toggleExpanded(item.href)}
                         className={cn("nav-item-v3 w-full", isActive ? "nav-item-v3-active" : "nav-item-v3-inactive")}>

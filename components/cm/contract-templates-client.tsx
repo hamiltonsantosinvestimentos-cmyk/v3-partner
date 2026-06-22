@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { Plus, Save, Trash2, Loader2, FileText, Eye, ChevronDown } from "lucide-react";
+import { Plus, Save, Trash2, Loader2, FileText, Eye, ChevronDown, Upload } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface Template {
@@ -57,6 +57,8 @@ export function ContractTemplatesClient() {
   const [formVertical, setFormVertical] = useState("capital_markets");
   const [formBody, setFormBody] = useState("");
   const [showVars, setShowVars] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const fetchTemplates = useCallback(async () => {
     setLoading(true);
@@ -85,6 +87,28 @@ export function ContractTemplatesClient() {
     setFormName("");
     setFormVertical("capital_markets");
     setFormBody("");
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch("/api/contracts/templates/upload", { method: "POST", body: fd });
+      const json = await res.json();
+      if (!res.ok) { alert(json.error); return; }
+      setSelected(null);
+      setIsNew(true);
+      setFormName(json.suggested_name);
+      setFormVertical("capital_markets");
+      setFormBody(json.body_text);
+    } catch { alert("Erro ao fazer upload"); }
+    finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
   };
 
   const handleSave = async () => {
@@ -128,9 +152,26 @@ export function ContractTemplatesClient() {
           <h1 className="text-2xl font-bold text-[#F5F1E8]">Central de Contratos</h1>
           <p className="text-sm text-[#9BAFC5]">Biblioteca de minutas com injeção automática de variáveis</p>
         </div>
-        <button onClick={startNew} className="flex items-center gap-2 px-4 py-2 bg-[#C9A84C] text-[#09081A] rounded-lg text-sm font-bold hover:bg-[#E8C97A] transition">
-          <Plus size={16} /> Nova Minuta
-        </button>
+        <div className="flex items-center gap-2">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".txt,.docx,.pdf"
+            onChange={handleFileUpload}
+            className="hidden"
+          />
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploading}
+            className="flex items-center gap-2 px-4 py-2 bg-[#162744] text-[#F5F1E8] border border-[#9BAFC5]/20 rounded-lg text-sm font-medium hover:bg-[#243A66] disabled:opacity-40 transition"
+          >
+            {uploading ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
+            {uploading ? "Processando..." : "Upload Minuta"}
+          </button>
+          <button onClick={startNew} className="flex items-center gap-2 px-4 py-2 bg-[#C9A84C] text-[#09081A] rounded-lg text-sm font-bold hover:bg-[#E8C97A] transition">
+            <Plus size={16} /> Nova Minuta
+          </button>
+        </div>
       </div>
 
       <div className="flex gap-2 mb-4">
