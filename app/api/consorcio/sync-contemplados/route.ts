@@ -187,6 +187,17 @@ export async function POST() {
     const code = `CARTA-26-${String(counter).padStart(3, "0")}`;
     counter++;
 
+    // Parse parcelas: "201x4858" → qtd=201, valor=4858
+    let parcelas_qtd: number | null = null;
+    let parcela_valor: number | null = null;
+    if (letter.parcelas_raw) {
+      const parcelasMatch = letter.parcelas_raw.match(/(\d+)\s*[xX×]\s*([\d.,]+)/);
+      if (parcelasMatch) {
+        parcelas_qtd = parseInt(parcelasMatch[1], 10);
+        parcela_valor = parseBRL(parcelasMatch[2]);
+      }
+    }
+
     toInsert.push({
       code,
       type: letter.type,
@@ -199,6 +210,13 @@ export async function POST() {
       discount: letter.discount,
       source_ref: letter.source_ref,
       created_by: user.id,
+      metadata: {
+        taxa_transf: letter.taxa_transf,
+        fundo_comum: letter.fundo_comum,
+        parcelas_qtd,
+        parcela_valor,
+        entrada: letter.asking_price,
+      },
     });
   }
 

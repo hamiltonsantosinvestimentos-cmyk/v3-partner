@@ -5,10 +5,18 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatCurrency } from "@/lib/utils";
-import { Trophy, Plus, Search, Home, Car, Wrench, TrendingUp, Trash2, Loader2, X, RefreshCw } from "lucide-react";
+import { Trophy, Plus, Search, Home, Car, Wrench, TrendingUp, Trash2, Loader2, X, RefreshCw, CheckSquare, Square, Handshake } from "lucide-react";
 
 type LetterType = "IMOVEL" | "VEICULO" | "SERVICO" | "OUTROS";
 type LetterStatus = "DISPONIVEL" | "NEGOCIACAO" | "VENDIDA" | "UTILIZADA";
+
+interface LetterMetadata {
+  taxa_transf?: number | null;
+  fundo_comum?: number | null;
+  parcelas_qtd?: number | null;
+  parcela_valor?: number | null;
+  entrada?: number | null;
+}
 
 interface ContemplatedLetter {
   id: string;
@@ -22,6 +30,21 @@ interface ContemplatedLetter {
   asking_price: number;
   discount: number;
   created_at?: string;
+  metadata?: LetterMetadata | null;
+}
+
+interface AdminUser {
+  id: string;
+  full_name: string;
+  role: string;
+}
+
+interface OfertaForm {
+  interessado_nome: string;
+  interessado_tel: string;
+  valor_oferta: string;
+  observacoes: string;
+  responsavel_id: string;
 }
 
 const TYPE_LABELS: Record<LetterType, string> = { IMOVEL: "Imóvel", VEICULO: "Veículo", SERVICO: "Serviço", OUTROS: "Outros" };
@@ -42,6 +65,7 @@ export default function CartasContempladasPage() {
   const [letters, setLetters] = useState<ContemplatedLetter[]>([]);
   const [loading, setLoading] = useState(true);
   const [userRole, setUserRole] = useState<string>("");
+  const [userId, setUserId] = useState<string>("");
   const [search, setSearch] = useState("");
   const [filterType, setFilterType] = useState("");
   const [filterStatus, setFilterStatus] = useState("DISPONIVEL");
@@ -51,6 +75,17 @@ export default function CartasContempladasPage() {
   const [syncResult, setSyncResult] = useState<{ inserted: number; updated: number; skipped: number; error?: string } | null>(null);
   const [form, setForm] = useState({ type: "IMOVEL" as LetterType, credit_value: "", admin: "", group_name: "", quota: "", status: "DISPONIVEL" as LetterStatus, asking_price: "", discount: "" });
 
+  // Seleção múltipla
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  // Modal oferta
+  const [ofertaModal, setOfertaModal] = useState<ContemplatedLetter | null>(null);
+  const [ofertaForm, setOfertaForm] = useState<OfertaForm>({ interessado_nome: "", interessado_tel: "", valor_oferta: "", observacoes: "", responsavel_id: "" });
+  const [adminUsers, setAdminUsers] = useState<AdminUser[]>([]);
+  const [submittingOferta, setSubmittingOferta] = useState(false);
+  const [ofertaSuccess, setOfertaSuccess] = useState(false);
+  const [ofertaError, setOfertaError] = useState<string | null>(null);
+
   useEffect(() => {
     Promise.all([
       fetch("/api/consorcio/cartas").then(r => r.json()),
@@ -58,8 +93,22 @@ export default function CartasContempladasPage() {
     ]).then(([cartasData, meData]) => {
       if (Array.isArray(cartasData.cartas)) setLetters(cartasData.cartas);
       if (meData?.role) setUserRole(meData.role);
+      if (meData?.id) setUserId(meData.id);
     }).finally(() => setLoading(false));
   }, []);
+
+  // Busca lista de admins para o select de responsável
+  useEffect(() => {
+    if (ADMIN_ROLES.includes(userRole)) {
+      fetch("/api/usuarios")
+        .then(r => r.json())
+        .then((data) => {
+          const list = Array.isArray(data) ? data : (data?.usuarios ?? []);
+          setAdminUsers(list.filter((u: AdminUser) => ["ADMIN", "GESTAO", "MESA_OPERACIONAL"].includes(u.role)));
+        })
+        .catch(() => {});
+    }
+  }, [userRole]);
 
   const isAdmin = ADMIN_ROLES.includes(userRole);
 
@@ -73,6 +122,24 @@ export default function CartasContempladasPage() {
   const available = letters.filter(l => l.status === "DISPONIVEL");
   const totalAvailableValue = available.reduce((s, l) => s + l.credit_value, 0);
   const avgDiscount = available.length > 0 ? available.reduce((s, l) => s + l.discount, 0) / available.length : 0;
+
+  // Seleção
+  const toggleSelect = (id: string) => {
+    setSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const selectedLetters = filtered.filter(l => selected.has(l.id));
+  const sumCredito = selectedLetters.reduce((s, l) => s + l.credit_value, 0);
+  const sumEntrada = selectedLetters.reduce((s, l) => s + l.asking_price, 0);
+  const avgParcela = (() => {
+    const withParcela = selectedLetters.filter(l => l.metadata?.parcela_valor && l.metadata.parcela_valor > 0);
+    if (withParcela.length === 0) return null;
+    return withParcela.reduce((s, l) => s + (l.metadata?.parcela_valor ?? 0), 0) / withParcela.length;
+  })();
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -105,7 +172,6 @@ export default function CartasContempladasPage() {
       const json = await res.json();
       if (!res.ok) { setSyncResult({ inserted: 0, updated: 0, skipped: 0, error: json.error ?? "Erro desconhecido" }); return; }
       setSyncResult({ inserted: json.inserted, updated: json.updated, skipped: json.skipped });
-      // Recarrega lista
       const cartasRes = await fetch("/api/consorcio/cartas");
       const cartasData = await cartasRes.json();
       if (Array.isArray(cartasData.cartas)) setLetters(cartasData.cartas);
@@ -116,8 +182,56 @@ export default function CartasContempladasPage() {
     }
   };
 
+  const openOfertaModal = (letter: ContemplatedLetter) => {
+    setOfertaModal(letter);
+    setOfertaForm({
+      interessado_nome: "",
+      interessado_tel: "",
+      valor_oferta: String(letter.asking_price),
+      observacoes: "",
+      responsavel_id: userId ?? "",
+    });
+    setOfertaSuccess(false);
+    setOfertaError(null);
+  };
+
+  const handleSubmitOferta = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!ofertaModal) return;
+    setSubmittingOferta(true);
+    setOfertaError(null);
+    try {
+      const res = await fetch("/api/consorcio/ofertas", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          carta_id: ofertaModal.id,
+          carta_code: ofertaModal.code,
+          carta_credit_value: ofertaModal.credit_value,
+          interessado_nome: ofertaForm.interessado_nome,
+          interessado_tel: ofertaForm.interessado_tel || null,
+          valor_oferta: Number(ofertaForm.valor_oferta),
+          observacoes: ofertaForm.observacoes || null,
+          responsavel_id: ofertaForm.responsavel_id || null,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setOfertaError(json.error ? (typeof json.error === "string" ? json.error : "Erro ao registrar oferta") : "Erro ao registrar oferta");
+      } else {
+        setOfertaSuccess(true);
+        // Atualiza status local da carta
+        setLetters(prev => prev.map(l => l.id === ofertaModal.id ? { ...l, status: "NEGOCIACAO" } : l));
+      }
+    } catch (err) {
+      setOfertaError(String(err));
+    } finally {
+      setSubmittingOferta(false);
+    }
+  };
+
   return (
-    <div className="space-y-5 animate-fade-in">
+    <div className="space-y-5 animate-fade-in pb-24">
       <div className="flex items-start justify-between">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center">
@@ -193,7 +307,7 @@ export default function CartasContempladasPage() {
           { label: "Total de Cartas", value: letters.length, color: "text-white" },
           { label: "Disponíveis", value: available.length, color: "text-emerald-400" },
           { label: "Volume Disponível", value: formatCurrency(totalAvailableValue), color: "text-amber-400" },
-          { label: "Desconto Médio", value: `${avgDiscount.toFixed(1)}%`, color: "text-blue-400" },
+          { label: "Desconto Médio", value: `${avgDiscount.toFixed(1)}%`, color: "text-[#C9A84C]" },
         ].map(kpi => (
           <Card key={kpi.label}>
             <CardContent className="p-4">
@@ -224,49 +338,92 @@ export default function CartasContempladasPage() {
 
       {!loading && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filtered.map(letter => (
-            <Card key={letter.id} className="cursor-pointer hover:border-amber-500/30 transition-all group">
-              <CardContent className="p-4 space-y-3">
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center text-amber-400">
-                      {TYPE_ICONS[letter.type]}
-                    </div>
-                    <div>
-                      <p className="text-xs font-mono text-muted-foreground">{letter.code}</p>
-                      <p className="text-sm font-medium text-foreground">{TYPE_LABELS[letter.type]}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Badge className={STATUS_COLORS[letter.status]}>{STATUS_LABELS[letter.status]}</Badge>
-                    {isAdmin && (
-                      <button onClick={() => handleDelete(letter.id)} disabled={deleting === letter.id} className="text-red-400/60 hover:text-red-400 transition-colors p-1">
-                        {deleting === letter.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+          {filtered.map(letter => {
+            const meta = letter.metadata;
+            const isSelected = selected.has(letter.id);
+            return (
+              <Card key={letter.id} className={`transition-all group ${isSelected ? "border-amber-500/60 ring-1 ring-amber-500/30" : "hover:border-amber-500/30"}`}>
+                <CardContent className="p-4 space-y-3">
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center gap-2">
+                      {/* Checkbox de seleção */}
+                      <button
+                        onClick={() => toggleSelect(letter.id)}
+                        className={`flex-shrink-0 transition-colors ${isSelected ? "text-amber-400" : "text-muted-foreground/40 hover:text-muted-foreground"}`}
+                        title={isSelected ? "Remover da seleção" : "Selecionar"}
+                      >
+                        {isSelected ? <CheckSquare className="w-4 h-4" /> : <Square className="w-4 h-4" />}
                       </button>
-                    )}
+                      <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center text-amber-400">
+                        {TYPE_ICONS[letter.type]}
+                      </div>
+                      <div>
+                        <p className="text-xs font-mono text-muted-foreground">{letter.code}</p>
+                        <p className="text-sm font-medium text-foreground">{TYPE_LABELS[letter.type]}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Badge className={STATUS_COLORS[letter.status]}>{STATUS_LABELS[letter.status]}</Badge>
+                      {isAdmin && (
+                        <button onClick={() => handleDelete(letter.id)} disabled={deleting === letter.id} className="text-red-400/60 hover:text-red-400 transition-colors p-1">
+                          {deleting === letter.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                        </button>
+                      )}
+                    </div>
                   </div>
-                </div>
-                <div className="space-y-1">
-                  <div className="flex justify-between text-xs">
-                    <span className="text-muted-foreground">Crédito</span>
-                    <span className="font-semibold text-white">{formatCurrency(letter.credit_value)}</span>
+
+                  {/* Dados principais */}
+                  <div className="space-y-1">
+                    <div className="flex justify-between text-xs">
+                      <span className="text-muted-foreground">Crédito</span>
+                      <span className="font-semibold text-white">{formatCurrency(letter.credit_value)}</span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-muted-foreground">Entrada</span>
+                      <span className="font-semibold text-amber-400">{formatCurrency(letter.asking_price)}</span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-muted-foreground">Desconto</span>
+                      <span className="font-semibold text-emerald-400">{letter.discount}%</span>
+                    </div>
+                    {/* Dados do metadata */}
+                    {meta?.parcelas_qtd && meta?.parcela_valor ? (
+                      <div className="flex justify-between text-xs">
+                        <span className="text-muted-foreground">Parcelas</span>
+                        <span className="font-semibold text-[#C9A84C]">{meta.parcelas_qtd}x {formatCurrency(meta.parcela_valor)}</span>
+                      </div>
+                    ) : null}
+                    {meta?.taxa_transf && meta.taxa_transf > 0 ? (
+                      <div className="flex justify-between text-xs">
+                        <span className="text-muted-foreground">Taxa Transf.</span>
+                        <span className="font-medium text-foreground">{formatCurrency(meta.taxa_transf)}</span>
+                      </div>
+                    ) : null}
+                    {meta?.fundo_comum && meta.fundo_comum > 0 ? (
+                      <div className="flex justify-between text-xs">
+                        <span className="text-muted-foreground">Fundo Comum</span>
+                        <span className="font-medium text-foreground">{formatCurrency(meta.fundo_comum)}</span>
+                      </div>
+                    ) : null}
                   </div>
-                  <div className="flex justify-between text-xs">
-                    <span className="text-muted-foreground">Preço de Venda</span>
-                    <span className="font-semibold text-amber-400">{formatCurrency(letter.asking_price)}</span>
+
+                  <div className="pt-2 border-t border-border/50 flex justify-between text-xs text-muted-foreground">
+                    <span>{letter.admin}</span>
+                    <span>{letter.group_name ? `Grupo ${letter.group_name}` : ""}{letter.quota ? ` · Cota ${letter.quota}` : ""}</span>
                   </div>
-                  <div className="flex justify-between text-xs">
-                    <span className="text-muted-foreground">Desconto</span>
-                    <span className="font-semibold text-emerald-400">{letter.discount}%</span>
-                  </div>
-                </div>
-                <div className="pt-2 border-t border-border/50 flex justify-between text-xs text-muted-foreground">
-                  <span>{letter.admin}</span>
-                  <span>{letter.group_name ? `Grupo ${letter.group_name}` : ""}{letter.quota ? ` · Cota ${letter.quota}` : ""}</span>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+
+                  {/* Botão Fazer Oferta */}
+                  <button
+                    onClick={() => openOfertaModal(letter)}
+                    className="w-full flex items-center justify-center gap-1.5 h-8 text-xs font-medium rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-400 hover:bg-amber-500/20 transition-colors"
+                  >
+                    <Handshake className="w-3.5 h-3.5" />
+                    Fazer Oferta
+                  </button>
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
       )}
 
@@ -274,6 +431,159 @@ export default function CartasContempladasPage() {
         <div className="text-center py-16">
           <Trophy className="w-10 h-10 text-amber-400/50 mx-auto mb-3" />
           <p className="text-muted-foreground text-sm">Nenhuma carta encontrada</p>
+        </div>
+      )}
+
+      {/* Barra de seleção múltipla */}
+      {selected.size >= 2 && (
+        <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-amber-500/30 bg-[#09081A]/95 backdrop-blur-md px-6 py-4">
+          <div className="max-w-screen-xl mx-auto flex flex-wrap items-center justify-between gap-4">
+            <div className="flex flex-wrap items-center gap-6">
+              <div className="text-sm font-semibold text-amber-400">
+                {selected.size} cartas selecionadas
+              </div>
+              <div className="flex gap-4 text-xs">
+                <div>
+                  <span className="text-muted-foreground">Total de Crédito</span>
+                  <p className="font-bold text-white">{formatCurrency(sumCredito)}</p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Total de Entrada</span>
+                  <p className="font-bold text-amber-400">{formatCurrency(sumEntrada)}</p>
+                </div>
+                {avgParcela !== null && (
+                  <div>
+                    <span className="text-muted-foreground">Média de Parcelas</span>
+                    <p className="font-bold text-[#C9A84C]">{formatCurrency(avgParcela)}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+            <button
+              onClick={() => setSelected(new Set())}
+              className="flex items-center gap-1.5 h-8 px-4 text-xs font-medium rounded-lg border border-border text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors"
+            >
+              <X className="w-3.5 h-3.5" />
+              Limpar seleção
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Fazer Oferta */}
+      {ofertaModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="w-full max-w-lg bg-[#111F35] rounded-2xl border border-amber-500/20 shadow-2xl">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-border/50">
+              <div>
+                <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                  <Handshake className="w-4 h-4 text-amber-400" />
+                  Fazer Oferta — {ofertaModal.code}
+                </h3>
+                <p className="text-xs text-muted-foreground mt-0.5">Crédito: {formatCurrency(ofertaModal.credit_value)}</p>
+              </div>
+              <button onClick={() => setOfertaModal(null)} className="text-muted-foreground hover:text-foreground transition-colors">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {ofertaSuccess ? (
+              <div className="px-6 py-10 text-center">
+                <div className="w-12 h-12 rounded-full bg-emerald-500/20 flex items-center justify-center mx-auto mb-4">
+                  <Trophy className="w-6 h-6 text-emerald-400" />
+                </div>
+                <p className="text-sm font-semibold text-white mb-1">Oferta registrada com sucesso!</p>
+                <p className="text-xs text-muted-foreground mb-4">A carta foi marcada como Em Negociação e os administradores foram notificados.</p>
+                <button
+                  onClick={() => setOfertaModal(null)}
+                  className="h-9 px-6 text-sm font-medium rounded-lg bg-amber-500/20 border border-amber-500/30 text-amber-400 hover:bg-amber-500/30 transition-colors"
+                >
+                  Fechar
+                </button>
+              </div>
+            ) : (
+              <form onSubmit={handleSubmitOferta} className="px-6 py-5 space-y-4">
+                {ofertaError && (
+                  <div className="px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/30 text-xs text-red-400">
+                    {ofertaError}
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-xs text-muted-foreground mb-1.5">Nome do interessado <span className="text-red-400">*</span></label>
+                  <input
+                    value={ofertaForm.interessado_nome}
+                    onChange={e => setOfertaForm(f => ({ ...f, interessado_nome: e.target.value }))}
+                    placeholder="Nome completo"
+                    required
+                    className="w-full h-9 px-3 text-sm bg-[#162744] border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-amber-500/40"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs text-muted-foreground mb-1.5">Telefone</label>
+                  <input
+                    value={ofertaForm.interessado_tel}
+                    onChange={e => setOfertaForm(f => ({ ...f, interessado_tel: e.target.value }))}
+                    placeholder="(51) 99999-0000"
+                    className="w-full h-9 px-3 text-sm bg-[#162744] border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-amber-500/40"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs text-muted-foreground mb-1.5">Valor da oferta (R$) <span className="text-red-400">*</span></label>
+                  <input
+                    value={ofertaForm.valor_oferta}
+                    onChange={e => setOfertaForm(f => ({ ...f, valor_oferta: e.target.value }))}
+                    type="number"
+                    min={0}
+                    step={0.01}
+                    required
+                    className="w-full h-9 px-3 text-sm bg-[#162744] border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-amber-500/40"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs text-muted-foreground mb-1.5">Responsável</label>
+                  <select
+                    value={ofertaForm.responsavel_id}
+                    onChange={e => setOfertaForm(f => ({ ...f, responsavel_id: e.target.value }))}
+                    className="w-full h-9 px-3 text-sm bg-[#162744] border border-border rounded-lg text-foreground focus:outline-none focus:ring-1 focus:ring-amber-500/40"
+                  >
+                    <option value="">Selecionar responsável</option>
+                    {adminUsers.map(u => (
+                      <option key={u.id} value={u.id}>{u.full_name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs text-muted-foreground mb-1.5">Observações</label>
+                  <textarea
+                    value={ofertaForm.observacoes}
+                    onChange={e => setOfertaForm(f => ({ ...f, observacoes: e.target.value }))}
+                    placeholder="Detalhes da negociação..."
+                    rows={3}
+                    className="w-full px-3 py-2 text-sm bg-[#162744] border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-amber-500/40 resize-none"
+                  />
+                </div>
+
+                <div className="flex gap-3 pt-1">
+                  <Button
+                    type="submit"
+                    disabled={submittingOferta}
+                    className="flex-1 bg-amber-500 hover:bg-amber-600 text-[#09081A] font-semibold"
+                  >
+                    {submittingOferta ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Handshake className="w-4 h-4 mr-2" />}
+                    {submittingOferta ? "Registrando..." : "Registrar Oferta"}
+                  </Button>
+                  <Button type="button" variant="outline" onClick={() => setOfertaModal(null)}>
+                    Cancelar
+                  </Button>
+                </div>
+              </form>
+            )}
+          </div>
         </div>
       )}
     </div>
