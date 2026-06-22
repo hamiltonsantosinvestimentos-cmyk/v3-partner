@@ -7,7 +7,6 @@ export const maxDuration = 60;
 
 const ADMIN_ROLES = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"] as const;
 const SOURCE_URL = "https://contempladosrs.com.br/area-do-parceiro";
-const SOURCE_URL_NC = "https://contempladosrs.com.br/area-do-parceiro-nao-contemplada";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -77,7 +76,10 @@ function parseTable(html: string): ScrapedLetter[] {
     if (cells.length < 6) continue;
 
     const categoria = cells[0];
-    if (!categoria || categoria.toLowerCase() === "categoria") continue; // pula header
+    // Pula linhas de cabeçalho
+    if (!categoria) continue;
+    const catLower = categoria.toLowerCase();
+    if (catLower === "categoria" || catLower === "tipo" || catLower === "cat.") continue;
 
     const creditValue = parseBRL(cells[1]);
     if (creditValue <= 0) continue;
@@ -141,17 +143,15 @@ export async function POST() {
     return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
   }
 
-  // Scraping das duas páginas em paralelo
-  let html1 = "", html2 = "";
+  // Scraping somente das cartas contempladas
+  let html1 = "";
   try {
-    [html1, html2] = await Promise.all([fetchPage(SOURCE_URL), fetchPage(SOURCE_URL_NC)]);
+    html1 = await fetchPage(SOURCE_URL);
   } catch (e) {
     return NextResponse.json({ error: `Erro ao buscar portal: ${String(e)}` }, { status: 502 });
   }
 
-  const letters1 = parseTable(html1);
-  const letters2 = parseTable(html2);
-  const allLetters = [...letters1, ...letters2];
+  const allLetters = parseTable(html1);
 
   if (allLetters.length === 0) {
     return NextResponse.json({ error: "Nenhuma carta encontrada no portal. O site pode ter mudado de estrutura." }, { status: 422 });
