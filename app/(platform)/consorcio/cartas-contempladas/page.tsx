@@ -132,7 +132,8 @@ export default function CartasContempladasPage() {
     });
   };
 
-  const selectedLetters = filtered.filter(l => selected.has(l.id));
+  // Usa todas as cartas (não só as filtradas) para a seleção
+  const selectedLetters = letters.filter(l => selected.has(l.id));
   const sumCredito = selectedLetters.reduce((s, l) => s + l.credit_value, 0);
   const sumEntrada = selectedLetters.reduce((s, l) => s + l.asking_price, 0);
   const avgParcela = (() => {
@@ -435,12 +436,12 @@ export default function CartasContempladasPage() {
       )}
 
       {/* Barra de seleção múltipla */}
-      {selected.size >= 2 && (
-        <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-amber-500/30 bg-[#09081A]/95 backdrop-blur-md px-6 py-4">
+      {selected.size >= 1 && (
+        <div className="fixed bottom-0 left-0 right-0 z-[200] border-t border-amber-500/30 bg-[#09081A]/95 backdrop-blur-md px-6 py-4">
           <div className="max-w-screen-xl mx-auto flex flex-wrap items-center justify-between gap-4">
             <div className="flex flex-wrap items-center gap-6">
               <div className="text-sm font-semibold text-amber-400">
-                {selected.size} cartas selecionadas
+                {selected.size} {selected.size === 1 ? "carta selecionada" : "cartas selecionadas"}
               </div>
               <div className="flex gap-4 text-xs">
                 <div>
