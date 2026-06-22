@@ -90,39 +90,39 @@ async function scrapeLetters(): Promise<ScrapedLetter[]> {
       const hasSenha = await page.waitForSelector(senhaSel, { timeout: 8000 }).catch(() => null);
 
       if (hasSenha) {
-        // Encontrou formulário de login — preenche
-        const emailInput = await page.evaluateHandle(() => {
-          const inputs = Array.from(document.querySelectorAll("input"));
-          return inputs.find(i =>
-            i.type !== "password" && i.type !== "hidden" && i.type !== "submit" &&
-            i.type !== "checkbox" && i.type !== "radio" && i.offsetParent !== null
-          ) ?? null;
+        // Encontrou formulário de login — preenche via evaluate (mais estável)
+        await page.evaluate((em, pw) => {
+          const inputs = Array.from(document.querySelectorAll<HTMLInputElement>("input"));
+          const emailField = inputs.find(i =>
+            i.type !== "password" && i.type !== "hidden" &&
+            i.type !== "submit" && i.type !== "checkbox" && i.type !== "radio"
+          );
+          const passField = inputs.find(i => i.type === "password");
+          if (emailField) { emailField.focus(); emailField.value = em; emailField.dispatchEvent(new Event("input", { bubbles: true })); }
+          if (passField)  { passField.focus();  passField.value  = pw; passField.dispatchEvent(new Event("input", { bubbles: true })); }
+        }, email, senha);
+
+        await new Promise(r => setTimeout(r, 500));
+
+        // Submete — tenta botão, senão Enter no campo de senha
+        const submitted = await page.evaluate(() => {
+          const btn = document.querySelector<HTMLElement>('button[type="submit"], input[type="submit"]');
+          if (btn) { btn.click(); return true; }
+          const form = document.querySelector("form");
+          if (form) { form.submit(); return true; }
+          return false;
         });
+        if (!submitted) await page.keyboard.press("Enter");
 
-        if (emailInput.asElement()) {
-          await emailInput.asElement()!.type(email, { delay: 30 });
-        }
-        await page.type(senhaSel, senha, { delay: 30 });
-
-        // Clica no botão de submit (mais robusto que Enter em SPAs)
-        const submitBtn = await page.$('button[type="submit"], input[type="submit"], button:not([type])');
-        if (submitBtn) {
-          await submitBtn.click();
-        } else {
-          await page.keyboard.press("Enter");
-        }
-
-        // Aguarda redirecionamento ou desaparecimento do form (até 15s)
+        // Aguarda desaparecimento do form ou tabela aparecer (até 20s)
         await page.waitForFunction(
-          () => !document.querySelector('input[type="password"]'),
-          { timeout: 15000 }
+          () => !document.querySelector('input[type="password"]') || !!document.querySelector("table"),
+          { timeout: 20000 }
         ).catch(() => {});
 
-        // Aguarda conteúdo carregar
-        await new Promise(r => setTimeout(r, 3000));
+        await new Promise(r => setTimeout(r, 2000));
         console.log("[sync-contemplados] pós-login URL:", page.url());
       } else {
-        // Sem form de login visível — pode já estar logado ou redirecionar
         const html = await page.evaluate(() => document.body.innerHTML.substring(0, 3000));
         console.log("[sync-contemplados] sem form login. URL:", page.url(), "| HTML:", html);
       }
