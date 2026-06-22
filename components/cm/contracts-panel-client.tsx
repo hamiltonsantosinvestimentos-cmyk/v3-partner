@@ -299,7 +299,7 @@ export function ContractsPanelClient() {
                   </div>
                 )}
 
-                {/* Acoes */}
+                {/* Ações */}
                 <div className="mt-4 pt-3 border-t border-[#9BAFC5]/10 flex items-center gap-2">
                   <button
                     onClick={() => setShowPreview(!showPreview)}
