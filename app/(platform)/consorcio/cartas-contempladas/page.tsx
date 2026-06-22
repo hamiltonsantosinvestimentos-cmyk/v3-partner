@@ -78,6 +78,9 @@ export default function CartasContempladasPage() {
   // Seleção múltipla
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
+  // Modal resumo seleção
+  const [showResumoModal, setShowResumoModal] = useState(false);
+
   // Modal oferta
   const [ofertaModal, setOfertaModal] = useState<ContemplatedLetter | null>(null);
   const [ofertaForm, setOfertaForm] = useState<OfertaForm>({ interessado_nome: "", interessado_tel: "", valor_oferta: "", observacoes: "", responsavel_id: "" });
@@ -435,38 +438,89 @@ export default function CartasContempladasPage() {
         </div>
       )}
 
-      {/* Barra de seleção múltipla */}
+      {/* Botão flutuante de seleção */}
       {selected.size >= 1 && (
-        <div className="fixed bottom-0 left-0 right-0 z-[200] border-t border-amber-500/30 bg-[#09081A]/95 backdrop-blur-md px-6 py-4">
-          <div className="max-w-screen-xl mx-auto flex flex-wrap items-center justify-between gap-4">
-            <div className="flex flex-wrap items-center gap-6">
-              <div className="text-sm font-semibold text-amber-400">
-                {selected.size} {selected.size === 1 ? "carta selecionada" : "cartas selecionadas"}
+        <div className="fixed bottom-6 right-6 z-[200]">
+          <button
+            onClick={() => setShowResumoModal(true)}
+            className="flex items-center gap-2 h-11 px-5 rounded-xl font-semibold text-sm shadow-xl transition-all"
+            style={{ background: "#C9A84C", color: "#09081A" }}
+          >
+            <CheckSquare className="w-4 h-4" />
+            {selected.size} {selected.size === 1 ? "carta" : "cartas"} — Ver resumo
+          </button>
+        </div>
+      )}
+
+      {/* Modal de resumo da seleção */}
+      {showResumoModal && selected.size >= 1 && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="w-full max-w-md bg-[#111F35] rounded-2xl border border-amber-500/20 shadow-2xl">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-border/50">
+              <h3 className="text-sm font-bold text-white">
+                Resumo — {selected.size} {selected.size === 1 ? "carta selecionada" : "cartas selecionadas"}
+              </h3>
+              <button onClick={() => setShowResumoModal(false)} className="text-muted-foreground hover:text-foreground transition-colors">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="px-6 py-5 space-y-3">
+              {/* Lista das cartas selecionadas */}
+              <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                {selectedLetters.map(l => (
+                  <div key={l.id} className="flex items-center justify-between px-3 py-2 rounded-lg bg-[#162744]">
+                    <div>
+                      <p className="text-xs font-mono text-muted-foreground">{l.code}</p>
+                      <p className="text-xs font-medium text-[#F0ECE4]">{l.admin}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs font-bold text-white">{formatCurrency(l.credit_value)}</p>
+                      <p className="text-[10px] text-amber-400">Entrada: {formatCurrency(l.asking_price)}</p>
+                    </div>
+                  </div>
+                ))}
               </div>
-              <div className="flex gap-4 text-xs">
-                <div>
-                  <span className="text-muted-foreground">Total de Crédito</span>
-                  <p className="font-bold text-white">{formatCurrency(sumCredito)}</p>
+
+              {/* Totais */}
+              <div className="border-t border-border/50 pt-3 space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-muted-foreground">Total de Crédito</span>
+                  <span className="text-sm font-bold text-white">{formatCurrency(sumCredito)}</span>
                 </div>
-                <div>
-                  <span className="text-muted-foreground">Total de Entrada</span>
-                  <p className="font-bold text-amber-400">{formatCurrency(sumEntrada)}</p>
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-muted-foreground">Total de Entrada</span>
+                  <span className="text-sm font-bold text-amber-400">{formatCurrency(sumEntrada)}</span>
                 </div>
                 {avgParcela !== null && (
-                  <div>
-                    <span className="text-muted-foreground">Média de Parcelas</span>
-                    <p className="font-bold text-[#C9A84C]">{formatCurrency(avgParcela)}</p>
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-muted-foreground">Média de Parcelas</span>
+                    <span className="text-sm font-bold text-[#C9A84C]">{formatCurrency(avgParcela)}</span>
                   </div>
                 )}
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-muted-foreground">Desconto Médio</span>
+                  <span className="text-sm font-bold text-emerald-400">
+                    {(selectedLetters.reduce((s, l) => s + l.discount, 0) / selectedLetters.length).toFixed(1)}%
+                  </span>
+                </div>
               </div>
             </div>
-            <button
-              onClick={() => setSelected(new Set())}
-              className="flex items-center gap-1.5 h-8 px-4 text-xs font-medium rounded-lg border border-border text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors"
-            >
-              <X className="w-3.5 h-3.5" />
-              Limpar seleção
-            </button>
+
+            <div className="px-6 pb-5 flex gap-2">
+              <button
+                onClick={() => setShowResumoModal(false)}
+                className="flex-1 h-9 text-xs font-medium rounded-lg border border-border text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors"
+              >
+                Fechar
+              </button>
+              <button
+                onClick={() => { setSelected(new Set()); setShowResumoModal(false); }}
+                className="flex-1 h-9 text-xs font-medium rounded-lg border border-red-500/30 text-red-400 hover:bg-red-500/10 transition-colors"
+              >
+                Limpar seleção
+              </button>
+            </div>
           </div>
         </div>
       )}
