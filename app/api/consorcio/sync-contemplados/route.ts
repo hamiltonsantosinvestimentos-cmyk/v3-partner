@@ -6,6 +6,7 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 120;
 
 const ADMIN_ROLES = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"] as const;
+const LOGIN_URL  = "https://contempladosrs.com.br/login";
 const SOURCE_URL = "https://contempladosrs.com.br/area-do-parceiro";
 
 function svc() {
@@ -72,14 +73,42 @@ interface ScrapedLetter {
 }
 
 async function scrapeLetters(): Promise<ScrapedLetter[]> {
+  const email = process.env.CONTEMPLADOS_EMAIL;
+  const senha = process.env.CONTEMPLADOS_SENHA;
+
   const browser = await launchBrowser();
   try {
     const page = await browser.newPage();
     await page.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36");
+
+    // ── Login ─────────────────────────────────────────────────────────────────
+    if (email && senha) {
+      await page.goto(LOGIN_URL, { waitUntil: "networkidle2", timeout: 30000 });
+
+      // Preenche campos de login (tenta seletores comuns)
+      const emailSel = 'input[type="email"], input[name="email"], input[name="usuario"], input[name="login"]';
+      const senhaSel = 'input[type="password"]';
+
+      await page.waitForSelector(emailSel, { timeout: 10000 });
+      await page.type(emailSel, email, { delay: 30 });
+      await page.type(senhaSel, senha, { delay: 30 });
+
+      // Submete o formulário
+      await Promise.all([
+        page.waitForNavigation({ waitUntil: "networkidle2", timeout: 30000 }),
+        page.keyboard.press("Enter"),
+      ]);
+    }
+
+    // ── Navega para a área do parceiro ────────────────────────────────────────
     await page.goto(SOURCE_URL, { waitUntil: "networkidle2", timeout: 30000 });
 
     // Aguarda a tabela aparecer
     await page.waitForSelector("table", { timeout: 15000 }).catch(() => {});
+
+    // Debug: captura URL final e título para diagnóstico
+    const debugUrl   = page.url();
+    const debugTitle = await page.title();
 
     // Extrai todas as linhas da tabela via DOM
     const rows = await page.evaluate(() => {
@@ -93,6 +122,10 @@ async function scrapeLetters(): Promise<ScrapedLetter[]> {
       });
       return results;
     });
+
+    if (rows.length === 0) {
+      throw new Error(`Nenhuma linha encontrada. URL final: ${debugUrl} | Título: ${debugTitle}`);
+    }
 
     const letters: ScrapedLetter[] = [];
 
