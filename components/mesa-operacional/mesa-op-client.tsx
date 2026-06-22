@@ -6,6 +6,7 @@ import {
   Clock, CheckCircle2, AlertCircle, Link2,
   LayoutGrid, List, Search, X, FileText, ArrowRight, ArrowLeft, MessageSquare, Trash2,
   ScrollText, RefreshCw, XCircle, Download, Edit2, Users, Filter, Settings, Bell, Mail, MessageCircle,
+  BarChart2, TrendingUp, AlertTriangle, Timer,
 } from "lucide-react";
 import { ExportButton } from "@/components/financeiro/export-button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -1413,7 +1414,7 @@ function EditarPropostaModal({ open, onClose, proposal, onSaved }: {
 
 // ─── Main Component ────────────────────────────────────────────────────────
 export function MesaOpClient({ tickets: initialTickets, proposals: initialProposals, currentUser }: MesaOpClientProps) {
-  const [view, setView] = useState<"kanban" | "tickets" | "contratos">("kanban");
+  const [view, setView] = useState<"kanban" | "tickets" | "contratos" | "dashboard">("kanban");
   const [tickets, setTickets] = useState<Ticket[]>(initialTickets);
   const [proposals, setProposals] = useState<ProposalCard[]>(initialProposals);
 
@@ -1990,6 +1991,10 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
         </div>
         <div className="flex gap-2">
           <div className="flex rounded-lg border border-border overflow-hidden">
+            <button onClick={() => setView("dashboard")}
+              className={`px-3 py-1.5 text-xs font-medium flex items-center gap-1.5 transition-colors ${view === "dashboard" ? "bg-[#C9A84C]/15 text-[#E8C97A]" : "text-muted-foreground hover:text-white hover:bg-secondary"}`}>
+              <BarChart2 className="w-3.5 h-3.5" /> Dashboard
+            </button>
             <button onClick={() => setView("kanban")}
               className={`px-3 py-1.5 text-xs font-medium flex items-center gap-1.5 transition-colors ${view === "kanban" ? "bg-[#C9A84C]/15 text-[#E8C97A]" : "text-muted-foreground hover:text-white hover:bg-secondary"}`}>
               <LayoutGrid className="w-3.5 h-3.5" /> Kanban
@@ -2971,6 +2976,261 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
           </div>
         </div>
       )}
+
+      {/* ── VIEW: DASHBOARD ── */}
+      {view === "dashboard" && (() => {
+        // ── Métricas de Tickets ──────────────────────────────────────────────
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        const ticketsAbertos = tickets.filter(t => !["COMPLETED", "CANCELLED"].includes(t.status));
+        const ticketsPendentes = tickets.filter(t => t.status === "PENDING");
+        const ticketsResolvidosHoje = tickets.filter(t => {
+          if (t.status !== "COMPLETED") return false;
+          const updated = t.due_date ? new Date(t.due_date) : null;
+          return updated && updated >= today;
+        });
+
+        const resolvedWithDuration = tickets
+          .filter(t => t.status === "COMPLETED" && t.due_date)
+          .map(t => (new Date(t.due_date!).getTime() - new Date(t.created_at).getTime()) / 86400000)
+          .filter(d => d > 0);
+        const tempoMedioTicket = resolvedWithDuration.length
+          ? (resolvedWithDuration.reduce((a, b) => a + b, 0) / resolvedWithDuration.length).toFixed(1)
+          : "—";
+
+        // ── Métricas de Propostas ────────────────────────────────────────────
+        const STAGES_ORDER = ["RECEBIDO", "TRIAGEM", "ANALISE", "PENDENCIA", "APROVACAO", "FINALIZADO"];
+        const STAGE_LABELS_MAP: Record<string, string> = {
+          RECEBIDO: "Recebido", TRIAGEM: "Triagem", ANALISE: "Análise",
+          PENDENCIA: "Pendência", APROVACAO: "Aprovação", FINALIZADO: "Finalizado",
+        };
+        const STAGE_COLORS: Record<string, string> = {
+          RECEBIDO: "#7A8FA8", TRIAGEM: "#60A5FA", ANALISE: "#A78BFA",
+          PENDENCIA: "#F59E0B", APROVACAO: "#34D399", FINALIZADO: "#C9A84C",
+        };
+
+        const funilData = STAGES_ORDER.map(s => ({
+          stage: s,
+          label: STAGE_LABELS_MAP[s],
+          count: proposals.filter(p => (p.stage ?? "RECEBIDO") === s).length,
+          color: STAGE_COLORS[s],
+        }));
+        const maxFunil = Math.max(...funilData.map(d => d.count), 1);
+
+        // ── SLA em risco (propostas não finalizadas paradas há > 48h) ────────
+        const slaEmRisco = proposals
+          .filter(p => p.stage !== "FINALIZADO")
+          .map(p => {
+            const ref = new Date(p.created_at).getTime();
+            const hoursStuck = (Date.now() - ref) / 3600000;
+            return { ...p, hoursStuck };
+          })
+          .filter(p => p.hoursStuck > 48)
+          .sort((a, b) => b.hoursStuck - a.hoursStuck)
+          .slice(0, 6);
+
+        // ── Tickets por prioridade ───────────────────────────────────────────
+        const prioData = [
+          { key: "URGENT", label: "Urgente", color: "#FF6B6B", count: ticketsAbertos.filter(t => t.priority === "URGENT").length },
+          { key: "HIGH", label: "Alta", color: "#F97316", count: ticketsAbertos.filter(t => t.priority === "HIGH").length },
+          { key: "MEDIUM", label: "Média", color: "#F59E0B", count: ticketsAbertos.filter(t => t.priority === "MEDIUM").length },
+          { key: "LOW", label: "Baixa", color: "#7A8FA8", count: ticketsAbertos.filter(t => t.priority === "LOW").length },
+        ];
+        const maxPrio = Math.max(...prioData.map(d => d.count), 1);
+
+        // ── Volume por parceiro (top 5 propostas) ────────────────────────────
+        const partnerMap: Record<string, { name: string; total: number; abertos: number }> = {};
+        for (const p of proposals) {
+          const pid = p.partner_id ?? "desconhecido";
+          const pname = p.partner_name ?? "Desconhecido";
+          if (!partnerMap[pid]) partnerMap[pid] = { name: pname, total: 0, abertos: 0 };
+          partnerMap[pid].total++;
+          if (p.stage !== "FINALIZADO") partnerMap[pid].abertos++;
+        }
+        const topPartners = Object.values(partnerMap)
+          .sort((a, b) => b.total - a.total)
+          .slice(0, 5);
+
+        return (
+          <div className="space-y-6 animate-fade-in">
+            {/* ── KPI Cards ── */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              {[
+                {
+                  label: "Propostas em Aberto",
+                  value: proposals.filter(p => p.stage !== "FINALIZADO").length,
+                  icon: <TrendingUp className="w-5 h-5" style={{ color: "#60A5FA" }} />,
+                  bg: "bg-blue-500/10",
+                  sub: `${proposals.length} total`,
+                },
+                {
+                  label: "Tickets Abertos",
+                  value: ticketsAbertos.length,
+                  icon: <AlertCircle className="w-5 h-5" style={{ color: "#F59E0B" }} />,
+                  bg: "bg-amber-500/10",
+                  sub: `${ticketsPendentes.length} em pendência`,
+                },
+                {
+                  label: "Resolvidos Hoje",
+                  value: ticketsResolvidosHoje.length,
+                  icon: <CheckCircle2 className="w-5 h-5" style={{ color: "#34D399" }} />,
+                  bg: "bg-emerald-500/10",
+                  sub: "tickets concluídos",
+                },
+                {
+                  label: "Tempo Médio (dias)",
+                  value: tempoMedioTicket,
+                  icon: <Timer className="w-5 h-5" style={{ color: "#C9A84C" }} />,
+                  bg: "bg-[#C9A84C]/10",
+                  sub: "por ticket resolvido",
+                },
+              ].map((kpi) => (
+                <div
+                  key={kpi.label}
+                  className="rounded-xl p-4 flex gap-3 items-center"
+                  style={{ background: "#111F35", border: "1px solid rgba(201,168,76,0.12)" }}
+                >
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${kpi.bg}`}>
+                    {kpi.icon}
+                  </div>
+                  <div>
+                    <p className="text-xl font-bold text-[#F0ECE4]">{kpi.value}</p>
+                    <p className="text-xs font-medium text-[#F0ECE4]/80">{kpi.label}</p>
+                    <p className="text-[10px] text-[#7A8FA8]">{kpi.sub}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {/* ── Funil de Propostas ── */}
+              <div className="rounded-xl p-5 space-y-3" style={{ background: "#111F35", border: "1px solid rgba(201,168,76,0.12)" }}>
+                <div className="flex items-center gap-2 mb-1">
+                  <BarChart2 className="w-4 h-4" style={{ color: "#C9A84C" }} />
+                  <h3 className="text-sm font-semibold text-[#F0ECE4]">Funil de Propostas</h3>
+                </div>
+                <div className="space-y-2">
+                  {funilData.map(d => (
+                    <div key={d.stage} className="space-y-1">
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs text-[#7A8FA8]">{d.label}</span>
+                        <span className="text-xs font-bold" style={{ color: d.color }}>{d.count}</span>
+                      </div>
+                      <div className="h-2 rounded-full" style={{ background: "#162744" }}>
+                        <div
+                          className="h-2 rounded-full transition-all duration-500"
+                          style={{ width: `${(d.count / maxFunil) * 100}%`, background: d.color }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* ── Tickets por Prioridade ── */}
+              <div className="rounded-xl p-5 space-y-3" style={{ background: "#111F35", border: "1px solid rgba(201,168,76,0.12)" }}>
+                <div className="flex items-center gap-2 mb-1">
+                  <AlertCircle className="w-4 h-4" style={{ color: "#C9A84C" }} />
+                  <h3 className="text-sm font-semibold text-[#F0ECE4]">Tickets Abertos por Prioridade</h3>
+                </div>
+                <div className="space-y-2">
+                  {prioData.map(d => (
+                    <div key={d.key} className="space-y-1">
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs text-[#7A8FA8]">{d.label}</span>
+                        <span className="text-xs font-bold" style={{ color: d.color }}>{d.count}</span>
+                      </div>
+                      <div className="h-2 rounded-full" style={{ background: "#162744" }}>
+                        <div
+                          className="h-2 rounded-full transition-all duration-500"
+                          style={{ width: `${(d.count / maxPrio) * 100}%`, background: d.color }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                {ticketsAbertos.length === 0 && (
+                  <p className="text-xs text-[#7A8FA8] text-center py-2">Nenhum ticket em aberto</p>
+                )}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {/* ── SLA em Risco ── */}
+              <div className="rounded-xl p-5" style={{ background: "#111F35", border: "1px solid rgba(201,168,76,0.12)" }}>
+                <div className="flex items-center gap-2 mb-3">
+                  <AlertTriangle className="w-4 h-4 text-amber-400" />
+                  <h3 className="text-sm font-semibold text-[#F0ECE4]">Alertas de SLA</h3>
+                  {slaEmRisco.length > 0 && (
+                    <span className="px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-400 text-[10px] font-bold">
+                      {slaEmRisco.length}
+                    </span>
+                  )}
+                </div>
+                {slaEmRisco.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-6 gap-2">
+                    <CheckCircle2 className="w-8 h-8 text-emerald-400/50" />
+                    <p className="text-xs text-[#7A8FA8]">Nenhuma proposta em atraso</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {slaEmRisco.map(p => {
+                      const days = Math.floor(p.hoursStuck / 24);
+                      const isUrgent = days >= 5;
+                      return (
+                        <div
+                          key={p.id}
+                          className="flex items-center justify-between px-3 py-2 rounded-lg cursor-pointer hover:bg-[#162744]/80 transition-colors"
+                          style={{ background: "#162744", border: `1px solid ${isUrgent ? "rgba(255,107,107,0.3)" : "rgba(245,158,11,0.2)"}` }}
+                          onClick={() => setView("kanban")}
+                        >
+                          <div className="min-w-0">
+                            <p className="text-xs font-medium text-[#F0ECE4] truncate">{p.client_name}</p>
+                            <p className="text-[10px] text-[#7A8FA8]">{p.code} · {STAGE_LABELS_MAP[p.stage ?? "RECEBIDO"]}</p>
+                          </div>
+                          <div className="flex items-center gap-1.5 flex-shrink-0 ml-2">
+                            <Clock className="w-3 h-3" style={{ color: isUrgent ? "#FF6B6B" : "#F59E0B" }} />
+                            <span className="text-[10px] font-bold" style={{ color: isUrgent ? "#FF6B6B" : "#F59E0B" }}>
+                              {days}d parado
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* ── Top Parceiros ── */}
+              <div className="rounded-xl p-5" style={{ background: "#111F35", border: "1px solid rgba(201,168,76,0.12)" }}>
+                <div className="flex items-center gap-2 mb-3">
+                  <Users className="w-4 h-4" style={{ color: "#C9A84C" }} />
+                  <h3 className="text-sm font-semibold text-[#F0ECE4]">Top Parceiros por Volume</h3>
+                </div>
+                {topPartners.length === 0 ? (
+                  <p className="text-xs text-[#7A8FA8] py-6 text-center">Nenhuma proposta registrada</p>
+                ) : (
+                  <div className="space-y-2">
+                    {topPartners.map((p, i) => (
+                      <div key={p.name} className="flex items-center gap-3 px-3 py-2 rounded-lg" style={{ background: "#162744" }}>
+                        <span className="text-xs font-bold w-4 text-center" style={{ color: i === 0 ? "#C9A84C" : "#7A8FA8" }}>
+                          {i + 1}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-medium text-[#F0ECE4] truncate">{p.name}</p>
+                          <p className="text-[10px] text-[#7A8FA8]">{p.abertos} em aberto</p>
+                        </div>
+                        <span className="text-xs font-bold text-[#E8C97A] flex-shrink-0">{p.total} prop.</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
