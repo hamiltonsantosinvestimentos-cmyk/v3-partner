@@ -30,22 +30,20 @@ const V3 = {
 
 async function launchBrowser() {
   if (process.env.NODE_ENV === "production") {
-    // Variáveis evitam análise estática do Turbopack (resolvidas em runtime)
-    const chromiumPkg = "@sparticuz/chromium-min";
-    const puppeteerPkg = "puppeteer-core";
-    const chromium = await import(/* webpackIgnore: true */ chromiumPkg);
-    const puppeteer = await import(/* webpackIgnore: true */ puppeteerPkg);
-    return puppeteer.default.launch({
-      args: [...(chromium.default.args ?? []), "--no-sandbox", "--disable-setuid-sandbox"],
+    // String literals para que serverExternalPackages funcione com Turbopack
+    const chromium = (await import("@sparticuz/chromium-min")).default;
+    const puppeteer = (await import("puppeteer-core")).default;
+    return puppeteer.launch({
+      args: [...(chromium.args ?? []), "--no-sandbox", "--disable-setuid-sandbox"],
       defaultViewport: { width: 1240, height: 1754 },
-      executablePath: await chromium.default.executablePath(
+      executablePath: await chromium.executablePath(
         "https://github.com/Sparticuz/chromium/releases/download/v133.0.0/chromium-v133.0.0-pack.tar"
       ),
       headless: true,
     });
   }
-  const puppeteer = await import("puppeteer-core");
-  return puppeteer.default.launch({
+  const puppeteer = (await import("puppeteer-core")).default;
+  return puppeteer.launch({
     args: ["--no-sandbox"],
     defaultViewport: { width: 1240, height: 1754 },
     executablePath:

@@ -31,20 +31,22 @@ function parseStatus(s: string): "DISPONIVEL" | "NEGOCIACAO" {
 
 async function launchBrowser() {
   if (process.env.NODE_ENV === "production") {
-    const chromiumPkg = "@sparticuz/chromium-min";
-    const puppeteerPkg = "puppeteer-core";
-    const chromium = await import(/* webpackIgnore: true */ chromiumPkg);
-    const puppeteer = await import(/* webpackIgnore: true */ puppeteerPkg);
-    return puppeteer.default.launch({
-      args: [...(chromium.default.args ?? []), "--no-sandbox", "--disable-setuid-sandbox"],
-      executablePath: await chromium.default.executablePath(
+    // String literals (não variáveis) para que serverExternalPackages funcione
+    // corretamente com Turbopack — o bundler precisa detectar o pacote estaticamente
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const chromium = (await import("@sparticuz/chromium-min")).default;
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const puppeteer = (await import("puppeteer-core")).default;
+    return puppeteer.launch({
+      args: [...(chromium.args ?? []), "--no-sandbox", "--disable-setuid-sandbox"],
+      executablePath: await chromium.executablePath(
         "https://github.com/Sparticuz/chromium/releases/download/v133.0.0/chromium-v133.0.0-pack.tar"
       ),
       headless: true,
     });
   }
-  const puppeteer = await import("puppeteer-core");
-  return puppeteer.default.launch({
+  const puppeteer = (await import("puppeteer-core")).default;
+  return puppeteer.launch({
     args: ["--no-sandbox"],
     executablePath:
       process.platform === "win32"
