@@ -5,7 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatCurrency } from "@/lib/utils";
-import { Trophy, Plus, Search, Home, Car, Wrench, TrendingUp, Trash2, Loader2, X } from "lucide-react";
+import { Trophy, Plus, Search, Home, Car, Wrench, TrendingUp, Trash2, Loader2, X, RefreshCw } from "lucide-react";
 
 type LetterType = "IMOVEL" | "VEICULO" | "SERVICO" | "OUTROS";
 type LetterStatus = "DISPONIVEL" | "NEGOCIACAO" | "VENDIDA" | "UTILIZADA";
@@ -47,6 +47,8 @@ export default function CartasContempladasPage() {
   const [filterStatus, setFilterStatus] = useState("DISPONIVEL");
   const [showForm, setShowForm] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState<{ inserted: number; updated: number; skipped: number; error?: string } | null>(null);
   const [form, setForm] = useState({ type: "IMOVEL" as LetterType, credit_value: "", admin: "", group_name: "", quota: "", status: "DISPONIVEL" as LetterStatus, asking_price: "", discount: "" });
 
   useEffect(() => {
@@ -95,6 +97,25 @@ export default function CartasContempladasPage() {
     setDeleting(null);
   };
 
+  const handleSync = async () => {
+    setSyncing(true);
+    setSyncResult(null);
+    try {
+      const res = await fetch("/api/consorcio/sync-contemplados", { method: "POST" });
+      const json = await res.json();
+      if (!res.ok) { setSyncResult({ inserted: 0, updated: 0, skipped: 0, error: json.error ?? "Erro desconhecido" }); return; }
+      setSyncResult({ inserted: json.inserted, updated: json.updated, skipped: json.skipped });
+      // Recarrega lista
+      const cartasRes = await fetch("/api/consorcio/cartas");
+      const cartasData = await cartasRes.json();
+      if (Array.isArray(cartasData.cartas)) setLetters(cartasData.cartas);
+    } catch (e) {
+      setSyncResult({ inserted: 0, updated: 0, skipped: 0, error: String(e) });
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   return (
     <div className="space-y-5 animate-fade-in">
       <div className="flex items-start justify-between">
@@ -107,11 +128,34 @@ export default function CartasContempladasPage() {
             <p className="text-xs text-muted-foreground">Cartas disponíveis para venda ou uso imediato</p>
           </div>
         </div>
-        <Button size="sm" onClick={() => setShowForm(!showForm)}>
-          <Plus className="w-4 h-4 mr-1.5" />
-          Incluir Carta
-        </Button>
+        <div className="flex items-center gap-2">
+          {isAdmin && (
+            <Button size="sm" variant="outline" onClick={handleSync} disabled={syncing}
+              className="gap-1.5 border-amber-500/40 text-amber-400 hover:bg-amber-500/10">
+              {syncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+              {syncing ? "Sincronizando..." : "Sincronizar Portal"}
+            </Button>
+          )}
+          <Button size="sm" onClick={() => setShowForm(!showForm)}>
+            <Plus className="w-4 h-4 mr-1.5" />
+            Incluir Carta
+          </Button>
+        </div>
       </div>
+
+      {/* Resultado do sync */}
+      {syncResult && (
+        <div className={`px-4 py-3 rounded-xl text-xs flex items-center justify-between ${syncResult.error ? "bg-red-500/10 border border-red-500/30 text-red-400" : "bg-emerald-500/10 border border-emerald-500/30 text-emerald-400"}`}>
+          {syncResult.error ? (
+            <span>⚠ Erro na sincronização: {syncResult.error}</span>
+          ) : (
+            <span>
+              ✓ Sincronização concluída — <strong>{syncResult.inserted}</strong> novas cartas importadas · <strong>{syncResult.updated}</strong> atualizadas · <strong>{syncResult.skipped}</strong> já existentes
+            </span>
+          )}
+          <button onClick={() => setSyncResult(null)} className="ml-4 opacity-60 hover:opacity-100"><X className="w-3.5 h-3.5" /></button>
+        </div>
+      )}
 
       {/* Form */}
       {showForm && (
