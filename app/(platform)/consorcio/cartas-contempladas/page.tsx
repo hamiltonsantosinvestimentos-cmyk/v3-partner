@@ -173,8 +173,10 @@ export default function CartasContempladasPage() {
     setSyncResult(null);
     try {
       const res = await fetch("/api/consorcio/sync-contemplados", { method: "POST" });
-      const json = await res.json();
-      if (!res.ok) { setSyncResult({ inserted: 0, updated: 0, skipped: 0, error: json.error ?? "Erro desconhecido" }); return; }
+      const text = await res.text();
+      let json: Record<string, unknown> = {};
+      try { json = JSON.parse(text); } catch { setSyncResult({ inserted: 0, updated: 0, skipped: 0, error: `Resposta inválida do servidor (${res.status})` }); return; }
+      if (!res.ok) { setSyncResult({ inserted: 0, updated: 0, skipped: 0, error: (json.error as string) ?? "Erro desconhecido" }); return; }
       setSyncResult({ inserted: json.inserted, updated: json.updated, skipped: json.skipped });
       const cartasRes = await fetch("/api/consorcio/cartas");
       const cartasData = await cartasRes.json();
