@@ -3,13 +3,11 @@ import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 120;
+export const maxDuration = 300;
 
 const ADMIN_ROLES = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"] as const;
-const BASE_URL = "https://contempladosrs.com.br";
+const BASE_URL    = "https://contempladosrs.com.br";
 const PARTNER_URL = `${BASE_URL}/area-do-parceiro`;
-const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
-const WIRE_TOKEN = "%2FJIwSEOOrlvahP%2Fv5qJlXidyHYoowD8K%2B%2Fc83PkU9VjcDsYOWAsOXw1b7BQShiEG07q%2FNSh5ofwppRJpUzPWglrhEKtksz6LZcgJrCSjkgw%3D";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -32,52 +30,6 @@ function parseStatus(s: string): "DISPONIVEL" | "NEGOCIACAO" {
   return s.toLowerCase().includes("reserv") ? "NEGOCIACAO" : "DISPONIVEL";
 }
 
-// ── Cookie jar simples ────────────────────────────────────────────────────────
-function mergeCookies(jar: Record<string, string>, res: Response): void {
-  // Node 18+ tem getSetCookie(); fallback para get("set-cookie")
-  const h = res.headers as unknown as { getSetCookie?: () => string[] };
-  const raw = h.getSetCookie?.() ?? [res.headers.get("set-cookie") ?? ""];
-  for (const c of raw) {
-    if (!c) continue;
-    const [pair] = c.split(";");
-    const idx = pair.indexOf("=");
-    if (idx > 0) jar[pair.substring(0, idx).trim()] = pair.substring(idx + 1).trim();
-  }
-}
-
-function cookieStr(jar: Record<string, string>): string {
-  return Object.entries(jar).map(([k, v]) => `${k}=${v}`).join("; ");
-}
-
-// ── Extrai texto puro de um bloco HTML ───────────────────────────────────────
-function stripHtml(html: string): string {
-  return html
-    .replace(/<[^>]+>/g, "")
-    .replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">").replace(/&quot;/g, '"')
-    .replace(/\s+/g, " ").trim();
-}
-
-// ── Parseia tabela HTML → array de linhas (array de células) ─────────────────
-function parseHtmlTable(html: string): string[][] {
-  const rows: string[][] = [];
-  // Remove comentários e scripts antes de parsear
-  const clean = html.replace(/<!--[\s\S]*?-->/g, "").replace(/<script[\s\S]*?<\/script>/gi, "");
-  const trRe = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
-  let trMatch: RegExpExecArray | null;
-  while ((trMatch = trRe.exec(clean)) !== null) {
-    const cells: string[] = [];
-    const tdRe = /<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi;
-    let tdMatch: RegExpExecArray | null;
-    while ((tdMatch = tdRe.exec(trMatch[1])) !== null) {
-      cells.push(stripHtml(tdMatch[1]));
-    }
-    // Aceita linhas com >= 4 células (algumas podem ter menos colunas)
-    if (cells.length >= 4) rows.push(cells);
-  }
-  return rows;
-}
-
 interface ScrapedLetter {
   type: "IMOVEL" | "VEICULO" | "SERVICO" | "OUTROS";
   credit_value: number;
@@ -95,211 +47,158 @@ interface ScrapedLetter {
   avaliacao_minima: number | null;
 }
 
-function rowsToLetters(rows: string[][]): ScrapedLetter[] {
-  const letters: ScrapedLetter[] = [];
-  for (const cells of rows) {
-    const categoria = cells[0];
-    if (!categoria) continue;
-    const catLower = categoria.toLowerCase();
-    if (catLower === "categoria" || catLower === "tipo" || catLower.includes("observ") || catLower === "th") continue;
-
-    const creditValue = parseBRL(cells[1]);
-    if (creditValue <= 0) continue;
-
-    const entrada       = parseBRL(cells[2]);
-    const parcelasRaw   = cells[3]?.trim() || null;
-    const taxaTransf    = parseBRL(cells[4]);
-    const fundoComum    = parseBRL(cells[5]);
-    const disponibilidade = cells[6] || "Disponível";
-    const administradora  = cells[7] || "Contemplados RS";
-    // Colunas extras (se existirem na tabela)
-    const avaliacaoMinima = cells[8] ? parseBRL(cells[8]) : null;
-
-    let parcelas_qtd: number | null = null;
-    let parcela_valor: number | null = null;
-    if (parcelasRaw) {
-      const m = parcelasRaw.replace(/\s/g, "").match(/^(\d+)[xX×]([0-9.,]+)/);
-      if (m) {
-        parcelas_qtd  = parseInt(m[1], 10);
-        parcela_valor = parseBRL(m[2]);
-      }
-    }
-
-    // Saldo devedor = total das parcelas restantes
-    const saldo_devedor = parcelas_qtd && parcela_valor ? Math.round(parcelas_qtd * parcela_valor) : null;
-    // Avaliação mínima: da coluna extra ou estimativa (credit_value × 1.335)
-    const avaliacao_minima = (avaliacaoMinima && avaliacaoMinima > 0)
-      ? avaliacaoMinima
-      : (creditValue > 0 ? Math.round(creditValue * 1.335) : null);
-
-    const discount = creditValue > 0 && entrada > 0
-      ? Math.round(((creditValue - entrada) / creditValue) * 100 * 10) / 10
-      : 0;
-
-    const sourceRef = `${categoria}-${creditValue}-${entrada}-${parcelasRaw}-${administradora}`
-      .toLowerCase().replace(/[^a-z0-9-]/g, "-").substring(0, 200);
-
-    letters.push({
-      type: parseCategory(categoria),
-      credit_value: creditValue,
-      admin: administradora,
-      status: parseStatus(disponibilidade),
-      asking_price: entrada,
-      discount,
-      source_ref: sourceRef,
-      parcelas_raw: parcelasRaw,
-      parcelas_qtd,
-      parcela_valor,
-      taxa_transf: taxaTransf,
-      fundo_comum: fundoComum,
-      saldo_devedor,
-      avaliacao_minima,
-    });
-  }
-  return letters;
-}
-
-// ── Wire API — tenta buscar via proxy autenticado ────────────────────────────
-async function fetchViaWire(pageUrl: string): Promise<string | null> {
-  const wireToken = process.env.CONTEMPLADOS_WIRE_TOKEN ?? WIRE_TOKEN;
-  const wireUrl = `https://api.wire.spbx.app/wire?token=${wireToken}&u=${encodeURIComponent(pageUrl)}`;
-  try {
-    const res = await fetch(wireUrl, {
-      headers: { "User-Agent": UA, "Accept": "text/html,application/xhtml+xml" },
-      redirect: "follow",
-    });
-    if (!res.ok) return null;
-    const html = await res.text();
-    return html;
-  } catch {
-    return null;
-  }
-}
-
 async function scrapeLetters(): Promise<{ letters: ScrapedLetter[]; rawRows: number }> {
-  // ── Tenta via Wire API primeiro (mais rápido, sem login) ─────────────────
-  const wireHtml = await fetchViaWire(PARTNER_URL);
-  if (wireHtml && /<table/i.test(wireHtml)) {
-    const allRows: string[][] = [...parseHtmlTable(wireHtml)];
-
-    // Paginação via wire
-    const pageLinkRe = /href=["']([^"']*[?&]page=(\d+)[^"']*)["']/gi;
-    const pageNums = new Set<number>();
-    let plm: RegExpExecArray | null;
-    while ((plm = pageLinkRe.exec(wireHtml)) !== null) {
-      pageNums.add(parseInt(plm[2], 10));
-    }
-    if (pageNums.size === 0 && allRows.length >= 20) {
-      for (let p = 2; p <= 10; p++) pageNums.add(p);
-    }
-    for (const p of pageNums) {
-      const pageHtml = await fetchViaWire(`${PARTNER_URL}?page=${p}`);
-      if (!pageHtml || !/<table/i.test(pageHtml)) break;
-      const pageRows = parseHtmlTable(pageHtml);
-      if (pageRows.length <= 1) break;
-      allRows.push(...pageRows);
-    }
-
-    const letters = rowsToLetters(allRows);
-    // Wire retorna dados mas podem estar truncados — só usa se tiver mais que login direto
-    // Para garantir completude, sempre usa login direto
-    if (letters.length > 0) console.log(`[sync] wire capturou ${allRows.length} linhas brutas → ${letters.length} cartas`);
-  }
-
-  // ── Login direto (mais completo que wire) ─────────────────────────────────
   const email = process.env.CONTEMPLADOS_EMAIL ?? "";
   const senha = process.env.CONTEMPLADOS_SENHA ?? "";
-  const jar: Record<string, string> = {};
 
-  // ── Passo 1: GET /area-do-parceiro para obter cookies de sessão ─────────────
-  const r1 = await fetch(PARTNER_URL, {
-    headers: { "User-Agent": UA, "Accept": "text/html,application/xhtml+xml", "Accept-Language": "pt-BR,pt;q=0.9" },
-    redirect: "follow",
-  });
-  mergeCookies(jar, r1);
+  // ── Lança browser ─────────────────────────────────────────────────────────
+  const puppeteerArgs = [
+    "--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage",
+    "--disable-gpu", "--single-process", "--no-zygote",
+  ];
 
-  // Extrai block_id do formulário de login (necessário para a API)
-  const html1 = await r1.text();
-  const blockIdMatch = html1.match(/["']block_id["']\s*:\s*["']([^"']+)["']|block_id=["']([^"']+)["']/i);
-  const blockId = blockIdMatch?.[1] ?? blockIdMatch?.[2] ?? "block1759149946234";
-
-  // ── Passo 2: POST /api/login-credentials (JSON API descoberta via DevTools) ──
-  const r2 = await fetch(`${BASE_URL}/api/login-credentials`, {
-    method: "POST",
-    headers: {
-      "User-Agent": UA,
-      "Content-Type": "application/json",
-      "Cookie": cookieStr(jar),
-      "Referer": PARTNER_URL,
-      "Origin": BASE_URL,
-      "Accept": "application/json, text/plain, */*",
-      "X-Requested-With": "XMLHttpRequest",
-    },
-    body: JSON.stringify({ block_id: blockId, login: email, senha }),
-    redirect: "manual",
-  });
-  mergeCookies(jar, r2);
-  const loginResp = await r2.text();
-  console.log("[sync] login-credentials status:", r2.status, "resp:", loginResp.substring(0, 100));
-
-  // ── Passo 3: GET /area-do-parceiro com sessão autenticada ────────────────────
-  const r3 = await fetch(PARTNER_URL, {
-    headers: {
-      "User-Agent": UA,
-      "Cookie": cookieStr(jar),
-      "Accept": "text/html,application/xhtml+xml",
-      "Accept-Language": "pt-BR,pt;q=0.9",
-      "Referer": BASE_URL,
-    },
-    redirect: "follow",
-  });
-  mergeCookies(jar, r3);
-  const htmlFinal = await r3.text();
-  console.log("[sync] step3 URL:", r3.url, "| TR:", (htmlFinal.match(/<tr/gi) ?? []).length);
-
-  if (!/<table/i.test(htmlFinal)) {
-    const snippet = stripHtml(htmlFinal).substring(0, 500);
-    throw new Error(`Tabela não encontrada após login. Página retornou: ${snippet}`);
-  }
-
-  // ── Coleta todas as páginas ───────────────────────────────────────────────
-  const allRows: string[][] = [...parseHtmlTable(htmlFinal)];
-
-  // Detecta links de paginação: ?page=N ou /area-do-parceiro?page=N
-  const pageLinks = new Set<string>();
-  const pageLinkRe = /href=["']([^"']*[?&]page=(\d+)[^"']*)["']/gi;
-  let plm: RegExpExecArray | null;
-  while ((plm = pageLinkRe.exec(htmlFinal)) !== null) {
-    const pageNum = parseInt(plm[2], 10);
-    if (pageNum > 1) {
-      const href = plm[1].startsWith("http") ? plm[1] : BASE_URL + plm[1];
-      pageLinks.add(href);
-    }
-  }
-
-  // Fallback: tenta pages 2..10 se não encontrou links de paginação mas tabela tem muitas linhas
-  if (pageLinks.size === 0 && allRows.length >= 20) {
-    for (let p = 2; p <= 10; p++) {
-      pageLinks.add(`${PARTNER_URL}?page=${p}`);
-    }
-  }
-
-  for (const pageUrl of pageLinks) {
-    const rp = await fetch(pageUrl, {
-      headers: { "User-Agent": UA, "Cookie": cookieStr(jar), "Accept": "text/html,application/xhtml+xml" },
-      redirect: "follow",
+  let browser;
+  if (process.env.NODE_ENV === "production") {
+    const chromium = (await import("@sparticuz/chromium-min")).default;
+    const puppeteer = (await import("puppeteer-core")).default;
+    browser = await puppeteer.launch({
+      args: [...chromium.args, ...puppeteerArgs],
+      executablePath: await chromium.executablePath(
+        "https://github.com/Sparticuz/chromium/releases/download/v133.0.0/chromium-v133.0.0-pack.tar"
+      ),
+      headless: true,
+      protocolTimeout: 90000,
     });
-    if (!rp.ok) break;
-    const htmlPage = await rp.text();
-    if (!/<table/i.test(htmlPage)) break;
-    const pageRows = parseHtmlTable(htmlPage);
-    if (pageRows.length <= 1) break; // só header, acabou
-    allRows.push(...pageRows);
+  } else {
+    const puppeteer = (await import("puppeteer-core")).default;
+    browser = await puppeteer.launch({
+      args: puppeteerArgs,
+      executablePath: "C:/Program Files/Google/Chrome/Application/chrome.exe",
+      headless: false,
+      protocolTimeout: 90000,
+    });
   }
 
-  const letters = rowsToLetters(allRows);
-  console.log(`[sync] login direto capturou ${allRows.length} linhas brutas → ${letters.length} cartas`);
-  return { letters, rawRows: allRows.length };
+  try {
+    const page = await browser.newPage();
+    page.setDefaultTimeout(60000);
+    page.setDefaultNavigationTimeout(60000);
+    await page.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36");
+
+    // ── Passo 1: Acessa a página para obter cookies + block_id ───────────────
+    await page.goto(PARTNER_URL, { waitUntil: "load", timeout: 60000 });
+
+    // Extrai block_id do JS da página
+    const blockId = await page.evaluate(() => {
+      const scripts = Array.from(document.querySelectorAll("script"));
+      for (const s of scripts) {
+        const m = s.textContent?.match(/block_id["'\s]*:["'\s]*([^"',}\s]+)/);
+        if (m) return m[1].replace(/['"]/g, "");
+      }
+      return "block1759149946234";
+    });
+
+    // ── Passo 2: Login via API JS ─────────────────────────────────────────────
+    const loginResult = await page.evaluate(async (url, bid, lg, pw) => {
+      try {
+        const r = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Requested-With": "XMLHttpRequest" },
+          body: JSON.stringify({ block_id: bid, login: lg, senha: pw }),
+        });
+        return { ok: r.ok, status: r.status, body: await r.text() };
+      } catch (e) {
+        return { ok: false, status: 0, body: String(e) };
+      }
+    }, `${BASE_URL}/api/login-credentials`, blockId, email, senha);
+
+    console.log("[sync] login result:", loginResult.status, loginResult.body.substring(0, 100));
+
+    if (!loginResult.ok) {
+      throw new Error(`Login falhou: ${loginResult.status} ${loginResult.body}`);
+    }
+
+    // ── Passo 3: Aguarda tabela recarregar com dados autenticados ─────────────
+    await new Promise(r => setTimeout(r, 3000));
+    await page.reload({ waitUntil: "load", timeout: 60000 });
+    await page.waitForSelector("table", { timeout: 20000 }).catch(() => {});
+    await new Promise(r => setTimeout(r, 2000));
+
+    // ── Extrai dados da tabela ────────────────────────────────────────────────
+    const rows = await page.evaluate(() => {
+      const results: string[][] = [];
+      document.querySelectorAll("table tr").forEach(tr => {
+        const cells: string[] = [];
+        tr.querySelectorAll("td, th").forEach(td => {
+          cells.push((td.textContent ?? "").trim().replace(/\s+/g, " "));
+        });
+        if (cells.length >= 4) results.push(cells);
+      });
+      return results;
+    });
+
+    console.log("[sync] rows capturadas:", rows.length);
+
+    const letters: ScrapedLetter[] = [];
+    for (const cells of rows) {
+      const categoria = cells[0];
+      if (!categoria) continue;
+      const catLower = categoria.toLowerCase();
+      if (catLower === "categoria" || catLower === "tipo" || catLower.includes("observ") || catLower === "th") continue;
+
+      const creditValue = parseBRL(cells[1]);
+      if (creditValue <= 0) continue;
+
+      const entrada         = parseBRL(cells[2]);
+      const parcelasRaw     = cells[3]?.trim() || null;
+      const taxaTransf      = parseBRL(cells[4]);
+      const fundoComum      = parseBRL(cells[5]);
+      const disponibilidade = cells[6] || "Disponível";
+      const administradora  = cells[7] || "Contemplados RS";
+      const avaliacaoCol    = cells[8] ? parseBRL(cells[8]) : null;
+
+      let parcelas_qtd: number | null = null;
+      let parcela_valor: number | null = null;
+      if (parcelasRaw) {
+        const m = parcelasRaw.replace(/\s/g, "").match(/^(\d+)[xX×]([0-9.,]+)/);
+        if (m) {
+          parcelas_qtd  = parseInt(m[1], 10);
+          parcela_valor = parseBRL(m[2]);
+        }
+      }
+
+      const saldo_devedor    = parcelas_qtd && parcela_valor ? Math.round(parcelas_qtd * parcela_valor) : null;
+      const avaliacao_minima = (avaliacaoCol && avaliacaoCol > 0) ? avaliacaoCol : (creditValue > 0 ? Math.round(creditValue * 1.335) : null);
+
+      const discount = creditValue > 0 && entrada > 0
+        ? Math.round(((creditValue - entrada) / creditValue) * 100 * 10) / 10
+        : 0;
+
+      const sourceRef = `${categoria}-${creditValue}-${entrada}-${parcelasRaw}-${administradora}`
+        .toLowerCase().replace(/[^a-z0-9-]/g, "-").substring(0, 200);
+
+      letters.push({
+        type: parseCategory(categoria),
+        credit_value: creditValue,
+        admin: administradora,
+        status: parseStatus(disponibilidade),
+        asking_price: entrada,
+        discount,
+        source_ref: sourceRef,
+        parcelas_raw: parcelasRaw,
+        parcelas_qtd,
+        parcela_valor,
+        taxa_transf: taxaTransf,
+        fundo_comum: fundoComum,
+        saldo_devedor,
+        avaliacao_minima,
+      });
+    }
+
+    return { letters, rawRows: rows.length };
+  } finally {
+    await browser.close();
+  }
 }
 
 export async function POST() {
@@ -327,7 +226,6 @@ export async function POST() {
     return NextResponse.json({ error: "Nenhuma carta encontrada no portal." }, { status: 422 });
   }
 
-  // Busca existentes para deduplicar
   const { data: existing } = await svc()
     .from("consorcio_cartas")
     .select("id, source_ref, status")
@@ -337,23 +235,20 @@ export async function POST() {
     (existing ?? []).map((r: { id: string; source_ref: string; status: string }) => [r.source_ref, r])
   );
 
-  // Busca todos os códigos e extrai o maior número para evitar colisão
-  const { data: allCodes } = await svc()
-    .from("consorcio_cartas")
-    .select("code");
+  const { data: allCodes } = await svc().from("consorcio_cartas").select("code");
   let maxNum = 0;
   for (const row of allCodes ?? []) {
     const m = String(row.code).match(/(\d+)$/);
     if (m) maxNum = Math.max(maxNum, parseInt(m[1], 10));
   }
   let counter = maxNum + 1;
+
   const toInsert = [];
-  const toUpdate = [];
+  const toUpdate: Array<{ id: string; status: string; saldo_devedor: number | null; avaliacao_minima: number | null; parcelas_qtd: number | null; parcela_valor: number | null; taxa_transf: number; fundo_comum: number }> = [];
 
   for (const letter of allLetters) {
     const existing_entry = existingMap.get(letter.source_ref);
     if (existing_entry) {
-      // Atualiza status e enriquece metadata com novos campos
       toUpdate.push({
         id: existing_entry.id,
         status: letter.status,
@@ -423,14 +318,11 @@ export async function POST() {
     raw_rows: rawRows,
     inserted,
     updated,
-    skipped: allLetters.length - inserted - updated,
+    skipped: 0,
     debug_sample: allLetters.slice(0, 5).map(l => ({
       admin: l.admin,
       credit_value: l.credit_value,
-      asking_price: l.asking_price,
-      parcelas_raw: l.parcelas_raw,
       status: l.status,
-      source_ref: l.source_ref.substring(0, 60),
     })),
   });
 }
