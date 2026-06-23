@@ -258,11 +258,19 @@ export async function POST() {
     (existing ?? []).map((r: { id: string; source_ref: string; status: string }) => [r.source_ref, r])
   );
 
-  const { count } = await svc()
+  // Usa o maior número já existente nos códigos para evitar duplicata
+  const { data: maxCodeRow } = await svc()
     .from("consorcio_cartas")
-    .select("*", { count: "exact", head: true });
+    .select("code")
+    .order("created_at", { ascending: false })
+    .limit(100);
 
-  let counter = (count ?? 0) + 1;
+  let maxNum = 0;
+  for (const row of maxCodeRow ?? []) {
+    const m = String(row.code).match(/(\d+)$/);
+    if (m) maxNum = Math.max(maxNum, parseInt(m[1], 10));
+  }
+  let counter = maxNum + 1;
   const toInsert = [];
   const toUpdate = [];
 
