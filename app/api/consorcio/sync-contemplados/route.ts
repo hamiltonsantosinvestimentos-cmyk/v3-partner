@@ -176,7 +176,7 @@ async function fetchViaWire(pageUrl: string): Promise<string | null> {
   }
 }
 
-async function scrapeLetters(): Promise<ScrapedLetter[]> {
+async function scrapeLetters(): Promise<{ letters: ScrapedLetter[]; rawRows: number }> {
   // ── Tenta via Wire API primeiro (mais rápido, sem login) ─────────────────
   const wireHtml = await fetchViaWire(PARTNER_URL);
   if (wireHtml && /<table/i.test(wireHtml)) {
@@ -201,10 +201,12 @@ async function scrapeLetters(): Promise<ScrapedLetter[]> {
     }
 
     const letters = rowsToLetters(allRows);
-    if (letters.length > 0) return letters;
+    // Wire retorna dados mas podem estar truncados — só usa se tiver mais que login direto
+    // Para garantir completude, sempre usa login direto
+    if (letters.length > 0) console.log(`[sync] wire capturou ${allRows.length} linhas brutas → ${letters.length} cartas`);
   }
 
-  // ── Fallback: login direto ────────────────────────────────────────────────
+  // ── Login direto (mais completo que wire) ─────────────────────────────────
   const email = process.env.CONTEMPLADOS_EMAIL ?? "";
   const senha = process.env.CONTEMPLADOS_SENHA ?? "";
   const jar: Record<string, string> = {};
@@ -221,7 +223,7 @@ async function scrapeLetters(): Promise<ScrapedLetter[]> {
   if (/<table/i.test(html1)) {
     const rows = parseHtmlTable(html1);
     const letters = rowsToLetters(rows);
-    if (letters.length > 0) return letters;
+    if (letters.length > 0) return { letters, rawRows: rows.length };
   }
 
   // ── Extrai CSRF token e form action ─────────────────────────────────────────
@@ -319,7 +321,8 @@ async function scrapeLetters(): Promise<ScrapedLetter[]> {
   }
 
   const letters = rowsToLetters(allRows);
-  return letters;
+  console.log(`[sync] login direto capturou ${allRows.length} linhas brutas → ${letters.length} cartas`);
+  return { letters, rawRows: allRows.length };
 }
 
 export async function POST() {
@@ -334,8 +337,11 @@ export async function POST() {
   }
 
   let allLetters: ScrapedLetter[] = [];
+  let rawRows = 0;
   try {
-    allLetters = await scrapeLetters();
+    const result = await scrapeLetters();
+    allLetters = result.letters;
+    rawRows = result.rawRows;
   } catch (e) {
     return NextResponse.json({ error: `Erro ao buscar portal: ${String(e)}` }, { status: 502 });
   }
@@ -437,6 +443,7 @@ export async function POST() {
   return NextResponse.json({
     ok: true,
     total_scraped: allLetters.length,
+    raw_rows: rawRows,
     inserted,
     updated,
     skipped: allLetters.length - inserted - updated,
