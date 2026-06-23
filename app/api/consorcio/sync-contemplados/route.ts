@@ -61,16 +61,19 @@ function stripHtml(html: string): string {
 // ── Parseia tabela HTML → array de linhas (array de células) ─────────────────
 function parseHtmlTable(html: string): string[][] {
   const rows: string[][] = [];
-  const trRe = /<tr[\s\S]*?>([\s\S]*?)<\/tr>/gi;
+  // Remove comentários e scripts antes de parsear
+  const clean = html.replace(/<!--[\s\S]*?-->/g, "").replace(/<script[\s\S]*?<\/script>/gi, "");
+  const trRe = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
   let trMatch: RegExpExecArray | null;
-  while ((trMatch = trRe.exec(html)) !== null) {
+  while ((trMatch = trRe.exec(clean)) !== null) {
     const cells: string[] = [];
-    const tdRe = /<t[dh][\s\S]*?>([\s\S]*?)<\/t[dh]>/gi;
+    const tdRe = /<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi;
     let tdMatch: RegExpExecArray | null;
     while ((tdMatch = tdRe.exec(trMatch[1])) !== null) {
       cells.push(stripHtml(tdMatch[1]));
     }
-    if (cells.length >= 6) rows.push(cells);
+    // Aceita linhas com >= 4 células (algumas podem ter menos colunas)
+    if (cells.length >= 4) rows.push(cells);
   }
   return rows;
 }
