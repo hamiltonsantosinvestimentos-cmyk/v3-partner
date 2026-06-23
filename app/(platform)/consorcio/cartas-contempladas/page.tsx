@@ -174,10 +174,10 @@ export default function CartasContempladasPage() {
     try {
       const res = await fetch("/api/consorcio/sync-contemplados", { method: "POST" });
       const text = await res.text();
-      let json: Record<string, unknown> = {};
+      let json: { ok?: boolean; error?: string; inserted?: number; updated?: number; skipped?: number } = {};
       try { json = JSON.parse(text); } catch { setSyncResult({ inserted: 0, updated: 0, skipped: 0, error: `Resposta inválida do servidor (${res.status})` }); return; }
-      if (!res.ok) { setSyncResult({ inserted: 0, updated: 0, skipped: 0, error: (json.error as string) ?? "Erro desconhecido" }); return; }
-      setSyncResult({ inserted: json.inserted, updated: json.updated, skipped: json.skipped });
+      if (!res.ok) { setSyncResult({ inserted: 0, updated: 0, skipped: 0, error: json.error ?? "Erro desconhecido" }); return; }
+      setSyncResult({ inserted: json.inserted ?? 0, updated: json.updated ?? 0, skipped: json.skipped ?? 0 });
       const cartasRes = await fetch("/api/consorcio/cartas");
       const cartasData = await cartasRes.json();
       if (Array.isArray(cartasData.cartas)) setLetters(cartasData.cartas);
