@@ -221,8 +221,42 @@ async function scrapeLetters(): Promise<ScrapedLetter[]> {
     throw new Error(`Tabela não encontrada após login. Página retornou: ${snippet}`);
   }
 
-  const rows = parseHtmlTable(htmlFinal);
-  const letters = rowsToLetters(rows);
+  // ── Coleta todas as páginas ───────────────────────────────────────────────
+  const allRows: string[][] = [...parseHtmlTable(htmlFinal)];
+
+  // Detecta links de paginação: ?page=N ou /area-do-parceiro?page=N
+  const pageLinks = new Set<string>();
+  const pageLinkRe = /href=["']([^"']*[?&]page=(\d+)[^"']*)["']/gi;
+  let plm: RegExpExecArray | null;
+  while ((plm = pageLinkRe.exec(htmlFinal)) !== null) {
+    const pageNum = parseInt(plm[2], 10);
+    if (pageNum > 1) {
+      const href = plm[1].startsWith("http") ? plm[1] : BASE_URL + plm[1];
+      pageLinks.add(href);
+    }
+  }
+
+  // Fallback: tenta pages 2..10 se não encontrou links de paginação mas tabela tem muitas linhas
+  if (pageLinks.size === 0 && allRows.length >= 20) {
+    for (let p = 2; p <= 10; p++) {
+      pageLinks.add(`${PARTNER_URL}?page=${p}`);
+    }
+  }
+
+  for (const pageUrl of pageLinks) {
+    const rp = await fetch(pageUrl, {
+      headers: { "User-Agent": UA, "Cookie": cookieStr(jar), "Accept": "text/html,application/xhtml+xml" },
+      redirect: "follow",
+    });
+    if (!rp.ok) break;
+    const htmlPage = await rp.text();
+    if (!/<table/i.test(htmlPage)) break;
+    const pageRows = parseHtmlTable(htmlPage);
+    if (pageRows.length <= 1) break; // só header, acabou
+    allRows.push(...pageRows);
+  }
+
+  const letters = rowsToLetters(allRows);
   return letters;
 }
 
