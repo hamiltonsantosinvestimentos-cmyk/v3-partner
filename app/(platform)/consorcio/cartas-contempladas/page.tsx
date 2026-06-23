@@ -68,7 +68,7 @@ export default function CartasContempladasPage() {
   const [userId, setUserId] = useState<string>("");
   const [search, setSearch] = useState("");
   const [filterType, setFilterType] = useState("");
-  const [filterStatus, setFilterStatus] = useState("DISPONIVEL");
+  const [filterStatus, setFilterStatus] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
