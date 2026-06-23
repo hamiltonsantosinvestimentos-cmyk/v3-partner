@@ -9,6 +9,7 @@ const ADMIN_ROLES = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"] as const;
 const BASE_URL = "https://contempladosrs.com.br";
 const PARTNER_URL = `${BASE_URL}/area-do-parceiro`;
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+const WIRE_TOKEN = "%2FJIwSEOOrlvahP%2Fv5qJlXidyHYoowD8K%2B%2Fc83PkU9VjcDsYOWAsOXw1b7BQShiEG07q%2FNSh5ofwppRJpUzPWglrhEKtksz6LZcgJrCSjkgw%3D";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -142,7 +143,52 @@ function rowsToLetters(rows: string[][]): ScrapedLetter[] {
   return letters;
 }
 
+// ── Wire API — tenta buscar via proxy autenticado ────────────────────────────
+async function fetchViaWire(pageUrl: string): Promise<string | null> {
+  const wireToken = process.env.CONTEMPLADOS_WIRE_TOKEN ?? WIRE_TOKEN;
+  const wireUrl = `https://api.wire.spbx.app/wire?token=${wireToken}&u=${encodeURIComponent(pageUrl)}`;
+  try {
+    const res = await fetch(wireUrl, {
+      headers: { "User-Agent": UA, "Accept": "text/html,application/xhtml+xml" },
+      redirect: "follow",
+    });
+    if (!res.ok) return null;
+    const html = await res.text();
+    return html;
+  } catch {
+    return null;
+  }
+}
+
 async function scrapeLetters(): Promise<ScrapedLetter[]> {
+  // ── Tenta via Wire API primeiro (mais rápido, sem login) ─────────────────
+  const wireHtml = await fetchViaWire(PARTNER_URL);
+  if (wireHtml && /<table/i.test(wireHtml)) {
+    const allRows: string[][] = [...parseHtmlTable(wireHtml)];
+
+    // Paginação via wire
+    const pageLinkRe = /href=["']([^"']*[?&]page=(\d+)[^"']*)["']/gi;
+    const pageNums = new Set<number>();
+    let plm: RegExpExecArray | null;
+    while ((plm = pageLinkRe.exec(wireHtml)) !== null) {
+      pageNums.add(parseInt(plm[2], 10));
+    }
+    if (pageNums.size === 0 && allRows.length >= 20) {
+      for (let p = 2; p <= 10; p++) pageNums.add(p);
+    }
+    for (const p of pageNums) {
+      const pageHtml = await fetchViaWire(`${PARTNER_URL}?page=${p}`);
+      if (!pageHtml || !/<table/i.test(pageHtml)) break;
+      const pageRows = parseHtmlTable(pageHtml);
+      if (pageRows.length <= 1) break;
+      allRows.push(...pageRows);
+    }
+
+    const letters = rowsToLetters(allRows);
+    if (letters.length > 0) return letters;
+  }
+
+  // ── Fallback: login direto ────────────────────────────────────────────────
   const email = process.env.CONTEMPLADOS_EMAIL ?? "";
   const senha = process.env.CONTEMPLADOS_SENHA ?? "";
   const jar: Record<string, string> = {};
