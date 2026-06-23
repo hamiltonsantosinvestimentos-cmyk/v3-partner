@@ -442,15 +442,16 @@ export function MesaCapitaisClient() {
       {/* Painel Lateral — Detalhe do Listing */}
       {selectedListing && (
         <div className="fixed inset-0 z-40 flex justify-end bg-black/50" onClick={() => setSelectedListing(null)}>
-          <div className="w-full max-w-md bg-[#09081A] border-l border-[#C9A84C]/20 h-full overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="p-5 border-b border-[#C9A84C]/20 flex items-center justify-between">
+          <div className="w-full max-w-md bg-[#09081A] border-l border-[#C9A84C]/20 h-full flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="p-5 border-b border-[#C9A84C]/20 flex items-center justify-between flex-shrink-0">
               <div>
                 <div className="text-[10px] text-[#C9A84C] font-bold tracking-wider">{selectedListing.anonymous_id}</div>
                 <div className="text-lg font-bold text-[#F5F1E8]">{formatBRL(Number(selectedListing.valor_face))}</div>
                 <div className="text-xs text-[#9BAFC5] mt-1">Status: <span className="text-[#F5F1E8]">{selectedListing.listing_status.replace(/_/g, " ")}</span></div>
               </div>
-              <button onClick={() => setSelectedListing(null)} className="text-[#9BAFC5] hover:text-[#F5F1E8] text-xl">&times;</button>
+              <button onClick={() => setSelectedListing(null)} className="w-8 h-8 flex items-center justify-center rounded-full text-[#9BAFC5] hover:text-[#F5F1E8] hover:bg-[#F5F1E8]/10 transition text-xl">&times;</button>
             </div>
+            <div className="flex-1 overflow-y-auto">
 
             {/* KPIs do Ativo */}
             <div className="grid grid-cols-3 gap-2 p-4">
@@ -608,6 +609,7 @@ export function MesaCapitaisClient() {
                   ))}
                 </div>
               )}
+            </div>
             </div>
           </div>
         </div>
