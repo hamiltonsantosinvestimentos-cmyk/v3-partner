@@ -211,74 +211,51 @@ async function scrapeLetters(): Promise<{ letters: ScrapedLetter[]; rawRows: num
   const senha = process.env.CONTEMPLADOS_SENHA ?? "";
   const jar: Record<string, string> = {};
 
-  // ── Passo 1: GET /area-do-parceiro para obter sessão + CSRF + form action ───
+  // ── Passo 1: GET /area-do-parceiro para obter cookies de sessão ─────────────
   const r1 = await fetch(PARTNER_URL, {
-    headers: { "User-Agent": UA, "Accept": "text/html,application/xhtml+xml" },
+    headers: { "User-Agent": UA, "Accept": "text/html,application/xhtml+xml", "Accept-Language": "pt-BR,pt;q=0.9" },
     redirect: "follow",
   });
   mergeCookies(jar, r1);
+
+  // Extrai block_id do formulário de login (necessário para a API)
   const html1 = await r1.text();
+  const blockIdMatch = html1.match(/["']block_id["']\s*:\s*["']([^"']+)["']|block_id=["']([^"']+)["']/i);
+  const blockId = blockIdMatch?.[1] ?? blockIdMatch?.[2] ?? "block1759149946234";
 
-  // Se já tem tabela (sessão ativa), parseia direto
-  if (/<table/i.test(html1)) {
-    const rows = parseHtmlTable(html1);
-    const letters = rowsToLetters(rows);
-    if (letters.length > 0) return { letters, rawRows: rows.length };
-  }
-
-  // ── Extrai CSRF token e form action ─────────────────────────────────────────
-  const csrfMatch = html1.match(/name=["']_token["'][^>]*value=["']([^"']+)["']|value=["']([^"']+)["'][^>]*name=["']_token["']/i);
-  const csrf = csrfMatch?.[1] ?? csrfMatch?.[2] ?? "";
-
-  const actionMatch = html1.match(/<form[^>]+action=["']([^"']+)["']/i);
-  let formAction = actionMatch?.[1] ?? PARTNER_URL;
-  if (formAction.startsWith("/")) formAction = BASE_URL + formAction;
-  if (!formAction.startsWith("http")) formAction = PARTNER_URL;
-
-  // ── Passo 2: POST login ──────────────────────────────────────────────────────
-  const body = new URLSearchParams();
-  body.set("email", email);
-  body.set("password", senha);
-  if (csrf) body.set("_token", csrf);
-
-  const r2 = await fetch(formAction, {
+  // ── Passo 2: POST /api/login-credentials (JSON API descoberta via DevTools) ──
+  const r2 = await fetch(`${BASE_URL}/api/login-credentials`, {
     method: "POST",
     headers: {
       "User-Agent": UA,
-      "Content-Type": "application/x-www-form-urlencoded",
+      "Content-Type": "application/json",
       "Cookie": cookieStr(jar),
       "Referer": PARTNER_URL,
       "Origin": BASE_URL,
-      "Accept": "text/html,application/xhtml+xml",
+      "Accept": "application/json, text/plain, */*",
+      "X-Requested-With": "XMLHttpRequest",
     },
-    body: body.toString(),
+    body: JSON.stringify({ block_id: blockId, login: email, senha }),
     redirect: "manual",
   });
   mergeCookies(jar, r2);
+  const loginResp = await r2.text();
+  console.log("[sync] login-credentials status:", r2.status, "resp:", loginResp.substring(0, 100));
 
-  // ── Passo 3: Segue redirect pós-login ────────────────────────────────────────
-  const location = r2.headers.get("location");
-  const nextUrl = location
-    ? (location.startsWith("http") ? location : BASE_URL + location)
-    : PARTNER_URL;
-
-  const r3 = await fetch(nextUrl, {
-    headers: { "User-Agent": UA, "Cookie": cookieStr(jar), "Accept": "text/html,application/xhtml+xml" },
+  // ── Passo 3: GET /area-do-parceiro com sessão autenticada ────────────────────
+  const r3 = await fetch(PARTNER_URL, {
+    headers: {
+      "User-Agent": UA,
+      "Cookie": cookieStr(jar),
+      "Accept": "text/html,application/xhtml+xml",
+      "Accept-Language": "pt-BR,pt;q=0.9",
+      "Referer": BASE_URL,
+    },
     redirect: "follow",
   });
   mergeCookies(jar, r3);
-  const html3 = await r3.text();
-
-  // Se landing não é a área do parceiro, busca explicitamente
-  let htmlFinal = html3;
-  if (!/<table/i.test(html3) && r3.url !== PARTNER_URL) {
-    const r4 = await fetch(PARTNER_URL, {
-      headers: { "User-Agent": UA, "Cookie": cookieStr(jar), "Accept": "text/html,application/xhtml+xml" },
-      redirect: "follow",
-    });
-    mergeCookies(jar, r4);
-    htmlFinal = await r4.text();
-  }
+  const htmlFinal = await r3.text();
+  console.log("[sync] step3 URL:", r3.url, "| TR:", (htmlFinal.match(/<tr/gi) ?? []).length);
 
   if (!/<table/i.test(htmlFinal)) {
     const snippet = stripHtml(htmlFinal).substring(0, 500);
