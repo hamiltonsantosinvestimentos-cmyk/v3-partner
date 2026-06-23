@@ -5,7 +5,7 @@ import {
   BarChart3, Users, Gavel, DollarSign, Play,
   Loader2, AlertTriangle, CheckCircle2, Clock,
   ArrowRight, RefreshCw, Shield, Bot, Upload, Mic,
-  Link2, Copy, Plus, FileText,
+  Link2, Copy, Plus, FileText, UserPlus,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AssetAssistant } from "./asset-assistant";
@@ -78,6 +78,8 @@ export function MesaCapitaisClient() {
   const [contractTemplates, setContractTemplates] = useState<any[]>([]);
   const [generatingContract, setGeneratingContract] = useState(false);
   const [contractResult, setContractResult] = useState<any>(null);
+  const [buyLinkUrl, setBuyLinkUrl] = useState<string | null>(null);
+  const [generatingBuyLink, setGeneratingBuyLink] = useState(false);
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
@@ -259,6 +261,18 @@ export function MesaCapitaisClient() {
     }
   };
 
+  const generateBuyLink = async () => {
+    setGeneratingBuyLink(true);
+    setBuyLinkUrl(null);
+    try {
+      const res = await fetch("/api/cm/intake/buy/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+      const json = await res.json();
+      if (res.ok) { setBuyLinkUrl(json.url); navigator.clipboard.writeText(json.url); alert("Link do comprador copiado!"); }
+      else alert(json.error ?? "Erro ao gerar link");
+    } catch { alert("Erro de conexão"); }
+    finally { setGeneratingBuyLink(false); }
+  };
+
   const totalVolume = listings.reduce((s, l) => s + Number(l.valor_face), 0);
   const naVitrine = listings.filter((l) => ["ativo_vitrine", "proposta_recebida"].includes(l.listing_status)).length;
   const propostas = bids.length;
@@ -284,6 +298,13 @@ export function MesaCapitaisClient() {
           >
             {generatingLink ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
             Novo Ativo
+          </button>
+          <button
+            onClick={generateBuyLink} disabled={generatingBuyLink}
+            className="flex items-center gap-2 px-4 py-2 border border-emerald-500/30 text-emerald-400 rounded-lg text-sm font-medium hover:bg-emerald-500/10 transition disabled:opacity-50"
+          >
+            {generatingBuyLink ? <Loader2 size={16} className="animate-spin" /> : <UserPlus size={16} />}
+            Novo Comprador
           </button>
           <button
             onClick={runMatchmaking} disabled={runningMatch}

@@ -4,11 +4,11 @@ import React, { useState } from "react";
 import { CheckCircle2, ChevronRight, ChevronLeft, Loader2, Shield } from "lucide-react";
 
 const STEPS = [
+  { label: "NDA", key: "nda" },
   { label: "Identificação", key: "identificacao" },
   { label: "Ativo", key: "ativo" },
   { label: "Financeiro", key: "financeiro" },
   { label: "Documentos", key: "documentos" },
-  { label: "NDA e envio", key: "nda" },
 ];
 
 const ASSET_TYPES = [
@@ -56,10 +56,10 @@ export function IntakeWizard({ token, prefill, anonymousId }: IntakeWizardProps)
   const upd = (field: string, value: any) => setForm((p) => ({ ...p, [field]: value }));
 
   const canAdvance = () => {
-    if (step === 0) return form.seller_name && form.contato_email;
-    if (step === 1) return form.asset_type && form.ente_devedor;
-    if (step === 2) return form.valor_face;
-    if (step === 4) return form.nda_accepted;
+    if (step === 0) return form.nda_accepted;
+    if (step === 1) return form.seller_name && form.contato_email;
+    if (step === 2) return form.asset_type && form.ente_devedor;
+    if (step === 3) return form.valor_face;
     return true;
   };
 
@@ -128,20 +128,56 @@ export function IntakeWizard({ token, prefill, anonymousId }: IntakeWizardProps)
       <div className="bg-[#12112A] border border-[#9BAFC5]/10 rounded-xl p-6 sm:p-8 mb-6">
         {step === 0 && (
           <div>
+            <h3 className="text-lg font-bold text-[#F5F1E8] mb-1">Termo de Confidencialidade</h3>
+            <p className="text-xs text-[#9BAFC5] mb-6">Leia e aceite os termos antes de prosseguir</p>
+            <div className="bg-[#162744] border border-[#9BAFC5]/10 rounded-lg p-6 mb-6 max-h-[200px] overflow-y-auto text-xs text-[#9BAFC5]/80 leading-relaxed">
+              <p className="mb-3">Pelo presente termo, declaro que as informações fornecidas são verdadeiras e autorizo a V3 Partners Soluções Ltda (CNPJ 14.219.287/0001-50) a utilizar os dados exclusivamente para fins de análise, estruturação e intermediação da operação de cessão do ativo descrito neste formulário.</p>
+              <p className="mb-3">Os dados pessoais e financeiros serão tratados conforme a Lei Geral de Proteção de Dados (LGPD — Lei 13.709/2018), com base legal na execução contratual (Art. 7, inc. V).</p>
+              <p className="mb-3">As informações do ativo serão exibidas de forma anonimizada na vitrine da plataforma. Dados identificáveis (nome, CPF/CNPJ, número de processo) são acessíveis apenas à equipe interna V3 Partners e nunca publicados.</p>
+              <p>Em caso de dúvidas: privacidade@v3partners.com.br</p>
+            </div>
+            <div className="flex items-center gap-3">
+              <input type="checkbox" id="nda" checked={form.nda_accepted} onChange={(e) => upd("nda_accepted", e.target.checked)} className="w-5 h-5 accent-[#C9A84C]" />
+              <label htmlFor="nda" className="text-sm text-[#F5F1E8]">Li e aceito o Termo de Confidencialidade e o tratamento dos dados conforme LGPD</label>
+            </div>
+          </div>
+        )}
+
+        {step === 1 && (
+          <div>
             <h3 className="text-lg font-bold text-[#F5F1E8] mb-1">Identificação do Cedente</h3>
             <p className="text-xs text-[#9BAFC5] mb-6">Dados de quem detém o ativo</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className={labelClass}>Nome / Razão Social *</label>
+                <label className={labelClass}>Nome completo / Razão Social *</label>
                 <input className={inputClass} value={form.seller_name} onChange={(e) => upd("seller_name", e.target.value)} placeholder="Nome completo ou razão social" />
               </div>
               <div>
-                <label className={labelClass}>CPF / CNPJ</label>
+                <label className={labelClass}>CPF / CNPJ *</label>
                 <input className={inputClass} value={form.seller_cpf_cnpj} onChange={(e) => upd("seller_cpf_cnpj", e.target.value)} placeholder="000.000.000-00" />
               </div>
               <div>
-                <label className={labelClass}>Nome do Contato</label>
-                <input className={inputClass} value={form.contato_nome} onChange={(e) => upd("contato_nome", e.target.value)} placeholder="Pessoa de contato" />
+                <label className={labelClass}>Nacionalidade</label>
+                <input className={inputClass} value={(form as any).nacionalidade ?? ""} onChange={(e) => upd("nacionalidade", e.target.value)} placeholder="Brasileira" />
+              </div>
+              <div>
+                <label className={labelClass}>Profissão</label>
+                <input className={inputClass} value={(form as any).profissao ?? ""} onChange={(e) => upd("profissao", e.target.value)} placeholder="Advogado, Empresário, etc." />
+              </div>
+              <div>
+                <label className={labelClass}>Estado Civil</label>
+                <select className={selectClass} value={(form as any).estado_civil ?? ""} onChange={(e) => upd("estado_civil", e.target.value)}>
+                  <option value="">Selecione</option>
+                  <option value="Solteiro(a)">Solteiro(a)</option>
+                  <option value="Casado(a)">Casado(a)</option>
+                  <option value="Divorciado(a)">Divorciado(a)</option>
+                  <option value="Viúvo(a)">Viúvo(a)</option>
+                  <option value="União Estável">União Estável</option>
+                </select>
+              </div>
+              <div>
+                <label className={labelClass}>Identidade / Órgão Expedidor</label>
+                <input className={inputClass} value={(form as any).identidade_orgao ?? ""} onChange={(e) => upd("identidade_orgao", e.target.value)} placeholder="Ex: 12.345.678-9 SSP/RJ" />
               </div>
               <div>
                 <label className={labelClass}>Email *</label>
@@ -151,11 +187,15 @@ export function IntakeWizard({ token, prefill, anonymousId }: IntakeWizardProps)
                 <label className={labelClass}>Telefone</label>
                 <input className={inputClass} value={form.contato_telefone} onChange={(e) => upd("contato_telefone", e.target.value)} placeholder="+55 (21) 99999-0000" />
               </div>
+              <div className="sm:col-span-2">
+                <label className={labelClass}>Endereço completo</label>
+                <input className={inputClass} value={(form as any).endereco ?? ""} onChange={(e) => upd("endereco", e.target.value)} placeholder="Rua, número, complemento, bairro, cidade, UF, CEP" />
+              </div>
             </div>
           </div>
         )}
 
-        {step === 1 && (
+        {step === 2 && (
           <div>
             <h3 className="text-lg font-bold text-[#F5F1E8] mb-1">Dados do Ativo</h3>
             <p className="text-xs text-[#9BAFC5] mb-6">Classificação e detalhes do direito creditório</p>
@@ -199,7 +239,7 @@ export function IntakeWizard({ token, prefill, anonymousId }: IntakeWizardProps)
           </div>
         )}
 
-        {step === 2 && (
+        {step === 3 && (
           <div>
             <h3 className="text-lg font-bold text-[#F5F1E8] mb-1">Dados Financeiros</h3>
             <p className="text-xs text-[#9BAFC5] mb-6">Valores e condições pretendidas</p>
@@ -228,7 +268,7 @@ export function IntakeWizard({ token, prefill, anonymousId }: IntakeWizardProps)
           </div>
         )}
 
-        {step === 3 && (
+        {step === 4 && (
           <div>
             <h3 className="text-lg font-bold text-[#F5F1E8] mb-1">Documentos</h3>
             <p className="text-xs text-[#9BAFC5] mb-6">Após o envio, a equipe V3 Partners solicitará os documentos necessários por email</p>
@@ -250,22 +290,6 @@ export function IntakeWizard({ token, prefill, anonymousId }: IntakeWizardProps)
           </div>
         )}
 
-        {step === 4 && (
-          <div>
-            <h3 className="text-lg font-bold text-[#F5F1E8] mb-1">Termo de Confidencialidade</h3>
-            <p className="text-xs text-[#9BAFC5] mb-6">Leia e aceite os termos para finalizar</p>
-            <div className="bg-[#162744] border border-[#9BAFC5]/10 rounded-lg p-6 mb-6 max-h-[200px] overflow-y-auto text-xs text-[#9BAFC5]/80 leading-relaxed">
-              <p className="mb-3">Pelo presente termo, declaro que as informações fornecidas são verdadeiras e autorizo a V3 Partners Soluções Ltda (CNPJ 14.219.287/0001-50) a utilizar os dados exclusivamente para fins de análise, estruturação e intermediação da operação de cessão do ativo descrito neste formulário.</p>
-              <p className="mb-3">Os dados pessoais e financeiros serão tratados conforme a Lei Geral de Proteção de Dados (LGPD — Lei 13.709/2018), com base legal na execução contratual (Art. 7, inc. V).</p>
-              <p className="mb-3">As informações do ativo serão exibidas de forma anonimizada na vitrine da plataforma. Dados identificáveis (nome, CPF/CNPJ, número de processo) são acessíveis apenas à equipe interna V3 Partners e nunca publicados.</p>
-              <p>Em caso de dúvidas: privacidade@v3partners.com.br</p>
-            </div>
-            <div className="flex items-center gap-3">
-              <input type="checkbox" id="nda" checked={form.nda_accepted} onChange={(e) => upd("nda_accepted", e.target.checked)} className="w-5 h-5 accent-[#C9A84C]" />
-              <label htmlFor="nda" className="text-sm text-[#F5F1E8]">Li e aceito o Termo de Confidencialidade e o tratamento dos dados conforme LGPD</label>
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Error */}
