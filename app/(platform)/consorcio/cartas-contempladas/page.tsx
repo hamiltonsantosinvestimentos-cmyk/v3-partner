@@ -16,6 +16,8 @@ interface LetterMetadata {
   parcelas_qtd?: number | null;
   parcela_valor?: number | null;
   entrada?: number | null;
+  saldo_devedor?: number | null;
+  avaliacao_minima?: number | null;
 }
 
 interface ContemplatedLetter {
@@ -416,6 +418,18 @@ export default function CartasContempladasPage() {
                       <div className="flex justify-between text-xs">
                         <span className="text-muted-foreground">Fundo Comum</span>
                         <span className="font-medium text-foreground">{formatCurrency(meta.fundo_comum)}</span>
+                      </div>
+                    ) : null}
+                    {meta?.saldo_devedor && meta.saldo_devedor > 0 ? (
+                      <div className="flex justify-between text-xs">
+                        <span className="text-muted-foreground">Saldo Devedor</span>
+                        <span className="font-medium text-foreground">{formatCurrency(meta.saldo_devedor)}</span>
+                      </div>
+                    ) : null}
+                    {meta?.avaliacao_minima && meta.avaliacao_minima > 0 ? (
+                      <div className="flex justify-between text-xs">
+                        <span className="text-muted-foreground">Aval. Mínima Imóvel</span>
+                        <span className="font-medium text-foreground">{formatCurrency(meta.avaliacao_minima)}</span>
                       </div>
                     ) : null}
                   </div>

@@ -88,6 +88,8 @@ interface ScrapedLetter {
   parcela_valor: number | null;
   taxa_transf: number;
   fundo_comum: number;
+  saldo_devedor: number | null;
+  avaliacao_minima: number | null;
 }
 
 function rowsToLetters(rows: string[][]): ScrapedLetter[] {
@@ -107,6 +109,8 @@ function rowsToLetters(rows: string[][]): ScrapedLetter[] {
     const fundoComum    = parseBRL(cells[5]);
     const disponibilidade = cells[6] || "Disponível";
     const administradora  = cells[7] || "Contemplados RS";
+    // Colunas extras (se existirem na tabela)
+    const avaliacaoMinima = cells[8] ? parseBRL(cells[8]) : null;
 
     let parcelas_qtd: number | null = null;
     let parcela_valor: number | null = null;
@@ -117,6 +121,13 @@ function rowsToLetters(rows: string[][]): ScrapedLetter[] {
         parcela_valor = parseBRL(m[2]);
       }
     }
+
+    // Saldo devedor = total das parcelas restantes
+    const saldo_devedor = parcelas_qtd && parcela_valor ? Math.round(parcelas_qtd * parcela_valor) : null;
+    // Avaliação mínima: da coluna extra ou estimativa (credit_value × 1.335)
+    const avaliacao_minima = (avaliacaoMinima && avaliacaoMinima > 0)
+      ? avaliacaoMinima
+      : (creditValue > 0 ? Math.round(creditValue * 1.335) : null);
 
     const discount = creditValue > 0 && entrada > 0
       ? Math.round(((creditValue - entrada) / creditValue) * 100 * 10) / 10
@@ -138,6 +149,8 @@ function rowsToLetters(rows: string[][]): ScrapedLetter[] {
       parcela_valor,
       taxa_transf: taxaTransf,
       fundo_comum: fundoComum,
+      saldo_devedor,
+      avaliacao_minima,
     });
   }
   return letters;
@@ -354,9 +367,17 @@ export async function POST() {
   for (const letter of allLetters) {
     const existing_entry = existingMap.get(letter.source_ref);
     if (existing_entry) {
-      if (existing_entry.status !== letter.status) {
-        toUpdate.push({ id: existing_entry.id, status: letter.status });
-      }
+      // Atualiza status e enriquece metadata com novos campos
+      toUpdate.push({
+        id: existing_entry.id,
+        status: letter.status,
+        saldo_devedor: letter.saldo_devedor,
+        avaliacao_minima: letter.avaliacao_minima,
+        parcelas_qtd: letter.parcelas_qtd,
+        parcela_valor: letter.parcela_valor,
+        taxa_transf: letter.taxa_transf,
+        fundo_comum: letter.fundo_comum,
+      });
       continue;
     }
 
@@ -381,6 +402,8 @@ export async function POST() {
         parcelas_qtd: letter.parcelas_qtd,
         parcela_valor: letter.parcela_valor,
         entrada: letter.asking_price,
+        saldo_devedor: letter.saldo_devedor,
+        avaliacao_minima: letter.avaliacao_minima,
       },
     });
   }
@@ -394,7 +417,17 @@ export async function POST() {
   }
 
   for (const u of toUpdate) {
-    await svc().from("consorcio_cartas").update({ status: u.status }).eq("id", u.id);
+    await svc().from("consorcio_cartas").update({
+      status: u.status,
+      metadata: {
+        saldo_devedor: u.saldo_devedor,
+        avaliacao_minima: u.avaliacao_minima,
+        parcelas_qtd: u.parcelas_qtd,
+        parcela_valor: u.parcela_valor,
+        taxa_transf: u.taxa_transf,
+        fundo_comum: u.fundo_comum,
+      },
+    }).eq("id", u.id);
     updated++;
   }
 
