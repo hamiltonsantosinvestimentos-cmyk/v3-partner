@@ -441,7 +441,7 @@ export function MesaCapitaisClient() {
 
       {/* Painel Lateral — Detalhe do Listing */}
       {selectedListing && (
-        <div className="fixed inset-0 z-40 flex justify-end bg-black/50" onClick={() => setSelectedListing(null)}>
+        <div className="fixed inset-0 z-[110] flex justify-end bg-black/50" onClick={() => setSelectedListing(null)}>
           <div className="w-full max-w-md bg-[#09081A] border-l border-[#C9A84C]/20 h-full flex flex-col" onClick={(e) => e.stopPropagation()}>
             <div className="p-5 border-b border-[#C9A84C]/20 flex items-center justify-between flex-shrink-0">
               <div>
