@@ -72,7 +72,7 @@ export default function CartasContempladasPage() {
   const [showForm, setShowForm] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
-  const [syncResult, setSyncResult] = useState<{ inserted: number; updated: number; skipped: number; error?: string } | null>(null);
+  const [syncResult, setSyncResult] = useState<{ inserted: number; updated: number; skipped: number; error?: string; debug_sample?: unknown[] } | null>(null);
   const [form, setForm] = useState({ type: "IMOVEL" as LetterType, credit_value: "", admin: "", group_name: "", quota: "", status: "DISPONIVEL" as LetterStatus, asking_price: "", discount: "" });
 
   // Seleção múltipla
@@ -177,7 +177,7 @@ export default function CartasContempladasPage() {
       let json: { ok?: boolean; error?: string; inserted?: number; updated?: number; skipped?: number } = {};
       try { json = JSON.parse(text); } catch { setSyncResult({ inserted: 0, updated: 0, skipped: 0, error: `Resposta inválida do servidor (${res.status})` }); return; }
       if (!res.ok) { setSyncResult({ inserted: 0, updated: 0, skipped: 0, error: json.error ?? "Erro desconhecido" }); return; }
-      setSyncResult({ inserted: json.inserted ?? 0, updated: json.updated ?? 0, skipped: json.skipped ?? 0 });
+      setSyncResult({ inserted: json.inserted ?? 0, updated: json.updated ?? 0, skipped: json.skipped ?? 0, debug_sample: json.debug_sample });
       const cartasRes = await fetch("/api/consorcio/cartas");
       const cartasData = await cartasRes.json();
       if (Array.isArray(cartasData.cartas)) setLetters(cartasData.cartas);
@@ -269,9 +269,16 @@ export default function CartasContempladasPage() {
           {syncResult.error ? (
             <span>⚠ Erro na sincronização: {syncResult.error}</span>
           ) : (
-            <span>
-              ✓ Sincronização concluída — <strong>{syncResult.inserted}</strong> novas cartas importadas · <strong>{syncResult.updated}</strong> atualizadas · <strong>{syncResult.skipped}</strong> já existentes
-            </span>
+            <div className="flex flex-col gap-1">
+              <span>
+                ✓ Sincronização concluída — <strong>{syncResult.inserted}</strong> novas cartas importadas · <strong>{syncResult.updated}</strong> atualizadas · <strong>{syncResult.skipped}</strong> já existentes
+              </span>
+              {syncResult.debug_sample && syncResult.debug_sample.length > 0 && (
+                <span className="opacity-70 text-[10px]">
+                  Amostra: {(syncResult.debug_sample as Array<{credit_value: number; admin: string}>).map(s => `R$${s.credit_value.toLocaleString("pt-BR")} (${s.admin})`).join(" · ")}
+                </span>
+              )}
+            </div>
           )}
           <button onClick={() => setSyncResult(null)} className="ml-4 opacity-60 hover:opacity-100"><X className="w-3.5 h-3.5" /></button>
         </div>

@@ -319,5 +319,13 @@ export async function POST() {
     inserted,
     updated,
     skipped: allLetters.length - inserted - updated,
+    debug_sample: allLetters.slice(0, 5).map(l => ({
+      admin: l.admin,
+      credit_value: l.credit_value,
+      asking_price: l.asking_price,
+      parcelas_raw: l.parcelas_raw,
+      status: l.status,
+      source_ref: l.source_ref.substring(0, 60),
+    })),
   });
 }
