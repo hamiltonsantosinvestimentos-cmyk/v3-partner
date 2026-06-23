@@ -17,7 +17,7 @@ interface Template {
 
 const VERTICAL_LABELS: Record<string, string> = {
   capital_markets: "Bolsa de Ativos",
-  credito: "Mesa de Credito",
+  credito: "Mesa de Crédito",
   ma: "M&A",
   institucional: "Institucional",
   clientes: "Clientes / Partners",
@@ -207,7 +207,7 @@ export function ContractTemplatesClient() {
                   <label className="block text-[10px] font-bold text-[#C9A84C] uppercase tracking-wider mb-1">Nome da Minuta</label>
                   <input value={formName} onChange={(e) => setFormName(e.target.value)}
                     className="w-full bg-[#162744] border border-[#9BAFC5]/15 rounded-lg px-4 py-2.5 text-sm text-[#F5F1E8] focus:border-[#C9A84C]/50 focus:outline-none"
-                    placeholder="Ex: Termo de Cessao de Credito" />
+                    placeholder="Ex: Termo de Cessão de Crédito" />
                 </div>
                 <div>
                   <label className="block text-[10px] font-bold text-[#C9A84C] uppercase tracking-wider mb-1">Vertical</label>
@@ -215,7 +215,7 @@ export function ContractTemplatesClient() {
                     disabled={!isNew}
                     className="w-full bg-[#162744] border border-[#9BAFC5]/15 rounded-lg px-4 py-2.5 text-sm text-[#F5F1E8] disabled:opacity-50">
                     <option value="capital_markets">Bolsa de Ativos</option>
-                    <option value="credito">Mesa de Credito</option>
+                    <option value="credito">Mesa de Crédito</option>
                     <option value="ma">M&A</option>
                     <option value="institucional">Institucional</option>
                     <option value="clientes">Clientes / Partners</option>

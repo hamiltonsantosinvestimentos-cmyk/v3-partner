@@ -16,7 +16,7 @@ interface SignedContract {
 
 const VERTICAL_LABELS: Record<string, string> = {
   capital_markets: "Bolsa de Ativos",
-  credito: "Mesa de Credito",
+  credito: "Mesa de Crédito",
   ma: "M&A",
   institucional: "Institucional",
   clientes: "Clientes / Partners",

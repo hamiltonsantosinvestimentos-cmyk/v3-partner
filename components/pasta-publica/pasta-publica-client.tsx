@@ -17,9 +17,9 @@ interface FileItem {
 
 const VERTICAL_META: Record<string, { label: string; icon: React.ReactNode; color: string }> = {
   MA:             { label: "M&A",            icon: <Building2 size={16} />,  color: "#C9A84C" },
-  Credito:        { label: "Credito",        icon: <CreditCard size={16} />, color: "#10B981" },
-  Consorcios:     { label: "Consorcios",     icon: <Users size={16} />,      color: "#6366F1" },
-  Administracao:  { label: "Administracao",  icon: <Shield size={16} />,     color: "#F59E0B" },
+  Credito:        { label: "Crédito",         icon: <CreditCard size={16} />, color: "#10B981" },
+  Consorcios:     { label: "Consórcios",     icon: <Users size={16} />,      color: "#6366F1" },
+  Administracao:  { label: "Administração",  icon: <Shield size={16} />,     color: "#F59E0B" },
 };
 
 function formatSize(bytes: number): string {
