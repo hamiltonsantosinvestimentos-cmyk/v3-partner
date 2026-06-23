@@ -141,21 +141,25 @@ async function scrapeLetters(): Promise<{ letters: ScrapedLetter[]; rawRows: num
 
     const letters: ScrapedLetter[] = [];
     for (const cells of rows) {
-      const categoria = cells[0];
+      // A tabela tem coluna extra de checkbox no início (cells[0] = "")
+      // Detecta offset: se cells[0] está vazio, categoria está em cells[1]
+      const offset = (!cells[0] && cells[1]) ? 1 : 0;
+
+      const categoria = cells[offset];
       if (!categoria) continue;
       const catLower = categoria.toLowerCase();
       if (catLower === "categoria" || catLower === "tipo" || catLower.includes("observ") || catLower === "th") continue;
 
-      const creditValue = parseBRL(cells[1]);
+      const creditValue = parseBRL(cells[offset + 1]);
       if (creditValue <= 0) continue;
 
-      const entrada         = parseBRL(cells[2]);
-      const parcelasRaw     = cells[3]?.trim() || null;
-      const taxaTransf      = parseBRL(cells[4]);
-      const fundoComum      = parseBRL(cells[5]);
-      const disponibilidade = cells[6] || "Disponível";
-      const administradora  = cells[7] || "Contemplados RS";
-      const avaliacaoCol    = cells[8] ? parseBRL(cells[8]) : null;
+      const entrada         = parseBRL(cells[offset + 2]);
+      const parcelasRaw     = cells[offset + 3]?.trim() || null;
+      const taxaTransf      = parseBRL(cells[offset + 4]);
+      const fundoComum      = parseBRL(cells[offset + 5]);
+      const disponibilidade = cells[offset + 6] || "Disponível";
+      const administradora  = cells[offset + 7] || "Contemplados RS";
+      const avaliacaoCol    = cells[offset + 8] ? parseBRL(cells[offset + 8]) : null;
 
       let parcelas_qtd: number | null = null;
       let parcela_valor: number | null = null;
