@@ -5,7 +5,8 @@ import {
   BarChart3, Users, Gavel, DollarSign, Play,
   Loader2, AlertTriangle, CheckCircle2, Clock,
   ArrowRight, RefreshCw, Shield, Bot, Upload, Mic,
-  Link2, Copy, Plus, FileText, UserPlus,
+  Link2, Copy, Plus, FileText, UserPlus, ClipboardCheck,
+  ToggleLeft, ToggleRight, Save,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AssetAssistant } from "./asset-assistant";
@@ -80,6 +81,12 @@ export function MesaCapitaisClient() {
   const [contractResult, setContractResult] = useState<any>(null);
   const [buyLinkUrl, setBuyLinkUrl] = useState<string | null>(null);
   const [generatingBuyLink, setGeneratingBuyLink] = useState(false);
+  const [checklists, setChecklists] = useState<any[]>([]);
+  const [checklistsLoading, setChecklistsLoading] = useState(false);
+  const [checklistTab, setChecklistTab] = useState<"pre_aceite" | "pre_fechamento" | "pos_cessao">("pre_fechamento");
+  const [askPriceFloor, setAskPriceFloor] = useState<string>("");
+  const [autoAcceptEnabled, setAutoAcceptEnabled] = useState(false);
+  const [savingFloor, setSavingFloor] = useState(false);
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
@@ -196,8 +203,11 @@ export function MesaCapitaisClient() {
     setRoomInvites([]);
     setContractResult(null);
     setDocsLoading(true);
+    setAskPriceFloor((listing as any).ask_price_floor?.toString() ?? "");
+    setAutoAcceptEnabled((listing as any).auto_accept_enabled ?? false);
     loadRoomInvites(listing.id);
     loadContractTemplates();
+    loadChecklists(listing.id);
     try {
       const res = await fetch(`/api/cm/listings/${listing.id}/documents`);
       const json = await res.json();
@@ -259,6 +269,56 @@ export function MesaCapitaisClient() {
       navigator.clipboard.writeText(intakeUrl);
       alert("Link copiado!");
     }
+  };
+
+  const loadChecklists = async (listingId: string) => {
+    setChecklistsLoading(true);
+    try {
+      const res = await fetch(`/api/cm/checklists?listing_id=${listingId}`);
+      const json = await res.json();
+      setChecklists(json.checklists ?? []);
+    } catch { setChecklists([]); }
+    finally { setChecklistsLoading(false); }
+  };
+
+  const createChecklist = async (listingId: string, type: string) => {
+    const res = await fetch("/api/cm/checklists", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ listing_id: listingId, checklist_type: type }),
+    });
+    if (res.ok) loadChecklists(listingId);
+    else {
+      const json = await res.json();
+      if (res.status === 409 && json.checklist_id) loadChecklists(listingId);
+      else alert(json.error ?? "Erro ao criar checklist");
+    }
+  };
+
+  const toggleCheckItem = async (checklistId: string, itemId: string, isChecked: boolean) => {
+    await fetch(`/api/cm/checklists/${checklistId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "check_item", item_id: itemId, is_checked: isChecked }),
+    });
+    if (selectedListing) loadChecklists(selectedListing.id);
+  };
+
+  const saveAskPrice = async (listingId: string) => {
+    setSavingFloor(true);
+    try {
+      const res = await fetch(`/api/cm/listings/${listingId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ask_price_floor: askPriceFloor ? Number(askPriceFloor) : null,
+          auto_accept_enabled: autoAcceptEnabled,
+        }),
+      });
+      if (res.ok) alert("Ask price salvo");
+      else alert("Erro ao salvar");
+    } catch { alert("Erro de conexão"); }
+    finally { setSavingFloor(false); }
   };
 
   const generateBuyLink = async () => {
@@ -577,6 +637,86 @@ export function MesaCapitaisClient() {
                   onChange={(e) => { if (e.target.files?.[0]) handleUploadDoc(selectedListing.id, e.target.files[0]); }}
                 />
               </label>
+            </div>
+
+            {/* Ask Price Floor + Auto-Aceite */}
+            <div className="px-4 mt-4">
+              <div className="text-[10px] text-[#C9A84C] font-bold uppercase tracking-wider mb-2">Order Book</div>
+              <div className="bg-[#12112A] border border-[#9BAFC5]/10 rounded-lg p-3 space-y-3">
+                <div>
+                  <label className="text-[9px] text-[#9BAFC5] uppercase">Ask Price Floor (R$)</label>
+                  <input
+                    type="number" value={askPriceFloor} onChange={(e) => setAskPriceFloor(e.target.value)}
+                    placeholder="Ex: 1200000"
+                    className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#F5F1E8] mt-1 focus:border-[#C9A84C]/50 focus:outline-none"
+                  />
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] text-[#9BAFC5]">Auto-aceite (oferta &ge; floor)</span>
+                  <button onClick={() => setAutoAcceptEnabled(!autoAcceptEnabled)} className="text-[#C9A84C]">
+                    {autoAcceptEnabled ? <ToggleRight size={20} /> : <ToggleLeft size={20} className="text-[#9BAFC5]" />}
+                  </button>
+                </div>
+                <button onClick={() => saveAskPrice(selectedListing.id)} disabled={savingFloor}
+                  className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-[#C9A84C]/10 border border-[#C9A84C]/20 rounded text-[#C9A84C] text-xs font-bold hover:bg-[#C9A84C]/20 transition disabled:opacity-50">
+                  {savingFloor ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
+                  Salvar
+                </button>
+              </div>
+            </div>
+
+            {/* Checklists Operacionais */}
+            <div className="px-4 mt-4">
+              <div className="text-[10px] text-[#C9A84C] font-bold uppercase tracking-wider mb-2">
+                <ClipboardCheck size={12} className="inline mr-1" /> Checklists Operacionais
+              </div>
+              <div className="flex gap-1 mb-2">
+                {(["pre_aceite", "pre_fechamento", "pos_cessao"] as const).map((t) => (
+                  <button key={t} onClick={() => setChecklistTab(t)}
+                    className={cn("px-2 py-1 rounded text-[9px] font-bold transition",
+                      checklistTab === t ? "bg-[#C9A84C] text-[#09081A]" : "bg-[#162744] text-[#9BAFC5] hover:text-[#F5F1E8]"
+                    )}>
+                    {t === "pre_aceite" ? "Pré-Aceite" : t === "pre_fechamento" ? "Pré-Fechamento" : "Pós-Cessão"}
+                  </button>
+                ))}
+              </div>
+              {checklistsLoading ? (
+                <div className="flex justify-center py-4"><Loader2 size={14} className="animate-spin text-[#C9A84C]" /></div>
+              ) : (() => {
+                const cl = checklists.find((c: any) => c.checklist_type === checklistTab);
+                if (!cl) return (
+                  <button onClick={() => createChecklist(selectedListing.id, checklistTab)}
+                    className="w-full py-3 border border-dashed border-[#9BAFC5]/20 rounded-lg text-[10px] text-[#9BAFC5] hover:border-[#C9A84C]/30 hover:text-[#C9A84C] transition">
+                    + Criar checklist {checklistTab === "pre_aceite" ? "Pré-Aceite" : checklistTab === "pre_fechamento" ? "Pré-Fechamento" : "Pós-Cessão"}
+                  </button>
+                );
+                const items = cl.cm_checklist_items?.sort((a: any, b: any) => a.sort_order - b.sort_order) ?? [];
+                const checked = items.filter((i: any) => i.is_checked).length;
+                return (
+                  <div className="bg-[#12112A] border border-[#9BAFC5]/10 rounded-lg p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className={cn("text-[9px] font-bold px-2 py-0.5 rounded",
+                        cl.status === "concluido" ? "bg-emerald-500/20 text-emerald-400" :
+                        cl.status === "em_andamento" ? "bg-[#C9A84C]/20 text-[#C9A84C]" :
+                        "bg-[#162744] text-[#9BAFC5]"
+                      )}>{cl.status === "concluido" ? "Concluído" : cl.status === "em_andamento" ? "Em Andamento" : "Pendente"}</span>
+                      <span className="text-[9px] text-[#9BAFC5]">{checked}/{items.length}</span>
+                    </div>
+                    <div className="space-y-1.5">
+                      {items.map((item: any) => (
+                        <label key={item.id} className="flex items-start gap-2 cursor-pointer group">
+                          <input type="checkbox" checked={item.is_checked}
+                            onChange={(e) => toggleCheckItem(cl.id, item.id, e.target.checked)}
+                            className="mt-0.5 accent-[#C9A84C]" />
+                          <span className={cn("text-[11px] leading-tight", item.is_checked ? "text-[#9BAFC5] line-through" : "text-[#F5F1E8]")}>
+                            {item.label}
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Transicoes de Status */}

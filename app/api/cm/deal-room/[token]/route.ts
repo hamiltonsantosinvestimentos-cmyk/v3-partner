@@ -14,7 +14,7 @@ export async function GET(
 
   const { data: access } = await svc()
     .from("cm_deal_room_access")
-    .select("*, cm_asset_listings(id, anonymous_id, asset_type, ente_devedor, esfera, tribunal, natureza, valor_face, valor_atualizado, desagio_pretendido, prazo_estimado_meses, listing_status)")
+    .select("*, cm_asset_listings(id, anonymous_id, asset_type, ente_devedor, esfera, tribunal, natureza, valor_face, valor_atualizado, desagio_pretendido, prazo_estimado_meses, listing_status, seller_name, numero_processo)")
     .eq("access_token", token)
     .eq("revoked", false)
     .single();
@@ -43,6 +43,38 @@ export async function GET(
   }
 
   const listing = access.cm_asset_listings as any;
+  const tier = access.access_tier ?? "nda_only";
+
+  const baseListing = {
+    anonymous_id: listing.anonymous_id,
+    asset_type: listing.asset_type,
+    ente_devedor: listing.ente_devedor,
+    esfera: listing.esfera,
+    tribunal: listing.tribunal,
+    natureza: listing.natureza,
+    valor_face: listing.valor_face,
+    desagio_pretendido: listing.desagio_pretendido,
+    prazo_estimado_meses: listing.prazo_estimado_meses,
+  };
+
+  if (tier === "nda_only") {
+    return NextResponse.json({
+      nda_required: false,
+      access_tier: "nda_only",
+      qualification_status: access.qualification_status,
+      listing: baseListing,
+      documents: [],
+      access: {
+        buyer_name: access.buyer_name,
+        nda_accepted_at: access.nda_accepted_at,
+      },
+      actions: {
+        can_qualify: access.qualification_status === "pendente",
+        can_accept_mandato: false,
+      },
+    });
+  }
+
   const { data: docs } = await svc()
     .from("cm_listing_documents")
     .select("id, document_type, original_filename, file_size, storage_path, validation_status, created_at")
@@ -58,23 +90,25 @@ export async function GET(
     })
   );
 
+  const enrichedListing = tier === "full_dd"
+    ? { ...baseListing, seller_name: listing.seller_name, numero_processo: listing.numero_processo }
+    : baseListing;
+
   return NextResponse.json({
     nda_required: false,
-    listing: {
-      anonymous_id: listing.anonymous_id,
-      asset_type: listing.asset_type,
-      ente_devedor: listing.ente_devedor,
-      esfera: listing.esfera,
-      tribunal: listing.tribunal,
-      natureza: listing.natureza,
-      valor_face: listing.valor_face,
-      desagio_pretendido: listing.desagio_pretendido,
-      prazo_estimado_meses: listing.prazo_estimado_meses,
-    },
+    access_tier: tier,
+    qualification_status: access.qualification_status,
+    mandato_v3_accepted: access.mandato_v3_accepted,
+    listing: enrichedListing,
     documents: docsWithUrls,
     access: {
       buyer_name: access.buyer_name,
       nda_accepted_at: access.nda_accepted_at,
+      mandato_v3_accepted_at: access.mandato_v3_accepted_at,
+    },
+    actions: {
+      can_qualify: false,
+      can_accept_mandato: tier === "qualified" && !access.mandato_v3_accepted,
     },
   });
 }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
+import { randomUUID } from "crypto";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -104,6 +105,35 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       p_new_status: "em_escrow_due_diligence",
       p_reason: `Bid aceito: R$ ${Number(bid.bid_value).toLocaleString("pt-BR")} (${commPercent}% comissão)`,
       p_user_id: caller.userId,
+    });
+
+    const token = randomUUID().replace(/-/g, "");
+    const { data: drAccess } = await svc().from("cm_deal_room_access").insert({
+      listing_id: listing.id,
+      access_token: token,
+      bid_id: id,
+      buyer_name: bid.buyer_name ?? null,
+      created_by: caller.userId,
+    }).select().single();
+
+    let dealRoomUrl: string | null = null;
+    if (drAccess) {
+      const host = req.headers.get("host") ?? "app.v3partners.com.br";
+      const protocol = host.includes("localhost") ? "http" : "https";
+      dealRoomUrl = `${protocol}://${host}/vdr/cm/${listing.anonymous_id}/${token}`;
+    }
+
+    await svc().rpc("create_cm_checklist", {
+      p_listing_id: listing.id,
+      p_bid_id: id,
+      p_type: "pre_fechamento",
+    });
+
+    return NextResponse.json({
+      success: true,
+      bid: { id, status: newStatus },
+      commission,
+      deal_room_url: dealRoomUrl,
     });
   }
 

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
+import { randomUUID } from "crypto";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -54,7 +55,7 @@ export async function POST(req: NextRequest) {
 
   const { data: listing } = await svc()
     .from("cm_asset_listings")
-    .select("id, listing_status, valor_face")
+    .select("id, listing_status, valor_face, anonymous_id, ask_price_floor, auto_accept_enabled")
     .eq("id", listing_id)
     .single();
 
@@ -91,5 +92,69 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  return NextResponse.json({ bid }, { status: 201 });
+  let autoAccepted = false;
+  let dealRoomUrl: string | null = null;
+
+  if (
+    listing.auto_accept_enabled &&
+    listing.ask_price_floor &&
+    Number(bid_value) >= Number(listing.ask_price_floor)
+  ) {
+    const { data: splitResult } = await svc().rpc("calculate_cm_commission_split", {
+      p_valor_face: Number(listing.valor_face),
+      p_commission_percent: 5,
+    });
+
+    if (splitResult && !splitResult.error) {
+      await svc().from("cm_bids").update({
+        status: "aceita",
+        auto_accepted: true,
+        reviewed_at: new Date().toISOString(),
+      }).eq("id", bid!.id);
+
+      await svc().from("cm_commission_splits").insert({
+        listing_id,
+        bid_id: bid!.id,
+        valor_face: Number(listing.valor_face),
+        commission_total_percent: splitResult.commission_total_percent,
+        commission_total_value: splitResult.commission_total_value,
+        split_buy_value: splitResult.split_buy_value,
+        split_platform_value: splitResult.split_platform_value,
+        split_sell_value: splitResult.split_sell_value,
+        minimum_enforced: splitResult.minimum_enforced,
+        status: "aprovado",
+      });
+
+      await svc().rpc("transition_cm_listing_status", {
+        p_listing_id: listing_id,
+        p_new_status: "em_escrow_due_diligence",
+        p_reason: `Auto-aceite: R$ ${Number(bid_value).toLocaleString("pt-BR")} >= floor R$ ${Number(listing.ask_price_floor).toLocaleString("pt-BR")}`,
+        p_user_id: caller.userId,
+      });
+
+      const token = randomUUID().replace(/-/g, "");
+      const { data: access } = await svc().from("cm_deal_room_access").insert({
+        listing_id,
+        access_token: token,
+        bid_id: bid!.id,
+        created_by: caller.userId,
+      }).select().single();
+
+      if (access) {
+        const host = req.headers.get("host") ?? "app.v3partners.com.br";
+        const protocol = host.includes("localhost") ? "http" : "https";
+        dealRoomUrl = `${protocol}://${host}/vdr/cm/${listing.anonymous_id}/${token}`;
+      }
+
+      await svc().rpc("create_cm_checklist", {
+        p_listing_id: listing_id,
+        p_bid_id: bid!.id,
+        p_type: "pre_fechamento",
+      });
+
+      autoAccepted = true;
+    }
+  }
+
+  return NextResponse.json({ bid, auto_accepted: autoAccepted, deal_room_url: dealRoomUrl }, { status: 201 });
 }
