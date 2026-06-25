@@ -321,6 +321,23 @@ export function MesaCapitaisClient() {
     finally { setSavingFloor(false); }
   };
 
+  const approveQualification = async (accessId: string, decision: "aprovado" | "reprovado") => {
+    try {
+      const res = await fetch(`/api/cm/deal-room/approve`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ access_id: accessId, decision }),
+      });
+      if (res.ok) {
+        alert(decision === "aprovado" ? "Qualificação aprovada — Tier 2 liberado" : "Qualificação reprovada");
+        if (selectedListing) loadRoomInvites(selectedListing.id);
+      } else {
+        const json = await res.json();
+        alert(json.error ?? "Erro");
+      }
+    } catch { alert("Erro de conexão"); }
+  };
+
   const generateBuyLink = async () => {
     setGeneratingBuyLink(true);
     setBuyLinkUrl(null);
@@ -602,12 +619,35 @@ export function MesaCapitaisClient() {
               {roomInvites.length > 0 && (
                 <div className="bg-[#12112A] border border-[#9BAFC5]/10 rounded-lg p-3">
                   <div className="text-[9px] text-[#C9A84C] font-bold uppercase mb-2">Convites Ativos ({roomInvites.length})</div>
-                  {roomInvites.slice(0, 5).map((inv: any) => (
-                    <div key={inv.id} className="flex items-center justify-between py-1 text-[10px]">
-                      <span className="text-[#F5F1E8]">{inv.buyer_name || inv.buyer_email || "Sem nome"}</span>
-                      <span className={inv.nda_accepted ? "text-emerald-400" : "text-[#9BAFC5]"}>
-                        {inv.nda_accepted ? "NDA aceito" : "Pendente"}
-                      </span>
+                  {roomInvites.slice(0, 10).map((inv: any) => (
+                    <div key={inv.id} className="py-2 border-b border-[#9BAFC5]/5 last:border-0">
+                      <div className="flex items-center justify-between text-[10px]">
+                        <span className="text-[#F5F1E8] font-medium">{inv.buyer_name || inv.buyer_email || "Sem nome"}</span>
+                        <span className={cn("text-[9px] font-bold px-1.5 py-0.5 rounded",
+                          inv.access_tier === "full_dd" ? "bg-emerald-500/20 text-emerald-400" :
+                          inv.access_tier === "qualified" ? "bg-[#C9A84C]/20 text-[#C9A84C]" :
+                          inv.nda_accepted ? "bg-blue-500/20 text-blue-400" :
+                          "bg-[#162744] text-[#9BAFC5]"
+                        )}>
+                          {inv.access_tier === "full_dd" ? "Full DD" :
+                           inv.access_tier === "qualified" ? "Qualificado" :
+                           inv.nda_accepted ? "NDA aceito" : "Pendente"}
+                        </span>
+                      </div>
+                      {inv.buyer_company && <div className="text-[9px] text-[#9BAFC5] mt-0.5">{inv.buyer_company}</div>}
+                      {inv.qualification_status === "pendente" && inv.proof_of_funds_path && (
+                        <div className="flex items-center gap-2 mt-1.5">
+                          <span className="text-[9px] text-orange-400">Qualificacao pendente</span>
+                          <button onClick={() => approveQualification(inv.id, "aprovado")}
+                            className="text-[9px] px-2 py-0.5 bg-emerald-600/20 text-emerald-400 rounded font-bold hover:bg-emerald-600/30 transition">
+                            Aprovar
+                          </button>
+                          <button onClick={() => approveQualification(inv.id, "reprovado")}
+                            className="text-[9px] px-2 py-0.5 bg-red-500/10 text-red-400 rounded font-bold hover:bg-red-500/20 transition">
+                            Reprovar
+                          </button>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
