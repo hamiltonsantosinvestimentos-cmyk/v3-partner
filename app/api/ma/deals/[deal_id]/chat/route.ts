@@ -10,7 +10,13 @@ function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 }
 
-function buildDealContext(deal: Record<string, unknown>, extractions: Record<string, unknown>[]): string {
+interface PendingDoc { doc_name: string | null; status: string | null; tipo_documento?: string | null; }
+
+function buildDealContext(
+  deal: Record<string, unknown>,
+  extractions: Record<string, unknown>[],
+  pendingDocs: PendingDoc[]
+): string {
   const asset = (deal.asset_data as Record<string, unknown>) ?? {};
   const forja = asset.forja_result as Record<string, unknown> | null;
 
@@ -45,6 +51,20 @@ Riscos: ${String(forja.riscos ?? "N/A").slice(0, 600)}`;
     }
   }
 
+  if (pendingDocs.length > 0) {
+    const statusLabel: Record<string, string> = {
+      pending: "aguardando processamento OCR",
+      needs_review: "necessita revisão manual",
+      failed: "falha na extração OCR",
+    };
+    ctx += `\n\nDOCUMENTOS AINDA NÃO PROCESSADOS (${pendingDocs.length} arquivo${pendingDocs.length > 1 ? "s" : ""}):`;
+    for (const doc of pendingDocs) {
+      const label = statusLabel[doc.status ?? ""] ?? doc.status ?? "status desconhecido";
+      ctx += `\n- ${doc.doc_name ?? doc.tipo_documento ?? "documento sem nome"} — ${label}`;
+    }
+    ctx += `\nATENÇÃO: Os documentos acima existem no sistema mas ainda não foram lidos pelo OCR. Suas informações NÃO estão disponíveis neste contexto. Informe a equipe quando esses dados forem relevantes para a pergunta.`;
+  }
+
   return ctx;
 }
 
@@ -75,7 +95,7 @@ export async function POST(
 
   if (!deal) return NextResponse.json({ error: "Deal não encontrado" }, { status: 404 });
 
-  // Carrega extrações OCR (até 5 mais recentes com status concluído)
+  // Carrega extrações concluídas (até 5 mais recentes)
   const { data: extractions } = await db
     .from("ma_document_extractions")
     .select("doc_name, tipo_documento, resumo, dados_extraidos, confiabilidade")
@@ -84,9 +104,23 @@ export async function POST(
     .order("extracted_at", { ascending: false })
     .limit(5);
 
+  // Documentos ainda não processados (pending / needs_review / failed)
+  const { data: unprocessed } = await db
+    .from("ma_document_extractions")
+    .select("doc_name, tipo_documento, status")
+    .eq("deal_id", deal_id)
+    .in("status", ["pending", "needs_review", "failed"]);
+
+  const pendingDocs: PendingDoc[] = (unprocessed ?? []).map(d => ({
+    doc_name: d.doc_name as string | null,
+    status: d.status as string | null,
+    tipo_documento: d.tipo_documento as string | null,
+  }));
+
   const dealContext = buildDealContext(
     deal as Record<string, unknown>,
-    (extractions ?? []) as Record<string, unknown>[]
+    (extractions ?? []) as Record<string, unknown>[],
+    pendingDocs
   );
 
   const systemPrompt = `Você é o analista de IA dedicado ao deal "${deal.title ?? deal.code}" da V3 Partners — Mesa M&A interna.
@@ -167,7 +201,12 @@ ${dealContext}
     }
 
     const docsLoaded = (extractions ?? []).length;
-    return NextResponse.json({ response: assistantText, session_id: finalSessionId, docs_loaded: docsLoaded });
+    return NextResponse.json({
+      response: assistantText,
+      session_id: finalSessionId,
+      docs_loaded: docsLoaded,
+      docs_pending: pendingDocs.length,
+    });
   } catch (err) {
     console.error("[deal-ia-chat]", err);
     return NextResponse.json({ error: "Erro interno no processamento" }, { status: 500 });
