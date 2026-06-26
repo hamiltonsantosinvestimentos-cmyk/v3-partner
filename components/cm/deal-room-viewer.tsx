@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { FileText, Download, Shield, CheckCircle2, Loader2, Lock, Upload, UserCheck, ScrollText } from "lucide-react";
+import { FileText, Download, Shield, CheckCircle2, Loader2, Lock, Upload, UserCheck, ScrollText, Fingerprint, ExternalLink } from "lucide-react";
 
 interface DealRoomViewerProps {
   token: string;
@@ -16,6 +16,8 @@ export function DealRoomViewer({ token, initialData }: DealRoomViewerProps) {
   const [qualifyForm, setQualifyForm] = useState({ buyer_name: "", buyer_company: "", notes: "" });
   const [qualifyFile, setQualifyFile] = useState<File | null>(null);
   const [acceptingMandato, setAcceptingMandato] = useState(false);
+  const [acceptingCessao, setAcceptingCessao] = useState(false);
+  const [cessaoHash, setCessaoHash] = useState<string | null>(initialData?.cessao?.hash ?? null);
 
   const acceptNda = async () => {
     setAccepting(true);
@@ -63,6 +65,26 @@ export function DealRoomViewer({ token, initialData }: DealRoomViewerProps) {
       await refreshData();
     } catch (err: any) { setError(err.message); }
     finally { setQualifying(false); }
+  };
+
+  const acceptCessao = async () => {
+    setAcceptingCessao(true);
+    setError("");
+    try {
+      const res = await fetch(`/api/cm/deal-room/${token}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "accept_cessao" }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Erro ao aceitar cessão");
+      setCessaoHash(json.cessao_hash);
+      await refreshData();
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setAcceptingCessao(false);
+    }
   };
 
   const acceptMandato = async () => {
@@ -193,7 +215,7 @@ export function DealRoomViewer({ token, initialData }: DealRoomViewerProps) {
       </div>
 
       {/* Tier Badge */}
-      <div className="flex gap-2 mb-6">
+      <div className="flex gap-2 mb-6 flex-wrap">
         {(["nda_only", "qualified", "full_dd"] as const).map((t) => (
           <span key={t} className={`text-[9px] font-bold px-2 py-1 rounded ${
             t === tier ? "bg-[#C9A84C]/20 text-[#C9A84C]" : "bg-[#162744] text-[#9BAFC5]/50"
@@ -201,6 +223,13 @@ export function DealRoomViewer({ token, initialData }: DealRoomViewerProps) {
             {t === "nda_only" ? "1. NDA" : t === "qualified" ? "2. Qualificado" : "3. Due Diligence"}
           </span>
         ))}
+        {tier === "full_dd" && (
+          <span className={`text-[9px] font-bold px-2 py-1 rounded ${
+            (cessaoHash ?? data.cessao?.hash) ? "bg-emerald-500/20 text-emerald-400" : "bg-[#162744] text-[#9BAFC5]/50"
+          }`}>
+            4. Cessão
+          </span>
+        )}
       </div>
 
       {listingSummary}
@@ -286,6 +315,73 @@ export function DealRoomViewer({ token, initialData }: DealRoomViewerProps) {
           {!docsSection && (
             <div className="text-center py-12 text-[#9BAFC5] text-sm">
               Nenhum documento disponivel nesta sala.
+            </div>
+          )}
+
+          {/* TIER 4: Cessão — aceite do contrato + âncora blockchain */}
+          {data.actions?.can_accept_cessao && !(cessaoHash ?? data.cessao?.hash) && (
+            <div className="bg-[#12112A] border border-[#C9A84C]/15 rounded-lg p-5 mt-6">
+              <div className="flex items-center gap-2 mb-4">
+                <Fingerprint size={16} className="text-[#C9A84C]" />
+                <h3 className="text-sm font-bold text-[#F5F1E8]">Aceite do Contrato de Cessão</h3>
+              </div>
+              <div className="bg-[#162744] border border-[#9BAFC5]/10 rounded-lg p-4 mb-4 max-h-[200px] overflow-y-auto text-xs text-[#9BAFC5]/80 leading-relaxed">
+                <p className="mb-2">Pelo presente instrumento, declaro minha intenção formal de adquirir o ativo identificado pelo código <span className="text-[#C9A84C] font-bold">{data.listing?.anonymous_id}</span>, nos termos negociados com a V3 Partners Soluções Ltda (CNPJ 14.219.287/0001-50).</p>
+                <p className="mb-2">Este aceite gera um registro criptográfico (SHA-256) que será ancorado na blockchain Bitcoin via OpenTimestamps, garantindo prova imutável de existência e timestamp desta declaração de intenção.</p>
+                <p>O aceite não constitui obrigação de compra, mas registra formalmente o interesse e o momento do aceite para fins de compliance e auditoria. Os dados de acesso serão registrados conforme LGPD Art. 7, inc. V.</p>
+              </div>
+              <button
+                onClick={acceptCessao}
+                disabled={acceptingCessao}
+                className="w-full px-6 py-3 bg-[#C9A84C] text-[#09081A] rounded-lg text-sm font-bold hover:bg-[#E8C97A] disabled:opacity-50 transition"
+              >
+                {acceptingCessao
+                  ? <Loader2 size={16} className="animate-spin inline mr-2" />
+                  : <Fingerprint size={16} className="inline mr-2" />}
+                Assinar Digitalmente e Ancorар na Blockchain
+              </button>
+            </div>
+          )}
+
+          {/* Prova de aceite da cessão */}
+          {(cessaoHash ?? data.cessao?.hash) && (
+            <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-lg p-5 mt-6">
+              <div className="flex items-center gap-2 mb-3">
+                <CheckCircle2 size={16} className="text-emerald-400" />
+                <h3 className="text-sm font-bold text-emerald-400">Cessão Aceita — Prova Criptográfica</h3>
+              </div>
+              {data.cessao?.accepted_at && (
+                <p className="text-xs text-[#9BAFC5] mb-3">
+                  Aceito em {new Date(data.cessao.accepted_at).toLocaleString("pt-BR")}
+                </p>
+              )}
+              <div className="bg-[#09081A] border border-emerald-500/15 rounded p-3 mb-3">
+                <div className="text-[9px] text-[#9BAFC5] uppercase font-bold mb-1">Hash SHA-256</div>
+                <div className="font-mono text-[10px] text-emerald-400 break-all">
+                  {cessaoHash ?? data.cessao?.hash}
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                {data.cessao?.ots_proof_path ? (
+                  <div className="flex items-center gap-2 text-xs text-emerald-400">
+                    <CheckCircle2 size={12} />
+                    <span>Ancorado na blockchain Bitcoin</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 text-xs text-[#9BAFC5]">
+                    <Loader2 size={12} className="animate-spin" />
+                    <span>Ancoragem Bitcoin em andamento (~10 min)</span>
+                  </div>
+                )}
+                <a
+                  href="https://opentimestamps.org"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="ml-auto flex items-center gap-1 text-[10px] text-[#9BAFC5]/60 hover:text-[#9BAFC5] transition"
+                >
+                  <ExternalLink size={10} /> OpenTimestamps
+                </a>
+              </div>
             </div>
           )}
         </>

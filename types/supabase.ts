@@ -690,19 +690,27 @@ export type Database = {
         Row: {
           allows_tranching: boolean
           anonymous_id: string
+          ask_price_floor: number | null
           asset_type: Database["public"]["Enums"]["cm_asset_type"]
+          auto_accept_enabled: boolean | null
+          cm_intake_token: string | null
           conditional_blocks: Json | null
           created_at: string
           created_by: string | null
+          deal_room_enabled: boolean | null
           desagio_pretendido: number | null
           ente_devedor: string | null
           esfera: string | null
           expires_at: string | null
+          form_submitted_at: string | null
           head_approved_at: string | null
           head_approved_by: string | null
           id: string
+          intake_data: Json | null
+          intake_locked: boolean | null
           listing_status: Database["public"]["Enums"]["cm_listing_status"]
           ma_deal_id: string | null
+          mandato_v3_template_id: string | null
           meeting_validated_at: string | null
           metadata: Json
           natureza: string | null
@@ -726,19 +734,27 @@ export type Database = {
         Insert: {
           allows_tranching?: boolean
           anonymous_id: string
+          ask_price_floor?: number | null
           asset_type: Database["public"]["Enums"]["cm_asset_type"]
+          auto_accept_enabled?: boolean | null
+          cm_intake_token?: string | null
           conditional_blocks?: Json | null
           created_at?: string
           created_by?: string | null
+          deal_room_enabled?: boolean | null
           desagio_pretendido?: number | null
           ente_devedor?: string | null
           esfera?: string | null
           expires_at?: string | null
+          form_submitted_at?: string | null
           head_approved_at?: string | null
           head_approved_by?: string | null
           id?: string
+          intake_data?: Json | null
+          intake_locked?: boolean | null
           listing_status?: Database["public"]["Enums"]["cm_listing_status"]
           ma_deal_id?: string | null
+          mandato_v3_template_id?: string | null
           meeting_validated_at?: string | null
           metadata?: Json
           natureza?: string | null
@@ -762,19 +778,27 @@ export type Database = {
         Update: {
           allows_tranching?: boolean
           anonymous_id?: string
+          ask_price_floor?: number | null
           asset_type?: Database["public"]["Enums"]["cm_asset_type"]
+          auto_accept_enabled?: boolean | null
+          cm_intake_token?: string | null
           conditional_blocks?: Json | null
           created_at?: string
           created_by?: string | null
+          deal_room_enabled?: boolean | null
           desagio_pretendido?: number | null
           ente_devedor?: string | null
           esfera?: string | null
           expires_at?: string | null
+          form_submitted_at?: string | null
           head_approved_at?: string | null
           head_approved_by?: string | null
           id?: string
+          intake_data?: Json | null
+          intake_locked?: boolean | null
           listing_status?: Database["public"]["Enums"]["cm_listing_status"]
           ma_deal_id?: string | null
+          mandato_v3_template_id?: string | null
           meeting_validated_at?: string | null
           metadata?: Json
           natureza?: string | null
@@ -835,8 +859,10 @@ export type Database = {
       }
       cm_bids: {
         Row: {
+          auto_accepted: boolean | null
           bid_value: number
           buyer_profile_id: string | null
+          buyer_qualified: boolean | null
           created_at: string
           created_by: string | null
           desagio_oferecido: number | null
@@ -846,15 +872,19 @@ export type Database = {
           notes: string | null
           payment_details: Json | null
           payment_type: Database["public"]["Enums"]["cm_payment_type"]
+          proof_of_funds_url: string | null
           reviewed_at: string | null
           reviewed_by: string | null
           status: Database["public"]["Enums"]["cm_bid_status"]
           tir_pretendida: number | null
+          tranche_id: string | null
           updated_at: string
         }
         Insert: {
+          auto_accepted?: boolean | null
           bid_value: number
           buyer_profile_id?: string | null
+          buyer_qualified?: boolean | null
           created_at?: string
           created_by?: string | null
           desagio_oferecido?: number | null
@@ -864,15 +894,19 @@ export type Database = {
           notes?: string | null
           payment_details?: Json | null
           payment_type?: Database["public"]["Enums"]["cm_payment_type"]
+          proof_of_funds_url?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
           status?: Database["public"]["Enums"]["cm_bid_status"]
           tir_pretendida?: number | null
+          tranche_id?: string | null
           updated_at?: string
         }
         Update: {
+          auto_accepted?: boolean | null
           bid_value?: number
           buyer_profile_id?: string | null
+          buyer_qualified?: boolean | null
           created_at?: string
           created_by?: string | null
           desagio_oferecido?: number | null
@@ -882,10 +916,12 @@ export type Database = {
           notes?: string | null
           payment_details?: Json | null
           payment_type?: Database["public"]["Enums"]["cm_payment_type"]
+          proof_of_funds_url?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
           status?: Database["public"]["Enums"]["cm_bid_status"]
           tir_pretendida?: number | null
+          tranche_id?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -923,6 +959,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_kyc_monthly_usage"
             referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "cm_bids_tranche_id_fkey"
+            columns: ["tranche_id"]
+            isOneToOne: false
+            referencedRelation: "cm_tranches"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -967,6 +1010,70 @@ export type Database = {
             columns: ["investor_profile_id"]
             isOneToOne: false
             referencedRelation: "investor_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cm_checklist_items: {
+        Row: {
+          checked_at: string | null
+          checked_by: string | null
+          checklist_id: string
+          created_at: string
+          evidence_url: string | null
+          id: string
+          is_checked: boolean
+          item_key: string
+          label: string
+          notes: string | null
+          sort_order: number
+        }
+        Insert: {
+          checked_at?: string | null
+          checked_by?: string | null
+          checklist_id: string
+          created_at?: string
+          evidence_url?: string | null
+          id?: string
+          is_checked?: boolean
+          item_key: string
+          label: string
+          notes?: string | null
+          sort_order?: number
+        }
+        Update: {
+          checked_at?: string | null
+          checked_by?: string | null
+          checklist_id?: string
+          created_at?: string
+          evidence_url?: string | null
+          id?: string
+          is_checked?: boolean
+          item_key?: string
+          label?: string
+          notes?: string | null
+          sort_order?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cm_checklist_items_checked_by_fkey"
+            columns: ["checked_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cm_checklist_items_checked_by_fkey"
+            columns: ["checked_by"]
+            isOneToOne: false
+            referencedRelation: "v_kyc_monthly_usage"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "cm_checklist_items_checklist_id_fkey"
+            columns: ["checklist_id"]
+            isOneToOne: false
+            referencedRelation: "cm_operation_checklists"
             referencedColumns: ["id"]
           },
         ]
@@ -1055,6 +1162,139 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_kyc_monthly_usage"
             referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      cm_deal_room_access: {
+        Row: {
+          access_count: number | null
+          access_tier: string | null
+          access_token: string
+          bid_id: string | null
+          buyer_company: string | null
+          buyer_email: string | null
+          buyer_name: string | null
+          cessao_accepted_at: string | null
+          cessao_accepted_ip: string | null
+          cessao_hash: string | null
+          cessao_ots_proof_path: string | null
+          created_at: string | null
+          created_by: string | null
+          expires_at: string | null
+          first_accessed_at: string | null
+          geo_location: string | null
+          id: string
+          last_accessed_at: string | null
+          listing_id: string
+          mandato_v3_accepted: boolean | null
+          mandato_v3_accepted_at: string | null
+          mandato_v3_hash: string | null
+          nda_accepted: boolean | null
+          nda_accepted_at: string | null
+          nda_hash: string | null
+          nda_ip_address: string | null
+          proof_of_funds_path: string | null
+          qualification_notes: string | null
+          qualification_status: string | null
+          qualified_at: string | null
+          qualified_by: string | null
+          revoked: boolean | null
+          tranche_id: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          access_count?: number | null
+          access_tier?: string | null
+          access_token: string
+          bid_id?: string | null
+          buyer_company?: string | null
+          buyer_email?: string | null
+          buyer_name?: string | null
+          cessao_accepted_at?: string | null
+          cessao_accepted_ip?: string | null
+          cessao_hash?: string | null
+          cessao_ots_proof_path?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          expires_at?: string | null
+          first_accessed_at?: string | null
+          geo_location?: string | null
+          id?: string
+          last_accessed_at?: string | null
+          listing_id: string
+          mandato_v3_accepted?: boolean | null
+          mandato_v3_accepted_at?: string | null
+          mandato_v3_hash?: string | null
+          nda_accepted?: boolean | null
+          nda_accepted_at?: string | null
+          nda_hash?: string | null
+          nda_ip_address?: string | null
+          proof_of_funds_path?: string | null
+          qualification_notes?: string | null
+          qualification_status?: string | null
+          qualified_at?: string | null
+          qualified_by?: string | null
+          revoked?: boolean | null
+          tranche_id?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          access_count?: number | null
+          access_tier?: string | null
+          access_token?: string
+          bid_id?: string | null
+          buyer_company?: string | null
+          buyer_email?: string | null
+          buyer_name?: string | null
+          cessao_accepted_at?: string | null
+          cessao_accepted_ip?: string | null
+          cessao_hash?: string | null
+          cessao_ots_proof_path?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          expires_at?: string | null
+          first_accessed_at?: string | null
+          geo_location?: string | null
+          id?: string
+          last_accessed_at?: string | null
+          listing_id?: string
+          mandato_v3_accepted?: boolean | null
+          mandato_v3_accepted_at?: string | null
+          mandato_v3_hash?: string | null
+          nda_accepted?: boolean | null
+          nda_accepted_at?: string | null
+          nda_hash?: string | null
+          nda_ip_address?: string | null
+          proof_of_funds_path?: string | null
+          qualification_notes?: string | null
+          qualification_status?: string | null
+          qualified_at?: string | null
+          qualified_by?: string | null
+          revoked?: boolean | null
+          tranche_id?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cm_deal_room_access_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "cm_asset_listings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cm_deal_room_access_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "cm_vitrine_public"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cm_deal_room_access_tranche_id_fkey"
+            columns: ["tranche_id"]
+            isOneToOne: false
+            referencedRelation: "cm_tranches"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -1166,6 +1406,78 @@ export type Database = {
           },
           {
             foreignKeyName: "cm_listing_documents_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "cm_vitrine_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cm_operation_checklists: {
+        Row: {
+          bid_id: string | null
+          checklist_type: string
+          completed_at: string | null
+          completed_by: string | null
+          created_at: string
+          id: string
+          listing_id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          bid_id?: string | null
+          checklist_type: string
+          completed_at?: string | null
+          completed_by?: string | null
+          created_at?: string
+          id?: string
+          listing_id: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          bid_id?: string | null
+          checklist_type?: string
+          completed_at?: string | null
+          completed_by?: string | null
+          created_at?: string
+          id?: string
+          listing_id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cm_operation_checklists_bid_id_fkey"
+            columns: ["bid_id"]
+            isOneToOne: false
+            referencedRelation: "cm_bids"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cm_operation_checklists_completed_by_fkey"
+            columns: ["completed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cm_operation_checklists_completed_by_fkey"
+            columns: ["completed_by"]
+            isOneToOne: false
+            referencedRelation: "v_kyc_monthly_usage"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "cm_operation_checklists_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "cm_asset_listings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cm_operation_checklists_listing_id_fkey"
             columns: ["listing_id"]
             isOneToOne: false
             referencedRelation: "cm_vitrine_public"
@@ -1571,6 +1883,280 @@ export type Database = {
           mensagem?: string
           total_destinatarios?: number
           total_enviados?: number
+        }
+        Relationships: []
+      }
+      consorcio_cartas: {
+        Row: {
+          admin: string
+          asking_price: number
+          code: string
+          created_at: string
+          created_by: string | null
+          credit_value: number
+          discount: number
+          group_name: string | null
+          id: string
+          metadata: Json | null
+          quota: string | null
+          source_ref: string | null
+          status: string
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          admin: string
+          asking_price: number
+          code: string
+          created_at?: string
+          created_by?: string | null
+          credit_value: number
+          discount?: number
+          group_name?: string | null
+          id?: string
+          metadata?: Json | null
+          quota?: string | null
+          source_ref?: string | null
+          status?: string
+          type: string
+          updated_at?: string
+        }
+        Update: {
+          admin?: string
+          asking_price?: number
+          code?: string
+          created_at?: string
+          created_by?: string | null
+          credit_value?: number
+          discount?: number
+          group_name?: string | null
+          id?: string
+          metadata?: Json | null
+          quota?: string | null
+          source_ref?: string | null
+          status?: string
+          type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "consorcio_cartas_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "consorcio_cartas_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "v_kyc_monthly_usage"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      consorcio_ofertas: {
+        Row: {
+          carta_code: string
+          carta_credit_value: number
+          carta_id: string
+          created_at: string
+          created_by: string
+          id: string
+          interessado_nome: string
+          interessado_tel: string | null
+          observacoes: string | null
+          responsavel_id: string | null
+          responsavel_nome: string | null
+          valor_oferta: number
+        }
+        Insert: {
+          carta_code: string
+          carta_credit_value: number
+          carta_id: string
+          created_at?: string
+          created_by: string
+          id?: string
+          interessado_nome: string
+          interessado_tel?: string | null
+          observacoes?: string | null
+          responsavel_id?: string | null
+          responsavel_nome?: string | null
+          valor_oferta: number
+        }
+        Update: {
+          carta_code?: string
+          carta_credit_value?: number
+          carta_id?: string
+          created_at?: string
+          created_by?: string
+          id?: string
+          interessado_nome?: string
+          interessado_tel?: string | null
+          observacoes?: string | null
+          responsavel_id?: string | null
+          responsavel_nome?: string | null
+          valor_oferta?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "consorcio_ofertas_carta_id_fkey"
+            columns: ["carta_id"]
+            isOneToOne: false
+            referencedRelation: "consorcio_cartas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "consorcio_ofertas_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "consorcio_ofertas_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "v_kyc_monthly_usage"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "consorcio_ofertas_responsavel_id_fkey"
+            columns: ["responsavel_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "consorcio_ofertas_responsavel_id_fkey"
+            columns: ["responsavel_id"]
+            isOneToOne: false
+            referencedRelation: "v_kyc_monthly_usage"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      contract_approvals: {
+        Row: {
+          approver_id: string
+          approver_name: string
+          comment: string | null
+          contract_id: string
+          created_at: string | null
+          decision: string
+          id: string
+        }
+        Insert: {
+          approver_id: string
+          approver_name: string
+          comment?: string | null
+          contract_id: string
+          created_at?: string | null
+          decision: string
+          id?: string
+        }
+        Update: {
+          approver_id?: string
+          approver_name?: string
+          comment?: string | null
+          contract_id?: string
+          created_at?: string | null
+          decision?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contract_approvals_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "operation_contracts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      contract_notes: {
+        Row: {
+          author_id: string
+          author_name: string
+          content: string
+          contract_id: string
+          created_at: string | null
+          decision: string | null
+          id: string
+          note_type: string
+        }
+        Insert: {
+          author_id: string
+          author_name: string
+          content: string
+          contract_id: string
+          created_at?: string | null
+          decision?: string | null
+          id?: string
+          note_type?: string
+        }
+        Update: {
+          author_id?: string
+          author_name?: string
+          content?: string
+          contract_id?: string
+          created_at?: string | null
+          decision?: string | null
+          id?: string
+          note_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contract_notes_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "operation_contracts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      contract_templates: {
+        Row: {
+          approval_status: string | null
+          body_text_raw: string
+          created_at: string | null
+          created_by: string | null
+          editable_sections: string[] | null
+          id: string
+          is_active: boolean | null
+          template_name: string
+          updated_at: string | null
+          variables_map: Json | null
+          version: number | null
+          vertical: Database["public"]["Enums"]["contract_vertical"]
+        }
+        Insert: {
+          approval_status?: string | null
+          body_text_raw?: string
+          created_at?: string | null
+          created_by?: string | null
+          editable_sections?: string[] | null
+          id?: string
+          is_active?: boolean | null
+          template_name: string
+          updated_at?: string | null
+          variables_map?: Json | null
+          version?: number | null
+          vertical: Database["public"]["Enums"]["contract_vertical"]
+        }
+        Update: {
+          approval_status?: string | null
+          body_text_raw?: string
+          created_at?: string | null
+          created_by?: string | null
+          editable_sections?: string[] | null
+          id?: string
+          is_active?: boolean | null
+          template_name?: string
+          updated_at?: string | null
+          variables_map?: Json | null
+          version?: number | null
+          vertical?: Database["public"]["Enums"]["contract_vertical"]
         }
         Relationships: []
       }
@@ -2588,11 +3174,12 @@ export type Database = {
           category: string
           created_at: string
           data_extracted: Json | null
-          deal_id: string
+          deal_id: string | null
           deal_room_id: string | null
           id: string
           initiated_by: string
           initiator_ref: string | null
+          listing_id: string | null
           priority: string
           status: string
           subject: string
@@ -2604,11 +3191,12 @@ export type Database = {
           category?: string
           created_at?: string
           data_extracted?: Json | null
-          deal_id: string
+          deal_id?: string | null
           deal_room_id?: string | null
           id?: string
           initiated_by?: string
           initiator_ref?: string | null
+          listing_id?: string | null
           priority?: string
           status?: string
           subject: string
@@ -2620,11 +3208,12 @@ export type Database = {
           category?: string
           created_at?: string
           data_extracted?: Json | null
-          deal_id?: string
+          deal_id?: string | null
           deal_room_id?: string | null
           id?: string
           initiated_by?: string
           initiator_ref?: string | null
+          listing_id?: string | null
           priority?: string
           status?: string
           subject?: string
@@ -2637,6 +3226,20 @@ export type Database = {
             columns: ["deal_id"]
             isOneToOne: false
             referencedRelation: "ma_deals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "deal_qa_threads_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "cm_asset_listings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "deal_qa_threads_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "cm_vitrine_public"
             referencedColumns: ["id"]
           },
         ]
@@ -3041,6 +3644,7 @@ export type Database = {
           notification_sent: boolean | null
           score: number
           status: string
+          tranche_id: string | null
           updated_at: string
         }
         Insert: {
@@ -3055,6 +3659,7 @@ export type Database = {
           notification_sent?: boolean | null
           score?: number
           status?: string
+          tranche_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -3069,6 +3674,7 @@ export type Database = {
           notification_sent?: boolean | null
           score?: number
           status?: string
+          tranche_id?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -3084,6 +3690,27 @@ export type Database = {
             columns: ["demand_id"]
             isOneToOne: false
             referencedRelation: "investor_demands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "demand_matches_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "cm_asset_listings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "demand_matches_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "cm_vitrine_public"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "demand_matches_tranche_id_fkey"
+            columns: ["tranche_id"]
+            isOneToOne: false
+            referencedRelation: "cm_tranches"
             referencedColumns: ["id"]
           },
         ]
@@ -3696,19 +4323,30 @@ export type Database = {
           alerta_ativo: boolean | null
           asset_types_preferidos: string[] | null
           cnpj: string | null
+          cpf: string | null
           created_at: string
           created_by: string | null
           criterios: string | null
           desagio_min: number | null
           email: string
           empresa: string | null
+          endereco: string | null
+          estado_civil: string | null
           id: string
+          identidade_orgao: string | null
+          intake_data: Json | null
+          intake_locked: boolean | null
+          intake_token: string | null
           investor_profile_id: string | null
           jurisdicao_alvo: string[] | null
+          nacionalidade: string | null
           natureza_preferida: string[] | null
+          nda_accepted: boolean | null
+          nda_accepted_at: string | null
           nome_contato: string
           notas: string | null
           origem: string
+          profissao: string | null
           setores: string[]
           status: string
           telefone: string | null
@@ -3722,19 +4360,30 @@ export type Database = {
           alerta_ativo?: boolean | null
           asset_types_preferidos?: string[] | null
           cnpj?: string | null
+          cpf?: string | null
           created_at?: string
           created_by?: string | null
           criterios?: string | null
           desagio_min?: number | null
           email: string
           empresa?: string | null
+          endereco?: string | null
+          estado_civil?: string | null
           id?: string
+          identidade_orgao?: string | null
+          intake_data?: Json | null
+          intake_locked?: boolean | null
+          intake_token?: string | null
           investor_profile_id?: string | null
           jurisdicao_alvo?: string[] | null
+          nacionalidade?: string | null
           natureza_preferida?: string[] | null
+          nda_accepted?: boolean | null
+          nda_accepted_at?: string | null
           nome_contato: string
           notas?: string | null
           origem?: string
+          profissao?: string | null
           setores?: string[]
           status?: string
           telefone?: string | null
@@ -3748,19 +4397,30 @@ export type Database = {
           alerta_ativo?: boolean | null
           asset_types_preferidos?: string[] | null
           cnpj?: string | null
+          cpf?: string | null
           created_at?: string
           created_by?: string | null
           criterios?: string | null
           desagio_min?: number | null
           email?: string
           empresa?: string | null
+          endereco?: string | null
+          estado_civil?: string | null
           id?: string
+          identidade_orgao?: string | null
+          intake_data?: Json | null
+          intake_locked?: boolean | null
+          intake_token?: string | null
           investor_profile_id?: string | null
           jurisdicao_alvo?: string[] | null
+          nacionalidade?: string | null
           natureza_preferida?: string[] | null
+          nda_accepted?: boolean | null
+          nda_accepted_at?: string | null
           nome_contato?: string
           notas?: string | null
           origem?: string
+          profissao?: string | null
           setores?: string[]
           status?: string
           telefone?: string | null
@@ -5426,6 +6086,127 @@ export type Database = {
           },
         ]
       }
+      operation_contracts: {
+        Row: {
+          approval_count: number | null
+          approved_by: string[] | null
+          bid_id: string | null
+          commission_percent: number | null
+          contract_title: string
+          created_at: string | null
+          created_by: string | null
+          credit_proposal_id: string | null
+          deal_id: string | null
+          external_envelope_id: string | null
+          id: string
+          listing_id: string | null
+          parties: Json | null
+          rendered_html: string | null
+          requires_review: boolean | null
+          signed_at: string | null
+          status_signature:
+            | Database["public"]["Enums"]["contract_signature_status"]
+            | null
+          storage_url: string | null
+          template_id: string
+          updated_at: string | null
+          vertical: Database["public"]["Enums"]["contract_vertical"]
+        }
+        Insert: {
+          approval_count?: number | null
+          approved_by?: string[] | null
+          bid_id?: string | null
+          commission_percent?: number | null
+          contract_title: string
+          created_at?: string | null
+          created_by?: string | null
+          credit_proposal_id?: string | null
+          deal_id?: string | null
+          external_envelope_id?: string | null
+          id?: string
+          listing_id?: string | null
+          parties?: Json | null
+          rendered_html?: string | null
+          requires_review?: boolean | null
+          signed_at?: string | null
+          status_signature?:
+            | Database["public"]["Enums"]["contract_signature_status"]
+            | null
+          storage_url?: string | null
+          template_id: string
+          updated_at?: string | null
+          vertical: Database["public"]["Enums"]["contract_vertical"]
+        }
+        Update: {
+          approval_count?: number | null
+          approved_by?: string[] | null
+          bid_id?: string | null
+          commission_percent?: number | null
+          contract_title?: string
+          created_at?: string | null
+          created_by?: string | null
+          credit_proposal_id?: string | null
+          deal_id?: string | null
+          external_envelope_id?: string | null
+          id?: string
+          listing_id?: string | null
+          parties?: Json | null
+          rendered_html?: string | null
+          requires_review?: boolean | null
+          signed_at?: string | null
+          status_signature?:
+            | Database["public"]["Enums"]["contract_signature_status"]
+            | null
+          storage_url?: string | null
+          template_id?: string
+          updated_at?: string | null
+          vertical?: Database["public"]["Enums"]["contract_vertical"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "operation_contracts_bid_id_fkey"
+            columns: ["bid_id"]
+            isOneToOne: false
+            referencedRelation: "cm_bids"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "operation_contracts_credit_proposal_id_fkey"
+            columns: ["credit_proposal_id"]
+            isOneToOne: false
+            referencedRelation: "credit_desk_proposals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "operation_contracts_deal_id_fkey"
+            columns: ["deal_id"]
+            isOneToOne: false
+            referencedRelation: "ma_deals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "operation_contracts_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "cm_asset_listings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "operation_contracts_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "cm_vitrine_public"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "operation_contracts_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "contract_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       operational_tickets: {
         Row: {
           assigned_to: string | null
@@ -7067,6 +7848,36 @@ export type Database = {
           },
         ]
       }
+      user_feature_access: {
+        Row: {
+          access_level: string
+          created_at: string | null
+          feature: string
+          id: string
+          updated_at: string | null
+          user_id: string
+          vertical_filter: string[] | null
+        }
+        Insert: {
+          access_level?: string
+          created_at?: string | null
+          feature: string
+          id?: string
+          updated_at?: string | null
+          user_id: string
+          vertical_filter?: string[] | null
+        }
+        Update: {
+          access_level?: string
+          created_at?: string | null
+          feature?: string
+          id?: string
+          updated_at?: string | null
+          user_id?: string
+          vertical_filter?: string[] | null
+        }
+        Relationships: []
+      }
       v3_print_standards: {
         Row: {
           categoria: string
@@ -7349,6 +8160,10 @@ export type Database = {
         }
         Returns: Json
       }
+      create_cm_checklist: {
+        Args: { p_bid_id?: string; p_listing_id: string; p_type?: string }
+        Returns: string
+      }
       create_deal_folder: {
         Args: {
           p_client_name: string
@@ -7485,6 +8300,21 @@ export type Database = {
         | "expirado"
       cm_payment_type: "a_vista" | "parcelado" | "escrow"
       cm_tranche_status: "disponivel" | "reservada" | "vendida" | "cancelada"
+      contract_signature_status:
+        | "rascunho"
+        | "enviado_assinatura"
+        | "assinado"
+        | "recusado"
+        | "expirado"
+        | "cancelado"
+      contract_vertical:
+        | "capital_markets"
+        | "credito"
+        | "ma"
+        | "institucional"
+        | "clientes"
+        | "talent_pool"
+        | "colaboradores"
       credit_desk_level: "NIVEL_1" | "NIVEL_2" | "NIVEL_3"
       deal_stage:
         | "PROSPECTING"
@@ -7707,6 +8537,23 @@ export const Constants = {
       ],
       cm_payment_type: ["a_vista", "parcelado", "escrow"],
       cm_tranche_status: ["disponivel", "reservada", "vendida", "cancelada"],
+      contract_signature_status: [
+        "rascunho",
+        "enviado_assinatura",
+        "assinado",
+        "recusado",
+        "expirado",
+        "cancelado",
+      ],
+      contract_vertical: [
+        "capital_markets",
+        "credito",
+        "ma",
+        "institucional",
+        "clientes",
+        "talent_pool",
+        "colaboradores",
+      ],
       credit_desk_level: ["NIVEL_1", "NIVEL_2", "NIVEL_3"],
       deal_stage: [
         "PROSPECTING",

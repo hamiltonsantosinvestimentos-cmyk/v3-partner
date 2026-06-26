@@ -6,7 +6,7 @@ import {
   BarChart2, Mail, Circle, FileText,
   Paperclip, Trash2, ExternalLink, Upload, Copy, CheckCheck,
   MessageSquare, Send, Zap, FileImage, FileSignature,
-  ArrowLeftRight, Pencil, Check, Loader2, DatabaseZap, Clock, TrendingUp,
+  ArrowLeftRight, Pencil, Check, Loader2, DatabaseZap, Clock, TrendingUp, Bot,
 } from "lucide-react";
 import { ExportButton } from "@/components/financeiro/export-button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -39,6 +39,10 @@ const BusinessPlanContainer = dynamic(
 import { NovoDealForm } from "@/components/ma/novo-deal-form";
 import { DealFormEditorClient } from "@/components/ma/deal-form-editor-client";
 import { BuysideDemandPanel } from "@/components/ma/buyside-demand-panel";
+const DealIaChat = dynamic(
+  () => import("@/components/ma/deal-ia-chat").then(m => m.DealIaChat),
+  { ssr: false }
+);
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type DealComment = {
@@ -237,7 +241,7 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
   const [cards, setCards] = useState<MaCard[]>(initialDeals);
   const [operators, setOperators] = useState<MesaOperator[]>([]);
   const [selectedCard, setSelectedCard] = useState<MaCard | null>(null);
-  const [detailTab, setDetailTab] = useState<"detalhes" | "forja" | "criativos" | "contrato" | "matches" | "analytics" | "qa" | "doc-requests" | "timeline" | "business-plan">("detalhes");
+  const [detailTab, setDetailTab] = useState<"detalhes" | "forja" | "criativos" | "contrato" | "matches" | "analytics" | "qa" | "doc-requests" | "timeline" | "business-plan" | "chat-ia">("detalhes");
   const [showNewCard, setShowNewCard] = useState(false);
   const [showFullForm, setShowFullForm] = useState(false);
   const [showNewOp, setShowNewOp] = useState(false);
@@ -877,6 +881,7 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
                   { id: "contrato" as const, label: "NDA / Mandato", icon: <FileSignature size={12} /> },
                   { id: "doc-requests" as const, label: "Docs", icon: <FileText size={12} /> },
                   { id: "timeline" as const, label: "Timeline", icon: <Clock size={12} /> },
+                  { id: "chat-ia" as const, label: "Chat IA", icon: <Bot size={12} /> },
                 ]).map(tab => {
                   const isTimeline = tab.id === "timeline";
                   const unread = isTimeline && selectedCard ? (timelineUnread[selectedCard.id] ?? 0) : 0;
@@ -1346,6 +1351,14 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
                     missingFields={missingFields}
                     forjaSnapshotAt={(selectedCard.asset_data?.forja_validated_at as string) ?? null}
                   />
+                </div>
+              );
+            }
+
+            if (detailTab === "chat-ia") {
+              return (
+                <div className="mt-2">
+                  <DealIaChat dealId={selectedCard.id} dealTitle={selectedCard.company} />
                 </div>
               );
             }
