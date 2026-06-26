@@ -37,21 +37,20 @@ export default async function IndicacoesPage() {
     );
     const { data: leads } = await svc
       .from("prospeccao_leads")
-      .select("id, status")
-      .eq("origem", "indicacao")
-      .ilike("indicado_por_nome", `%${profile.full_name ?? ""}%`);
+      .select("id, etapa")
+      .eq("indicado_por_partner_id", user.id);
 
     if (leads) {
       totalIndicados = leads.length;
       ativos = leads.filter(
-        (l: { id: string; status: string }) => l.status === "ATIVO" || l.status === "CONVERTIDO"
+        (l: { id: string; etapa: string }) => l.etapa === "convertido" || l.etapa === "trial"
       ).length;
       pendentes = leads.filter(
-        (l: { id: string; status: string }) => l.status === "NOVO" || l.status === "EM_CONTATO"
+        (l: { id: string; etapa: string }) => l.etapa === "prospect" || l.etapa === "contatado" || l.etapa === "interessado"
       ).length;
     }
   } catch {
-    // table may not have indicado_por_nome — show zeros
+    // silently show zeros on error
   }
 
   return (
