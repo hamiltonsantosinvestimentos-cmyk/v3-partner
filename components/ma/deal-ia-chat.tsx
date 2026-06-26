@@ -93,7 +93,7 @@ export function DealIaChat({ dealId, dealTitle }: DealIaChatProps) {
           {docsPending != null && docsPending > 0 && (
             <div className="flex items-center gap-1 text-[10px] text-amber-400 bg-amber-400/10 border border-amber-400/25 px-2 py-0.5 rounded-full">
               <AlertCircle className="w-2.5 h-2.5" />
-              {docsPending} pendente{docsPending !== 1 ? "s" : ""}
+              {docsPending} sem OCR
             </div>
           )}
         </div>
@@ -104,8 +104,8 @@ export function DealIaChat({ dealId, dealTitle }: DealIaChatProps) {
         <div className="flex items-start gap-2 px-4 py-2.5 bg-amber-400/8 border-b border-amber-400/20">
           <AlertCircle className="w-3.5 h-3.5 text-amber-400 flex-shrink-0 mt-0.5" />
           <p className="text-[11px] text-amber-300/80 leading-snug">
-            <span className="font-semibold text-amber-400">{docsPending} documento{docsPending !== 1 ? "s" : ""} ainda não processado{docsPending !== 1 ? "s" : ""} pelo OCR.</span>{" "}
-            O agente não tem acesso ao conteúdo desse{docsPending !== 1 ? "s" : ""} arquivo{docsPending !== 1 ? "s" : ""} — processe-o{docsPending !== 1 ? "s" : ""} antes de fazer perguntas que dependam de seu conteúdo.
+            <span className="font-semibold text-amber-400">{docsPending} documento{docsPending !== 1 ? "s" : ""} sem OCR.</span>{" "}
+            O agente não tem acesso ao conteúdo desse{docsPending !== 1 ? "s" : ""} arquivo{docsPending !== 1 ? "s" : ""} — envie-o{docsPending !== 1 ? "s" : ""} para processamento na aba OCR. Documentos com status "Revisar" já são carregados automaticamente.
           </p>
         </div>
       )}

@@ -43,7 +43,11 @@ Riscos: ${String(forja.riscos ?? "N/A").slice(0, 600)}`;
   if (extractions.length > 0) {
     ctx += "\n\nDOCUMENTOS EXTRAÍDOS VIA OCR:";
     for (const ext of extractions) {
-      ctx += `\n\n[${ext.tipo_documento ?? ext.doc_name}] (confiabilidade: ${ext.confiabilidade ?? "?"}%)`;
+      const isLowConf = ext.status === "needs_review";
+      const confLabel = isLowConf
+        ? `confiabilidade: ${ext.confiabilidade ?? "?"}% — ATENÇÃO: documento com baixa confiança, aguardando revisão manual`
+        : `confiabilidade: ${ext.confiabilidade ?? "?"}%`;
+      ctx += `\n\n[${ext.tipo_documento ?? ext.doc_name}] (${confLabel})`;
       if (ext.resumo) ctx += `\nResumo: ${String(ext.resumo).slice(0, 1500)}`;
       if (ext.dados_extraidos) {
         ctx += `\nDados: ${JSON.stringify(ext.dados_extraidos).slice(0, 800)}`;
@@ -95,21 +99,21 @@ export async function POST(
 
   if (!deal) return NextResponse.json({ error: "Deal não encontrado" }, { status: 404 });
 
-  // Carrega extrações concluídas (até 5 mais recentes)
+  // Carrega extrações concluídas + needs_review (até 5 mais recentes)
   const { data: extractions } = await db
     .from("ma_document_extractions")
-    .select("doc_name, tipo_documento, resumo, dados_extraidos, confiabilidade")
+    .select("doc_name, tipo_documento, resumo, dados_extraidos, confiabilidade, status")
     .eq("deal_id", deal_id)
-    .eq("status", "completed")
+    .in("status", ["completed", "needs_review"])
     .order("extracted_at", { ascending: false })
     .limit(5);
 
-  // Documentos ainda não processados (pending / needs_review / failed)
+  // Documentos ainda não processados (apenas pending / failed — needs_review já entra no contexto)
   const { data: unprocessed } = await db
     .from("ma_document_extractions")
     .select("doc_name, tipo_documento, status")
     .eq("deal_id", deal_id)
-    .in("status", ["pending", "needs_review", "failed"]);
+    .in("status", ["pending", "failed"]);
 
   const pendingDocs: PendingDoc[] = (unprocessed ?? []).map(d => ({
     doc_name: d.doc_name as string | null,
