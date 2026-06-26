@@ -45,8 +45,45 @@ export async function POST(req: NextRequest) {
 
   const db = svc();
 
+  const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
   if (token) {
-    // Busca o prospect pelo token
+    // UUID → link de indicação gerado pelo dashboard de parceiros (?ref=partner_id)
+    if (UUID_REGEX.test(token)) {
+      const { data: partner } = await db
+        .from("profiles")
+        .select("id, full_name")
+        .eq("id", token)
+        .single();
+
+      if (!partner) {
+        return NextResponse.json({ error: "Link inválido ou expirado" }, { status: 404 });
+      }
+
+      const partnerName = (partner as { full_name: string | null }).full_name ?? "";
+
+      const { data, error } = await db.from("prospeccao_leads").insert({
+        nome: nome.trim(),
+        documento: documento || null,
+        email: email.trim().toLowerCase(),
+        telefone: telefone || null,
+        cidade: cidade || null,
+        estado: estado || null,
+        origem: "indicacao",
+        indicado_por_nome: indicado_por_nome || partnerName || null,
+        indicado_por_partner_id: token,
+        etapa: "prospect",
+      }).select("id").single();
+
+      if (error) {
+        console.error("Erro ao criar lead via indicação:", error.message);
+        return NextResponse.json({ error: "Erro ao salvar dados" }, { status: 500 });
+      }
+
+      return NextResponse.json({ ok: true, leadId: (data as { id: string }).id }, { status: 201 });
+    }
+
+    // Token alfanumérico → link de prospecção gerado pela equipe (/api/prospeccao/link)
     const { data: lead } = await db
       .from("prospeccao_leads")
       .select("id, etapa, nome")
