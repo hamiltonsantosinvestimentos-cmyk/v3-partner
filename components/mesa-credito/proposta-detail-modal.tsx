@@ -579,13 +579,21 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
   const [chatSessionId, setChatSessionId] = useState<string | null>(null);
   const chatEndRef = React.useRef<HTMLDivElement>(null);
 
-  // Reseta chat ao trocar de proposta
+  // Carrega último histórico de chat ao abrir/trocar proposta
   useEffect(() => {
-    if (open && proposal) {
-      setChatMessages([]);
-      setChatInput("");
-      setChatSessionId(null);
-    }
+    if (!open || !proposal) return;
+    setChatMessages([]);
+    setChatInput("");
+    setChatSessionId(null);
+    fetch(`/api/mesa/chat-deal?proposal_id=${proposal.id}`)
+      .then(r => r.json())
+      .then((data: { session_id: string | null; messages: ChatMessage[] }) => {
+        if (data.messages?.length) {
+          setChatMessages(data.messages);
+          setChatSessionId(data.session_id);
+        }
+      })
+      .catch(() => {});
   }, [open, proposal?.id]);
 
   useEffect(() => {

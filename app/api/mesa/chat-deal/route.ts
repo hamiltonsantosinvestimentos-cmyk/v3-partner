@@ -222,10 +222,37 @@ ${contextoProposta}`;
         squad_id: "mesa-op-deal-chat",
         title,
         messages: newMessages,
+        deal_id: proposal_id,
       })
       .select("id").single();
     finalSessionId = newSession?.id;
   }
 
   return NextResponse.json({ response: assistantText, session_id: finalSessionId });
+}
+
+export async function GET(req: NextRequest) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+
+  const { data: profile } = await svc()
+    .from("profiles").select("role").eq("id", user.id).single();
+  if (!ADMIN_ROLES.includes(profile?.role as typeof ADMIN_ROLES[number])) {
+    return NextResponse.json({ error: "Acesso restrito" }, { status: 403 });
+  }
+
+  const proposal_id = new URL(req.url).searchParams.get("proposal_id");
+  if (!proposal_id) return NextResponse.json({ error: "proposal_id obrigatório" }, { status: 400 });
+
+  const { data } = await svc()
+    .from("agent_sessions")
+    .select("id, messages")
+    .eq("deal_id", proposal_id)
+    .eq("squad_id", "mesa-op-deal-chat")
+    .order("updated_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  return NextResponse.json({ session_id: data?.id ?? null, messages: data?.messages ?? [] });
 }
