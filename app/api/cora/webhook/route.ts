@@ -121,7 +121,7 @@ export async function POST(req: NextRequest) {
     // 1. Atualiza cadastro pendente de adesão
     const { data: reg } = await db
       .from("partner_registrations")
-      .select("id, plano, email, nome_completo, razao_social")
+      .select("id, plano, email, nome_completo, razao_social, referred_by_partner_id")
       .eq("cora_invoice_id", invoiceId)
       .single();
 
@@ -148,6 +148,24 @@ export async function POST(req: NextRequest) {
             read: false,
           }))
         ).then(null, () => {});
+      }
+
+      // Ativa desconto do referenciador (10% por 6 meses)
+      if (reg.referred_by_partner_id) {
+        const nomeIndicado = reg.nome_completo ?? reg.razao_social ?? "Seu indicado";
+        await db.from("profiles").update({
+          referral_discount_percent: 10,
+          referral_discount_months_remaining: 6,
+        }).eq("id", reg.referred_by_partner_id).then(null, () => {});
+
+        await db.from("notifications").insert({
+          user_id:    reg.referred_by_partner_id,
+          type:       "commission",
+          title:      "Indicação convertida! 🎉",
+          message:    `${nomeIndicado} pagou a adesão V3 Partners. Você ganhou 10% de desconto nas próximas 6 mensalidades!`,
+          action_url: "/indicacoes",
+          read:       false,
+        }).then(null, () => {});
       }
     }
 

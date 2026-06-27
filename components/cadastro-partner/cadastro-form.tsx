@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import Image from "next/image";
 import {
   User, Building2, CheckCircle2, ChevronRight, ChevronLeft,
@@ -225,6 +226,9 @@ function StepBar({ step, total }: { step: Step; total: number }) {
 
 // ─── Main Form ────────────────────────────────────────────────────────────────
 export function CadastroPartnerForm() {
+  const searchParams = useSearchParams();
+  const referredByPartnerId = searchParams.get("ref");
+
   const [step, setStep] = useState<Step>(1);
   const [plano, setPlano] = useState<Plano | null>(null);
   const [tipoPessoa, setTipoPessoa] = useState<TipoPessoa | null>(null);
@@ -361,6 +365,8 @@ export function CadastroPartnerForm() {
       docIdentidade.forEach((f) => fd.append("doc_identidade", f));
       docCnpj.forEach((f)       => fd.append("doc_cnpj", f));
       docSocio.forEach((f)      => fd.append("doc_socio", f));
+
+      if (referredByPartnerId) fd.append("referred_by_partner_id", referredByPartnerId);
 
       const res = await fetch("/api/cadastro-partner", { method: "POST", body: fd });
       const data = await res.json();

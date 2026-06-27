@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { CadastroPartnerForm } from "@/components/cadastro-partner/cadastro-form";
 
 export const metadata = {
@@ -6,5 +7,9 @@ export const metadata = {
 };
 
 export default function CadastroPartnerPage() {
-  return <CadastroPartnerForm />;
+  return (
+    <Suspense>
+      <CadastroPartnerForm />
+    </Suspense>
+  );
 }

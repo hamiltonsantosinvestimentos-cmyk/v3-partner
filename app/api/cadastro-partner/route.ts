@@ -145,6 +145,8 @@ export async function POST(req: NextRequest) {
     // IP do solicitante
     const ip = req.headers.get("x-forwarded-for")?.split(",")[0] ?? req.headers.get("x-real-ip") ?? null;
 
+    const referredByPartnerId = formData.get("referred_by_partner_id") as string | null;
+
     // Montar payload
     const payload: Record<string, unknown> = {
       id:          regId,
@@ -167,6 +169,8 @@ export async function POST(req: NextRequest) {
       // Controle
       status:    "PENDENTE",
       ip_origem: ip,
+      // Referral
+      ...(referredByPartnerId ? { referred_by_partner_id: referredByPartnerId } : {}),
     };
 
     if (tipoPessoa === "PF") {

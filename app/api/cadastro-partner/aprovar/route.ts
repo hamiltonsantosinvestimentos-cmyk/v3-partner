@@ -113,7 +113,7 @@ export async function POST(req: NextRequest) {
   // Busca o cadastro
   const { data: reg } = await svc
     .from("partner_registrations")
-    .select("*")
+    .select("*, referred_by_partner_id")
     .eq("id", id)
     .single();
 
@@ -166,6 +166,7 @@ export async function POST(req: NextRequest) {
         email,
         kyc_status: "APROVADO",
         updated_at: new Date().toISOString(),
+        ...(reg.referred_by_partner_id ? { referred_by_partner_id: reg.referred_by_partner_id } : {}),
       }, { onConflict: "id" });
     }
 
