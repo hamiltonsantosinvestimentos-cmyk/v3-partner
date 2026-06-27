@@ -15,40 +15,61 @@ export default async function IndicacoesPage() {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("id, full_name, email, role")
+    .select("id, full_name, email, role, referral_discount_percent, referral_discount_months_remaining")
     .eq("id", user.id)
     .single();
 
-  if (!profile || !["ADMIN", "PARTNER", "PARTNER_PRO", "GESTAO"].includes(profile.role)) {
+  if (!profile || !["ADMIN", "STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE", "GESTAO"].includes(profile.role)) {
     redirect("/unauthorized");
   }
 
-  const referralLink = `https://app.v3partners.com.br/indicacao?ref=${user.id}`;
+  const leadsLink = `https://app.v3partners.com.br/indicacao?ref=${user.id}`;
+  const partnerLink = `https://app.v3partners.com.br/cadastro-partner?ref=${user.id}`;
 
-  // Try to count leads from the referral — best-effort, no crash if table differs
   let totalIndicados = 0;
   let ativos = 0;
   let pendentes = 0;
+  let ganhosTotal = 0;
+  let partnersIndicados = 0;
 
   try {
     const svc = sc(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     );
-    const { data: leads } = await svc
-      .from("prospeccao_leads")
-      .select("id, etapa")
-      .eq("indicado_por_partner_id", user.id);
 
-    if (leads) {
-      totalIndicados = leads.length;
-      ativos = leads.filter(
-        (l: { id: string; etapa: string }) => l.etapa === "convertido" || l.etapa === "trial"
-      ).length;
-      pendentes = leads.filter(
-        (l: { id: string; etapa: string }) => l.etapa === "prospect" || l.etapa === "contatado" || l.etapa === "interessado"
-      ).length;
-    }
+    const [leadsRes, commissionsRes, partnersRes] = await Promise.all([
+      svc
+        .from("prospeccao_leads")
+        .select("id, etapa")
+        .eq("indicado_por_partner_id", user.id),
+      svc
+        .from("commissions")
+        .select("amount")
+        .eq("partner_id", user.id)
+        .eq("is_referral_commission", true),
+      svc
+        .from("profiles")
+        .select("id", { count: "exact", head: true })
+        .eq("referred_by_partner_id", user.id),
+    ]);
+
+    const leads = leadsRes.data ?? [];
+    totalIndicados = leads.length;
+    ativos = leads.filter(
+      (l: { id: string; etapa: string }) => l.etapa === "convertido" || l.etapa === "trial"
+    ).length;
+    pendentes = leads.filter(
+      (l: { id: string; etapa: string }) =>
+        l.etapa === "prospect" || l.etapa === "contatado" || l.etapa === "interessado"
+    ).length;
+
+    ganhosTotal = (commissionsRes.data ?? []).reduce(
+      (sum: number, c: { amount: number }) => sum + (c.amount ?? 0),
+      0
+    );
+
+    partnersIndicados = partnersRes.count ?? 0;
   } catch {
     // silently show zeros on error
   }
@@ -58,8 +79,12 @@ export default async function IndicacoesPage() {
       userId={user.id}
       partnerName={profile.full_name ?? profile.email}
       role={profile.role}
-      referralLink={referralLink}
-      stats={{ totalIndicados, ativos, pendentes, ganhos: ativos * 0 }}
+      leadsLink={leadsLink}
+      partnerLink={partnerLink}
+      discountPercent={(profile as Record<string, unknown>).referral_discount_percent as number ?? 0}
+      discountMonthsRemaining={(profile as Record<string, unknown>).referral_discount_months_remaining as number ?? 0}
+      partnersIndicados={partnersIndicados}
+      stats={{ totalIndicados, ativos, pendentes, ganhos: ganhosTotal }}
     />
   );
 }
