@@ -34,6 +34,9 @@ async function gerarComissaoIndicacao(
   const referrerId = (partnerProfile as { referred_by_partner_id?: string | null } | null)?.referred_by_partner_id;
   if (!referrerId) return;
 
+  const TIPOS_ELEGÍVEIS = ["CREDITO", "MA", "CONSORCIO"];
+  if (!TIPOS_ELEGÍVEIS.includes(comissaoOriginal.operation_type)) return;
+
   const commValue      = comissaoOriginal.commission_value ?? (comissaoOriginal.operation_value * comissaoOriginal.commission_percent / 100);
   const referralValue  = Math.round(commValue * 0.10 * 100) / 100;
   const partnerName    = (partnerProfile as { full_name?: string | null }).full_name ?? "Partner";
