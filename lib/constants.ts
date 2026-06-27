@@ -231,12 +231,6 @@ export const NAV_ITEMS = [
     roles: ["ADMIN", "PARTNER", "PARTNER_PRO", "MESA_OPERACIONAL", "GESTAO"],
   },
   {
-    href: "/split-fiscal",
-    label: "Split Fiscal",
-    icon: "PieChart",
-    roles: ["ADMIN", "PARTNER", "PARTNER_PRO", "GESTAO"],
-  },
-  {
     href: "/ma",
     label: "M&A",
     icon: "Building2",

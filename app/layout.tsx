@@ -6,7 +6,7 @@ import { ChunkErrorReload } from "@/components/chunk-error-reload";
 export const metadata: Metadata = {
   title: "V3 PARTNERS — Plataforma Financeira",
   description: "Plataforma de gestão para parceiros e operações financeiras V3 Partners",
-  keywords: ["crédito", "finanças", "M&A", "split fiscal", "parceiros"],
+  keywords: ["crédito", "finanças", "M&A", "parceiros"],
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,

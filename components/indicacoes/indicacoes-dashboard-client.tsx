@@ -90,7 +90,7 @@ export function IndicacoesDashboardClient({
   stats,
 }: Props) {
   const whatsappLeads = encodeURIComponent(
-    `Olá! Sou parceiro da V3 Partners, uma boutique institucional multiproduto.\n\nConheça nossos serviços de crédito estruturado, consórcio, split fiscal, M&A e muito mais.\n\nAcesse pelo meu link: ${leadsLink}`
+    `Olá! Sou parceiro da V3 Partners, uma boutique institucional multiproduto.\n\nConheça nossos serviços de crédito estruturado, consórcio, M&A e muito mais.\n\nAcesse pelo meu link: ${leadsLink}`
   );
   const whatsappPartner = encodeURIComponent(
     `Olá! Estou te convidando para ser parceiro V3 Partners.\n\nAcesse pelo meu link e garanta condições especiais: ${partnerLink}`

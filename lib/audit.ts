@@ -10,7 +10,6 @@ export type AuditEntity =
   | "ma_deals"
   | "operational_tickets"
   | "credit_desk_proposals"
-  | "split_fiscal"
   | "profiles"
   | "crm_leads"
   | "commissions"

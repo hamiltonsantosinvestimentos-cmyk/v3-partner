@@ -129,10 +129,6 @@ export async function DELETE(
     // partner_registrations / contracts
     svc2.from("partner_registrations").update({ user_id: null }).eq("user_id", id),
     svc2.from("partner_contracts").update({ partner_id: null }).eq("partner_id", id),
-    // split_fiscal
-    svc2.from("split_fiscal").update({ partner_id: null }).eq("partner_id", id),
-    svc2.from("split_fiscal").update({ created_by: null }).eq("created_by", id),
-    svc2.from("split_fiscal").update({ approved_by: null }).eq("approved_by", id),
     // prospeccao
     svc2.from("prospeccao_leads").update({ partner_id: null }).eq("partner_id", id),
     svc2.from("prospeccao_leads").update({ created_by: null }).eq("created_by", id),

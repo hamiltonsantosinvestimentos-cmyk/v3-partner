@@ -13,7 +13,6 @@ import {
   Zap,
   Building2,
   Trophy,
-  PieChart,
   ChevronRight,
   Plus,
   Search,
@@ -536,7 +535,6 @@ const CONVERT_OPTIONS = [
   { id: "high_ticket",        label: "High Ticket",         desc: "CRI, CRA, CPR, Fundos",               color: "#A855F7", bg: "rgba(168,85,247,0.1)", icon: Zap },
   { id: "ma",                 label: "M&A",                 desc: "Fusões e Aquisições",                 color: "#6366F1", bg: "rgba(99,102,241,0.1)", icon: Building2 },
   { id: "consorcio",          label: "Consórcio",           desc: "Imóvel e Veículos",                   color: "#10B981", bg: "rgba(16,185,129,0.1)", icon: Trophy },
-  { id: "split",              label: "Split Fiscal",        desc: "Split de Receita",                    color: "#C9A84C", bg: "rgba(196,146,46,0.1)", icon: PieChart },
 ];
 
 // Linhas de crédito por produto (igual ao nova-proposta-modal)
@@ -3415,16 +3413,7 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
                 <Button variant="outline" onClick={() => setSelectedLead(null)}>
                   Fechar
                 </Button>
-                {selectedLead.productInterest === "split" && (
-                  <Button
-                    variant="outline"
-                    onClick={() => { window.location.href = "/split-fiscal"; }}
-                    style={{ borderColor: "#C9A84C", color: "#E8C97A" }}
-                  >
-                    <PieChart className="w-4 h-4 mr-2" />
-                    Simulador Split Fiscal
-                  </Button>
-                )}
+
                 {selectedLead.productInterest === "consorcio" && (
                   <Button
                     variant="outline"

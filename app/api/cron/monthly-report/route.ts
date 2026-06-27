@@ -40,7 +40,6 @@ export async function GET(req: NextRequest) {
     CREDITO: "crédito estruturado",
     MA: "M&A",
     CONSORCIO: "consórcio",
-    SPLIT_FISCAL: "split fiscal",
     MARKETPLACE: "marketplace financeiro",
   };
 

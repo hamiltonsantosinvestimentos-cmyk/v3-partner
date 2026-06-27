@@ -296,7 +296,7 @@ export function ManualPlataformaPDF() {
             ["8", "IA Partner", "Assistente de inteligência artificial"],
             ["9", "Academy", "Treinamentos e certificações"],
             ["10", "Marketplace", "Produtos e fornecedores"],
-            ["11", "Financeiro", "Comissões, split fiscal e assinaturas"],
+            ["11", "Financeiro", "Comissões e assinaturas"],
             ["12", "Configurações", "Perfil, senha e preferências"],
           ].map(([num, title, desc]) => (
             <View key={num} style={styles.tableRow}>
@@ -670,7 +670,7 @@ export function ManualPlataformaPDF() {
         <SectionHeader
           tag="Capítulo 11"
           title="Financeiro — Comissões e Assinatura"
-          subtitle="Acompanhe suas comissões, split fiscal e gerencie sua assinatura V3 Partners."
+          subtitle="Acompanhe suas comissões e gerencie sua assinatura V3 Partners."
         />
         <View style={styles.row2}>
           <ModuleCard

@@ -2,7 +2,7 @@ import { DashboardClient } from "@/components/dashboard/dashboard-client";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import {
-  DEMO_SPLITS, DEMO_DEALS, DEMO_CREDIT_PROPOSALS, DEMO_TICKETS
+  DEMO_DEALS, DEMO_CREDIT_PROPOSALS, DEMO_TICKETS
 } from "@/lib/demo-data";
 
 export const dynamic = "force-dynamic";

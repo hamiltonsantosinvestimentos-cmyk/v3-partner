@@ -177,47 +177,6 @@ export const ACADEMY_QUIZZES: Record<string, CategoryQuiz> = {
       },
     ],
   },
-  "split-fiscal": {
-    categoryId: "split-fiscal",
-    passingScore: 70,
-    questions: [
-      {
-        id: "sf-q1",
-        question: "O que é Split Fiscal no contexto da V3 Partners?",
-        options: ["Divisão de impostos entre sócios", "Estrutura de otimização tributária legal que divide receitas entre entidades jurídicas distintas", "Parcelamento de dívida tributária com a Receita Federal", "Transferência de prejuízos entre empresas do mesmo grupo"],
-        correct: 1,
-        explanation: "Split Fiscal é uma estrutura de planejamento tributário lícita que distribui receitas entre múltiplas entidades jurídicas, otimizando a carga tributária de forma legal.",
-      },
-      {
-        id: "sf-q2",
-        question: "Qual é o perfil ideal de empresa para uma operação de Split Fiscal?",
-        options: ["Startup em fase pré-receita", "Empresa com faturamento acima do limite do Simples Nacional e margem saudável", "MEI com faturamento até R$ 81 mil/ano", "Empresa pública de economia mista"],
-        correct: 1,
-        explanation: "O Split Fiscal é indicado para empresas que ultrapassaram o limite do Simples Nacional (R$ 4,8M/ano) e estão no Lucro Presumido ou Real.",
-      },
-      {
-        id: "sf-q3",
-        question: "Qual a documentação mínima para iniciar uma análise de Split Fiscal?",
-        options: ["Apenas CNPJ e CPF dos sócios", "Últimos 3 balanços, DRE, contrato social e detalhamento das operações", "Somente o faturamento dos últimos 12 meses", "Apenas declaração de Imposto de Renda dos sócios"],
-        correct: 1,
-        explanation: "Para análise completa de Split Fiscal, são necessários os balanços, DRE, estrutura societária e detalhe das operações para identificar as oportunidades de otimização.",
-      },
-      {
-        id: "sf-q4",
-        question: "Qual é o papel do compliance no Split Fiscal?",
-        options: ["Não é necessário envolver compliance", "Garantir que toda a estrutura esteja amparada por legislação vigente e resistirá a eventual fiscalização", "Apenas assinar os documentos finais", "Calcular o valor dos impostos economizados"],
-        correct: 1,
-        explanation: "O compliance é fundamental para validar que a estrutura de Split Fiscal é legal, documentada e sustentável.",
-      },
-      {
-        id: "sf-q5",
-        question: "Qual a diferença entre planejamento tributário lícito e evasão fiscal?",
-        options: ["Não há diferença jurídica", "O planejamento lícito é realizado antes do fato gerador; a evasão simula ou oculta negócios para reduzir tributos indevidamente", "Apenas o valor dos tributos evitados os distingue", "A diferença é apenas temporal"],
-        correct: 1,
-        explanation: "O planejamento tributário lícito explora as opções legais antes do fato gerador. A evasão fiscal simula ou oculta negócios para reduzir tributos de forma fraudulenta.",
-      },
-    ],
-  },
   "consorcio": {
     categoryId: "consorcio",
     passingScore: 70,

@@ -68,34 +68,6 @@ export const DEMO_USERS = [
   },
 ];
 
-export const DEMO_SPLITS = [
-  {
-    id: "split-001", code: "SF-26-100001", title: "Split Fiscal - Operação Varejo SP",
-    total_value: 850000, split_percent: 2.5, partner_revenue: 21250,
-    status: "APPROVED", created_at: "2026-03-01T10:00:00Z",
-  },
-  {
-    id: "split-002", code: "SF-26-100002", title: "Split Fiscal - Correspondente RJ",
-    total_value: 1200000, split_percent: 2.0, partner_revenue: 24000,
-    status: "IN_REVIEW", created_at: "2026-03-10T14:00:00Z",
-  },
-  {
-    id: "split-003", code: "SF-26-100003", title: "Split Fiscal - Parceiro MG",
-    total_value: 430000, split_percent: 3.0, partner_revenue: 12900,
-    status: "PENDING", created_at: "2026-03-15T09:00:00Z",
-  },
-  {
-    id: "split-004", code: "SF-26-100004", title: "Split Fiscal - Expansão Sul",
-    total_value: 2100000, split_percent: 1.8, partner_revenue: 37800,
-    status: "COMPLETED", created_at: "2026-02-20T11:00:00Z",
-  },
-  {
-    id: "split-005", code: "SF-26-100005", title: "Split Fiscal - Operação Nordeste",
-    total_value: 670000, split_percent: 2.2, partner_revenue: 14740,
-    status: "DRAFT", created_at: "2026-03-20T16:00:00Z",
-  },
-];
-
 export const DEMO_DEALS = [
   {
     id: "deal-001", code: "MA-26-200001", title: "Aquisição TechFinance Ltda",

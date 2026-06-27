@@ -36,7 +36,6 @@ const PAGE_LABELS: Record<string, string> = {
   "/mesa-ma": "Mesa M&A",
   "/mesa-operacional": "Mesa Operacional",
   "/mesa-consorcio-op": "Mesa Consórcio",
-  "/split-fiscal": "Split Fiscal",
   "/ma": "M&A",
   "/consorcio": "Consórcio",
   "/ia-assistant": "V3 IA Partner",
