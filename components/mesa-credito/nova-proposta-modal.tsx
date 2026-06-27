@@ -1191,7 +1191,7 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
                     <Field label="E-mail *" value={email} onChange={setEmail} placeholder="contato@empresa.com" type="email" />
                     <Field label="Telefone *" value={telefone} onChange={setTelefone} placeholder="(11) 3000-0000" />
                   </div>
-                  <CurrencyField label="Faturamento Anual (R$) *" value={faturamento} onChange={setFaturamento} />
+                  <CurrencyField label="Faturamento Mensal (R$) *" value={faturamento} onChange={setFaturamento} />
                   <div className="grid grid-cols-2 gap-3">
                     <CepField label="CEP da Empresa" value={enderecoCep} onChange={handleEnderecoCepChange} loading={cepLoading} />
                     <Field label="UF" value={enderecoUf} onChange={setEnderecoUf} placeholder="SP" />

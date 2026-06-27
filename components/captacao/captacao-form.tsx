@@ -403,7 +403,7 @@ export function CaptacaoForm({ token, partnerName }: CaptacaoFormProps) {
             ) : (
               <>
                 <div className="grid grid-cols-2 gap-3">
-                  <Field label="Faturamento Mensal">
+                  <Field label="Faturamento Anual">
                     <input style={inputStyle} value={faturamento} onChange={e => setFaturamento(e.target.value)} placeholder="R$ 0,00" />
                   </Field>
                   <Field label="Sócio Responsável">

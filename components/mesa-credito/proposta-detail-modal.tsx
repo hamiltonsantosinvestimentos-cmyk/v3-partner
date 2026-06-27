@@ -3910,7 +3910,7 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
                     <EField label="Telefone" value={editTelefone} onChange={setEditTelefone} placeholder="(11) 3000-0000" />
                   </div>
                   <div className="grid grid-cols-3 gap-3">
-                    <EField label="Faturamento Anual (R$)" value={editFaturamento} onChange={setEditFaturamento} placeholder="0,00" />
+                    <EField label="Faturamento Mensal (R$)" value={editFaturamento} onChange={setEditFaturamento} placeholder="0,00" />
                     <EField label="Endereço" value={editEndRua} onChange={setEditEndRua} placeholder="Rua, número, bairro" />
                     <EField label="CEP" value={editEndCep} onChange={setEditEndCep} placeholder="00000-000" />
                   </div>
