@@ -15,13 +15,26 @@ export default async function IndicacoesPage() {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("id, full_name, email, role, referral_discount_percent, referral_discount_months_remaining")
+    .select("id, full_name, email, role")
     .eq("id", user.id)
     .single();
 
   if (!profile || !["ADMIN", "STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE", "GESTAO"].includes(profile.role)) {
     redirect("/unauthorized");
   }
+
+  const svcDiscount = sc(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+  const { data: discountData } = await svcDiscount
+    .from("profiles")
+    .select("referral_discount_percent, referral_discount_months_remaining")
+    .eq("id", user.id)
+    .single() as { data: { referral_discount_percent: number; referral_discount_months_remaining: number } | null; error: unknown };
+
+  const discountPercent = discountData?.referral_discount_percent ?? 0;
+  const discountMonthsRemaining = discountData?.referral_discount_months_remaining ?? 0;
 
   const leadsLink = `https://app.v3partners.com.br/indicacao?ref=${user.id}`;
   const partnerLink = `https://app.v3partners.com.br/cadastro-partner?ref=${user.id}`;
@@ -33,22 +46,17 @@ export default async function IndicacoesPage() {
   let partnersIndicados = 0;
 
   try {
-    const svc = sc(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
-    );
-
     const [leadsRes, commissionsRes, partnersRes] = await Promise.all([
-      svc
+      svcDiscount
         .from("prospeccao_leads")
         .select("id, etapa")
         .eq("indicado_por_partner_id", user.id),
-      svc
+      svcDiscount
         .from("commissions")
         .select("amount")
         .eq("partner_id", user.id)
         .eq("is_referral_commission", true),
-      svc
+      svcDiscount
         .from("profiles")
         .select("id", { count: "exact", head: true })
         .eq("referred_by_partner_id", user.id),
@@ -81,8 +89,8 @@ export default async function IndicacoesPage() {
       role={profile.role}
       leadsLink={leadsLink}
       partnerLink={partnerLink}
-      discountPercent={(profile as Record<string, unknown>).referral_discount_percent as number ?? 0}
-      discountMonthsRemaining={(profile as Record<string, unknown>).referral_discount_months_remaining as number ?? 0}
+      discountPercent={discountPercent}
+      discountMonthsRemaining={discountMonthsRemaining}
       partnersIndicados={partnersIndicados}
       stats={{ totalIndicados, ativos, pendentes, ganhos: ganhosTotal }}
     />
