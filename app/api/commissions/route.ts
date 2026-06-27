@@ -20,6 +20,55 @@ async function getAuthedUser() {
 
 const ADMIN_ROLES = ["ADMIN", "GESTAO", "FINANCEIRO"] as const;
 
+async function gerarComissaoIndicacao(
+  svc: ReturnType<typeof serviceClient>,
+  comissaoOriginal: { id: string; code: string; commission_value: number | null; operation_value: number; commission_percent: number; operation_type: string; operation_description: string; operation_closed_at: string | null; status: string },
+  partnerId: string,
+) {
+  const { data: partnerProfile } = await svc
+    .from("profiles")
+    .select("referred_by_partner_id, full_name")
+    .eq("id", partnerId)
+    .single();
+
+  const referrerId = (partnerProfile as { referred_by_partner_id?: string | null } | null)?.referred_by_partner_id;
+  if (!referrerId) return;
+
+  const commValue      = comissaoOriginal.commission_value ?? (comissaoOriginal.operation_value * comissaoOriginal.commission_percent / 100);
+  const referralValue  = Math.round(commValue * 0.10 * 100) / 100;
+  const partnerName    = (partnerProfile as { full_name?: string | null }).full_name ?? "Partner";
+
+  const { count } = await svc.from("commissions").select("*", { count: "exact", head: true });
+  const code = `COM-26-${String((count ?? 0) + 1).padStart(4, "0")}-IND`;
+
+  await svc.from("commissions").insert({
+    code,
+    partner_id:                  referrerId,
+    operation_type:              comissaoOriginal.operation_type,
+    operation_description:       `Comissão de indicação — 10% sobre negócio de ${partnerName}`,
+    operation_value:             commValue,
+    commission_percent:          10,
+    commission_value:            referralValue,
+    status:                      comissaoOriginal.status,
+    operation_closed_at:         comissaoOriginal.operation_closed_at,
+    notes:                       `Ref. ${comissaoOriginal.code} — gerado automaticamente pelo sistema de indicações`,
+    is_referral_commission:      true,
+    referral_source_commission_id: comissaoOriginal.id,
+    created_by:                  null,
+  });
+
+  // Notifica o referenciador
+  const valFormatted = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(referralValue);
+  await svc.from("notifications").insert({
+    user_id:    referrerId,
+    type:       "commission",
+    title:      "Comissão de indicação recebida! 💰",
+    message:    `Seu indicado ${partnerName} fechou um negócio. Você ganhou ${valFormatted} de comissão de indicação.`,
+    action_url: "/comissoes",
+    read:       false,
+  }).then(null, () => {});
+}
+
 const createSchema = z.object({
   partner_id:           z.string().uuid("Partner obrigatório"),
   operation_type:       z.enum(["CREDITO", "MA", "CONSORCIO", "SPLIT_FISCAL", "MARKETPLACE"]),
@@ -112,6 +161,9 @@ export async function POST(req: NextRequest) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   logAudit({ userId: user.id, userName: profile?.full_name, action: "CREATE", entity: "commissions" as never, entityId: data.id, newData: d as Record<string, unknown> });
+
+  // Comissão de indicação: 10% do valor para quem indicou este partner (fire and forget)
+  gerarComissaoIndicacao(svc, data, d.partner_id).catch(() => {});
 
   // Notifica partner por e-mail (fire and forget)
   const svcEmail = serviceClient();

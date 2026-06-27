@@ -18,6 +18,56 @@ async function getUser() {
 
 const ETAPAS = ["prospect", "contatado", "interessado", "trial", "convertido", "perdido"];
 
+async function processarRecompensaIndicacao(db: ReturnType<typeof svc>, leadId: string) {
+  try {
+    const { data: lead } = await db
+      .from("prospeccao_leads")
+      .select("email, indicado_por_partner_id")
+      .eq("id", leadId)
+      .single();
+
+    if (!lead || !(lead as { indicado_por_partner_id?: string | null }).indicado_por_partner_id) return;
+
+    const referrerId = (lead as { indicado_por_partner_id: string }).indicado_por_partner_id;
+    const leadEmail  = (lead as { email: string | null }).email;
+
+    // Vincular o partner recém-convertido ao seu referenciador
+    if (leadEmail) {
+      await db
+        .from("profiles")
+        .update({ referred_by_partner_id: referrerId })
+        .eq("email", leadEmail.toLowerCase());
+    }
+
+    // Dar ao referenciador 10% de desconto por 6 meses (acumula se já tiver)
+    const { data: referrer } = await db
+      .from("profiles")
+      .select("referral_discount_months_remaining")
+      .eq("id", referrerId)
+      .single();
+
+    const mesesRestantes = (referrer as { referral_discount_months_remaining: number } | null)
+      ?.referral_discount_months_remaining ?? 0;
+
+    await db.from("profiles").update({
+      referral_discount_percent:          10,
+      referral_discount_months_remaining: mesesRestantes + 6,
+    }).eq("id", referrerId);
+
+    // Notificar o referenciador
+    await db.from("notifications").insert({
+      user_id:    referrerId,
+      type:       "commission",
+      title:      "Indicação convertida! 🎉",
+      message:    "Sua indicação foi ativada. Você ganhou 10% de desconto na mensalidade por 6 meses.",
+      action_url: "/indicacoes",
+      read:       false,
+    }).then(null, () => {});
+  } catch (e) {
+    console.error("Erro ao processar recompensa de indicação:", e);
+  }
+}
+
 /** PATCH /api/prospeccao/[id] — atualiza etapa, responsável, notas, dados */
 export async function PATCH(
   req: NextRequest,
@@ -64,6 +114,11 @@ export async function PATCH(
       nota: body.nota_historico ?? null,
       created_by: me.id,
     });
+
+    // Recompensas de indicação quando lead converte
+    if (body.etapa === "convertido") {
+      await processarRecompensaIndicacao(db, id);
+    }
   }
 
   if (Object.keys(updates).length === 0) {

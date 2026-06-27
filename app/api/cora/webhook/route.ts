@@ -16,14 +16,29 @@ async function gerarProximaCobranca(db: ReturnType<typeof svc>, partnerId: strin
   try {
     const { data: profile } = await db
       .from("profiles")
-      .select("full_name, cpf, cnpj, email")
+      .select("full_name, cpf, cnpj, email, referral_discount_percent, referral_discount_months_remaining")
       .eq("id", partnerId)
       .single();
 
     if (!profile) return;
 
     const documento = (profile as { cpf?: string; cnpj?: string }).cpf ?? (profile as { cpf?: string; cnpj?: string }).cnpj ?? "";
-    const valor = PLANO_VALOR[plano] ?? 19700;
+    const baseValor = PLANO_VALOR[plano] ?? 19700;
+
+    // Aplica desconto de indicação se houver meses restantes
+    const descontoPercent      = (profile as { referral_discount_percent?: number }).referral_discount_percent ?? 0;
+    const mesesComDesconto     = (profile as { referral_discount_months_remaining?: number }).referral_discount_months_remaining ?? 0;
+    const temDesconto          = descontoPercent > 0 && mesesComDesconto > 0;
+    const valor                = temDesconto ? Math.round(baseValor * (1 - descontoPercent / 100)) : baseValor;
+
+    // Decrementa meses restantes de desconto
+    if (temDesconto) {
+      const novosMeses = mesesComDesconto - 1;
+      await db.from("profiles").update({
+        referral_discount_months_remaining: novosMeses,
+        ...(novosMeses === 0 ? { referral_discount_percent: 0 } : {}),
+      }).eq("id", partnerId);
+    }
 
     const dueDate = new Date();
     dueDate.setMonth(dueDate.getMonth() + 1);
@@ -47,7 +62,7 @@ async function gerarProximaCobranca(db: ReturnType<typeof svc>, partnerId: strin
           interest: { type: "MONTHLY_PERCENTAGE", value: 1 },
           fine: { type: "PERCENTAGE", value: 2 },
         },
-        services: [{ name: `V3 Partners — Mensalidade ${plano === "PARTNER_PRO" ? "Partner PRO" : "Partner"}`, amount: valor }],
+        services: [{ name: `V3 Partners — Mensalidade ${plano === "PARTNER_PRO" ? "Partner PRO" : "Partner"}${temDesconto ? ` (${descontoPercent}% desc. indicação)` : ""}`, amount: valor }],
         notifications: { formats: ["EMAIL"], by_email: { should_notify: true } },
       }),
       idempotencyKey: randomUUID(),
