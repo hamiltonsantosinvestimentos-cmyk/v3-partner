@@ -76,6 +76,41 @@ export async function POST(req: NextRequest) {
     proposal.level3_notes && `Nível 3 (${proposal.level3_at ? new Date(proposal.level3_at).toLocaleDateString("pt-BR") : ""}): ${proposal.level3_notes}`,
   ].filter(Boolean).join("\n") || "Sem notas de analistas.";
 
+  // ── OCR resultados ─────────────────────────────────────────────────────────
+  type OcrCampo = { campo: string; extraido: string | null; status: string; mensagem: string };
+  type OcrResultado = {
+    tipo_documento: string;
+    resumo: "aprovado" | "atencao" | "reprovado";
+    observacoes: string;
+    campos: OcrCampo[];
+    doc_check?: { resumo_linha: string; cliente_confere: boolean; status: string };
+    extrato_info?: { banco: string; periodo: string; media_entrada_mensal: number | null; media_entrada_formatada: string };
+  };
+
+  const ocrResultados = (meta.ocr_resultados ?? null) as Record<string, OcrResultado> | null;
+  const ocrEntries = ocrResultados ? Object.entries(ocrResultados) : [];
+
+  let ocrCtx = "";
+  if (ocrEntries.length > 0) {
+    const emoji = { aprovado: "✅", atencao: "⚠️", reprovado: "❌" } as const;
+    ocrCtx = "\n\nRESULTADOS OCR DOS DOCUMENTOS ANALISADOS:";
+    for (const [, r] of ocrEntries) {
+      ocrCtx += `\n\n[${r.tipo_documento}] ${emoji[r.resumo] ?? "?"} ${r.resumo.toUpperCase()}`;
+      if (r.doc_check?.resumo_linha) ocrCtx += `\n  Conferência: ${r.doc_check.resumo_linha}`;
+      if (r.observacoes) ocrCtx += `\n  Observações: ${r.observacoes}`;
+      if (r.extrato_info) {
+        const e = r.extrato_info;
+        ocrCtx += `\n  Banco: ${e.banco} | Período: ${e.periodo} | Média de entrada: ${e.media_entrada_formatada ?? "não calculada"}`;
+      }
+      const divergentes = (r.campos ?? []).filter(c => c.status === "divergente" || c.status === "ausente");
+      if (divergentes.length > 0) {
+        ocrCtx += `\n  Divergências: ${divergentes.map(c => `${c.campo} — ${c.mensagem}`).join("; ")}`;
+      }
+    }
+  } else {
+    ocrCtx = "\n\nOCR: Nenhum documento foi analisado via OCR ainda.";
+  }
+
   const contextoProposta = `
 PROPOSTA: ${proposal.code}
 CLIENTE: ${proposal.client_name}
@@ -107,7 +142,7 @@ ${notasNivel}
 
 COMENTÁRIOS DA MESA:
 ${comments}
-`;
+${ocrCtx}`;
 
   const SYSTEM_PROMPT = `Você é um analista sênior de crédito da V3 Partners, boutique institucional de securitização e estruturação financeira.
 
@@ -115,6 +150,10 @@ Você está assistindo a equipe da Mesa Operacional a analisar a proposta de cr�
 
 Linhas de crédito V3: Home Equity, Home Cash, Crédito com Garantia de Imóvel (CGI), Crédito com Garantia de Precatórios, Crédito Estruturado, CRI, FIDC.
 Ticket mínimo: R$ 500.000. Crédito pessoal/consignado: EXCLUÍDO do escopo.
+
+REGRA ANTI-ALUCINAÇÃO: Baseie suas respostas EXCLUSIVAMENTE nos dados do contexto abaixo. Se uma informação não constar, diga "não disponível nos documentos analisados". Nunca invente valores, datas ou conclusões sem base nos dados fornecidos.
+
+Quando houver resultados de OCR, use-os como fonte primária para validar dados do cliente. Aponte divergências entre o declarado e o extraído dos documentos.
 
 Tom: direto, técnico, institucional. Use bullet points quando listar. Seja objetivo e assertivo.
 

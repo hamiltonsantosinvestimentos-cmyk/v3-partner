@@ -3431,6 +3431,18 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
                 <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#C9A84C]/15 text-[#E8C97A] font-semibold">
                   {proposal.client_name}
                 </span>
+                {(() => {
+                  const ocrCount = Object.keys((proposal.metadata?.ocr_resultados as Record<string, unknown>) ?? {}).length;
+                  return ocrCount > 0 ? (
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 font-semibold">
+                      {ocrCount} doc{ocrCount > 1 ? "s" : ""} OCR no contexto
+                    </span>
+                  ) : (
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#243A66]/60 text-[#7A8FA8] font-semibold">
+                      Sem OCR — rode na aba Documentos
+                    </span>
+                  );
+                })()}
               </div>
 
               {/* Mensagens */}
@@ -3439,14 +3451,14 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
                   <div className="flex flex-col items-center justify-center h-full gap-3 py-8">
                     <MessageCircle className="w-10 h-10 text-[#C9A84C]/30" />
                     <p className="text-xs text-[#7A8FA8] text-center max-w-xs">
-                      Pergunte sobre o cliente, riscos, documentação, linha de crédito recomendada ou qualquer dúvida operacional.
+                      Pergunte sobre o cliente, riscos, documentação, resultados OCR ou linha de crédito recomendada.
                     </p>
                     <div className="flex flex-wrap gap-2 justify-center">
                       {[
                         "Qual o risco desta operação?",
-                        "O que falta de documentação?",
+                        "Os documentos OCR conferem com o declarado?",
                         "Qual linha de crédito indica?",
-                        "Pontos críticos do cliente",
+                        "Há divergências nos documentos analisados?",
                       ].map(s => (
                         <button
                           key={s}
@@ -3490,7 +3502,7 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
                   value={chatInput}
                   onChange={e => setChatInput(e.target.value)}
                   onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleChatSend(); } }}
-                  placeholder="Pergunte sobre o cliente, risco, documentação..."
+                  placeholder="Pergunte sobre o cliente, OCR dos documentos, risco, linha de crédito..."
                   disabled={chatLoading}
                   className="flex-1 h-9 px-3 text-sm rounded-lg outline-none disabled:opacity-50"
                   style={{ background: "#162744", border: "1px solid rgba(201,168,76,0.2)", color: "#F0ECE4" }}
