@@ -204,7 +204,7 @@ export async function POST(
       .update({
         cessao_hash: cessaoHash,
         cessao_accepted_at: timestamp,
-        // cessao_accepted_ip: ip — LGPD PENDENTE: não popular até sign-off Robson Lino
+        cessao_accepted_ip: ip,
         geo_location: access.geo_location ?? req.headers.get("cf-ipcountry") ?? req.headers.get("x-vercel-ip-country") ?? null,
       })
       .eq("id", access.id);
