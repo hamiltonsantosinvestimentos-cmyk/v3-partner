@@ -99,12 +99,12 @@ export async function POST(
 
   if (!deal) return NextResponse.json({ error: "Deal não encontrado" }, { status: 404 });
 
-  // Carrega extrações concluídas + needs_review (até 5 mais recentes)
+  // Carrega extrações concluídas + needs_review + done (até 5 mais recentes)
   const { data: extractions } = await db
     .from("ma_document_extractions")
     .select("doc_name, tipo_documento, resumo, dados_extraidos, confiabilidade, status")
     .eq("deal_id", deal_id)
-    .in("status", ["completed", "needs_review"])
+    .in("status", ["completed", "needs_review", "done"])
     .order("extracted_at", { ascending: false })
     .limit(5);
 

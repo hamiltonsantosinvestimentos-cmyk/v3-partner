@@ -353,6 +353,12 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
   // Badge de não lidos por deal na aba Timeline
   const [timelineUnread, setTimelineUnread] = useState<Record<string, number>>({});
 
+  // n8n warm-up (cold start Render)
+  type WarmupStatus = "idle" | "pinging" | "online" | "warming" | "error";
+  const [warmupStatus, setWarmupStatus] = useState<WarmupStatus>("idle");
+  const [warmupElapsed, setWarmupElapsed] = useState<number | null>(null);
+  const [warmupCountdown, setWarmupCountdown] = useState(0);
+
   // Link de upload externo (gerado pelo botão no tab FORJA)
   const [uploadLinkUrl, setUploadLinkUrl]         = useState<string | null>(null);
   const [uploadLinkLoading, setUploadLinkLoading] = useState(false);
@@ -371,6 +377,53 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
   });
   const [teaserSaving, setTeaserSaving] = useState(false);
   const [teaserError, setTeaserError] = useState<string | null>(null);
+
+  const handleWarmup = async () => {
+    setWarmupStatus("pinging");
+    setWarmupElapsed(null);
+    setWarmupCountdown(0);
+    try {
+      const res = await fetch("/api/ma/n8n-warmup", { method: "POST" });
+      const json = await res.json() as { status: string; elapsed_ms?: number };
+      if (json.status === "online") {
+        setWarmupStatus("online");
+        setWarmupElapsed(json.elapsed_ms ?? null);
+        setTimeout(() => setWarmupStatus("idle"), 8000);
+      } else if (json.status === "warming") {
+        // Render está acordando — conta regressiva de 35s e re-pinga
+        setWarmupStatus("warming");
+        let secs = 35;
+        setWarmupCountdown(secs);
+        const interval = setInterval(() => {
+          secs -= 1;
+          setWarmupCountdown(secs);
+          if (secs <= 0) {
+            clearInterval(interval);
+            setWarmupStatus("pinging");
+            fetch("/api/ma/n8n-warmup", { method: "POST" })
+              .then(r => r.json())
+              .then((j: { status: string; elapsed_ms?: number }) => {
+                if (j.status === "online") {
+                  setWarmupStatus("online");
+                  setWarmupElapsed(j.elapsed_ms ?? null);
+                  setTimeout(() => setWarmupStatus("idle"), 8000);
+                } else {
+                  setWarmupStatus("error");
+                  setTimeout(() => setWarmupStatus("idle"), 6000);
+                }
+              })
+              .catch(() => { setWarmupStatus("error"); setTimeout(() => setWarmupStatus("idle"), 6000); });
+          }
+        }, 1000);
+      } else {
+        setWarmupStatus("error");
+        setTimeout(() => setWarmupStatus("idle"), 6000);
+      }
+    } catch {
+      setWarmupStatus("error");
+      setTimeout(() => setWarmupStatus("idle"), 6000);
+    }
+  };
 
   useEffect(() => {
     if (!selectedCard) { setCardDocs([]); setDetailTab("detalhes"); setEditingCard(false); return; }
@@ -1692,13 +1745,52 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
                     <p className="text-xs font-semibold text-[#7A8FA8] flex items-center gap-1.5">
                       <FileText size={13} /> Documentos do Ativo
                     </p>
-                    <button
-                      type="button"
-                      onClick={() => detailFileRef.current?.click()}
-                      className="flex items-center gap-1 text-xs text-[#C9A84C] hover:text-[#E8C97A] transition-colors"
-                    >
-                      <Upload size={12} /> Anexar
-                    </button>
+                    <div className="flex items-center gap-2">
+                      {/* Botão cold-start n8n — acorda o Render antes de fazer upload */}
+                      <button
+                        type="button"
+                        onClick={handleWarmup}
+                        disabled={warmupStatus === "pinging" || warmupStatus === "warming"}
+                        title={
+                          warmupStatus === "online"
+                            ? `n8n online (${warmupElapsed != null ? (warmupElapsed / 1000).toFixed(1) + "s" : "ok"})`
+                            : warmupStatus === "warming"
+                            ? `Acordando Render... ${warmupCountdown}s`
+                            : warmupStatus === "error"
+                            ? "Falha ao conectar — tente novamente"
+                            : "Verificar / acordar n8n antes de fazer upload"
+                        }
+                        className={[
+                          "flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded transition-colors",
+                          warmupStatus === "online"
+                            ? "bg-emerald-900/40 text-emerald-400"
+                            : warmupStatus === "error"
+                            ? "bg-red-900/30 text-red-400"
+                            : warmupStatus === "warming" || warmupStatus === "pinging"
+                            ? "bg-[#162744] text-[#E8C97A] opacity-80 cursor-not-allowed"
+                            : "bg-[#162744] text-[#9BAFC5] hover:text-[#C9A84C] hover:bg-[#243A66]",
+                        ].join(" ")}
+                      >
+                        {warmupStatus === "pinging" ? (
+                          <><Loader2 size={10} className="animate-spin" /> Ping...</>
+                        ) : warmupStatus === "warming" ? (
+                          <><Loader2 size={10} className="animate-spin" /> {warmupCountdown}s</>
+                        ) : warmupStatus === "online" ? (
+                          <><Zap size={10} className="fill-current" /> Online</>
+                        ) : warmupStatus === "error" ? (
+                          <><DatabaseZap size={10} /> Erro</>
+                        ) : (
+                          <><DatabaseZap size={10} /> n8n</>
+                        )}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => detailFileRef.current?.click()}
+                        className="flex items-center gap-1 text-xs text-[#C9A84C] hover:text-[#E8C97A] transition-colors"
+                      >
+                        <Upload size={12} /> Anexar
+                      </button>
+                    </div>
                   </div>
                   <input
                     ref={detailFileRef}
