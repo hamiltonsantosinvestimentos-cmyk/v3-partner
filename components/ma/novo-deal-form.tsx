@@ -952,7 +952,17 @@ export function NovoDealForm({ isDemo, userId, onSuccess, onCancel }: NovoDealFo
           <Button
             type="button"
             disabled={saving}
-            onClick={() => handleSubmit(onSubmit)()}
+            onClick={() => handleSubmit(
+              onSubmit,
+              (fieldErrors) => {
+                const orderedSteps = [1, 2, 3, 4, 5] as const;
+                const firstBad = orderedSteps.find(s =>
+                  (STEP_FIELDS[s] as (keyof typeof fieldErrors)[]).some(f => fieldErrors[f])
+                );
+                if (firstBad !== undefined) setStep(firstBad);
+                setError("Há campos obrigatórios incompletos. Verifique os dados antes de continuar.");
+              }
+            )()}
             className="bg-[#C9A84C] hover:bg-[#E8C97A] text-[#09081A] font-bold min-w-40"
           >
             {saving ? (

@@ -610,11 +610,37 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
   const [showCreditoForm, setShowCreditoForm] = useState(false);
   const [creditoFormLevel, setCreditoFormLevel] = useState<"NIVEL_1" | "NIVEL_2" | "NIVEL_3">("NIVEL_1");
   const [showMaForm, setShowMaForm] = useState(false);
+  const [maDealSuccessMsg, setMaDealSuccessMsg] = useState<string | null>(null);
 
   // Captacao links state
   const [captacaoLinks, setCaptacaoLinks] = useState<CaptacaoLink[]>([]);
   const [captacaoLoading, setCaptacaoLoading] = useState(false);
   const [captacaoGenerating, setCaptacaoGenerating] = useState(false);
+
+  async function refreshLeads() {
+    try {
+      const r = await fetch("/api/crm");
+      const j = await r.json();
+      if (Array.isArray(j.leads)) {
+        const mapped: CRMLead[] = j.leads.map((l: Record<string, unknown>) => ({
+          id: l.id as string, code: l.code as string, name: l.name as string,
+          document: (l.document as string) ?? "", personType: (l.person_type as "PF" | "PJ") ?? "PJ",
+          email: (l.email as string) ?? "", phone: (l.phone as string) ?? "",
+          segment: (l.segment as string) ?? "", annualRevenue: Number(l.annual_revenue ?? 0),
+          city: (l.city as string) ?? "", state: (l.state as string) ?? "",
+          status: (l.status as CRMLead["status"]) ?? "prospect",
+          source: (l.source as CRMLead["source"]) ?? "ativo",
+          visitDate: (l.visit_date as string) ?? "", nextContact: (l.next_contact as string) ?? "",
+          notes: (l.notes as string) ?? "", convertedTo: "" as const, convertedAt: "",
+          productInterest: (l.product_interest as string) ?? "", creditLine: (l.credit_line as string) ?? "",
+          partnerId: (l.partner_id as string) ?? userId, partnerName: (l.partner_name as string) ?? userName,
+          createdAt: ((l.created_at as string) ?? "").split("T")[0] ?? todayISO(),
+          interactions: [], metadata: (l.metadata as Record<string, unknown>) ?? {},
+        }));
+        setLeads(mapped);
+      }
+    } catch { /* silent */ }
+  }
 
   // Re-agendamento rápido
   const [reagendandoId, setReagendandoId] = useState<string | null>(null);
@@ -3868,6 +3894,23 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
       />
 
       {/* ── MODAL FORMULÁRIO M&A ── */}
+      {/* Banner de sucesso M&A */}
+      {maDealSuccessMsg && (
+        <div style={{
+          position: "fixed", bottom: 24, right: 24, zIndex: 60,
+          background: "#162744", border: "1px solid #C9A84C", borderRadius: 10,
+          padding: "12px 20px", display: "flex", alignItems: "center", gap: 10,
+          boxShadow: "0 4px 24px rgba(0,0,0,0.5)", maxWidth: 400,
+        }}>
+          <span style={{ color: "#C9A84C", fontWeight: 700, fontSize: 14 }}>✓</span>
+          <span style={{ color: "#F5F1E8", fontSize: 13 }}>{maDealSuccessMsg}</span>
+          <button
+            onClick={() => setMaDealSuccessMsg(null)}
+            style={{ marginLeft: "auto", background: "none", border: "none", color: "#9BAFC5", cursor: "pointer", fontSize: 16, lineHeight: 1 }}
+          >×</button>
+        </div>
+      )}
+
       {showMaForm && (
         <div
           style={{
@@ -3889,7 +3932,12 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
             <NovoDealForm
               isDemo={false}
               userId={userId}
-              onSuccess={() => setShowMaForm(false)}
+              onSuccess={(_dealId, dealCode) => {
+                setShowMaForm(false);
+                setMaDealSuccessMsg(`Deal ${dealCode} enviado para a Mesa M&A com sucesso.`);
+                setTimeout(() => setMaDealSuccessMsg(null), 6000);
+                refreshLeads();
+              }}
               onCancel={() => setShowMaForm(false)}
             />
           </div>
