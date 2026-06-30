@@ -204,6 +204,95 @@ export async function POST(req: NextRequest) {
       await gerarProximaCobranca(db, sub.partner_id, sub.plano);
     }
 
+    // 3. Pagamento de serviço vendido por partner (partner_service_orders)
+    const { data: serviceOrder } = await db
+      .from("partner_service_orders")
+      .select("id, partner_id, client_name, client_email, link_id, partner_service_links(title, service_type, price_cents)")
+      .eq("cora_invoice_id", invoiceId)
+      .eq("status", "PENDING")
+      .single();
+
+    if (serviceOrder) {
+      const intakeToken = randomUUID().replace(/-/g, "") + randomUUID().replace(/-/g, "").slice(0, 8);
+      const link = serviceOrder.partner_service_links as { title?: string; service_type?: string; price_cents?: number } | null;
+
+      // Atualiza order como PAID e grava intake_token
+      await db.from("partner_service_orders").update({
+        status: "PAID",
+        paid_at: paidAt,
+        intake_token: intakeToken,
+        intake_sent_at: new Date().toISOString(),
+      }).eq("id", serviceOrder.id);
+
+      // Incrementa receita no link atomicamente
+      await db.rpc("increment_link_revenue", {
+        p_link_id: serviceOrder.link_id,
+        p_amount: link?.price_cents ?? 0,
+      }).then(null, () => {});
+
+      // Gera intake token no credit_intake (reutiliza tabela captacao_links via inserção direta)
+      await db.from("captacao_links").insert({
+        token: intakeToken,
+        partner_id: serviceOrder.partner_id,
+        partner_name: "V3 Partners",
+        active: true,
+        uses_count: 0,
+      }).then(null, () => {});
+
+      // Envia email ao cliente com link de intake via Resend
+      try {
+        const intakePath = link?.service_type === "credit_analysis"
+          ? `/intake/cm/${intakeToken}`
+          : link?.service_type === "ma_intake"
+          ? `/intake/bp/${intakeToken}`
+          : `/c/${intakeToken}`;
+
+        await fetch("https://api.resend.com/emails", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            from: "V3 Partners <inteligencia@v3partners.com.br>",
+            to: [serviceOrder.client_email],
+            subject: `Pagamento confirmado — ${link?.title ?? "Serviço V3"}`,
+            html: `
+              <div style="background:#09081A;color:#F5F1E8;font-family:sans-serif;padding:40px;border-radius:8px;max-width:560px;margin:0 auto">
+                <div style="color:#C9A84C;font-size:11px;font-weight:700;letter-spacing:3px;text-transform:uppercase;margin-bottom:20px">V3 PARTNERS</div>
+                <h2 style="font-size:20px;margin-bottom:12px">Pagamento confirmado</h2>
+                <p style="color:#9BAFC5;font-size:13px;line-height:1.7;margin-bottom:24px">
+                  Olá, <strong style="color:#F5F1E8">${serviceOrder.client_name}</strong>.<br>
+                  Recebemos o pagamento de <strong style="color:#C9A84C">${link?.title ?? "seu serviço V3"}</strong>.
+                  Clique no botão abaixo para preencher seus dados e dar início ao processo.
+                </p>
+                <a href="https://app.v3partners.com.br${intakePath}"
+                   style="display:inline-block;background:#C9A84C;color:#09081A;font-weight:700;font-size:13px;padding:12px 28px;border-radius:6px;text-decoration:none">
+                  Preencher meus dados
+                </a>
+                <p style="color:#9BAFC5;font-size:11px;margin-top:24px;line-height:1.6">
+                  Nossa mesa entrará em contato em até 24h úteis após o preenchimento.<br>
+                  Dúvidas: <a href="mailto:operacoes@v3partners.com.br" style="color:#C9A84C">operacoes@v3partners.com.br</a>
+                </p>
+              </div>
+            `,
+          }),
+        });
+      } catch (e) {
+        console.error("Resend email error (service order):", e);
+      }
+
+      // Notifica o partner sobre venda confirmada
+      await db.from("notifications").insert({
+        user_id:    serviceOrder.partner_id,
+        type:       "commission",
+        title:      "Venda confirmada!",
+        message:    `${serviceOrder.client_name} pagou "${link?.title ?? "serviço"}". Intake enviado por email.`,
+        action_url: "/configuracoes",
+        read:       false,
+      }).then(null, () => {});
+    }
+
     return NextResponse.json({ received: true });
   } catch (e) {
     console.error("Cora webhook error:", e);
