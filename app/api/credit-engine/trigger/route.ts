@@ -38,17 +38,22 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Proposta não encontrada" }, { status: 404 });
   }
 
+  const rawDoc = (proposal.client_cpf_cnpj ?? "").replace(/\D/g, "");
+  const subject_type = rawDoc.length === 14 ? "PJ" : "PF";
+
   const webhookRes = await fetch("https://n8n-514n.onrender.com/webhook/v3-credit-engine", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       proposal_id: proposal.id,
-      client_name: proposal.client_name,
-      client_cpf_cnpj: proposal.client_cpf_cnpj,
+      subject_name: proposal.client_name,
+      subject_cpf_cnpj: proposal.client_cpf_cnpj,
+      subject_type,
+      analysis_type: "COMPLETA",
       credit_line: proposal.credit_line,
       requested_value: proposal.requested_value,
       current_level: proposal.current_level,
-      triggered_by: user.id,
+      requested_by: user.id,
     }),
   });
 
