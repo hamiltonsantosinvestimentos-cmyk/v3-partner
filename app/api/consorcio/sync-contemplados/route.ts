@@ -138,28 +138,71 @@ async function scrapeLetters(): Promise<{ letters: ScrapedLetter[]; rawRows: num
     });
 
     console.log("[sync] rows capturadas:", rows.length);
+    if (rows.length > 0) console.log("[sync] header row:", JSON.stringify(rows[0]));
+    if (rows.length > 1) console.log("[sync] sample row:", JSON.stringify(rows[1]));
+
+    // ── Detecta cabeçalho para mapear colunas dinamicamente ──────────────────
+    const COL_PATTERNS: Record<string, RegExp> = {
+      categoria:       /categ|tipo/i,
+      credit_value:    /cr[eé]d|valor.+cr[eé]d/i,
+      entrada:         /entrada|lance/i,
+      parcelas:        /parcela|presta/i,
+      taxa_transf:     /taxa.+transf|transf/i,
+      fundo_comum:     /fundo/i,
+      disponibilidade: /dispon|status|situa/i,
+      administradora:  /admin/i,
+      avaliacao:       /avalia/i,
+    };
+
+    // Encontra a linha de cabeçalho (primeira linha que contém "categoria" ou "crédito")
+    let colMap: Record<string, number> = {};
+    let dataStartIdx = 0;
+    for (let i = 0; i < Math.min(rows.length, 5); i++) {
+      const row = rows[i];
+      const rowText = row.join(" ").toLowerCase();
+      if (COL_PATTERNS.categoria.test(rowText) || COL_PATTERNS.credit_value.test(rowText)) {
+        // Mapeia cada coluna pelo seu índice
+        for (const [key, re] of Object.entries(COL_PATTERNS)) {
+          const idx = row.findIndex(c => re.test(c));
+          if (idx !== -1) colMap[key] = idx;
+        }
+        dataStartIdx = i + 1;
+        break;
+      }
+    }
+
+    // Fallback: mapeamento por posição se cabeçalho não foi detectado
+    // (checkbox em [0], dados começam em [1] ou direto em [0])
+    const useDynamic = Object.keys(colMap).length >= 3;
+    console.log("[sync] colMap:", JSON.stringify(colMap), "dynamic:", useDynamic, "dataStart:", dataStartIdx);
+
+    function getCell(cells: string[], key: string, fallbackOffset: number): string {
+      if (useDynamic && colMap[key] !== undefined) return cells[colMap[key]] ?? "";
+      // fallback: detecta offset pelo checkbox vazio
+      const off = (!cells[0] && cells[1]) ? 1 : 0;
+      return cells[off + fallbackOffset] ?? "";
+    }
 
     const letters: ScrapedLetter[] = [];
-    for (const cells of rows) {
-      // A tabela tem coluna extra de checkbox no início (cells[0] = "")
-      // Detecta offset: se cells[0] está vazio, categoria está em cells[1]
-      const offset = (!cells[0] && cells[1]) ? 1 : 0;
+    for (let i = dataStartIdx; i < rows.length; i++) {
+      const cells = rows[i];
 
-      const categoria = cells[offset];
+      const categoria = getCell(cells, "categoria", 0);
       if (!categoria) continue;
       const catLower = categoria.toLowerCase();
       if (catLower === "categoria" || catLower === "tipo" || catLower.includes("observ") || catLower === "th") continue;
 
-      const creditValue = parseBRL(cells[offset + 1]);
+      const creditValue = parseBRL(getCell(cells, "credit_value", 1));
       if (creditValue <= 0) continue;
 
-      const entrada         = parseBRL(cells[offset + 2]);
-      const parcelasRaw     = cells[offset + 3]?.trim() || null;
-      const taxaTransf      = parseBRL(cells[offset + 4]);
-      const fundoComum      = parseBRL(cells[offset + 5]);
-      const disponibilidade = cells[offset + 6] || "Disponível";
-      const administradora  = cells[offset + 7] || "Contemplados RS";
-      const avaliacaoCol    = cells[offset + 8] ? parseBRL(cells[offset + 8]) : null;
+      const entrada         = parseBRL(getCell(cells, "entrada", 2));
+      const parcelasRaw     = getCell(cells, "parcelas", 3).trim() || null;
+      const taxaTransf      = parseBRL(getCell(cells, "taxa_transf", 4));
+      const fundoComum      = parseBRL(getCell(cells, "fundo_comum", 5));
+      const disponibilidade = getCell(cells, "disponibilidade", 6) || "Disponível";
+      const administradora  = getCell(cells, "administradora", 7) || "Contemplados RS";
+      const avaliacaoRaw    = getCell(cells, "avaliacao", 8);
+      const avaliacaoCol    = avaliacaoRaw ? parseBRL(avaliacaoRaw) : null;
 
       let parcelas_qtd: number | null = null;
       let parcela_valor: number | null = null;
@@ -230,46 +273,32 @@ export async function POST() {
     return NextResponse.json({ error: "Nenhuma carta encontrada no portal." }, { status: 422 });
   }
 
-  const { data: existing } = await svc()
+  // ── Replace completo: apaga cartas do portal e insere as novas ─────────────
+  const { error: delErr } = await svc()
     .from("consorcio_cartas")
-    .select("id, source_ref, status")
+    .delete()
     .not("source_ref", "is", null);
 
-  const existingMap = new Map(
-    (existing ?? []).map((r: { id: string; source_ref: string; status: string }) => [r.source_ref, r])
-  );
+  if (delErr) {
+    return NextResponse.json({ error: `Erro ao limpar cartas antigas: ${delErr.message}` }, { status: 500 });
+  }
 
-  const { data: allCodes } = await svc().from("consorcio_cartas").select("code");
+  // Gera códigos sequenciais a partir do máximo das cartas manuais (source_ref IS NULL)
+  const { data: manualCodes } = await svc()
+    .from("consorcio_cartas")
+    .select("code")
+    .is("source_ref", null);
+
   let maxNum = 0;
-  for (const row of allCodes ?? []) {
+  for (const row of manualCodes ?? []) {
     const m = String(row.code).match(/(\d+)$/);
     if (m) maxNum = Math.max(maxNum, parseInt(m[1], 10));
   }
   let counter = maxNum + 1;
 
-  const toInsert = [];
-  const toUpdate: Array<{ id: string; status: string; saldo_devedor: number | null; avaliacao_minima: number | null; parcelas_qtd: number | null; parcela_valor: number | null; taxa_transf: number; fundo_comum: number }> = [];
-
-  for (const letter of allLetters) {
-    const existing_entry = existingMap.get(letter.source_ref);
-    if (existing_entry) {
-      toUpdate.push({
-        id: existing_entry.id,
-        status: letter.status,
-        saldo_devedor: letter.saldo_devedor,
-        avaliacao_minima: letter.avaliacao_minima,
-        parcelas_qtd: letter.parcelas_qtd,
-        parcela_valor: letter.parcela_valor,
-        taxa_transf: letter.taxa_transf,
-        fundo_comum: letter.fundo_comum,
-      });
-      continue;
-    }
-
-    const code = `CARTA-26-${String(counter).padStart(3, "0")}`;
-    counter++;
-
-    toInsert.push({
+  const toInsert = allLetters.map(letter => {
+    const code = `CARTA-26-${String(counter++).padStart(3, "0")}`;
+    return {
       code,
       type: letter.type,
       credit_value: letter.credit_value,
@@ -290,38 +319,18 @@ export async function POST() {
         saldo_devedor: letter.saldo_devedor,
         avaliacao_minima: letter.avaliacao_minima,
       },
-    });
-  }
+    };
+  });
 
-  let inserted = 0, updated = 0;
-
-  if (toInsert.length > 0) {
-    const { error } = await svc().from("consorcio_cartas").insert(toInsert);
-    if (error) return NextResponse.json({ error: `Erro ao inserir: ${error.message}` }, { status: 500 });
-    inserted = toInsert.length;
-  }
-
-  for (const u of toUpdate) {
-    await svc().from("consorcio_cartas").update({
-      status: u.status,
-      metadata: {
-        saldo_devedor: u.saldo_devedor,
-        avaliacao_minima: u.avaliacao_minima,
-        parcelas_qtd: u.parcelas_qtd,
-        parcela_valor: u.parcela_valor,
-        taxa_transf: u.taxa_transf,
-        fundo_comum: u.fundo_comum,
-      },
-    }).eq("id", u.id);
-    updated++;
-  }
+  const { error: insErr } = await svc().from("consorcio_cartas").insert(toInsert);
+  if (insErr) return NextResponse.json({ error: `Erro ao inserir: ${insErr.message}` }, { status: 500 });
 
   return NextResponse.json({
     ok: true,
     total_scraped: allLetters.length,
     raw_rows: rawRows,
-    inserted,
-    updated,
+    inserted: toInsert.length,
+    updated: 0,
     skipped: 0,
     debug_sample: allLetters.slice(0, 5).map(l => ({
       admin: l.admin,
