@@ -117,6 +117,10 @@ export default function CartasContempladasPage() {
 
   const isAdmin = ADMIN_ROLES.includes(userRole);
 
+  // Entrada exibida ao partner = asking_price + 5% do crédito (margem V3)
+  const partnerEntrada = (l: ContemplatedLetter) => l.asking_price + l.credit_value * 0.05;
+  const displayEntrada = (l: ContemplatedLetter) => isAdmin ? l.asking_price : partnerEntrada(l);
+
   const filtered = letters.filter(l => {
     const matchSearch = !search || l.code.includes(search) || l.admin.toLowerCase().includes(search.toLowerCase());
     const matchType = !filterType || l.type === filterType;
@@ -140,7 +144,7 @@ export default function CartasContempladasPage() {
   // Usa todas as cartas (não só as filtradas) para a seleção
   const selectedLetters = letters.filter(l => selected.has(l.id));
   const sumCredito = selectedLetters.reduce((s, l) => s + l.credit_value, 0);
-  const sumEntrada = selectedLetters.reduce((s, l) => s + l.asking_price, 0);
+  const sumEntrada = selectedLetters.reduce((s, l) => s + displayEntrada(l), 0);
   const avgParcela = (() => {
     const withParcela = selectedLetters.filter(l => l.metadata?.parcela_valor && l.metadata.parcela_valor > 0);
     if (withParcela.length === 0) return null;
@@ -195,7 +199,7 @@ export default function CartasContempladasPage() {
     setOfertaForm({
       interessado_nome: "",
       interessado_tel: "",
-      valor_oferta: String(letter.asking_price),
+      valor_oferta: String(displayEntrada(letter)),
       observacoes: "",
       responsavel_id: userId ?? "",
     });
@@ -393,10 +397,23 @@ export default function CartasContempladasPage() {
                       <span className="text-muted-foreground">Crédito</span>
                       <span className="font-semibold text-white">{formatCurrency(letter.credit_value)}</span>
                     </div>
-                    <div className="flex justify-between text-xs">
-                      <span className="text-muted-foreground">Entrada</span>
-                      <span className="font-semibold text-amber-400">{formatCurrency(letter.asking_price)}</span>
-                    </div>
+                    {isAdmin ? (
+                      <>
+                        <div className="flex justify-between text-xs">
+                          <span className="text-muted-foreground">Entrada (Portal)</span>
+                          <span className="font-semibold text-amber-400">{formatCurrency(letter.asking_price)}</span>
+                        </div>
+                        <div className="flex justify-between text-xs">
+                          <span className="text-muted-foreground">Entrada Partner</span>
+                          <span className="font-semibold text-[#C9A84C]">{formatCurrency(partnerEntrada(letter))}</span>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="flex justify-between text-xs">
+                        <span className="text-muted-foreground">Entrada</span>
+                        <span className="font-semibold text-amber-400">{formatCurrency(partnerEntrada(letter))}</span>
+                      </div>
+                    )}
                     <div className="flex justify-between text-xs">
                       <span className="text-muted-foreground">Desconto</span>
                       <span className="font-semibold text-emerald-400">{letter.discount}%</span>
@@ -499,7 +516,8 @@ export default function CartasContempladasPage() {
                     </div>
                     <div className="text-right">
                       <p className="text-xs font-bold text-white">{formatCurrency(l.credit_value)}</p>
-                      <p className="text-[10px] text-amber-400">Entrada: {formatCurrency(l.asking_price)}</p>
+                      <p className="text-[10px] text-amber-400">Entrada: {formatCurrency(displayEntrada(l))}</p>
+                      {isAdmin && <p className="text-[10px] text-[#C9A84C]">Partner: {formatCurrency(partnerEntrada(l))}</p>}
                     </div>
                   </div>
                 ))}
