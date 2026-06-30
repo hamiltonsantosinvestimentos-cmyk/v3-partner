@@ -574,7 +574,7 @@ export default function CartasContempladasPage() {
 
       {/* Modal Fazer Oferta */}
       {ofertaModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-start justify-center p-4 pt-6 bg-black/60 backdrop-blur-sm overflow-y-auto">
           <div className="w-full max-w-lg bg-[#111F35] rounded-2xl border border-amber-500/20 shadow-2xl">
             <div className="flex items-center justify-between px-6 py-4 border-b border-border/50">
               <div>
