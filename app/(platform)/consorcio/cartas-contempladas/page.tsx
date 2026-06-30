@@ -117,9 +117,15 @@ export default function CartasContempladasPage() {
 
   const isAdmin = ADMIN_ROLES.includes(userRole);
 
-  // Entrada exibida ao partner = asking_price + 5% do crédito (margem V3)
-  const partnerEntrada = (l: ContemplatedLetter) => l.asking_price + l.credit_value * 0.05;
+  // Entrada exibida ao partner = asking_price + 7% do crédito (margem V3)
+  const partnerEntrada = (l: ContemplatedLetter) => l.asking_price + l.credit_value * 0.07;
   const displayEntrada = (l: ContemplatedLetter) => isAdmin ? l.asking_price : partnerEntrada(l);
+  // Desconto recalculado com a entrada do partner
+  const partnerDiscount = (l: ContemplatedLetter) => {
+    const pe = partnerEntrada(l);
+    return l.credit_value > 0 ? Math.max(0, Math.round(((l.credit_value - pe) / l.credit_value) * 1000) / 10) : 0;
+  };
+  const displayDiscount = (l: ContemplatedLetter) => isAdmin ? l.discount : partnerDiscount(l);
 
   const filtered = letters.filter(l => {
     const matchSearch = !search || l.code.includes(search) || l.admin.toLowerCase().includes(search.toLowerCase());
@@ -130,7 +136,7 @@ export default function CartasContempladasPage() {
 
   const available = letters.filter(l => l.status === "DISPONIVEL");
   const totalAvailableValue = available.reduce((s, l) => s + l.credit_value, 0);
-  const avgDiscount = available.length > 0 ? available.reduce((s, l) => s + l.discount, 0) / available.length : 0;
+  const avgDiscount = available.length > 0 ? available.reduce((s, l) => s + displayDiscount(l), 0) / available.length : 0;
 
   // Seleção
   const toggleSelect = (id: string) => {
@@ -416,7 +422,7 @@ export default function CartasContempladasPage() {
                     )}
                     <div className="flex justify-between text-xs">
                       <span className="text-muted-foreground">Desconto</span>
-                      <span className="font-semibold text-emerald-400">{letter.discount}%</span>
+                      <span className="font-semibold text-emerald-400">{displayDiscount(letter)}%</span>
                     </div>
                     {/* Dados do metadata */}
                     {meta?.parcelas_qtd && meta?.parcela_valor ? (
@@ -542,7 +548,7 @@ export default function CartasContempladasPage() {
                 <div className="flex justify-between items-center">
                   <span className="text-xs text-muted-foreground">Desconto Médio</span>
                   <span className="text-sm font-bold text-emerald-400">
-                    {(selectedLetters.reduce((s, l) => s + l.discount, 0) / selectedLetters.length).toFixed(1)}%
+                    {(selectedLetters.reduce((s, l) => s + displayDiscount(l), 0) / selectedLetters.length).toFixed(1)}%
                   </span>
                 </div>
               </div>
