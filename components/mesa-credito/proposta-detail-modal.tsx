@@ -125,6 +125,7 @@ export interface ProposalFull {
   pending_resolved_at?: string | null;
   pending_resolved_by?: string | null;
   reminder_sent_at?: string | null;
+  credit_profile_id?: string | null;
 }
 
 interface EscavadorProcesso {
@@ -1534,6 +1535,11 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
   const [escavadorResult, setEscavadorResult] = useState<EscavadorResult | null>(null);
   const [showEscavador, setShowEscavador] = useState(false);
 
+  // ── Credit Engine state ───────────────────────────────────────────────────
+  const [creditLoading, setCreditLoading] = useState(false);
+  const [creditResult, setCreditResult] = useState<{ tier: string; score_total: number; spread_min: number; spread_max: number; profile_id: string } | null>(null);
+  const [creditError, setCreditError] = useState<string>("");
+
   async function consultarEscavador() {
     if (!proposal) return;
     const cpfCnpj = proposal.cpf_cnpj?.replace(/\D/g, "");
@@ -1558,12 +1564,43 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
     }
   }
 
+  async function handleCreditAnalysis() {
+    if (!proposal) return;
+    setCreditLoading(true);
+    setCreditResult(null);
+    setCreditError("");
+    try {
+      const res = await fetch("/api/credit-engine/trigger", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ proposal_id: proposal.id }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Erro no motor de crédito");
+      if (!json.success) throw new Error(json.error ?? "Análise não concluída");
+      setCreditResult({
+        tier: json.tier,
+        score_total: json.score_total,
+        spread_min: json.spread_min,
+        spread_max: json.spread_max,
+        profile_id: json.profile_id,
+      });
+      onProposalUpdate?.(proposal.id, { credit_profile_id: json.profile_id });
+    } catch (e) {
+      setCreditError(String(e));
+    } finally {
+      setCreditLoading(false);
+    }
+  }
+
   // Sync state when proposal changes
   useEffect(() => {
     if (!proposal) return;
     setShowEdit(false);
     setEscavadorResult(null);
     setShowEscavador(false);
+    setCreditResult(null);
+    setCreditError("");
     const vc = proposal.valor_credito_atual ?? proposal.requested_value;
     setValorCredito(vc);
     setValorCreditoEdit(String(vc));
@@ -2140,6 +2177,18 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
                       : <Search className="w-3 h-3" />}
                     {escavadorLoading ? "Consultando..." : "Consultar Processos Judiciais"}
                   </button>
+                  {canChangeStage && !proposal.credit_profile_id && !creditResult && (
+                    <button
+                      onClick={handleCreditAnalysis}
+                      disabled={creditLoading}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#C9A84C]/15 text-[#C9A84C] border border-[#C9A84C]/30 hover:bg-[#C9A84C]/25 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {creditLoading
+                        ? <Loader2 className="w-3 h-3 animate-spin" />
+                        : <Brain className="w-3 h-3" />}
+                      {creditLoading ? "Analisando..." : "Analisar Crédito"}
+                    </button>
+                  )}
                   </div>
                 </div>
 
@@ -2441,6 +2490,53 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
                   )}
                 </div>
               ) : null}
+            </div>
+          )}
+
+          {/* ── Credit Engine Results ── */}
+          {canChangeStage && (creditResult || proposal.credit_profile_id || creditError) && (
+            <div className="p-4 rounded-xl border border-[#C9A84C]/30 bg-[#C9A84C]/5 space-y-3">
+              <p className="text-xs font-semibold text-[#C9A84C] flex items-center gap-1.5">
+                <Brain className="w-3.5 h-3.5" /> Análise de Crédito — Motor V3
+              </p>
+              {creditError ? (
+                <div className="flex items-center gap-2 py-2 text-red-400">
+                  <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+                  <span className="text-xs">{creditError}</span>
+                </div>
+              ) : creditResult ? (
+                <div className="space-y-2">
+                  <div className={`flex items-center gap-3 p-3 rounded-lg border ${
+                    creditResult.tier === "A" ? "bg-emerald-500/10 border-emerald-500/30"
+                    : creditResult.tier === "B" ? "bg-teal-500/10 border-teal-500/30"
+                    : creditResult.tier === "C" ? "bg-amber-500/10 border-amber-500/30"
+                    : creditResult.tier === "D" ? "bg-orange-500/10 border-orange-500/30"
+                    : "bg-red-500/10 border-red-500/30"
+                  }`}>
+                    <span className={`text-2xl font-black ${
+                      creditResult.tier === "A" ? "text-emerald-400"
+                      : creditResult.tier === "B" ? "text-teal-400"
+                      : creditResult.tier === "C" ? "text-amber-400"
+                      : creditResult.tier === "D" ? "text-orange-400"
+                      : "text-red-400"
+                    }`}>{creditResult.tier}</span>
+                    <div>
+                      <p className="text-xs font-bold text-foreground">Score {creditResult.score_total}/1000</p>
+                      <p className="text-[10px] text-muted-foreground">
+                        Spread estimado: CDI + {creditResult.spread_min.toFixed(1)}% a {creditResult.spread_max.toFixed(1)}%
+                      </p>
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground font-mono truncate">
+                    Profile: {creditResult.profile_id}
+                  </p>
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  Análise registrada.{" "}
+                  <span className="font-mono text-[10px]">ID: {proposal.credit_profile_id}</span>
+                </p>
+              )}
             </div>
           )}
 
