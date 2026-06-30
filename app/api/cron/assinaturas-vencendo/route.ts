@@ -169,12 +169,26 @@ export async function GET(req: NextRequest) {
 
     const { data: profile } = await svc()
       .from("profiles")
-      .select("full_name, phone, cobranding_whatsapp")
+      .select("full_name, email, phone, cobranding_whatsapp")
       .eq("id", sub.partner_id)
       .single();
 
-    const phoneRaw = (profile as { cobranding_whatsapp?: string | null; phone?: string | null } | null)
-      ?.cobranding_whatsapp ?? (profile as { phone?: string | null } | null)?.phone ?? null;
+    // Prioridade: cobranding_whatsapp → phone → telefone do cadastro (obrigatório no registro)
+    let phoneRaw: string | null =
+      (profile as { cobranding_whatsapp?: string | null } | null)?.cobranding_whatsapp ??
+      (profile as { phone?: string | null } | null)?.phone ??
+      null;
+
+    if (!phoneRaw && (profile as { email?: string } | null)?.email) {
+      const { data: reg } = await svc()
+        .from("partner_registrations")
+        .select("telefone")
+        .eq("email", (profile as { email: string }).email)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      phoneRaw = (reg as { telefone?: string | null } | null)?.telefone ?? null;
+    }
 
     if (!phoneRaw) {
       zapErros.push(`${sub.partner_id}: sem telefone`);
