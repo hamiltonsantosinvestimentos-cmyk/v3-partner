@@ -2035,7 +2035,7 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
                 </div>
 
                 {/* Enviar para Securitizadora */}
-                {["ADMIN", "GESTAO", "MESA"].includes(userRole) && (
+                {["ADMIN", "GESTAO", "MESA_OPERACIONAL"].includes(userRole) && (
                   <div className="pt-1 border-t border-[#122036]">
                     <button
                       onClick={() => {
