@@ -9,6 +9,26 @@ const DEFAULT_BUCKET = "credit-documents";
 const GOVERNED_BUCKET = "v3-docs-publico";
 const SIGNED_URL_EXPIRES = 20 * 24 * 60 * 60;
 
+// Mesmo whitelist do bucket credit-documents (supabase-storage-setup.sql)
+const EXT_TO_MIME: Record<string, string> = {
+  pdf: "application/pdf",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  png: "image/png",
+  doc: "application/msword",
+  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+};
+const ALLOWED_MIME_TYPES = new Set(Object.values(EXT_TO_MIME));
+
+// O MIME type que o navegador reporta (file.type) é pouco confiável — muitos
+// dispositivos mandam "application/octet-stream" para PDFs/imagens válidos.
+// Por isso resolvemos o content-type pela extensão do arquivo, que é estável.
+function resolveContentType(fileName: string, browserType: string): string | null {
+  if (ALLOWED_MIME_TYPES.has(browserType)) return browserType;
+  const ext = fileName.split(".").pop()?.toLowerCase() ?? "";
+  return EXT_TO_MIME[ext] ?? null;
+}
+
 function resolveBucket(doc: { storage_path?: string; bucket?: string }): string {
   if (doc.bucket) return doc.bucket;
   if (doc.storage_path?.startsWith("Credito/") || doc.storage_path?.startsWith("MA/") || doc.storage_path?.startsWith("Administracao/")) return GOVERNED_BUCKET;
@@ -68,6 +88,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
   }
 
+  const contentType = resolveContentType(file.name, file.type);
+  if (!contentType) {
+    return NextResponse.json(
+      { error: "Tipo de arquivo não suportado. Envie PDF, JPG, PNG, DOC ou DOCX." },
+      { status: 415 }
+    );
+  }
+
   // Usa o partner_id ou o user.id como fallback para montar o caminho
   const ownerId  = proposal.partner_id ?? user.id;
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_").substring(0, 80);
@@ -79,7 +107,7 @@ export async function POST(req: NextRequest) {
   const bytes = await file.arrayBuffer();
   const { error: uploadError } = await svc.storage
     .from(DEFAULT_BUCKET)
-    .upload(storagePath, bytes, { contentType: file.type, upsert: true });
+    .upload(storagePath, bytes, { contentType, upsert: true });
 
   if (uploadError) {
     return NextResponse.json({ error: `Erro no storage: ${uploadError.message}` }, { status: 500 });
