@@ -6,7 +6,7 @@ function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 }
 
-const ALLOWED = ["ADMIN", "GESTAO", "MESA"];
+const ALLOWED = ["ADMIN", "GESTAO", "MESA", "MESA_OPERACIONAL"];
 
 // ── GET /api/integrations ──────────────────────────────────────────────────────
 export async function GET(_req: NextRequest) {

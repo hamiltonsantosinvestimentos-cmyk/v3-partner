@@ -830,6 +830,14 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
   const [instituicaoSaved, setInstituicaoSaved] = useState(false);
   const [instituicaoError, setInstituicaoError] = useState<string | null>(null);
 
+  // Estado para envio a securitizadoras parceiras
+  const [partnersSecList, setPartnersSecList] = useState<Array<{id: string; display_name: string; active: boolean; has_api_key: boolean; sla_days?: number}>>([]);
+  const [loadingPartnersSec, setLoadingPartnersSec] = useState(false);
+  const [showPartnerSend, setShowPartnerSend] = useState(false);
+  const [selectedPartnerId, setSelectedPartnerId] = useState("");
+  const [sendingToPartner, setSendingToPartner] = useState(false);
+  const [partnerSendResult, setPartnerSendResult] = useState<{ok: boolean; msg: string} | null>(null);
+
   function handleAddInstituicao() {
     const nome = addingInst === "Outra" ? addingInstCustom.trim() : addingInst;
     if (!nome || instituicoesList.includes(nome)) return;
@@ -882,6 +890,9 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
     setInstituicoesList(parsedInsts);
     setAddingInst("");
     setAddingInstCustom("");
+    setShowPartnerSend(false);
+    setSelectedPartnerId("");
+    setPartnerSendResult(null);
     setMesaComments(Array.isArray(proposal.mesa_comments) ? proposal.mesa_comments : []);
     setNewComment("");
     if (IS_DEMO) {
@@ -2358,6 +2369,111 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
                     </button>
                     {instituicaoError && (
                       <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{instituicaoError}</p>
+                    )}
+                  </div>
+                )}
+
+                {/* Enviar para Securitizadora — apenas mesa/admin */}
+                {canEditInstituicao && proposal && (
+                  <div className="p-4 rounded-xl border border-[#243A66] bg-[#09081A]/50 space-y-3">
+                    <p className="text-xs font-semibold text-[#9BAFC5] uppercase tracking-wider flex items-center gap-1.5">
+                      <Send className="w-3.5 h-3.5 text-[#C9A84C]" /> Encaminhar para Securitizadora
+                    </p>
+                    {!showPartnerSend ? (
+                      <button
+                        onClick={async () => {
+                          setShowPartnerSend(true);
+                          setPartnerSendResult(null);
+                          if (partnersSecList.length === 0) {
+                            setLoadingPartnersSec(true);
+                            try {
+                              const r = await fetch("/api/integrations");
+                              if (r.ok) {
+                                const d = await r.json() as { partners?: typeof partnersSecList };
+                                setPartnersSecList(d.partners ?? []);
+                              }
+                            } finally {
+                              setLoadingPartnersSec(false);
+                            }
+                          }
+                        }}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#C9A84C]/10 hover:bg-[#C9A84C]/20 border border-[#C9A84C]/25 text-[#C9A84C] text-xs font-semibold transition-colors"
+                      >
+                        <Send className="w-3 h-3" /> Enviar para Parceiro
+                      </button>
+                    ) : (
+                      <div className="space-y-3">
+                        {loadingPartnersSec ? (
+                          <p className="text-xs text-[#9BAFC5] flex items-center gap-1.5">
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" /> Carregando parceiros...
+                          </p>
+                        ) : (
+                          <>
+                            <select
+                              value={selectedPartnerId}
+                              onChange={(e) => { setSelectedPartnerId(e.target.value); setPartnerSendResult(null); }}
+                              className="w-full h-8 px-3 text-xs bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-1 focus:ring-[#C9A84C]/50"
+                            >
+                              <option value="">Selecionar parceiro...</option>
+                              {partnersSecList.map(p => (
+                                <option key={p.id} value={p.id} disabled={!p.has_api_key}>
+                                  {p.display_name}{!p.has_api_key ? " — Aguardando configuração" : ""}
+                                </option>
+                              ))}
+                            </select>
+                            {partnerSendResult && (
+                              <p className={`text-xs px-3 py-2 rounded-lg border ${partnerSendResult.ok ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" : "bg-red-500/10 text-red-400 border-red-500/20"}`}>
+                                {partnerSendResult.msg}
+                              </p>
+                            )}
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={async () => {
+                                  if (!selectedPartnerId || !proposal) return;
+                                  setSendingToPartner(true);
+                                  setPartnerSendResult(null);
+                                  try {
+                                    const r = await fetch(`/api/credit-proposals/${proposal.id}/submit-partner`, {
+                                      method: "POST",
+                                      headers: { "Content-Type": "application/json" },
+                                      body: JSON.stringify({ partner_id: selectedPartnerId }),
+                                    });
+                                    const d = await r.json() as { error?: string };
+                                    if (r.ok) {
+                                      const pName = partnersSecList.find(p => p.id === selectedPartnerId)?.display_name ?? selectedPartnerId;
+                                      setPartnerSendResult({ ok: true, msg: `Proposta enviada para ${pName}.` });
+                                      if (!instituicoesList.includes(pName)) {
+                                        const updated = [...instituicoesList, pName];
+                                        setInstituicoesList(updated);
+                                        onProposalUpdate?.(proposal.id, { instituicao_encaminhada: JSON.stringify(updated) });
+                                      }
+                                      setShowPartnerSend(false);
+                                      setSelectedPartnerId("");
+                                    } else {
+                                      setPartnerSendResult({ ok: false, msg: d.error ?? "Erro ao enviar proposta." });
+                                    }
+                                  } catch {
+                                    setPartnerSendResult({ ok: false, msg: "Erro de conexão." });
+                                  } finally {
+                                    setSendingToPartner(false);
+                                  }
+                                }}
+                                disabled={!selectedPartnerId || sendingToPartner}
+                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#C9A84C] hover:bg-[#E8C97A] text-[#09081A] text-xs font-bold disabled:opacity-50 transition-colors"
+                              >
+                                {sendingToPartner ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
+                                {sendingToPartner ? "Enviando..." : "Confirmar Envio"}
+                              </button>
+                              <button
+                                onClick={() => { setShowPartnerSend(false); setSelectedPartnerId(""); setPartnerSendResult(null); }}
+                                className="px-3 py-1.5 rounded-lg bg-[#243A66]/50 hover:bg-[#243A66] text-[#9BAFC5] text-xs font-semibold transition-colors"
+                              >
+                                Cancelar
+                              </button>
+                            </div>
+                          </>
+                        )}
+                      </div>
                     )}
                   </div>
                 )}
