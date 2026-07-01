@@ -7,6 +7,7 @@ import {
   Paperclip, Trash2, ExternalLink, Upload, Copy, CheckCheck,
   MessageSquare, Send, Zap, FileImage, FileSignature,
   ArrowLeftRight, Pencil, Check, Loader2, DatabaseZap, Clock, TrendingUp, Bot,
+  Link2, AlertCircle, CheckCircle2,
 } from "lucide-react";
 import { ExportButton } from "@/components/financeiro/export-button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -368,6 +369,23 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
   const [ctxForja, setCtxForja]   = useState("");
   const [ctxSaving, setCtxSaving] = useState(false);
   const [ctxOk, setCtxOk]         = useState(false);
+
+  // Enviar para Securitizadora
+  type IntegrationPartner = {
+    id: string; name: string; display_name: string;
+    crm_type: string; active: boolean; sla_days: number; has_api_key: boolean;
+  };
+  type SubmitResult = {
+    submission_id: string; vdr_url: string; sla_deadline: string;
+    pipedrive_sent: boolean; partner: { display_name: string; active: boolean };
+  };
+  const [showSubmitPartner, setShowSubmitPartner] = useState(false);
+  const [integrationPartners, setIntegrationPartners] = useState<IntegrationPartner[]>([]);
+  const [selectedPartnerId, setSelectedPartnerId] = useState<string>("");
+  const [submitPartnerLoading, setSubmitPartnerLoading] = useState(false);
+  const [submitPartnerResult, setSubmitPartnerResult] = useState<SubmitResult | null>(null);
+  const [submitPartnerError, setSubmitPartnerError] = useState<string | null>(null);
+  const [submitPartnersLoading, setSubmitPartnersLoading] = useState(false);
 
   // Teaser Cego
   const [showTeaserCego, setShowTeaserCego] = useState(false);
@@ -2016,6 +2034,29 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
                   </p>
                 </div>
 
+                {/* Enviar para Securitizadora */}
+                {["ADMIN", "GESTAO", "MESA"].includes(userRole) && (
+                  <div className="pt-1 border-t border-[#122036]">
+                    <button
+                      onClick={() => {
+                        setSubmitPartnerResult(null);
+                        setSubmitPartnerError(null);
+                        setSelectedPartnerId("");
+                        setSubmitPartnersLoading(true);
+                        fetch("/api/integrations")
+                          .then(r => r.json())
+                          .then(({ partners }) => setIntegrationPartners(partners ?? []))
+                          .catch(() => setIntegrationPartners([]))
+                          .finally(() => setSubmitPartnersLoading(false));
+                        setShowSubmitPartner(true);
+                      }}
+                      className="w-full text-xs text-[#C9A84C]/80 hover:text-[#C9A84C] transition-colors py-1.5 flex items-center justify-center gap-1.5 font-medium"
+                    >
+                      <Send size={12} /> Enviar para Securitizadora
+                    </button>
+                  </div>
+                )}
+
                 {/* Transferir deal */}
                 {["ADMIN", "GESTAO"].includes(userRole) && (
                   <div className="pt-1 border-t border-[#122036]">
@@ -2306,6 +2347,169 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
               </button>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── MODAL ENVIAR PARA SECURITIZADORA ────────────────────────────── */}
+      <Dialog open={showSubmitPartner} onOpenChange={v => { setShowSubmitPartner(v); if (!v) setSubmitPartnerResult(null); }}>
+        <DialogContent className="max-w-lg bg-[#111F35] border border-[#243A66] text-[#E8EDF5]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base font-bold text-[#F0ECE4]">
+              <Send size={16} className="text-[#C9A84C]" />
+              Enviar para Securitizadora — {selectedCard?.code}
+            </DialogTitle>
+          </DialogHeader>
+
+          {submitPartnerResult ? (
+            /* ── Resultado ── */
+            <div className="space-y-4 py-2">
+              <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4 space-y-3">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 size={18} className="text-emerald-400 flex-shrink-0" />
+                  <div>
+                    <p className="text-sm font-semibold text-emerald-300">Envio realizado com sucesso</p>
+                    <p className="text-xs text-[#9BAFC5] mt-0.5">
+                      SLA: {new Date(submitPartnerResult.sla_deadline).toLocaleDateString("pt-BR")} · {submitPartnerResult.partner.display_name}
+                    </p>
+                  </div>
+                </div>
+                {!submitPartnerResult.partner.active && (
+                  <p className="text-xs text-amber-400 bg-amber-500/10 border border-amber-500/25 rounded-lg px-3 py-2">
+                    Parceiro aguardando API key — VDR gerado mas sem envio automático ao CRM.
+                  </p>
+                )}
+                {submitPartnerResult.pipedrive_sent && (
+                  <p className="text-xs text-emerald-400">Lead criado no Pipedrive automaticamente.</p>
+                )}
+              </div>
+
+              <div className="space-y-1.5">
+                <p className="text-[10px] font-bold uppercase tracking-wide text-[#E8C97A]">Link VDR para Análise</p>
+                <div className="flex items-center gap-2 rounded-lg bg-[#09081A] border border-[#243A66] px-3 py-2">
+                  <Link2 size={12} className="text-[#C9A84C] flex-shrink-0" />
+                  <span className="text-xs text-[#9BAFC5] truncate flex-1">{submitPartnerResult.vdr_url}</span>
+                  <button
+                    onClick={() => navigator.clipboard.writeText(submitPartnerResult.vdr_url)}
+                    className="text-[#C9A84C] hover:text-[#E8C97A] transition-colors flex-shrink-0"
+                    title="Copiar link"
+                  >
+                    <Copy size={12} />
+                  </button>
+                </div>
+                <p className="text-[10px] text-[#5A7490]">Compartilhe este link com a securitizadora para acesso aos documentos.</p>
+              </div>
+
+              <button
+                onClick={() => { setShowSubmitPartner(false); setSubmitPartnerResult(null); }}
+                className="w-full rounded-lg bg-[#162744] border border-[#243A66] text-sm text-[#F0ECE4] py-2.5 hover:bg-[#1E3A5F] transition-colors"
+              >
+                Fechar
+              </button>
+            </div>
+          ) : (
+            /* ── Formulário ── */
+            <div className="space-y-4 py-2">
+              <p className="text-xs text-[#9BAFC5]">
+                Selecione a securitizadora que receberá os dados deste deal. Um link VDR exclusivo será gerado para análise de crédito.
+              </p>
+
+              {/* Lista de parceiros */}
+              {submitPartnersLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 size={20} className="animate-spin text-[#C9A84C]" />
+                </div>
+              ) : integrationPartners.length === 0 ? (
+                <div className="rounded-xl border border-[#243A66] bg-[#09081A] p-4 text-center">
+                  <p className="text-xs text-[#9BAFC5]">Nenhuma securitizadora cadastrada.</p>
+                  <a href="/configuracoes/integracoes" className="text-xs text-[#C9A84C] hover:underline mt-1 inline-block">
+                    Configurar integrações →
+                  </a>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {integrationPartners.map(p => (
+                    <button
+                      key={p.id}
+                      onClick={() => setSelectedPartnerId(p.id)}
+                      className={`w-full rounded-xl border text-left px-4 py-3 transition-all ${
+                        selectedPartnerId === p.id
+                          ? "border-[#C9A84C]/60 bg-[#C9A84C]/8"
+                          : "border-[#243A66] bg-[#09081A] hover:border-[#C9A84C]/30"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-semibold text-[#F0ECE4]">{p.display_name}</p>
+                          <p className="text-[10px] text-[#9BAFC5] mt-0.5 uppercase tracking-wide">{p.crm_type} · SLA {p.sla_days} dias</p>
+                        </div>
+                        <div className="flex flex-col items-end gap-1">
+                          {p.active ? (
+                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/25">ATIVO</span>
+                          ) : (
+                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/25">AGUARDANDO KEY</span>
+                          )}
+                          {selectedPartnerId === p.id && (
+                            <div className="w-3 h-3 rounded-full bg-[#C9A84C] flex items-center justify-center">
+                              <Check size={8} className="text-[#09081A]" />
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      {!p.active && selectedPartnerId === p.id && (
+                        <p className="text-[10px] text-amber-400 mt-2 flex items-center gap-1">
+                          <AlertCircle size={10} />
+                          VDR será gerado, mas envio ao CRM aguarda API key.
+                        </p>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {submitPartnerError && (
+                <p className="text-xs text-red-400 flex items-center gap-1.5">
+                  <AlertCircle size={12} /> {submitPartnerError}
+                </p>
+              )}
+
+              <div className="flex gap-2 pt-1">
+                <button
+                  onClick={() => setShowSubmitPartner(false)}
+                  className="flex-1 rounded-lg border border-[#122036] text-[#7A8FA8] text-sm py-2.5 hover:text-[#E8EDF5] transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  disabled={!selectedPartnerId || submitPartnerLoading}
+                  onClick={async () => {
+                    if (!selectedCard || !selectedPartnerId) return;
+                    setSubmitPartnerLoading(true);
+                    setSubmitPartnerError(null);
+                    try {
+                      const res = await fetch(`/api/ma/deals/${selectedCard.id}/submit-partner`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ partner_id: selectedPartnerId }),
+                      });
+                      const json = await res.json() as SubmitResult & { error?: string };
+                      if (!res.ok) throw new Error(json.error ?? "Erro ao enviar");
+                      setSubmitPartnerResult(json);
+                    } catch (err) {
+                      setSubmitPartnerError((err as Error).message);
+                    } finally {
+                      setSubmitPartnerLoading(false);
+                    }
+                  }}
+                  className="flex-1 rounded-lg bg-[#C9A84C] text-[#09081A] text-sm font-semibold py-2.5 hover:bg-[#E8C97A] transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {submitPartnerLoading
+                    ? <><Loader2 size={14} className="animate-spin" /> Enviando...</>
+                    : <><Send size={14} /> Enviar Deal</>
+                  }
+                </button>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 
