@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { logAudit } from "@/lib/audit";
+import { resolveContentType } from "@/lib/credit-documents/content-type";
 
 export const dynamic = "force-dynamic";
 
@@ -68,6 +69,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
   }
 
+  const contentType = resolveContentType(file.name, file.type);
+  if (!contentType) {
+    return NextResponse.json(
+      { error: "Tipo de arquivo não suportado. Envie PDF, JPG, PNG, DOC ou DOCX." },
+      { status: 415 }
+    );
+  }
+
   // Usa o partner_id ou o user.id como fallback para montar o caminho
   const ownerId  = proposal.partner_id ?? user.id;
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_").substring(0, 80);
@@ -79,7 +88,7 @@ export async function POST(req: NextRequest) {
   const bytes = await file.arrayBuffer();
   const { error: uploadError } = await svc.storage
     .from(DEFAULT_BUCKET)
-    .upload(storagePath, bytes, { contentType: file.type, upsert: true });
+    .upload(storagePath, bytes, { contentType, upsert: true });
 
   if (uploadError) {
     return NextResponse.json({ error: `Erro no storage: ${uploadError.message}` }, { status: 500 });

@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { STATUS_LABELS, STATUS_COLORS, type OperationStatus } from "@/lib/constants";
+import { uploadCreditDocument } from "@/lib/credit-documents/upload";
 import { CHECKLISTS, DEFAULT_CHECKLIST } from "./nova-proposta-modal";
 import { RecomendacaoLinha } from "./recomendacao-linha";
 
@@ -229,25 +230,15 @@ function PartnerDocUpload({ proposalId }: { proposalId: string }) {
     if (!file) return;
     setUploading(true);
     setError(null);
-    try {
-      const form = new FormData();
-      form.append("proposal_id", proposalId);
-      // doc_id livre: prefixo + timestamp para não colidir com checklist
-      form.append("doc_id", `anexo_${Date.now()}`);
-      form.append("file", file);
-      const res = await fetch("/api/credit-proposals/documents", { method: "POST", body: form });
-      if (!res.ok) {
-        const d = await res.json().catch(() => ({}));
-        setError(d.error ?? "Erro ao enviar documento.");
-      } else {
-        await load();
-      }
-    } catch {
-      setError("Erro de conexão ao enviar documento.");
-    } finally {
-      setUploading(false);
-      if (fileRef.current) fileRef.current.value = "";
+    // doc_id livre: prefixo + timestamp para não colidir com checklist
+    const result = await uploadCreditDocument(proposalId, `anexo_${Date.now()}`, file);
+    if (!result.ok) {
+      setError(result.error);
+    } else {
+      await load();
     }
+    setUploading(false);
+    if (fileRef.current) fileRef.current.value = "";
   };
 
   const handleDelete = async (doc: FreeDoc) => {
@@ -972,20 +963,15 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
     }
     setIsUploading(docId);
     try {
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("proposal_id", proposal.id);
-      formData.append("doc_id", docId);
-      const res  = await fetch("/api/credit-proposals/documents", { method: "POST", body: formData });
-      const json = await res.json();
-      if (!res.ok) { alert(json.error ?? "Erro ao enviar arquivo"); return; }
+      const result = await uploadCreditDocument(proposal.id, docId, file);
+      if (!result.ok) { alert(result.error); return; }
       setCheckedDocs((prev) => ({ ...prev, [docId]: true }));
       setUploadedFiles((prev) => ({
         ...prev,
         [docId]: [...(prev[docId] ?? []), {
           name: file.name,
-          url: json.document?.url ?? null,
-          key: json.document?.file_key ?? file.name,
+          url: result.url,
+          key: result.fileKey,
         }],
       }));
     } finally {

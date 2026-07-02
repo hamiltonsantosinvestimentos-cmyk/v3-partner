@@ -8,6 +8,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency } from "@/lib/utils";
+import { uploadCreditDocument } from "@/lib/credit-documents/upload";
 
 // ─── Checklists por linha e tipo de pessoa ─────────────────────────────────
 export const CHECKLISTS: Record<string, Record<"PF" | "PJ", { id: string; label: string; required: boolean; hint?: string }[]>> = {
@@ -953,20 +954,10 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
       const toUpload = uploadedFiles.filter(f => f.status === "pending" && f.file);
       for (const uf of toUpload) {
         setUploadedFiles(prev => prev.map(f => f.fileKey === uf.fileKey ? { ...f, status: "uploading" } : f));
-        try {
-          const form = new FormData();
-          form.append("file", uf.file!);
-          form.append("proposal_id", proposalId);
-          form.append("doc_id", uf.docId);
-          const res = await fetch("/api/credit-proposals/documents", { method: "POST", body: form });
-          if (res.ok) {
-            setUploadedFiles(prev => prev.map(f => f.fileKey === uf.fileKey ? { ...f, status: "done", file: undefined } : f));
-          } else {
-            setUploadedFiles(prev => prev.map(f => f.fileKey === uf.fileKey ? { ...f, status: "error" } : f));
-          }
-        } catch {
-          setUploadedFiles(prev => prev.map(f => f.fileKey === uf.fileKey ? { ...f, status: "error" } : f));
-        }
+        const result = await uploadCreditDocument(proposalId, uf.docId, uf.file!);
+        setUploadedFiles(prev => prev.map(f => f.fileKey === uf.fileKey
+          ? { ...f, status: result.ok ? "done" : "error", file: result.ok ? undefined : f.file }
+          : f));
       }
 
       setSubmitted(true);
