@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { coraFetch } from "@/lib/cora";
 import { randomUUID } from "crypto";
+import { sendWhatsApp, resolvePartnerPhone, planoLabel, buildRenovacaoManualMessage } from "@/lib/whatsapp/subscription-messages";
 
 const PLANO_VALOR: Record<string, number> = {
   STARTER:     29700,   // R$ 297,00
@@ -13,6 +14,20 @@ const PLANO_VALOR: Record<string, number> = {
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+}
+
+// Avisa o partner via WhatsApp quando o admin renova/reativa manualmente o acesso por 30 dias
+async function notificarRenovacaoManual(partnerId: string, novaExpiracao: Date) {
+  const { data: partner } = await svc().from("profiles").select("full_name, role").eq("id", partnerId).single();
+  if (!partner) return;
+  const phone = await resolvePartnerPhone(svc(), partnerId);
+  if (!phone) return;
+  const msg = buildRenovacaoManualMessage({
+    nome: partner.full_name ?? "Partner",
+    plano: planoLabel(partner.role),
+    novaExpiracao: novaExpiracao.toISOString(),
+  });
+  await sendWhatsApp(phone, msg);
 }
 
 async function getAuthedAdmin() {
@@ -165,6 +180,7 @@ export async function PATCH(req: NextRequest) {
       .update({ trial_expires_at: novaExpiracao.toISOString(), is_active: true })
       .eq("id", partnerId);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    await notificarRenovacaoManual(partnerId, novaExpiracao);
 
   } else if (action === "upgrade") {
     const { error } = await svc()
@@ -188,6 +204,7 @@ export async function PATCH(req: NextRequest) {
       .update({ is_active: true, trial_expires_at: novaExpiracao.toISOString() })
       .eq("id", partnerId);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    await notificarRenovacaoManual(partnerId, novaExpiracao);
 
   } else if (action === "editar") {
     const { full_name, role, valor_cents, trial_expires_at } = body as {
