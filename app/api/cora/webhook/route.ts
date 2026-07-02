@@ -115,6 +115,21 @@ export async function POST(req: NextRequest) {
     const invoiceId = body.data?.id ?? body.id;
     if (!invoiceId) return NextResponse.json({ received: true });
 
+    // Rota é pública (Cora não envia cookie de sessão) e não há assinatura
+    // documentada no payload — nunca confiar no corpo do POST. Reconsulta a
+    // fatura na própria API da Cora antes de processar qualquer pagamento.
+    try {
+      const verifyRes = await coraFetch(`/v2/invoices/${invoiceId}`, { method: "GET" });
+      const verifyData = verifyRes.ok ? await verifyRes.json() as { status?: string } : null;
+      if (!verifyRes.ok || verifyData?.status !== "PAID") {
+        console.error(`Cora webhook: fatura ${invoiceId} não confirmada como PAID na API (status HTTP ${verifyRes.status}, status fatura ${verifyData?.status})`);
+        return NextResponse.json({ received: true, verified: false });
+      }
+    } catch (e) {
+      console.error(`Cora webhook: erro ao reconsultar fatura ${invoiceId} na API Cora:`, e);
+      return NextResponse.json({ received: true, verified: false });
+    }
+
     const db = svc();
     const paidAt = body.data?.payment_date ?? new Date().toISOString();
 
