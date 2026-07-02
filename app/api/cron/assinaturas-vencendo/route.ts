@@ -28,8 +28,8 @@ type Partner = {
   full_name: string | null;
   email: string | null;
   role: string;
-  cpf?: string | null;
-  cnpj?: string | null;
+  cpf: string | null;
+  cnpj: string | null;
   trial_expires_at: string;
 };
 
