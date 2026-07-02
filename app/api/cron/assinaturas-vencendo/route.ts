@@ -159,7 +159,7 @@ export async function GET(req: NextRequest) {
 
   const { data: allActivePartners } = await svc()
     .from("profiles")
-    .select("id, full_name, email, role, cpf, cnpj, trial_expires_at, created_at, is_active")
+    .select("id, full_name, email, role, cpf, cnpj, trial_expires_at")
     .in("role", ["STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE"])
     .eq("is_active", true);
 
