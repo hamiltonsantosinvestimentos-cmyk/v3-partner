@@ -132,9 +132,10 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       source_type: "credit",
       source_id: consent.deal_proposal_id ?? consent.id,
       doc_id: docId,
+      doc_name: "registrato.pdf",
       file_name: "registrato.pdf",
       storage_path: storagePath,
-      status: "queued",
+      status: "pending",
       processing_mode: "async",
       dados_extraidos: { _bucket: bucket, _context: { tipo: "registrato_bacen", credit_consent_id: consent.id } },
     })
