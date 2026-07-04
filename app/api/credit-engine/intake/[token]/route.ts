@@ -29,7 +29,7 @@ async function resolveConsent(token: string) {
   const db = svc();
   const { data } = await db
     .from("credit_consents")
-    .select("id, subject_name, subject_cpf_cnpj, intake_expires_at, status, registrato_pdf_path")
+    .select("id, subject_name, subject_cpf_cnpj, intake_expires_at, status, registrato_pdf_path, deal_proposal_id")
     .eq("intake_token", token)
     .single();
 
