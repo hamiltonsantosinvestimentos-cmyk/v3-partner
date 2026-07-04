@@ -6,7 +6,7 @@ import {
   Loader2, AlertTriangle, CheckCircle2, Clock,
   ArrowRight, RefreshCw, Shield, Bot, Upload, Mic,
   Link2, Copy, Plus, FileText, UserPlus, ClipboardCheck,
-  ToggleLeft, ToggleRight, Save,
+  ToggleLeft, ToggleRight, Save, Download,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AssetAssistant } from "./asset-assistant";
@@ -56,6 +56,41 @@ function formatBRL(v: number) {
   if (v >= 1_000_000) return `R$ ${(v / 1_000_000).toFixed(1)}M`;
   if (v >= 1_000) return `R$ ${(v / 1_000).toFixed(0)}K`;
   return `R$ ${v.toLocaleString("pt-BR")}`;
+}
+
+function toFieldLabel(key: string): string {
+  return key
+    .replace(/_/g, " ")
+    .split(" ")
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(" ");
+}
+
+function confidenceStyle(score: number): string {
+  if (score >= 85) return "bg-emerald-500/15 border-emerald-500/30 text-emerald-400";
+  if (score >= 60) return "bg-[#C9A84C]/15 border-[#C9A84C]/30 text-[#C9A84C]";
+  return "bg-red-500/15 border-red-500/30 text-red-400";
+}
+
+// Achata objetos aninhados (ex: outros_campos) em pares label/valor, ignorando nulos e vazios
+function flattenExtractedFields(obj: Record<string, unknown>, prefix = ""): { label: string; value: string }[] {
+  const out: { label: string; value: string }[] = [];
+  for (const [key, val] of Object.entries(obj)) {
+    if (val === null || val === undefined || val === "") continue;
+    if (Array.isArray(val)) {
+      if (val.length === 0) continue;
+      out.push({ label: toFieldLabel(prefix + key), value: val.join(", ") });
+    } else if (typeof val === "object") {
+      out.push(...flattenExtractedFields(val as Record<string, unknown>, ""));
+    } else if (typeof val === "boolean") {
+      out.push({ label: toFieldLabel(prefix + key), value: val ? "Sim" : "Não" });
+    } else if (typeof val === "number") {
+      out.push({ label: toFieldLabel(prefix + key), value: val.toLocaleString("pt-BR") });
+    } else {
+      out.push({ label: toFieldLabel(prefix + key), value: String(val) });
+    }
+  }
+  return out;
 }
 
 export function MesaCapitaisClient() {
@@ -791,23 +826,76 @@ export function MesaCapitaisClient() {
                 <div className="text-xs text-[#9BAFC5] py-4 text-center">Nenhum documento anexado</div>
               ) : (
                 <div className="space-y-2">
-                  {listingDocs.map((doc: any) => (
-                    <div key={doc.id} className="bg-[#12112A] border border-[#9BAFC5]/10 rounded-lg p-3">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <div className="text-xs text-[#F5F1E8] font-medium">{doc.original_filename ?? "Documento"}</div>
-                          <div className="text-[10px] text-[#9BAFC5]">{doc.document_type} &middot; {doc.validation_status}</div>
+                  {listingDocs.map((doc: any) => {
+                    const ocr = doc.ocr_result;
+                    const isStructured = ocr && typeof ocr === "object" && !Array.isArray(ocr) && ("dados_extraidos" in ocr || "confiabilidade" in ocr || "resumo" in ocr);
+                    const transcription = ocr && typeof ocr === "object" ? ocr.transcription : null;
+                    const extractedFields = isStructured && ocr.dados_extraidos ? flattenExtractedFields(ocr.dados_extraidos) : [];
+
+                    return (
+                      <div key={doc.id} className="bg-[#12112A] border border-[#9BAFC5]/10 rounded-lg p-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="min-w-0">
+                            <div className="text-xs text-[#F5F1E8] font-medium truncate">{doc.original_filename ?? "Documento"}</div>
+                            <div className="text-[10px] text-[#9BAFC5]">{doc.document_type} &middot; {doc.validation_status}</div>
+                          </div>
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            {isStructured && typeof ocr.confiabilidade === "number" && (
+                              <span className={cn("text-[9px] font-bold px-1.5 py-0.5 rounded border", confidenceStyle(ocr.confiabilidade))}>
+                                {ocr.confiabilidade}% OCR
+                              </span>
+                            )}
+                            {doc.document_type === "AUDIO" && <Mic size={14} className="text-[#C9A84C]" />}
+                            {doc.download_url && (
+                              <a href={doc.download_url} target="_blank" rel="noopener noreferrer"
+                                title="Baixar documento original"
+                                className="flex items-center gap-1 px-2 py-1 bg-[#162744] border border-[#9BAFC5]/15 rounded text-[#9BAFC5] text-[9px] font-bold hover:border-[#C9A84C]/30 hover:text-[#C9A84C] transition">
+                                <Download size={11} /> Baixar
+                              </a>
+                            )}
+                          </div>
                         </div>
-                        {doc.document_type === "AUDIO" && <Mic size={14} className="text-[#C9A84C]" />}
+
+                        {isStructured ? (
+                          <div className="mt-2 space-y-2">
+                            {ocr.tipo_documento && (
+                              <div className="text-[9px] text-[#9BAFC5] uppercase tracking-wide">
+                                Tipo identificado: <span className="text-[#E8C97A] font-bold">{toFieldLabel(String(ocr.tipo_documento))}</span>
+                              </div>
+                            )}
+                            {ocr.resumo && (
+                              <div className="p-2 bg-[#09081A] rounded text-[10px] text-[#9BAFC5] leading-relaxed max-h-40 overflow-y-auto">
+                                {ocr.resumo}
+                              </div>
+                            )}
+                            {extractedFields.length > 0 && (
+                              <div className="p-2 bg-[#09081A] rounded max-h-56 overflow-y-auto">
+                                <div className="text-[9px] text-[#C9A84C] font-bold uppercase tracking-wider mb-1.5">
+                                  Campos Extraídos ({extractedFields.length})
+                                </div>
+                                <div className="grid grid-cols-2 gap-x-3 gap-y-1">
+                                  {extractedFields.map((f, i) => (
+                                    <div key={i} className="min-w-0">
+                                      <div className="text-[8px] text-[#9BAFC5]/70 truncate">{f.label}</div>
+                                      <div className="text-[10px] text-[#F5F1E8] truncate" title={f.value}>{f.value}</div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        ) : transcription ? (
+                          <div className="mt-2 p-2 bg-[#09081A] rounded text-[10px] text-[#9BAFC5] leading-relaxed max-h-40 overflow-y-auto">
+                            {transcription}
+                          </div>
+                        ) : ocr ? (
+                          <div className="mt-2 p-2 bg-[#09081A] rounded text-[10px] text-[#9BAFC5] leading-relaxed max-h-40 overflow-y-auto whitespace-pre-wrap">
+                            {typeof ocr === "string" ? ocr : JSON.stringify(ocr, null, 2)}
+                          </div>
+                        ) : null}
                       </div>
-                      {doc.ocr_result && (
-                        <div className="mt-2 p-2 bg-[#09081A] rounded text-[10px] text-[#9BAFC5] max-h-24 overflow-y-auto">
-                          {typeof doc.ocr_result === "string" ? doc.ocr_result.substring(0, 300) : (doc.ocr_result.transcription ?? JSON.stringify(doc.ocr_result)).substring(0, 300)}
-                          {(typeof doc.ocr_result === "string" ? doc.ocr_result : JSON.stringify(doc.ocr_result)).length > 300 && "..."}
-                        </div>
-                      )}
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>

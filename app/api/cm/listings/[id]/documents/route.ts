@@ -31,7 +31,17 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     .order("created_at", { ascending: false });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ documents: data ?? [] });
+
+  const documentsWithUrls = await Promise.all(
+    (data ?? []).map(async (doc) => {
+      const { data: signedUrl } = await svc().storage
+        .from("documents")
+        .createSignedUrl(doc.storage_path, 3600);
+      return { ...doc, download_url: signedUrl?.signedUrl ?? null };
+    })
+  );
+
+  return NextResponse.json({ documents: documentsWithUrls });
 }
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
