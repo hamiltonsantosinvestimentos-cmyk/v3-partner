@@ -1534,6 +1534,9 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
 
   // ── Credit Engine state ───────────────────────────────────────────────────
   const [creditLoading, setCreditLoading] = useState(false);
+  const [registratoLinkLoading, setRegistratoLinkLoading] = useState(false);
+  const [registratoLink, setRegistratoLink] = useState("");
+  const [registratoLinkCopied, setRegistratoLinkCopied] = useState(false);
   const [creditResult, setCreditResult] = useState<{ tier: string; score_total: number; spread_min: number; spread_max: number; profile_id: string } | null>(null);
   const [creditError, setCreditError] = useState<string>("");
 
@@ -1590,6 +1593,28 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
     }
   }
 
+  async function handleGenerateRegistratoLink() {
+    if (!proposal) return;
+    setRegistratoLinkLoading(true);
+    setRegistratoLinkCopied(false);
+    try {
+      const res = await fetch("/api/credit-engine/intake/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ proposal_id: proposal.id }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Erro ao gerar link");
+      setRegistratoLink(json.url);
+      await navigator.clipboard.writeText(json.url).catch(() => {});
+      setRegistratoLinkCopied(true);
+    } catch (e) {
+      setCreditError(String(e));
+    } finally {
+      setRegistratoLinkLoading(false);
+    }
+  }
+
   // Sync state when proposal changes
   useEffect(() => {
     if (!proposal) return;
@@ -1598,6 +1623,8 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
     setShowEscavador(false);
     setCreditResult(null);
     setCreditError("");
+    setRegistratoLink("");
+    setRegistratoLinkCopied(false);
     const vc = proposal.valor_credito_atual ?? proposal.requested_value;
     setValorCredito(vc);
     setValorCreditoEdit(String(vc));
@@ -2186,8 +2213,33 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
                       {creditLoading ? "Analisando..." : "Analisar Crédito"}
                     </button>
                   )}
+                  <button
+                    onClick={handleGenerateRegistratoLink}
+                    disabled={registratoLinkLoading}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/25 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {registratoLinkLoading
+                      ? <Loader2 className="w-3 h-3 animate-spin" />
+                      : registratoLinkCopied
+                        ? <CheckCheck className="w-3 h-3" />
+                        : <Link2 className="w-3 h-3" />}
+                    {registratoLinkLoading ? "Gerando..." : registratoLinkCopied ? "Link copiado!" : "Gerar Link Registrato"}
+                  </button>
                   </div>
                 </div>
+
+                {registratoLink && (
+                  <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-emerald-500/20 bg-emerald-500/5">
+                    <Link2 className="w-3 h-3 text-emerald-400 flex-shrink-0" />
+                    <span className="text-xs text-muted-foreground truncate flex-1">{registratoLink}</span>
+                    <button
+                      onClick={async () => { await navigator.clipboard.writeText(registratoLink).catch(() => {}); setRegistratoLinkCopied(true); }}
+                      className="text-emerald-400 hover:text-emerald-300 flex-shrink-0"
+                    >
+                      <Copy className="w-3 h-3" />
+                    </button>
+                  </div>
+                )}
 
                 {/* Client info card */}
                 <div className="p-4 rounded-xl border border-border bg-secondary/20 space-y-2">
