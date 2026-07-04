@@ -8,7 +8,7 @@ import { randomBytes } from "crypto";
 // Body: { deal_id: string; expires_days?: number }
 // Response: { token: string; url: string; expires_at: string }
 
-const ALLOWED_ROLES = ["ADMIN", "GESTAO", "MESA"] as const;
+const ALLOWED_ROLES = ["ADMIN", "GESTAO", "MESA", "MESA_OPERACIONAL"] as const;
 const DEFAULT_EXPIRES_DAYS = 30;
 
 export async function POST(req: NextRequest) {

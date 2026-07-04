@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 
-const ALLOWED = ["ADMIN", "GESTAO", "MESA"];
+const ALLOWED = ["ADMIN", "GESTAO", "MESA", "MESA_OPERACIONAL"];
 const N8N_URL = process.env.N8N_URL ?? "https://n8n-514n.onrender.com";
 
 function svc() {

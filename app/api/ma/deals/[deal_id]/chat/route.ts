@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 
-const ALLOWED = ["ADMIN", "GESTAO", "MESA"];
+const ALLOWED = ["ADMIN", "GESTAO", "MESA", "MESA_OPERACIONAL"];
 
 interface Message { role: "user" | "assistant"; content: string; ts?: string; }
 
@@ -85,7 +85,7 @@ export async function POST(
   const db = svc();
   const { data: profile } = await db.from("profiles").select("role").eq("id", user.id).single();
   if (!ALLOWED.includes(profile?.role ?? ""))
-    return NextResponse.json({ error: "Acesso restrito a ADMIN, GESTAO e MESA" }, { status: 403 });
+    return NextResponse.json({ error: "Acesso restrito a ADMIN, GESTAO, MESA e MESA_OPERACIONAL" }, { status: 403 });
 
   const { message, session_id } = await req.json();
   if (!message?.trim()) return NextResponse.json({ error: "Mensagem vazia" }, { status: 400 });

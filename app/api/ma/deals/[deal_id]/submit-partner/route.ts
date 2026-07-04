@@ -6,7 +6,7 @@ function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 }
 
-const ALLOWED = ["ADMIN", "GESTAO", "MESA"];
+const ALLOWED = ["ADMIN", "GESTAO", "MESA", "MESA_OPERACIONAL"];
 
 type RouteContext = { params: Promise<{ deal_id: string }> };
 
@@ -26,7 +26,7 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
     .single();
 
   if (!ALLOWED.includes(profile?.role ?? "")) {
-    return NextResponse.json({ error: "Acesso restrito a ADMIN, GESTAO e MESA" }, { status: 403 });
+    return NextResponse.json({ error: "Acesso restrito a ADMIN, GESTAO, MESA e MESA_OPERACIONAL" }, { status: 403 });
   }
 
   const body = await req.json() as { partner_id?: string };
