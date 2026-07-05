@@ -922,7 +922,11 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
 
       {/* ── CARD DETAIL MODAL ──────────────────────────────────── */}
       <Dialog open={!!selectedCard} onOpenChange={open => { if (!open) { setSelectedCard(null); setConfirmDelete(false); setEditingCard(false); } }}>
-        <DialogContent className="bg-[#091221] border border-[#122036] text-[#E8EDF5] max-w-2xl max-h-[92vh] overflow-y-auto grid-cols-1">
+        <DialogContent
+          onPointerDownOutside={(e) => e.preventDefault()}
+          onEscapeKeyDown={(e) => e.preventDefault()}
+          className="bg-[#091221] border-0 text-[#E8EDF5] w-screen h-screen max-w-none max-h-none rounded-none overflow-y-auto grid-cols-1 sm:rounded-none"
+        >
           <DialogHeader className="min-w-0 w-full">
             <DialogTitle className="text-[#E8EDF5] flex items-center gap-2 flex-wrap min-w-0 w-full">
               <span className="break-words">{selectedCard?.company}</span>

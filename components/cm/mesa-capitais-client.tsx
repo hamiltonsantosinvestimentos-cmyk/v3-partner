@@ -105,6 +105,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
   const [assistantListing, setAssistantListing] = useState<{ id: string; anonymous_id: string } | null>(null);
   const [uploadingDoc, setUploadingDoc] = useState<string | null>(null);
   const [selectedListing, setSelectedListing] = useState<Listing | null>(null);
+  const [activeDetailTab, setActiveDetailTab] = useState<"geral" | "documentos" | "orderbook" | "governanca">("geral");
   const [listingDocs, setListingDocs] = useState<any[]>([]);
   const [docsLoading, setDocsLoading] = useState(false);
   const [intakeUrl, setIntakeUrl] = useState<string | null>(null);
@@ -257,6 +258,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
 
   const openListingDetail = async (listing: Listing) => {
     setSelectedListing(listing);
+    setActiveDetailTab("geral");
     setIntakeUrl(null);
     setDealRoomUrl(null);
     setRoomInvites([]);
@@ -807,8 +809,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
 
       {/* Painel Lateral — Detalhe do Listing */}
       {selectedListing && (
-        <div className="fixed inset-0 z-[110] flex justify-end bg-black/50" onClick={() => setSelectedListing(null)}>
-          <div className="w-full max-w-md bg-[#09081A] border-l border-[#C9A84C]/20 h-full flex flex-col" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[110] bg-[#09081A] flex flex-col">
             <div className="p-5 border-b border-[#C9A84C]/20 flex items-center justify-between flex-shrink-0">
               <div>
                 <div className="text-[10px] text-[#C9A84C] font-bold tracking-wider">{selectedListing.anonymous_id}</div>
@@ -817,8 +818,34 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
               </div>
               <button onClick={() => setSelectedListing(null)} className="w-8 h-8 flex items-center justify-center rounded-full text-[#9BAFC5] hover:text-[#F5F1E8] hover:bg-[#F5F1E8]/10 transition text-xl">&times;</button>
             </div>
+
+            {/* Navegação por abas */}
+            <div className="flex border-b border-[#C9A84C]/10 flex-shrink-0 overflow-x-auto">
+              {([
+                { id: "geral" as const, label: "Visão Geral" },
+                { id: "documentos" as const, label: "Documentos" },
+                { id: "orderbook" as const, label: "Order Book" },
+                { id: "governanca" as const, label: "Governança" },
+              ]).map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveDetailTab(tab.id)}
+                  className={cn(
+                    "px-4 py-2.5 text-xs font-bold whitespace-nowrap border-b-2 transition-colors flex-shrink-0",
+                    activeDetailTab === tab.id
+                      ? "border-[#C9A84C] text-[#C9A84C]"
+                      : "border-transparent text-[#9BAFC5] hover:text-[#F5F1E8]"
+                  )}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+
             <div className="flex-1 overflow-y-auto">
 
+            {/* ══ ABA: VISÃO GERAL ══ */}
+            {activeDetailTab === "geral" && (<>
             {/* KPIs do Ativo */}
             <div className="grid grid-cols-3 gap-2 p-4">
               <div className="bg-[#12112A] rounded-lg p-3 text-center">
@@ -1031,7 +1058,10 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
                 />
               </label>
             </div>
+            </>)}
 
+            {/* ══ ABA: GOVERNANÇA ══ */}
+            {activeDetailTab === "governanca" && (<>
             {/* NDA Retroativo — Autorização de Diretor */}
             <div className="px-4 mt-4">
               <div className="text-[10px] text-[#C9A84C] font-bold uppercase tracking-wider mb-2">NDA Retroativo (fora do sistema)</div>
@@ -1132,7 +1162,10 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
                 )}
               </div>
             </div>
+            </>)}
 
+            {/* ══ ABA: ORDER BOOK ══ */}
+            {activeDetailTab === "orderbook" && (<>
             {/* Ask Price Floor + Auto-Aceite */}
             <div className="px-4 mt-4">
               <div className="text-[10px] text-[#C9A84C] font-bold uppercase tracking-wider mb-2">Order Book</div>
@@ -1235,7 +1268,10 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
                 </button>
               </div>
             </div>
+            </>)}
 
+            {/* ══ ABA: DOCUMENTOS ══ */}
+            {activeDetailTab === "documentos" && (<>
             {/* Documentos */}
             <div className="px-4 mt-4 pb-6">
               <div className="text-[10px] text-[#C9A84C] font-bold uppercase tracking-wider mb-2">Documentos ({listingDocs.length})</div>
@@ -1318,8 +1354,9 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
                 </div>
               )}
             </div>
+            </>)}
+
             </div>
-          </div>
         </div>
       )}
 
