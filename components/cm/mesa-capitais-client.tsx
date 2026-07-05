@@ -94,7 +94,7 @@ function flattenExtractedFields(obj: Record<string, unknown>, prefix = ""): { la
   return out;
 }
 
-export function MesaCapitaisClient() {
+export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string }) {
   const [listings, setListings] = useState<Listing[]>([]);
   const [matches, setMatches] = useState<Match[]>([]);
   const [bids, setBids] = useState<Bid[]>([]);
@@ -125,6 +125,10 @@ export function MesaCapitaisClient() {
   const [valorFaceNegociado, setValorFaceNegociado] = useState<string>("");
   const [valorAtualizadoNegociado, setValorAtualizadoNegociado] = useState<string>("");
   const [savingValores, setSavingValores] = useState(false);
+  const [deletingListing, setDeletingListing] = useState(false);
+  const [showLixeira, setShowLixeira] = useState(false);
+  const [lixeiraItems, setLixeiraItems] = useState<any[]>([]);
+  const [lixeiraLoading, setLixeiraLoading] = useState(false);
   const [savingFloor, setSavingFloor] = useState(false);
 
   const fetchAll = useCallback(async () => {
@@ -389,6 +393,90 @@ export function MesaCapitaisClient() {
     finally { setSavingValores(false); }
   };
 
+  const handleDeleteAsset = async (listingId: string) => {
+    const reason = window.prompt(
+      userRole === "ADMIN"
+        ? "Motivo da exclusão (obrigatório):"
+        : "Motivo da solicitação de exclusão (obrigatório — será enviado por email aos sócios):"
+    );
+    if (!reason || reason.trim().length < 5) {
+      if (reason !== null) alert("Motivo obrigatório — mínimo 5 caracteres");
+      return;
+    }
+    setDeletingListing(true);
+    try {
+      const res = await fetch(`/api/cm/listings/${listingId}/delete`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: reason.trim() }),
+      });
+      const json = await res.json();
+      if (res.ok) {
+        if (json.mode === "deleted") {
+          alert("Ativo excluído — disponível na Lixeira por 30 dias.");
+          setListings((prev) => prev.filter((l) => l.id !== listingId));
+          setSelectedListing(null);
+        } else {
+          alert("Solicitação enviada aos sócios por email. O ativo continua ativo até a decisão.");
+          setListings((prev) => prev.map((l) => (l.id === listingId ? { ...l, ...json.listing } : l)));
+          setSelectedListing((prev) => (prev ? { ...prev, ...json.listing } : prev));
+        }
+      } else {
+        alert(json.error ?? "Erro ao processar exclusão");
+      }
+    } catch { alert("Erro de conexão"); }
+    finally { setDeletingListing(false); }
+  };
+
+  const handleGovernanceDecision = async (listingId: string, action: "approve" | "reject") => {
+    setDeletingListing(true);
+    try {
+      const res = await fetch(`/api/cm/listings/${listingId}/delete`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+      });
+      const json = await res.json();
+      if (res.ok) {
+        if (action === "approve") {
+          setListings((prev) => prev.filter((l) => l.id !== listingId));
+          setSelectedListing(null);
+        } else {
+          setListings((prev) => prev.map((l) => (l.id === listingId ? { ...l, ...json.listing } : l)));
+        }
+      } else {
+        alert(json.error ?? "Erro ao processar decisão");
+      }
+    } catch { alert("Erro de conexão"); }
+    finally { setDeletingListing(false); }
+  };
+
+  const loadLixeira = async () => {
+    setLixeiraLoading(true);
+    try {
+      const res = await fetch("/api/cm/lixeira");
+      const json = await res.json();
+      setLixeiraItems(json.items ?? []);
+    } catch { setLixeiraItems([]); }
+    finally { setLixeiraLoading(false); }
+  };
+
+  const restoreFromLixeira = async (listingId: string) => {
+    try {
+      const res = await fetch("/api/cm/lixeira", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ listing_id: listingId }),
+      });
+      if (res.ok) {
+        setLixeiraItems((prev) => prev.filter((i) => i.id !== listingId));
+        fetchAll();
+      } else {
+        alert("Erro ao restaurar ativo");
+      }
+    } catch { alert("Erro de conexão"); }
+  };
+
   const approveQualification = async (accessId: string, decision: "aprovado" | "reprovado") => {
     try {
       const res = await fetch(`/api/cm/deal-room/approve`, {
@@ -458,8 +546,52 @@ export function MesaCapitaisClient() {
             {runningMatch ? <Loader2 size={16} className="animate-spin" /> : <Play size={16} />}
             Executar Matchmaking
           </button>
+          {userRole === "ADMIN" && (
+            <button
+              onClick={() => { setShowLixeira(true); loadLixeira(); }}
+              className="flex items-center gap-2 px-4 py-2 border border-[#9BAFC5]/20 text-[#9BAFC5] rounded-lg text-sm font-medium hover:bg-[#9BAFC5]/10 hover:text-[#F5F1E8] transition"
+            >
+              <ClipboardCheck size={16} /> Lixeira
+            </button>
+          )}
         </div>
       </div>
+
+      {/* Modal Lixeira */}
+      {showLixeira && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60" onClick={() => setShowLixeira(false)}>
+          <div className="w-full max-w-lg max-h-[80vh] bg-[#09081A] border border-[#C9A84C]/20 rounded-xl flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="p-4 border-b border-[#C9A84C]/20 flex items-center justify-between flex-shrink-0">
+              <div className="text-sm font-bold text-[#F5F1E8]">Lixeira — Ativos Excluídos (30 dias)</div>
+              <button onClick={() => setShowLixeira(false)} className="text-[#9BAFC5] hover:text-[#F5F1E8] text-xl">&times;</button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 space-y-2">
+              {lixeiraLoading ? (
+                <div className="flex justify-center py-8"><Loader2 size={20} className="animate-spin text-[#C9A84C]" /></div>
+              ) : lixeiraItems.length === 0 ? (
+                <div className="text-center text-xs text-[#9BAFC5] py-8">Lixeira vazia</div>
+              ) : (
+                lixeiraItems.map((item: any) => (
+                  <div key={item.id} className="bg-[#12112A] border border-[#9BAFC5]/10 rounded-lg p-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="text-xs font-bold text-[#F5F1E8]">{item.anonymous_id}</div>
+                        <div className="text-[10px] text-[#9BAFC5]">{formatBRL(Number(item.valor_face))} · excluído por {item.profiles?.full_name ?? "—"}</div>
+                        <div className="text-[10px] text-red-400 mt-1">{item.deletion_reason}</div>
+                        <div className="text-[9px] text-[#9BAFC5]/70 mt-1">{item.days_remaining} dias restantes na lixeira</div>
+                      </div>
+                      <button onClick={() => restoreFromLixeira(item.id)}
+                        className="flex-shrink-0 px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/20 rounded text-emerald-400 text-[10px] font-bold hover:bg-emerald-500/20 transition">
+                        Restaurar
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* KPIs */}
       <div className="grid grid-cols-5 gap-3 mb-6">
@@ -516,6 +648,9 @@ export function MesaCapitaisClient() {
                       )}
                       {(l.cm_bids?.[0] as any)?.count > 0 && (
                         <div className="text-[9px] text-orange-400 mt-1">{(l.cm_bids[0] as any).count} proposta(s)</div>
+                      )}
+                      {(l as any).deletion_status === "pending_governance" && (
+                        <div className="text-[8px] text-red-400 font-bold uppercase mt-1 px-1.5 py-0.5 bg-red-500/10 border border-red-500/20 rounded inline-block">Exclusão Solicitada</div>
                       )}
                       {Number((l.cm_listing_documents?.[0] as any)?.count) > 0 && (
                         <div className="text-[9px] text-[#9BAFC5] mt-1">{(l.cm_listing_documents[0] as any).count} doc(s)</div>
@@ -830,6 +965,43 @@ export function MesaCapitaisClient() {
                   onChange={(e) => { if (e.target.files?.[0]) handleUploadDoc(selectedListing.id, e.target.files[0]); }}
                 />
               </label>
+            </div>
+
+            {/* Zona de Risco — Exclusão */}
+            <div className="px-4 mt-4">
+              <div className="text-[10px] text-red-400 font-bold uppercase tracking-wider mb-2">Zona de Risco</div>
+              <div className="bg-red-500/5 border border-red-500/20 rounded-lg p-3">
+                {(selectedListing as any).deletion_status === "pending_governance" ? (
+                  <div className="text-[11px] text-[#F5F1E8]">
+                    <div className="text-red-400 font-bold mb-1">Exclusão solicitada — aguardando aprovação</div>
+                    <div className="text-[#9BAFC5] text-[10px] mb-2">{(selectedListing as any).deletion_reason}</div>
+                    {userRole === "ADMIN" && (
+                      <div className="flex gap-2">
+                        <button onClick={() => handleGovernanceDecision(selectedListing.id, "approve")} disabled={deletingListing}
+                          className="flex-1 px-3 py-2 bg-red-600/20 border border-red-500/30 rounded text-red-400 text-[10px] font-bold hover:bg-red-600/30 transition disabled:opacity-50">
+                          Aprovar Exclusão
+                        </button>
+                        <button onClick={() => handleGovernanceDecision(selectedListing.id, "reject")} disabled={deletingListing}
+                          className="flex-1 px-3 py-2 bg-[#162744] border border-[#9BAFC5]/15 rounded text-[#9BAFC5] text-[10px] font-bold hover:text-[#F5F1E8] transition disabled:opacity-50">
+                          Rejeitar
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => handleDeleteAsset(selectedListing.id)}
+                    disabled={deletingListing}
+                    className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-red-500/10 border border-red-500/20 rounded text-red-400 text-xs font-bold hover:bg-red-500/20 transition disabled:opacity-50"
+                  >
+                    {deletingListing ? <Loader2 size={14} className="animate-spin" /> : null}
+                    {userRole === "ADMIN" ? "Excluir Ativo" : "Solicitar Exclusão"}
+                  </button>
+                )}
+                {userRole !== "ADMIN" && (selectedListing as any).deletion_status !== "pending_governance" && (
+                  <p className="text-[9px] text-[#9BAFC5] mt-2">Exige aprovação de João, Hamilton ou Robson — motivo é enviado por email aos sócios.</p>
+                )}
+              </div>
             </div>
 
             {/* Ask Price Floor + Auto-Aceite */}

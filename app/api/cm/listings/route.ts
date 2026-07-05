@@ -28,6 +28,7 @@ export async function GET(req: NextRequest) {
   let query = svc()
     .from("cm_asset_listings")
     .select("*, cm_bids(count), cm_listing_documents(count)")
+    .is("deleted_at", null)
     .order("created_at", { ascending: false })
     .limit(50);
 

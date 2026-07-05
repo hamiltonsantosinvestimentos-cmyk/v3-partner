@@ -770,6 +770,12 @@ export type Database = {
           created_at: string
           created_by: string | null
           deal_room_enabled: boolean | null
+          deleted_at: string | null
+          deleted_by: string | null
+          deletion_reason: string | null
+          deletion_requested_at: string | null
+          deletion_requested_by: string | null
+          deletion_status: string
           desagio_pretendido: number | null
           ente_devedor: string | null
           esfera: string | null
@@ -815,6 +821,12 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           deal_room_enabled?: boolean | null
+          deleted_at?: string | null
+          deleted_by?: string | null
+          deletion_reason?: string | null
+          deletion_requested_at?: string | null
+          deletion_requested_by?: string | null
+          deletion_status?: string
           desagio_pretendido?: number | null
           ente_devedor?: string | null
           esfera?: string | null
@@ -860,6 +872,12 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           deal_room_enabled?: boolean | null
+          deleted_at?: string | null
+          deleted_by?: string | null
+          deletion_reason?: string | null
+          deletion_requested_at?: string | null
+          deletion_requested_by?: string | null
+          deletion_status?: string
           desagio_pretendido?: number | null
           ente_devedor?: string | null
           esfera?: string | null
@@ -895,6 +913,34 @@ export type Database = {
           vpl?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "cm_asset_listings_deleted_by_fkey"
+            columns: ["deleted_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cm_asset_listings_deleted_by_fkey"
+            columns: ["deleted_by"]
+            isOneToOne: false
+            referencedRelation: "v_kyc_monthly_usage"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "cm_asset_listings_deletion_requested_by_fkey"
+            columns: ["deletion_requested_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cm_asset_listings_deletion_requested_by_fkey"
+            columns: ["deletion_requested_by"]
+            isOneToOne: false
+            referencedRelation: "v_kyc_monthly_usage"
+            referencedColumns: ["user_id"]
+          },
           {
             foreignKeyName: "cm_asset_listings_head_approved_by_fkey"
             columns: ["head_approved_by"]
