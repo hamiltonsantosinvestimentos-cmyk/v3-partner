@@ -3111,19 +3111,26 @@ function AssinaturasTab() {
                               <p className="text-[10px] text-muted-foreground">
                                 Vence {new Date(sub.due_date + "T12:00:00").toLocaleDateString("pt-BR")}
                               </p>
-                              {(() => {
-                                const ultimoEnvio = sub.zap_d1_sent_at ? { stage: "D-1", at: sub.zap_d1_sent_at }
-                                  : sub.zap_d3_sent_at ? { stage: "D-3", at: sub.zap_d3_sent_at }
-                                  : sub.zap_d5_sent_at ? { stage: "D-5", at: sub.zap_d5_sent_at }
-                                  : null;
-                                return ultimoEnvio ? (
-                                  <p className="text-[10px] text-emerald-400" title={`WhatsApp ${ultimoEnvio.stage} enviado`}>
-                                    Zap {ultimoEnvio.stage} em {new Date(ultimoEnvio.at).toLocaleDateString("pt-BR")}
-                                  </p>
-                                ) : isPending ? (
-                                  <p className="text-[10px] text-muted-foreground/70">Nenhum WhatsApp enviado</p>
-                                ) : null;
-                              })()}
+                              <div className="flex items-center gap-1 pt-0.5">
+                                {([
+                                  { stage: "D-5", at: sub.zap_d5_sent_at },
+                                  { stage: "D-3", at: sub.zap_d3_sent_at },
+                                  { stage: "D-1", at: sub.zap_d1_sent_at },
+                                ] as const).map(({ stage, at }) => (
+                                  <span
+                                    key={stage}
+                                    title={at ? `WhatsApp ${stage} enviado em ${new Date(at).toLocaleString("pt-BR")}` : `WhatsApp ${stage} ainda não enviado`}
+                                    className={`text-[9px] font-semibold px-1.5 py-0.5 rounded border ${
+                                      at
+                                        ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
+                                        : "bg-transparent text-muted-foreground/50 border-[#243A66]"
+                                    }`}
+                                  >
+                                    {stage}
+                                    {at ? ` ${new Date(at).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}` : ""}
+                                  </span>
+                                ))}
+                              </div>
                               {isPending && (
                                 <button
                                   onClick={() => doAction(p.id, "gerar_cobranca_cora")}
