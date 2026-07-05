@@ -153,5 +153,6 @@ export async function POST(req: NextRequest, { params }: Params) {
     boleto_pdf: order.boleto_pdf,
     intake_token: order.intake_token,
     service_type: link.service_type,
+    _debug_cora_raw: process.env.NODE_ENV !== "production" || req.headers.get("x-debug-cora") === process.env.CRON_SECRET ? coraData : undefined,
   });
 }
