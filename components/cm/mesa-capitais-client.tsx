@@ -94,6 +94,27 @@ function flattenExtractedFields(obj: Record<string, unknown>, prefix = ""): { la
   return out;
 }
 
+// Consolida dados_extraidos de TODOS os documentos de um ativo em um unico
+// resumo por campo, sinalizando divergencia quando documentos diferentes
+// extraem valores diferentes para o mesmo campo (estilo FORJA multi-fonte).
+function buildConsolidatedSummary(docs: any[]): { label: string; values: { value: string; source: string; confidence: number | null }[] }[] {
+  const map = new Map<string, { value: string; source: string; confidence: number | null }[]>();
+  for (const doc of docs) {
+    const ocr = doc.ocr_result;
+    const isStructured = ocr && typeof ocr === "object" && !Array.isArray(ocr) && "dados_extraidos" in ocr;
+    if (!isStructured || !ocr.dados_extraidos) continue;
+    const fields = flattenExtractedFields(ocr.dados_extraidos);
+    const confidence = typeof ocr.confiabilidade === "number" ? ocr.confiabilidade : null;
+    const source = doc.original_filename ?? "documento";
+    for (const f of fields) {
+      const arr = map.get(f.label) ?? [];
+      arr.push({ value: f.value, source, confidence });
+      map.set(f.label, arr);
+    }
+  }
+  return Array.from(map.entries()).map(([label, values]) => ({ label, values }));
+}
+
 export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string }) {
   const [listings, setListings] = useState<Listing[]>([]);
   const [matches, setMatches] = useState<Match[]>([]);
@@ -136,6 +157,23 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
   const [ndaDate, setNdaDate] = useState<string>(new Date().toISOString().slice(0, 10));
   const [ndaReason, setNdaReason] = useState("");
   const [submittingNda, setSubmittingNda] = useState(false);
+  const [showManualForm, setShowManualForm] = useState(false);
+  const [submittingManual, setSubmittingManual] = useState(false);
+  const [manualForm, setManualForm] = useState({
+    asset_type: "precatorio" as CmAssetType,
+    seller_name: "",
+    seller_cpf_cnpj: "",
+    ente_devedor: "",
+    esfera: "",
+    tribunal: "",
+    natureza: "",
+    numero_processo: "",
+    valor_face: "",
+    valor_atualizado: "",
+    desagio_pretendido: "",
+    prazo_estimado_meses: "",
+    allows_tranching: false,
+  });
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
@@ -515,6 +553,50 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
     } catch { alert("Erro de conexão"); }
   };
 
+  const submitManualListing = async () => {
+    if (!manualForm.seller_name.trim() || !manualForm.valor_face) {
+      alert("Preencha ao menos: nome do cedente e valor de face");
+      return;
+    }
+    setSubmittingManual(true);
+    try {
+      const res = await fetch("/api/cm/listings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          asset_type: manualForm.asset_type,
+          seller_name: manualForm.seller_name.trim(),
+          seller_cpf_cnpj: manualForm.seller_cpf_cnpj.trim() || undefined,
+          ente_devedor: manualForm.ente_devedor.trim() || undefined,
+          esfera: manualForm.esfera || undefined,
+          tribunal: manualForm.tribunal.trim() || undefined,
+          natureza: manualForm.natureza.trim() || undefined,
+          numero_processo: manualForm.numero_processo.trim() || undefined,
+          valor_face: Number(manualForm.valor_face),
+          valor_atualizado: manualForm.valor_atualizado ? Number(manualForm.valor_atualizado) : undefined,
+          desagio_pretendido: manualForm.desagio_pretendido ? Number(manualForm.desagio_pretendido) : undefined,
+          prazo_estimado_meses: manualForm.prazo_estimado_meses ? Number(manualForm.prazo_estimado_meses) : undefined,
+          allows_tranching: manualForm.allows_tranching,
+        }),
+      });
+      const json = await res.json();
+      if (res.ok) {
+        alert(`Ativo cadastrado: ${json.listing.anonymous_id}`);
+        setShowManualForm(false);
+        setManualForm({
+          asset_type: "precatorio", seller_name: "", seller_cpf_cnpj: "", ente_devedor: "",
+          esfera: "", tribunal: "", natureza: "", numero_processo: "",
+          valor_face: "", valor_atualizado: "", desagio_pretendido: "", prazo_estimado_meses: "",
+          allows_tranching: false,
+        });
+        fetchAll();
+      } else {
+        alert(json.error ?? "Erro ao cadastrar ativo");
+      }
+    } catch { alert("Erro de conexão"); }
+    finally { setSubmittingManual(false); }
+  };
+
   const loadLixeira = async () => {
     setLixeiraLoading(true);
     try {
@@ -597,6 +679,12 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
             Novo Ativo
           </button>
           <button
+            onClick={() => setShowManualForm(true)}
+            className="flex items-center gap-2 px-4 py-2 border border-[#9BAFC5]/20 text-[#9BAFC5] rounded-lg text-sm font-medium hover:bg-[#9BAFC5]/10 hover:text-[#F5F1E8] transition"
+          >
+            <FileText size={16} /> Cadastro Manual
+          </button>
+          <button
             onClick={generateBuyLink} disabled={generatingBuyLink}
             className="flex items-center gap-2 px-4 py-2 border border-emerald-500/30 text-emerald-400 rounded-lg text-sm font-medium hover:bg-emerald-500/10 transition disabled:opacity-50"
           >
@@ -652,6 +740,117 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
                   </div>
                 ))
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Cadastro Manual */}
+      {showManualForm && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60" onClick={() => setShowManualForm(false)}>
+          <div className="w-full max-w-lg max-h-[85vh] bg-[#09081A] border border-[#C9A84C]/20 rounded-xl flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="p-4 border-b border-[#C9A84C]/20 flex items-center justify-between flex-shrink-0">
+              <div>
+                <div className="text-sm font-bold text-[#F5F1E8]">Cadastro Manual de Ativo</div>
+                <div className="text-[10px] text-[#9BAFC5]">Para deals já qualificados internamente pela Mesa, sem intake público</div>
+              </div>
+              <button onClick={() => setShowManualForm(false)} className="text-[#9BAFC5] hover:text-[#F5F1E8] text-xl">&times;</button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+              <div>
+                <label className="text-[9px] text-[#9BAFC5] uppercase">Tipo de Ativo *</label>
+                <select value={manualForm.asset_type} onChange={(e) => setManualForm((f) => ({ ...f, asset_type: e.target.value as CmAssetType }))}
+                  className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#F5F1E8] mt-1">
+                  <option value="precatorio">Precatório</option>
+                  <option value="direito_creditorio">Direito Creditório</option>
+                  <option value="cgi">CGI</option>
+                  <option value="cri">CRI</option>
+                  <option value="fidc">FIDC</option>
+                  <option value="outros">Outros</option>
+                </select>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[9px] text-[#9BAFC5] uppercase">Nome do Cedente *</label>
+                  <input value={manualForm.seller_name} onChange={(e) => setManualForm((f) => ({ ...f, seller_name: e.target.value }))}
+                    className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#F5F1E8] mt-1" />
+                </div>
+                <div>
+                  <label className="text-[9px] text-[#9BAFC5] uppercase">CPF/CNPJ Cedente</label>
+                  <input value={manualForm.seller_cpf_cnpj} onChange={(e) => setManualForm((f) => ({ ...f, seller_cpf_cnpj: e.target.value }))}
+                    className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#F5F1E8] mt-1" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[9px] text-[#9BAFC5] uppercase">Valor de Face (R$) *</label>
+                  <input type="number" value={manualForm.valor_face} onChange={(e) => setManualForm((f) => ({ ...f, valor_face: e.target.value }))}
+                    className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#F5F1E8] mt-1" />
+                </div>
+                <div>
+                  <label className="text-[9px] text-[#9BAFC5] uppercase">Valor Atualizado (R$)</label>
+                  <input type="number" value={manualForm.valor_atualizado} onChange={(e) => setManualForm((f) => ({ ...f, valor_atualizado: e.target.value }))}
+                    className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#F5F1E8] mt-1" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[9px] text-[#9BAFC5] uppercase">Deságio Pretendido (%)</label>
+                  <input type="number" value={manualForm.desagio_pretendido} onChange={(e) => setManualForm((f) => ({ ...f, desagio_pretendido: e.target.value }))}
+                    className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#F5F1E8] mt-1" />
+                </div>
+                <div>
+                  <label className="text-[9px] text-[#9BAFC5] uppercase">Prazo Estimado (meses)</label>
+                  <input type="number" value={manualForm.prazo_estimado_meses} onChange={(e) => setManualForm((f) => ({ ...f, prazo_estimado_meses: e.target.value }))}
+                    className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#F5F1E8] mt-1" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[9px] text-[#9BAFC5] uppercase">Ente Devedor</label>
+                  <input value={manualForm.ente_devedor} onChange={(e) => setManualForm((f) => ({ ...f, ente_devedor: e.target.value }))}
+                    className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#F5F1E8] mt-1" />
+                </div>
+                <div>
+                  <label className="text-[9px] text-[#9BAFC5] uppercase">Esfera</label>
+                  <select value={manualForm.esfera} onChange={(e) => setManualForm((f) => ({ ...f, esfera: e.target.value }))}
+                    className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#F5F1E8] mt-1">
+                    <option value="">—</option>
+                    <option value="Federal">Federal</option>
+                    <option value="Estadual">Estadual</option>
+                    <option value="Municipal">Municipal</option>
+                  </select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[9px] text-[#9BAFC5] uppercase">Tribunal</label>
+                  <input value={manualForm.tribunal} onChange={(e) => setManualForm((f) => ({ ...f, tribunal: e.target.value }))}
+                    className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#F5F1E8] mt-1" />
+                </div>
+                <div>
+                  <label className="text-[9px] text-[#9BAFC5] uppercase">Natureza</label>
+                  <input value={manualForm.natureza} onChange={(e) => setManualForm((f) => ({ ...f, natureza: e.target.value }))}
+                    className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#F5F1E8] mt-1" />
+                </div>
+              </div>
+              <div>
+                <label className="text-[9px] text-[#9BAFC5] uppercase">Número do Processo</label>
+                <input value={manualForm.numero_processo} onChange={(e) => setManualForm((f) => ({ ...f, numero_processo: e.target.value }))}
+                  className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#F5F1E8] mt-1" />
+              </div>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={manualForm.allows_tranching}
+                  onChange={(e) => setManualForm((f) => ({ ...f, allows_tranching: e.target.checked }))}
+                  className="accent-[#C9A84C]" />
+                <span className="text-xs text-[#9BAFC5]">Permite tranching (fracionamento entre compradores)</span>
+              </label>
+              <button onClick={submitManualListing} disabled={submittingManual}
+                className="w-full flex items-center justify-center gap-2 px-3 py-2.5 bg-[#C9A84C] text-[#09081A] rounded-lg text-sm font-bold hover:bg-[#D4B96A] transition disabled:opacity-50">
+                {submittingManual ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
+                Cadastrar Ativo
+              </button>
+              <p className="text-[9px] text-[#9BAFC5] text-center">Entra direto no pipeline em &quot;Reunião Validada&quot; — mesmo ponto de partida do intake público.</p>
             </div>
           </div>
         </div>
@@ -1272,6 +1471,48 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
 
             {/* ══ ABA: DOCUMENTOS ══ */}
             {activeDetailTab === "documentos" && (<>
+            {/* Resumo Consolidado — Multi-Documento (estilo FORJA) */}
+            {(() => {
+              const consolidated = buildConsolidatedSummary(listingDocs);
+              if (consolidated.length === 0) return null;
+              return (
+                <div className="px-4 pt-4">
+                  <div className="text-[10px] text-[#C9A84C] font-bold uppercase tracking-wider mb-2">
+                    Resumo Consolidado — Todos os Documentos ({listingDocs.length})
+                  </div>
+                  <div className="bg-[#12112A] border border-[#9BAFC5]/10 rounded-lg p-3 divide-y divide-[#9BAFC5]/5 max-h-72 overflow-y-auto">
+                    {consolidated.map((f, i) => {
+                      const uniqueValues = Array.from(new Set(f.values.map((v) => v.value)));
+                      const hasConflict = uniqueValues.length > 1;
+                      return (
+                        <div key={i} className="flex items-start justify-between gap-3 py-1.5 first:pt-0 last:pb-0">
+                          <div className="min-w-0 flex-1">
+                            <div className="text-[9px] text-[#9BAFC5]/70 uppercase tracking-wide">{f.label}</div>
+                            {hasConflict ? (
+                              <div className="space-y-0.5 mt-0.5">
+                                {f.values.map((v, j) => (
+                                  <div key={j} className="text-[11px] text-[#F5F1E8]">
+                                    {v.value} <span className="text-[9px] text-[#9BAFC5]" title={v.source}>· {v.source}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="text-[11px] text-[#F5F1E8]">{f.values[0].value}</div>
+                            )}
+                          </div>
+                          {hasConflict ? (
+                            <span className="flex-shrink-0 text-[8px] font-bold px-1.5 py-0.5 rounded bg-red-500/15 border border-red-500/30 text-red-400">DIVERGÊNCIA</span>
+                          ) : f.values.length > 1 ? (
+                            <span className="flex-shrink-0 text-[8px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/15 border border-emerald-500/30 text-emerald-400">{f.values.length}x confirmado</span>
+                          ) : null}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
+
             {/* Documentos */}
             <div className="px-4 mt-4 pb-6">
               <div className="text-[10px] text-[#C9A84C] font-bold uppercase tracking-wider mb-2">Documentos ({listingDocs.length})</div>
