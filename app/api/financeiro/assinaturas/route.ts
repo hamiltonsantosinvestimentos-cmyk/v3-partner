@@ -3,7 +3,8 @@ import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { coraFetch } from "@/lib/cora";
 import { randomUUID } from "crypto";
-import { sendWhatsApp, resolvePartnerPhone, planoLabel, buildRenovacaoManualMessage } from "@/lib/whatsapp/subscription-messages";
+import { sendWhatsApp, resolvePartnerPhone, planoLabel, buildRenovacaoManualMessage, buildCobrancaMessage } from "@/lib/whatsapp/subscription-messages";
+import { efetivoVencimento } from "@/lib/partner-vencimento";
 
 const PLANO_VALOR: Record<string, number> = {
   STARTER:     29700,   // R$ 297,00
@@ -317,8 +318,8 @@ export async function PATCH(req: NextRequest) {
       valor = regOriginal.cora_amount_cents; // mantém preço contratado
     }
 
-    // Vencimento = data de expiração do partner (ou +30 dias se já venceu)
-    const expiry = pp.trial_expires_at ? new Date(pp.trial_expires_at) : new Date();
+    // Vencimento = mesma data efetiva exibida na coluna Vencimento da tela (ou +30 dias se já venceu)
+    const expiry = efetivoVencimento(pp);
     const dueDate = expiry > new Date() ? expiry : new Date(Date.now() + 30 * 86400000);
     const dueDateStr = dueDate.toISOString().split("T")[0];
 
@@ -370,6 +371,22 @@ export async function PATCH(req: NextRequest) {
 
     coraData = await coraRes.json() as typeof coraData;
 
+    // Envia o WhatsApp de cobrança na hora, com o mesmo template usado pelo cron no estágio D-5
+    const phone = await resolvePartnerPhone(svc(), partnerId);
+    let zapEnviado = false;
+    if (phone) {
+      const msg = buildCobrancaMessage({
+        nome: pp.full_name,
+        plano: planoLabel(pp.role),
+        dueDate: dueDateStr,
+        valorCents: valor,
+        pixEmv: coraData.pix?.emv ?? null,
+        boletoBarcode: coraData.payment_options?.bank_slip?.digitable ?? null,
+        boletoPdf: coraData.payment_options?.bank_slip?.url ?? null,
+      });
+      zapEnviado = await sendWhatsApp(phone, msg);
+    }
+
     await svc().from("partner_subscriptions").insert({
       partner_id:      partnerId,
       plano:           pp.role,
@@ -381,9 +398,21 @@ export async function PATCH(req: NextRequest) {
       pix_qr_code:     coraData.pix?.qr_code,
       boleto_barcode:  coraData.payment_options?.bank_slip?.digitable,
       boleto_pdf:      coraData.payment_options?.bank_slip?.url,
+      zap_d5_sent_at:  zapEnviado ? new Date().toISOString() : null,
     });
 
-    return NextResponse.json({ ok: true, cora_invoice_id: coraData.id });
+    await svc().from("notifications").insert({
+      user_id: partnerId,
+      title: zapEnviado ? "WhatsApp de cobrança enviado ✅" : phone ? "Falha ao enviar WhatsApp ❌" : "Cobrança gerada sem telefone cadastrado",
+      message: zapEnviado
+        ? `Cobrança de ${planoLabel(pp.role)} enviada para ${phone}. Vencimento: ${dueDateStr}`
+        : "Cobrança Cora gerada, mas não foi possível enviar o WhatsApp automaticamente.",
+      type: "ASSINATURA_ZAP",
+      action_url: "/minha-assinatura",
+      read: true,
+    });
+
+    return NextResponse.json({ ok: true, cora_invoice_id: coraData.id, whatsapp_enviado: zapEnviado });
 
   } else {
     return NextResponse.json({ error: "Ação inválida" }, { status: 400 });

@@ -10,6 +10,7 @@ import {
   buildLembreteMessage,
   buildAvisoBloqueioMessage,
 } from "@/lib/whatsapp/subscription-messages";
+import { efetivoVencimento } from "@/lib/partner-vencimento";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -30,7 +31,8 @@ type Partner = {
   role: string;
   cpf: string | null;
   cnpj: string | null;
-  trial_expires_at: string;
+  trial_expires_at: string | null;
+  created_at: string;
 };
 
 type Subscription = {
@@ -160,17 +162,15 @@ export async function GET(req: NextRequest) {
 
   const { data: allActivePartners } = await svc()
     .from("profiles")
-    .select("id, full_name, email, role, cpf, cnpj, trial_expires_at")
+    .select("id, full_name, email, role, cpf, cnpj, trial_expires_at, created_at")
     .in("role", ["STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE"])
     .eq("is_active", true);
 
-  const partnersComVencimento = (allActivePartners ?? []).filter(
-    (p): p is Partner => !!p.trial_expires_at
-  );
+  const partnersComVencimento = (allActivePartners ?? []) as Partner[];
 
   if (horasSinceLastRun >= 12) {
     const vencendo = partnersComVencimento.filter(p => {
-      const diasRestantes = Math.floor((new Date(p.trial_expires_at).getTime() - now.getTime()) / 86400000);
+      const diasRestantes = Math.floor((efetivoVencimento(p).getTime() - now.getTime()) / 86400000);
       return diasRestantes >= 0 && diasRestantes <= 7;
     });
 
@@ -183,7 +183,7 @@ export async function GET(req: NextRequest) {
 
       if (admins?.length) {
         const lista = vencendo.map(p => {
-          const dias = Math.max(Math.floor((new Date(p.trial_expires_at).getTime() - now.getTime()) / 86400000), 0);
+          const dias = Math.max(Math.floor((efetivoVencimento(p).getTime() - now.getTime()) / 86400000), 0);
           return `${p.full_name ?? p.email} (${planoLabel(p.role)}) — ${dias === 0 ? "vence hoje" : `vence em ${dias}d`}`;
         }).join("; ");
 
@@ -206,13 +206,13 @@ export async function GET(req: NextRequest) {
   const zapErros: string[] = [];
 
   const emCadencia = partnersComVencimento.filter(p => {
-    const diasRestantes = Math.floor((new Date(p.trial_expires_at).getTime() - now.getTime()) / 86400000);
+    const diasRestantes = Math.floor((efetivoVencimento(p).getTime() - now.getTime()) / 86400000);
     return diasRestantes >= 0 && diasRestantes <= 5;
   });
 
   for (const partner of emCadencia) {
-    const dueDateStr = new Date(partner.trial_expires_at).toISOString().split("T")[0];
-    const diasRestantes = Math.floor((new Date(partner.trial_expires_at).getTime() - now.getTime()) / 86400000);
+    const dueDateStr = efetivoVencimento(partner).toISOString().split("T")[0];
+    const diasRestantes = Math.floor((efetivoVencimento(partner).getTime() - now.getTime()) / 86400000);
 
     const sub = await getOrCreatePendingSubscription(svc(), partner, dueDateStr);
     if (!sub) { zapErros.push(`${partner.id}: falha ao gerar/obter cobrança`); continue; }
