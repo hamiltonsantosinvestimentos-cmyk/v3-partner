@@ -61,6 +61,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const formData = await req.formData();
   const file = formData.get("file") as File | null;
   const documentType = formData.get("document_type") as string || "outro";
+  const checklistItemId = (formData.get("checklist_item_id") as string) || null;
 
   if (!file) return NextResponse.json({ error: "Arquivo obrigatório" }, { status: 422 });
 
@@ -83,6 +84,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       original_filename: file.name,
       file_size_bytes: file.size,
       validation_status: "pendente",
+      checklist_item_id: checklistItemId,
     })
     .select()
     .single();

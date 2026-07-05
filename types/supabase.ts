@@ -240,6 +240,7 @@ export type Database = {
         Row: {
           archived: boolean
           created_at: string
+          deal_id: string | null
           export_type: Database["public"]["Enums"]["agent_export_type"] | null
           id: string
           messages: Json
@@ -252,6 +253,7 @@ export type Database = {
         Insert: {
           archived?: boolean
           created_at?: string
+          deal_id?: string | null
           export_type?: Database["public"]["Enums"]["agent_export_type"] | null
           id?: string
           messages?: Json
@@ -264,6 +266,7 @@ export type Database = {
         Update: {
           archived?: boolean
           created_at?: string
+          deal_id?: string | null
           export_type?: Database["public"]["Enums"]["agent_export_type"] | null
           id?: string
           messages?: Json
@@ -274,6 +277,13 @@ export type Database = {
           workspace_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "agent_sessions_deal_id_fkey"
+            columns: ["deal_id"]
+            isOneToOne: false
+            referencedRelation: "ma_deals"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "agent_sessions_workspace_id_fkey"
             columns: ["workspace_id"]
@@ -322,6 +332,68 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_kyc_monthly_usage"
             referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      asset_restrictions: {
+        Row: {
+          created_at: string
+          credit_profile_id: string | null
+          credor: string | null
+          data_ocorrencia: string | null
+          data_vencimento: string | null
+          descricao: string | null
+          fonte: string
+          id: string
+          numero_referencia: string | null
+          raw_data: Json | null
+          restriction_type: string
+          score_impact: number | null
+          status: string
+          subject_cpf_cnpj: string
+          valor: number | null
+        }
+        Insert: {
+          created_at?: string
+          credit_profile_id?: string | null
+          credor?: string | null
+          data_ocorrencia?: string | null
+          data_vencimento?: string | null
+          descricao?: string | null
+          fonte: string
+          id?: string
+          numero_referencia?: string | null
+          raw_data?: Json | null
+          restriction_type: string
+          score_impact?: number | null
+          status?: string
+          subject_cpf_cnpj: string
+          valor?: number | null
+        }
+        Update: {
+          created_at?: string
+          credit_profile_id?: string | null
+          credor?: string | null
+          data_ocorrencia?: string | null
+          data_vencimento?: string | null
+          descricao?: string | null
+          fonte?: string
+          id?: string
+          numero_referencia?: string | null
+          raw_data?: Json | null
+          restriction_type?: string
+          score_impact?: number | null
+          status?: string
+          subject_cpf_cnpj?: string
+          valor?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "asset_restrictions_credit_profile_id_fkey"
+            columns: ["credit_profile_id"]
+            isOneToOne: false
+            referencedRelation: "credit_profiles"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -729,6 +801,7 @@ export type Database = {
           updated_at: string
           valor_atualizado: number | null
           valor_face: number
+          valores_ocr: Json | null
           vpl: number | null
         }
         Insert: {
@@ -773,6 +846,7 @@ export type Database = {
           updated_at?: string
           valor_atualizado?: number | null
           valor_face: number
+          valores_ocr?: Json | null
           vpl?: number | null
         }
         Update: {
@@ -817,6 +891,7 @@ export type Database = {
           updated_at?: string
           valor_atualizado?: number | null
           valor_face?: number
+          valores_ocr?: Json | null
           vpl?: number | null
         }
         Relationships: [
@@ -1361,6 +1436,7 @@ export type Database = {
       }
       cm_listing_documents: {
         Row: {
+          checklist_item_id: string | null
           created_at: string
           document_type: string
           file_size_bytes: number | null
@@ -1373,6 +1449,7 @@ export type Database = {
           validation_status: string
         }
         Insert: {
+          checklist_item_id?: string | null
           created_at?: string
           document_type: string
           file_size_bytes?: number | null
@@ -1385,6 +1462,7 @@ export type Database = {
           validation_status?: string
         }
         Update: {
+          checklist_item_id?: string | null
           created_at?: string
           document_type?: string
           file_size_bytes?: number | null
@@ -1786,6 +1864,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           id: string
+          is_referral_commission: boolean
           minimum_enforced: boolean | null
           notes: string | null
           operation_closed_at: string | null
@@ -1797,6 +1876,7 @@ export type Database = {
           override_approved_by: string | null
           partner_id: string
           payment_date: string | null
+          referral_source_commission_id: string | null
           split_buy: number | null
           split_platform: number | null
           split_sell: number | null
@@ -1810,6 +1890,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: string
+          is_referral_commission?: boolean
           minimum_enforced?: boolean | null
           notes?: string | null
           operation_closed_at?: string | null
@@ -1821,6 +1902,7 @@ export type Database = {
           override_approved_by?: string | null
           partner_id: string
           payment_date?: string | null
+          referral_source_commission_id?: string | null
           split_buy?: number | null
           split_platform?: number | null
           split_sell?: number | null
@@ -1834,6 +1916,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: string
+          is_referral_commission?: boolean
           minimum_enforced?: boolean | null
           notes?: string | null
           operation_closed_at?: string | null
@@ -1845,13 +1928,22 @@ export type Database = {
           override_approved_by?: string | null
           partner_id?: string
           payment_date?: string | null
+          referral_source_commission_id?: string | null
           split_buy?: number | null
           split_platform?: number | null
           split_sell?: number | null
           status?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "commissions_referral_source_commission_id_fkey"
+            columns: ["referral_source_commission_id"]
+            isOneToOne: false
+            referencedRelation: "commissions"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       comunicados: {
         Row: {
@@ -2463,6 +2555,66 @@ export type Database = {
           },
         ]
       }
+      credit_consents: {
+        Row: {
+          consent_ip: string | null
+          consent_scope: string[]
+          consent_user_agent: string | null
+          consented_at: string | null
+          created_at: string
+          deal_proposal_id: string | null
+          id: string
+          intake_expires_at: string
+          intake_token: string
+          registrato_extraction_id: string | null
+          registrato_pdf_path: string | null
+          registrato_processed_at: string | null
+          requested_by: string | null
+          status: string
+          subject_cpf_cnpj: string
+          subject_email: string | null
+          subject_name: string
+        }
+        Insert: {
+          consent_ip?: string | null
+          consent_scope?: string[]
+          consent_user_agent?: string | null
+          consented_at?: string | null
+          created_at?: string
+          deal_proposal_id?: string | null
+          id?: string
+          intake_expires_at?: string
+          intake_token?: string
+          registrato_extraction_id?: string | null
+          registrato_pdf_path?: string | null
+          registrato_processed_at?: string | null
+          requested_by?: string | null
+          status?: string
+          subject_cpf_cnpj: string
+          subject_email?: string | null
+          subject_name: string
+        }
+        Update: {
+          consent_ip?: string | null
+          consent_scope?: string[]
+          consent_user_agent?: string | null
+          consented_at?: string | null
+          created_at?: string
+          deal_proposal_id?: string | null
+          id?: string
+          intake_expires_at?: string
+          intake_token?: string
+          registrato_extraction_id?: string | null
+          registrato_pdf_path?: string | null
+          registrato_processed_at?: string | null
+          requested_by?: string | null
+          status?: string
+          subject_cpf_cnpj?: string
+          subject_email?: string | null
+          subject_name?: string
+        }
+        Relationships: []
+      }
       credit_desk_proposals: {
         Row: {
           approved_value: number | null
@@ -2475,6 +2627,7 @@ export type Database = {
           created_at: string
           created_by: string
           credit_line: string
+          credit_profile_id: string | null
           current_level: Database["public"]["Enums"]["credit_desk_level"]
           documents: Json | null
           id: string
@@ -2519,6 +2672,7 @@ export type Database = {
           created_at?: string
           created_by: string
           credit_line: string
+          credit_profile_id?: string | null
           current_level?: Database["public"]["Enums"]["credit_desk_level"]
           documents?: Json | null
           id?: string
@@ -2563,6 +2717,7 @@ export type Database = {
           created_at?: string
           created_by?: string
           credit_line?: string
+          credit_profile_id?: string | null
           current_level?: Database["public"]["Enums"]["credit_desk_level"]
           documents?: Json | null
           id?: string
@@ -2612,6 +2767,13 @@ export type Database = {
             referencedColumns: ["user_id"]
           },
           {
+            foreignKeyName: "credit_desk_proposals_credit_profile_id_fkey"
+            columns: ["credit_profile_id"]
+            isOneToOne: false
+            referencedRelation: "credit_profiles"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "credit_desk_proposals_level1_analyst_id_fkey"
             columns: ["level1_analyst_id"]
             isOneToOne: false
@@ -2666,6 +2828,116 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_kyc_monthly_usage"
             referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      credit_profiles: {
+        Row: {
+          analysis_status: string
+          analysis_type: string
+          analyst_notes: string | null
+          created_at: string
+          deal_proposal_id: string | null
+          escavador_checked_at: string | null
+          escavador_data: Json | null
+          expires_at: string | null
+          flags: Json | null
+          id: string
+          raw_result: Json | null
+          registrato_data: Json | null
+          registrato_emitted_at: string | null
+          registrato_path: string | null
+          requested_by: string | null
+          score_comportamental: number | null
+          score_credito: number | null
+          score_identidade: number | null
+          score_judicial: number | null
+          score_patrimonial: number | null
+          score_setorial: number | null
+          score_total: number | null
+          sources_free: string[] | null
+          sources_paid: string[] | null
+          spread_max: number | null
+          spread_min: number | null
+          subject_cpf_cnpj: string
+          subject_name: string
+          subject_type: string
+          tier: string | null
+          updated_at: string
+        }
+        Insert: {
+          analysis_status?: string
+          analysis_type?: string
+          analyst_notes?: string | null
+          created_at?: string
+          deal_proposal_id?: string | null
+          escavador_checked_at?: string | null
+          escavador_data?: Json | null
+          expires_at?: string | null
+          flags?: Json | null
+          id?: string
+          raw_result?: Json | null
+          registrato_data?: Json | null
+          registrato_emitted_at?: string | null
+          registrato_path?: string | null
+          requested_by?: string | null
+          score_comportamental?: number | null
+          score_credito?: number | null
+          score_identidade?: number | null
+          score_judicial?: number | null
+          score_patrimonial?: number | null
+          score_setorial?: number | null
+          score_total?: number | null
+          sources_free?: string[] | null
+          sources_paid?: string[] | null
+          spread_max?: number | null
+          spread_min?: number | null
+          subject_cpf_cnpj: string
+          subject_name: string
+          subject_type: string
+          tier?: string | null
+          updated_at?: string
+        }
+        Update: {
+          analysis_status?: string
+          analysis_type?: string
+          analyst_notes?: string | null
+          created_at?: string
+          deal_proposal_id?: string | null
+          escavador_checked_at?: string | null
+          escavador_data?: Json | null
+          expires_at?: string | null
+          flags?: Json | null
+          id?: string
+          raw_result?: Json | null
+          registrato_data?: Json | null
+          registrato_emitted_at?: string | null
+          registrato_path?: string | null
+          requested_by?: string | null
+          score_comportamental?: number | null
+          score_credito?: number | null
+          score_identidade?: number | null
+          score_judicial?: number | null
+          score_patrimonial?: number | null
+          score_setorial?: number | null
+          score_total?: number | null
+          sources_free?: string[] | null
+          sources_paid?: string[] | null
+          spread_max?: number | null
+          spread_min?: number | null
+          subject_cpf_cnpj?: string
+          subject_name?: string
+          subject_type?: string
+          tier?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_credit_profiles_deal_proposal"
+            columns: ["deal_proposal_id"]
+            isOneToOne: false
+            referencedRelation: "credit_desk_proposals"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -3060,6 +3332,86 @@ export type Database = {
           },
         ]
       }
+      deal_partner_submissions: {
+        Row: {
+          created_at: string
+          deal_id: string | null
+          external_lead_id: string | null
+          external_url: string | null
+          id: string
+          partner_id: string
+          payload_snapshot: Json
+          proposal_id: string | null
+          sla_deadline: string | null
+          sla_notified_at: string | null
+          status: string
+          submitted_by: string
+          updated_at: string
+          vdr_invite_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          deal_id?: string | null
+          external_lead_id?: string | null
+          external_url?: string | null
+          id?: string
+          partner_id: string
+          payload_snapshot?: Json
+          proposal_id?: string | null
+          sla_deadline?: string | null
+          sla_notified_at?: string | null
+          status?: string
+          submitted_by: string
+          updated_at?: string
+          vdr_invite_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          deal_id?: string | null
+          external_lead_id?: string | null
+          external_url?: string | null
+          id?: string
+          partner_id?: string
+          payload_snapshot?: Json
+          proposal_id?: string | null
+          sla_deadline?: string | null
+          sla_notified_at?: string | null
+          status?: string
+          submitted_by?: string
+          updated_at?: string
+          vdr_invite_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "deal_partner_submissions_deal_id_fkey"
+            columns: ["deal_id"]
+            isOneToOne: false
+            referencedRelation: "ma_deals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "deal_partner_submissions_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "integration_partners"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "deal_partner_submissions_proposal_id_fkey"
+            columns: ["proposal_id"]
+            isOneToOne: false
+            referencedRelation: "credit_desk_proposals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "deal_partner_submissions_vdr_invite_id_fkey"
+            columns: ["vdr_invite_id"]
+            isOneToOne: false
+            referencedRelation: "deal_room_invites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       deal_qa_doc_updates: {
         Row: {
           created_at: string
@@ -3297,7 +3649,7 @@ export type Database = {
           first_accessed_at: string | null
           id: string
           investor_company: string | null
-          investor_email: string
+          investor_email: string | null
           investor_name: string
           sent_at: string | null
           source_group: string | null
@@ -3315,7 +3667,7 @@ export type Database = {
           first_accessed_at?: string | null
           id?: string
           investor_company?: string | null
-          investor_email: string
+          investor_email?: string | null
           investor_name: string
           sent_at?: string | null
           source_group?: string | null
@@ -3333,7 +3685,7 @@ export type Database = {
           first_accessed_at?: string | null
           id?: string
           investor_company?: string | null
-          investor_email?: string
+          investor_email?: string | null
           investor_name?: string
           sent_at?: string | null
           source_group?: string | null
@@ -4285,6 +4637,66 @@ export type Database = {
           },
         ]
       }
+      guardian_snapshots: {
+        Row: {
+          audit_findings: Json | null
+          created_at: string | null
+          duration_ms: number | null
+          efficiency_score: number | null
+          email_sent: boolean | null
+          health_score: number | null
+          id: string
+          n8n_workflow_count: number | null
+          portal_route_count: number | null
+          raw_data: Json | null
+          run_id: string
+          scope: string
+          security_findings: Json | null
+          security_score: number | null
+          status: string
+          topology_summary: string | null
+          triggered_at: string
+        }
+        Insert: {
+          audit_findings?: Json | null
+          created_at?: string | null
+          duration_ms?: number | null
+          efficiency_score?: number | null
+          email_sent?: boolean | null
+          health_score?: number | null
+          id?: string
+          n8n_workflow_count?: number | null
+          portal_route_count?: number | null
+          raw_data?: Json | null
+          run_id: string
+          scope?: string
+          security_findings?: Json | null
+          security_score?: number | null
+          status?: string
+          topology_summary?: string | null
+          triggered_at?: string
+        }
+        Update: {
+          audit_findings?: Json | null
+          created_at?: string | null
+          duration_ms?: number | null
+          efficiency_score?: number | null
+          email_sent?: boolean | null
+          health_score?: number | null
+          id?: string
+          n8n_workflow_count?: number | null
+          portal_route_count?: number | null
+          raw_data?: Json | null
+          run_id?: string
+          scope?: string
+          security_findings?: Json | null
+          security_score?: number | null
+          status?: string
+          topology_summary?: string | null
+          triggered_at?: string
+        }
+        Relationships: []
+      }
       instituicoes: {
         Row: {
           auth_user_id: string | null
@@ -4314,6 +4726,48 @@ export type Database = {
           id?: string
           nome?: string
           status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      integration_partners: {
+        Row: {
+          active: boolean
+          api_key_enc: string | null
+          config_json: Json
+          created_at: string
+          created_by: string | null
+          crm_type: string
+          display_name: string
+          id: string
+          name: string
+          sla_days: number
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          api_key_enc?: string | null
+          config_json?: Json
+          created_at?: string
+          created_by?: string | null
+          crm_type?: string
+          display_name: string
+          id?: string
+          name: string
+          sla_days?: number
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          api_key_enc?: string | null
+          config_json?: Json
+          created_at?: string
+          created_by?: string | null
+          crm_type?: string
+          display_name?: string
+          id?: string
+          name?: string
+          sla_days?: number
           updated_at?: string
         }
         Relationships: []
@@ -4535,6 +4989,77 @@ export type Database = {
             columns: ["crm_lead_id"]
             isOneToOne: false
             referencedRelation: "crm_leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      judicial_records: {
+        Row: {
+          assunto: string | null
+          classe_processual: string | null
+          created_at: string
+          credit_profile_id: string | null
+          data_distribuicao: string | null
+          fonte: string
+          id: string
+          numero_processo: string
+          polo: string | null
+          processo_hash: string | null
+          raw_data: Json | null
+          severity: string | null
+          status_processo: string | null
+          subject_cpf_cnpj: string
+          tribunal: string | null
+          ultima_movimentacao: string | null
+          valor_causa: number | null
+          vara: string | null
+        }
+        Insert: {
+          assunto?: string | null
+          classe_processual?: string | null
+          created_at?: string
+          credit_profile_id?: string | null
+          data_distribuicao?: string | null
+          fonte?: string
+          id?: string
+          numero_processo: string
+          polo?: string | null
+          processo_hash?: string | null
+          raw_data?: Json | null
+          severity?: string | null
+          status_processo?: string | null
+          subject_cpf_cnpj: string
+          tribunal?: string | null
+          ultima_movimentacao?: string | null
+          valor_causa?: number | null
+          vara?: string | null
+        }
+        Update: {
+          assunto?: string | null
+          classe_processual?: string | null
+          created_at?: string
+          credit_profile_id?: string | null
+          data_distribuicao?: string | null
+          fonte?: string
+          id?: string
+          numero_processo?: string
+          polo?: string | null
+          processo_hash?: string | null
+          raw_data?: Json | null
+          severity?: string | null
+          status_processo?: string | null
+          subject_cpf_cnpj?: string
+          tribunal?: string | null
+          ultima_movimentacao?: string | null
+          valor_causa?: number | null
+          vara?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "judicial_records_credit_profile_id_fkey"
+            columns: ["credit_profile_id"]
+            isOneToOne: false
+            referencedRelation: "credit_profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -5224,7 +5749,7 @@ export type Database = {
           confirmed_by: string | null
           created_at: string
           dados_extraidos: Json | null
-          deal_id: string
+          deal_id: string | null
           doc_id: string
           doc_name: string
           error_message: string | null
@@ -5257,7 +5782,7 @@ export type Database = {
           confirmed_by?: string | null
           created_at?: string
           dados_extraidos?: Json | null
-          deal_id: string
+          deal_id?: string | null
           doc_id: string
           doc_name: string
           error_message?: string | null
@@ -5290,7 +5815,7 @@ export type Database = {
           confirmed_by?: string | null
           created_at?: string
           dados_extraidos?: Json | null
-          deal_id?: string
+          deal_id?: string | null
           doc_id?: string
           doc_name?: string
           error_message?: string | null
@@ -6449,6 +6974,7 @@ export type Database = {
           observacao: string | null
           plano: string
           razao_social: string | null
+          referred_by_partner_id: string | null
           revisado_em: string | null
           revisado_por: string | null
           status: string
@@ -6488,6 +7014,7 @@ export type Database = {
           observacao?: string | null
           plano: string
           razao_social?: string | null
+          referred_by_partner_id?: string | null
           revisado_em?: string | null
           revisado_por?: string | null
           status?: string
@@ -6527,6 +7054,7 @@ export type Database = {
           observacao?: string | null
           plano?: string
           razao_social?: string | null
+          referred_by_partner_id?: string | null
           revisado_em?: string | null
           revisado_por?: string | null
           status?: string
@@ -6534,7 +7062,170 @@ export type Database = {
           tipo_pessoa?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "partner_registrations_referred_by_partner_id_fkey"
+            columns: ["referred_by_partner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "partner_registrations_referred_by_partner_id_fkey"
+            columns: ["referred_by_partner_id"]
+            isOneToOne: false
+            referencedRelation: "v_kyc_monthly_usage"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      partner_service_links: {
+        Row: {
+          active: boolean
+          created_at: string
+          description: string | null
+          id: string
+          partner_id: string
+          price_cents: number
+          service_type: string
+          title: string
+          token: string
+          total_paid_cents: number
+          total_uses: number
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          description?: string | null
+          id?: string
+          partner_id: string
+          price_cents?: number
+          service_type: string
+          title: string
+          token: string
+          total_paid_cents?: number
+          total_uses?: number
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          description?: string | null
+          id?: string
+          partner_id?: string
+          price_cents?: number
+          service_type?: string
+          title?: string
+          token?: string
+          total_paid_cents?: number
+          total_uses?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "partner_service_links_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "partner_service_links_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "v_kyc_monthly_usage"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      partner_service_orders: {
+        Row: {
+          amount_cents: number
+          boleto_barcode: string | null
+          boleto_pdf: string | null
+          client_doc: string
+          client_email: string
+          client_name: string
+          cora_invoice_id: string | null
+          created_at: string
+          id: string
+          intake_sent_at: string | null
+          intake_submitted_at: string | null
+          intake_token: string | null
+          link_id: string
+          paid_at: string | null
+          partner_id: string
+          pix_emv: string | null
+          pix_qr_code: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          amount_cents?: number
+          boleto_barcode?: string | null
+          boleto_pdf?: string | null
+          client_doc: string
+          client_email: string
+          client_name: string
+          cora_invoice_id?: string | null
+          created_at?: string
+          id?: string
+          intake_sent_at?: string | null
+          intake_submitted_at?: string | null
+          intake_token?: string | null
+          link_id: string
+          paid_at?: string | null
+          partner_id: string
+          pix_emv?: string | null
+          pix_qr_code?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          amount_cents?: number
+          boleto_barcode?: string | null
+          boleto_pdf?: string | null
+          client_doc?: string
+          client_email?: string
+          client_name?: string
+          cora_invoice_id?: string | null
+          created_at?: string
+          id?: string
+          intake_sent_at?: string | null
+          intake_submitted_at?: string | null
+          intake_token?: string | null
+          link_id?: string
+          paid_at?: string | null
+          partner_id?: string
+          pix_emv?: string | null
+          pix_qr_code?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "partner_service_orders_link_id_fkey"
+            columns: ["link_id"]
+            isOneToOne: false
+            referencedRelation: "partner_service_links"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "partner_service_orders_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "partner_service_orders_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "v_kyc_monthly_usage"
+            referencedColumns: ["user_id"]
+          },
+        ]
       }
       partner_subscriptions: {
         Row: {
@@ -6551,6 +7242,9 @@ export type Database = {
           pix_qr_code: string | null
           plano: string
           status: string | null
+          zap_d1_sent_at: string | null
+          zap_d3_sent_at: string | null
+          zap_d5_sent_at: string | null
         }
         Insert: {
           amount_cents: number
@@ -6566,6 +7260,9 @@ export type Database = {
           pix_qr_code?: string | null
           plano: string
           status?: string | null
+          zap_d1_sent_at?: string | null
+          zap_d3_sent_at?: string | null
+          zap_d5_sent_at?: string | null
         }
         Update: {
           amount_cents?: number
@@ -6581,6 +7278,9 @@ export type Database = {
           pix_qr_code?: string | null
           plano?: string
           status?: string | null
+          zap_d1_sent_at?: string | null
+          zap_d3_sent_at?: string | null
+          zap_d5_sent_at?: string | null
         }
         Relationships: []
       }
@@ -6852,6 +7552,9 @@ export type Database = {
           last_login_at: string | null
           onboarding_dismissed: boolean | null
           phone: string | null
+          referral_discount_months_remaining: number
+          referral_discount_percent: number
+          referred_by_partner_id: string | null
           role: Database["public"]["Enums"]["user_role"]
           trial_expires_at: string | null
           updated_at: string
@@ -6875,6 +7578,9 @@ export type Database = {
           last_login_at?: string | null
           onboarding_dismissed?: boolean | null
           phone?: string | null
+          referral_discount_months_remaining?: number
+          referral_discount_percent?: number
+          referred_by_partner_id?: string | null
           role?: Database["public"]["Enums"]["user_role"]
           trial_expires_at?: string | null
           updated_at?: string
@@ -6898,6 +7604,9 @@ export type Database = {
           last_login_at?: string | null
           onboarding_dismissed?: boolean | null
           phone?: string | null
+          referral_discount_months_remaining?: number
+          referral_discount_percent?: number
+          referred_by_partner_id?: string | null
           role?: Database["public"]["Enums"]["user_role"]
           trial_expires_at?: string | null
           updated_at?: string
@@ -6913,6 +7622,20 @@ export type Database = {
           {
             foreignKeyName: "profiles_created_by_fkey"
             columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "v_kyc_monthly_usage"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "profiles_referred_by_partner_id_fkey"
+            columns: ["referred_by_partner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "profiles_referred_by_partner_id_fkey"
+            columns: ["referred_by_partner_id"]
             isOneToOne: false
             referencedRelation: "v_kyc_monthly_usage"
             referencedColumns: ["user_id"]
@@ -7549,6 +8272,109 @@ export type Database = {
         }
         Relationships: []
       }
+      split_fiscal: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          attachments: Json | null
+          code: string
+          created_at: string
+          created_by: string
+          description: string | null
+          due_date: string | null
+          id: string
+          notes: string | null
+          partner_id: string | null
+          partner_revenue: number | null
+          split_percent: number | null
+          status: Database["public"]["Enums"]["operation_status"]
+          title: string
+          total_value: number
+          updated_at: string
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          attachments?: Json | null
+          code: string
+          created_at?: string
+          created_by: string
+          description?: string | null
+          due_date?: string | null
+          id?: string
+          notes?: string | null
+          partner_id?: string | null
+          partner_revenue?: number | null
+          split_percent?: number | null
+          status?: Database["public"]["Enums"]["operation_status"]
+          title: string
+          total_value: number
+          updated_at?: string
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          attachments?: Json | null
+          code?: string
+          created_at?: string
+          created_by?: string
+          description?: string | null
+          due_date?: string | null
+          id?: string
+          notes?: string | null
+          partner_id?: string | null
+          partner_revenue?: number | null
+          split_percent?: number | null
+          status?: Database["public"]["Enums"]["operation_status"]
+          title?: string
+          total_value?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "split_fiscal_approved_by_fkey"
+            columns: ["approved_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "split_fiscal_approved_by_fkey"
+            columns: ["approved_by"]
+            isOneToOne: false
+            referencedRelation: "v_kyc_monthly_usage"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "split_fiscal_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "split_fiscal_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "v_kyc_monthly_usage"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "split_fiscal_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "split_fiscal_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "v_kyc_monthly_usage"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
       team_chat_messages: {
         Row: {
           attachment_name: string | null
@@ -8086,6 +8912,11 @@ export type Database = {
         Args: never
         Returns: Database["public"]["Enums"]["user_role"]
       }
+      increment_link_revenue: {
+        Args: { p_amount: number; p_link_id: string }
+        Returns: undefined
+      }
+      increment_link_uses: { Args: { p_link_id: string }; Returns: undefined }
       match_cm_listings_to_demands: { Args: never; Returns: number }
       match_deals_for_investor: {
         Args: { p_demand_id: string }
