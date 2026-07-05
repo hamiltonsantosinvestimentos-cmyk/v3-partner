@@ -73,7 +73,7 @@ export async function POST(req: NextRequest) {
   const valor = PLANO_VALOR[p.role] ?? 19700;
 
   // Gera cobrança na Cora
-  let coraData: { id?: string; pix?: { emv?: string; qr_code?: string }; bank_slip?: { pdf?: { url?: string }; our_number?: string }; payment_url?: string } = {};
+  let coraData: { id?: string; pix?: { emv?: string; qr_code?: string }; payment_options?: { bank_slip?: { digitable?: string; url?: string } }; payment_url?: string } = {};
   try {
     const res = await coraFetch("/v2/invoices", {
       method: "POST",
@@ -92,6 +92,7 @@ export async function POST(req: NextRequest) {
           interest: { type: "MONTHLY_PERCENTAGE", value: 1 },
           fine: { type: "PERCENTAGE", value: 2 },
         },
+        payment_forms: ["BANK_SLIP", "PIX"],
         services: [{ name: `V3 Partners — Mensalidade ${p.role === "PARTNER_PRO" ? "Partner PRO" : "Partner"}`, amount: valor }],
         notifications: { formats: ["EMAIL"], by_email: { should_notify: true } },
       }),
@@ -112,8 +113,8 @@ export async function POST(req: NextRequest) {
     status:          "PENDING",
     pix_emv:         coraData.pix?.emv,
     pix_qr_code:     coraData.pix?.qr_code,
-    boleto_barcode:  coraData.bank_slip?.our_number,
-    boleto_pdf:      coraData.bank_slip?.pdf?.url,
+    boleto_barcode:  coraData.payment_options?.bank_slip?.digitable,
+    boleto_pdf:      coraData.payment_options?.bank_slip?.url,
   }).select().single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

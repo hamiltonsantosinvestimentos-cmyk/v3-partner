@@ -333,7 +333,7 @@ export async function PATCH(req: NextRequest) {
 
     if (existing) return NextResponse.json({ error: "Já existe cobrança pendente", existing }, { status: 409 });
 
-    let coraData: { id?: string; pix?: { emv?: string; qr_code?: string }; bank_slip?: { pdf?: { url?: string }; our_number?: string } } = {};
+    let coraData: { id?: string; pix?: { emv?: string; qr_code?: string }; payment_options?: { bank_slip?: { digitable?: string; url?: string } } } = {};
     const coraRes = await coraFetch("/v2/invoices", {
       method: "POST",
       body: JSON.stringify({
@@ -351,6 +351,7 @@ export async function PATCH(req: NextRequest) {
           interest: { type: "MONTHLY_PERCENTAGE", value: 1 },
           fine: { type: "PERCENTAGE", value: 2 },
         },
+        payment_forms: ["BANK_SLIP", "PIX"],
         services: [{ name: `V3 Partners — Mensalidade ${
           pp.role === "ENTERPRISE" ? "Enterprise"
           : pp.role === "PARTNER_PRO" ? "Partner PRO"
@@ -378,8 +379,8 @@ export async function PATCH(req: NextRequest) {
       status:          "PENDING",
       pix_emv:         coraData.pix?.emv,
       pix_qr_code:     coraData.pix?.qr_code,
-      boleto_barcode:  coraData.bank_slip?.our_number,
-      boleto_pdf:      coraData.bank_slip?.pdf?.url,
+      boleto_barcode:  coraData.payment_options?.bank_slip?.digitable,
+      boleto_pdf:      coraData.payment_options?.bank_slip?.url,
     });
 
     return NextResponse.json({ ok: true, cora_invoice_id: coraData.id });

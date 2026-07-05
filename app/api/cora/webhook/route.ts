@@ -62,6 +62,7 @@ async function gerarProximaCobranca(db: ReturnType<typeof svc>, partnerId: strin
           interest: { type: "MONTHLY_PERCENTAGE", value: 1 },
           fine: { type: "PERCENTAGE", value: 2 },
         },
+        payment_forms: ["BANK_SLIP", "PIX"],
         services: [{ name: `V3 Partners — Mensalidade ${plano === "PARTNER_PRO" ? "Partner PRO" : "Partner"}${temDesconto ? ` (${descontoPercent}% desc. indicação)` : ""}`, amount: valor }],
         notifications: { formats: ["EMAIL"], by_email: { should_notify: true } },
       }),
@@ -72,7 +73,7 @@ async function gerarProximaCobranca(db: ReturnType<typeof svc>, partnerId: strin
     const coraData = await res.json() as {
       id?: string;
       pix?: { emv?: string; qr_code?: string };
-      bank_slip?: { pdf?: { url?: string }; our_number?: string };
+      payment_options?: { bank_slip?: { digitable?: string; url?: string } };
     };
 
     await db.from("partner_subscriptions").insert({
@@ -84,8 +85,8 @@ async function gerarProximaCobranca(db: ReturnType<typeof svc>, partnerId: strin
       status:          "PENDING",
       pix_emv:         coraData.pix?.emv,
       pix_qr_code:     coraData.pix?.qr_code,
-      boleto_barcode:  coraData.bank_slip?.our_number,
-      boleto_pdf:      coraData.bank_slip?.pdf?.url,
+      boleto_barcode:  coraData.payment_options?.bank_slip?.digitable,
+      boleto_pdf:      coraData.payment_options?.bank_slip?.url,
     });
   } catch (e) {
     console.error("Erro ao gerar próxima cobrança:", e);

@@ -45,6 +45,7 @@ async function gerarCobrancaCora(params: {
         interest: { type: "MONTHLY_PERCENTAGE", value: 1 },
         fine: { type: "PERCENTAGE", value: 2 },
       },
+      payment_forms: ["BANK_SLIP", "PIX"],
       services: [{ name: `V3 Partners — Adesão ${
         params.plano === "ENTERPRISE" ? "Enterprise"
         : params.plano === "PARTNER_PRO" ? "Partner PRO"
@@ -67,7 +68,7 @@ async function gerarCobrancaCora(params: {
     const data = await res.json() as {
       id?: string;
       pix?: { emv?: string; qr_code?: string };
-      bank_slip?: { pdf?: { url?: string }; our_number?: string };
+      payment_options?: { bank_slip?: { digitable?: string; url?: string } };
       payment_url?: string;
     };
 
@@ -75,8 +76,8 @@ async function gerarCobrancaCora(params: {
       invoiceId: data.id,
       pixEmv: data.pix?.emv,
       pixQrCode: data.pix?.qr_code,
-      boletoPdf: data.bank_slip?.pdf?.url,
-      boletoBarcode: data.bank_slip?.our_number,
+      boletoPdf: data.payment_options?.bank_slip?.url,
+      boletoBarcode: data.payment_options?.bank_slip?.digitable,
       paymentUrl: data.payment_url,
     };
   } catch (e) {

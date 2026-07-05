@@ -68,7 +68,7 @@ export async function POST(req: NextRequest, { params }: Params) {
   let coraData: {
     id?: string;
     pix?: { emv?: string; qr_code?: string };
-    bank_slip?: { pdf?: { url?: string }; our_number?: string };
+    payment_options?: { bank_slip?: { digitable?: string; barcode?: string; url?: string } };
   } = {};
 
   const isPaid = link.price_cents === 0;
@@ -87,6 +87,7 @@ export async function POST(req: NextRequest, { params }: Params) {
           },
           payment_terms: { due_date: dueDateStr, amount: link.price_cents },
           payment_options: { interest: { type: "MONTHLY_PERCENTAGE", value: 1 }, fine: { type: "PERCENTAGE", value: 2 } },
+          payment_forms: ["BANK_SLIP", "PIX"],
           services: [{ name: link.title, amount: link.price_cents }],
           notifications: { formats: ["EMAIL"], by_email: { should_notify: true } },
         }),
@@ -120,8 +121,8 @@ export async function POST(req: NextRequest, { params }: Params) {
       paid_at:        isPaid ? new Date().toISOString() : null,
       pix_emv:        coraData.pix?.emv ?? null,
       pix_qr_code:    coraData.pix?.qr_code ?? null,
-      boleto_barcode: coraData.bank_slip?.our_number ?? null,
-      boleto_pdf:     coraData.bank_slip?.pdf?.url ?? null,
+      boleto_barcode: coraData.payment_options?.bank_slip?.digitable ?? null,
+      boleto_pdf:     coraData.payment_options?.bank_slip?.url ?? null,
       intake_token:   intakeToken,
     })
     .select()
@@ -153,6 +154,5 @@ export async function POST(req: NextRequest, { params }: Params) {
     boleto_pdf: order.boleto_pdf,
     intake_token: order.intake_token,
     service_type: link.service_type,
-    _debug_cora_raw: process.env.NODE_ENV !== "production" || req.headers.get("x-debug-cora") === process.env.CRON_SECRET ? coraData : undefined,
   });
 }
