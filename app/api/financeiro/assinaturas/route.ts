@@ -57,7 +57,7 @@ export async function GET(req: NextRequest) {
     const [subsRes, manualRes] = await Promise.allSettled([
       svc()
         .from("partner_subscriptions")
-        .select("id, partner_id, status, cora_invoice_id, amount_cents, due_date, pix_emv, pix_qr_code, boleto_pdf, paid_at, created_at, plano")
+        .select("id, partner_id, status, cora_invoice_id, amount_cents, due_date, pix_emv, pix_qr_code, boleto_pdf, paid_at, created_at, plano, zap_d5_sent_at, zap_d3_sent_at, zap_d1_sent_at")
         .eq("partner_id", partnerId)
         .order("created_at", { ascending: false }),
       svc()
@@ -111,19 +111,19 @@ export async function GET(req: NextRequest) {
   } catch { payments = []; }
 
   // Última cobrança Cora por partner
-  let coraByPartner: Record<string, { id: string; status: string; cora_invoice_id?: string; amount_cents: number; due_date: string; pix_emv?: string; paid_at?: string }> = {};
+  let coraByPartner: Record<string, { id: string; status: string; cora_invoice_id?: string; amount_cents: number; due_date: string; pix_emv?: string; paid_at?: string; zap_d5_sent_at?: string; zap_d3_sent_at?: string; zap_d1_sent_at?: string }> = {};
   try {
     const partnerIds = (finalPartners ?? []).map((p: { id: string }) => p.id);
     if (partnerIds.length > 0) {
       const { data: subs } = await svc()
         .from("partner_subscriptions")
-        .select("id, partner_id, status, cora_invoice_id, amount_cents, due_date, pix_emv, paid_at, created_at")
+        .select("id, partner_id, status, cora_invoice_id, amount_cents, due_date, pix_emv, paid_at, created_at, zap_d5_sent_at, zap_d3_sent_at, zap_d1_sent_at")
         .in("partner_id", partnerIds)
         .order("created_at", { ascending: false });
 
       // Pega apenas a mais recente por partner
       for (const sub of (subs ?? [])) {
-        const s = sub as { partner_id: string; id: string; status: string; cora_invoice_id?: string; amount_cents: number; due_date: string; pix_emv?: string; paid_at?: string };
+        const s = sub as { partner_id: string; id: string; status: string; cora_invoice_id?: string; amount_cents: number; due_date: string; pix_emv?: string; paid_at?: string; zap_d5_sent_at?: string; zap_d3_sent_at?: string; zap_d1_sent_at?: string };
         if (!coraByPartner[s.partner_id]) {
           coraByPartner[s.partner_id] = s;
         }

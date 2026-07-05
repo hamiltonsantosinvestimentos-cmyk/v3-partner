@@ -2629,6 +2629,9 @@ interface CoraSubRow {
   due_date: string;
   pix_emv?: string;
   paid_at?: string;
+  zap_d5_sent_at?: string;
+  zap_d3_sent_at?: string;
+  zap_d1_sent_at?: string;
 }
 
 interface PaymentRecord {
@@ -2702,7 +2705,7 @@ function AssinaturasTab() {
   const [editLoading, setEditLoading] = useState(false);
 
   // Drawer de histórico
-  interface SubHistRow { id: string; status: string; cora_invoice_id?: string; amount_cents: number; due_date: string; pix_emv?: string; pix_qr_code?: string; boleto_pdf?: string; paid_at?: string; created_at: string; plano?: string }
+  interface SubHistRow { id: string; status: string; cora_invoice_id?: string; amount_cents: number; due_date: string; pix_emv?: string; pix_qr_code?: string; boleto_pdf?: string; paid_at?: string; created_at: string; plano?: string; zap_d5_sent_at?: string; zap_d3_sent_at?: string; zap_d1_sent_at?: string }
   interface ManualHistRow { id: string; data: { valor: number; mes: number; ano: number; observacoes?: string; dataPagamento: string }; created_at: string }
   const [showHistDrawer, setShowHistDrawer] = useState(false);
   const [histPartner, setHistPartner] = useState<PartnerRow | null>(null);
@@ -3108,6 +3111,19 @@ function AssinaturasTab() {
                               <p className="text-[10px] text-muted-foreground">
                                 Vence {new Date(sub.due_date + "T12:00:00").toLocaleDateString("pt-BR")}
                               </p>
+                              {isPending && (() => {
+                                const ultimoEnvio = sub.zap_d1_sent_at ? { stage: "D-1", at: sub.zap_d1_sent_at }
+                                  : sub.zap_d3_sent_at ? { stage: "D-3", at: sub.zap_d3_sent_at }
+                                  : sub.zap_d5_sent_at ? { stage: "D-5", at: sub.zap_d5_sent_at }
+                                  : null;
+                                return ultimoEnvio ? (
+                                  <p className="text-[10px] text-emerald-400" title={`WhatsApp ${ultimoEnvio.stage} enviado`}>
+                                    Zap {ultimoEnvio.stage} em {new Date(ultimoEnvio.at).toLocaleDateString("pt-BR")}
+                                  </p>
+                                ) : (
+                                  <p className="text-[10px] text-muted-foreground/70">Nenhum WhatsApp enviado</p>
+                                );
+                              })()}
                               {isPending && (
                                 <button
                                   onClick={() => doAction(p.id, "gerar_cobranca_cora")}
