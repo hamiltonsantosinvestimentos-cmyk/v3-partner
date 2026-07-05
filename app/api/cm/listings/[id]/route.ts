@@ -11,18 +11,24 @@ async function getCaller(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
   const { data: profile } = await svc().from("profiles").select("id, role").eq("id", user.id).single();
-  if (!profile || !["ADMIN", "GESTAO"].includes(profile.role as string)) return null;
+  if (!profile || !["ADMIN", "GESTAO", "MESA_OPERACIONAL"].includes(profile.role as string)) return null;
   return { userId: user.id, role: profile.role as string };
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const caller = await getCaller(req);
-  if (!caller) return NextResponse.json({ error: "Apenas ADMIN/GESTAO" }, { status: 403 });
+  if (!caller) return NextResponse.json({ error: "Apenas ADMIN/GESTAO/MESA_OPERACIONAL" }, { status: 403 });
 
   const { id } = await params;
   const body = await req.json();
 
-  const allowed = ["ask_price_floor", "auto_accept_enabled", "mandato_v3_template_id"];
+  // Campos negociados: calibrados manualmente pela Mesa, separados do historico de OCR
+  // (cm_asset_listings.valores_ocr, populado via trigger — nunca escrito por esta rota)
+  const allowed = [
+    "ask_price_floor", "auto_accept_enabled", "mandato_v3_template_id",
+    "valor_face", "valor_atualizado", "desagio_pretendido",
+    "prazo_estimado_meses", "tir_estimada", "vpl",
+  ];
   const update: Record<string, any> = {};
   for (const key of allowed) {
     if (body[key] !== undefined) update[key] = body[key];

@@ -122,6 +122,9 @@ export function MesaCapitaisClient() {
   const [checklistTab, setChecklistTab] = useState<"pre_aceite" | "pre_fechamento" | "pos_cessao">("pre_fechamento");
   const [askPriceFloor, setAskPriceFloor] = useState<string>("");
   const [autoAcceptEnabled, setAutoAcceptEnabled] = useState(false);
+  const [valorFaceNegociado, setValorFaceNegociado] = useState<string>("");
+  const [valorAtualizadoNegociado, setValorAtualizadoNegociado] = useState<string>("");
+  const [savingValores, setSavingValores] = useState(false);
   const [savingFloor, setSavingFloor] = useState(false);
 
   const fetchAll = useCallback(async () => {
@@ -251,6 +254,8 @@ export function MesaCapitaisClient() {
     setContractResult(null);
     setAskPriceFloor((listing as any).ask_price_floor?.toString() ?? "");
     setAutoAcceptEnabled((listing as any).auto_accept_enabled ?? false);
+    setValorFaceNegociado(listing.valor_face?.toString() ?? "");
+    setValorAtualizadoNegociado((listing as any).valor_atualizado?.toString() ?? "");
     loadRoomInvites(listing.id);
     loadContractTemplates();
     loadChecklists(listing.id);
@@ -360,6 +365,28 @@ export function MesaCapitaisClient() {
       else alert("Erro ao salvar");
     } catch { alert("Erro de conexão"); }
     finally { setSavingFloor(false); }
+  };
+
+  const saveValoresNegociados = async (listingId: string) => {
+    setSavingValores(true);
+    try {
+      const res = await fetch(`/api/cm/listings/${listingId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          valor_face: valorFaceNegociado ? Number(valorFaceNegociado) : undefined,
+          valor_atualizado: valorAtualizadoNegociado ? Number(valorAtualizadoNegociado) : null,
+        }),
+      });
+      if (res.ok) {
+        const json = await res.json();
+        setListings((prev) => prev.map((l) => (l.id === listingId ? { ...l, ...json.listing } : l)));
+        setSelectedListing((prev) => (prev ? { ...prev, ...json.listing } : prev));
+      } else {
+        alert("Erro ao salvar valores negociados");
+      }
+    } catch { alert("Erro de conexão"); }
+    finally { setSavingValores(false); }
   };
 
   const approveQualification = async (accessId: string, decision: "aprovado" | "reprovado") => {
@@ -605,6 +632,56 @@ export function MesaCapitaisClient() {
               <div className="bg-[#12112A] rounded-lg p-3 text-center">
                 <div className="text-lg font-bold text-[#F5F1E8]">{(selectedListing.cm_bids?.[0] as any)?.count ?? 0}</div>
                 <div className="text-[8px] text-[#9BAFC5] uppercase">Propostas</div>
+              </div>
+            </div>
+
+            {/* Valores — OCR vs Negociado */}
+            <div className="px-4 pb-4">
+              <div className="text-[10px] text-[#C9A84C] font-bold uppercase tracking-wider mb-2">
+                Valores — OCR vs Negociado
+              </div>
+              <div className="bg-[#12112A] border border-[#9BAFC5]/10 rounded-lg p-3 space-y-3">
+                {([
+                  { key: "valor_face", label: "Valor de Face", value: valorFaceNegociado, setValue: setValorFaceNegociado },
+                  { key: "valor_atualizado", label: "Valor Atualizado", value: valorAtualizadoNegociado, setValue: setValorAtualizadoNegociado },
+                ] as const).map(({ key, label, value, setValue }) => {
+                  const history: any[] = ((selectedListing as any).valores_ocr?.[key] ?? []).slice().reverse();
+                  return (
+                    <div key={key}>
+                      <label className="text-[9px] text-[#9BAFC5] uppercase">{label} — Negociado (manual)</label>
+                      <input
+                        type="number" value={value} onChange={(e) => setValue(e.target.value)}
+                        className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#F5F1E8] mt-1 focus:border-[#C9A84C]/50 focus:outline-none"
+                      />
+                      {history.length > 0 && (
+                        <div className="mt-2 space-y-1">
+                          <div className="text-[8px] text-[#9BAFC5]/70 uppercase tracking-wide">
+                            {history.length > 1 ? `${history.length} extrações via OCR (divergência entre documentos)` : "Extraído via OCR"}
+                          </div>
+                          {history.map((h, i) => (
+                            <div key={i} className="flex items-center justify-between gap-2 bg-[#09081A] rounded px-2 py-1.5">
+                              <div className="min-w-0">
+                                <div className="text-[11px] text-[#F5F1E8]">{formatBRL(Number(h.valor))}</div>
+                                <div className="text-[8px] text-[#9BAFC5] truncate" title={h.documento}>{h.documento ?? "documento"} · {typeof h.confiabilidade === "number" ? `${h.confiabilidade}%` : "—"}</div>
+                              </div>
+                              <button
+                                onClick={() => setValue(String(h.valor))}
+                                className="flex-shrink-0 px-2 py-1 bg-[#C9A84C]/10 border border-[#C9A84C]/20 rounded text-[#C9A84C] text-[9px] font-bold hover:bg-[#C9A84C]/20 transition"
+                              >
+                                Usar
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+                <button onClick={() => saveValoresNegociados(selectedListing.id)} disabled={savingValores}
+                  className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-[#C9A84C]/10 border border-[#C9A84C]/20 rounded text-[#C9A84C] text-xs font-bold hover:bg-[#C9A84C]/20 transition disabled:opacity-50">
+                  {savingValores ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
+                  Salvar Valores Negociados
+                </button>
               </div>
             </div>
 
