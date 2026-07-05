@@ -3111,7 +3111,7 @@ function AssinaturasTab() {
                               <p className="text-[10px] text-muted-foreground">
                                 Vence {new Date(sub.due_date + "T12:00:00").toLocaleDateString("pt-BR")}
                               </p>
-                              {isPending && (() => {
+                              {(() => {
                                 const ultimoEnvio = sub.zap_d1_sent_at ? { stage: "D-1", at: sub.zap_d1_sent_at }
                                   : sub.zap_d3_sent_at ? { stage: "D-3", at: sub.zap_d3_sent_at }
                                   : sub.zap_d5_sent_at ? { stage: "D-5", at: sub.zap_d5_sent_at }
@@ -3120,9 +3120,9 @@ function AssinaturasTab() {
                                   <p className="text-[10px] text-emerald-400" title={`WhatsApp ${ultimoEnvio.stage} enviado`}>
                                     Zap {ultimoEnvio.stage} em {new Date(ultimoEnvio.at).toLocaleDateString("pt-BR")}
                                   </p>
-                                ) : (
+                                ) : isPending ? (
                                   <p className="text-[10px] text-muted-foreground/70">Nenhum WhatsApp enviado</p>
-                                );
+                                ) : null;
                               })()}
                               {isPending && (
                                 <button
