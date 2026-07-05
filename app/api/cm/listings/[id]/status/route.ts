@@ -35,6 +35,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   }
 
   if (nda_signed_at || nda_document_url) {
+    // Marcacao retroativa de NDA exige autorizacao de diretor — ver
+    // /api/cm/listings/[id]/nda-authorize. So ADMIN pode setar direto aqui.
+    if (caller.role !== "ADMIN") {
+      return NextResponse.json({
+        error: "Use /api/cm/listings/[id]/nda-authorize para marcar NDA — exige autorização de diretor para GESTAO/MESA_OPERACIONAL",
+      }, { status: 403 });
+    }
     await svc().from("cm_asset_listings").update({
       nda_signed_at: nda_signed_at ?? new Date().toISOString(),
       nda_document_url: nda_document_url ?? null,

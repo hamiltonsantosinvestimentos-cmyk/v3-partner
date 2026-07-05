@@ -792,6 +792,11 @@ export type Database = {
           meeting_validated_at: string | null
           metadata: Json
           natureza: string | null
+          nda_authorization_reason: string | null
+          nda_authorization_requested_at: string | null
+          nda_authorization_requested_by: string | null
+          nda_authorization_status: string
+          nda_authorized_by: string | null
           nda_document_url: string | null
           nda_signed_at: string | null
           numero_processo: string | null
@@ -843,6 +848,11 @@ export type Database = {
           meeting_validated_at?: string | null
           metadata?: Json
           natureza?: string | null
+          nda_authorization_reason?: string | null
+          nda_authorization_requested_at?: string | null
+          nda_authorization_requested_by?: string | null
+          nda_authorization_status?: string
+          nda_authorized_by?: string | null
           nda_document_url?: string | null
           nda_signed_at?: string | null
           numero_processo?: string | null
@@ -894,6 +904,11 @@ export type Database = {
           meeting_validated_at?: string | null
           metadata?: Json
           natureza?: string | null
+          nda_authorization_reason?: string | null
+          nda_authorization_requested_at?: string | null
+          nda_authorization_requested_by?: string | null
+          nda_authorization_status?: string
+          nda_authorized_by?: string | null
           nda_document_url?: string | null
           nda_signed_at?: string | null
           numero_processo?: string | null
@@ -961,6 +976,34 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "ma_deals"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cm_asset_listings_nda_authorization_requested_by_fkey"
+            columns: ["nda_authorization_requested_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cm_asset_listings_nda_authorization_requested_by_fkey"
+            columns: ["nda_authorization_requested_by"]
+            isOneToOne: false
+            referencedRelation: "v_kyc_monthly_usage"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "cm_asset_listings_nda_authorized_by_fkey"
+            columns: ["nda_authorized_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cm_asset_listings_nda_authorized_by_fkey"
+            columns: ["nda_authorized_by"]
+            isOneToOne: false
+            referencedRelation: "v_kyc_monthly_usage"
+            referencedColumns: ["user_id"]
           },
           {
             foreignKeyName: "cm_asset_listings_seller_profile_id_fkey"

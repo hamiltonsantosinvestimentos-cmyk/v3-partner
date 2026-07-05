@@ -130,6 +130,11 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
   const [lixeiraItems, setLixeiraItems] = useState<any[]>([]);
   const [lixeiraLoading, setLixeiraLoading] = useState(false);
   const [savingFloor, setSavingFloor] = useState(false);
+  const [showNdaForm, setShowNdaForm] = useState(false);
+  const [ndaFile, setNdaFile] = useState<File | null>(null);
+  const [ndaDate, setNdaDate] = useState<string>(new Date().toISOString().slice(0, 10));
+  const [ndaReason, setNdaReason] = useState("");
+  const [submittingNda, setSubmittingNda] = useState(false);
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
@@ -451,6 +456,63 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
     finally { setDeletingListing(false); }
   };
 
+  const submitNdaAuthorization = async (listingId: string) => {
+    if (!ndaFile) { alert("Anexe o PDF do NDA assinado"); return; }
+    if (!ndaReason || ndaReason.trim().length < 5) { alert("Motivo/contexto obrigatório (mínimo 5 caracteres)"); return; }
+
+    setSubmittingNda(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", ndaFile);
+      formData.append("document_type", "NDA_ASSINADO_RETROATIVO");
+      const uploadRes = await fetch(`/api/cm/listings/${listingId}/documents`, { method: "POST", body: formData });
+      const uploadJson = await uploadRes.json();
+      if (!uploadRes.ok) { alert(uploadJson.error ?? "Erro ao anexar NDA"); return; }
+
+      const res = await fetch(`/api/cm/listings/${listingId}/nda-authorize`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          nda_signed_at: new Date(ndaDate).toISOString(),
+          nda_document_url: uploadJson.document.storage_path,
+          reason: ndaReason.trim(),
+        }),
+      });
+      const json = await res.json();
+      if (res.ok) {
+        alert(json.mode === "approved"
+          ? "NDA marcado como assinado."
+          : "Solicitação enviada aos diretores por email. Aguardando autorização.");
+        setListings((prev) => prev.map((l) => (l.id === listingId ? { ...l, ...json.listing } : l)));
+        setSelectedListing((prev) => (prev ? { ...prev, ...json.listing } : prev));
+        setShowNdaForm(false);
+        setNdaFile(null);
+        setNdaReason("");
+        loadDocs(listingId);
+      } else {
+        alert(json.error ?? "Erro ao registrar autorização");
+      }
+    } catch { alert("Erro de conexão"); }
+    finally { setSubmittingNda(false); }
+  };
+
+  const handleNdaGovernanceDecision = async (listingId: string, action: "approve" | "reject") => {
+    try {
+      const res = await fetch(`/api/cm/listings/${listingId}/nda-authorize`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+      });
+      const json = await res.json();
+      if (res.ok) {
+        setListings((prev) => prev.map((l) => (l.id === listingId ? { ...l, ...json.listing } : l)));
+        setSelectedListing((prev) => (prev ? { ...prev, ...json.listing } : prev));
+      } else {
+        alert(json.error ?? "Erro ao processar decisão");
+      }
+    } catch { alert("Erro de conexão"); }
+  };
+
   const loadLixeira = async () => {
     setLixeiraLoading(true);
     try {
@@ -651,6 +713,9 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
                       )}
                       {(l as any).deletion_status === "pending_governance" && (
                         <div className="text-[8px] text-red-400 font-bold uppercase mt-1 px-1.5 py-0.5 bg-red-500/10 border border-red-500/20 rounded inline-block">Exclusão Solicitada</div>
+                      )}
+                      {(l as any).nda_authorization_status === "pending_director" && (
+                        <div className="text-[8px] text-[#C9A84C] font-bold uppercase mt-1 px-1.5 py-0.5 bg-[#C9A84C]/10 border border-[#C9A84C]/20 rounded inline-block">NDA Pendente</div>
                       )}
                       {Number((l.cm_listing_documents?.[0] as any)?.count) > 0 && (
                         <div className="text-[9px] text-[#9BAFC5] mt-1">{(l.cm_listing_documents[0] as any).count} doc(s)</div>
@@ -965,6 +1030,70 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
                   onChange={(e) => { if (e.target.files?.[0]) handleUploadDoc(selectedListing.id, e.target.files[0]); }}
                 />
               </label>
+            </div>
+
+            {/* NDA Retroativo — Autorização de Diretor */}
+            <div className="px-4 mt-4">
+              <div className="text-[10px] text-[#C9A84C] font-bold uppercase tracking-wider mb-2">NDA Retroativo (fora do sistema)</div>
+              <div className="bg-[#12112A] border border-[#9BAFC5]/10 rounded-lg p-3">
+                {(selectedListing as any).nda_authorization_status === "pending_director" ? (
+                  <div className="text-[11px] text-[#F5F1E8]">
+                    <div className="text-[#C9A84C] font-bold mb-1">NDA marcado — aguardando autorização de diretor</div>
+                    <div className="text-[#9BAFC5] text-[10px] mb-2">{(selectedListing as any).nda_authorization_reason}</div>
+                    {userRole === "ADMIN" && (
+                      <div className="flex gap-2">
+                        <button onClick={() => handleNdaGovernanceDecision(selectedListing.id, "approve")}
+                          className="flex-1 px-3 py-2 bg-emerald-600/20 border border-emerald-500/30 rounded text-emerald-400 text-[10px] font-bold hover:bg-emerald-600/30 transition">
+                          Autorizar
+                        </button>
+                        <button onClick={() => handleNdaGovernanceDecision(selectedListing.id, "reject")}
+                          className="flex-1 px-3 py-2 bg-[#162744] border border-[#9BAFC5]/15 rounded text-[#9BAFC5] text-[10px] font-bold hover:text-[#F5F1E8] transition">
+                          Rejeitar
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ) : (selectedListing as any).nda_authorization_status === "approved" ? (
+                  <div className="text-[11px] text-emerald-400 font-bold">NDA autorizado {(selectedListing as any).nda_signed_at ? `em ${new Date((selectedListing as any).nda_signed_at).toLocaleDateString("pt-BR")}` : ""}</div>
+                ) : !showNdaForm ? (
+                  <button onClick={() => setShowNdaForm(true)}
+                    className="w-full px-3 py-2 bg-[#C9A84C]/10 border border-[#C9A84C]/20 rounded text-[#C9A84C] text-xs font-bold hover:bg-[#C9A84C]/20 transition">
+                    Marcar NDA como Já Assinado
+                  </button>
+                ) : (
+                  <div className="space-y-2">
+                    <div>
+                      <label className="text-[9px] text-[#9BAFC5] uppercase">Data da assinatura</label>
+                      <input type="date" value={ndaDate} onChange={(e) => setNdaDate(e.target.value)}
+                        className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#F5F1E8] mt-1" />
+                    </div>
+                    <div>
+                      <label className="text-[9px] text-[#9BAFC5] uppercase">PDF do NDA assinado</label>
+                      <input type="file" accept=".pdf,.jpg,.png,.jpeg" onChange={(e) => setNdaFile(e.target.files?.[0] ?? null)}
+                        className="w-full text-[10px] text-[#9BAFC5] mt-1" />
+                    </div>
+                    <div>
+                      <label className="text-[9px] text-[#9BAFC5] uppercase">Motivo / contexto</label>
+                      <textarea value={ndaReason} onChange={(e) => setNdaReason(e.target.value)} rows={2}
+                        placeholder="Ex: deal antigo, NDA assinado em papel em reunião presencial"
+                        className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#F5F1E8] mt-1" />
+                    </div>
+                    <div className="flex gap-2">
+                      <button onClick={() => submitNdaAuthorization(selectedListing.id)} disabled={submittingNda}
+                        className="flex-1 px-3 py-2 bg-[#C9A84C]/10 border border-[#C9A84C]/20 rounded text-[#C9A84C] text-[10px] font-bold hover:bg-[#C9A84C]/20 transition disabled:opacity-50">
+                        {submittingNda ? <Loader2 size={12} className="animate-spin inline" /> : (userRole === "ADMIN" ? "Confirmar" : "Enviar p/ Autorização")}
+                      </button>
+                      <button onClick={() => setShowNdaForm(false)}
+                        className="px-3 py-2 bg-[#162744] border border-[#9BAFC5]/15 rounded text-[#9BAFC5] text-[10px] font-bold hover:text-[#F5F1E8] transition">
+                        Cancelar
+                      </button>
+                    </div>
+                    {userRole !== "ADMIN" && (
+                      <p className="text-[9px] text-[#9BAFC5]">Exige autorização de João, Hamilton ou Robson — enviado por email aos diretores.</p>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Zona de Risco — Exclusão */}
