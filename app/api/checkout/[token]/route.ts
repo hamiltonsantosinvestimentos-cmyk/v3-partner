@@ -92,7 +92,13 @@ export async function POST(req: NextRequest, { params }: Params) {
         }),
         idempotencyKey: randomUUID(),
       });
-      if (res.ok) coraData = await res.json() as typeof coraData;
+      if (res.ok) {
+        coraData = await res.json() as typeof coraData;
+      } else {
+        const errBody = await res.json().catch(() => ({}));
+        console.error("Cora checkout error — invoice creation failed:", res.status, errBody);
+        return NextResponse.json({ error: `Erro ao gerar cobrança (Cora ${res.status}): ${JSON.stringify(errBody)}` }, { status: 502 });
+      }
     } catch (e) {
       console.error("Cora checkout error:", e);
       return NextResponse.json({ error: "Erro ao gerar cobrança. Tente novamente." }, { status: 500 });
