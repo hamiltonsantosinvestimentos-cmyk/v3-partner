@@ -3099,14 +3099,16 @@ function AssinaturasTab() {
                           }
                           const isPending = ["PENDING", "OPEN"].includes(sub.status);
                           const isPaid = sub.status === "PAID";
+                          const isManual = sub.status === "MANUAL";
                           return (
                             <div className="space-y-0.5">
                               <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
                                 isPaid ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
                                 : isPending ? "bg-amber-500/20 text-amber-400 border-amber-500/30"
+                                : isManual ? "bg-secondary text-muted-foreground border-border"
                                 : "bg-red-500/20 text-red-400 border-red-500/30"
                               }`}>
-                                {isPaid ? "Pago" : isPending ? "Pendente" : "Cancelado"}
+                                {isPaid ? "Pago" : isPending ? "Pendente" : isManual ? "Sem cobrança" : "Cancelado"}
                               </span>
                               <p className="text-[10px] text-muted-foreground">
                                 Vence {new Date(sub.due_date + "T12:00:00").toLocaleDateString("pt-BR")}
@@ -3131,7 +3133,7 @@ function AssinaturasTab() {
                                   </span>
                                 ))}
                               </div>
-                              {isPending && (
+                              {!isPending && (
                                 <button
                                   onClick={() => doAction(p.id, "gerar_cobranca_cora")}
                                   disabled={!!isLoadingAny}
