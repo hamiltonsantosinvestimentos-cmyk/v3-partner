@@ -302,8 +302,9 @@ export function MinhaAssinaturaClient({ profile, contract, commissions }: Props)
         </div>
       )}
 
-      {/* Pagar com cartão — disponível com ou sem cobrança Cora já gerada */}
-      {(!subscription || subscription.status === "PENDING") && (
+      {/* Pagar com cartão — disponível sempre que não há cobrança PAGA vigente
+          (cobre também status MANUAL/CANCELLED, não só ausência ou PENDING) */}
+      {(!subscription || subscription.status !== "PAID") && (
         <div className="p-4 rounded-xl border border-[#243A66] bg-[#0D1929] flex items-center justify-between">
           <div>
             <p className="text-sm font-semibold text-white">Pagar com Cartão</p>
