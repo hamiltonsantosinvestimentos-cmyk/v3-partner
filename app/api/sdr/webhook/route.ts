@@ -230,16 +230,16 @@ async function processarMensagemSDR(phone: string, mensagem: string, instance: s
       content: h.content,
     }));
 
-    // Delay humanizado: entre 2 e 5 segundos antes de responder
-    const delay = 2000 + Math.floor(Math.random() * 3000);
-    await new Promise(r => setTimeout(r, delay));
+    // Delay humanizado: tempo de "leitura" antes de começar a responder (1,5-3s)
+    const delayLeitura = 1500 + Math.floor(Math.random() * 1500);
+    await new Promise(r => setTimeout(r, delayLeitura));
 
     const { default: Anthropic } = await import("@anthropic-ai/sdk");
     const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
 
     const response = await anthropic.messages.create({
       model: "claude-sonnet-4-6",
-      max_tokens: 800,
+      max_tokens: 300,
       system: `Você é o Matheus, consultor de relacionamento da V3 Partners — uma boutique institucional de estruturação financeira e securitização.
 
 Você representa uma empresa séria e de alto padrão. Seu tom é profissional, caloroso e consultivo. Você escreve como um humano experiente, não como um robô.
@@ -258,12 +258,13 @@ Você representa uma empresa séria e de alto padrão. Seu tom é profissional, 
 5. Se qualificado, agendar uma apresentação com um dos sócios via Google Meet
 6. Coletar: nome completo, empresa e melhor horário
 
-**Regras de comunicação:**
-- Escreva de forma natural, como numa conversa de WhatsApp profissional
-- Use parágrafos curtos, sem bullet points ou markdown
-- Nunca use asteriscos, emojis excessivos ou linguagem de chatbot
-- Uma ou duas frases por vez quando for só cumprimento ou confirmação
-- Para apresentações ou qualificação, pode ir até 4-5 linhas
+**Regras de comunicação — MUITO IMPORTANTE:**
+- Escreva exatamente como alguém digitando rápido no WhatsApp: frases curtas e diretas
+- Cada frase sua deve ter no máximo ~15 palavras
+- Nunca escreva mais de 2 frases seguidas sem quebrar
+- Se precisar falar de mais de uma coisa (ex: apresentar a empresa E qualificar), separe as ideias em parágrafos curtos com uma linha em branco entre eles — cada parágrafo vira uma mensagem separada no WhatsApp, então prefira várias mensagens curtas a uma única mensagem longa
+- Nunca use bullet points, markdown ou asteriscos
+- Nunca use emojis excessivos ou linguagem de chatbot
 - Nunca invente taxas, retornos ou produtos específicos — diga que os detalhes serão apresentados na reunião
 - Se o lead confirmar reunião, diga que um dos sócios vai entrar em contato para confirmar o link do Meet
 - Lembre-se do histórico da conversa para não repetir perguntas já feitas`,
@@ -280,19 +281,32 @@ Você representa uma empresa séria e de alto padrão. Seu tom é profissional, 
       instance,
     });
 
-    await fetch(
-      `${process.env.EVOLUTION_API_URL}/message/sendText/${instance}`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          apikey: process.env.EVOLUTION_API_KEY!,
-        },
-        body: JSON.stringify({ number: phone, text: resposta }),
-      }
-    );
+    // Envia como várias mensagens curtas em sequência (um parágrafo = uma mensagem),
+    // com uma pequena pausa "digitando" entre elas, ao invés de um bloco único de texto.
+    const partesMensagem = resposta
+      .split(/\n\s*\n/)
+      .map(p => p.trim())
+      .filter(Boolean);
 
-    console.log(`[SDR Webhook] Resposta enviada para ${phone}`);
+    for (let i = 0; i < partesMensagem.length; i++) {
+      if (i > 0) {
+        const pausaDigitando = 700 + Math.min(partesMensagem[i].length * 25, 1500) + Math.floor(Math.random() * 400);
+        await new Promise(r => setTimeout(r, pausaDigitando));
+      }
+      await fetch(
+        `${process.env.EVOLUTION_API_URL}/message/sendText/${instance}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            apikey: process.env.EVOLUTION_API_KEY!,
+          },
+          body: JSON.stringify({ number: phone, text: partesMensagem[i] }),
+        }
+      );
+    }
+
+    console.log(`[SDR Webhook] Resposta enviada para ${phone} (${partesMensagem.length} mensagem(ns))`);
 
     // Detecta se houve agendamento na troca de mensagens (fire-and-forget)
     detectarAgendamento(mensagem, resposta).then(detect => {
