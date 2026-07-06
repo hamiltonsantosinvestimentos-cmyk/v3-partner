@@ -280,18 +280,6 @@ export function MinhaAssinaturaClient({ profile, contract, commissions }: Props)
                 </div>
               </div>
             )}
-            <div className="pt-2 border-t border-[#243A66]">
-              <p className="text-xs font-semibold text-[#7A8FA8] uppercase mb-2">Ou pague com cartão de crédito</p>
-              <button
-                onClick={handlePagarCartao}
-                disabled={loadingCartao}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl border border-[#C9A84C]/40 text-[#C9A84C] hover:bg-[#C9A84C]/10 text-sm font-semibold transition-colors disabled:opacity-60"
-              >
-                {loadingCartao ? <Loader2 className="w-4 h-4 animate-spin" /> : <CreditCard className="w-4 h-4" />}
-                {loadingCartao ? "Gerando link..." : "Pagar com Cartão"}
-              </button>
-              {cartaoErro && <p className="text-xs text-red-400 mt-2">{cartaoErro}</p>}
-            </div>
           </div>
         </div>
       )}
@@ -311,6 +299,27 @@ export function MinhaAssinaturaClient({ profile, contract, commissions }: Props)
             {loadingSub ? <Loader2 className="w-4 h-4 animate-spin" /> : <QrCode className="w-4 h-4" />}
             {loadingSub ? "Gerando..." : "Gerar Cobrança"}
           </button>
+        </div>
+      )}
+
+      {/* Pagar com cartão — disponível com ou sem cobrança Cora já gerada */}
+      {(!subscription || subscription.status === "PENDING") && (
+        <div className="p-4 rounded-xl border border-[#243A66] bg-[#0D1929] flex items-center justify-between">
+          <div>
+            <p className="text-sm font-semibold text-white">Pagar com Cartão</p>
+            <p className="text-xs text-[#7A8FA8]">Cobrança de {valorMensal}/mês via InfinitePay</p>
+          </div>
+          <div className="text-right">
+            <button
+              onClick={handlePagarCartao}
+              disabled={loadingCartao}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl border border-[#C9A84C]/40 text-[#C9A84C] hover:bg-[#C9A84C]/10 text-sm font-semibold transition-colors disabled:opacity-60"
+            >
+              {loadingCartao ? <Loader2 className="w-4 h-4 animate-spin" /> : <CreditCard className="w-4 h-4" />}
+              {loadingCartao ? "Gerando link..." : "Pagar com Cartão"}
+            </button>
+            {cartaoErro && <p className="text-xs text-red-400 mt-2">{cartaoErro}</p>}
+          </div>
         </div>
       )}
 

@@ -8,7 +8,15 @@ function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 }
 
-// POST — gera um link de checkout InfinitePay (cartão) para a cobrança PENDING vigente do partner
+// Mesmos valores/regra de vencimento do "Gerar Cobrança" self-service da Cora
+// (app/api/cora/subscription/route.ts), pra manter os dois caminhos consistentes.
+const PLANO_VALOR: Record<string, number> = {
+  PARTNER: 19700,
+  PARTNER_PRO: 39700,
+};
+
+// POST — gera um link de checkout InfinitePay (cartão) para a mensalidade do partner logado,
+// criando a cobrança PENDING na hora se ainda não existir nenhuma
 export async function POST() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -20,17 +28,34 @@ export async function POST() {
     .eq("id", user.id)
     .single();
 
-  const { data: sub } = await svc()
+  let sub = (await svc()
     .from("partner_subscriptions")
     .select("id, amount_cents, plano")
     .eq("partner_id", user.id)
     .eq("status", "PENDING")
     .order("created_at", { ascending: false })
     .limit(1)
-    .maybeSingle();
+    .maybeSingle()).data;
 
   if (!sub) {
-    return NextResponse.json({ error: "Nenhuma cobrança pendente. Gere a cobrança primeiro." }, { status: 404 });
+    const dueDate = new Date();
+    dueDate.setMonth(dueDate.getMonth() + 1);
+    dueDate.setDate(10);
+
+    const valor = PLANO_VALOR[profile?.role ?? ""] ?? 19700;
+
+    const { data: created, error } = await svc().from("partner_subscriptions").insert({
+      partner_id:   user.id,
+      plano:        profile?.role ?? "PARTNER",
+      amount_cents: valor,
+      due_date:     dueDate.toISOString().split("T")[0],
+      status:       "PENDING",
+    }).select("id, amount_cents, plano").single();
+
+    if (error || !created) {
+      return NextResponse.json({ error: "Não foi possível gerar a cobrança." }, { status: 500 });
+    }
+    sub = created;
   }
 
   const plano = (profile?.role as string | undefined) ?? sub.plano;
