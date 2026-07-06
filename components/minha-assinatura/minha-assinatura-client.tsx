@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { CheckCircle2, Clock, AlertCircle, FileText, Wallet, TrendingUp, Crown, Shield, RefreshCw, ArrowUpCircle, Loader2, QrCode, Copy, ExternalLink } from "lucide-react";
+import { CheckCircle2, Clock, AlertCircle, FileText, Wallet, TrendingUp, Crown, Shield, RefreshCw, ArrowUpCircle, Loader2, QrCode, Copy, ExternalLink, CreditCard } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 
 interface Profile {
@@ -76,6 +76,8 @@ export function MinhaAssinaturaClient({ profile, contract, commissions }: Props)
   }[]>([]);
   const [loadingSub, setLoadingSub] = useState(false);
   const [pixCopiado, setPixCopiado] = useState(false);
+  const [loadingCartao, setLoadingCartao] = useState(false);
+  const [cartaoErro, setCartaoErro] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/cora/subscription")
@@ -95,6 +97,23 @@ export function MinhaAssinaturaClient({ profile, contract, commissions }: Props)
       if (d.subscription) setSubscription(d.subscription);
     } catch { /* silencioso */ }
     setLoadingSub(false);
+  }
+
+  async function handlePagarCartao() {
+    setLoadingCartao(true);
+    setCartaoErro(null);
+    try {
+      const res = await fetch("/api/infinitepay/checkout", { method: "POST" });
+      const d = await res.json();
+      if (res.ok && d.checkout_url) {
+        window.open(d.checkout_url, "_blank", "noopener,noreferrer");
+      } else {
+        setCartaoErro(d.error ?? "Não foi possível gerar o link de pagamento.");
+      }
+    } catch {
+      setCartaoErro("Não foi possível gerar o link de pagamento.");
+    }
+    setLoadingCartao(false);
   }
 
   const totalRecebido = commissions.filter(c => c.status === "PAGA").reduce((s, c) => s + c.commission_value, 0);
@@ -261,6 +280,18 @@ export function MinhaAssinaturaClient({ profile, contract, commissions }: Props)
                 </div>
               </div>
             )}
+            <div className="pt-2 border-t border-[#243A66]">
+              <p className="text-xs font-semibold text-[#7A8FA8] uppercase mb-2">Ou pague com cartão de crédito</p>
+              <button
+                onClick={handlePagarCartao}
+                disabled={loadingCartao}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl border border-[#C9A84C]/40 text-[#C9A84C] hover:bg-[#C9A84C]/10 text-sm font-semibold transition-colors disabled:opacity-60"
+              >
+                {loadingCartao ? <Loader2 className="w-4 h-4 animate-spin" /> : <CreditCard className="w-4 h-4" />}
+                {loadingCartao ? "Gerando link..." : "Pagar com Cartão"}
+              </button>
+              {cartaoErro && <p className="text-xs text-red-400 mt-2">{cartaoErro}</p>}
+            </div>
           </div>
         </div>
       )}
