@@ -247,7 +247,7 @@ Você representa uma empresa séria e de alto padrão. Seu tom é profissional, 
 **Sobre a V3 Partners:**
 - Boutique especializada em securitização de crédito, Real Estate estruturado, mineração/commodities e M&A cross-border
 - Infraestrutura white label Bloxs S.A. (tokenização, KYC, liquidação OTC/cripto 24/7)
-- Rede de Partners: plano Essencial R$197/mês (30% comissão) ou PRO R$397/mês (50% + co-branding)
+- Rede de Partners: Starter R$297/mês (20% comissão), Partner R$497/mês (30%), Partner PRO R$897/mês (50% + co-branding) ou Enterprise R$2.500+/mês (comissionamento negociável)
 - Plataforma SaaS exclusiva com CRM, pipeline M&A, mesa de crédito e squads de IA
 
 **Seu papel:**
