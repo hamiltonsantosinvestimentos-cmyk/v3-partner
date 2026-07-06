@@ -9,7 +9,7 @@ function serviceClient() {
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://v3-partner.vercel.app";
 
 // ─── E-mail de boas-vindas via Resend ─────────────────────────────────────────
-async function enviarBoasVindas(email: string, nome: string, plano: string) {
+async function enviarBoasVindas(email: string, nome: string, plano: string, cartaoRecorrenteLink?: string | null) {
   const resendKey = process.env.RESEND_API_KEY;
   if (!resendKey) return; // sem chave, ignora silenciosamente
 
@@ -58,6 +58,21 @@ async function enviarBoasVindas(email: string, nome: string, plano: string) {
         </a>
       </div>
 
+      ${cartaoRecorrenteLink ? `
+      <!-- Assinatura recorrente no cartão -->
+      <div style="background:#0A1628;border:1px solid #C9A84C55;border-radius:12px;padding:20px;margin-bottom:20px;">
+        <p style="font-size:13px;color:#C9A84C;margin:0 0 8px;font-weight:700;">Finalize sua assinatura recorrente</p>
+        <p style="font-size:13px;color:#7A8FA8;margin:0 0 16px;line-height:1.6;">
+          Você escolheu pagar a mensalidade com cartão recorrente (fidelidade de 12 meses). Clique no botão abaixo para cadastrar seu cartão e ativar a cobrança automática mensal.
+        </p>
+        <div style="text-align:center;">
+          <a href="${cartaoRecorrenteLink}"
+             style="display:inline-block;background:#C9A84C;color:#09081A;font-size:13px;font-weight:700;padding:12px 28px;border-radius:8px;text-decoration:none;">
+            Ativar assinatura recorrente →
+          </a>
+        </div>
+      </div>` : ""}
+
       <!-- Alerta senha -->
       <div style="background:#C9A84C10;border:1px solid #C9A84C35;border-radius:8px;padding:14px;">
         <p style="font-size:13px;color:#C9A84C;margin:0;line-height:1.5;">
@@ -102,8 +117,8 @@ export async function POST(req: NextRequest) {
   const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
   if (profile?.role !== "ADMIN") return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
 
-  const { id, acao, observacao } = await req.json() as {
-    id: string; acao: "APROVAR" | "REPROVAR" | "EM_ANALISE"; observacao?: string;
+  const { id, acao, observacao, cartao_recorrente_link } = await req.json() as {
+    id: string; acao: "APROVAR" | "REPROVAR" | "EM_ANALISE"; observacao?: string; cartao_recorrente_link?: string;
   };
 
   if (!id || !acao) return NextResponse.json({ error: "Payload inválido" }, { status: 400 });
@@ -118,6 +133,13 @@ export async function POST(req: NextRequest) {
     .single();
 
   if (!reg) return NextResponse.json({ error: "Cadastro não encontrado" }, { status: 404 });
+
+  // Cartão recorrente: exige o link da assinatura InfinitePay (criada manualmente
+  // no painel deles) antes de aprovar, já que é enviado no e-mail de boas-vindas.
+  const linkCartaoFinal = cartao_recorrente_link ?? reg.cartao_recorrente_link ?? null;
+  if (acao === "APROVAR" && reg.plano_recorrencia === "ANUAL_CARTAO" && !linkCartaoFinal) {
+    return NextResponse.json({ error: "Informe o link de assinatura recorrente da InfinitePay antes de aprovar." }, { status: 400 });
+  }
 
   const novoStatus = acao === "APROVAR" ? "APROVADO" : acao === "REPROVAR" ? "REPROVADO" : "EM_ANALISE";
 
@@ -171,7 +193,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Envia e-mail de boas-vindas (async, não bloqueia)
-    enviarBoasVindas(email, nome, reg.plano).catch(() => {});
+    enviarBoasVindas(email, nome, reg.plano, linkCartaoFinal).catch(() => {});
   }
 
   // Atualiza o cadastro
@@ -181,6 +203,7 @@ export async function POST(req: NextRequest) {
     revisado_por: user.id,
     revisado_em:  new Date().toISOString(),
     updated_at:   new Date().toISOString(),
+    ...(cartao_recorrente_link ? { cartao_recorrente_link } : {}),
   }).eq("id", id);
 
   return NextResponse.json({ ok: true, status: "APROVADO", email, role: planoRole });

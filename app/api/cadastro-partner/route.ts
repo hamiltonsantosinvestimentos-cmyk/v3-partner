@@ -10,12 +10,16 @@ const PLANO_VALOR: Record<string, number> = {
   ENTERPRISE:  250000,  // R$ 2.500,00 em centavos
 };
 
+// Fidelidade de 12 meses via Pix/Boleto Cora custa R$ 50,00 a mais por mês
+const ADICIONAL_FIDELIDADE_PIX_BOLETO = 5000;
+
 async function gerarCobrancaCora(params: {
   regId: string;
   plano: string;
   nome: string;
   documento: string;
   email: string;
+  valor: number;
 }): Promise<{
   invoiceId?: string;
   pixEmv?: string;
@@ -25,7 +29,7 @@ async function gerarCobrancaCora(params: {
   paymentUrl?: string;
 }> {
   try {
-    const valor = PLANO_VALOR[params.plano] ?? 29700;
+    const valor = params.valor;
     const vencimento = new Date();
     vencimento.setDate(vencimento.getDate() + 3); // 3 dias para pagar
     const vencStr = vencimento.toISOString().split("T")[0];
@@ -98,6 +102,10 @@ export async function POST(req: NextRequest) {
     const tipoPessoa  = formData.get("tipo_pessoa") as string;
     const email       = formData.get("email") as string;
     const telefone    = formData.get("telefone") as string;
+    const planoRecorrenciaRaw = formData.get("plano_recorrencia") as string | null;
+    const planoRecorrencia = ["MENSAL", "ANUAL_PIX_BOLETO", "ANUAL_CARTAO"].includes(planoRecorrenciaRaw ?? "")
+      ? planoRecorrenciaRaw!
+      : "MENSAL";
 
     // Validações básicas
     if (!plano || !tipoPessoa || !email || !telefone) {
@@ -170,6 +178,7 @@ export async function POST(req: NextRequest) {
       // Controle
       status:    "PENDENTE",
       ip_origem: ip,
+      plano_recorrencia: planoRecorrencia,
       // Referral
       ...(referredByPartnerId ? { referred_by_partner_id: referredByPartnerId } : {}),
     };
@@ -194,7 +203,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Erro ao salvar cadastro" }, { status: 500 });
     }
 
-    // Gera cobrança Cora automaticamente
+    // Nome/documento para a cobrança
     const nome = tipoPessoa === "PF"
       ? (formData.get("nome_completo") as string ?? "")
       : (formData.get("razao_social") as string ?? "");
@@ -202,7 +211,16 @@ export async function POST(req: NextRequest) {
       ? (formData.get("cpf") as string ?? "")
       : (formData.get("cnpj") as string ?? "");
 
-    const cora = await gerarCobrancaCora({ regId, plano, nome, documento, email });
+    // Fidelidade de 12 meses via Pix/Boleto soma R$50/mês; esse valor também é
+    // salvo como cora_amount_cents (preço "contratado") pra ser herdado por
+    // todas as próximas mensalidades (cron + geração manual).
+    const valorFinal = (PLANO_VALOR[plano] ?? 29700) + (planoRecorrencia === "ANUAL_PIX_BOLETO" ? ADICIONAL_FIDELIDADE_PIX_BOLETO : 0);
+
+    // Cartão recorrente (InfinitePay) é configurado manualmente pelo admin na
+    // aprovação — não gera cobrança Cora nesse caso.
+    const cora = planoRecorrencia === "ANUAL_CARTAO"
+      ? {}
+      : await gerarCobrancaCora({ regId, plano, nome, documento, email, valor: valorFinal });
 
     if (cora.invoiceId) {
       await svc.from("partner_registrations").update({
@@ -213,15 +231,15 @@ export async function POST(req: NextRequest) {
         cora_boleto_pdf:     cora.boletoPdf,
         cora_boleto_barcode: cora.boletoBarcode,
         cora_payment_url:    cora.paymentUrl,
-        cora_amount_cents:   PLANO_VALOR[plano] ?? 29700,
+        cora_amount_cents:   valorFinal,
       }).eq("id", regId);
     }
 
-    // Envia e-mail com dados de pagamento (#6)
-    try {
+    // Envia e-mail com dados de pagamento (#6) — não se aplica ao cartão recorrente
+    if (planoRecorrencia !== "ANUAL_CARTAO") try {
       const { Resend } = await import("resend");
       const resend = new Resend(process.env.RESEND_API_KEY);
-      const valorFmt = ((PLANO_VALOR[plano] ?? 29700) / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+      const valorFmt = (valorFinal / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
       const planoLabel = plano === "ENTERPRISE" ? "V3 Enterprise"
         : plano === "PARTNER_PRO" ? "V3 Partner PRO"
         : plano === "STARTER" ? "V3 Starter"
@@ -282,7 +300,7 @@ export async function POST(req: NextRequest) {
         boletoPdf:    cora.boletoPdf,
         boletoBarcode: cora.boletoBarcode,
         paymentUrl:   cora.paymentUrl,
-        valor:        PLANO_VALOR[plano] ?? 29700,
+        valor:        valorFinal,
       },
     });
   } catch (err) {

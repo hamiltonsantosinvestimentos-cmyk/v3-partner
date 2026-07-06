@@ -34,6 +34,8 @@ interface Registration {
   status: "PENDENTE" | "APROVADO" | "REPROVADO" | "EM_ANALISE";
   observacao?: string;
   created_at: string;
+  plano_recorrencia?: "MENSAL" | "ANUAL_PIX_BOLETO" | "ANUAL_CARTAO";
+  cartao_recorrente_link?: string | null;
   // Cora
   cora_invoice_id?: string | null;
   cora_invoice_status?: string | null;
@@ -102,17 +104,21 @@ function ModalDetalhe({
 }: {
   reg: Registration;
   onClose: () => void;
-  onAcao: (id: string, acao: "APROVAR" | "REPROVAR" | "EM_ANALISE", obs?: string) => Promise<void>;
+  onAcao: (id: string, acao: "APROVAR" | "REPROVAR" | "EM_ANALISE", obs?: string, cartaoRecorrenteLink?: string) => Promise<void>;
   onUpdateCoraStatus: (id: string, status: string) => void;
 }) {
   const [obs, setObs] = useState(reg.observacao ?? "");
   const [loading, setLoading] = useState<string | null>(null);
   const [pixCopiado, setPixCopiado] = useState(false);
   const [coraStatus, setCoraStatus] = useState(reg.cora_invoice_status);
+  const [cartaoLink, setCartaoLink] = useState(reg.cartao_recorrente_link ?? "");
+
+  const isCartaoRecorrente = reg.plano_recorrencia === "ANUAL_CARTAO";
+  const podeAprovar = !isCartaoRecorrente || cartaoLink.trim().length > 0;
 
   const acionar = async (acao: "APROVAR" | "REPROVAR" | "EM_ANALISE") => {
     setLoading(acao);
-    await onAcao(reg.id, acao, obs);
+    await onAcao(reg.id, acao, obs, isCartaoRecorrente ? cartaoLink.trim() : undefined);
     setLoading(null);
     onClose();
   };
@@ -165,6 +171,11 @@ function ModalDetalhe({
                   : reg.plano === "PARTNER" ? "V3 Partner — R$ 497/mês"
                   : reg.plano === "PARTNER_PRO" ? "V3 Partner PRO — R$ 897/mês"
                   : "V3 Enterprise — R$ 2.500+/mês"}
+              </p>
+              <p className="text-[11px] text-muted-foreground mt-0.5">
+                {reg.plano_recorrencia === "ANUAL_PIX_BOLETO" ? "Anual via Pix/Boleto (+R$50/mês)"
+                  : reg.plano_recorrencia === "ANUAL_CARTAO" ? "Anual recorrente no cartão"
+                  : "Mensal, sem fidelidade"}
               </p>
             </div>
           </div>
@@ -300,6 +311,29 @@ function ModalDetalhe({
             )}
           </div>
 
+          {/* Assinatura recorrente no cartão (InfinitePay) */}
+          {isCartaoRecorrente && (
+            <div className="p-3 rounded-xl bg-[#C9A84C]/10 border border-[#C9A84C]/30 space-y-2">
+              <div className="flex items-center gap-2">
+                <CreditCard className="w-4 h-4 text-[#C9A84C]" />
+                <p className="text-xs font-semibold text-[#C9A84C]">Assinatura recorrente escolhida (cartão, 12 meses)</p>
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                Crie a cobrança recorrente manualmente no painel da InfinitePay e cole o link abaixo. Ele será enviado ao partner junto com o e-mail de boas-vindas na aprovação.
+              </p>
+              <input
+                type="url"
+                value={cartaoLink}
+                onChange={(e) => setCartaoLink(e.target.value)}
+                placeholder="https://checkout.infinitepay.io/..."
+                className="w-full px-3 py-2 rounded-lg border border-[#243A66] bg-[#09081A] text-foreground text-xs placeholder:text-muted-foreground focus:outline-none focus:border-[#C9A84C] transition-colors"
+              />
+              {!podeAprovar && (
+                <p className="text-[10px] text-amber-400">Cole o link de assinatura recorrente antes de aprovar.</p>
+              )}
+            </div>
+          )}
+
           {/* Observação */}
           <div>
             <p className="text-xs font-semibold text-[#C9A84C] uppercase tracking-wide mb-2">Observação (opcional)</p>
@@ -317,7 +351,8 @@ function ModalDetalhe({
             <div className="flex gap-3 flex-wrap">
               <button
                 onClick={() => acionar("APROVAR")}
-                disabled={!!loading}
+                disabled={!!loading || !podeAprovar}
+                title={!podeAprovar ? "Cole o link de assinatura recorrente antes de aprovar" : undefined}
                 className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-emerald-700 hover:bg-emerald-600 text-white text-sm font-semibold disabled:opacity-50 transition-colors"
               >
                 {loading === "APROVAR" ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
@@ -448,15 +483,18 @@ export function AdminCadastrosClient({
     return matchStatus && matchBusca;
   });
 
-  const handleAcao = async (id: string, acao: "APROVAR" | "REPROVAR" | "EM_ANALISE", obs?: string) => {
+  const handleAcao = async (id: string, acao: "APROVAR" | "REPROVAR" | "EM_ANALISE", obs?: string, cartaoRecorrenteLink?: string) => {
     const res = await fetch("/api/cadastro-partner/aprovar", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id, acao, observacao: obs }),
+      body: JSON.stringify({ id, acao, observacao: obs, cartao_recorrente_link: cartaoRecorrenteLink }),
     });
     if (res.ok) {
       const novoStatus = acao === "APROVAR" ? "APROVADO" : acao === "REPROVAR" ? "REPROVADO" : "EM_ANALISE";
-      setRegs((prev) => prev.map((r) => r.id === id ? { ...r, status: novoStatus as Registration["status"], observacao: obs } : r));
+      setRegs((prev) => prev.map((r) => r.id === id ? { ...r, status: novoStatus as Registration["status"], observacao: obs, ...(cartaoRecorrenteLink ? { cartao_recorrente_link: cartaoRecorrenteLink } : {}) } : r));
+    } else {
+      const d = await res.json().catch(() => ({})) as { error?: string };
+      alert(d.error ?? "Erro ao processar ação.");
     }
   };
 

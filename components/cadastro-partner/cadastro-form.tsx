@@ -29,6 +29,25 @@ function fmtCEP(v: string) {
 type Plano = "STARTER" | "PARTNER" | "PARTNER_PRO" | "ENTERPRISE";
 type TipoPessoa = "PF" | "PJ";
 type Step = 1 | 2 | 3 | 4 | 5;
+type PlanoRecorrencia = "MENSAL" | "ANUAL_PIX_BOLETO" | "ANUAL_CARTAO";
+
+const OPCOES_RECORRENCIA: { id: PlanoRecorrencia; titulo: string; descricao: string }[] = [
+  {
+    id: "MENSAL",
+    titulo: "Mensal, sem fidelidade",
+    descricao: "Pague mês a mês via Pix ou Boleto (Cora), sem compromisso de permanência.",
+  },
+  {
+    id: "ANUAL_PIX_BOLETO",
+    titulo: "Anual via Pix ou Boleto (+R$ 50/mês)",
+    descricao: "Fidelidade de 12 meses. A mensalidade fica R$ 50,00 a mais em relação ao plano mensal.",
+  },
+  {
+    id: "ANUAL_CARTAO",
+    titulo: "Anual recorrente no cartão",
+    descricao: "Fidelidade de 12 meses, cobrança recorrente automática no cartão, sem acréscimo no valor. O link de assinatura recorrente é enviado por e-mail após a aprovação do cadastro.",
+  },
+];
 
 const PLANOS = [
   {
@@ -231,6 +250,7 @@ export function CadastroPartnerForm() {
 
   const [step, setStep] = useState<Step>(1);
   const [plano, setPlano] = useState<Plano | null>(null);
+  const [planoRecorrencia, setPlanoRecorrencia] = useState<PlanoRecorrencia>("MENSAL");
   const [tipoPessoa, setTipoPessoa] = useState<TipoPessoa | null>(null);
 
   // Dados PF
@@ -339,6 +359,7 @@ export function CadastroPartnerForm() {
     try {
       const fd = new FormData();
       fd.append("plano", plano!);
+      fd.append("plano_recorrencia", planoRecorrencia);
       fd.append("tipo_pessoa", tipoPessoa!);
       fd.append("email", email);
       fd.append("telefone", telefone);
@@ -604,6 +625,33 @@ export function CadastroPartnerForm() {
                     </div>
                   </button>
                 ))}
+              </div>
+
+              {/* Forma de compromisso / recorrência */}
+              <div className="pt-2">
+                <h3 className="text-sm font-bold text-[#F0ECE4]">Forma de pagamento da mensalidade</h3>
+                <p className="text-xs text-[#7A8FA8] mt-1 mb-3">Escolha como prefere pagar sua mensalidade</p>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {OPCOES_RECORRENCIA.map((o) => (
+                    <button
+                      key={o.id}
+                      type="button"
+                      onClick={() => setPlanoRecorrencia(o.id)}
+                      className={cn(
+                        "text-left p-4 rounded-xl border-2 transition-all",
+                        planoRecorrencia === o.id
+                          ? "border-[#C9A84C] bg-[#C9A84C]/10"
+                          : "border-[#243A66] bg-[#0D1B2E] hover:border-[#C9A84C]/40"
+                      )}
+                    >
+                      <div className="flex items-center justify-between mb-1.5">
+                        <p className="text-xs font-bold text-[#F0ECE4]">{o.titulo}</p>
+                        {planoRecorrencia === o.id && <CheckCircle2 className="w-4 h-4 text-[#C9A84C] flex-shrink-0" />}
+                      </div>
+                      <p className="text-[11px] text-[#7A8FA8] leading-relaxed">{o.descricao}</p>
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
           )}
