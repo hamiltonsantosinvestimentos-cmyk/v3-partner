@@ -70,6 +70,7 @@ export function MinhaAssinaturaClient({ profile, contract, commissions }: Props)
   const [subscription, setSubscription] = useState<{
     id: string; status: string; pix_emv?: string; pix_qr_code?: string;
     boleto_barcode?: string; boleto_pdf?: string; amount_cents: number; due_date: string;
+    paid_at?: string | null;
   } | null>(null);
   const [subHistory, setSubHistory] = useState<{
     id: string; status: string; amount_cents: number; due_date: string; paid_at?: string | null; plano: string; created_at: string;
@@ -281,6 +282,24 @@ export function MinhaAssinaturaClient({ profile, contract, commissions }: Props)
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {/* Confirmação de pagamento (Cora ou InfinitePay) */}
+      {subscription && subscription.status === "PAID" && (
+        <div className="p-4 rounded-xl border border-emerald-500/30 bg-emerald-500/5 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <CheckCircle2 className="w-5 h-5 text-emerald-400 flex-shrink-0" />
+            <div>
+              <p className="text-sm font-semibold text-white">Mensalidade paga</p>
+              <p className="text-xs text-[#7A8FA8]">
+                {subscription.paid_at ? `Pago em ${new Date(subscription.paid_at).toLocaleDateString("pt-BR")}` : "Pagamento confirmado"}
+              </p>
+            </div>
+          </div>
+          <p className="text-lg font-bold text-emerald-400">
+            {((subscription.amount_cents ?? 0) / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+          </p>
         </div>
       )}
 

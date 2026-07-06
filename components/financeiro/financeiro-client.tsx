@@ -3111,7 +3111,9 @@ function AssinaturasTab() {
                                 {isPaid ? "Pago" : isPending ? "Pendente" : isManual ? "Sem cobrança" : "Cancelado"}
                               </span>
                               <p className="text-[10px] text-muted-foreground">
-                                Vence {new Date(sub.due_date + "T12:00:00").toLocaleDateString("pt-BR")}
+                                {isPaid && sub.paid_at
+                                  ? `Pago em ${new Date(sub.paid_at).toLocaleDateString("pt-BR")}`
+                                  : `Vence ${new Date(sub.due_date + "T12:00:00").toLocaleDateString("pt-BR")}`}
                               </p>
                               <div className="flex items-center gap-1 pt-0.5">
                                 {([
