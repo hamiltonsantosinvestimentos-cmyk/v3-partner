@@ -15,6 +15,8 @@ import { CM_DOCUMENT_CHECKLISTS, type CmAssetType } from "@/lib/cm-checklists";
 interface Listing {
   id: string;
   anonymous_id: string;
+  apelido: string | null;
+  numero_interno: string | null;
   asset_type: string;
   valor_face: number;
   desagio_pretendido: number | null;
@@ -146,6 +148,9 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
   const [autoAcceptEnabled, setAutoAcceptEnabled] = useState(false);
   const [valorFaceNegociado, setValorFaceNegociado] = useState<string>("");
   const [valorAtualizadoNegociado, setValorAtualizadoNegociado] = useState<string>("");
+  const [desagioNegociado, setDesagioNegociado] = useState<string>("");
+  const [apelidoNegociado, setApelidoNegociado] = useState<string>("");
+  const [numeroInternoNegociado, setNumeroInternoNegociado] = useState<string>("");
   const [savingValores, setSavingValores] = useState(false);
   const [deletingListing, setDeletingListing] = useState(false);
   const [showLixeira, setShowLixeira] = useState(false);
@@ -161,6 +166,8 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
   const [submittingManual, setSubmittingManual] = useState(false);
   const [manualForm, setManualForm] = useState({
     asset_type: "precatorio" as CmAssetType,
+    apelido: "",
+    numero_interno: "",
     seller_name: "",
     seller_cpf_cnpj: "",
     ente_devedor: "",
@@ -305,6 +312,9 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
     setAutoAcceptEnabled((listing as any).auto_accept_enabled ?? false);
     setValorFaceNegociado(listing.valor_face?.toString() ?? "");
     setValorAtualizadoNegociado((listing as any).valor_atualizado?.toString() ?? "");
+    setDesagioNegociado(listing.desagio_pretendido?.toString() ?? "");
+    setApelidoNegociado(listing.apelido ?? "");
+    setNumeroInternoNegociado(listing.numero_interno ?? "");
     loadRoomInvites(listing.id);
     loadContractTemplates();
     loadChecklists(listing.id);
@@ -425,6 +435,9 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
         body: JSON.stringify({
           valor_face: valorFaceNegociado ? Number(valorFaceNegociado) : undefined,
           valor_atualizado: valorAtualizadoNegociado ? Number(valorAtualizadoNegociado) : null,
+          desagio_pretendido: desagioNegociado ? Number(desagioNegociado) : null,
+          apelido: apelidoNegociado.trim() || null,
+          numero_interno: numeroInternoNegociado.trim() || null,
         }),
       });
       if (res.ok) {
@@ -565,6 +578,8 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           asset_type: manualForm.asset_type,
+          apelido: manualForm.apelido.trim() || undefined,
+          numero_interno: manualForm.numero_interno.trim() || undefined,
           seller_name: manualForm.seller_name.trim(),
           seller_cpf_cnpj: manualForm.seller_cpf_cnpj.trim() || undefined,
           ente_devedor: manualForm.ente_devedor.trim() || undefined,
@@ -584,7 +599,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
         alert(`Ativo cadastrado: ${json.listing.anonymous_id}`);
         setShowManualForm(false);
         setManualForm({
-          asset_type: "precatorio", seller_name: "", seller_cpf_cnpj: "", ente_devedor: "",
+          asset_type: "precatorio", apelido: "", numero_interno: "", seller_name: "", seller_cpf_cnpj: "", ente_devedor: "",
           esfera: "", tribunal: "", natureza: "", numero_processo: "",
           valor_face: "", valor_atualizado: "", desagio_pretendido: "", prazo_estimado_meses: "",
           allows_tranching: false,
@@ -771,6 +786,19 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div>
+                  <label className="text-[9px] text-[#9BAFC5] uppercase">Apelido</label>
+                  <input value={manualForm.apelido} onChange={(e) => setManualForm((f) => ({ ...f, apelido: e.target.value }))}
+                    placeholder="Ex: Tunep"
+                    className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#F5F1E8] mt-1" />
+                </div>
+                <div>
+                  <label className="text-[9px] text-[#9BAFC5] uppercase">Número Interno</label>
+                  <input value={manualForm.numero_interno} onChange={(e) => setManualForm((f) => ({ ...f, numero_interno: e.target.value }))}
+                    className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#F5F1E8] mt-1" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
                   <label className="text-[9px] text-[#9BAFC5] uppercase">Nome do Cedente *</label>
                   <input value={manualForm.seller_name} onChange={(e) => setManualForm((f) => ({ ...f, seller_name: e.target.value }))}
                     className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#F5F1E8] mt-1" />
@@ -903,6 +931,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
                   {items.map((l) => (
                     <div key={l.id} onClick={() => openListingDetail(l)} className="bg-[#12112A] border border-[#9BAFC5]/10 rounded-md p-3 cursor-pointer hover:border-[#C9A84C]/30 transition">
                       <div className="text-[9px] text-[#C9A84C] font-bold">{l.anonymous_id}</div>
+                      {l.apelido && <div className="text-[10px] text-[#F5F1E8] font-semibold truncate">{l.apelido}</div>}
                       <div className="text-xs text-[#F5F1E8] font-semibold">{formatBRL(Number(l.valor_face))}</div>
                       {l.risk_score && (
                         <div className={cn("text-[9px] font-bold mt-1",
@@ -1011,7 +1040,10 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
         <div className="fixed inset-0 z-[110] bg-[#09081A] flex flex-col">
             <div className="p-5 border-b border-[#C9A84C]/20 flex items-center justify-between flex-shrink-0">
               <div>
-                <div className="text-[10px] text-[#C9A84C] font-bold tracking-wider">{selectedListing.anonymous_id}</div>
+                <div className="text-[10px] text-[#C9A84C] font-bold tracking-wider">
+                  {selectedListing.anonymous_id}
+                  {selectedListing.apelido && <span className="text-[#F5F1E8]"> · {selectedListing.apelido}</span>}
+                </div>
                 <div className="text-lg font-bold text-[#F5F1E8]">{formatBRL(Number(selectedListing.valor_face))}</div>
                 <div className="text-xs text-[#9BAFC5] mt-1">Status: <span className="text-[#F5F1E8]">{selectedListing.listing_status.replace(/_/g, " ")}</span></div>
               </div>
@@ -1061,6 +1093,38 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
               </div>
             </div>
 
+            {/* Identificação do Ativo */}
+            <div className="px-4 pb-4">
+              <div className="text-[10px] text-[#C9A84C] font-bold uppercase tracking-wider mb-2">
+                Identificação do Ativo
+              </div>
+              <div className="bg-[#12112A] border border-[#9BAFC5]/10 rounded-lg p-3 space-y-3">
+                <div>
+                  <label className="text-[9px] text-[#9BAFC5] uppercase">Apelido</label>
+                  <input
+                    type="text" value={apelidoNegociado} onChange={(e) => setApelidoNegociado(e.target.value)}
+                    placeholder="Ex: Tunep"
+                    className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#F5F1E8] mt-1 focus:border-[#C9A84C]/50 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="text-[9px] text-[#9BAFC5] uppercase">Número Interno</label>
+                  <input
+                    type="text" value={numeroInternoNegociado} onChange={(e) => setNumeroInternoNegociado(e.target.value)}
+                    placeholder="Referência interna da Mesa"
+                    className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#F5F1E8] mt-1 focus:border-[#C9A84C]/50 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="text-[9px] text-[#9BAFC5] uppercase">Deságio Pretendido (%)</label>
+                  <input
+                    type="number" value={desagioNegociado} onChange={(e) => setDesagioNegociado(e.target.value)}
+                    className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#F5F1E8] mt-1 focus:border-[#C9A84C]/50 focus:outline-none"
+                  />
+                </div>
+              </div>
+            </div>
+
             {/* Valores — OCR vs Negociado */}
             <div className="px-4 pb-4">
               <div className="text-[10px] text-[#C9A84C] font-bold uppercase tracking-wider mb-2">
@@ -1106,7 +1170,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
                 <button onClick={() => saveValoresNegociados(selectedListing.id)} disabled={savingValores}
                   className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-[#C9A84C]/10 border border-[#C9A84C]/20 rounded text-[#C9A84C] text-xs font-bold hover:bg-[#C9A84C]/20 transition disabled:opacity-50">
                   {savingValores ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
-                  Salvar Valores Negociados
+                  Salvar Identificação e Valores Negociados
                 </button>
               </div>
             </div>

@@ -50,6 +50,7 @@ export async function POST(req: NextRequest) {
     ente_devedor, esfera, tribunal, natureza, numero_processo,
     valor_face, valor_atualizado, desagio_pretendido, prazo_estimado_meses,
     allows_tranching, conditional_blocks, metadata, ma_deal_id,
+    apelido, numero_interno,
   } = body;
 
   if (!asset_type || !seller_name || !valor_face) {
@@ -67,6 +68,8 @@ export async function POST(req: NextRequest) {
     .from("cm_asset_listings")
     .insert({
       anonymous_id: anonId,
+      apelido: apelido ?? null,
+      numero_interno: numero_interno ?? null,
       asset_type,
       seller_name,
       seller_cpf_cnpj: seller_cpf_cnpj ?? null,
