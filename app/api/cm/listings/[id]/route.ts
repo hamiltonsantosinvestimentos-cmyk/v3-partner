@@ -28,7 +28,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     "ask_price_floor", "auto_accept_enabled", "mandato_v3_template_id",
     "valor_face", "valor_atualizado", "desagio_pretendido",
     "prazo_estimado_meses", "tir_estimada", "vpl",
-    "apelido", "originator_profile_id",
+    "apelido", "originator_profile_id", "originator_referral_id",
+    "uf_ente_devedor", "municipio_ente_devedor", "tranche_valor_minimo",
   ];
   const update: Record<string, any> = {};
   for (const key of allowed) {

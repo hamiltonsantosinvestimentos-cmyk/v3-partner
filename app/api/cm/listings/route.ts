@@ -47,10 +47,10 @@ export async function POST(req: NextRequest) {
   const body = await req.json();
   const {
     asset_type, seller_name, seller_cpf_cnpj,
-    ente_devedor, esfera, tribunal, natureza, numero_processo,
+    ente_devedor, uf_ente_devedor, municipio_ente_devedor, esfera, tribunal, natureza, numero_processo,
     valor_face, valor_atualizado, desagio_pretendido, prazo_estimado_meses,
-    allows_tranching, conditional_blocks, metadata, ma_deal_id,
-    apelido, originator_profile_id,
+    allows_tranching, tranche_valor_minimo, conditional_blocks, metadata, ma_deal_id,
+    apelido, originator_profile_id, originator_referral_id,
   } = body;
 
   if (!asset_type || !seller_name || !valor_face) {
@@ -72,12 +72,15 @@ export async function POST(req: NextRequest) {
       apelido: apelido ?? null,
       numero_interno: numeroInterno,
       originator_profile_id: originator_profile_id ?? null,
+      originator_referral_id: originator_referral_id ?? null,
       asset_type,
       seller_name,
       seller_cpf_cnpj: seller_cpf_cnpj ?? null,
       seller_profile_id: null,
       ma_deal_id: ma_deal_id ?? null,
       ente_devedor: ente_devedor ?? null,
+      uf_ente_devedor: uf_ente_devedor ?? null,
+      municipio_ente_devedor: municipio_ente_devedor ?? null,
       esfera: esfera ?? null,
       tribunal: tribunal ?? null,
       natureza: natureza ?? null,
@@ -87,6 +90,7 @@ export async function POST(req: NextRequest) {
       desagio_pretendido: desagio_pretendido ? Number(desagio_pretendido) : null,
       prazo_estimado_meses: prazo_estimado_meses ? Number(prazo_estimado_meses) : null,
       allows_tranching: allows_tranching ?? false,
+      tranche_valor_minimo: tranche_valor_minimo ? Number(tranche_valor_minimo) : null,
       conditional_blocks: conditional_blocks ?? null,
       metadata: metadata ?? {},
       listing_status: "reuniao_validada",

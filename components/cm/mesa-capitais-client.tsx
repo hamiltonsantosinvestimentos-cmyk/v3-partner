@@ -18,6 +18,7 @@ interface Listing {
   apelido: string | null;
   numero_interno: string | null;
   originator_profile_id: string | null;
+  originator_referral_id: string | null;
   asset_type: string;
   valor_face: number;
   desagio_pretendido: number | null;
@@ -127,6 +128,11 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
   const [matches, setMatches] = useState<Match[]>([]);
   const [bids, setBids] = useState<Bid[]>([]);
   const [partners, setPartners] = useState<{ id: string; full_name: string }[]>([]);
+  const [referralPartners, setReferralPartners] = useState<{ id: string; full_name: string; contact: string | null }[]>([]);
+  const [showNewReferralPartner, setShowNewReferralPartner] = useState(false);
+  const [newReferralName, setNewReferralName] = useState("");
+  const [newReferralContact, setNewReferralContact] = useState("");
+  const [savingReferralPartner, setSavingReferralPartner] = useState(false);
   const [loading, setLoading] = useState(true);
   const [runningMatch, setRunningMatch] = useState(false);
   const [tab, setTab] = useState<"kanban" | "matches" | "bids">("kanban");
@@ -186,6 +192,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
     desagio_pretendido: "",
     prazo_estimado_meses: "",
     allows_tranching: false,
+    tranche_valor_minimo: "",
   });
 
   const fetchAll = useCallback(async () => {
@@ -217,6 +224,39 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
       .then((json) => setPartners(json.partners ?? []))
       .catch(() => setPartners([]));
   }, []);
+
+  const loadReferralPartners = useCallback(() => {
+    fetch("/api/cm/referral-partners")
+      .then((res) => res.json())
+      .then((json) => setReferralPartners(json.partners ?? []))
+      .catch(() => setReferralPartners([]));
+  }, []);
+
+  useEffect(() => { loadReferralPartners(); }, [loadReferralPartners]);
+
+  const createReferralPartner = async (): Promise<string | null> => {
+    if (!newReferralName.trim()) { alert("Nome é obrigatório"); return null; }
+    setSavingReferralPartner(true);
+    try {
+      const res = await fetch("/api/cm/referral-partners", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ full_name: newReferralName.trim(), contact: newReferralContact.trim() || undefined }),
+      });
+      const json = await res.json();
+      if (!res.ok) { alert(json.error ?? "Erro ao criar partner"); return null; }
+      setReferralPartners((prev) => [...prev, json.partner]);
+      setShowNewReferralPartner(false);
+      setNewReferralName("");
+      setNewReferralContact("");
+      return `ref:${json.partner.id}`;
+    } catch {
+      alert("Erro de conexão");
+      return null;
+    } finally {
+      setSavingReferralPartner(false);
+    }
+  };
 
   const runMatchmaking = async () => {
     setRunningMatch(true);
@@ -327,7 +367,8 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
     setValorAtualizadoNegociado((listing as any).valor_atualizado?.toString() ?? "");
     setDesagioNegociado(listing.desagio_pretendido?.toString() ?? "");
     setApelidoNegociado(listing.apelido ?? "");
-    setOriginatorNegociado(listing.originator_profile_id ?? "");
+    setOriginatorNegociado(listing.originator_referral_id ? `ref:${listing.originator_referral_id}` : (listing.originator_profile_id ?? ""));
+    setShowNewReferralPartner(false);
     loadRoomInvites(listing.id);
     loadContractTemplates();
     loadChecklists(listing.id);
@@ -456,7 +497,8 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
           valor_atualizado: valorAtualizadoNegociado ? Number(valorAtualizadoNegociado) : null,
           desagio_pretendido: desagioNegociado ? Number(desagioNegociado) : null,
           apelido: apelidoNegociado.trim() || null,
-          originator_profile_id: originatorNegociado || null,
+          originator_profile_id: originatorNegociado.startsWith("ref:") ? null : (originatorNegociado || null),
+          originator_referral_id: originatorNegociado.startsWith("ref:") ? originatorNegociado.slice(4) : null,
         }),
       });
       if (res.ok) {
@@ -598,7 +640,8 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
         body: JSON.stringify({
           asset_type: manualForm.asset_type,
           apelido: manualForm.apelido.trim() || undefined,
-          originator_profile_id: manualForm.originator_profile_id || undefined,
+          originator_profile_id: manualForm.originator_profile_id.startsWith("ref:") ? undefined : (manualForm.originator_profile_id || undefined),
+          originator_referral_id: manualForm.originator_profile_id.startsWith("ref:") ? manualForm.originator_profile_id.slice(4) : undefined,
           seller_name: manualForm.seller_name.trim(),
           seller_cpf_cnpj: manualForm.seller_cpf_cnpj.trim() || undefined,
           ente_devedor: manualForm.ente_devedor.trim() || undefined,
@@ -611,6 +654,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
           desagio_pretendido: manualForm.desagio_pretendido ? Number(manualForm.desagio_pretendido) : undefined,
           prazo_estimado_meses: manualForm.prazo_estimado_meses ? Number(manualForm.prazo_estimado_meses) : undefined,
           allows_tranching: manualForm.allows_tranching,
+          tranche_valor_minimo: manualForm.allows_tranching && manualForm.tranche_valor_minimo ? Number(manualForm.tranche_valor_minimo) : undefined,
         }),
       });
       const json = await res.json();
@@ -621,7 +665,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
           asset_type: "precatorio", apelido: "", originator_profile_id: "", seller_name: "", seller_cpf_cnpj: "", ente_devedor: "",
           esfera: "", tribunal: "", natureza: "", numero_processo: "",
           valor_face: "", valor_atualizado: "", desagio_pretendido: "", prazo_estimado_meses: "",
-          allows_tranching: false,
+          allows_tranching: false, tranche_valor_minimo: "",
         });
         fetchAll();
       } else {
@@ -814,14 +858,44 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
                   <label className="text-[9px] text-[#9BAFC5] uppercase">Partner de Origem</label>
                   <select
                     value={manualForm.originator_profile_id}
-                    onChange={(e) => setManualForm((f) => ({ ...f, originator_profile_id: e.target.value }))}
+                    onChange={(e) => { if (e.target.value === "__new__") setShowNewReferralPartner(true); else setManualForm((f) => ({ ...f, originator_profile_id: e.target.value })); }}
                     className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#F5F1E8] mt-1"
                   >
                     <option value="">— Selecionar —</option>
                     {partners.map((p) => (
                       <option key={p.id} value={p.id}>{p.full_name}</option>
                     ))}
+                    {referralPartners.length > 0 && (
+                      <optgroup label="Sem conta no portal">
+                        {referralPartners.map((p) => (
+                          <option key={p.id} value={`ref:${p.id}`}>{p.full_name}</option>
+                        ))}
+                      </optgroup>
+                    )}
+                    <option value="__new__">+ Novo partner (sem conta)</option>
                   </select>
+                  {showNewReferralPartner && (
+                    <div className="mt-2 p-2 bg-[#09081A] border border-[#C9A84C]/20 rounded space-y-2">
+                      <input value={newReferralName} onChange={(e) => setNewReferralName(e.target.value)}
+                        placeholder="Nome do partner *"
+                        className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]" />
+                      <input value={newReferralContact} onChange={(e) => setNewReferralContact(e.target.value)}
+                        placeholder="Contato (telefone/email)"
+                        className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]" />
+                      <div className="flex gap-2">
+                        <button
+                          onClick={async () => { const v = await createReferralPartner(); if (v) setManualForm((f) => ({ ...f, originator_profile_id: v })); }}
+                          disabled={savingReferralPartner}
+                          className="flex-1 px-2 py-1.5 bg-[#C9A84C]/10 border border-[#C9A84C]/20 rounded text-[#C9A84C] text-[10px] font-bold disabled:opacity-50">
+                          {savingReferralPartner ? "Salvando..." : "Salvar"}
+                        </button>
+                        <button onClick={() => { setShowNewReferralPartner(false); setNewReferralName(""); setNewReferralContact(""); }}
+                          className="px-2 py-1.5 border border-[#9BAFC5]/20 rounded text-[#9BAFC5] text-[10px]">
+                          Cancelar
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-2">
@@ -906,6 +980,13 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
                   className="accent-[#C9A84C]" />
                 <span className="text-xs text-[#9BAFC5]">Permite tranching (fracionamento entre compradores)</span>
               </label>
+              {manualForm.allows_tranching && (
+                <div>
+                  <label className="text-[9px] text-[#9BAFC5] uppercase">Valor Mínimo por Fração (R$)</label>
+                  <input type="number" value={manualForm.tranche_valor_minimo} onChange={(e) => setManualForm((f) => ({ ...f, tranche_valor_minimo: e.target.value }))}
+                    className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#F5F1E8] mt-1" />
+                </div>
+              )}
               <button onClick={submitManualListing} disabled={submittingManual}
                 className="w-full flex items-center justify-center gap-2 px-3 py-2.5 bg-[#C9A84C] text-[#09081A] rounded-lg text-sm font-bold hover:bg-[#D4B96A] transition disabled:opacity-50">
                 {submittingManual ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
@@ -1150,14 +1231,45 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
                 <div>
                   <label className="text-[9px] text-[#9BAFC5] uppercase">Partner de Origem</label>
                   <select
-                    value={originatorNegociado} onChange={(e) => setOriginatorNegociado(e.target.value)}
+                    value={originatorNegociado}
+                    onChange={(e) => { if (e.target.value === "__new__") setShowNewReferralPartner(true); else setOriginatorNegociado(e.target.value); }}
                     className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#F5F1E8] mt-1 focus:border-[#C9A84C]/50 focus:outline-none"
                   >
                     <option value="">— Selecionar —</option>
                     {partners.map((p) => (
                       <option key={p.id} value={p.id}>{p.full_name}</option>
                     ))}
+                    {referralPartners.length > 0 && (
+                      <optgroup label="Sem conta no portal">
+                        {referralPartners.map((p) => (
+                          <option key={p.id} value={`ref:${p.id}`}>{p.full_name}</option>
+                        ))}
+                      </optgroup>
+                    )}
+                    <option value="__new__">+ Novo partner (sem conta)</option>
                   </select>
+                  {showNewReferralPartner && (
+                    <div className="mt-2 p-2 bg-[#09081A] border border-[#C9A84C]/20 rounded space-y-2">
+                      <input value={newReferralName} onChange={(e) => setNewReferralName(e.target.value)}
+                        placeholder="Nome do partner *"
+                        className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]" />
+                      <input value={newReferralContact} onChange={(e) => setNewReferralContact(e.target.value)}
+                        placeholder="Contato (telefone/email)"
+                        className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]" />
+                      <div className="flex gap-2">
+                        <button
+                          onClick={async () => { const v = await createReferralPartner(); if (v) setOriginatorNegociado(v); }}
+                          disabled={savingReferralPartner}
+                          className="flex-1 px-2 py-1.5 bg-[#C9A84C]/10 border border-[#C9A84C]/20 rounded text-[#C9A84C] text-[10px] font-bold disabled:opacity-50">
+                          {savingReferralPartner ? "Salvando..." : "Salvar"}
+                        </button>
+                        <button onClick={() => { setShowNewReferralPartner(false); setNewReferralName(""); setNewReferralContact(""); }}
+                          className="px-2 py-1.5 border border-[#9BAFC5]/20 rounded text-[#9BAFC5] text-[10px]">
+                          Cancelar
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
                 <div>
                   <label className="text-[9px] text-[#9BAFC5] uppercase">Deságio Pretendido (%)</label>

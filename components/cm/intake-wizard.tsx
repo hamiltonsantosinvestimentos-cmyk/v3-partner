@@ -2,10 +2,13 @@
 
 import React, { useState } from "react";
 import { CheckCircle2, ChevronRight, ChevronLeft, Loader2, Shield } from "lucide-react";
+import { maskCpfCnpjInput, maskPhoneInput, isValidEmail } from "@/lib/utils";
+import { UFS, fetchMunicipios } from "@/lib/br-locations";
 
 const STEPS = [
+  { label: "Identificação Inicial", key: "identificacao_inicial" },
   { label: "NDA", key: "nda" },
-  { label: "Identificação", key: "identificacao" },
+  { label: "Identificação Completa", key: "identificacao_completa" },
   { label: "Ativo", key: "ativo" },
   { label: "Financeiro", key: "financeiro" },
   { label: "Documentos", key: "documentos" },
@@ -31,6 +34,8 @@ export function IntakeWizard({ token, prefill, anonymousId }: IntakeWizardProps)
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState("");
+  const [municipios, setMunicipios] = useState<string[]>([]);
+  const [loadingMunicipios, setLoadingMunicipios] = useState(false);
 
   const [form, setForm] = useState({
     seller_name: prefill.seller_name || "",
@@ -40,6 +45,8 @@ export function IntakeWizard({ token, prefill, anonymousId }: IntakeWizardProps)
     contato_telefone: prefill.contato_telefone || "",
     asset_type: prefill.asset_type || "precatorio",
     ente_devedor: prefill.ente_devedor || "",
+    uf_ente_devedor: prefill.uf_ente_devedor || "",
+    municipio_ente_devedor: prefill.municipio_ente_devedor || "",
     esfera: prefill.esfera || "",
     tribunal: prefill.tribunal || "",
     natureza: prefill.natureza || "",
@@ -49,17 +56,32 @@ export function IntakeWizard({ token, prefill, anonymousId }: IntakeWizardProps)
     desagio_pretendido: prefill.desagio_pretendido || "",
     prazo_estimado_meses: prefill.prazo_estimado_meses || "",
     allows_tranching: prefill.allows_tranching || false,
+    tranche_valor_minimo: prefill.tranche_valor_minimo || "",
     observacoes: "",
     nda_accepted: false,
   });
 
   const upd = (field: string, value: any) => setForm((p) => ({ ...p, [field]: value }));
 
+  const selectUf = async (uf: string) => {
+    upd("uf_ente_devedor", uf);
+    upd("municipio_ente_devedor", "");
+    setMunicipios([]);
+    if (!uf) return;
+    setLoadingMunicipios(true);
+    try {
+      setMunicipios(await fetchMunicipios(uf));
+    } finally {
+      setLoadingMunicipios(false);
+    }
+  };
+
   const canAdvance = () => {
-    if (step === 0) return form.nda_accepted;
-    if (step === 1) return form.seller_name && form.contato_email;
-    if (step === 2) return form.asset_type && form.ente_devedor;
-    if (step === 3) return form.valor_face;
+    if (step === 0) return form.seller_name.trim() && isValidEmail(form.contato_email);
+    if (step === 1) return form.nda_accepted;
+    if (step === 2) return true;
+    if (step === 3) return form.asset_type && form.ente_devedor;
+    if (step === 4) return form.valor_face;
     return true;
   };
 
@@ -128,10 +150,30 @@ export function IntakeWizard({ token, prefill, anonymousId }: IntakeWizardProps)
       <div className="bg-[#12112A] border border-[#9BAFC5]/10 rounded-xl p-6 sm:p-8 mb-6">
         {step === 0 && (
           <div>
+            <h3 className="text-lg font-bold text-[#F5F1E8] mb-1">Identificação Inicial</h3>
+            <p className="text-xs text-[#9BAFC5] mb-6">Antes do Termo de Confidencialidade, precisamos saber quem é você — o NDA será gerado com esses dados</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className={labelClass}>Nome completo / Razão Social *</label>
+                <input className={inputClass} value={form.seller_name} onChange={(e) => upd("seller_name", e.target.value)} placeholder="Nome completo ou razão social" />
+              </div>
+              <div>
+                <label className={labelClass}>Email *</label>
+                <input type="email" className={inputClass} value={form.contato_email} onChange={(e) => upd("contato_email", e.target.value)} placeholder="email@empresa.com" />
+                {form.contato_email && !isValidEmail(form.contato_email) && (
+                  <p className="text-[10px] text-red-400 mt-1">Email inválido</p>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {step === 1 && (
+          <div>
             <h3 className="text-lg font-bold text-[#F5F1E8] mb-1">Termo de Confidencialidade</h3>
             <p className="text-xs text-[#9BAFC5] mb-6">Leia e aceite os termos antes de prosseguir</p>
             <div className="bg-[#162744] border border-[#9BAFC5]/10 rounded-lg p-6 mb-6 max-h-[200px] overflow-y-auto text-xs text-[#9BAFC5]/80 leading-relaxed">
-              <p className="mb-3">Pelo presente termo, declaro que as informações fornecidas são verdadeiras e autorizo a V3 Partners Soluções Ltda (CNPJ 14.219.287/0001-50) a utilizar os dados exclusivamente para fins de análise, estruturação e intermediação da operação de cessão do ativo descrito neste formulário.</p>
+              <p className="mb-3">Pelo presente termo, <strong className="text-[#F5F1E8]">{form.seller_name || "o cedente"}</strong> declara que as informações fornecidas são verdadeiras e autoriza a V3 Partners Soluções Ltda (CNPJ 14.219.287/0001-50) a utilizar os dados exclusivamente para fins de análise, estruturação e intermediação da operação de cessão do ativo descrito neste formulário.</p>
               <p className="mb-3">Os dados pessoais e financeiros serão tratados conforme a Lei Geral de Proteção de Dados (LGPD — Lei 13.709/2018), com base legal na execução contratual (Art. 7, inc. V).</p>
               <p className="mb-3">As informações do ativo serão exibidas de forma anonimizada na vitrine da plataforma. Dados identificáveis (nome, CPF/CNPJ, número de processo) são acessíveis apenas à equipe interna V3 Partners e nunca publicados.</p>
               <p>Em caso de dúvidas: privacidade@v3partners.com.br</p>
@@ -143,18 +185,18 @@ export function IntakeWizard({ token, prefill, anonymousId }: IntakeWizardProps)
           </div>
         )}
 
-        {step === 1 && (
+        {step === 2 && (
           <div>
-            <h3 className="text-lg font-bold text-[#F5F1E8] mb-1">Identificação do Cedente</h3>
-            <p className="text-xs text-[#9BAFC5] mb-6">Dados de quem detém o ativo</p>
+            <h3 className="text-lg font-bold text-[#F5F1E8] mb-1">Identificação Completa</h3>
+            <p className="text-xs text-[#9BAFC5] mb-6">Dados complementares de quem detém o ativo</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className={labelClass}>Nome completo / Razão Social *</label>
-                <input className={inputClass} value={form.seller_name} onChange={(e) => upd("seller_name", e.target.value)} placeholder="Nome completo ou razão social" />
+                <label className={labelClass}>CPF / CNPJ *</label>
+                <input className={inputClass} value={form.seller_cpf_cnpj} onChange={(e) => upd("seller_cpf_cnpj", maskCpfCnpjInput(e.target.value))} placeholder="000.000.000-00" />
               </div>
               <div>
-                <label className={labelClass}>CPF / CNPJ *</label>
-                <input className={inputClass} value={form.seller_cpf_cnpj} onChange={(e) => upd("seller_cpf_cnpj", e.target.value)} placeholder="000.000.000-00" />
+                <label className={labelClass}>Telefone (com DDD)</label>
+                <input className={inputClass} value={form.contato_telefone} onChange={(e) => upd("contato_telefone", maskPhoneInput(e.target.value))} placeholder="(21) 99999-0000" />
               </div>
               <div>
                 <label className={labelClass}>Nacionalidade</label>
@@ -179,14 +221,6 @@ export function IntakeWizard({ token, prefill, anonymousId }: IntakeWizardProps)
                 <label className={labelClass}>Identidade / Órgão Expedidor</label>
                 <input className={inputClass} value={(form as any).identidade_orgao ?? ""} onChange={(e) => upd("identidade_orgao", e.target.value)} placeholder="Ex: 12.345.678-9 SSP/RJ" />
               </div>
-              <div>
-                <label className={labelClass}>Email *</label>
-                <input type="email" className={inputClass} value={form.contato_email} onChange={(e) => upd("contato_email", e.target.value)} placeholder="email@empresa.com" />
-              </div>
-              <div>
-                <label className={labelClass}>Telefone</label>
-                <input className={inputClass} value={form.contato_telefone} onChange={(e) => upd("contato_telefone", e.target.value)} placeholder="+55 (21) 99999-0000" />
-              </div>
               <div className="sm:col-span-2">
                 <label className={labelClass}>Endereço completo</label>
                 <input className={inputClass} value={(form as any).endereco ?? ""} onChange={(e) => upd("endereco", e.target.value)} placeholder="Rua, número, complemento, bairro, cidade, UF, CEP" />
@@ -195,7 +229,7 @@ export function IntakeWizard({ token, prefill, anonymousId }: IntakeWizardProps)
           </div>
         )}
 
-        {step === 2 && (
+        {step === 3 && (
           <div>
             <h3 className="text-lg font-bold text-[#F5F1E8] mb-1">Dados do Ativo</h3>
             <p className="text-xs text-[#9BAFC5] mb-6">Classificação e detalhes do direito creditório</p>
@@ -209,6 +243,20 @@ export function IntakeWizard({ token, prefill, anonymousId }: IntakeWizardProps)
               <div>
                 <label className={labelClass}>Ente Devedor *</label>
                 <input className={inputClass} value={form.ente_devedor} onChange={(e) => upd("ente_devedor", e.target.value)} placeholder="Ex: União Federal, Estado do RJ" />
+              </div>
+              <div>
+                <label className={labelClass}>UF do Ente Devedor</label>
+                <select className={selectClass} value={form.uf_ente_devedor} onChange={(e) => selectUf(e.target.value)}>
+                  <option value="">Selecione</option>
+                  {UFS.map((uf) => <option key={uf} value={uf}>{uf}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className={labelClass}>Município do Ente Devedor</label>
+                <select className={selectClass} value={form.municipio_ente_devedor} onChange={(e) => upd("municipio_ente_devedor", e.target.value)} disabled={!form.uf_ente_devedor || loadingMunicipios}>
+                  <option value="">{loadingMunicipios ? "Carregando..." : "Selecione a UF primeiro"}</option>
+                  {municipios.map((m) => <option key={m} value={m}>{m}</option>)}
+                </select>
               </div>
               <div>
                 <label className={labelClass}>Esfera Judicial</label>
@@ -232,14 +280,14 @@ export function IntakeWizard({ token, prefill, anonymousId }: IntakeWizardProps)
                 </select>
               </div>
               <div>
-                <label className={labelClass}>Número do Processo</label>
+                <label className={labelClass}>Número do Processo (opcional)</label>
                 <input className={inputClass} value={form.numero_processo} onChange={(e) => upd("numero_processo", e.target.value)} placeholder="0000000-00.0000.0.00.0000" />
               </div>
             </div>
           </div>
         )}
 
-        {step === 3 && (
+        {step === 4 && (
           <div>
             <h3 className="text-lg font-bold text-[#F5F1E8] mb-1">Dados Financeiros</h3>
             <p className="text-xs text-[#9BAFC5] mb-6">Valores e condições pretendidas</p>
@@ -264,11 +312,17 @@ export function IntakeWizard({ token, prefill, anonymousId }: IntakeWizardProps)
                 <input type="checkbox" id="tranching" checked={form.allows_tranching} onChange={(e) => upd("allows_tranching", e.target.checked)} className="w-4 h-4 accent-[#C9A84C]" />
                 <label htmlFor="tranching" className="text-sm text-[#9BAFC5]">Aceito fracionamento do ativo em tranches</label>
               </div>
+              {form.allows_tranching && (
+                <div>
+                  <label className={labelClass}>Valor Mínimo por Fração (R$)</label>
+                  <input type="number" className={inputClass} value={form.tranche_valor_minimo} onChange={(e) => upd("tranche_valor_minimo", e.target.value)} placeholder="Ex: 100000" />
+                </div>
+              )}
             </div>
           </div>
         )}
 
-        {step === 4 && (
+        {step === 5 && (
           <div>
             <h3 className="text-lg font-bold text-[#F5F1E8] mb-1">Documentos</h3>
             <p className="text-xs text-[#9BAFC5] mb-6">Após o envio, a equipe V3 Partners solicitará os documentos necessários por email</p>

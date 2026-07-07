@@ -1,11 +1,13 @@
 "use client";
 
-import React, { useState } from "react";
-import { CheckCircle2, ChevronRight, ChevronLeft, Loader2, Shield, Search } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { CheckCircle2, ChevronRight, ChevronLeft, Loader2, Shield, Search, Upload } from "lucide-react";
+import { maskCpfCnpjInput, maskPhoneInput, isValidEmail } from "@/lib/utils";
 
 const STEPS = [
+  { label: "Identificação Inicial", key: "identificacao_inicial" },
   { label: "NDA", key: "nda" },
-  { label: "Identificação", key: "identificacao" },
+  { label: "Identificação Completa", key: "identificacao_completa" },
   { label: "Mandato de Busca", key: "mandato" },
   { label: "Envio", key: "envio" },
 ];
@@ -20,6 +22,37 @@ export function BuyIntakeWizard({ token, prefill }: BuyIntakeWizardProps) {
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState("");
+  const [docs, setDocs] = useState<{ id: string; document_type: string }[]>([]);
+  const [uploadingDoc, setUploadingDoc] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch(`/api/cm/intake/buy/${token}/documents`)
+      .then((res) => res.json())
+      .then((json) => setDocs(json.documents ?? []))
+      .catch(() => setDocs([]));
+  }, [token]);
+
+  const hasDoc = (type: string) => docs.some((d) => d.document_type === type);
+
+  const uploadDoc = async (file: File, documentType: string) => {
+    setUploadingDoc(documentType);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("document_type", documentType);
+      const res = await fetch(`/api/cm/intake/buy/${token}/documents`, { method: "POST", body: formData });
+      const json = await res.json();
+      if (res.ok) {
+        setDocs((prev) => [...prev, json.document]);
+      } else {
+        alert(json.error ?? "Erro no upload");
+      }
+    } catch {
+      alert("Erro de conexão");
+    } finally {
+      setUploadingDoc(null);
+    }
+  };
 
   const [form, setForm] = useState({
     nome_contato: prefill.nome_contato || "",
@@ -51,9 +84,10 @@ export function BuyIntakeWizard({ token, prefill }: BuyIntakeWizardProps) {
   };
 
   const canAdvance = () => {
-    if (step === 0) return form.nda_accepted;
-    if (step === 1) return form.nome_contato && form.email;
-    if (step === 2) return form.asset_types_preferidos.length > 0;
+    if (step === 0) return form.nome_contato.trim() && isValidEmail(form.email);
+    if (step === 1) return form.nda_accepted;
+    if (step === 2) return hasDoc("loi_mou") && hasDoc("procuracao");
+    if (step === 3) return form.asset_types_preferidos.length > 0;
     return true;
   };
 
@@ -121,11 +155,31 @@ export function BuyIntakeWizard({ token, prefill }: BuyIntakeWizardProps) {
       <div className="bg-[#12112A] border border-[#9BAFC5]/10 rounded-xl p-6 sm:p-8 mb-6">
         {step === 0 && (
           <div>
+            <h3 className="text-lg font-bold text-[#F5F1E8] mb-1">Identificação Inicial</h3>
+            <p className="text-xs text-[#9BAFC5] mb-6">Antes do Termo de Confidencialidade, precisamos saber quem é você — o NDA será gerado com esses dados</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className={labelClass}>Nome completo / Razão Social *</label>
+                <input className={inputClass} value={form.nome_contato} onChange={(e) => upd("nome_contato", e.target.value)} placeholder="Nome completo ou razão social" />
+              </div>
+              <div>
+                <label className={labelClass}>Email *</label>
+                <input type="email" className={inputClass} value={form.email} onChange={(e) => upd("email", e.target.value)} placeholder="email@empresa.com" />
+                {form.email && !isValidEmail(form.email) && (
+                  <p className="text-[10px] text-red-400 mt-1">Email inválido</p>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {step === 1 && (
+          <div>
             <h3 className="text-lg font-bold text-[#F5F1E8] mb-1">Termo de Confidencialidade</h3>
             <p className="text-xs text-[#9BAFC5] mb-6">Leia e aceite os termos antes de prosseguir</p>
             <div className="bg-[#162744] border border-[#9BAFC5]/10 rounded-lg p-6 mb-6 max-h-[200px] overflow-y-auto text-xs text-[#9BAFC5]/80 leading-relaxed">
-              <p className="mb-3">Pelo presente termo, declaro que manterei em sigilo absoluto todas as informações acessadas na plataforma V3 Partners, incluindo dados de ativos, valores, condições de negociação e identidade das partes envolvidas.</p>
-              <p className="mb-3">Comprometo-me a não divulgar, compartilhar ou utilizar as informações para qualquer finalidade diferente da análise de viabilidade de aquisição dos ativos disponibilizados pela V3 Partners Soluções Ltda (CNPJ 14.219.287/0001-50).</p>
+              <p className="mb-3">Pelo presente termo, <strong className="text-[#F5F1E8]">{form.nome_contato || "o comprador"}</strong> declara que manterá em sigilo absoluto todas as informações acessadas na plataforma V3 Partners, incluindo dados de ativos, valores, condições de negociação e identidade das partes envolvidas.</p>
+              <p className="mb-3">Compromete-se a não divulgar, compartilhar ou utilizar as informações para qualquer finalidade diferente da análise de viabilidade de aquisição dos ativos disponibilizados pela V3 Partners Soluções Ltda (CNPJ 14.219.287/0001-50).</p>
               <p className="mb-3">O descumprimento deste termo sujeita o infrator às penalidades previstas em lei, incluindo indenização por perdas e danos, além de vedação de negociação direta com cedentes identificados através da plataforma (cláusula de não circunvenção).</p>
               <p>Os dados pessoais serão tratados conforme LGPD (Lei 13.709/2018), Art. 7, inc. V. Contato: privacidade@v3partners.com.br</p>
             </div>
@@ -136,26 +190,26 @@ export function BuyIntakeWizard({ token, prefill }: BuyIntakeWizardProps) {
           </div>
         )}
 
-        {step === 1 && (
+        {step === 2 && (
           <div>
-            <h3 className="text-lg font-bold text-[#F5F1E8] mb-1">Identificação do Comprador</h3>
-            <p className="text-xs text-[#9BAFC5] mb-6">Dados de quem busca adquirir ativos</p>
+            <h3 className="text-lg font-bold text-[#F5F1E8] mb-1">Identificação Completa</h3>
+            <p className="text-xs text-[#9BAFC5] mb-6">Dados complementares de quem busca adquirir ativos</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className={labelClass}>Nome completo / Razão Social *</label>
-                <input className={inputClass} value={form.nome_contato} onChange={(e) => upd("nome_contato", e.target.value)} placeholder="Nome completo ou razão social" />
-              </div>
-              <div>
                 <label className={labelClass}>CPF</label>
-                <input className={inputClass} value={form.cpf} onChange={(e) => upd("cpf", e.target.value)} placeholder="000.000.000-00" />
+                <input className={inputClass} value={form.cpf} onChange={(e) => upd("cpf", maskCpfCnpjInput(e.target.value))} placeholder="000.000.000-00" />
               </div>
               <div>
                 <label className={labelClass}>CNPJ (se PJ)</label>
-                <input className={inputClass} value={form.cnpj} onChange={(e) => upd("cnpj", e.target.value)} placeholder="00.000.000/0001-00" />
+                <input className={inputClass} value={form.cnpj} onChange={(e) => upd("cnpj", maskCpfCnpjInput(e.target.value))} placeholder="00.000.000/0001-00" />
               </div>
               <div>
                 <label className={labelClass}>Empresa</label>
                 <input className={inputClass} value={form.empresa} onChange={(e) => upd("empresa", e.target.value)} placeholder="Nome da empresa ou fundo" />
+              </div>
+              <div>
+                <label className={labelClass}>Telefone (com DDD)</label>
+                <input className={inputClass} value={form.telefone} onChange={(e) => upd("telefone", maskPhoneInput(e.target.value))} placeholder="(21) 99999-0000" />
               </div>
               <div>
                 <label className={labelClass}>Nacionalidade</label>
@@ -180,23 +234,39 @@ export function BuyIntakeWizard({ token, prefill }: BuyIntakeWizardProps) {
                 <label className={labelClass}>Identidade / Órgão Expedidor</label>
                 <input className={inputClass} value={form.identidade_orgao} onChange={(e) => upd("identidade_orgao", e.target.value)} placeholder="Ex: 12.345.678-9 SSP/RJ" />
               </div>
-              <div>
-                <label className={labelClass}>Email *</label>
-                <input type="email" className={inputClass} value={form.email} onChange={(e) => upd("email", e.target.value)} placeholder="email@empresa.com" />
-              </div>
-              <div>
-                <label className={labelClass}>Telefone</label>
-                <input className={inputClass} value={form.telefone} onChange={(e) => upd("telefone", e.target.value)} placeholder="+55 (21) 99999-0000" />
-              </div>
               <div className="sm:col-span-2">
                 <label className={labelClass}>Endereço completo</label>
                 <input className={inputClass} value={form.endereco} onChange={(e) => upd("endereco", e.target.value)} placeholder="Rua, número, complemento, bairro, cidade, UF, CEP" />
               </div>
             </div>
+
+            <div className="mt-6 pt-6 border-t border-[#9BAFC5]/10">
+              <label className={labelClass}>Documentos obrigatórios</label>
+              <div className="space-y-2 mt-2">
+                {([
+                  { type: "loi_mou", label: "Carta de Intenções (LOI) ou Memorando de Entendimento (MOU)" },
+                  { type: "procuracao", label: "Procuração / autorização" },
+                ] as const).map(({ type, label }) => (
+                  <div key={type} className="flex items-center justify-between gap-3 bg-[#162744] border border-[#9BAFC5]/10 rounded-lg px-4 py-3">
+                    <span className="text-xs text-[#F5F1E8]">{label}</span>
+                    {hasDoc(type) ? (
+                      <span className="text-[10px] text-emerald-400 font-bold flex items-center gap-1"><CheckCircle2 size={12} /> Enviado</span>
+                    ) : (
+                      <label className="flex items-center gap-1.5 px-3 py-1.5 bg-[#12112A] border border-[#9BAFC5]/15 rounded text-[#9BAFC5] text-[10px] font-bold hover:border-[#C9A84C]/30 hover:text-[#C9A84C] transition cursor-pointer flex-shrink-0">
+                        {uploadingDoc === type ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
+                        Enviar
+                        <input type="file" className="hidden" accept=".pdf,.doc,.docx,.jpg,.png"
+                          onChange={(e) => { if (e.target.files?.[0]) uploadDoc(e.target.files[0], type); }} />
+                      </label>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         )}
 
-        {step === 2 && (
+        {step === 3 && (
           <div>
             <h3 className="text-lg font-bold text-[#F5F1E8] mb-1">Mandato de Busca</h3>
             <p className="text-xs text-[#9BAFC5] mb-6">Defina o perfil de ativos que você procura</p>
@@ -256,7 +326,7 @@ export function BuyIntakeWizard({ token, prefill }: BuyIntakeWizardProps) {
           </div>
         )}
 
-        {step === 3 && (
+        {step === 4 && (
           <div className="text-center py-8">
             <Search className="w-12 h-12 text-[#C9A84C] mx-auto mb-4" />
             <h3 className="text-lg font-bold text-[#F5F1E8] mb-2">Confirmar envio</h3>

@@ -13,7 +13,7 @@ export async function GET(
 
   const { data: listing, error } = await svc()
     .from("cm_asset_listings")
-    .select("id, anonymous_id, asset_type, listing_status, intake_locked, intake_data, seller_name, ente_devedor, esfera, tribunal, natureza, numero_processo, valor_face, valor_atualizado, desagio_pretendido, prazo_estimado_meses, allows_tranching")
+    .select("id, anonymous_id, asset_type, listing_status, intake_locked, intake_data, seller_name, ente_devedor, uf_ente_devedor, municipio_ente_devedor, esfera, tribunal, natureza, numero_processo, valor_face, valor_atualizado, desagio_pretendido, prazo_estimado_meses, allows_tranching, tranche_valor_minimo")
     .eq("cm_intake_token", token)
     .single();
 
@@ -34,6 +34,8 @@ export async function GET(
       asset_type: listing.asset_type,
       seller_name: listing.seller_name !== "Pendente" ? listing.seller_name : "",
       ente_devedor: listing.ente_devedor ?? "",
+      uf_ente_devedor: listing.uf_ente_devedor ?? "",
+      municipio_ente_devedor: listing.municipio_ente_devedor ?? "",
       esfera: listing.esfera ?? "",
       tribunal: listing.tribunal ?? "",
       natureza: listing.natureza ?? "",
@@ -43,6 +45,7 @@ export async function GET(
       desagio_pretendido: listing.desagio_pretendido ?? "",
       prazo_estimado_meses: listing.prazo_estimado_meses ?? "",
       allows_tranching: listing.allows_tranching ?? false,
+      tranche_valor_minimo: listing.tranche_valor_minimo ?? "",
       ...(listing.intake_data as Record<string, unknown> ?? {}),
     },
   });
@@ -72,10 +75,11 @@ export async function POST(
   const body = await req.json();
   const {
     asset_type, seller_name, seller_cpf_cnpj,
-    ente_devedor, esfera, tribunal, natureza, numero_processo,
+    ente_devedor, uf_ente_devedor, municipio_ente_devedor, esfera, tribunal, natureza, numero_processo,
     valor_face, valor_atualizado, desagio_pretendido, prazo_estimado_meses,
-    allows_tranching, nda_accepted,
+    allows_tranching, tranche_valor_minimo, nda_accepted,
     contato_nome, contato_email, contato_telefone,
+    nacionalidade, profissao, estado_civil, identidade_orgao, endereco,
   } = body;
 
   if (!seller_name || !valor_face || !asset_type) {
@@ -97,6 +101,8 @@ export async function POST(
       seller_name,
       seller_cpf_cnpj: seller_cpf_cnpj ?? null,
       ente_devedor: ente_devedor ?? null,
+      uf_ente_devedor: uf_ente_devedor ?? null,
+      municipio_ente_devedor: municipio_ente_devedor ?? null,
       esfera: esfera ?? null,
       tribunal: tribunal ?? null,
       natureza: natureza ?? null,
@@ -106,6 +112,7 @@ export async function POST(
       desagio_pretendido: desagio_pretendido ? Number(desagio_pretendido) : null,
       prazo_estimado_meses: prazo_estimado_meses ? Number(prazo_estimado_meses) : null,
       allows_tranching: allows_tranching ?? false,
+      tranche_valor_minimo: tranche_valor_minimo ? Number(tranche_valor_minimo) : null,
       listing_status: "formulario_preenchido",
       form_submitted_at: new Date().toISOString(),
       intake_locked: true,
@@ -113,6 +120,11 @@ export async function POST(
         contato_nome: contato_nome ?? null,
         contato_email: contato_email ?? null,
         contato_telefone: contato_telefone ?? null,
+        nacionalidade: nacionalidade ?? null,
+        profissao: profissao ?? null,
+        estado_civil: estado_civil ?? null,
+        identidade_orgao: identidade_orgao ?? null,
+        endereco: endereco ?? null,
         nda_accepted: nda_accepted ?? false,
         nda_accepted_at: nda_accepted ? new Date().toISOString() : null,
         submitted_at: new Date().toISOString(),
