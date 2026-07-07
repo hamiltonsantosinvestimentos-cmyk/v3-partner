@@ -61,6 +61,10 @@ function formatBRL(v: number) {
   return `R$ ${v.toLocaleString("pt-BR")}`;
 }
 
+function formatBRLFull(v: number) {
+  return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+
 function toFieldLabel(key: string): string {
   return key
     .replace(/_/g, " ")
@@ -814,11 +818,17 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
                   <label className="text-[9px] text-[#9BAFC5] uppercase">Valor de Face (R$) *</label>
                   <input type="number" value={manualForm.valor_face} onChange={(e) => setManualForm((f) => ({ ...f, valor_face: e.target.value }))}
                     className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#F5F1E8] mt-1" />
+                  {manualForm.valor_face && Number.isFinite(Number(manualForm.valor_face)) && (
+                    <div className="text-[9px] text-[#9BAFC5] mt-1">{formatBRLFull(Number(manualForm.valor_face))}</div>
+                  )}
                 </div>
                 <div>
                   <label className="text-[9px] text-[#9BAFC5] uppercase">Valor Atualizado (R$)</label>
                   <input type="number" value={manualForm.valor_atualizado} onChange={(e) => setManualForm((f) => ({ ...f, valor_atualizado: e.target.value }))}
                     className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#F5F1E8] mt-1" />
+                  {manualForm.valor_atualizado && Number.isFinite(Number(manualForm.valor_atualizado)) && (
+                    <div className="text-[9px] text-[#9BAFC5] mt-1">{formatBRLFull(Number(manualForm.valor_atualizado))}</div>
+                  )}
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-2">
@@ -1074,6 +1084,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
             </div>
 
             <div className="flex-1 overflow-y-auto">
+            <div className="max-w-3xl mx-auto w-full">
 
             {/* ══ ABA: VISÃO GERAL ══ */}
             {activeDetailTab === "geral" && (<>
@@ -1136,6 +1147,12 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
                   { key: "valor_atualizado", label: "Valor Atualizado", value: valorAtualizadoNegociado, setValue: setValorAtualizadoNegociado },
                 ] as const).map(({ key, label, value, setValue }) => {
                   const history: any[] = ((selectedListing as any).valores_ocr?.[key] ?? []).slice().reverse();
+                  const latestOcr = history[0];
+                  const numValue = value ? Number(value) : null;
+                  const divergeFromOcr =
+                    latestOcr && numValue !== null && Number.isFinite(numValue) && Number(latestOcr.valor) !== 0
+                      ? Math.round((numValue / Number(latestOcr.valor) - 1) * 1000) / 10
+                      : null;
                   return (
                     <div key={key}>
                       <label className="text-[9px] text-[#9BAFC5] uppercase">{label} — Negociado (manual)</label>
@@ -1143,6 +1160,15 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
                         type="number" value={value} onChange={(e) => setValue(e.target.value)}
                         className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#F5F1E8] mt-1 focus:border-[#C9A84C]/50 focus:outline-none"
                       />
+                      {numValue !== null && Number.isFinite(numValue) && (
+                        <div className="text-[9px] text-[#9BAFC5] mt-1">{formatBRLFull(numValue)}</div>
+                      )}
+                      {divergeFromOcr !== null && divergeFromOcr !== 0 && (
+                        <div className="flex items-center gap-1 mt-1 px-2 py-1 bg-orange-500/10 border border-orange-500/20 rounded text-orange-400 text-[9px] font-bold">
+                          <AlertTriangle size={11} className="flex-shrink-0" />
+                          {divergeFromOcr > 0 ? `${divergeFromOcr}% acima` : `${Math.abs(divergeFromOcr)}% abaixo`} do valor lido no OCR ({formatBRLFull(Number(latestOcr.valor))})
+                        </div>
+                      )}
                       {history.length > 0 && (
                         <div className="mt-2 space-y-1">
                           <div className="text-[8px] text-[#9BAFC5]/70 uppercase tracking-wide">
@@ -1661,6 +1687,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
             </div>
             </>)}
 
+            </div>
             </div>
         </div>
       )}
