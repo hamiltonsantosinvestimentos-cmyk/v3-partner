@@ -75,7 +75,7 @@ export async function POST(req: NextRequest) {
       cm_intake_token: token,
       created_by: user.id,
     })
-    .select("id")
+    .select("*")
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -86,5 +86,6 @@ export async function POST(req: NextRequest) {
     token,
     url: `${protocol}://${host}/intake/cm/${token}`,
     listing_id: listing.id,
+    listing,
   }, { status: 201 });
 }

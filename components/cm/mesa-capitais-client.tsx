@@ -364,8 +364,14 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
       });
       const json = await res.json();
       if (res.ok) {
-        setIntakeUrl(json.url);
-        if (!listingId) fetchAll();
+        if (!listingId && json.listing) {
+          // Novo Ativo: abre o painel do ativo recem-criado direto, pronto para nomear (Apelido) e enviar o link
+          await openListingDetail(json.listing);
+          setIntakeUrl(json.url);
+          setListings((prev) => [json.listing, ...prev]);
+        } else {
+          setIntakeUrl(json.url);
+        }
       } else {
         alert(json.error ?? "Erro ao gerar link");
       }
