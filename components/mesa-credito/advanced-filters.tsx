@@ -20,10 +20,12 @@ export const EMPTY_FILTERS: FilterState = {
   valueMin: "", valueMax: "", dateFrom: "", dateTo: "", partner: "",
 };
 
-const STAGES = ["RECEBIDO", "TRIAGEM", "ANALISE", "PENDENCIA", "APROVACAO", "FINALIZADO"];
+const STAGES = ["RECEBIDO", "TRIAGEM", "ANALISE", "PENDENCIA", "AVALIACAO_IMOVEL", "APROVACAO", "CONTRATO_ASSINADO", "REGISTRO_IMOVEL", "LIBERADO", "REPROVADO", "FINALIZADO"];
 const STAGE_LABELS: Record<string, string> = {
   RECEBIDO: "Recebido", TRIAGEM: "Triagem", ANALISE: "Análise de Crédito",
-  PENDENCIA: "Pendência de Docs", APROVACAO: "Em Aprovação", FINALIZADO: "Finalizado",
+  PENDENCIA: "Pendência de Docs", AVALIACAO_IMOVEL: "Avaliação de Imóvel", APROVACAO: "Em Aprovação",
+  CONTRATO_ASSINADO: "Contrato Assinado", REGISTRO_IMOVEL: "Registro de Imóveis",
+  LIBERADO: "Recurso Liberado", REPROVADO: "Reprovado", FINALIZADO: "Finalizado",
 };
 
 interface Props {
@@ -230,11 +232,16 @@ export type SLAStatus = "ok" | "warning" | "critical" | "expired";
 
 // SLA em horas úteis por etapa (seg–sex, 08h–18h = 10h úteis/dia)
 export const SLA_HOURS_BY_STAGE: Record<string, number> = {
-  RECEBIDO:   20,   // 2 dias úteis
-  TRIAGEM:    20,   // 2 dias úteis
-  ANALISE:    70,   // 7 dias úteis
-  PENDENCIA:  20,   // 2 dias úteis
-  APROVACAO:  30,   // 3 dias úteis
+  RECEBIDO:          20,   // 2 dias úteis
+  TRIAGEM:           20,   // 2 dias úteis
+  ANALISE:           70,   // 7 dias úteis
+  PENDENCIA:         20,   // 2 dias úteis
+  AVALIACAO_IMOVEL: 150,   // 15 dias
+  APROVACAO:         30,   // 3 dias úteis
+  CONTRATO_ASSINADO: 50,   // 5 dias
+  REGISTRO_IMOVEL:  300,   // 30 dias
+  LIBERADO:          30,   // 3 dias
+  REPROVADO:  Infinity,
   FINALIZADO: Infinity,
 };
 

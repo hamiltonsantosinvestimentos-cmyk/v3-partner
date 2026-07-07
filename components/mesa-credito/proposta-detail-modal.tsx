@@ -31,9 +31,16 @@ export const PIPELINE_STAGES = [
   { key: "TRIAGEM", label: "Triagem", color: "text-blue-400", bg: "bg-blue-500/20" },
   { key: "ANALISE", label: "Análise de Crédito", color: "text-amber-400", bg: "bg-amber-500/20" },
   { key: "PENDENCIA", label: "Pendência de Docs", color: "text-orange-400", bg: "bg-orange-500/20" },
+  { key: "AVALIACAO_IMOVEL", label: "Avaliação de Imóvel", color: "text-cyan-400", bg: "bg-cyan-500/20" },
   { key: "APROVACAO", label: "Em Aprovação", color: "text-purple-400", bg: "bg-purple-500/20" },
-  { key: "FINALIZADO", label: "Finalizado", color: "text-emerald-400", bg: "bg-emerald-500/20" },
+  { key: "CONTRATO_ASSINADO", label: "Contrato Assinado", color: "text-indigo-400", bg: "bg-indigo-500/20" },
+  { key: "REGISTRO_IMOVEL", label: "Registro de Imóveis", color: "text-teal-400", bg: "bg-teal-500/20" },
+  { key: "LIBERADO", label: "Recurso Liberado", color: "text-emerald-400", bg: "bg-emerald-500/20" },
 ];
+
+// Estágio terminal de reprovação — fora do fluxo linear principal (não faz parte
+// do "avançar/retroceder" sequencial, é alcançado a qualquer momento pelo botão Reprovar)
+export const STAGE_REPROVADO = { key: "REPROVADO", label: "Reprovado", color: "text-red-400", bg: "bg-red-500/20" };
 
 export interface ImovelMeta {
   endereco?: string;
@@ -548,6 +555,107 @@ function PendingBanner({ proposal, canChangeStage, onProposalUpdate, onStageChan
   );
 }
 
+// ── Linha do Tempo da Operação ──────────────────────────────────────────────
+// Reconstrói entrada/saída de cada etapa a partir de metadata.stage_history
+// (que já registra a saída da etapa anterior a cada troca de stage) +
+// stage_changed_at (entrada na etapa atual) + created_at (entrada na primeira etapa).
+function stageLabelFor(key: string): { label: string; color: string } {
+  if (key === "REPROVADO") return STAGE_REPROVADO;
+  const found = PIPELINE_STAGES.find(s => s.key === key);
+  return found ?? { label: key, color: "text-muted-foreground" };
+}
+
+function formatDuracao(ms: number): string {
+  if (ms < 0) ms = 0;
+  const dias = Math.floor(ms / 86400000);
+  const horas = Math.floor((ms % 86400000) / 3600000);
+  if (dias === 0 && horas === 0) return "menos de 1h";
+  if (dias === 0) return `${horas}h`;
+  if (horas === 0) return `${dias}d`;
+  return `${dias}d ${horas}h`;
+}
+
+interface TimelineEntry {
+  stage: string;
+  enteredAt: string;
+  exitedAt: string | null;
+}
+
+function buildStageTimeline(proposal: ProposalFull): TimelineEntry[] {
+  const history = (proposal.metadata?.stage_history as { stage: string; exited_at: string }[] | undefined) ?? [];
+  const entries: TimelineEntry[] = [];
+  let cursor = proposal.created_at;
+  for (const h of history) {
+    entries.push({ stage: h.stage, enteredAt: cursor, exitedAt: h.exited_at });
+    cursor = h.exited_at;
+  }
+  if (proposal.stage) {
+    entries.push({ stage: proposal.stage, enteredAt: cursor, exitedAt: null });
+  }
+  return entries;
+}
+
+function TimelineOperacao({ proposal }: { proposal: ProposalFull }) {
+  const entries = buildStageTimeline(proposal);
+  if (entries.length === 0) return null;
+
+  const slaOverride = (proposal.metadata?.sla_override as Record<string, string> | undefined) ?? {};
+  const isTerminal = proposal.stage === "LIBERADO" || proposal.stage === "REPROVADO" || proposal.stage === "FINALIZADO";
+  const inicio = new Date(proposal.created_at).getTime();
+  const fim = isTerminal ? new Date(entries[entries.length - 1].enteredAt).getTime() : Date.now();
+  const tempoTotal = fim - inicio;
+
+  return (
+    <div>
+      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Linha do Tempo da Operação</p>
+      <div className="space-y-0">
+        {entries.map((entry, idx) => {
+          const { label, color } = stageLabelFor(entry.stage);
+          const duracaoMs = (entry.exitedAt ? new Date(entry.exitedAt).getTime() : Date.now()) - new Date(entry.enteredAt).getTime();
+          const isUltima = idx === entries.length - 1;
+          const target = slaOverride[entry.stage];
+          let slaBadge: { text: string; cls: string } | null = null;
+          if (target) {
+            const deadline = new Date(target + "T23:59:59-03:00").getTime();
+            const referencia = entry.exitedAt ? new Date(entry.exitedAt).getTime() : Date.now();
+            const noPrazo = referencia <= deadline;
+            slaBadge = entry.exitedAt
+              ? { text: noPrazo ? "concluído no prazo" : "concluído com atraso", cls: noPrazo ? "text-emerald-400 bg-emerald-500/10 border-emerald-500/30" : "text-red-400 bg-red-500/10 border-red-500/30" }
+              : { text: noPrazo ? `prazo: ${new Date(target + "T12:00:00").toLocaleDateString("pt-BR")}` : "prazo vencido", cls: noPrazo ? "text-amber-400 bg-amber-500/10 border-amber-500/30" : "text-red-400 bg-red-500/10 border-red-500/30" };
+          }
+          return (
+            <div key={`${entry.stage}-${idx}`} className="flex gap-3">
+              <div className="flex flex-col items-center">
+                <div className={`w-2.5 h-2.5 rounded-full mt-1.5 flex-shrink-0 ${isUltima ? "ring-2 ring-offset-2 ring-offset-card" : ""} ${color.replace("text-", "bg-")}`} />
+                {!isUltima && <div className="w-px flex-1 bg-border my-0.5" style={{ minHeight: "28px" }} />}
+              </div>
+              <div className="pb-4 flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className={`text-xs font-semibold ${color}`}>{label}</span>
+                  {slaBadge && (
+                    <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded border ${slaBadge.cls}`}>{slaBadge.text}</span>
+                  )}
+                </div>
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  {new Date(entry.enteredAt).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                  {" · "}
+                  {entry.exitedAt ? `durou ${formatDuracao(duracaoMs)}` : `em andamento há ${formatDuracao(duracaoMs)}`}
+                </p>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-secondary/40 border border-border mt-1">
+        <span className="text-[11px] text-muted-foreground">
+          {isTerminal ? "Tempo total da operação" : "Tempo decorrido desde a entrada na esteira"}
+        </span>
+        <span className="text-xs font-bold text-foreground">{formatDuracao(tempoTotal)}</span>
+      </div>
+    </div>
+  );
+}
+
 export function PropostaDetailModal({ open, onClose, proposal, onStageChange, onProposalUpdate, canChangeStage, canEditValorSolicitado, canCompileDocuments, canEditInstituicao }: PropostaDetailModalProps) {
   // ── Modal tab ─────────────────────────────────────────────────────────────
   type ModalTab = "detalhes" | "recomendacao" | "documentos" | "comentarios" | "analise_ia" | "chat_ia";
@@ -717,14 +825,16 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
     if (!proposal || !valorAprovado) return;
     setSavingAprovacao(true);
     try {
+      // Aprovar registra a decisão de crédito (status), mas não move a etapa —
+      // "Contrato Assinado" só deve ser marcado quando o contrato for realmente
+      // assinado (avanço manual pela mesa, refletindo a data real do evento).
       const val = parseFloat(valorAprovado.replace(/\D/g, "")) / 100;
       await fetch("/api/credit-proposals", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: proposal.id, status: "APPROVED", approved_value: val, stage: "FINALIZADO" }),
+        body: JSON.stringify({ id: proposal.id, status: "APPROVED", approved_value: val }),
       });
-      onProposalUpdate?.(proposal.id, { status: "APPROVED", approved_value: val, stage: "FINALIZADO" });
-      onStageChange?.(proposal.id, "FINALIZADO");
+      onProposalUpdate?.(proposal.id, { status: "APPROVED", approved_value: val });
       // Notifica o partner
       if (proposal.partner_id) {
         fetch("/api/notifications", {
@@ -752,10 +862,10 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
       await fetch("/api/credit-proposals", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: proposal.id, status: "REJECTED", stage: "FINALIZADO", metadata: newMeta }),
+        body: JSON.stringify({ id: proposal.id, status: "REJECTED", stage: "REPROVADO", metadata: newMeta }),
       });
-      onProposalUpdate?.(proposal.id, { status: "REJECTED", stage: "FINALIZADO", metadata: newMeta as typeof proposal.metadata });
-      onStageChange?.(proposal.id, "FINALIZADO");
+      onProposalUpdate?.(proposal.id, { status: "REJECTED", stage: "REPROVADO", metadata: newMeta as typeof proposal.metadata });
+      onStageChange?.(proposal.id, "REPROVADO");
       // Notifica o partner
       if (proposal.partner_id) {
         fetch("/api/notifications", {
@@ -1718,7 +1828,10 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
     }
   }
 
-  const currentStageIdx = PIPELINE_STAGES.findIndex((s) => s.key === (proposal.stage ?? "RECEBIDO"));
+  // FINALIZADO é o rótulo legado usado antes da separação entre Liberado/Reprovado
+  const isReprovado = proposal.stage === "REPROVADO" || (proposal.stage === "FINALIZADO" && proposal.status === "REJECTED");
+  const stageParaIndice = proposal.stage === "FINALIZADO" ? "LIBERADO" : (proposal.stage ?? "RECEBIDO");
+  const currentStageIdx = PIPELINE_STAGES.findIndex((s) => s.key === stageParaIndice);
   const activeIdx = currentStageIdx >= 0 ? currentStageIdx : 0;
 
   function handleExportPDF() {
@@ -2115,38 +2228,48 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
           {/* ── Pipeline de Etapas ── */}
           <div>
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Etapas da Proposta</p>
-            <div className="flex items-center gap-0">
-              {PIPELINE_STAGES.map((stage, idx) => (
-                <React.Fragment key={stage.key}>
-                  <div className="flex flex-col items-center gap-1 flex-shrink-0">
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center border-2 transition-all ${
-                      idx < activeIdx
-                        ? "bg-emerald-500 border-emerald-500"
-                        : idx === activeIdx
-                        ? "border-primary bg-primary/20"
-                        : "border-border bg-secondary/50"
-                    }`}>
-                      {idx < activeIdx ? (
-                        <CheckCircle2 className="w-4 h-4 text-white" />
-                      ) : idx === activeIdx ? (
-                        <Clock className="w-4 h-4 text-primary" />
-                      ) : (
-                        <span className="w-2 h-2 rounded-full bg-muted-foreground/40" />
-                      )}
+            {isReprovado ? (
+              <div className="flex items-center gap-2 px-4 py-3 rounded-xl border border-red-500/30 bg-red-500/10">
+                <X className="w-4 h-4 text-red-400 flex-shrink-0" />
+                <p className="text-xs font-semibold text-red-400">Operação reprovada</p>
+              </div>
+            ) : (
+              <div className="flex items-center gap-0">
+                {PIPELINE_STAGES.map((stage, idx) => (
+                  <React.Fragment key={stage.key}>
+                    <div className="flex flex-col items-center gap-1 flex-shrink-0">
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center border-2 transition-all ${
+                        idx < activeIdx
+                          ? "bg-emerald-500 border-emerald-500"
+                          : idx === activeIdx
+                          ? "border-primary bg-primary/20"
+                          : "border-border bg-secondary/50"
+                      }`}>
+                        {idx < activeIdx ? (
+                          <CheckCircle2 className="w-4 h-4 text-white" />
+                        ) : idx === activeIdx ? (
+                          <Clock className="w-4 h-4 text-primary" />
+                        ) : (
+                          <span className="w-2 h-2 rounded-full bg-muted-foreground/40" />
+                        )}
+                      </div>
+                      <span className={`text-[10px] font-medium text-center leading-tight max-w-14 ${
+                        idx === activeIdx ? "text-primary" : idx < activeIdx ? "text-emerald-400" : "text-muted-foreground"
+                      }`}>
+                        {stage.label}
+                      </span>
                     </div>
-                    <span className={`text-[10px] font-medium text-center leading-tight max-w-14 ${
-                      idx === activeIdx ? "text-primary" : idx < activeIdx ? "text-emerald-400" : "text-muted-foreground"
-                    }`}>
-                      {stage.label}
-                    </span>
-                  </div>
-                  {idx < PIPELINE_STAGES.length - 1 && (
-                    <div className={`flex-1 h-0.5 mb-4 ${idx < activeIdx ? "bg-emerald-500" : "bg-border"}`} />
-                  )}
-                </React.Fragment>
-              ))}
-            </div>
+                    {idx < PIPELINE_STAGES.length - 1 && (
+                      <div className={`flex-1 h-0.5 mb-4 ${idx < activeIdx ? "bg-emerald-500" : "bg-border"}`} />
+                    )}
+                  </React.Fragment>
+                ))}
+              </div>
+            )}
           </div>
+
+          {/* ── Linha do Tempo da Operação ── */}
+          <TimelineOperacao proposal={proposal} />
 
           {/* ── Dados do Cliente ── */}
           {(() => {
@@ -3829,6 +3952,13 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
             <Button size="sm" onClick={advance} className="gap-2">
               Avançar para <span className={nextStage.color}>{nextStage.label}</span>
               <ArrowRight className="w-4 h-4" />
+            </Button>
+          )}
+          {/* ── Pular Registro de Imóveis quando não aplicável (ex: crédito sem garantia real) ── */}
+          {canChangeStage && proposal?.stage === "REGISTRO_IMOVEL" && (
+            <Button size="sm" variant="outline" onClick={() => onStageChange?.(proposal!.id, "LIBERADO")}
+              className="gap-1.5 border-border text-muted-foreground hover:text-white">
+              <ArrowRight className="w-3.5 h-3.5" /> Não aplicável — pular para Liberado
             </Button>
           )}
           {/* ── Botão Reprovar — disponível em qualquer estágio ── */}

@@ -103,26 +103,27 @@ const TICKET_PRIORITY_OPTIONS = [
 ];
 
 // ─── SLA por Fase ──────────────────────────────────────────────────────────
-const SLA_STAGES = ["RECEBIDO", "TRIAGEM", "ANALISE", "PENDENCIA", "APROVACAO"] as const;
+const SLA_STAGES = ["RECEBIDO", "TRIAGEM", "ANALISE", "PENDENCIA", "AVALIACAO_IMOVEL", "APROVACAO", "CONTRATO_ASSINADO", "REGISTRO_IMOVEL", "LIBERADO"] as const;
 type SlaStage = typeof SLA_STAGES[number];
 
-interface SlaConfig {
-  RECEBIDO: number;
-  TRIAGEM: number;
-  ANALISE: number;
-  PENDENCIA: number;
-  APROVACAO: number;
-}
+type SlaConfig = Record<SlaStage, number>;
 
 const SLA_STAGE_LABELS: Record<SlaStage, string> = {
   RECEBIDO: "Recebido",
   TRIAGEM: "Triagem",
   ANALISE: "Análise",
   PENDENCIA: "Pendência",
+  AVALIACAO_IMOVEL: "Avaliação de Imóvel",
   APROVACAO: "Aprovação",
+  CONTRATO_ASSINADO: "Contrato Assinado",
+  REGISTRO_IMOVEL: "Registro de Imóveis",
+  LIBERADO: "Recurso Liberado",
 };
 
-const DEFAULT_SLA: SlaConfig = { RECEBIDO: 1, TRIAGEM: 2, ANALISE: 5, PENDENCIA: 3, APROVACAO: 2 };
+const DEFAULT_SLA: SlaConfig = {
+  RECEBIDO: 1, TRIAGEM: 2, ANALISE: 5, PENDENCIA: 3,
+  AVALIACAO_IMOVEL: 15, APROVACAO: 2, CONTRATO_ASSINADO: 5, REGISTRO_IMOVEL: 30, LIBERADO: 3,
+};
 const SLA_STORAGE_KEY = "v3_sla_config";
 
 function loadSlaConfig(): SlaConfig {
@@ -163,7 +164,8 @@ interface SlaStatusResult {
 }
 
 function getSlaStatus(proposal: ProposalCard, slaConfig: SlaConfig): SlaStatusResult | null {
-  if (!proposal.stage || proposal.stage === "FINALIZADO") return null;
+  // Estágios terminais não têm "próxima etapa" para contar prazo até lá
+  if (!proposal.stage || ["FINALIZADO", "LIBERADO", "REPROVADO"].includes(proposal.stage)) return null;
   const stage = proposal.stage as SlaStage;
   if (!SLA_STAGES.includes(stage)) return null;
 
@@ -1965,8 +1967,8 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
         .catch(() => { setOcrAutoRunning(prev => { const n = { ...prev }; delete n[proposalId]; return n; }); });
     }
 
-    // Auto-abre modal de SLA para a nova etapa (exceto FINALIZADO)
-    if (newStage !== "FINALIZADO" && SLA_STAGES.includes(newStage as SlaStage)) {
+    // Auto-abre modal de SLA para a nova etapa (não faz sentido em estágios terminais)
+    if (!["FINALIZADO", "LIBERADO", "REPROVADO"].includes(newStage) && SLA_STAGES.includes(newStage as SlaStage)) {
       const proposal = proposals.find(p => p.id === proposalId);
       if (proposal) {
         setStageSlaTarget({ proposal: { ...proposal, stage: newStage }, stage: newStage as SlaStage });
@@ -2079,9 +2081,13 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
           {/* Kanban board */}
           <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
             {PIPELINE_STAGES.map((stage) => {
-              const stageProposals = filteredProposals.filter(
-                (p) => (p.stage === stage.key) || (!p.stage && stage.key === "RECEBIDO")
-              );
+              const stageProposals = filteredProposals.filter((p) => {
+                if (!p.stage) return stage.key === "RECEBIDO";
+                // FINALIZADO é rótulo legado (antes da separação Liberado/Reprovado);
+                // usa status pra decidir a qual dos dois corresponde
+                if (p.stage === "FINALIZADO") return stage.key === "LIBERADO" && p.status !== "REJECTED";
+                return p.stage === stage.key;
+              });
               const totalValue = stageProposals.reduce((sum, p) => sum + (p.requested_value || 0), 0);
               return (
                 <div key={stage.key} className="flex flex-col gap-2"
