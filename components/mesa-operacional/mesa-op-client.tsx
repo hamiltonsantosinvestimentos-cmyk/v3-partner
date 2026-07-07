@@ -2079,7 +2079,7 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
           </div>
 
           {/* Kanban board */}
-          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+          <div className="flex gap-3 overflow-x-auto pb-2">
             {PIPELINE_STAGES.map((stage) => {
               const stageProposals = filteredProposals.filter((p) => {
                 if (!p.stage) return stage.key === "RECEBIDO";
@@ -2090,7 +2090,7 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
               });
               const totalValue = stageProposals.reduce((sum, p) => sum + (p.requested_value || 0), 0);
               return (
-                <div key={stage.key} className="flex flex-col gap-2"
+                <div key={stage.key} className="flex flex-col gap-2 w-[230px] flex-shrink-0"
                   onDragOver={(e) => { if (!canChangeStage) return; e.preventDefault(); setDragOverStage(stage.key); }}
                   onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOverStage(null); }}
                   onDrop={(e) => { e.preventDefault(); const id = e.dataTransfer.getData("proposalId"); if (id && canChangeStage && id !== "") handleStageChange(id, stage.key); setDragOverStage(null); }}
