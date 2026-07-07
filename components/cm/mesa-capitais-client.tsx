@@ -17,6 +17,7 @@ interface Listing {
   anonymous_id: string;
   apelido: string | null;
   numero_interno: string | null;
+  originator_profile_id: string | null;
   asset_type: string;
   valor_face: number;
   desagio_pretendido: number | null;
@@ -125,6 +126,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
   const [listings, setListings] = useState<Listing[]>([]);
   const [matches, setMatches] = useState<Match[]>([]);
   const [bids, setBids] = useState<Bid[]>([]);
+  const [partners, setPartners] = useState<{ id: string; full_name: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [runningMatch, setRunningMatch] = useState(false);
   const [tab, setTab] = useState<"kanban" | "matches" | "bids">("kanban");
@@ -154,7 +156,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
   const [valorAtualizadoNegociado, setValorAtualizadoNegociado] = useState<string>("");
   const [desagioNegociado, setDesagioNegociado] = useState<string>("");
   const [apelidoNegociado, setApelidoNegociado] = useState<string>("");
-  const [numeroInternoNegociado, setNumeroInternoNegociado] = useState<string>("");
+  const [originatorNegociado, setOriginatorNegociado] = useState<string>("");
   const [savingValores, setSavingValores] = useState(false);
   const [deletingListing, setDeletingListing] = useState(false);
   const [showLixeira, setShowLixeira] = useState(false);
@@ -171,7 +173,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
   const [manualForm, setManualForm] = useState({
     asset_type: "precatorio" as CmAssetType,
     apelido: "",
-    numero_interno: "",
+    originator_profile_id: "",
     seller_name: "",
     seller_cpf_cnpj: "",
     ente_devedor: "",
@@ -208,6 +210,13 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
   }, []);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
+
+  useEffect(() => {
+    fetch("/api/partners")
+      .then((res) => res.json())
+      .then((json) => setPartners(json.partners ?? []))
+      .catch(() => setPartners([]));
+  }, []);
 
   const runMatchmaking = async () => {
     setRunningMatch(true);
@@ -318,7 +327,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
     setValorAtualizadoNegociado((listing as any).valor_atualizado?.toString() ?? "");
     setDesagioNegociado(listing.desagio_pretendido?.toString() ?? "");
     setApelidoNegociado(listing.apelido ?? "");
-    setNumeroInternoNegociado(listing.numero_interno ?? "");
+    setOriginatorNegociado(listing.originator_profile_id ?? "");
     loadRoomInvites(listing.id);
     loadContractTemplates();
     loadChecklists(listing.id);
@@ -447,7 +456,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
           valor_atualizado: valorAtualizadoNegociado ? Number(valorAtualizadoNegociado) : null,
           desagio_pretendido: desagioNegociado ? Number(desagioNegociado) : null,
           apelido: apelidoNegociado.trim() || null,
-          numero_interno: numeroInternoNegociado.trim() || null,
+          originator_profile_id: originatorNegociado || null,
         }),
       });
       if (res.ok) {
@@ -589,7 +598,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
         body: JSON.stringify({
           asset_type: manualForm.asset_type,
           apelido: manualForm.apelido.trim() || undefined,
-          numero_interno: manualForm.numero_interno.trim() || undefined,
+          originator_profile_id: manualForm.originator_profile_id || undefined,
           seller_name: manualForm.seller_name.trim(),
           seller_cpf_cnpj: manualForm.seller_cpf_cnpj.trim() || undefined,
           ente_devedor: manualForm.ente_devedor.trim() || undefined,
@@ -609,7 +618,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
         alert(`Ativo cadastrado: ${json.listing.anonymous_id}`);
         setShowManualForm(false);
         setManualForm({
-          asset_type: "precatorio", apelido: "", numero_interno: "", seller_name: "", seller_cpf_cnpj: "", ente_devedor: "",
+          asset_type: "precatorio", apelido: "", originator_profile_id: "", seller_name: "", seller_cpf_cnpj: "", ente_devedor: "",
           esfera: "", tribunal: "", natureza: "", numero_processo: "",
           valor_face: "", valor_atualizado: "", desagio_pretendido: "", prazo_estimado_meses: "",
           allows_tranching: false,
@@ -802,9 +811,17 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
                     className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#F5F1E8] mt-1" />
                 </div>
                 <div>
-                  <label className="text-[9px] text-[#9BAFC5] uppercase">Número Interno</label>
-                  <input value={manualForm.numero_interno} onChange={(e) => setManualForm((f) => ({ ...f, numero_interno: e.target.value }))}
-                    className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#F5F1E8] mt-1" />
+                  <label className="text-[9px] text-[#9BAFC5] uppercase">Partner de Origem</label>
+                  <select
+                    value={manualForm.originator_profile_id}
+                    onChange={(e) => setManualForm((f) => ({ ...f, originator_profile_id: e.target.value }))}
+                    className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#F5F1E8] mt-1"
+                  >
+                    <option value="">— Selecionar —</option>
+                    {partners.map((p) => (
+                      <option key={p.id} value={p.id}>{p.full_name}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-2">
@@ -1125,12 +1142,22 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
                   />
                 </div>
                 <div>
-                  <label className="text-[9px] text-[#9BAFC5] uppercase">Número Interno</label>
-                  <input
-                    type="text" value={numeroInternoNegociado} onChange={(e) => setNumeroInternoNegociado(e.target.value)}
-                    placeholder="Referência interna da Mesa"
+                  <label className="text-[9px] text-[#9BAFC5] uppercase">Número Interno (gerado automaticamente)</label>
+                  <div className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#C9A84C] font-bold mt-1">
+                    {(selectedListing as any).numero_interno ?? "—"}
+                  </div>
+                </div>
+                <div>
+                  <label className="text-[9px] text-[#9BAFC5] uppercase">Partner de Origem</label>
+                  <select
+                    value={originatorNegociado} onChange={(e) => setOriginatorNegociado(e.target.value)}
                     className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#F5F1E8] mt-1 focus:border-[#C9A84C]/50 focus:outline-none"
-                  />
+                  >
+                    <option value="">— Selecionar —</option>
+                    {partners.map((p) => (
+                      <option key={p.id} value={p.id}>{p.full_name}</option>
+                    ))}
+                  </select>
                 </div>
                 <div>
                   <label className="text-[9px] text-[#9BAFC5] uppercase">Deságio Pretendido (%)</label>

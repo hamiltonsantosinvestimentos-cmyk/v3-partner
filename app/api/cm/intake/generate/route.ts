@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
 
   const body = await req.json();
-  const { listing_id } = body;
+  const { listing_id, originator_profile_id } = body;
 
   if (listing_id) {
     const { data: existing } = await svc()
@@ -62,11 +62,14 @@ export async function POST(req: NextRequest) {
     p_asset_type: "precatorio",
     p_esfera: "Federal",
   });
+  const { data: numeroInterno } = await svc().rpc("generate_cm_numero_interno");
 
   const { data: listing, error } = await svc()
     .from("cm_asset_listings")
     .insert({
       anonymous_id: anonId,
+      numero_interno: numeroInterno,
+      originator_profile_id: originator_profile_id ?? null,
       asset_type: "precatorio",
       seller_name: "Pendente",
       valor_face: 0,

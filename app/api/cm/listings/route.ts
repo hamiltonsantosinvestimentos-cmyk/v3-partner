@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
     ente_devedor, esfera, tribunal, natureza, numero_processo,
     valor_face, valor_atualizado, desagio_pretendido, prazo_estimado_meses,
     allows_tranching, conditional_blocks, metadata, ma_deal_id,
-    apelido, numero_interno,
+    apelido, originator_profile_id,
   } = body;
 
   if (!asset_type || !seller_name || !valor_face) {
@@ -63,13 +63,15 @@ export async function POST(req: NextRequest) {
     p_asset_type: asset_type,
     p_esfera: esfera ?? "Federal",
   });
+  const { data: numeroInterno } = await svc().rpc("generate_cm_numero_interno");
 
   const { data: listing, error } = await svc()
     .from("cm_asset_listings")
     .insert({
       anonymous_id: anonId,
       apelido: apelido ?? null,
-      numero_interno: numero_interno ?? null,
+      numero_interno: numeroInterno,
+      originator_profile_id: originator_profile_id ?? null,
       asset_type,
       seller_name,
       seller_cpf_cnpj: seller_cpf_cnpj ?? null,
