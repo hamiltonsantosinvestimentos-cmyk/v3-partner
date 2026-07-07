@@ -54,7 +54,7 @@ export function AssetAssistant({ listingId, anonymousId, onClose }: Props) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+    <div className="fixed inset-0 z-[130] flex items-center justify-center bg-black/60">
       <div className="w-full max-w-lg bg-[#09081A] border border-[#C9A84C]/30 rounded-xl overflow-hidden flex flex-col" style={{ height: "70vh" }}>
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-3 border-b border-[#C9A84C]/20 bg-[#12112A]">

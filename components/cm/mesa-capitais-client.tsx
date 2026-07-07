@@ -781,7 +781,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
 
       {/* Modal Cadastro Manual */}
       {showManualForm && (
-        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60" onClick={() => setShowManualForm(false)}>
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60">
           <div className="w-full max-w-lg max-h-[85vh] bg-[#09081A] border border-[#C9A84C]/20 rounded-xl flex flex-col" onClick={(e) => e.stopPropagation()}>
             <div className="p-4 border-b border-[#C9A84C]/20 flex items-center justify-between flex-shrink-0">
               <div>

@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
   if (listingId) query = query.eq("listing_id", listingId);
   if (status) query = query.eq("status", status);
 
-  if (!["ADMIN", "GESTAO"].includes(caller.role)) {
+  if (!["ADMIN", "GESTAO", "MESA_OPERACIONAL"].includes(caller.role)) {
     query = query.eq("created_by", caller.userId);
   }
 

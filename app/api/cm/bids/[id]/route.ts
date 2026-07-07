@@ -7,7 +7,7 @@ function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 }
 
-const ADMIN_ROLES = ["ADMIN", "GESTAO"];
+const ADMIN_ROLES = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"];
 
 async function getCallerRole(req: NextRequest) {
   const supabase = await createClient();
@@ -35,7 +35,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const caller = await getCallerRole(req);
-  if (!caller) return NextResponse.json({ error: "Não autorizado — apenas ADMIN/GESTAO" }, { status: 401 });
+  if (!caller) return NextResponse.json({ error: "Não autorizado — apenas ADMIN/GESTAO/MESA_OPERACIONAL" }, { status: 401 });
 
   const { id } = await params;
   const body = await req.json();
