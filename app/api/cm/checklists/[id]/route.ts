@@ -11,13 +11,13 @@ async function getCaller(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
   const { data: profile } = await svc().from("profiles").select("id, role, full_name").eq("id", user.id).single();
-  if (!profile || !["ADMIN", "GESTAO"].includes(profile.role as string)) return null;
+  if (!profile || !["ADMIN", "GESTAO", "MESA_OPERACIONAL"].includes(profile.role as string)) return null;
   return { userId: user.id, role: profile.role as string, name: profile.full_name as string };
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const caller = await getCaller(req);
-  if (!caller) return NextResponse.json({ error: "Apenas ADMIN/GESTAO" }, { status: 403 });
+  if (!caller) return NextResponse.json({ error: "Apenas ADMIN/GESTAO/MESA_OPERACIONAL" }, { status: 403 });
 
   const { id } = await params;
   const body = await req.json();

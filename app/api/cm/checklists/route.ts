@@ -6,7 +6,7 @@ function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 }
 
-const ADMIN_ROLES = ["ADMIN", "GESTAO"];
+const ADMIN_ROLES = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"];
 
 async function getCaller(req: NextRequest) {
   const supabase = await createClient();
@@ -44,7 +44,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const caller = await getCaller(req);
   if (!caller || !ADMIN_ROLES.includes(caller.role))
-    return NextResponse.json({ error: "Apenas ADMIN/GESTAO" }, { status: 403 });
+    return NextResponse.json({ error: "Apenas ADMIN/GESTAO/MESA_OPERACIONAL" }, { status: 403 });
 
   const { listing_id, bid_id, checklist_type } = await req.json();
   if (!listing_id || !checklist_type)
