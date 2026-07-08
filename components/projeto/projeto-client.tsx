@@ -22,9 +22,24 @@ const SECTOR_LABELS: Record<Sector, string> = {
 
 const MESES = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 
-interface Form5W2H {
+interface Item5W2H {
+  id: string;
   sector: string;
   o_que: string; por_que: string; onde: string; quando: string; quem: string; como: string; quanto_custa: string;
+  prazo: string | null;
+  concluido: boolean;
+  concluido_em: string | null;
+  created_at: string;
+}
+
+const NOVO_ITEM_VAZIO = { o_que: "", por_que: "", onde: "", quando: "", quem: "", como: "", quanto_custa: "", prazo: "" };
+
+function statusItem5w2h(item: Item5W2H): { label: string; cls: string; dot: string } {
+  if (item.concluido) return { label: "Concluído", cls: "border-emerald-500/30 bg-emerald-500/10 text-emerald-400", dot: "bg-emerald-500" };
+  if (item.prazo && new Date(item.prazo + "T23:59:59") < new Date()) {
+    return { label: "Em atraso", cls: "border-red-500/30 bg-red-500/10 text-red-400", dot: "bg-red-500" };
+  }
+  return { label: "Em andamento", cls: "border-amber-500/30 bg-amber-500/10 text-amber-400", dot: "bg-amber-500" };
 }
 
 interface FormSwot {
@@ -93,12 +108,15 @@ export function ProjetoClient() {
   const [sector, setSector] = useState<Sector>("MA");
   const [year, setYear] = useState(new Date().getFullYear());
 
-  const [form5w2h, setForm5w2h] = useState<Form5W2H | null>(null);
+  const [items5w2h, setItems5w2h] = useState<Item5W2H[]>([]);
+  const [novoItem, setNovoItem] = useState(NOVO_ITEM_VAZIO);
+  const [expandedItem, setExpandedItem] = useState<string | null>(null);
   const [formSwot, setFormSwot] = useState<FormSwot | null>(null);
   const [metas, setMetas] = useState<MetasData | null>(null);
 
   const [loading, setLoading] = useState(true);
-  const [saving5w2h, setSaving5w2h] = useState(false);
+  const [savingNovoItem, setSavingNovoItem] = useState(false);
+  const [savingItemId, setSavingItemId] = useState<string | null>(null);
   const [savingSwot, setSavingSwot] = useState(false);
   const [savingMeta, setSavingMeta] = useState<string | null>(null);
 
@@ -110,7 +128,7 @@ export function ProjetoClient() {
         fetch(`/api/projeto/swot?sector=${sector}`).then(r => r.json()),
         fetch(`/api/projeto/metas?sector=${sector}&year=${year}`).then(r => r.json()),
       ]);
-      setForm5w2h(r5w2h.data);
+      setItems5w2h(r5w2h.data ?? []);
       setFormSwot(rSwot.data);
       setMetas(rMetas);
     } catch { /* silencioso */ }
@@ -119,16 +137,38 @@ export function ProjetoClient() {
 
   useEffect(() => { load(); }, [load]);
 
-  async function salvar5w2h() {
-    if (!form5w2h) return;
-    setSaving5w2h(true);
+  async function criarItem5w2h() {
+    if (!novoItem.o_que.trim()) return;
+    setSavingNovoItem(true);
+    try {
+      await fetch("/api/projeto/5w2h", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...novoItem, sector }),
+      });
+      setNovoItem(NOVO_ITEM_VAZIO);
+      await load();
+    } finally { setSavingNovoItem(false); }
+  }
+
+  async function atualizarItem5w2h(id: string, updates: Partial<Item5W2H>) {
+    setSavingItemId(id);
     try {
       await fetch("/api/projeto/5w2h", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form5w2h, sector }),
+        body: JSON.stringify({ id, ...updates }),
       });
-    } finally { setSaving5w2h(false); }
+      await load();
+    } finally { setSavingItemId(null); }
+  }
+
+  async function excluirItem5w2h(id: string) {
+    setSavingItemId(id);
+    try {
+      await fetch(`/api/projeto/5w2h?id=${id}`, { method: "DELETE" });
+      await load();
+    } finally { setSavingItemId(null); }
   }
 
   async function salvarSwot() {
@@ -186,32 +226,104 @@ export function ProjetoClient() {
         ))}
       </div>
 
-      {loading && !form5w2h ? (
+      {loading && items5w2h.length === 0 ? (
         <div className="flex justify-center py-16"><Loader2 className="w-6 h-6 animate-spin text-[#C9A84C]" /></div>
       ) : (
         <>
-          {/* 5W2H */}
-          {form5w2h && (
-            <div className="bg-[#111F35] border border-[#243A66] rounded-2xl p-5 space-y-4">
-              <div className="flex items-center justify-between">
-                <p className="text-xs font-bold text-[#C9A84C] uppercase tracking-widest">5W2H — {SECTOR_LABELS[sector]}</p>
-                <button onClick={salvar5w2h} disabled={saving5w2h}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#C9A84C]/10 border border-[#C9A84C]/30 text-[#C9A84C] hover:bg-[#C9A84C]/20 text-xs font-semibold transition-colors disabled:opacity-50">
-                  {saving5w2h ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-                  Salvar
-                </button>
-              </div>
+          {/* 5W2H — lista de itens de ação com prazo e status */}
+          <div className="bg-[#111F35] border border-[#243A66] rounded-2xl p-5 space-y-4">
+            <p className="text-xs font-bold text-[#C9A84C] uppercase tracking-widest">5W2H — {SECTOR_LABELS[sector]}</p>
+
+            {/* Novo item */}
+            <div className="p-4 rounded-xl border border-dashed border-[#243A66] space-y-3">
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
-                <Field label="O quê" value={form5w2h.o_que} onChange={v => setForm5w2h({ ...form5w2h, o_que: v })} />
-                <Field label="Por quê" value={form5w2h.por_que} onChange={v => setForm5w2h({ ...form5w2h, por_que: v })} />
-                <Field label="Onde" value={form5w2h.onde} onChange={v => setForm5w2h({ ...form5w2h, onde: v })} />
-                <Field label="Quando" value={form5w2h.quando} onChange={v => setForm5w2h({ ...form5w2h, quando: v })} />
-                <Field label="Quem" value={form5w2h.quem} onChange={v => setForm5w2h({ ...form5w2h, quem: v })} />
-                <Field label="Como" value={form5w2h.como} onChange={v => setForm5w2h({ ...form5w2h, como: v })} />
-                <Field label="Quanto custa" value={form5w2h.quanto_custa} onChange={v => setForm5w2h({ ...form5w2h, quanto_custa: v })} />
+                <Field label="O quê *" value={novoItem.o_que} onChange={v => setNovoItem({ ...novoItem, o_que: v })} />
+                <Field label="Por quê" value={novoItem.por_que} onChange={v => setNovoItem({ ...novoItem, por_que: v })} />
+                <Field label="Onde" value={novoItem.onde} onChange={v => setNovoItem({ ...novoItem, onde: v })} />
+                <Field label="Quando" value={novoItem.quando} onChange={v => setNovoItem({ ...novoItem, quando: v })} />
+                <Field label="Quem" value={novoItem.quem} onChange={v => setNovoItem({ ...novoItem, quem: v })} />
+                <Field label="Como" value={novoItem.como} onChange={v => setNovoItem({ ...novoItem, como: v })} />
+                <Field label="Quanto custa" value={novoItem.quanto_custa} onChange={v => setNovoItem({ ...novoItem, quanto_custa: v })} />
+                <div>
+                  <label className="text-[10px] font-bold uppercase tracking-wide text-[#C9A84C]">Prazo</label>
+                  <input type="date" value={novoItem.prazo}
+                    onChange={e => setNovoItem({ ...novoItem, prazo: e.target.value })}
+                    className="w-full mt-1 px-3 py-2 text-xs rounded-lg bg-[#0A1628] border border-[#243A66] text-[#F0ECE4] focus:outline-none focus:ring-1 focus:ring-[#C9A84C]/50" />
+                </div>
               </div>
+              <button onClick={criarItem5w2h} disabled={savingNovoItem || !novoItem.o_que.trim()}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#C9A84C] hover:bg-[#E8C97A] text-[#09081A] text-xs font-bold transition-colors disabled:opacity-50">
+                {savingNovoItem ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                Adicionar item
+              </button>
             </div>
-          )}
+
+            {/* Lista de acompanhamento */}
+            <div className="space-y-2">
+              {items5w2h.length === 0 && (
+                <p className="text-xs text-muted-foreground text-center py-4">Nenhum item cadastrado ainda.</p>
+              )}
+              {items5w2h.map(item => {
+                const st = statusItem5w2h(item);
+                const isOpen = expandedItem === item.id;
+                return (
+                  <div key={item.id} className={`rounded-xl border ${st.cls} overflow-hidden`}>
+                    <button onClick={() => setExpandedItem(isOpen ? null : item.id)}
+                      className="w-full flex items-center gap-3 px-4 py-3 text-left">
+                      <span className={`w-2 h-2 rounded-full flex-shrink-0 ${st.dot}`} />
+                      <span className="text-xs font-semibold text-[#F0ECE4] flex-1 truncate">{item.o_que}</span>
+                      {item.prazo && (
+                        <span className="text-[10px] text-muted-foreground flex-shrink-0">
+                          Prazo {new Date(item.prazo + "T12:00:00").toLocaleDateString("pt-BR")}
+                        </span>
+                      )}
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border flex-shrink-0 ${st.cls}`}>{st.label}</span>
+                    </button>
+                    {isOpen && (
+                      <div className="px-4 pb-4 space-y-3 border-t border-white/10 pt-3">
+                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+                          {(["por_que", "onde", "quando", "quem", "como", "quanto_custa"] as const).map(campo => (
+                            <div key={campo}>
+                              <label className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+                                {{ por_que: "Por quê", onde: "Onde", quando: "Quando", quem: "Quem", como: "Como", quanto_custa: "Quanto custa" }[campo]}
+                              </label>
+                              <textarea
+                                defaultValue={item[campo] ?? ""}
+                                rows={2}
+                                onBlur={(e) => { if (e.target.value !== item[campo]) atualizarItem5w2h(item.id, { [campo]: e.target.value }); }}
+                                className="w-full mt-1 px-3 py-2 text-xs rounded-lg bg-[#0A1628]/60 border border-white/10 text-[#F0ECE4] focus:outline-none focus:ring-1 focus:ring-white/30 resize-none"
+                              />
+                            </div>
+                          ))}
+                          <div>
+                            <label className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Prazo</label>
+                            <input type="date" defaultValue={item.prazo ?? ""}
+                              onBlur={(e) => { if (e.target.value !== item.prazo) atualizarItem5w2h(item.id, { prazo: e.target.value || null }); }}
+                              className="w-full mt-1 px-3 py-2 text-xs rounded-lg bg-[#0A1628]/60 border border-white/10 text-[#F0ECE4] focus:outline-none focus:ring-1 focus:ring-white/30" />
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => atualizarItem5w2h(item.id, { concluido: !item.concluido })}
+                            disabled={savingItemId === item.id}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20 text-xs font-semibold transition-colors disabled:opacity-50">
+                            {savingItemId === item.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+                            {item.concluido ? "Reabrir" : "Marcar como concluído"}
+                          </button>
+                          <button
+                            onClick={() => excluirItem5w2h(item.id)}
+                            disabled={savingItemId === item.id}
+                            className="px-3 py-1.5 rounded-lg border border-red-500/30 text-red-400 hover:bg-red-500/10 text-xs font-semibold transition-colors disabled:opacity-50">
+                            Excluir
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
 
           {/* SWOT */}
           {formSwot && (

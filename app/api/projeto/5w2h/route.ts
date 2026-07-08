@@ -18,6 +18,7 @@ async function getAuthedAdmin() {
   return user;
 }
 
+// GET ?sector=X — lista todos os itens de 5W2H do setor
 export async function GET(req: NextRequest) {
   const user = await getAuthedAdmin();
   if (!user) return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
@@ -25,24 +26,72 @@ export async function GET(req: NextRequest) {
   const sector = req.nextUrl.searchParams.get("sector") ?? "";
   if (!isValidSector(sector)) return NextResponse.json({ error: "Setor inválido" }, { status: 400 });
 
-  const { data } = await serviceClient().from("sector_5w2h").select("*").eq("sector", sector).maybeSingle();
-  return NextResponse.json({ data: data ?? { sector, o_que: "", por_que: "", onde: "", quando: "", quem: "", como: "", quanto_custa: "" } });
+  const { data, error } = await serviceClient()
+    .from("sector_5w2h")
+    .select("*")
+    .eq("sector", sector)
+    .order("created_at", { ascending: false });
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ data: data ?? [] });
 }
 
+// POST — cria um novo item de 5W2H
+export async function POST(req: NextRequest) {
+  const user = await getAuthedAdmin();
+  if (!user) return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
+
+  const body = await req.json();
+  const { sector, o_que, por_que, onde, quando, quem, como, quanto_custa, prazo } = body;
+  if (!isValidSector(sector)) return NextResponse.json({ error: "Setor inválido" }, { status: 400 });
+
+  const { data, error } = await serviceClient().from("sector_5w2h").insert({
+    sector, o_que, por_que, onde, quando, quem, como, quanto_custa,
+    prazo: prazo || null,
+    updated_at: new Date().toISOString(),
+    updated_by: user.id,
+  }).select().single();
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ ok: true, data });
+}
+
+// PATCH — edita um item existente (inclui marcar/desmarcar como concluído)
 export async function PATCH(req: NextRequest) {
   const user = await getAuthedAdmin();
   if (!user) return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
 
   const body = await req.json();
-  const { sector, o_que, por_que, onde, quando, quem, como, quanto_custa } = body;
-  if (!isValidSector(sector)) return NextResponse.json({ error: "Setor inválido" }, { status: 400 });
+  const { id, concluido, ...fields } = body as {
+    id: string; concluido?: boolean;
+    o_que?: string; por_que?: string; onde?: string; quando?: string; quem?: string; como?: string; quanto_custa?: string; prazo?: string | null;
+  };
+  if (!id) return NextResponse.json({ error: "ID obrigatório" }, { status: 400 });
 
-  const { error } = await serviceClient().from("sector_5w2h").upsert({
-    sector, o_que, por_que, onde, quando, quem, como, quanto_custa,
+  const updateData: Record<string, unknown> = {
+    ...fields,
     updated_at: new Date().toISOString(),
     updated_by: user.id,
-  }, { onConflict: "sector" });
+  };
+  if (concluido !== undefined) {
+    updateData.concluido = concluido;
+    updateData.concluido_em = concluido ? new Date().toISOString() : null;
+  }
 
+  const { error } = await serviceClient().from("sector_5w2h").update(updateData).eq("id", id);
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ ok: true });
+}
+
+// DELETE ?id=X — remove um item
+export async function DELETE(req: NextRequest) {
+  const user = await getAuthedAdmin();
+  if (!user) return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
+
+  const id = req.nextUrl.searchParams.get("id") ?? "";
+  if (!id) return NextResponse.json({ error: "ID obrigatório" }, { status: 400 });
+
+  const { error } = await serviceClient().from("sector_5w2h").delete().eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true });
 }
