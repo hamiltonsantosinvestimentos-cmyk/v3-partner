@@ -136,6 +136,7 @@ const NAV_SECTIONS: NavSection[] = [
       { href: "/deal-rooms", label: "Deal Rooms", icon: "Layers", roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL", "FINANCEIRO"] },
       { href: "/ia-assistant", label: "V3 IA Partner", icon: "BrainCircuit", roles: ["ADMIN", "STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE", "MESA_OPERACIONAL", "GESTAO", "FINANCEIRO"] },
       { href: "/metas", label: "Metas & Performance", icon: "Target", roles: ["ADMIN", "GESTAO", "STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE"] },
+      { href: "/projeto", label: "Projeto", icon: "ClipboardList", roles: ["ADMIN", "GESTAO"] },
       { href: "/compliance", label: "Compliance", icon: "ShieldCheck", roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL"] },
       { href: "/financeiro", label: "Financeiro", icon: "DollarSign", roles: ["ADMIN", "FINANCEIRO"] },
       { href: "/comissoes", label: "Comissões", icon: "Wallet", roles: ["ADMIN", "STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE", "FINANCEIRO"] },
