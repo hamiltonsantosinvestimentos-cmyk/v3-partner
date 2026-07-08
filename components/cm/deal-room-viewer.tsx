@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import { FileText, Download, Shield, CheckCircle2, Loader2, Lock, Upload, UserCheck, ScrollText, Fingerprint, ExternalLink } from "lucide-react";
+import { maskCpfInput } from "@/lib/utils";
 
 interface DealRoomViewerProps {
   token: string;
@@ -13,7 +14,7 @@ export function DealRoomViewer({ token, initialData }: DealRoomViewerProps) {
   const [accepting, setAccepting] = useState(false);
   const [error, setError] = useState("");
   const [qualifying, setQualifying] = useState(false);
-  const [qualifyForm, setQualifyForm] = useState({ buyer_name: "", buyer_company: "", notes: "" });
+  const [qualifyForm, setQualifyForm] = useState({ buyer_name: "", buyer_company: "", buyer_cpf: "", notes: "" });
   const [qualifyFile, setQualifyFile] = useState<File | null>(null);
   const [acceptingMandato, setAcceptingMandato] = useState(false);
   const [acceptingCessao, setAcceptingCessao] = useState(false);
@@ -56,6 +57,7 @@ export function DealRoomViewer({ token, initialData }: DealRoomViewerProps) {
       if (qualifyFile) fd.append("proof_of_funds", qualifyFile);
       fd.append("buyer_name", qualifyForm.buyer_name);
       fd.append("buyer_company", qualifyForm.buyer_company);
+      fd.append("buyer_cpf", qualifyForm.buyer_cpf);
       fd.append("notes", qualifyForm.notes);
       const res = await fetch(`/api/cm/deal-room/${token}/qualify`, { method: "POST", body: fd });
       if (!res.ok) {
@@ -250,6 +252,11 @@ export function DealRoomViewer({ token, initialData }: DealRoomViewerProps) {
             <input value={qualifyForm.buyer_company} onChange={(e) => setQualifyForm(p => ({ ...p, buyer_company: e.target.value }))}
               placeholder="Empresa / Fundo" className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded-lg px-4 py-2.5 text-sm text-[#F5F1E8] focus:border-[#C9A84C]/50 focus:outline-none" />
             <div>
+              <input value={qualifyForm.buyer_cpf} onChange={(e) => setQualifyForm(p => ({ ...p, buyer_cpf: maskCpfInput(e.target.value) }))}
+                placeholder="CPF * (obrigatório para acessar documentos)" className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded-lg px-4 py-2.5 text-sm text-[#F5F1E8] focus:border-[#C9A84C]/50 focus:outline-none" />
+              <p className="text-[10px] text-[#9BAFC5]/70 mt-1">Todo documento visualizado nesta sala fica associado ao seu CPF e IP de acesso, para fins de auditoria (LGPD Art. 7, inc. V).</p>
+            </div>
+            <div>
               <label className="text-[10px] text-[#9BAFC5] uppercase">Prova de Fundos (PDF)</label>
               <label className="mt-1 w-full flex items-center gap-2 px-4 py-3 bg-[#162744] border border-[#9BAFC5]/15 rounded-lg text-[#9BAFC5] text-xs cursor-pointer hover:border-[#C9A84C]/30 transition">
                 <Upload size={14} />
@@ -260,7 +267,7 @@ export function DealRoomViewer({ token, initialData }: DealRoomViewerProps) {
             <textarea value={qualifyForm.notes} onChange={(e) => setQualifyForm(p => ({ ...p, notes: e.target.value }))}
               placeholder="Observacoes (opcional)" rows={2}
               className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded-lg px-4 py-2.5 text-sm text-[#F5F1E8] focus:border-[#C9A84C]/50 focus:outline-none resize-none" />
-            <button onClick={submitQualification} disabled={qualifying || !qualifyForm.buyer_name}
+            <button onClick={submitQualification} disabled={qualifying || !qualifyForm.buyer_name || qualifyForm.buyer_cpf.replace(/\D/g, "").length < 11}
               className="w-full px-6 py-3 bg-[#C9A84C] text-[#09081A] rounded-lg text-sm font-bold hover:bg-[#E8C97A] disabled:opacity-50 transition">
               {qualifying ? <Loader2 size={16} className="animate-spin inline mr-2" /> : null}
               Enviar Qualificacao

@@ -154,6 +154,12 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
   const [buyLinkUrl, setBuyLinkUrl] = useState<string | null>(null);
   const [generatingBuyLink, setGeneratingBuyLink] = useState(false);
   const [checklists, setChecklists] = useState<any[]>([]);
+  const [kycDocs, setKycDocs] = useState<any[]>([]);
+  const [kycPartyType, setKycPartyType] = useState<"comprador" | "vendedor">("vendedor");
+  const [kycPartyName, setKycPartyName] = useState("");
+  const [kycDocType, setKycDocType] = useState("");
+  const [uploadingKyc, setUploadingKyc] = useState(false);
+  const [kycActionLoading, setKycActionLoading] = useState<string | null>(null);
   const [checklistsLoading, setChecklistsLoading] = useState(false);
   const [checklistTab, setChecklistTab] = useState<"pre_aceite" | "pre_fechamento" | "pos_cessao">("pre_fechamento");
   const [askPriceFloor, setAskPriceFloor] = useState<string>("");
@@ -373,6 +379,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
     loadContractTemplates();
     loadChecklists(listing.id);
     loadDocs(listing.id);
+    loadKycDocs(listing.id);
   };
 
   const handleStatusTransition = async (listingId: string, newStatus: string) => {
@@ -444,6 +451,56 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
       setChecklists(json.checklists ?? []);
     } catch { setChecklists([]); }
     finally { setChecklistsLoading(false); }
+  };
+
+  const loadKycDocs = async (listingId: string) => {
+    try {
+      const res = await fetch(`/api/cm/kyc-documents?listing_id=${listingId}`);
+      const json = await res.json();
+      setKycDocs(json.documents ?? []);
+    } catch { setKycDocs([]); }
+  };
+
+  const uploadKycDoc = async (listingId: string, file: File) => {
+    if (!kycDocType.trim()) { alert("Informe o tipo de documento"); return; }
+    setUploadingKyc(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("listing_id", listingId);
+      fd.append("party_type", kycPartyType);
+      fd.append("party_name", kycPartyName);
+      fd.append("document_type", kycDocType);
+      const res = await fetch("/api/cm/kyc-documents", { method: "POST", body: fd });
+      const json = await res.json();
+      if (res.ok) {
+        setKycDocs((prev) => [json.document, ...prev]);
+        setKycPartyName("");
+        setKycDocType("");
+      } else {
+        alert(json.error ?? "Erro no upload");
+      }
+    } catch { alert("Erro de conexão"); }
+    finally { setUploadingKyc(false); }
+  };
+
+  const handleKycDecision = async (kycId: string, action: "approve" | "reject") => {
+    setKycActionLoading(kycId);
+    try {
+      const reason = action === "reject" ? prompt("Motivo da rejeição (opcional):") ?? "" : undefined;
+      const res = await fetch(`/api/cm/kyc-documents/${kycId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action, rejection_reason: reason }),
+      });
+      const json = await res.json();
+      if (res.ok) {
+        setKycDocs((prev) => prev.map((d) => (d.id === kycId ? json.document : d)));
+      } else {
+        alert(json.error ?? "Erro ao processar decisão");
+      }
+    } catch { alert("Erro de conexão"); }
+    finally { setKycActionLoading(null); }
   };
 
   const createChecklist = async (listingId: string, type: string) => {
@@ -1555,6 +1612,63 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
                     {userRole !== "ADMIN" && (
                       <p className="text-[9px] text-[#9BAFC5]">Exige autorização de João, Hamilton ou Robson — enviado por email aos diretores.</p>
                     )}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Painel KYC Segregado — retido ate validacao da Mesa */}
+            <div className="px-4 mt-4">
+              <div className="text-[10px] text-[#C9A84C] font-bold uppercase tracking-wider mb-2">Documentos KYC (retidos p/ validação)</div>
+              <div className="bg-[#12112A] border border-[#9BAFC5]/10 rounded-lg p-3 space-y-3">
+                <p className="text-[10px] text-[#9BAFC5]">Documentos de KYC de comprador/vendedor ficam retidos aqui até a Mesa aprovar — só depois disso aparecem no repositório público do Deal Room.</p>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <select value={kycPartyType} onChange={(e) => setKycPartyType(e.target.value as any)}
+                    className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]">
+                    <option value="vendedor">Vendedor (cedente)</option>
+                    <option value="comprador">Comprador</option>
+                  </select>
+                  <input value={kycPartyName} onChange={(e) => setKycPartyName(e.target.value)} placeholder="Nome (opcional)"
+                    className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]" />
+                </div>
+                <div className="flex gap-2">
+                  <input value={kycDocType} onChange={(e) => setKycDocType(e.target.value)} placeholder="Tipo de documento (ex: RG, Contrato Social)"
+                    className="flex-1 bg-[#09081A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]" />
+                  <label className="flex items-center gap-1.5 px-3 py-1.5 bg-[#C9A84C]/10 border border-[#C9A84C]/20 rounded text-[#C9A84C] text-[10px] font-bold cursor-pointer hover:bg-[#C9A84C]/20 transition flex-shrink-0">
+                    {uploadingKyc ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
+                    Enviar
+                    <input type="file" className="hidden" accept=".pdf,.jpg,.png,.jpeg"
+                      onChange={(e) => { if (e.target.files?.[0]) uploadKycDoc(selectedListing.id, e.target.files[0]); }} />
+                  </label>
+                </div>
+
+                {kycDocs.length > 0 && (
+                  <div className="space-y-1.5 pt-2 border-t border-[#9BAFC5]/10">
+                    {kycDocs.map((d) => (
+                      <div key={d.id} className="flex items-center justify-between gap-2 bg-[#09081A] rounded px-2 py-1.5">
+                        <div className="min-w-0">
+                          <div className="text-[10px] text-[#F5F1E8] truncate">{d.party_type === "vendedor" ? "Vendedor" : "Comprador"}{d.party_name ? ` — ${d.party_name}` : ""} · {d.document_type}</div>
+                          <div className="text-[8px] text-[#9BAFC5] truncate">{d.original_filename}</div>
+                        </div>
+                        {d.status === "pendente" ? (
+                          <div className="flex gap-1 flex-shrink-0">
+                            <button onClick={() => handleKycDecision(d.id, "approve")} disabled={kycActionLoading === d.id}
+                              className="px-2 py-1 bg-emerald-600/20 border border-emerald-500/30 rounded text-emerald-400 text-[9px] font-bold hover:bg-emerald-600/30 transition disabled:opacity-50">
+                              Aprovar
+                            </button>
+                            <button onClick={() => handleKycDecision(d.id, "reject")} disabled={kycActionLoading === d.id}
+                              className="px-2 py-1 bg-[#162744] border border-[#9BAFC5]/15 rounded text-[#9BAFC5] text-[9px] font-bold hover:text-[#F5F1E8] transition disabled:opacity-50">
+                              Rejeitar
+                            </button>
+                          </div>
+                        ) : (
+                          <span className={cn("text-[9px] font-bold flex-shrink-0", d.status === "aprovado" ? "text-emerald-400" : "text-red-400")}>
+                            {d.status === "aprovado" ? "Aprovado" : "Rejeitado"}
+                          </span>
+                        )}
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>

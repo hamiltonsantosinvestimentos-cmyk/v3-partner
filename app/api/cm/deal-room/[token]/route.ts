@@ -78,18 +78,16 @@ export async function GET(
 
   const { data: docs } = await svc()
     .from("cm_listing_documents")
-    .select("id, document_type, original_filename, file_size, storage_path, validation_status, created_at")
+    .select("id, document_type, original_filename, file_size, validation_status, created_at")
     .eq("listing_id", listing.id)
     .order("created_at", { ascending: false });
 
-  const docsWithUrls = await Promise.all(
-    (docs ?? []).map(async (doc: any) => {
-      const { data: signedUrl } = await svc().storage
-        .from("documents")
-        .createSignedUrl(doc.storage_path, 3600);
-      return { ...doc, download_url: signedUrl?.signedUrl ?? null };
-    })
-  );
+  // Download nao usa mais signed URL estatica — vai por /documents/[doc_id],
+  // que registra IP+CPF obrigatoriamente e aplica marca dagua antes de servir o PDF.
+  const docsWithUrls = (docs ?? []).map((doc: any) => ({
+    ...doc,
+    download_url: `/api/cm/deal-room/${token}/documents/${doc.id}`,
+  }));
 
   const enrichedListing = tier === "full_dd"
     ? { ...baseListing, seller_name: listing.seller_name, numero_processo: listing.numero_processo }

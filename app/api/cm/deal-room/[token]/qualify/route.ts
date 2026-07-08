@@ -30,7 +30,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   const file = formData.get("proof_of_funds") as File | null;
   const buyerName = formData.get("buyer_name") as string | null;
   const buyerCompany = formData.get("buyer_company") as string | null;
+  const buyerCpf = formData.get("buyer_cpf") as string | null;
   const notes = formData.get("notes") as string | null;
+
+  if (!buyerCpf || buyerCpf.replace(/\D/g, "").length < 11) {
+    return NextResponse.json({ error: "CPF é obrigatório para acessar documentos — necessário para a trilha de auditoria do Deal Room" }, { status: 422 });
+  }
 
   let storagePath: string | null = null;
 
@@ -58,6 +63,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
       qualification_notes: notes,
       buyer_name: buyerName || access.buyer_name,
       buyer_company: buyerCompany || access.buyer_company,
+      buyer_cpf: buyerCpf.replace(/\D/g, ""),
     })
     .eq("id", access.id);
 
