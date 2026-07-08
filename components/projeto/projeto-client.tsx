@@ -53,13 +53,15 @@ interface MetaMensal {
   meta_quantidade: number | null;
   realizado: number;
   pct: number;
+  comissao: number;
 }
 
 interface MetasData {
   sector: string;
   year: number;
+  comissao_percent: number;
   monthly: MetaMensal[];
-  annual: { meta_valor: number; meta_quantidade: number | null; realizado: number; pct: number };
+  annual: { meta_valor: number; meta_quantidade: number | null; realizado: number; pct: number; comissao: number };
 }
 
 const moeda = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
@@ -190,6 +192,24 @@ export function ProjetoClient() {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ sector, year, month, meta_valor: metaValor, meta_quantidade: metaQuantidade }),
+      });
+      await load();
+    } finally { setSavingMeta(null); }
+  }
+
+  async function salvarComissaoPercent(pct: number) {
+    if (!metas) return;
+    setSavingMeta("annual");
+    try {
+      await fetch("/api/projeto/metas", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sector, year, month: null,
+          meta_valor: metas.annual.meta_valor,
+          meta_quantidade: metas.annual.meta_quantidade,
+          comissao_percent: pct,
+        }),
       });
       await load();
     } finally { setSavingMeta(null); }
@@ -400,6 +420,26 @@ export function ProjetoClient() {
                   <div className={`h-full rounded-full ${metas.annual.pct >= 100 ? "bg-emerald-500" : "bg-[#C9A84C]"}`}
                     style={{ width: `${Math.min(metas.annual.pct, 100)}%` }} />
                 </div>
+                <div className="flex items-center gap-4 mt-4 pt-3 border-t border-[#C9A84C]/20">
+                  <div className="w-28">
+                    <label className="text-[10px] text-muted-foreground">% Comissionamento</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      defaultValue={metas.comissao_percent || ""}
+                      placeholder="Ex: 5"
+                      onBlur={(e) => {
+                        const v = parseFloat(e.target.value) || 0;
+                        if (v !== metas.comissao_percent) salvarComissaoPercent(v);
+                      }}
+                      className="w-full px-2.5 py-1.5 text-sm rounded-lg bg-[#0A1628] border border-[#243A66] text-white focus:outline-none focus:ring-1 focus:ring-[#C9A84C]/50"
+                    />
+                  </div>
+                  <div className="flex-1 text-right">
+                    <p className="text-[10px] text-muted-foreground">Comissionamento gerado no ano (soma mensal)</p>
+                    <p className="text-lg font-bold text-emerald-400">{moeda(metas.annual.comissao)}</p>
+                  </div>
+                </div>
               </div>
 
               {/* Gráfico meta x realizado */}
@@ -440,6 +480,8 @@ export function ProjetoClient() {
                     />
                     <span className="text-[10px] text-muted-foreground flex-shrink-0">Realizado:</span>
                     <span className="text-xs font-semibold text-white flex-1">{moeda(m.realizado)}</span>
+                    <span className="text-[10px] text-muted-foreground flex-shrink-0">Comissão:</span>
+                    <span className="text-xs font-semibold text-emerald-400 w-24">{moeda(m.comissao)}</span>
                     <span className={`text-xs font-bold w-12 text-right ${pctColor(m.pct)}`}>{m.pct}%</span>
                     {savingMeta === String(m.month) && <Loader2 className="w-3.5 h-3.5 animate-spin text-[#C9A84C]" />}
                   </div>

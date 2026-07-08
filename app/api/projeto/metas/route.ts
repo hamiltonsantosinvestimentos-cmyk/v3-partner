@@ -35,10 +35,14 @@ export async function GET(req: NextRequest) {
     getRealizadoPorMes(db, sector, year),
   ]);
 
-  const goalByMonth = new Map<number, { meta_valor: number; meta_quantidade: number | null }>();
+  const goalByMonth = new Map<number, { meta_valor: number; meta_quantidade: number | null; comissao_percent: number | null }>();
   for (const row of goalRows ?? []) {
-    goalByMonth.set(row.month, { meta_valor: row.meta_valor, meta_quantidade: row.meta_quantidade });
+    goalByMonth.set(row.month, { meta_valor: row.meta_valor, meta_quantidade: row.meta_quantidade, comissao_percent: row.comissao_percent });
   }
+
+  const annualGoal = goalByMonth.get(0);
+  // % de comissionamento é definido na linha anual e vale pra todos os meses do ano
+  const comissaoPercent = annualGoal?.comissao_percent ?? 0;
 
   const monthly = Array.from({ length: 12 }, (_, i) => {
     const month = i + 1;
@@ -51,21 +55,24 @@ export async function GET(req: NextRequest) {
       meta_quantidade: goal?.meta_quantidade ?? null,
       realizado,
       pct: meta_valor > 0 ? Math.round((realizado / meta_valor) * 100) : 0,
+      comissao: meta_valor * (comissaoPercent / 100),
     };
   });
 
-  const annualGoal = goalByMonth.get(0);
   const realizadoAnual = Object.values(realizadoPorMes).reduce((s, v) => s + v, 0);
   const annualMetaValor = annualGoal?.meta_valor ?? 0;
+  const comissaoAnual = monthly.reduce((s, m) => s + m.comissao, 0);
 
   return NextResponse.json({
     sector, year,
+    comissao_percent: comissaoPercent,
     monthly,
     annual: {
       meta_valor: annualMetaValor,
       meta_quantidade: annualGoal?.meta_quantidade ?? null,
       realizado: realizadoAnual,
       pct: annualMetaValor > 0 ? Math.round((realizadoAnual / annualMetaValor) * 100) : 0,
+      comissao: comissaoAnual,
     },
   });
 }
@@ -76,8 +83,8 @@ export async function PATCH(req: NextRequest) {
   if (!user) return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
 
   const body = await req.json();
-  const { sector, year, month, meta_valor, meta_quantidade } = body as {
-    sector: string; year: number; month: number | null; meta_valor: number; meta_quantidade?: number | null;
+  const { sector, year, month, meta_valor, meta_quantidade, comissao_percent } = body as {
+    sector: string; year: number; month: number | null; meta_valor: number; meta_quantidade?: number | null; comissao_percent?: number | null;
   };
 
   // month=null (ou 0) representa a meta ANUAL — armazenada com o sentinela 0
@@ -92,6 +99,8 @@ export async function PATCH(req: NextRequest) {
   const { error } = await serviceClient().from("sector_goals").upsert({
     sector, year, month: monthValue,
     meta_valor, meta_quantidade: meta_quantidade ?? null,
+    // % de comissionamento só é relevante/aplicado na linha anual (month=0)
+    ...(monthValue === 0 ? { comissao_percent: comissao_percent ?? null } : {}),
     updated_at: new Date().toISOString(),
     updated_by: user.id,
   }, { onConflict: "sector,year,month" });
