@@ -18,7 +18,12 @@ import {
   CREDIT_DESK_LINES,
   type OperationStatus, type TicketPriority,
 } from "@/lib/constants";
-import { PropostaDetailModal, PIPELINE_STAGES, type ProposalFull, type MesaComment } from "@/components/mesa-credito/proposta-detail-modal";
+import { PropostaDetailModal, PIPELINE_STAGES, STAGE_REPROVADO, STAGE_DECLINADO, type ProposalFull, type MesaComment } from "@/components/mesa-credito/proposta-detail-modal";
+
+// Colunas do kanban = fluxo linear + os 2 estágios terminais (fora do avançar/retroceder sequencial)
+const KANBAN_COLUMNS = [...PIPELINE_STAGES, STAGE_REPROVADO, STAGE_DECLINADO];
+// FINALIZADO é o rótulo legado (antes da separação Liberado/Reprovado/Declinado) — ainda conta como terminal
+const TERMINAL_STAGES = ["LIBERADO", "REPROVADO", "DECLINADO", "FINALIZADO"] as const;
 import { NovaPropostaModal } from "@/components/mesa-credito/nova-proposta-modal";
 
 // ─── Tipos ─────────────────────────────────────────────────────────────────
@@ -165,7 +170,7 @@ interface SlaStatusResult {
 
 function getSlaStatus(proposal: ProposalCard, slaConfig: SlaConfig): SlaStatusResult | null {
   // Estágios terminais não têm "próxima etapa" para contar prazo até lá
-  if (!proposal.stage || ["FINALIZADO", "LIBERADO", "REPROVADO"].includes(proposal.stage)) return null;
+  if (!proposal.stage || (TERMINAL_STAGES as readonly string[]).includes(proposal.stage)) return null;
   const stage = proposal.stage as SlaStage;
   if (!SLA_STAGES.includes(stage)) return null;
 
@@ -1707,13 +1712,15 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
     setQuickSaving(true);
     const parsed = parseFloat(quickValorAprovado.replace(/\./g, "").replace(",", ".").replace(/[^\d.]/g, ""));
     try {
+      // Aprovar registra a decisão de crédito (status), mas não move a etapa —
+      // "Contrato Assinado" só é marcado quando o contrato for realmente assinado.
       const res = await fetch("/api/credit-proposals", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: quickAction.proposal.id, status: "APPROVED", approved_value: parsed, stage: "FINALIZADO" }),
+        body: JSON.stringify({ id: quickAction.proposal.id, status: "APPROVED", approved_value: parsed }),
       });
       if (res.ok) {
-        setProposals(prev => prev.map(p => p.id === quickAction.proposal.id ? { ...p, status: "APPROVED", stage: "FINALIZADO", approved_value: parsed } : p));
+        setProposals(prev => prev.map(p => p.id === quickAction.proposal.id ? { ...p, status: "APPROVED", approved_value: parsed } : p));
         if (quickAction.proposal.partner_id) {
           fetch("/api/notifications", {
             method: "POST",
@@ -1740,10 +1747,10 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
       const res = await fetch("/api/credit-proposals", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: quickAction.proposal.id, status: "REJECTED", metadata: meta }),
+        body: JSON.stringify({ id: quickAction.proposal.id, status: "REJECTED", stage: "REPROVADO", metadata: meta }),
       });
       if (res.ok) {
-        setProposals(prev => prev.map(p => p.id === quickAction.proposal.id ? { ...p, status: "REJECTED", metadata: meta } : p));
+        setProposals(prev => prev.map(p => p.id === quickAction.proposal.id ? { ...p, status: "REJECTED", stage: "REPROVADO", metadata: meta } : p));
         if (quickAction.proposal.partner_id) {
           fetch("/api/notifications", {
             method: "POST",
@@ -1968,7 +1975,7 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
     }
 
     // Auto-abre modal de SLA para a nova etapa (não faz sentido em estágios terminais)
-    if (!["FINALIZADO", "LIBERADO", "REPROVADO"].includes(newStage) && SLA_STAGES.includes(newStage as SlaStage)) {
+    if (!(TERMINAL_STAGES as readonly string[]).includes(newStage) && SLA_STAGES.includes(newStage as SlaStage)) {
       const proposal = proposals.find(p => p.id === proposalId);
       if (proposal) {
         setStageSlaTarget({ proposal: { ...proposal, stage: newStage }, stage: newStage as SlaStage });
@@ -2036,10 +2043,10 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
         {[
-          { label: "Propostas Ativas", value: proposals.filter((p) => p.stage !== "FINALIZADO").length, color: "text-blue-400", icon: <FileText className="w-4 h-4" /> },
+          { label: "Propostas Ativas", value: proposals.filter((p) => !(TERMINAL_STAGES as readonly string[]).includes(p.stage ?? "")).length, color: "text-blue-400", icon: <FileText className="w-4 h-4" /> },
           { label: "Tickets Abertos", value: openCount, color: "text-amber-400", icon: <Clock className="w-4 h-4" /> },
           { label: "Urgentes", value: urgentCount, color: "text-red-400", icon: <AlertCircle className="w-4 h-4" /> },
-          { label: "Finalizados", value: proposals.filter((p) => p.stage === "FINALIZADO").length, color: "text-emerald-400", icon: <CheckCircle2 className="w-4 h-4" /> },
+          { label: "Liberados", value: proposals.filter((p) => p.stage === "LIBERADO" || (p.stage === "FINALIZADO" && p.status === "APPROVED")).length, color: "text-emerald-400", icon: <CheckCircle2 className="w-4 h-4" /> },
           { label: "Contratos Pendentes", value: contratosPendentes > 0 ? contratosPendentes : "—", color: "text-purple-400", icon: <ScrollText className="w-4 h-4" /> },
           { label: "SLA Vencidas", value: slaVencidas > 0 ? slaVencidas : "—", color: slaVencidas > 0 ? "text-red-400" : "text-muted-foreground", icon: <Clock className="w-4 h-4" /> },
         ].map((kpi) => (
@@ -2080,12 +2087,16 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
 
           {/* Kanban board */}
           <div className="flex gap-3 overflow-x-auto pb-2">
-            {PIPELINE_STAGES.map((stage) => {
+            {KANBAN_COLUMNS.map((stage) => {
               const stageProposals = filteredProposals.filter((p) => {
                 if (!p.stage) return stage.key === "RECEBIDO";
-                // FINALIZADO é rótulo legado (antes da separação Liberado/Reprovado);
-                // usa status pra decidir a qual dos dois corresponde
-                if (p.stage === "FINALIZADO") return stage.key === "LIBERADO" && p.status !== "REJECTED";
+                // FINALIZADO é rótulo legado (antes da separação Liberado/Reprovado/Declinado);
+                // usa status pra decidir a qual dos três corresponde
+                if (p.stage === "FINALIZADO") {
+                  if (p.status === "REJECTED") return stage.key === "REPROVADO";
+                  if (p.status === "CANCELLED") return stage.key === "DECLINADO";
+                  return stage.key === "LIBERADO";
+                }
                 return p.stage === stage.key;
               });
               const totalValue = stageProposals.reduce((sum, p) => sum + (p.requested_value || 0), 0);
@@ -2112,8 +2123,9 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
                   <div className="flex flex-col gap-2 min-h-24">
                     {stageProposals.map((p) => {
                       const cardIdx = stageKeys.indexOf(p.stage ?? "RECEBIDO");
+                      // Reprovado/Declinado são terminais fora do fluxo linear — sem setas de avançar/retroceder
                       const hasPrev = canChangeStage && cardIdx > 0;
-                      const hasNext = canChangeStage && cardIdx < stageKeys.length - 1;
+                      const hasNext = canChangeStage && cardIdx >= 0 && cardIdx < stageKeys.length - 1;
                       return (
                         <div key={p.id}
                           draggable={canChangeStage}
@@ -3006,27 +3018,33 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
           : "—";
 
         // ── Métricas de Propostas ────────────────────────────────────────────
-        const STAGES_ORDER = ["RECEBIDO", "TRIAGEM", "ANALISE", "PENDENCIA", "APROVACAO", "FINALIZADO"];
-        const STAGE_LABELS_MAP: Record<string, string> = {
-          RECEBIDO: "Recebido", TRIAGEM: "Triagem", ANALISE: "Análise",
-          PENDENCIA: "Pendência", APROVACAO: "Aprovação", FINALIZADO: "Finalizado",
-        };
+        const STAGES_ORDER = KANBAN_COLUMNS.map(s => s.key);
+        const STAGE_LABELS_MAP: Record<string, string> = Object.fromEntries(KANBAN_COLUMNS.map(s => [s.key, s.label]));
         const STAGE_COLORS: Record<string, string> = {
-          RECEBIDO: "#7A8FA8", TRIAGEM: "#60A5FA", ANALISE: "#A78BFA",
-          PENDENCIA: "#F59E0B", APROVACAO: "#34D399", FINALIZADO: "#C9A84C",
+          RECEBIDO: "#7A8FA8", TRIAGEM: "#60A5FA", ANALISE: "#A78BFA", PENDENCIA: "#F59E0B",
+          AVALIACAO_IMOVEL: "#22D3EE", APROVACAO: "#34D399", CONTRATO_ASSINADO: "#818CF8",
+          REGISTRO_IMOVEL: "#2DD4BF", LIBERADO: "#C9A84C", REPROVADO: "#F87171", DECLINADO: "#94A3B8",
+        };
+
+        // FINALIZADO (legado) conta pro estágio equivalente no funil, conforme o status
+        const stageEquivalente = (p: ProposalCard) => {
+          if (p.stage !== "FINALIZADO") return p.stage ?? "RECEBIDO";
+          if (p.status === "REJECTED") return "REPROVADO";
+          if (p.status === "CANCELLED") return "DECLINADO";
+          return "LIBERADO";
         };
 
         const funilData = STAGES_ORDER.map(s => ({
           stage: s,
           label: STAGE_LABELS_MAP[s],
-          count: proposals.filter(p => (p.stage ?? "RECEBIDO") === s).length,
+          count: proposals.filter(p => stageEquivalente(p) === s).length,
           color: STAGE_COLORS[s],
         }));
         const maxFunil = Math.max(...funilData.map(d => d.count), 1);
 
         // ── SLA em risco (propostas não finalizadas paradas há > 48h) ────────
         const slaEmRisco = proposals
-          .filter(p => p.stage !== "FINALIZADO")
+          .filter(p => !(TERMINAL_STAGES as readonly string[]).includes(p.stage ?? ""))
           .map(p => {
             const ref = new Date(p.created_at).getTime();
             const hoursStuck = (Date.now() - ref) / 3600000;
@@ -3052,7 +3070,7 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
           const pname = p.partner_name ?? "Desconhecido";
           if (!partnerMap[pid]) partnerMap[pid] = { name: pname, total: 0, abertos: 0 };
           partnerMap[pid].total++;
-          if (p.stage !== "FINALIZADO") partnerMap[pid].abertos++;
+          if (!(TERMINAL_STAGES as readonly string[]).includes(p.stage ?? "")) partnerMap[pid].abertos++;
         }
         const topPartners = Object.values(partnerMap)
           .sort((a, b) => b.total - a.total)
@@ -3065,7 +3083,7 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
               {[
                 {
                   label: "Propostas em Aberto",
-                  value: proposals.filter(p => p.stage !== "FINALIZADO").length,
+                  value: proposals.filter(p => !(TERMINAL_STAGES as readonly string[]).includes(p.stage ?? "")).length,
                   icon: <TrendingUp className="w-5 h-5" style={{ color: "#60A5FA" }} />,
                   bg: "bg-blue-500/10",
                   sub: `${proposals.length} total`,

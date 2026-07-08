@@ -52,13 +52,26 @@ const CREDIT_LINES_N1 = [
 ];
 
 const KANBAN_STAGES = [
-  { key: "RECEBIDO",   label: "Recebido",          borderColor: "border-slate-500/40",   headerColor: "text-slate-400",   bg: "bg-slate-500/5"  },
-  { key: "TRIAGEM",    label: "Triagem",            borderColor: "border-blue-500/40",    headerColor: "text-blue-400",    bg: "bg-blue-500/5"   },
-  { key: "ANALISE",    label: "Análise de Crédito", borderColor: "border-amber-500/40",   headerColor: "text-amber-400",   bg: "bg-amber-500/5"  },
-  { key: "PENDENCIA",  label: "Pendência de Docs",  borderColor: "border-orange-500/40",  headerColor: "text-orange-400",  bg: "bg-orange-500/5" },
-  { key: "APROVACAO",  label: "Em Aprovação",       borderColor: "border-purple-500/40",  headerColor: "text-purple-400",  bg: "bg-purple-500/5" },
-  { key: "FINALIZADO", label: "Finalizado",         borderColor: "border-emerald-500/40", headerColor: "text-emerald-400", bg: "bg-emerald-500/5"},
+  { key: "RECEBIDO",           label: "Recebido",                 borderColor: "border-slate-500/40",   headerColor: "text-slate-400",   bg: "bg-slate-500/5"  },
+  { key: "TRIAGEM",            label: "Triagem",                  borderColor: "border-blue-500/40",    headerColor: "text-blue-400",    bg: "bg-blue-500/5"   },
+  { key: "ANALISE",            label: "Análise de Crédito",       borderColor: "border-amber-500/40",   headerColor: "text-amber-400",   bg: "bg-amber-500/5"  },
+  { key: "PENDENCIA",          label: "Pendência de Docs",        borderColor: "border-orange-500/40",  headerColor: "text-orange-400",  bg: "bg-orange-500/5" },
+  { key: "AVALIACAO_IMOVEL",   label: "Avaliação de Imóvel",      borderColor: "border-cyan-500/40",    headerColor: "text-cyan-400",    bg: "bg-cyan-500/5"   },
+  { key: "APROVACAO",          label: "Em Aprovação",             borderColor: "border-purple-500/40",  headerColor: "text-purple-400",  bg: "bg-purple-500/5" },
+  { key: "CONTRATO_ASSINADO",  label: "Contrato Assinado",        borderColor: "border-indigo-500/40",  headerColor: "text-indigo-400",  bg: "bg-indigo-500/5" },
+  { key: "REGISTRO_IMOVEL",    label: "Registro de Imóveis",      borderColor: "border-teal-500/40",    headerColor: "text-teal-400",    bg: "bg-teal-500/5"   },
+  { key: "LIBERADO",           label: "Recurso Liberado",         borderColor: "border-emerald-500/40", headerColor: "text-emerald-400", bg: "bg-emerald-500/5"},
+  { key: "REPROVADO",          label: "Reprovado",                borderColor: "border-red-500/40",     headerColor: "text-red-400",     bg: "bg-red-500/5"    },
+  { key: "DECLINADO",          label: "Declinado (sem aderência)", borderColor: "border-slate-500/40",  headerColor: "text-slate-400",   bg: "bg-slate-500/5"  },
 ];
+
+// FINALIZADO é rótulo legado (antes da separação Liberado/Reprovado/Declinado)
+function stageEquivalenteKanban(p: { stage?: string | null; status?: string }): string {
+  if (p.stage !== "FINALIZADO") return p.stage ?? "RECEBIDO";
+  if (p.status === "REJECTED") return "REPROVADO";
+  if (p.status === "CANCELLED") return "DECLINADO";
+  return "LIBERADO";
+}
 
 export function CreditDeskLevel1Client({ proposals: initial, currentUser }: CreditDeskLevel1ClientProps) {
   const [proposals, setProposals] = useState<Proposal[]>(initial);
@@ -237,7 +250,7 @@ export function CreditDeskLevel1Client({ proposals: initial, currentUser }: Cred
         <div className="overflow-x-auto pb-2">
           <div className="flex gap-3 min-w-max">
             {KANBAN_STAGES.map((stage) => {
-              const cards = filtered.filter(p => (p.stage ?? "RECEBIDO") === stage.key);
+              const cards = filtered.filter(p => stageEquivalenteKanban(p) === stage.key);
               return (
                 <div key={stage.key} className={`w-56 flex-shrink-0 rounded-xl border ${stage.borderColor} ${stage.bg} p-3 flex flex-col gap-2`}>
                   <div className="flex items-center justify-between mb-1">

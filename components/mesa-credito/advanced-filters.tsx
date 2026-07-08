@@ -20,12 +20,12 @@ export const EMPTY_FILTERS: FilterState = {
   valueMin: "", valueMax: "", dateFrom: "", dateTo: "", partner: "",
 };
 
-const STAGES = ["RECEBIDO", "TRIAGEM", "ANALISE", "PENDENCIA", "AVALIACAO_IMOVEL", "APROVACAO", "CONTRATO_ASSINADO", "REGISTRO_IMOVEL", "LIBERADO", "REPROVADO", "FINALIZADO"];
+const STAGES = ["RECEBIDO", "TRIAGEM", "ANALISE", "PENDENCIA", "AVALIACAO_IMOVEL", "APROVACAO", "CONTRATO_ASSINADO", "REGISTRO_IMOVEL", "LIBERADO", "REPROVADO", "DECLINADO", "FINALIZADO"];
 const STAGE_LABELS: Record<string, string> = {
   RECEBIDO: "Recebido", TRIAGEM: "Triagem", ANALISE: "Análise de Crédito",
   PENDENCIA: "Pendência de Docs", AVALIACAO_IMOVEL: "Avaliação de Imóvel", APROVACAO: "Em Aprovação",
   CONTRATO_ASSINADO: "Contrato Assinado", REGISTRO_IMOVEL: "Registro de Imóveis",
-  LIBERADO: "Recurso Liberado", REPROVADO: "Reprovado", FINALIZADO: "Finalizado",
+  LIBERADO: "Recurso Liberado", REPROVADO: "Reprovado", DECLINADO: "Declinado (sem aderência)", FINALIZADO: "Finalizado",
 };
 
 interface Props {
@@ -242,6 +242,7 @@ export const SLA_HOURS_BY_STAGE: Record<string, number> = {
   REGISTRO_IMOVEL:  300,   // 30 dias
   LIBERADO:          30,   // 3 dias
   REPROVADO:  Infinity,
+  DECLINADO:  Infinity,
   FINALIZADO: Infinity,
 };
 

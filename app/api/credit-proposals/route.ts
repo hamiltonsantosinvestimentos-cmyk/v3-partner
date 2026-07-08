@@ -39,7 +39,7 @@ const createSchema = z.object({
 
 const patchSchema = z.object({
   id:               z.string().uuid("ID inválido"),
-  stage:            z.enum(["RECEBIDO","TRIAGEM","ANALISE","PENDENCIA","AVALIACAO_IMOVEL","APROVACAO","CONTRATO_ASSINADO","REGISTRO_IMOVEL","LIBERADO","REPROVADO","FINALIZADO"]).optional(),
+  stage:            z.enum(["RECEBIDO","TRIAGEM","ANALISE","PENDENCIA","AVALIACAO_IMOVEL","APROVACAO","CONTRATO_ASSINADO","REGISTRO_IMOVEL","LIBERADO","REPROVADO","DECLINADO","FINALIZADO"]).optional(),
   status:           z.enum(["PENDING","IN_REVIEW","APPROVED","REJECTED","COMPLETED","CANCELLED"]).optional(),
   approved_value:   z.number().gt(0).optional().nullable(),
   current_level:    z.enum(["NIVEL_1","NIVEL_2","NIVEL_3"]).optional(),
@@ -262,6 +262,9 @@ export async function PATCH(req: NextRequest) {
   }
   if (fields.stage === "REPROVADO" && !fields.status) {
     updateData.status = "REJECTED";
+  }
+  if (fields.stage === "DECLINADO" && !fields.status) {
+    updateData.status = "CANCELLED";
   }
 
   // Quando o stage muda OU metadata é enviado, garante merge correto (nunca sobrescreve dados existentes)

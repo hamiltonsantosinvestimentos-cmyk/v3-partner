@@ -38,9 +38,11 @@ export const PIPELINE_STAGES = [
   { key: "LIBERADO", label: "Recurso Liberado", color: "text-emerald-400", bg: "bg-emerald-500/20" },
 ];
 
-// Estágio terminal de reprovação — fora do fluxo linear principal (não faz parte
-// do "avançar/retroceder" sequencial, é alcançado a qualquer momento pelo botão Reprovar)
+// Estágios terminais fora do fluxo linear principal (não fazem parte do
+// "avançar/retroceder" sequencial, alcançados a qualquer momento pelos botões
+// Reprovar / Declinar) — ainda assim aparecem como colunas próprias no kanban.
 export const STAGE_REPROVADO = { key: "REPROVADO", label: "Reprovado", color: "text-red-400", bg: "bg-red-500/20" };
+export const STAGE_DECLINADO = { key: "DECLINADO", label: "Declinado (sem aderência)", color: "text-slate-400", bg: "bg-slate-500/20" };
 
 export interface ImovelMeta {
   endereco?: string;
@@ -561,6 +563,7 @@ function PendingBanner({ proposal, canChangeStage, onProposalUpdate, onStageChan
 // stage_changed_at (entrada na etapa atual) + created_at (entrada na primeira etapa).
 function stageLabelFor(key: string): { label: string; color: string } {
   if (key === "REPROVADO") return STAGE_REPROVADO;
+  if (key === "DECLINADO") return STAGE_DECLINADO;
   const found = PIPELINE_STAGES.find(s => s.key === key);
   return found ?? { label: key, color: "text-muted-foreground" };
 }
@@ -815,9 +818,11 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
   // ── Workflow de aprovação ─────────────────────────────────────────────────
   const [showAprovar, setShowAprovar] = useState(false);
   const [showReprovar, setShowReprovar] = useState(false);
+  const [showDeclinar, setShowDeclinar] = useState(false);
   const [showEscalar, setShowEscalar] = useState(false);
   const [valorAprovado, setValorAprovado] = useState("");
   const [motivoReprovacao, setMotivoReprovacao] = useState("");
+  const [motivoDeclinio, setMotivoDeclinio] = useState("");
   const [nivelEscalar, setNivelEscalar] = useState("");
   const [savingAprovacao, setSavingAprovacao] = useState(false);
 
@@ -882,6 +887,37 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
       }
       setShowReprovar(false);
       setMotivoReprovacao("");
+    } finally { setSavingAprovacao(false); }
+  }
+
+  async function handleDeclinar() {
+    if (!proposal || !motivoDeclinio.trim()) return;
+    setSavingAprovacao(true);
+    try {
+      const newMeta = { ...(proposal.metadata ?? {}), motivo_declinio: motivoDeclinio };
+      await fetch("/api/credit-proposals", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: proposal.id, status: "CANCELLED", stage: "DECLINADO", metadata: newMeta }),
+      });
+      onProposalUpdate?.(proposal.id, { status: "CANCELLED", stage: "DECLINADO", metadata: newMeta as typeof proposal.metadata });
+      onStageChange?.(proposal.id, "DECLINADO");
+      // Notifica o partner
+      if (proposal.partner_id) {
+        fetch("/api/notifications", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            user_id: proposal.partner_id,
+            title: `⚠️ Proposta ${proposal.code} Declinada`,
+            message: `Sua proposta de crédito para ${proposal.client_name} foi declinada por falta de aderência. Motivo: ${motivoDeclinio}`,
+            type: "proposal",
+            action_url: "/minhas-operacoes",
+          }),
+        }).catch(() => {});
+      }
+      setShowDeclinar(false);
+      setMotivoDeclinio("");
     } finally { setSavingAprovacao(false); }
   }
 
@@ -1830,6 +1866,7 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
 
   // FINALIZADO é o rótulo legado usado antes da separação entre Liberado/Reprovado
   const isReprovado = proposal.stage === "REPROVADO" || (proposal.stage === "FINALIZADO" && proposal.status === "REJECTED");
+  const isDeclinado = proposal.stage === "DECLINADO" || (proposal.stage === "FINALIZADO" && proposal.status === "CANCELLED");
   const stageParaIndice = proposal.stage === "FINALIZADO" ? "LIBERADO" : (proposal.stage ?? "RECEBIDO");
   const currentStageIdx = PIPELINE_STAGES.findIndex((s) => s.key === stageParaIndice);
   const activeIdx = currentStageIdx >= 0 ? currentStageIdx : 0;
@@ -2232,6 +2269,11 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
               <div className="flex items-center gap-2 px-4 py-3 rounded-xl border border-red-500/30 bg-red-500/10">
                 <X className="w-4 h-4 text-red-400 flex-shrink-0" />
                 <p className="text-xs font-semibold text-red-400">Operação reprovada</p>
+              </div>
+            ) : isDeclinado ? (
+              <div className="flex items-center gap-2 px-4 py-3 rounded-xl border border-slate-500/30 bg-slate-500/10">
+                <X className="w-4 h-4 text-slate-400 flex-shrink-0" />
+                <p className="text-xs font-semibold text-slate-400">Operação declinada (sem aderência)</p>
               </div>
             ) : (
               <div className="flex items-center gap-0">
@@ -3968,6 +4010,13 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
               <X className="w-3.5 h-3.5" /> Reprovar
             </Button>
           )}
+          {/* ── Botão Declinar (sem aderência) — disponível em qualquer estágio ── */}
+          {canChangeStage && !isFinished && proposal?.status !== "REJECTED" && proposal?.status !== "CANCELLED" && (
+            <Button size="sm" variant="outline" onClick={() => setShowDeclinar(true)}
+              className="gap-1.5 border-slate-500/40 text-slate-400 hover:bg-slate-500/10">
+              <X className="w-3.5 h-3.5" /> Declinar (sem aderência)
+            </Button>
+          )}
           {/* ── Botão Aprovar — disponível em qualquer estágio ── */}
           {canChangeStage && !isFinished && proposal?.status !== "APPROVED" && proposal?.status !== "REJECTED" && (
             <div className="flex items-center gap-2 flex-wrap">
@@ -4067,6 +4116,41 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
                 className="bg-red-600 hover:bg-red-500 border-0 text-white gap-1.5">
                 {savingAprovacao ? <span className="w-3 h-3 rounded-full border-2 border-white border-t-transparent animate-spin" /> : <X className="w-3.5 h-3.5" />}
                 Confirmar Reprovação
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal: Declinar (sem aderência) ── */}
+      {showDeclinar && (
+        <div className="fixed inset-0 z-[70] flex items-start justify-center p-4 pt-10 bg-black/70 backdrop-blur-sm">
+          <div className="bg-card border border-slate-500/30 rounded-2xl w-full max-w-sm animate-fade-in">
+            <div className="flex items-center gap-2 px-5 py-4 border-b border-border">
+              <X className="w-4 h-4 text-slate-400" />
+              <h3 className="text-sm font-bold text-white">Declinar Proposta (sem aderência)</h3>
+            </div>
+            <div className="px-5 py-4 space-y-4">
+              <p className="text-xs text-muted-foreground">
+                Use quando a proposta não é reprovada por crédito, mas não tem aderência ao que oferecemos. Informe o motivo — o partner será notificado.
+              </p>
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Motivo *</label>
+                <textarea
+                  value={motivoDeclinio}
+                  onChange={e => setMotivoDeclinio(e.target.value)}
+                  placeholder="Ex: Fora do escopo de produtos, valor abaixo do mínimo, garantia não aceita..."
+                  rows={4}
+                  className="w-full px-3 py-2 text-sm bg-secondary border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-slate-500/50 resize-none"
+                />
+              </div>
+            </div>
+            <div className="px-5 py-4 border-t border-border flex gap-2 justify-end">
+              <Button size="sm" variant="outline" onClick={() => { setShowDeclinar(false); setMotivoDeclinio(""); }}>Cancelar</Button>
+              <Button size="sm" onClick={handleDeclinar} disabled={!motivoDeclinio.trim() || savingAprovacao}
+                className="bg-slate-600 hover:bg-slate-500 border-0 text-white gap-1.5">
+                {savingAprovacao ? <span className="w-3 h-3 rounded-full border-2 border-white border-t-transparent animate-spin" /> : <X className="w-3.5 h-3.5" />}
+                Confirmar Declínio
               </Button>
             </div>
           </div>
