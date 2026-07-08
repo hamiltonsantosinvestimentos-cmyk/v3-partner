@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-export const SECTORS = ["MA", "CREDITO", "CONSORCIO", "BOLSA_ATIVOS", "MARKETPLACE", "CREDITO_INTERNACIONAL"] as const;
+export const SECTORS = ["MA", "CREDITO", "CONSORCIO", "BOLSA_ATIVOS", "MARKETPLACE", "CREDITO_INTERNACIONAL", "ASSINATURAS"] as const;
 export type Sector = typeof SECTORS[number];
 
 export const SECTOR_LABELS: Record<Sector, string> = {
@@ -10,23 +10,27 @@ export const SECTOR_LABELS: Record<Sector, string> = {
   BOLSA_ATIVOS: "Bolsa de Ativos",
   MARKETPLACE: "Marketplace",
   CREDITO_INTERNACIONAL: "Crédito Internacional",
+  ASSINATURAS: "Assinaturas",
 };
 
 export function isValidSector(v: string): v is Sector {
   return (SECTORS as readonly string[]).includes(v);
 }
 
-/** Soma valores reais por mês (1-12) para o setor/ano informado, a partir dos dados operacionais reais. */
-export async function getRealizadoPorMes(db: SupabaseClient, sector: Sector, year: number): Promise<Record<number, number>> {
-  const porMes: Record<number, number> = {};
-  for (let m = 1; m <= 12; m++) porMes[m] = 0;
+export interface RealizadoMes { valor: number; quantidade: number; }
+
+/** Soma valor + quantidade reais por mês (1-12) para o setor/ano informado, a partir dos dados operacionais reais. */
+export async function getRealizadoPorMes(db: SupabaseClient, sector: Sector, year: number): Promise<Record<number, RealizadoMes>> {
+  const porMes: Record<number, RealizadoMes> = {};
+  for (let m = 1; m <= 12; m++) porMes[m] = { valor: 0, quantidade: 0 };
 
   const add = (dateStr: string | null | undefined, value: number | null | undefined) => {
-    if (!dateStr || !value) return;
+    if (!dateStr) return;
     const d = new Date(dateStr);
     if (d.getFullYear() !== year) return;
     const m = d.getMonth() + 1;
-    porMes[m] = (porMes[m] ?? 0) + value;
+    porMes[m].valor += value ?? 0;
+    porMes[m].quantidade += 1;
   };
 
   const yearStart = `${year}-01-01`;
@@ -97,6 +101,17 @@ export async function getRealizadoPorMes(db: SupabaseClient, sector: Sector, yea
       .lte("updated_at", yearEnd);
     for (const row of data ?? []) {
       add(row.updated_at as string, row.valor_face as number | null);
+    }
+  } else if (sector === "ASSINATURAS") {
+    // Mensalidades de partners pagas (Cora ou InfinitePay) — partner_subscriptions
+    const { data } = await db
+      .from("partner_subscriptions")
+      .select("amount_cents, paid_at")
+      .eq("status", "PAID")
+      .gte("paid_at", yearStart)
+      .lte("paid_at", yearEnd);
+    for (const row of data ?? []) {
+      add(row.paid_at as string, ((row.amount_cents as number | null) ?? 0) / 100);
     }
   }
 

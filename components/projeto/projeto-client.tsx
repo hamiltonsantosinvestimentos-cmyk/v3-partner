@@ -9,7 +9,7 @@ import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
 } from "recharts";
 
-const SECTORS = ["MA", "CREDITO", "CONSORCIO", "BOLSA_ATIVOS", "MARKETPLACE", "CREDITO_INTERNACIONAL"] as const;
+const SECTORS = ["MA", "CREDITO", "CONSORCIO", "BOLSA_ATIVOS", "MARKETPLACE", "CREDITO_INTERNACIONAL", "ASSINATURAS"] as const;
 type Sector = typeof SECTORS[number];
 
 const SECTOR_LABELS: Record<Sector, string> = {
@@ -19,6 +19,7 @@ const SECTOR_LABELS: Record<Sector, string> = {
   BOLSA_ATIVOS: "Bolsa de Ativos",
   MARKETPLACE: "Marketplace",
   CREDITO_INTERNACIONAL: "Crédito Internacional",
+  ASSINATURAS: "Assinaturas",
 };
 
 const MESES = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
@@ -53,7 +54,9 @@ interface MetaMensal {
   meta_valor: number;
   meta_quantidade: number | null;
   realizado: number;
+  realizado_quantidade: number;
   pct: number;
+  pct_quantidade: number;
   comissao: number;
 }
 
@@ -62,7 +65,7 @@ interface MetasData {
   year: number;
   comissao_percent: number;
   monthly: MetaMensal[];
-  annual: { meta_valor: number; meta_quantidade: number | null; realizado: number; pct: number; comissao: number };
+  annual: { meta_valor: number; meta_quantidade: number | null; realizado: number; realizado_quantidade: number; pct: number; pct_quantidade: number; comissao: number };
 }
 
 const moeda = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
@@ -411,9 +414,23 @@ export function ProjetoClient() {
                       className="w-full px-3 py-1.5 text-sm rounded-lg bg-[#0A1628] border border-[#243A66] text-white focus:outline-none focus:ring-1 focus:ring-[#C9A84C]/50"
                     />
                   </div>
+                  <div className="w-28">
+                    <label className="text-[10px] text-muted-foreground">Meta (qtd)</label>
+                    <input
+                      type="number"
+                      defaultValue={metas.annual.meta_quantidade ?? ""}
+                      placeholder="Qtd"
+                      onBlur={(e) => {
+                        const v = e.target.value ? parseInt(e.target.value, 10) : null;
+                        if (v !== metas.annual.meta_quantidade) salvarMeta(null, metas.annual.meta_valor, v);
+                      }}
+                      className="w-full px-3 py-1.5 text-sm rounded-lg bg-[#0A1628] border border-[#243A66] text-white focus:outline-none focus:ring-1 focus:ring-[#C9A84C]/50"
+                    />
+                  </div>
                   <div className="flex-1 text-right">
                     <p className="text-[10px] text-muted-foreground">Realizado</p>
                     <p className="text-lg font-bold text-white">{moeda(metas.annual.realizado)}</p>
+                    <p className="text-[10px] text-muted-foreground">{metas.annual.realizado_quantidade} {metas.annual.meta_quantidade ? `/ ${metas.annual.meta_quantidade}` : ""}</p>
                   </div>
                   {savingMeta === "annual" && <Loader2 className="w-4 h-4 animate-spin text-[#C9A84C]" />}
                 </div>
@@ -479,8 +496,23 @@ export function ProjetoClient() {
                       }}
                       className="w-32 px-2.5 py-1.5 text-xs rounded-lg bg-[#0A1628] border border-[#243A66] text-white focus:outline-none focus:ring-1 focus:ring-[#C9A84C]/50"
                     />
+                    <input
+                      type="number"
+                      defaultValue={m.meta_quantidade ?? ""}
+                      placeholder="Meta qtd"
+                      onBlur={(e) => {
+                        const v = e.target.value ? parseInt(e.target.value, 10) : null;
+                        if (v !== m.meta_quantidade) salvarMeta(m.month, m.meta_valor, v);
+                      }}
+                      className="w-20 px-2.5 py-1.5 text-xs rounded-lg bg-[#0A1628] border border-[#243A66] text-white focus:outline-none focus:ring-1 focus:ring-[#C9A84C]/50"
+                    />
                     <span className="text-[10px] text-muted-foreground flex-shrink-0">Realizado:</span>
-                    <span className="text-xs font-semibold text-white flex-1">{moeda(m.realizado)}</span>
+                    <span className="text-xs font-semibold text-white flex-1">
+                      {moeda(m.realizado)}
+                      <span className="text-[10px] text-muted-foreground ml-1">
+                        ({m.realizado_quantidade}{m.meta_quantidade ? `/${m.meta_quantidade}` : ""})
+                      </span>
+                    </span>
                     <span className="text-[10px] text-muted-foreground flex-shrink-0">Comissão:</span>
                     <span className="text-xs font-semibold text-emerald-400 w-24">{moeda(m.comissao)}</span>
                     <span className={`text-xs font-bold w-12 text-right ${pctColor(m.pct)}`}>{m.pct}%</span>

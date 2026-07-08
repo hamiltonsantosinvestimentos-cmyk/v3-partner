@@ -47,20 +47,25 @@ export async function GET(req: NextRequest) {
   const monthly = Array.from({ length: 12 }, (_, i) => {
     const month = i + 1;
     const goal = goalByMonth.get(month);
-    const realizado = realizadoPorMes[month] ?? 0;
+    const realizadoMes = realizadoPorMes[month] ?? { valor: 0, quantidade: 0 };
     const meta_valor = goal?.meta_valor ?? 0;
+    const meta_quantidade = goal?.meta_quantidade ?? null;
     return {
       month,
       meta_valor,
-      meta_quantidade: goal?.meta_quantidade ?? null,
-      realizado,
-      pct: meta_valor > 0 ? Math.round((realizado / meta_valor) * 100) : 0,
+      meta_quantidade,
+      realizado: realizadoMes.valor,
+      realizado_quantidade: realizadoMes.quantidade,
+      pct: meta_valor > 0 ? Math.round((realizadoMes.valor / meta_valor) * 100) : 0,
+      pct_quantidade: meta_quantidade ? Math.round((realizadoMes.quantidade / meta_quantidade) * 100) : 0,
       comissao: meta_valor * (comissaoPercent / 100),
     };
   });
 
-  const realizadoAnual = Object.values(realizadoPorMes).reduce((s, v) => s + v, 0);
+  const realizadoAnual = monthly.reduce((s, m) => s + m.realizado, 0);
+  const realizadoQuantidadeAnual = monthly.reduce((s, m) => s + m.realizado_quantidade, 0);
   const annualMetaValor = annualGoal?.meta_valor ?? 0;
+  const annualMetaQuantidade = annualGoal?.meta_quantidade ?? null;
   const comissaoAnual = monthly.reduce((s, m) => s + m.comissao, 0);
 
   return NextResponse.json({
@@ -69,9 +74,11 @@ export async function GET(req: NextRequest) {
     monthly,
     annual: {
       meta_valor: annualMetaValor,
-      meta_quantidade: annualGoal?.meta_quantidade ?? null,
+      meta_quantidade: annualMetaQuantidade,
       realizado: realizadoAnual,
+      realizado_quantidade: realizadoQuantidadeAnual,
       pct: annualMetaValor > 0 ? Math.round((realizadoAnual / annualMetaValor) * 100) : 0,
+      pct_quantidade: annualMetaQuantidade ? Math.round((realizadoQuantidadeAnual / annualMetaQuantidade) * 100) : 0,
       comissao: comissaoAnual,
     },
   });
