@@ -6,7 +6,7 @@ import {
   Lightbulb, ShieldAlert, ChevronLeft, ChevronRight,
 } from "lucide-react";
 import {
-  ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
+  ResponsiveContainer, ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
 } from "recharts";
 
 const SECTORS = ["MA", "CREDITO", "CONSORCIO", "BOLSA_ATIVOS", "MARKETPLACE", "CREDITO_INTERNACIONAL", "ASSINATURAS"] as const;
@@ -58,14 +58,25 @@ interface MetaMensal {
   pct: number;
   pct_quantidade: number;
   comissao: number;
+  // Só presentes no setor Assinaturas
+  mrr?: number;
+  custo_sdr?: number;
+  custo_closer?: number;
+  lucro_liquido?: number;
 }
 
 interface MetasData {
   sector: string;
   year: number;
   comissao_percent: number;
+  custo_sdr_percent?: number;
+  custo_closer_percent?: number;
   monthly: MetaMensal[];
-  annual: { meta_valor: number; meta_quantidade: number | null; realizado: number; realizado_quantidade: number; pct: number; pct_quantidade: number; comissao: number };
+  annual: {
+    meta_valor: number; meta_quantidade: number | null; realizado: number; realizado_quantidade: number;
+    pct: number; pct_quantidade: number; comissao: number;
+    mrr_final?: number; custo_sdr?: number; custo_closer?: number; lucro_liquido?: number;
+  };
 }
 
 const moeda = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
@@ -195,7 +206,15 @@ export function ProjetoClient() {
       await fetch("/api/projeto/metas", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sector, year, month, meta_valor: metaValor, meta_quantidade: metaQuantidade }),
+        body: JSON.stringify({
+          sector, year, month, meta_valor: metaValor, meta_quantidade: metaQuantidade,
+          // Reenvia os % já salvos pra não zerá-los ao editar só o valor/quantidade da meta anual
+          ...(month === null ? {
+            comissao_percent: metas?.comissao_percent,
+            custo_sdr_percent: metas?.custo_sdr_percent,
+            custo_closer_percent: metas?.custo_closer_percent,
+          } : {}),
+        }),
       });
       await load();
     } finally { setSavingMeta(null); }
@@ -213,16 +232,41 @@ export function ProjetoClient() {
           meta_valor: metas.annual.meta_valor,
           meta_quantidade: metas.annual.meta_quantidade,
           comissao_percent: pct,
+          custo_sdr_percent: metas.custo_sdr_percent,
+          custo_closer_percent: metas.custo_closer_percent,
         }),
       });
       await load();
     } finally { setSavingMeta(null); }
   }
 
+  async function salvarCustoPercent(campo: "custo_sdr_percent" | "custo_closer_percent", pct: number) {
+    if (!metas) return;
+    setSavingMeta("annual");
+    try {
+      await fetch("/api/projeto/metas", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sector, year, month: null,
+          meta_valor: metas.annual.meta_valor,
+          meta_quantidade: metas.annual.meta_quantidade,
+          comissao_percent: metas.comissao_percent,
+          custo_sdr_percent: metas.custo_sdr_percent,
+          custo_closer_percent: metas.custo_closer_percent,
+          [campo]: pct,
+        }),
+      });
+      await load();
+    } finally { setSavingMeta(null); }
+  }
+
+  const isAssinaturas = sector === "ASSINATURAS";
   const chartData = metas?.monthly.map(m => ({
     mes: MESES[m.month - 1],
     Meta: m.meta_valor,
     Realizado: m.realizado,
+    ...(isAssinaturas ? { MRR: m.mrr ?? 0 } : {}),
   })) ?? [];
 
   return (
@@ -460,11 +504,67 @@ export function ProjetoClient() {
                 </div>
               </div>
 
-              {/* Gráfico meta x realizado */}
+              {/* Custo de comissão SDR/Closer e lucro líquido — só em Assinaturas */}
+              {isAssinaturas && (
+                <div className="p-4 rounded-xl border border-[#243A66] bg-[#0D1929] space-y-3">
+                  <p className="text-xs font-bold text-[#7A8FA8] uppercase tracking-wide">Custo de Venda (SDR + Closer) e Lucro Líquido</p>
+                  <p className="text-[10px] text-muted-foreground -mt-2">
+                    Os % incidem sobre o valor das vendas novas do mês (não sobre o MRR acumulado).
+                  </p>
+                  <div className="flex items-center gap-4 flex-wrap">
+                    <div className="w-28">
+                      <label className="text-[10px] text-muted-foreground">% Custo SDR</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        defaultValue={metas.custo_sdr_percent || ""}
+                        placeholder="Ex: 10"
+                        onBlur={(e) => {
+                          const v = parseFloat(e.target.value) || 0;
+                          if (v !== metas.custo_sdr_percent) salvarCustoPercent("custo_sdr_percent", v);
+                        }}
+                        className="w-full px-2.5 py-1.5 text-sm rounded-lg bg-[#0A1628] border border-[#243A66] text-white focus:outline-none focus:ring-1 focus:ring-[#C9A84C]/50"
+                      />
+                    </div>
+                    <div className="w-28">
+                      <label className="text-[10px] text-muted-foreground">% Custo Closer</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        defaultValue={metas.custo_closer_percent || ""}
+                        placeholder="Ex: 15"
+                        onBlur={(e) => {
+                          const v = parseFloat(e.target.value) || 0;
+                          if (v !== metas.custo_closer_percent) salvarCustoPercent("custo_closer_percent", v);
+                        }}
+                        className="w-full px-2.5 py-1.5 text-sm rounded-lg bg-[#0A1628] border border-[#243A66] text-white focus:outline-none focus:ring-1 focus:ring-[#C9A84C]/50"
+                      />
+                    </div>
+                    <div className="flex-1 text-right">
+                      <p className="text-[10px] text-muted-foreground">Custo total no ano</p>
+                      <p className="text-sm font-bold text-red-400">
+                        -{moeda((metas.annual.custo_sdr ?? 0) + (metas.annual.custo_closer ?? 0))}
+                      </p>
+                    </div>
+                    <div className="flex-1 text-right">
+                      <p className="text-[10px] text-muted-foreground">Lucro líquido no ano</p>
+                      <p className="text-lg font-bold text-emerald-400">{moeda(metas.annual.lucro_liquido ?? 0)}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/30">
+                    <span className="text-xs font-semibold text-emerald-400">MRR atual (dez/{year} ou último mês com dado)</span>
+                    <span className="text-sm font-bold text-emerald-400">{moeda(metas.annual.mrr_final ?? 0)}/mês</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Gráfico meta x realizado (+ MRR acumulado em Assinaturas) */}
               <div className="p-4 rounded-xl border border-[#243A66] bg-[#0D1929]">
-                <p className="text-xs font-bold text-[#7A8FA8] uppercase tracking-wide mb-4">Meta x Realizado por Mês</p>
+                <p className="text-xs font-bold text-[#7A8FA8] uppercase tracking-wide mb-4">
+                  {isAssinaturas ? "Vendas Novas x Meta, e Crescimento do MRR" : "Meta x Realizado por Mês"}
+                </p>
                 <ResponsiveContainer width="100%" height={220}>
-                  <BarChart data={chartData} margin={{ top: 5, right: 5, left: 0, bottom: 0 }}>
+                  <ComposedChart data={chartData} margin={{ top: 5, right: 5, left: 0, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#243A66" />
                     <XAxis dataKey="mes" tick={{ fill: "#7A8FA8", fontSize: 10 }} axisLine={false} tickLine={false} />
                     <YAxis tick={{ fill: "#7A8FA8", fontSize: 10 }} axisLine={false} tickLine={false}
@@ -476,7 +576,10 @@ export function ProjetoClient() {
                     <Legend wrapperStyle={{ fontSize: 11 }} />
                     <Bar dataKey="Meta" fill="#243A66" radius={[4, 4, 0, 0]} />
                     <Bar dataKey="Realizado" fill="#C9A84C" radius={[4, 4, 0, 0]} />
-                  </BarChart>
+                    {isAssinaturas && (
+                      <Line type="monotone" dataKey="MRR" stroke="#10b981" strokeWidth={2} dot={{ r: 3 }} name="MRR acumulado" />
+                    )}
+                  </ComposedChart>
                 </ResponsiveContainer>
               </div>
 
@@ -484,7 +587,8 @@ export function ProjetoClient() {
               <div className="space-y-1.5">
                 <p className="text-xs font-bold text-[#7A8FA8] uppercase tracking-wide">Metas Mensais</p>
                 {metas.monthly.map(m => (
-                  <div key={m.month} className="flex items-center gap-3 p-2.5 rounded-lg border border-[#243A66] bg-[#0D1929]">
+                  <div key={m.month} className="p-2.5 rounded-lg border border-[#243A66] bg-[#0D1929] space-y-2">
+                  <div className="flex items-center gap-3">
                     <span className="text-xs font-semibold text-white w-8">{MESES[m.month - 1]}</span>
                     <input
                       type="number"
@@ -517,6 +621,14 @@ export function ProjetoClient() {
                     <span className="text-xs font-semibold text-emerald-400 w-24">{moeda(m.comissao)}</span>
                     <span className={`text-xs font-bold w-12 text-right ${pctColor(m.pct)}`}>{m.pct}%</span>
                     {savingMeta === String(m.month) && <Loader2 className="w-3.5 h-3.5 animate-spin text-[#C9A84C]" />}
+                  </div>
+                  {isAssinaturas && (
+                    <div className="flex items-center gap-3 pl-11 text-[10px]">
+                      <span className="text-muted-foreground">MRR: <span className="font-semibold text-emerald-400">{moeda(m.mrr ?? 0)}</span></span>
+                      <span className="text-muted-foreground">Custo SDR+Closer: <span className="font-semibold text-red-400">-{moeda((m.custo_sdr ?? 0) + (m.custo_closer ?? 0))}</span></span>
+                      <span className="text-muted-foreground">Lucro líquido: <span className="font-semibold text-white">{moeda(m.lucro_liquido ?? 0)}</span></span>
+                    </div>
+                  )}
                   </div>
                 ))}
               </div>

@@ -103,17 +103,72 @@ export async function getRealizadoPorMes(db: SupabaseClient, sector: Sector, yea
       add(row.updated_at as string, row.valor_face as number | null);
     }
   } else if (sector === "ASSINATURAS") {
-    // Mensalidades de partners pagas (Cora ou InfinitePay) — partner_subscriptions
+    // "Venda nova" = primeiro pagamento confirmado de cada partner (não conta renovação).
+    // Busca sem filtro de ano pra achar o primeiro pagamento de verdade, mesmo se
+    // for de um ano anterior — o add() já ignora o que não é do ano pedido.
     const { data } = await db
       .from("partner_subscriptions")
-      .select("amount_cents, paid_at")
+      .select("partner_id, amount_cents, paid_at")
       .eq("status", "PAID")
-      .gte("paid_at", yearStart)
-      .lte("paid_at", yearEnd);
+      .not("paid_at", "is", null)
+      .order("paid_at", { ascending: true });
+
+    const primeiroPagamentoPorPartner = new Map<string, { amount_cents: number; paid_at: string }>();
     for (const row of data ?? []) {
-      add(row.paid_at as string, ((row.amount_cents as number | null) ?? 0) / 100);
+      const partnerId = row.partner_id as string;
+      if (!primeiroPagamentoPorPartner.has(partnerId)) {
+        primeiroPagamentoPorPartner.set(partnerId, { amount_cents: row.amount_cents as number, paid_at: row.paid_at as string });
+      }
+    }
+    for (const { amount_cents, paid_at } of primeiroPagamentoPorPartner.values()) {
+      add(paid_at, (amount_cents ?? 0) / 100);
     }
   }
 
   return porMes;
+}
+
+/**
+ * MRR acumulado (receita recorrente ativa) por mês — não é "quanto entrou de caixa
+ * no mês", é "quantos partners pagantes estavam com assinatura vigente naquele mês",
+ * somando o valor mensal de cada um. Um partner conta em todo mês coberto pelo
+ * período [paid_at, due_date) do seu pagamento mais recente até aquele ponto.
+ */
+export async function getMRRAcumuladoPorMes(db: SupabaseClient, year: number): Promise<Record<number, number>> {
+  const mrrPorMes: Record<number, number> = {};
+  for (let m = 1; m <= 12; m++) mrrPorMes[m] = 0;
+
+  const { data } = await db
+    .from("partner_subscriptions")
+    .select("partner_id, amount_cents, paid_at, due_date")
+    .eq("status", "PAID")
+    .not("paid_at", "is", null)
+    .lte("paid_at", `${year}-12-31T23:59:59`);
+
+  const porPartner = new Map<string, { amount_cents: number; paid_at: string; due_date: string }[]>();
+  for (const row of (data ?? []) as { partner_id: string; amount_cents: number; paid_at: string; due_date: string }[]) {
+    const list = porPartner.get(row.partner_id) ?? [];
+    list.push(row);
+    porPartner.set(row.partner_id, list);
+  }
+
+  for (let month = 1; month <= 12; month++) {
+    const inicioMes = new Date(year, month - 1, 1);
+    const fimMes = new Date(year, month, 0, 23, 59, 59);
+
+    for (const pagamentos of porPartner.values()) {
+      // Entre os pagamentos já feitos até o fim do mês, pega o mais recente
+      const validos = pagamentos.filter(p => new Date(p.paid_at) <= fimMes);
+      if (validos.length === 0) continue;
+      const maisRecente = validos.reduce((a, b) => (new Date(a.paid_at) > new Date(b.paid_at) ? a : b));
+      const cobreAte = maisRecente.due_date ? new Date(maisRecente.due_date + "T23:59:59") : null;
+      // Considera o partner ainda "ativo" nesse mês se o vencimento do último pagamento
+      // não ficou pra trás antes do mês em questão
+      if (!cobreAte || cobreAte >= inicioMes) {
+        mrrPorMes[month] += (maisRecente.amount_cents ?? 0) / 100;
+      }
+    }
+  }
+
+  return mrrPorMes;
 }

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
-import { isValidSector, getRealizadoPorMes } from "@/lib/sector-goals";
+import { isValidSector, getRealizadoPorMes, getMRRAcumuladoPorMes } from "@/lib/sector-goals";
 
 function serviceClient() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -29,20 +29,30 @@ export async function GET(req: NextRequest) {
   if (!isValidSector(sector) || !year) return NextResponse.json({ error: "Parâmetros inválidos" }, { status: 400 });
 
   const db = serviceClient();
+  const isAssinaturas = sector === "ASSINATURAS";
 
-  const [{ data: goalRows }, realizadoPorMes] = await Promise.all([
+  const [{ data: goalRows }, realizadoPorMes, mrrPorMes] = await Promise.all([
     db.from("sector_goals").select("*").eq("sector", sector).eq("year", year),
     getRealizadoPorMes(db, sector, year),
+    isAssinaturas ? getMRRAcumuladoPorMes(db, year) : Promise.resolve(null),
   ]);
 
-  const goalByMonth = new Map<number, { meta_valor: number; meta_quantidade: number | null; comissao_percent: number | null }>();
+  const goalByMonth = new Map<number, {
+    meta_valor: number; meta_quantidade: number | null; comissao_percent: number | null;
+    custo_sdr_percent: number | null; custo_closer_percent: number | null;
+  }>();
   for (const row of goalRows ?? []) {
-    goalByMonth.set(row.month, { meta_valor: row.meta_valor, meta_quantidade: row.meta_quantidade, comissao_percent: row.comissao_percent });
+    goalByMonth.set(row.month, {
+      meta_valor: row.meta_valor, meta_quantidade: row.meta_quantidade, comissao_percent: row.comissao_percent,
+      custo_sdr_percent: row.custo_sdr_percent, custo_closer_percent: row.custo_closer_percent,
+    });
   }
 
   const annualGoal = goalByMonth.get(0);
-  // % de comissionamento é definido na linha anual e vale pra todos os meses do ano
+  // % definidos na linha anual valem pra todos os meses do ano
   const comissaoPercent = annualGoal?.comissao_percent ?? 0;
+  const custoSdrPercent = annualGoal?.custo_sdr_percent ?? 0;
+  const custoCloserPercent = annualGoal?.custo_closer_percent ?? 0;
 
   const monthly = Array.from({ length: 12 }, (_, i) => {
     const month = i + 1;
@@ -50,6 +60,9 @@ export async function GET(req: NextRequest) {
     const realizadoMes = realizadoPorMes[month] ?? { valor: 0, quantidade: 0 };
     const meta_valor = goal?.meta_valor ?? 0;
     const meta_quantidade = goal?.meta_quantidade ?? null;
+    // Custo de comissão SDR/Closer incide sobre a venda nova gerada no mês (não sobre o MRR acumulado)
+    const custoSdr = realizadoMes.valor * (custoSdrPercent / 100);
+    const custoCloser = realizadoMes.valor * (custoCloserPercent / 100);
     return {
       month,
       meta_valor,
@@ -59,6 +72,12 @@ export async function GET(req: NextRequest) {
       pct: meta_valor > 0 ? Math.round((realizadoMes.valor / meta_valor) * 100) : 0,
       pct_quantidade: meta_quantidade ? Math.round((realizadoMes.quantidade / meta_quantidade) * 100) : 0,
       comissao: meta_valor * (comissaoPercent / 100),
+      ...(isAssinaturas ? {
+        mrr: mrrPorMes?.[month] ?? 0,
+        custo_sdr: custoSdr,
+        custo_closer: custoCloser,
+        lucro_liquido: realizadoMes.valor - custoSdr - custoCloser,
+      } : {}),
     };
   });
 
@@ -71,6 +90,7 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     sector, year,
     comissao_percent: comissaoPercent,
+    ...(isAssinaturas ? { custo_sdr_percent: custoSdrPercent, custo_closer_percent: custoCloserPercent } : {}),
     monthly,
     annual: {
       meta_valor: annualMetaValor,
@@ -80,6 +100,12 @@ export async function GET(req: NextRequest) {
       pct: annualMetaValor > 0 ? Math.round((realizadoAnual / annualMetaValor) * 100) : 0,
       pct_quantidade: annualMetaQuantidade ? Math.round((realizadoQuantidadeAnual / annualMetaQuantidade) * 100) : 0,
       comissao: comissaoAnual,
+      ...(isAssinaturas ? {
+        mrr_final: mrrPorMes?.[12] ?? 0,
+        custo_sdr: monthly.reduce((s, m) => s + (m.custo_sdr ?? 0), 0),
+        custo_closer: monthly.reduce((s, m) => s + (m.custo_closer ?? 0), 0),
+        lucro_liquido: monthly.reduce((s, m) => s + (m.lucro_liquido ?? 0), 0),
+      } : {}),
     },
   });
 }
@@ -90,8 +116,9 @@ export async function PATCH(req: NextRequest) {
   if (!user) return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
 
   const body = await req.json();
-  const { sector, year, month, meta_valor, meta_quantidade, comissao_percent } = body as {
-    sector: string; year: number; month: number | null; meta_valor: number; meta_quantidade?: number | null; comissao_percent?: number | null;
+  const { sector, year, month, meta_valor, meta_quantidade, comissao_percent, custo_sdr_percent, custo_closer_percent } = body as {
+    sector: string; year: number; month: number | null; meta_valor: number; meta_quantidade?: number | null;
+    comissao_percent?: number | null; custo_sdr_percent?: number | null; custo_closer_percent?: number | null;
   };
 
   // month=null (ou 0) representa a meta ANUAL — armazenada com o sentinela 0
@@ -106,8 +133,12 @@ export async function PATCH(req: NextRequest) {
   const { error } = await serviceClient().from("sector_goals").upsert({
     sector, year, month: monthValue,
     meta_valor, meta_quantidade: meta_quantidade ?? null,
-    // % de comissionamento só é relevante/aplicado na linha anual (month=0)
-    ...(monthValue === 0 ? { comissao_percent: comissao_percent ?? null } : {}),
+    // % só são relevantes/aplicados na linha anual (month=0)
+    ...(monthValue === 0 ? {
+      comissao_percent: comissao_percent ?? null,
+      custo_sdr_percent: custo_sdr_percent ?? null,
+      custo_closer_percent: custo_closer_percent ?? null,
+    } : {}),
     updated_at: new Date().toISOString(),
     updated_by: user.id,
   }, { onConflict: "sector,year,month" });
