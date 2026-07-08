@@ -30,7 +30,7 @@ export async function GET(
 
   const { data: access } = await db
     .from("cm_deal_room_access")
-    .select("id, listing_id, access_tier, nda_accepted, revoked, expires_at, buyer_cpf, cm_asset_listings(anonymous_id)")
+    .select("id, listing_id, access_tier, nda_accepted, revoked, expires_at, buyer_cpf, buyer_email, cm_asset_listings(anonymous_id)")
     .eq("access_token", token)
     .single();
 
@@ -43,8 +43,8 @@ export async function GET(
   if (!access.nda_accepted || !["qualified", "full_dd"].includes(access.access_tier ?? ""))
     return NextResponse.json({ error: "Acesso insuficiente para este documento" }, { status: 403 });
 
-  if (!access.buyer_cpf)
-    return NextResponse.json({ error: "CPF não registrado para este acesso — qualificação incompleta" }, { status: 403 });
+  if (!access.buyer_cpf || !access.buyer_email)
+    return NextResponse.json({ error: "CPF e email não registrados para este acesso — qualificação incompleta" }, { status: 403 });
 
   const { data: doc } = await db
     .from("cm_listing_documents")
@@ -64,6 +64,7 @@ export async function GET(
     document_id: doc.id,
     ip_address: ip,
     buyer_cpf: access.buyer_cpf,
+    buyer_email: access.buyer_email,
     user_agent: userAgent,
   });
 
@@ -90,7 +91,7 @@ export async function GET(
   try {
     const pdfDoc = await PDFDocument.load(originalBytes, { ignoreEncryption: true });
     const font = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-    const watermarkText = `V3 Partners — Deal Room ${anonymousId} — CPF ${maskCpf(access.buyer_cpf)} — ${new Date().toLocaleString("pt-BR")}`;
+    const watermarkText = `V3 Partners — Deal Room ${anonymousId} — CPF ${maskCpf(access.buyer_cpf)} — ${access.buyer_email} — ${new Date().toLocaleString("pt-BR")}`;
 
     for (const page of pdfDoc.getPages()) {
       const { width, height } = page.getSize();

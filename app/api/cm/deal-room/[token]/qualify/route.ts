@@ -31,10 +31,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   const buyerName = formData.get("buyer_name") as string | null;
   const buyerCompany = formData.get("buyer_company") as string | null;
   const buyerCpf = formData.get("buyer_cpf") as string | null;
+  const buyerEmail = formData.get("buyer_email") as string | null;
   const notes = formData.get("notes") as string | null;
 
   if (!buyerCpf || buyerCpf.replace(/\D/g, "").length < 11) {
     return NextResponse.json({ error: "CPF é obrigatório para acessar documentos — necessário para a trilha de auditoria do Deal Room" }, { status: 422 });
+  }
+  if (!buyerEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(buyerEmail.trim())) {
+    return NextResponse.json({ error: "Email válido é obrigatório para acessar documentos — necessário para a trilha de auditoria do Deal Room" }, { status: 422 });
   }
 
   let storagePath: string | null = null;
@@ -64,6 +68,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
       buyer_name: buyerName || access.buyer_name,
       buyer_company: buyerCompany || access.buyer_company,
       buyer_cpf: buyerCpf.replace(/\D/g, ""),
+      buyer_email: buyerEmail.trim(),
     })
     .eq("id", access.id);
 
