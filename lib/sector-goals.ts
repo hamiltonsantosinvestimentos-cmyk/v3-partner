@@ -1,14 +1,15 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-export const SECTORS = ["MA", "CREDITO", "CONSORCIO", "PRECATORIOS", "MARKETPLACE"] as const;
+export const SECTORS = ["MA", "CREDITO", "CONSORCIO", "BOLSA_ATIVOS", "MARKETPLACE", "CREDITO_INTERNACIONAL"] as const;
 export type Sector = typeof SECTORS[number];
 
 export const SECTOR_LABELS: Record<Sector, string> = {
   MA: "M&A",
   CREDITO: "Crédito",
   CONSORCIO: "Consórcio",
-  PRECATORIOS: "Precatórios",
+  BOLSA_ATIVOS: "Bolsa de Ativos",
   MARKETPLACE: "Marketplace",
+  CREDITO_INTERNACIONAL: "Crédito Internacional",
 };
 
 export function isValidSector(v: string): v is Sector {
@@ -42,10 +43,23 @@ export async function getRealizadoPorMes(db: SupabaseClient, sector: Sector, yea
       add((row.contract_signed_at as string | null) ?? (row.updated_at as string), row.deal_value as number | null);
     }
   } else if (sector === "CREDITO") {
+    // Exclui linhas "Op. Internacional ..." — essas contam pro setor Crédito Internacional
+    const { data } = await db
+      .from("credit_desk_proposals")
+      .select("approved_value, updated_at, credit_line")
+      .in("status", ["APPROVED", "COMPLETED"])
+      .not("credit_line", "ilike", "Op. Internacional%")
+      .gte("updated_at", yearStart)
+      .lte("updated_at", yearEnd);
+    for (const row of data ?? []) {
+      add(row.updated_at as string, row.approved_value as number | null);
+    }
+  } else if (sector === "CREDITO_INTERNACIONAL") {
     const { data } = await db
       .from("credit_desk_proposals")
       .select("approved_value, updated_at")
       .in("status", ["APPROVED", "COMPLETED"])
+      .ilike("credit_line", "Op. Internacional%")
       .gte("updated_at", yearStart)
       .lte("updated_at", yearEnd);
     for (const row of data ?? []) {
@@ -72,13 +86,12 @@ export async function getRealizadoPorMes(db: SupabaseClient, sector: Sector, yea
       const product = Array.isArray(row.product) ? row.product[0] : row.product;
       add(row.updated_at, product?.price ?? null);
     }
-  } else if (sector === "PRECATORIOS") {
-    // Proxy: não existe pipeline dedicado de precatórios ainda — usa Mesa de Capitais
-    // (cm_asset_listings) filtrando o tipo de ativo, status "liquidado" como fechado.
+  } else if (sector === "BOLSA_ATIVOS") {
+    // Mesa de Capitais (cm_asset_listings) — todos os tipos de ativo
+    // (precatorio, direito_creditorio, cgi, cri, fidc, outros), status "liquidado" como fechado.
     const { data } = await db
       .from("cm_asset_listings")
       .select("valor_face, updated_at")
-      .eq("asset_type", "precatorio")
       .eq("listing_status", "liquidado")
       .gte("updated_at", yearStart)
       .lte("updated_at", yearEnd);

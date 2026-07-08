@@ -9,15 +9,16 @@ import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
 } from "recharts";
 
-const SECTORS = ["MA", "CREDITO", "CONSORCIO", "PRECATORIOS", "MARKETPLACE"] as const;
+const SECTORS = ["MA", "CREDITO", "CONSORCIO", "BOLSA_ATIVOS", "MARKETPLACE", "CREDITO_INTERNACIONAL"] as const;
 type Sector = typeof SECTORS[number];
 
 const SECTOR_LABELS: Record<Sector, string> = {
   MA: "M&A",
   CREDITO: "Crédito",
   CONSORCIO: "Consórcio",
-  PRECATORIOS: "Precatórios",
+  BOLSA_ATIVOS: "Bolsa de Ativos",
   MARKETPLACE: "Marketplace",
+  CREDITO_INTERNACIONAL: "Crédito Internacional",
 };
 
 const MESES = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
