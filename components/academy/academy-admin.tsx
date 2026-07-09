@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import {
   Video, Save, CheckCircle2, AlertCircle, Search,
   ExternalLink, Trash2, Link2, Info, Trophy, Loader2, BarChart2, Upload, X, Edit3,
-  Radio, Calendar, Users, Plus,
+  Radio, Calendar, Users, Plus, Rocket,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -296,6 +296,59 @@ function CategoryRow({ category, override, onSave, onReset }: CategoryRowProps) 
   );
 }
 
+interface TrailStepRowProps {
+  step: { id: number; title: string; duration: string; desc: string };
+  override?: OnboardingOverride;
+  saving: boolean;
+  onSave: (data: Partial<OnboardingOverride>) => Promise<void>;
+}
+
+function TrailStepRow({ step, override, saving, onSave }: TrailStepRowProps) {
+  const [title, setTitle] = useState(override?.title ?? step.title);
+  const [description, setDescription] = useState(override?.description ?? step.desc);
+  const [duration, setDuration] = useState(override?.duration ?? step.duration);
+  const [videoUrl, setVideoUrl] = useState(override?.video_url ?? "");
+
+  return (
+    <div className="p-4 rounded-xl border border-border bg-secondary/30 space-y-3">
+      <div className="flex items-center gap-2">
+        <span className="w-6 h-6 rounded-full bg-[#C9A84C]/20 text-[#C9A84C] text-[10px] font-black flex items-center justify-center flex-shrink-0">
+          {step.id + 1}
+        </span>
+        <p className="text-xs font-bold text-muted-foreground uppercase tracking-wide">Passo {step.id + 1}</p>
+        {videoUrl && (
+          <span className="text-[10px] font-bold text-emerald-400 flex items-center gap-1">
+            <CheckCircle2 className="w-3 h-3" /> Aula vinculada
+          </span>
+        )}
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <input value={title} onChange={e => setTitle(e.target.value)}
+          placeholder="Título"
+          className="h-9 px-3 text-sm bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-1 focus:ring-[#C9A84C]/50" />
+        <input value={duration} onChange={e => setDuration(e.target.value)}
+          placeholder="Duração (ex: 5 min)"
+          className="h-9 px-3 text-sm bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-1 focus:ring-[#C9A84C]/50" />
+        <textarea value={description} onChange={e => setDescription(e.target.value)}
+          placeholder="Descrição" rows={2}
+          className="md:col-span-2 px-3 py-2 text-sm bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-1 focus:ring-[#C9A84C]/50 resize-none" />
+        <input value={videoUrl} onChange={e => setVideoUrl(e.target.value)}
+          placeholder="Link do YouTube desta aula"
+          className="md:col-span-2 h-9 px-3 text-sm bg-secondary border border-[#C9A84C]/40 rounded-lg text-foreground focus:outline-none focus:ring-1 focus:ring-[#C9A84C]/50" />
+      </div>
+      <Button
+        size="sm"
+        onClick={() => onSave({ title, description, duration, video_url: videoUrl })}
+        disabled={saving}
+        className="gap-1.5"
+      >
+        {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+        Salvar
+      </Button>
+    </div>
+  );
+}
+
 interface AcademyAdminProps {
   ytLinks: Record<string, string>;
   onLinksChange: (links: Record<string, string>) => void;
@@ -308,6 +361,22 @@ interface CategoryOverride {
   icon?: string;
   color?: string;
   hidden?: boolean;
+}
+
+const TRAIL_STEPS_DEFAULT = [
+  { id: 0, title: "Como funciona a V3 Partners", duration: "5 min", desc: "Visão geral da plataforma e seus módulos" },
+  { id: 1, title: "Seu primeiro deal no Marketplace", duration: "8 min", desc: "Passo a passo para enviar seu primeiro lead" },
+  { id: 2, title: "CRM para assessores financeiros", duration: "6 min", desc: "Organize sua carteira e acompanhe clientes" },
+  { id: 3, title: "Crédito estruturado — fundamentos", duration: "10 min", desc: "Entenda as principais linhas de crédito" },
+  { id: 4, title: "M&A para assessores independentes", duration: "12 min", desc: "Como originar e estruturar operações de M&A" },
+];
+
+interface OnboardingOverride {
+  step_id: number;
+  title?: string;
+  description?: string;
+  duration?: string;
+  video_url?: string;
 }
 
 interface HomeBanner {
@@ -546,7 +615,7 @@ function LiveClassRow({ liveClass, onSave, onDelete }: {
 }
 
 export function AcademyAdmin({ ytLinks, onLinksChange }: AcademyAdminProps) {
-  const [tab, setTab] = useState<"links" | "categorias" | "aovivo" | "ranking" | "analytics">("links");
+  const [tab, setTab] = useState<"links" | "categorias" | "aovivo" | "trilha" | "ranking" | "analytics">("links");
   const [showCsvImport, setShowCsvImport] = useState(false);
   const [csvText, setCsvText] = useState("");
   const [csvImporting, setCsvImporting] = useState(false);
@@ -602,6 +671,38 @@ export function AcademyAdmin({ ytLinks, onLinksChange }: AcademyAdminProps) {
       delete next[categoryId];
       return next;
     });
+  }
+
+  // ── Trilha de Boas-Vindas ────────────────────────────────────────────────
+  const [trailOverrides, setTrailOverrides] = useState<Record<number, OnboardingOverride>>({});
+  const [savingTrailStep, setSavingTrailStep] = useState<number | null>(null);
+
+  useEffect(() => {
+    fetch("/api/academy/onboarding-overrides")
+      .then(r => r.json())
+      .then(d => {
+        if (d.overrides) {
+          const map: Record<number, OnboardingOverride> = {};
+          for (const o of d.overrides as OnboardingOverride[]) { map[o.step_id] = o; }
+          setTrailOverrides(map);
+        }
+      }).catch(() => {});
+  }, []);
+
+  async function handleSaveTrailStep(stepId: number, data: Partial<OnboardingOverride>) {
+    setSavingTrailStep(stepId);
+    try {
+      const res = await fetch("/api/academy/onboarding-overrides", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ step_id: stepId, ...data }),
+      });
+      if (res.ok) {
+        setTrailOverrides(prev => ({ ...prev, [stepId]: { ...prev[stepId], ...data, step_id: stepId } }));
+      }
+    } finally {
+      setSavingTrailStep(null);
+    }
   }
 
   // ── Aulas ao Vivo ────────────────────────────────────────────────────────
@@ -714,6 +815,7 @@ export function AcademyAdmin({ ytLinks, onLinksChange }: AcademyAdminProps) {
           { key: "links", label: "Links YouTube", icon: <Link2 className="w-3.5 h-3.5" /> },
           { key: "categorias", label: "Temas", icon: <Edit3 className="w-3.5 h-3.5" /> },
           { key: "aovivo", label: "Ao Vivo", icon: <Radio className="w-3.5 h-3.5" /> },
+          { key: "trilha", label: "Trilha de Boas-Vindas", icon: <Rocket className="w-3.5 h-3.5" /> },
           { key: "ranking", label: "Ranking Engajamento", icon: <Trophy className="w-3.5 h-3.5" /> },
           { key: "analytics", label: "Analytics", icon: <BarChart2 className="w-3.5 h-3.5" /> },
         ] as const).map((t) => (
@@ -822,6 +924,30 @@ export function AcademyAdmin({ ytLinks, onLinksChange }: AcademyAdminProps) {
               <LiveClassRow key={cls.id} liveClass={cls} onSave={handleSaveLiveClass} onDelete={handleDeleteLiveClass} />
             ))}
           </div>
+        </div>
+      )}
+
+      {tab === "trilha" && (
+        <div className="space-y-3">
+          <div className="p-4 rounded-xl border border-amber-500/30 bg-amber-500/5 flex items-start gap-3">
+            <Info className="w-4 h-4 text-amber-400 mt-0.5 flex-shrink-0" />
+            <div>
+              <p className="text-sm font-semibold text-amber-400 mb-1">Trilha de Boas-Vindas</p>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Cole o link do YouTube de cada passo pra que o partner novo consiga assistir a aula de verdade
+                clicando em &quot;Assistir&quot;. Sem link, o passo continua funcionando só como checklist manual.
+              </p>
+            </div>
+          </div>
+          {TRAIL_STEPS_DEFAULT.map((step) => (
+            <TrailStepRow
+              key={step.id}
+              step={step}
+              override={trailOverrides[step.id]}
+              saving={savingTrailStep === step.id}
+              onSave={(data) => handleSaveTrailStep(step.id, data)}
+            />
+          ))}
         </div>
       )}
 

@@ -11,7 +11,7 @@ import { ACADEMY_CATEGORIES, getAllVideos, type Video, type VideoCategory } from
 import { getQuiz } from "@/lib/academy-quizzes";
 import { BADGE_DEFS, RARITY_COLORS, SPECIALTY_BADGE_DEFS } from "@/lib/academy-badges";
 import { LiveClasses } from "./live-classes";
-import { OnboardingTrail } from "./onboarding-trail";
+import { OnboardingTrail, type TrailStep } from "./onboarding-trail";
 import { AcademyRanking } from "./academy-ranking";
 import { AcademyIntro, shouldShowAcademyIntro } from "./academy-intro";
 
@@ -421,6 +421,28 @@ export function AcademyClient({ initialCategory, userRole, userName, userId, isN
     }),
   [recordedLiveClasses]);
 
+  const handlePlayTrailStep = useCallback((step: TrailStep) => {
+    if (!step.video_url) return;
+    const videoId = `trail-${step.id}`;
+    const minutes = parseInt(step.duration, 10);
+    const durationSecs = (Number.isFinite(minutes) && minutes > 0 ? minutes : 5) * 60;
+    setYtLinks((prev) => ({ ...prev, [videoId]: step.video_url! }));
+    setPlayingVideo({
+      id: videoId,
+      title: step.title,
+      description: step.desc,
+      duration: step.duration,
+      durationSecs,
+      instructor: "V3 Partners",
+      instructorRole: "Trilha de Boas-Vindas",
+      category: "trilha-boas-vindas",
+      level: "Iniciante",
+      gradient: "from-[#C9A84C] via-amber-600 to-amber-800",
+      accentColor: "#C9A84C",
+      tags: [],
+    });
+  }, []);
+
   const mergedCategories = useMemo(() => {
     const base = ACADEMY_CATEGORIES
       .filter(cat => !categoryOverrides[cat.id]?.hidden)
@@ -675,7 +697,7 @@ export function AcademyClient({ initialCategory, userRole, userName, userId, isN
         {!search && <LiveClasses />}
 
         {/* Welcome Onboarding Trail */}
-        {!search && <OnboardingTrail isNew={isNew ?? false} />}
+        {!search && <OnboardingTrail isNew={isNew ?? false} onPlayStep={handlePlayTrailStep} />}
 
         <div className="relative mb-5">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />

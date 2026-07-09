@@ -10,10 +10,27 @@ const TRAIL_STEPS = [
   { id: 4, title: "M&A para assessores independentes", duration: "12 min", desc: "Como originar e estruturar operações de M&A" },
 ];
 
-export function OnboardingTrail({ isNew }: { isNew: boolean }) {
+interface OnboardingOverride {
+  step_id: number;
+  title?: string;
+  description?: string;
+  duration?: string;
+  video_url?: string;
+}
+
+export interface TrailStep {
+  id: number;
+  title: string;
+  duration: string;
+  desc: string;
+  video_url?: string;
+}
+
+export function OnboardingTrail({ isNew, onPlayStep }: { isNew: boolean; onPlayStep?: (step: TrailStep) => void }) {
   const [progress, setProgress] = useState<number[]>([]);
   const [collapsed, setCollapsed] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [overrides, setOverrides] = useState<Record<number, OnboardingOverride>>({});
 
   useEffect(() => {
     setMounted(true);
@@ -21,7 +38,24 @@ export function OnboardingTrail({ isNew }: { isNew: boolean }) {
     if (saved) {
       try { setProgress(JSON.parse(saved)); } catch { /* ignore */ }
     }
+    fetch("/api/academy/onboarding-overrides")
+      .then((r) => r.json())
+      .then((d) => {
+        if (!d.overrides) return;
+        const map: Record<number, OnboardingOverride> = {};
+        for (const o of d.overrides as OnboardingOverride[]) map[o.step_id] = o;
+        setOverrides(map);
+      })
+      .catch(() => {});
   }, []);
+
+  const steps: TrailStep[] = TRAIL_STEPS.map((s) => ({
+    id: s.id,
+    title: overrides[s.id]?.title ?? s.title,
+    duration: overrides[s.id]?.duration ?? s.duration,
+    desc: overrides[s.id]?.description ?? s.desc,
+    video_url: overrides[s.id]?.video_url,
+  }));
 
   if (!mounted) return null;
   if (!isNew && progress.length === TRAIL_STEPS.length) return null;
@@ -33,8 +67,8 @@ export function OnboardingTrail({ isNew }: { isNew: boolean }) {
   }
 
   const doneCount = progress.length;
-  const pct = Math.round((doneCount / TRAIL_STEPS.length) * 100);
-  const allDone = doneCount === TRAIL_STEPS.length;
+  const pct = Math.round((doneCount / steps.length) * 100);
+  const allDone = doneCount === steps.length;
 
   return (
     <div className="rounded-2xl border border-[#C9A84C]/40 overflow-hidden mb-6" style={{ background: "#0A1525" }}>
@@ -59,14 +93,15 @@ export function OnboardingTrail({ isNew }: { isNew: boolean }) {
           </button>
         </div>
         <p className="text-xs text-[#7A8FA8] mb-4">
-          {doneCount}/{TRAIL_STEPS.length} aulas concluídas · Complete para desbloquear todas as funcionalidades
+          {doneCount}/{steps.length} aulas concluídas · Complete para desbloquear todas as funcionalidades
         </p>
 
         {!collapsed && (
           <div className="space-y-2">
-            {TRAIL_STEPS.map((step, idx) => {
+            {steps.map((step, idx) => {
               const done = progress.includes(step.id);
               const locked = idx > 0 && !progress.includes(idx - 1);
+              const playable = !!step.video_url && !locked;
               return (
                 <div
                   key={step.id}
@@ -78,10 +113,13 @@ export function OnboardingTrail({ isNew }: { isNew: boolean }) {
                       : "border-[#1B3050] bg-[#111F35]"
                   }`}
                 >
-                  <div
+                  <button
+                    onClick={() => playable && onPlayStep?.(step)}
+                    disabled={!playable}
                     className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
                       done ? "bg-[#C9A84C]/20" : locked ? "bg-[#162744]" : "bg-[#1B3050]"
-                    }`}
+                    } ${playable ? "cursor-pointer hover:bg-[#C9A84C]/30" : "cursor-default"}`}
+                    title={playable ? "Assistir aula" : undefined}
                   >
                     {done ? (
                       <CheckCircle2 className="w-4 h-4 text-[#C9A84C]" />
@@ -90,7 +128,7 @@ export function OnboardingTrail({ isNew }: { isNew: boolean }) {
                     ) : (
                       <Play className="w-4 h-4 text-[#F0ECE4]" />
                     )}
-                  </div>
+                  </button>
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-semibold text-[#F0ECE4] truncate">{step.title}</p>
                     <p className="text-[10px] text-[#7A8FA8]">
@@ -98,12 +136,22 @@ export function OnboardingTrail({ isNew }: { isNew: boolean }) {
                     </p>
                   </div>
                   {!done && !locked && (
-                    <button
-                      onClick={() => markDone(step.id)}
-                      className="text-[10px] font-bold text-[#C9A84C] hover:text-[#E8C97A] whitespace-nowrap transition-colors"
-                    >
-                      Marcar feito ✓
-                    </button>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      {playable && (
+                        <button
+                          onClick={() => onPlayStep?.(step)}
+                          className="text-[10px] font-bold text-[#C9A84C] hover:text-[#E8C97A] whitespace-nowrap transition-colors"
+                        >
+                          Assistir ▶
+                        </button>
+                      )}
+                      <button
+                        onClick={() => markDone(step.id)}
+                        className="text-[10px] font-bold text-[#7A8FA8] hover:text-[#F0ECE4] whitespace-nowrap transition-colors"
+                      >
+                        Marcar feito ✓
+                      </button>
+                    </div>
                   )}
                 </div>
               );
