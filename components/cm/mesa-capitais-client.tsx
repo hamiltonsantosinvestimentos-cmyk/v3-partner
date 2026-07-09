@@ -6,7 +6,7 @@ import {
   Loader2, AlertTriangle, CheckCircle2, Clock,
   ArrowRight, RefreshCw, Shield, Bot, Upload, Mic,
   Link2, Copy, Plus, FileText, UserPlus, ClipboardCheck,
-  ToggleLeft, ToggleRight, Save, Download, ExternalLink,
+  ToggleLeft, ToggleRight, Save, Download, ExternalLink, Trash2, X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AssetAssistant } from "./asset-assistant";
@@ -165,6 +165,21 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
   const [noteContent, setNoteContent] = useState("");
   const [noteMentionedIds, setNoteMentionedIds] = useState<string[]>([]);
   const [submittingNote, setSubmittingNote] = useState(false);
+  const [intermediaries, setIntermediaries] = useState<any[]>([]);
+  const [partnersList, setPartnersList] = useState<{ id: string; full_name: string; email: string }[]>([]);
+  const [interSide, setInterSide] = useState<"compra" | "venda">("venda");
+  const [interName, setInterName] = useState("");
+  const [interDoc, setInterDoc] = useState("");
+  const [interPercentage, setInterPercentage] = useState("");
+  const [interMandatarioId, setInterMandatarioId] = useState("");
+  const [addingIntermediary, setAddingIntermediary] = useState(false);
+  const [generatingAnnex, setGeneratingAnnex] = useState<string | null>(null);
+  const [showQuickPartner, setShowQuickPartner] = useState(false);
+  const [qpName, setQpName] = useState("");
+  const [qpEmail, setQpEmail] = useState("");
+  const [qpPhone, setQpPhone] = useState("");
+  const [qpDoc, setQpDoc] = useState("");
+  const [creatingQuickPartner, setCreatingQuickPartner] = useState(false);
   const [checklistsLoading, setChecklistsLoading] = useState(false);
   const [checklistTab, setChecklistTab] = useState<"pre_aceite" | "pre_fechamento" | "pos_cessao">("pre_fechamento");
   const [askPriceFloor, setAskPriceFloor] = useState<string>("");
@@ -252,6 +267,13 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
       .catch(() => setMesaUsers([]));
   }, []);
 
+  useEffect(() => {
+    fetch("/api/cm/partners-list")
+      .then((res) => res.json())
+      .then((json) => setPartnersList(json.partners ?? []))
+      .catch(() => setPartnersList([]));
+  }, []);
+
   const loadDealNotes = async (listingId: string) => {
     try {
       const res = await fetch(`/api/cm/deal-notes?listing_id=${listingId}`);
@@ -289,6 +311,93 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
       }
     } catch { alert("Erro de conexão"); }
     finally { setSubmittingNote(false); }
+  };
+
+  const loadIntermediaries = async (listingId: string) => {
+    try {
+      const res = await fetch(`/api/cm/deal-intermediaries?listing_id=${listingId}`);
+      const json = await res.json();
+      setIntermediaries(json.intermediaries ?? []);
+    } catch { setIntermediaries([]); }
+  };
+
+  const addIntermediary = async (listingId: string) => {
+    if (!interName.trim() || !interPercentage || !interMandatarioId) {
+      alert("Nome, percentual e Mandatário são obrigatórios");
+      return;
+    }
+    setAddingIntermediary(true);
+    try {
+      const res = await fetch("/api/cm/deal-intermediaries", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          listing_id: listingId,
+          side: interSide,
+          mandatario_partner_id: interMandatarioId,
+          intermediary_name: interName.trim(),
+          intermediary_document: interDoc.trim() || null,
+          percentage: Number(interPercentage),
+        }),
+      });
+      const json = await res.json();
+      if (res.ok) {
+        setIntermediaries((prev) => [...prev, json.intermediary]);
+        setInterName(""); setInterDoc(""); setInterPercentage("");
+      } else {
+        alert(json.error ?? "Erro ao adicionar intermediário");
+      }
+    } catch { alert("Erro de conexão"); }
+    finally { setAddingIntermediary(false); }
+  };
+
+  const removeIntermediary = async (id: string) => {
+    if (!confirm("Remover este intermediário da cadeia?")) return;
+    await fetch(`/api/cm/deal-intermediaries/${id}`, { method: "DELETE" });
+    setIntermediaries((prev) => prev.filter((i) => i.id !== id));
+  };
+
+  const generateAnnex = async (listingId: string, side: "compra" | "venda") => {
+    setGeneratingAnnex(side);
+    try {
+      const res = await fetch("/api/cm/deal-intermediaries/generate-annex", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ listing_id: listingId, side }),
+      });
+      const json = await res.json();
+      if (res.ok) {
+        alert(`Anexo gerado e enviado para assinatura do Mandatário.\nLink: ${json.signing_url}`);
+      } else {
+        alert(json.error ?? "Erro ao gerar Anexo");
+      }
+    } catch { alert("Erro de conexão"); }
+    finally { setGeneratingAnnex(null); }
+  };
+
+  const createQuickPartner = async () => {
+    if (!qpName.trim() || !qpEmail.trim()) {
+      alert("Nome e email são obrigatórios");
+      return;
+    }
+    setCreatingQuickPartner(true);
+    try {
+      const res = await fetch("/api/cm/deal-intermediaries/quick-partner", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ full_name: qpName.trim(), email: qpEmail.trim(), phone: qpPhone.trim() || null, document_cpf: qpDoc.trim() || null }),
+      });
+      const json = await res.json();
+      if (res.ok) {
+        setPartnersList((prev) => [...prev, json.partner]);
+        setInterMandatarioId(json.partner.id);
+        setShowQuickPartner(false);
+        setQpName(""); setQpEmail(""); setQpPhone(""); setQpDoc("");
+      } else {
+        alert(json.error ?? "Erro ao cadastrar Partner");
+      }
+    } catch { alert("Erro de conexão"); }
+    finally { setCreatingQuickPartner(false); }
   };
 
   const createReferralPartner = async (): Promise<string | null> => {
@@ -434,6 +543,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
     loadDealNotes(listing.id);
     setNoteContent("");
     setNoteMentionedIds([]);
+    loadIntermediaries(listing.id);
   };
 
   const handleStatusTransition = async (listingId: string, newStatus: string) => {
@@ -1622,6 +1732,104 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
                 </span>
                 <ExternalLink size={12} />
               </a>
+            </div>
+
+            {/* Cadeia de Intermediários — Anexo FPA/NCND (Single Payout) */}
+            <div className="px-4 mt-4">
+              <div className="text-[10px] text-[#C9A84C] font-bold uppercase tracking-wider mb-2">Cadeia de Intermediários (FPA/NCND)</div>
+              <div className="bg-[#12112A] border border-[#9BAFC5]/10 rounded-lg p-3 space-y-3">
+                <p className="text-[10px] text-[#9BAFC5]">V3 paga um único Mandatário por lado. Ele assume, via Anexo assinado, a obrigação de repassar aos demais intermediários conforme os percentuais abaixo.</p>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <select value={interSide} onChange={(e) => setInterSide(e.target.value as any)}
+                    className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]">
+                    <option value="venda">Lado Venda</option>
+                    <option value="compra">Lado Compra</option>
+                  </select>
+                  <div className="flex gap-1">
+                    <select value={interMandatarioId} onChange={(e) => setInterMandatarioId(e.target.value)}
+                      className="flex-1 bg-[#09081A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]">
+                      <option value="">— Mandatário —</option>
+                      {partnersList.map((p) => (
+                        <option key={p.id} value={p.id}>{p.full_name}</option>
+                      ))}
+                    </select>
+                    {userRole === "ADMIN" && (
+                      <button onClick={() => setShowQuickPartner((v) => !v)}
+                        className="px-2 bg-[#162744] border border-[#9BAFC5]/15 rounded text-[#C9A84C] text-[9px] font-bold hover:bg-[#243A66] transition flex-shrink-0">
+                        + Partner
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {showQuickPartner && (
+                  <div className="bg-[#09081A] border border-[#C9A84C]/20 rounded-lg p-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[9px] text-[#C9A84C] font-bold uppercase">Cadastrar Novo Partner</span>
+                      <button onClick={() => setShowQuickPartner(false)}><X size={12} className="text-[#9BAFC5]" /></button>
+                    </div>
+                    <input value={qpName} onChange={(e) => setQpName(e.target.value)} placeholder="Nome completo *"
+                      className="w-full bg-[#162744] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]" />
+                    <input value={qpEmail} onChange={(e) => setQpEmail(e.target.value)} placeholder="Email *" type="email"
+                      className="w-full bg-[#162744] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]" />
+                    <div className="grid grid-cols-2 gap-2">
+                      <input value={qpPhone} onChange={(e) => setQpPhone(e.target.value)} placeholder="Telefone"
+                        className="w-full bg-[#162744] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]" />
+                      <input value={qpDoc} onChange={(e) => setQpDoc(e.target.value)} placeholder="CPF/CNPJ"
+                        className="w-full bg-[#162744] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]" />
+                    </div>
+                    <button onClick={createQuickPartner} disabled={creatingQuickPartner}
+                      className="w-full px-3 py-2 bg-[#C9A84C]/20 border border-[#C9A84C]/30 rounded text-[#E8C97A] text-[10px] font-bold hover:bg-[#C9A84C]/30 transition disabled:opacity-50">
+                      {creatingQuickPartner ? <Loader2 size={12} className="animate-spin inline" /> : "Criar Partner e Usar como Mandatário"}
+                    </button>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-3 gap-2">
+                  <input value={interName} onChange={(e) => setInterName(e.target.value)} placeholder="Nome do intermediário *"
+                    className="col-span-2 w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]" />
+                  <input value={interPercentage} onChange={(e) => setInterPercentage(e.target.value)} placeholder="% *" type="number"
+                    className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]" />
+                </div>
+                <div className="flex gap-2">
+                  <input value={interDoc} onChange={(e) => setInterDoc(e.target.value)} placeholder="CPF/CNPJ (opcional)"
+                    className="flex-1 bg-[#09081A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]" />
+                  <button onClick={() => addIntermediary(selectedListing.id)} disabled={addingIntermediary}
+                    className="px-3 py-1.5 bg-[#162744] border border-[#9BAFC5]/15 rounded text-[#C9A84C] text-[10px] font-bold hover:bg-[#243A66] transition disabled:opacity-50 flex items-center gap-1.5 flex-shrink-0">
+                    {addingIntermediary ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />} Adicionar
+                  </button>
+                </div>
+
+                {(["venda", "compra"] as const).map((side) => {
+                  const sideRows = intermediaries.filter((i) => i.side === side);
+                  if (sideRows.length === 0) return null;
+                  return (
+                    <div key={side} className="pt-2 border-t border-[#9BAFC5]/10">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-[9px] text-[#9BAFC5] font-bold uppercase">Lado {side === "venda" ? "Venda" : "Compra"}</span>
+                        <button onClick={() => generateAnnex(selectedListing.id, side)} disabled={generatingAnnex === side}
+                          className="px-2 py-1 bg-[#C9A84C]/20 border border-[#C9A84C]/30 rounded text-[#E8C97A] text-[9px] font-bold hover:bg-[#C9A84C]/30 transition disabled:opacity-50 flex items-center gap-1">
+                          {generatingAnnex === side ? <Loader2 size={11} className="animate-spin" /> : null} Gerar Anexo e Enviar
+                        </button>
+                      </div>
+                      <div className="space-y-1">
+                        {sideRows.map((i) => (
+                          <div key={i.id} className="flex items-center justify-between gap-2 bg-[#09081A] rounded px-2 py-1.5">
+                            <div className="min-w-0">
+                              <div className="text-[10px] text-[#F5F1E8] truncate">{i.intermediary_name} · {i.percentage}%</div>
+                              <div className="text-[8px] text-[#9BAFC5] truncate">Mandatário: {i.profiles?.full_name ?? "—"}</div>
+                            </div>
+                            <button onClick={() => removeIntermediary(i.id)} className="flex-shrink-0">
+                              <Trash2 size={12} className="text-red-400/70 hover:text-red-400" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
 
             {/* NDA Retroativo — Autorização de Diretor */}
