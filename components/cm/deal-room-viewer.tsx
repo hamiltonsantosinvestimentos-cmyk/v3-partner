@@ -139,7 +139,7 @@ export function DealRoomViewer({ token, initialData }: DealRoomViewerProps) {
           </div>
         )}
         {!data.nda_document_html && (
-          <p className="text-[9px] text-[#9BAFC5]/50 mb-4 -mt-4">Modelo padrão exibido — nenhuma minuta específica de Bolsa de Ativos ativa na Central de Contratos.</p>
+          <p className="text-[9px] text-[#9BAFC5]/50 mb-4 -mt-4">Modelo padrão exibido. Nenhuma minuta específica de Bolsa de Ativos ativa na Central de Contratos.</p>
         )}
 
         <div className="text-left mb-4">
@@ -391,7 +391,7 @@ export function DealRoomViewer({ token, initialData }: DealRoomViewerProps) {
             <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-lg p-5 mt-6">
               <div className="flex items-center gap-2 mb-3">
                 <CheckCircle2 size={16} className="text-emerald-400" />
-                <h3 className="text-sm font-bold text-emerald-400">Cessão Aceita — Prova Criptográfica</h3>
+                <h3 className="text-sm font-bold text-emerald-400">Cessão Aceita: Prova Criptográfica</h3>
               </div>
               {data.cessao?.accepted_at && (
                 <p className="text-xs text-[#9BAFC5] mb-3">

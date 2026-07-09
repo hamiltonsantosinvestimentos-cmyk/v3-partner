@@ -1728,7 +1728,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
               >
                 <span className="flex items-center gap-2">
                   <FileText size={13} className="text-[#C9A84C]" />
-                  Template NDA (Central de Contratos) — minuta usada de verdade na Deal Room
+                  Template NDA (Central de Contratos): minuta usada de verdade na Deal Room
                 </span>
                 <ExternalLink size={12} />
               </a>

@@ -7,11 +7,11 @@ function generateTempPassword(): string {
 }
 
 /**
- * POST /api/cm/deal-intermediaries/quick-partner — cadastro rapido de Partner
+ * POST /api/cm/deal-intermediaries/quick-partner: cadastro rapido de Partner
  * a partir da tela de Cadeia de Intermediarios, quando o Mandatario desejado
  * ainda nao existe na plataforma. ADMIN-only, mesma restricao de /api/usuarios.
  * Nao reutiliza o arquivo de /api/usuarios diretamente para nao arriscar
- * regressao num modulo ja em producao — duplica so o essencial.
+ * regressao num modulo ja em producao. Duplica so o essencial.
  */
 export async function POST(req: NextRequest) {
   const authClient = await createClient();
@@ -55,7 +55,7 @@ export async function POST(req: NextRequest) {
       await resend.emails.send({
         from: "V3 Partners <noreply@v3partners.com.br>",
         to: email,
-        subject: "Seus dados de acesso — V3 Partners",
+        subject: "Seus dados de acesso: V3 Partners",
         html: `<p>Olá ${full_name},</p>
                <p>Você foi cadastrado como Partner V3 para atuar como Mandatário em uma operação da Bolsa de Ativos.</p>
                <p><strong>Email:</strong> ${email}<br/><strong>Senha temporária:</strong> ${tempPassword}</p>

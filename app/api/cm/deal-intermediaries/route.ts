@@ -17,7 +17,7 @@ async function getCaller() {
   return { userId: user.id, role: profile.role as string };
 }
 
-/** GET /api/cm/deal-intermediaries?listing_id=X — lista cadeia de intermediarios do ativo */
+/** GET /api/cm/deal-intermediaries?listing_id=X: lista cadeia de intermediarios do ativo */
 export async function GET(req: NextRequest) {
   const caller = await getCaller();
   if (!caller) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({ intermediaries: data ?? [] });
 }
 
-/** POST /api/cm/deal-intermediaries — adiciona intermediario a cadeia */
+/** POST /api/cm/deal-intermediaries: adiciona intermediario a cadeia */
 export async function POST(req: NextRequest) {
   const caller = await getCaller();
   if (!caller) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });

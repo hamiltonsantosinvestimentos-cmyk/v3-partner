@@ -23,11 +23,11 @@ function buildDistribuicaoTableHtml(rows: { intermediary_name: string; intermedi
   const linhas = rows
     .map(
       (r) =>
-        `<tr><td style="padding:6px 10px;border-bottom:1px solid #243A66">${r.intermediary_name}</td><td style="padding:6px 10px;border-bottom:1px solid #243A66">${r.intermediary_document ?? "—"}</td><td style="padding:6px 10px;border-bottom:1px solid #243A66;text-align:right">${r.percentage}%</td></tr>`
+        `<tr><td style="padding:6px 10px;border-bottom:1px solid #243A66">${r.intermediary_name}</td><td style="padding:6px 10px;border-bottom:1px solid #243A66">${r.intermediary_document ?? "N/D"}</td><td style="padding:6px 10px;border-bottom:1px solid #243A66;text-align:right">${r.percentage}%</td></tr>`
     )
     .join("");
   return `<table style="width:100%;border-collapse:collapse;margin:12px 0;font-size:12px">
-    <thead><tr style="color:#C9A84C;text-transform:uppercase;font-size:10px">
+    <thead><tr style="color:#E8C97A;text-transform:uppercase;font-size:10px">
       <th style="text-align:left;padding:6px 10px;border-bottom:2px solid #C9A84C">Intermediário</th>
       <th style="text-align:left;padding:6px 10px;border-bottom:2px solid #C9A84C">CPF/CNPJ</th>
       <th style="text-align:right;padding:6px 10px;border-bottom:2px solid #C9A84C">Percentual</th>
@@ -36,7 +36,7 @@ function buildDistribuicaoTableHtml(rows: { intermediary_name: string; intermedi
   </table>`;
 }
 
-/** POST /api/cm/deal-intermediaries/generate-annex — gera o Anexo FPA/NCND e envia link de assinatura ao Mandatario */
+/** POST /api/cm/deal-intermediaries/generate-annex: gera o Anexo FPA/NCND e envia link de assinatura ao Mandatario */
 export async function POST(req: NextRequest) {
   const caller = await getCaller();
   if (!caller) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
@@ -69,7 +69,7 @@ export async function POST(req: NextRequest) {
     .maybeSingle();
 
   if (!partnerContract)
-    return NextResponse.json({ error: `${mandatario?.full_name ?? "O Mandatário"} ainda não assinou o Contrato de Parceria — assine-o antes de gerar o Anexo FPA/NCND` }, { status: 409 });
+    return NextResponse.json({ error: `${mandatario?.full_name ?? "O Mandatário"} ainda não assinou o Contrato de Parceria. Assine-o antes de gerar o Anexo FPA/NCND.` }, { status: 409 });
 
   const { data: listing } = await svc()
     .from("cm_asset_listings")
@@ -83,7 +83,7 @@ export async function POST(req: NextRequest) {
     .from("contract_templates")
     .select("*")
     .eq("vertical", "capital_markets")
-    .eq("template_name", "Anexo FPA/NCND — Distribuição de Comissionamento")
+    .eq("template_name", "Anexo FPA/NCND: Distribuição de Comissionamento")
     .eq("is_active", true)
     .maybeSingle();
 
@@ -99,7 +99,7 @@ export async function POST(req: NextRequest) {
   };
 
   const renderedBody = resolveContractVariables(template.body_text_raw, variables);
-  const contractTitle = `${resolveContractVariables(template.template_name, variables)} — ${listing.anonymous_id} (${variables.lado_operacao})`;
+  const contractTitle = `${resolveContractVariables(template.template_name, variables)}, ${listing.anonymous_id} (${variables.lado_operacao})`;
   const renderedHtml = wrapContractInV3Html(contractTitle, renderedBody);
   const signingToken = randomUUID().replace(/-/g, "");
 
@@ -131,7 +131,7 @@ export async function POST(req: NextRequest) {
       await resend.emails.send({
         from: "V3 Partners Bolsa de Ativos <noreply@v3partners.com.br>",
         to: mandatario.email,
-        subject: `Assinatura pendente — ${contractTitle}`,
+        subject: `Assinatura pendente: ${contractTitle}`,
         html: `<p>Olá ${mandatario.full_name},</p>
                <p>Você foi designado Mandatário da cadeia de intermediação (lado ${variables.lado_operacao}) do ativo <strong>${listing.anonymous_id}</strong>.</p>
                <p>Assine o Anexo FPA/NCND para confirmar o recebimento centralizado e a obrigação de repasse: https://app.v3partners.com.br/assinar/anexo/${signingToken}</p>`,
