@@ -65,7 +65,7 @@ export function AnnexSignViewer({ token }: AnnexSignViewerProps) {
           <img src="https://app.v3partners.com.br/v3-logo-flat-gold-alpha.png" alt="V3 Partners" className="h-10" />
           <div>
             <div className="text-sm font-bold text-[#F5F1E8]">Assinatura de Anexo</div>
-            <div className="text-xs text-[#9BAFC5]">Bolsa de Ativos — V3 Partners</div>
+            <div className="text-xs text-[#9BAFC5]">Bolsa de Ativos · V3 Partners</div>
           </div>
         </div>
 
@@ -91,7 +91,7 @@ export function AnnexSignViewer({ token }: AnnexSignViewerProps) {
           </button>
         )}
 
-        <p className="text-[9px] text-[#9BAFC5]/50 text-center mt-6">V3 Partners Soluções Ltda — CNPJ 14.219.287/0001-50</p>
+        <p className="text-[9px] text-[#9BAFC5]/50 text-center mt-6">V3 Partners Soluções Ltda, CNPJ 14.219.287/0001-50</p>
       </div>
     </div>
   );
