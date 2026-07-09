@@ -63,6 +63,17 @@ interface HomeBanner {
   cta_href?: string;
 }
 
+interface LiveClassRecording {
+  id: string;
+  title: string;
+  description?: string | null;
+  instructor?: string | null;
+  category?: string | null;
+  level?: string | null;
+  duration_min: number;
+  recording_url: string;
+}
+
 function applyCategoryOverride(category: VideoCategory, override?: CategoryOverride): VideoCategory {
   if (!override) return category;
   return {
@@ -327,6 +338,7 @@ export function AcademyClient({ initialCategory, userRole, userName, userId, isN
   const [overrides, setOverrides] = useState<Record<string, VideoOverride>>({});
   const [categoryOverrides, setCategoryOverrides] = useState<Record<string, CategoryOverride>>({});
   const [homeBanner, setHomeBanner] = useState<HomeBanner | null>(null);
+  const [recordedLiveClasses, setRecordedLiveClasses] = useState<LiveClassRecording[]>([]);
   const [showIntro, setShowIntro] = useState(false);
   const saveProgressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -345,7 +357,8 @@ export function AcademyClient({ initialCategory, userRole, userName, userId, isN
       fetch("/api/academy/video-overrides").then((r) => r.json()).catch(() => ({ overrides: [] })),
       fetch("/api/academy/category-overrides").then((r) => r.json()).catch(() => ({ overrides: [] })),
       fetch("/api/academy/home-banner").then((r) => r.json()).catch(() => ({ banner: null })),
-    ]).then(([pData, lData, cData, qData, bData, oData, coData, hbData]) => {
+      fetch("/api/academy/live-classes").then((r) => r.json()).catch(() => ({ classes: [] })),
+    ]).then(([pData, lData, cData, qData, bData, oData, coData, hbData, lcData]) => {
       if (pData.progress) setVideoProgress(pData.progress);
       if (lData.links) setYtLinks(lData.links);
       if (cData.certificates) {
@@ -372,6 +385,15 @@ export function AcademyClient({ initialCategory, userRole, userName, userId, isN
         setOverrides(map);
       }
       if (hbData.banner) setHomeBanner(hbData.banner);
+      if (lcData.classes) {
+        const recorded = (lcData.classes as LiveClassRecording[]).filter((c) => !!c.recording_url);
+        setRecordedLiveClasses(recorded);
+        setYtLinks((prev) => {
+          const next = { ...prev };
+          for (const c of recorded) next[`live-${c.id}`] = c.recording_url;
+          return next;
+        });
+      }
     }).catch(() => {});
   }, []);
 
@@ -379,14 +401,44 @@ export function AcademyClient({ initialCategory, userRole, userName, userId, isN
     getAllVideos().map(v => applyOverride(v, overrides[v.id])),
   [overrides]);
 
-  const mergedCategories = useMemo(() =>
-    ACADEMY_CATEGORIES
+  const liveClassVideos = useMemo<Video[]>(() =>
+    recordedLiveClasses.map((c) => {
+      const durationSecs = c.duration_min * 60;
+      return {
+        id: `live-${c.id}`,
+        title: c.title,
+        description: c.description ?? "Gravação de aula ao vivo V3 Academy.",
+        duration: formatTime(durationSecs),
+        durationSecs,
+        instructor: c.instructor ?? "V3 Partners",
+        instructorRole: "Aula ao Vivo",
+        category: "aulas-ao-vivo",
+        level: (c.level as Video["level"]) ?? "Intermediário",
+        gradient: "from-red-600 via-red-700 to-rose-800",
+        accentColor: "#EF4444",
+        tags: c.category ? [c.category] : [],
+      };
+    }),
+  [recordedLiveClasses]);
+
+  const mergedCategories = useMemo(() => {
+    const base = ACADEMY_CATEGORIES
       .filter(cat => !categoryOverrides[cat.id]?.hidden)
       .map(cat => ({
         ...applyCategoryOverride(cat, categoryOverrides[cat.id]),
         videos: cat.videos.map(v => applyOverride(v, overrides[v.id])),
-      })),
-  [overrides, categoryOverrides]);
+      }));
+    if (liveClassVideos.length === 0 || categoryOverrides["aulas-ao-vivo"]?.hidden) return base;
+    const liveCategory = applyCategoryOverride({
+      id: "aulas-ao-vivo",
+      label: "Aulas ao Vivo",
+      description: "Gravações das aulas ao vivo — disponíveis para assistir quando quiser.",
+      icon: "📺",
+      color: "#EF4444",
+      videos: [],
+    }, categoryOverrides["aulas-ao-vivo"]);
+    return [...base, { ...liveCategory, videos: liveClassVideos }];
+  }, [overrides, categoryOverrides, liveClassVideos]);
 
   const featuredVideo = allVideos.find((v) => v.featured) ?? allVideos[0];
 

@@ -1253,3 +1253,66 @@ export async function notifyAgendamentoSDR(opts: {
     })
   );
 }
+
+// ── V3 Academy — Aulas ao Vivo ─────────────────────────────────────────────
+
+export async function notifyAulaAoVivoInscricao(opts: {
+  partnerEmail: string;
+  partnerName: string;
+  titulo: string;
+  instrutor: string;
+  dataHora: string; // já formatada em pt-BR
+  zoomLink: string;
+}): Promise<void> {
+  const body = `
+    <p style="color:#7A96AF;font-size:14px;margin:0 0 20px;">
+      Olá, <strong style="color:#C8D4E3;">${opts.partnerName}</strong>! Sua inscrição na aula ao vivo abaixo foi confirmada.
+    </p>
+    <div style="margin:0 0 20px;padding:18px 20px;background:#13243D;border-radius:10px;border-left:4px solid #C4922E;">
+      <p style="margin:0 0 4px;font-size:11px;font-weight:700;letter-spacing:1px;color:#C4922E;text-transform:uppercase;">Você está inscrito</p>
+      <p style="margin:0;font-size:18px;font-weight:800;color:#E5B96A;">${opts.titulo}</p>
+    </div>
+    ${row("Instrutor", opts.instrutor)}
+    ${row("Data e horário", opts.dataHora)}
+    <p style="color:#7A96AF;font-size:12px;margin-top:20px;">
+      Vamos te lembrar por e-mail 1 dia antes. Guarde o link de acesso abaixo.
+    </p>
+  `;
+  await send(
+    opts.partnerEmail,
+    `✅ Inscrição confirmada — ${opts.titulo}`,
+    template(`Inscrição confirmada — ${opts.titulo}`, body, {
+      label: "Acessar a Sala ao Vivo",
+      url: opts.zoomLink,
+    })
+  );
+}
+
+export async function notifyAulaAoVivoLembrete(opts: {
+  partnerEmail: string;
+  partnerName: string;
+  titulo: string;
+  instrutor: string;
+  dataHora: string; // já formatada em pt-BR
+  zoomLink: string;
+}): Promise<void> {
+  const body = `
+    <p style="color:#7A96AF;font-size:14px;margin:0 0 20px;">
+      Olá, <strong style="color:#C8D4E3;">${opts.partnerName}</strong>! Sua aula ao vivo é <strong style="color:#E5B96A;">amanhã</strong>. Não perca.
+    </p>
+    <div style="margin:0 0 20px;padding:18px 20px;background:#13243D;border-radius:10px;border-left:4px solid #C4922E;">
+      <p style="margin:0 0 4px;font-size:11px;font-weight:700;letter-spacing:1px;color:#C4922E;text-transform:uppercase;">Lembrete — Aula Amanhã</p>
+      <p style="margin:0;font-size:18px;font-weight:800;color:#E5B96A;">${opts.titulo}</p>
+    </div>
+    ${row("Instrutor", opts.instrutor)}
+    ${row("Data e horário", opts.dataHora)}
+  `;
+  await send(
+    opts.partnerEmail,
+    `⏰ Amanhã: ${opts.titulo}`,
+    template(`Sua aula é amanhã — ${opts.titulo}`, body, {
+      label: "Acessar a Sala ao Vivo",
+      url: opts.zoomLink,
+    })
+  );
+}

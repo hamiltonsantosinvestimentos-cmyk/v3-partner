@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import {
   Video, Save, CheckCircle2, AlertCircle, Search,
   ExternalLink, Trash2, Link2, Info, Trophy, Loader2, BarChart2, Upload, X, Edit3,
+  Radio, Calendar, Users, Plus,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -388,8 +389,164 @@ function BannerEditor() {
   );
 }
 
+interface LiveClass {
+  id: string;
+  title: string;
+  description?: string | null;
+  instructor?: string | null;
+  category?: string | null;
+  date: string;
+  duration_min: number;
+  level?: string | null;
+  total_spots: number;
+  zoom_link?: string | null;
+  recording_url?: string | null;
+  registered_count: number;
+}
+
+const NOVA_AULA_VAZIA = {
+  title: "", description: "", instructor: "", category: "", date: "",
+  duration_min: 60, level: "Intermediário", total_spots: 100, zoom_link: "",
+};
+
+function LiveClassRow({ liveClass, onSave, onDelete }: {
+  liveClass: LiveClass;
+  onSave: (id: string, data: Partial<LiveClass>) => Promise<void>;
+  onDelete: (id: string) => Promise<void>;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const [form, setForm] = useState({
+    title: liveClass.title,
+    description: liveClass.description ?? "",
+    instructor: liveClass.instructor ?? "",
+    category: liveClass.category ?? "",
+    date: liveClass.date ? liveClass.date.slice(0, 16) : "",
+    duration_min: liveClass.duration_min,
+    level: liveClass.level ?? "",
+    total_spots: liveClass.total_spots,
+    zoom_link: liveClass.zoom_link ?? "",
+    recording_url: liveClass.recording_url ?? "",
+  });
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const isPast = new Date(liveClass.date) < new Date();
+
+  async function handleSave() {
+    setSaving(true);
+    await onSave(liveClass.id, { ...form, date: new Date(form.date).toISOString() });
+    setSaving(false);
+  }
+
+  async function handleDelete() {
+    if (!confirm(`Excluir "${liveClass.title}"? Os inscritos não serão notificados.`)) return;
+    setDeleting(true);
+    await onDelete(liveClass.id);
+    setDeleting(false);
+  }
+
+  return (
+    <div className="rounded-xl border border-border bg-secondary/20 overflow-hidden">
+      <button onClick={() => setExpanded(!expanded)} className="w-full flex items-center gap-3 px-4 py-3 text-left">
+        {isPast ? <Badge className="bg-secondary text-muted-foreground border-border text-[10px]">Passada</Badge>
+          : <Badge className="bg-red-500/20 text-red-400 border-red-500/30 text-[10px]">Agendada</Badge>}
+        <span className="text-sm font-semibold text-foreground flex-1 truncate">{liveClass.title}</span>
+        <span className="text-[10px] text-muted-foreground flex items-center gap-1">
+          <Calendar className="w-3 h-3" /> {new Date(liveClass.date).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+        </span>
+        <span className="text-[10px] text-muted-foreground flex items-center gap-1">
+          <Users className="w-3 h-3" /> {liveClass.registered_count}/{liveClass.total_spots}
+        </span>
+        {liveClass.recording_url && <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 text-[10px]">Gravação salva</Badge>}
+      </button>
+      {expanded && (
+        <div className="px-4 pb-4 space-y-3 border-t border-border pt-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <label className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Título</label>
+              <input value={form.title} onChange={e => setForm({ ...form, title: e.target.value })}
+                className="w-full mt-1 h-9 px-3 text-sm bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-1 focus:ring-[#C9A84C]/50" />
+            </div>
+            <div>
+              <label className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Instrutor</label>
+              <input value={form.instructor} onChange={e => setForm({ ...form, instructor: e.target.value })}
+                className="w-full mt-1 h-9 px-3 text-sm bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-1 focus:ring-[#C9A84C]/50" />
+            </div>
+            <div>
+              <label className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Data e hora</label>
+              <input type="datetime-local" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })}
+                className="w-full mt-1 h-9 px-3 text-sm bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-1 focus:ring-[#C9A84C]/50" />
+            </div>
+            <div>
+              <label className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Duração (min)</label>
+              <input type="number" value={form.duration_min} onChange={e => setForm({ ...form, duration_min: parseInt(e.target.value) || 0 })}
+                className="w-full mt-1 h-9 px-3 text-sm bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-1 focus:ring-[#C9A84C]/50" />
+            </div>
+            <div>
+              <label className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Categoria</label>
+              <select value={form.category} onChange={e => setForm({ ...form, category: e.target.value })}
+                className="w-full mt-1 h-9 px-3 text-sm bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-1 focus:ring-[#C9A84C]/50">
+                <option value="">—</option>
+                {ACADEMY_CATEGORIES.map(c => <option key={c.id} value={c.label}>{c.label}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Nível</label>
+              <select value={form.level} onChange={e => setForm({ ...form, level: e.target.value })}
+                className="w-full mt-1 h-9 px-3 text-sm bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-1 focus:ring-[#C9A84C]/50">
+                <option value="Iniciante">Iniciante</option>
+                <option value="Intermediário">Intermediário</option>
+                <option value="Avançado">Avançado</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Total de vagas</label>
+              <input type="number" value={form.total_spots} onChange={e => setForm({ ...form, total_spots: parseInt(e.target.value) || 0 })}
+                className="w-full mt-1 h-9 px-3 text-sm bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-1 focus:ring-[#C9A84C]/50" />
+            </div>
+            <div>
+              <label className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Link da sala (Zoom/Meet)</label>
+              <input value={form.zoom_link} onChange={e => setForm({ ...form, zoom_link: e.target.value })}
+                placeholder="https://zoom.us/j/..."
+                className="w-full mt-1 h-9 px-3 text-sm bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-1 focus:ring-[#C9A84C]/50" />
+            </div>
+            <div className="md:col-span-2">
+              <label className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Descrição</label>
+              <textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })}
+                rows={2}
+                className="w-full mt-1 px-3 py-2 text-sm bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-1 focus:ring-[#C9A84C]/50 resize-none" />
+            </div>
+            <div className="md:col-span-2">
+              <label className="text-[10px] font-bold uppercase tracking-wide text-emerald-400">
+                Link da gravação (cole aqui quando a aula terminar — vídeo do YouTube)
+              </label>
+              <input value={form.recording_url} onChange={e => setForm({ ...form, recording_url: e.target.value })}
+                placeholder="https://youtu.be/..."
+                className="w-full mt-1 h-9 px-3 text-sm bg-secondary border border-emerald-500/30 rounded-lg text-foreground focus:outline-none focus:ring-1 focus:ring-emerald-500/50" />
+              <p className="text-[10px] text-muted-foreground mt-1">
+                Ao salvar com um link aqui, a aula passa a aparecer pros partners no tema &quot;Aulas ao Vivo&quot;, disponível pra assistir quando quiser.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button size="sm" onClick={handleSave} disabled={saving} className="gap-1.5">
+              {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+              Salvar
+            </Button>
+            <Button size="sm" variant="outline" onClick={handleDelete} disabled={deleting}
+              className="gap-1.5 border-red-500/40 text-red-400 hover:bg-red-500/10">
+              {deleting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+              Excluir
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function AcademyAdmin({ ytLinks, onLinksChange }: AcademyAdminProps) {
-  const [tab, setTab] = useState<"links" | "categorias" | "ranking" | "analytics">("links");
+  const [tab, setTab] = useState<"links" | "categorias" | "aovivo" | "ranking" | "analytics">("links");
   const [showCsvImport, setShowCsvImport] = useState(false);
   const [csvText, setCsvText] = useState("");
   const [csvImporting, setCsvImporting] = useState(false);
@@ -445,6 +602,50 @@ export function AcademyAdmin({ ytLinks, onLinksChange }: AcademyAdminProps) {
       delete next[categoryId];
       return next;
     });
+  }
+
+  // ── Aulas ao Vivo ────────────────────────────────────────────────────────
+  const [liveClasses, setLiveClasses] = useState<LiveClass[]>([]);
+  const [novaAula, setNovaAula] = useState(NOVA_AULA_VAZIA);
+  const [savingNovaAula, setSavingNovaAula] = useState(false);
+
+  function loadLiveClasses() {
+    fetch("/api/academy/live-classes")
+      .then(r => r.json())
+      .then(d => { if (d.classes) setLiveClasses(d.classes); })
+      .catch(() => {});
+  }
+
+  useEffect(() => { loadLiveClasses(); }, []);
+
+  async function handleCreateLiveClass() {
+    if (!novaAula.title.trim() || !novaAula.date) return;
+    setSavingNovaAula(true);
+    try {
+      await fetch("/api/academy/live-classes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...novaAula, date: new Date(novaAula.date).toISOString() }),
+      });
+      setNovaAula(NOVA_AULA_VAZIA);
+      loadLiveClasses();
+    } finally {
+      setSavingNovaAula(false);
+    }
+  }
+
+  async function handleSaveLiveClass(id: string, data: Partial<LiveClass>) {
+    await fetch("/api/academy/live-classes", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, ...data }),
+    });
+    loadLiveClasses();
+  }
+
+  async function handleDeleteLiveClass(id: string) {
+    await fetch(`/api/academy/live-classes?id=${id}`, { method: "DELETE" });
+    setLiveClasses(prev => prev.filter(c => c.id !== id));
   }
 
   async function handleSaveOverride(videoId: string, data: Partial<VideoOverride>) {
@@ -512,6 +713,7 @@ export function AcademyAdmin({ ytLinks, onLinksChange }: AcademyAdminProps) {
         {([
           { key: "links", label: "Links YouTube", icon: <Link2 className="w-3.5 h-3.5" /> },
           { key: "categorias", label: "Temas", icon: <Edit3 className="w-3.5 h-3.5" /> },
+          { key: "aovivo", label: "Ao Vivo", icon: <Radio className="w-3.5 h-3.5" /> },
           { key: "ranking", label: "Ranking Engajamento", icon: <Trophy className="w-3.5 h-3.5" /> },
           { key: "analytics", label: "Analytics", icon: <BarChart2 className="w-3.5 h-3.5" /> },
         ] as const).map((t) => (
@@ -553,6 +755,73 @@ export function AcademyAdmin({ ytLinks, onLinksChange }: AcademyAdminProps) {
               onReset={() => handleResetCategoryOverride(cat.id)}
             />
           ))}
+        </div>
+      )}
+
+      {tab === "aovivo" && (
+        <div className="space-y-3">
+          <div className="p-4 rounded-xl border border-amber-500/30 bg-amber-500/5 flex items-start gap-3">
+            <Info className="w-4 h-4 text-amber-400 mt-0.5 flex-shrink-0" />
+            <div>
+              <p className="text-sm font-semibold text-amber-400 mb-1">Gerenciar Aulas ao Vivo</p>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Quem se inscrever recebe o link por e-mail e pelo chat interno na hora, e um lembrete por e-mail 1 dia antes.
+                Depois da aula, cole o link da gravação (edição do card) pra ela ficar salva no tema &quot;Aulas ao Vivo&quot;.
+              </p>
+            </div>
+          </div>
+
+          {/* Nova aula */}
+          <div className="p-4 rounded-xl border border-dashed border-border space-y-3">
+            <p className="text-xs font-bold text-muted-foreground uppercase tracking-wide">Nova Aula ao Vivo</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <input value={novaAula.title} onChange={e => setNovaAula({ ...novaAula, title: e.target.value })}
+                placeholder="Título *"
+                className="h-9 px-3 text-sm bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-1 focus:ring-[#C9A84C]/50" />
+              <input value={novaAula.instructor} onChange={e => setNovaAula({ ...novaAula, instructor: e.target.value })}
+                placeholder="Instrutor"
+                className="h-9 px-3 text-sm bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-1 focus:ring-[#C9A84C]/50" />
+              <input type="datetime-local" value={novaAula.date} onChange={e => setNovaAula({ ...novaAula, date: e.target.value })}
+                className="h-9 px-3 text-sm bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-1 focus:ring-[#C9A84C]/50" />
+              <input type="number" value={novaAula.duration_min} onChange={e => setNovaAula({ ...novaAula, duration_min: parseInt(e.target.value) || 0 })}
+                placeholder="Duração (min)"
+                className="h-9 px-3 text-sm bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-1 focus:ring-[#C9A84C]/50" />
+              <select value={novaAula.category} onChange={e => setNovaAula({ ...novaAula, category: e.target.value })}
+                className="h-9 px-3 text-sm bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-1 focus:ring-[#C9A84C]/50">
+                <option value="">Tema —</option>
+                {ACADEMY_CATEGORIES.map(c => <option key={c.id} value={c.label}>{c.label}</option>)}
+              </select>
+              <select value={novaAula.level} onChange={e => setNovaAula({ ...novaAula, level: e.target.value })}
+                className="h-9 px-3 text-sm bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-1 focus:ring-[#C9A84C]/50">
+                <option value="Iniciante">Iniciante</option>
+                <option value="Intermediário">Intermediário</option>
+                <option value="Avançado">Avançado</option>
+              </select>
+              <input type="number" value={novaAula.total_spots} onChange={e => setNovaAula({ ...novaAula, total_spots: parseInt(e.target.value) || 0 })}
+                placeholder="Total de vagas"
+                className="h-9 px-3 text-sm bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-1 focus:ring-[#C9A84C]/50" />
+              <input value={novaAula.zoom_link} onChange={e => setNovaAula({ ...novaAula, zoom_link: e.target.value })}
+                placeholder="Link da sala (Zoom/Meet)"
+                className="h-9 px-3 text-sm bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-1 focus:ring-[#C9A84C]/50" />
+              <textarea value={novaAula.description} onChange={e => setNovaAula({ ...novaAula, description: e.target.value })}
+                placeholder="Descrição" rows={2}
+                className="md:col-span-2 px-3 py-2 text-sm bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-1 focus:ring-[#C9A84C]/50 resize-none" />
+            </div>
+            <Button size="sm" onClick={handleCreateLiveClass} disabled={savingNovaAula || !novaAula.title.trim() || !novaAula.date} className="gap-1.5">
+              {savingNovaAula ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+              Criar Aula
+            </Button>
+          </div>
+
+          {/* Lista */}
+          <div className="space-y-2">
+            {liveClasses.length === 0 && (
+              <p className="text-xs text-muted-foreground text-center py-4">Nenhuma aula ao vivo cadastrada ainda.</p>
+            )}
+            {liveClasses.map(cls => (
+              <LiveClassRow key={cls.id} liveClass={cls} onSave={handleSaveLiveClass} onDelete={handleDeleteLiveClass} />
+            ))}
+          </div>
         </div>
       )}
 
