@@ -140,7 +140,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
   const [assistantListing, setAssistantListing] = useState<{ id: string; anonymous_id: string } | null>(null);
   const [uploadingDoc, setUploadingDoc] = useState<string | null>(null);
   const [selectedListing, setSelectedListing] = useState<Listing | null>(null);
-  const [activeDetailTab, setActiveDetailTab] = useState<"geral" | "documentos" | "orderbook" | "governanca">("geral");
+  const [activeDetailTab, setActiveDetailTab] = useState<"geral" | "documentos" | "orderbook" | "governanca" | "notas">("geral");
   const [listingDocs, setListingDocs] = useState<any[]>([]);
   const [docsLoading, setDocsLoading] = useState(false);
   const [intakeUrl, setIntakeUrl] = useState<string | null>(null);
@@ -160,6 +160,11 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
   const [kycDocType, setKycDocType] = useState("");
   const [uploadingKyc, setUploadingKyc] = useState(false);
   const [kycActionLoading, setKycActionLoading] = useState<string | null>(null);
+  const [dealNotes, setDealNotes] = useState<any[]>([]);
+  const [mesaUsers, setMesaUsers] = useState<{ id: string; full_name: string }[]>([]);
+  const [noteContent, setNoteContent] = useState("");
+  const [noteMentionedIds, setNoteMentionedIds] = useState<string[]>([]);
+  const [submittingNote, setSubmittingNote] = useState(false);
   const [checklistsLoading, setChecklistsLoading] = useState(false);
   const [checklistTab, setChecklistTab] = useState<"pre_aceite" | "pre_fechamento" | "pos_cessao">("pre_fechamento");
   const [askPriceFloor, setAskPriceFloor] = useState<string>("");
@@ -239,6 +244,52 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
   }, []);
 
   useEffect(() => { loadReferralPartners(); }, [loadReferralPartners]);
+
+  useEffect(() => {
+    fetch("/api/cm/mesa-users")
+      .then((res) => res.json())
+      .then((json) => setMesaUsers(json.users ?? []))
+      .catch(() => setMesaUsers([]));
+  }, []);
+
+  const loadDealNotes = async (listingId: string) => {
+    try {
+      const res = await fetch(`/api/cm/deal-notes?listing_id=${listingId}`);
+      const json = await res.json();
+      setDealNotes(json.notes ?? []);
+    } catch { setDealNotes([]); }
+  };
+
+  const toggleMention = (userId: string, fullName: string) => {
+    if (noteMentionedIds.includes(userId)) {
+      setNoteMentionedIds((prev) => prev.filter((id) => id !== userId));
+      setNoteContent((prev) => prev.replace(`@${fullName} `, ""));
+    } else {
+      setNoteMentionedIds((prev) => [...prev, userId]);
+      setNoteContent((prev) => `${prev}${prev && !prev.endsWith(" ") ? " " : ""}@${fullName} `);
+    }
+  };
+
+  const submitDealNote = async (listingId: string) => {
+    if (!noteContent.trim()) { alert("Escreva uma nota antes de enviar"); return; }
+    setSubmittingNote(true);
+    try {
+      const res = await fetch("/api/cm/deal-notes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ listing_id: listingId, content: noteContent.trim(), mentioned_user_ids: noteMentionedIds }),
+      });
+      const json = await res.json();
+      if (res.ok) {
+        setDealNotes((prev) => [json.note, ...prev]);
+        setNoteContent("");
+        setNoteMentionedIds([]);
+      } else {
+        alert(json.error ?? "Erro ao salvar nota");
+      }
+    } catch { alert("Erro de conexão"); }
+    finally { setSubmittingNote(false); }
+  };
 
   const createReferralPartner = async (): Promise<string | null> => {
     if (!newReferralName.trim()) { alert("Nome é obrigatório"); return null; }
@@ -380,6 +431,9 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
     loadChecklists(listing.id);
     loadDocs(listing.id);
     loadKycDocs(listing.id);
+    loadDealNotes(listing.id);
+    setNoteContent("");
+    setNoteMentionedIds([]);
   };
 
   const handleStatusTransition = async (listingId: string, newStatus: string) => {
@@ -1116,7 +1170,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
                         <div className="text-[8px] text-red-400 font-bold uppercase mt-1 px-1.5 py-0.5 bg-red-500/10 border border-red-500/20 rounded inline-block">Exclusão Solicitada</div>
                       )}
                       {(l as any).nda_authorization_status === "pending_director" && (
-                        <div className="text-[8px] text-[#C9A84C] font-bold uppercase mt-1 px-1.5 py-0.5 bg-[#C9A84C]/10 border border-[#C9A84C]/20 rounded inline-block">NDA Pendente</div>
+                        <div className="text-[8px] text-[#C9A84C] font-bold uppercase mt-1 px-1.5 py-0.5 bg-[#C9A84C]/10 border border-[#C9A84C]/20 rounded inline-block">Enviado — Aguardando Diretoria</div>
                       )}
                       {Number((l.cm_listing_documents?.[0] as any)?.count) > 0 && (
                         <div className="text-[9px] text-[#9BAFC5] mt-1">{(l.cm_listing_documents[0] as any).count} doc(s)</div>
@@ -1228,6 +1282,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
                 { id: "documentos" as const, label: "Documentos" },
                 { id: "orderbook" as const, label: "Order Book" },
                 { id: "governanca" as const, label: "Governança" },
+                { id: "notas" as const, label: "Notas" },
               ]).map((tab) => (
                 <button
                   key={tab.id}
@@ -1559,7 +1614,8 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
               <div className="bg-[#12112A] border border-[#9BAFC5]/10 rounded-lg p-3">
                 {(selectedListing as any).nda_authorization_status === "pending_director" ? (
                   <div className="text-[11px] text-[#F5F1E8]">
-                    <div className="text-[#C9A84C] font-bold mb-1">NDA marcado — aguardando autorização de diretor</div>
+                    <div className="text-[#C9A84C] font-bold mb-1">Enviado — Aguardando Diretoria</div>
+                    <div className="text-[#9BAFC5] text-[10px] mb-1">A ação da Mesa foi concluída. O gargalo agora é a autorização de um diretor (João, Hamilton ou Robson).</div>
                     <div className="text-[#9BAFC5] text-[10px] mb-2">{(selectedListing as any).nda_authorization_reason}</div>
                     {userRole === "ADMIN" && (
                       <div className="flex gap-2">
@@ -1709,6 +1765,69 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
                   <p className="text-[9px] text-[#9BAFC5] mt-2">Exige aprovação de João, Hamilton ou Robson — motivo é enviado por email aos sócios.</p>
                 )}
               </div>
+            </div>
+            </>)}
+
+            {/* ══ ABA: NOTAS ══ */}
+            {activeDetailTab === "notas" && (<>
+            <div className="px-4 mt-4">
+              <div className="text-[10px] text-[#C9A84C] font-bold uppercase tracking-wider mb-2">Bloco de Anotações do Ativo</div>
+              <div className="bg-[#12112A] border border-[#9BAFC5]/10 rounded-lg p-3 space-y-3">
+                <textarea
+                  value={noteContent}
+                  onChange={(e) => setNoteContent(e.target.value)}
+                  placeholder="Escreva uma nota... use @ para marcar um gestor ou operador"
+                  rows={3}
+                  className="w-full bg-[#162744] border border-[#9BAFC5]/15 rounded px-3 py-2 text-[11px] text-[#F5F1E8] placeholder:text-[#9BAFC5]/50 focus:outline-none focus:border-[#C9A84C]/40 resize-none"
+                />
+                <div>
+                  <div className="text-[9px] text-[#9BAFC5] uppercase tracking-wider mb-1.5">Marcar na Mesa</div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {mesaUsers.map((u) => (
+                      <button
+                        key={u.id}
+                        type="button"
+                        onClick={() => toggleMention(u.id, u.full_name)}
+                        className={cn(
+                          "px-2 py-1 rounded text-[9px] font-bold transition border",
+                          noteMentionedIds.includes(u.id)
+                            ? "bg-[#C9A84C]/20 border-[#C9A84C]/40 text-[#E8C97A]"
+                            : "bg-[#162744] border-[#9BAFC5]/15 text-[#9BAFC5] hover:text-[#F5F1E8]"
+                        )}
+                      >
+                        @{u.full_name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <button
+                  onClick={() => submitDealNote(selectedListing.id)}
+                  disabled={submittingNote || !noteContent.trim()}
+                  className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-[#C9A84C]/20 border border-[#C9A84C]/30 rounded text-[#E8C97A] text-[10px] font-bold hover:bg-[#C9A84C]/30 transition disabled:opacity-50"
+                >
+                  {submittingNote ? <Loader2 size={14} className="animate-spin" /> : null}
+                  Publicar Nota
+                </button>
+              </div>
+            </div>
+
+            <div className="px-4 mt-4">
+              <div className="text-[10px] text-[#9BAFC5] font-bold uppercase tracking-wider mb-2">Histórico</div>
+              {dealNotes.length === 0 ? (
+                <p className="text-[10px] text-[#9BAFC5]/70 italic">Nenhuma nota registrada para este ativo ainda.</p>
+              ) : (
+                <div className="space-y-2">
+                  {dealNotes.map((n) => (
+                    <div key={n.id} className="bg-[#12112A] border border-[#9BAFC5]/10 rounded-lg p-3">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[10px] font-bold text-[#F5F1E8]">{n.profiles?.full_name ?? "Usuário"}</span>
+                        <span className="text-[9px] text-[#9BAFC5]">{new Date(n.created_at).toLocaleString("pt-BR")}</span>
+                      </div>
+                      <p className="text-[11px] text-[#9BAFC5] whitespace-pre-wrap">{n.content}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
             </>)}
 
