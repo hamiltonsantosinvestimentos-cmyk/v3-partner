@@ -3,12 +3,10 @@
 import { useEffect, useState } from "react";
 import Image from "next/image";
 
-const SESSION_KEY = "v3_academy_intro_shown";
-
 /**
  * Abertura estilo Netflix: logo da V3 aparece com um "bump" (escala + fade in),
  * segura um instante, e some com fade out revelando a página por trás.
- * Toca só uma vez por sessão do navegador (sessionStorage).
+ * Toca toda vez que a aba do Academy é aberta.
  */
 export function AcademyIntro({ onDone }: { onDone: () => void }) {
   const [phase, setPhase] = useState<"in" | "hold" | "out">("in");
@@ -16,10 +14,7 @@ export function AcademyIntro({ onDone }: { onDone: () => void }) {
   useEffect(() => {
     const t1 = setTimeout(() => setPhase("hold"), 650);
     const t2 = setTimeout(() => setPhase("out"), 1500);
-    const t3 = setTimeout(() => {
-      sessionStorage.setItem(SESSION_KEY, "1");
-      onDone();
-    }, 2100);
+    const t3 = setTimeout(onDone, 2100);
     return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
   }, [onDone]);
 
@@ -53,6 +48,5 @@ export function AcademyIntro({ onDone }: { onDone: () => void }) {
 }
 
 export function shouldShowAcademyIntro(): boolean {
-  if (typeof window === "undefined") return false;
-  return !sessionStorage.getItem(SESSION_KEY);
+  return typeof window !== "undefined";
 }
