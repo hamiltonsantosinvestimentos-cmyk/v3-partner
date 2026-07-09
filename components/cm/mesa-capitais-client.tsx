@@ -6,7 +6,7 @@ import {
   Loader2, AlertTriangle, CheckCircle2, Clock,
   ArrowRight, RefreshCw, Shield, Bot, Upload, Mic,
   Link2, Copy, Plus, FileText, UserPlus, ClipboardCheck,
-  ToggleLeft, ToggleRight, Save, Download,
+  ToggleLeft, ToggleRight, Save, Download, ExternalLink,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AssetAssistant } from "./asset-assistant";
@@ -1608,6 +1608,22 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
 
             {/* ══ ABA: GOVERNANÇA ══ */}
             {activeDetailTab === "governanca" && (<>
+            {/* Atalho Central de Contratos — minuta real do NDA usada na Deal Room */}
+            <div className="px-4 mt-4">
+              <a
+                href="/juridico/contratos?vertical=capital_markets"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-between gap-2 px-3 py-2.5 bg-[#12112A] border border-[#9BAFC5]/10 rounded-lg text-[10px] text-[#9BAFC5] hover:border-[#C9A84C]/30 hover:text-[#F5F1E8] transition"
+              >
+                <span className="flex items-center gap-2">
+                  <FileText size={13} className="text-[#C9A84C]" />
+                  Template NDA (Central de Contratos) — minuta usada de verdade na Deal Room
+                </span>
+                <ExternalLink size={12} />
+              </a>
+            </div>
+
             {/* NDA Retroativo — Autorização de Diretor */}
             <div className="px-4 mt-4">
               <div className="text-[10px] text-[#C9A84C] font-bold uppercase tracking-wider mb-2">NDA Retroativo (fora do sistema)</div>

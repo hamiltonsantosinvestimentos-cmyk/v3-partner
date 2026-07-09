@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { Suspense, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { FileText, LayoutList } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ContractTemplatesClient } from "./contract-templates-client";
@@ -13,8 +14,9 @@ const TABS = [
 
 type TabId = (typeof TABS)[number]["id"];
 
-export function ContractsCentralClient() {
-  const [tab, setTab] = useState<TabId>("painel");
+function ContractsCentralInner() {
+  const searchParams = useSearchParams();
+  const [tab, setTab] = useState<TabId>(searchParams.get("vertical") ? "minutas" : "painel");
 
   return (
     <div>
@@ -38,5 +40,13 @@ export function ContractsCentralClient() {
       {tab === "painel" && <ContractsPanelClient />}
       {tab === "minutas" && <ContractTemplatesClient />}
     </div>
+  );
+}
+
+export function ContractsCentralClient() {
+  return (
+    <Suspense fallback={null}>
+      <ContractsCentralInner />
+    </Suspense>
   );
 }

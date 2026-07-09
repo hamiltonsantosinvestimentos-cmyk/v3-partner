@@ -1,9 +1,47 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { createHash } from "crypto";
+import { resolveContractVariables, wrapContractInV3Html } from "@/lib/contract-render";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+}
+
+async function renderNdaDocument(listing: any) {
+  const { data: template } = await svc()
+    .from("contract_templates")
+    .select("*")
+    .eq("vertical", "capital_markets")
+    .eq("is_active", true)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!template) return null;
+
+  const variables: Record<string, any> = {
+    data_geracao: new Date().toLocaleDateString("pt-BR"),
+    data_geracao_extenso: new Date().toLocaleDateString("pt-BR", { day: "numeric", month: "long", year: "numeric" }),
+    nome_cedente: listing.seller_name,
+    cpf_cnpj_cedente: listing.seller_cpf_cnpj ?? null,
+    tipo_ativo: listing.asset_type,
+    anonymous_id: listing.anonymous_id,
+    ente_devedor: listing.ente_devedor,
+    esfera: listing.esfera,
+    tribunal: listing.tribunal,
+    natureza: listing.natureza,
+    numero_processo: listing.numero_processo,
+    valor_face: listing.valor_face,
+    valor_atualizado: listing.valor_atualizado ?? listing.valor_face,
+    desagio_pretendido: listing.desagio_pretendido,
+    prazo_estimado_meses: listing.prazo_estimado_meses,
+  };
+
+  const renderedBody = resolveContractVariables(template.body_text_raw, variables);
+  const contractTitle = resolveContractVariables(template.template_name, variables);
+  const renderedHtml = wrapContractInV3Html(contractTitle, renderedBody);
+
+  return { template, variables, contractTitle, renderedBody, renderedHtml };
 }
 
 export async function GET(
@@ -14,7 +52,7 @@ export async function GET(
 
   const { data: access } = await svc()
     .from("cm_deal_room_access")
-    .select("*, cm_asset_listings(id, anonymous_id, asset_type, ente_devedor, esfera, tribunal, natureza, valor_face, valor_atualizado, desagio_pretendido, prazo_estimado_meses, listing_status, seller_name, numero_processo)")
+    .select("*, cm_asset_listings(id, anonymous_id, asset_type, ente_devedor, esfera, tribunal, natureza, valor_face, valor_atualizado, desagio_pretendido, prazo_estimado_meses, listing_status, seller_name, seller_cpf_cnpj, numero_processo)")
     .eq("access_token", token)
     .eq("revoked", false)
     .single();
@@ -33,12 +71,14 @@ export async function GET(
   }).eq("id", access.id);
 
   if (!access.nda_accepted) {
+    const ndaDoc = await renderNdaDocument(access.cm_asset_listings);
     return NextResponse.json({
       nda_required: true,
       listing: {
         anonymous_id: (access.cm_asset_listings as any)?.anonymous_id,
         asset_type: (access.cm_asset_listings as any)?.asset_type,
       },
+      nda_document_html: ndaDoc?.renderedBody ?? null,
     });
   }
 
@@ -132,7 +172,7 @@ export async function POST(
   if (action === "accept_nda") {
     const { data: access } = await svc()
       .from("cm_deal_room_access")
-      .select("id, nda_accepted, revoked, expires_at")
+      .select("id, listing_id, buyer_name, buyer_email, nda_accepted, revoked, expires_at, cm_asset_listings(id, anonymous_id, asset_type, ente_devedor, esfera, tribunal, natureza, valor_face, valor_atualizado, desagio_pretendido, prazo_estimado_meses, seller_name, seller_cpf_cnpj, numero_processo)")
       .eq("access_token", token)
       .single();
 
@@ -149,8 +189,38 @@ export async function POST(
     const userAgent = req.headers.get("user-agent") ?? "unknown";
     const timestamp = new Date().toISOString();
 
-    const hashPayload = `${access.id}|${token}|${ip}|${userAgent}|${timestamp}|nda_accepted`;
+    const ndaDoc = await renderNdaDocument(access.cm_asset_listings);
+
+    // Hash amarrado ao conteudo do documento aceito, nao so a metadados de acesso —
+    // se o template mudar depois, o hash deste aceite continua provando exatamente
+    // qual texto o comprador viu e aceitou.
+    const hashPayload = `${access.id}|${token}|${ip}|${userAgent}|${timestamp}|nda_accepted|${ndaDoc?.renderedHtml ?? "sem_template_ativo"}`;
     const ndaHash = createHash("sha256").update(hashPayload).digest("hex");
+
+    let ndaContractId: string | null = null;
+    if (ndaDoc) {
+      const listing = access.cm_asset_listings as any;
+      const { data: contract } = await svc()
+        .from("operation_contracts")
+        .insert({
+          template_id: ndaDoc.template.id,
+          vertical: "capital_markets",
+          listing_id: access.listing_id,
+          deal_room_access_id: access.id,
+          contract_title: ndaDoc.contractTitle,
+          rendered_html: ndaDoc.renderedHtml,
+          status_signature: "assinado",
+          signed_at: timestamp,
+          parties: [
+            { role: "cedente", name: listing?.seller_name ?? null, doc: listing?.seller_cpf_cnpj ?? null },
+            { role: "receptora", name: access.buyer_name ?? null, doc: null, email: access.buyer_email ?? null },
+            { role: "v3_partners", name: "V3 Partners Soluções Ltda", doc: "14.219.287/0001-50" },
+          ],
+        })
+        .select("id")
+        .single();
+      ndaContractId = contract?.id ?? null;
+    }
 
     const { error } = await svc()
       .from("cm_deal_room_access")
@@ -159,6 +229,7 @@ export async function POST(
         nda_accepted_at: timestamp,
         nda_ip_address: ip,
         nda_hash: ndaHash,
+        nda_contract_id: ndaContractId,
         geo_location: req.headers.get("cf-ipcountry") ?? req.headers.get("x-vercel-ip-country") ?? null,
       })
       .eq("id", access.id);

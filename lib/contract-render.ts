@@ -1,0 +1,50 @@
+export function resolveContractVariables(template: string, data: Record<string, any>): string {
+  return template.replace(/\{\{([^}]+)\}\}/g, (match, key) => {
+    const trimmed = key.trim();
+    const value = data[trimmed];
+    if (value === null || value === undefined) return `[${trimmed}]`;
+    if (typeof value === "number") {
+      return value.toLocaleString("pt-BR", { minimumFractionDigits: 2 });
+    }
+    return String(value);
+  });
+}
+
+export function wrapContractInV3Html(title: string, body: string): string {
+  return `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>${title} — V3 Partners</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+body{font-family:'DM Sans',sans-serif;background:#09081A;color:#F5F1E8;padding:40px 60px;line-height:1.8;font-size:13px}
+h1{font-size:20px;font-weight:700;color:#C9A84C;text-align:center;margin-bottom:8px}
+h2{font-size:14px;font-weight:700;color:#C9A84C;margin:24px 0 8px;text-transform:uppercase;letter-spacing:.5px}
+.header{text-align:center;margin-bottom:32px;padding-bottom:16px;border-bottom:2px solid #C9A84C}
+.header img{height:40px;margin-bottom:8px}
+.header p{font-size:11px;color:#9BAFC5}
+p{margin-bottom:12px}
+.parties{display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:48px;padding-top:24px;border-top:1px solid #243A66}
+.party{text-align:center}
+.party .line{width:200px;border-top:1px solid #9BAFC5;margin:40px auto 8px}
+.party .name{font-weight:700;color:#F5F1E8;font-size:12px}
+.party .doc{font-size:10px;color:#9BAFC5}
+.footer{text-align:center;margin-top:48px;font-size:10px;color:#243A66}
+@media print{@page{size:A4;margin:20mm 15mm}body{background:#09081A!important;-webkit-print-color-adjust:exact!important}}
+</style>
+</head>
+<body>
+<div class="header">
+<img src="https://app.v3partners.com.br/v3-logo-flat-gold-alpha.png" alt="V3 Partners">
+<h1>${title}</h1>
+<p>V3 Partners Solucoes Ltda — CNPJ 14.219.287/0001-50</p>
+</div>
+${body}
+<div class="footer">
+<p>Documento gerado automaticamente pela plataforma V3 Partners em ${new Date().toLocaleDateString("pt-BR")}.</p>
+<p>Este documento requer assinatura eletronica para validade juridica.</p>
+</div>
+</body>
+</html>`;
+}

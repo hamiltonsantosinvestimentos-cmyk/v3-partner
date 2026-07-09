@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 import { Plus, Save, Trash2, Loader2, FileText, Eye, ChevronDown, Upload } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -46,12 +47,15 @@ M&A: {{nome_ativo}}, {{valor_deal}}, {{setor}}, {{v3_code}}
 SISTEMA: {{data_geracao}}, {{data_geracao_extenso}}`;
 
 export function ContractTemplatesClient() {
+  const searchParams = useSearchParams();
+  const initialVertical = searchParams.get("vertical") ?? "";
+
   const [templates, setTemplates] = useState<Template[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [selected, setSelected] = useState<Template | null>(null);
   const [isNew, setIsNew] = useState(false);
-  const [filterVertical, setFilterVertical] = useState("");
+  const [filterVertical, setFilterVertical] = useState(initialVertical);
 
   const [formName, setFormName] = useState("");
   const [formVertical, setFormVertical] = useState("capital_markets");

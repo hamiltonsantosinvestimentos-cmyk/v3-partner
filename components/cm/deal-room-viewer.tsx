@@ -120,12 +120,22 @@ export function DealRoomViewer({ token, initialData }: DealRoomViewerProps) {
           é necessário aceitar o termo de confidencialidade.
         </p>
 
-        <div className="bg-[#162744] border border-[#9BAFC5]/10 rounded-lg p-6 mb-6 text-left max-h-[250px] overflow-y-auto text-xs text-[#9BAFC5]/80 leading-relaxed">
-          <p className="mb-3">Pelo presente termo, declaro que manterei em sigilo absoluto todas as informações acessadas nesta sala de documentos, incluindo dados financeiros, jurídicos e operacionais do ativo identificado pelo código {data.listing?.anonymous_id}.</p>
-          <p className="mb-3">Comprometo-me a não divulgar, compartilhar ou utilizar as informações para qualquer finalidade diferente da análise de viabilidade da operação de cessão/aquisição proposta pela V3 Partners Soluções Ltda (CNPJ 14.219.287/0001-50).</p>
-          <p className="mb-3">O descumprimento deste termo sujeita o infrator às penalidades previstas em lei, incluindo indenização por perdas e danos.</p>
-          <p>Os dados de acesso (IP, data, horário) serão registrados para fins de auditoria e compliance, conforme LGPD Art. 7, inc. V.</p>
-        </div>
+        {data.nda_document_html ? (
+          <div
+            className="bg-[#162744] border border-[#9BAFC5]/10 rounded-lg p-6 mb-6 text-left max-h-[350px] overflow-y-auto text-xs text-[#9BAFC5]/90 leading-relaxed [&_h2]:text-[#C9A84C] [&_h2]:font-bold [&_h2]:uppercase [&_h2]:text-[11px] [&_h2]:tracking-wide [&_h2]:mt-4 [&_h2]:mb-2 [&_p]:mb-3 [&_strong]:text-[#F5F1E8]"
+            dangerouslySetInnerHTML={{ __html: data.nda_document_html }}
+          />
+        ) : (
+          <div className="bg-[#162744] border border-[#9BAFC5]/10 rounded-lg p-6 mb-6 text-left max-h-[250px] overflow-y-auto text-xs text-[#9BAFC5]/80 leading-relaxed">
+            <p className="mb-3">Pelo presente termo, declaro que manterei em sigilo absoluto todas as informações acessadas nesta sala de documentos, incluindo dados financeiros, jurídicos e operacionais do ativo identificado pelo código {data.listing?.anonymous_id}.</p>
+            <p className="mb-3">Comprometo-me a não divulgar, compartilhar ou utilizar as informações para qualquer finalidade diferente da análise de viabilidade da operação de cessão/aquisição proposta pela V3 Partners Soluções Ltda (CNPJ 14.219.287/0001-50).</p>
+            <p className="mb-3">O descumprimento deste termo sujeita o infrator às penalidades previstas em lei, incluindo indenização por perdas e danos.</p>
+            <p>Os dados de acesso (IP, data, horário) serão registrados para fins de auditoria e compliance, conforme LGPD Art. 7, inc. V.</p>
+          </div>
+        )}
+        {!data.nda_document_html && (
+          <p className="text-[9px] text-[#9BAFC5]/50 mb-4 -mt-4">Modelo padrão exibido — nenhuma minuta específica de Bolsa de Ativos ativa na Central de Contratos.</p>
+        )}
 
         {error && <p className="text-sm text-red-400 mb-4">{error}</p>}
 
