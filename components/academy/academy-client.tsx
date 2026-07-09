@@ -13,6 +13,7 @@ import { BADGE_DEFS, RARITY_COLORS, SPECIALTY_BADGE_DEFS } from "@/lib/academy-b
 import { LiveClasses } from "./live-classes";
 import { OnboardingTrail } from "./onboarding-trail";
 import { AcademyRanking } from "./academy-ranking";
+import { AcademyIntro, shouldShowAcademyIntro } from "./academy-intro";
 
 interface VideoOverride {
   video_id: string;
@@ -52,6 +53,14 @@ interface CategoryOverride {
   icon?: string;
   color?: string;
   hidden?: boolean;
+}
+
+interface HomeBanner {
+  title?: string;
+  subtitle?: string;
+  background_image_url?: string;
+  cta_label?: string;
+  cta_href?: string;
 }
 
 function applyCategoryOverride(category: VideoCategory, override?: CategoryOverride): VideoCategory {
@@ -240,10 +249,21 @@ function CategoryRow({ category, onPlay, progress, ytLinks }: {
 }
 
 // ── Hero Banner ─────────────────────────────────────────────────────────────
-function HeroBanner({ video, onPlay }: { video: Video; onPlay: (v: Video) => void }) {
+function HeroBanner({ video, banner, onPlay }: { video: Video; banner?: HomeBanner | null; onPlay: (v: Video) => void }) {
+  const title = banner?.title || video.title;
+  const subtitle = banner?.subtitle || video.description;
+  const hasCustomCta = !!(banner?.cta_label && banner?.cta_href);
+
   return (
     <div className="relative rounded-2xl overflow-hidden mb-8" style={{ aspectRatio: "21/7" }}>
-      <div className={`absolute inset-0 bg-gradient-to-br ${video.gradient}`} />
+      {banner?.background_image_url ? (
+        <div
+          className="absolute inset-0 bg-cover bg-center"
+          style={{ backgroundImage: `url(${banner.background_image_url})` }}
+        />
+      ) : (
+        <div className={`absolute inset-0 bg-gradient-to-br ${video.gradient}`} />
+      )}
       <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/40 to-transparent" />
       <div className="absolute inset-0 bg-gradient-to-t from-[#060D1A] via-transparent to-transparent" />
       <div className="absolute inset-0 overflow-hidden">
@@ -261,15 +281,24 @@ function HeroBanner({ video, onPlay }: { video: Video; onPlay: (v: Video) => voi
               <Clock className="w-3 h-3" />{video.duration}
             </span>
           </div>
-          <h2 className="text-2xl md:text-3xl font-bold text-white leading-tight mb-2">{video.title}</h2>
-          <p className="text-sm text-white/70 mb-4 line-clamp-2">{video.description}</p>
+          <h2 className="text-2xl md:text-3xl font-bold text-white leading-tight mb-2">{title}</h2>
+          <p className="text-sm text-white/70 mb-4 line-clamp-2">{subtitle}</p>
           <div className="flex items-center gap-3">
-            <button
-              onClick={() => onPlay(video)}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white text-black font-semibold text-sm hover:bg-white/90 transition-colors shadow-lg"
-            >
-              <Play className="w-4 h-4" fill="black" /> Assistir Agora
-            </button>
+            {hasCustomCta ? (
+              <a
+                href={banner!.cta_href}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white text-black font-semibold text-sm hover:bg-white/90 transition-colors shadow-lg"
+              >
+                <Play className="w-4 h-4" fill="black" /> {banner!.cta_label}
+              </a>
+            ) : (
+              <button
+                onClick={() => onPlay(video)}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white text-black font-semibold text-sm hover:bg-white/90 transition-colors shadow-lg"
+              >
+                <Play className="w-4 h-4" fill="black" /> Assistir Agora
+              </button>
+            )}
             <div className="text-xs text-white/60">
               {video.instructor} · {video.instructorRole}
             </div>
@@ -297,7 +326,13 @@ export function AcademyClient({ initialCategory, userRole, userName, userId, isN
   const [newBadges, setNewBadges] = useState<string[]>([]);
   const [overrides, setOverrides] = useState<Record<string, VideoOverride>>({});
   const [categoryOverrides, setCategoryOverrides] = useState<Record<string, CategoryOverride>>({});
+  const [homeBanner, setHomeBanner] = useState<HomeBanner | null>(null);
+  const [showIntro, setShowIntro] = useState(false);
   const saveProgressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (shouldShowAcademyIntro()) setShowIntro(true);
+  }, []);
 
   // Load progress, YT links, certificates, quiz results, badges, overrides
   useEffect(() => {
@@ -309,7 +344,8 @@ export function AcademyClient({ initialCategory, userRole, userName, userId, isN
       fetch("/api/academy/badges").then((r) => r.json()),
       fetch("/api/academy/video-overrides").then((r) => r.json()).catch(() => ({ overrides: [] })),
       fetch("/api/academy/category-overrides").then((r) => r.json()).catch(() => ({ overrides: [] })),
-    ]).then(([pData, lData, cData, qData, bData, oData, coData]) => {
+      fetch("/api/academy/home-banner").then((r) => r.json()).catch(() => ({ banner: null })),
+    ]).then(([pData, lData, cData, qData, bData, oData, coData, hbData]) => {
       if (pData.progress) setVideoProgress(pData.progress);
       if (lData.links) setYtLinks(lData.links);
       if (cData.certificates) {
@@ -335,6 +371,7 @@ export function AcademyClient({ initialCategory, userRole, userName, userId, isN
         for (const o of oData.overrides as VideoOverride[]) { map[o.video_id] = o; }
         setOverrides(map);
       }
+      if (hbData.banner) setHomeBanner(hbData.banner);
     }).catch(() => {});
   }, []);
 
@@ -491,6 +528,7 @@ export function AcademyClient({ initialCategory, userRole, userName, userId, isN
 
   return (
     <div className="animate-fade-in">
+      {showIntro && <AcademyIntro onDone={() => setShowIntro(false)} />}
       {/* Header */}
       <div className="flex items-start justify-between mb-4">
         <div className="flex items-center gap-3">
@@ -700,7 +738,7 @@ export function AcademyClient({ initialCategory, userRole, userName, userId, isN
         )}
 
         {activeCategory === "all" && !search && (
-          <HeroBanner video={featuredVideo} onPlay={setPlayingVideo} />
+          <HeroBanner video={featuredVideo} banner={homeBanner} onPlay={setPlayingVideo} />
         )}
 
         {continueWatching.length > 0 && !search && (

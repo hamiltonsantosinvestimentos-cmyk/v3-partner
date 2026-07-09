@@ -309,6 +309,85 @@ interface CategoryOverride {
   hidden?: boolean;
 }
 
+interface HomeBanner {
+  title?: string;
+  subtitle?: string;
+  background_image_url?: string;
+  cta_label?: string;
+  cta_href?: string;
+}
+
+function BannerEditor() {
+  const [banner, setBanner] = useState<HomeBanner>({});
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/academy/home-banner")
+      .then(r => r.json())
+      .then(d => { if (d.banner) setBanner(d.banner); })
+      .catch(() => {});
+  }, []);
+
+  async function handleSave() {
+    setSaving(true);
+    const res = await fetch("/api/academy/home-banner", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(banner),
+    });
+    setSaving(false);
+    if (res.ok) { setSaved(true); setTimeout(() => setSaved(false), 2000); }
+  }
+
+  return (
+    <div className="p-4 rounded-xl border border-[#C9A84C]/30 bg-[#C9A84C]/5 space-y-3">
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-semibold text-white">Banner Principal (topo da página inicial)</p>
+        <Button size="sm" onClick={handleSave} disabled={saving} className="gap-1.5 h-8">
+          {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : saved ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Save className="w-3.5 h-3.5" />}
+          {saved ? "Salvo" : "Salvar Banner"}
+        </Button>
+      </div>
+      <p className="text-xs text-muted-foreground -mt-2">
+        Deixe em branco pra usar o comportamento padrão (destaca automaticamente a aula marcada como "featured").
+      </p>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div>
+          <label className="text-[10px] font-bold uppercase tracking-wide text-[#C9A84C]">Título</label>
+          <input value={banner.title ?? ""} onChange={e => setBanner({ ...banner, title: e.target.value })}
+            placeholder="Ex: Domine o Mercado de Crédito Estruturado"
+            className="w-full mt-1 h-9 px-3 text-sm bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-1 focus:ring-[#C9A84C]/50" />
+        </div>
+        <div>
+          <label className="text-[10px] font-bold uppercase tracking-wide text-[#C9A84C]">Imagem de fundo (URL)</label>
+          <input value={banner.background_image_url ?? ""} onChange={e => setBanner({ ...banner, background_image_url: e.target.value })}
+            placeholder="https://..."
+            className="w-full mt-1 h-9 px-3 text-sm bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-1 focus:ring-[#C9A84C]/50" />
+        </div>
+        <div className="md:col-span-2">
+          <label className="text-[10px] font-bold uppercase tracking-wide text-[#C9A84C]">Subtítulo</label>
+          <textarea value={banner.subtitle ?? ""} onChange={e => setBanner({ ...banner, subtitle: e.target.value })}
+            rows={2} placeholder="Texto de apoio abaixo do título"
+            className="w-full mt-1 px-3 py-2 text-sm bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-1 focus:ring-[#C9A84C]/50 resize-none" />
+        </div>
+        <div>
+          <label className="text-[10px] font-bold uppercase tracking-wide text-[#C9A84C]">Texto do botão</label>
+          <input value={banner.cta_label ?? ""} onChange={e => setBanner({ ...banner, cta_label: e.target.value })}
+            placeholder="Ex: Começar Agora"
+            className="w-full mt-1 h-9 px-3 text-sm bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-1 focus:ring-[#C9A84C]/50" />
+        </div>
+        <div>
+          <label className="text-[10px] font-bold uppercase tracking-wide text-[#C9A84C]">Link do botão</label>
+          <input value={banner.cta_href ?? ""} onChange={e => setBanner({ ...banner, cta_href: e.target.value })}
+            placeholder="/academy?cat=home-equity"
+            className="w-full mt-1 h-9 px-3 text-sm bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-1 focus:ring-[#C9A84C]/50" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function AcademyAdmin({ ytLinks, onLinksChange }: AcademyAdminProps) {
   const [tab, setTab] = useState<"links" | "categorias" | "ranking" | "analytics">("links");
   const [showCsvImport, setShowCsvImport] = useState(false);
@@ -453,6 +532,8 @@ export function AcademyAdmin({ ytLinks, onLinksChange }: AcademyAdminProps) {
 
       {tab === "categorias" && (
         <div className="space-y-3">
+          <BannerEditor />
+
           <div className="p-4 rounded-xl border border-amber-500/30 bg-amber-500/5 flex items-start gap-3">
             <Info className="w-4 h-4 text-amber-400 mt-0.5 flex-shrink-0" />
             <div>

@@ -144,14 +144,6 @@ const NAV_SECTIONS: NavSection[] = [
       {
         href: "/academy", label: "V3 Academy", icon: "GraduationCap",
         roles: ["ADMIN", "STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE", "MESA_OPERACIONAL", "GESTAO"],
-        children: [
-          { href: "/academy?cat=home-equity", label: "Home Equity", roles: ["ADMIN", "STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE", "MESA_OPERACIONAL", "GESTAO"] },
-          { href: "/academy?cat=estruturado", label: "Crédito Estruturado", roles: ["ADMIN", "STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE", "MESA_OPERACIONAL", "GESTAO"] },
-          { href: "/academy?cat=high-ticket", label: "High Ticket", roles: ["ADMIN", "STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE", "MESA_OPERACIONAL", "GESTAO"] },
-          { href: "/academy?cat=ma", label: "M&A", roles: ["ADMIN", "GESTAO", "PARTNER_PRO", "ENTERPRISE"] },
-          { href: "/academy?cat=consorcio", label: "Consórcio", roles: ["ADMIN", "STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE", "MESA_OPERACIONAL", "GESTAO"] },
-          { href: "/academy?cat=compliance", label: "Compliance", roles: ["ADMIN", "STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE", "MESA_OPERACIONAL", "GESTAO"] },
-        ],
       },
     ],
   },
