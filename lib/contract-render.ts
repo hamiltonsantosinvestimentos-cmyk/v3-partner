@@ -38,12 +38,12 @@ p{margin-bottom:12px}
 <div class="header">
 <img src="https://app.v3partners.com.br/v3-logo-flat-gold-alpha.png" alt="V3 Partners">
 <h1>${title}</h1>
-<p>V3 Partners Solucoes Ltda — CNPJ 14.219.287/0001-50</p>
+<p>V3 Partners Soluções Ltda — CNPJ 14.219.287/0001-50</p>
 </div>
 ${body}
 <div class="footer">
 <p>Documento gerado automaticamente pela plataforma V3 Partners em ${new Date().toLocaleDateString("pt-BR")}.</p>
-<p>Este documento requer assinatura eletronica para validade juridica.</p>
+<p>Este documento requer assinatura eletrônica para validade jurídica.</p>
 </div>
 </body>
 </html>`;
