@@ -1280,7 +1280,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
                         <div className="text-[8px] text-red-400 font-bold uppercase mt-1 px-1.5 py-0.5 bg-red-500/10 border border-red-500/20 rounded inline-block">Exclusão Solicitada</div>
                       )}
                       {(l as any).nda_authorization_status === "pending_director" && (
-                        <div className="text-[8px] text-[#C9A84C] font-bold uppercase mt-1 px-1.5 py-0.5 bg-[#C9A84C]/10 border border-[#C9A84C]/20 rounded inline-block">Enviado — Aguardando Diretoria</div>
+                        <div className="text-[8px] text-[#C9A84C] font-bold uppercase mt-1 px-1.5 py-0.5 bg-[#C9A84C]/10 border border-[#C9A84C]/20 rounded inline-block">Enviado: Aguardando Diretoria</div>
                       )}
                       {Number((l.cm_listing_documents?.[0] as any)?.count) > 0 && (
                         <div className="text-[9px] text-[#9BAFC5] mt-1">{(l.cm_listing_documents[0] as any).count} doc(s)</div>
@@ -1838,7 +1838,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
               <div className="bg-[#12112A] border border-[#9BAFC5]/10 rounded-lg p-3">
                 {(selectedListing as any).nda_authorization_status === "pending_director" ? (
                   <div className="text-[11px] text-[#F5F1E8]">
-                    <div className="text-[#C9A84C] font-bold mb-1">Enviado — Aguardando Diretoria</div>
+                    <div className="text-[#C9A84C] font-bold mb-1">Enviado: Aguardando Diretoria</div>
                     <div className="text-[#9BAFC5] text-[10px] mb-1">A ação da Mesa foi concluída. O gargalo agora é a autorização de um diretor (João, Hamilton ou Robson).</div>
                     <div className="text-[#9BAFC5] text-[10px] mb-2">{(selectedListing as any).nda_authorization_reason}</div>
                     {userRole === "ADMIN" && (
