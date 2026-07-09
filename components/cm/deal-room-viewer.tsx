@@ -13,6 +13,7 @@ export function DealRoomViewer({ token, initialData }: DealRoomViewerProps) {
   const [data, setData] = useState(initialData);
   const [accepting, setAccepting] = useState(false);
   const [error, setError] = useState("");
+  const [ndaEmail, setNdaEmail] = useState("");
   const [qualifying, setQualifying] = useState(false);
   const [qualifyForm, setQualifyForm] = useState({ buyer_name: "", buyer_company: "", buyer_cpf: "", buyer_email: "", notes: "" });
   const [qualifyFile, setQualifyFile] = useState<File | null>(null);
@@ -21,13 +22,17 @@ export function DealRoomViewer({ token, initialData }: DealRoomViewerProps) {
   const [cessaoHash, setCessaoHash] = useState<string | null>(initialData?.cessao?.hash ?? null);
 
   const acceptNda = async () => {
+    if (!isValidEmail(ndaEmail)) {
+      setError("Informe um email válido para receber a cópia do documento assinado.");
+      return;
+    }
     setAccepting(true);
     setError("");
     try {
       const res = await fetch(`/api/cm/deal-room/${token}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "accept_nda" }),
+        body: JSON.stringify({ action: "accept_nda", buyer_email: ndaEmail.trim() }),
       });
       if (!res.ok) {
         const json = await res.json();
@@ -137,11 +142,24 @@ export function DealRoomViewer({ token, initialData }: DealRoomViewerProps) {
           <p className="text-[9px] text-[#9BAFC5]/50 mb-4 -mt-4">Modelo padrão exibido — nenhuma minuta específica de Bolsa de Ativos ativa na Central de Contratos.</p>
         )}
 
+        <div className="text-left mb-4">
+          <input
+            type="email"
+            value={ndaEmail}
+            onChange={(e) => setNdaEmail(e.target.value)}
+            placeholder="Email * (para receber a cópia do NDA assinado)"
+            className="w-full bg-[#162744] border border-[#9BAFC5]/15 rounded-lg px-4 py-2.5 text-sm text-[#F5F1E8] placeholder:text-[#9BAFC5]/60 focus:border-[#C9A84C]/50 focus:outline-none"
+          />
+          {ndaEmail && !isValidEmail(ndaEmail) && (
+            <p className="text-[10px] text-red-400 mt-1">Email inválido</p>
+          )}
+        </div>
+
         {error && <p className="text-sm text-red-400 mb-4">{error}</p>}
 
         <button
           onClick={acceptNda}
-          disabled={accepting}
+          disabled={accepting || !isValidEmail(ndaEmail)}
           className="px-8 py-3 bg-[#C9A84C] text-[#09081A] rounded-lg text-sm font-bold hover:bg-[#E8C97A] disabled:opacity-50 transition"
         >
           {accepting ? <Loader2 size={16} className="animate-spin inline mr-2" /> : <Lock size={16} className="inline mr-2" />}

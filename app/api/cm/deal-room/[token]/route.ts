@@ -7,6 +7,46 @@ function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 }
 
+// Mesmo grupo de governanca da Bolsa de Ativos usado em nda-authorize e delete —
+// evita criar um novo destinatario interno so para esta notificacao.
+const MESA_V3_EMAILS = [
+  "joao.lemos@v3partners.com.br",
+  "suporte@v3partners.com.br",
+  "robinholino16@gmail.com",
+];
+
+async function sendNdaCopyByEmail(params: {
+  buyerEmail: string;
+  anonymousId: string;
+  contractTitle: string;
+  renderedHtml: string;
+}) {
+  if (!process.env.RESEND_API_KEY) return;
+  try {
+    const { Resend } = await import("resend");
+    const resend = new Resend(process.env.RESEND_API_KEY);
+    const subject = `${params.contractTitle} — ${params.anonymousId} (assinado)`;
+    const html = `<p>Segue cópia do termo assinado eletronicamente na Deal Room do ativo <strong>${params.anonymousId}</strong>.</p>${params.renderedHtml}`;
+
+    await Promise.all([
+      resend.emails.send({
+        from: "V3 Partners Bolsa de Ativos <noreply@v3partners.com.br>",
+        to: params.buyerEmail,
+        subject,
+        html,
+      }),
+      resend.emails.send({
+        from: "V3 Partners Bolsa de Ativos <noreply@v3partners.com.br>",
+        to: MESA_V3_EMAILS,
+        subject: `[Mesa] ${subject}`,
+        html,
+      }),
+    ]);
+  } catch (err) {
+    console.error("[CM Deal Room] falha ao enviar copia do NDA por email:", err);
+  }
+}
+
 async function renderNdaDocument(listing: any) {
   const { data: template } = await svc()
     .from("contract_templates")
@@ -163,7 +203,7 @@ export async function POST(
   { params }: { params: Promise<{ token: string }> }
 ) {
   const { token } = await params;
-  const { action } = await req.json();
+  const { action, buyer_email } = await req.json();
 
   if (!["accept_nda", "accept_cessao"].includes(action))
     return NextResponse.json({ error: "Ação inválida" }, { status: 422 });
@@ -184,6 +224,10 @@ export async function POST(
 
     if (access.nda_accepted)
       return NextResponse.json({ success: true, message: "NDA já aceito" });
+
+    const effectiveEmail: string | null = access.buyer_email ?? buyer_email ?? null;
+    if (!effectiveEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(effectiveEmail.trim()))
+      return NextResponse.json({ error: "Email válido é obrigatório para receber a cópia do NDA assinado" }, { status: 422 });
 
     const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
     const userAgent = req.headers.get("user-agent") ?? "unknown";
@@ -213,7 +257,7 @@ export async function POST(
           signed_at: timestamp,
           parties: [
             { role: "cedente", name: listing?.seller_name ?? null, doc: listing?.seller_cpf_cnpj ?? null },
-            { role: "receptora", name: access.buyer_name ?? null, doc: null, email: access.buyer_email ?? null },
+            { role: "receptora", name: access.buyer_name ?? null, doc: null, email: effectiveEmail },
             { role: "v3_partners", name: "V3 Partners Soluções Ltda", doc: "14.219.287/0001-50" },
           ],
         })
@@ -230,9 +274,19 @@ export async function POST(
         nda_ip_address: ip,
         nda_hash: ndaHash,
         nda_contract_id: ndaContractId,
+        buyer_email: effectiveEmail,
         geo_location: req.headers.get("cf-ipcountry") ?? req.headers.get("x-vercel-ip-country") ?? null,
       })
       .eq("id", access.id);
+
+    if (!error && ndaDoc) {
+      await sendNdaCopyByEmail({
+        buyerEmail: effectiveEmail,
+        anonymousId: (access.cm_asset_listings as any)?.anonymous_id,
+        contractTitle: ndaDoc.contractTitle,
+        renderedHtml: ndaDoc.renderedHtml,
+      });
+    }
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json({ success: true, message: "NDA aceito. Documentos liberados.", nda_hash: ndaHash });
