@@ -45,6 +45,26 @@ function applyOverride(video: Video, override?: VideoOverride): Video {
   };
 }
 
+interface CategoryOverride {
+  category_id: string;
+  label?: string;
+  description?: string;
+  icon?: string;
+  color?: string;
+  hidden?: boolean;
+}
+
+function applyCategoryOverride(category: VideoCategory, override?: CategoryOverride): VideoCategory {
+  if (!override) return category;
+  return {
+    ...category,
+    label: override.label ?? category.label,
+    description: override.description ?? category.description,
+    icon: override.icon ?? category.icon,
+    color: override.color ?? category.color,
+  };
+}
+
 const LEVEL_COLORS: Record<string, string> = {
   "Iniciante": "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
   "Intermediário": "bg-amber-500/20 text-amber-400 border-amber-500/30",
@@ -276,6 +296,7 @@ export function AcademyClient({ initialCategory, userRole, userName, userId, isN
   const [earnedBadges, setEarnedBadges] = useState<Set<string>>(new Set());
   const [newBadges, setNewBadges] = useState<string[]>([]);
   const [overrides, setOverrides] = useState<Record<string, VideoOverride>>({});
+  const [categoryOverrides, setCategoryOverrides] = useState<Record<string, CategoryOverride>>({});
   const saveProgressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Load progress, YT links, certificates, quiz results, badges, overrides
@@ -287,7 +308,8 @@ export function AcademyClient({ initialCategory, userRole, userName, userId, isN
       fetch("/api/academy/quiz").then((r) => r.json()),
       fetch("/api/academy/badges").then((r) => r.json()),
       fetch("/api/academy/video-overrides").then((r) => r.json()).catch(() => ({ overrides: [] })),
-    ]).then(([pData, lData, cData, qData, bData, oData]) => {
+      fetch("/api/academy/category-overrides").then((r) => r.json()).catch(() => ({ overrides: [] })),
+    ]).then(([pData, lData, cData, qData, bData, oData, coData]) => {
       if (pData.progress) setVideoProgress(pData.progress);
       if (lData.links) setYtLinks(lData.links);
       if (cData.certificates) {
@@ -303,6 +325,11 @@ export function AcademyClient({ initialCategory, userRole, userName, userId, isN
       if (bData.badges) {
         setEarnedBadges(new Set((bData.badges as { badge_id: string }[]).map((b) => b.badge_id)));
       }
+      if (coData.overrides) {
+        const map: Record<string, CategoryOverride> = {};
+        for (const o of coData.overrides as CategoryOverride[]) { map[o.category_id] = o; }
+        setCategoryOverrides(map);
+      }
       if (oData.overrides) {
         const map: Record<string, VideoOverride> = {};
         for (const o of oData.overrides as VideoOverride[]) { map[o.video_id] = o; }
@@ -316,11 +343,13 @@ export function AcademyClient({ initialCategory, userRole, userName, userId, isN
   [overrides]);
 
   const mergedCategories = useMemo(() =>
-    ACADEMY_CATEGORIES.map(cat => ({
-      ...cat,
-      videos: cat.videos.map(v => applyOverride(v, overrides[v.id])),
-    })),
-  [overrides]);
+    ACADEMY_CATEGORIES
+      .filter(cat => !categoryOverrides[cat.id]?.hidden)
+      .map(cat => ({
+        ...applyCategoryOverride(cat, categoryOverrides[cat.id]),
+        videos: cat.videos.map(v => applyOverride(v, overrides[v.id])),
+      })),
+  [overrides, categoryOverrides]);
 
   const featuredVideo = allVideos.find((v) => v.featured) ?? allVideos[0];
 
@@ -656,7 +685,7 @@ export function AcademyClient({ initialCategory, userRole, userName, userId, isN
             >
               Todos
             </button>
-            {ACADEMY_CATEGORIES.map((cat) => (
+            {mergedCategories.map((cat) => (
               <button key={cat.id}
                 onClick={() => setActiveCategory(cat.id)}
                 className={`flex-shrink-0 flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold transition-all border ${

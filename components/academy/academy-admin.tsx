@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ACADEMY_CATEGORIES, getAllVideos, type Video as VideoType } from "@/lib/academy-data";
+import { ACADEMY_CATEGORIES, getAllVideos, type Video as VideoType, type VideoCategory } from "@/lib/academy-data";
 import { AcademyRanking } from "./academy-ranking";
 import { AcademyAnalytics } from "./academy-analytics";
 import { AcademyVideoEdit } from "./academy-video-edit";
@@ -200,13 +200,117 @@ function VideoRow({ video, savedUrl, onSave, onDelete, onEdit, hasOverride }: Ro
   );
 }
 
+interface CategoryRowProps {
+  category: VideoCategory;
+  override?: { label?: string; description?: string; icon?: string; color?: string; hidden?: boolean };
+  onSave: (data: { label?: string; description?: string; icon?: string; color?: string; hidden?: boolean }) => Promise<void>;
+  onReset: () => Promise<void>;
+}
+
+function CategoryRow({ category, override, onSave, onReset }: CategoryRowProps) {
+  const effective = {
+    label: override?.label ?? category.label,
+    description: override?.description ?? category.description,
+    icon: override?.icon ?? category.icon,
+    color: override?.color ?? category.color,
+  };
+  const isHidden = !!override?.hidden;
+
+  const [label, setLabel] = useState(effective.label);
+  const [description, setDescription] = useState(effective.description);
+  const [icon, setIcon] = useState(effective.icon);
+  const [color, setColor] = useState(effective.color);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  const isDirty = label !== effective.label || description !== effective.description || icon !== effective.icon || color !== effective.color;
+  const hasOverride = !!override && (override.label !== undefined || override.description !== undefined || override.icon !== undefined || override.color !== undefined);
+
+  async function handleSave() {
+    setSaving(true);
+    await onSave({ label, description, icon, color });
+    setSaving(false);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  }
+
+  async function handleToggleHidden() {
+    setSaving(true);
+    await onSave({ label, description, icon, color, hidden: !isHidden });
+    setSaving(false);
+  }
+
+  return (
+    <div className={`p-4 rounded-xl border ${isHidden ? "border-border/40 bg-secondary/10 opacity-60" : "border-border bg-secondary/20"}`}>
+      <div className="flex items-start gap-3">
+        <input
+          value={icon}
+          onChange={(e) => setIcon(e.target.value)}
+          className="w-12 h-12 text-2xl text-center rounded-lg bg-secondary border border-border flex-shrink-0"
+          maxLength={4}
+        />
+        <div className="flex-1 min-w-0 space-y-2">
+          <div className="flex items-center gap-2">
+            <input
+              value={label}
+              onChange={(e) => setLabel(e.target.value)}
+              className="flex-1 h-8 px-2.5 text-sm font-semibold bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-1 focus:ring-[#C9A84C]/50"
+              placeholder="Nome do tema"
+            />
+            <input
+              type="color"
+              value={color}
+              onChange={(e) => setColor(e.target.value)}
+              className="w-8 h-8 rounded-lg border border-border bg-secondary cursor-pointer"
+              title="Cor do tema"
+            />
+            {isHidden && <Badge className="bg-red-500/20 text-red-400 border-red-500/30 text-[10px]">Oculto</Badge>}
+          </div>
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            rows={2}
+            className="w-full px-2.5 py-1.5 text-xs bg-secondary border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-[#C9A84C]/50 resize-none"
+            placeholder="Descrição do tema"
+          />
+          <p className="text-[10px] text-muted-foreground">{category.videos.length} aula(s) neste tema</p>
+        </div>
+        <div className="flex flex-col gap-1.5 flex-shrink-0">
+          <Button size="sm" onClick={handleSave} disabled={!isDirty || saving} className="gap-1.5 h-8">
+            {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : saved ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Save className="w-3.5 h-3.5" />}
+            {saved ? "Salvo" : "Salvar"}
+          </Button>
+          <Button size="sm" variant="outline" onClick={handleToggleHidden} disabled={saving}
+            className={isHidden ? "gap-1.5 h-8 border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10" : "gap-1.5 h-8 border-red-500/40 text-red-400 hover:bg-red-500/10"}>
+            {isHidden ? "Restaurar" : <><Trash2 className="w-3.5 h-3.5" /> Ocultar</>}
+          </Button>
+          {hasOverride && (
+            <button onClick={onReset} className="text-[10px] text-muted-foreground hover:text-foreground transition-colors underline">
+              Restaurar padrão
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 interface AcademyAdminProps {
   ytLinks: Record<string, string>;
   onLinksChange: (links: Record<string, string>) => void;
 }
 
+interface CategoryOverride {
+  category_id: string;
+  label?: string;
+  description?: string;
+  icon?: string;
+  color?: string;
+  hidden?: boolean;
+}
+
 export function AcademyAdmin({ ytLinks, onLinksChange }: AcademyAdminProps) {
-  const [tab, setTab] = useState<"links" | "ranking" | "analytics">("links");
+  const [tab, setTab] = useState<"links" | "categorias" | "ranking" | "analytics">("links");
   const [showCsvImport, setShowCsvImport] = useState(false);
   const [csvText, setCsvText] = useState("");
   const [csvImporting, setCsvImporting] = useState(false);
@@ -215,6 +319,7 @@ export function AcademyAdmin({ ytLinks, onLinksChange }: AcademyAdminProps) {
   const [filterCat, setFilterCat] = useState("all");
   const [overrides, setOverrides] = useState<Record<string, VideoOverride>>({});
   const [editingVideo, setEditingVideo] = useState<VideoType | null>(null);
+  const [categoryOverrides, setCategoryOverrides] = useState<Record<string, CategoryOverride>>({});
 
   const allVideos = getAllVideos();
 
@@ -228,7 +333,40 @@ export function AcademyAdmin({ ytLinks, onLinksChange }: AcademyAdminProps) {
           setOverrides(map);
         }
       }).catch(() => {});
+    fetch("/api/academy/category-overrides")
+      .then(r => r.json())
+      .then(d => {
+        if (d.overrides) {
+          const map: Record<string, CategoryOverride> = {};
+          for (const o of d.overrides as CategoryOverride[]) { map[o.category_id] = o; }
+          setCategoryOverrides(map);
+        }
+      }).catch(() => {});
   }, []);
+
+  async function handleSaveCategoryOverride(categoryId: string, data: Partial<CategoryOverride>) {
+    const res = await fetch("/api/academy/category-overrides", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ category_id: categoryId, ...data }),
+    });
+    if (res.ok) {
+      setCategoryOverrides(prev => ({ ...prev, [categoryId]: { ...prev[categoryId], ...data, category_id: categoryId } }));
+    }
+  }
+
+  async function handleResetCategoryOverride(categoryId: string) {
+    await fetch("/api/academy/category-overrides", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ category_id: categoryId }),
+    });
+    setCategoryOverrides(prev => {
+      const next = { ...prev };
+      delete next[categoryId];
+      return next;
+    });
+  }
 
   async function handleSaveOverride(videoId: string, data: Partial<VideoOverride>) {
     const res = await fetch("/api/academy/video-overrides", {
@@ -294,6 +432,7 @@ export function AcademyAdmin({ ytLinks, onLinksChange }: AcademyAdminProps) {
       <div className="flex items-center gap-1 bg-[#0D1929] border border-[#243A66] rounded-xl p-1 w-fit">
         {([
           { key: "links", label: "Links YouTube", icon: <Link2 className="w-3.5 h-3.5" /> },
+          { key: "categorias", label: "Temas", icon: <Edit3 className="w-3.5 h-3.5" /> },
           { key: "ranking", label: "Ranking Engajamento", icon: <Trophy className="w-3.5 h-3.5" /> },
           { key: "analytics", label: "Analytics", icon: <BarChart2 className="w-3.5 h-3.5" /> },
         ] as const).map((t) => (
@@ -311,6 +450,30 @@ export function AcademyAdmin({ ytLinks, onLinksChange }: AcademyAdminProps) {
 
       {tab === "ranking" && <AcademyRanking />}
       {tab === "analytics" && <AcademyAnalytics />}
+
+      {tab === "categorias" && (
+        <div className="space-y-3">
+          <div className="p-4 rounded-xl border border-amber-500/30 bg-amber-500/5 flex items-start gap-3">
+            <Info className="w-4 h-4 text-amber-400 mt-0.5 flex-shrink-0" />
+            <div>
+              <p className="text-sm font-semibold text-amber-400 mb-1">Gerenciar Temas</p>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Edite nome, descrição, ícone e cor de cada tema. "Ocultar" remove o tema e suas aulas da visão
+                dos partners sem apagar nada — dá pra restaurar a qualquer momento.
+              </p>
+            </div>
+          </div>
+          {ACADEMY_CATEGORIES.map((cat) => (
+            <CategoryRow
+              key={cat.id}
+              category={cat}
+              override={categoryOverrides[cat.id]}
+              onSave={(data) => handleSaveCategoryOverride(cat.id, data)}
+              onReset={() => handleResetCategoryOverride(cat.id)}
+            />
+          ))}
+        </div>
+      )}
 
       {tab === "links" && <>
         {/* Info banner */}
