@@ -127,6 +127,22 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   const docId      = `upload_${timestamp}_${Math.random().toString(36).slice(2, 8)}`;
   const fileHash   = createHash("sha256").update(buf).digest("hex");
 
+  const { data: duplicateRow } = await svc()
+    .from("ma_documents")
+    .select("id, file_name")
+    .eq("deal_id", tokenRow.deal_id)
+    .eq("file_hash", fileHash)
+    .limit(1)
+    .maybeSingle();
+
+  if (duplicateRow) {
+    return NextResponse.json({
+      ok: true,
+      duplicate: true,
+      message: "Este arquivo já foi recebido anteriormente — nada novo foi enviado.",
+    });
+  }
+
   const { data: deal } = await svc()
     .from("ma_deals")
     .select("v3_code, sector, target_company, assigned_to, created_by, documents")

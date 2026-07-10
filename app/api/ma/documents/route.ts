@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
+import { createHash } from "crypto";
 
 export const dynamic = "force-dynamic";
 
@@ -27,6 +28,8 @@ type DocEntry = {
   uploaded_at: string;
   uploaded_by: string;
   bucket?: string;
+  file_hash?: string;
+  category?: string;
 };
 
 function resolveBucket(doc: DocEntry): string {
@@ -44,6 +47,7 @@ export async function POST(req: NextRequest) {
   const file      = formData.get("file")    as File   | null;
   const dealId    = formData.get("deal_id") as string | null;
   const docId     = formData.get("doc_id")  as string | null;
+  const category  = (formData.get("category") as string | null) ?? "Due_Diligence";
 
   if (!file || !dealId || !docId) {
     return NextResponse.json({ error: "Campos obrigatórios: file, deal_id, doc_id" }, { status: 400 });
@@ -63,13 +67,40 @@ export async function POST(req: NextRequest) {
   const safeName    = file.name.replace(/[^a-zA-Z0-9._-]/g, "_").substring(0, 80);
   const storagePath = `${dealId}/${docId}_${Date.now()}_${safeName}`;
 
+  const bytes = await file.arrayBuffer();
+  const fileHash = createHash("sha256").update(Buffer.from(bytes)).digest("hex");
+
+  const { data: duplicateRow } = await svc
+    .from("ma_documents")
+    .select("id, doc_id, file_name, storage_path, bucket, uploaded_at")
+    .eq("deal_id", dealId)
+    .eq("file_hash", fileHash)
+    .limit(1)
+    .maybeSingle();
+
+  if (duplicateRow) {
+    const { data: existingSigned } = await svc.storage
+      .from(duplicateRow.bucket)
+      .createSignedUrl(duplicateRow.storage_path, SIGNED_URL_EXPIRES);
+    return NextResponse.json({
+      ok: true,
+      duplicate: true,
+      document: {
+        doc_id: duplicateRow.doc_id,
+        file_name: duplicateRow.file_name,
+        storage_path: duplicateRow.storage_path,
+        uploaded_at: duplicateRow.uploaded_at,
+        url: existingSigned?.signedUrl ?? null,
+      },
+    });
+  }
+
   const existingDocs: DocEntry[] = Array.isArray(deal.documents) ? deal.documents : [];
   const oldDoc = existingDocs.find((d) => d.doc_id === docId);
   if (oldDoc) {
     await svc.storage.from(resolveBucket(oldDoc)).remove([oldDoc.storage_path]);
   }
 
-  const bytes = await file.arrayBuffer();
   const { error: uploadError } = await svc.storage
     .from(DEFAULT_BUCKET)
     .upload(storagePath, bytes, { contentType: file.type, upsert: true });
@@ -86,6 +117,9 @@ export async function POST(req: NextRequest) {
     doc_id:       docId,
     file_name:    file.name,
     storage_path: storagePath,
+    bucket:       DEFAULT_BUCKET,
+    category,
+    file_hash:    fileHash,
     uploaded_at:  new Date().toISOString(),
     uploaded_by:  user.id,
   };

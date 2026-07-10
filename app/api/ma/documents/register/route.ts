@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
+import { createHash } from "crypto";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
-const BUCKET              = "ma-documents";
 const SIGNED_URL_EXPIRES  = 20 * 24 * 60 * 60; // 20 dias
 const WRITE_ROLES         = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"] as const;
 
@@ -16,6 +17,9 @@ type DocEntry = {
   doc_id:          string;
   file_name:       string;
   storage_path:    string;
+  bucket?:         string;
+  file_hash?:      string;
+  category?:       string;
   uploaded_at:     string;
   uploaded_by:     string;
   file_size_bytes?: number;
@@ -38,10 +42,14 @@ export async function POST(req: NextRequest) {
     doc_id:          string;
     file_name:       string;
     storage_path:    string;
+    bucket?:         string;
+    category?:       string;
     file_size_bytes: number;
   };
 
   const { deal_id, doc_id, file_name, storage_path, file_size_bytes } = body;
+  const bucket = body.bucket ?? "ma-documents";
+  const category = body.category ?? "Due_Diligence";
   if (!deal_id || !doc_id || !file_name || !storage_path) {
     return NextResponse.json({ error: "deal_id, doc_id, file_name e storage_path são obrigatórios" }, { status: 400 });
   }
@@ -56,18 +64,57 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Operação M&A não encontrada" }, { status: 404 });
   }
 
+  // Calcula hash do arquivo recem-subido (o servidor nao viu os bytes antes — signed URL bypassa o body do Vercel)
+  const { data: fileBytes, error: downloadError } = await svc.storage.from(bucket).download(storage_path);
+  if (downloadError || !fileBytes) {
+    return NextResponse.json({ error: "Falha ao ler arquivo recém-enviado do storage" }, { status: 500 });
+  }
+  const fileHash = createHash("sha256").update(Buffer.from(await fileBytes.arrayBuffer())).digest("hex");
+
+  const { data: duplicateRow } = await svc
+    .from("ma_documents")
+    .select("id, doc_id, file_name, storage_path, bucket, uploaded_at")
+    .eq("deal_id", deal_id)
+    .eq("file_hash", fileHash)
+    .neq("storage_path", storage_path)
+    .limit(1)
+    .maybeSingle();
+
+  if (duplicateRow) {
+    // Duplicata exata: descarta o upload recem-feito e devolve o documento ja existente
+    await svc.storage.from(bucket).remove([storage_path]);
+    const { data: existingSigned } = await svc.storage
+      .from(duplicateRow.bucket)
+      .createSignedUrl(duplicateRow.storage_path, SIGNED_URL_EXPIRES);
+
+    return NextResponse.json({
+      ok: true,
+      duplicate: true,
+      document: {
+        doc_id: duplicateRow.doc_id,
+        file_name: duplicateRow.file_name,
+        storage_path: duplicateRow.storage_path,
+        uploaded_at: duplicateRow.uploaded_at,
+        url: existingSigned?.signedUrl ?? null,
+      },
+    });
+  }
+
   const existingDocs: DocEntry[] = Array.isArray(deal.documents) ? deal.documents : [];
 
   // Remove versão anterior do mesmo doc_id (substituição)
   const oldDoc = existingDocs.find(d => d.doc_id === doc_id);
   if (oldDoc) {
-    await svc.storage.from(BUCKET).remove([oldDoc.storage_path]);
+    await svc.storage.from(oldDoc.bucket ?? "ma-documents").remove([oldDoc.storage_path]);
   }
 
   const newDoc: DocEntry = {
     doc_id,
     file_name,
     storage_path,
+    bucket,
+    category,
+    file_hash: fileHash,
     uploaded_at:     new Date().toISOString(),
     uploaded_by:     user.id,
     file_size_bytes: file_size_bytes ?? undefined,
@@ -85,7 +132,7 @@ export async function POST(req: NextRequest) {
   }
 
   const { data: signedData } = await svc.storage
-    .from(BUCKET)
+    .from(bucket)
     .createSignedUrl(storage_path, SIGNED_URL_EXPIRES);
 
   return NextResponse.json({

@@ -326,7 +326,17 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
   const [uploadingDoc, setUploadingDoc] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState<number>(0);
   const [copiedDoc, setCopiedDoc] = useState<string | null>(null);
+  const [uploadCategory, setUploadCategory] = useState<string>("Due_Diligence");
   const detailFileRef = useRef<HTMLInputElement>(null);
+  const DOC_CATEGORIES: { value: string; label: string }[] = [
+    { value: "NDA", label: "NDA" },
+    { value: "Teaser", label: "Teaser" },
+    { value: "CIM", label: "CIM" },
+    { value: "Due_Diligence", label: "Due Diligence" },
+    { value: "Propostas", label: "Propostas" },
+    { value: "Contrato", label: "Contrato" },
+    { value: "Closing", label: "Closing" },
+  ];
 
   // Comentários
   const [newComment, setNewComment] = useState("");
@@ -1805,6 +1815,16 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
                           <><DatabaseZap size={10} /> n8n</>
                         )}
                       </button>
+                      <select
+                        value={uploadCategory}
+                        onChange={(e) => setUploadCategory(e.target.value)}
+                        title="Categoria do documento a anexar"
+                        className="text-[10px] bg-[#162744] text-[#9BAFC5] border border-[#243A66] rounded px-1.5 py-0.5 focus:outline-none focus:border-[#C9A84C]"
+                      >
+                        {DOC_CATEGORIES.map((c) => (
+                          <option key={c.value} value={c.value}>{c.label}</option>
+                        ))}
+                      </select>
                       <button
                         type="button"
                         onClick={() => detailFileRef.current?.click()}
@@ -1831,16 +1851,16 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
                           if (file.size > 4 * 1024 * 1024) {
                             // Arquivo grande: upload direto ao Supabase Storage via URL assinada
                             const urlRes = await fetch(
-                              `/api/ma/documents/upload-url?deal_id=${selectedCard.id}&doc_id=${encodeURIComponent(docId)}&file_name=${encodeURIComponent(file.name)}`
+                              `/api/ma/documents/upload-url?deal_id=${selectedCard.id}&doc_id=${encodeURIComponent(docId)}&file_name=${encodeURIComponent(file.name)}&category=${encodeURIComponent(uploadCategory)}`
                             );
                             if (!urlRes.ok) throw new Error((await urlRes.json()).error ?? "Erro ao obter URL");
-                            const { token, storagePath } = await urlRes.json() as { signedUrl: string; token: string; storagePath: string };
+                            const { token, storagePath, bucket } = await urlRes.json() as { signedUrl: string; token: string; storagePath: string; bucket: string };
 
                             // Upload via XHR para ter progresso real
                             await new Promise<void>((resolve, reject) => {
                               const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
                               const xhr = new XMLHttpRequest();
-                              xhr.open("PUT", `${supabaseUrl}/storage/v1/object/upload/sign/ma-documents/${storagePath}?token=${token}`);
+                              xhr.open("PUT", `${supabaseUrl}/storage/v1/object/upload/sign/${bucket}/${storagePath}?token=${token}`);
                               xhr.setRequestHeader("Content-Type", file.type || "application/pdf");
                               xhr.upload.onprogress = (ev) => {
                                 if (ev.lengthComputable) setUploadProgress(Math.round((ev.loaded / ev.total) * 100));
@@ -1852,19 +1872,24 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
 
                             setUploadProgress(100);
 
-                            // Registra metadados
+                            // Registra metadados (servidor calcula hash e bloqueia duplicata exata)
                             const regRes = await fetch("/api/ma/documents/register", {
                               method: "POST",
                               headers: { "Content-Type": "application/json" },
                               body: JSON.stringify({
                                 deal_id: selectedCard.id, doc_id: docId,
                                 file_name: file.name, storage_path: storagePath,
+                                bucket, category: uploadCategory,
                                 file_size_bytes: file.size,
                               }),
                             });
                             const regJson = await regRes.json();
                             if (regJson.ok && regJson.document) {
-                              setCardDocs(prev => [...prev, { ...regJson.document }]);
+                              if (regJson.duplicate) {
+                                alert(`Arquivo idêntico já existe neste deal: ${regJson.document.file_name}. Nenhuma cópia nova foi criada.`);
+                              } else {
+                                setCardDocs(prev => [...prev, { ...regJson.document }]);
+                              }
                             } else {
                               alert(regJson.error ?? "Erro ao registrar arquivo");
                             }
@@ -1874,10 +1899,15 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
                             form.append("file", file);
                             form.append("deal_id", selectedCard.id);
                             form.append("doc_id", docId);
+                            form.append("category", uploadCategory);
                             const res = await fetch("/api/ma/documents", { method: "POST", body: form });
                             const json = await res.json();
                             if (json.ok && json.document) {
-                              setCardDocs(prev => [...prev, { ...json.document }]);
+                              if (json.duplicate) {
+                                alert(`Arquivo idêntico já existe neste deal: ${json.document.file_name}. Nenhuma cópia nova foi criada.`);
+                              } else {
+                                setCardDocs(prev => [...prev, { ...json.document }]);
+                              }
                             } else {
                               alert(json.error ?? "Erro ao enviar arquivo");
                             }
