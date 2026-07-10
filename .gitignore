@@ -67,3 +67,8 @@ Thumbs.db
 .claude/settings.local.json
 .aiox/install-log.txt
 .env*.local
+
+# Playwright (Fase 3 - MPS Documentos V3)
+playwright-report/
+test-results/
+tests/e2e/.auth/
