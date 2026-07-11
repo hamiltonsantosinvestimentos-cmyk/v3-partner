@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { auditText } from "@/lib/brand-guardian-gate";
 
 export const maxDuration = 300;
 
@@ -49,9 +50,9 @@ export async function POST(req: NextRequest) {
 
   const prompt =
     `Você é estrategista M&A da V3 Partners. Com base nos dados validados abaixo, gere narrativa comercial cega e tese de investimento.\n\n` +
-    `Setor: ${deal.sector ?? "—"}\n` +
-    `Região: ${deal.location ?? "—"}\n` +
-    `Valor: R$ ${deal.deal_value ? (Number(deal.deal_value)/1e6).toFixed(1) + "M" : "—"}\n` +
+    `Setor: ${deal.sector ?? "não informado"}\n` +
+    `Região: ${deal.location ?? "não informada"}\n` +
+    `Valor: R$ ${deal.deal_value ? (Number(deal.deal_value)/1e6).toFixed(1) + "M" : "não informado"}\n` +
     `Score FORJA: ${score}/100 · ${recommendation}\n\n` +
     `Dados validados:\n${validatedSummary}\n\n` +
     (missingSummary ? `Itens ausentes (ALTA prioridade):\n${missingSummary}\n\n` : "") +
@@ -63,15 +64,16 @@ export async function POST(req: NextRequest) {
     `Retorne APENAS JSON válido, sem markdown:\n` +
     `{\n` +
     `  "tese_investimento": [\n` +
-    `    "<bullet 1 — verbo forte: Adquira/Acesse/Capture/Consolide/Aproveite>",\n` +
+    `    "<bullet 1, verbo forte: Adquira/Acesse/Capture/Consolide/Aproveite>",\n` +
     `    "<bullet 2>", "<bullet 3>", "<bullet 4>", "<bullet 5>"\n` +
     `  ],\n` +
     `  "narrative_pt": "<2-3 parágrafos, cego (sem nome/cidade), tom comercial que gera interesse>",\n` +
     `  "narrative_en": "<2-3 paragraphs, blind, same quality as PT>"\n` +
     `}\n\n` +
-    `Regras: narrativas CEGAS (sem nome da empresa, sem cidade exata — só estado/região). ` +
+    `Regras: narrativas CEGAS (sem nome da empresa, sem cidade exata, só estado/região). ` +
     `Tese: 5 bullets específicos para este ativo, não genéricos. ` +
-    `Narrativa: destaque o que é único e valioso. Tom: analítico, direto, institucional.`;
+    `Narrativa: destaque o que é único e valioso. Tom: analítico, direto, institucional. ` +
+    `NUNCA use travessão (—) em nenhum texto gerado, use vírgula, dois-pontos ou ponto.`;
 
   const { default: Anthropic } = await import("@anthropic-ai/sdk");
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
@@ -88,11 +90,21 @@ export async function POST(req: NextRequest) {
 
   try {
     const parsed = JSON.parse(raw);
+
+    // Gate Brand & Grammar Guardian — corrige travessão/acentuação/Bloxs/emoji
+    // automaticamente antes de qualquer narrativa chegar ao ForjaPanel.
+    const teseCorrigida = (parsed.tese_investimento ?? []).map((bullet: string) => auditText(bullet).corrected);
+    const ptResult = auditText(parsed.narrative_pt ?? "");
+    const enResult = auditText(parsed.narrative_en ?? "");
+
     return NextResponse.json({
       ok: true,
-      tese_investimento: parsed.tese_investimento ?? [],
-      narrative_pt:      parsed.narrative_pt ?? "",
-      narrative_en:      parsed.narrative_en ?? "",
+      tese_investimento: teseCorrigida,
+      narrative_pt:       ptResult.corrected,
+      narrative_en:       enResult.corrected,
+      brand_gate: {
+        violations_found: ptResult.violations.length + enResult.violations.length,
+      },
     });
   } catch {
     return NextResponse.json({ error: "Resposta da IA inválida", raw }, { status: 500 });

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
+import { auditHtml } from "@/lib/brand-guardian-gate";
 
 export const maxDuration = 300;
 
@@ -44,7 +45,7 @@ function isBlind(field: string): boolean {
 }
 
 function formatM(v: number | null | undefined): string {
-  if (!v) return "—";
+  if (!v) return "N/D";
   if (v >= 1e9) return `R$ ${(v / 1e9).toFixed(1)}B`;
   if (v >= 1e6) return `R$ ${(v / 1e6).toFixed(1)}M`;
   if (v >= 1e3) return `R$ ${(v / 1e3).toFixed(0)}K`;
@@ -422,7 +423,7 @@ export async function POST(req: NextRequest) {
 
   const html = buildTeaserHtml({
     code:        deal.code ?? deal_id.slice(0, 8),
-    sector:      deal.sector ?? "—",
+    sector:      deal.sector ?? "Setor não informado",
     regiao:      regiaoBlind,
     valor:       Number(deal.deal_value ?? 0),
     dealType,
@@ -444,5 +445,17 @@ export async function POST(req: NextRequest) {
     }).eq("id", deal_id);
   } catch { /* não bloquear */ }
 
-  return NextResponse.json({ ok: true, html, code: deal.code });
+  // Gate Brand & Grammar Guardian — corrige cores legadas/travessão/Bloxs/emoji
+  // automaticamente; bloqueia se logo/DM Sans/navy estiverem ausentes (não deveria
+  // acontecer neste template, mas é a rede de segurança antes de expor a mercado).
+  const gate = auditHtml(html);
+  if (gate.blocking.length > 0) {
+    console.error("[gerar-teaser-cego] Brand Guardian bloqueou o documento:", gate.blocking);
+    return NextResponse.json(
+      { error: "Gate de marca bloqueou o teaser cego", violations: gate.blocking.map((v) => v.message) },
+      { status: 422 }
+    );
+  }
+
+  return NextResponse.json({ ok: true, html: gate.corrected, code: deal.code });
 }

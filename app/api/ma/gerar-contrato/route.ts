@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { DEMO_DEALS } from "@/lib/demo-data";
+import { auditHtml } from "@/lib/brand-guardian-gate";
 
 const IS_DEMO = false;
 
@@ -394,6 +395,15 @@ export async function GET(request: NextRequest) {
   } else {
     html = buildNDA(deal, lang);
   }
+
+  // Gate Brand & Grammar Guardian — corrige cores legadas/travessão/Bloxs/emoji.
+  // Não bloqueia (o ClickSign depende desta rota respondendo sempre 200), apenas
+  // registra se algo estrutural (logo/DM Sans/navy) estiver ausente.
+  const gate = auditHtml(html);
+  if (gate.blocking.length > 0) {
+    console.error("[gerar-contrato] Brand Guardian encontrou violação estrutural:", gate.blocking);
+  }
+  html = gate.corrected;
 
   return new Response(html, {
     headers: {

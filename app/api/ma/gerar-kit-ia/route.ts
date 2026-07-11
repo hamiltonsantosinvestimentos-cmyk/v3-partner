@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
+import { auditText } from "@/lib/brand-guardian-gate";
 
 export const maxDuration = 300;
 
@@ -103,14 +104,16 @@ STRICT limits per field (exceed = invalid):
 - descricao_en: max 250 chars
 - teaser_ptbr: max 180 chars (blind, no company name)
 - teaser_en: max 180 chars (blind, no company name)
-- linkedin_post_ptbr: max 400 chars, emojis ok, no company name
-- linkedin_post_en: max 400 chars, emojis ok, no company name
+- linkedin_post_ptbr: max 400 chars, no emojis, no company name
+- linkedin_post_en: max 400 chars, no emojis, no company name
 - linkedin_story_ptbr: max 80 chars
 - linkedin_story_en: max 80 chars
 - diferenciais: exactly 3 strings, max 80 chars each (use real data from context)
 - riscos: exactly 2 objects with real risks based on the deal context
 
-{"descricao_ptbr":"...","descricao_en":"...","teaser_ptbr":"...","teaser_en":"...","linkedin_post_ptbr":"...","linkedin_post_en":"...","linkedin_story_ptbr":"...","linkedin_story_en":"...","diferenciais":["...","...","..."],"riscos":[{"nivel":"BAIXO","descricao":"...","mitigacao":"..."},{"nivel":"MÉDIO","descricao":"...","mitigacao":"..."}]}`;
+{"descricao_ptbr":"...","descricao_en":"...","teaser_ptbr":"...","teaser_en":"...","linkedin_post_ptbr":"...","linkedin_post_en":"...","linkedin_story_ptbr":"...","linkedin_story_en":"...","diferenciais":["...","...","..."],"riscos":[{"nivel":"BAIXO","descricao":"...","mitigacao":"..."},{"nivel":"MÉDIO","descricao":"...","mitigacao":"..."}]}
+
+Never use em dash (—) in any field. Use comma, colon or period instead.`;
 
     const message = await client.messages.create({
       model: "claude-haiku-4-5-20251001",
@@ -122,7 +125,27 @@ STRICT limits per field (exceed = invalid):
     if (content.type !== "text") throw new Error("Resposta inesperada da IA");
 
     const raw = content.text.trim().replace(/^```json\s*/i, "").replace(/```\s*$/i, "");
-    const kitContent = JSON.parse(raw);
+    const parsedKit = JSON.parse(raw);
+
+    // Gate Brand & Grammar Guardian — corrige travessão/acentuação/Bloxs/emoji em cada campo de texto do kit
+    const TEXT_FIELDS = [
+      "descricao_ptbr", "descricao_en", "teaser_ptbr", "teaser_en",
+      "linkedin_post_ptbr", "linkedin_post_en", "linkedin_story_ptbr", "linkedin_story_en",
+    ] as const;
+    const kitContent: Record<string, unknown> = { ...parsedKit };
+    for (const field of TEXT_FIELDS) {
+      if (typeof kitContent[field] === "string") kitContent[field] = auditText(kitContent[field] as string).corrected;
+    }
+    if (Array.isArray(kitContent.diferenciais)) {
+      kitContent.diferenciais = (kitContent.diferenciais as string[]).map((d) => auditText(d).corrected);
+    }
+    if (Array.isArray(kitContent.riscos)) {
+      kitContent.riscos = (kitContent.riscos as { nivel: string; descricao: string; mitigacao: string }[]).map((r) => ({
+        ...r,
+        descricao: auditText(r.descricao ?? "").corrected,
+        mitigacao: auditText(r.mitigacao ?? "").corrected,
+      }));
+    }
 
     // Salva conteúdo gerado em asset_data — metricas computadas de financial_projections têm prioridade
     await svc.from("ma_deals").update({

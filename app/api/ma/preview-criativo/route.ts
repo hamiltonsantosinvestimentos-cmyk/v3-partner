@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { DEMO_DEALS } from "@/lib/demo-data";
+import { auditHtml } from "@/lib/brand-guardian-gate";
 
 const IS_DEMO = false;
 
@@ -1697,7 +1698,20 @@ export async function GET(request: Request) {
 
   if (format) html = injectFormat(html, format, type);
 
-  return new Response(html, {
+  // Gate Brand & Grammar Guardian — corrige cores legadas/travessão/Bloxs/emoji
+  // antes de expor o material. CIM e Teaser são documentos completos e bloqueiam
+  // se logo/DM Sans/navy estiverem ausentes; posts de LinkedIn são apenas
+  // auto-corrigidos (layout de card, não segue a mesma estrutura de documento).
+  const gate = auditHtml(html);
+  if ((type === "cim" || type === "teaser") && gate.blocking.length > 0) {
+    console.error(`[preview-criativo] Brand Guardian bloqueou "${type}":`, gate.blocking);
+    return new Response(
+      `<p style="color:red">Gate de marca bloqueou este documento: ${gate.blocking.map((v) => v.message).join(" · ")}</p>`,
+      { status: 422, headers: { "Content-Type": "text/html; charset=utf-8" } }
+    );
+  }
+
+  return new Response(gate.corrected, {
     headers: { "Content-Type": "text/html; charset=utf-8" },
   });
 }

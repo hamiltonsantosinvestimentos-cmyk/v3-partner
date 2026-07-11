@@ -2,6 +2,7 @@ import { resolveBucket } from "@/lib/storage-bucket";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
+import { auditHtml } from "@/lib/brand-guardian-gate";
 
 export const maxDuration = 300;
 
@@ -537,7 +538,15 @@ export async function POST(req: NextRequest) {
       .in("role", ["ADMIN", "GESTAO"]);
 
     // ── Gera HTML do relatório ────────────────────────────────────────────────
-    const reportHtml = buildReportHtml(deal, forja_result, partnerName, generatedAt);
+    const rawReportHtml = buildReportHtml(deal, forja_result, partnerName, generatedAt);
+
+    // Gate Brand & Grammar Guardian — corrige cores legadas/travessão/Bloxs/emoji
+    // antes de subir ao Storage e enviar por e-mail.
+    const reportGate = auditHtml(rawReportHtml);
+    if (reportGate.blocking.length > 0) {
+      console.error("[forja-report] Brand Guardian bloqueou o relatório:", reportGate.blocking);
+    }
+    const reportHtml = reportGate.corrected;
 
     // ── Upload para Supabase Storage ──────────────────────────────────────────
     const timestamp   = Date.now();
