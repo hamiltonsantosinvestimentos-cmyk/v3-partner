@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import Anthropic from "@anthropic-ai/sdk";
+import { getThesisTemplate } from "@/lib/thesis-templates";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -28,7 +29,7 @@ export async function POST(req: NextRequest) {
 
   const { data: listing } = await db
     .from("cm_asset_listings")
-    .select("anonymous_id, asset_type, ente_devedor, esfera, tribunal, natureza, valor_face, valor_atualizado, desagio_pretendido, tir_estimada, prazo_estimado_meses, risk_score, listing_status, conditional_blocks, metadata")
+    .select("anonymous_id, asset_type, ente_devedor, esfera, tribunal, natureza, valor_face, valor_atualizado, desagio_pretendido, tir_estimada, prazo_estimado_meses, risk_score, listing_status, conditional_blocks, metadata, selected_thesis_template")
     .eq("id", listing_id)
     .single();
 
@@ -49,9 +50,12 @@ export async function POST(req: NextRequest) {
     })
     .join("\n\n");
 
+  const thesis = getThesisTemplate(listing.selected_thesis_template as string | null);
+
   const systemPrompt = `Você é o Assistente do Ativo ${listing.anonymous_id} da V3 Partners.
 Sua função é responder perguntas EXCLUSIVAMENTE com base nos documentos e dados deste ativo.
 NUNCA invente informações. Se a resposta não estiver nos documentos, diga "Não encontrei essa informação nos documentos disponíveis."
+${thesis ? `\nTESE COMERCIAL ATIVA PARA ESTE ATIVO (Switcher de Teses): ${thesis.label}. ${thesis.promptFragment}\nEnquadre suas respostas comerciais dentro desse ângulo sempre que fizer sentido, sem nunca inventar dado que não esteja nos documentos.\n` : ""}
 
 DADOS DO ATIVO:
 - ID: ${listing.anonymous_id}

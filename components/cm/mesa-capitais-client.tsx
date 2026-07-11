@@ -30,6 +30,8 @@ interface Listing {
   allow_public_listing?: boolean;
   public_gallery?: { storage_path: string; caption: string; order: number }[];
   inspection_requests?: InspectionRequest[];
+  selected_thesis_template?: string | null;
+  public_narrative?: string | null;
 }
 
 interface InspectionRequest {
@@ -153,6 +155,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
   const [assistantListing, setAssistantListing] = useState<{ id: string; anonymous_id: string } | null>(null);
   const [uploadingDoc, setUploadingDoc] = useState<string | null>(null);
   const [uploadingGallery, setUploadingGallery] = useState(false);
+  const [generatingNarrative, setGeneratingNarrative] = useState(false);
   const [selectedListing, setSelectedListing] = useState<Listing | null>(null);
   const [activeDetailTab, setActiveDetailTab] = useState<"geral" | "documentos" | "orderbook" | "governanca" | "notas">("geral");
   const [listingDocs, setListingDocs] = useState<any[]>([]);
@@ -534,6 +537,21 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
       if (res.ok) setSelectedListing((prev) => (prev ? { ...prev, inspection_requests: json.inspection_requests } : prev));
       else alert(json.error ?? "Erro ao atualizar pedido de vistoria");
     } catch { alert("Erro de conexão"); }
+  };
+
+  const generateNarrative = async (listingId: string, thesisId: string) => {
+    setGeneratingNarrative(true);
+    try {
+      const res = await fetch(`/api/cm/listings/${listingId}/narrative`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ selected_thesis_template: thesisId }),
+      });
+      const json = await res.json();
+      if (res.ok) setSelectedListing((prev) => (prev ? { ...prev, ...json.listing } : prev));
+      else alert(json.error ?? "Erro ao gerar narrativa");
+    } catch { alert("Erro de conexão"); }
+    finally { setGeneratingNarrative(false); }
   };
 
   const loadRoomInvites = async (listingId: string) => {
@@ -1688,6 +1706,36 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
                     </div>
                     <p className="text-[9px] text-[#9BAFC5]/70 mt-1.5">
                       Nunca envie fotos com marca d&apos;água, logotipo ou qualquer identificador do vendedor.
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="text-[9px] text-[#9BAFC5] uppercase">Tese Comercial (Switcher de Teses)</label>
+                    <select
+                      value={selectedListing.selected_thesis_template ?? ""}
+                      onChange={(e) => setSelectedListing((prev) => (prev ? { ...prev, selected_thesis_template: e.target.value } : prev))}
+                      className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#F5F1E8] mt-1 focus:border-[#C9A84C]/50 focus:outline-none"
+                    >
+                      <option value="">— Selecionar tese —</option>
+                      <option value="despacho_imediato">Despacho Imediato</option>
+                      <option value="rendimento_longo_prazo">Rendimento de Longo Prazo</option>
+                      <option value="retrofit_incorporacao">Retrofit / Incorporação</option>
+                    </select>
+                    <button
+                      onClick={() => selectedListing.selected_thesis_template && generateNarrative(selectedListing.id, selectedListing.selected_thesis_template)}
+                      disabled={generatingNarrative || !selectedListing.selected_thesis_template}
+                      className="w-full flex items-center justify-center gap-2 mt-2 px-3 py-2 bg-[#C9A84C]/10 border border-[#C9A84C]/20 rounded text-[#C9A84C] text-xs font-bold hover:bg-[#C9A84C]/20 transition disabled:opacity-40"
+                    >
+                      {generatingNarrative ? <Loader2 size={12} className="animate-spin" /> : null}
+                      {selectedListing.public_narrative ? "Regenerar Narrativa" : "Gerar Narrativa"}
+                    </button>
+                    {selectedListing.public_narrative && (
+                      <p className="text-[10px] text-[#9BAFC5] leading-relaxed mt-2 bg-[#09081A] border border-[#9BAFC5]/10 rounded p-2">
+                        {selectedListing.public_narrative}
+                      </p>
+                    )}
+                    <p className="text-[9px] text-[#9BAFC5]/70 mt-1.5">
+                      A narrativa e o Chat IA do ativo se ajustam automaticamente ao ângulo comercial escolhido aqui.
                     </p>
                   </div>
                 </div>

@@ -15,6 +15,7 @@ type Asset = {
   risk_score: number | null;
   gallery: { url: string; caption: string }[];
   listing_status: string;
+  public_narrative?: string | null;
 };
 
 function formatBRL(v: number | null | undefined) {
@@ -159,10 +160,16 @@ export default function BolsaImovelLandingPage() {
               <p className="text-xs text-[#9BAFC5] mb-4">{asset.natureza ?? "Ativo alternativo"} · {asset.anonymous_id}</p>
 
               {asset.risk_score !== null && (
-                <div className="flex items-center gap-2 mb-6 px-3 py-2 bg-[#12112A] border border-[#C9A84C]/20 rounded-lg w-fit">
+                <div className="flex items-center gap-2 mb-4 px-3 py-2 bg-[#12112A] border border-[#C9A84C]/20 rounded-lg w-fit">
                   <ShieldCheck size={14} className="text-[#C9A84C]" />
                   <span className="text-[11px] text-[#C9A84C] font-bold">Score V3: {asset.risk_score}/100</span>
                 </div>
+              )}
+
+              {asset.public_narrative && (
+                <p className="text-[12px] text-[#9BAFC5] leading-relaxed mb-6 border-l-2 border-[#C9A84C]/30 pl-3">
+                  {asset.public_narrative}
+                </p>
               )}
 
               {!showForm && submitResult !== "ok" && (

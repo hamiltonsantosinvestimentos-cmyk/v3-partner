@@ -48,5 +48,6 @@ export async function GET(
     risk_score: row.risk_score,
     gallery: galleryWithUrls.filter((g) => g.url),
     listing_status: row.listing_status,
+    public_narrative: row.public_narrative ?? null,
   });
 }
