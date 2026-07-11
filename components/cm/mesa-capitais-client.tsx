@@ -1716,7 +1716,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
                       onChange={(e) => setSelectedListing((prev) => (prev ? { ...prev, selected_thesis_template: e.target.value } : prev))}
                       className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#F5F1E8] mt-1 focus:border-[#C9A84C]/50 focus:outline-none"
                     >
-                      <option value="">— Selecionar tese —</option>
+                      <option value="">Selecionar tese</option>
                       <option value="despacho_imediato">Despacho Imediato</option>
                       <option value="rendimento_longo_prazo">Rendimento de Longo Prazo</option>
                       <option value="retrofit_incorporacao">Retrofit / Incorporação</option>

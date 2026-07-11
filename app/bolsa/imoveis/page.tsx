@@ -16,7 +16,7 @@ type Asset = {
 };
 
 function formatBRL(v: number | null | undefined) {
-  if (v === null || v === undefined) return "—";
+  if (v === null || v === undefined) return "N/D";
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 }
 

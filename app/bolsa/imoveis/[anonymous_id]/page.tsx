@@ -19,7 +19,7 @@ type Asset = {
 };
 
 function formatBRL(v: number | null | undefined) {
-  if (v === null || v === undefined) return "—";
+  if (v === null || v === undefined) return "N/D";
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 }
 
@@ -28,7 +28,7 @@ const NDA_SUMMARY =
   "não as divulgar a terceiros e utilizá-las exclusivamente para avaliar esta oportunidade.";
 
 const NCND_SUMMARY =
-  "Você concorda em não contornar a intermediação da V3 Partners nesta operação — qualquer contato direto com o " +
+  "Você concorda em não contornar a intermediação da V3 Partners nesta operação: qualquer contato direto com o " +
   "vendedor, cedente ou demais intermediários fora do processo conduzido pela Mesa V3 é vedado. Eventuais disputas " +
   "decorrentes deste aceite serão submetidas a Câmara de Arbitragem institucional (CBMA/CAMARB, a definir), com a " +
   "V3 Partners atuando como parte neutra do processo.";
