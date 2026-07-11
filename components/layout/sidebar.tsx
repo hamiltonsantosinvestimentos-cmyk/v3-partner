@@ -251,10 +251,10 @@ export function Sidebar({ role, onClose }: SidebarProps) {
         <div className="relative group">
           {/* Outer glow ring */}
           <div className="absolute -inset-1.5 rounded-2xl bg-gradient-to-br from-[#C9A84C]/20 via-transparent to-[#E8C97A]/10 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-          {/* Logo container */}
-          <div className="relative w-[100px] h-[100px] rounded-2xl overflow-hidden"
+          {/* Logo container — proporção real de logo.jpg (652x778) para evitar corte/emenda dentro de um quadrado */}
+          <div className="relative w-[84px] h-[100px] rounded-2xl overflow-hidden"
             style={{ boxShadow: "0 0 0 1px rgba(201,168,76,0.2), 0 8px 24px rgba(0,0,0,0.5), 0 0 40px rgba(201,168,76,0.08)" }}>
-            <Image src="/logo.jpg" alt="V3 PARTNERS" width={100} height={100}
+            <Image src="/logo.jpg" alt="V3 PARTNERS" width={84} height={100}
               className="w-full h-full object-contain" priority />
           </div>
           {/* Status dot */}
