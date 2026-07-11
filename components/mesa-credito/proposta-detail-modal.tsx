@@ -787,6 +787,36 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
     URL.revokeObjectURL(url);
   }
 
+  // ── Relatório Completo (Perfil + OCR + 5C's num único PDF) ──────────────────
+  const [gerandoRelatorioCompleto, setGerandoRelatorioCompleto] = useState(false);
+  const [erroRelatorioCompleto, setErroRelatorioCompleto] = useState<string>("");
+
+  async function handleRelatorioCompleto() {
+    if (!proposal) return;
+    setGerandoRelatorioCompleto(true);
+    setErroRelatorioCompleto("");
+    try {
+      const res = await fetch("/api/credit-proposals/relatorio-completo", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ proposal_id: proposal.id }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Erro desconhecido");
+      const bytes = Uint8Array.from(atob(json.pdf_base64), c => c.charCodeAt(0));
+      const blob = new Blob([bytes], { type: "application/pdf" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = `relatorio-completo-${proposal.code}.pdf`; a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error("[RelatorioCompleto]", e);
+      setErroRelatorioCompleto(String(e));
+    } finally {
+      setGerandoRelatorioCompleto(false);
+    }
+  }
+
   // ── Checklist state ───────────────────────────────────────────────────────
   const IS_DEMO = false;
   const [checkedDocs, setCheckedDocs] = useState<Record<string, boolean>>({});
@@ -2136,6 +2166,16 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
             <h2 className="text-base font-bold text-white">{proposal.title}</h2>
           </div>
           <div className="flex items-center gap-1.5 ml-4 flex-shrink-0">
+            {canChangeStage && (
+              <button
+                onClick={handleRelatorioCompleto}
+                disabled={gerandoRelatorioCompleto}
+                title="Relatório Completo — Perfil do Cliente + OCR + Análise dos 5C's num único PDF"
+                className="flex items-center gap-1.5 h-8 px-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20 transition-colors text-xs font-semibold disabled:opacity-50">
+                {gerandoRelatorioCompleto ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileText className="w-3.5 h-3.5" />}
+                Relatório Completo
+              </button>
+            )}
             <button
               onClick={handleExportPDF}
               title="Exportar PDF"
@@ -2149,6 +2189,12 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
             </button>
           </div>
         </div>
+
+        {erroRelatorioCompleto && (
+          <div className="px-6 py-2 bg-red-500/10 border-b border-red-500/30">
+            <p className="text-xs text-red-400 font-mono break-all">Erro ao gerar Relatório Completo: {erroRelatorioCompleto}</p>
+          </div>
+        )}
 
         {/* Tabs */}
         <div className="flex border-b border-border px-6 gap-1">

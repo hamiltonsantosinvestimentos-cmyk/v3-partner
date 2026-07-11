@@ -93,6 +93,21 @@ export async function POST(req: NextRequest) {
   const fmtCurrency = (v: number) =>
     new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 
+  // Resultados de OCR já validados (ocr-batch) — dá ao analista IA os números
+  // extraídos de fato dos documentos, em vez de apenas o nome do arquivo.
+  type OcrCampoCtx = { campo: string; extraido: string | null; status: string; mensagem: string };
+  type OcrDocCtx = { tipo_documento: string; resumo: string; observacoes: string; campos: OcrCampoCtx[] };
+  const ocrResultadosMap = (meta.ocr_resultados as Record<string, OcrDocCtx> | undefined) ?? {};
+  const ocrDocs = Object.values(ocrResultadosMap);
+  const extratosResumo = (meta.extratos_resumo as Array<{ banco: string; media_entrada_formatada: string | null }> | undefined) ?? [];
+  const ocrContexto = ocrDocs.length === 0
+    ? "Nenhum documento foi validado por OCR ainda."
+    : [
+        ...ocrDocs.map(d => `[${d.tipo_documento}] resumo=${d.resumo}${d.observacoes ? ` — ${d.observacoes}` : ""}\n` +
+          d.campos.map(c => `  - ${c.campo}: ${c.extraido ?? "não encontrado"} (${c.status})`).join("\n")),
+        ...(extratosResumo.length ? [`Média de entradas mensais por banco: ${extratosResumo.map(e => `${e.banco}=${e.media_entrada_formatada ?? "n/d"}`).join(", ")}`] : []),
+      ].join("\n");
+
   const contextoProposta = `
 PROPOSTA: ${proposal.code}
 CLIENTE: ${proposal.client_name}
@@ -115,6 +130,9 @@ DADOS DO CLIENTE (metadata):
 - Finalidade: ${(meta.finalidade as string) ?? "Não informada"}
 - Restrições: ${(meta.restricao_cliente as string) ?? "Não informado"}
 - Endereço: ${(meta.endereco_rua as string) ?? ""} ${(meta.endereco_cidade as string) ?? ""} ${(meta.endereco_uf as string) ?? ""}
+
+DADOS EXTRAÍDOS POR OCR DOS DOCUMENTOS (use estes números concretos na análise financeira e nos 5C's — não são apenas nomes de arquivo):
+${ocrContexto}
 
 NOTAS DOS ANALISTAS:
 ${notasNivel}
