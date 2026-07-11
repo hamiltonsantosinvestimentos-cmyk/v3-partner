@@ -9,7 +9,7 @@ export interface CmChecklistItem {
   hint?: string;
 }
 
-export type CmAssetType = "precatorio" | "direito_creditorio" | "cgi" | "cri" | "fidc" | "outros";
+export type CmAssetType = "precatorio" | "direito_creditorio" | "cgi" | "cri" | "fidc" | "imovel" | "outros";
 
 export const CM_DOCUMENT_CHECKLISTS: Record<CmAssetType, CmChecklistItem[]> = {
   precatorio: [
@@ -51,6 +51,16 @@ export const CM_DOCUMENT_CHECKLISTS: Record<CmAssetType, CmChecklistItem[]> = {
     { id: "fidc_2", label: "Relatório de Composição da Carteira", required: true },
     { id: "fidc_3", label: "Demonstrativo do Custodiante", required: true },
     { id: "fidc_4", label: "CND Federal, Estadual e Municipal", required: true },
+  ],
+  imovel: [
+    { id: "im_1", label: "Matrícula atualizada do imóvel", required: true, hint: "Emitida em até 30 dias — o mesmo prazo já usado no checklist de CGI" },
+    { id: "im_2", label: "IPTU do ano corrente", required: true },
+    { id: "im_3", label: "Laudo de Vistoria Inicial", required: true, hint: "Vistoria própria da Mesa, anterior à publicação na vitrine — não confundir com a Vistoria Técnica solicitada pelo comprador na landing page pública" },
+    { id: "im_4", label: "Certidões de Ônus Reais", required: true },
+    { id: "im_5", label: "Comprovação de titularidade / propriedade", required: true },
+    { id: "im_6", label: "Compliance PLD corporativo", required: true, hint: "Prevenção à Lavagem de Dinheiro — cedente pessoa jurídica" },
+    { id: "im_7", label: "RG e CPF (PF) ou Contrato Social (PJ)", required: true },
+    { id: "im_8", label: "Mandato V3 com exclusividade assinado", required: false, hint: "Gerado pela Mesa — não obrigatório no intake inicial" },
   ],
   outros: [
     { id: "out_1", label: "Documento comprobatório do ativo", required: true },

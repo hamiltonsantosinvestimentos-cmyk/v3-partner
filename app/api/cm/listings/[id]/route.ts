@@ -30,6 +30,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     "prazo_estimado_meses", "tir_estimada", "vpl",
     "apelido", "originator_profile_id", "originator_referral_id",
     "uf_ente_devedor", "municipio_ente_devedor", "tranche_valor_minimo",
+    // Fase 1 · Bolsa de Grandes Ativos Imobiliarios e Alternativos
+    "allow_public_listing",
   ];
   const update: Record<string, any> = {};
   for (const key of allowed) {

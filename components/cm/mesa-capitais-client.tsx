@@ -27,6 +27,19 @@ interface Listing {
   created_at: string;
   cm_bids: { count: number }[];
   cm_listing_documents: { count: number }[];
+  allow_public_listing?: boolean;
+  public_gallery?: { storage_path: string; caption: string; order: number }[];
+  inspection_requests?: InspectionRequest[];
+}
+
+interface InspectionRequest {
+  id: string;
+  buyer_name: string;
+  buyer_email: string;
+  buyer_phone?: string | null;
+  requested_at: string;
+  proof_of_funds_status: "pendente" | "em_analise" | "aprovado" | "rejeitado";
+  status: string;
 }
 
 interface Match {
@@ -139,6 +152,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [assistantListing, setAssistantListing] = useState<{ id: string; anonymous_id: string } | null>(null);
   const [uploadingDoc, setUploadingDoc] = useState<string | null>(null);
+  const [uploadingGallery, setUploadingGallery] = useState(false);
   const [selectedListing, setSelectedListing] = useState<Listing | null>(null);
   const [activeDetailTab, setActiveDetailTab] = useState<"geral" | "documentos" | "orderbook" | "governanca" | "notas">("geral");
   const [listingDocs, setListingDocs] = useState<any[]>([]);
@@ -472,6 +486,54 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
       }
     } catch { alert("Erro de conexão"); }
     finally { setCreatingRoom(false); }
+  };
+
+  const togglePublicListing = async (listingId: string, next: boolean) => {
+    try {
+      const res = await fetch(`/api/cm/listings/${listingId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ allow_public_listing: next }),
+      });
+      const json = await res.json();
+      if (res.ok) setSelectedListing((prev) => (prev ? { ...prev, ...json.listing } : prev));
+      else alert(json.error ?? "Erro ao atualizar vitrine pública");
+    } catch { alert("Erro de conexão"); }
+  };
+
+  const uploadGalleryImage = async (listingId: string, file: File) => {
+    setUploadingGallery(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch(`/api/cm/listings/${listingId}/gallery`, { method: "POST", body: formData });
+      const json = await res.json();
+      if (res.ok) setSelectedListing((prev) => (prev ? { ...prev, public_gallery: json.gallery } : prev));
+      else alert(json.error ?? "Erro no upload da imagem");
+    } catch { alert("Erro de conexão"); }
+    finally { setUploadingGallery(false); }
+  };
+
+  const deleteGalleryImage = async (listingId: string, storagePath: string) => {
+    try {
+      const res = await fetch(`/api/cm/listings/${listingId}/gallery?storage_path=${encodeURIComponent(storagePath)}`, { method: "DELETE" });
+      const json = await res.json();
+      if (res.ok) setSelectedListing((prev) => (prev ? { ...prev, public_gallery: json.gallery } : prev));
+      else alert(json.error ?? "Erro ao remover imagem");
+    } catch { alert("Erro de conexão"); }
+  };
+
+  const decideInspection = async (listingId: string, requestId: string, action: "aprovar" | "rejeitar") => {
+    try {
+      const res = await fetch(`/api/cm/listings/${listingId}/inspection/${requestId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+      });
+      const json = await res.json();
+      if (res.ok) setSelectedListing((prev) => (prev ? { ...prev, inspection_requests: json.inspection_requests } : prev));
+      else alert(json.error ?? "Erro ao atualizar pedido de vistoria");
+    } catch { alert("Erro de conexão"); }
   };
 
   const loadRoomInvites = async (listingId: string) => {
@@ -1065,6 +1127,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
                   <option value="cgi">CGI</option>
                   <option value="cri">CRI</option>
                   <option value="fidc">FIDC</option>
+                  <option value="imovel">Imóvel / Ativo Alternativo</option>
                   <option value="outros">Outros</option>
                 </select>
               </div>
@@ -1567,6 +1630,115 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
                 </button>
               </div>
             </div>
+
+            {/* Vitrine Pública — exclusivo para a classe "imovel" (Fase 1 · Bolsa de Grandes Ativos) */}
+            {selectedListing.asset_type === "imovel" && (
+              <div className="px-4 pb-4">
+                <div className="text-[10px] text-[#C9A84C] font-bold uppercase tracking-wider mb-2">
+                  Vitrine Pública (sem login)
+                </div>
+                <div className="bg-[#12112A] border border-[#9BAFC5]/10 rounded-lg p-3 space-y-3">
+                  <label className="flex items-center justify-between cursor-pointer">
+                    <span className="text-xs text-[#F5F1E8]">Publicar em /bolsa/imoveis</span>
+                    <input
+                      type="checkbox"
+                      checked={selectedListing.allow_public_listing ?? false}
+                      onChange={(e) => togglePublicListing(selectedListing.id, e.target.checked)}
+                      className="w-4 h-4 accent-[#C9A84C]"
+                    />
+                  </label>
+                  <p className="text-[9px] text-[#9BAFC5]">
+                    Quando ativo, este ativo aparece anonimizado na vitrine pública, sem exigir login do visitante.
+                  </p>
+
+                  <div>
+                    <label className="text-[9px] text-[#9BAFC5] uppercase">Galeria de imagens (higienizadas)</label>
+                    <div className="grid grid-cols-3 gap-2 mt-2">
+                      {(selectedListing.public_gallery ?? []).map((img) => (
+                        <div key={img.storage_path} className="relative aspect-square bg-[#09081A] rounded overflow-hidden group">
+                          <button
+                            onClick={() => deleteGalleryImage(selectedListing.id, img.storage_path)}
+                            className="absolute top-1 right-1 z-10 w-5 h-5 flex items-center justify-center bg-[#09081A]/80 rounded-full text-red-400 text-[10px] opacity-0 group-hover:opacity-100 transition"
+                            title="Remover"
+                          >
+                            &times;
+                          </button>
+                          <div className="w-full h-full flex items-center justify-center text-[8px] text-[#9BAFC5]/50 px-1 text-center">
+                            {img.storage_path.split("/").pop()}
+                          </div>
+                        </div>
+                      ))}
+                      <label className="aspect-square flex items-center justify-center border border-dashed border-[#9BAFC5]/25 rounded cursor-pointer hover:border-[#C9A84C]/40 transition">
+                        {uploadingGallery ? (
+                          <Loader2 size={16} className="animate-spin text-[#C9A84C]" />
+                        ) : (
+                          <span className="text-[9px] text-[#9BAFC5]">+ Foto</span>
+                        )}
+                        <input
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) uploadGalleryImage(selectedListing.id, file);
+                            e.target.value = "";
+                          }}
+                        />
+                      </label>
+                    </div>
+                    <p className="text-[9px] text-[#9BAFC5]/70 mt-1.5">
+                      Nunca envie fotos com marca d&apos;água, logotipo ou qualquer identificador do vendedor.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Pedidos de Vistoria Técnica — gate manual de Prova de Fundos */}
+            {selectedListing.asset_type === "imovel" && (selectedListing.inspection_requests?.length ?? 0) > 0 && (
+              <div className="px-4 pb-4">
+                <div className="text-[10px] text-[#C9A84C] font-bold uppercase tracking-wider mb-2">
+                  Pedidos de Vistoria Técnica
+                </div>
+                <div className="space-y-2">
+                  {(selectedListing.inspection_requests ?? []).map((req) => (
+                    <div key={req.id} className="bg-[#12112A] border border-[#9BAFC5]/10 rounded-lg p-3">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs text-[#F5F1E8] font-bold">{req.buyer_name}</span>
+                        <span
+                          className={cn(
+                            "text-[8px] font-bold uppercase px-2 py-0.5 rounded-full",
+                            req.proof_of_funds_status === "aprovado" && "bg-emerald-500/10 text-emerald-400",
+                            req.proof_of_funds_status === "rejeitado" && "bg-red-500/10 text-red-400",
+                            req.proof_of_funds_status === "pendente" && "bg-orange-500/10 text-orange-400",
+                            req.proof_of_funds_status === "em_analise" && "bg-[#C9A84C]/10 text-[#C9A84C]"
+                          )}
+                        >
+                          {req.proof_of_funds_status === "pendente" ? "Prova de Fundos pendente" : req.proof_of_funds_status}
+                        </span>
+                      </div>
+                      <p className="text-[9px] text-[#9BAFC5] mb-2">{req.buyer_email}{req.buyer_phone ? ` · ${req.buyer_phone}` : ""}</p>
+                      {req.proof_of_funds_status === "pendente" && (
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => decideInspection(selectedListing.id, req.id, "aprovar")}
+                            className="flex-1 px-2 py-1.5 bg-emerald-500/10 border border-emerald-500/20 rounded text-emerald-400 text-[10px] font-bold hover:bg-emerald-500/20 transition"
+                          >
+                            Aprovar Prova de Fundos
+                          </button>
+                          <button
+                            onClick={() => decideInspection(selectedListing.id, req.id, "rejeitar")}
+                            className="flex-1 px-2 py-1.5 bg-red-500/10 border border-red-500/20 rounded text-red-400 text-[10px] font-bold hover:bg-red-500/20 transition"
+                          >
+                            Rejeitar
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Ações */}
             <div className="px-4 space-y-2">
