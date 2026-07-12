@@ -376,3 +376,41 @@ export const DEFAULT_CHECKLIST = {
     { id: "def_pj_4", label: "Certidões Negativas", required: true },
   ],
 };
+
+// ─── Linhas por nível ──────────────────────────────────────────────────────
+export const LEVEL_LINES: Record<string, string[]> = {
+  NIVEL_1: [
+    "V3Equity",
+    "Home Equity",
+    "Home Equity Distressed",
+    "Giro Auto",
+    "V3Auto",
+    "Crédito no Aval",
+    "Financiamento Imobiliário",
+    "Capital Maquinários",
+  ],
+  NIVEL_2: [
+    "HomeCash",
+    "CGI — Grandes Empresas",
+    "Cash Collateral",
+    "Fundo Construção — Moradia",
+    "Fundo Construção — Reforma",
+    "Fundo Construção — Unifamiliar",
+    "Fundo Construção — Geminados",
+    "Financiamento — Brasileiros no Exterior",
+    "CPR Agro",
+    "Câmbio Pronto",
+    "FINIMP — Financiamento de Importações",
+    "ACC — Adiantamento s/ Contrato de Câmbio",
+    "ACE — Adiantamento s/ Cambiais Entregues",
+  ],
+  NIVEL_3: [
+    "Sale Leaseback Agro",
+    "Op. Internacional — Cash Collateral",
+    "CRI Cash Collateral",
+    "Crédito Ponto / CRI Início de Obra",
+    "Construtoras BTS — Build-to-Suit",
+    "Fundo Incorporadoras",
+    "Op. Internacional — Garantia Imobiliária",
+  ],
+};

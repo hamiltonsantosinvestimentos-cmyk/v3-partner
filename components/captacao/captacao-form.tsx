@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import { ChevronRight, ChevronLeft, CheckCircle2, Home, User, Building2, AlertTriangle, Upload, FileText, X, Check } from "lucide-react";
 
 const CREDIT_LINES = [
@@ -25,6 +25,37 @@ const UFS = ["AC","AL","AM","AP","BA","CE","DF","ES","GO","MA","MG","MS","MT","P
 const LGPD_TEXT = `Autorizo a V3 Partners Soluções Ltda (CNPJ 14.219.287/0001-50) a coletar, processar e armazenar meus dados pessoais e documentos para fins de análise e estruturação de operações financeiras, em conformidade com a Lei Geral de Proteção de Dados (LGPD — Lei nº 13.709/2018). Os dados poderão ser compartilhados com parceiros e instituições financeiras exclusivamente para a finalidade informada. Tenho ciência de que esta autorização pode ser revogada a qualquer momento mediante solicitação formal ao e-mail: compliance@v3partners.com.br.`;
 
 const DEFAULT_CHECKLIST = ["Documento de Identidade (RG ou CNH)", "CPF/CNPJ", "Comprovante de Endereço", "Comprovante de Renda ou Faturamento"];
+
+function normalizeStr(s: string) {
+  return s.toUpperCase()
+    .normalize("NFD").replace(/[̀-ͯ]/g, "")
+    .replace(/[^A-Z0-9 ]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function maskCep(v: string) {
+  const d = v.replace(/\D/g, "").slice(0, 8);
+  return d.length > 5 ? `${d.slice(0, 5)}-${d.slice(5)}` : d;
+}
+
+async function buscarCep(cep: string) {
+  const digits = cep.replace(/\D/g, "");
+  if (digits.length !== 8) return null;
+  try {
+    const res = await fetch(`https://viacep.com.br/ws/${digits}/json/`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.erro ? null : (data as { logradouro: string; bairro: string; localidade: string; uf: string });
+  } catch { return null; }
+}
+
+function applyBRLMask(raw: string): string {
+  const digits = raw.replace(/\D/g, "");
+  if (!digits) return "";
+  const num = parseInt(digits, 10);
+  return (num / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
 
 const inputStyle: React.CSSProperties = {
   width: "100%",
@@ -55,6 +86,27 @@ function Field({ label, required, children }: { label: string; required?: boolea
       <label style={labelStyle}>{label}{required && <span style={{ color: "#EF4444", marginLeft: 3 }}>*</span>}</label>
       {children}
     </div>
+  );
+}
+
+function CurrencyField({ label, required, value, onChange, placeholder, loading }: {
+  label: string; required?: boolean; value: string; onChange: (v: string) => void; placeholder?: string; loading?: boolean;
+}) {
+  return (
+    <Field label={label} required={required}>
+      <div style={{ position: "relative" }}>
+        <span style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", fontSize: 13, color: "#7A8FA8", pointerEvents: "none" }}>R$</span>
+        <input
+          style={{ ...inputStyle, paddingLeft: 36 }}
+          type="text"
+          inputMode="numeric"
+          value={value}
+          onChange={(e) => onChange(applyBRLMask(e.target.value))}
+          placeholder={placeholder ?? "0,00"}
+        />
+        {loading && <span style={{ position: "absolute", right: 14, top: "50%", transform: "translateY(-50%)", fontSize: 11, color: "#C9A84C" }}>...</span>}
+      </div>
+    </Field>
   );
 }
 
@@ -106,6 +158,40 @@ export function CaptacaoForm({ token, partnerName }: CaptacaoFormProps) {
   const [imovelValor, setImovelValor] = useState("");
   const [imovelZona, setImovelZona] = useState<"" | "URBANO" | "RURAL">("");
   const [imovelProprio, setImovelProprio] = useState(true);
+
+  // Busca automática de endereço por CEP (ViaCEP)
+  const [cepLoading, setCepLoading] = useState(false);
+  const [imovelCepLoading, setImovelCepLoading] = useState(false);
+
+  async function handleCepChange(value: string) {
+    const masked = maskCep(value);
+    setCep(masked);
+    if (value.replace(/\D/g, "").length === 8) {
+      setCepLoading(true);
+      const addr = await buscarCep(value);
+      setCepLoading(false);
+      if (addr) {
+        setEnderecoRua(addr.logradouro ? `${addr.logradouro}${addr.bairro ? `, ${addr.bairro}` : ""}` : enderecoRua);
+        setCity(addr.localidade ?? city);
+        setState(addr.uf ?? state);
+      }
+    }
+  }
+
+  async function handleImovelCepChange(value: string) {
+    const masked = maskCep(value);
+    setImovelCep(masked);
+    if (value.replace(/\D/g, "").length === 8) {
+      setImovelCepLoading(true);
+      const addr = await buscarCep(value);
+      setImovelCepLoading(false);
+      if (addr) {
+        setImovelEndereco(addr.logradouro ? `${addr.logradouro}${addr.bairro ? `, ${addr.bairro}` : ""}` : imovelEndereco);
+        setImovelCidade(addr.localidade ?? imovelCidade);
+        setImovelEstado(addr.uf ?? imovelEstado);
+      }
+    }
+  }
 
   // Portfólio — documentos dinâmicos por linha
   const [portfolioLinhas, setPortfolioLinhas] = useState<{
@@ -207,7 +293,7 @@ export function CaptacaoForm({ token, partnerName }: CaptacaoFormProps) {
           cep: imovelCep,
           cidade: imovelCidade,
           estado: imovelEstado,
-          valor_medio: parseFloat(imovelValor.replace(/\D/g, "")) || undefined,
+          valor_medio: parseFloat(imovelValor.replace(/\./g, "").replace(",", ".")) || undefined,
           zona: imovelZona || undefined,
           proprietario: imovelProprio ? "MESMO_TITULAR" : undefined,
         }] : [],
@@ -266,13 +352,15 @@ export function CaptacaoForm({ token, partnerName }: CaptacaoFormProps) {
     backdropFilter: "blur(8px)",
   };
 
-  function normalizeStr(s: string) {
-    return s.toUpperCase()
-      .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-      .replace(/[^A-Z0-9 ]/g, "")
-      .replace(/\s+/g, " ")
-      .trim();
-  }
+  // Linhas de crédito do dropdown: as fixas + quaisquer outras cadastradas no
+  // portfólio (admin) que ainda não estejam cobertas pela lista fixa.
+  const allCreditLines = useMemo(() => {
+    const existing = new Set(CREDIT_LINES.map(l => normalizeStr(l.value)));
+    const fromPortfolio = portfolioLinhas
+      .filter(l => !existing.has(normalizeStr(l.nome)))
+      .map(l => ({ value: l.nome, label: l.nome }));
+    return [...CREDIT_LINES, ...fromPortfolio];
+  }, [portfolioLinhas]);
 
   const checklistFull = (() => {
     if (!creditLine) return DEFAULT_CHECKLIST.map(nome => ({ nome, obrigatorio: true }));
@@ -384,9 +472,7 @@ export function CaptacaoForm({ token, partnerName }: CaptacaoFormProps) {
             {personType === "PF" ? (
               <>
                 <div className="grid grid-cols-2 gap-3">
-                  <Field label="Renda Mensal Bruta">
-                    <input style={inputStyle} value={renda} onChange={e => setRenda(e.target.value)} placeholder="R$ 0,00" />
-                  </Field>
+                  <CurrencyField label="Renda Mensal Bruta" value={renda} onChange={setRenda} />
                   <Field label="Data de Nascimento">
                     <input style={inputStyle} type="date" value={nascimento} onChange={e => setNascimento(e.target.value)} />
                   </Field>
@@ -403,9 +489,7 @@ export function CaptacaoForm({ token, partnerName }: CaptacaoFormProps) {
             ) : (
               <>
                 <div className="grid grid-cols-2 gap-3">
-                  <Field label="Faturamento Anual">
-                    <input style={inputStyle} value={faturamento} onChange={e => setFaturamento(e.target.value)} placeholder="R$ 0,00" />
-                  </Field>
+                  <CurrencyField label="Faturamento Anual" value={faturamento} onChange={setFaturamento} />
                   <Field label="Sócio Responsável">
                     <input style={inputStyle} value={socioResponsavel} onChange={e => setSocioResponsavel(e.target.value)} placeholder="Nome do sócio" />
                   </Field>
@@ -414,14 +498,15 @@ export function CaptacaoForm({ token, partnerName }: CaptacaoFormProps) {
             )}
 
             <div className="grid grid-cols-3 gap-3">
+              <Field label="CEP">
+                <input style={inputStyle} value={cep} onChange={e => handleCepChange(e.target.value)} placeholder="00000-000" maxLength={9} />
+              </Field>
               <div style={{ gridColumn: "span 2" }}>
                 <Field label="Endereço (rua, número)">
-                  <input style={inputStyle} value={enderecoRua} onChange={e => setEnderecoRua(e.target.value)} placeholder="Rua, número, bairro" />
+                  <input style={inputStyle} value={enderecoRua} onChange={e => setEnderecoRua(e.target.value)}
+                    placeholder={cepLoading ? "Buscando endereço..." : "Rua, número, bairro"} />
                 </Field>
               </div>
-              <Field label="CEP">
-                <input style={inputStyle} value={cep} onChange={e => setCep(e.target.value)} placeholder="00000-000" maxLength={9} />
-              </Field>
             </div>
 
             <div className="grid grid-cols-3 gap-3">
@@ -465,15 +550,12 @@ export function CaptacaoForm({ token, partnerName }: CaptacaoFormProps) {
             <Field label="Linha de crédito / Produto" required>
               <select style={inputStyle} value={creditLine} onChange={e => setCreditLine(e.target.value)}>
                 <option value="">Selecione uma linha...</option>
-                {CREDIT_LINES.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
+                {allCreditLines.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
               </select>
             </Field>
 
             <div className="grid grid-cols-2 gap-3">
-              <Field label="Valor Aproximado Desejado" required>
-                <input style={inputStyle} value={valorSolicitado} onChange={e => setValorSolicitado(e.target.value)}
-                  placeholder="R$ 500.000,00" />
-              </Field>
+              <CurrencyField label="Valor Aproximado Desejado" required value={valorSolicitado} onChange={setValorSolicitado} placeholder="500.000,00" />
               <Field label="Prazo Desejado">
                 <input style={inputStyle} value={prazo} onChange={e => setPrazo(e.target.value)}
                   placeholder="Ex: 60 meses" />
@@ -517,15 +599,15 @@ export function CaptacaoForm({ token, partnerName }: CaptacaoFormProps) {
             </p>
 
             <div className="grid grid-cols-3 gap-3">
+              <Field label="CEP do Imóvel">
+                <input style={inputStyle} value={imovelCep} onChange={e => handleImovelCepChange(e.target.value)} placeholder="00000-000" maxLength={9} />
+              </Field>
               <div style={{ gridColumn: "span 2" }}>
                 <Field label="Endereço do Imóvel">
                   <input style={inputStyle} value={imovelEndereco} onChange={e => setImovelEndereco(e.target.value)}
-                    placeholder="Rua, número, bairro" />
+                    placeholder={imovelCepLoading ? "Buscando endereço..." : "Rua, número, bairro"} />
                 </Field>
               </div>
-              <Field label="CEP do Imóvel">
-                <input style={inputStyle} value={imovelCep} onChange={e => setImovelCep(e.target.value)} placeholder="00000-000" maxLength={9} />
-              </Field>
             </div>
 
             <div className="grid grid-cols-3 gap-3">
@@ -543,10 +625,7 @@ export function CaptacaoForm({ token, partnerName }: CaptacaoFormProps) {
             </div>
 
             <div className="grid grid-cols-2 gap-3">
-              <Field label="Valor Estimado do Imóvel">
-                <input style={inputStyle} value={imovelValor} onChange={e => setImovelValor(e.target.value)}
-                  placeholder="R$ 800.000,00" />
-              </Field>
+              <CurrencyField label="Valor Estimado do Imóvel" value={imovelValor} onChange={setImovelValor} placeholder="800.000,00" />
               <Field label="Zona">
                 <select style={inputStyle} value={imovelZona} onChange={e => setImovelZona(e.target.value as "" | "URBANO" | "RURAL")}>
                   <option value="">Selecione...</option>

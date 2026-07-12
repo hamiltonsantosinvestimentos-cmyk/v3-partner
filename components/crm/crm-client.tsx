@@ -1317,9 +1317,10 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
        "HOME EQUITY");
 
     // Valor: prefere valorSolicitado do metadata, senão 30% do faturamento anual
+    // Formato BRL ("5.000,00") — não confundir com dígitos crus.
     const parseMeta = (v: unknown) => {
       if (typeof v === "number") return v;
-      if (typeof v === "string") return parseFloat(v.replace(/\D/g, "")) || 0;
+      if (typeof v === "string") return parseFloat(v.replace(/\./g, "").replace(",", ".")) || 0;
       return 0;
     };
     const baseVal = parseMeta(meta.valorSolicitado) || (lead.annualRevenue > 0 ? Math.round(lead.annualRevenue * 0.3) : 100000);

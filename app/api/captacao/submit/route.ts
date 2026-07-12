@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as sc } from "@supabase/supabase-js";
-import { CHECKLISTS, DEFAULT_CHECKLIST } from "@/lib/credit-checklists";
+import { CHECKLISTS, DEFAULT_CHECKLIST, LEVEL_LINES } from "@/lib/credit-checklists";
+
+/** Parseia valor em formato BRL ("5.000,00") — não confundir com dígitos crus. */
+function parseBRL(v: unknown): number {
+  if (typeof v === "number") return v;
+  if (typeof v !== "string" || !v.trim()) return 0;
+  return parseFloat(v.replace(/\./g, "").replace(",", ".")) || 0;
+}
 
 function serviceClient() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -40,6 +47,26 @@ function resolveChecklist(creditLine: string, clientType: "PF" | "PJ", portfolio
   }
 
   return DEFAULT_CHECKLIST[clientType].map(d => ({ id: d.id, label: d.label }));
+}
+
+/** Resolve o nível (N1/N2/N3) pela linha de crédito escolhida — mesmo mapeamento
+ *  usado na Mesa de Crédito (LEVEL_LINES). Casamento mais permissivo (includes
+ *  nos dois sentidos) porque os valores do formulário público (ex: "AVAL",
+ *  "HOME EQUITY") são mais curtos que os nomes completos das linhas (ex:
+ *  "Crédito no Aval"). Sem linha reconhecida, cai no valor solicitado —
+ *  respeitando sempre o mínimo de R$ 5.000.000 para Nível 3. */
+function resolveLevel(creditLine: string, requestedValue: number): "NIVEL_1" | "NIVEL_2" | "NIVEL_3" {
+  const cl = normalizeStr(creditLine || "");
+  if (cl) {
+    for (const nivel of ["NIVEL_1", "NIVEL_2", "NIVEL_3"] as const) {
+      const match = LEVEL_LINES[nivel].some(l => {
+        const n = normalizeStr(l);
+        return n === cl || n.includes(cl) || cl.includes(n);
+      });
+      if (match) return nivel;
+    }
+  }
+  return requestedValue >= 5_000_000 ? "NIVEL_3" : requestedValue >= 500_000 ? "NIVEL_2" : "NIVEL_1";
 }
 
 /** Copia um arquivo já enviado via link de captação (bucket captacao-documents,
@@ -85,15 +112,10 @@ async function createLinkedProposal(
   const creditLine = (formData.creditLine as string) || (formData.productInterest as string) || "HOME EQUITY";
   const clientName = clientType === "PF" ? String(formData.name ?? "").trim() : String(formData.razaoSocial || formData.name || "").trim();
 
-  const parseMoney = (v: unknown) => {
-    if (typeof v === "number") return v;
-    if (typeof v === "string") return parseFloat(v.replace(/\D/g, "")) || 0;
-    return 0;
-  };
-  const valorSolicitado = parseMoney(formData.valorSolicitado);
-  const rendaOuFaturamento = clientType === "PF" ? parseMoney(formData.renda) : parseMoney(formData.faturamento);
+  const valorSolicitado = parseBRL(formData.valorSolicitado);
+  const rendaOuFaturamento = clientType === "PF" ? parseBRL(formData.renda) : parseBRL(formData.faturamento);
   const baseVal = valorSolicitado || (rendaOuFaturamento > 0 ? Math.round(rendaOuFaturamento * 12 * 0.3) : 100000);
-  const level = baseVal >= 5_000_000 ? "NIVEL_3" : baseVal >= 500_000 ? "NIVEL_2" : "NIVEL_1";
+  const level = resolveLevel(creditLine, baseVal);
   const requestedValue = level === "NIVEL_3" ? Math.max(baseVal, 5_000_000) : baseVal;
 
   const { count } = await svc.from("credit_desk_proposals").select("id", { count: "exact", head: true });
@@ -210,10 +232,9 @@ export async function POST(req: NextRequest) {
   const code = `CRM-26-${String((count ?? 0) + 1).padStart(4, "0")}`;
 
   // Calcula receita anual aproximada
-  const parseMoney = (v?: string) => parseFloat((v ?? "").replace(/\D/g, "")) || 0;
   const annualRevenue = formData.personType === "PF"
-    ? parseMoney(formData.renda) * 12
-    : parseMoney(formData.faturamento) * 12;
+    ? parseBRL(formData.renda) * 12
+    : parseBRL(formData.faturamento) * 12;
 
   // Insere lead no CRM
   const { data: lead, error } = await svc.from("crm_leads").insert({

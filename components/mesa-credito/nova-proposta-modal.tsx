@@ -10,48 +10,10 @@ import { Badge } from "@/components/ui/badge";
 import { formatCurrency } from "@/lib/utils";
 import { uploadCreditDocument } from "@/lib/credit-documents/upload";
 
-// Checklists de documentos por linha e tipo de pessoa — em lib/credit-checklists.ts
+// Checklists de documentos e linhas por nível — em lib/credit-checklists.ts
 // (importavel em rotas server-side sem trazer dependencias de UI/React).
-import { CHECKLISTS, DEFAULT_CHECKLIST } from "@/lib/credit-checklists";
+import { CHECKLISTS, DEFAULT_CHECKLIST, LEVEL_LINES } from "@/lib/credit-checklists";
 export { CHECKLISTS, DEFAULT_CHECKLIST };
-
-// ─── Linhas por nível ──────────────────────────────────────────────────────
-const LEVEL_LINES: Record<string, string[]> = {
-  NIVEL_1: [
-    "V3Equity",
-    "Home Equity",
-    "Home Equity Distressed",
-    "Giro Auto",
-    "V3Auto",
-    "Crédito no Aval",
-    "Financiamento Imobiliário",
-    "Capital Maquinários",
-  ],
-  NIVEL_2: [
-    "HomeCash",
-    "CGI — Grandes Empresas",
-    "Cash Collateral",
-    "Fundo Construção — Moradia",
-    "Fundo Construção — Reforma",
-    "Fundo Construção — Unifamiliar",
-    "Fundo Construção — Geminados",
-    "Financiamento — Brasileiros no Exterior",
-    "CPR Agro",
-    "Câmbio Pronto",
-    "FINIMP — Financiamento de Importações",
-    "ACC — Adiantamento s/ Contrato de Câmbio",
-    "ACE — Adiantamento s/ Cambiais Entregues",
-  ],
-  NIVEL_3: [
-    "Sale Leaseback Agro",
-    "Op. Internacional — Cash Collateral",
-    "CRI Cash Collateral",
-    "Crédito Ponto / CRI Início de Obra",
-    "Construtoras BTS — Build-to-Suit",
-    "Fundo Incorporadoras",
-    "Op. Internacional — Garantia Imobiliária",
-  ],
-};
 
 type Tab = "cliente" | "operacao" | "documentos";
 
