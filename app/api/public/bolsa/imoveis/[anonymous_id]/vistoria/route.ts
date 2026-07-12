@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { randomUUID } from "crypto";
+import { auditText, auditHtml } from "@/lib/brand-guardian-gate";
 
 export const dynamic = "force-dynamic";
 
@@ -74,18 +75,77 @@ export async function POST(
     try {
       const { Resend } = await import("resend");
       const resend = new Resend(resendKey);
+
+      const rawSubject = `[Bolsa de Ativos] Pedido de Vistoria: ${listing.anonymous_id}`;
+      const rawHtml = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pedido de Vistoria · V3 Partners</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;600;700&display=swap" rel="stylesheet" />
+</head>
+<body style="font-family:'DM Sans',Arial,sans-serif;background:#09081A;color:#F5F1E8;margin:0;padding:0;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#09081A;padding:40px 0;">
+    <tr>
+      <td align="center">
+        <table width="600" cellpadding="0" cellspacing="0" style="background:#13223A;border:1px solid #243A66;border-radius:12px;overflow:hidden;">
+
+          <!-- Header -->
+          <tr>
+            <td style="background:#162744;padding:24px 32px;border-bottom:1px solid #243A66;">
+              <img src="https://app.v3partners.com.br/v3-logo-flat-gold-alpha.png" alt="V3 Partners" style="height:32px;display:block;margin-bottom:12px;" />
+              <p style="margin:0;font-size:11px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#C9A84C;">Bolsa de Grandes Ativos</p>
+              <h1 style="margin:8px 0 0;font-size:20px;font-weight:700;color:#F5F1E8;">Novo Pedido de Vistoria Técnica</h1>
+            </td>
+          </tr>
+
+          <!-- Body -->
+          <tr>
+            <td style="padding:32px;">
+              <table width="100%" cellpadding="0" cellspacing="0" style="background:#162744;border:1px solid #243A66;border-radius:8px;margin-bottom:20px;">
+                <tr>
+                  <td style="padding:20px 24px;">
+                    <p style="margin:0 0 4px;font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#C9A84C;">Ativo</p>
+                    <p style="margin:0 0 16px;font-size:18px;font-weight:700;color:#F5F1E8;font-family:monospace;">${listing.anonymous_id}</p>
+                    <p style="margin:0 0 4px;font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#C9A84C;">Comprador</p>
+                    <p style="margin:0 0 4px;font-size:13px;font-weight:600;color:#F5F1E8;">${buyer_name}</p>
+                    <p style="margin:0;font-size:12px;color:#9BAFC5;">${buyer_email}${buyer_phone ? ` · ${buyer_phone}` : ""}</p>
+                  </td>
+                </tr>
+              </table>
+              <p style="margin:0;font-size:13px;color:#9BAFC5;line-height:1.6;">
+                NDA e NCND aceitos pelo comprador. Prova de Fundos <strong style="color:#F5F1E8;">pendente</strong> de aprovação manual da Mesa antes de confirmar a data da vistoria.
+              </p>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="padding:20px 32px;border-top:1px solid #243A66;">
+              <p style="margin:0;font-size:10px;color:#9BAFC5;">V3 Partners Soluções Ltda · CNPJ 14.219.287/0001-50</p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`.trim();
+
+      const subjectGate = auditText(rawSubject);
+      const htmlGate = auditHtml(rawHtml);
+      if (htmlGate.blocking.length > 0) {
+        console.error("[vistoria] Brand Guardian bloqueou o email:", htmlGate.blocking);
+      }
+
       await resend.emails.send({
         from: "V3 Partners Plataforma <noreply@v3partners.com.br>",
         to: "deal@v3partners.com.br",
-        subject: `[Bolsa de Ativos] Pedido de Vistoria — ${listing.anonymous_id}`,
-        html: `
-          <div style="font-family:'DM Sans',Arial,sans-serif;background:#09081A;color:#F5F1E8;padding:24px">
-            <p style="color:#C9A84C;font-weight:700;text-transform:uppercase;font-size:11px;letter-spacing:.08em">Novo pedido de vistoria técnica</p>
-            <p><strong>Ativo:</strong> ${listing.anonymous_id}</p>
-            <p><strong>Comprador:</strong> ${buyer_name} · ${buyer_email}${buyer_phone ? ` · ${buyer_phone}` : ""}</p>
-            <p>NDA e NCND aceitos. Prova de Fundos <strong>pendente</strong> de aprovação manual da Mesa antes de qualquer agendamento.</p>
-          </div>
-        `.trim(),
+        subject: subjectGate.corrected,
+        html: htmlGate.corrected,
       });
     } catch (err) {
       console.error("[vistoria] Falha ao enviar email de notificação:", err);

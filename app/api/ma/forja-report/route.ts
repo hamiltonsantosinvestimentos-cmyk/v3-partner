@@ -2,7 +2,7 @@ import { resolveBucket } from "@/lib/storage-bucket";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
-import { auditHtml } from "@/lib/brand-guardian-gate";
+import { auditText, auditHtml } from "@/lib/brand-guardian-gate";
 
 export const maxDuration = 300;
 
@@ -621,14 +621,24 @@ export async function POST(req: NextRequest) {
 
       const sends: Promise<unknown>[] = [];
 
+      // Gate Brand & Grammar Guardian — corrige travessão/acentuação/Bloxs/emoji
+      // e bloqueia (loga, não impede o envio) se logo/DM Sans/navy faltarem.
+      const mesaSubjectGate = auditText(`[FORJA] ${deal.code} Score ${forja_result.score} · ${recLabel[forja_result.recommendation]}`);
+      const mesaHtmlGate = auditHtml(buildMesaEmail(deal, forja_result, partnerName, reportUrl, generatedAt));
+      if (mesaHtmlGate.blocking.length > 0) console.error("[forja-report] Brand Guardian (email mesa):", mesaHtmlGate.blocking);
+
+      const partnerSubjectGate = auditText(`${deal.code} Relatório FORJA recebido`);
+      const partnerHtmlGate = auditHtml(buildPartnerEmail(deal, forja_result, partnerName, generatedAt));
+      if (partnerHtmlGate.blocking.length > 0) console.error("[forja-report] Brand Guardian (email partner):", partnerHtmlGate.blocking);
+
       // Email para a mesa
       if (mesaEmails.length > 0) {
         sends.push(
           resend.emails.send({
             from:    "V3 Partners Plataforma <noreply@v3partners.com.br>",
             to:      mesaEmails,
-            subject: `[FORJA] ${deal.code} — Score ${forja_result.score} · ${recLabel[forja_result.recommendation]}`,
-            html:    buildMesaEmail(deal, forja_result, partnerName, reportUrl, generatedAt),
+            subject: mesaSubjectGate.corrected,
+            html:    mesaHtmlGate.corrected,
           }).then(() => { emailsSent += mesaEmails.length; })
             .catch(e => console.error("[forja-report] email mesa:", e))
         );
@@ -640,8 +650,8 @@ export async function POST(req: NextRequest) {
           resend.emails.send({
             from:    "V3 Partners <noreply@v3partners.com.br>",
             to:      partnerProfile.email,
-            subject: `${deal.code} — Relatório FORJA recebido`,
-            html:    buildPartnerEmail(deal, forja_result, partnerName, generatedAt),
+            subject: partnerSubjectGate.corrected,
+            html:    partnerHtmlGate.corrected,
           }).then(() => { emailsSent += 1; })
             .catch(e => console.error("[forja-report] email partner:", e))
         );
