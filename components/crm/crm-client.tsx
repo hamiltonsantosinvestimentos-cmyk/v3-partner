@@ -32,11 +32,13 @@ import {
   Trash2,
   CalendarPlus,
   Share2,
+  Paperclip,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { NovaPropostaModal } from "@/components/mesa-credito/nova-proposta-modal";
+import { PropostaDetailModal, type ProposalFull } from "@/components/mesa-credito/proposta-detail-modal";
 import { NovoDealForm } from "@/components/ma/novo-deal-form";
 import { ColdLeadAlert } from "@/components/crm/cold-lead-alert";
 
@@ -77,6 +79,7 @@ type CRMLead = {
   interactions: Interaction[];
   metadata?: Record<string, unknown>;
   clientToken?: string | null;
+  creditProposalId?: string | null;
 };
 
 type CaptacaoLink = {
@@ -594,6 +597,9 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
   const [tab, setTab] = useState<"pipeline" | "leads" | "prospeccao" | "relatorios" | "captacao">("pipeline");
   const [leads, setLeads] = useState<CRMLead[]>(initialLeads);
   const [selectedLead, setSelectedLead] = useState<CRMLead | null>(null);
+  const [crmProposal, setCrmProposal] = useState<ProposalFull | null>(null);
+  const [proposalDocCounts, setProposalDocCounts] = useState<Record<string, number>>({});
+  const canChangeStageInCrm = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"].includes(userRole);
   const [showNewLead, setShowNewLead] = useState(false);
   const [showConvert, setShowConvert] = useState<CRMLead | null>(null);
   const [mesaSuccess, setMesaSuccess] = useState<string | null>(null);
@@ -722,6 +728,24 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
     window.addEventListener("crm:filter-cold-leads", handleColdLeadFilter);
     return () => window.removeEventListener("crm:filter-cold-leads", handleColdLeadFilter);
   }, []);
+
+  // Carrega contagem de documentos das propostas vinculadas aos leads de
+  // captação, pra mostrar o badge de anexos direto no card do pipe.
+  useEffect(() => {
+    const proposalIds = new Set(leads.map(l => l.creditProposalId).filter(Boolean) as string[]);
+    if (proposalIds.size === 0) return;
+    fetch("/api/credit-proposals?include_pending=1")
+      .then(r => r.json())
+      .then(d => {
+        if (!Array.isArray(d.proposals)) return;
+        const counts: Record<string, number> = {};
+        for (const p of d.proposals as { id: string; documents?: unknown[] }[]) {
+          if (proposalIds.has(p.id)) counts[p.id] = Array.isArray(p.documents) ? p.documents.length : 0;
+        }
+        setProposalDocCounts(counts);
+      })
+      .catch(() => {});
+  }, [leads]);
 
   async function handleGerarLink() {
     setCaptacaoGenerating(true);
@@ -1236,6 +1260,53 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
     if (typeof window !== "undefined") localStorage.setItem("crm-view", v);
   }
 
+  // Leads vindos do link de captação já têm uma proposta de crédito vinculada
+  // (criada no submit do formulário) — abrem o mesmo modal da Mesa de Crédito,
+  // com perfil do cliente, documentos e checklist. Leads sem proposta vinculada
+  // (criados manualmente) continuam abrindo o modal simples de sempre.
+  async function openLead(lead: CRMLead) {
+    if (lead.creditProposalId) {
+      try {
+        const res = await fetch(`/api/credit-proposals?id=${lead.creditProposalId}`);
+        const json = await res.json();
+        if (res.ok && json.proposal) {
+          const p = json.proposal as ProposalFull & { partner?: { full_name?: string } | null };
+          setCrmProposal({ ...p, partner_name: p.partner?.full_name });
+          return;
+        }
+      } catch { /* cai no fallback abaixo */ }
+    }
+    setSelectedLead(lead);
+  }
+
+  const handleCrmProposalUpdate = useCallback((proposalId: string, updates: Partial<ProposalFull>) => {
+    setCrmProposal(prev => prev && prev.id === proposalId ? { ...prev, ...updates } : prev);
+  }, []);
+
+  const handleCrmStageChange = useCallback((proposalId: string, newStage: string) => {
+    setCrmProposal(prev => prev && prev.id === proposalId ? { ...prev, stage: newStage } : prev);
+    fetch("/api/credit-proposals", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: proposalId, stage: newStage }),
+    }).catch(() => {});
+  }, []);
+
+  async function handleConfirmCrmSendToMesa() {
+    if (!crmProposal) return;
+    try {
+      const res = await fetch(`/api/credit-proposals/${crmProposal.id}/confirm-crm-review`, { method: "POST" });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Erro ao confirmar envio");
+      setCrmProposal(prev => prev ? { ...prev, metadata: { ...(prev.metadata ?? {}), crm_pending_review: false } } : prev);
+      setMesaSuccess(`Proposta ${crmProposal.code} enviada para a Mesa de Crédito com sucesso!`);
+      setTimeout(() => setMesaSuccess(null), 5000);
+    } catch (e) {
+      setMesaError(e instanceof Error ? e.message : "Erro ao confirmar envio");
+      setTimeout(() => setMesaError(null), 5000);
+    }
+  }
+
   async function handleEnviarMesa(lead: CRMLead) {
     const meta = lead.metadata ?? {};
     const creditLine =
@@ -1641,7 +1712,7 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
                         return (
                         <div
                           key={lead.id}
-                          onClick={() => setSelectedLead(lead)}
+                          onClick={() => openLead(lead)}
                           style={{
                             background: "#0F1E35",
                             border: "1px solid #122036",
@@ -2065,7 +2136,7 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
                       <td style={{ padding: "10px 12px", whiteSpace: "nowrap" }}>
                         <div style={{ display: "flex", gap: 6 }}>
                           <button
-                            onClick={() => setSelectedLead(lead)}
+                            onClick={() => openLead(lead)}
                             style={{
                               background: "rgba(90,116,144,0.2)",
                               border: "1px solid #122036",
@@ -2229,7 +2300,7 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
                           const ls = calcLeadScore(lead);
                           return (
                             <div key={lead.id} style={{ background: "#0F1E35", border: "1px solid #122036", borderRadius: 8, padding: "10px 12px", cursor: "pointer", transition: "border-color 0.15s" }}
-                              onClick={() => setSelectedLead(lead)}
+                              onClick={() => openLead(lead)}
                               onMouseEnter={(e) => (e.currentTarget.style.borderColor = col.hex)}
                               onMouseLeave={(e) => (e.currentTarget.style.borderColor = "#122036")}
                             >
@@ -2259,6 +2330,15 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
                               <div style={{ fontSize: 10, color: "#7A8FA8", display: "flex", alignItems: "center", gap: 3, marginBottom: 6 }}>
                                 <MapPin style={{ width: 10, height: 10 }} />{lead.city}, {lead.state}
                               </div>
+                              {lead.creditProposalId && (
+                                <div style={{
+                                  fontSize: 10, color: "#C9A84C", display: "flex", alignItems: "center", gap: 3, marginBottom: 6,
+                                  background: "rgba(201,168,76,0.08)", border: "1px solid rgba(201,168,76,0.2)", borderRadius: 6, padding: "2px 6px", width: "fit-content",
+                                }} title="Documentos anexados via link de captação">
+                                  <Paperclip style={{ width: 10, height: 10 }} />
+                                  {proposalDocCounts[lead.creditProposalId] ?? 0} documento{(proposalDocCounts[lead.creditProposalId] ?? 0) !== 1 ? "s" : ""}
+                                </div>
+                              )}
                               {/* Mover para */}
                               <select
                                 value=""
@@ -3479,6 +3559,21 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
           )}
         </DialogContent>
       </Dialog>
+
+      {/* ── MODAL: Lead de captação com proposta vinculada — mesmo modal da Mesa de Crédito ── */}
+      <PropostaDetailModal
+        open={!!crmProposal}
+        onClose={() => setCrmProposal(null)}
+        proposal={crmProposal}
+        onStageChange={handleCrmStageChange}
+        onProposalUpdate={handleCrmProposalUpdate}
+        canChangeStage={canChangeStageInCrm}
+        canEditValorSolicitado={canChangeStageInCrm}
+        canCompileDocuments={canChangeStageInCrm}
+        canEditInstituicao={canChangeStageInCrm}
+        pendingCrmReview={!!(crmProposal?.metadata as Record<string, unknown> | undefined)?.crm_pending_review}
+        onConfirmSendToMesa={handleConfirmCrmSendToMesa}
+      />
 
       {/* ── MODAL: Convert Lead ── */}
       <Dialog open={!!showConvert} onOpenChange={(open) => { if (!open) { setShowConvert(null); setSelectedConvert(""); setSelectedCreditLine(""); } }}>

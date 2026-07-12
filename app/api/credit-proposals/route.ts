@@ -73,36 +73,55 @@ const patchSchema = z.object({
   pending_resolved_by:   z.string().max(200).optional().nullable(),
 });
 
-// GET — lista propostas (partner vê as suas, admin/mesa vê todas)
+const PROPOSAL_SELECT = `
+  id, code, title, client_name, client_cpf_cnpj, credit_line,
+  requested_value, approved_value, current_level, status, stage,
+  level1_notes, level2_notes, level3_notes,
+  level1_at, level2_at, level3_at, created_at,
+  valor_credito_atual, comissao_mandato_perc, comissao_instituicao_perc,
+  instituicao_encaminhada, instituicao_feedback,
+  pending_reason, pending_responsible, pending_at,
+  pending_resolved_at, pending_resolved_by,
+  documents, checklist, metadata,
+  partner:profiles!partner_id(id, full_name)
+`;
+
+// GET — lista propostas (partner vê as suas, admin/mesa vê todas), ou uma
+// única proposta via ?id=. Propostas de captação ainda pendentes de
+// conferência do partner (metadata.crm_pending_review) ficam ocultas da
+// listagem — só o CRM as enxerga, via ?id= ou ?include_pending=1.
 export async function GET(req: NextRequest) {
   const { user, profile } = await getAuthedUser();
   if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
   const { searchParams } = new URL(req.url);
-  const status = searchParams.get("status");
-  const level  = searchParams.get("level");
+  const id             = searchParams.get("id");
+  const status         = searchParams.get("status");
+  const level          = searchParams.get("level");
+  const includePending = searchParams.get("include_pending") === "1";
   const isAdmin = ADMIN_ROLES.includes(profile?.role as typeof ADMIN_ROLES[number]);
 
   const svc = serviceClient();
+
+  if (id) {
+    let single = svc.from("credit_desk_proposals").select(PROPOSAL_SELECT).eq("id", id);
+    if (!isAdmin) single = single.eq("partner_id", user.id);
+    const { data, error } = await single.single();
+    if (error || !data) return NextResponse.json({ error: "Proposta não encontrada" }, { status: 404 });
+    return NextResponse.json({ proposal: data });
+  }
+
   let query = svc
     .from("credit_desk_proposals")
-    .select(`
-      id, code, title, client_name, client_cpf_cnpj, credit_line,
-      requested_value, approved_value, current_level, status, stage,
-      level1_notes, level2_notes, level3_notes,
-      level1_at, level2_at, level3_at, created_at,
-      valor_credito_atual, comissao_mandato_perc, comissao_instituicao_perc,
-      instituicao_encaminhada, instituicao_feedback,
-      pending_reason, pending_responsible, pending_at,
-      pending_resolved_at, pending_resolved_by,
-      metadata,
-      partner:profiles!partner_id(id, full_name)
-    `)
+    .select(PROPOSAL_SELECT)
     .order("created_at", { ascending: false });
 
   if (!isAdmin) query = query.eq("partner_id", user.id);
   if (status)   query = query.eq("status", status.toUpperCase());
   if (level)    query = query.eq("current_level", level.toUpperCase());
+  // "not.eq" trataria NULL como não-correspondente e esconderia toda proposta
+  // sem essa chave em metadata — por isso o or() explícito (null OU false).
+  if (!includePending) query = query.or("metadata->>crm_pending_review.is.null,metadata->>crm_pending_review.eq.false");
 
   const { data, error } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

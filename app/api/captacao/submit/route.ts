@@ -1,8 +1,180 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as sc } from "@supabase/supabase-js";
+import { CHECKLISTS, DEFAULT_CHECKLIST } from "@/lib/credit-checklists";
 
 function serviceClient() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+}
+
+function normalizeStr(s: string) {
+  return s.toUpperCase()
+    .normalize("NFD").replace(/[̀-ͯ]/g, "")
+    .replace(/[^A-Z0-9 ]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+type ChecklistItem = { id: string; label: string };
+type PortfolioLinha = { nome: string; documentos_pf?: { id: string; nome: string; obrigatorio: boolean }[]; documentos_pj?: { id: string; nome: string; obrigatorio: boolean }[] };
+
+/** Resolve a checklist de documentos da mesma forma que o PropostaDetailModal:
+ *  portfolio_linhas (nome normalizado) → CHECKLISTS (linhas fixas) → DEFAULT_CHECKLIST. */
+function resolveChecklist(creditLine: string, clientType: "PF" | "PJ", portfolioLinhas: PortfolioLinha[]): ChecklistItem[] {
+  const cl = normalizeStr(creditLine || "");
+
+  const linha = portfolioLinhas.find(l => {
+    const n = normalizeStr(l.nome);
+    return n === cl || n.startsWith(cl) || cl.startsWith(n);
+  });
+  if (linha) {
+    const docs = clientType === "PJ" ? linha.documentos_pj : linha.documentos_pf;
+    if (docs && docs.length > 0) return docs.map(d => ({ id: d.id, label: d.nome }));
+  }
+
+  const checklistKey = Object.keys(CHECKLISTS).find(key => {
+    const n = normalizeStr(key);
+    return n === cl || n.startsWith(cl) || cl.startsWith(n);
+  });
+  if (checklistKey) {
+    return CHECKLISTS[checklistKey][clientType].map(d => ({ id: d.id, label: d.label }));
+  }
+
+  return DEFAULT_CHECKLIST[clientType].map(d => ({ id: d.id, label: d.label }));
+}
+
+/** Copia um arquivo já enviado via link de captação (bucket captacao-documents,
+ *  URL pública) para o bucket credit-documents, no formato que a proposta espera. */
+async function copyToProposalBucket(
+  svc: ReturnType<typeof serviceClient>,
+  publicUrl: string,
+  ownerId: string,
+  proposalId: string,
+  docId: string,
+  fileName: string,
+): Promise<{ storage_path: string } | null> {
+  const marker = "/captacao-documents/";
+  const idx = publicUrl.indexOf(marker);
+  if (idx === -1) return null;
+  const sourcePath = decodeURIComponent(publicUrl.slice(idx + marker.length));
+
+  const { data: fileData, error: downloadError } = await svc.storage.from("captacao-documents").download(sourcePath);
+  if (downloadError || !fileData) return null;
+
+  const safeName = fileName.replace(/[^a-zA-Z0-9._-]/g, "_").substring(0, 80);
+  const storagePath = `${ownerId}/${proposalId}/${docId}_${Date.now()}_${safeName}`;
+
+  const { error: uploadError } = await svc.storage
+    .from("credit-documents")
+    .upload(storagePath, await fileData.arrayBuffer(), { contentType: fileData.type || undefined, upsert: false });
+  if (uploadError) return null;
+
+  return { storage_path: storagePath };
+}
+
+/** Cria a proposta de crédito já vinculada ao lead, com os dados do formulário
+ *  e os documentos anexados registrados contra o checklist da linha escolhida.
+ *  Fica marcada como pendente de conferência do partner (crm_pending_review) —
+ *  só aparece na Mesa de Crédito depois que o partner confirmar os documentos. */
+async function createLinkedProposal(
+  svc: ReturnType<typeof serviceClient>,
+  lead: { id: string; code: string },
+  formData: Record<string, unknown>,
+  partnerId: string,
+) {
+  const clientType: "PF" | "PJ" = formData.personType === "PJ" ? "PJ" : "PF";
+  const creditLine = (formData.creditLine as string) || (formData.productInterest as string) || "HOME EQUITY";
+  const clientName = clientType === "PF" ? String(formData.name ?? "").trim() : String(formData.razaoSocial || formData.name || "").trim();
+
+  const parseMoney = (v: unknown) => {
+    if (typeof v === "number") return v;
+    if (typeof v === "string") return parseFloat(v.replace(/\D/g, "")) || 0;
+    return 0;
+  };
+  const valorSolicitado = parseMoney(formData.valorSolicitado);
+  const rendaOuFaturamento = clientType === "PF" ? parseMoney(formData.renda) : parseMoney(formData.faturamento);
+  const baseVal = valorSolicitado || (rendaOuFaturamento > 0 ? Math.round(rendaOuFaturamento * 12 * 0.3) : 100000);
+  const level = baseVal >= 5_000_000 ? "NIVEL_3" : baseVal >= 500_000 ? "NIVEL_2" : "NIVEL_1";
+  const requestedValue = level === "NIVEL_3" ? Math.max(baseVal, 5_000_000) : baseVal;
+
+  const { count } = await svc.from("credit_desk_proposals").select("id", { count: "exact", head: true });
+  const code = `CRED-26-${String((count ?? 0) + 1).padStart(4, "0")}`;
+
+  // Resolve checklist e registra os documentos já anexados no formulário
+  const { data: portfolioLinhas } = await svc.from("portfolio_linhas").select("nome, documentos_pf, documentos_pj").eq("ativo", true);
+  const checklist = resolveChecklist(creditLine, clientType, (portfolioLinhas ?? []) as PortfolioLinha[]);
+
+  const documentosForm = Array.isArray(formData.documentos)
+    ? (formData.documentos as { label: string; name: string; url: string }[])
+    : [];
+
+  const proposalIdForPath = crypto.randomUUID();
+  const documents: { doc_id: string; file_name: string; storage_path: string; uploaded_at: string; uploaded_by: string }[] = [];
+  const checklistChecked: Record<string, boolean> = {};
+
+  for (let i = 0; i < documentosForm.length; i++) {
+    const doc = documentosForm[i];
+    if (!doc?.url) continue;
+    const labelNorm = normalizeStr(doc.label ?? "");
+    const match = checklist.find(c => {
+      const n = normalizeStr(c.label);
+      return n === labelNorm || n.startsWith(labelNorm) || labelNorm.startsWith(n);
+    });
+    const docId = match?.id ?? `captacao_${i}`;
+    const copied = await copyToProposalBucket(svc, doc.url, partnerId, proposalIdForPath, docId, doc.name ?? doc.label ?? "documento");
+    if (copied) {
+      documents.push({ doc_id: docId, file_name: doc.name ?? doc.label ?? "documento", storage_path: copied.storage_path, uploaded_at: new Date().toISOString(), uploaded_by: partnerId });
+      if (match) checklistChecked[docId] = true;
+    }
+  }
+
+  const { data: proposal, error } = await svc.from("credit_desk_proposals").insert({
+    id: proposalIdForPath,
+    code,
+    title: `${creditLine} - ${clientName}`,
+    client_name: clientName,
+    client_cpf_cnpj: (formData.cpfCnpj as string) ?? null,
+    credit_line: creditLine,
+    requested_value: requestedValue,
+    current_level: level,
+    status: "PENDING",
+    stage: "RECEBIDO",
+    partner_id: partnerId,
+    created_by: partnerId,
+    documents,
+    checklist: checklistChecked,
+    metadata: {
+      ...formData,
+      crm_lead_id: lead.id,
+      crm_lead_code: lead.code,
+      client_type: clientType,
+      email: formData.email,
+      telefone: formData.phone,
+      renda_mensal: clientType === "PF" ? rendaOuFaturamento : undefined,
+      faturamento_mensal: clientType === "PJ" ? rendaOuFaturamento : undefined,
+      estado_civil: formData.estadoCivil,
+      nascimento: formData.nascimento,
+      razao_social: formData.razaoSocial,
+      nome_fantasia: formData.nomeFantasia,
+      socio_responsavel: formData.socioResponsavel,
+      endereco_rua: formData.enderecoRua,
+      endereco_cep: formData.cep,
+      endereco_cidade: formData.city,
+      endereco_uf: formData.state,
+      restricao_cliente: formData.restricao,
+      prazo: formData.prazo,
+      finalidade: formData.finalidade,
+      observacoes: formData.observacoes,
+      imoveis: formData.imoveis,
+      documentos: formData.documentos,
+      captacao_origin: true,
+      crm_pending_review: true,
+    },
+  }).select("id, code").single();
+
+  if (error || !proposal) return null;
+
+  await svc.from("crm_leads").update({ credit_proposal_id: proposal.id }).eq("id", lead.id);
+  return proposal;
 }
 
 // POST — recebe dados do formulário público de captação (sem auth)
@@ -102,6 +274,15 @@ export async function POST(req: NextRequest) {
     created_by:               link.partner_id,
     crm_lead_id:              (lead as { id: string }).id,
   }).then(() => {}, () => {}); // fire-and-forget, não bloqueia resposta
+
+  // Cria a proposta de crédito já vinculada ao lead, com dados e documentos do
+  // formulário registrados contra o checklist — pendente de conferência do
+  // partner antes de aparecer na Mesa de Crédito. Não bloqueia a resposta.
+  try {
+    await createLinkedProposal(svc, lead as { id: string; code: string }, formData, link.partner_id);
+  } catch (e) {
+    console.error("[captacao/submit] Erro ao criar proposta vinculada:", e);
+  }
 
   return NextResponse.json({ ok: true, code: lead.code });
 }

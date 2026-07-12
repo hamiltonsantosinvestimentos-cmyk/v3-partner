@@ -59,6 +59,7 @@ export default async function CRMPage() {
     interactions:    Array.isArray(l.interactions) ? l.interactions : [],
     metadata:        (l.metadata ?? {}) as Record<string, unknown>,
     clientToken:     (l.client_token as string | null) ?? null,
+    creditProposalId: (l.credit_proposal_id as string | null) ?? null,
   }));
 
   return <CRMClient userRole={userRole} userName={userName} userId={userId} initialLeads={initialLeads} />;

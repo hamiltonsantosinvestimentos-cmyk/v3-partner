@@ -175,6 +175,10 @@ interface PropostaDetailModalProps {
   canEditValorSolicitado?: boolean;
   canCompileDocuments?: boolean;
   canEditInstituicao?: boolean;
+  /** Proposta criada a partir de um lead de captação, ainda não conferida
+   *  pelo partner — some da Mesa de Crédito até onConfirmSendToMesa rodar. */
+  pendingCrmReview?: boolean;
+  onConfirmSendToMesa?: () => Promise<void> | void;
 }
 
 // ── CopyClientLinkButton ── botão para copiar link de acompanhamento ──────────
@@ -659,7 +663,17 @@ function TimelineOperacao({ proposal }: { proposal: ProposalFull }) {
   );
 }
 
-export function PropostaDetailModal({ open, onClose, proposal, onStageChange, onProposalUpdate, canChangeStage, canEditValorSolicitado, canCompileDocuments, canEditInstituicao }: PropostaDetailModalProps) {
+export function PropostaDetailModal({ open, onClose, proposal, onStageChange, onProposalUpdate, canChangeStage, canEditValorSolicitado, canCompileDocuments, canEditInstituicao, pendingCrmReview, onConfirmSendToMesa }: PropostaDetailModalProps) {
+  const [confirmandoEnvioMesa, setConfirmandoEnvioMesa] = useState(false);
+  async function handleConfirmSendToMesa() {
+    if (!onConfirmSendToMesa) return;
+    setConfirmandoEnvioMesa(true);
+    try {
+      await onConfirmSendToMesa();
+    } finally {
+      setConfirmandoEnvioMesa(false);
+    }
+  }
   // ── Modal tab ─────────────────────────────────────────────────────────────
   type ModalTab = "detalhes" | "recomendacao" | "documentos" | "comentarios" | "analise_ia" | "chat_ia";
   const [modalTab, setModalTab] = useState<ModalTab>("detalhes");
@@ -2189,6 +2203,27 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
             </button>
           </div>
         </div>
+
+        {pendingCrmReview && (
+          <div className="px-6 py-3 bg-amber-500/10 border-b border-amber-500/30 flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-amber-400 flex-shrink-0" />
+              <p className="text-xs text-amber-400">
+                Lead vindo do link de captação — confira os documentos abaixo antes de enviar para a Mesa de Crédito.
+              </p>
+            </div>
+            {onConfirmSendToMesa && (
+              <button
+                onClick={handleConfirmSendToMesa}
+                disabled={confirmandoEnvioMesa}
+                className="flex items-center gap-1.5 h-8 px-3 rounded-lg bg-amber-500/20 border border-amber-500/40 text-amber-300 hover:bg-amber-500/30 transition-colors text-xs font-bold disabled:opacity-50 flex-shrink-0"
+              >
+                {confirmandoEnvioMesa ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+                Confirmar documentos e Enviar para Mesa
+              </button>
+            )}
+          </div>
+        )}
 
         {erroRelatorioCompleto && (
           <div className="px-6 py-2 bg-red-500/10 border-b border-red-500/30">
