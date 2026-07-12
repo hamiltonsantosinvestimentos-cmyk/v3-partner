@@ -382,7 +382,7 @@ function buildMesaEmail(deal: DealInfo, result: ForjaResult, partnerName: string
         <table cellpadding="0" cellspacing="0" style="margin-bottom:20px;">
           <tr>
             <td style="padding-right:8px;">
-              <a href="https://v3-partner.vercel.app/mesa-ma" style="display:inline-block;background:#C9A84C;color:#09081A;font-weight:700;font-size:12px;padding:10px 20px;border-radius:6px;text-decoration:none;">
+              <a href="https://app.v3partners.com.br/mesa-ma" style="display:inline-block;background:#C9A84C;color:#09081A;font-weight:700;font-size:12px;padding:10px 20px;border-radius:6px;text-decoration:none;">
                 Abrir Mesa M&A
               </a>
             </td>
@@ -463,7 +463,7 @@ function buildPartnerEmail(deal: DealInfo, result: ForjaResult, partnerName: str
           ).join("")}
         </div>` : ""}
 
-        <a href="https://v3-partner.vercel.app/ma" style="display:inline-block;background:#C9A84C;color:#09081A;font-weight:700;font-size:12px;padding:10px 24px;border-radius:6px;text-decoration:none;margin-bottom:20px;">
+        <a href="https://app.v3partners.com.br/ma" style="display:inline-block;background:#C9A84C;color:#09081A;font-weight:700;font-size:12px;padding:10px 24px;border-radius:6px;text-decoration:none;margin-bottom:20px;">
           Ver meu Deal na Plataforma
         </a>
 
