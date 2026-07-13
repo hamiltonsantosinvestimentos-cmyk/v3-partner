@@ -162,6 +162,47 @@ export async function DELETE(
     svc2.from("creative_jobs").update({ created_by: null }).eq("created_by", id),
     svc2.from("meeting_summaries").update({ user_id: null }).eq("user_id", id),
     svc2.from("profiles").update({ created_by: null }).eq("created_by", id),
+    // assinaturas / financeiro
+    svc2.from("partner_subscriptions").update({ partner_id: null }).eq("partner_id", id),
+    svc2.from("split_fiscal").update({ partner_id: null }).eq("partner_id", id),
+    svc2.from("split_fiscal").update({ created_by: null }).eq("created_by", id),
+    svc2.from("split_fiscal").update({ approved_by: null }).eq("approved_by", id),
+    svc2.from("partner_goals").update({ created_by: null }).eq("created_by", id),
+    // consórcio
+    svc2.from("consorcio_leads").update({ created_by: null }).eq("created_by", id),
+    svc2.from("consorcio_projetos").update({ created_by: null }).eq("created_by", id),
+    svc2.from("consorcio_cartas").update({ created_by: null }).eq("created_by", id),
+    // marketplace
+    svc2.from("marketplace_products").update({ reviewed_by: null }).eq("reviewed_by", id),
+    svc2.from("creative_files").update({ created_by: null }).eq("created_by", id),
+    // partner registrations/registro — coluna que a limpeza acima não cobria
+    svc2.from("partner_registrations").update({ revisado_por: null }).eq("revisado_por", id),
+    // M&A — colunas adicionadas em migrações mais recentes que a lista original
+    svc2.from("ma_deals").update({ originator_profile_id: null }).eq("originator_profile_id", id),
+    // Mesa de Capitais (cm_*)
+    svc2.from("cm_asset_listings").update({ originator_profile_id: null }).eq("originator_profile_id", id),
+    svc2.from("cm_asset_listings").update({ nda_authorization_requested_by: null }).eq("nda_authorization_requested_by", id),
+    svc2.from("cm_asset_listings").update({ nda_authorized_by: null }).eq("nda_authorized_by", id),
+    svc2.from("cm_asset_listings").update({ deleted_by: null }).eq("deleted_by", id),
+    svc2.from("cm_asset_listings").update({ deletion_requested_by: null }).eq("deletion_requested_by", id),
+    svc2.from("cm_deal_intermediaries").update({ created_by: null }).eq("created_by", id),
+    svc2.from("cm_referral_partners").update({ created_by: null }).eq("created_by", id),
+    svc2.from("cm_deal_room_security_kyc").update({ reviewed_by: null }).eq("reviewed_by", id),
+    svc2.from("cm_deal_room_security_kyc").update({ created_by: null }).eq("created_by", id),
+    // V3 Academy — overrides administrativos
+    svc2.from("academy_onboarding_overrides").update({ updated_by: null }).eq("updated_by", id),
+    svc2.from("academy_home_banner").update({ updated_by: null }).eq("updated_by", id),
+    svc2.from("academy_category_overrides").update({ updated_by: null }).eq("updated_by", id),
+    svc2.from("academy_video_overrides").update({ updated_by: null }).eq("updated_by", id),
+    svc2.from("academy_badges").update({ updated_by: null }).eq("updated_by", id),
+    svc2.from("academy_live_classes").update({ created_by: null }).eq("created_by", id),
+    // Projeto (5W2H / SWOT / Metas por setor)
+    svc2.from("sector_5w2h").update({ updated_by: null }).eq("updated_by", id),
+    svc2.from("sector_swot").update({ updated_by: null }).eq("updated_by", id),
+    svc2.from("sector_goals").update({ updated_by: null }).eq("updated_by", id),
+    // credit engine
+    svc2.from("credit_engine_credit_profiles").update({ requested_by: null }).eq("requested_by", id),
+    svc2.from("credit_engine_credit_consents").update({ requested_by: null }).eq("requested_by", id),
   ]);
 
   // Deleta registros que pertencem exclusivamente ao usuário
@@ -185,7 +226,13 @@ export async function DELETE(
 
   if (!adminRes.ok) {
     const body = await adminRes.json().catch(() => ({}));
-    const msg = (body as { msg?: string; message?: string })?.msg ?? (body as { msg?: string; message?: string })?.message ?? `Erro ${adminRes.status}`;
+    const rawMsg = (body as { msg?: string; message?: string })?.msg ?? (body as { msg?: string; message?: string })?.message ?? `Erro ${adminRes.status}`;
+    // Ainda há registro obrigatório (coluna NOT NULL) apontando pra este usuário
+    // que não pode ser nulificado — a exclusão definitiva não é segura aqui.
+    const isFkBlock = /foreign key constraint/i.test(rawMsg);
+    const msg = isFkBlock
+      ? `Este usuário ainda possui registros vinculados que não podem ser removidos automaticamente (${rawMsg}). Use "Desativar" em vez de excluir, ou remova manualmente os registros dependentes antes de tentar novamente.`
+      : rawMsg;
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 
