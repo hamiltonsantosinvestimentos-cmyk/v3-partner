@@ -207,6 +207,16 @@ export function CaptacaoForm({ token, partnerName }: CaptacaoFormProps) {
       .catch(() => {});
   }, []);
 
+  // Linhas de crédito do dropdown: as fixas + quaisquer outras cadastradas no
+  // portfólio (admin) que ainda não estejam cobertas pela lista fixa.
+  const allCreditLines = useMemo(() => {
+    const existing = new Set(CREDIT_LINES.map(l => normalizeStr(l.value)));
+    const fromPortfolio = portfolioLinhas
+      .filter(l => !existing.has(normalizeStr(l.nome)))
+      .map(l => ({ value: l.nome, label: l.nome }));
+    return [...CREDIT_LINES, ...fromPortfolio];
+  }, [portfolioLinhas]);
+
   // Step Documentos
   const [uploadedDocs, setUploadedDocs] = useState<Record<string, { name: string; url: string }>>({});
   const [uploading, setUploading] = useState<string | null>(null);
@@ -355,16 +365,6 @@ export function CaptacaoForm({ token, partnerName }: CaptacaoFormProps) {
     padding: 28,
     backdropFilter: "blur(8px)",
   };
-
-  // Linhas de crédito do dropdown: as fixas + quaisquer outras cadastradas no
-  // portfólio (admin) que ainda não estejam cobertas pela lista fixa.
-  const allCreditLines = useMemo(() => {
-    const existing = new Set(CREDIT_LINES.map(l => normalizeStr(l.value)));
-    const fromPortfolio = portfolioLinhas
-      .filter(l => !existing.has(normalizeStr(l.nome)))
-      .map(l => ({ value: l.nome, label: l.nome }));
-    return [...CREDIT_LINES, ...fromPortfolio];
-  }, [portfolioLinhas]);
 
   const checklistFull = (() => {
     if (!creditLine) return DEFAULT_CHECKLIST.map(nome => ({ nome, obrigatorio: true }));
