@@ -414,3 +414,48 @@ export const LEVEL_LINES: Record<string, string[]> = {
     "Op. Internacional — Garantia Imobiliária",
   ],
 };
+
+// ─── Resolução de checklist (compartilhada entre rotas server-side) ─────────
+export function normalizeChecklistStr(s: string) {
+  return s.toUpperCase()
+    .normalize("NFD").replace(/[̀-ͯ]/g, "")
+    .replace(/[^A-Z0-9 ]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export type ChecklistItem = { id: string; label: string };
+export type PortfolioLinhaDocs = {
+  nome: string;
+  documentos_pf?: { id: string; nome: string; obrigatorio: boolean }[];
+  documentos_pj?: { id: string; nome: string; obrigatorio: boolean }[];
+};
+
+/** Resolve a checklist de documentos da mesma forma que o PropostaDetailModal:
+ *  portfolio_linhas (nome normalizado) → CHECKLISTS (linhas fixas) → DEFAULT_CHECKLIST. */
+export function resolveChecklistForLine(
+  creditLine: string,
+  clientType: "PF" | "PJ",
+  portfolioLinhas: PortfolioLinhaDocs[],
+): ChecklistItem[] {
+  const cl = normalizeChecklistStr(creditLine || "");
+
+  const linha = portfolioLinhas.find(l => {
+    const n = normalizeChecklistStr(l.nome);
+    return n === cl || n.startsWith(cl) || cl.startsWith(n);
+  });
+  if (linha) {
+    const docs = clientType === "PJ" ? linha.documentos_pj : linha.documentos_pf;
+    if (docs && docs.length > 0) return docs.map(d => ({ id: d.id, label: d.nome }));
+  }
+
+  const checklistKey = Object.keys(CHECKLISTS).find(key => {
+    const n = normalizeChecklistStr(key);
+    return n === cl || n.startsWith(cl) || cl.startsWith(n);
+  });
+  if (checklistKey) {
+    return CHECKLISTS[checklistKey][clientType].map(d => ({ id: d.id, label: d.label }));
+  }
+
+  return DEFAULT_CHECKLIST[clientType].map(d => ({ id: d.id, label: d.label }));
+}

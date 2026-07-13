@@ -215,6 +215,53 @@ function CopyClientLinkButton({ proposalId }: { proposalId: string }) {
   );
 }
 
+// ── GenerateUploadLinkButton ── gera link p/ cliente anexar docs do checklist ─
+function GenerateUploadLinkButton({ proposalId }: { proposalId: string }) {
+  const [loading, setLoading] = React.useState(false);
+  const [copied, setCopied] = React.useState(false);
+  const [error, setError] = React.useState("");
+
+  async function handleClick() {
+    setLoading(true);
+    setError("");
+    try {
+      const res = await fetch("/api/credit-proposals/upload-links", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ proposal_id: proposalId }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Erro ao gerar link");
+      await navigator.clipboard.writeText(json.upload_url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 3000);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Erro ao gerar link");
+      setTimeout(() => setError(""), 4000);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <button
+      onClick={handleClick}
+      disabled={loading}
+      title="Gerar link para o cliente anexar os documentos do checklist"
+      className="flex items-center gap-1.5 h-8 px-2.5 rounded-lg bg-[#243A66]/50 border border-[#243A66] text-[#7A8FA8] hover:bg-[#243A66] hover:text-[#F0ECE4] transition-colors text-xs font-semibold disabled:opacity-50"
+    >
+      {loading ? (
+        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+      ) : copied ? (
+        <CheckCheck className="w-3.5 h-3.5 text-emerald-400" />
+      ) : (
+        <Upload className="w-3.5 h-3.5" />
+      )}
+      {error ? <span className="text-red-400">{error}</span> : copied ? <span className="text-emerald-400">Link copiado!</span> : "Link p/ Documentos"}
+    </button>
+  );
+}
+
 // ── PartnerDocUpload ── upload livre de documentos (partner e admin) ──────────
 type FreeDoc = { doc_id: string; file_name: string; storage_path: string; uploaded_at: string; url: string | null };
 
@@ -2198,6 +2245,7 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
               PDF
             </button>
             <CopyClientLinkButton proposalId={proposal.id} />
+            {canChangeStage && <GenerateUploadLinkButton proposalId={proposal.id} />}
             <button onClick={onClose} className="w-8 h-8 rounded-lg hover:bg-secondary flex items-center justify-center text-muted-foreground hover:text-white transition-colors">
               <X className="w-4 h-4" />
             </button>
