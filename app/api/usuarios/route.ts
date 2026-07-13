@@ -90,7 +90,7 @@ export async function POST(request: Request) {
   let emailStatus: { ok: boolean; erro?: string } = { ok: false, erro: "não é partner" };
 
   if (["STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE"].includes(role)) {
-    const APP_URL = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_SITE_URL || "https://v3-partner.vercel.app";
+    const APP_URL = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_SITE_URL || "https://app.v3partners.com.br";
     const resendKey = process.env.RESEND_API_KEY;
     const planoLabel = role === "ENTERPRISE" ? "V3 Enterprise" : role === "PARTNER_PRO" ? "V3 Partner PRO" : role === "STARTER" ? "V3 Starter" : "V3 Partner";
     const comissao   = role === "ENTERPRISE" ? "negociável" : role === "PARTNER_PRO" ? "50%" : role === "STARTER" ? "20%" : "30%";

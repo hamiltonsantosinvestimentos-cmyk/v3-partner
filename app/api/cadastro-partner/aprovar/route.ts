@@ -6,7 +6,7 @@ function serviceClient() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 }
 
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://v3-partner.vercel.app";
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://app.v3partners.com.br";
 
 // ─── E-mail de boas-vindas via Resend ─────────────────────────────────────────
 async function enviarBoasVindas(email: string, nome: string, plano: string, cartaoRecorrenteLink?: string | null) {

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { notifyContratoCompleto, notifyTestemunhaParaAssinar } from "@/lib/email";
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://v3-partner.vercel.app";
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.v3partners.com.br";
 const V3_REP_EMAIL = process.env.EMAIL_MESA_OPERACIONAL ?? process.env.EMAIL_ADMIN ?? "mesa@v3partners.com.br";
 
 export async function GET(

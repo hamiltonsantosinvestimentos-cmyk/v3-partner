@@ -54,7 +54,7 @@ const IS_ADMIN_ONLY = (role: string) => role === "ADMIN";
 
 const BASE_URL = typeof window !== "undefined"
   ? `${window.location.origin}/c/`
-  : "https://v3-partner.vercel.app/c/";
+  : "https://app.v3partners.com.br/c/";
 
 function Toast({ msg, type }: { msg: string; type: "success" | "error" }) {
   return (
@@ -151,7 +151,7 @@ function CobrandingTab({ profile }: { profile: Profile }) {
   const [saved, setSaved]   = useState(false);
   const [err, setErr]       = useState("");
 
-  const baseUrl = typeof window !== "undefined" ? window.location.origin : "https://v3-partner.vercel.app";
+  const baseUrl = typeof window !== "undefined" ? window.location.origin : "https://app.v3partners.com.br";
   const previewUrl = form.cobranding_slug ? `${baseUrl}/p/${form.cobranding_slug}` : null;
 
   const inputCls = "w-full h-10 px-3 text-sm rounded-lg border bg-[#0A1628] border-[#243A66] text-[#F0ECE4] placeholder:text-[#3A5070] focus:outline-none focus:ring-1 focus:ring-[#C9A84C]/50";
@@ -838,7 +838,7 @@ export function ConfiguracoesClient({ profile, initialLinks, systemStats }: Prop
               desc="Hosting, CDN e serverless functions"
               icon={<Activity className="w-4 h-4" />}
               status="ok"
-              detail="v3-partner.vercel.app · Edge Network"
+              detail="app.v3partners.com.br · Edge Network"
             />
           </div>
 

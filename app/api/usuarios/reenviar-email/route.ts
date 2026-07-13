@@ -6,7 +6,7 @@ function serviceClient() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 }
 
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://v3-partner.vercel.app";
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://app.v3partners.com.br";
 
 async function enviarBoasVindas(email: string, nome: string, role: string) {
   const resendKey = process.env.RESEND_API_KEY;

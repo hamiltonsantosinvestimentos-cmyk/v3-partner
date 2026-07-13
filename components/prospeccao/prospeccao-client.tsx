@@ -711,7 +711,7 @@ function ProspectCard({
 function LinkGeralModal({ onClose }: { onClose: () => void }) {
   const baseUrl = typeof window !== "undefined"
     ? window.location.origin
-    : "https://v3-partner.vercel.app";
+    : "https://app.v3partners.com.br";
   const url = `${baseUrl}/indicacao`;
 
   const [copied, setCopied] = useState(false);

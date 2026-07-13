@@ -10,7 +10,7 @@ export async function POST() {
   // Usa supabase auth admin para enviar email de reset
   const svc = sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://v3-partner.vercel.app";
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://app.v3partners.com.br";
   const redirectTo = `${siteUrl}/auth/update-password`;
 
   const { error } = await svc.auth.resetPasswordForEmail(user.email, { redirectTo });

@@ -123,7 +123,7 @@ export async function POST(req: NextRequest) {
         <p style="margin:0;font-size:22px;font-weight:800;color:#C4922E;">${totalFormatted}</p>
       </div>
       <div style="margin-top:28px;">
-        <a href="${process.env.NEXT_PUBLIC_SITE_URL ?? "https://v3-partner.vercel.app"}/comissoes"
+        <a href="${process.env.NEXT_PUBLIC_SITE_URL ?? "https://app.v3partners.com.br"}/comissoes"
           style="display:inline-block;background:#C4922E;color:#07101E;text-decoration:none;padding:12px 28px;border-radius:8px;font-weight:700;font-size:14px;">
           Ver Comissões →
         </a>

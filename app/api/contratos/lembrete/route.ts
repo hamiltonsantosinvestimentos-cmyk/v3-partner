@@ -7,7 +7,7 @@ import {
   notifyTestemunha2ParaAssinar,
 } from "@/lib/email";
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://v3-partner.vercel.app";
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.v3partners.com.br";
 
 export async function GET(req: NextRequest) {
   const supabase = createClient(

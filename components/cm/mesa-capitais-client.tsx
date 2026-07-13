@@ -817,10 +817,10 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
     const reason = window.prompt(
       userRole === "ADMIN"
         ? "Motivo da exclusão (obrigatório):"
-        : "Motivo da solicitação de exclusão (obrigatório — será enviado por email aos sócios):"
+        : "Motivo da solicitação de exclusão (obrigatório, será enviado por email aos sócios):"
     );
     if (!reason || reason.trim().length < 5) {
-      if (reason !== null) alert("Motivo obrigatório — mínimo 5 caracteres");
+      if (reason !== null) alert("Motivo obrigatório: mínimo 5 caracteres");
       return;
     }
     setDeletingListing(true);
@@ -833,7 +833,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
       const json = await res.json();
       if (res.ok) {
         if (json.mode === "deleted") {
-          alert("Ativo excluído — disponível na Lixeira por 30 dias.");
+          alert("Ativo excluído. Disponível na Lixeira por 30 dias.");
           setListings((prev) => prev.filter((l) => l.id !== listingId));
           setSelectedListing(null);
         } else {
@@ -1010,7 +1010,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
         body: JSON.stringify({ access_id: accessId, decision }),
       });
       if (res.ok) {
-        alert(decision === "aprovado" ? "Qualificação aprovada — Tier 2 liberado" : "Qualificação reprovada");
+        alert(decision === "aprovado" ? "Qualificação aprovada: Tier 2 liberado" : "Qualificação reprovada");
         if (selectedListing) loadRoomInvites(selectedListing.id);
       } else {
         const json = await res.json();
@@ -1093,7 +1093,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
         <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60" onClick={() => setShowLixeira(false)}>
           <div className="w-full max-w-lg max-h-[80vh] bg-[#09081A] border border-[#C9A84C]/20 rounded-xl flex flex-col" onClick={(e) => e.stopPropagation()}>
             <div className="p-4 border-b border-[#C9A84C]/20 flex items-center justify-between flex-shrink-0">
-              <div className="text-sm font-bold text-[#F5F1E8]">Lixeira — Ativos Excluídos (30 dias)</div>
+              <div className="text-sm font-bold text-[#F5F1E8]">Lixeira · Ativos Excluídos (30 dias)</div>
               <button onClick={() => setShowLixeira(false)} className="text-[#9BAFC5] hover:text-[#F5F1E8] text-xl">&times;</button>
             </div>
             <div className="flex-1 overflow-y-auto p-4 space-y-2">
@@ -1107,7 +1107,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
                     <div className="flex items-center justify-between">
                       <div>
                         <div className="text-xs font-bold text-[#F5F1E8]">{item.anonymous_id}</div>
-                        <div className="text-[10px] text-[#9BAFC5]">{formatBRL(Number(item.valor_face))} · excluído por {item.profiles?.full_name ?? "—"}</div>
+                        <div className="text-[10px] text-[#9BAFC5]">{formatBRL(Number(item.valor_face))} · excluído por {item.profiles?.full_name ?? "N/D"}</div>
                         <div className="text-[10px] text-red-400 mt-1">{item.deletion_reason}</div>
                         <div className="text-[9px] text-[#9BAFC5]/70 mt-1">{item.days_remaining} dias restantes na lixeira</div>
                       </div>
@@ -1163,7 +1163,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
                     onChange={(e) => { if (e.target.value === "__new__") setShowNewReferralPartner(true); else setManualForm((f) => ({ ...f, originator_profile_id: e.target.value })); }}
                     className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#F5F1E8] mt-1"
                   >
-                    <option value="">— Selecionar —</option>
+                    <option value="">Selecionar</option>
                     {partners.map((p) => (
                       <option key={p.id} value={p.id}>{p.full_name}</option>
                     ))}
@@ -1252,7 +1252,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
                   <label className="text-[9px] text-[#9BAFC5] uppercase">Esfera</label>
                   <select value={manualForm.esfera} onChange={(e) => setManualForm((f) => ({ ...f, esfera: e.target.value }))}
                     className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#F5F1E8] mt-1">
-                    <option value="">—</option>
+                    <option value="">Selecionar</option>
                     <option value="Federal">Federal</option>
                     <option value="Estadual">Estadual</option>
                     <option value="Municipal">Municipal</option>
@@ -1294,7 +1294,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
                 {submittingManual ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
                 Cadastrar Ativo
               </button>
-              <p className="text-[9px] text-[#9BAFC5] text-center">Entra direto no pipeline em &quot;Reunião Validada&quot; — mesmo ponto de partida do intake público.</p>
+              <p className="text-[9px] text-[#9BAFC5] text-center">Entra direto no pipeline em &quot;Reunião Validada&quot;, mesmo ponto de partida do intake público.</p>
             </div>
           </div>
         </div>
@@ -1390,12 +1390,12 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
                   <div className="text-[9px] text-[#9BAFC5]">Score</div>
                 </div>
                 <div>
-                  <div className="text-xs font-bold text-[#C9A84C]">{m.cm_asset_listings?.anonymous_id ?? "—"}</div>
+                  <div className="text-xs font-bold text-[#C9A84C]">{m.cm_asset_listings?.anonymous_id ?? "N/D"}</div>
                   <div className="text-xs text-[#F5F1E8]">{formatBRL(Number(m.cm_asset_listings?.valor_face ?? 0))}</div>
                 </div>
                 <ArrowRight size={16} className="text-[#9BAFC5]" />
                 <div>
-                  <div className="text-xs font-bold text-[#F5F1E8]">{m.investor_demands?.nome_contato ?? "—"}</div>
+                  <div className="text-xs font-bold text-[#F5F1E8]">{m.investor_demands?.nome_contato ?? "N/D"}</div>
                   <div className="text-[10px] text-[#9BAFC5]">{m.investor_demands?.empresa ?? m.investor_demands?.email ?? ""}</div>
                 </div>
               </div>
@@ -1418,14 +1418,14 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
             <div key={b.id} className="bg-[#12112A] border border-[#C9A84C]/15 rounded-lg p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <div className="text-[10px] text-[#C9A84C] font-bold">{(b.cm_asset_listings as any)?.anonymous_id ?? "—"}</div>
+                  <div className="text-[10px] text-[#C9A84C] font-bold">{(b.cm_asset_listings as any)?.anonymous_id ?? "N/D"}</div>
                   <div className="text-sm font-bold text-[#F5F1E8]">
                     Oferta: {formatBRL(Number(b.bid_value))}
                     {b.desagio_oferecido && <span className="text-[#9BAFC5] font-normal ml-2">({b.desagio_oferecido}% deságio)</span>}
                   </div>
                   <div className="text-[10px] text-[#9BAFC5] mt-1">
                     Pagamento: {b.payment_type === "a_vista" ? "À Vista" : b.payment_type === "parcelado" ? "Parcelado" : "Escrow"}
-                    {b.notes && ` — ${b.notes}`}
+                    {b.notes && ` · ${b.notes}`}
                   </div>
                 </div>
                 <div className="flex gap-2">
@@ -1451,7 +1451,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
         </div>
       )}
 
-      {/* Painel Lateral — Detalhe do Listing */}
+      {/* Painel Lateral: Detalhe do Listing */}
       {selectedListing && (
         <div className="fixed inset-0 z-[110] bg-[#09081A] flex flex-col">
             <div className="p-5 border-b border-[#C9A84C]/20 flex items-center justify-between flex-shrink-0">
@@ -1498,11 +1498,11 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
             {/* KPIs do Ativo */}
             <div className="grid grid-cols-3 gap-2 p-4">
               <div className="bg-[#12112A] rounded-lg p-3 text-center">
-                <div className={cn("text-lg font-bold", selectedListing.risk_score && selectedListing.risk_score >= 70 ? "text-emerald-400" : selectedListing.risk_score && selectedListing.risk_score >= 50 ? "text-[#C9A84C]" : "text-red-400")}>{selectedListing.risk_score ?? "—"}</div>
+                <div className={cn("text-lg font-bold", selectedListing.risk_score && selectedListing.risk_score >= 70 ? "text-emerald-400" : selectedListing.risk_score && selectedListing.risk_score >= 50 ? "text-[#C9A84C]" : "text-red-400")}>{selectedListing.risk_score ?? "N/D"}</div>
                 <div className="text-[8px] text-[#9BAFC5] uppercase">Score</div>
               </div>
               <div className="bg-[#12112A] rounded-lg p-3 text-center">
-                <div className="text-lg font-bold text-[#C9A84C]">{selectedListing.desagio_pretendido ?? "—"}%</div>
+                <div className="text-lg font-bold text-[#C9A84C]">{selectedListing.desagio_pretendido ?? "N/D"}%</div>
                 <div className="text-[8px] text-[#9BAFC5] uppercase">Deságio</div>
               </div>
               <div className="bg-[#12112A] rounded-lg p-3 text-center">
@@ -1528,7 +1528,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
                 <div>
                   <label className="text-[9px] text-[#9BAFC5] uppercase">Número Interno (gerado automaticamente)</label>
                   <div className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#C9A84C] font-bold mt-1">
-                    {(selectedListing as any).numero_interno ?? "—"}
+                    {(selectedListing as any).numero_interno ?? "N/D"}
                   </div>
                 </div>
                 <div>
@@ -1538,7 +1538,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
                     onChange={(e) => { if (e.target.value === "__new__") setShowNewReferralPartner(true); else setOriginatorNegociado(e.target.value); }}
                     className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#F5F1E8] mt-1 focus:border-[#C9A84C]/50 focus:outline-none"
                   >
-                    <option value="">— Selecionar —</option>
+                    <option value="">Selecionar</option>
                     {partners.map((p) => (
                       <option key={p.id} value={p.id}>{p.full_name}</option>
                     ))}
@@ -1584,10 +1584,10 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
               </div>
             </div>
 
-            {/* Valores — OCR vs Negociado */}
+            {/* Valores: OCR vs Negociado */}
             <div className="px-4 pb-4">
               <div className="text-[10px] text-[#C9A84C] font-bold uppercase tracking-wider mb-2">
-                Valores — OCR vs Negociado
+                Valores: OCR vs Negociado
               </div>
               <div className="bg-[#12112A] border border-[#9BAFC5]/10 rounded-lg p-3 space-y-3">
                 {([
@@ -1603,7 +1603,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
                       : null;
                   return (
                     <div key={key}>
-                      <label className="text-[9px] text-[#9BAFC5] uppercase">{label} — Negociado (manual)</label>
+                      <label className="text-[9px] text-[#9BAFC5] uppercase">{label}: Negociado (manual)</label>
                       <input
                         type="number" value={value} onChange={(e) => setValue(e.target.value)}
                         className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#F5F1E8] mt-1 focus:border-[#C9A84C]/50 focus:outline-none"
@@ -1626,7 +1626,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
                             <div key={i} className="flex items-center justify-between gap-2 bg-[#09081A] rounded px-2 py-1.5">
                               <div className="min-w-0">
                                 <div className="text-[11px] text-[#F5F1E8]">{formatBRL(Number(h.valor))}</div>
-                                <div className="text-[8px] text-[#9BAFC5] truncate" title={h.documento}>{h.documento ?? "documento"} · {typeof h.confiabilidade === "number" ? `${h.confiabilidade}%` : "—"}</div>
+                                <div className="text-[8px] text-[#9BAFC5] truncate" title={h.documento}>{h.documento ?? "documento"} · {typeof h.confiabilidade === "number" ? `${h.confiabilidade}%` : "N/D"}</div>
                               </div>
                               <button
                                 onClick={() => setValue(String(h.valor))}
@@ -1649,7 +1649,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
               </div>
             </div>
 
-            {/* Vitrine Pública — exclusivo para a classe "imovel" (Fase 1 · Bolsa de Grandes Ativos) */}
+            {/* Vitrine Pública: exclusivo para a classe "imovel" (Fase 1 · Bolsa de Grandes Ativos) */}
             {selectedListing.asset_type === "imovel" && (
               <div className="px-4 pb-4">
                 <div className="text-[10px] text-[#C9A84C] font-bold uppercase tracking-wider mb-2">
@@ -1742,7 +1742,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
               </div>
             )}
 
-            {/* Pedidos de Vistoria Técnica — gate manual de Prova de Fundos */}
+            {/* Pedidos de Vistoria Técnica: gate manual de Prova de Fundos */}
             {selectedListing.asset_type === "imovel" && (selectedListing.inspection_requests?.length ?? 0) > 0 && (
               <div className="px-4 pb-4">
                 <div className="text-[10px] text-[#C9A84C] font-bold uppercase tracking-wider mb-2">
@@ -1938,7 +1938,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
 
             {/* ══ ABA: GOVERNANÇA ══ */}
             {activeDetailTab === "governanca" && (<>
-            {/* Atalho Central de Contratos — minuta real do NDA usada na Deal Room */}
+            {/* Atalho Central de Contratos: minuta real do NDA usada na Deal Room */}
             <div className="px-4 mt-4">
               <a
                 href="/juridico/contratos?vertical=capital_markets"
@@ -1954,7 +1954,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
               </a>
             </div>
 
-            {/* Cadeia de Intermediários — Anexo FPA/NCND (Single Payout) */}
+            {/* Cadeia de Intermediários: Anexo FPA/NCND (Single Payout) */}
             <div className="px-4 mt-4">
               <div className="text-[10px] text-[#C9A84C] font-bold uppercase tracking-wider mb-2">Cadeia de Intermediários (FPA/NCND)</div>
               <div className="bg-[#12112A] border border-[#9BAFC5]/10 rounded-lg p-3 space-y-3">
@@ -1969,7 +1969,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
                   <div className="flex gap-1">
                     <select value={interMandatarioId} onChange={(e) => setInterMandatarioId(e.target.value)}
                       className="flex-1 bg-[#09081A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]">
-                      <option value="">— Mandatário —</option>
+                      <option value="">Mandatário</option>
                       {partnersList.map((p) => (
                         <option key={p.id} value={p.id}>{p.full_name}</option>
                       ))}
@@ -2038,7 +2038,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
                           <div key={i.id} className="flex items-center justify-between gap-2 bg-[#09081A] rounded px-2 py-1.5">
                             <div className="min-w-0">
                               <div className="text-[10px] text-[#F5F1E8] truncate">{i.intermediary_name} · {i.percentage}%</div>
-                              <div className="text-[8px] text-[#9BAFC5] truncate">Mandatário: {i.profiles?.full_name ?? "—"}</div>
+                              <div className="text-[8px] text-[#9BAFC5] truncate">Mandatário: {i.profiles?.full_name ?? "N/D"}</div>
                             </div>
                             <button onClick={() => removeIntermediary(i.id)} className="flex-shrink-0">
                               <Trash2 size={12} className="text-red-400/70 hover:text-red-400" />
@@ -2052,7 +2052,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
               </div>
             </div>
 
-            {/* NDA Retroativo — Autorização de Diretor */}
+            {/* NDA Retroativo: Autorização de Diretor */}
             <div className="px-4 mt-4">
               <div className="text-[10px] text-[#C9A84C] font-bold uppercase tracking-wider mb-2">NDA Retroativo (fora do sistema)</div>
               <div className="bg-[#12112A] border border-[#9BAFC5]/10 rounded-lg p-3">
@@ -2110,18 +2110,18 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
                       </button>
                     </div>
                     {userRole !== "ADMIN" && (
-                      <p className="text-[9px] text-[#9BAFC5]">Exige autorização de João, Hamilton ou Robson — enviado por email aos diretores.</p>
+                      <p className="text-[9px] text-[#9BAFC5]">Exige autorização de João, Hamilton ou Robson, enviado por email aos diretores.</p>
                     )}
                   </div>
                 )}
               </div>
             </div>
 
-            {/* Painel KYC Segregado — retido ate validacao da Mesa */}
+            {/* Painel KYC Segregado: retido ate validacao da Mesa */}
             <div className="px-4 mt-4">
               <div className="text-[10px] text-[#C9A84C] font-bold uppercase tracking-wider mb-2">Documentos KYC (retidos p/ validação)</div>
               <div className="bg-[#12112A] border border-[#9BAFC5]/10 rounded-lg p-3 space-y-3">
-                <p className="text-[10px] text-[#9BAFC5]">Documentos de KYC de comprador/vendedor ficam retidos aqui até a Mesa aprovar — só depois disso aparecem no repositório público do Deal Room.</p>
+                <p className="text-[10px] text-[#9BAFC5]">Documentos de KYC de comprador/vendedor ficam retidos aqui até a Mesa aprovar, só depois disso aparecem no repositório público do Deal Room.</p>
 
                 <div className="grid grid-cols-2 gap-2">
                   <select value={kycPartyType} onChange={(e) => setKycPartyType(e.target.value as any)}
@@ -2148,7 +2148,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
                     {kycDocs.map((d) => (
                       <div key={d.id} className="flex items-center justify-between gap-2 bg-[#09081A] rounded px-2 py-1.5">
                         <div className="min-w-0">
-                          <div className="text-[10px] text-[#F5F1E8] truncate">{d.party_type === "vendedor" ? "Vendedor" : "Comprador"}{d.party_name ? ` — ${d.party_name}` : ""} · {d.document_type}</div>
+                          <div className="text-[10px] text-[#F5F1E8] truncate">{d.party_type === "vendedor" ? "Vendedor" : "Comprador"}{d.party_name ? `: ${d.party_name}` : ""} · {d.document_type}</div>
                           <div className="text-[8px] text-[#9BAFC5] truncate">{d.original_filename}</div>
                         </div>
                         {d.status === "pendente" ? (
@@ -2174,13 +2174,13 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
               </div>
             </div>
 
-            {/* Zona de Risco — Exclusão */}
+            {/* Zona de Risco: Exclusão */}
             <div className="px-4 mt-4">
               <div className="text-[10px] text-red-400 font-bold uppercase tracking-wider mb-2">Zona de Risco</div>
               <div className="bg-red-500/5 border border-red-500/20 rounded-lg p-3">
                 {(selectedListing as any).deletion_status === "pending_governance" ? (
                   <div className="text-[11px] text-[#F5F1E8]">
-                    <div className="text-red-400 font-bold mb-1">Exclusão solicitada — aguardando aprovação</div>
+                    <div className="text-red-400 font-bold mb-1">Exclusão solicitada: aguardando aprovação</div>
                     <div className="text-[#9BAFC5] text-[10px] mb-2">{(selectedListing as any).deletion_reason}</div>
                     {userRole === "ADMIN" && (
                       <div className="flex gap-2">
@@ -2206,7 +2206,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
                   </button>
                 )}
                 {userRole !== "ADMIN" && (selectedListing as any).deletion_status !== "pending_governance" && (
-                  <p className="text-[9px] text-[#9BAFC5] mt-2">Exige aprovação de João, Hamilton ou Robson — motivo é enviado por email aos sócios.</p>
+                  <p className="text-[9px] text-[#9BAFC5] mt-2">Exige aprovação de João, Hamilton ou Robson, motivo é enviado por email aos sócios.</p>
                 )}
               </div>
             </div>
@@ -2383,14 +2383,14 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
 
             {/* ══ ABA: DOCUMENTOS ══ */}
             {activeDetailTab === "documentos" && (<>
-            {/* Resumo Consolidado — Multi-Documento (estilo FORJA) */}
+            {/* Resumo Consolidado: Multi-Documento (estilo FORJA) */}
             {(() => {
               const consolidated = buildConsolidatedSummary(listingDocs);
               if (consolidated.length === 0) return null;
               return (
                 <div className="px-4 pt-4">
                   <div className="text-[10px] text-[#C9A84C] font-bold uppercase tracking-wider mb-2">
-                    Resumo Consolidado — Todos os Documentos ({listingDocs.length})
+                    Resumo Consolidado · Todos os Documentos ({listingDocs.length})
                   </div>
                   <div className="bg-[#12112A] border border-[#9BAFC5]/10 rounded-lg p-3 divide-y divide-[#9BAFC5]/5 max-h-72 overflow-y-auto">
                     {consolidated.map((f, i) => {

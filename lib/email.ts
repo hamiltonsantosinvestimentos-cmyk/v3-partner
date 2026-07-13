@@ -1,14 +1,19 @@
 import { Resend } from "resend";
+import { auditText, auditHtml } from "@/lib/brand-guardian-gate";
 
 const FROM = process.env.EMAIL_FROM || "V3 Partners <onboarding@resend.dev>";
 
 // Envia e-mail — nunca bloqueia a operação principal
 // Resend é instanciado em runtime (não em build time) para evitar erro de chave ausente
+// Gate Brand Guardian aplicado aqui (ponto único de saída) cobre as 11 funções deste arquivo
 async function send(to: string, subject: string, html: string): Promise<void> {
   if (!process.env.RESEND_API_KEY || !to) return;
   try {
+    const subjectGate = auditText(subject);
+    const htmlGate = auditHtml(html);
+    if (htmlGate.blocking.length > 0) console.error("[lib/email] Brand Guardian bloqueou:", htmlGate.blocking);
     const resend = new Resend(process.env.RESEND_API_KEY);
-    await resend.emails.send({ from: FROM, to, subject, html });
+    await resend.emails.send({ from: FROM, to, subject: subjectGate.corrected, html: htmlGate.corrected });
   } catch { /* silent */ }
 }
 
@@ -18,32 +23,29 @@ function template(title: string, body: string, cta?: { label: string; url: strin
 <html lang="pt-BR">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${title}</title></head>
-<body style="margin:0;padding:0;background:#07101E;font-family:'Segoe UI',Arial,sans-serif;">
-  <div style="max-width:560px;margin:40px auto;background:#0C1929;border-radius:12px;overflow:hidden;border:1px solid #1B3050;">
+<body style="margin:0;padding:0;background:#09081A;font-family:'DM Sans',Arial,sans-serif;">
+  <div style="max-width:560px;margin:40px auto;background:#162744;border-radius:12px;overflow:hidden;border:1px solid #243A66;">
 
-    <div style="padding:24px 32px;border-bottom:1px solid #1B3050;background:#07101E;">
-      <div style="display:flex;align-items:center;gap:10px;">
-        <div style="width:3px;height:24px;background:linear-gradient(180deg,#C4922E,#E5B96A);border-radius:2px;"></div>
-        <span style="font-size:16px;font-weight:800;color:#E5B96A;letter-spacing:0.08em;">V3 PARTNERS</span>
-      </div>
+    <div style="padding:24px 32px;border-bottom:1px solid #243A66;background:#09081A;">
+      <img src="https://app.v3partners.com.br/v3-logo-flat-gold-alpha.png" alt="V3 Partners" style="height:32px;display:block;">
     </div>
 
     <div style="padding:32px;">
-      <h2 style="margin:0 0 20px;font-size:19px;font-weight:700;color:#C8D4E3;line-height:1.3;">${title}</h2>
+      <h2 style="margin:0 0 20px;font-size:19px;font-weight:700;color:#F5F1E8;line-height:1.3;">${title}</h2>
       ${body}
       ${cta ? `
       <div style="margin-top:28px;">
         <a href="${cta.url}"
-          style="display:inline-block;background:#C4922E;color:#07101E;text-decoration:none;
+          style="display:inline-block;background:#C9A84C;color:#09081A;text-decoration:none;
                  padding:12px 28px;border-radius:8px;font-weight:700;font-size:14px;">
           ${cta.label} →
         </a>
       </div>` : ""}
     </div>
 
-    <div style="padding:18px 32px;border-top:1px solid #1B3050;background:#07101E;">
-      <p style="margin:0;font-size:11px;color:#7A96AF;">
-        V3 Partners — Plataforma Financeira &nbsp;·&nbsp; E-mail automático, não responda.
+    <div style="padding:18px 32px;border-top:1px solid #243A66;background:#09081A;">
+      <p style="margin:0;font-size:11px;color:#9BAFC5;">
+        V3 Partners · Plataforma Financeira &nbsp;·&nbsp; E-mail automático, não responda.
       </p>
     </div>
   </div>
@@ -53,16 +55,16 @@ function template(title: string, body: string, cta?: { label: string; url: strin
 
 function row(label: string, value: string): string {
   return `<div style="display:flex;justify-content:space-between;align-items:center;
-                       padding:9px 0;border-bottom:1px solid #1B3050;">
-    <span style="font-size:13px;color:#7A96AF;">${label}</span>
-    <span style="font-size:13px;font-weight:600;color:#C8D4E3;">${value}</span>
+                       padding:9px 0;border-bottom:1px solid #243A66;">
+    <span style="font-size:13px;color:#9BAFC5;">${label}</span>
+    <span style="font-size:13px;font-weight:600;color:#F5F1E8;">${value}</span>
   </div>`;
 }
 
 function highlight(label: string, value: string, color: string): string {
-  return `<div style="margin-top:16px;padding:14px 18px;background:#13243D;
+  return `<div style="margin-top:16px;padding:14px 18px;background:#13223A;
                        border-radius:8px;border-left:3px solid ${color};">
-    <p style="margin:0 0 4px;font-size:11px;color:#7A96AF;">${label}</p>
+    <p style="margin:0 0 4px;font-size:11px;color:#9BAFC5;">${label}</p>
     <p style="margin:0;font-size:22px;font-weight:800;color:${color};">${value}</p>
   </div>`;
 }
@@ -103,7 +105,7 @@ export async function notifyContratoParceriaAssinado(opts: {
     `✅ Contrato V3 ${planoLabel} assinado com sucesso`,
     template(`Bem-vindo à V3, ${opts.partnerName}!`, body, {
       label: "Acessar Plataforma",
-      url: "https://v3-partner.vercel.app/dashboard",
+      url: "https://app.v3partners.com.br/dashboard",
     })
   );
 }
@@ -139,7 +141,7 @@ export async function notifyNovaProposta(opts: {
     `📋 Nova proposta recebida — ${opts.proposalCode}`,
     template("Nova Proposta na Mesa de Crédito", body, {
       label: "Ver na Mesa de Crédito",
-      url: "https://v3-partner.vercel.app/mesa-credito",
+      url: "https://app.v3partners.com.br/mesa-credito",
     })
   );
 }
@@ -184,7 +186,7 @@ export async function notifyPropostaAtualizada(opts: {
     `${st.emoji} Proposta ${opts.proposalCode} — ${st.label}`,
     template("Atualização da sua Proposta", body, {
       label: "Ver Proposta",
-      url: "https://v3-partner.vercel.app/mesa-credito",
+      url: "https://app.v3partners.com.br/mesa-credito",
     })
   );
 }
@@ -218,7 +220,7 @@ export async function notifyNovaComissao(opts: {
     `💰 Nova comissão a receber — ${moeda(opts.commissionValue)}`,
     template("Nova Comissão Registrada", body, {
       label: "Ver Comissões",
-      url: "https://v3-partner.vercel.app/comissoes",
+      url: "https://app.v3partners.com.br/comissoes",
     })
   );
 }
@@ -289,7 +291,7 @@ export async function notifyContratoV3Rep(opts: {
     `📤 Contrato enviado — ${opts.clientName} · ${opts.proposalCode}`,
     template("Mandato Enviado para Assinatura", body, {
       label: "Ver na Mesa Operacional",
-      url: "https://v3-partner.vercel.app/mesa-operacional",
+      url: "https://app.v3partners.com.br/mesa-operacional",
     })
   );
 }
@@ -417,7 +419,7 @@ export async function notifyContratoCompleto(opts: {
     `✅ Mandato finalizado — ${opts.clientName} · ${opts.proposalCode}`,
     template("Contrato Totalmente Assinado", repBody, {
       label: "Ver na Mesa Operacional",
-      url: "https://v3-partner.vercel.app/mesa-operacional",
+      url: "https://app.v3partners.com.br/mesa-operacional",
     })
   );
 }
@@ -706,7 +708,7 @@ export async function sendMonthlyReport(opts: {
     `📊 Seu relatório mensal V3 — ${opts.mes}`,
     template(`Relatório de ${opts.mes}`, body, {
       label: "Ver Detalhes na Plataforma",
-      url: "https://v3-partner.vercel.app/minha-assinatura",
+      url: "https://app.v3partners.com.br/minha-assinatura",
     })
   );
 }
@@ -743,7 +745,7 @@ export async function notifyComentarioProposta(opts: {
     `💬 Novo comentário na proposta ${opts.proposalCode}`,
     template("Comentário da Mesa Operacional", body, {
       label: "Ver Proposta",
-      url: `${process.env.NEXT_PUBLIC_SITE_URL ?? "https://v3-partner.vercel.app"}/mesa-credito`,
+      url: `${process.env.NEXT_PUBLIC_SITE_URL ?? "https://app.v3partners.com.br"}/mesa-credito`,
     })
   );
 }
@@ -780,7 +782,7 @@ export async function notifyComissaoPaga(opts: {
     `✅ Comissão paga — ${moeda(opts.commissionValue)}`,
     template("Comissão Liquidada", body, {
       label: "Ver Extrato",
-      url: "https://v3-partner.vercel.app/comissoes",
+      url: "https://app.v3partners.com.br/comissoes",
     })
   );
 }
@@ -1023,7 +1025,7 @@ export async function notifyMarketplaceLead(opts: {
     `🛒 Novo lead no Marketplace — ${opts.productName}`,
     template("Novo Lead Recebido", body, {
       label: "Ver no Painel",
-      url: `${process.env.NEXT_PUBLIC_SITE_URL ?? "https://v3-partner.vercel.app"}/fornecedor/dashboard`,
+      url: `${process.env.NEXT_PUBLIC_SITE_URL ?? "https://app.v3partners.com.br"}/fornecedor/dashboard`,
     })
   );
 }
@@ -1065,7 +1067,7 @@ export async function notifyLeadStatusAtualizado(opts: {
     `${st.emoji} Lead atualizado — ${opts.productName}`,
     template("Status do Lead Atualizado", body, {
       label: "Ver Meus Leads",
-      url: `${process.env.NEXT_PUBLIC_SITE_URL ?? "https://v3-partner.vercel.app"}/marketplace`,
+      url: `${process.env.NEXT_PUBLIC_SITE_URL ?? "https://app.v3partners.com.br"}/marketplace`,
     })
   );
 }

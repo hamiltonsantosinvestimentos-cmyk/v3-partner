@@ -162,7 +162,7 @@ Never use em dash (—) in any field. Use comma, colon or period instead.`;
     // Tenta registrar arquivos na tabela creative_files — falha graciosamente
     try {
       await svc.from("creative_files").delete().eq("deal_id", deal_id);
-      const baseUrl = "https://v3-partner.vercel.app";
+      const baseUrl = "https://app.v3partners.com.br";
       const fileEntries = [
         { file_type: "cim",            language: "pt-br", format: "pdf" },
         { file_type: "cim",            language: "en",    format: "pdf" },
