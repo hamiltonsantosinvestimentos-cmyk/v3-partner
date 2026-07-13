@@ -210,6 +210,7 @@ export function CaptacaoForm({ token, partnerName }: CaptacaoFormProps) {
   // Step Documentos
   const [uploadedDocs, setUploadedDocs] = useState<Record<string, { name: string; url: string }>>({});
   const [uploading, setUploading] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<string>("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [pendingLabel, setPendingLabel] = useState("");
 
@@ -240,6 +241,7 @@ export function CaptacaoForm({ token, partnerName }: CaptacaoFormProps) {
 
   async function handleDocUpload(docLabel: string, file: File) {
     setUploading(docLabel);
+    setUploadError("");
     try {
       const fd = new FormData();
       fd.append("token", token);
@@ -249,9 +251,11 @@ export function CaptacaoForm({ token, partnerName }: CaptacaoFormProps) {
       const json = await res.json();
       if (res.ok && json.url) {
         setUploadedDocs(prev => ({ ...prev, [docLabel]: { name: file.name, url: json.url } }));
+      } else {
+        setUploadError(json.error ?? "Não foi possível enviar o documento. Tente novamente.");
       }
     } catch {
-      // silently ignore — docs are optional
+      setUploadError("Erro de conexão ao enviar o documento. Verifique sua internet e tente novamente.");
     } finally {
       setUploading(null);
     }
@@ -664,6 +668,13 @@ export function CaptacaoForm({ token, partnerName }: CaptacaoFormProps) {
             <p style={{ fontSize: 12, color: "#7A8FA8", marginTop: 0 }}>
               Envie os documentos abaixo para agilizar a análise. Todos são opcionais agora — você pode enviá-los depois.
             </p>
+
+            {uploadError && (
+              <div className="flex items-center gap-2 p-3 rounded-xl" style={{ background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.3)" }}>
+                <AlertTriangle style={{ width: 14, height: 14, color: "#EF4444", flexShrink: 0 }} />
+                <p style={{ fontSize: 12, color: "#EF4444", margin: 0 }}>{uploadError}</p>
+              </div>
+            )}
 
             {/* Checklist */}
             <div className="space-y-2">

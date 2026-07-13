@@ -32,6 +32,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Arquivo muito grande (máximo 10 MB)" }, { status: 400 });
   }
 
+  // Garante que o bucket existe (cria se necessário) — evita falha silenciosa
+  // de upload quando o bucket ainda não foi provisionado no projeto Supabase.
+  const { data: buckets } = await svc.storage.listBuckets();
+  const bucketExists = buckets?.some((b) => b.name === "captacao-documents");
+  if (!bucketExists) {
+    const { error: createError } = await svc.storage.createBucket("captacao-documents", { public: true, fileSizeLimit: 10 * 1024 * 1024 });
+    if (createError) return NextResponse.json({ error: `Erro ao preparar armazenamento: ${createError.message}` }, { status: 500 });
+  }
+
   const ext      = file.name.split(".").pop() ?? "bin";
   const safeName = `${token}/${Date.now()}_${label.replace(/[^a-zA-Z0-9]/g, "_")}.${ext}`;
   const buffer   = Buffer.from(await file.arrayBuffer());
@@ -40,7 +49,7 @@ export async function POST(req: NextRequest) {
     .from("captacao-documents")
     .upload(safeName, buffer, { contentType: file.type, upsert: false });
 
-  if (uploadError) return NextResponse.json({ error: uploadError.message }, { status: 500 });
+  if (uploadError) return NextResponse.json({ error: `Erro ao enviar arquivo: ${uploadError.message}` }, { status: 500 });
 
   const { data: { publicUrl } } = svc.storage
     .from("captacao-documents")
