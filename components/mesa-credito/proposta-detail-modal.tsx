@@ -2245,7 +2245,7 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
               PDF
             </button>
             <CopyClientLinkButton proposalId={proposal.id} />
-            {canChangeStage && <GenerateUploadLinkButton proposalId={proposal.id} />}
+            {(canChangeStage || canEditValorSolicitado) && <GenerateUploadLinkButton proposalId={proposal.id} />}
             <button onClick={onClose} className="w-8 h-8 rounded-lg hover:bg-secondary flex items-center justify-center text-muted-foreground hover:text-white transition-colors">
               <X className="w-4 h-4" />
             </button>

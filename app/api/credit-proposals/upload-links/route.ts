@@ -22,10 +22,6 @@ export async function POST(req: NextRequest) {
     .eq("id", user.id)
     .single();
 
-  if (!ADMIN_ROLES.includes(profile?.role as typeof ADMIN_ROLES[number])) {
-    return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
-  }
-
   const body = await req.json() as {
     proposal_id:  string;
     label?:       string;
@@ -43,6 +39,12 @@ export async function POST(req: NextRequest) {
     .single();
 
   if (!proposal) return NextResponse.json({ error: "Proposta não encontrada" }, { status: 404 });
+
+  const isMesa = ADMIN_ROLES.includes(profile?.role as typeof ADMIN_ROLES[number]);
+  const isOwner = proposal.partner_id === user.id;
+  if (!isMesa && !isOwner) {
+    return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
+  }
 
   const expiresAt = new Date();
   expiresAt.setDate(expiresAt.getDate() + expires_days);
