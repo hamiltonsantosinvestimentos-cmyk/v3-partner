@@ -70,19 +70,20 @@ function resolveLevel(creditLine: string, requestedValue: number): "NIVEL_1" | "
 }
 
 /** Copia um arquivo já enviado via link de captação (bucket captacao-documents,
- *  URL pública) para o bucket credit-documents, no formato que a proposta espera. */
+ *  privado) para o bucket credit-documents, no formato que a proposta espera.
+ *  `sourcePath` vem do que o próprio upload retornou (nunca de uma URL
+ *  informada pelo cliente) e precisa começar com o token deste envio — evita
+ *  que alguém informe o caminho de um documento de outro lead/parceiro. */
 async function copyToProposalBucket(
   svc: ReturnType<typeof serviceClient>,
-  publicUrl: string,
+  sourcePath: string,
+  token: string,
   ownerId: string,
   proposalId: string,
   docId: string,
   fileName: string,
 ): Promise<{ storage_path: string } | null> {
-  const marker = "/captacao-documents/";
-  const idx = publicUrl.indexOf(marker);
-  if (idx === -1) return null;
-  const sourcePath = decodeURIComponent(publicUrl.slice(idx + marker.length));
+  if (!sourcePath.startsWith(`${token}/`)) return null;
 
   const { data: fileData, error: downloadError } = await svc.storage.from("captacao-documents").download(sourcePath);
   if (downloadError || !fileData) return null;
@@ -107,6 +108,7 @@ async function createLinkedProposal(
   lead: { id: string; code: string },
   formData: Record<string, unknown>,
   partnerId: string,
+  token: string,
 ) {
   const clientType: "PF" | "PJ" = formData.personType === "PJ" ? "PJ" : "PF";
   const creditLine = (formData.creditLine as string) || (formData.productInterest as string) || "HOME EQUITY";
@@ -126,7 +128,7 @@ async function createLinkedProposal(
   const checklist = resolveChecklist(creditLine, clientType, (portfolioLinhas ?? []) as PortfolioLinha[]);
 
   const documentosForm = Array.isArray(formData.documentos)
-    ? (formData.documentos as { label: string; name: string; url: string }[])
+    ? (formData.documentos as { label: string; name: string; path?: string; url?: string }[])
     : [];
 
   const proposalIdForPath = crypto.randomUUID();
@@ -135,14 +137,16 @@ async function createLinkedProposal(
 
   for (let i = 0; i < documentosForm.length; i++) {
     const doc = documentosForm[i];
-    if (!doc?.url) continue;
+    // Só o "path" retornado pelo próprio upload é confiável — nunca uma URL
+    // informada livremente no corpo da requisição.
+    if (!doc?.path) continue;
     const labelNorm = normalizeStr(doc.label ?? "");
     const match = checklist.find(c => {
       const n = normalizeStr(c.label);
       return n === labelNorm || n.startsWith(labelNorm) || labelNorm.startsWith(n);
     });
     const docId = match?.id ?? `captacao_${i}`;
-    const copied = await copyToProposalBucket(svc, doc.url, partnerId, proposalIdForPath, docId, doc.name ?? doc.label ?? "documento");
+    const copied = await copyToProposalBucket(svc, doc.path, token, partnerId, proposalIdForPath, docId, doc.name ?? doc.label ?? "documento");
     if (copied) {
       documents.push({ doc_id: docId, file_name: doc.name ?? doc.label ?? "documento", storage_path: copied.storage_path, uploaded_at: new Date().toISOString(), uploaded_by: partnerId });
       if (match) checklistChecked[docId] = true;
@@ -300,7 +304,7 @@ export async function POST(req: NextRequest) {
   // formulário registrados contra o checklist — pendente de conferência do
   // partner antes de aparecer na Mesa de Crédito. Não bloqueia a resposta.
   try {
-    await createLinkedProposal(svc, lead as { id: string; code: string }, formData, link.partner_id);
+    await createLinkedProposal(svc, lead as { id: string; code: string }, formData, link.partner_id, token);
   } catch (e) {
     console.error("[captacao/submit] Erro ao criar proposta vinculada:", e);
   }

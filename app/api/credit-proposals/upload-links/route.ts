@@ -84,9 +84,20 @@ export async function GET(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
+  const { data: profile } = await svc().from("profiles").select("role").eq("id", user.id).single();
+
   const { searchParams } = new URL(req.url);
   const proposal_id = searchParams.get("proposal_id");
   if (!proposal_id) return NextResponse.json({ error: "proposal_id obrigatório" }, { status: 400 });
+
+  const { data: proposal } = await svc().from("credit_desk_proposals").select("partner_id").eq("id", proposal_id).single();
+  if (!proposal) return NextResponse.json({ error: "Proposta não encontrada" }, { status: 404 });
+
+  const isMesa = ADMIN_ROLES.includes(profile?.role as typeof ADMIN_ROLES[number]);
+  const isOwner = proposal.partner_id === user.id;
+  if (!isMesa && !isOwner) {
+    return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
+  }
 
   const { data, error } = await svc()
     .from("credit_upload_tokens")

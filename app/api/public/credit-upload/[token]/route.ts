@@ -125,11 +125,22 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
 
   const { data: proposal } = await svc()
     .from("credit_desk_proposals")
-    .select("documents, checklist, partner_id")
+    .select("documents, checklist, partner_id, credit_line, metadata")
     .eq("id", tokenRow.proposal_id)
     .single();
 
   if (!proposal) return NextResponse.json({ error: "Proposta não encontrada." }, { status: 404 });
+
+  // O doc_id precisa ser um item real do checklist desta proposta — evita
+  // que o portador do link grave chaves arbitrárias no caminho do storage ou
+  // no JSONB de checklist.
+  const meta = (proposal.metadata as Record<string, unknown>) ?? {};
+  const clientType: "PF" | "PJ" = meta.client_type === "PJ" ? "PJ" : "PF";
+  const { data: portfolioLinhas } = await svc().from("portfolio_linhas").select("nome, documentos_pf, documentos_pj").eq("ativo", true);
+  const validChecklist = resolveChecklistForLine(proposal.credit_line, clientType, (portfolioLinhas ?? []) as PortfolioLinhaDocs[]);
+  if (!validChecklist.some(c => c.id === docIdInput)) {
+    return NextResponse.json({ error: "Documento do checklist inválido." }, { status: 400 });
+  }
 
   const safeName = sanitizeAscii(file.name);
   const fileHash = createHash("sha256").update(buf).digest("hex");

@@ -100,9 +100,13 @@ export async function DELETE(
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
-  const { data: profileData } = await supabase.from("profiles").select("role").eq("id", user.id).single();
-  const profile = profileData as { role: string } | null;
+  const { data: profileData } = await supabase.from("profiles").select("role, full_name, email").eq("id", user.id).single();
+  const profile = profileData as { role: string; full_name: string | null; email: string } | null;
   if (profile?.role !== "ADMIN") return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
+
+  // Captura dados do alvo antes de excluir, só para o registro de auditoria
+  const { data: targetData } = await supabase.from("profiles").select("full_name, email").eq("id", id).single();
+  const target = targetData as { full_name: string | null; email: string | null } | null;
 
   // Nullifica TODAS as FKs que referenciam profiles (preserva os registros)
   const svc2 = svcClient();
@@ -235,6 +239,18 @@ export async function DELETE(
       : rawMsg;
     return NextResponse.json({ error: msg }, { status: 500 });
   }
+
+  // Grava auditoria (fire-and-forget) — mesmo padrão do PATCH acima
+  svcClient().from("audit_logs").insert({
+    user_id: user.id,
+    user_name: profile?.full_name ?? profile?.email ?? user.email,
+    action: "EXCLUIR_USUARIO",
+    entity: "profiles",
+    entity_id: id,
+    new_data: null,
+    old_data: { full_name: target?.full_name ?? null, email: target?.email ?? null },
+    ip_address: null,
+  }).then(() => {}, () => {});
 
   return NextResponse.json({ success: true });
 }

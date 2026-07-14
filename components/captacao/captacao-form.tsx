@@ -218,7 +218,7 @@ export function CaptacaoForm({ token, partnerName }: CaptacaoFormProps) {
   }, [portfolioLinhas]);
 
   // Step Documentos
-  const [uploadedDocs, setUploadedDocs] = useState<Record<string, { name: string; url: string }>>({});
+  const [uploadedDocs, setUploadedDocs] = useState<Record<string, { name: string; path: string }>>({});
   const [uploading, setUploading] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string>("");
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -259,8 +259,8 @@ export function CaptacaoForm({ token, partnerName }: CaptacaoFormProps) {
       fd.append("label", docLabel);
       const res = await fetch("/api/captacao/documents", { method: "POST", body: fd });
       const json = await res.json();
-      if (res.ok && json.url) {
-        setUploadedDocs(prev => ({ ...prev, [docLabel]: { name: file.name, url: json.url } }));
+      if (res.ok && json.path) {
+        setUploadedDocs(prev => ({ ...prev, [docLabel]: { name: file.name, path: json.path } }));
       } else {
         setUploadError(json.error ?? "Não foi possível enviar o documento. Tente novamente.");
       }
