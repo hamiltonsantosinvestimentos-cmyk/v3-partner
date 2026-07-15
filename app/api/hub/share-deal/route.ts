@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { auditText, auditHtml } from "@/lib/brand-guardian-gate";
 
 // POST { dealId, empresaNome, setor, valorEstimado, sugestaoTese, emails[] }
 export async function POST(req: NextRequest) {
@@ -112,11 +113,13 @@ export async function POST(req: NextRequest) {
     const { Resend } = await import("resend");
     const resend = new Resend(resendKey);
 
+    const hubHtmlGate = auditHtml(html);
+    if (hubHtmlGate.blocking.length > 0) console.error("[hub/share-deal] Brand Guardian bloqueou:", hubHtmlGate.blocking);
     await resend.emails.send({
       from: "V3 Partners Hub <noreply@v3partners.com.br>",
       to: emails,
-      subject: `[Hub V3] Deal — ${empresaNome} · ${setorlabels[setor] ?? setor}`,
-      html,
+      subject: auditText(`[Hub V3] Deal: ${empresaNome} · ${setorlabels[setor] ?? setor}`).corrected,
+      html: hubHtmlGate.corrected,
     });
 
     return NextResponse.json({ ok: true, mode: "production", sent: emails.length, dealId });

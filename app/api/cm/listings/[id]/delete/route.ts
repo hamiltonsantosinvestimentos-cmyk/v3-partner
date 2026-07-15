@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
+import { auditText, auditHtml } from "@/lib/brand-guardian-gate";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -26,14 +27,17 @@ async function notifyGovernance(params: { anonymousId: string; requesterName: st
   try {
     const { Resend } = await import("resend");
     const resend = new Resend(process.env.RESEND_API_KEY);
+    const delSubjectGate = auditText(`Solicitação de exclusão: ${params.anonymousId}`);
+    const delHtmlGate = auditHtml(`<p><strong>${params.requesterName}</strong> solicitou a exclusão do ativo <strong>${params.anonymousId}</strong>.</p>
+             <p><strong>Motivo:</strong> ${params.reason}</p>
+             <p>Acesse a Mesa de Capitais para aprovar ou rejeitar: https://app.v3partners.com.br/bolsa/mesa</p>
+             <p style="color:#888;font-size:12px">listing_id: ${params.listingId}</p>`);
+    if (delHtmlGate.blocking.length > 0) console.error("[cm listings delete] Brand Guardian bloqueou:", delHtmlGate.blocking);
     await resend.emails.send({
       from: "V3 Partners Bolsa de Ativos <noreply@v3partners.com.br>",
       to: ADMIN_EMAILS_FOR_GOVERNANCE,
-      subject: `Solicitação de exclusão — ${params.anonymousId}`,
-      html: `<p><strong>${params.requesterName}</strong> solicitou a exclusão do ativo <strong>${params.anonymousId}</strong>.</p>
-             <p><strong>Motivo:</strong> ${params.reason}</p>
-             <p>Acesse a Mesa de Capitais para aprovar ou rejeitar: https://app.v3partners.com.br/bolsa/mesa</p>
-             <p style="color:#888;font-size:12px">listing_id: ${params.listingId}</p>`,
+      subject: delSubjectGate.corrected,
+      html: delHtmlGate.corrected,
     });
   } catch (err) {
     console.error("[CM Delete] falha ao notificar governança:", err);

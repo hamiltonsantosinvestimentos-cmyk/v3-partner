@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { auditText, auditHtml } from "@/lib/brand-guardian-gate";
 
 // POST { perfil, codigo }
 export async function POST(req: NextRequest) {
@@ -114,11 +115,13 @@ export async function POST(req: NextRequest) {
 </body>
 </html>`.trim();
 
+      const investidorHtmlGate = auditHtml(htmlMesa);
+      if (investidorHtmlGate.blocking.length > 0) console.error("[submeter-investidor] Brand Guardian bloqueou:", investidorHtmlGate.blocking);
       await resend.emails.send({
         from: "V3 Partners Plataforma <noreply@v3partners.com.br>",
         to: "mesa@v3partners.com.br",
-        subject: `[Novo Investidor] ${codigo} — ${nomeContato} · ${labelTipo[tipoInvestidor] ?? tipoInvestidor}`,
-        html: htmlMesa,
+        subject: auditText(`[Novo Investidor] ${codigo}: ${nomeContato} · ${labelTipo[tipoInvestidor] ?? tipoInvestidor}`).corrected,
+        html: investidorHtmlGate.corrected,
       });
     }
 

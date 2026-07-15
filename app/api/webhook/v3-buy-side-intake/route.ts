@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as sc } from "@supabase/supabase-js";
+import { auditText, auditHtml } from "@/lib/brand-guardian-gate";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -19,14 +20,11 @@ async function sendNotification(demand: {
   const setoresStr = demand.setores.join(", ");
   const ticketRange = `R$ ${(demand.ticket_min / 1e6).toFixed(1)}M – R$ ${(demand.ticket_max / 1e6).toFixed(1)}M`;
 
-  await resend.emails.send({
-    from: "Mesa M&A <no-reply@v3partners.com.br>",
-    to: ["mesa@v3partners.com.br"],
-    subject: `[Buy-Side] Nova demanda — ${demand.nome_contato}${demand.empresa ? ` (${demand.empresa})` : ""}`,
-    html: `
+  const buySideSubjectGate = auditText(`[Buy-Side] Nova demanda: ${demand.nome_contato}${demand.empresa ? ` (${demand.empresa})` : ""}`);
+  const buySideHtmlGate = auditHtml(`
       <div style="font-family: sans-serif; max-width: 600px; color: #333;">
         <h2 style="color: #C9A84C;">Nova Demanda Buy-Side Recebida</h2>
-        <p><strong>Contato:</strong> ${demand.nome_contato}${demand.empresa ? ` — ${demand.empresa}` : ""}</p>
+        <p><strong>Contato:</strong> ${demand.nome_contato}${demand.empresa ? `: ${demand.empresa}` : ""}</p>
         <p><strong>Setores:</strong> ${setoresStr}</p>
         <p><strong>Ticket:</strong> ${ticketRange}</p>
         <p><strong>Matches encontrados:</strong> ${matchesCount}</p>
@@ -37,7 +35,13 @@ async function sendNotification(demand: {
           <a href="https://app.v3partners.com.br/mesa-ma">app.v3partners.com.br/mesa-ma</a> → aba Buy-Side
         </p>
       </div>
-    `,
+    `);
+  if (buySideHtmlGate.blocking.length > 0) console.error("[v3-buy-side-intake] Brand Guardian bloqueou:", buySideHtmlGate.blocking);
+  await resend.emails.send({
+    from: "Mesa M&A <no-reply@v3partners.com.br>",
+    to: ["mesa@v3partners.com.br"],
+    subject: buySideSubjectGate.corrected,
+    html: buySideHtmlGate.corrected,
   });
 }
 

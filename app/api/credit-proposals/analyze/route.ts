@@ -4,6 +4,7 @@ import { createClient as sc } from "@supabase/supabase-js";
 import { default as Anthropic } from "@anthropic-ai/sdk";
 import { renderAnalisePDF, type AnaliseCredito } from "@/lib/analise-credito-pdf";
 import { Resend } from "resend";
+import { auditText, auditHtml } from "@/lib/brand-guardian-gate";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -332,11 +333,14 @@ Retorne APENAS um objeto JSON válido com EXATAMENTE esta estrutura (sem markdow
 </body>
 </html>`;
 
+      const analyzeSubjectGate = auditText(`Relatório de Comitê: ${proposal.code} | ${proposal.client_name}`);
+      const analyzeHtmlGate = auditHtml(html);
+      if (analyzeHtmlGate.blocking.length > 0) console.error("[credit-proposals/analyze] Brand Guardian bloqueou:", analyzeHtmlGate.blocking);
       await resend.emails.send({
         from: process.env.EMAIL_FROM || "V3 Partners <onboarding@resend.dev>",
         to: COMITE_EMAIL,
-        subject: `${parecerEmoji} Relatório de Comitê — ${proposal.code} | ${proposal.client_name}`,
-        html,
+        subject: analyzeSubjectGate.corrected,
+        html: analyzeHtmlGate.corrected,
         attachments: pdfBuffer ? [{
           filename: `relatorio-comite-${proposal.code}.pdf`,
           content: pdfBuffer,

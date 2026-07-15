@@ -2,6 +2,7 @@ import { resolveBucket } from "@/lib/storage-bucket";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
+import { auditText, auditHtml } from "@/lib/brand-guardian-gate";
 
 export const maxDuration = 300;
 
@@ -308,16 +309,19 @@ export async function POST(req: NextRequest) {
     if (admins && admins.length > 0) {
       const { Resend } = await import("resend");
       const resend = new Resend(process.env.RESEND_API_KEY);
-      await resend.emails.send({
-        from:    "V3 Partners <noreply@v3partners.com.br>",
-        to:      admins.map(a => a.email).filter(Boolean),
-        subject: `[${dealCode}] Conciliação concluída — ${stats.success}/${stats.total} docs · conf. ${stats.avgConf}%`,
-        html: `<p style="font-family:DM Sans,Arial;color:#F0ECE4;background:#09081A;padding:24px;">
+      const reconcileSubjectGate = auditText(`[${dealCode}] Conciliação concluída: ${stats.success}/${stats.total} docs · conf. ${stats.avgConf}%`);
+      const reconcileHtmlGate = auditHtml(`<p style="font-family:DM Sans,Arial;color:#F5F1E8;background:#09081A;padding:24px;">
           Lote <strong>${batchName}</strong> processado.<br/>
           ${stats.success} extraídos · ${stats.needsReview} requerem revisão · ${stats.error} erros<br/>
           Confiabilidade média: <strong>${stats.avgConf}%</strong> · Divergências: <strong>${stats.divergences}</strong><br/><br/>
           ${reportUrl ? `<a href="${reportUrl}" style="color:#C9A84C;">Ver Relatório Completo</a>` : ""}
-        </p>`,
+        </p>`);
+      if (reconcileHtmlGate.blocking.length > 0) console.error("[batch-reconcile] Brand Guardian bloqueou:", reconcileHtmlGate.blocking);
+      await resend.emails.send({
+        from:    "V3 Partners <noreply@v3partners.com.br>",
+        to:      admins.map(a => a.email).filter(Boolean),
+        subject: reconcileSubjectGate.corrected,
+        html:    reconcileHtmlGate.corrected,
       }).then(() => { emailsSent = admins.length; }).catch(e => console.error("[batch-reconcile] email:", e));
     }
   }

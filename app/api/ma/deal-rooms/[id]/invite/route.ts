@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { Resend } from "resend";
+import { auditText, auditHtml } from "@/lib/brand-guardian-gate";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -97,19 +98,21 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
   if (process.env.RESEND_API_KEY) {
     try {
       const resend = new Resend(process.env.RESEND_API_KEY);
+      const inviteHtmlGate = auditHtml(buildInviteEmail({
+        investorName: investor_name,
+        dealName:     deal?.target_company ?? dealCode,
+        dealCode,
+        vdrUrl,
+        expiresDate:  tokenExpiresAt.toLocaleDateString("pt-BR"),
+        message,
+        requiresNda:  room.nda_required,
+      }));
+      if (inviteHtmlGate.blocking.length > 0) console.error("[deal-rooms/invite] Brand Guardian bloqueou:", inviteHtmlGate.blocking);
       await resend.emails.send({
         from:    "V3 Partners <noreply@v3partners.com.br>",
         to:      investor_email,
-        subject: `Acesso ao Deal Room — ${deal?.target_company ?? dealCode} | V3 Partners`,
-        html: buildInviteEmail({
-          investorName: investor_name,
-          dealName:     deal?.target_company ?? dealCode,
-          dealCode,
-          vdrUrl,
-          expiresDate:  tokenExpiresAt.toLocaleDateString("pt-BR"),
-          message,
-          requiresNda:  room.nda_required,
-        }),
+        subject: auditText(`Acesso ao Deal Room: ${deal?.target_company ?? dealCode} | V3 Partners`).corrected,
+        html: inviteHtmlGate.corrected,
       });
       emailSent = true;
     } catch (e) {

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { Resend } from "resend";
+import { auditText, auditHtml } from "@/lib/brand-guardian-gate";
 
 export const maxDuration = 300;
 
@@ -75,11 +76,14 @@ export async function POST(
       .replace("</body>", `${trackPixel}${optoutFooter}</body>`);
 
     try {
+      const campanhaSubjectGate = auditText(campanha.assunto);
+      const campanhaHtmlGate = auditHtml(htmlFinal);
+      if (campanhaHtmlGate.blocking.length > 0) console.error("[sdr/disparar] Brand Guardian bloqueou:", campanhaHtmlGate.blocking);
       await resend.emails.send({
         from: FROM,
         to: contato.email,
-        subject: campanha.assunto,
-        html: htmlFinal,
+        subject: campanhaSubjectGate.corrected,
+        html: campanhaHtmlGate.corrected,
       });
 
       await svc().from("sdr_campanha_contatos").update({

@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { mapMissingToDocRequests, DOC_TIPO_LABEL } from "@/lib/ma/document-request-mapper";
 import type { DocRequestItem } from "@/lib/ma/document-request-mapper";
+import { auditText, auditHtml } from "@/lib/brand-guardian-gate";
 
 export const maxDuration = 300;
 
@@ -205,19 +206,21 @@ export async function POST(req: NextRequest) {
     const dealCode = (assetData.v3_code as string) ?? deal_id.slice(0, 8).toUpperCase();
 
     try {
+      const docReqHtmlGate = auditHtml(buildPartnerRequestEmail({
+        partnerName: partnerProfile.full_name ?? "Partner",
+        dealCode,
+        dealSector:  deal.sector ?? "M&A",
+        items:       allItems,
+        deadline,
+        notes,
+        mesaName:    profile?.full_name ?? "Mesa V3",
+      }));
+      if (docReqHtmlGate.blocking.length > 0) console.error("[document-requests] Brand Guardian bloqueou:", docReqHtmlGate.blocking);
       await resend.emails.send({
         from:    "V3 Partners Mesa M&A <noreply@v3partners.com.br>",
         to:      partnerProfile.email,
-        subject: `[${dealCode}] Documentos necessários para análise`,
-        html:    buildPartnerRequestEmail({
-          partnerName: partnerProfile.full_name ?? "Partner",
-          dealCode,
-          dealSector:  deal.sector ?? "M&A",
-          items:       allItems,
-          deadline,
-          notes,
-          mesaName:    profile?.full_name ?? "Mesa V3",
-        }),
+        subject: auditText(`[${dealCode}] Documentos necessários para análise`).corrected,
+        html:    docReqHtmlGate.corrected,
       });
 
       await svc

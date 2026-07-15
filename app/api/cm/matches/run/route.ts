@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { Resend } from "resend";
+import { auditText, auditHtml } from "@/lib/brand-guardian-gate";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -51,11 +52,8 @@ export async function POST(req: NextRequest) {
       if (matches && matches.length > 0) {
         const resend = new Resend(process.env.RESEND_API_KEY);
 
-        await resend.emails.send({
-          from: "V3 Partners <deal@v3partners.com.br>",
-          to: ["joao.lemos@v3partners.com.br"],
-          subject: `[Marketplace] ${matches.length} novo(s) match(es) detectado(s)`,
-          html: `
+        const matchesSubjectGate = auditText(`[Marketplace] ${matches.length} novo(s) match(es) detectado(s)`);
+        const matchesHtmlGate = auditHtml(`
             <h2>Novos matches no Marketplace de Capitais</h2>
             <p>${matches.length} match(es) encontrado(s) pelo engine automatizado.</p>
             <table border="1" cellpadding="8" cellspacing="0" style="border-collapse:collapse;">
@@ -71,7 +69,13 @@ export async function POST(req: NextRequest) {
               `).join('')}
             </table>
             <p style="margin-top:16px;color:#666;">Acesse a Mesa de Operações para gerenciar.</p>
-          `,
+          `);
+        if (matchesHtmlGate.blocking.length > 0) console.error("[cm/matches/run] Brand Guardian bloqueou:", matchesHtmlGate.blocking);
+        await resend.emails.send({
+          from: "V3 Partners <deal@v3partners.com.br>",
+          to: ["joao.lemos@v3partners.com.br"],
+          subject: matchesSubjectGate.corrected,
+          html: matchesHtmlGate.corrected,
         });
 
         const matchIds = matches.map((m: any) => m.id).filter(Boolean);

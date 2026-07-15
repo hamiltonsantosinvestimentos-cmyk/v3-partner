@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as sc } from "@supabase/supabase-js";
+import { auditText, auditHtml } from "@/lib/brand-guardian-gate";
 
 export const maxDuration = 30;
 
@@ -88,12 +89,14 @@ export async function POST(req: NextRequest) {
   const resend = new Resend(resendKey);
 
   try {
+    const uploadHtmlGate = auditHtml(html);
+    if (uploadHtmlGate.blocking.length > 0) console.error("[upload-notify] Brand Guardian bloqueou:", uploadHtmlGate.blocking);
     await resend.emails.send({
       from:    "V3 Partners Mesa M&A <noreply@v3partners.com.br>",
       replyTo: "deal@v3partners.com.br",
       to:      ["deal@v3partners.com.br", "joao.lemos@v3partners.com.br"],
-      subject: `[Upload] ${file_name} recebido — ${dealCodigo}`,
-      html,
+      subject: auditText(`[Upload] ${file_name} recebido: ${dealCodigo}`).corrected,
+      html: uploadHtmlGate.corrected,
     });
     return NextResponse.json({ ok: true, deal_code: dealCodigo, extraction_id: extractionId });
   } catch (err) {

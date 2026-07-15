@@ -82,7 +82,7 @@ export async function notifyContratoParceriaAssinado(opts: {
 }): Promise<void> {
   const planoLabel = opts.plano === "PARTNER_PRO" ? "Partner PRO" : "Partner";
   const body = `
-    <p style="color:#C8D4E3;font-size:14px;margin-bottom:20px;">
+    <p style="color:#F5F1E8;font-size:14px;margin-bottom:20px;">
       Olá, <strong>${opts.partnerName}</strong>!<br><br>
       Seu contrato de parceria com a V3 Partners foi assinado com sucesso.
       Bem-vindo ao ecossistema V3!
@@ -96,7 +96,7 @@ export async function notifyContratoParceriaAssinado(opts: {
         ✅ Contrato registrado eletronicamente conforme Lei nº 14.063/2020
       </p>
     </div>
-    <p style="color:#7A96AF;font-size:13px;margin-top:16px;">
+    <p style="color:#9BAFC5;font-size:13px;margin-top:16px;">
       Você já pode acessar a plataforma e começar a operar. Em caso de dúvidas, entre em contato com nossa equipe.
     </p>
   `;
@@ -126,7 +126,7 @@ export async function notifyNovaProposta(opts: {
   requestedValue: number;
 }) {
   const body = `
-    <p style="color:#7A96AF;font-size:14px;margin:0 0 20px;">
+    <p style="color:#9BAFC5;font-size:14px;margin:0 0 20px;">
       Uma nova proposta foi enviada e aguarda análise.
     </p>
     ${row("Parceiro", opts.partnerName)}
@@ -134,7 +134,7 @@ export async function notifyNovaProposta(opts: {
     ${row("Título", opts.proposalTitle)}
     ${row("Cliente", opts.clientName)}
     ${row("Linha de Crédito", opts.creditLine)}
-    ${highlight("Valor Solicitado", moeda(opts.requestedValue), "#C4922E")}
+    ${highlight("Valor Solicitado", moeda(opts.requestedValue), "#C9A84C")}
   `;
   await send(
     opts.adminEmail,
@@ -160,22 +160,22 @@ export async function notifyPropostaAtualizada(opts: {
     APPROVED:   { label: "Aprovado",    color: "#10B981", emoji: "✅" },
     REJECTED:   { label: "Reprovado",   color: "#EF4444", emoji: "❌" },
     COMPLETED:  { label: "Concluído",   color: "#10B981", emoji: "🎉" },
-    CANCELLED:  { label: "Cancelado",   color: "#7A96AF", emoji: "⚠️" },
+    CANCELLED:  { label: "Cancelado",   color: "#9BAFC5", emoji: "⚠️" },
   };
   const st = statusMap[opts.novoStatus];
   if (!st) return; // não notifica PENDING ou outros estados internos
 
   const body = `
-    <p style="color:#7A96AF;font-size:14px;margin:0 0 20px;">
-      Olá, <strong style="color:#C8D4E3;">${opts.partnerName}</strong>!
+    <p style="color:#9BAFC5;font-size:14px;margin:0 0 20px;">
+      Olá, <strong style="color:#F5F1E8;">${opts.partnerName}</strong>!
       O status da sua proposta foi atualizado.
     </p>
     ${row("Código", opts.proposalCode)}
     ${row("Título", opts.proposalTitle)}
     ${row("Linha de Crédito", opts.creditLine)}
-    <div style="margin-top:16px;padding:14px 18px;background:#13243D;
+    <div style="margin-top:16px;padding:14px 18px;background:#13223A;
                 border-radius:8px;border-left:3px solid ${st.color};">
-      <p style="margin:0 0 4px;font-size:11px;color:#7A96AF;">Novo status</p>
+      <p style="margin:0 0 4px;font-size:11px;color:#9BAFC5;">Novo status</p>
       <p style="margin:0;font-size:20px;font-weight:800;color:${st.color};">
         ${st.emoji} ${st.label}
       </p>
@@ -205,15 +205,15 @@ export async function notifyNovaComissao(opts: {
     CREDITO: "Crédito", MA: "M&A", CONSORCIO: "Consórcio", SPLIT_FISCAL: "Split Fiscal",
   };
   const body = `
-    <p style="color:#7A96AF;font-size:14px;margin:0 0 20px;">
-      Olá, <strong style="color:#C8D4E3;">${opts.partnerName}</strong>!
+    <p style="color:#9BAFC5;font-size:14px;margin:0 0 20px;">
+      Olá, <strong style="color:#F5F1E8;">${opts.partnerName}</strong>!
       Uma nova comissão foi registrada para você.
     </p>
     ${row("Código", opts.commissionCode)}
     ${row("Operação", opts.operationDescription)}
     ${row("Tipo", tipoLabels[opts.operationType] ?? opts.operationType)}
     ${opts.paymentDate ? row("Previsão de Pagamento", dataLocal(opts.paymentDate)) : ""}
-    ${highlight("Valor a Receber", moeda(opts.commissionValue), "#C4922E")}
+    ${highlight("Valor a Receber", moeda(opts.commissionValue), "#C9A84C")}
   `;
   await send(
     opts.partnerEmail,
@@ -236,18 +236,18 @@ export async function notifyContratoCliente(opts: {
   expiresAt: string;
 }) {
   const body = `
-    <p style="color:#7A96AF;font-size:14px;margin:0 0 20px;">
-      Olá, <strong style="color:#C8D4E3;">${opts.clientName}</strong>!
+    <p style="color:#9BAFC5;font-size:14px;margin:0 0 20px;">
+      Olá, <strong style="color:#F5F1E8;">${opts.clientName}</strong>!
       Sua proposta de crédito está pronta para assinatura do Mandato de Representação.
     </p>
     ${row("Código da Proposta", opts.proposalCode)}
     ${row("Linha de Crédito", opts.creditLine)}
-    ${highlight("Valor Solicitado", moeda(opts.requestedValue), "#C4922E")}
-    <p style="color:#7A96AF;font-size:13px;margin-top:20px;">
+    ${highlight("Valor Solicitado", moeda(opts.requestedValue), "#C9A84C")}
+    <p style="color:#9BAFC5;font-size:13px;margin-top:20px;">
       Clique no botão abaixo para ler e assinar o contrato digitalmente.
-      O link expira em <strong style="color:#E5B96A;">${new Date(opts.expiresAt).toLocaleDateString("pt-BR")}</strong>.
+      O link expira em <strong style="color:#E8C97A;">${new Date(opts.expiresAt).toLocaleDateString("pt-BR")}</strong>.
     </p>
-    <p style="color:#7A96AF;font-size:12px;margin-top:8px;">
+    <p style="color:#9BAFC5;font-size:12px;margin-top:8px;">
       Após a assinatura, nossa equipe dará continuidade à análise da sua operação.
     </p>
   `;
@@ -273,7 +273,7 @@ export async function notifyContratoV3Rep(opts: {
   signingUrl: string;
 }) {
   const body = `
-    <p style="color:#7A96AF;font-size:14px;margin:0 0 20px;">
+    <p style="color:#9BAFC5;font-size:14px;margin:0 0 20px;">
       Contrato de mandato enviado ao cliente para assinatura eletrônica.
     </p>
     ${row("Código", opts.proposalCode)}
@@ -281,8 +281,8 @@ export async function notifyContratoV3Rep(opts: {
     ${row("E-mail do Cliente", opts.clientEmail)}
     ${row("Linha de Crédito", opts.creditLine)}
     ${row("Comissão V3", `${opts.commissionPerc}%`)}
-    ${highlight("Valor da Operação", moeda(opts.requestedValue), "#C4922E")}
-    <p style="color:#7A96AF;font-size:13px;margin-top:16px;">
+    ${highlight("Valor da Operação", moeda(opts.requestedValue), "#C9A84C")}
+    <p style="color:#9BAFC5;font-size:13px;margin-top:16px;">
       Acompanhe o status de assinatura na Mesa Operacional.
     </p>
   `;
@@ -306,18 +306,18 @@ export async function notifyContratoAssinado(opts: {
 }) {
   const dateStr = new Date(opts.signedAt).toLocaleString("pt-BR");
   const body = `
-    <p style="color:#7A96AF;font-size:14px;margin:0 0 20px;">
-      Olá, <strong style="color:#C8D4E3;">${opts.clientName}</strong>!
+    <p style="color:#9BAFC5;font-size:14px;margin:0 0 20px;">
+      Olá, <strong style="color:#F5F1E8;">${opts.clientName}</strong>!
       Sua assinatura foi registrada com sucesso.
     </p>
     ${row("Código", opts.proposalCode)}
     ${row("Linha de Crédito", opts.creditLine)}
     ${row("Assinado em", dateStr)}
     <div style="margin-top:16px;padding:14px 18px;background:#0A2018;border-radius:8px;border-left:3px solid #10B981;">
-      <p style="margin:0 0 4px;font-size:11px;color:#7A96AF;">Status</p>
+      <p style="margin:0 0 4px;font-size:11px;color:#9BAFC5;">Status</p>
       <p style="margin:0;font-size:20px;font-weight:800;color:#10B981;">✅ Assinatura Registrada</p>
     </div>
-    <p style="color:#7A96AF;font-size:13px;margin-top:16px;">
+    <p style="color:#9BAFC5;font-size:13px;margin-top:16px;">
       Aguardando a contra-assinatura da V3 Partners. Você receberá o contrato
       finalizado assim que nossa equipe concluir a assinatura.
     </p>
@@ -341,7 +341,7 @@ export async function notifyV3ParaAssinar(opts: {
 }) {
   const dateStr = new Date(opts.signedAt).toLocaleString("pt-BR");
   const body = `
-    <p style="color:#7A96AF;font-size:14px;margin:0 0 20px;">
+    <p style="color:#9BAFC5;font-size:14px;margin:0 0 20px;">
       O cliente assinou o mandato e aguarda a contra-assinatura da V3 Partners.
     </p>
     ${row("Código", opts.proposalCode)}
@@ -349,7 +349,7 @@ export async function notifyV3ParaAssinar(opts: {
     ${row("E-mail", opts.clientEmail)}
     ${row("Linha de Crédito", opts.creditLine)}
     ${row("Assinado pelo cliente em", dateStr)}
-    <p style="color:#7A96AF;font-size:13px;margin-top:16px;">
+    <p style="color:#9BAFC5;font-size:13px;margin-top:16px;">
       Clique no botão abaixo para revisar e assinar o contrato como representante da V3 Partners.
     </p>
   `;
@@ -378,8 +378,8 @@ export async function notifyContratoCompleto(opts: {
   const v3Date = new Date(opts.v3SignedAt).toLocaleString("pt-BR");
 
   const clientBody = `
-    <p style="color:#7A96AF;font-size:14px;margin:0 0 20px;">
-      Olá, <strong style="color:#C8D4E3;">${opts.clientName}</strong>!
+    <p style="color:#9BAFC5;font-size:14px;margin:0 0 20px;">
+      Olá, <strong style="color:#F5F1E8;">${opts.clientName}</strong>!
       O contrato está totalmente assinado por ambas as partes.
     </p>
     ${row("Código", opts.proposalCode)}
@@ -389,7 +389,7 @@ export async function notifyContratoCompleto(opts: {
     <div style="margin-top:16px;padding:14px 18px;background:#0A2018;border-radius:8px;border-left:3px solid #10B981;">
       <p style="margin:0;font-size:20px;font-weight:800;color:#10B981;">✅ Contrato Finalizado</p>
     </div>
-    <p style="color:#7A96AF;font-size:13px;margin-top:16px;">
+    <p style="color:#9BAFC5;font-size:13px;margin-top:16px;">
       Nossa equipe já está trabalhando na estruturação da sua operação de crédito.
       Em breve entraremos em contato. Obrigado pela confiança na V3 Partners!
     </p>
@@ -401,7 +401,7 @@ export async function notifyContratoCompleto(opts: {
   );
 
   const repBody = `
-    <p style="color:#7A96AF;font-size:14px;margin:0 0 20px;">
+    <p style="color:#9BAFC5;font-size:14px;margin:0 0 20px;">
       Contrato totalmente assinado por ambas as partes.
     </p>
     ${row("Código", opts.proposalCode)}
@@ -439,31 +439,31 @@ export async function notifyContratoFinalizado(opts: {
     iso ? new Date(iso).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" }) : "—";
 
   const assinRow = (papel: string, nome: string, email: string, data: string | null, ip: string | null) => `
-    <div style="margin-bottom:12px;padding:12px 16px;background:#13243D;border-radius:10px;border-left:3px solid #C9A84C;">
+    <div style="margin-bottom:12px;padding:12px 16px;background:#13223A;border-radius:10px;border-left:3px solid #C9A84C;">
       <div style="font-size:10px;font-weight:700;color:#C9A84C;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">${papel}</div>
-      <div style="font-size:13px;font-weight:600;color:#C8D4E3;">${nome}</div>
-      <div style="font-size:12px;color:#7A96AF;">${email}</div>
+      <div style="font-size:13px;font-weight:600;color:#F5F1E8;">${nome}</div>
+      <div style="font-size:12px;color:#9BAFC5;">${email}</div>
       <div style="margin-top:6px;display:flex;gap:16px;flex-wrap:wrap;">
-        <span style="font-size:11px;color:#7A96AF;">📅 ${fmt(data)}</span>
-        <span style="font-size:11px;color:#7A96AF;font-family:monospace;">🌐 ${ip ?? "—"}</span>
+        <span style="font-size:11px;color:#9BAFC5;">📅 ${fmt(data)}</span>
+        <span style="font-size:11px;color:#9BAFC5;font-family:monospace;">🌐 ${ip ?? "—"}</span>
       </div>
     </div>`;
 
   const body = `
-    <p style="color:#7A96AF;font-size:14px;margin:0 0 20px;">
+    <p style="color:#9BAFC5;font-size:14px;margin:0 0 20px;">
       O Contrato de Mandato foi <strong style="color:#10B981;">totalmente assinado</strong> por todas as partes.
       Abaixo estão os registros completos de cada assinatura eletrônica.
     </p>
     ${row("Proposta", opts.proposalCode)}
     ${row("Linha de Crédito", opts.creditLine)}
     <div style="margin-top:20px;margin-bottom:8px;">
-      <span style="font-size:11px;font-weight:700;color:#7A96AF;text-transform:uppercase;letter-spacing:1px;">Assinaturas registradas</span>
+      <span style="font-size:11px;font-weight:700;color:#9BAFC5;text-transform:uppercase;letter-spacing:1px;">Assinaturas registradas</span>
     </div>
     ${assinRow("Contratante (Cliente)", opts.clientName, opts.clientEmail, opts.clientData, opts.clientIp)}
     ${assinRow("Contratada — V3 Partners", opts.v3Nome, opts.v3Email, opts.v3Data, opts.v3Ip)}
     ${opts.t1Nome ? assinRow("1ª Testemunha (Parceiro Originador)", opts.t1Nome, opts.t1Email ?? "—", opts.t1Data, opts.t1Ip) : ""}
     ${opts.t2Nome ? assinRow("2ª Testemunha (Institucional)", opts.t2Nome, opts.t2Email ?? "—", opts.t2Data, opts.t2Ip) : ""}
-    <p style="color:#7A96AF;font-size:12px;margin-top:16px;">
+    <p style="color:#9BAFC5;font-size:12px;margin-top:16px;">
       Assinaturas com plena validade jurídica nos termos da MP 2.200-2/2001 e Lei 14.063/2020.
     </p>
   `;
@@ -495,16 +495,16 @@ export async function notifyTestemunha2ParaAssinar(opts: {
   testemunhaUrl: string;
 }) {
   const body = `
-    <p style="color:#7A96AF;font-size:14px;margin:0 0 20px;">
-      Olá, <strong style="color:#C8D4E3;">${opts.testemunhaNome}</strong>!
+    <p style="color:#9BAFC5;font-size:14px;margin:0 0 20px;">
+      Olá, <strong style="color:#F5F1E8;">${opts.testemunhaNome}</strong>!
       O contrato do cliente abaixo foi assinado pelo contratante, pela V3 Partners e pelo
       parceiro originador. Aguarda agora a sua assinatura como
-      <strong style="color:#E5B96A;">segunda testemunha</strong>.
+      <strong style="color:#E8C97A;">segunda testemunha</strong>.
     </p>
     ${row("Código", opts.proposalCode)}
     ${row("Cliente", opts.clientName)}
     ${row("Linha de Crédito", opts.creditLine)}
-    <p style="color:#7A96AF;font-size:13px;margin-top:16px;">
+    <p style="color:#9BAFC5;font-size:13px;margin-top:16px;">
       Clique no botão abaixo para revisar e assinar como testemunha do contrato.
     </p>
   `;
@@ -528,15 +528,15 @@ export async function notifyTestemunhaParaAssinar(opts: {
   testemunhaUrl: string;
 }) {
   const body = `
-    <p style="color:#7A96AF;font-size:14px;margin:0 0 20px;">
-      Olá, <strong style="color:#C8D4E3;">${opts.testemunhaNome}</strong>!
+    <p style="color:#9BAFC5;font-size:14px;margin:0 0 20px;">
+      Olá, <strong style="color:#F5F1E8;">${opts.testemunhaNome}</strong>!
       O contrato referente ao seu cliente foi assinado pelas partes e aguarda
-      a sua assinatura como <strong style="color:#E5B96A;">testemunha</strong>.
+      a sua assinatura como <strong style="color:#E8C97A;">testemunha</strong>.
     </p>
     ${row("Código", opts.proposalCode)}
     ${row("Cliente", opts.clientName)}
     ${row("Linha de Crédito", opts.creditLine)}
-    <p style="color:#7A96AF;font-size:13px;margin-top:16px;">
+    <p style="color:#9BAFC5;font-size:13px;margin-top:16px;">
       Clique no botão abaixo para assinar como testemunha do contrato.
     </p>
   `;
@@ -561,9 +561,9 @@ export async function notifyAssinaturaRegistrada(opts: {
 }): Promise<void> {
   const dateStr = new Date(opts.signedAt).toLocaleString("pt-BR");
   const body = `
-    <p style="color:#7A96AF;font-size:14px;margin:0 0 20px;">
-      Olá, <strong style="color:#C8D4E3;">${opts.nome}</strong>!<br>
-      Sua assinatura como <strong style="color:#E5B96A;">${opts.papel}</strong> foi registrada com sucesso.
+    <p style="color:#9BAFC5;font-size:14px;margin:0 0 20px;">
+      Olá, <strong style="color:#F5F1E8;">${opts.nome}</strong>!<br>
+      Sua assinatura como <strong style="color:#E8C97A;">${opts.papel}</strong> foi registrada com sucesso.
     </p>
     ${row("Proposta", opts.proposalCode)}
     ${row("Cliente", opts.clientName)}
@@ -571,7 +571,7 @@ export async function notifyAssinaturaRegistrada(opts: {
     <div style="margin-top:16px;padding:14px 18px;background:#0A2018;border-radius:8px;border-left:3px solid #10B981;">
       <p style="margin:0;font-size:20px;font-weight:800;color:#10B981;">✅ Assinatura Registrada</p>
     </div>
-    <p style="color:#7A96AF;font-size:12px;margin-top:16px;">
+    <p style="color:#9BAFC5;font-size:12px;margin-top:16px;">
       Aguardando as demais assinaturas para finalização do contrato.
     </p>
   `;
@@ -678,14 +678,14 @@ export async function sendMonthlyReport(opts: {
 }): Promise<void> {
   const semMovimento = opts.totalComissoes === 0 && opts.totalOperacoes === 0;
   const aiSection = opts.aiInsights ? `
-    <div style="margin-top:24px;padding:18px 20px;background:#0D1929;border-radius:10px;border:1px solid #1B3050;border-left:3px solid #C9A84C;">
+    <div style="margin-top:24px;padding:18px 20px;background:#162744;border-radius:10px;border:1px solid #243A66;border-left:3px solid #C9A84C;">
       <p style="margin:0 0 12px;font-size:11px;font-weight:700;color:#C9A84C;text-transform:uppercase;letter-spacing:0.12em;">📊 Inteligência de Mercado</p>
-      <p style="margin:0;font-size:13px;color:#7A96AF;line-height:1.7;white-space:pre-line;">${opts.aiInsights}</p>
+      <p style="margin:0;font-size:13px;color:#9BAFC5;line-height:1.7;white-space:pre-line;">${opts.aiInsights}</p>
     </div>` : "";
   const body = `
-    <p style="color:#7A96AF;font-size:14px;margin:0 0 20px;">
-      Olá, <strong style="color:#C8D4E3;">${opts.partnerName}</strong>!
-      Aqui está o resumo das suas atividades em <strong style="color:#E5B96A;">${opts.mes}</strong>.
+    <p style="color:#9BAFC5;font-size:14px;margin:0 0 20px;">
+      Olá, <strong style="color:#F5F1E8;">${opts.partnerName}</strong>!
+      Aqui está o resumo das suas atividades em <strong style="color:#E8C97A;">${opts.mes}</strong>.
     </p>
     ${row("Plano", opts.plano)}
     ${row("Total de Operações", String(opts.totalOperacoes))}
@@ -693,13 +693,13 @@ export async function sendMonthlyReport(opts: {
     ${highlight("Comissões Recebidas", moeda(opts.totalRecebido), "#10B981")}
     ${opts.totalPendente > 0 ? highlight("Comissões a Receber", moeda(opts.totalPendente), "#F59E0B") : ""}
     ${semMovimento ? `
-    <div style="margin-top:16px;padding:14px 18px;background:#13243D;border-radius:8px;border-left:3px solid #7A96AF;">
-      <p style="margin:0;font-size:13px;color:#7A96AF;">
+    <div style="margin-top:16px;padding:14px 18px;background:#13223A;border-radius:8px;border-left:3px solid #9BAFC5;">
+      <p style="margin:0;font-size:13px;color:#9BAFC5;">
         Nenhuma operação registrada este mês. Que tal indicar novos clientes para aumentar suas comissões?
       </p>
     </div>` : ""}
     ${aiSection}
-    <p style="color:#7A96AF;font-size:12px;margin-top:20px;">
+    <p style="color:#9BAFC5;font-size:12px;margin-top:20px;">
       Acesse a plataforma para ver o extrato completo e os detalhes das suas operações.
     </p>
   `;
@@ -724,19 +724,19 @@ export async function notifyComentarioProposta(opts: {
   comentario: string;
 }): Promise<void> {
   const body = `
-    <p style="color:#7A96AF;font-size:14px;margin:0 0 20px;">
-      Olá, <strong style="color:#C8D4E3;">${opts.partnerName}</strong>!
+    <p style="color:#9BAFC5;font-size:14px;margin:0 0 20px;">
+      Olá, <strong style="color:#F5F1E8;">${opts.partnerName}</strong>!
       A Mesa Operacional adicionou um comentário na sua proposta.
     </p>
     ${row("Código", opts.proposalCode)}
     ${row("Título", opts.proposalTitle)}
     ${row("Linha de Crédito", opts.creditLine)}
     ${row("Enviado por", opts.autor)}
-    <div style="margin-top:16px;padding:16px 18px;background:#13243D;border-radius:8px;border-left:3px solid #C4922E;">
-      <p style="margin:0 0 6px;font-size:11px;color:#7A96AF;text-transform:uppercase;letter-spacing:1px;">Mensagem</p>
-      <p style="margin:0;font-size:14px;color:#C8D4E3;line-height:1.6;">${opts.comentario}</p>
+    <div style="margin-top:16px;padding:16px 18px;background:#13223A;border-radius:8px;border-left:3px solid #C9A84C;">
+      <p style="margin:0 0 6px;font-size:11px;color:#9BAFC5;text-transform:uppercase;letter-spacing:1px;">Mensagem</p>
+      <p style="margin:0;font-size:14px;color:#F5F1E8;line-height:1.6;">${opts.comentario}</p>
     </div>
-    <p style="color:#7A96AF;font-size:12px;margin-top:16px;">
+    <p style="color:#9BAFC5;font-size:12px;margin-top:16px;">
       Acesse a plataforma para ver todos os comentários e responder se necessário.
     </p>
   `;
@@ -759,8 +759,8 @@ export async function notifyComissaoPaga(opts: {
   commissionValue: number;
 }) {
   const body = `
-    <p style="color:#7A96AF;font-size:14px;margin:0 0 20px;">
-      Olá, <strong style="color:#C8D4E3;">${opts.partnerName}</strong>!
+    <p style="color:#9BAFC5;font-size:14px;margin:0 0 20px;">
+      Olá, <strong style="color:#F5F1E8;">${opts.partnerName}</strong>!
       Sua comissão foi liquidada.
     </p>
     ${row("Código", opts.commissionCode)}
@@ -768,12 +768,12 @@ export async function notifyComissaoPaga(opts: {
     ${row("Data do Pagamento", new Date().toLocaleDateString("pt-BR"))}
     <div style="margin-top:16px;padding:14px 18px;background:#0A2018;
                 border-radius:8px;border-left:3px solid #10B981;">
-      <p style="margin:0 0 4px;font-size:11px;color:#7A96AF;">Valor pago</p>
+      <p style="margin:0 0 4px;font-size:11px;color:#9BAFC5;">Valor pago</p>
       <p style="margin:0;font-size:22px;font-weight:800;color:#10B981;">
         ✅ ${moeda(opts.commissionValue)}
       </p>
     </div>
-    <p style="color:#7A96AF;font-size:13px;margin-top:16px;">
+    <p style="color:#9BAFC5;font-size:13px;margin-top:16px;">
       O valor foi liquidado conforme acordado. Acesse a plataforma para ver o extrato completo.
     </p>
   `;
@@ -796,10 +796,10 @@ export async function notifyBoasVindasPartner(opts: {
   const planoLabel = opts.plano === "PARTNER_PRO" ? "Partner PRO" : "Partner";
   const comissao  = opts.plano === "PARTNER_PRO" ? "50%" : "30%";
   const body = `
-    <p style="color:#C8D4E3;font-size:15px;margin:0 0 8px;font-weight:700;">
+    <p style="color:#F5F1E8;font-size:15px;margin:0 0 8px;font-weight:700;">
       Bem-vindo à V3 Partners, ${opts.partnerName}! 🎉
     </p>
-    <p style="color:#7A96AF;font-size:14px;margin:0 0 24px;">
+    <p style="color:#9BAFC5;font-size:14px;margin:0 0 24px;">
       Sua conta <strong style="color:#E8C97A;">${planoLabel}</strong> está ativa.
       Você tem ${comissao} de comissionamento em todas as operações fechadas.
       Veja abaixo como começar a operar hoje mesmo.
@@ -810,28 +810,28 @@ export async function notifyBoasVindasPartner(opts: {
         <div style="min-width:28px;height:28px;background:#C9A84C20;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#C9A84C;">1</div>
         <div>
           <p style="margin:0 0 2px;font-size:13px;font-weight:600;color:#F0ECE4;">Cadastre seus leads no CRM</p>
-          <p style="margin:0;font-size:12px;color:#7A96AF;">Organize seus contatos e acompanhe cada negociação</p>
+          <p style="margin:0;font-size:12px;color:#9BAFC5;">Organize seus contatos e acompanhe cada negociação</p>
         </div>
       </div>
       <div style="display:flex;align-items:flex-start;gap:14px;margin-bottom:14px;">
         <div style="min-width:28px;height:28px;background:#C9A84C20;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#C9A84C;">2</div>
         <div>
           <p style="margin:0 0 2px;font-size:13px;font-weight:600;color:#F0ECE4;">Envie sua primeira proposta de crédito</p>
-          <p style="margin:0;font-size:12px;color:#7A96AF;">Nossa Mesa de Crédito analisa em até 48h</p>
+          <p style="margin:0;font-size:12px;color:#9BAFC5;">Nossa Mesa de Crédito analisa em até 48h</p>
         </div>
       </div>
       <div style="display:flex;align-items:flex-start;gap:14px;">
         <div style="min-width:28px;height:28px;background:#C9A84C20;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#C9A84C;">3</div>
         <div>
           <p style="margin:0 0 2px;font-size:13px;font-weight:600;color:#F0ECE4;">Acesse o Academy</p>
-          <p style="margin:0;font-size:12px;color:#7A96AF;">Capacite-se para fechar operações maiores e mais complexas</p>
+          <p style="margin:0;font-size:12px;color:#9BAFC5;">Capacite-se para fechar operações maiores e mais complexas</p>
         </div>
       </div>
     </div>
     ${row("Plano", planoLabel)}
     ${row("Comissionamento", comissao)}
     ${row("Suporte", "operacional@v3partners.com.br")}
-    <p style="color:#7A96AF;font-size:12px;margin-top:20px;">
+    <p style="color:#9BAFC5;font-size:12px;margin-top:20px;">
       Nossa equipe está disponível para apoiar você em cada operação. Boas vendas! 🚀
     </p>
   `;
@@ -868,18 +868,18 @@ export async function notifyLembreteOnboardingEtapa(opts: {
       subject: `👤 Complete seu perfil na V3, ${opts.partnerName}`,
       title: "Seu perfil ainda está incompleto",
       body: `
-        <p style="color:#C8D4E3;font-size:14px;margin:0 0 16px;">
+        <p style="color:#F5F1E8;font-size:14px;margin:0 0 16px;">
           Olá, <strong>${opts.partnerName}</strong>! 👋<br><br>
           Notamos que seu perfil na V3 Partners ainda está incompleto.
           Ter um perfil completo aumenta sua credibilidade e é o primeiro passo para operar.
         </p>
         <div style="background:#0D1C2E;border-radius:10px;padding:18px;margin-bottom:16px;">
           <p style="margin:0 0 10px;font-size:12px;font-weight:700;color:#C9A84C;letter-spacing:0.08em;">O QUE PREENCHER</p>
-          <p style="margin:0;font-size:13px;color:#7A96AF;line-height:1.8;">
+          <p style="margin:0;font-size:13px;color:#9BAFC5;line-height:1.8;">
             • Nome completo<br>• Telefone de contato<br>• Cidade e estado
           </p>
         </div>
-        <p style="color:#7A96AF;font-size:13px;">Leva menos de 1 minuto. Clique abaixo para completar agora.</p>
+        <p style="color:#9BAFC5;font-size:13px;">Leva menos de 1 minuto. Clique abaixo para completar agora.</p>
       `,
       cta: { label: "Completar Perfil", url: "https://app.v3partners.com.br/perfil" },
     },
@@ -888,21 +888,21 @@ export async function notifyLembreteOnboardingEtapa(opts: {
       subject: `👥 Cadastre seu primeiro lead no CRM V3, ${opts.partnerName}`,
       title: "Você ainda não tem leads no CRM",
       body: `
-        <p style="color:#C8D4E3;font-size:14px;margin:0 0 16px;">
+        <p style="color:#F5F1E8;font-size:14px;margin:0 0 16px;">
           Olá, <strong>${opts.partnerName}</strong>! 👋<br><br>
           O CRM é onde tudo começa. Cada lead cadastrado é um potencial negócio e uma comissão futura.
           Você ainda não registrou nenhum cliente.
         </p>
         <div style="background:#0D1C2E;border-radius:10px;padding:18px;margin-bottom:16px;">
           <p style="margin:0 0 10px;font-size:12px;font-weight:700;color:#C9A84C;letter-spacing:0.08em;">POR QUE USAR O CRM</p>
-          <p style="margin:0;font-size:13px;color:#7A96AF;line-height:1.8;">
+          <p style="margin:0;font-size:13px;color:#9BAFC5;line-height:1.8;">
             • Organize todos seus contatos em um só lugar<br>
             • Acompanhe o status de cada negociação<br>
             • Programe follow-ups e nunca perca um lead<br>
             • Histórico completo de interações
           </p>
         </div>
-        <p style="color:#7A96AF;font-size:13px;">Cadastre seu primeiro lead agora e comece a construir sua carteira.</p>
+        <p style="color:#9BAFC5;font-size:13px;">Cadastre seu primeiro lead agora e comece a construir sua carteira.</p>
       `,
       cta: { label: "Acessar o CRM", url: "https://app.v3partners.com.br/crm" },
     },
@@ -911,20 +911,20 @@ export async function notifyLembreteOnboardingEtapa(opts: {
       subject: `📝 Envie sua primeira proposta de crédito, ${opts.partnerName}`,
       title: "Sua primeira proposta está te esperando",
       body: `
-        <p style="color:#C8D4E3;font-size:14px;margin:0 0 16px;">
+        <p style="color:#F5F1E8;font-size:14px;margin:0 0 16px;">
           Olá, <strong>${opts.partnerName}</strong>! 👋<br><br>
           Você é <strong style="color:#E8C97A;">${planoLabel}</strong> e ainda não enviou nenhuma proposta para a Mesa de Crédito.
           Cada proposta aprovada gera comissão direta para você.
         </p>
         <div style="background:#0D1C2E;border-radius:10px;padding:18px;margin-bottom:16px;">
           <p style="margin:0 0 10px;font-size:12px;font-weight:700;color:#C9A84C;letter-spacing:0.08em;">NOSSAS LINHAS DE CRÉDITO</p>
-          <p style="margin:0;font-size:13px;color:#7A96AF;line-height:1.8;">
+          <p style="margin:0;font-size:13px;color:#9BAFC5;line-height:1.8;">
             • Crédito Varejo (N1) — até R$500K<br>
             • Crédito Estruturado (N2) — R$500K a R$5M<br>
             • High Ticket (N3) — acima de R$5M
           </p>
         </div>
-        <p style="color:#7A96AF;font-size:13px;">Nossa Mesa analisa em até 48h. Envie sua primeira proposta agora.</p>
+        <p style="color:#9BAFC5;font-size:13px;">Nossa Mesa analisa em até 48h. Envie sua primeira proposta agora.</p>
       `,
       cta: { label: "Ir para a Mesa de Crédito", url: "https://app.v3partners.com.br/mesa-credito" },
     },
@@ -933,12 +933,12 @@ export async function notifyLembreteOnboardingEtapa(opts: {
       subject: `✉️ Bem-vindo à V3 Partners, ${opts.partnerName}!`,
       title: "Sua conta V3 está ativa",
       body: `
-        <p style="color:#C8D4E3;font-size:14px;margin:0 0 16px;">
+        <p style="color:#F5F1E8;font-size:14px;margin:0 0 16px;">
           Olá, <strong>${opts.partnerName}</strong>! 👋<br><br>
           Sua conta <strong style="color:#E8C97A;">${planoLabel}</strong> na V3 Partners está ativa e pronta para operar.
           Acesse a plataforma e conheça todos os módulos disponíveis para você.
         </p>
-        <p style="color:#7A96AF;font-size:13px;">Qualquer dúvida, nossa equipe está disponível para ajudar.</p>
+        <p style="color:#9BAFC5;font-size:13px;">Qualquer dúvida, nossa equipe está disponível para ajudar.</p>
       `,
       cta: { label: "Acessar a Plataforma", url: "https://app.v3partners.com.br/dashboard" },
     },
@@ -965,7 +965,7 @@ export async function notifyNovoLeadParceiro(opts: {
 }): Promise<void> {
   const adminEmail = process.env.ADMIN_EMAIL || "operacional@v3partners.com.br";
   const body = `
-    <p style="color:#7A96AF;font-size:14px;margin:0 0 20px;">
+    <p style="color:#9BAFC5;font-size:14px;margin:0 0 20px;">
       Um novo lead preencheu o formulário da landing page e aguarda qualificação.
     </p>
     ${row("Nome", opts.nome)}
@@ -974,11 +974,11 @@ export async function notifyNovoLeadParceiro(opts: {
     ${opts.segmento ? row("Ramo de atuação", opts.segmento) : ""}
     ${opts.instagram ? row("Instagram", opts.instagram) : ""}
     ${opts.linkedin ? row("LinkedIn", opts.linkedin) : ""}
-    <div style="margin-top:16px;padding:14px 18px;background:#13243D;border-radius:8px;border-left:3px solid #C4922E;">
-      <p style="margin:0 0 4px;font-size:11px;color:#7A96AF;">Licenciamento de interesse</p>
-      <p style="margin:0;font-size:15px;font-weight:800;color:#C4922E;">${opts.plano}</p>
+    <div style="margin-top:16px;padding:14px 18px;background:#13223A;border-radius:8px;border-left:3px solid #C9A84C;">
+      <p style="margin:0 0 4px;font-size:11px;color:#9BAFC5;">Licenciamento de interesse</p>
+      <p style="margin:0;font-size:15px;font-weight:800;color:#C9A84C;">${opts.plano}</p>
     </div>
-    <p style="color:#7A96AF;font-size:12px;margin-top:16px;">
+    <p style="color:#9BAFC5;font-size:12px;margin-top:16px;">
       Acesse a Prospecção para ver o lead e iniciar o processo de onboarding.
     </p>
   `;
@@ -1003,8 +1003,8 @@ export async function notifyMarketplaceLead(opts: {
   message: string | null;
 }): Promise<void> {
   const body = `
-    <p style="color:#7A96AF;font-size:14px;margin:0 0 20px;">
-      Olá, <strong style="color:#C8D4E3;">${opts.supplierName}</strong>!
+    <p style="color:#9BAFC5;font-size:14px;margin:0 0 20px;">
+      Olá, <strong style="color:#F5F1E8;">${opts.supplierName}</strong>!
       Um partner da V3 demonstrou interesse em um dos seus produtos.
     </p>
     ${row("Produto", opts.productName)}
@@ -1012,11 +1012,11 @@ export async function notifyMarketplaceLead(opts: {
     ${opts.clientName ? row("Cliente indicado", opts.clientName) : ""}
     ${opts.clientContact ? row("Contato do cliente", opts.clientContact) : ""}
     ${opts.message ? `
-    <div style="margin-top:16px;padding:16px 18px;background:#13243D;border-radius:8px;border-left:3px solid #C4922E;">
-      <p style="margin:0 0 6px;font-size:11px;color:#7A96AF;text-transform:uppercase;letter-spacing:1px;">Mensagem</p>
-      <p style="margin:0;font-size:14px;color:#C8D4E3;line-height:1.6;">${opts.message}</p>
+    <div style="margin-top:16px;padding:16px 18px;background:#13223A;border-radius:8px;border-left:3px solid #C9A84C;">
+      <p style="margin:0 0 6px;font-size:11px;color:#9BAFC5;text-transform:uppercase;letter-spacing:1px;">Mensagem</p>
+      <p style="margin:0;font-size:14px;color:#F5F1E8;line-height:1.6;">${opts.message}</p>
     </div>` : ""}
-    <p style="color:#7A96AF;font-size:13px;margin-top:16px;">
+    <p style="color:#9BAFC5;font-size:13px;margin-top:16px;">
       Acesse o painel do fornecedor para acompanhar e atualizar o status deste lead.
     </p>
   `;
@@ -1042,23 +1042,23 @@ export async function notifyLeadStatusAtualizado(opts: {
     IN_PROGRESS: { label: "Em Andamento",  color: "#F59E0B", emoji: "🔄" },
     CONVERTED:   { label: "Convertido",    color: "#10B981", emoji: "✅" },
     LOST:        { label: "Perdido",       color: "#EF4444", emoji: "❌" },
-    PENDING:     { label: "Pendente",      color: "#7A96AF", emoji: "⏳" },
+    PENDING:     { label: "Pendente",      color: "#9BAFC5", emoji: "⏳" },
   };
   const st = statusMap[opts.novoStatus];
   if (!st) return;
 
   const body = `
-    <p style="color:#7A96AF;font-size:14px;margin:0 0 20px;">
-      Olá, <strong style="color:#C8D4E3;">${opts.partnerName}</strong>!
+    <p style="color:#9BAFC5;font-size:14px;margin:0 0 20px;">
+      Olá, <strong style="color:#F5F1E8;">${opts.partnerName}</strong>!
       O fornecedor atualizou o status do seu lead.
     </p>
     ${row("Produto", opts.productName)}
     ${row("Fornecedor", opts.supplierName)}
-    <div style="margin-top:16px;padding:14px 18px;background:#13243D;border-radius:8px;border-left:3px solid ${st.color};">
-      <p style="margin:0 0 4px;font-size:11px;color:#7A96AF;">Novo status</p>
+    <div style="margin-top:16px;padding:14px 18px;background:#13223A;border-radius:8px;border-left:3px solid ${st.color};">
+      <p style="margin:0 0 4px;font-size:11px;color:#9BAFC5;">Novo status</p>
       <p style="margin:0;font-size:20px;font-weight:800;color:${st.color};">${st.emoji} ${st.label}</p>
     </div>
-    <p style="color:#7A96AF;font-size:13px;margin-top:16px;">
+    <p style="color:#9BAFC5;font-size:13px;margin-top:16px;">
       Acesse o marketplace para ver mais detalhes dos seus leads.
     </p>
   `;
@@ -1083,14 +1083,14 @@ export async function notifyFollowUpsDodia(opts: {
 
   const listaHoje = opts.followUpsHoje.length > 0
     ? opts.followUpsHoje.map((l) => `
-        <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid #1B3050;">
+        <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid #243A66;">
           <div style="min-width:32px;height:32px;background:#C9A84C20;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;">📞</div>
           <div>
             <p style="margin:0;font-size:13px;font-weight:600;color:#F0ECE4;">${l.name}</p>
-            <p style="margin:0;font-size:11px;color:#7A96AF;">${l.phone ?? "Sem telefone"}${l.segment ? ` · ${l.segment}` : ""}</p>
+            <p style="margin:0;font-size:11px;color:#9BAFC5;">${l.phone ?? "Sem telefone"}${l.segment ? ` · ${l.segment}` : ""}</p>
           </div>
         </div>`).join("")
-    : `<p style="color:#7A96AF;font-size:13px;">Nenhum follow-up agendado para hoje.</p>`;
+    : `<p style="color:#9BAFC5;font-size:13px;">Nenhum follow-up agendado para hoje.</p>`;
 
   const listaEsquecidos = opts.leadsEsquecidos.length > 0
     ? `<div style="margin-top:20px;padding:16px;background:#1A0A0A;border-radius:8px;border-left:3px solid #EF4444;">
@@ -1104,8 +1104,8 @@ export async function notifyFollowUpsDodia(opts: {
     : "";
 
   const body = `
-    <p style="color:#C8D4E3;font-size:14px;margin:0 0 4px;">Olá, <strong>${opts.partnerName}</strong>!</p>
-    <p style="color:#7A96AF;font-size:13px;margin:0 0 20px;">Aqui estão seus follow-ups para <strong style="color:#E8C97A;">${hoje}</strong>.</p>
+    <p style="color:#F5F1E8;font-size:14px;margin:0 0 4px;">Olá, <strong>${opts.partnerName}</strong>!</p>
+    <p style="color:#9BAFC5;font-size:13px;margin:0 0 20px;">Aqui estão seus follow-ups para <strong style="color:#E8C97A;">${hoje}</strong>.</p>
     <div style="background:#0D1C2E;border-radius:10px;padding:16px;margin-bottom:16px;">
       <p style="margin:0 0 12px;font-size:12px;font-weight:700;color:#C9A84C;letter-spacing:0.08em;">
         📞 FOLLOW-UPS DE HOJE (${opts.followUpsHoje.length})
@@ -1113,7 +1113,7 @@ export async function notifyFollowUpsDodia(opts: {
       ${listaHoje}
     </div>
     ${listaEsquecidos}
-    <p style="color:#7A96AF;font-size:12px;margin-top:16px;">
+    <p style="color:#9BAFC5;font-size:12px;margin-top:16px;">
       Acesse o CRM para registrar as interações e reagendar os próximos contatos.
     </p>
   `;
@@ -1136,15 +1136,15 @@ export async function notifyChatMensagemPartner(opts: {
   preview: string;
 }): Promise<void> {
   const body = `
-    <p style="color:#C8D4E3;font-size:14px;margin:0 0 4px;">Olá, <strong>${opts.partnerName}</strong>!</p>
-    <p style="color:#7A96AF;font-size:13px;margin:0 0 20px;">
+    <p style="color:#F5F1E8;font-size:14px;margin:0 0 4px;">Olá, <strong>${opts.partnerName}</strong>!</p>
+    <p style="color:#9BAFC5;font-size:13px;margin:0 0 20px;">
       Você recebeu uma nova mensagem da equipe V3 Partners.
     </p>
     <div style="background:#0D1C2E;border-radius:10px;padding:20px;margin-bottom:16px;border-left:3px solid #C9A84C;">
       <p style="margin:0 0 6px;font-size:11px;font-weight:700;color:#C9A84C;letter-spacing:0.08em;">MENSAGEM DE ${opts.senderName.toUpperCase()}</p>
       <p style="margin:0;font-size:14px;color:#F0ECE4;line-height:1.6;">"${opts.preview}"</p>
     </div>
-    <p style="color:#7A96AF;font-size:12px;">Acesse a plataforma para responder.</p>
+    <p style="color:#9BAFC5;font-size:12px;">Acesse a plataforma para responder.</p>
   `;
   await send(
     opts.partnerEmail,
@@ -1164,15 +1164,15 @@ export async function notifyChatMensagemInstituicao(opts: {
   preview: string;
 }): Promise<void> {
   const body = `
-    <p style="color:#C8D4E3;font-size:14px;margin:0 0 4px;">Olá, <strong>${opts.instituicaoNome}</strong>!</p>
-    <p style="color:#7A96AF;font-size:13px;margin:0 0 20px;">
+    <p style="color:#F5F1E8;font-size:14px;margin:0 0 4px;">Olá, <strong>${opts.instituicaoNome}</strong>!</p>
+    <p style="color:#9BAFC5;font-size:13px;margin:0 0 20px;">
       A equipe Mesa V3 Partners enviou uma mensagem para você.
     </p>
     <div style="background:#0D1C2E;border-radius:10px;padding:20px;margin-bottom:16px;border-left:3px solid #C9A84C;">
       <p style="margin:0 0 6px;font-size:11px;font-weight:700;color:#C9A84C;letter-spacing:0.08em;">MENSAGEM DE ${opts.senderName.toUpperCase()}</p>
       <p style="margin:0;font-size:14px;color:#F0ECE4;line-height:1.6;">"${opts.preview}"</p>
     </div>
-    <p style="color:#7A96AF;font-size:12px;">Acesse o portal da instituição para responder.</p>
+    <p style="color:#9BAFC5;font-size:12px;">Acesse o portal da instituição para responder.</p>
   `;
   await send(
     opts.instituicaoEmail,
@@ -1195,21 +1195,21 @@ export async function notifyPropostaEtapaPartner(opts: {
   observacao?: string;
 }): Promise<void> {
   const body = `
-    <p style="color:#C8D4E3;font-size:14px;margin:0 0 4px;">Olá, <strong>${opts.partnerName}</strong>!</p>
-    <p style="color:#7A96AF;font-size:13px;margin:0 0 20px;">
+    <p style="color:#F5F1E8;font-size:14px;margin:0 0 4px;">Olá, <strong>${opts.partnerName}</strong>!</p>
+    <p style="color:#9BAFC5;font-size:13px;margin:0 0 20px;">
       Sua proposta teve uma atualização de status na Mesa Operacional.
     </p>
     <div style="background:#0D1C2E;border-radius:10px;padding:20px;margin-bottom:16px;">
       <p style="margin:0 0 12px;font-size:11px;font-weight:700;color:#C9A84C;letter-spacing:0.08em;">PROPOSTA ATUALIZADA</p>
       <p style="margin:0 0 8px;font-size:14px;font-weight:600;color:#F0ECE4;">${opts.clienteNome}</p>
       <div style="display:flex;align-items:center;gap:12px;margin:12px 0;">
-        <span style="font-size:12px;color:#7A96AF;background:#1B3050;padding:4px 10px;border-radius:6px;">${opts.etapaAnterior}</span>
+        <span style="font-size:12px;color:#9BAFC5;background:#243A66;padding:4px 10px;border-radius:6px;">${opts.etapaAnterior}</span>
         <span style="color:#C9A84C;font-size:14px;">→</span>
         <span style="font-size:12px;font-weight:700;color:#F0ECE4;background:#C9A84C20;border:1px solid #C9A84C50;padding:4px 10px;border-radius:6px;">${opts.etapaNova}</span>
       </div>
-      ${opts.observacao ? `<p style="margin:12px 0 0;font-size:13px;color:#C8D4E3;border-top:1px solid #1B3050;padding-top:12px;">${opts.observacao}</p>` : ""}
+      ${opts.observacao ? `<p style="margin:12px 0 0;font-size:13px;color:#F5F1E8;border-top:1px solid #243A66;padding-top:12px;">${opts.observacao}</p>` : ""}
     </div>
-    <p style="color:#7A96AF;font-size:12px;">Acesse a plataforma para ver os detalhes completos.</p>
+    <p style="color:#9BAFC5;font-size:12px;">Acesse a plataforma para ver os detalhes completos.</p>
   `;
   await send(
     opts.partnerEmail,
@@ -1231,18 +1231,18 @@ export async function notifyAgendamentoSDR(opts: {
 }): Promise<void> {
   const displayName = opts.nomeLead ?? opts.phone;
   const body = `
-    <p style="color:#7A96AF;font-size:14px;margin:0 0 20px;">
+    <p style="color:#9BAFC5;font-size:14px;margin:0 0 20px;">
       O Agente SDR (Matheus) detectou que um lead confirmou interesse em uma reunião. Confirme o link do Google Meet com o lead.
     </p>
-    <div style="margin:0 0 20px;padding:18px 20px;background:#13243D;border-radius:10px;border-left:4px solid #C4922E;">
-      <p style="margin:0 0 4px;font-size:11px;font-weight:700;letter-spacing:1px;color:#C4922E;text-transform:uppercase;">Reunião Confirmada</p>
-      <p style="margin:0;font-size:20px;font-weight:800;color:#E5B96A;">${opts.dataHora ?? "Horário a confirmar"}</p>
+    <div style="margin:0 0 20px;padding:18px 20px;background:#13223A;border-radius:10px;border-left:4px solid #C9A84C;">
+      <p style="margin:0 0 4px;font-size:11px;font-weight:700;letter-spacing:1px;color:#C9A84C;text-transform:uppercase;">Reunião Confirmada</p>
+      <p style="margin:0;font-size:20px;font-weight:800;color:#E8C97A;">${opts.dataHora ?? "Horário a confirmar"}</p>
     </div>
     ${row("Lead", displayName)}
     ${row("WhatsApp", opts.phone)}
     ${row("Responsável", opts.responsavelNome)}
-    <p style="color:#7A96AF;font-size:12px;margin-top:20px;">
-      O lead foi marcado automaticamente como <strong style="color:#E5B96A;">Agendado</strong> na aba SDR.
+    <p style="color:#9BAFC5;font-size:12px;margin-top:20px;">
+      O lead foi marcado automaticamente como <strong style="color:#E8C97A;">Agendado</strong> na aba SDR.
       Acesse a plataforma para ver o histórico da conversa e enviar o link da reunião.
     </p>
   `;
@@ -1267,16 +1267,16 @@ export async function notifyAulaAoVivoInscricao(opts: {
   zoomLink: string;
 }): Promise<void> {
   const body = `
-    <p style="color:#7A96AF;font-size:14px;margin:0 0 20px;">
-      Olá, <strong style="color:#C8D4E3;">${opts.partnerName}</strong>! Sua inscrição na aula ao vivo abaixo foi confirmada.
+    <p style="color:#9BAFC5;font-size:14px;margin:0 0 20px;">
+      Olá, <strong style="color:#F5F1E8;">${opts.partnerName}</strong>! Sua inscrição na aula ao vivo abaixo foi confirmada.
     </p>
-    <div style="margin:0 0 20px;padding:18px 20px;background:#13243D;border-radius:10px;border-left:4px solid #C4922E;">
-      <p style="margin:0 0 4px;font-size:11px;font-weight:700;letter-spacing:1px;color:#C4922E;text-transform:uppercase;">Você está inscrito</p>
-      <p style="margin:0;font-size:18px;font-weight:800;color:#E5B96A;">${opts.titulo}</p>
+    <div style="margin:0 0 20px;padding:18px 20px;background:#13223A;border-radius:10px;border-left:4px solid #C9A84C;">
+      <p style="margin:0 0 4px;font-size:11px;font-weight:700;letter-spacing:1px;color:#C9A84C;text-transform:uppercase;">Você está inscrito</p>
+      <p style="margin:0;font-size:18px;font-weight:800;color:#E8C97A;">${opts.titulo}</p>
     </div>
     ${row("Instrutor", opts.instrutor)}
     ${row("Data e horário", opts.dataHora)}
-    <p style="color:#7A96AF;font-size:12px;margin-top:20px;">
+    <p style="color:#9BAFC5;font-size:12px;margin-top:20px;">
       Vamos te lembrar por e-mail 1 dia antes. Guarde o link de acesso abaixo.
     </p>
   `;
@@ -1299,12 +1299,12 @@ export async function notifyAulaAoVivoLembrete(opts: {
   zoomLink: string;
 }): Promise<void> {
   const body = `
-    <p style="color:#7A96AF;font-size:14px;margin:0 0 20px;">
-      Olá, <strong style="color:#C8D4E3;">${opts.partnerName}</strong>! Sua aula ao vivo é <strong style="color:#E5B96A;">amanhã</strong>. Não perca.
+    <p style="color:#9BAFC5;font-size:14px;margin:0 0 20px;">
+      Olá, <strong style="color:#F5F1E8;">${opts.partnerName}</strong>! Sua aula ao vivo é <strong style="color:#E8C97A;">amanhã</strong>. Não perca.
     </p>
-    <div style="margin:0 0 20px;padding:18px 20px;background:#13243D;border-radius:10px;border-left:4px solid #C4922E;">
-      <p style="margin:0 0 4px;font-size:11px;font-weight:700;letter-spacing:1px;color:#C4922E;text-transform:uppercase;">Lembrete — Aula Amanhã</p>
-      <p style="margin:0;font-size:18px;font-weight:800;color:#E5B96A;">${opts.titulo}</p>
+    <div style="margin:0 0 20px;padding:18px 20px;background:#13223A;border-radius:10px;border-left:4px solid #C9A84C;">
+      <p style="margin:0 0 4px;font-size:11px;font-weight:700;letter-spacing:1px;color:#C9A84C;text-transform:uppercase;">Lembrete — Aula Amanhã</p>
+      <p style="margin:0;font-size:18px;font-weight:800;color:#E8C97A;">${opts.titulo}</p>
     </div>
     ${row("Instrutor", opts.instrutor)}
     ${row("Data e horário", opts.dataHora)}

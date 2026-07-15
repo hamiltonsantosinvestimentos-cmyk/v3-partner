@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { createHash } from "crypto";
 import { resolveContractVariables, wrapContractInV3Html } from "@/lib/contract-render";
+import { auditText, auditHtml } from "@/lib/brand-guardian-gate";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -25,8 +26,11 @@ async function sendNdaCopyByEmail(params: {
   try {
     const { Resend } = await import("resend");
     const resend = new Resend(process.env.RESEND_API_KEY);
-    const subject = `${params.contractTitle} — ${params.anonymousId} (assinado)`;
-    const html = `<p>Segue cópia do termo assinado eletronicamente na Deal Room do ativo <strong>${params.anonymousId}</strong>.</p>${params.renderedHtml}`;
+    const subjectGate = auditText(`${params.contractTitle}: ${params.anonymousId} (assinado)`);
+    const htmlGate = auditHtml(`<p>Segue cópia do termo assinado eletronicamente na Deal Room do ativo <strong>${params.anonymousId}</strong>.</p>${params.renderedHtml}`);
+    if (htmlGate.blocking.length > 0) console.error("[deal-room nda-copy] Brand Guardian bloqueou:", htmlGate.blocking);
+    const subject = subjectGate.corrected;
+    const html = htmlGate.corrected;
 
     await Promise.all([
       resend.emails.send({
@@ -38,7 +42,7 @@ async function sendNdaCopyByEmail(params: {
       resend.emails.send({
         from: "V3 Partners Bolsa de Ativos <noreply@v3partners.com.br>",
         to: MESA_V3_EMAILS,
-        subject: `[Mesa] ${subject}`,
+        subject: auditText(`[Mesa] ${subject}`).corrected,
         html,
       }),
     ]);

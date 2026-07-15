@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { randomBytes } from "crypto";
+import { auditText, auditHtml } from "@/lib/brand-guardian-gate";
 
 function generateTempPassword(): string {
   return randomBytes(9).toString("base64").replace(/[+/=]/g, "").slice(0, 12);
@@ -52,14 +53,16 @@ export async function POST(req: NextRequest) {
     try {
       const { Resend } = await import("resend");
       const resend = new Resend(process.env.RESEND_API_KEY);
+      const quickPartnerHtmlGate = auditHtml(`<p>Olá ${full_name},</p>
+               <p>Você foi cadastrado como Partner V3 para atuar como Mandatário em uma operação da Bolsa de Ativos.</p>
+               <p><strong>Email:</strong> ${email}<br/><strong>Senha temporária:</strong> ${tempPassword}</p>
+               <p>Acesse a plataforma e assine o Contrato de Parceria: https://app.v3partners.com.br/contrato-parceria</p>`);
+      if (quickPartnerHtmlGate.blocking.length > 0) console.error("[quick-partner] Brand Guardian bloqueou:", quickPartnerHtmlGate.blocking);
       await resend.emails.send({
         from: "V3 Partners <noreply@v3partners.com.br>",
         to: email,
-        subject: "Seus dados de acesso: V3 Partners",
-        html: `<p>Olá ${full_name},</p>
-               <p>Você foi cadastrado como Partner V3 para atuar como Mandatário em uma operação da Bolsa de Ativos.</p>
-               <p><strong>Email:</strong> ${email}<br/><strong>Senha temporária:</strong> ${tempPassword}</p>
-               <p>Acesse a plataforma e assine o Contrato de Parceria: https://app.v3partners.com.br/contrato-parceria</p>`,
+        subject: auditText("Seus dados de acesso: V3 Partners").corrected,
+        html: quickPartnerHtmlGate.corrected,
       });
     } catch (err) {
       console.error("[quick-partner] falha ao enviar email de acesso:", err);

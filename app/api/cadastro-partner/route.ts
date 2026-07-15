@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { coraFetch } from "@/lib/cora";
 import { randomUUID } from "crypto";
+import { auditText, auditHtml } from "@/lib/brand-guardian-gate";
 
 const PLANO_VALOR: Record<string, number> = {
   STARTER:     29700,   // R$ 297,00 em centavos
@@ -246,11 +247,8 @@ export async function POST(req: NextRequest) {
         : "V3 Partner";
       const vencimento = new Date(Date.now() + 3 * 86400000).toLocaleDateString("pt-BR");
 
-      await resend.emails.send({
-        from: "V3 Partners <noreply@v3partners.com.br>",
-        to: email,
-        subject: `Bem-vindo à V3 Partners — Conclua seu pagamento de ${valorFmt}`,
-        html: `
+      const cadastroSubjectGate = auditText(`Bem-vindo à V3 Partners: conclua seu pagamento de ${valorFmt}`);
+      const cadastroHtmlGate = auditHtml(`
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #09081A; color: #F0ECE4; padding: 32px; border-radius: 16px;">
             <img src="https://app.v3partners.com.br/logo.jpg" alt="V3 Partners" style="height: 40px; margin-bottom: 24px;" />
             <h1 style="color: #C9A84C; font-size: 24px; margin-bottom: 8px;">Cadastro Recebido!</h1>
@@ -283,7 +281,13 @@ export async function POST(req: NextRequest) {
             <p style="color: #7A8FA8; font-size: 11px; margin: 0;">Dúvidas? Responda este e-mail ou entre em contato: contato@v3partners.com.br</p>
             <p style="color: #3A5070; font-size: 10px; margin: 8px 0 0;">V3 Partners Soluções Ltda · CNPJ 14.219.287/0001-50</p>
           </div>
-        `,
+        `);
+      if (cadastroHtmlGate.blocking.length > 0) console.error("[cadastro-partner] Brand Guardian bloqueou:", cadastroHtmlGate.blocking);
+      await resend.emails.send({
+        from: "V3 Partners <noreply@v3partners.com.br>",
+        to: email,
+        subject: cadastroSubjectGate.corrected,
+        html: cadastroHtmlGate.corrected,
       });
     } catch (emailErr) {
       console.error("Erro ao enviar e-mail de cadastro:", emailErr);

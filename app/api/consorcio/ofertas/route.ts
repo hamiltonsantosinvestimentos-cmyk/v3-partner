@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { Resend } from "resend";
 import { z } from "zod";
+import { auditText, auditHtml } from "@/lib/brand-guardian-gate";
 
 export const dynamic = "force-dynamic";
 
@@ -110,61 +111,64 @@ export async function POST(req: NextRequest) {
         const html = `<!DOCTYPE html>
 <html lang="pt-BR">
 <head><meta charset="utf-8"><title>Nova Oferta de Consórcio</title></head>
-<body style="margin:0;padding:0;background:#07101E;font-family:'Segoe UI',Arial,sans-serif;">
-  <div style="max-width:560px;margin:40px auto;background:#0C1929;border-radius:12px;overflow:hidden;border:1px solid #1B3050;">
-    <div style="padding:24px 32px;border-bottom:1px solid #1B3050;background:#07101E;">
-      <span style="font-size:16px;font-weight:800;color:#E5B96A;letter-spacing:0.08em;">V3 PARTNERS</span>
+<body style="margin:0;padding:0;background:#09081A;font-family:'Segoe UI',Arial,sans-serif;">
+  <div style="max-width:560px;margin:40px auto;background:#162744;border-radius:12px;overflow:hidden;border:1px solid #243A66;">
+    <div style="padding:24px 32px;border-bottom:1px solid #243A66;background:#09081A;">
+      <span style="font-size:16px;font-weight:800;color:#E8C97A;letter-spacing:0.08em;">V3 PARTNERS</span>
     </div>
     <div style="padding:32px;">
-      <h2 style="margin:0 0 20px;font-size:18px;font-weight:700;color:#C8D4E3;">
+      <h2 style="margin:0 0 20px;font-size:18px;font-weight:700;color:#F5F1E8;">
         Nova Oferta — Carta ${d.carta_code}
       </h2>
-      <div style="background:#07101E;border-radius:8px;padding:16px;margin-bottom:20px;">
-        <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #1B3050;">
-          <span style="color:#7A96AF;font-size:13px;">Carta</span>
-          <span style="color:#C8D4E3;font-size:13px;font-weight:600;">${d.carta_code}</span>
+      <div style="background:#09081A;border-radius:8px;padding:16px;margin-bottom:20px;">
+        <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #243A66;">
+          <span style="color:#9BAFC5;font-size:13px;">Carta</span>
+          <span style="color:#F5F1E8;font-size:13px;font-weight:600;">${d.carta_code}</span>
         </div>
-        <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #1B3050;">
-          <span style="color:#7A96AF;font-size:13px;">Valor do Crédito</span>
-          <span style="color:#C8D4E3;font-size:13px;font-weight:600;">${fmtCurrency(d.carta_credit_value)}</span>
+        <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #243A66;">
+          <span style="color:#9BAFC5;font-size:13px;">Valor do Crédito</span>
+          <span style="color:#F5F1E8;font-size:13px;font-weight:600;">${fmtCurrency(d.carta_credit_value)}</span>
         </div>
-        <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #1B3050;">
-          <span style="color:#7A96AF;font-size:13px;">Valor da Oferta</span>
-          <span style="color:#E5B96A;font-size:13px;font-weight:700;">${fmtCurrency(d.valor_oferta)}</span>
+        <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #243A66;">
+          <span style="color:#9BAFC5;font-size:13px;">Valor da Oferta</span>
+          <span style="color:#E8C97A;font-size:13px;font-weight:700;">${fmtCurrency(d.valor_oferta)}</span>
         </div>
-        <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #1B3050;">
-          <span style="color:#7A96AF;font-size:13px;">Interessado</span>
-          <span style="color:#C8D4E3;font-size:13px;font-weight:600;">${d.interessado_nome}</span>
+        <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #243A66;">
+          <span style="color:#9BAFC5;font-size:13px;">Interessado</span>
+          <span style="color:#F5F1E8;font-size:13px;font-weight:600;">${d.interessado_nome}</span>
         </div>
-        <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:${d.observacoes ? "1px solid #1B3050" : "none"};">
-          <span style="color:#7A96AF;font-size:13px;">Telefone</span>
-          <span style="color:#C8D4E3;font-size:13px;font-weight:600;">${d.interessado_tel ?? "—"}</span>
+        <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:${d.observacoes ? "1px solid #243A66" : "none"};">
+          <span style="color:#9BAFC5;font-size:13px;">Telefone</span>
+          <span style="color:#F5F1E8;font-size:13px;font-weight:600;">${d.interessado_tel ?? "—"}</span>
         </div>
-        ${responsavel_nome ? `<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:${d.observacoes ? "1px solid #1B3050" : "none"};">
-          <span style="color:#7A96AF;font-size:13px;">Responsável</span>
-          <span style="color:#C8D4E3;font-size:13px;font-weight:600;">${responsavel_nome}</span>
+        ${responsavel_nome ? `<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:${d.observacoes ? "1px solid #243A66" : "none"};">
+          <span style="color:#9BAFC5;font-size:13px;">Responsável</span>
+          <span style="color:#F5F1E8;font-size:13px;font-weight:600;">${responsavel_nome}</span>
         </div>` : ""}
         ${d.observacoes ? `<div style="padding:8px 0;">
-          <span style="color:#7A96AF;font-size:13px;">Observações</span>
-          <p style="margin:4px 0 0;color:#C8D4E3;font-size:13px;line-height:1.5;">${d.observacoes}</p>
+          <span style="color:#9BAFC5;font-size:13px;">Observações</span>
+          <p style="margin:4px 0 0;color:#F5F1E8;font-size:13px;line-height:1.5;">${d.observacoes}</p>
         </div>` : ""}
       </div>
-      <p style="font-size:13px;color:#C8D4E3;line-height:1.6;margin-bottom:16px;">
-        A carta foi marcada como <strong style="color:#E5B96A;">Em Negociação</strong>. Acesse a plataforma para acompanhar.
+      <p style="font-size:13px;color:#F5F1E8;line-height:1.6;margin-bottom:16px;">
+        A carta foi marcada como <strong style="color:#E8C97A;">Em Negociação</strong>. Acesse a plataforma para acompanhar.
       </p>
     </div>
-    <div style="padding:18px 32px;border-top:1px solid #1B3050;background:#07101E;">
-      <p style="margin:0;font-size:11px;color:#7A96AF;">V3 Partners — Consórcio · Notificação automática</p>
+    <div style="padding:18px 32px;border-top:1px solid #243A66;background:#09081A;">
+      <p style="margin:0;font-size:11px;color:#9BAFC5;">V3 Partners — Consórcio · Notificação automática</p>
     </div>
   </div>
 </body>
 </html>`;
 
+        const ofertaSubjectGate = auditText(`Nova Oferta: Carta ${d.carta_code} · ${d.interessado_nome}`);
+        const ofertaHtmlGate = auditHtml(html);
+        if (ofertaHtmlGate.blocking.length > 0) console.error("[consorcio/ofertas] Brand Guardian bloqueou:", ofertaHtmlGate.blocking);
         await resend.emails.send({
           from: process.env.EMAIL_FROM || "V3 Partners <onboarding@resend.dev>",
           to: adminEmails,
-          subject: `Nova Oferta — Carta ${d.carta_code} · ${d.interessado_nome}`,
-          html,
+          subject: ofertaSubjectGate.corrected,
+          html: ofertaHtmlGate.corrected,
         });
       }
     } catch { /* silent — não bloqueia */ }

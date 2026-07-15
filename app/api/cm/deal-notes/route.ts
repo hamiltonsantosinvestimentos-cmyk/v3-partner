@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
+import { auditText, auditHtml } from "@/lib/brand-guardian-gate";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -52,6 +53,11 @@ async function notifyMentioned(params: {
   try {
     const { Resend } = await import("resend");
     const resend = new Resend(process.env.RESEND_API_KEY);
+    const noteSubjectGate = auditText(title);
+    const noteHtmlGate = auditHtml(`<p><strong>${params.authorName}</strong> mencionou você numa nota do ativo <strong>${params.listingAnonymousId}</strong>:</p>
+                   <p style="background:#12112A;color:#F5F1E8;padding:12px;border-radius:6px">${params.content}</p>
+                   <p>Acesse a Mesa de Capitais para responder: https://app.v3partners.com.br/bolsa/mesa</p>`);
+    if (noteHtmlGate.blocking.length > 0) console.error("[deal-notes] Brand Guardian bloqueou:", noteHtmlGate.blocking);
     await Promise.all(
       mentionedProfiles
         .filter((p) => p.email)
@@ -59,10 +65,8 @@ async function notifyMentioned(params: {
           resend.emails.send({
             from: "V3 Partners Bolsa de Ativos <noreply@v3partners.com.br>",
             to: p.email as string,
-            subject: title,
-            html: `<p><strong>${params.authorName}</strong> mencionou você numa nota do ativo <strong>${params.listingAnonymousId}</strong>:</p>
-                   <p style="background:#12112A;color:#F5F1E8;padding:12px;border-radius:6px">${params.content}</p>
-                   <p>Acesse a Mesa de Capitais para responder: https://app.v3partners.com.br/bolsa/mesa</p>`,
+            subject: noteSubjectGate.corrected,
+            html: noteHtmlGate.corrected,
           })
         )
     );

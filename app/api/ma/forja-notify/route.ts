@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as sc } from "@supabase/supabase-js";
+import { auditText, auditHtml } from "@/lib/brand-guardian-gate";
 
 export const maxDuration = 60;
 
@@ -330,45 +331,49 @@ export async function POST(req: NextRequest) {
     mesaDestinatarios.push(partnerInfo.email);
   }
 
+  const mesaEmailHtmlGate = auditHtml(buildForjaEmail({
+    destinatarioNome: "Mesa",
+    dealCodigo,
+    score,
+    recommendation,
+    pendencias,
+    docInsights: insights,
+    portalUrl,
+    uploadUrl,
+    tipo: "mesa",
+  }));
+  if (mesaEmailHtmlGate.blocking.length > 0) console.error("[forja-notify mesa] Brand Guardian bloqueou:", mesaEmailHtmlGate.blocking);
   sends.push(
     resend.emails.send({
       from:    "V3 Partners Mesa M&A <noreply@v3partners.com.br>",
       replyTo: "deal@v3partners.com.br",
       to:      mesaDestinatarios,
-      subject: `[FORJA] ${dealCodigo} · ${recLabel(recommendation)} · Score ${score}/100`,
-      html: buildForjaEmail({
-        destinatarioNome: "Mesa",
-        dealCodigo,
-        score,
-        recommendation,
-        pendencias,
-        docInsights: insights,
-        portalUrl,
-        uploadUrl,
-        tipo: "mesa",
-      }),
+      subject: auditText(`[FORJA] ${dealCodigo} · ${recLabel(recommendation)} · Score ${score}/100`).corrected,
+      html: mesaEmailHtmlGate.corrected,
     })
   );
 
   // 2. Email para o Partner (se existir e tiver email)
   if (partnerInfo?.email) {
+    const partnerEmailHtmlGate = auditHtml(buildForjaEmail({
+      destinatarioNome: partnerInfo.full_name ?? "Partner",
+      dealCodigo,
+      score,
+      recommendation,
+      pendencias,
+      docInsights: [],
+      portalUrl,
+      uploadUrl,
+      tipo: "partner",
+    }));
+    if (partnerEmailHtmlGate.blocking.length > 0) console.error("[forja-notify partner] Brand Guardian bloqueou:", partnerEmailHtmlGate.blocking);
     sends.push(
       resend.emails.send({
         from:    "V3 Partners <noreply@v3partners.com.br>",
         replyTo: "deal@v3partners.com.br",
         to:      partnerInfo.email,
-        subject: `Pendências para avançar no deal ${dealCodigo}`,
-        html: buildForjaEmail({
-          destinatarioNome: partnerInfo.full_name ?? "Partner",
-          dealCodigo,
-          score,
-          recommendation,
-          pendencias,
-          docInsights: [],
-          portalUrl,
-          uploadUrl,
-          tipo: "partner",
-        }),
+        subject: auditText(`Pendências para avançar no deal ${dealCodigo}`).corrected,
+        html: partnerEmailHtmlGate.corrected,
       })
     );
   }
@@ -378,12 +383,8 @@ export async function POST(req: NextRequest) {
   const nomeCliente  = (assetData.nome_contato ?? dealNome) as string;
   if (emailCliente) {
     sends.push(
-      resend.emails.send({
-        from:    "V3 Partners <noreply@v3partners.com.br>",
-        replyTo: "deal@v3partners.com.br",
-        to:      emailCliente,
-        subject: `Documentação necessária para análise — V3 Partners`,
-        html: buildForjaEmail({
+      (() => {
+        const clienteEmailHtmlGate = auditHtml(buildForjaEmail({
           destinatarioNome: nomeCliente,
           dealCodigo,
           score,
@@ -393,8 +394,16 @@ export async function POST(req: NextRequest) {
           portalUrl,
           uploadUrl,
           tipo: "cliente",
-        }),
-      })
+        }));
+        if (clienteEmailHtmlGate.blocking.length > 0) console.error("[forja-notify cliente] Brand Guardian bloqueou:", clienteEmailHtmlGate.blocking);
+        return resend.emails.send({
+          from:    "V3 Partners <noreply@v3partners.com.br>",
+          replyTo: "deal@v3partners.com.br",
+          to:      emailCliente,
+          subject: auditText("Documentação necessária para análise: V3 Partners").corrected,
+          html: clienteEmailHtmlGate.corrected,
+        });
+      })()
     );
   }
 

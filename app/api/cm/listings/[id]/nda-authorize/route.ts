@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
+import { auditText, auditHtml } from "@/lib/brand-guardian-gate";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -26,14 +27,17 @@ async function notifyDirectors(params: { anonymousId: string; requesterName: str
   try {
     const { Resend } = await import("resend");
     const resend = new Resend(process.env.RESEND_API_KEY);
+    const ndaSubjectGate = auditText(`Autorização de NDA retroativo: ${params.anonymousId}`);
+    const ndaHtmlGate = auditHtml(`<p><strong>${params.requesterName}</strong> marcou o NDA do ativo <strong>${params.anonymousId}</strong> como já assinado fora do sistema, e precisa de autorização de um diretor.</p>
+             <p><strong>Motivo/contexto:</strong> ${params.reason}</p>
+             <p>Acesse a Mesa de Capitais para aprovar ou rejeitar: https://app.v3partners.com.br/bolsa/mesa</p>
+             <p style="color:#888;font-size:12px">listing_id: ${params.listingId}</p>`);
+    if (ndaHtmlGate.blocking.length > 0) console.error("[nda-authorize] Brand Guardian bloqueou:", ndaHtmlGate.blocking);
     await resend.emails.send({
       from: "V3 Partners Bolsa de Ativos <noreply@v3partners.com.br>",
       to: DIRECTOR_EMAILS,
-      subject: `Autorização de NDA retroativo — ${params.anonymousId}`,
-      html: `<p><strong>${params.requesterName}</strong> marcou o NDA do ativo <strong>${params.anonymousId}</strong> como já assinado fora do sistema, e precisa de autorização de um diretor.</p>
-             <p><strong>Motivo/contexto:</strong> ${params.reason}</p>
-             <p>Acesse a Mesa de Capitais para aprovar ou rejeitar: https://app.v3partners.com.br/bolsa/mesa</p>
-             <p style="color:#888;font-size:12px">listing_id: ${params.listingId}</p>`,
+      subject: ndaSubjectGate.corrected,
+      html: ndaHtmlGate.corrected,
     });
   } catch (err) {
     console.error("[CM NDA Authorize] falha ao notificar diretores:", err);

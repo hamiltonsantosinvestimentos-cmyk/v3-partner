@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { randomUUID } from "crypto";
 import { resolveContractVariables, wrapContractInV3Html } from "@/lib/contract-render";
+import { auditText, auditHtml } from "@/lib/brand-guardian-gate";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -128,13 +129,16 @@ export async function POST(req: NextRequest) {
     try {
       const { Resend } = await import("resend");
       const resend = new Resend(process.env.RESEND_API_KEY);
+      const annexSubjectGate = auditText(`Assinatura pendente: ${contractTitle}`);
+      const annexHtmlGate = auditHtml(`<p>Olá ${mandatario.full_name},</p>
+               <p>Você foi designado Mandatário da cadeia de intermediação (lado ${variables.lado_operacao}) do ativo <strong>${listing.anonymous_id}</strong>.</p>
+               <p>Assine o Anexo FPA/NCND para confirmar o recebimento centralizado e a obrigação de repasse: https://app.v3partners.com.br/assinar/anexo/${signingToken}</p>`);
+      if (annexHtmlGate.blocking.length > 0) console.error("[generate-annex] Brand Guardian bloqueou:", annexHtmlGate.blocking);
       await resend.emails.send({
         from: "V3 Partners Bolsa de Ativos <noreply@v3partners.com.br>",
         to: mandatario.email,
-        subject: `Assinatura pendente: ${contractTitle}`,
-        html: `<p>Olá ${mandatario.full_name},</p>
-               <p>Você foi designado Mandatário da cadeia de intermediação (lado ${variables.lado_operacao}) do ativo <strong>${listing.anonymous_id}</strong>.</p>
-               <p>Assine o Anexo FPA/NCND para confirmar o recebimento centralizado e a obrigação de repasse: https://app.v3partners.com.br/assinar/anexo/${signingToken}</p>`,
+        subject: annexSubjectGate.corrected,
+        html: annexHtmlGate.corrected,
       });
     } catch (err) {
       console.error("[generate-annex] falha ao enviar email de assinatura:", err);

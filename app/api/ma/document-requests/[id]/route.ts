@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import type { DocRequestItem } from "@/lib/ma/document-request-mapper";
 import { DOC_TIPO_LABEL } from "@/lib/ma/document-request-mapper";
+import { auditText, auditHtml } from "@/lib/brand-guardian-gate";
 
 export const maxDuration = 300;
 
@@ -154,11 +155,13 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
       mesaName: profile?.full_name ?? "Mesa V3",
     });
 
+    const docReqIdHtmlGate = auditHtml(emailHtml);
+    if (docReqIdHtmlGate.blocking.length > 0) console.error("[document-requests/id] Brand Guardian bloqueou:", docReqIdHtmlGate.blocking);
     await resend.emails.send({
       from:    "V3 Partners Mesa M&A <noreply@v3partners.com.br>",
       to:      partnerEmail,
-      subject: `[${dealCode}] Documentos necessários para análise`,
-      html:    emailHtml,
+      subject: auditText(`[${dealCode}] Documentos necessários para análise`).corrected,
+      html:    docReqIdHtmlGate.corrected,
     });
 
     updates.status        = "sent";

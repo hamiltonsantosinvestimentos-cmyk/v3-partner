@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
+import { auditText, auditHtml } from "@/lib/brand-guardian-gate";
 
 export const maxDuration = 30;
 
@@ -268,11 +269,13 @@ export async function POST(req: NextRequest) {
 
     if (recipients.length > 0) {
       try {
+        const transferHtmlGate = auditHtml(emailHtml);
+        if (transferHtmlGate.blocking.length > 0) console.error("[transfer-deal] Brand Guardian bloqueou:", transferHtmlGate.blocking);
         await resend.emails.send({
           from:    "V3 Partners Plataforma <noreply@v3partners.com.br>",
           to:      recipients,
-          subject: `[Transferência de Deal] ${deal.code} — ${deal.target_company ?? deal.title}`,
-          html:    emailHtml,
+          subject: auditText(`[Transferência de Deal] ${deal.code}: ${deal.target_company ?? deal.title}`).corrected,
+          html:    transferHtmlGate.corrected,
         });
         emailsEnviados = recipients.length;
       } catch (err) {

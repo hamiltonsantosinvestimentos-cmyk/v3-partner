@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { auditText, auditHtml } from "@/lib/brand-guardian-gate";
 
 // POST { dealCode, dealName, partnerName, partnerEmail, sector, dealValue }
 export async function POST(req: NextRequest) {
@@ -192,18 +193,22 @@ export async function POST(req: NextRequest) {
     const { Resend } = await import("resend");
     const resend = new Resend(resendKey);
 
+    const partnerNotifyHtmlGate = auditHtml(buildPartnerEmail());
+    const mesaNotifyHtmlGate = auditHtml(buildMesaEmail());
+    if (partnerNotifyHtmlGate.blocking.length > 0) console.error("[notify-deal partner] Brand Guardian bloqueou:", partnerNotifyHtmlGate.blocking);
+    if (mesaNotifyHtmlGate.blocking.length > 0) console.error("[notify-deal mesa] Brand Guardian bloqueou:", mesaNotifyHtmlGate.blocking);
     await Promise.all([
       resend.emails.send({
         from: "V3 Partners <noreply@v3partners.com.br>",
         to: partnerEmail,
-        subject: `Deal ${dealCode} recebido — V3 Partners`,
-        html: buildPartnerEmail(),
+        subject: auditText(`Deal ${dealCode} recebido: V3 Partners`).corrected,
+        html: partnerNotifyHtmlGate.corrected,
       }),
       resend.emails.send({
         from: "V3 Partners Plataforma <noreply@v3partners.com.br>",
         to: "deal@v3partners.com.br",
-        subject: `[Novo Deal] ${dealCode} — ${dealName} · ${sector}`,
-        html: buildMesaEmail(),
+        subject: auditText(`[Novo Deal] ${dealCode}: ${dealName} · ${sector}`).corrected,
+        html: mesaNotifyHtmlGate.corrected,
       }),
     ]);
 
