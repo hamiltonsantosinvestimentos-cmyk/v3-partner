@@ -191,6 +191,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
   const [interMandatarioId, setInterMandatarioId] = useState("");
   const [addingIntermediary, setAddingIntermediary] = useState(false);
   const [generatingAnnex, setGeneratingAnnex] = useState<string | null>(null);
+  const [generatingFillLink, setGeneratingFillLink] = useState<string | null>(null);
   const [showQuickPartner, setShowQuickPartner] = useState(false);
   const [qpName, setQpName] = useState("");
   const [qpEmail, setQpEmail] = useState("");
@@ -457,6 +458,29 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
       }
     } catch { alert("Erro de conexão"); }
     finally { setGeneratingAnnex(null); }
+  };
+
+  const generateFillLink = async (listingId: string, side: "compra" | "venda") => {
+    if (!interMandatarioId) {
+      alert("Selecione o Mandatário deste lado antes de gerar o link de preenchimento");
+      return;
+    }
+    setGeneratingFillLink(side);
+    try {
+      const res = await fetch("/api/cm/deal-intermediaries/generate-fill-link", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ listing_id: listingId, side, mandatario_partner_id: interMandatarioId }),
+      });
+      const json = await res.json();
+      if (res.ok) {
+        navigator.clipboard.writeText(json.url);
+        alert(`Link copiado e enviado por email ao Mandatário.\n${json.url}`);
+      } else {
+        alert(json.error ?? "Erro ao gerar link");
+      }
+    } catch { alert("Erro de conexão"); }
+    finally { setGeneratingFillLink(null); }
   };
 
   const createQuickPartner = async () => {
@@ -2195,10 +2219,16 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
                     <div key={side} className="pt-2 border-t border-[#9BAFC5]/10">
                       <div className="flex items-center justify-between mb-1.5">
                         <span className="text-[9px] text-[#9BAFC5] font-bold uppercase">Lado {side === "venda" ? "Venda" : "Compra"}</span>
-                        <button onClick={() => generateAnnex(selectedListing.id, side)} disabled={generatingAnnex === side}
-                          className="px-2 py-1 bg-[#C9A84C]/20 border border-[#C9A84C]/30 rounded text-[#E8C97A] text-[9px] font-bold hover:bg-[#C9A84C]/30 transition disabled:opacity-50 flex items-center gap-1">
-                          {generatingAnnex === side ? <Loader2 size={11} className="animate-spin" /> : null} Gerar Anexo e Enviar
-                        </button>
+                        <div className="flex gap-1.5">
+                          <button onClick={() => generateFillLink(selectedListing.id, side)} disabled={generatingFillLink === side}
+                            className="px-2 py-1 bg-[#162744] border border-[#9BAFC5]/15 rounded text-[#9BAFC5] text-[9px] font-bold hover:text-[#F5F1E8] transition disabled:opacity-50 flex items-center gap-1">
+                            {generatingFillLink === side ? <Loader2 size={11} className="animate-spin" /> : null} Gerar Link p/ Preenchimento
+                          </button>
+                          <button onClick={() => generateAnnex(selectedListing.id, side)} disabled={generatingAnnex === side}
+                            className="px-2 py-1 bg-[#C9A84C]/20 border border-[#C9A84C]/30 rounded text-[#E8C97A] text-[9px] font-bold hover:bg-[#C9A84C]/30 transition disabled:opacity-50 flex items-center gap-1">
+                            {generatingAnnex === side ? <Loader2 size={11} className="animate-spin" /> : null} Gerar Anexo e Enviar
+                          </button>
+                        </div>
                       </div>
                       <div className="space-y-1">
                         {sideRows.map((i) => (

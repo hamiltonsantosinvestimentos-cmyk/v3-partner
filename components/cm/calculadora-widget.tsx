@@ -1,7 +1,9 @@
 "use client";
 
-import React, { useState } from "react";
-import { Calculator, Loader2, ArrowRightLeft } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { Calculator, Loader2, ArrowRightLeft, Settings2 } from "lucide-react";
+
+const INTERNAL_ROLES = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"];
 
 interface CalcResult {
   valor_face: number;
@@ -17,19 +19,45 @@ function formatBRL(v: number) {
   return `R$ ${v.toLocaleString("pt-BR", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 }
 
-export function CalculadoraWidget() {
+export function CalculadoraWidget({ userRole = "PARTNER" }: { userRole?: string }) {
   const [valorFace, setValorFace] = useState("4200000");
   const [prazo, setPrazo] = useState("18");
   const [desagio, setDesagio] = useState("32");
   const [tir, setTir] = useState("");
   const [commPercent, setCommPercent] = useState("7");
   const [divisaoPartes, setDivisaoPartes] = useState("3");
-  const [taxaEstruturacao, setTaxaEstruturacao] = useState("0");
+  const [taxaIntermediacao, setTaxaIntermediacao] = useState("");
   const [mode, setMode] = useState<"desagio" | "tir">("desagio");
   const [result, setResult] = useState<CalcResult | null>(null);
   const [commission, setCommission] = useState<any>(null);
   const [commissionPrecision, setCommissionPrecision] = useState<any>(null);
   const [loading, setLoading] = useState(false);
+  const [editingDefault, setEditingDefault] = useState(false);
+  const [savingDefault, setSavingDefault] = useState(false);
+
+  const isInternal = INTERNAL_ROLES.includes(userRole);
+
+  useEffect(() => {
+    fetch("/api/cm/settings/taxa-estruturacao")
+      .then((res) => res.json())
+      .then((json) => { if (json.divisao_partes) setDivisaoPartes(String(json.divisao_partes)); })
+      .catch(() => {});
+  }, []);
+
+  const saveDefaultDivisaoPartes = async () => {
+    setSavingDefault(true);
+    try {
+      const res = await fetch("/api/cm/settings/taxa-estruturacao", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ divisao_partes: Number(divisaoPartes) }),
+      });
+      const json = await res.json();
+      if (res.ok) { alert("Padrão salvo para toda a Mesa"); setEditingDefault(false); }
+      else alert(json.error ?? "Erro ao salvar padrão");
+    } catch { alert("Erro de conexão"); }
+    finally { setSavingDefault(false); }
+  };
 
   const calculate = async () => {
     setLoading(true);
@@ -44,7 +72,7 @@ export function CalculadoraWidget() {
           prazo_meses: Number(prazo),
           commission_percent: commPercent ? Number(commPercent) : null,
           divisao_partes: divisaoPartes ? Number(divisaoPartes) : null,
-          taxa_estruturacao: taxaEstruturacao ? Number(taxaEstruturacao) : null,
+          taxa_intermediacao: taxaIntermediacao !== "" ? Number(taxaIntermediacao) : null,
         }),
       });
       const json = await res.json();
@@ -123,17 +151,30 @@ export function CalculadoraWidget() {
 
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mt-3">
         <div>
-          <label className="block text-[10px] text-[#9BAFC5] font-bold uppercase mb-1">Divisão de Partes</label>
+          <label className="block text-[10px] text-[#9BAFC5] font-bold uppercase mb-1 flex items-center gap-1">
+            Divisão de Partes (1/3 compra · 1/3 venda · 1/3 estruturação)
+            {isInternal && (
+              <button type="button" onClick={() => setEditingDefault((v) => !v)} title="Editar padrão da Mesa">
+                <Settings2 size={10} className="text-[#C9A84C]" />
+              </button>
+            )}
+          </label>
           <input
             type="number" value={divisaoPartes} onChange={(e) => setDivisaoPartes(e.target.value)}
-            placeholder="3 (compra/plataforma/venda)"
             className="w-full bg-[#162744] border border-[#9BAFC5]/15 rounded-md px-3 py-2 text-xs text-[#F5F1E8]"
           />
+          {editingDefault && isInternal && (
+            <button onClick={saveDefaultDivisaoPartes} disabled={savingDefault}
+              className="mt-1 w-full py-1.5 bg-[#C9A84C]/10 border border-[#C9A84C]/20 rounded text-[#C9A84C] text-[9px] font-bold hover:bg-[#C9A84C]/20 transition disabled:opacity-50">
+              {savingDefault ? "Salvando..." : "Salvar como padrão da Mesa"}
+            </button>
+          )}
         </div>
         <div>
-          <label className="block text-[10px] text-[#9BAFC5] font-bold uppercase mb-1">Taxa de Estruturação V3 (%)</label>
+          <label className="block text-[10px] text-[#9BAFC5] font-bold uppercase mb-1">Taxa de Intermediação (opcional)</label>
           <input
-            type="number" value={taxaEstruturacao} onChange={(e) => setTaxaEstruturacao(e.target.value)}
+            type="number" value={taxaIntermediacao} onChange={(e) => setTaxaIntermediacao(e.target.value)}
+            placeholder="Só se V3 também intermediar"
             className="w-full bg-[#162744] border border-[#9BAFC5]/15 rounded-md px-3 py-2 text-xs text-[#F5F1E8]"
           />
         </div>
@@ -178,8 +219,15 @@ export function CalculadoraWidget() {
       )}
       {commissionPrecision && (
         <div className="flex items-center justify-center gap-6 mt-2 py-2 bg-[#162744] border border-[#9BAFC5]/10 rounded-lg text-xs text-[#F5F1E8] flex-wrap">
-          <span className="text-[#9BAFC5]">Por parte ({commissionPrecision.divisao_partes}x): <strong className="text-[#F5F1E8]">{commissionPrecision.comissao_por_parte_percent}%</strong></span>
+          <span className="text-[#9BAFC5]">Taxa de Estruturação (1/{commissionPrecision.divisao_partes}): <strong className="text-[#F5F1E8]">{commissionPrecision.comissao_por_parte_percent}%</strong></span>
           <span className="text-[#9BAFC5]">Split por lado (compra/venda): <strong className="text-[#C9A84C]">{commissionPrecision.comissao_split_lado}%</strong></span>
+        </div>
+      )}
+      {commissionPrecision?.v3_atua_como_intermediaria && (
+        <div className="flex items-center justify-center gap-6 mt-2 py-2 bg-[#C9A84C]/10 border border-[#C9A84C]/30 rounded-lg text-xs text-[#E8C97A] flex-wrap">
+          <span className="font-bold uppercase text-[9px] tracking-wider">V3 atua como intermediária</span>
+          <span>Taxa de Intermediação: <strong>{commissionPrecision.taxa_intermediacao_percent}%</strong></span>
+          <span>Comissão total (estruturação + intermediação): <strong>{commissionPrecision.comissao_total_com_intermediacao_percent}%</strong></span>
         </div>
       )}
       {commission?.error && (

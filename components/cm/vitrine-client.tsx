@@ -57,7 +57,7 @@ function formatBRL(v: number) {
   return `R$ ${v.toLocaleString("pt-BR")}`;
 }
 
-export function VitrineClient() {
+export function VitrineClient({ userRole = "PARTNER" }: { userRole?: string }) {
   const [listings, setListings] = useState<Listing[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedListing, setSelectedListing] = useState<Listing | null>(null);
@@ -127,7 +127,7 @@ export function VitrineClient() {
 
       {/* Calculadora */}
       <div ref={calcRef} style={{ display: "none" }} className="mb-6">
-        <CalculadoraWidget />
+        <CalculadoraWidget userRole={userRole} />
       </div>
 
       {/* Filtros */}
