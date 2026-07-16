@@ -60,15 +60,21 @@ export default async function PlatformLayout({
       redirect("/auth/update-password?required=true");
     }
 
-    // Força assinatura do contrato de parceria
-    if (!user.app_metadata?.contract_signed) {
-      redirect("/contrato-parceria");
-    }
-
     const { data: profileData, error: profileError } = await supabase
       .from("profiles").select("*").eq("id", user.id).single();
 
     if (profileError || !profileData) redirect("/login");
+
+    // Roles internos não assinam contrato de parceria — mesma lista de app/contrato-parceria/page.tsx.
+    // Checar o role ANTES do redirect evita loop infinito dashboard <-> contrato-parceria
+    // para quem nunca terá app_metadata.contract_signed=true (ex: GESTAO, ADMIN, MESA_OPERACIONAL).
+    const ROLES_INTERNOS = ["ADMIN", "SDR", "CLOSER", "GESTAO", "MESA_OPERACIONAL", "FINANCEIRO", "FORNECEDOR"];
+    const isRoleInterno = ROLES_INTERNOS.includes((profileData as { role?: string }).role ?? "");
+
+    // Força assinatura do contrato de parceria (não aplicável a roles internos)
+    if (!isRoleInterno && !user.app_metadata?.contract_signed) {
+      redirect("/contrato-parceria");
+    }
 
     const profile = profileData as {
       id: string; email: string; full_name: string | null;
