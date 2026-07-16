@@ -12,12 +12,13 @@ export async function GET(
 ) {
   const { token } = await params;
 
-  const { data: fillToken } = await svc()
+  const { data: fillToken, error } = await svc()
     .from("cm_intermediary_fill_tokens")
-    .select("id, listing_id, side, status, mandatario_partner_id, cm_asset_listings(anonymous_id), profiles(full_name)")
+    .select("id, listing_id, side, status, mandatario_partner_id, cm_asset_listings(anonymous_id), profiles!cm_intermediary_fill_tokens_mandatario_partner_id_fkey(full_name)")
     .eq("token", token)
     .single();
 
+  if (error) console.error("[deal-intermediaries/fill GET]", error.message);
   if (!fillToken) return NextResponse.json({ error: "Link inválido ou expirado" }, { status: 404 });
 
   if (fillToken.status === "preenchido") {
@@ -43,12 +44,13 @@ export async function POST(
 ) {
   const { token } = await params;
 
-  const { data: fillToken } = await svc()
+  const { data: fillToken, error: lookupError } = await svc()
     .from("cm_intermediary_fill_tokens")
     .select("id, listing_id, side, status, mandatario_partner_id")
     .eq("token", token)
     .single();
 
+  if (lookupError) console.error("[deal-intermediaries/fill POST]", lookupError.message);
   if (!fillToken) return NextResponse.json({ error: "Link inválido ou expirado" }, { status: 404 });
   if (fillToken.status === "preenchido") {
     return NextResponse.json({ error: "Este link já foi preenchido. Solicite um novo à Mesa V3." }, { status: 409 });
