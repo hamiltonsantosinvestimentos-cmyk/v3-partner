@@ -8,7 +8,7 @@ import {
   Link2, Copy, Plus, FileText, UserPlus, ClipboardCheck,
   ToggleLeft, ToggleRight, Save, Download, ExternalLink, Trash2, X,
 } from "lucide-react";
-import { cn, maskCpfCnpjInput, maskPhoneInput, isValidEmail } from "@/lib/utils";
+import { cn, maskCpfCnpjInput, maskPhoneInput, isValidEmail, maskCurrencyBRLInput, parseCurrencyBRLInput, formatCurrencyBRLFromNumber } from "@/lib/utils";
 import { AssetAssistant } from "./asset-assistant";
 import { CM_DOCUMENT_CHECKLISTS, type CmAssetType } from "@/lib/cm-checklists";
 
@@ -271,8 +271,8 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
           empresa: manualBuyerForm.empresa || undefined,
           cpf: !isCnpj ? manualBuyerForm.cpf_cnpj || undefined : undefined,
           cnpj: isCnpj ? manualBuyerForm.cpf_cnpj || undefined : undefined,
-          ticket_min: manualBuyerForm.ticket_min || undefined,
-          ticket_max: manualBuyerForm.ticket_max || undefined,
+          ticket_min: manualBuyerForm.ticket_min ? parseCurrencyBRLInput(manualBuyerForm.ticket_min) : undefined,
+          ticket_max: manualBuyerForm.ticket_max ? parseCurrencyBRLInput(manualBuyerForm.ticket_max) : undefined,
           desagio_min: manualBuyerForm.desagio_min || undefined,
           asset_types_preferidos: manualBuyerForm.asset_types_preferidos,
           criterios: manualBuyerForm.criterios || undefined,
@@ -674,7 +674,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
     setDealRoomUrl(null);
     setRoomInvites([]);
     setContractResult(null);
-    setAskPriceFloor((listing as any).ask_price_floor?.toString() ?? "");
+    setAskPriceFloor(formatCurrencyBRLFromNumber((listing as any).ask_price_floor));
     setAutoAcceptEnabled((listing as any).auto_accept_enabled ?? false);
     setValorFaceNegociado(listing.valor_face?.toString() ?? "");
     setValorAtualizadoNegociado((listing as any).valor_atualizado?.toString() ?? "");
@@ -844,7 +844,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          ask_price_floor: askPriceFloor ? Number(askPriceFloor) : null,
+          ask_price_floor: askPriceFloor ? parseCurrencyBRLInput(askPriceFloor) : null,
           auto_accept_enabled: autoAcceptEnabled,
         }),
       });
@@ -1017,12 +1017,12 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
           tribunal: manualForm.tribunal.trim() || undefined,
           natureza: manualForm.natureza.trim() || undefined,
           numero_processo: manualForm.numero_processo.trim() || undefined,
-          valor_face: Number(manualForm.valor_face),
-          valor_atualizado: manualForm.valor_atualizado ? Number(manualForm.valor_atualizado) : undefined,
+          valor_face: parseCurrencyBRLInput(manualForm.valor_face),
+          valor_atualizado: manualForm.valor_atualizado ? parseCurrencyBRLInput(manualForm.valor_atualizado) : undefined,
           desagio_pretendido: manualForm.desagio_pretendido ? Number(manualForm.desagio_pretendido) : undefined,
           prazo_estimado_meses: manualForm.prazo_estimado_meses ? Number(manualForm.prazo_estimado_meses) : undefined,
           allows_tranching: manualForm.allows_tranching,
-          tranche_valor_minimo: manualForm.allows_tranching && manualForm.tranche_valor_minimo ? Number(manualForm.tranche_valor_minimo) : undefined,
+          tranche_valor_minimo: manualForm.allows_tranching && manualForm.tranche_valor_minimo ? parseCurrencyBRLInput(manualForm.tranche_valor_minimo) : undefined,
         }),
       });
       const json = await res.json();
@@ -1287,19 +1287,15 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="text-[9px] text-[#9BAFC5] uppercase">Valor de Face (R$) *</label>
-                  <input type="number" value={manualForm.valor_face} onChange={(e) => setManualForm((f) => ({ ...f, valor_face: e.target.value }))}
+                  <input inputMode="numeric" value={manualForm.valor_face} onChange={(e) => setManualForm((f) => ({ ...f, valor_face: maskCurrencyBRLInput(e.target.value) }))}
+                    placeholder="0,00"
                     className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#F5F1E8] mt-1" />
-                  {manualForm.valor_face && Number.isFinite(Number(manualForm.valor_face)) && (
-                    <div className="text-[9px] text-[#9BAFC5] mt-1">{formatBRLFull(Number(manualForm.valor_face))}</div>
-                  )}
                 </div>
                 <div>
                   <label className="text-[9px] text-[#9BAFC5] uppercase">Valor Atualizado (R$)</label>
-                  <input type="number" value={manualForm.valor_atualizado} onChange={(e) => setManualForm((f) => ({ ...f, valor_atualizado: e.target.value }))}
+                  <input inputMode="numeric" value={manualForm.valor_atualizado} onChange={(e) => setManualForm((f) => ({ ...f, valor_atualizado: maskCurrencyBRLInput(e.target.value) }))}
+                    placeholder="0,00"
                     className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#F5F1E8] mt-1" />
-                  {manualForm.valor_atualizado && Number.isFinite(Number(manualForm.valor_atualizado)) && (
-                    <div className="text-[9px] text-[#9BAFC5] mt-1">{formatBRLFull(Number(manualForm.valor_atualizado))}</div>
-                  )}
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-2">
@@ -1357,7 +1353,8 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
               {manualForm.allows_tranching && (
                 <div>
                   <label className="text-[9px] text-[#9BAFC5] uppercase">Valor Mínimo por Fração (R$)</label>
-                  <input type="number" value={manualForm.tranche_valor_minimo} onChange={(e) => setManualForm((f) => ({ ...f, tranche_valor_minimo: e.target.value }))}
+                  <input inputMode="numeric" value={manualForm.tranche_valor_minimo} onChange={(e) => setManualForm((f) => ({ ...f, tranche_valor_minimo: maskCurrencyBRLInput(e.target.value) }))}
+                    placeholder="0,00"
                     className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#F5F1E8] mt-1" />
                 </div>
               )}
@@ -1438,12 +1435,14 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
               <div className="grid grid-cols-3 gap-2">
                 <div>
                   <label className="text-[9px] text-[#9BAFC5] uppercase">Ticket Mín. (R$)</label>
-                  <input type="number" value={manualBuyerForm.ticket_min} onChange={(e) => setManualBuyerForm((f) => ({ ...f, ticket_min: e.target.value }))}
+                  <input inputMode="numeric" value={manualBuyerForm.ticket_min} onChange={(e) => setManualBuyerForm((f) => ({ ...f, ticket_min: maskCurrencyBRLInput(e.target.value) }))}
+                    placeholder="0,00"
                     className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#F5F1E8] mt-1" />
                 </div>
                 <div>
                   <label className="text-[9px] text-[#9BAFC5] uppercase">Ticket Máx. (R$)</label>
-                  <input type="number" value={manualBuyerForm.ticket_max} onChange={(e) => setManualBuyerForm((f) => ({ ...f, ticket_max: e.target.value }))}
+                  <input inputMode="numeric" value={manualBuyerForm.ticket_max} onChange={(e) => setManualBuyerForm((f) => ({ ...f, ticket_max: maskCurrencyBRLInput(e.target.value) }))}
+                    placeholder="0,00"
                     className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#F5F1E8] mt-1" />
                 </div>
                 <div>
@@ -2456,8 +2455,8 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
                 <div>
                   <label className="text-[9px] text-[#9BAFC5] uppercase">Ask Price Floor (R$)</label>
                   <input
-                    type="number" value={askPriceFloor} onChange={(e) => setAskPriceFloor(e.target.value)}
-                    placeholder="Ex: 1200000"
+                    inputMode="numeric" value={askPriceFloor} onChange={(e) => setAskPriceFloor(maskCurrencyBRLInput(e.target.value))}
+                    placeholder="0,00"
                     className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#F5F1E8] mt-1 focus:border-[#C9A84C]/50 focus:outline-none"
                   />
                 </div>

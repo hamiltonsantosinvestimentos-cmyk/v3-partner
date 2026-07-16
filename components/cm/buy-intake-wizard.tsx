@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { CheckCircle2, ChevronRight, ChevronLeft, Loader2, Shield, Search, Upload } from "lucide-react";
-import { maskCpfCnpjInput, maskPhoneInput, isValidEmail } from "@/lib/utils";
+import { maskCpfCnpjInput, maskPhoneInput, isValidEmail, maskCurrencyBRLInput, parseCurrencyBRLInput, formatCurrencyBRLFromNumber } from "@/lib/utils";
 
 const STEPS = [
   { label: "Identificação Inicial", key: "identificacao_inicial" },
@@ -69,8 +69,8 @@ export function BuyIntakeWizard({ token, prefill }: BuyIntakeWizardProps) {
     asset_types_preferidos: prefill.asset_types_preferidos || [],
     jurisdicao_alvo: prefill.jurisdicao_alvo || [],
     natureza_preferida: prefill.natureza_preferida || [],
-    ticket_min: prefill.ticket_min || "",
-    ticket_max: prefill.ticket_max || "",
+    ticket_min: prefill.ticket_min ? formatCurrencyBRLFromNumber(Number(prefill.ticket_min)) : "",
+    ticket_max: prefill.ticket_max ? formatCurrencyBRLFromNumber(Number(prefill.ticket_max)) : "",
     desagio_min: prefill.desagio_min || "",
     criterios: prefill.criterios || "",
     nda_accepted: false,
@@ -98,7 +98,11 @@ export function BuyIntakeWizard({ token, prefill }: BuyIntakeWizardProps) {
       const res = await fetch(`/api/cm/intake/buy/${token}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify({
+          ...form,
+          ticket_min: form.ticket_min ? parseCurrencyBRLInput(form.ticket_min) : "",
+          ticket_max: form.ticket_max ? parseCurrencyBRLInput(form.ticket_max) : "",
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Erro ao enviar");
@@ -311,11 +315,11 @@ export function BuyIntakeWizard({ token, prefill }: BuyIntakeWizardProps) {
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <label className={labelClass}>Ticket mínimo (R$)</label>
-                  <input type="number" className={inputClass} value={form.ticket_min} onChange={(e) => upd("ticket_min", e.target.value)} placeholder="Ex: 500000" />
+                  <input inputMode="numeric" className={inputClass} value={form.ticket_min} onChange={(e) => upd("ticket_min", maskCurrencyBRLInput(e.target.value))} placeholder="0,00" />
                 </div>
                 <div>
                   <label className={labelClass}>Ticket máximo (R$)</label>
-                  <input type="number" className={inputClass} value={form.ticket_max} onChange={(e) => upd("ticket_max", e.target.value)} placeholder="Ex: 10000000" />
+                  <input inputMode="numeric" className={inputClass} value={form.ticket_max} onChange={(e) => upd("ticket_max", maskCurrencyBRLInput(e.target.value))} placeholder="0,00" />
                 </div>
                 <div>
                   <label className={labelClass}>Deságio mínimo (%)</label>

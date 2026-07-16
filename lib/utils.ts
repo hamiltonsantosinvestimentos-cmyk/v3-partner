@@ -102,6 +102,12 @@ export function parseCurrencyBRLInput(value: string): number {
   return parseInt(digits, 10) / 100;
 }
 
+/** Formata um number real (vindo do banco, ex: ask_price_floor) no mesmo padrao visual de maskCurrencyBRLInput, para popular campos mascarados ao carregar dado existente. */
+export function formatCurrencyBRLFromNumber(value: number | null | undefined): string {
+  if (value === null || value === undefined || Number.isNaN(value)) return "";
+  return value.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
 export function abbreviateName(fullName: string): string {
   const parts = fullName.trim().split(" ");
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();

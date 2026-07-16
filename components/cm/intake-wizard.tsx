@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { CheckCircle2, ChevronRight, ChevronLeft, Loader2, Shield } from "lucide-react";
-import { maskCpfCnpjInput, maskPhoneInput, isValidEmail } from "@/lib/utils";
+import { maskCpfCnpjInput, maskPhoneInput, isValidEmail, maskCurrencyBRLInput, parseCurrencyBRLInput, formatCurrencyBRLFromNumber } from "@/lib/utils";
 import { UFS, fetchMunicipios } from "@/lib/br-locations";
 
 const STEPS = [
@@ -50,12 +50,12 @@ export function IntakeWizard({ token, prefill, anonymousId }: IntakeWizardProps)
     tribunal: prefill.tribunal || "",
     natureza: prefill.natureza || "",
     numero_processo: prefill.numero_processo || "",
-    valor_face: prefill.valor_face || "",
-    valor_atualizado: prefill.valor_atualizado || "",
+    valor_face: prefill.valor_face ? formatCurrencyBRLFromNumber(Number(prefill.valor_face)) : "",
+    valor_atualizado: prefill.valor_atualizado ? formatCurrencyBRLFromNumber(Number(prefill.valor_atualizado)) : "",
     desagio_pretendido: prefill.desagio_pretendido || "",
     prazo_estimado_meses: prefill.prazo_estimado_meses || "",
     allows_tranching: prefill.allows_tranching || false,
-    tranche_valor_minimo: prefill.tranche_valor_minimo || "",
+    tranche_valor_minimo: prefill.tranche_valor_minimo ? formatCurrencyBRLFromNumber(Number(prefill.tranche_valor_minimo)) : "",
     observacoes: "",
     nda_accepted: false,
   });
@@ -91,7 +91,12 @@ export function IntakeWizard({ token, prefill, anonymousId }: IntakeWizardProps)
       const res = await fetch(`/api/cm/intake/${token}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify({
+          ...form,
+          valor_face: parseCurrencyBRLInput(form.valor_face),
+          valor_atualizado: form.valor_atualizado ? parseCurrencyBRLInput(form.valor_atualizado) : "",
+          tranche_valor_minimo: form.tranche_valor_minimo ? parseCurrencyBRLInput(form.tranche_valor_minimo) : "",
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Erro ao enviar");
@@ -293,11 +298,11 @@ export function IntakeWizard({ token, prefill, anonymousId }: IntakeWizardProps)
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className={labelClass}>Valor de Face (R$) *</label>
-                <input type="number" className={inputClass} value={form.valor_face} onChange={(e) => upd("valor_face", e.target.value)} placeholder="0,00" />
+                <input inputMode="numeric" className={inputClass} value={form.valor_face} onChange={(e) => upd("valor_face", maskCurrencyBRLInput(e.target.value))} placeholder="0,00" />
               </div>
               <div>
                 <label className={labelClass}>Valor Atualizado (R$)</label>
-                <input type="number" className={inputClass} value={form.valor_atualizado} onChange={(e) => upd("valor_atualizado", e.target.value)} placeholder="Se diferente do face" />
+                <input inputMode="numeric" className={inputClass} value={form.valor_atualizado} onChange={(e) => upd("valor_atualizado", maskCurrencyBRLInput(e.target.value))} placeholder="Se diferente do face" />
               </div>
               <div>
                 <label className={labelClass}>Deságio Pretendido (%)</label>
@@ -314,7 +319,7 @@ export function IntakeWizard({ token, prefill, anonymousId }: IntakeWizardProps)
               {form.allows_tranching && (
                 <div>
                   <label className={labelClass}>Valor Mínimo por Fração (R$)</label>
-                  <input type="number" className={inputClass} value={form.tranche_valor_minimo} onChange={(e) => upd("tranche_valor_minimo", e.target.value)} placeholder="Ex: 100000" />
+                  <input inputMode="numeric" className={inputClass} value={form.tranche_valor_minimo} onChange={(e) => upd("tranche_valor_minimo", maskCurrencyBRLInput(e.target.value))} placeholder="0,00" />
                 </div>
               )}
             </div>
