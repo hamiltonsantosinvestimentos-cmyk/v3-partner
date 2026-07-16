@@ -2175,12 +2175,17 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
                               )}
                               {currentUser?.role === "ADMIN" && (
                                 <button
-                                  onClick={(e) => {
+                                  onClick={async (e) => {
                                     e.stopPropagation();
                                     if (!confirm(`Excluir proposta ${p.code} de ${p.client_name}? Esta ação não pode ser desfeita.`)) return;
-                                    fetch(`/api/credit-proposals?id=${p.id}`, { method: "DELETE" })
-                                      .then(() => setProposals(prev => prev.filter(x => x.id !== p.id)))
-                                      .catch(() => alert("Erro ao excluir proposta."));
+                                    try {
+                                      const res = await fetch(`/api/credit-proposals?id=${p.id}`, { method: "DELETE" });
+                                      const body = await res.json().catch(() => ({}));
+                                      if (!res.ok) throw new Error(body?.error ?? "Erro ao excluir proposta.");
+                                      setProposals(prev => prev.filter(x => x.id !== p.id));
+                                    } catch (err) {
+                                      alert(err instanceof Error ? err.message : "Erro ao excluir proposta.");
+                                    }
                                   }}
                                   className="w-5 h-5 rounded flex items-center justify-center text-muted-foreground hover:text-red-400 hover:bg-red-500/15 transition-colors opacity-0 group-hover:opacity-100"
                                   title="Excluir proposta"
@@ -2563,8 +2568,14 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
                             <button
                               onClick={async () => {
                                 if (!confirm("Excluir este ticket permanentemente?")) return;
-                                await fetch(`/api/tickets?id=${ticket.id}`, { method: "DELETE" });
-                                setTickets(prev => prev.filter(t => t.id !== ticket.id));
+                                try {
+                                  const res = await fetch(`/api/tickets?id=${ticket.id}`, { method: "DELETE" });
+                                  const body = await res.json().catch(() => ({}));
+                                  if (!res.ok) throw new Error(body?.error ?? "Erro ao excluir ticket.");
+                                  setTickets(prev => prev.filter(t => t.id !== ticket.id));
+                                } catch (err) {
+                                  alert(err instanceof Error ? err.message : "Erro ao excluir ticket.");
+                                }
                               }}
                               className="text-xs text-red-400 hover:text-red-300"
                             >
