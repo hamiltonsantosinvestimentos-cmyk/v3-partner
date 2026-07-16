@@ -17,7 +17,12 @@ async function getCaller(req: NextRequest) {
   return { userId: user.id, role: profile.role as string };
 }
 
-/** GET /api/cm/kyc-documents?listing_id=X — painel segregado, documentos retidos ate aprovacao */
+/** GET /api/cm/kyc-documents?listing_id=X — painel segregado, documentos retidos ate aprovacao
+ *  Mescla dois fluxos que antes ficavam desconectados (bug reportado pela Mesa Operacional 2026-07-15,
+ *  "propostas nao aparecem no quadro de KYC"): uploads internos da Mesa (cm_kyc_documents, por listing_id)
+ *  + LOI/MOU e Procuracao que o proprio comprador ja enviou no Buy Intake Wizard publico
+ *  (investor_demand_documents, ligados por demand_id — sem listing_id proprio, so existe via
+ *  demand_matches quando o motor de matchmaking cruzou o mandato de busca com este ativo). */
 export async function GET(req: NextRequest) {
   const caller = await getCaller(req);
   if (!caller) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
@@ -26,14 +31,46 @@ export async function GET(req: NextRequest) {
   const listingId = searchParams.get("listing_id");
   if (!listingId) return NextResponse.json({ error: "listing_id obrigatório" }, { status: 422 });
 
-  const { data, error } = await svc()
-    .from("cm_kyc_documents")
-    .select("*")
-    .eq("listing_id", listingId)
-    .order("created_at", { ascending: false });
+  const db = svc();
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ documents: data ?? [] });
+  const [internalDocs, matches] = await Promise.all([
+    db.from("cm_kyc_documents").select("*").eq("listing_id", listingId).order("created_at", { ascending: false }),
+    db.from("demand_matches").select("demand_id, investor_demands(nome_contato)").eq("listing_id", listingId),
+  ]);
+
+  if (internalDocs.error) return NextResponse.json({ error: internalDocs.error.message }, { status: 500 });
+
+  const demandIds = [...new Set((matches.data ?? []).map((m) => m.demand_id).filter(Boolean))];
+  let buyerDocs: any[] = [];
+
+  if (demandIds.length > 0) {
+    const { data: demandDocs } = await db
+      .from("investor_demand_documents")
+      .select("id, demand_id, document_type, storage_path, original_filename, created_at")
+      .in("demand_id", demandIds);
+
+    const nameByDemand = new Map(
+      (matches.data ?? []).map((m: any) => [m.demand_id, m.investor_demands?.nome_contato ?? "Comprador"])
+    );
+
+    buyerDocs = (demandDocs ?? []).map((d) => ({
+      id: d.id,
+      listing_id: listingId,
+      party_type: "comprador",
+      party_name: nameByDemand.get(d.demand_id) ?? "Comprador",
+      document_type: d.document_type,
+      storage_path: d.storage_path,
+      original_filename: d.original_filename,
+      status: "enviado_pelo_comprador",
+      created_at: d.created_at,
+      source: "buyer_intake",
+    }));
+  }
+
+  const documents = [...(internalDocs.data ?? []).map((d) => ({ ...d, source: "mesa_upload" })), ...buyerDocs]
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+  return NextResponse.json({ documents });
 }
 
 /** POST /api/cm/kyc-documents — upload de documento KYC (fica retido, pendente de validacao) */

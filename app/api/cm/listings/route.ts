@@ -59,6 +59,16 @@ export async function POST(req: NextRequest) {
     }, { status: 422 });
   }
 
+  // Filtro compulsorio de portfolio (Mesa Operacional 2026-07-15): CGI/CRI/FIDC nao sao
+  // mais aceitos em novos cadastros da Bolsa de Ativos financeira. Valores permanecem no
+  // enum do banco (Postgres nao permite DROP VALUE) so por compatibilidade com listagens
+  // historicas ja existentes — bloqueio vale so para CRIACAO de listagem nova.
+  if (["cgi", "cri", "fidc"].includes(asset_type)) {
+    return NextResponse.json({
+      error: `Classe de ativo "${asset_type.toUpperCase()}" não é mais aceita para novos cadastros. Use: Precatório, Direito Creditório, IPI, ICMS ou Outros.`
+    }, { status: 422 });
+  }
+
   const { data: anonId } = await svc().rpc("generate_cm_anonymous_id", {
     p_asset_type: asset_type,
     p_esfera: esfera ?? "Federal",

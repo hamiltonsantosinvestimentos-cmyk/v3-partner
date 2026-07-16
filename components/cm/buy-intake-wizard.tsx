@@ -86,7 +86,7 @@ export function BuyIntakeWizard({ token, prefill }: BuyIntakeWizardProps) {
   const canAdvance = () => {
     if (step === 0) return form.nome_contato.trim() && isValidEmail(form.email);
     if (step === 1) return form.nda_accepted;
-    if (step === 2) return hasDoc("loi_mou") && hasDoc("procuracao");
+    if (step === 2) return true; // Documentos KYC nao bloqueiam mais o avanco — ficam "Pendente" na Mesa (correcao Mesa Operacional 2026-07-15)
     if (step === 3) return form.asset_types_preferidos.length > 0;
     return true;
   };
@@ -241,7 +241,8 @@ export function BuyIntakeWizard({ token, prefill }: BuyIntakeWizardProps) {
             </div>
 
             <div className="mt-6 pt-6 border-t border-[#9BAFC5]/10">
-              <label className={labelClass}>Documentos obrigatórios</label>
+              <label className={labelClass}>Documentos (KYC)</label>
+              <p className="text-[11px] text-[#9BAFC5]/70 mb-2">Você pode enviar agora ou depois, o cadastro não fica bloqueado. Documentos pendentes ficam retidos para validação da Mesa V3 antes de liberar o Full DD.</p>
               <div className="space-y-2 mt-2">
                 {([
                   { type: "loi_mou", label: "Carta de Intenções (LOI) ou Memorando de Entendimento (MOU)" },
@@ -252,12 +253,15 @@ export function BuyIntakeWizard({ token, prefill }: BuyIntakeWizardProps) {
                     {hasDoc(type) ? (
                       <span className="text-[10px] text-emerald-400 font-bold flex items-center gap-1"><CheckCircle2 size={12} /> Enviado</span>
                     ) : (
-                      <label className="flex items-center gap-1.5 px-3 py-1.5 bg-[#12112A] border border-[#9BAFC5]/15 rounded text-[#9BAFC5] text-[10px] font-bold hover:border-[#C9A84C]/30 hover:text-[#C9A84C] transition cursor-pointer flex-shrink-0">
-                        {uploadingDoc === type ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
-                        Enviar
-                        <input type="file" className="hidden" accept=".pdf,.doc,.docx,.jpg,.png"
-                          onChange={(e) => { if (e.target.files?.[0]) uploadDoc(e.target.files[0], type); }} />
-                      </label>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <span className="text-[10px] text-[#9BAFC5] font-bold uppercase tracking-wider">Pendente</span>
+                        <label className="flex items-center gap-1.5 px-3 py-1.5 bg-[#12112A] border border-[#9BAFC5]/15 rounded text-[#9BAFC5] text-[10px] font-bold hover:border-[#C9A84C]/30 hover:text-[#C9A84C] transition cursor-pointer">
+                          {uploadingDoc === type ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
+                          Enviar
+                          <input type="file" className="hidden" accept=".pdf,.doc,.docx,.jpg,.png"
+                            onChange={(e) => { if (e.target.files?.[0]) uploadDoc(e.target.files[0], type); }} />
+                        </label>
+                      </div>
                     )}
                   </div>
                 ))}
@@ -274,7 +278,7 @@ export function BuyIntakeWizard({ token, prefill }: BuyIntakeWizardProps) {
               <div>
                 <label className={labelClass}>Tipos de ativo de interesse *</label>
                 <div className="flex flex-wrap gap-2">
-                  {["precatorio", "direito_creditorio", "cgi", "cri", "fidc", "outros"].map((t) => (
+                  {["precatorio", "direito_creditorio", "ipi", "icms", "outros"].map((t) => (
                     <button key={t} type="button" onClick={() => toggleArray("asset_types_preferidos", t)}
                       className={chipClass(form.asset_types_preferidos.includes(t))}>
                       {t === "precatorio" ? "Precatório" : t === "direito_creditorio" ? "Dir. Creditório" : t.toUpperCase()}

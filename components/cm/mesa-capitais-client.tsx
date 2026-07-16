@@ -8,7 +8,7 @@ import {
   Link2, Copy, Plus, FileText, UserPlus, ClipboardCheck,
   ToggleLeft, ToggleRight, Save, Download, ExternalLink, Trash2, X,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, maskCpfCnpjInput, maskPhoneInput, isValidEmail } from "@/lib/utils";
 import { AssetAssistant } from "./asset-assistant";
 import { CM_DOCUMENT_CHECKLISTS, type CmAssetType } from "@/lib/cm-checklists";
 
@@ -238,6 +238,65 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
     tranche_valor_minimo: "",
   });
 
+  const [showManualBuyerForm, setShowManualBuyerForm] = useState(false);
+  const [submittingManualBuyer, setSubmittingManualBuyer] = useState(false);
+  const [manualBuyerForm, setManualBuyerForm] = useState({
+    nome_contato: "",
+    email: "",
+    telefone: "",
+    empresa: "",
+    cpf_cnpj: "",
+    ticket_min: "",
+    ticket_max: "",
+    desagio_min: "",
+    asset_types_preferidos: [] as string[],
+    criterios: "",
+  });
+
+  const submitManualBuyer = async () => {
+    if (!manualBuyerForm.nome_contato.trim() || !isValidEmail(manualBuyerForm.email)) {
+      alert("Nome e email válido são obrigatórios");
+      return;
+    }
+    setSubmittingManualBuyer(true);
+    try {
+      const isCnpj = manualBuyerForm.cpf_cnpj.replace(/\D/g, "").length > 11;
+      const res = await fetch("/api/cm/investor-demands", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          nome_contato: manualBuyerForm.nome_contato.trim(),
+          email: manualBuyerForm.email.trim(),
+          telefone: manualBuyerForm.telefone || undefined,
+          empresa: manualBuyerForm.empresa || undefined,
+          cpf: !isCnpj ? manualBuyerForm.cpf_cnpj || undefined : undefined,
+          cnpj: isCnpj ? manualBuyerForm.cpf_cnpj || undefined : undefined,
+          ticket_min: manualBuyerForm.ticket_min || undefined,
+          ticket_max: manualBuyerForm.ticket_max || undefined,
+          desagio_min: manualBuyerForm.desagio_min || undefined,
+          asset_types_preferidos: manualBuyerForm.asset_types_preferidos,
+          criterios: manualBuyerForm.criterios || undefined,
+        }),
+      });
+      const json = await res.json();
+      if (res.ok) {
+        alert("Comprador cadastrado");
+        setShowManualBuyerForm(false);
+        setManualBuyerForm({
+          nome_contato: "", email: "", telefone: "", empresa: "", cpf_cnpj: "",
+          ticket_min: "", ticket_max: "", desagio_min: "", asset_types_preferidos: [], criterios: "",
+        });
+        fetchAll();
+      } else {
+        alert(json.error ?? "Erro ao cadastrar comprador");
+      }
+    } catch {
+      alert("Erro de conexão");
+    } finally {
+      setSubmittingManualBuyer(false);
+    }
+  };
+
   const fetchAll = useCallback(async () => {
     setLoading(true);
     try {
@@ -260,6 +319,14 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
   }, []);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
+
+  // Polling leve enquanto a aba "Propostas" fica aberta — corrige bug de propostas
+  // novas nao aparecendo sem reload manual (Mesa Operacional 2026-07-15)
+  useEffect(() => {
+    if (tab !== "bids") return;
+    const interval = setInterval(() => fetchAll(), 20000);
+    return () => clearInterval(interval);
+  }, [tab, fetchAll]);
 
   useEffect(() => {
     fetch("/api/partners")
@@ -1064,11 +1131,17 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
             <FileText size={16} /> Cadastro Manual
           </button>
           <button
-            onClick={generateBuyLink} disabled={generatingBuyLink}
-            className="flex items-center gap-2 px-4 py-2 border border-emerald-500/30 text-emerald-400 rounded-lg text-sm font-medium hover:bg-emerald-500/10 transition disabled:opacity-50"
+            onClick={() => setShowManualBuyerForm(true)}
+            className="flex items-center gap-2 px-4 py-2 border border-emerald-500/30 text-emerald-400 rounded-lg text-sm font-medium hover:bg-emerald-500/10 transition"
           >
-            {generatingBuyLink ? <Loader2 size={16} className="animate-spin" /> : <UserPlus size={16} />}
-            Novo Comprador
+            <UserPlus size={16} /> Novo Comprador
+          </button>
+          <button
+            onClick={generateBuyLink} disabled={generatingBuyLink}
+            className="flex items-center gap-2 px-4 py-2 border border-[#9BAFC5]/20 text-[#9BAFC5] rounded-lg text-sm font-medium hover:bg-[#9BAFC5]/10 hover:text-[#F5F1E8] transition disabled:opacity-50"
+          >
+            {generatingBuyLink ? <Loader2 size={16} className="animate-spin" /> : <Link2 size={16} />}
+            Link Comprador
           </button>
           <button
             onClick={runMatchmaking} disabled={runningMatch}
@@ -1138,13 +1211,12 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
             <div className="flex-1 overflow-y-auto p-4 space-y-3">
               <div>
                 <label className="text-[9px] text-[#9BAFC5] uppercase">Tipo de Ativo *</label>
-                <select value={manualForm.asset_type} onChange={(e) => setManualForm((f) => ({ ...f, asset_type: e.target.value as CmAssetType }))}
+                <select name="asset_type" value={manualForm.asset_type} onChange={(e) => setManualForm((f) => ({ ...f, asset_type: e.target.value as CmAssetType }))}
                   className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#F5F1E8] mt-1">
                   <option value="precatorio">Precatório</option>
                   <option value="direito_creditorio">Direito Creditório</option>
-                  <option value="cgi">CGI</option>
-                  <option value="cri">CRI</option>
-                  <option value="fidc">FIDC</option>
+                  <option value="ipi">IPI</option>
+                  <option value="icms">ICMS</option>
                   <option value="imovel">Imóvel / Ativo Alternativo</option>
                   <option value="outros">Outros</option>
                 </select>
@@ -1300,6 +1372,102 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
         </div>
       )}
 
+      {/* Modal Cadastro Manual de Comprador — sem depender do link publico (correcao Mesa Operacional 2026-07-15) */}
+      {showManualBuyerForm && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60" onClick={() => setShowManualBuyerForm(false)}>
+          <div className="w-full max-w-lg max-h-[85vh] bg-[#09081A] border border-[#C9A84C]/20 rounded-xl flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="p-4 border-b border-[#C9A84C]/20 flex items-center justify-between flex-shrink-0">
+              <div>
+                <div className="text-sm font-bold text-[#F5F1E8]">Cadastro Manual de Comprador</div>
+                <div className="text-[10px] text-[#9BAFC5]">Mandato de busca inserido direto pela Mesa, sem link externo de captação</div>
+              </div>
+              <button onClick={() => setShowManualBuyerForm(false)} className="text-[#9BAFC5] hover:text-[#F5F1E8] text-xl">&times;</button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+              <div>
+                <label className="text-[9px] text-[#9BAFC5] uppercase">Nome / Razão Social *</label>
+                <input value={manualBuyerForm.nome_contato} onChange={(e) => setManualBuyerForm((f) => ({ ...f, nome_contato: e.target.value }))}
+                  className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#F5F1E8] mt-1" />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[9px] text-[#9BAFC5] uppercase">Email *</label>
+                  <input type="email" value={manualBuyerForm.email} onChange={(e) => setManualBuyerForm((f) => ({ ...f, email: e.target.value }))}
+                    className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#F5F1E8] mt-1" />
+                </div>
+                <div>
+                  <label className="text-[9px] text-[#9BAFC5] uppercase">Telefone</label>
+                  <input value={manualBuyerForm.telefone} onChange={(e) => setManualBuyerForm((f) => ({ ...f, telefone: maskPhoneInput(e.target.value) }))}
+                    placeholder="(21) 99999-0000"
+                    className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#F5F1E8] mt-1" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[9px] text-[#9BAFC5] uppercase">Empresa / Fundo</label>
+                  <input value={manualBuyerForm.empresa} onChange={(e) => setManualBuyerForm((f) => ({ ...f, empresa: e.target.value }))}
+                    className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#F5F1E8] mt-1" />
+                </div>
+                <div>
+                  <label className="text-[9px] text-[#9BAFC5] uppercase">CPF / CNPJ</label>
+                  <input value={manualBuyerForm.cpf_cnpj} onChange={(e) => setManualBuyerForm((f) => ({ ...f, cpf_cnpj: maskCpfCnpjInput(e.target.value) }))}
+                    placeholder="000.000.000-00 ou 00.000.000/0001-00"
+                    className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#F5F1E8] mt-1" />
+                </div>
+              </div>
+              <div>
+                <label className="text-[9px] text-[#9BAFC5] uppercase">Tipos de ativo de interesse</label>
+                <div className="flex flex-wrap gap-2 mt-1">
+                  {["precatorio", "direito_creditorio", "ipi", "icms", "outros"].map((t) => {
+                    const active = manualBuyerForm.asset_types_preferidos.includes(t);
+                    return (
+                      <button key={t} type="button"
+                        onClick={() => setManualBuyerForm((f) => ({
+                          ...f,
+                          asset_types_preferidos: active
+                            ? f.asset_types_preferidos.filter((v) => v !== t)
+                            : [...f.asset_types_preferidos, t],
+                        }))}
+                        className={`px-2.5 py-1 rounded text-[10px] font-bold ${active ? "bg-[#C9A84C] text-[#09081A]" : "bg-[#12112A] border border-[#9BAFC5]/15 text-[#9BAFC5]"}`}>
+                        {t === "precatorio" ? "Precatório" : t === "direito_creditorio" ? "Dir. Creditório" : t.toUpperCase()}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <label className="text-[9px] text-[#9BAFC5] uppercase">Ticket Mín. (R$)</label>
+                  <input type="number" value={manualBuyerForm.ticket_min} onChange={(e) => setManualBuyerForm((f) => ({ ...f, ticket_min: e.target.value }))}
+                    className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#F5F1E8] mt-1" />
+                </div>
+                <div>
+                  <label className="text-[9px] text-[#9BAFC5] uppercase">Ticket Máx. (R$)</label>
+                  <input type="number" value={manualBuyerForm.ticket_max} onChange={(e) => setManualBuyerForm((f) => ({ ...f, ticket_max: e.target.value }))}
+                    className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#F5F1E8] mt-1" />
+                </div>
+                <div>
+                  <label className="text-[9px] text-[#9BAFC5] uppercase">Deságio Mín. (%)</label>
+                  <input type="number" value={manualBuyerForm.desagio_min} onChange={(e) => setManualBuyerForm((f) => ({ ...f, desagio_min: e.target.value }))}
+                    className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#F5F1E8] mt-1" />
+                </div>
+              </div>
+              <div>
+                <label className="text-[9px] text-[#9BAFC5] uppercase">Critérios adicionais</label>
+                <textarea value={manualBuyerForm.criterios} onChange={(e) => setManualBuyerForm((f) => ({ ...f, criterios: e.target.value }))}
+                  className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#F5F1E8] mt-1 min-h-[60px]" />
+              </div>
+              <button onClick={submitManualBuyer} disabled={submittingManualBuyer}
+                className="w-full flex items-center justify-center gap-2 px-3 py-2.5 bg-emerald-500 text-white rounded-lg text-sm font-bold hover:bg-emerald-400 transition disabled:opacity-50">
+                {submittingManualBuyer ? <Loader2 size={14} className="animate-spin" /> : <UserPlus size={14} />}
+                Cadastrar Comprador
+              </button>
+              <p className="text-[9px] text-[#9BAFC5] text-center">Entra direto ativo no motor de matchmaking. Documentos KYC (LOI/MOU, Procuração) ficam pendentes até anexo posterior pela Mesa (aba Governança do ativo).</p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* KPIs */}
       <div className="grid grid-cols-5 gap-3 mb-6">
         {[
@@ -1320,7 +1488,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
       <div className="flex gap-1 mb-6 border-b border-[#9BAFC5]/10">
         {(["kanban", "matches", "bids"] as const).map((t) => (
           <button
-            key={t} onClick={() => setTab(t)}
+            key={t} onClick={() => { setTab(t); if (t === "bids") fetchAll(); }}
             className={cn(
               "px-4 py-2 text-sm font-medium border-b-2 transition",
               tab === t ? "border-[#C9A84C] text-[#C9A84C]" : "border-transparent text-[#9BAFC5] hover:text-[#F5F1E8]"
@@ -2148,10 +2316,14 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
                     {kycDocs.map((d) => (
                       <div key={d.id} className="flex items-center justify-between gap-2 bg-[#09081A] rounded px-2 py-1.5">
                         <div className="min-w-0">
-                          <div className="text-[10px] text-[#F5F1E8] truncate">{d.party_type === "vendedor" ? "Vendedor" : "Comprador"}{d.party_name ? `: ${d.party_name}` : ""} · {d.document_type}</div>
+                          <div className="text-[10px] text-[#F5F1E8] truncate">{d.party_type === "vendedor" ? "Vendedor" : "Comprador"}{d.party_name ? `: ${d.party_name}` : ""} · {d.document_type}
+                            {d.source === "buyer_intake" && <span className="ml-1.5 text-[8px] text-[#C9A84C] font-bold uppercase">via Wizard</span>}
+                          </div>
                           <div className="text-[8px] text-[#9BAFC5] truncate">{d.original_filename}</div>
                         </div>
-                        {d.status === "pendente" ? (
+                        {d.source === "buyer_intake" ? (
+                          <span className="text-[9px] font-bold text-[#9BAFC5] flex-shrink-0">Enviado pelo comprador</span>
+                        ) : d.status === "pendente" ? (
                           <div className="flex gap-1 flex-shrink-0">
                             <button onClick={() => handleKycDecision(d.id, "approve")} disabled={kycActionLoading === d.id}
                               className="px-2 py-1 bg-emerald-600/20 border border-emerald-500/30 rounded text-emerald-400 text-[9px] font-bold hover:bg-emerald-600/30 transition disabled:opacity-50">

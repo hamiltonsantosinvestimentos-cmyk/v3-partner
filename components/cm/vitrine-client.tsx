@@ -31,18 +31,16 @@ interface Listing {
 const ASSET_LABELS: Record<string, string> = {
   precatorio: "Precatório",
   direito_creditorio: "Dir. Creditório",
-  cgi: "CGI",
-  cri: "CRI",
-  fidc: "FIDC",
+  ipi: "IPI",
+  icms: "ICMS",
   outros: "Outros",
 };
 
 const ASSET_COLORS: Record<string, string> = {
   precatorio: "bg-[#C9A84C] text-[#09081A]",
   direito_creditorio: "bg-blue-500 text-white",
-  cgi: "bg-emerald-500 text-white",
-  cri: "bg-purple-500 text-white",
-  fidc: "bg-orange-500 text-white",
+  ipi: "bg-emerald-500 text-white",
+  icms: "bg-purple-500 text-white",
   outros: "bg-[#9BAFC5] text-[#09081A]",
 };
 

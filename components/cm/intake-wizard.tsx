@@ -17,9 +17,8 @@ const STEPS = [
 const ASSET_TYPES = [
   { value: "precatorio", label: "Precatório" },
   { value: "direito_creditorio", label: "Direito Creditório" },
-  { value: "cgi", label: "CGI" },
-  { value: "cri", label: "CRI" },
-  { value: "fidc", label: "FIDC" },
+  { value: "ipi", label: "IPI" },
+  { value: "icms", label: "ICMS" },
   { value: "outros", label: "Outros" },
 ];
 

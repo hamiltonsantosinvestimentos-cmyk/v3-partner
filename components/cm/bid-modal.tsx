@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import { X, Loader2, Send } from "lucide-react";
+import { maskCurrencyBRLInput, parseCurrencyBRLInput } from "@/lib/utils";
 
 interface BidModalProps {
   listing: {
@@ -28,12 +29,13 @@ export function BidModal({ listing, onClose, onSuccess }: BidModalProps) {
     setDesagio(val);
     if (val) {
       const custo = listing.valor_face * (1 - Number(val) / 100);
-      setBidValue(custo.toFixed(0));
+      setBidValue(maskCurrencyBRLInput(String(Math.round(custo * 100))));
     }
   };
 
   const handleSubmit = async () => {
-    if (!bidValue) { setError("Informe o valor da oferta"); return; }
+    const bidValueNum = parseCurrencyBRLInput(bidValue);
+    if (!bidValueNum) { setError("Informe o valor da oferta"); return; }
     setLoading(true);
     setError("");
     try {
@@ -42,7 +44,7 @@ export function BidModal({ listing, onClose, onSuccess }: BidModalProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           listing_id: listing.id,
-          bid_value: Number(bidValue),
+          bid_value: bidValueNum,
           desagio_oferecido: desagio ? Number(desagio) : null,
           tir_pretendida: tirPretendida ? Number(tirPretendida) : null,
           payment_type: paymentType,
@@ -98,12 +100,15 @@ export function BidModal({ listing, onClose, onSuccess }: BidModalProps) {
           </div>
           <div>
             <label className="block text-[10px] text-[#C9A84C] font-bold uppercase tracking-wider mb-1">Valor da Oferta (R$)</label>
-            <input
-              type="number" value={bidValue}
-              onChange={(e) => setBidValue(e.target.value)}
-              placeholder="Calculado automaticamente"
-              className="w-full bg-[#162744] border border-[#C9A84C]/30 rounded-md px-3 py-2 text-sm text-[#F5F1E8] font-bold placeholder:text-[#9BAFC5]/40"
-            />
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-[#9BAFC5]">R$</span>
+              <input
+                inputMode="numeric" value={bidValue}
+                onChange={(e) => setBidValue(maskCurrencyBRLInput(e.target.value))}
+                placeholder="0,00"
+                className="w-full bg-[#162744] border border-[#C9A84C]/30 rounded-md pl-8 pr-3 py-2 text-sm text-[#F5F1E8] font-bold placeholder:text-[#9BAFC5]/40"
+              />
+            </div>
           </div>
           <div>
             <label className="block text-[10px] text-[#C9A84C] font-bold uppercase tracking-wider mb-1">TIR Pretendida (% a.a.)</label>

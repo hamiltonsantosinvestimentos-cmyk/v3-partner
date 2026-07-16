@@ -87,6 +87,21 @@ export function maskCpfCnpjInput(value: string): string {
   return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}/${d.slice(8, 12)}-${d.slice(12)}`;
 }
 
+/** Mascara monetaria em Reais em tempo real (estilo maquineta: digita da direita pra esquerda). Ex: "1234567" digitado vira "12.345,67". */
+export function maskCurrencyBRLInput(value: string): string {
+  const digits = value.replace(/\D/g, "");
+  if (!digits) return "";
+  const cents = parseInt(digits, 10);
+  return (cents / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+/** Converte o valor exibido por maskCurrencyBRLInput de volta para number (reais, nao centavos). */
+export function parseCurrencyBRLInput(value: string): number {
+  const digits = value.replace(/\D/g, "");
+  if (!digits) return 0;
+  return parseInt(digits, 10) / 100;
+}
+
 export function abbreviateName(fullName: string): string {
   const parts = fullName.trim().split(" ");
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
