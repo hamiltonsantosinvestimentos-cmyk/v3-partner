@@ -29,18 +29,13 @@ function fmtCEP(v: string) {
 type Plano = "STARTER" | "PARTNER" | "PARTNER_PRO" | "ENTERPRISE";
 type TipoPessoa = "PF" | "PJ";
 type Step = 1 | 2 | 3 | 4 | 5;
-type PlanoRecorrencia = "MENSAL" | "ANUAL_PIX_BOLETO" | "ANUAL_CARTAO";
+type PlanoRecorrencia = "ANUAL_PIX_BOLETO" | "ANUAL_CARTAO";
 
 const OPCOES_RECORRENCIA: { id: PlanoRecorrencia; titulo: string; descricao: string }[] = [
   {
-    id: "MENSAL",
-    titulo: "Mensal, sem fidelidade",
-    descricao: "Pague mês a mês via Pix ou Boleto (Cora), sem compromisso de permanência.",
-  },
-  {
     id: "ANUAL_PIX_BOLETO",
     titulo: "Anual via Pix ou Boleto (+R$ 50/mês)",
-    descricao: "Fidelidade de 12 meses. A mensalidade fica R$ 50,00 a mais em relação ao plano mensal.",
+    descricao: "Fidelidade de 12 meses. A mensalidade fica R$ 50,00 a mais em relação ao valor mensal base do plano.",
   },
   {
     id: "ANUAL_CARTAO",
@@ -250,7 +245,7 @@ export function CadastroPartnerForm() {
 
   const [step, setStep] = useState<Step>(1);
   const [plano, setPlano] = useState<Plano | null>(null);
-  const [planoRecorrencia, setPlanoRecorrencia] = useState<PlanoRecorrencia>("MENSAL");
+  const [planoRecorrencia, setPlanoRecorrencia] = useState<PlanoRecorrencia>("ANUAL_PIX_BOLETO");
   const [tipoPessoa, setTipoPessoa] = useState<TipoPessoa | null>(null);
 
   // Dados PF
@@ -631,7 +626,7 @@ export function CadastroPartnerForm() {
               <div className="pt-2">
                 <h3 className="text-sm font-bold text-[#F0ECE4]">Forma de pagamento da mensalidade</h3>
                 <p className="text-xs text-[#7A8FA8] mt-1 mb-3">Escolha como prefere pagar sua mensalidade</p>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {OPCOES_RECORRENCIA.map((o) => (
                     <button
                       key={o.id}

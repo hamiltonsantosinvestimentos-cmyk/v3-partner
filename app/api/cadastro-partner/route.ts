@@ -103,9 +103,9 @@ export async function POST(req: NextRequest) {
     const email       = formData.get("email") as string;
     const telefone    = formData.get("telefone") as string;
     const planoRecorrenciaRaw = formData.get("plano_recorrencia") as string | null;
-    const planoRecorrencia = ["MENSAL", "ANUAL_PIX_BOLETO", "ANUAL_CARTAO"].includes(planoRecorrenciaRaw ?? "")
+    const planoRecorrencia = ["ANUAL_PIX_BOLETO", "ANUAL_CARTAO"].includes(planoRecorrenciaRaw ?? "")
       ? planoRecorrenciaRaw!
-      : "MENSAL";
+      : "ANUAL_PIX_BOLETO";
 
     // Validações básicas
     if (!plano || !tipoPessoa || !email || !telefone) {
