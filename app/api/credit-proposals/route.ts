@@ -104,7 +104,7 @@ export async function GET(req: NextRequest) {
   const svc = serviceClient();
 
   if (id) {
-    let single = svc.from("credit_desk_proposals").select(PROPOSAL_SELECT).eq("id", id);
+    let single = svc.from("credit_desk_proposals").select(PROPOSAL_SELECT).eq("id", id).is("deleted_at", null);
     if (!isAdmin) single = single.eq("partner_id", user.id);
     const { data, error } = await single.single();
     if (error || !data) return NextResponse.json({ error: "Proposta não encontrada" }, { status: 404 });
@@ -114,6 +114,7 @@ export async function GET(req: NextRequest) {
   let query = svc
     .from("credit_desk_proposals")
     .select(PROPOSAL_SELECT)
+    .is("deleted_at", null)
     .order("created_at", { ascending: false });
 
   if (!isAdmin) query = query.eq("partner_id", user.id);
@@ -370,21 +371,11 @@ export async function PATCH(req: NextRequest) {
 }
 
 // DELETE — somente ADMIN
-export async function DELETE(req: NextRequest) {
-  const { user, profile } = await getAuthedUser();
-  if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
-  if (profile?.role !== "ADMIN") {
-    return NextResponse.json({ error: "Apenas administradores podem excluir propostas" }, { status: 403 });
-  }
-
-  const { searchParams } = new URL(req.url);
-  const id = searchParams.get("id");
-  if (!id) return NextResponse.json({ error: "ID obrigatório" }, { status: 400 });
-
-  const { error } = await serviceClient().from("credit_desk_proposals").delete().eq("id", id);
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-
-  logAudit({ userId: user.id!, userName: profile?.full_name, action: "DELETE", entity: "credit_desk_proposals", entityId: id });
-
-  return NextResponse.json({ ok: true });
+// DELETE — descontinuado: exclusão de proposta agora passa por soft delete +
+// governança em POST /api/credit-proposals/[id]/delete (ver lib/governance-delete.ts).
+export async function DELETE() {
+  return NextResponse.json(
+    { error: "Use POST /api/credit-proposals/{id}/delete — exclusão direta foi descontinuada (soft delete + governança)" },
+    { status: 410 }
+  );
 }

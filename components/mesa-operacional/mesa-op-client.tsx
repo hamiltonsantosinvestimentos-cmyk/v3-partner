@@ -6,7 +6,7 @@ import {
   Clock, CheckCircle2, AlertCircle, Link2,
   LayoutGrid, List, Search, X, FileText, ArrowRight, ArrowLeft, MessageSquare, Trash2,
   ScrollText, RefreshCw, XCircle, Download, Edit2, Users, Filter, Settings, Bell, Mail, MessageCircle,
-  BarChart2, TrendingUp, AlertTriangle, Timer,
+  BarChart2, TrendingUp, AlertTriangle, Timer, ClipboardCheck, Loader2,
 } from "lucide-react";
 import { ExportButton } from "@/components/financeiro/export-button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -1485,6 +1485,37 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
   }, []);
 
   const [novoTicket, setNovoTicket] = useState(false);
+
+  // ─── Lixeira (ADMIN) ─────────────────────────────────────────────────────
+  const [showLixeira, setShowLixeira] = useState(false);
+  const [lixeiraItems, setLixeiraItems] = useState<any[]>([]);
+  const [lixeiraLoading, setLixeiraLoading] = useState(false);
+
+  const loadLixeira = async () => {
+    setLixeiraLoading(true);
+    try {
+      const res = await fetch("/api/credit-proposals/lixeira");
+      const json = await res.json();
+      setLixeiraItems(json.items ?? []);
+    } catch { setLixeiraItems([]); }
+    finally { setLixeiraLoading(false); }
+  };
+
+  const restoreFromLixeira = async (itemId: string) => {
+    try {
+      const res = await fetch("/api/credit-proposals/lixeira", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ item_type: "proposta", item_id: itemId }),
+      });
+      if (res.ok) {
+        setLixeiraItems((prev) => prev.filter((i) => i.id !== itemId));
+      } else {
+        alert("Erro ao restaurar proposta");
+      }
+    } catch { alert("Erro de conexão"); }
+  };
+
   // ─── Nova Proposta ───────────────────────────────────────────────────────
   const [npSelector, setNpSelector] = useState(false);
   const [npOpen, setNpOpen] = useState(false);
@@ -2037,8 +2068,49 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
           <Button size="sm" onClick={() => setNovoTicket(true)}>
             <Plus className="w-4 h-4 mr-1.5" /> Novo Ticket
           </Button>
+          {currentUser?.role === "ADMIN" && (
+            <Button size="sm" variant="outline" onClick={() => { setShowLixeira(true); loadLixeira(); }}>
+              <ClipboardCheck className="w-4 h-4 mr-1.5" /> Lixeira
+            </Button>
+          )}
         </div>
       </div>
+
+      {/* Modal Lixeira — Propostas de Crédito */}
+      {showLixeira && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60" onClick={() => setShowLixeira(false)}>
+          <div className="w-full max-w-lg max-h-[80vh] bg-[#09081A] border border-[#C9A84C]/20 rounded-xl flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="p-4 border-b border-[#C9A84C]/20 flex items-center justify-between flex-shrink-0">
+              <div className="text-sm font-bold text-foreground">Lixeira · Propostas Excluídas (30 dias)</div>
+              <button onClick={() => setShowLixeira(false)} className="text-muted-foreground hover:text-foreground text-xl">&times;</button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 space-y-2">
+              {lixeiraLoading ? (
+                <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-[#C9A84C]" /></div>
+              ) : lixeiraItems.length === 0 ? (
+                <div className="text-center text-xs text-muted-foreground py-8">Lixeira vazia</div>
+              ) : (
+                lixeiraItems.map((item: any) => (
+                  <div key={item.id} className="bg-secondary/40 border border-border rounded-lg p-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="text-xs font-bold text-foreground">{item.client_name} <span className="text-muted-foreground font-normal">({item.code})</span></div>
+                        <div className="text-[10px] text-muted-foreground">excluído por {item.profiles?.full_name ?? "N/D"}</div>
+                        <div className="text-[10px] text-red-400 mt-1">{item.deletion_reason}</div>
+                        <div className="text-[9px] text-muted-foreground/70 mt-1">{item.days_remaining} dias restantes na lixeira</div>
+                      </div>
+                      <button onClick={() => restoreFromLixeira(item.id)}
+                        className="flex-shrink-0 px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/20 rounded text-emerald-400 text-[10px] font-bold hover:bg-emerald-500/20 transition">
+                        Restaurar
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
@@ -2173,14 +2245,35 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
                                   <Edit2 className="w-3 h-3" />
                                 </button>
                               )}
-                              {currentUser?.role === "ADMIN" && (
+                              {["ADMIN", "GESTAO", "MESA_OPERACIONAL"].includes(currentUser?.role ?? "") && (
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    if (!confirm(`Excluir proposta ${p.code} de ${p.client_name}? Esta ação não pode ser desfeita.`)) return;
-                                    fetch(`/api/credit-proposals?id=${p.id}`, { method: "DELETE" })
-                                      .then(() => setProposals(prev => prev.filter(x => x.id !== p.id)))
-                                      .catch(() => alert("Erro ao excluir proposta."));
+                                    const reason = window.prompt(
+                                      currentUser?.role === "ADMIN"
+                                        ? `Motivo da exclusão de ${p.code} (obrigatório):`
+                                        : `Motivo da solicitação de exclusão de ${p.code} (obrigatório, será enviado por email à governança):`
+                                    );
+                                    if (!reason || reason.trim().length < 5) {
+                                      if (reason !== null) alert("Motivo obrigatório: mínimo 5 caracteres");
+                                      return;
+                                    }
+                                    fetch(`/api/credit-proposals/${p.id}/delete`, {
+                                      method: "POST",
+                                      headers: { "Content-Type": "application/json" },
+                                      body: JSON.stringify({ reason: reason.trim() }),
+                                    })
+                                      .then(async (res) => {
+                                        const json = await res.json();
+                                        if (!res.ok) { alert(json.error ?? "Erro ao excluir proposta."); return; }
+                                        if (json.mode === "deleted") {
+                                          alert("Proposta excluída. Disponível na Lixeira por 30 dias.");
+                                          setProposals(prev => prev.filter(x => x.id !== p.id));
+                                        } else {
+                                          alert("Solicitação enviada por email à governança. A proposta continua ativa até a decisão do ADMIN.");
+                                        }
+                                      })
+                                      .catch(() => alert("Erro de conexão."));
                                   }}
                                   className="w-5 h-5 rounded flex items-center justify-center text-muted-foreground hover:text-red-400 hover:bg-red-500/15 transition-colors opacity-0 group-hover:opacity-100"
                                   title="Excluir proposta"

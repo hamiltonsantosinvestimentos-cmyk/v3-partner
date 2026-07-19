@@ -7,7 +7,7 @@ import {
   Paperclip, Trash2, ExternalLink, Upload, Copy, CheckCheck,
   MessageSquare, Send, Zap, FileImage, FileSignature,
   ArrowLeftRight, Pencil, Check, Loader2, DatabaseZap, Clock, TrendingUp, Bot,
-  Link2, AlertCircle, CheckCircle2,
+  Link2, AlertCircle, CheckCircle2, ClipboardCheck,
 } from "lucide-react";
 import { ExportButton } from "@/components/financeiro/export-button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -346,6 +346,36 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
   const [deletingCard, setDeletingCard] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
+  // Lixeira (ADMIN)
+  const [showLixeira, setShowLixeira] = useState(false);
+  const [lixeiraItems, setLixeiraItems] = useState<any[]>([]);
+  const [lixeiraLoading, setLixeiraLoading] = useState(false);
+
+  const loadLixeira = async () => {
+    setLixeiraLoading(true);
+    try {
+      const res = await fetch("/api/ma-deals/lixeira");
+      const json = await res.json();
+      setLixeiraItems(json.items ?? []);
+    } catch { setLixeiraItems([]); }
+    finally { setLixeiraLoading(false); }
+  };
+
+  const restoreFromLixeira = async (itemId: string) => {
+    try {
+      const res = await fetch("/api/ma-deals/lixeira", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ item_type: "deal", item_id: itemId }),
+      });
+      if (res.ok) {
+        setLixeiraItems((prev) => prev.filter((i) => i.id !== itemId));
+      } else {
+        alert("Erro ao restaurar deal");
+      }
+    } catch { alert("Erro de conexão"); }
+  };
+
   const [showKitOverride, setShowKitOverride] = useState(false);
   const [overrideWord, setOverrideWord] = useState("");
   const [overrideLoading, setOverrideLoading] = useState(false);
@@ -550,13 +580,36 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
   };
 
   const handleDeleteCard = async (card: MaCard) => {
+    const reason = window.prompt(
+      userRole === "ADMIN"
+        ? "Motivo da exclusão (obrigatório):"
+        : "Motivo da solicitação de exclusão (obrigatório, será enviado por email à governança):"
+    );
+    if (!reason || reason.trim().length < 5) {
+      if (reason !== null) alert("Motivo obrigatório: mínimo 5 caracteres");
+      return;
+    }
     setDeletingCard(true);
     try {
-      await fetch(`/api/ma-deals?id=${card.id}`, { method: "DELETE" });
-      setCards(prev => prev.filter(c => c.id !== card.id));
-      setSelectedCard(null);
-      setConfirmDelete(false);
-    } catch {}
+      const res = await fetch(`/api/ma-deals/${card.id}/delete`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: reason.trim() }),
+      });
+      const json = await res.json();
+      if (res.ok) {
+        if (json.mode === "deleted") {
+          alert("Deal excluído. Disponível na Lixeira por 30 dias.");
+          setCards(prev => prev.filter(c => c.id !== card.id));
+          setSelectedCard(null);
+        } else {
+          alert("Solicitação enviada por email à governança. O deal continua ativo até a decisão do ADMIN.");
+        }
+        setConfirmDelete(false);
+      } else {
+        alert(json.error ?? "Erro ao processar exclusão");
+      }
+    } catch { alert("Erro de conexão"); }
     setDeletingCard(false);
   };
 
@@ -710,6 +763,51 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
                 <Plus size={14} />
                 Novo Deal Completo
               </button>
+              {userRole === "ADMIN" && (
+                <button
+                  onClick={() => { setShowLixeira(true); loadLixeira(); }}
+                  className="flex items-center gap-2 rounded-lg border border-[#7A8FA8]/40 text-[#7A8FA8] text-xs font-semibold px-3 py-2 hover:border-[#C9A84C]/40 hover:text-[#C9A84C] transition-colors"
+                >
+                  <ClipboardCheck size={14} />
+                  Lixeira
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Modal Lixeira */}
+          {showLixeira && (
+            <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60" onClick={() => setShowLixeira(false)}>
+              <div className="w-full max-w-lg max-h-[80vh] bg-[#09081A] border border-[#C9A84C]/20 rounded-xl flex flex-col" onClick={(e) => e.stopPropagation()}>
+                <div className="p-4 border-b border-[#C9A84C]/20 flex items-center justify-between flex-shrink-0">
+                  <div className="text-sm font-bold text-[#E8EDF5]">Lixeira · Deals Excluídos (30 dias)</div>
+                  <button onClick={() => setShowLixeira(false)} className="text-[#7A8FA8] hover:text-[#E8EDF5] text-xl">&times;</button>
+                </div>
+                <div className="flex-1 overflow-y-auto p-4 space-y-2">
+                  {lixeiraLoading ? (
+                    <div className="flex justify-center py-8"><Loader2 size={20} className="animate-spin text-[#C9A84C]" /></div>
+                  ) : lixeiraItems.length === 0 ? (
+                    <div className="text-center text-xs text-[#7A8FA8] py-8">Lixeira vazia</div>
+                  ) : (
+                    lixeiraItems.map((item: any) => (
+                      <div key={item.id} className="bg-[#0d1526] border border-[#122036] rounded-lg p-3">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <div className="text-xs font-bold text-[#E8EDF5]">{item.target_company} <span className="text-[#7A8FA8] font-normal">({item.code})</span></div>
+                            <div className="text-[10px] text-[#7A8FA8]">excluído por {item.profiles?.full_name ?? "N/D"}</div>
+                            <div className="text-[10px] text-red-400 mt-1">{item.deletion_reason}</div>
+                            <div className="text-[9px] text-[#7A8FA8]/70 mt-1">{item.days_remaining} dias restantes na lixeira</div>
+                          </div>
+                          <button onClick={() => restoreFromLixeira(item.id)}
+                            className="flex-shrink-0 px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/20 rounded text-emerald-400 text-[10px] font-bold hover:bg-emerald-500/20 transition">
+                            Restaurar
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
             </div>
           )}
           {activeTab === "operadores" && (
@@ -2119,7 +2217,9 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
                     </button>
                   ) : (
                     <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-3 space-y-2">
-                      <p className="text-xs text-red-400 text-center font-medium">Confirmar exclusão permanente?</p>
+                      <p className="text-xs text-red-400 text-center font-medium">
+                        {userRole === "ADMIN" ? "Confirmar exclusão? Fica na Lixeira por 30 dias." : "Confirmar solicitação de exclusão à governança?"}
+                      </p>
                       <div className="flex gap-2">
                         <button
                           onClick={() => setConfirmDelete(false)}

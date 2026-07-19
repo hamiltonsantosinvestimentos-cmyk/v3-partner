@@ -202,14 +202,66 @@ export function MesaConsorcioClient({ userRole }: { userRole: string }) {
   };
 
   const handleDeleteCard = async (id: string) => {
-    if (!confirm("Excluir esta cota?")) return;
-    setDeletingCard(id);
-    const res = await fetch(`/api/consorcio/leads?id=${id}`, { method: "DELETE" });
-    if (res.ok) {
-      setCards(prev => prev.filter(c => c.id !== id));
-      setSelectedCard(null);
+    const reason = window.prompt(
+      userRole === "ADMIN"
+        ? "Motivo da exclusão (obrigatório):"
+        : "Motivo da solicitação de exclusão (obrigatório, será enviado por email à governança):"
+    );
+    if (!reason || reason.trim().length < 5) {
+      if (reason !== null) alert("Motivo obrigatório: mínimo 5 caracteres");
+      return;
     }
+    setDeletingCard(id);
+    try {
+      const res = await fetch(`/api/consorcio/leads/${id}/delete`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: reason.trim() }),
+      });
+      const json = await res.json();
+      if (res.ok) {
+        if (json.mode === "deleted") {
+          alert("Cota excluída. Disponível na Lixeira por 30 dias.");
+          setCards(prev => prev.filter(c => c.id !== id));
+          setSelectedCard(null);
+        } else {
+          alert("Solicitação enviada por email à governança. A cota continua ativa até a decisão do ADMIN.");
+        }
+      } else {
+        alert(json.error ?? "Erro ao processar exclusão");
+      }
+    } catch { alert("Erro de conexão"); }
     setDeletingCard(null);
+  };
+
+  // ─── Lixeira (ADMIN) ─────────────────────────────────────────────────────
+  const [showLixeira, setShowLixeira] = useState(false);
+  const [lixeiraItems, setLixeiraItems] = useState<any[]>([]);
+  const [lixeiraLoading, setLixeiraLoading] = useState(false);
+
+  const loadLixeira = async () => {
+    setLixeiraLoading(true);
+    try {
+      const res = await fetch("/api/consorcio/lixeira");
+      const json = await res.json();
+      setLixeiraItems(json.items ?? []);
+    } catch { setLixeiraItems([]); }
+    finally { setLixeiraLoading(false); }
+  };
+
+  const restoreFromLixeira = async (itemType: string, itemId: string) => {
+    try {
+      const res = await fetch("/api/consorcio/lixeira", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ item_type: itemType, item_id: itemId }),
+      });
+      if (res.ok) {
+        setLixeiraItems((prev) => prev.filter((i) => i.id !== itemId));
+      } else {
+        alert("Erro ao restaurar registro");
+      }
+    } catch { alert("Erro de conexão"); }
   };
 
   const handleCreateOp = () => {
@@ -246,14 +298,63 @@ export function MesaConsorcioClient({ userRole }: { userRole: string }) {
               <p className="text-xs text-[#7A8FA8]">Gestão de Cotas & Contemplações</p>
             </div>
           </div>
-          {activeTab === "kanban" && (
-            <button
-              onClick={() => setShowNewCard(true)}
-              className="flex items-center gap-2 rounded-lg bg-[#C9A84C] text-[#09081A] text-xs font-semibold px-4 py-2 hover:bg-[#E8C97A] transition-colors"
-            >
-              <Plus size={14} />
-              Nova Cota
-            </button>
+          <div className="flex items-center gap-2">
+            {activeTab === "kanban" && (
+              <button
+                onClick={() => setShowNewCard(true)}
+                className="flex items-center gap-2 rounded-lg bg-[#C9A84C] text-[#09081A] text-xs font-semibold px-4 py-2 hover:bg-[#E8C97A] transition-colors"
+              >
+                <Plus size={14} />
+                Nova Cota
+              </button>
+            )}
+            {isAdmin && (
+              <button
+                onClick={() => { setShowLixeira(true); loadLixeira(); }}
+                className="flex items-center gap-2 rounded-lg border border-[#7A8FA8]/40 text-[#7A8FA8] text-xs font-semibold px-3 py-2 hover:border-[#C9A84C]/40 hover:text-[#C9A84C] transition-colors"
+              >
+                <Trash2 size={14} />
+                Lixeira
+              </button>
+            )}
+          </div>
+
+          {/* Modal Lixeira */}
+          {showLixeira && (
+            <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60" onClick={() => setShowLixeira(false)}>
+              <div className="w-full max-w-lg max-h-[80vh] bg-[#09081A] border border-[#C9A84C]/20 rounded-xl flex flex-col" onClick={(e) => e.stopPropagation()}>
+                <div className="p-4 border-b border-[#C9A84C]/20 flex items-center justify-between flex-shrink-0">
+                  <div className="text-sm font-bold text-[#E8EDF5]">Lixeira · Consórcio (30 dias)</div>
+                  <button onClick={() => setShowLixeira(false)} className="text-[#7A8FA8] hover:text-[#E8EDF5] text-xl">&times;</button>
+                </div>
+                <div className="flex-1 overflow-y-auto p-4 space-y-2">
+                  {lixeiraLoading ? (
+                    <div className="flex justify-center py-8"><Loader2 size={20} className="animate-spin text-[#C9A84C]" /></div>
+                  ) : lixeiraItems.length === 0 ? (
+                    <div className="text-center text-xs text-[#7A8FA8] py-8">Lixeira vazia</div>
+                  ) : (
+                    lixeiraItems.map((item: any) => (
+                      <div key={item.id} className="bg-[#0d1526] border border-[#122036] rounded-lg p-3">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <div className="text-xs font-bold text-[#E8EDF5]">
+                              {item.client ?? item.name ?? item.group_name ?? item.code} <span className="text-[#7A8FA8] font-normal">({item.item_type})</span>
+                            </div>
+                            <div className="text-[10px] text-[#7A8FA8]">excluído por {item.profiles?.full_name ?? "N/D"}</div>
+                            <div className="text-[10px] text-red-400 mt-1">{item.deletion_reason}</div>
+                            <div className="text-[9px] text-[#7A8FA8]/70 mt-1">{item.days_remaining} dias restantes na lixeira</div>
+                          </div>
+                          <button onClick={() => restoreFromLixeira(item.item_type, item.id)}
+                            className="flex-shrink-0 px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/20 rounded text-emerald-400 text-[10px] font-bold hover:bg-emerald-500/20 transition">
+                            Restaurar
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
           )}
           {activeTab === "operadores" && (
             <button

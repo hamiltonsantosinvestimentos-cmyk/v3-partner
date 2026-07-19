@@ -16,8 +16,6 @@ async function getAuthedUser() {
   return { user, profile };
 }
 
-const ADMIN_ROLES = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"] as const;
-
 const createSchema = z.object({
   name: z.string().min(2).max(200),
   type: z.enum(["IMOVEL","VEICULO","SERVICO","OUTROS"]).default("IMOVEL"),
@@ -31,7 +29,7 @@ export async function GET() {
   const { user } = await getAuthedUser();
   if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   const svc = serviceClient();
-  const { data, error } = await svc.from("consorcio_projetos").select("*").order("created_at", { ascending: false });
+  const { data, error } = await svc.from("consorcio_projetos").select("*").is("deleted_at", null).order("created_at", { ascending: false });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ projetos: data ?? [] });
 }
@@ -51,16 +49,11 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ ok: true, projeto: data });
 }
 
-export async function DELETE(req: NextRequest) {
-  const { user, profile } = await getAuthedUser();
-  if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
-  if (!ADMIN_ROLES.includes(profile?.role as typeof ADMIN_ROLES[number])) {
-    return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
-  }
-  const { searchParams } = new URL(req.url);
-  const id = searchParams.get("id");
-  if (!id) return NextResponse.json({ error: "ID obrigatório" }, { status: 400 });
-  const { error } = await serviceClient().from("consorcio_projetos").delete().eq("id", id);
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ ok: true });
+// DELETE — descontinuado: exclusão agora passa por soft delete + governança
+// em POST /api/consorcio/projetos/[id]/delete (ver lib/governance-delete.ts).
+export async function DELETE() {
+  return NextResponse.json(
+    { error: "Use POST /api/consorcio/projetos/{id}/delete — exclusão direta foi descontinuada (soft delete + governança)" },
+    { status: 410 }
+  );
 }

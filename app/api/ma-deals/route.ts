@@ -83,14 +83,14 @@ export async function GET(req: NextRequest) {
 
   // Busca deal único por ID (para refresh de asset_data)
   if (id) {
-    let q = svc.from("ma_deals").select(DEAL_SELECT).eq("id", id);
+    let q = svc.from("ma_deals").select(DEAL_SELECT).eq("id", id).is("deleted_at", null);
     if (!isAdmin) q = q.or(`assigned_to.eq.${user.id},created_by.eq.${user.id}`);
     const { data, error } = await q.single();
     if (error) return NextResponse.json({ error: error.message }, { status: 404 });
     return NextResponse.json({ deal: data });
   }
 
-  let query = svc.from("ma_deals").select(DEAL_SELECT).order("created_at", { ascending: false });
+  let query = svc.from("ma_deals").select(DEAL_SELECT).is("deleted_at", null).order("created_at", { ascending: false });
 
   if (!isAdmin) {
     query = query.or(`assigned_to.eq.${user.id},created_by.eq.${user.id}`);
@@ -389,21 +389,11 @@ export async function PATCH(req: NextRequest) {
 }
 
 // DELETE — somente ADMIN
-export async function DELETE(req: NextRequest) {
-  const { user, profile } = await getAuthedUser();
-  if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
-  if (profile?.role !== "ADMIN") {
-    return NextResponse.json({ error: "Apenas administradores podem excluir deals" }, { status: 403 });
-  }
-
-  const { searchParams } = new URL(req.url);
-  const id = searchParams.get("id");
-  if (!id) return NextResponse.json({ error: "ID obrigatório" }, { status: 400 });
-
-  const { error } = await serviceClient().from("ma_deals").delete().eq("id", id);
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-
-  logAudit({ userId: user.id, userName: profile?.full_name, action: "DELETE", entity: "ma_deals", entityId: id });
-
-  return NextResponse.json({ ok: true });
+// DELETE — descontinuado: exclusão de deal agora passa por soft delete +
+// governança em POST /api/ma-deals/[id]/delete (ver lib/governance-delete.ts).
+export async function DELETE() {
+  return NextResponse.json(
+    { error: "Use POST /api/ma-deals/{id}/delete — exclusão direta foi descontinuada (soft delete + governança)" },
+    { status: 410 }
+  );
 }
