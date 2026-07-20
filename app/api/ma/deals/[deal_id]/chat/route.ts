@@ -32,12 +32,30 @@ Receita TTM: ${fmt(deal.revenue_ttm)}
 Notas internas: ${deal.notes ?? "nenhuma"}`;
 
   if (forja) {
+    const teseRaw = forja.tese_investimento;
+    const tese = Array.isArray(teseRaw) ? teseRaw.join(" ") : String(teseRaw ?? "N/A");
+
+    const missingRaw = forja.missing;
+    const missing = Array.isArray(missingRaw)
+      ? (missingRaw as Record<string, unknown>[])
+          .map(m => `${m.field ?? "?"} (${m.priority ?? "?"})`)
+          .join("; ")
+      : "nenhum";
+
+    const riscosRaw = asset.riscos;
+    const riscos = Array.isArray(riscosRaw)
+      ? (riscosRaw as Record<string, unknown>[])
+          .map(r => `[${r.nivel ?? "?"}] ${r.descricao ?? "?"}`)
+          .join("; ")
+      : "não informado";
+
     ctx += `\n\nANÁLISE FORJA:
 Score: ${forja.score ?? "N/A"} / 100
-Veredicto: ${forja.veredicto ?? "N/A"}
-Tese de investimento: ${String(forja.tese_investimento ?? "N/A").slice(0, 1200)}
-Pontos fortes: ${String(forja.pontos_fortes ?? "N/A").slice(0, 600)}
-Riscos: ${String(forja.riscos ?? "N/A").slice(0, 600)}`;
+Status: ${asset.forja_status ?? forja.recommendation ?? "N/A"}
+Justificativa: ${forja.recommendation_note ?? "N/A"}
+Tese de investimento: ${tese.slice(0, 1200)}
+Gaps críticos (missing): ${missing.slice(0, 800)}
+Riscos declarados: ${riscos.slice(0, 600)}`;
   }
 
   if (extractions.length > 0) {
