@@ -10,6 +10,7 @@ import {
   CheckCircle,
   Clock,
   DollarSign,
+  Handshake,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { cookies } from "next/headers";
@@ -33,6 +34,7 @@ export default async function MesaCreditoPage() {
   let totalProposals = 0;
   let totalVolume = 0;
   let pendingCount = 0;
+  let pendingPartnerOrders = 0;
 
   if (IS_DEMO) {
     try {
@@ -102,6 +104,14 @@ export default async function MesaCreditoPage() {
           if (metrics[lvl]) metrics[lvl].thisMonth++;
         }
       }
+
+      const { count: ordersCount } = await supabase
+        .from("partner_service_orders")
+        .select("id, partner_service_links!inner(service_type)", { count: "exact", head: true })
+        .eq("status", "PAID")
+        .is("report_delivered_at", null)
+        .eq("partner_service_links.service_type", "credit_analysis");
+      pendingPartnerOrders = ordersCount ?? 0;
     } catch {}
   }
 
@@ -224,7 +234,43 @@ export default async function MesaCreditoPage() {
       </div>
 
       {/* ── Level Cards ── */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
+        <div className="relative">
+          {!["ADMIN", "GESTAO", "MESA_OPERACIONAL"].includes(role) && (
+            <div className="absolute inset-0 bg-background/60 backdrop-blur-sm rounded-xl z-10 flex items-center justify-center">
+              <div className="text-center">
+                <CreditCard className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
+                <p className="text-sm text-muted-foreground">Acesso restrito</p>
+              </div>
+            </div>
+          )}
+          <Link href={["ADMIN", "GESTAO", "MESA_OPERACIONAL"].includes(role) ? "/mesa-credito/pedidos" : "#"}>
+            <Card className="h-full hover:border-teal-400 transition-all duration-200 cursor-pointer group">
+              <CardContent className="p-5 space-y-4">
+                <div className="flex items-start justify-between">
+                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-teal-500 to-cyan-600 flex items-center justify-center shadow-lg">
+                    <Handshake className="w-6 h-6 text-white" />
+                  </div>
+                  {pendingPartnerOrders > 0 && (
+                    <span className="text-xs font-bold px-2 py-1 rounded-md bg-teal-500/10 text-teal-400 border border-teal-500/20">
+                      {pendingPartnerOrders} pendente{pendingPartnerOrders > 1 ? "s" : ""}
+                    </span>
+                  )}
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white">Pedidos de Partners</h3>
+                  <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                    Análises de crédito vendidas por partners e pagas pelo cliente, aguardando processamento e entrega do relatório
+                  </p>
+                </div>
+                <div className="flex items-center justify-between pt-2 border-t border-border/50">
+                  <span className="text-xs text-muted-foreground">Análise de Crédito Empresarial</span>
+                  <ArrowRight className="w-4 h-4 text-teal-400 group-hover:translate-x-1 transition-transform" />
+                </div>
+              </CardContent>
+            </Card>
+          </Link>
+        </div>
         {levels.map((level) => {
           const Icon = level.icon;
           const m = metrics[level.levelKey];

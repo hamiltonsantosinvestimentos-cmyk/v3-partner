@@ -108,7 +108,12 @@ export function CreditDeskClient({ proposals: initial, level, currentUser }: Cre
       })
       .then(({ proposals: fresh }) => {
         if (!isMounted || !Array.isArray(fresh)) return;
-        setProposals(fresh.map((p: Record<string, unknown>) => ({
+        // Propostas sintéticas criadas a partir de pedidos pagos de partners (Análise de Crédito
+        // avulsa, R$497) não são operações de crédito reais: ficam só no painel de Pedidos de Partners.
+        const realProposals = fresh.filter(
+          (p: Record<string, unknown>) => (p.metadata as Record<string, unknown> | null)?.source !== "partner_service_order"
+        );
+        setProposals(realProposals.map((p: Record<string, unknown>) => ({
           id: p.id as string, code: p.code as string, title: p.title as string,
           client_name: p.client_name as string,
           cpf_cnpj: (p.client_cpf_cnpj ?? (p.metadata as Record<string, unknown> | null)?.cpf_cnpj) as string | undefined,
