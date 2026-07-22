@@ -41,6 +41,28 @@ export async function POST(req: NextRequest) {
   const rawDoc = (proposal.client_cpf_cnpj ?? "").replace(/\D/g, "");
   const subject_type = rawDoc.length === 14 ? "PJ" : "PF";
 
+  // Painel de Configuração de Fontes: usa a config salva pelo CNPJ do titular,
+  // ou os defaults (fontes gratuitas ligadas, pagas desligadas) se nunca configurado.
+  const { data: sourceConfig } = await svc
+    .from("credit_source_configs")
+    .select("receita_federal, cnj_datajud, ceis, registrato_bacen, serasa, serasa_modalidade, serasa_cnpj, serasa_cpf, serasa_cpf_list, spc, escavador")
+    .eq("cnpj", proposal.client_cpf_cnpj ?? "")
+    .single();
+
+  const effectiveSourceConfig = sourceConfig ?? {
+    receita_federal: true,
+    cnj_datajud: true,
+    ceis: true,
+    registrato_bacen: false,
+    serasa: false,
+    serasa_modalidade: "simples",
+    serasa_cnpj: true,
+    serasa_cpf: false,
+    serasa_cpf_list: null,
+    spc: false,
+    escavador: false,
+  };
+
   const webhookRes = await fetch("https://n8n-514n.onrender.com/webhook/v3-credit-engine", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -54,6 +76,7 @@ export async function POST(req: NextRequest) {
       requested_value: proposal.requested_value,
       current_level: proposal.current_level,
       requested_by: user.id,
+      source_config: effectiveSourceConfig,
     }),
   });
 
@@ -66,5 +89,12 @@ export async function POST(req: NextRequest) {
   }
 
   const result = await webhookRes.json();
+
+  // Grava o retrato de quais fontes estavam configuradas no momento da análise,
+  // para auditoria (o motor n8n ainda não ramifica por source_config, ver Fase 2 da spec).
+  if (result?.profile_id) {
+    await svc.from("credit_profiles").update({ source_config_snapshot: effectiveSourceConfig }).eq("id", result.profile_id).then(null, () => {});
+  }
+
   return NextResponse.json(result);
 }
