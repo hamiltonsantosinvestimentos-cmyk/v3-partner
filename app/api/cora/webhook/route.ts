@@ -223,7 +223,7 @@ export async function POST(req: NextRequest) {
     // 3. Pagamento de serviço vendido por partner (partner_service_orders)
     const { data: serviceOrder } = await db
       .from("partner_service_orders")
-      .select("id, partner_id, client_name, client_email, link_id, partner_service_links(title, service_type, price_cents)")
+      .select("id, partner_id, client_name, client_email, client_doc, link_id, partner_service_links(title, service_type, price_cents)")
       .eq("cora_invoice_id", invoiceId)
       .eq("status", "PENDING")
       .single();
@@ -246,19 +246,30 @@ export async function POST(req: NextRequest) {
         p_amount: link?.price_cents ?? 0,
       }).then(null, () => {});
 
-      // Gera intake token no credit_intake (reutiliza tabela captacao_links via inserção direta)
-      await db.from("captacao_links").insert({
-        token: intakeToken,
-        partner_id: serviceOrder.partner_id,
-        partner_name: "V3 Partners",
-        active: true,
-        uses_count: 0,
-      }).then(null, () => {});
+      // Gera o token de intake na tabela correta por tipo de serviço.
+      // credit_analysis usa credit_consents (gate LGPD do Credit Engine, ver /api/credit-engine/intake/[token]).
+      // Os demais tipos seguem o padrão anterior via captacao_links.
+      if (link?.service_type === "credit_analysis") {
+        await db.from("credit_consents").insert({
+          intake_token: intakeToken,
+          subject_cpf_cnpj: serviceOrder.client_doc,
+          subject_name: serviceOrder.client_name,
+          subject_email: serviceOrder.client_email,
+        }).then(null, () => {});
+      } else {
+        await db.from("captacao_links").insert({
+          token: intakeToken,
+          partner_id: serviceOrder.partner_id,
+          partner_name: "V3 Partners",
+          active: true,
+          uses_count: 0,
+        }).then(null, () => {});
+      }
 
       // Envia email ao cliente com link de intake via Resend
       try {
         const intakePath = link?.service_type === "credit_analysis"
-          ? `/intake/cm/${intakeToken}`
+          ? `/intake/credit/${intakeToken}`
           : link?.service_type === "ma_intake"
           ? `/intake/bp/${intakeToken}`
           : `/c/${intakeToken}`;
