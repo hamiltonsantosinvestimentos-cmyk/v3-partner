@@ -37,12 +37,12 @@ export async function GET(req: NextRequest) {
       "id, room_id, sender_id, sender_name, sender_role, content, attachment_url, attachment_name, attachment_type, created_at"
     )
     .eq("room_id", room_id)
-    .order("created_at", { ascending: true })
+    .order("created_at", { ascending: false })
     .limit(50);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  return NextResponse.json({ messages: data ?? [] });
+  return NextResponse.json({ messages: (data ?? []).reverse() });
 }
 
 // POST — envia mensagem

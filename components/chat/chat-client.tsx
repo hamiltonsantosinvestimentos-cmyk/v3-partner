@@ -70,20 +70,22 @@ interface ChatClientProps {
   rooms?: ChatRoom[];
 }
 
+const BR_TZ = "America/Sao_Paulo";
+
 function formatTime(iso: string) {
   const d = new Date(iso);
-  return d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  return d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: BR_TZ });
 }
 
 function formatDate(iso: string) {
   const d = new Date(iso);
-  const today = new Date();
-  const yesterday = new Date();
-  yesterday.setDate(yesterday.getDate() - 1);
+  const dKey = d.toLocaleDateString("en-CA", { timeZone: BR_TZ });
+  const todayKey = new Date().toLocaleDateString("en-CA", { timeZone: BR_TZ });
+  const yesterdayKey = new Date(Date.now() - 86400000).toLocaleDateString("en-CA", { timeZone: BR_TZ });
 
-  if (d.toDateString() === today.toDateString()) return "Hoje";
-  if (d.toDateString() === yesterday.toDateString()) return "Ontem";
-  return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
+  if (dKey === todayKey) return "Hoje";
+  if (dKey === yesterdayKey) return "Ontem";
+  return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: BR_TZ });
 }
 
 function groupMessagesByDate(messages: ChatMessage[]) {
