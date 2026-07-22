@@ -44,12 +44,12 @@ export async function GET(req: NextRequest) {
     .from("chat_messages")
     .select("id, room_id, sender_id, sender_name, sender_role, content, created_at")
     .eq("room_id", room_id)
-    .order("created_at", { ascending: true })
+    .order("created_at", { ascending: false })
     .limit(50);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  return NextResponse.json({ messages: data ?? [] });
+  return NextResponse.json({ messages: (data ?? []).reverse() });
 }
 
 // POST — cria uma mensagem
