@@ -65,7 +65,7 @@ export function PartnerLinksPanel() {
       const r = await fetch("/api/partner/service-links", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, price_cents: Math.round(parseFloat(form.price_cents.replace(",", ".")) * 100) }),
+        body: JSON.stringify({ ...form, price_cents: Math.round(Number(form.price_cents) || 0) }),
       });
       const d = await r.json() as { ok?: boolean; error?: string };
       if (d.error) { setCreateError(d.error); return; }
