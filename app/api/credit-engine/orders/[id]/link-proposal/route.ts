@@ -26,14 +26,16 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
 
   const { data: order, error: orderErr } = await svc
     .from("partner_service_orders")
-    .select("id, partner_id, client_name, client_email, client_doc, amount_cents, status, intake_token, credit_desk_proposal_id, partner_service_links(service_type)")
+    .select("id, partner_id, ref_partner_id, source, service_type, client_name, client_email, client_doc, amount_cents, status, intake_token, credit_desk_proposal_id, partner_service_links(service_type)")
     .eq("id", id)
     .single();
 
   if (orderErr || !order) return NextResponse.json({ error: "Pedido não encontrado" }, { status: 404 });
 
   const link = order.partner_service_links as unknown as { service_type?: string } | null;
-  if (link?.service_type !== "credit_analysis") {
+  const CREDIT_TYPES = ["credit_analysis", "credit_analysis_consultoria"];
+  const isCreditOrder = link?.service_type === "credit_analysis" || CREDIT_TYPES.includes(order.service_type ?? "");
+  if (!isCreditOrder) {
     return NextResponse.json({ error: "Este pedido não é de Análise de Crédito" }, { status: 422 });
   }
   if (order.status !== "PAID") {
@@ -75,6 +77,8 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
         source: "partner_service_order",
         partner_service_order_id: order.id,
         client_email: order.client_email,
+        order_source: order.source,
+        ref_partner_id: order.ref_partner_id,
       },
     })
     .select()

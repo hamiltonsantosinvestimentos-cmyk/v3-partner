@@ -93,7 +93,14 @@ export function PedidoDetailModal({ order, onClose, onUpdated }: Props) {
           <div className="rounded-xl border border-border/50 bg-secondary/30 p-4 grid grid-cols-2 gap-3 text-sm">
             <div><p className="text-[10px] text-muted-foreground uppercase tracking-wider">Serviço</p><p className="text-foreground font-medium">{order.service_title}</p></div>
             <div><p className="text-[10px] text-muted-foreground uppercase tracking-wider">Valor pago</p><p className="text-foreground font-medium">{formatCurrency(order.amount_cents / 100)}</p></div>
-            <div><p className="text-[10px] text-muted-foreground uppercase tracking-wider">Partner</p><p className="text-foreground font-medium">{order.partner_name ?? "—"}</p></div>
+            <div>
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Origem</p>
+              <p className="text-foreground font-medium">
+                {order.source === "direct" ? "Venda direta" : "Via partner"}
+                {order.source === "direct" && order.ref_partner_name && ` (ref. ${order.ref_partner_name})`}
+                {order.source !== "direct" && order.partner_name && `: ${order.partner_name}`}
+              </p>
+            </div>
             <div><p className="text-[10px] text-muted-foreground uppercase tracking-wider">Pago em</p><p className="text-foreground font-medium">{order.paid_at ? formatDate(order.paid_at) : "—"}</p></div>
           </div>
 

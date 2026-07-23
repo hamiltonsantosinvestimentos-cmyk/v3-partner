@@ -320,6 +320,101 @@ export async function POST(req: NextRequest) {
       }).then(null, () => {});
     }
 
+    // 3b. Venda direta na landing page pública /analise, sem link de partner
+    // (source='direct', link_id NULL). ref_partner_id é só atribuição opcional:
+    // comissão fica pendente de lançamento manual pela Mesa/Financeiro, mesmo
+    // padrão já usado para todo o resto do sistema hoje (commissions não tem
+    // trigger automático, decisão registrada na sessão que criou esta feature).
+    const { data: directOrder } = await db
+      .from("partner_service_orders")
+      .select("id, ref_partner_id, client_name, client_email, client_doc, service_type, amount_cents")
+      .eq("cora_invoice_id", invoiceId)
+      .eq("status", "PENDING")
+      .eq("source", "direct")
+      .single();
+
+    if (directOrder) {
+      const intakeToken = randomUUID().replace(/-/g, "") + randomUUID().replace(/-/g, "").slice(0, 8);
+      const DIRECT_TITLES: Record<string, string> = {
+        credit_analysis: "Análise de Crédito Empresarial",
+        credit_analysis_consultoria: "Análise de Crédito Empresarial + Consultoria Estratégica V3",
+      };
+      const title = DIRECT_TITLES[directOrder.service_type ?? ""] ?? "Análise de Crédito Empresarial";
+
+      await db.from("partner_service_orders").update({
+        status: "PAID",
+        paid_at: paidAt,
+        intake_token: intakeToken,
+        intake_sent_at: new Date().toISOString(),
+      }).eq("id", directOrder.id);
+
+      // Vendas diretas de crédito (com ou sem consultoria) sempre usam o gate
+      // LGPD do Credit Engine via credit_consents, igual ao fluxo por link de partner.
+      await db.from("credit_consents").insert({
+        intake_token: intakeToken,
+        subject_cpf_cnpj: directOrder.client_doc,
+        subject_name: directOrder.client_name,
+        subject_email: directOrder.client_email,
+      }).then(null, () => {});
+
+      try {
+        await fetch("https://api.resend.com/emails", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            from: "V3 Partners <inteligencia@v3partners.com.br>",
+            to: [directOrder.client_email],
+            subject: `Pagamento confirmado: ${title}`,
+            html: `
+              <div style="background:#09081A;color:#F5F1E8;font-family:sans-serif;padding:40px;border-radius:8px;max-width:560px;margin:0 auto">
+                <div style="color:#C9A84C;font-size:11px;font-weight:700;letter-spacing:3px;text-transform:uppercase;margin-bottom:20px">V3 PARTNERS</div>
+                <h2 style="font-size:20px;margin-bottom:12px">Pagamento confirmado</h2>
+                <p style="color:#9BAFC5;font-size:13px;line-height:1.7;margin-bottom:24px">
+                  Olá, <strong style="color:#F5F1E8">${directOrder.client_name}</strong>.<br>
+                  Recebemos o pagamento de <strong style="color:#C9A84C">${title}</strong>.
+                  Clique no botão abaixo para preencher seus dados e dar início ao processo.
+                </p>
+                <a href="https://app.v3partners.com.br/intake/credit/${intakeToken}"
+                   style="display:inline-block;background:#C9A84C;color:#09081A;font-weight:700;font-size:13px;padding:12px 28px;border-radius:6px;text-decoration:none">
+                  Preencher meus dados
+                </a>
+                <p style="color:#9BAFC5;font-size:11px;margin-top:24px;line-height:1.6">
+                  Nossa mesa entrará em contato em até 24h úteis após o preenchimento.<br>
+                  Dúvidas: <a href="mailto:operacoes@v3partners.com.br" style="color:#C9A84C">operacoes@v3partners.com.br</a>
+                </p>
+              </div>
+            `,
+          }),
+        });
+      } catch (e) {
+        console.error("Resend email error (direct order):", e);
+      }
+
+      // Se veio atribuída a um partner via ?ref=, notifica ADMIN/GESTAO/FINANCEIRO
+      // para lançamento manual da comissão (nenhum % automático definido ainda).
+      if (directOrder.ref_partner_id) {
+        const { data: staff } = await db
+          .from("profiles")
+          .select("id")
+          .in("role", ["ADMIN", "FINANCEIRO"]);
+        if (staff?.length) {
+          await db.from("notifications").insert(
+            staff.map((s: { id: string }) => ({
+              user_id: s.id,
+              type: "commission",
+              title: "Venda direta atribuída a partner",
+              message: `${directOrder.client_name} comprou "${title}" via link de indicação. Comissão pendente de lançamento manual em /financeiro.`,
+              action_url: "/financeiro",
+              read: false,
+            }))
+          ).then(null, () => {});
+        }
+      }
+    }
+
     return NextResponse.json({ received: true });
   } catch (e) {
     console.error("Cora webhook error:", e);

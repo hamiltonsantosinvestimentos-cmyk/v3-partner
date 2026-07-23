@@ -12,6 +12,8 @@ export interface PartnerOrder {
   client_email: string;
   client_doc: string;
   partner_name: string | null;
+  source: string;
+  ref_partner_name: string | null;
   service_title: string;
   amount_cents: number;
   status: string;
@@ -28,6 +30,25 @@ export interface PartnerOrder {
 function ConsentBadge({ status }: { status: string }) {
   if (status === "consented") return <Badge className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20">Consentido</Badge>;
   return <Badge className="bg-amber-500/10 text-amber-400 border-amber-500/20">Pendente</Badge>;
+}
+
+function OriginBadge({ order }: { order: PartnerOrder }) {
+  if (order.source === "direct") {
+    return (
+      <div className="flex flex-col gap-1">
+        <Badge className="bg-secondary text-muted-foreground border-border/50 w-fit">Venda direta</Badge>
+        {order.ref_partner_name && (
+          <span className="text-[11px] text-muted-foreground truncate max-w-40">Ref: {order.ref_partner_name}</span>
+        )}
+      </div>
+    );
+  }
+  return (
+    <div className="flex flex-col gap-1">
+      <Badge className="bg-teal-500/10 text-teal-400 border-teal-500/20 w-fit">Via partner</Badge>
+      <span className="text-[11px] text-muted-foreground truncate max-w-40">{order.partner_name ?? "—"}</span>
+    </div>
+  );
 }
 
 function StageBadge({ order }: { order: PartnerOrder }) {
@@ -94,7 +115,7 @@ export function PedidosPartnersClient() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border/50">
-                {["Cliente", "Partner", "Valor Pago", "Consentimento", "Etapa", "Pago em"].map((h) => (
+                {["Cliente", "Origem", "Valor Pago", "Consentimento", "Etapa", "Pago em"].map((h) => (
                   <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">{h}</th>
                 ))}
               </tr>
@@ -107,7 +128,7 @@ export function PedidosPartnersClient() {
                   onClick={() => setSelected(o)}
                 >
                   <td className="px-4 py-3 font-medium text-foreground max-w-48 truncate">{o.client_name}</td>
-                  <td className="px-4 py-3 text-xs text-muted-foreground">{o.partner_name ?? "—"}</td>
+                  <td className="px-4 py-3"><OriginBadge order={o} /></td>
                   <td className="px-4 py-3 text-right font-semibold text-white">{formatCurrency(o.amount_cents / 100)}</td>
                   <td className="px-4 py-3"><ConsentBadge status={o.consent_status} /></td>
                   <td className="px-4 py-3"><StageBadge order={o} /></td>

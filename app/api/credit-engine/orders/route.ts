@@ -29,9 +29,11 @@ export async function GET(req: NextRequest) {
       id, partner_id, client_name, client_email, client_doc, amount_cents, status,
       paid_at, intake_token, intake_submitted_at, credit_desk_proposal_id,
       report_public_token, report_delivered_at, created_at,
+      service_type, source, ref_partner_id,
       partner_service_links(title, service_type),
       credit_desk_proposals(id, credit_profile_id, status),
-      partner:profiles!partner_id(full_name)
+      partner:profiles!partner_id(full_name),
+      ref_partner:profiles!ref_partner_id(full_name)
     `)
     .order("created_at", { ascending: false });
 
@@ -39,9 +41,12 @@ export async function GET(req: NextRequest) {
 
   type OrderRow = typeof orders extends (infer T)[] ? T : never;
 
+  const CREDIT_TYPES = ["credit_analysis", "credit_analysis_consultoria"];
+
   let filtered = ((orders ?? []) as OrderRow[]).filter((o) => {
     const link = o.partner_service_links as unknown as { service_type?: string } | null;
-    return link?.service_type === "credit_analysis";
+    const ownType = (o as unknown as { service_type: string | null }).service_type;
+    return link?.service_type === "credit_analysis" || (ownType && CREDIT_TYPES.includes(ownType));
   });
 
   if (statusFilter) {
@@ -59,15 +64,22 @@ export async function GET(req: NextRequest) {
     consentsByToken = Object.fromEntries((consents ?? []).map((c) => [c.intake_token, c]));
   }
 
+  const DIRECT_TITLES: Record<string, string> = {
+    credit_analysis: "Análise de Crédito Empresarial",
+    credit_analysis_consultoria: "Análise de Crédito Empresarial + Consultoria Estratégica V3",
+  };
+
   const result = filtered.map((o) => {
     const row = o as unknown as {
-      id: string; partner_id: string; client_name: string; client_email: string; client_doc: string;
+      id: string; partner_id: string | null; client_name: string; client_email: string; client_doc: string;
       amount_cents: number; status: string; paid_at: string | null; intake_token: string | null;
       intake_submitted_at: string | null; credit_desk_proposal_id: string | null;
       report_public_token: string | null; report_delivered_at: string | null; created_at: string;
+      service_type: string | null; source: string; ref_partner_id: string | null;
       partner_service_links: { title?: string } | null;
       credit_desk_proposals: { id: string; credit_profile_id: string | null; status: string } | null;
       partner: { full_name?: string } | null;
+      ref_partner: { full_name?: string } | null;
     };
     const consent = row.intake_token ? consentsByToken[row.intake_token] : null;
     return {
@@ -76,7 +88,9 @@ export async function GET(req: NextRequest) {
       client_email: row.client_email,
       client_doc: row.client_doc,
       partner_name: row.partner?.full_name ?? null,
-      service_title: row.partner_service_links?.title ?? "Análise de Crédito Empresarial",
+      source: row.source,
+      ref_partner_name: row.ref_partner?.full_name ?? null,
+      service_title: row.partner_service_links?.title ?? DIRECT_TITLES[row.service_type ?? ""] ?? "Análise de Crédito Empresarial",
       amount_cents: row.amount_cents,
       status: row.status,
       paid_at: row.paid_at,
