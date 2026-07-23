@@ -38,7 +38,7 @@ const SERVICE_LABEL: Record<string, string> = {
 };
 
 const INTAKE_PATH: Record<string, string> = {
-  credit_analysis: "/intake/cm",
+  credit_analysis: "/intake/credit",
   ma_intake: "/intake/bp",
   due_diligence: "/intake/cm",
   captacao: "/c",
