@@ -8,21 +8,41 @@ import { captureRefFromUrl, captureUtmFromUrl } from "@/lib/ref-tracking";
 
 const N = "#09081A", N2 = "#13223A", N3 = "#162744", N4 = "#243A66";
 const GO = "#C9A84C", GL = "#E8C97A", CR = "#F5F1E8", MU = "#9BAFC5";
+const GOLD_BORDER = "rgba(201,168,76,0.35)";
+
+function sectionBg(url: string) {
+  return {
+    backgroundImage: `radial-gradient(ellipse 1000px 650px at 50% 15%, rgba(9,8,26,0.93) 0%, rgba(9,8,26,0.8) 55%, rgba(9,8,26,0.62) 100%), url('${url}')`,
+    backgroundSize: "cover",
+    backgroundPosition: "center",
+  } as const;
+}
+
+function cardBg(url: string) {
+  return {
+    backgroundImage: `linear-gradient(rgba(9,8,26,0.87), rgba(9,8,26,0.87)), url('${url}')`,
+    backgroundSize: "cover",
+    backgroundPosition: "center",
+  } as const;
+}
 
 const PILARES = [
   {
     icon: Compass,
     title: "Seu Raio-X Financeiro",
+    image: "/analise-v2/pilar-1.jpg",
     text: "Como o Banco Central e o mercado enxergam a saúde do seu CNPJ hoje: histórico, restrições e sinais de risco que moldam a primeira leitura de qualquer fundo sobre a operação.",
   },
   {
     icon: Landmark,
     title: "Sua Garantia Real",
+    image: "/analise-v2/pilar-2.jpg",
     text: "Imóveis, máquinas ou recebíveis futuros: cada fundo aceita e valoriza um tipo diferente de garantia. Usar a garantia errada pode travar uma operação sólida.",
   },
   {
     icon: Handshake,
     title: "O Encontro Certo",
+    image: "/analise-v2/pilar-3.jpg",
     text: "Cada fundo, FIDC ou securitizadora opera dentro de uma tese própria de investimento. A V3 conecta sua empresa ao fundo cuja tese realmente combina com o seu perfil.",
   },
 ];
@@ -79,7 +99,7 @@ export function AnaliseLandingV2Client() {
       </header>
 
       {/* 1. HERO */}
-      <section style={{ padding: "56px 20px 48px", textAlign: "center" }}>
+      <section style={{ ...sectionBg("/analise-v2/hero.jpg"), padding: "56px 20px 48px", textAlign: "center" }}>
         <div style={{ maxWidth: 720, margin: "0 auto" }}>
           <Eyebrow>V3 Partners · Bússola de Crédito</Eyebrow>
           <h1 style={{ fontSize: "clamp(26px, 5vw, 42px)", fontWeight: 800, lineHeight: 1.25, color: CR, marginBottom: 20 }}>
@@ -96,7 +116,7 @@ export function AnaliseLandingV2Client() {
 
         {/* Video placeholder */}
         <div style={{ maxWidth: 720, margin: "40px auto 0" }}>
-          <div style={{ position: "relative", aspectRatio: "16/9", background: N2, border: `1px solid ${N4}`, borderRadius: 12, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10 }}>
+          <div style={{ position: "relative", aspectRatio: "16/9", background: "rgba(9,8,26,0.55)", backdropFilter: "blur(6px)", border: `1px solid ${GOLD_BORDER}`, borderRadius: 12, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10 }}>
             <PlayCircle size={48} color={GO} strokeWidth={1.5} />
             <span style={{ fontSize: 11, color: MU, letterSpacing: "0.04em", textTransform: "uppercase" }}>Vídeo explicativo em produção</span>
           </div>
@@ -104,7 +124,7 @@ export function AnaliseLandingV2Client() {
       </section>
 
       {/* 2. O PROBLEMA & A BÚSSOLA */}
-      <section style={{ padding: "48px 20px", background: N2, borderTop: `1px solid ${N4}`, borderBottom: `1px solid ${N4}` }}>
+      <section style={{ ...sectionBg("/analise-v2/problema.jpg"), padding: "48px 20px", borderTop: `1px solid ${N4}`, borderBottom: `1px solid ${N4}` }}>
         <div style={{ maxWidth: 960, margin: "0 auto" }}>
           <Eyebrow>Por que a porta certa muda tudo</Eyebrow>
           <h2 style={{ fontSize: "clamp(22px, 4vw, 30px)", fontWeight: 800, textAlign: "center", marginBottom: 24, lineHeight: 1.3 }}>
@@ -115,7 +135,7 @@ export function AnaliseLandingV2Client() {
           </p>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 20 }}>
             {PILARES.map((p) => (
-              <div key={p.title} style={{ background: N3, border: `1px solid ${N4}`, borderRadius: 10, padding: 24 }}>
+              <div key={p.title} style={{ ...cardBg(p.image), border: `1px solid ${GOLD_BORDER}`, borderRadius: 10, padding: 24 }}>
                 <p.icon size={26} color={GO} strokeWidth={1.5} style={{ marginBottom: 14 }} />
                 <div style={{ fontSize: 15, fontWeight: 700, color: CR, marginBottom: 8 }}>{p.title}</div>
                 <div style={{ fontSize: 13, color: MU, lineHeight: 1.65 }}>{p.text}</div>
@@ -126,7 +146,7 @@ export function AnaliseLandingV2Client() {
       </section>
 
       {/* 3. PASSO A PASSO */}
-      <section style={{ padding: "48px 20px" }}>
+      <section style={{ ...sectionBg("/analise-v2/caminho.jpg"), padding: "48px 20px" }}>
         <div style={{ maxWidth: 960, margin: "0 auto" }}>
           <Eyebrow>O Caminho até o Capital</Eyebrow>
           <h2 style={{ fontSize: "clamp(22px, 4vw, 30px)", fontWeight: 800, textAlign: "center", marginBottom: 40, lineHeight: 1.3 }}>
@@ -134,7 +154,7 @@ export function AnaliseLandingV2Client() {
           </h2>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 18 }}>
             {ETAPAS.map((e) => (
-              <div key={e.num} style={{ background: N2, border: `1px solid ${N4}`, borderRadius: 10, padding: 22 }}>
+              <div key={e.num} style={{ background: "rgba(19,34,58,0.75)", backdropFilter: "blur(6px)", border: `1px solid ${N4}`, borderRadius: 10, padding: 22 }}>
                 <div style={{ fontSize: 26, fontWeight: 800, color: N4, marginBottom: 10, fontVariantNumeric: "tabular-nums" }}>{e.num}</div>
                 <div style={{ fontSize: 14.5, fontWeight: 700, color: CR, marginBottom: 8 }}>{e.title}</div>
                 <div style={{ fontSize: 12.5, color: MU, lineHeight: 1.6 }}>{e.text}</div>
@@ -170,7 +190,7 @@ export function AnaliseLandingV2Client() {
             </div>
 
             {/* Plano 2: recomendado */}
-            <div style={{ background: N3, border: `1px solid ${GO}`, borderRadius: 12, padding: 28, display: "flex", flexDirection: "column", position: "relative" }}>
+            <div style={{ ...cardBg("/analise-v2/consultoria.jpg"), border: `1px solid ${GO}`, borderRadius: 12, padding: 28, display: "flex", flexDirection: "column", position: "relative" }}>
               <div style={{ position: "absolute", top: -12, left: 28, background: GO, color: N, fontSize: 9.5, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", padding: "4px 10px", borderRadius: 4 }}>
                 Recomendado
               </div>
