@@ -1,11 +1,12 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { PartnerLinksPanel } from "@/components/partner/partner-links-panel";
+import { ReferralLinksCard } from "@/components/partner/referral-links-card";
 
 export const dynamic = "force-dynamic";
 
 export const metadata = {
-  title: "Meus Links de Serviço — V3 Partners",
+  title: "Meus Links de Serviço · V3 Partners",
 };
 
 export default async function MeusLinksPage() {
@@ -65,6 +66,7 @@ export default async function MeusLinksPage() {
           </p>
         </div>
 
+        <ReferralLinksCard partnerId={user.id} />
         <PartnerLinksPanel />
       </div>
     </div>
