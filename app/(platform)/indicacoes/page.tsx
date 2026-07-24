@@ -38,6 +38,8 @@ export default async function IndicacoesPage() {
 
   const leadsLink = `https://app.v3partners.com.br/indicacao?ref=${user.id}`;
   const partnerLink = `https://app.v3partners.com.br/cadastro-partner?ref=${user.id}`;
+  const analiseLink = `https://app.v3partners.com.br/analise?ref=${user.id}`;
+  const analiseV2Link = `https://app.v3partners.com.br/analise-v2?ref=${user.id}`;
 
   let totalIndicados = 0;
   let ativos = 0;
@@ -89,6 +91,8 @@ export default async function IndicacoesPage() {
       role={profile.role}
       leadsLink={leadsLink}
       partnerLink={partnerLink}
+      analiseLink={analiseLink}
+      analiseV2Link={analiseV2Link}
       discountPercent={discountPercent}
       discountMonthsRemaining={discountMonthsRemaining}
       partnersIndicados={partnersIndicados}
