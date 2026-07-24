@@ -23,7 +23,7 @@ const V3 = {
 };
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-type ServiceType = "due_diligence" | "relatorio_premium" | "consultoria" | "outro";
+type ServiceType = "due_diligence" | "relatorio_premium" | "consultoria" | "narrativa_venda" | "outro";
 type PropostaStatus = "draft" | "sent" | "viewed" | "signed" | "rejected" | "expired";
 type MsgType = "internal_note" | "system_event" | "client_update";
 
@@ -89,6 +89,7 @@ const SERVICE_LABELS: Record<ServiceType, string> = {
   due_diligence:    "Due Diligence",
   relatorio_premium:"Relatório Premium",
   consultoria:      "Consultoria",
+  narrativa_venda:  "Narrativa de Venda (IA)",
   outro:            "Outro",
 };
 
@@ -192,6 +193,14 @@ export function PropostasClient({
     deal_id: "", partner_id: "", partner_name: "", partner_email: "",
   });
 
+  // ── Buscar Deal (pré-preencher a partir de um deal existente) ──
+  const [dealCode, setDealCode] = useState("");
+  const [dealSearching, setDealSearching] = useState(false);
+  const [dealFound, setDealFound] = useState<{ id: string; code: string; title: string; sector: string | null; value: number | null } | null>(null);
+  const [dealSearchError, setDealSearchError] = useState("");
+  const [narrativeLoading, setNarrativeLoading] = useState(false);
+  const [narrativeError, setNarrativeError] = useState("");
+
   // ── Carregar propostas ──
   useEffect(() => {
     fetch("/api/propostas")
@@ -243,9 +252,66 @@ export function PropostasClient({
           value: "", description: "",
           deal_id: "", partner_id: "", partner_name: "", partner_email: "",
         });
+        setDealCode(""); setDealFound(null); setDealSearchError("");
       }
     } catch {}
     setCreating(false);
+  };
+
+  // ── Buscar deal por código ──
+  const handleSearchDeal = async () => {
+    if (!dealCode.trim()) return;
+    setDealSearching(true);
+    setDealSearchError("");
+    setDealFound(null);
+    try {
+      const res = await fetch(`/api/propostas/deal-lookup?code=${encodeURIComponent(dealCode.trim())}`);
+      const data = await res.json();
+      if (!res.ok || !data.found) {
+        setDealSearchError(data.error ?? "Deal não encontrado.");
+        return;
+      }
+      setDealFound(data.deal);
+      const comprador = (data.participants ?? []).find((p: { role: string }) => p.role === "comprador")
+        ?? (data.participants ?? [])[0];
+      setForm(f => ({
+        ...f,
+        deal_id: data.deal.id,
+        title: f.title || `Proposta Comercial · ${data.deal.title}`,
+        value: data.deal.value ? String(data.deal.value) : f.value,
+        recipient_name: comprador?.name ?? f.recipient_name,
+        recipient_email: comprador?.email ?? f.recipient_email,
+        recipient_company: comprador?.role === "comprador" ? String(data.deal.title ?? f.recipient_company) : f.recipient_company,
+      }));
+    } catch {
+      setDealSearchError("Erro de conexão. Tente novamente.");
+    } finally {
+      setDealSearching(false);
+    }
+  };
+
+  // ── Gerar narrativa de venda com IA a partir do deal vinculado ──
+  const handleGerarNarrativa = async () => {
+    if (!form.deal_id) return;
+    setNarrativeLoading(true);
+    setNarrativeError("");
+    try {
+      const res = await fetch("/api/propostas/gerar-narrativa", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ deal_id: form.deal_id }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        setNarrativeError(data.error ?? "Erro ao gerar narrativa.");
+        return;
+      }
+      setForm(f => ({ ...f, description: data.descricao_sugerida, service_type: "narrativa_venda" }));
+    } catch {
+      setNarrativeError("Erro de conexão. Tente novamente.");
+    } finally {
+      setNarrativeLoading(false);
+    }
   };
 
   // ── Enviar proposta ──
@@ -715,6 +781,42 @@ export function PropostasClient({
                 </button>
               </div>
 
+              <div style={{ background: V3.navyC, border: `1px solid ${V3.navyM}`, borderRadius: 8, padding: 14, marginBottom: 16 }}>
+                <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.15em", textTransform: "uppercase", color: V3.goldL, margin: "0 0 8px" }}>Buscar Deal (opcional)</p>
+                <div className="flex gap-2">
+                  <input style={{ ...inputStyle, flex: 1 }} value={dealCode}
+                    onChange={e => setDealCode(e.target.value)}
+                    placeholder="Ex: MA-26-30823"
+                    onKeyDown={e => e.key === "Enter" && (e.preventDefault(), handleSearchDeal())} />
+                  <button onClick={handleSearchDeal} disabled={dealSearching || !dealCode.trim()}
+                    style={{
+                      padding: "9px 16px", borderRadius: 6, fontSize: 12, fontWeight: 700,
+                      background: V3.navyM, color: V3.cream, border: "none",
+                      cursor: dealSearching ? "not-allowed" : "pointer",
+                      opacity: !dealCode.trim() ? 0.5 : 1, whiteSpace: "nowrap",
+                    }}>
+                    {dealSearching ? <Loader2 size={13} className="animate-spin" /> : "Buscar"}
+                  </button>
+                </div>
+                {dealSearchError && <p style={{ fontSize: 11, color: V3.red, margin: "8px 0 0" }}>{dealSearchError}</p>}
+                {dealFound && (
+                  <div style={{ marginTop: 10, padding: "8px 12px", background: "rgba(201,168,76,.08)", border: `1px solid rgba(201,168,76,.25)`, borderRadius: 6 }}>
+                    <p style={{ fontSize: 12, color: V3.cream, margin: "0 0 2px", fontWeight: 600 }}>{dealFound.title}</p>
+                    <p style={{ fontSize: 10, color: V3.muted, margin: "0 0 8px" }}>{dealFound.code} · {dealFound.sector ?? "—"}</p>
+                    <button onClick={handleGerarNarrativa} disabled={narrativeLoading}
+                      style={{
+                        display: "flex", alignItems: "center", gap: 6,
+                        padding: "7px 14px", borderRadius: 6, fontSize: 11, fontWeight: 700,
+                        background: V3.gold, color: V3.navy, border: "none",
+                        cursor: narrativeLoading ? "not-allowed" : "pointer",
+                      }}>
+                      {narrativeLoading ? <><Loader2 size={12} className="animate-spin" /> Gerando narrativa...</> : "Gerar Narrativa com IA →"}
+                    </button>
+                    {narrativeError && <p style={{ fontSize: 11, color: V3.red, margin: "8px 0 0" }}>{narrativeError}</p>}
+                  </div>
+                )}
+              </div>
+
               <Field label="Título da Proposta *">
                 <input style={inputStyle} value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
                   placeholder="Ex: Due Diligence — Expansão Operacional"
@@ -732,6 +834,7 @@ export function PropostasClient({
                     <option value="consultoria">Consultoria</option>
                     <option value="due_diligence">Due Diligence</option>
                     <option value="relatorio_premium">Relatório Premium</option>
+                    <option value="narrativa_venda">Narrativa de Venda (IA)</option>
                     <option value="outro">Outro</option>
                   </select>
                 </Field>

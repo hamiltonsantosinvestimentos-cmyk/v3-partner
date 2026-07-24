@@ -9,6 +9,8 @@ function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 }
 
+// ── GET /api/propostas/deal-lookup?code=... ─────────────────────────────────
+// Busca um deal por código para pré-preencher o formulário de Nova Proposta.
 export async function GET(req: NextRequest) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();

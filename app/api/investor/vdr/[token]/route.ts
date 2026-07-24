@@ -131,6 +131,7 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
       name:    invite.investor_name,
       company: invite.investor_company,
     },
+    access_side: invite.access_side,
     nda_signed,
     nda_signed_at:   ndaSig?.signed_at ?? null,
     documents,

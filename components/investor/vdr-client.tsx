@@ -26,6 +26,7 @@ type RoomData = {
   room:        { id: string; name: string; nda_required: boolean; nda_text: string | null };
   deal:        { v3_code: string | null; target_company: string | null; sector: string | null };
   investor:    { name: string; company: string | null };
+  access_side: string;
   nda_signed:  boolean;
   documents:   Document[];
   access_count: number;
@@ -51,7 +52,12 @@ export function VdrClient({ v3Code, token }: VdrClientProps) {
   const [qaContent, setQaContent] = useState("");
   const [qaSending, setQaSending] = useState(false);
   const [qaSuccess, setQaSuccess] = useState(false);
-  const [activeSection, setActiveSection] = useState<"docs" | "qa">("docs");
+  const [activeSection, setActiveSection] = useState<"docs" | "qa" | "compra">("docs");
+  // Pedido de Compra state (só lado buyer)
+  const [compraForm, setCompraForm] = useState({ empresa: "", cnpj: "", contato_nome: "", contato_email: "", contato_telefone: "", observacoes: "" });
+  const [compraSending, setCompraSending] = useState(false);
+  const [compraSaved, setCompraSaved] = useState(false);
+  const [compraError, setCompraError] = useState("");
 
   // ── Fetch room data ──
   useEffect(() => {
@@ -113,6 +119,28 @@ export function VdrClient({ v3Code, token }: VdrClientProps) {
       setState("ready");
     }
     setSigning(false);
+  };
+
+  // ── Enviar Pedido de Compra ──
+  const handleSendPedidoCompra = async () => {
+    if (!compraForm.empresa.trim() || !compraForm.contato_nome.trim() || !compraForm.contato_email.trim()) {
+      setCompraError("Empresa, nome do contato e email são obrigatórios.");
+      return;
+    }
+    setCompraError("");
+    setCompraSending(true);
+    const r = await fetch(`/api/investor/vdr/${token}/pedido-compra`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(compraForm),
+    });
+    const d = await r.json();
+    setCompraSending(false);
+    if (d.saved) {
+      setCompraSaved(true);
+    } else {
+      setCompraError(d.error ?? "Erro ao enviar. Tente novamente.");
+    }
   };
 
   // ── Abrir documento ──
@@ -281,6 +309,7 @@ export function VdrClient({ v3Code, token }: VdrClientProps) {
               {[
                 { id: "docs" as const, label: "Documentos" },
                 { id: "qa"   as const, label: `Perguntas${qaThreads.length > 0 ? ` (${qaThreads.length})` : ""}` },
+                ...(data.access_side === "buyer" ? [{ id: "compra" as const, label: "Pedido de Compra" }] : []),
               ].map(tab => (
                 <button key={tab.id} onClick={() => setActiveSection(tab.id)}
                   style={{ padding: "8px 16px", fontSize: 13, fontWeight: 600, fontFamily: "inherit", border: "none", background: "transparent", cursor: "pointer", borderBottom: `2px solid ${activeSection === tab.id ? V3.gold : "transparent"}`, color: activeSection === tab.id ? V3.gold : V3.muted, transition: "all 0.15s" }}>
@@ -386,6 +415,48 @@ export function VdrClient({ v3Code, token }: VdrClientProps) {
                     {qaSending ? "Enviando..." : "Enviar Pergunta →"}
                   </button>
                 </div>
+              </div>
+            )}
+
+            {/* ── PEDIDO DE COMPRA (lado buyer) ── */}
+            {activeSection === "compra" && data.access_side === "buyer" && (
+              <div style={{ background: V3.navyMid, border: `1px solid ${V3.navyBrd}`, borderRadius: 10, padding: 16 }}>
+                {compraSaved ? (
+                  <div style={{ textAlign: "center", padding: "24px 0" }}>
+                    <CheckCircle style={{ width: 32, height: 32, color: V3.green, margin: "0 auto 12px", display: "block" }} />
+                    <div style={{ fontSize: 14, fontWeight: 600, color: V3.cream, marginBottom: 6 }}>Pedido de compra registrado</div>
+                    <div style={{ fontSize: 12, color: V3.muted }}>A Mesa V3 Partners foi notificada e dará sequência ao processo.</div>
+                  </div>
+                ) : (
+                  <>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: V3.goldLt, letterSpacing: 1, textTransform: "uppercase", marginBottom: 12 }}>
+                      Registrar Pedido de Compra
+                    </div>
+                    <input value={compraForm.empresa} onChange={e => setCompraForm(f => ({ ...f, empresa: e.target.value }))}
+                      placeholder="Empresa compradora *"
+                      style={{ width: "100%", background: V3.navy, border: `1px solid ${V3.navyBrd}`, borderRadius: 8, padding: "10px 12px", fontSize: 13, color: V3.cream, fontFamily: "inherit", marginBottom: 10, outline: "none", boxSizing: "border-box" }} />
+                    <input value={compraForm.cnpj} onChange={e => setCompraForm(f => ({ ...f, cnpj: e.target.value }))}
+                      placeholder="CNPJ"
+                      style={{ width: "100%", background: V3.navy, border: `1px solid ${V3.navyBrd}`, borderRadius: 8, padding: "10px 12px", fontSize: 13, color: V3.cream, fontFamily: "inherit", marginBottom: 10, outline: "none", boxSizing: "border-box" }} />
+                    <input value={compraForm.contato_nome} onChange={e => setCompraForm(f => ({ ...f, contato_nome: e.target.value }))}
+                      placeholder="Nome do responsável *"
+                      style={{ width: "100%", background: V3.navy, border: `1px solid ${V3.navyBrd}`, borderRadius: 8, padding: "10px 12px", fontSize: 13, color: V3.cream, fontFamily: "inherit", marginBottom: 10, outline: "none", boxSizing: "border-box" }} />
+                    <input value={compraForm.contato_email} onChange={e => setCompraForm(f => ({ ...f, contato_email: e.target.value }))}
+                      placeholder="Email *" type="email"
+                      style={{ width: "100%", background: V3.navy, border: `1px solid ${V3.navyBrd}`, borderRadius: 8, padding: "10px 12px", fontSize: 13, color: V3.cream, fontFamily: "inherit", marginBottom: 10, outline: "none", boxSizing: "border-box" }} />
+                    <input value={compraForm.contato_telefone} onChange={e => setCompraForm(f => ({ ...f, contato_telefone: e.target.value }))}
+                      placeholder="Telefone"
+                      style={{ width: "100%", background: V3.navy, border: `1px solid ${V3.navyBrd}`, borderRadius: 8, padding: "10px 12px", fontSize: 13, color: V3.cream, fontFamily: "inherit", marginBottom: 10, outline: "none", boxSizing: "border-box" }} />
+                    <textarea value={compraForm.observacoes} onChange={e => setCompraForm(f => ({ ...f, observacoes: e.target.value }))} rows={3}
+                      placeholder="Observações (volume de interesse, prazo, condições...)"
+                      style={{ width: "100%", background: V3.navy, border: `1px solid ${V3.navyBrd}`, borderRadius: 8, padding: "10px 12px", fontSize: 13, color: V3.cream, fontFamily: "inherit", resize: "none", outline: "none", boxSizing: "border-box", marginBottom: 10 }} />
+                    {compraError && <div style={{ fontSize: 12, color: V3.red, marginBottom: 8 }}>{compraError}</div>}
+                    <button onClick={handleSendPedidoCompra} disabled={compraSending}
+                      style={{ background: V3.gold, color: V3.navy, border: "none", borderRadius: 8, padding: "10px 20px", fontSize: 13, fontWeight: 700, fontFamily: "inherit", cursor: compraSending ? "not-allowed" : "pointer" }}>
+                      {compraSending ? "Enviando..." : "Enviar Pedido de Compra →"}
+                    </button>
+                  </>
+                )}
               </div>
             )}
 
