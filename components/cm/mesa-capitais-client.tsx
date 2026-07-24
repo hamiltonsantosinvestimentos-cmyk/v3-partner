@@ -2661,7 +2661,71 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
 
             {/* Documentos */}
             <div className="px-4 mt-4 pb-6">
-              <div className="text-[10px] text-[#C9A84C] font-bold uppercase tracking-wider mb-2">Documentos ({listingDocs.length})</div>
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-[10px] text-[#C9A84C] font-bold uppercase tracking-wider">Documentos ({listingDocs.length})</div>
+                <button
+                  onClick={() => loadDocs(selectedListing.id)}
+                  disabled={docsLoading}
+                  title="Atualizar lista de documentos"
+                  className="flex items-center gap-1 px-2 py-1 bg-[#162744] border border-[#9BAFC5]/15 rounded text-[#9BAFC5] text-[9px] font-bold hover:border-[#C9A84C]/30 hover:text-[#C9A84C] transition disabled:opacity-50"
+                >
+                  <RefreshCw size={11} className={docsLoading ? "animate-spin" : ""} /> Atualizar
+                </button>
+              </div>
+
+              {listingDocs.length > 0 && (
+                <div className="mb-3 overflow-x-auto">
+                  <table className="w-full text-[10px] border-collapse">
+                    <thead>
+                      <tr className="text-left text-[#9BAFC5]/70 uppercase tracking-wide text-[8px]">
+                        <th className="py-1 pr-2">Documento</th>
+                        <th className="py-1 pr-2">Confiabilidade</th>
+                        <th className="py-1 pr-2">Status</th>
+                        <th className="py-1">Erro</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#9BAFC5]/10">
+                      {listingDocs.map((doc: any) => {
+                        const ocrQ = doc.ocr_result;
+                        const conf = ocrQ && typeof ocrQ === "object" && typeof ocrQ.confiabilidade === "number" ? ocrQ.confiabilidade : null;
+                        const isError = doc.validation_status === "erro";
+                        const statusStyle = isError
+                          ? "bg-red-500/15 border-red-500/30 text-red-400"
+                          : doc.validation_status === "processing"
+                          ? "bg-[#E8C97A]/15 border-[#E8C97A]/30 text-[#E8C97A]"
+                          : doc.validation_status === "needs_review"
+                          ? "bg-amber-500/15 border-amber-500/30 text-amber-400"
+                          : doc.validation_status === "validado" || doc.validation_status === "transcrito"
+                          ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-400"
+                          : "bg-[#162744] border-[#9BAFC5]/20 text-[#9BAFC5]";
+                        return (
+                          <tr key={doc.id} className={cn(isError && "bg-red-500/5")}>
+                            <td className="py-1.5 pr-2 text-[#F5F1E8] max-w-[180px] truncate" title={doc.original_filename ?? ""}>
+                              {doc.original_filename ?? "Documento"}
+                            </td>
+                            <td className="py-1.5 pr-2">
+                              {conf !== null ? (
+                                <span className={cn("font-bold px-1.5 py-0.5 rounded border text-[9px]", confidenceStyle(conf))}>{conf}%</span>
+                              ) : (
+                                <span className="text-[#9BAFC5]/50">-</span>
+                              )}
+                            </td>
+                            <td className="py-1.5 pr-2">
+                              <span className={cn("font-bold px-1.5 py-0.5 rounded border text-[9px]", statusStyle)}>
+                                {doc.validation_status}
+                              </span>
+                            </td>
+                            <td className="py-1.5 text-red-400/90 max-w-[220px] truncate" title={doc.error_message ?? ""}>
+                              {doc.error_message ?? "-"}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
               {docsLoading ? (
                 <div className="flex justify-center py-4"><Loader2 size={16} className="animate-spin text-[#C9A84C]" /></div>
               ) : listingDocs.length === 0 ? (
