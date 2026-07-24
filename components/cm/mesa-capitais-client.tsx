@@ -11,6 +11,7 @@ import {
 import { cn, maskCpfCnpjInput, maskPhoneInput, isValidEmail, maskCurrencyBRLInput, parseCurrencyBRLInput, formatCurrencyBRLFromNumber } from "@/lib/utils";
 import { AssetAssistant } from "./asset-assistant";
 import { CM_DOCUMENT_CHECKLISTS, type CmAssetType } from "@/lib/cm-checklists";
+import { createClient as createBrowserSupabaseClient } from "@/lib/supabase/client";
 
 interface Listing {
   id: string;
@@ -546,12 +547,44 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
   const handleUploadDoc = async (listingId: string, file: File, checklistItemId?: string) => {
     setUploadingDoc(listingId);
     try {
-      const formData = new FormData();
-      formData.append("file", file);
       const isAudio = /\.(mp3|ogg|wav|m4a|webm)$/i.test(file.name);
-      formData.append("document_type", isAudio ? "AUDIO" : "OUTRO");
-      if (checklistItemId) formData.append("checklist_item_id", checklistItemId);
-      const res = await fetch(`/api/cm/listings/${listingId}/documents`, { method: "POST", body: formData });
+      const documentType = isAudio ? "AUDIO" : "OUTRO";
+
+      // 1. Pede uma signed upload URL — contorna o limite de body do Vercel
+      //    serverless (~4.5MB) para documentos grandes (múltiplos sub-documentos anexados)
+      const urlRes = await fetch(
+        `/api/cm/listings/${listingId}/documents/upload-url?file_name=${encodeURIComponent(file.name)}`
+      );
+      const urlJson = await urlRes.json();
+      if (!urlRes.ok) {
+        alert(urlJson.error ?? "Erro ao preparar upload");
+        return;
+      }
+
+      // 2. Sobe o arquivo direto para o Storage, sem passar pela function
+      const { token, storagePath, bucket } = urlJson;
+      const { error: uploadError } = await createBrowserSupabaseClient()
+        .storage.from(bucket)
+        .uploadToSignedUrl(storagePath, token, file);
+
+      if (uploadError) {
+        alert(`Falha ao enviar arquivo ao Storage: ${uploadError.message}`);
+        return;
+      }
+
+      // 3. Registra o metadado em cm_listing_documents e dispara o webhook de OCR
+      const res = await fetch(`/api/cm/listings/${listingId}/documents`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          storage_path: storagePath,
+          original_filename: file.name,
+          file_size_bytes: file.size,
+          content_type: file.type,
+          document_type: documentType,
+          checklist_item_id: checklistItemId ?? null,
+        }),
+      });
       const json = await res.json();
       if (res.ok) {
         loadDocs(listingId);
