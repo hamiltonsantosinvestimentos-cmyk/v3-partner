@@ -65,10 +65,12 @@ export async function sendToClickSign(input: SendToClickSignInput): Promise<Send
     const createDocRes = await fetch(`${baseUrl}/api/v1/documents?access_token=${accessToken}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      // content_base64 nao pode ser enviado (nem como null) quando o
+      // documento vem de uma url: o ClickSign valida o campo presente no
+      // payload como base64 real e rejeita com "Conteudo do Base64 invalido".
       body: JSON.stringify({
         document: {
           path: `/${documentLabel}.html`,
-          content_base64: null,
           auto_close: true,
           locale: "pt-BR",
           remind_interval: 3,
