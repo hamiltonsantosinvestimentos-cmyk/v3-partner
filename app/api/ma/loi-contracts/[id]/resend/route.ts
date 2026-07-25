@@ -33,7 +33,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     .eq("vertical", "ma")
     .single();
 
-  if (!contract) return NextResponse.json({ error: "Carta de Intenção não encontrada." }, { status: 404 });
+  if (!contract) return NextResponse.json({ error: "Documento não encontrado." }, { status: 404 });
   if (contract.status_signature === "assinado") {
     return NextResponse.json({ error: "Este documento já foi assinado, não há o que reenviar." }, { status: 409 });
   }
@@ -41,13 +41,15 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     return NextResponse.json({ error: "Este documento ainda não tem envelope ClickSign associado." }, { status: 409 });
   }
 
+  // Signatário externo: "comprador" (Carta de Intenção), "vendedor"
+  // (Contrato de Venda) ou "participante" (FPA Venda, múltiplos).
   const parties = (contract.parties as Array<{ role: string; name: string; email: string }> | null) ?? [];
-  const comprador = parties.find(p => p.role === "comprador");
+  const signatario = parties.find(p => ["comprador", "vendedor", "participante"].includes(p.role));
 
-  const result = await notifyClickSignEnvelope(contract.external_envelope_id, comprador?.name ?? "");
+  const result = await notifyClickSignEnvelope(contract.external_envelope_id, signatario?.name ?? "");
   if (!result.ok) {
     return NextResponse.json({ error: `Falha ao reenviar notificação: ${result.error}` }, { status: 502 });
   }
 
-  return NextResponse.json({ ok: true, message: `Notificação reenviada para ${comprador?.email ?? "o comprador"}.` });
+  return NextResponse.json({ ok: true, message: `Notificação reenviada para ${signatario?.email ?? "o(s) signatário(s)"}.` });
 }

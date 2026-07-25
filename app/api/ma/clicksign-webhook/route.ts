@@ -1,12 +1,132 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient as sc } from "@supabase/supabase-js";
+import { createClient as sc, type SupabaseClient } from "@supabase/supabase-js";
 import { createHmac } from "crypto";
+import { auditHtml, auditText } from "@/lib/brand-guardian-gate";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 }
 
 const IS_DEMO = false;
+
+const MANDATARIO_VENDA_EMAIL = "rafa2704@gmail.com";
+const MANDATARIO_VENDA_NOME = "Rafael Campos";
+const CARTA_INTENCAO_TEMPLATE_NAME = "Carta de Intencao de Compra (Matching)";
+
+// Etapa 3 da esteira M&A: quando a Carta de Intenção (Etapa 2) é assinada
+// pelo comprador ("compra firme"), dispara automaticamente a FPA Venda
+// (Etapa 3) para o grupo do lado vendedor (Rafael). Gera um novo invite
+// (access_side "seller", já usado pelo Contrato de Venda) com token próprio
+// e envia o link real por e-mail.
+async function triggerFpaVendaIfCartaIntencao(
+  db: SupabaseClient,
+  contract: { template_id: string | null; deal_id: string | null; deal_room_invite_id: string | null }
+) {
+  if (!contract.template_id || !contract.deal_id) return;
+
+  const { data: template } = await db
+    .from("contract_templates")
+    .select("template_name")
+    .eq("id", contract.template_id)
+    .single();
+  if (template?.template_name !== CARTA_INTENCAO_TEMPLATE_NAME) return;
+
+  const { data: originalInvite } = contract.deal_room_invite_id
+    ? await db.from("deal_room_invites").select("deal_room_id").eq("id", contract.deal_room_invite_id).single()
+    : { data: null };
+  if (!originalInvite) return;
+
+  const { data: deal } = await db.from("ma_deals").select("v3_code, code").eq("id", contract.deal_id).single();
+  const dealCode = deal?.v3_code ?? deal?.code ?? contract.deal_id;
+
+  const token = crypto.randomUUID().replace(/-/g, "");
+  const { error: inviteErr } = await db.from("deal_room_invites").insert({
+    deal_room_id: originalInvite.deal_room_id,
+    investor_name: MANDATARIO_VENDA_NOME,
+    investor_email: MANDATARIO_VENDA_EMAIL,
+    access_side: "seller",
+    token,
+    token_expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+    status: "pending",
+  });
+  if (inviteErr) {
+    console.error("[clicksign-webhook] Falha ao criar invite da FPA Venda:", inviteErr.message);
+    return;
+  }
+
+  await notifyFpaVendaDisponivel(dealCode, token);
+}
+
+async function notifyFpaVendaDisponivel(dealCode: string, token: string) {
+  const resendKey = process.env.RESEND_API_KEY;
+  if (!resendKey) return;
+
+  const link = `${process.env.NEXT_PUBLIC_APP_URL ?? "https://app.v3partners.com.br"}/intake/fpa-venda/${token}`;
+
+  const html = `
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<title>FPA Venda Disponível, V3 Partners</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;600;700&display=swap" rel="stylesheet" />
+</head>
+<body style="font-family:'DM Sans',Arial,sans-serif; background:#09081A; color:#F5F1E8; margin:0; padding:0;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#09081A; padding:40px 0;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="background:#13223A; border:1px solid #243A66; border-radius:12px; overflow:hidden;">
+        <tr>
+          <td style="padding:12px 32px; background:#162744; text-align:center;">
+            <img src="https://app.v3partners.com.br/v3-logo-flat-gold-alpha.png" alt="V3 Partners" height="32" />
+          </td>
+        </tr>
+        <tr>
+          <td style="background:#162744; padding:24px 32px; border-bottom:1px solid #243A66;">
+            <p style="margin:0; font-size:11px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:#C9A84C;">V3 Partners, Mesa M&amp;A</p>
+            <h1 style="margin:8px 0 0; font-size:20px; font-weight:700; color:#F5F1E8;">Compra Firme Confirmada, FPA Venda Disponível</h1>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:32px;">
+            <p style="margin:0 0 20px; font-size:14px; color:#9BAFC5; line-height:1.6;">
+              Prezado(a) ${MANDATARIO_VENDA_NOME}, a Carta de Intenção do deal ${dealCode} foi assinada pelo comprador. A partir de agora, o cadastro do grupo de venda (FPA Venda) está disponível no link abaixo.
+            </p>
+            <a href="${link}" style="display:inline-block; background:#C9A84C; color:#09081A; font-weight:700; font-size:13px; padding:12px 28px; border-radius:8px; text-decoration:none;">
+              Preencher FPA Venda
+            </a>
+            <hr style="border:none; border-top:1px solid #243A66; margin:32px 0 24px;" />
+            <p style="margin:0; font-size:11px; color:#9BAFC5; line-height:1.5;">
+              V3 Partners Soluções Ltda, CNPJ 14.219.287/0001-50<br />
+              <a href="https://v3partners.com.br" style="color:#C9A84C; text-decoration:none;">v3partners.com.br</a>
+            </p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>
+  `.trim();
+
+  const gate = auditHtml(html);
+  if (gate.blocking.length > 0) {
+    console.error("[clicksign-webhook notifyFpaVendaDisponivel] Brand Guardian bloqueou:", gate.blocking);
+    return;
+  }
+
+  try {
+    const { Resend } = await import("resend");
+    const resend = new Resend(resendKey);
+    await resend.emails.send({
+      from: "V3 Partners Plataforma <noreply@v3partners.com.br>",
+      to: MANDATARIO_VENDA_EMAIL,
+      subject: auditText(`Compra firme confirmada, FPA Venda disponível, ${dealCode}`).corrected,
+      html: gate.corrected,
+    });
+  } catch (err) {
+    console.error("[clicksign-webhook notifyFpaVendaDisponivel] Erro ao enviar email:", err);
+  }
+}
 
 interface ClickSignWebhookPayload {
   event?: {
@@ -103,19 +223,24 @@ async function handleV1Event(eventName: string, externalId: string) {
     const [{ data: dealRows }, { data: proposalRows }, { data: contractRows }] = await Promise.all([
       db.from("ma_deals").select("id, stage").eq("clicksign_envelope_id", externalId).limit(1),
       db.from("commercial_proposals").select("id").eq("clicksign_key", externalId).limit(1),
-      db.from("operation_contracts").select("id, status_signature").eq("external_envelope_id", externalId).limit(1),
+      db.from("operation_contracts").select("id, status_signature, template_id, deal_id, deal_room_invite_id").eq("external_envelope_id", externalId).limit(1),
     ]);
 
     const isSigned = eventName === "close" || eventName === "auto_close";
 
     // Atualiza contrato (ex: Carta de Intenção) se encontrado
-    const contract = contractRows?.[0] as { id: string; status_signature: string } | undefined;
+    const contract = contractRows?.[0] as { id: string; status_signature: string; template_id: string | null; deal_id: string | null; deal_room_invite_id: string | null } | undefined;
     if (contract) {
-      if (isSigned && contract.status_signature !== "assinado") {
+      const wasAlreadySigned = contract.status_signature === "assinado";
+      if (isSigned && !wasAlreadySigned) {
         await db.from("operation_contracts").update({
           status_signature: "assinado",
           signed_at: new Date().toISOString(),
         }).eq("id", contract.id);
+
+        // Etapa 3 da esteira: assinatura da Carta de Intenção ("compra firme")
+        // dispara automaticamente a FPA Venda para o grupo do Rafael.
+        await triggerFpaVendaIfCartaIntencao(db, contract);
       }
     }
 

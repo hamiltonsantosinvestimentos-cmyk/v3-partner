@@ -5,11 +5,15 @@ export interface ClickSignSignatory {
 
 export interface SendToClickSignInput {
   dealId: string;
-  documentType: "nda" | "mandato" | "loi";
+  documentType: "nda" | "mandato" | "loi" | "contrato_venda" | "fpa_venda";
   signatories: ClickSignSignatory[];
   documentUrl?: string;
   documentLabel?: string;
 }
+
+// documentTypes que usam a API v3 (envelopes), confirmadamente funcional.
+// "nda" e "mandato" continuam na v1 depreciada até serem migrados também.
+const V3_DOCUMENT_TYPES = new Set(["loi", "contrato_venda", "fpa_venda"]);
 
 export type SendToClickSignResult =
   | { ok: true; envelopeId: string; signUrl: string; status: "PENDING" }
@@ -121,7 +125,7 @@ async function htmlToPdfBase64(html: string): Promise<string> {
 // "mandato" continuam na v1 por enquanto (nenhum dos dois foi testado nesta
 // migração; migrar os três de uma vez triplicaria a superfície de teste).
 export async function sendToClickSign(input: SendToClickSignInput): Promise<SendToClickSignResult> {
-  if (input.documentType === "loi") {
+  if (V3_DOCUMENT_TYPES.has(input.documentType)) {
     return sendToClickSignV3(input);
   }
   return sendToClickSignV1(input);
