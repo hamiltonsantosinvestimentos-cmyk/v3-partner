@@ -3,6 +3,7 @@ import { createClient as sc } from "@supabase/supabase-js";
 import { isValidCNPJ } from "@/lib/validators/cpf-cnpj";
 import { resolveContractVariables, wrapContractInV3Html } from "@/lib/contract-render";
 import { sendToClickSign } from "@/lib/clicksign";
+import { notifyDealTimeline } from "@/lib/ma-negociacao-notify";
 
 export const maxDuration = 300;
 
@@ -81,19 +82,29 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
     return NextResponse.json({ error: "Contrato de venda já foi enviado para este link.", locked: true }, { status: 409 });
   }
 
+  const fail = async (status: number, error: string) => {
+    await notifyDealTimeline({
+      dealId: deal.id,
+      title: "Contrato de Venda rejeitado no cadastro público",
+      message: `Tentativa de envio de ${invite.investor_name} (${invite.investor_email}) rejeitada: ${error}`,
+      type: "negociacao_falha",
+    });
+    return NextResponse.json({ error }, { status });
+  };
+
   const body = await req.json().catch(() => ({}));
   const { razao_social_estaleiro, cnpj_estaleiro, nome_representante, email, local } = body;
 
   const required = { razao_social_estaleiro, cnpj_estaleiro, nome_representante, email, local };
   const missing = Object.entries(required).filter(([, v]) => !v || String(v).trim() === "").map(([k]) => k);
   if (missing.length > 0) {
-    return NextResponse.json({ error: `Campos obrigatórios ausentes: ${missing.join(", ")}` }, { status: 422 });
+    return fail(422, `Campos obrigatórios ausentes: ${missing.join(", ")}`);
   }
   if (!isValidCNPJ(cnpj_estaleiro)) {
-    return NextResponse.json({ error: "CNPJ inválido, confira o número informado." }, { status: 422 });
+    return fail(422, "CNPJ inválido, confira o número informado.");
   }
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    return NextResponse.json({ error: "Email inválido." }, { status: 422 });
+    return fail(422, "Email inválido.");
   }
 
   const db = svc();
@@ -105,7 +116,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
     .eq("template_name", TEMPLATE_NAME)
     .eq("is_active", true)
     .single();
-  if (!template) return NextResponse.json({ error: "Template do Contrato de Venda não encontrado." }, { status: 500 });
+  if (!template) return fail(500, "Template do Contrato de Venda não encontrado.");
 
   const dataExtenso = new Date().toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" });
   const bodyHtml = resolveContractVariables(template.body_text_raw, {
@@ -136,7 +147,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
     .single();
 
   if (insertErr || !contract) {
-    return NextResponse.json({ error: insertErr?.message ?? "Erro ao criar contrato" }, { status: 500 });
+    return fail(500, insertErr?.message ?? "Erro ao criar contrato");
   }
 
   const documentUrl = `${process.env.NEXT_PUBLIC_APP_URL ?? "https://app.v3partners.com.br"}/api/cm/annex-sign/${signingToken}?format=html`;
@@ -151,13 +162,20 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
 
   if (!clicksignRes.ok) {
     await db.from("operation_contracts").delete().eq("id", contract.id);
-    return NextResponse.json({ error: `Falha ao enviar para o ClickSign, tente novamente: ${clicksignRes.error}` }, { status: 502 });
+    return fail(502, `Falha ao enviar para o ClickSign, tente novamente: ${clicksignRes.error}`);
   }
 
   await db.from("operation_contracts").update({
     status_signature: "enviado_assinatura",
     external_envelope_id: clicksignRes.envelopeId,
   }).eq("id", contract.id);
+
+  await notifyDealTimeline({
+    dealId: deal.id,
+    title: "Contrato de Venda enviado para assinatura",
+    message: `${nome_representante} (${razao_social_estaleiro}) preencheu o Contrato de Venda, enviado ao ClickSign para ${email}.`,
+    type: "negociacao_convite",
+  });
 
   return NextResponse.json({
     success: true,

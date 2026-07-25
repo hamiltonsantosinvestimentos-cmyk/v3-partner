@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { resolveContractVariables, wrapContractInV3Html } from "@/lib/contract-render";
 import { sendToClickSign } from "@/lib/clicksign";
+import { notifyDealTimeline } from "@/lib/ma-negociacao-notify";
 
 export const maxDuration = 300;
 
@@ -83,26 +84,36 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
     return NextResponse.json({ error: "FPA Venda já foi enviada para este link.", locked: true }, { status: 409 });
   }
 
+  const fail = async (status: number, error: string) => {
+    await notifyDealTimeline({
+      dealId: deal.id,
+      title: "FPA Venda rejeitada no cadastro público",
+      message: `Tentativa de envio de ${invite.investor_name} (${invite.investor_email}) rejeitada: ${error}`,
+      type: "negociacao_falha",
+    });
+    return NextResponse.json({ error }, { status });
+  };
+
   const body = await req.json().catch(() => ({}));
   const { participantes, local } = body as { participantes: Participante[]; local: string };
 
   if (!local || String(local).trim() === "") {
-    return NextResponse.json({ error: "Campo obrigatório ausente: local" }, { status: 422 });
+    return fail(422, "Campo obrigatório ausente: local");
   }
   if (!Array.isArray(participantes) || participantes.length === 0) {
-    return NextResponse.json({ error: "Cadastre ao menos 1 participante." }, { status: 422 });
+    return fail(422, "Cadastre ao menos 1 participante.");
   }
   for (const p of participantes) {
     const required = { nome: p.nome, cpf_cnpj: p.cpf_cnpj, email: p.email, bluepay_pix: p.bluepay_pix };
     const missing = Object.entries(required).filter(([, v]) => !v || String(v).trim() === "").map(([k]) => k);
     if (missing.length > 0) {
-      return NextResponse.json({ error: `Participante "${p.nome || "sem nome"}" com campos ausentes: ${missing.join(", ")}` }, { status: 422 });
+      return fail(422, `Participante "${p.nome || "sem nome"}" com campos ausentes: ${missing.join(", ")}`);
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(p.email)) {
-      return NextResponse.json({ error: `Email inválido para "${p.nome}".` }, { status: 422 });
+      return fail(422, `Email inválido para "${p.nome}".`);
     }
     if (!p.valor_bruto || Number(p.valor_bruto) <= 0) {
-      return NextResponse.json({ error: `Valor bruto inválido para "${p.nome}".` }, { status: 422 });
+      return fail(422, `Valor bruto inválido para "${p.nome}".`);
     }
   }
 
@@ -115,7 +126,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
     .eq("template_name", TEMPLATE_NAME)
     .eq("is_active", true)
     .single();
-  if (!template) return NextResponse.json({ error: "Template da FPA Venda não encontrado." }, { status: 500 });
+  if (!template) return fail(500, "Template da FPA Venda não encontrado.");
 
   const listaParticipantes = participantes
     .map(p => {
@@ -169,13 +180,20 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
 
   if (!clicksignRes.ok) {
     await db.from("operation_contracts").delete().eq("id", contract.id);
-    return NextResponse.json({ error: `Falha ao enviar para o ClickSign, tente novamente: ${clicksignRes.error}` }, { status: 502 });
+    return fail(502, `Falha ao enviar para o ClickSign, tente novamente: ${clicksignRes.error}`);
   }
 
   await db.from("operation_contracts").update({
     status_signature: "enviado_assinatura",
     external_envelope_id: clicksignRes.envelopeId,
   }).eq("id", contract.id);
+
+  await notifyDealTimeline({
+    dealId: deal.id,
+    title: "FPA Venda enviada para assinatura",
+    message: `${invite.investor_name} cadastrou ${participantes.length} participante(s) e o documento foi enviado ao ClickSign.`,
+    type: "negociacao_convite",
+  });
 
   return NextResponse.json({
     success: true,

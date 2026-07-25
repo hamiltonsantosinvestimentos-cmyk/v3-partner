@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient as sc, type SupabaseClient } from "@supabase/supabase-js";
 import { createHmac } from "crypto";
 import { auditHtml, auditText } from "@/lib/brand-guardian-gate";
+import { notifyDealTimeline } from "@/lib/ma-negociacao-notify";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -241,6 +242,25 @@ async function handleV1Event(eventName: string, externalId: string) {
         // Etapa 3 da esteira: assinatura da Carta de Intenção ("compra firme")
         // dispara automaticamente a FPA Venda para o grupo do Rafael.
         await triggerFpaVendaIfCartaIntencao(db, contract);
+
+        // Timeline do deal (aba nativa Mesa M&A): registra a assinatura real,
+        // não só o disparo do convite.
+        if (contract.deal_id) {
+          const [{ data: tpl }, { data: fullContract }] = await Promise.all([
+            contract.template_id
+              ? db.from("contract_templates").select("template_name").eq("id", contract.template_id).single()
+              : Promise.resolve({ data: null }),
+            db.from("operation_contracts").select("contract_title, parties").eq("id", contract.id).single(),
+          ]);
+          const parties = (fullContract?.parties as Array<{ role: string; name: string }> | null) ?? [];
+          const signatario = parties.find(p => p.role !== "v3_partners");
+          await notifyDealTimeline({
+            dealId: contract.deal_id,
+            title: `${tpl?.template_name ?? fullContract?.contract_title ?? "Documento"} assinado`,
+            message: `${signatario?.name ?? "Signatário"} assinou digitalmente via ClickSign, envelope ${externalId}.`,
+            type: "negociacao_assinado",
+          });
+        }
       }
     }
 

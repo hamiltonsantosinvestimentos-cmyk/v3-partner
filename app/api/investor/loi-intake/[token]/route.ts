@@ -5,6 +5,7 @@ import { resolveContractVariables, wrapContractInV3Html } from "@/lib/contract-r
 import { valorEmReaisPorExtenso } from "@/lib/utils/valor-extenso";
 import { sendToClickSign } from "@/lib/clicksign";
 import { auditHtml, auditText } from "@/lib/brand-guardian-gate";
+import { notifyDealTimeline } from "@/lib/ma-negociacao-notify";
 
 export const maxDuration = 300;
 
@@ -111,6 +112,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
     return NextResponse.json({ error: "Carta de Intenção já foi enviada para este link.", locked: true }, { status: 409 });
   }
 
+  const fail = async (status: number, error: string) => {
+    await notifyDealTimeline({
+      dealId: deal.id,
+      title: "Carta de Intenção rejeitada no cadastro público",
+      message: `Tentativa de envio de ${invite.investor_name} (${invite.investor_email}) rejeitada: ${error}`,
+      type: "negociacao_falha",
+    });
+    return NextResponse.json({ error }, { status });
+  };
+
   const body = await req.json().catch(() => ({}));
   const {
     nome_interessada, razao_social, cnpj, endereco_completo,
@@ -121,17 +132,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   const required = { nome_interessada, razao_social, cnpj, endereco_completo, nome_completo_socio, nacionalidade, profissao, estado_civil, cpf, email, local };
   const missing = Object.entries(required).filter(([, v]) => !v || String(v).trim() === "").map(([k]) => k);
   if (missing.length > 0) {
-    return NextResponse.json({ error: `Campos obrigatórios ausentes: ${missing.join(", ")}` }, { status: 422 });
+    return fail(422, `Campos obrigatórios ausentes: ${missing.join(", ")}`);
   }
 
   if (!isValidCNPJ(cnpj)) {
-    return NextResponse.json({ error: "CNPJ inválido, confira o número informado." }, { status: 422 });
+    return fail(422, "CNPJ inválido, confira o número informado.");
   }
   if (!isValidCPF(cpf)) {
-    return NextResponse.json({ error: "CPF inválido, confira o número informado." }, { status: 422 });
+    return fail(422, "CPF inválido, confira o número informado.");
   }
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    return NextResponse.json({ error: "Email inválido." }, { status: 422 });
+    return fail(422, "Email inválido.");
   }
 
   const db = svc();
@@ -142,7 +153,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   const dealCode = deal.v3_code ?? deal.code ?? "V3-DEAL";
 
   if (!preco) {
-    return NextResponse.json({ error: "Condição comercial pública não configurada para este deal. Contate a Mesa." }, { status: 422 });
+    return fail(422, "Condição comercial pública não configurada para este deal. Contate a Mesa.");
   }
 
   const { data: template } = await db
@@ -152,7 +163,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
     .eq("is_active", true)
     .single();
 
-  if (!template) return NextResponse.json({ error: "Template da Carta de Intenção não encontrado." }, { status: 500 });
+  if (!template) return fail(500, "Template da Carta de Intenção não encontrado.");
 
   const dataExtenso = new Date().toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" });
 
@@ -196,7 +207,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
     .single();
 
   if (insertErr || !contract) {
-    return NextResponse.json({ error: insertErr?.message ?? "Erro ao criar contrato" }, { status: 500 });
+    return fail(500, insertErr?.message ?? "Erro ao criar contrato");
   }
 
   // Dispara ClickSign real: o documento é servido via annex-sign?format=html
@@ -218,7 +229,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
     // este invite: sem isso, o gate (existingContract) bloquearia qualquer
     // nova tentativa mesmo sem nada ter sido de fato enviado ao ClickSign.
     await db.from("operation_contracts").delete().eq("id", contract.id);
-    return NextResponse.json({ error: `Falha ao enviar para o ClickSign, tente novamente: ${clicksignRes.error}` }, { status: 502 });
+    return fail(502, `Falha ao enviar para o ClickSign, tente novamente: ${clicksignRes.error}`);
   }
 
   await db.from("operation_contracts").update({
@@ -230,6 +241,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   // aqui não desfaz o envio da Carta de Intenção (já está com o comprador);
   // apenas loga, mesmo padrão do notifyClickSignEnvelope acima.
   await notifyMandatarioVenda({ dealCode, contractTitle, buyerName: nome_completo_socio, buyerCompany: razao_social, buyerEmail: email });
+
+  await notifyDealTimeline({
+    dealId: deal.id,
+    title: "Carta de Intenção enviada para assinatura",
+    message: `${nome_completo_socio} (${razao_social}) preencheu a Carta de Intenção, enviada ao ClickSign para ${email}.`,
+    type: "negociacao_convite",
+  });
 
   return NextResponse.json({
     success: true,
