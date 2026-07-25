@@ -240,6 +240,13 @@ async function sendToClickSignV3(input: SendToClickSignInput): Promise<SendToCli
     // Ativar o envelope (status: running) NÃO dispara o e-mail de assinatura
     // sozinho — confirmado ao vivo (envelope ativado com sucesso, e-mail
     // nunca chegou). A v3 exige a chamada explícita de notificação abaixo.
+    //
+    // email_customization é obrigatório na prática: sem ele, o e-mail chega
+    // vazio (sem corpo, sem botão de assinatura) — confirmado ao vivo via
+    // teste A/B no mesmo envelope (payload idêntico, só adicionando
+    // email_customization mudou o resultado). Copy revisada pelo
+    // brand-guardian (Registro 1, Governante+Sábio, gate PT-BR aprovado).
+    //
     // Falha aqui não desfaz o envio: o envelope já está ativo e assinável
     // pelo link; só o lembrete automático (remind_interval) cobriria o
     // signatário eventualmente, então logamos em vez de falhar a operação
@@ -247,7 +254,25 @@ async function sendToClickSignV3(input: SendToClickSignInput): Promise<SendToCli
     const notifyRes = await fetch(`${baseUrl}/api/v3/envelopes/${envelopeId}/notifications`, {
       method: "POST",
       headers,
-      body: JSON.stringify({ data: { type: "notifications", attributes: { message: null } } }),
+      body: JSON.stringify({
+        data: {
+          type: "notifications",
+          attributes: {
+            message: null,
+            email_customization: {
+              subject: "V3 Partners: Assinatura Digital da Carta de Intenção de Compra",
+              head: "V3 Partners Soluções Ltda",
+              greeting: `Prezado(a) ${signatories[0]?.name ?? "Sr(a)"},`,
+              principal:
+                "A V3 Partners encaminha a Carta de Intenção de Compra referente à operação sob sua intermediação. Revise o documento e confirme sua assinatura digital abaixo.",
+              button: "Verificar e Assinar",
+              final: "Em caso de dúvidas, entre em contato com privacidade@v3partners.com.br.",
+              align: "left",
+              show_token: true,
+            },
+          },
+        },
+      }),
     });
     if (!notifyRes.ok) {
       const err = await notifyRes.text();
