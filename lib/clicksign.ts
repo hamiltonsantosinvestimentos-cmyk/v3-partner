@@ -237,6 +237,23 @@ async function sendToClickSignV3(input: SendToClickSignInput): Promise<SendToCli
       return { ok: false, error: `ClickSign activateEnvelope: ${err}`, status: 502 };
     }
 
+    // Ativar o envelope (status: running) NÃO dispara o e-mail de assinatura
+    // sozinho — confirmado ao vivo (envelope ativado com sucesso, e-mail
+    // nunca chegou). A v3 exige a chamada explícita de notificação abaixo.
+    // Falha aqui não desfaz o envio: o envelope já está ativo e assinável
+    // pelo link; só o lembrete automático (remind_interval) cobriria o
+    // signatário eventualmente, então logamos em vez de falhar a operação
+    // inteira por um problema de notificação.
+    const notifyRes = await fetch(`${baseUrl}/api/v3/envelopes/${envelopeId}/notifications`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ data: { type: "notifications", attributes: { message: null } } }),
+    });
+    if (!notifyRes.ok) {
+      const err = await notifyRes.text();
+      console.error(`[clicksign] notifyEnvelope falhou para envelope ${envelopeId}: ${err}`);
+    }
+
     return {
       ok: true,
       envelopeId,
