@@ -211,7 +211,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   });
 
   if (!clicksignRes.ok) {
-    return NextResponse.json({ error: `Contrato criado, mas falha ao enviar para o ClickSign: ${clicksignRes.error}` }, { status: 502 });
+    // Desfaz a criação do contrato para não deixar um "rascunho" travando
+    // este invite: sem isso, o gate (existingContract) bloquearia qualquer
+    // nova tentativa mesmo sem nada ter sido de fato enviado ao ClickSign.
+    await db.from("operation_contracts").delete().eq("id", contract.id);
+    return NextResponse.json({ error: `Falha ao enviar para o ClickSign, tente novamente: ${clicksignRes.error}` }, { status: 502 });
   }
 
   await db.from("operation_contracts").update({
