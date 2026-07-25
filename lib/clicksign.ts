@@ -5,7 +5,7 @@ export interface ClickSignSignatory {
 
 export interface SendToClickSignInput {
   dealId: string;
-  documentType: "nda" | "mandato" | "loi" | "contrato_venda" | "fpa_venda";
+  documentType: "nda" | "mandato" | "loi" | "contrato_venda" | "fpa_venda" | "fpa_compra";
   signatories: ClickSignSignatory[];
   documentUrl?: string;
   documentLabel?: string;
@@ -13,7 +13,7 @@ export interface SendToClickSignInput {
 
 // documentTypes que usam a API v3 (envelopes), confirmadamente funcional.
 // "nda" e "mandato" continuam na v1 depreciada até serem migrados também.
-const V3_DOCUMENT_TYPES = new Set(["loi", "contrato_venda", "fpa_venda"]);
+const V3_DOCUMENT_TYPES = new Set(["loi", "contrato_venda", "fpa_venda", "fpa_compra"]);
 
 export type SendToClickSignResult =
   | { ok: true; envelopeId: string; signUrl: string; status: "PENDING" }

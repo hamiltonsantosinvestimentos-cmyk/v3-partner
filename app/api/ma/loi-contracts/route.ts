@@ -82,11 +82,7 @@ export async function GET() {
 
   const operacoes: OperacaoTimeline[] = [...byDeal.entries()].map(([dealId, dealContracts]) => {
     const stages: StageStatus[] = STAGE_ORDER.map(templateName => {
-      const match = dealContracts.find(c =>
-        templateName === "FPA Compra"
-          ? c.contract_title.startsWith("FPA Compra")
-          : templateNameById.get(c.template_id ?? "") === templateName
-      );
+      const match = dealContracts.find(c => templateNameById.get(c.template_id ?? "") === templateName);
       return {
         templateName,
         label: LABELS[templateName],

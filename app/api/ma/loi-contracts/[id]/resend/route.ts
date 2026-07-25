@@ -42,9 +42,9 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   }
 
   // Signatário externo: "comprador" (Carta de Intenção), "vendedor"
-  // (Contrato de Venda) ou "participante" (FPA Venda, múltiplos).
+  // (Contrato de Venda), "participante" (FPA Venda) ou "comissionado_compra" (FPA Compra).
   const parties = (contract.parties as Array<{ role: string; name: string; email: string }> | null) ?? [];
-  const signatario = parties.find(p => ["comprador", "vendedor", "participante"].includes(p.role));
+  const signatario = parties.find(p => ["comprador", "vendedor", "participante", "comissionado_compra"].includes(p.role));
 
   const result = await notifyClickSignEnvelope(contract.external_envelope_id, signatario?.name ?? "");
   if (!result.ok) {

@@ -74,7 +74,7 @@ export default function FpaCompraIntakePage() {
         )}
 
         {state === "ready" && data && (
-          <FpaIntakeForm token={token} apiPath="fpa-compra-intake" dealCode={data.deal_code} />
+          <FpaIntakeForm token={token} apiPath="fpa-compra-intake" dealCode={data.deal_code} withValor withSignature deducaoPercent={data.deducao_percent} />
         )}
       </div>
 
