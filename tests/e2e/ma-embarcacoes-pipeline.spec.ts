@@ -2,18 +2,25 @@ import { test, expect, APIRequestContext } from "@playwright/test";
 import { createClient } from "@supabase/supabase-js";
 
 // M&A V3 Partners — Esteira de 4 etapas (FPA Compra, Carta de Intencao, FPA
-// Venda, Contrato de Venda), deal de embarcacoes PSV (Estaleiro Liessa /
-// Dalmolin). Reaproveita o deal room real do MA-26-30823, mas cria e apaga
-// convites descartaveis a cada execucao (mesmo padrao usado nas sessoes de
-// verificacao manual desta feature).
+// Venda, Contrato de Venda). Cria e apaga convites descartaveis a cada
+// execucao (mesmo padrao usado nas sessoes de verificacao manual desta
+// feature).
 //
 // Escopo deliberado: testa os fluxos que NAO disparam ClickSign/Resend real
 // a cada rodada de CI (FPA Compra, e os caminhos de erro/validacao de
 // Contrato de Venda e FPA Venda). O envio real com assinatura ao vivo foi
 // verificado manualmente contra producao durante o desenvolvimento desta
 // feature, nao e re-executado aqui para nao enviar e-mail real a cada CI.
+//
+// IMPORTANTE: usa um deal room de fixture dedicado (QA Playwright, deal
+// W5/e65dce3a...), nunca o deal room de uma operacao real. Ate 2026-07-25
+// este teste usava o deal room real do MA-26-30823 (embarcacoes
+// Dalmolin/Gustavo), o que injetava notificacoes de teste na Timeline de
+// uma operacao de verdade a cada push para main (o workflow
+// .github/workflows/e2e-tests.yml roda esta suite a cada push). Corrigido
+// apos o proprio Joao notar o ruido na Timeline real em producao.
 
-const DEAL_ROOM_ID = "71835f26-823b-4cbb-b39f-9abdd4435553"; // MA-26-30823, PSV/Dalmolin
+const DEAL_ROOM_ID = "c3b8a0f8-9d29-4622-9fd2-2941c9012b2f"; // fixture QA Playwright, deal W5 (e65dce3a...)
 
 function svc() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
