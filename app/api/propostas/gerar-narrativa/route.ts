@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { auditText } from "@/lib/brand-guardian-gate";
+import { redactMarginText } from "@/lib/matching-redaction";
 
 export const maxDuration = 120;
 
@@ -57,19 +58,37 @@ export async function POST(req: NextRequest) {
   const assetData = (deal.asset_data as Record<string, unknown>) ?? {};
   const specs = (assetData.especificacoes_tecnicas as EspecificacoesTecnicas | undefined) ?? null;
   const pedidoCompra = assetData.pedido_compra as Record<string, unknown> | undefined;
+  const isMatching = assetData.tipo_operacao_v3 === "matching";
+
+  // Nunca expor a margem/spread da V3 ao destinatário externo da proposta,
+  // mesmo que a linha apareça nas notas internas do deal.
+  const notesForPrompt = deal.notes ? (isMatching ? redactMarginText(deal.notes) : deal.notes) : null;
+
+  const referenciaMercado = assetData.referencia_mercado as string | undefined;
+
+  const matchingRules = isMatching
+    ? ` Esta é uma operação de estruturação (a V3 compra de um vendedor e coloca junto a um comprador). ` +
+      `Não é uma empresa operacional com receita recorrente, é uma transação única de compra e revenda de um lote de ativos físicos. ` +
+      `PROIBIDO usar as palavras "intermediação" ou "intermediário" em qualquer forma, use sempre "estruturação"/"estrutura"/"estruturar". ` +
+      `PROIBIDO mencionar qualquer percentual ou valor de margem, spread ou lucro da V3.` +
+      (referenciaMercado?.trim()
+        ? ` Use a referência de mercado internacional fornecida abaixo na apresentação, comparando o preço desta operação com a referência, usando exatamente os valores fornecidos, sem recalcular nem converter câmbio por conta própria.`
+        : "")
+    : "";
 
   const prompt =
     `Você é redator institucional da V3 Partners, mesa independente de estruturação financeira. ` +
     `Escreva no Registro 1 (Governante + Sábio): sóbrio, cirúrgico, assertivo. Projeta controle, nunca pede permissão. ` +
     `Frases construídas sobre dados verificáveis, nunca adjetivos vagos ("excelente", "ótima oportunidade"). ` +
-    `NUNCA use o caractere travessão em nenhum texto, use vírgula, dois-pontos ou ponto.\n\n` +
+    `NUNCA use o caractere travessão em nenhum texto, use vírgula, dois-pontos ou ponto.${matchingRules}\n\n` +
     `Gere o texto de uma proposta comercial de venda para o seguinte deal, USANDO APENAS os dados abaixo ` +
     `(nunca invente números, nomes ou condições que não estejam aqui):\n\n` +
     `Título: ${deal.title}\n` +
     `Setor: ${deal.sector ?? "não informado"}\n` +
     `Localização: ${deal.location ?? "não informada"}\n` +
     `Valor total da operação: R$ ${deal.deal_value ?? "não informado"}\n` +
-    `Resumo financeiro/notas internas (fonte da verdade para custos, NUNCA recalcule nem arredonde diferente do texto): ${deal.notes ?? "não informado"}\n` +
+    `Resumo financeiro/notas internas (fonte da verdade para custos, NUNCA recalcule nem arredonde diferente do texto): ${notesForPrompt ?? "não informado"}\n` +
+    (referenciaMercado?.trim() ? `Referência de mercado (dado real, use os números exatamente como estão, nunca recalcule): ${referenciaMercado}\n` : "") +
     (pedidoCompra?.empresa ? `Comprador identificado: ${pedidoCompra.empresa}\n` : "") +
     `\nRetorne APENAS JSON válido, sem markdown, no formato:\n` +
     `{\n` +
