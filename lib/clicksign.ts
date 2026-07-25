@@ -62,19 +62,28 @@ export async function sendToClickSign(input: SendToClickSignInput): Promise<Send
       overrideUrl ??
       `${process.env.NEXT_PUBLIC_APP_URL ?? "https://app.v3partners.com.br"}/api/ma/gerar-contrato?dealId=${dealId}&tipo=${documentType}&lang=pt-br`;
 
+    // A API v1 do ClickSign não aceita criar documento a partir de uma url,
+    // só content_base64 no formato "data:<mimetype>;base64,<dados>". Busca o
+    // HTML aqui e converte, em vez de mandar a url (confirmado via doc oficial
+    // ClickSign: campo url não existe nesse endpoint, causava "Conteúdo do
+    // Base64 inválido" independente de content_base64 estar presente ou não).
+    const htmlRes = await fetch(documentUrl);
+    if (!htmlRes.ok) {
+      return { ok: false, error: `Falha ao buscar o conteúdo do documento em ${documentUrl}: HTTP ${htmlRes.status}`, status: 502 };
+    }
+    const html = await htmlRes.text();
+    const contentBase64 = `data:text/html;base64,${Buffer.from(html, "utf-8").toString("base64")}`;
+
     const createDocRes = await fetch(`${baseUrl}/api/v1/documents?access_token=${accessToken}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      // content_base64 nao pode ser enviado (nem como null) quando o
-      // documento vem de uma url: o ClickSign valida o campo presente no
-      // payload como base64 real e rejeita com "Conteudo do Base64 invalido".
       body: JSON.stringify({
         document: {
           path: `/${documentLabel}.html`,
+          content_base64: contentBase64,
           auto_close: true,
           locale: "pt-BR",
           remind_interval: 3,
-          url: documentUrl,
         },
       }),
     });
