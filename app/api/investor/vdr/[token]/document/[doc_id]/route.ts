@@ -39,6 +39,21 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
     return NextResponse.json({ error: "Link expirado." }, { status: 410 });
   }
 
+  // 1b. Gate de Carta de Intenção (LOI), mesma regra do GET da sala: só se
+  // aplica quando existe operation_contracts vinculado a este invite.
+  const { data: loiContract } = await db
+    .from("operation_contracts")
+    .select("status_signature")
+    .eq("deal_room_invite_id", invite.id)
+    .maybeSingle();
+
+  if (loiContract && loiContract.status_signature !== "assinado") {
+    return NextResponse.json({
+      error: "O acesso a este Deal Room é liberado após a assinatura digital da Carta de Intenção.",
+      requires_loi: true,
+    }, { status: 403 });
+  }
+
   // 2. Buscar documento
   const { data: doc, error: docErr } = await db
     .from("deal_room_documents")

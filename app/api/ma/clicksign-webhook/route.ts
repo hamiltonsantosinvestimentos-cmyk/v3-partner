@@ -62,11 +62,26 @@ export async function POST(request: NextRequest) {
   try {
     const db = svc();
 
-    // Busca deal pelo clicksign_key (ma_deals) ou proposal pelo clicksign_key (commercial_proposals)
-    const [{ data: dealRows }, { data: proposalRows }] = await Promise.all([
+    // Busca deal pelo clicksign_key (ma_deals), proposal pelo clicksign_key
+    // (commercial_proposals), ou contrato pelo external_envelope_id
+    // (operation_contracts, ex: Carta de Intenção assinada via intake público)
+    const [{ data: dealRows }, { data: proposalRows }, { data: contractRows }] = await Promise.all([
       db.from("ma_deals").select("id, stage").eq("clicksign_envelope_id", document.key).limit(1),
       db.from("commercial_proposals").select("id").eq("clicksign_key", document.key).limit(1),
+      db.from("operation_contracts").select("id, status_signature").eq("external_envelope_id", document.key).limit(1),
     ]);
+
+    // Atualiza contrato (ex: Carta de Intenção) se encontrado
+    const contract = contractRows?.[0] as { id: string; status_signature: string } | undefined;
+    if (contract) {
+      const isSigned = event.name === "close" || event.name === "auto_close";
+      if (isSigned && contract.status_signature !== "assinado") {
+        await db.from("operation_contracts").update({
+          status_signature: "assinado",
+          signed_at: new Date().toISOString(),
+        }).eq("id", contract.id);
+      }
+    }
 
     // Atualiza proposta comercial se encontrada
     if (proposalRows && proposalRows.length > 0) {
@@ -84,7 +99,7 @@ export async function POST(request: NextRequest) {
           sender_id:   "00000000-0000-0000-0000-000000000000",
           sender_name: "ClickSign",
           sender_role: "SYSTEM",
-          content:     `Proposta assinada digitalmente via ClickSign — envelope ${document.key}.`,
+          content:     `Proposta assinada digitalmente via ClickSign, envelope ${document.key}.`,
           type:        "system_event",
         });
       }
@@ -104,7 +119,7 @@ export async function POST(request: NextRequest) {
       void db.from("ma_deal_history").insert({
         deal_id:     deal.id,
         event_type:  "CONTRACT_SIGNED",
-        description: `Contrato assinado via ClickSign — envelope ${document.key}`,
+        description: `Contrato assinado via ClickSign, envelope ${document.key}`,
         created_at:  new Date().toISOString(),
       });
     }

@@ -64,6 +64,23 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
     return NextResponse.json({ error: "A sala expirou." }, { status: 410 });
   }
 
+  // 2b. Gate de Carta de Intenção (LOI): só se aplica a convites que de fato
+  // passaram pelo fluxo /intake/carta-intencao (existe operation_contracts
+  // vinculado). Convites sem esse vínculo seguem o fluxo antigo, só NDA,
+  // sem quebrar Deal Rooms de deals que não usam esse gate.
+  const { data: loiContract } = await db
+    .from("operation_contracts")
+    .select("status_signature")
+    .eq("deal_room_invite_id", invite.id)
+    .maybeSingle();
+
+  if (loiContract && loiContract.status_signature !== "assinado") {
+    return NextResponse.json({
+      error: "O acesso a este Deal Room é liberado após a assinatura digital da Carta de Intenção.",
+      requires_loi: true,
+    }, { status: 403 });
+  }
+
   // 3. Registrar primeiro acesso e enriquecer rastreamento
   const isFirstAccess = !invite.source_group && sourceGroup !== "direct";
 
