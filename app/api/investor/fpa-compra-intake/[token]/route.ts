@@ -86,10 +86,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   // Registro de cadastro puro (sem assinatura, sem cláusula jurídica) fica
   // em operation_contracts mesmo assim, pra reaproveitar a mesma timeline
   // do painel, mas já nasce "assinado" (não é um documento pra assinar).
+  // template_id é NOT NULL na tabela (confirmado ao vivo), por isso usa o
+  // template "FPA Compra" mesmo sem fluxo de assinatura associado.
   const dealCode = deal.v3_code ?? deal.code ?? "V3-DEAL";
   const contractTitle = `FPA Compra, Deal ${dealCode}`;
 
+  const { data: template } = await db.from("contract_templates").select("id").eq("template_name", "FPA Compra").single();
+  if (!template) return NextResponse.json({ error: "Template FPA Compra não encontrado." }, { status: 500 });
+
   const { error: insertErr } = await db.from("operation_contracts").insert({
+    template_id: template.id,
     vertical: "ma",
     contract_title: contractTitle,
     rendered_html: `<p>Cadastro de comissionados do lado da compra, Deal ${dealCode}.</p>`,
