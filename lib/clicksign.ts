@@ -142,7 +142,7 @@ export async function sendToClickSign(input: SendToClickSignInput): Promise<Send
     const documentKey: string = docData.document?.key;
 
     for (const signatory of signatories) {
-      await fetch(`${baseUrl}/api/v1/lists?access_token=${accessToken}`, {
+      const listRes = await fetch(`${baseUrl}/api/v1/lists?access_token=${accessToken}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -160,9 +160,17 @@ export async function sendToClickSign(input: SendToClickSignInput): Promise<Send
           },
         }),
       });
+      if (!listRes.ok) {
+        const err = await listRes.text();
+        return { ok: false, error: `ClickSign addSignatory (${signatory.email}): ${err}`, status: 502 };
+      }
     }
 
-    await fetch(`${baseUrl}/api/v1/documents/${documentKey}/finish?access_token=${accessToken}`, { method: "PATCH" });
+    const finishRes = await fetch(`${baseUrl}/api/v1/documents/${documentKey}/finish?access_token=${accessToken}`, { method: "PATCH" });
+    if (!finishRes.ok) {
+      const err = await finishRes.text();
+      return { ok: false, error: `ClickSign finish: ${err}`, status: 502 };
+    }
 
     return {
       ok: true,
