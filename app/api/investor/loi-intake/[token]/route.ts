@@ -4,6 +4,7 @@ import { isValidCPF, isValidCNPJ } from "@/lib/validators/cpf-cnpj";
 import { resolveContractVariables, wrapContractInV3Html } from "@/lib/contract-render";
 import { valorEmReaisPorExtenso } from "@/lib/utils/valor-extenso";
 import { sendToClickSign } from "@/lib/clicksign";
+import { auditHtml, auditText } from "@/lib/brand-guardian-gate";
 
 export const maxDuration = 300;
 
@@ -225,8 +226,104 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
     external_envelope_id: clicksignRes.envelopeId,
   }).eq("id", contract.id);
 
+  // Notifica o mandatário de venda para acompanhamento da operação. Falha
+  // aqui não desfaz o envio da Carta de Intenção (já está com o comprador);
+  // apenas loga, mesmo padrão do notifyClickSignEnvelope acima.
+  await notifyMandatarioVenda({ dealCode, contractTitle, buyerName: nome_completo_socio, buyerCompany: razao_social, buyerEmail: email });
+
   return NextResponse.json({
     success: true,
     message: `Carta de Intenção enviada para assinatura digital no email ${email}.`,
   });
+}
+
+const MANDATARIO_VENDA_EMAIL = "rafa2704@gmail.com";
+const MANDATARIO_VENDA_NOME = "Rafael Campos";
+
+async function notifyMandatarioVenda(input: {
+  dealCode: string;
+  contractTitle: string;
+  buyerName: string;
+  buyerCompany: string;
+  buyerEmail: string;
+}) {
+  const resendKey = process.env.RESEND_API_KEY;
+  if (!resendKey) return;
+
+  const html = `
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<title>Carta de Intenção Enviada, V3 Partners</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;600;700&display=swap" rel="stylesheet" />
+</head>
+<body style="font-family:'DM Sans',Arial,sans-serif; background:#09081A; color:#F5F1E8; margin:0; padding:0;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#09081A; padding:40px 0;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="background:#13223A; border:1px solid #243A66; border-radius:12px; overflow:hidden;">
+        <tr>
+          <td style="padding:12px 32px; background:#162744; text-align:center;">
+            <img src="https://app.v3partners.com.br/v3-logo-flat-gold-alpha.png" alt="V3 Partners" height="32" />
+          </td>
+        </tr>
+        <tr>
+          <td style="background:#162744; padding:24px 32px; border-bottom:1px solid #243A66;">
+            <p style="margin:0; font-size:11px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:#C9A84C;">V3 Partners, Mesa M&amp;A</p>
+            <h1 style="margin:8px 0 0; font-size:20px; font-weight:700; color:#F5F1E8;">Carta de Intenção Enviada para Assinatura</h1>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:32px;">
+            <p style="margin:0 0 20px; font-size:14px; color:#9BAFC5; line-height:1.6;">
+              Prezado(a) ${MANDATARIO_VENDA_NOME}, a operação abaixo teve a Carta de Intenção de Compra enviada para assinatura digital via ClickSign. Você está recebendo esta notificação como mandatário do lado vendedor.
+            </p>
+            <table width="100%" cellpadding="0" cellspacing="0" style="background:#162744; border:1px solid #243A66; border-radius:8px; margin-bottom:24px;">
+              <tr>
+                <td style="padding:20px 24px;">
+                  <p style="margin:0 0 4px; font-size:10px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:#C9A84C;">Deal</p>
+                  <p style="margin:0 0 16px; font-size:16px; font-weight:700; color:#F5F1E8;">${input.dealCode}</p>
+                  <p style="margin:0; font-size:10px; color:#9BAFC5; text-transform:uppercase; letter-spacing:.08em;">Documento</p>
+                  <p style="margin:4px 0 16px; font-size:13px; font-weight:600; color:#F5F1E8;">${input.contractTitle}</p>
+                  <p style="margin:0; font-size:10px; color:#9BAFC5; text-transform:uppercase; letter-spacing:.08em;">Comprador</p>
+                  <p style="margin:4px 0 0; font-size:13px; font-weight:600; color:#F5F1E8;">${input.buyerName}, ${input.buyerCompany}</p>
+                  <p style="margin:4px 0 0; font-size:12px; color:#9BAFC5;">${input.buyerEmail}</p>
+                </td>
+              </tr>
+            </table>
+            <p style="margin:0; font-size:13px; color:#9BAFC5; line-height:1.6;">
+              O acesso ao Deal Room é liberado automaticamente assim que a assinatura digital for confirmada.
+            </p>
+            <hr style="border:none; border-top:1px solid #243A66; margin:24px 0;" />
+            <p style="margin:0; font-size:11px; color:#9BAFC5; line-height:1.5;">
+              V3 Partners Soluções Ltda, CNPJ 14.219.287/0001-50<br />
+              <a href="https://v3partners.com.br" style="color:#C9A84C; text-decoration:none;">v3partners.com.br</a>
+            </p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>
+  `.trim();
+
+  const gate = auditHtml(html);
+  if (gate.blocking.length > 0) {
+    console.error("[loi-intake notifyMandatarioVenda] Brand Guardian bloqueou:", gate.blocking);
+    return;
+  }
+
+  try {
+    const { Resend } = await import("resend");
+    const resend = new Resend(resendKey);
+    await resend.emails.send({
+      from: "V3 Partners Plataforma <noreply@v3partners.com.br>",
+      to: MANDATARIO_VENDA_EMAIL,
+      subject: auditText(`Carta de Intenção enviada, ${input.dealCode}`).corrected,
+      html: gate.corrected,
+    });
+  } catch (err) {
+    console.error("[loi-intake notifyMandatarioVenda] Erro ao enviar email:", err);
+  }
 }

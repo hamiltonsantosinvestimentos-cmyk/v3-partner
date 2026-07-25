@@ -17,6 +17,52 @@ export type SendToClickSignResult =
 
 const IS_DEMO = false;
 
+export type NotifyClickSignResult = { ok: true } | { ok: false; error: string; status: number };
+
+// Notifica o(s) signatário(s) de um envelope v3 já ativo (envia/reenvia o
+// e-mail de assinatura). Extraído de sendToClickSignV3 para ser reutilizável
+// pelo botão "Reenviar notificação" do painel de acompanhamento, sem
+// duplicar a copy já aprovada pelo brand-guardian em dois lugares.
+export async function notifyClickSignEnvelope(envelopeId: string, signatoryName: string): Promise<NotifyClickSignResult> {
+  const accessToken = process.env.CLICKSIGN_ACCESS_TOKEN;
+  const baseUrl = process.env.CLICKSIGN_BASE_URL ?? "https://sandbox.clicksign.com";
+  if (!accessToken) return { ok: false, error: "CLICKSIGN_ACCESS_TOKEN não configurado", status: 500 };
+
+  const notifyRes = await fetch(`${baseUrl}/api/v3/envelopes/${envelopeId}/notifications`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/vnd.api+json",
+      Accept: "application/json",
+      Authorization: accessToken,
+    },
+    body: JSON.stringify({
+      data: {
+        type: "notifications",
+        attributes: {
+          message: null,
+          email_customization: {
+            subject: "V3 Partners: Assinatura Digital da Carta de Intenção de Compra",
+            head: "V3 Partners Soluções Ltda",
+            greeting: `Prezado(a) ${signatoryName || "Sr(a)"},`,
+            principal:
+              "A V3 Partners encaminha a Carta de Intenção de Compra referente à operação sob sua intermediação. Revise o documento e confirme sua assinatura digital abaixo.",
+            button: "Verificar e Assinar",
+            final: "Em caso de dúvidas, entre em contato com privacidade@v3partners.com.br.",
+            align: "left",
+            show_token: true,
+          },
+        },
+      },
+    }),
+  });
+
+  if (!notifyRes.ok) {
+    const err = await notifyRes.text();
+    return { ok: false, error: err, status: 502 };
+  }
+  return { ok: true };
+}
+
 async function launchBrowser() {
   if (process.env.NODE_ENV === "production") {
     const chromium = (await import("@sparticuz/chromium-min")).default;
@@ -240,43 +286,13 @@ async function sendToClickSignV3(input: SendToClickSignInput): Promise<SendToCli
     // Ativar o envelope (status: running) NÃO dispara o e-mail de assinatura
     // sozinho — confirmado ao vivo (envelope ativado com sucesso, e-mail
     // nunca chegou). A v3 exige a chamada explícita de notificação abaixo.
-    //
-    // email_customization é obrigatório na prática: sem ele, o e-mail chega
-    // vazio (sem corpo, sem botão de assinatura) — confirmado ao vivo via
-    // teste A/B no mesmo envelope (payload idêntico, só adicionando
-    // email_customization mudou o resultado). Copy revisada pelo
-    // brand-guardian (Registro 1, Governante+Sábio, gate PT-BR aprovado).
-    //
     // Falha aqui não desfaz o envio: o envelope já está ativo e assinável
     // pelo link; só o lembrete automático (remind_interval) cobriria o
     // signatário eventualmente, então logamos em vez de falhar a operação
     // inteira por um problema de notificação.
-    const notifyRes = await fetch(`${baseUrl}/api/v3/envelopes/${envelopeId}/notifications`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({
-        data: {
-          type: "notifications",
-          attributes: {
-            message: null,
-            email_customization: {
-              subject: "V3 Partners: Assinatura Digital da Carta de Intenção de Compra",
-              head: "V3 Partners Soluções Ltda",
-              greeting: `Prezado(a) ${signatories[0]?.name ?? "Sr(a)"},`,
-              principal:
-                "A V3 Partners encaminha a Carta de Intenção de Compra referente à operação sob sua intermediação. Revise o documento e confirme sua assinatura digital abaixo.",
-              button: "Verificar e Assinar",
-              final: "Em caso de dúvidas, entre em contato com privacidade@v3partners.com.br.",
-              align: "left",
-              show_token: true,
-            },
-          },
-        },
-      }),
-    });
+    const notifyRes = await notifyClickSignEnvelope(envelopeId, signatories[0]?.name ?? "");
     if (!notifyRes.ok) {
-      const err = await notifyRes.text();
-      console.error(`[clicksign] notifyEnvelope falhou para envelope ${envelopeId}: ${err}`);
+      console.error(`[clicksign] notifyEnvelope falhou para envelope ${envelopeId}: ${notifyRes.error}`);
     }
 
     return {

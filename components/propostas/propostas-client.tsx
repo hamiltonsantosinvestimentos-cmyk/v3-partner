@@ -5,7 +5,9 @@ import {
   FileCheck2, Plus, X, Send, MessageSquare, Bell,
   Eye, PenLine, Clock, ChevronRight, Loader2,
   Building2, Mail, User, DollarSign, FileText, Check,
+  FileSignature,
 } from "lucide-react";
+import { LoiPanel } from "./loi-panel";
 
 // ─── Paleta V4.2 ──────────────────────────────────────────────────────────────
 const V3 = {
@@ -171,6 +173,8 @@ export function PropostasClient({
   complianceOk?: boolean;
 }) {
   const canAccess = ALLOWED.includes(userRole);
+
+  const [mainTab, setMainTab] = useState<"propostas" | "cartas_intencao">("propostas");
 
   const [propostas, setPropostas]       = useState<Proposta[]>([]);
   const [loading, setLoading]           = useState(true);
@@ -376,35 +380,78 @@ export function PropostasClient({
               <FileCheck2 size={18} color={V3.gold} />
             </div>
             <div>
-              <h1 style={{ fontSize: 15, fontWeight: 700, color: V3.cream, margin: 0 }}>Propostas Comerciais</h1>
-              <p style={{ fontSize: 11, color: V3.muted, margin: 0 }}>Serviços extras V3 Partners</p>
+              <h1 style={{ fontSize: 15, fontWeight: 700, color: V3.cream, margin: 0 }}>
+                {mainTab === "propostas" ? "Propostas Comerciais" : "Cartas de Intenção"}
+              </h1>
+              <p style={{ fontSize: 11, color: V3.muted, margin: 0 }}>
+                {mainTab === "propostas" ? "Serviços extras V3 Partners" : "Acompanhamento ponto a ponto, intake público de compradores"}
+              </p>
             </div>
           </div>
-          <button
-            onClick={() => setShowNew(true)}
-            style={{
-              display: "flex", alignItems: "center", gap: 6,
-              background: V3.gold, color: V3.navy,
-              border: "none", borderRadius: 6, padding: "8px 16px",
-              fontSize: 12, fontWeight: 700, cursor: "pointer",
-            }}
-          >
-            <Plus size={14} /> Nova Proposta
-          </button>
+          {mainTab === "propostas" && (
+            <button
+              onClick={() => setShowNew(true)}
+              style={{
+                display: "flex", alignItems: "center", gap: 6,
+                background: V3.gold, color: V3.navy,
+                border: "none", borderRadius: 6, padding: "8px 16px",
+                fontSize: 12, fontWeight: 700, cursor: "pointer",
+              }}
+            >
+              <Plus size={14} /> Nova Proposta
+            </button>
+          )}
+        </div>
+
+        {/* Tabs */}
+        <div className="flex items-center gap-1 mb-4">
+          {([
+            { key: "propostas" as const, label: "Propostas Comerciais", icon: FileCheck2 },
+            { key: "cartas_intencao" as const, label: "Cartas de Intenção", icon: FileSignature },
+          ]).map(t => {
+            const TabIcon = t.icon;
+            const active = mainTab === t.key;
+            return (
+              <button
+                key={t.key}
+                onClick={() => setMainTab(t.key)}
+                className="flex items-center gap-2"
+                style={{
+                  background: active ? "rgba(201,168,76,.12)" : "transparent",
+                  color: active ? V3.gold : V3.muted,
+                  border: `1px solid ${active ? "rgba(201,168,76,.35)" : V3.navyC}`,
+                  borderRadius: 6, padding: "7px 14px",
+                  fontSize: 12, fontWeight: 700, cursor: "pointer",
+                }}
+              >
+                <TabIcon size={13} /> {t.label}
+              </button>
+            );
+          })}
         </div>
 
         {/* KPIs */}
-        <div className="grid grid-cols-4 gap-3">
-          {kpis.map(k => (
-            <div key={k.label} style={{ background: V3.navyC, border: `1px solid ${V3.navyM}`, borderRadius: 8, padding: "12px 16px" }}>
-              <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.15em", textTransform: "uppercase", color: V3.goldL, margin: "0 0 4px" }}>{k.label}</p>
-              <p style={{ fontSize: 22, fontWeight: 800, color: k.color, margin: 0 }}>{k.value}</p>
-            </div>
-          ))}
-        </div>
+        {mainTab === "propostas" && (
+          <div className="grid grid-cols-4 gap-3">
+            {kpis.map(k => (
+              <div key={k.label} style={{ background: V3.navyC, border: `1px solid ${V3.navyM}`, borderRadius: 8, padding: "12px 16px" }}>
+                <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.15em", textTransform: "uppercase", color: V3.goldL, margin: "0 0 4px" }}>{k.label}</p>
+                <p style={{ fontSize: 22, fontWeight: 800, color: k.color, margin: 0 }}>{k.value}</p>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
-      {/* ── Lista ── */}
+      {/* ── Cartas de Intenção ── */}
+      {mainTab === "cartas_intencao" && (
+        <div style={{ padding: "20px 24px" }}>
+          <LoiPanel />
+        </div>
+      )}
+
+      {/* ── Lista de Propostas ── */}
+      {mainTab === "propostas" && (
       <div style={{ padding: "20px 24px" }}>
         {loading && (
           <div className="flex items-center justify-center py-16 gap-2" style={{ color: V3.muted }}>
@@ -475,6 +522,7 @@ export function PropostasClient({
           </div>
         )}
       </div>
+      )}
 
       {/* ── Modal de Detalhe ── */}
       {selected && (
