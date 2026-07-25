@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
-import { Resend } from "resend";
-import { auditText, auditHtml } from "@/lib/brand-guardian-gate";
 import { notifyDealTimeline } from "@/lib/ma-negociacao-notify";
 import { STAGES } from "@/lib/ma-negociacao-stages";
+
+// Todo email do sistema V3 passa por um workflow n8n dedicado (formata o
+// HTML + roda o Brand Audit bloqueante antes de disparar via Resend) — nunca
+// Resend chamado direto de uma API route. Ver W14, workflow ypTD3V5MBhWLV32m.
+const N8N_EMAIL_WEBHOOK = "https://n8n-514n.onrender.com/webhook/v3-negociacao-email";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -144,27 +147,26 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
   const intakeUrl = `${appUrl}/intake/${etapa}/${token}`;
 
   let emailSent = false;
-  if (process.env.RESEND_API_KEY) {
-    try {
-      const resend = new Resend(process.env.RESEND_API_KEY);
-      const htmlGate = auditHtml(buildStageInviteEmail({
+  try {
+    const n8nRes = await fetch(N8N_EMAIL_WEBHOOK, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        to: email,
         nome,
+        etapa,
         stageLabel: stage.label,
         dealName: deal.target_company ?? dealCode,
         dealCode,
         intakeUrl,
-      }));
-      if (htmlGate.blocking.length > 0) console.error("[negociacao/invite] Brand Guardian bloqueou:", htmlGate.blocking);
-      await resend.emails.send({
-        from: "V3 Partners <noreply@v3partners.com.br>",
-        to: email,
-        subject: auditText(`V3 Partners: ${stage.label}, ${deal.target_company ?? dealCode}`).corrected,
-        html: htmlGate.corrected,
-      });
-      emailSent = true;
-    } catch (e) {
-      console.error("[negociacao/invite] Resend error:", e);
-    }
+        role: stage.role,
+      }),
+    });
+    const n8nBody = await n8nRes.json().catch(() => null);
+    emailSent = n8nRes.ok && n8nBody?.ok === true;
+    if (!emailSent) console.error("[negociacao/invite] W14 n8n falhou:", n8nRes.status, n8nBody);
+  } catch (e) {
+    console.error("[negociacao/invite] Erro ao chamar W14 n8n:", e);
   }
 
   await notifyDealTimeline({
@@ -175,41 +177,4 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
   });
 
   return NextResponse.json({ invite_id: inviteId, token, url: intakeUrl, email_sent: emailSent });
-}
-
-function buildStageInviteEmail(p: { nome: string; stageLabel: string; dealName: string; dealCode: string; intakeUrl: string }): string {
-  return `
-<!DOCTYPE html>
-<html>
-<head><meta charset="UTF-8"><style>
-  body { font-family: 'DM Sans', Arial, sans-serif; background: #09081A; color: #F5F1E8; margin: 0; padding: 0; }
-  .container { max-width: 560px; margin: 40px auto; }
-  .header { background: #162744; border: 1px solid #243A66; border-radius: 12px 12px 0 0; padding: 24px; text-align: center; }
-  .body { background: #13223A; border: 1px solid #243A66; border-top: none; border-radius: 0 0 12px 12px; padding: 28px; }
-  .badge { display: inline-block; background: rgba(201,168,76,0.15); border: 1px solid rgba(201,168,76,0.3); border-radius: 4px; padding: 3px 10px; font-size: 11px; color: #E8C97A; font-weight: 600; letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 12px; }
-  .deal-name { font-size: 22px; font-weight: 800; color: #F5F1E8; margin: 0 0 4px; }
-  .deal-code { font-size: 13px; color: #C9A84C; font-weight: 600; }
-  p { color: #9BAFC5; font-size: 14px; line-height: 1.6; }
-  .btn { display: block; width: fit-content; margin: 24px auto; background: #C9A84C; color: #09081A; text-decoration: none; font-weight: 700; font-size: 15px; padding: 14px 32px; border-radius: 10px; }
-  .warning { font-size: 11px; color: #9BAFC5; text-align: center; margin-top: 20px; border-top: 1px solid #243A66; padding-top: 16px; }
-</style></head>
-<body>
-<div class="container">
-  <div class="header">
-    <div class="badge">${p.stageLabel}</div>
-    <h1 class="deal-name">${p.dealName}</h1>
-    <div class="deal-code">${p.dealCode}</div>
-  </div>
-  <div class="body">
-    <p>Prezado(a) <strong style="color:#F5F1E8">${p.nome}</strong>,</p>
-    <p>A <strong style="color:#F5F1E8">V3 Partners</strong> preparou o documento de ${p.stageLabel.toLowerCase()} referente a esta operação. O preenchimento é digital e leva poucos minutos.</p>
-    <a href="${p.intakeUrl}" class="btn">Preencher e assinar &#8594;</a>
-    <p style="text-align:center;font-size:12px;">Link individual, não repasse a terceiros.</p>
-    <div class="warning">
-      V3 Partners &middot; privacidade@v3partners.com.br &middot; v3partners.com.br
-    </div>
-  </div>
-</div>
-</body>
-</html>`;
 }
