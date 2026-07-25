@@ -175,7 +175,6 @@ export async function sendToClickSign(input: SendToClickSignInput): Promise<Send
             signer_key: signerKey,
             sign_as: "sign",
             refusable: true,
-            group: 1,
             message: `V3 Partners solicita sua assinatura no documento: ${documentLabel}`,
           },
         }),
