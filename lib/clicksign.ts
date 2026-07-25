@@ -142,19 +142,37 @@ export async function sendToClickSign(input: SendToClickSignInput): Promise<Send
     const documentKey: string = docData.document?.key;
 
     for (const signatory of signatories) {
+      // A API v1 exige o signatário já existir como recurso próprio (signer_key)
+      // antes de vincular ao documento em /api/v1/lists — mandar os dados do
+      // signatário direto ali (sem criar antes) retorna "Signatário não
+      // encontrado", confirmado ao vivo contra a conta de produção.
+      const signerRes = await fetch(`${baseUrl}/api/v1/signers?access_token=${accessToken}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          signer: {
+            email: signatory.email,
+            phone_number: null,
+            auths: ["email"],
+            name: signatory.name,
+            has_documentation: false,
+          },
+        }),
+      });
+      if (!signerRes.ok) {
+        const err = await signerRes.text();
+        return { ok: false, error: `ClickSign createSigner (${signatory.email}): ${err}`, status: 502 };
+      }
+      const signerData = await signerRes.json();
+      const signerKey: string = signerData.signer?.key;
+
       const listRes = await fetch(`${baseUrl}/api/v1/lists?access_token=${accessToken}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           list: {
             document_key: documentKey,
-            signer: {
-              email: signatory.email,
-              phone_number: null,
-              auth_type: "email",
-              name: signatory.name,
-              has_documentation: false,
-            },
+            signer_key: signerKey,
             sign_as: "sign",
             message: `V3 Partners solicita sua assinatura no documento: ${documentLabel}`,
           },
