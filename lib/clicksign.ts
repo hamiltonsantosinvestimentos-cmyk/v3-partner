@@ -17,6 +17,51 @@ export type SendToClickSignResult =
 
 const IS_DEMO = false;
 
+async function launchBrowser() {
+  if (process.env.NODE_ENV === "production") {
+    const chromium = (await import("@sparticuz/chromium-min")).default;
+    const puppeteer = (await import("puppeteer-core")).default;
+    return puppeteer.launch({
+      args: [...(chromium.args ?? []), "--no-sandbox", "--disable-setuid-sandbox"],
+      defaultViewport: { width: 1240, height: 1754 },
+      executablePath: await chromium.executablePath(
+        "https://github.com/Sparticuz/chromium/releases/download/v133.0.0/chromium-v133.0.0-pack.tar"
+      ),
+      headless: true,
+    });
+  }
+  const puppeteer = (await import("puppeteer-core")).default;
+  return puppeteer.launch({
+    args: ["--no-sandbox"],
+    defaultViewport: { width: 1240, height: 1754 },
+    executablePath:
+      process.platform === "win32"
+        ? "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"
+        : "/usr/bin/google-chrome",
+    headless: true,
+  });
+}
+
+// ClickSign só aceita PDF, Word, imagem ou TXT como documento (confirmado ao
+// vivo: HTML retorna "Documento deve ser em formato pdf, Word (doc e docx),
+// Imagens (png ou jpeg) ou Texto (txt)"), então todo HTML precisa virar PDF
+// antes de subir. Mesmo padrão de launch do Puppeteer usado em cim-pdf.
+async function htmlToPdfBase64(html: string): Promise<string> {
+  const browser = await launchBrowser();
+  try {
+    const page = await browser.newPage();
+    await page.setContent(html, { waitUntil: "load" });
+    const pdfBuffer = await page.pdf({
+      format: "A4",
+      printBackground: true,
+      margin: { top: "0", bottom: "0", left: "0", right: "0" },
+    });
+    return `data:application/pdf;base64,${Buffer.from(pdfBuffer).toString("base64")}`;
+  } finally {
+    await browser.close();
+  }
+}
+
 // Dispara um documento para assinatura digital real na API v1 do ClickSign.
 // Usado tanto pela rota autenticada (app/api/ma/clicksign-send, UI da Mesa)
 // quanto por fluxos públicos server-to-server (ex: intake da Carta de
@@ -63,23 +108,23 @@ export async function sendToClickSign(input: SendToClickSignInput): Promise<Send
       `${process.env.NEXT_PUBLIC_APP_URL ?? "https://app.v3partners.com.br"}/api/ma/gerar-contrato?dealId=${dealId}&tipo=${documentType}&lang=pt-br`;
 
     // A API v1 do ClickSign não aceita criar documento a partir de uma url,
-    // só content_base64 no formato "data:<mimetype>;base64,<dados>". Busca o
-    // HTML aqui e converte, em vez de mandar a url (confirmado via doc oficial
-    // ClickSign: campo url não existe nesse endpoint, causava "Conteúdo do
-    // Base64 inválido" independente de content_base64 estar presente ou não).
+    // só content_base64 no formato "data:<mimetype>;base64,<dados>", e o
+    // formato precisa ser PDF/Word/imagem/TXT, nunca HTML (os dois confirmados
+    // ao vivo contra a conta de produção). Busca o HTML, renderiza como PDF
+    // via Puppeteer, e só então sobe o base64.
     const htmlRes = await fetch(documentUrl);
     if (!htmlRes.ok) {
       return { ok: false, error: `Falha ao buscar o conteúdo do documento em ${documentUrl}: HTTP ${htmlRes.status}`, status: 502 };
     }
     const html = await htmlRes.text();
-    const contentBase64 = `data:text/html;base64,${Buffer.from(html, "utf-8").toString("base64")}`;
+    const contentBase64 = await htmlToPdfBase64(html);
 
     const createDocRes = await fetch(`${baseUrl}/api/v1/documents?access_token=${accessToken}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         document: {
-          path: `/${documentLabel}.html`,
+          path: `/${documentLabel}.pdf`,
           content_base64: contentBase64,
           auto_close: true,
           locale: "pt-BR",

@@ -5,6 +5,8 @@ import { resolveContractVariables, wrapContractInV3Html } from "@/lib/contract-r
 import { valorEmReaisPorExtenso } from "@/lib/utils/valor-extenso";
 import { sendToClickSign } from "@/lib/clicksign";
 
+export const maxDuration = 300;
+
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 }

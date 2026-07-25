@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { sendToClickSign, type SendToClickSignInput } from "@/lib/clicksign";
 
+export const maxDuration = 300;
+
 export async function POST(request: NextRequest) {
   let body: SendToClickSignInput;
   try {
