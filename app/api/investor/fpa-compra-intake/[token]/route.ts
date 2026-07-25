@@ -19,7 +19,7 @@ async function loadContext(token: string) {
 
   const { data: invite } = await db
     .from("deal_room_invites")
-    .select("id, deal_room_id, investor_name, investor_email, access_side, token_expires_at, status")
+    .select("id, deal_room_id, investor_name, investor_email, access_side, token_expires_at")
     .eq("token", token)
     .single();
 
@@ -33,10 +33,17 @@ async function loadContext(token: string) {
   const { data: deal } = await db.from("ma_deals").select("id, code, v3_code").eq("id", room.deal_id).single();
   if (!deal) return { error: "Deal não encontrado", status: 404 } as const;
 
-  // FPA Compra não gera operation_contracts (não é documento assinável, é
-  // só cadastro de comissionados), então o "já enviado" é rastreado pelo
-  // próprio status do invite.
-  const alreadySent = invite.status === "fpa_compra_cadastrada";
+  // "Já enviado" é rastreado pela existência de operation_contracts vinculado
+  // a este invite, mesmo padrão usado pelos outros 3 fluxos da esteira.
+  // Tentativa anterior usava deal_room_invites.status = "fpa_compra_cadastrada",
+  // mas a coluna tem CHECK constraint que rejeita esse valor (erro engolido
+  // silenciosamente, descoberto só via teste automatizado real).
+  const { data: existingContract } = await db
+    .from("operation_contracts")
+    .select("id")
+    .eq("deal_room_invite_id", invite.id)
+    .maybeSingle();
+  const alreadySent = !!existingContract;
 
   return { invite, deal, alreadySent } as const;
 }
@@ -111,8 +118,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   });
 
   if (insertErr) return NextResponse.json({ error: insertErr.message }, { status: 500 });
-
-  await db.from("deal_room_invites").update({ status: "fpa_compra_cadastrada" }).eq("id", invite.id);
 
   return NextResponse.json({
     success: true,

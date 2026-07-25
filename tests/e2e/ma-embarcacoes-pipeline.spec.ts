@@ -1,0 +1,182 @@
+import { test, expect, APIRequestContext } from "@playwright/test";
+import { createClient } from "@supabase/supabase-js";
+
+// M&A V3 Partners — Esteira de 4 etapas (FPA Compra, Carta de Intencao, FPA
+// Venda, Contrato de Venda), deal de embarcacoes PSV (Estaleiro Liessa /
+// Dalmolin). Reaproveita o deal room real do MA-26-30823, mas cria e apaga
+// convites descartaveis a cada execucao (mesmo padrao usado nas sessoes de
+// verificacao manual desta feature).
+//
+// Escopo deliberado: testa os fluxos que NAO disparam ClickSign/Resend real
+// a cada rodada de CI (FPA Compra, e os caminhos de erro/validacao de
+// Contrato de Venda e FPA Venda). O envio real com assinatura ao vivo foi
+// verificado manualmente contra producao durante o desenvolvimento desta
+// feature, nao e re-executado aqui para nao enviar e-mail real a cada CI.
+
+const DEAL_ROOM_ID = "71835f26-823b-4cbb-b39f-9abdd4435553"; // MA-26-30823, PSV/Dalmolin
+
+function svc() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) throw new Error("NEXT_PUBLIC_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY ausentes (ver .env.local)");
+  return createClient(url, key);
+}
+
+async function createInvite(accessSide: "buyer" | "seller" | "intermediario") {
+  const db = svc();
+  const token = `pw-${accessSide}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const { data, error } = await db
+    .from("deal_room_invites")
+    .insert({
+      deal_room_id: DEAL_ROOM_ID,
+      investor_name: "Teste Playwright",
+      investor_email: "playwright-test@v3partners.com.br",
+      access_side: accessSide,
+      token,
+      token_expires_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+      status: "pending",
+    })
+    .select("id")
+    .single();
+  if (error || !data) throw new Error(`Falha ao criar invite de teste: ${error?.message}`);
+  return { inviteId: data.id as string, token };
+}
+
+async function cleanupInvite(inviteId: string) {
+  const db = svc();
+  await db.from("operation_contracts").delete().eq("deal_room_invite_id", inviteId);
+  await db.from("deal_room_invites").delete().eq("id", inviteId);
+}
+
+test.describe("M&A V3 Partners, Esteira de Embarcacoes (4 etapas)", () => {
+  test("FPA Compra: cadastro de comissionados sem assinatura, ate persistencia real", async ({ request }) => {
+    const { inviteId, token } = await createInvite("intermediario");
+    try {
+      const getRes = await request.get(`/api/investor/fpa-compra-intake/${token}`);
+      expect(getRes.ok()).toBeTruthy();
+      const getBody = await getRes.json();
+      expect(getBody.deal_code).toBeTruthy();
+
+      const postRes = await request.post(`/api/investor/fpa-compra-intake/${token}`, {
+        data: {
+          participantes: [
+            { nome: "Gustavo Teste", cpf_cnpj: "111.444.777-35", email: "gustavo-teste@v3partners.com.br", bluepay_pix: "gustavo@chavepix.com" },
+          ],
+        },
+      });
+      expect(postRes.ok()).toBeTruthy();
+      const postBody = await postRes.json();
+      expect(postBody.success).toBe(true);
+
+      // Segundo envio no mesmo token deve ser bloqueado (idempotencia do intake)
+      const secondRes = await request.post(`/api/investor/fpa-compra-intake/${token}`, {
+        data: { participantes: [{ nome: "X", cpf_cnpj: "1", email: "x@x.com", bluepay_pix: "x" }] },
+      });
+      expect(secondRes.status()).toBe(409);
+    } finally {
+      await cleanupInvite(inviteId);
+    }
+  });
+
+  test("FPA Compra: rejeita participante sem email valido", async ({ request }) => {
+    const { inviteId, token } = await createInvite("intermediario");
+    try {
+      const res = await request.post(`/api/investor/fpa-compra-intake/${token}`, {
+        data: { participantes: [{ nome: "Teste", cpf_cnpj: "111.444.777-35", email: "nao-e-email", bluepay_pix: "x" }] },
+      });
+      expect(res.status()).toBe(422);
+    } finally {
+      await cleanupInvite(inviteId);
+    }
+  });
+
+  test("Contrato de Venda: gate de access_side, invite errado e rejeitado", async ({ request }) => {
+    const { inviteId, token } = await createInvite("buyer"); // access_side errado de proposito
+    try {
+      const res = await request.get(`/api/investor/contrato-venda-intake/${token}`);
+      expect(res.status()).toBe(403);
+    } finally {
+      await cleanupInvite(inviteId);
+    }
+  });
+
+  test("Contrato de Venda: rejeita CNPJ invalido antes de acionar ClickSign", async ({ request }) => {
+    const { inviteId, token } = await createInvite("seller");
+    try {
+      const res = await request.post(`/api/investor/contrato-venda-intake/${token}`, {
+        data: {
+          razao_social_estaleiro: "Estaleiro Teste Ltda",
+          cnpj_estaleiro: "00.000.000/0000-00", // invalido
+          nome_representante: "Teste",
+          email: "teste@v3partners.com.br",
+          local: "Rio de Janeiro, RJ",
+        },
+      });
+      expect(res.status()).toBe(422);
+    } finally {
+      await cleanupInvite(inviteId);
+    }
+  });
+
+  test("FPA Venda: gate de access_side, invite errado e rejeitado", async ({ request }) => {
+    const { inviteId, token } = await createInvite("intermediario"); // errado de proposito
+    try {
+      const res = await request.get(`/api/investor/fpa-venda-intake/${token}`);
+      expect(res.status()).toBe(403);
+    } finally {
+      await cleanupInvite(inviteId);
+    }
+  });
+
+  test("FPA Venda: rejeita submissao sem participantes", async ({ request }) => {
+    const { inviteId, token } = await createInvite("seller");
+    try {
+      const res = await request.post(`/api/investor/fpa-venda-intake/${token}`, {
+        data: { participantes: [], local: "Rio de Janeiro, RJ" },
+      });
+      expect(res.status()).toBe(422);
+    } finally {
+      await cleanupInvite(inviteId);
+    }
+  });
+
+  test("FPA Venda: calculo de deducao de 6% e responsabilidade do form, API valida valor_bruto > 0", async ({ request }) => {
+    const { inviteId, token } = await createInvite("seller");
+    try {
+      const res = await request.post(`/api/investor/fpa-venda-intake/${token}`, {
+        data: {
+          participantes: [
+            { nome: "Rafael Teste", cpf_cnpj: "111.444.777-35", email: "rafael-teste@v3partners.com.br", bluepay_pix: "rafael@chavepix.com", valor_bruto: 0 },
+          ],
+          local: "Rio de Janeiro, RJ",
+        },
+      });
+      expect(res.status()).toBe(422);
+    } finally {
+      await cleanupInvite(inviteId);
+    }
+  });
+
+  test("Painel /propostas: timeline da esteira reflete o estagio real de cada operacao", async ({ request }: { request: APIRequestContext }) => {
+    const { inviteId, token } = await createInvite("intermediario");
+    try {
+      await request.post(`/api/investor/fpa-compra-intake/${token}`, {
+        data: { participantes: [{ nome: "Gustavo Teste", cpf_cnpj: "111.444.777-35", email: "gustavo-teste@v3partners.com.br", bluepay_pix: "gustavo@chavepix.com" }] },
+      });
+
+      const timelineRes = await request.get("/api/ma/loi-contracts");
+      expect(timelineRes.ok()).toBeTruthy();
+      const { operacoes } = await timelineRes.json();
+
+      const found = (operacoes as Array<{ dealId: string; stages: Array<{ templateName: string; status: string }> }>).find(
+        op => op.stages.some(s => s.status !== "nao_iniciado")
+      );
+      expect(found, "deveria haver ao menos 1 operacao com alguma etapa iniciada").toBeTruthy();
+
+      const fpaCompraStage = found!.stages.find(s => s.templateName === "FPA Compra");
+      expect(fpaCompraStage?.status).toBe("assinado");
+    } finally {
+      await cleanupInvite(inviteId);
+    }
+  });
+});
