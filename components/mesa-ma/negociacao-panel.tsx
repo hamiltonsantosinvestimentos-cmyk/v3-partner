@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Loader2, Send, Copy, Check, RefreshCw, AlertCircle, CheckCircle2 } from "lucide-react";
+import { Loader2, Send, Copy, Check, RefreshCw, AlertCircle, CheckCircle2, FileText, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 type StageStatus = "nao_iniciado" | "convite_enviado" | "rascunho" | "enviado_assinatura" | "assinado";
@@ -16,6 +16,25 @@ type Stage = {
   invite: { id: string; nome: string; email: string; token: string } | null;
 };
 
+type ProposalStatus = "draft" | "sent" | "viewed" | "signed";
+
+type Proposal = {
+  id: string;
+  code: string;
+  status: ProposalStatus;
+  recipientName: string;
+  recipientEmail: string;
+  sentAt: string | null;
+  signedAt: string | null;
+};
+
+const PROPOSAL_STATUS_META: Record<ProposalStatus, { label: string; color: string; bg: string }> = {
+  draft: { label: "Rascunho", color: "#7A8FA8", bg: "rgba(122,143,168,0.1)" },
+  sent: { label: "Enviada", color: "#C9A84C", bg: "rgba(201,168,76,0.1)" },
+  viewed: { label: "Visualizada", color: "#F59E0B", bg: "rgba(245,158,11,0.1)" },
+  signed: { label: "Assinada", color: "#10B981", bg: "rgba(16,185,129,0.1)" },
+};
+
 const STATUS_META: Record<StageStatus, { label: string; color: string; bg: string }> = {
   nao_iniciado: { label: "Não iniciado", color: "#7A8FA8", bg: "rgba(122,143,168,0.1)" },
   convite_enviado: { label: "Convite enviado", color: "#F59E0B", bg: "rgba(245,158,11,0.1)" },
@@ -26,6 +45,7 @@ const STATUS_META: Record<StageStatus, { label: string; color: string; bg: strin
 
 export function NegociacaoPanel({ dealId }: { dealId: string }) {
   const [stages, setStages] = useState<Stage[] | null>(null);
+  const [proposal, setProposal] = useState<Proposal | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -37,6 +57,7 @@ export function NegociacaoPanel({ dealId }: { dealId: string }) {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Falha ao carregar");
       setStages(json.stages);
+      setProposal(json.proposal ?? null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Erro ao carregar etapas");
     } finally {
@@ -65,11 +86,54 @@ export function NegociacaoPanel({ dealId }: { dealId: string }) {
   return (
     <div className="space-y-3">
       <p className="text-[10px] text-[#7A8FA8] uppercase tracking-widest font-bold">
-        Esteira de Negociação, 4 etapas
+        Circuito de Negociação, da proposta ao fechamento
       </p>
+      <ProposalCard proposal={proposal} />
       {(stages ?? []).map((stage, i) => (
         <StageCard key={stage.etapa} index={i + 1} dealId={dealId} stage={stage} onChanged={load} />
       ))}
+    </div>
+  );
+}
+
+function ProposalCard({ proposal }: { proposal: Proposal | null }) {
+  const meta = proposal ? PROPOSAL_STATUS_META[proposal.status] : null;
+  return (
+    <div className="rounded-xl border border-[#122036] bg-[#0D1626] p-4">
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div className="flex items-start gap-3">
+          <span className="mt-0.5 flex-shrink-0 w-6 h-6 rounded-full bg-[#162744] border border-[#243A66] text-[#7A8FA8] text-[11px] font-bold flex items-center justify-center">
+            0
+          </span>
+          <div>
+            <p className="text-sm font-bold text-[#E8EDF5] flex items-center gap-1.5">
+              <FileText size={13} /> Proposta Comercial
+            </p>
+            {proposal ? (
+              <p className="text-[11px] text-[#7A8FA8] mt-0.5">
+                {proposal.code} &middot; {proposal.recipientName} &middot; {proposal.recipientEmail}
+              </p>
+            ) : (
+              <p className="text-[11px] text-[#5A7490] mt-0.5">Nenhuma proposta comercial registrada para este deal ainda</p>
+            )}
+          </div>
+        </div>
+        {meta && (
+          <span
+            className="text-[9px] font-bold uppercase tracking-wide px-2.5 py-1 rounded-full flex-shrink-0"
+            style={{ color: meta.color, background: meta.bg }}
+          >
+            {meta.label}
+          </span>
+        )}
+      </div>
+      <div className="mt-3">
+        <a href="/propostas" target="_blank" rel="noopener noreferrer">
+          <Button size="sm" variant="ghost" className="h-7 text-[11px]">
+            <ExternalLink size={12} /> {proposal ? "Ver em Propostas Comerciais" : "Criar proposta em Propostas Comerciais"}
+          </Button>
+        </a>
+      </div>
     </div>
   );
 }

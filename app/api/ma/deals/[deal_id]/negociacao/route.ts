@@ -41,6 +41,16 @@ export async function GET(_req: NextRequest, ctx: RouteContext) {
     .limit(1)
     .maybeSingle();
 
+  // Etapa 0 (informativa, sem botão de disparo aqui: reaproveita o fluxo
+  // já existente em /propostas). Mostra a proposta mais recente do deal.
+  const { data: proposal } = await db
+    .from("commercial_proposals")
+    .select("id, code, status, recipient_name, recipient_email, sent_at, signed_at")
+    .eq("deal_id", dealId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
   const templateNames = STAGES.map(s => s.templateName);
   const { data: templates } = await db
     .from("contract_templates")
@@ -109,6 +119,17 @@ export async function GET(_req: NextRequest, ctx: RouteContext) {
     dealId,
     dealCode: deal.v3_code ?? deal.legacy_code ?? deal.id,
     dealRoomId: room?.id ?? null,
+    proposal: proposal
+      ? {
+          id: proposal.id,
+          code: proposal.code,
+          status: proposal.status as "draft" | "sent" | "viewed" | "signed",
+          recipientName: proposal.recipient_name,
+          recipientEmail: proposal.recipient_email,
+          sentAt: proposal.sent_at,
+          signedAt: proposal.signed_at,
+        }
+      : null,
     stages,
   });
 }

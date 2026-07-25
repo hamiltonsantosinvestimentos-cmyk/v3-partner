@@ -91,19 +91,30 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // 2. Notifications linked to this deal via action_url pattern
+  // 2. Notifications linked to this deal via action_url pattern. Ações como
+  // notifyDealTimeline() gravam uma linha por usuário elegível (ADMIN/GESTAO/
+  // MESA_OPERACIONAL) para o sino funcionar por usuário, então o mesmo evento
+  // aparece várias vezes aqui — busca um lote maior e agrupa por
+  // título+mensagem antes de exibir, para a Timeline mostrar 1 linha por
+  // evento real, não 1 por destinatário.
   const { data: notifs } = await svc()
     .from("notifications")
     .select("id, title, message, type, created_at")
     .like("action_url", `/mesa-ma?deal=${dealId}%`)
     .order("created_at", { ascending: false })
-    .limit(30);
+    .limit(200);
 
   if (notifs) {
+    const seen = new Set<string>();
     for (const n of notifs as Array<{
       id: string; title: string; message: string | null;
       type: string; created_at: string;
     }>) {
+      const dedupeKey = `${n.title}|${n.message ?? ""}`;
+      if (seen.has(dedupeKey)) continue;
+      seen.add(dedupeKey);
+      if (seen.size > 30) break;
+
       const titleLower = n.title.toLowerCase();
       let evType: TimelineEvent["type"] = "notification";
       if (titleLower.includes("forja") || titleLower.includes("validação") || titleLower.includes("score"))
