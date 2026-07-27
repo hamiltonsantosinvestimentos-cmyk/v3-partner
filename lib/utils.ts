@@ -108,6 +108,26 @@ export function formatCurrencyBRLFromNumber(value: number | null | undefined): s
   return value.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+/** Moedas aceitas na Bolsa de Ativos (Marketplace de Capitais). BRL continua o padrao em todo o resto do portal. */
+export type CmCurrency = "BRL" | "USD" | "EUR";
+
+export const CM_CURRENCY_SYMBOL: Record<CmCurrency, string> = { BRL: "R$", USD: "$", EUR: "€" };
+const CM_CURRENCY_LOCALE: Record<CmCurrency, string> = { BRL: "pt-BR", USD: "en-US", EUR: "en-US" };
+
+/** Mesma logica de maskCurrencyBRLInput, mas parametrizada por moeda (separador decimal/milhar muda entre BRL e USD/EUR). */
+export function maskCurrencyInput(value: string, currency: CmCurrency = "BRL"): string {
+  const digits = value.replace(/\D/g, "");
+  if (!digits) return "";
+  const cents = parseInt(digits, 10);
+  return (cents / 100).toLocaleString(CM_CURRENCY_LOCALE[currency], { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+/** Formata um number vindo do banco no padrao visual de maskCurrencyInput, para popular campo mascarado ja existente. */
+export function formatCurrencyFromNumber(value: number | null | undefined, currency: CmCurrency = "BRL"): string {
+  if (value === null || value === undefined || Number.isNaN(value)) return "";
+  return value.toLocaleString(CM_CURRENCY_LOCALE[currency], { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
 export function abbreviateName(fullName: string): string {
   const parts = fullName.trim().split(" ");
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();

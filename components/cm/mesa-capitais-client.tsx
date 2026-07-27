@@ -8,7 +8,7 @@ import {
   Link2, Copy, Plus, FileText, UserPlus, ClipboardCheck,
   ToggleLeft, ToggleRight, Save, Download, ExternalLink, Trash2, X,
 } from "lucide-react";
-import { cn, maskCpfCnpjInput, maskPhoneInput, isValidEmail, maskCurrencyBRLInput, parseCurrencyBRLInput, formatCurrencyBRLFromNumber } from "@/lib/utils";
+import { cn, maskCpfCnpjInput, maskPhoneInput, isValidEmail, maskCurrencyBRLInput, parseCurrencyBRLInput, formatCurrencyBRLFromNumber, maskCurrencyInput, CM_CURRENCY_SYMBOL, type CmCurrency } from "@/lib/utils";
 import { AssetAssistant } from "./asset-assistant";
 import { CM_DOCUMENT_CHECKLISTS, type CmAssetType } from "@/lib/cm-checklists";
 import { createClient as createBrowserSupabaseClient } from "@/lib/supabase/client";
@@ -22,6 +22,7 @@ interface Listing {
   originator_referral_id: string | null;
   asset_type: string;
   valor_face: number;
+  currency?: CmCurrency;
   desagio_pretendido: number | null;
   listing_status: string;
   risk_score: number | null;
@@ -74,6 +75,12 @@ const STATUS_COLUMNS = [
 ];
 
 function formatBRL(v: number) {
+  if (v >= 1_000_000_000) {
+    const bi = v / 1_000_000_000;
+    const casas = Number.isInteger(bi) ? 0 : 2;
+    const num = bi.toLocaleString("pt-BR", { minimumFractionDigits: casas, maximumFractionDigits: casas });
+    return `R$ ${num} ${bi === 1 ? "Bilhão" : "Bilhões"}`;
+  }
   if (v >= 1_000_000) return `R$ ${(v / 1_000_000).toFixed(1)}M`;
   if (v >= 1_000) return `R$ ${(v / 1_000).toFixed(0)}K`;
   return `R$ ${v.toLocaleString("pt-BR")}`;
@@ -81,6 +88,20 @@ function formatBRL(v: number) {
 
 function formatBRLFull(v: number) {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+
+/** Mesma logica compacta de formatBRL, mas respeitando a moeda do ativo (USD/EUR usam simbolo e notacao correspondentes). KPIs agregados (soma de varios ativos) continuam em BRL, ver formatBRL. */
+function formatListingValue(v: number, currency?: CmCurrency) {
+  if (!currency || currency === "BRL") return formatBRL(v);
+  const symbol = CM_CURRENCY_SYMBOL[currency];
+  if (v >= 1_000_000_000) {
+    const bi = v / 1_000_000_000;
+    const casas = Number.isInteger(bi) ? 0 : 2;
+    return `${symbol} ${bi.toLocaleString("en-US", { minimumFractionDigits: casas, maximumFractionDigits: casas })}Bi`;
+  }
+  if (v >= 1_000_000) return `${symbol} ${(v / 1_000_000).toFixed(1)}M`;
+  if (v >= 1_000) return `${symbol} ${(v / 1_000).toFixed(0)}K`;
+  return `${symbol} ${v.toLocaleString("en-US")}`;
 }
 
 function toFieldLabel(key: string): string {
@@ -222,7 +243,8 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
   const [showManualForm, setShowManualForm] = useState(false);
   const [submittingManual, setSubmittingManual] = useState(false);
   const [manualForm, setManualForm] = useState({
-    asset_type: "precatorio" as CmAssetType,
+    asset_type: "" as CmAssetType | "",
+    currency: "BRL" as CmCurrency,
     apelido: "",
     originator_profile_id: "",
     seller_name: "",
@@ -1053,6 +1075,10 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
   };
 
   const submitManualListing = async () => {
+    if (!manualForm.asset_type) {
+      alert("Selecione a classe do ativo antes de continuar");
+      return;
+    }
     if (!manualForm.seller_name.trim() || !manualForm.valor_face) {
       alert("Preencha ao menos: nome do cedente e valor de face");
       return;
@@ -1064,6 +1090,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           asset_type: manualForm.asset_type,
+          currency: manualForm.currency,
           apelido: manualForm.apelido.trim() || undefined,
           originator_profile_id: manualForm.originator_profile_id.startsWith("ref:") ? undefined : (manualForm.originator_profile_id || undefined),
           originator_referral_id: manualForm.originator_profile_id.startsWith("ref:") ? manualForm.originator_profile_id.slice(4) : undefined,
@@ -1087,7 +1114,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
         alert(`Ativo cadastrado: ${json.listing.anonymous_id}`);
         setShowManualForm(false);
         setManualForm({
-          asset_type: "precatorio", apelido: "", originator_profile_id: "", seller_name: "", seller_cpf_cnpj: "", ente_devedor: "",
+          asset_type: "", currency: "BRL", apelido: "", originator_profile_id: "", seller_name: "", seller_cpf_cnpj: "", ente_devedor: "",
           esfera: "", tribunal: "", natureza: "", numero_processo: "",
           valor_face: "", valor_atualizado: "", desagio_pretendido: "", prazo_estimado_meses: "",
           allows_tranching: false, tranche_valor_minimo: "",
@@ -1266,18 +1293,42 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
               <button onClick={() => setShowManualForm(false)} className="text-[#9BAFC5] hover:text-[#F5F1E8] text-xl">&times;</button>
             </div>
             <div className="flex-1 overflow-y-auto p-4 space-y-3">
-              <div>
-                <label className="text-[9px] text-[#9BAFC5] uppercase">Tipo de Ativo *</label>
-                <select name="asset_type" value={manualForm.asset_type} onChange={(e) => setManualForm((f) => ({ ...f, asset_type: e.target.value as CmAssetType }))}
-                  className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#F5F1E8] mt-1">
-                  <option value="precatorio">Precatório</option>
-                  <option value="direito_creditorio">Direito Creditório</option>
-                  <option value="ipi">IPI</option>
-                  <option value="icms">ICMS</option>
-                  <option value="imovel">Imóvel / Ativo Alternativo</option>
-                  <option value="outros">Outros</option>
-                </select>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[9px] text-[#9BAFC5] uppercase">Tipo de Ativo *</label>
+                  <select name="asset_type" value={manualForm.asset_type}
+                    onChange={(e) => setManualForm((f) => ({ ...f, asset_type: e.target.value as CmAssetType }))}
+                    className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#F5F1E8] mt-1">
+                    <option value="">Selecione a classe do ativo</option>
+                    <option value="precatorio">Precatório</option>
+                    <option value="direito_creditorio">Direito Creditório</option>
+                    <option value="ipi">IPI</option>
+                    <option value="icms">ICMS</option>
+                    <option value="imovel">Imóvel / Ativo Alternativo</option>
+                    <option value="outros">Outros</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[9px] text-[#9BAFC5] uppercase">Moeda</label>
+                  <select name="currency" value={manualForm.currency}
+                    onChange={(e) => setManualForm((f) => ({ ...f, currency: e.target.value as CmCurrency }))}
+                    className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#F5F1E8] mt-1">
+                    <option value="BRL">BRL (R$)</option>
+                    <option value="USD">USD ($)</option>
+                    <option value="EUR">EUR (€)</option>
+                  </select>
+                </div>
               </div>
+              {manualForm.asset_type && (
+                <div className="bg-[#12112A] border border-[#C9A84C]/15 rounded-lg px-3 py-2">
+                  <div className="text-[8px] text-[#E8C97A] font-bold uppercase tracking-wide mb-1">Documentos obrigatórios para este tipo</div>
+                  <div className="text-[10px] text-[#9BAFC5] leading-relaxed">
+                    {(CM_DOCUMENT_CHECKLISTS[manualForm.asset_type as CmAssetType] ?? CM_DOCUMENT_CHECKLISTS.outros)
+                      .filter((item) => item.required).map((item) => item.label).join(" · ")}
+                  </div>
+                </div>
+              )}
+              <fieldset disabled={!manualForm.asset_type} className={cn("space-y-3", !manualForm.asset_type && "opacity-40 pointer-events-none")}>
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="text-[9px] text-[#9BAFC5] uppercase">Apelido</label>
@@ -1343,14 +1394,14 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="text-[9px] text-[#9BAFC5] uppercase">Valor de Face (R$) *</label>
-                  <input inputMode="numeric" value={manualForm.valor_face} onChange={(e) => setManualForm((f) => ({ ...f, valor_face: maskCurrencyBRLInput(e.target.value) }))}
+                  <label className="text-[9px] text-[#9BAFC5] uppercase">Valor de Face ({CM_CURRENCY_SYMBOL[manualForm.currency]}) *</label>
+                  <input inputMode="numeric" value={manualForm.valor_face} onChange={(e) => setManualForm((f) => ({ ...f, valor_face: maskCurrencyInput(e.target.value, f.currency) }))}
                     placeholder="0,00"
                     className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#F5F1E8] mt-1" />
                 </div>
                 <div>
-                  <label className="text-[9px] text-[#9BAFC5] uppercase">Valor Atualizado (R$)</label>
-                  <input inputMode="numeric" value={manualForm.valor_atualizado} onChange={(e) => setManualForm((f) => ({ ...f, valor_atualizado: maskCurrencyBRLInput(e.target.value) }))}
+                  <label className="text-[9px] text-[#9BAFC5] uppercase">Valor Atualizado ({CM_CURRENCY_SYMBOL[manualForm.currency]})</label>
+                  <input inputMode="numeric" value={manualForm.valor_atualizado} onChange={(e) => setManualForm((f) => ({ ...f, valor_atualizado: maskCurrencyInput(e.target.value, f.currency) }))}
                     placeholder="0,00"
                     className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#F5F1E8] mt-1" />
                 </div>
@@ -1409,12 +1460,13 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
               </label>
               {manualForm.allows_tranching && (
                 <div>
-                  <label className="text-[9px] text-[#9BAFC5] uppercase">Valor Mínimo por Fração (R$)</label>
-                  <input inputMode="numeric" value={manualForm.tranche_valor_minimo} onChange={(e) => setManualForm((f) => ({ ...f, tranche_valor_minimo: maskCurrencyBRLInput(e.target.value) }))}
+                  <label className="text-[9px] text-[#9BAFC5] uppercase">Valor Mínimo por Fração ({CM_CURRENCY_SYMBOL[manualForm.currency]})</label>
+                  <input inputMode="numeric" value={manualForm.tranche_valor_minimo} onChange={(e) => setManualForm((f) => ({ ...f, tranche_valor_minimo: maskCurrencyInput(e.target.value, f.currency) }))}
                     placeholder="0,00"
                     className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#F5F1E8] mt-1" />
                 </div>
               )}
+              </fieldset>
               <button onClick={submitManualListing} disabled={submittingManual}
                 className="w-full flex items-center justify-center gap-2 px-3 py-2.5 bg-[#C9A84C] text-[#09081A] rounded-lg text-sm font-bold hover:bg-[#D4B96A] transition disabled:opacity-50">
                 {submittingManual ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
@@ -1572,7 +1624,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
                     <div key={l.id} onClick={() => openListingDetail(l)} className="bg-[#12112A] border border-[#9BAFC5]/10 rounded-md p-3 cursor-pointer hover:border-[#C9A84C]/30 transition">
                       <div className="text-[9px] text-[#C9A84C] font-bold">{l.anonymous_id}</div>
                       {l.apelido && <div className="text-[10px] text-[#F5F1E8] font-semibold truncate">{l.apelido}</div>}
-                      <div className="text-xs text-[#F5F1E8] font-semibold">{formatBRL(Number(l.valor_face))}</div>
+                      <div className="text-xs text-[#F5F1E8] font-semibold">{formatListingValue(Number(l.valor_face), l.currency)}</div>
                       {l.risk_score && (
                         <div className={cn("text-[9px] font-bold mt-1",
                           l.risk_score >= 70 ? "text-emerald-400" : l.risk_score >= 50 ? "text-[#C9A84C]" : "text-red-400"
@@ -1684,7 +1736,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
                   {selectedListing.anonymous_id}
                   {selectedListing.apelido && <span className="text-[#F5F1E8]"> · {selectedListing.apelido}</span>}
                 </div>
-                <div className="text-lg font-bold text-[#F5F1E8]">{formatBRL(Number(selectedListing.valor_face))}</div>
+                <div className="text-lg font-bold text-[#F5F1E8]">{formatListingValue(Number(selectedListing.valor_face), selectedListing.currency)}</div>
                 <div className="text-xs text-[#9BAFC5] mt-1">Status: <span className="text-[#F5F1E8]">{selectedListing.listing_status.replace(/_/g, " ")}</span></div>
               </div>
               <button onClick={() => setSelectedListing(null)} className="w-8 h-8 flex items-center justify-center rounded-full text-[#9BAFC5] hover:text-[#F5F1E8] hover:bg-[#F5F1E8]/10 transition text-xl">&times;</button>
@@ -2035,6 +2087,47 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
                   <p className="text-[9px] text-[#9BAFC5] mt-1.5">Envie este link ao cedente. Formulário público, sem login.</p>
                 </div>
               )}
+              <div className="mb-2">
+                <div className="text-[10px] text-[#C9A84C] font-bold uppercase tracking-wider mb-2">
+                  Checklist de Documentos Obrigatórios
+                </div>
+                <div className="space-y-1.5">
+                  {(CM_DOCUMENT_CHECKLISTS[selectedListing.asset_type as CmAssetType] ?? CM_DOCUMENT_CHECKLISTS.outros).map((item) => {
+                    const uploaded = listingDocs.find((d: any) => d.checklist_item_id === item.id);
+                    return (
+                      <div key={item.id} className="flex items-center justify-between gap-2 bg-[#12112A] border border-[#9BAFC5]/10 rounded-lg px-3 py-2">
+                        <div className="min-w-0 flex items-center gap-2">
+                          {uploaded ? <CheckCircle2 size={13} className="text-emerald-400 flex-shrink-0" /> : <Clock size={13} className="text-[#9BAFC5]/50 flex-shrink-0" />}
+                          <div className="min-w-0">
+                            <div className="text-[11px] text-[#F5F1E8] truncate">{item.label}</div>
+                            {item.required && !uploaded && (
+                              <div className="text-[8px] text-[#E8C97A] font-bold uppercase tracking-wide">Obrigatório</div>
+                            )}
+                          </div>
+                        </div>
+                        {uploaded ? (
+                          <span className="text-[9px] text-emerald-400 font-bold flex-shrink-0">Enviado</span>
+                        ) : (
+                          <label className="flex items-center gap-1 px-2 py-1 bg-[#162744] border border-[#9BAFC5]/15 rounded text-[#9BAFC5] text-[9px] font-bold hover:border-[#C9A84C]/30 hover:text-[#C9A84C] transition cursor-pointer flex-shrink-0">
+                            {uploadingDoc === selectedListing.id ? <Loader2 size={11} className="animate-spin" /> : <Upload size={11} />}
+                            Enviar
+                            <input type="file" className="hidden" accept=".pdf,.jpg,.png,.jpeg"
+                              onChange={(e) => { if (e.target.files?.[0]) handleUploadDoc(selectedListing.id, e.target.files[0], item.id); }}
+                            />
+                          </label>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+              <label className="w-full flex items-center gap-3 px-4 py-3 bg-[#162744] border border-[#9BAFC5]/15 rounded-lg text-[#9BAFC5] text-xs font-bold hover:bg-[#162744]/80 transition cursor-pointer">
+                {uploadingDoc === selectedListing.id ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
+                Outro Documento / Áudio
+                <input type="file" className="hidden" accept=".pdf,.mp3,.ogg,.wav,.m4a,.webm,.jpg,.png,.jpeg"
+                  onChange={(e) => { if (e.target.files?.[0]) handleUploadDoc(selectedListing.id, e.target.files[0]); }}
+                />
+              </label>
               <button
                 onClick={() => { setAssistantListing({ id: selectedListing.id, anonymous_id: selectedListing.anonymous_id }); }}
                 className="w-full flex items-center gap-3 px-4 py-3 bg-[#C9A84C]/10 border border-[#C9A84C]/20 rounded-lg text-[#C9A84C] text-xs font-bold hover:bg-[#C9A84C]/20 transition"
@@ -2115,48 +2208,6 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
                   )}
                 </div>
               )}
-              <div className="mb-2">
-                <div className="text-[10px] text-[#C9A84C] font-bold uppercase tracking-wider mb-2">
-                  Checklist de Documentos Obrigatórios
-                </div>
-                <div className="space-y-1.5">
-                  {(CM_DOCUMENT_CHECKLISTS[selectedListing.asset_type as CmAssetType] ?? CM_DOCUMENT_CHECKLISTS.outros).map((item) => {
-                    const uploaded = listingDocs.find((d: any) => d.checklist_item_id === item.id);
-                    return (
-                      <div key={item.id} className="flex items-center justify-between gap-2 bg-[#12112A] border border-[#9BAFC5]/10 rounded-lg px-3 py-2">
-                        <div className="min-w-0 flex items-center gap-2">
-                          {uploaded ? <CheckCircle2 size={13} className="text-emerald-400 flex-shrink-0" /> : <Clock size={13} className="text-[#9BAFC5]/50 flex-shrink-0" />}
-                          <div className="min-w-0">
-                            <div className="text-[11px] text-[#F5F1E8] truncate">{item.label}</div>
-                            {item.required && !uploaded && (
-                              <div className="text-[8px] text-[#E8C97A] font-bold uppercase tracking-wide">Obrigatório</div>
-                            )}
-                          </div>
-                        </div>
-                        {uploaded ? (
-                          <span className="text-[9px] text-emerald-400 font-bold flex-shrink-0">Enviado</span>
-                        ) : (
-                          <label className="flex items-center gap-1 px-2 py-1 bg-[#162744] border border-[#9BAFC5]/15 rounded text-[#9BAFC5] text-[9px] font-bold hover:border-[#C9A84C]/30 hover:text-[#C9A84C] transition cursor-pointer flex-shrink-0">
-                            {uploadingDoc === selectedListing.id ? <Loader2 size={11} className="animate-spin" /> : <Upload size={11} />}
-                            Enviar
-                            <input type="file" className="hidden" accept=".pdf,.jpg,.png,.jpeg"
-                              onChange={(e) => { if (e.target.files?.[0]) handleUploadDoc(selectedListing.id, e.target.files[0], item.id); }}
-                            />
-                          </label>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <label className="w-full flex items-center gap-3 px-4 py-3 bg-[#162744] border border-[#9BAFC5]/15 rounded-lg text-[#9BAFC5] text-xs font-bold hover:bg-[#162744]/80 transition cursor-pointer">
-                {uploadingDoc === selectedListing.id ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
-                Outro Documento / Áudio
-                <input type="file" className="hidden" accept=".pdf,.mp3,.ogg,.wav,.m4a,.webm,.jpg,.png,.jpeg"
-                  onChange={(e) => { if (e.target.files?.[0]) handleUploadDoc(selectedListing.id, e.target.files[0]); }}
-                />
-              </label>
             </div>
             </>)}
 

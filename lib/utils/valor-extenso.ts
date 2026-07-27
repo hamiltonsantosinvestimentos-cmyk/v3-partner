@@ -28,15 +28,22 @@ function tresDigitosPorExtenso(n: number): string {
   return partes.join(" e ");
 }
 
-function inteiroPorExtenso(n: number): { texto: string; terminaEmMilhao: boolean } {
-  if (n === 0) return { texto: "zero", terminaEmMilhao: false };
+function inteiroPorExtenso(n: number): { texto: string; terminaEmMilhaoOuBilhao: boolean } {
+  if (n === 0) return { texto: "zero", terminaEmMilhaoOuBilhao: false };
 
-  const milhoes = Math.floor(n / 1_000_000);
+  // tresDigitosPorExtenso só formata 0-999, então bilhoes/milhoes tem que
+  // ficar dentro dessa faixa aqui (ate 999 bilhoes, bem acima de qualquer
+  // ativo real da Bolsa de Ativos V3).
+  const bilhoes = Math.floor(n / 1_000_000_000);
+  const milhoes = Math.floor((n % 1_000_000_000) / 1_000_000);
   const milhares = Math.floor((n % 1_000_000) / 1000);
   const centenas = n % 1000;
 
   const partes: string[] = [];
 
+  if (bilhoes > 0) {
+    partes.push(bilhoes === 1 ? "um bilhão" : `${tresDigitosPorExtenso(bilhoes)} bilhões`);
+  }
   if (milhoes > 0) {
     partes.push(milhoes === 1 ? "um milhão" : `${tresDigitosPorExtenso(milhoes)} milhões`);
   }
@@ -47,15 +54,15 @@ function inteiroPorExtenso(n: number): { texto: string; terminaEmMilhao: boolean
     partes.push(tresDigitosPorExtenso(centenas));
   }
 
-  // "de" é obrigatório logo após milhão/milhões quando não há mil/centenas
-  // em seguida (ex: "um milhão de reais", nunca "um milhão reais").
-  const terminaEmMilhao = milhoes > 0 && milhares === 0 && centenas === 0;
+  // "de" é obrigatório logo após milhão/milhões/bilhão/bilhões quando não há
+  // mil/centenas em seguida (ex: "dois bilhões de reais", nunca "dois bilhões reais").
+  const terminaEmMilhaoOuBilhao = (bilhoes > 0 || milhoes > 0) && milhares === 0 && centenas === 0;
 
-  if (partes.length <= 1) return { texto: partes[0] ?? "zero", terminaEmMilhao };
+  if (partes.length <= 1) return { texto: partes[0] ?? "zero", terminaEmMilhaoOuBilhao };
 
   const ultimo = partes[partes.length - 1];
   const resto = partes.slice(0, -1);
-  return { texto: `${resto.join(", ")} e ${ultimo}`, terminaEmMilhao };
+  return { texto: `${resto.join(", ")} e ${ultimo}`, terminaEmMilhaoOuBilhao };
 }
 
 // Converte um valor em reais (ex: 2475200.00) para texto por extenso em pt-BR,
@@ -64,9 +71,9 @@ export function valorEmReaisPorExtenso(valor: number): string {
   const inteiro = Math.floor(valor);
   const centavos = Math.round((valor - inteiro) * 100);
 
-  const { texto: reaisTexto, terminaEmMilhao } = inteiroPorExtenso(inteiro);
+  const { texto: reaisTexto, terminaEmMilhaoOuBilhao } = inteiroPorExtenso(inteiro);
   const reaisLabel = inteiro === 1 ? "real" : "reais";
-  const conector = terminaEmMilhao ? "de" : "";
+  const conector = terminaEmMilhaoOuBilhao ? "de" : "";
 
   if (centavos === 0) {
     return [reaisTexto, conector, reaisLabel].filter(Boolean).join(" ");

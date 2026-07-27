@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { X, Loader2, Send } from "lucide-react";
-import { maskCurrencyBRLInput, parseCurrencyBRLInput } from "@/lib/utils";
+import { maskCurrencyInput, parseCurrencyBRLInput, CM_CURRENCY_SYMBOL, type CmCurrency } from "@/lib/utils";
 
 interface BidModalProps {
   listing: {
@@ -10,6 +10,7 @@ interface BidModalProps {
     anonymous_id: string;
     asset_type: string;
     valor_face: number;
+    currency?: CmCurrency;
     desagio_pretendido: number | null;
   };
   onClose: () => void;
@@ -17,6 +18,8 @@ interface BidModalProps {
 }
 
 export function BidModal({ listing, onClose, onSuccess }: BidModalProps) {
+  const currency: CmCurrency = listing.currency ?? "BRL";
+  const symbol = CM_CURRENCY_SYMBOL[currency];
   const [bidValue, setBidValue] = useState("");
   const [desagio, setDesagio] = useState("");
   const [tirPretendida, setTirPretendida] = useState("");
@@ -29,7 +32,7 @@ export function BidModal({ listing, onClose, onSuccess }: BidModalProps) {
     setDesagio(val);
     if (val) {
       const custo = listing.valor_face * (1 - Number(val) / 100);
-      setBidValue(maskCurrencyBRLInput(String(Math.round(custo * 100))));
+      setBidValue(maskCurrencyInput(String(Math.round(custo * 100)), currency));
     }
   };
 
@@ -77,7 +80,7 @@ export function BidModal({ listing, onClose, onSuccess }: BidModalProps) {
         <div className="bg-[#09081A] rounded-lg p-3 mb-4 text-xs text-[#9BAFC5]">
           <div className="flex justify-between">
             <span>Valor de Face</span>
-            <span className="text-[#F5F1E8] font-bold">R$ {listing.valor_face.toLocaleString("pt-BR")}</span>
+            <span className="text-[#F5F1E8] font-bold">{symbol} {listing.valor_face.toLocaleString(currency === "BRL" ? "pt-BR" : "en-US")}</span>
           </div>
           {listing.desagio_pretendido && (
             <div className="flex justify-between mt-1">
@@ -99,12 +102,12 @@ export function BidModal({ listing, onClose, onSuccess }: BidModalProps) {
             />
           </div>
           <div>
-            <label className="block text-[10px] text-[#C9A84C] font-bold uppercase tracking-wider mb-1">Valor da Oferta (R$)</label>
+            <label className="block text-[10px] text-[#C9A84C] font-bold uppercase tracking-wider mb-1">Valor da Oferta ({symbol})</label>
             <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-[#9BAFC5]">R$</span>
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-[#9BAFC5]">{symbol}</span>
               <input
                 inputMode="numeric" value={bidValue}
-                onChange={(e) => setBidValue(maskCurrencyBRLInput(e.target.value))}
+                onChange={(e) => setBidValue(maskCurrencyInput(e.target.value, currency))}
                 placeholder="0,00"
                 className="w-full bg-[#162744] border border-[#C9A84C]/30 rounded-md pl-8 pr-3 py-2 text-sm text-[#F5F1E8] font-bold placeholder:text-[#9BAFC5]/40"
               />

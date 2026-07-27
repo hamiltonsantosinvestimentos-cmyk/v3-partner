@@ -32,10 +32,15 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     "uf_ente_devedor", "municipio_ente_devedor", "tranche_valor_minimo",
     // Fase 1 · Bolsa de Grandes Ativos Imobiliarios e Alternativos
     "allow_public_listing",
+    "currency",
   ];
   const update: Record<string, any> = {};
   for (const key of allowed) {
     if (body[key] !== undefined) update[key] = body[key];
+  }
+
+  if (update.currency !== undefined && !["BRL", "USD", "EUR"].includes(update.currency)) {
+    return NextResponse.json({ error: `Moeda "${update.currency}" inválida. Use BRL, USD ou EUR.` }, { status: 422 });
   }
 
   if (Object.keys(update).length === 0)

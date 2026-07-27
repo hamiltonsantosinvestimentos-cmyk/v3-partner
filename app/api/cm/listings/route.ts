@@ -50,13 +50,18 @@ export async function POST(req: NextRequest) {
     ente_devedor, uf_ente_devedor, municipio_ente_devedor, esfera, tribunal, natureza, numero_processo,
     valor_face, valor_atualizado, desagio_pretendido, prazo_estimado_meses,
     allows_tranching, tranche_valor_minimo, conditional_blocks, metadata, ma_deal_id,
-    apelido, originator_profile_id, originator_referral_id,
+    apelido, originator_profile_id, originator_referral_id, currency,
   } = body;
 
   if (!asset_type || !seller_name || !valor_face) {
     return NextResponse.json({
       error: "Campos obrigatórios: asset_type, seller_name, valor_face"
     }, { status: 422 });
+  }
+
+  const CM_CURRENCIES = ["BRL", "USD", "EUR"];
+  if (currency !== undefined && !CM_CURRENCIES.includes(currency)) {
+    return NextResponse.json({ error: `Moeda "${currency}" inválida. Use BRL, USD ou EUR.` }, { status: 422 });
   }
 
   // Filtro compulsorio de portfolio (Mesa Operacional 2026-07-15): CGI/CRI/FIDC nao sao
@@ -84,6 +89,7 @@ export async function POST(req: NextRequest) {
       originator_profile_id: originator_profile_id ?? null,
       originator_referral_id: originator_referral_id ?? null,
       asset_type,
+      currency: currency ?? "BRL",
       seller_name,
       seller_cpf_cnpj: seller_cpf_cnpj ?? null,
       seller_profile_id: null,
