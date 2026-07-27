@@ -72,10 +72,10 @@ const STATUS_COLUMNS = [
   { key: "aprovado_head", label: "Aguarda Head", color: "border-[#C9A84C]", icon: Gavel },
   { key: "ativo_vitrine,proposta_recebida", label: "Na Vitrine", color: "border-emerald-500", icon: BarChart3 },
   { key: "em_escrow_due_diligence", label: "Escrow / DD", color: "border-purple-500", icon: DollarSign },
-  // Coluna adicionada em 27/07: ativos "cancelado" existiam no banco (deleted_at nulo,
-  // continuavam contando em Total Ativos) mas nao apareciam em nenhuma coluna do Kanban,
-  // ficando orfaos sem visibilidade nenhuma para a Mesa.
-  { key: "cancelado", label: "Cancelado", color: "border-red-500", icon: X },
+  // Coluna "Cancelado" testada em 27/07 e removida a pedido de Joao: ativo cancelado
+  // deve ir para a Lixeira (deleted_at), nao ficar visivel num board separado. O botao
+  // "Cancelar" na aba Governanca agora chama handleDeleteAsset em vez de setar
+  // listing_status="cancelado" (status morto, sem coluna nenhuma no board).
 ];
 
 function formatBRL(v: number) {
@@ -1625,7 +1625,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
 
       {/* Kanban */}
       {tab === "kanban" && (
-        <div className="grid grid-cols-6 gap-3">
+        <div className="grid grid-cols-5 gap-3">
           {STATUS_COLUMNS.map((col) => {
             const statuses = col.key.split(",");
             const items = listings.filter((l) => statuses.includes(l.listing_status));
@@ -2674,7 +2674,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
                     {t.label} &rarr;
                   </button>
                 ))}
-                <button onClick={() => handleStatusTransition(selectedListing.id, "cancelado")}
+                <button onClick={() => handleDeleteAsset(selectedListing.id)}
                   className="px-3 py-2 bg-red-600/10 border border-red-500/20 rounded-lg text-red-400 text-xs hover:bg-red-600/20 transition">
                   Cancelar
                 </button>
