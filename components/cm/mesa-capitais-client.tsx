@@ -356,6 +356,18 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
     return () => clearInterval(interval);
   }, [tab, fetchAll]);
 
+  // Polling leve enquanto a aba "Documentos" do ativo selecionado fica aberta e ha
+  // documento ainda em processamento (OCR/Whisper) — corrige a mesma classe de bug
+  // do polling de Propostas acima: antes so atualizava com o botao "Atualizar" manual.
+  // Para de rodar sozinho assim que todo documento sair de pendente/processing.
+  useEffect(() => {
+    if (activeDetailTab !== "documentos" || !selectedListing) return;
+    const temPendente = listingDocs.some((d: any) => d.validation_status === "pendente" || d.validation_status === "processing");
+    if (!temPendente) return;
+    const interval = setInterval(() => loadDocs(selectedListing.id), 15000);
+    return () => clearInterval(interval);
+  }, [activeDetailTab, selectedListing, listingDocs]);
+
   useEffect(() => {
     fetch("/api/partners")
       .then((res) => res.json())
