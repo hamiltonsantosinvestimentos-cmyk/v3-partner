@@ -73,6 +73,7 @@ export function ContractsPanelClient() {
   const [showPreview, setShowPreview] = useState(false);
   const [noteText, setNoteText] = useState("");
   const [submittingNote, setSubmittingNote] = useState(false);
+  const [sendingToSignature, setSendingToSignature] = useState(false);
 
   const fetchContracts = useCallback(async () => {
     setLoading(true);
@@ -126,6 +127,23 @@ export function ContractsPanelClient() {
         alert(j.error);
       }
     } catch { /* */ }
+  };
+
+  const handleSendToSignature = async () => {
+    if (!selected) return;
+    if (!confirm(`Enviar "${selected.contract_title}" para assinatura digital via ClickSign?`)) return;
+    setSendingToSignature(true);
+    try {
+      const res = await fetch(`/api/contracts/${selected.id}/send`, { method: "POST" });
+      const json = await res.json();
+      if (res.ok) {
+        alert(`Enviado para assinatura (${json.signatarios} signatário(s)).`);
+        fetchContracts();
+      } else {
+        alert(json.error ?? "Erro ao enviar para assinatura");
+      }
+    } catch { alert("Erro de conexão"); }
+    finally { setSendingToSignature(false); }
   };
 
   const statusInfo = (s: string) => STATUS_MAP[s] ?? STATUS_MAP.rascunho;
@@ -323,6 +341,16 @@ export function ContractsPanelClient() {
                         <XCircle size={13} /> Reprovar
                       </button>
                     </>
+                  )}
+
+                  {["rascunho", "aprovado"].includes(selected.status_signature) && selected.parties?.some((p: any) => p.role !== "v3_partners" && p.email) && (
+                    <button
+                      onClick={handleSendToSignature}
+                      disabled={sendingToSignature}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-[#C9A84C]/20 text-[#C9A84C] rounded-lg text-xs font-bold hover:bg-[#C9A84C]/30 transition disabled:opacity-50"
+                    >
+                      {sendingToSignature ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />} Enviar para Assinatura
+                    </button>
                   )}
                 </div>
               </div>

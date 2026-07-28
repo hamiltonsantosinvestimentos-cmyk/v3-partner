@@ -5,15 +5,20 @@ export interface ClickSignSignatory {
 
 export interface SendToClickSignInput {
   dealId: string;
-  documentType: "nda" | "mandato" | "loi" | "contrato_venda" | "fpa_venda" | "fpa_compra";
+  documentType: "nda" | "mandato" | "loi" | "contrato_venda" | "fpa_venda" | "fpa_compra" | "nda_quadripartite" | "contrato_final";
   signatories: ClickSignSignatory[];
   documentUrl?: string;
   documentLabel?: string;
 }
 
 // documentTypes que usam a API v3 (envelopes), confirmadamente funcional.
-// "nda" e "mandato" continuam na v1 depreciada até serem migrados também.
-const V3_DOCUMENT_TYPES = new Set(["loi", "contrato_venda", "fpa_venda", "fpa_compra"]);
+// "nda" continua na v1 depreciada (fluxo M&A original, não tocado aqui).
+// "mandato" migrado para v3 nesta extensão (2026-07-28, botão "Enviar para
+// Assinatura" da Central de Contratos): não tinha nenhum caller real até
+// então, então mover para o caminho funcional não muda comportamento de
+// produção nenhum. "nda_quadripartite" e "contrato_final" são os novos
+// tipos da esteira de qualificação de partes da Bolsa de Capitais.
+const V3_DOCUMENT_TYPES = new Set(["loi", "contrato_venda", "fpa_venda", "fpa_compra", "mandato", "nda_quadripartite", "contrato_final"]);
 
 export type SendToClickSignResult =
   | { ok: true; envelopeId: string; signUrl: string; status: "PENDING" }
