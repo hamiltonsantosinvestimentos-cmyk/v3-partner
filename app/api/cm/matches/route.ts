@@ -30,9 +30,12 @@ export async function GET(req: NextRequest) {
     .select(`
       *,
       investor_demands(nome_contato, email, empresa, setores, ticket_min, ticket_max),
-      cm_asset_listings:listing_id(anonymous_id, asset_type, valor_face, desagio_pretendido, listing_status)
+      cm_asset_listings:listing_id!inner(anonymous_id, asset_type, valor_face, desagio_pretendido, listing_status)
     `)
     .not("listing_id", "is", null)
+    // !inner + filtro no join: exclui matches cujo ativo ja foi pra Lixeira
+    // (mesmo bug ja corrigido em Total Ativos e agora encontrado aqui tambem)
+    .is("cm_asset_listings.deleted_at", null)
     .order("score", { ascending: false })
     .limit(50);
 
