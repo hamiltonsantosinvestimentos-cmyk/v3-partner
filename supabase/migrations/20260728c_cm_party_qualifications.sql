@@ -89,3 +89,17 @@ CREATE POLICY cm_party_qual_insert ON cm_party_qualifications FOR INSERT TO auth
 -- /api/cm/qualificacao/[token]) roda com a service role key no servidor,
 -- que ignora RLS — mesmo padrao de todo outro fluxo de intake publico neste
 -- projeto (loi-intake, fpa-venda-intake, deal-intermediaries/fill, etc.).
+
+-- ════════════════════════════════════════════════════
+-- 3. VINCULO COM A CENTRAL DE CONTRATOS (padronizacao via template)
+-- ════════════════════════════════════════════════════
+-- Decisao (2026-07-28, Joao): o documento final (NDA Quadripartite, FPA
+-- Venda/Compra, Contrato Final) deve ser gerado pela Central de Contratos
+-- (app/api/contracts/generate) usando um template real cadastrado por
+-- Dr. Luis Athaydes em contract_templates — nao por upload manual de PDF.
+-- Esta coluna amarra o contrato gerado ao lote que forneceu os dados das
+-- partes, para app/api/contracts/generate poder puxar cm_party_qualifications
+-- automaticamente quando qualification_batch_id for informado.
+
+ALTER TABLE operation_contracts ADD COLUMN IF NOT EXISTS qualification_batch_id uuid REFERENCES cm_qualification_batches(id);
+COMMENT ON COLUMN operation_contracts.qualification_batch_id IS 'Lote de qualificacao (cm_qualification_batches) cujas partes (cm_party_qualifications) alimentaram as variaveis e o array parties deste contrato, quando gerado via Central de Contratos a partir da esteira de qualificacao.';

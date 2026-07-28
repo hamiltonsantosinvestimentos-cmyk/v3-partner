@@ -227,6 +227,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
     { full_name: "", email: "", role_in_document: "parte_principal" },
   ]);
   const [creatingQualification, setCreatingQualification] = useState(false);
+  const [selectedQualBatchId, setSelectedQualBatchId] = useState("");
   const [partnersList, setPartnersList] = useState<{ id: string; full_name: string; email: string }[]>([]);
   const [interSide, setInterSide] = useState<"compra" | "venda">("venda");
   const [interName, setInterName] = useState("");
@@ -843,7 +844,12 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
       const res = await fetch("/api/contracts/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ template_id: templateId, listing_id: listingId, commission_percent: 7 }),
+        body: JSON.stringify({
+          template_id: templateId,
+          listing_id: listingId,
+          commission_percent: 7,
+          qualification_batch_id: selectedQualBatchId || undefined,
+        }),
       });
       const json = await res.json();
       if (res.ok) {
@@ -2391,6 +2397,18 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
               {contractTemplates.length > 0 && (
                 <div className="bg-[#12112A] border border-[#9BAFC5]/10 rounded-lg p-3">
                   <div className="text-[9px] text-[#C9A84C] font-bold uppercase mb-2">Gerar Contrato</div>
+                  {qualBatches.filter((b: any) => b.status === "completo").length > 0 && (
+                    <div className="mb-2">
+                      <label className="text-[9px] text-[#9BAFC5] uppercase">Puxar partes do lote de qualificação (opcional)</label>
+                      <select value={selectedQualBatchId} onChange={(e) => setSelectedQualBatchId(e.target.value)}
+                        className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8] mt-1">
+                        <option value="">Nenhum (só cedente da listagem)</option>
+                        {qualBatches.filter((b: any) => b.status === "completo").map((b: any) => (
+                          <option key={b.id} value={b.id}>{DOCUMENT_TYPE_LABELS[b.document_type] ?? b.document_type} · {(b.cm_party_qualifications ?? []).length} partes</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
                   {contractTemplates.map((t: any) => (
                     <button key={t.id} onClick={() => generateContract(selectedListing.id, t.id)}
                       disabled={generatingContract}
