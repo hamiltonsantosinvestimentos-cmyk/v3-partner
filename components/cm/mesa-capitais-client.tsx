@@ -2733,10 +2733,10 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
                 <button
                   onClick={() => loadDocs(selectedListing.id)}
                   disabled={docsLoading}
-                  title="Atualizar lista de documentos"
+                  title="Verificar status de OCR/transcrição dos documentos"
                   className="flex items-center gap-1 px-2 py-1 bg-[#162744] border border-[#9BAFC5]/15 rounded text-[#9BAFC5] text-[9px] font-bold hover:border-[#C9A84C]/30 hover:text-[#C9A84C] transition disabled:opacity-50"
                 >
-                  <RefreshCw size={11} className={docsLoading ? "animate-spin" : ""} /> Atualizar
+                  <RefreshCw size={11} className={docsLoading ? "animate-spin" : ""} /> Atualizar Processamento
                 </button>
               </div>
 
