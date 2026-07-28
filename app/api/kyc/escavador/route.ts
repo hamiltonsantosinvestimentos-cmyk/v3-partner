@@ -65,7 +65,7 @@ export async function POST(req: NextRequest) {
     if (!token) return NextResponse.json({ error: "ESCAVADOR_API_TOKEN não configurado" }, { status: 500 });
 
     const body = await req.json();
-    const { tipo, valor } = body;
+    const { tipo, valor, credit_profile_id } = body;
     if (!tipo || !valor?.trim()) {
       return NextResponse.json({ error: "tipo e valor são obrigatórios" }, { status: 400 });
     }
@@ -125,12 +125,20 @@ export async function POST(req: NextRequest) {
       processos.push(...batchResult);
     }
 
-    return NextResponse.json({
+    const result = {
       envolvido,
       total_processos: total,
       match_tipo: matchTipo,
       processos,
-    });
+    };
+
+    // Persistência best-effort: relatório final (lib/credit-report-data.ts) lê
+    // credit_profiles.escavador_data para montar a seção própria do Escavador.
+    if (credit_profile_id) {
+      await svc.from("credit_profiles").update({ escavador_data: result }).eq("id", credit_profile_id).then(null, () => {});
+    }
+
+    return NextResponse.json(result);
   } catch (err) {
     return NextResponse.json(
       { error: `Erro interno: ${err instanceof Error ? err.message : String(err)}` },

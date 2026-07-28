@@ -112,6 +112,30 @@ export function buildExternalReportBodyHtml(data: CreditReportData): string {
     ? `<div class="flag-box bad"><strong>Sanção localizada no CEIS</strong>Foi identificada sanção administrativa ou impedimento de contratar com a administração pública para o titular. Consultar a instituição para o detalhamento completo.</div>`
     : `<div class="flag-box"><strong>Sem ocorrência no CEIS</strong>Nenhuma sanção administrativa ou impedimento de contratar localizado no CEIS para o titular na data-base da coleta.</div>`;
 
+  const escavadorSection = data.escavador.hasData
+    ? data.escavador.totalProcessos && data.escavador.totalProcessos > 0
+      ? `
+      <h3 class="sec">Processos Judiciais Localizados · Escavador</h3>
+      <p class="note">${data.escavador.totalProcessos} processo(s) localizado(s) na base do Escavador. ${
+          data.escavador.processos.length < data.escavador.totalProcessos
+            ? `Exibindo os ${data.escavador.processos.length} mais recentes.`
+            : ""
+        }</p>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>Número CNJ</th><th>Polo Ativo</th><th>Polo Passivo</th><th>Tribunal</th><th>Status</th></tr></thead>
+        <tbody>${data.escavador.processos
+          .map(
+            (p) => `<tr><td><strong>${esc(p.numeroCnj)}</strong></td><td>${esc(p.poloAtivo ?? "Não informado")}</td><td>${esc(p.poloPassivo ?? "Não informado")}</td><td>${esc(p.tribunal ?? "Não informado")}</td><td>${esc(p.status ?? "Não informado")}</td></tr>`
+          )
+          .join("")}</tbody>
+      </table></div>`
+      : `
+      <h3 class="sec">Processos Judiciais · Escavador</h3>
+      <p class="note">Nenhum processo localizado na base do Escavador para o titular na data-base da coleta.</p>`
+    : `
+      <h3 class="sec">Processos Judiciais · Escavador</h3>
+      <p class="note">Fonte não consultada nesta análise.</p>`;
+
   return `
 <div class="gold-stripe"></div>
 <div class="doc-body">
@@ -151,6 +175,8 @@ export function buildExternalReportBodyHtml(data: CreditReportData): string {
 
   <h3 class="sec">Sanções e Impedimentos (CEIS)</h3>
   ${ceisSection}
+
+  ${escavadorSection}
 
   <h3 class="sec">Nota Metodológica</h3>
   <p class="note">Este dossiê é uma compilação factual produzida pela V3 Partners a partir de fontes públicas e, quando aplicável, de documentos fornecidos pelo titular mediante consentimento expresso (LGPD Art. 7º, inciso V). Não contém score, classificação de risco ou recomendação de crédito. A avaliação de risco e a decisão de alocação são de responsabilidade exclusiva da instituição destinatária. Validade de 30 dias a partir da data de emissão.</p>

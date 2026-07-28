@@ -37,6 +37,11 @@ export interface CreditReportData {
   ceis: {
     hasMatch: boolean;
   };
+  escavador: {
+    hasData: boolean;
+    totalProcessos: number | null;
+    processos: Array<{ numeroCnj: string; poloAtivo: string | null; poloPassivo: string | null; tribunal: string | null; status: string | null }>;
+  };
 }
 
 const SOURCE_CATALOG: Array<{ key: string; label: string; scope: string }> = [
@@ -77,7 +82,7 @@ export async function buildCreditReportData(creditProfileId: string): Promise<Cr
 
   const { data: profile } = await svc
     .from("credit_profiles")
-    .select("id, subject_name, subject_cpf_cnpj, created_at, sources_free, sources_paid, flags, raw_result, registrato_data")
+    .select("id, subject_name, subject_cpf_cnpj, created_at, sources_free, sources_paid, flags, raw_result, registrato_data, escavador_data")
     .eq("id", creditProfileId)
     .single();
 
@@ -102,6 +107,11 @@ export async function buildCreditReportData(creditProfileId: string): Promise<Cr
 
   const flags = (profile.flags ?? {}) as Record<string, unknown>;
   const ceisMatch = flags.ceis_match === true;
+
+  const escavadorData = (profile.escavador_data ?? null) as {
+    total_processos?: number;
+    processos?: Array<{ numero_cnj: string; polo_ativo: string | null; polo_passivo: string | null; tribunal: string | null; status: string | null }>;
+  } | null;
 
   return {
     code: profile.id.slice(0, 8).toUpperCase(),
@@ -128,6 +138,17 @@ export async function buildCreditReportData(creditProfileId: string): Promise<Cr
     },
     ceis: {
       hasMatch: ceisMatch,
+    },
+    escavador: {
+      hasData: escavadorData !== null,
+      totalProcessos: escavadorData?.total_processos ?? null,
+      processos: (escavadorData?.processos ?? []).slice(0, 10).map((p) => ({
+        numeroCnj: p.numero_cnj,
+        poloAtivo: p.polo_ativo ?? null,
+        poloPassivo: p.polo_passivo ?? null,
+        tribunal: p.tribunal ?? null,
+        status: p.status ?? null,
+      })),
     },
   };
 }

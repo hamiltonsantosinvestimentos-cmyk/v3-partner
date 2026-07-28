@@ -1790,7 +1790,7 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
       const res = await fetch("/api/kyc/escavador", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tipo, valor }),
+        body: JSON.stringify({ tipo, valor, credit_profile_id: proposal.credit_profile_id }),
       });
       const json = await res.json();
       setEscavadorResult(json);
