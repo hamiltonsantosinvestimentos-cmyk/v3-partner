@@ -1,0 +1,135 @@
+import { NextRequest, NextResponse } from "next/server";
+import { createClient as sc } from "@supabase/supabase-js";
+import { isValidCPF, isValidCNPJ } from "@/lib/validators/cpf-cnpj";
+
+function svc() {
+  return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+}
+
+const DOCUMENT_TYPE_LABELS: Record<string, string> = {
+  nda_quadripartite: "NDA Quadripartite",
+  fpa_venda: "FPA Venda",
+  fpa_compra: "FPA Compra",
+  mandato: "Mandato",
+  contrato_final: "Contrato Final",
+};
+
+// GET /api/cm/qualificacao/[token] — contexto público para o envolvido preencher.
+export async function GET(_req: NextRequest, { params }: { params: Promise<{ token: string }> }) {
+  const { token } = await params;
+
+  const { data: qualification } = await svc()
+    .from("cm_party_qualifications")
+    .select("id, full_name, email, role_in_document, status, batch_id, cm_qualification_batches(document_type, cm_asset_listings(anonymous_id))")
+    .eq("qualification_token", token)
+    .single();
+
+  if (!qualification) return NextResponse.json({ error: "Link inválido ou expirado" }, { status: 404 });
+
+  const batch = qualification.cm_qualification_batches as any;
+  const docLabel = DOCUMENT_TYPE_LABELS[batch?.document_type] ?? batch?.document_type;
+
+  if (qualification.status === "preenchido") {
+    return NextResponse.json({ locked: true, message: `Qualificação já enviada. Aguarde a geração do ${docLabel}.` }, { status: 409 });
+  }
+
+  return NextResponse.json({
+    full_name: qualification.full_name,
+    email: qualification.email,
+    role_in_document: qualification.role_in_document,
+    document_type_label: docLabel,
+    anonymous_id: batch?.cm_asset_listings?.anonymous_id ?? null,
+  });
+}
+
+// POST /api/cm/qualificacao/[token] — envolvido envia CPF/CNPJ, RG, endereço
+// e dados bancários/PIX. Ao completar 100% do lote, marca o batch como
+// "completo" e notifica a Mesa — a geração do instrumento jurídico
+// (NDA Quadripartite/FPA/Mandato/Contrato Final) continua manual a partir
+// daqui: os textos desses 4 documentos ainda não existem em contract_templates
+// (só "NDA (Comprador Bolsa de Ativos)" e "Anexo FPA/NCND" existem hoje) e
+// autoria de texto jurídico novo não é decisão que este código deve tomar.
+export async function POST(req: NextRequest, { params }: { params: Promise<{ token: string }> }) {
+  const { token } = await params;
+
+  const { data: qualification } = await svc()
+    .from("cm_party_qualifications")
+    .select("id, batch_id, status")
+    .eq("qualification_token", token)
+    .single();
+
+  if (!qualification) return NextResponse.json({ error: "Link inválido ou expirado" }, { status: 404 });
+  if (qualification.status === "preenchido") {
+    return NextResponse.json({ error: "Este link já foi preenchido." }, { status: 409 });
+  }
+
+  const body = await req.json().catch(() => ({}));
+  const { cpf_cnpj, rg, endereco_completo, dados_bancarios, pix_key } = body as {
+    cpf_cnpj?: string;
+    rg?: string;
+    endereco_completo?: string;
+    dados_bancarios?: { banco?: string; agencia?: string; conta?: string; tipo_conta?: string };
+    pix_key?: string;
+  };
+
+  const required = { cpf_cnpj, rg, endereco_completo };
+  const missing = Object.entries(required).filter(([, v]) => !v || String(v).trim() === "").map(([k]) => k);
+  if (missing.length > 0) {
+    return NextResponse.json({ error: `Campos obrigatórios ausentes: ${missing.join(", ")}` }, { status: 422 });
+  }
+
+  const docDigits = String(cpf_cnpj).replace(/\D/g, "");
+  const validDoc = docDigits.length > 11 ? isValidCNPJ(cpf_cnpj!) : isValidCPF(cpf_cnpj!);
+  if (!validDoc) {
+    return NextResponse.json({ error: "CPF/CNPJ inválido, confira o número informado." }, { status: 422 });
+  }
+  if (!pix_key && !dados_bancarios?.banco) {
+    return NextResponse.json({ error: "Informe ao menos dados bancários ou chave PIX para eventual repasse." }, { status: 422 });
+  }
+
+  const db = svc();
+
+  const { error: updateError } = await db
+    .from("cm_party_qualifications")
+    .update({
+      cpf_cnpj,
+      rg,
+      endereco_completo,
+      dados_bancarios: dados_bancarios ?? null,
+      pix_key: pix_key ?? null,
+      status: "preenchido",
+      filled_at: new Date().toISOString(),
+    })
+    .eq("id", qualification.id);
+
+  if (updateError) return NextResponse.json({ error: updateError.message }, { status: 500 });
+
+  const { data: siblings } = await db
+    .from("cm_party_qualifications")
+    .select("status")
+    .eq("batch_id", qualification.batch_id);
+
+  const allFilled = (siblings ?? []).every((s) => s.status === "preenchido");
+
+  if (allFilled) {
+    const { data: batch } = await db
+      .from("cm_qualification_batches")
+      .update({ status: "completo", completed_at: new Date().toISOString() })
+      .eq("id", qualification.batch_id)
+      .select("created_by, document_type, listing_id")
+      .single();
+
+    if (batch?.created_by) {
+      await db.from("notifications").insert({
+        user_id: batch.created_by,
+        title: "Qualificação de partes completa",
+        message: `Todos os envolvidos preencheram os dados de qualificação para ${DOCUMENT_TYPE_LABELS[batch.document_type] ?? batch.document_type}. Pronto para gerar o documento.`,
+        type: "qualificacao_completa",
+        action_url: batch.listing_id ? `/bolsa/mesa` : null,
+        read: false,
+      });
+    }
+  }
+
+  return NextResponse.json({ success: true, batch_complete: allFilled });
+}

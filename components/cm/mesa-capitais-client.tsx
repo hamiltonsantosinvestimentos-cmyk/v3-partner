@@ -66,6 +66,14 @@ interface Bid {
   cm_asset_listings: { anonymous_id: string; valor_face: number } | null;
 }
 
+const DOCUMENT_TYPE_LABELS: Record<string, string> = {
+  nda_quadripartite: "NDA Quadripartite",
+  fpa_venda: "FPA Venda",
+  fpa_compra: "FPA Compra",
+  mandato: "Mandato",
+  contrato_final: "Contrato Final",
+};
+
 const STATUS_COLUMNS = [
   { key: "reuniao_validada,formulario_preenchido", label: "Intake", color: "border-blue-500", icon: Clock },
   { key: "nda_assinado,em_analise", label: "NDA / Análise", color: "border-orange-500", icon: Shield },
@@ -212,6 +220,13 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
   const [slaSummary, setSlaSummary] = useState<Record<string, { hours_pending: number; pending_count: number }>>({});
   const [slaContracts, setSlaContracts] = useState<any[]>([]);
   const [resendingContractId, setResendingContractId] = useState<string | null>(null);
+  const [qualBatches, setQualBatches] = useState<any[]>([]);
+  const [showQualModal, setShowQualModal] = useState(false);
+  const [qualDocType, setQualDocType] = useState("nda_quadripartite");
+  const [qualParties, setQualParties] = useState<{ full_name: string; email: string; role_in_document: string }[]>([
+    { full_name: "", email: "", role_in_document: "parte_principal" },
+  ]);
+  const [creatingQualification, setCreatingQualification] = useState(false);
   const [partnersList, setPartnersList] = useState<{ id: string; full_name: string; email: string }[]>([]);
   const [interSide, setInterSide] = useState<"compra" | "venda">("venda");
   const [interName, setInterName] = useState("");
@@ -470,6 +485,52 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
     if (hours >= 48) return { label: `SLA Estourado: ${hours}h`, color: "bg-red-500/15 text-red-400 border-red-500/30" };
     if (hours >= 24) return { label: `SLA Atenção: ${hours}h`, color: "bg-amber-500/15 text-amber-400 border-amber-500/30" };
     return { label: `${hours}h`, color: "bg-[#162744] text-[#9BAFC5] border-[#9BAFC5]/15" };
+  };
+
+  const loadQualifications = async (listingId: string) => {
+    try {
+      const res = await fetch(`/api/cm/qualifications?listing_id=${listingId}`);
+      const json = await res.json();
+      setQualBatches(json.batches ?? []);
+    } catch { setQualBatches([]); }
+  };
+
+  const addQualPartyRow = () => {
+    setQualParties((prev) => [...prev, { full_name: "", email: "", role_in_document: "parte_principal" }]);
+  };
+
+  const removeQualPartyRow = (index: number) => {
+    setQualParties((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const updateQualPartyRow = (index: number, field: "full_name" | "email" | "role_in_document", value: string) => {
+    setQualParties((prev) => prev.map((row, i) => (i === index ? { ...row, [field]: value } : row)));
+  };
+
+  const submitQualification = async (listingId: string) => {
+    const invalid = qualParties.some((p) => !p.full_name.trim() || !isValidEmail(p.email));
+    if (qualParties.length === 0 || invalid) {
+      alert("Preencha nome e e-mail válido para todos os envolvidos");
+      return;
+    }
+    setCreatingQualification(true);
+    try {
+      const res = await fetch("/api/cm/qualifications", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ listing_id: listingId, document_type: qualDocType, parties: qualParties }),
+      });
+      const json = await res.json();
+      if (res.ok) {
+        alert("Links de qualificação enviados aos envolvidos.");
+        setShowQualModal(false);
+        setQualParties([{ full_name: "", email: "", role_in_document: "parte_principal" }]);
+        loadQualifications(listingId);
+      } else {
+        alert(json.error ?? "Erro ao gerar qualificação");
+      }
+    } catch { alert("Erro de conexão"); }
+    finally { setCreatingQualification(false); }
   };
 
   const resendContractNotification = async (contractId: string) => {
@@ -830,6 +891,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
     setNoteMentionedIds([]);
     loadIntermediaries(listing.id);
     loadSlaContracts(listing.id);
+    loadQualifications(listing.id);
   };
 
   const handleStatusTransition = async (listingId: string, newStatus: string) => {
@@ -855,6 +917,9 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
       });
       const json = await res.json();
       if (!res.ok) { alert(json.error ?? "Erro"); return; }
+      if (action === "aceitar" && json.match_deal_id) {
+        alert(`Bid aceito. Operação: ${json.match_deal_id}${json.deal_room_url ? `\nDeal Room: ${json.deal_room_url}` : ""}`);
+      }
       fetchAll();
     } catch { alert("Erro de conexão"); }
     finally { setActionLoading(null); }
@@ -1336,6 +1401,65 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
                   </div>
                 ))
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Qualificação de Partes */}
+      {showQualModal && selectedListing && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60" onClick={() => setShowQualModal(false)}>
+          <div className="w-full max-w-lg max-h-[85vh] bg-[#09081A] border border-[#C9A84C]/20 rounded-xl flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="p-4 border-b border-[#C9A84C]/20 flex items-center justify-between flex-shrink-0">
+              <div className="text-sm font-bold text-[#F5F1E8]">Gerar Qualificação de Partes</div>
+              <button onClick={() => setShowQualModal(false)} className="text-[#9BAFC5] hover:text-[#F5F1E8] text-xl">&times;</button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+              <div>
+                <label className="text-[9px] text-[#9BAFC5] uppercase">Documento</label>
+                <select value={qualDocType} onChange={(e) => setQualDocType(e.target.value)}
+                  className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8] mt-1">
+                  {Object.entries(DOCUMENT_TYPE_LABELS).map(([value, label]) => (
+                    <option key={value} value={value}>{label}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-2">
+                {qualParties.map((row, i) => (
+                  <div key={i} className="bg-[#12112A] border border-[#9BAFC5]/10 rounded-lg p-2 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[9px] text-[#9BAFC5] uppercase">Envolvido {i + 1}</span>
+                      {qualParties.length > 1 && (
+                        <button onClick={() => removeQualPartyRow(i)}><X size={12} className="text-red-400/70 hover:text-red-400" /></button>
+                      )}
+                    </div>
+                    <input value={row.full_name} onChange={(e) => updateQualPartyRow(i, "full_name", e.target.value)} placeholder="Nome completo *"
+                      className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]" />
+                    <input value={row.email} onChange={(e) => updateQualPartyRow(i, "email", e.target.value)} placeholder="E-mail *" type="email"
+                      className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]" />
+                    <select value={row.role_in_document} onChange={(e) => updateQualPartyRow(i, "role_in_document", e.target.value)}
+                      className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]">
+                      <option value="parte_principal">Parte Principal</option>
+                      <option value="intermediario_finder_venda">Intermediário/Finder Venda</option>
+                      <option value="intermediario_finder_compra">Intermediário/Finder Compra</option>
+                      <option value="mandatario">Mandatário</option>
+                      <option value="testemunha">Testemunha</option>
+                    </select>
+                  </div>
+                ))}
+              </div>
+
+              <button onClick={addQualPartyRow}
+                className="w-full flex items-center justify-center gap-1.5 px-3 py-2 bg-[#162744] border border-[#9BAFC5]/15 rounded text-[#9BAFC5] text-[10px] font-bold hover:text-[#F5F1E8] transition">
+                <Plus size={12} /> Adicionar Envolvido
+              </button>
+            </div>
+            <div className="p-4 border-t border-[#C9A84C]/20 flex-shrink-0">
+              <button onClick={() => submitQualification(selectedListing.id)} disabled={creatingQualification}
+                className="w-full px-3 py-2.5 bg-[#C9A84C] text-[#09081A] rounded-lg text-xs font-bold hover:bg-[#E8C97A] transition disabled:opacity-50 flex items-center justify-center gap-2">
+                {creatingQualification ? <Loader2 size={14} className="animate-spin" /> : null} Enviar Links de Qualificação
+              </button>
             </div>
           </div>
         </div>
@@ -2343,6 +2467,41 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
                             </>
                           )}
                         </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+
+            {/* Esteira de Qualificação de Partes */}
+            <div className="px-4 mt-4">
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-[10px] text-[#C9A84C] font-bold uppercase tracking-wider">Qualificação de Partes</div>
+                <button onClick={() => setShowQualModal(true)}
+                  className="flex items-center gap-1 px-2 py-1 bg-[#C9A84C]/20 border border-[#C9A84C]/30 rounded text-[#E8C97A] text-[9px] font-bold hover:bg-[#C9A84C]/30 transition">
+                  <UserPlus size={11} /> Gerar Qualificação de Partes
+                </button>
+              </div>
+              <div className="bg-[#12112A] border border-[#9BAFC5]/10 rounded-lg p-3 space-y-2">
+                {qualBatches.length === 0 ? (
+                  <p className="text-[10px] text-[#9BAFC5]">Nenhuma qualificação gerada para este ativo ainda.</p>
+                ) : (
+                  qualBatches.map((batch: any) => {
+                    const parties = batch.cm_party_qualifications ?? [];
+                    const filled = parties.filter((p: any) => p.status === "preenchido").length;
+                    const pending = parties.filter((p: any) => p.status !== "preenchido");
+                    return (
+                      <div key={batch.id} className="bg-[#09081A] rounded px-3 py-2">
+                        <div className="flex items-center justify-between">
+                          <div className="text-[10px] text-[#F5F1E8] font-semibold">{DOCUMENT_TYPE_LABELS[batch.document_type] ?? batch.document_type}</div>
+                          <span className={cn("text-[8px] font-bold uppercase px-1.5 py-0.5 rounded border",
+                            batch.status === "completo" ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" : "bg-[#162744] text-[#9BAFC5] border-[#9BAFC5]/15"
+                          )}>{filled}/{parties.length} qualificados</span>
+                        </div>
+                        {pending.length > 0 && (
+                          <div className="text-[9px] text-[#9BAFC5] mt-1">Pendente: {pending.map((p: any) => p.full_name).join(", ")}</div>
+                        )}
                       </div>
                     );
                   })
