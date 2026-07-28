@@ -143,9 +143,14 @@ export async function POST(req: NextRequest) {
     variables.comissao_intermediario = (commission_percent * 0.2).toFixed(2);
   }
 
+  const resolvedParties = qualificationParties ?? (variables.nome_cedente ? [
+    { role: "cedente", name: variables.nome_cedente, doc: variables.cpf_cnpj_cedente },
+    { role: "v3_partners", name: "V3 Partners Soluções Ltda", doc: "14.219.287/0001-50" },
+  ] : []);
+
   const renderedBody = resolveContractVariables(template.body_text_raw, variables);
   const contractTitle = resolveContractVariables(template.template_name, variables);
-  const renderedHtml = wrapContractInV3Html(contractTitle, renderedBody);
+  const renderedHtml = wrapContractInV3Html(contractTitle, renderedBody, resolvedParties);
 
   const { data: contract, error } = await svc()
     .from("operation_contracts")
@@ -161,10 +166,7 @@ export async function POST(req: NextRequest) {
       rendered_html: renderedHtml,
       status_signature: "rascunho",
       commission_percent: commission_percent ?? null,
-      parties: qualificationParties ?? (variables.nome_cedente ? [
-        { role: "cedente", name: variables.nome_cedente, doc: variables.cpf_cnpj_cedente },
-        { role: "v3_partners", name: "V3 Partners Soluções Ltda", doc: "14.219.287/0001-50" },
-      ] : []),
+      parties: resolvedParties,
       created_by: caller.userId,
     })
     .select()

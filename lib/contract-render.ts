@@ -10,7 +10,27 @@ export function resolveContractVariables(template: string, data: Record<string, 
   });
 }
 
-export function wrapContractInV3Html(title: string, body: string): string {
+export interface ContractParty {
+  role: string;
+  name: string;
+  doc?: string | null;
+}
+
+// Bloco de assinatura estilo manuscrito: uma linha por parte, com nome e
+// CPF/CNPJ embaixo, igual a um contrato físico impresso. Reaproveita CSS
+// (.parties/.party/.line) que já existia mas nunca era populado por nenhum
+// HTML real. Não depende do ClickSign posicionar nada — o PDF que sobe pra
+// assinatura é gerado por nós (htmlToPdfBase64), então a posição da "área de
+// assinatura" de cada parte já vem definida no próprio documento.
+function renderPartiesBlock(parties?: ContractParty[]): string {
+  if (!parties || parties.length === 0) return "";
+  const cards = parties
+    .map((p) => `<div class="party"><div class="line"></div><div class="name">${p.name}</div>${p.doc ? `<div class="doc">${p.doc}</div>` : ""}</div>`)
+    .join("");
+  return `<div class="parties">${cards}</div>`;
+}
+
+export function wrapContractInV3Html(title: string, body: string, parties?: ContractParty[]): string {
   return `<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -25,8 +45,8 @@ h2{font-size:14px;font-weight:700;color:#C9A84C;margin:24px 0 8px;text-transform
 .header img{height:40px;margin-bottom:8px}
 .header p{font-size:11px;color:#9BAFC5}
 p{margin-bottom:12px}
-.parties{display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:48px;padding-top:24px;border-top:1px solid #243A66}
-.party{text-align:center}
+.parties{display:flex;flex-wrap:wrap;justify-content:center;gap:40px;margin-top:48px;padding-top:24px;border-top:1px solid #243A66}
+.party{flex:1 1 200px;max-width:220px;text-align:center}
 .party .line{width:200px;border-top:1px solid #9BAFC5;margin:40px auto 8px}
 .party .name{font-weight:700;color:#F5F1E8;font-size:12px}
 .party .doc{font-size:10px;color:#9BAFC5}
@@ -41,6 +61,7 @@ p{margin-bottom:12px}
 <p>V3 Partners Soluções Ltda, CNPJ 14.219.287/0001-50</p>
 </div>
 ${body}
+${renderPartiesBlock(parties)}
 <div class="footer">
 <p>Documento gerado automaticamente pela plataforma V3 Partners em ${new Date().toLocaleDateString("pt-BR")}.</p>
 <p>Este documento requer assinatura eletrônica para validade jurídica.</p>
