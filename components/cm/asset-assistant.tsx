@@ -18,8 +18,27 @@ export function AssetAssistant({ listingId, anonymousId, onClose }: Props) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [loadingHistory, setLoadingHistory] = useState(true);
   const [docsLoaded, setDocsLoaded] = useState<number | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Reidrata a conversa já existente deste usuário para este ativo, ao abrir
+  // o assistente — antes desta correção, a conversa vivia só em useState e
+  // era apagada toda vez que o modal fechava.
+  useEffect(() => {
+    let cancelled = false;
+    setLoadingHistory(true);
+    fetch(`/api/cm/assistant?listing_id=${listingId}`)
+      .then((r) => r.json())
+      .then((json) => {
+        if (!cancelled) setMessages(json.messages ?? []);
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setLoadingHistory(false);
+      });
+    return () => { cancelled = true; };
+  }, [listingId]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
@@ -73,7 +92,13 @@ export function AssetAssistant({ listingId, anonymousId, onClose }: Props) {
 
         {/* Messages */}
         <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-3">
-          {messages.length === 0 && (
+          {loadingHistory && (
+            <div className="text-center py-12 text-[#9BAFC5] text-sm">
+              <Loader2 size={24} className="mx-auto mb-2 animate-spin text-[#C9A84C]" />
+              <p>Carregando conversa...</p>
+            </div>
+          )}
+          {!loadingHistory && messages.length === 0 && (
             <div className="text-center py-12 text-[#9BAFC5] text-sm">
               <Bot size={40} className="mx-auto mb-3 opacity-30" />
               <p>Pergunte sobre este ativo.</p>
