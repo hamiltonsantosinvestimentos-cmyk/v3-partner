@@ -2,15 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { coraFetch } from "@/lib/cora";
 import { randomUUID } from "crypto";
+import { getPlanoValor } from "@/lib/plano-valor";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 }
-
-const PLANO_VALOR: Record<string, number> = {
-  PARTNER: 19700,
-  PARTNER_PRO: 39700,
-};
 
 async function gerarProximaCobranca(db: ReturnType<typeof svc>, partnerId: string, plano: string) {
   try {
@@ -23,7 +19,7 @@ async function gerarProximaCobranca(db: ReturnType<typeof svc>, partnerId: strin
     if (!profile) return;
 
     const documento = (profile as { cpf?: string; cnpj?: string }).cpf ?? (profile as { cpf?: string; cnpj?: string }).cnpj ?? "";
-    const baseValor = PLANO_VALOR[plano] ?? 19700;
+    const baseValor = getPlanoValor(plano);
 
     // Aplica desconto de indicação se houver meses restantes
     const descontoPercent      = (profile as { referral_discount_percent?: number }).referral_discount_percent ?? 0;
