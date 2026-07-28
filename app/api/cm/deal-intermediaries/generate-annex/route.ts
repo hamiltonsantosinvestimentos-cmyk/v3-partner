@@ -114,6 +114,7 @@ export async function POST(req: NextRequest) {
       rendered_html: renderedHtml,
       status_signature: "enviado_assinatura",
       signing_token: signingToken,
+      sent_to_signature_at: new Date().toISOString(),
       parties: [
         { role: "mandatario", name: mandatario?.full_name ?? null, doc: mandatario?.document_cpf ?? null, email: mandatario?.email ?? null },
         { role: "v3_partners", name: "V3 Partners Soluções Ltda", doc: "14.219.287/0001-50" },

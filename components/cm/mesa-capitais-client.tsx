@@ -209,6 +209,9 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
   const [noteMentionedIds, setNoteMentionedIds] = useState<string[]>([]);
   const [submittingNote, setSubmittingNote] = useState(false);
   const [intermediaries, setIntermediaries] = useState<any[]>([]);
+  const [slaSummary, setSlaSummary] = useState<Record<string, { hours_pending: number; pending_count: number }>>({});
+  const [slaContracts, setSlaContracts] = useState<any[]>([]);
+  const [resendingContractId, setResendingContractId] = useState<string | null>(null);
   const [partnersList, setPartnersList] = useState<{ id: string; full_name: string; email: string }[]>([]);
   const [interSide, setInterSide] = useState<"compra" | "venda">("venda");
   const [interName, setInterName] = useState("");
@@ -328,17 +331,21 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
   const fetchAll = useCallback(async () => {
     setLoading(true);
     try {
-      const [listRes, matchRes, bidRes] = await Promise.all([
+      const [listRes, matchRes, bidRes, slaRes] = await Promise.all([
         fetch("/api/cm/listings"),
         fetch("/api/cm/matches"),
         fetch("/api/cm/bids?status=pendente"),
+        fetch("/api/cm/contracts/pending-sla"),
       ]);
-      const [listJson, matchJson, bidJson] = await Promise.all([
-        listRes.json(), matchRes.json(), bidRes.json(),
+      const [listJson, matchJson, bidJson, slaJson] = await Promise.all([
+        listRes.json(), matchRes.json(), bidRes.json(), slaRes.json(),
       ]);
       setListings(listJson.listings ?? []);
       setMatches(matchJson.matches ?? []);
       setBids(bidJson.bids ?? []);
+      const slaMap: Record<string, { hours_pending: number; pending_count: number }> = {};
+      for (const row of slaJson.summary ?? []) slaMap[row.listing_id] = row;
+      setSlaSummary(slaMap);
     } catch (err) {
       console.error("[Mesa CM]", err);
     } finally {
@@ -445,6 +452,41 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
     } catch { setIntermediaries([]); }
   };
 
+  const loadSlaContracts = async (listingId: string) => {
+    try {
+      const res = await fetch(`/api/cm/listings/${listingId}/contracts`);
+      const json = await res.json();
+      setSlaContracts(json.contracts ?? []);
+    } catch { setSlaContracts([]); }
+  };
+
+  // SLA 48h: Atenção (>=24h) / Estourado (>=48h). Fallback COALESCE(sent_to_signature_at,
+  // updated_at) para contratos anteriores a esta feature, que não tem o timestamp de envio.
+  const getSlaBadge = (contract: any): { label: string; color: string } | null => {
+    if (contract.status_signature === "assinado" || contract.status_signature === "cancelado") return null;
+    const baseTime = contract.sent_to_signature_at ?? contract.updated_at;
+    if (!baseTime) return null;
+    const hours = Math.floor((Date.now() - new Date(baseTime).getTime()) / 3_600_000);
+    if (hours >= 48) return { label: `SLA Estourado: ${hours}h`, color: "bg-red-500/15 text-red-400 border-red-500/30" };
+    if (hours >= 24) return { label: `SLA Atenção: ${hours}h`, color: "bg-amber-500/15 text-amber-400 border-amber-500/30" };
+    return { label: `${hours}h`, color: "bg-[#162744] text-[#9BAFC5] border-[#9BAFC5]/15" };
+  };
+
+  const resendContractNotification = async (contractId: string) => {
+    setResendingContractId(contractId);
+    try {
+      const res = await fetch(`/api/cm/contracts/${contractId}/resend`, { method: "POST" });
+      const json = await res.json();
+      if (res.ok) {
+        alert(json.message ?? "Notificação reenviada com sucesso.");
+        if (selectedListing) loadSlaContracts(selectedListing.id);
+      } else {
+        alert(json.error ?? "Erro ao reenviar notificação");
+      }
+    } catch { alert("Erro de conexão"); }
+    finally { setResendingContractId(null); }
+  };
+
   const addIntermediary = async (listingId: string) => {
     if (!interName.trim() || !interPercentage || !interMandatarioId) {
       alert("Nome, percentual e Mandatário são obrigatórios");
@@ -492,6 +534,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
       const json = await res.json();
       if (res.ok) {
         alert(`Anexo gerado e enviado para assinatura do Mandatário.\nLink: ${json.signing_url}`);
+        loadSlaContracts(listingId);
       } else {
         alert(json.error ?? "Erro ao gerar Anexo");
       }
@@ -786,6 +829,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
     setNoteContent("");
     setNoteMentionedIds([]);
     loadIntermediaries(listing.id);
+    loadSlaContracts(listing.id);
   };
 
   const handleStatusTransition = async (listingId: string, newStatus: string) => {
@@ -1658,6 +1702,20 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
                       {Number((l.cm_listing_documents?.[0] as any)?.count) > 0 && (
                         <div className="text-[9px] text-[#9BAFC5] mt-1">{(l.cm_listing_documents[0] as any).count} doc(s)</div>
                       )}
+                      {slaSummary[l.id] && (() => {
+                        const h = slaSummary[l.id].hours_pending;
+                        const n = slaSummary[l.id].pending_count;
+                        const badge = h >= 48
+                          ? { label: `SLA Estourado: ${h}h`, cls: "bg-red-500/10 border-red-500/20 text-red-400" }
+                          : h >= 24
+                          ? { label: `SLA Atenção: ${h}h`, cls: "bg-amber-500/10 border-amber-500/20 text-amber-400" }
+                          : { label: `Assinatura: ${h}h`, cls: "bg-[#162744] border-[#9BAFC5]/15 text-[#9BAFC5]" };
+                        return (
+                          <div className={cn("text-[8px] font-bold uppercase mt-1 px-1.5 py-0.5 border rounded inline-block", badge.cls)}>
+                            {badge.label} ({n})
+                          </div>
+                        );
+                      })()}
                     </div>
                   ))}
                 </div>
@@ -2243,6 +2301,53 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
                 </span>
                 <ExternalLink size={12} />
               </a>
+            </div>
+
+            {/* Painel de Monitoramento de Assinaturas — SLA 48h + Reenvio */}
+            <div className="px-4 mt-4">
+              <div className="text-[10px] text-[#C9A84C] font-bold uppercase tracking-wider mb-2">Andamento do Projeto · Assinaturas</div>
+              <div className="bg-[#12112A] border border-[#9BAFC5]/10 rounded-lg p-3 space-y-2">
+                {slaContracts.filter((c) => c.status_signature !== "cancelado").length === 0 ? (
+                  <p className="text-[10px] text-[#9BAFC5]">Nenhum contrato gerado para este ativo ainda.</p>
+                ) : (
+                  slaContracts.filter((c) => c.status_signature !== "cancelado").map((c) => {
+                    const badge = getSlaBadge(c);
+                    const parties = (c.parties as Array<{ role: string; name: string | null }> | null) ?? [];
+                    const signatario = parties.find((p) => p.role === "mandatario") ?? parties[0];
+                    const assinado = c.status_signature === "assinado";
+                    return (
+                      <div key={c.id} className="flex items-center justify-between gap-2 bg-[#09081A] rounded px-2 py-2">
+                        <div className="min-w-0">
+                          <div className="text-[10px] text-[#F5F1E8] truncate">{c.contract_title}</div>
+                          <div className="text-[9px] text-[#9BAFC5] truncate">
+                            {assinado
+                              ? `Assinado${c.signed_at ? ` em ${new Date(c.signed_at).toLocaleDateString("pt-BR")}` : ""}`
+                              : `Pendente: ${signatario?.name ?? "signatário não identificado"}`}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          {assinado ? (
+                            <span className="text-[8px] font-bold uppercase px-1.5 py-0.5 rounded border bg-emerald-500/15 text-emerald-400 border-emerald-500/30">Assinado</span>
+                          ) : (
+                            <>
+                              {badge && (
+                                <span className={cn("text-[8px] font-bold uppercase px-1.5 py-0.5 rounded border", badge.color)}>{badge.label}</span>
+                              )}
+                              <button
+                                onClick={() => resendContractNotification(c.id)}
+                                disabled={resendingContractId === c.id}
+                                className="flex items-center gap-1 px-2 py-1 bg-[#162744] border border-[#9BAFC5]/15 rounded text-[#C9A84C] text-[9px] font-bold hover:bg-[#243A66] transition disabled:opacity-50 flex-shrink-0"
+                              >
+                                {resendingContractId === c.id ? <Loader2 size={11} className="animate-spin" /> : null} Reenviar Notificação
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
             </div>
 
             {/* Cadeia de Intermediários: Anexo FPA/NCND (Single Payout) */}
