@@ -153,10 +153,10 @@ export function PainelFontesCredito() {
           <div className="py-3 border-b border-border/30">
             <SourceRow
               label="Serasa"
-              description="Nó ainda é stub no workflow, não retorna dado real hoje"
+              description="Integração real (PJ e PF), validada em homologação. Aguardando credenciais de produção"
               checked={config.serasa}
               disabled
-              disabledReason="Nó ainda é stub no workflow, não retorna dado real hoje"
+              disabledReason="Integração real (PJ e PF), validada em homologação. Aguardando credenciais de produção antes de habilitar"
               onChange={(v) => update("serasa", v)}
             />
             <div className="mt-3 pl-1 space-y-3 opacity-50">
