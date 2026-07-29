@@ -3,17 +3,11 @@ import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { createCheckoutLink } from "@/lib/infinitepay";
 import { planoLabel } from "@/lib/whatsapp/subscription-messages";
+import { getPlanoValor } from "@/lib/plano-valor";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 }
-
-// Mesmos valores/regra de vencimento do "Gerar Cobrança" self-service da Cora
-// (app/api/cora/subscription/route.ts), pra manter os dois caminhos consistentes.
-const PLANO_VALOR: Record<string, number> = {
-  PARTNER: 19700,
-  PARTNER_PRO: 39700,
-};
 
 // POST — gera um link de checkout InfinitePay (cartão) para a mensalidade do partner logado,
 // criando a cobrança PENDING na hora se ainda não existir nenhuma
@@ -42,7 +36,7 @@ export async function POST() {
     dueDate.setMonth(dueDate.getMonth() + 1);
     dueDate.setDate(10);
 
-    const valor = PLANO_VALOR[profile?.role ?? ""] ?? 19700;
+    const valor = getPlanoValor(profile?.role);
 
     const { data: created, error } = await svc().from("partner_subscriptions").insert({
       partner_id:   user.id,
