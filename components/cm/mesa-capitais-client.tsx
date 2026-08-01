@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { cn, maskCpfCnpjInput, maskPhoneInput, isValidEmail, maskCurrencyBRLInput, parseCurrencyBRLInput, formatCurrencyBRLFromNumber, maskCurrencyInput, CM_CURRENCY_SYMBOL, type CmCurrency } from "@/lib/utils";
 import { AssetAssistant } from "./asset-assistant";
+import { DueDiligencePanel } from "./due-diligence-panel";
 import { CM_DOCUMENT_CHECKLISTS, type CmAssetType } from "@/lib/cm-checklists";
 import { createClient as createBrowserSupabaseClient } from "@/lib/supabase/client";
 
@@ -34,6 +35,7 @@ interface Listing {
   inspection_requests?: InspectionRequest[];
   selected_thesis_template?: string | null;
   public_narrative?: string | null;
+  seller_cpf_cnpj?: string | null;
 }
 
 interface InspectionRequest {
@@ -187,6 +189,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
   const [tab, setTab] = useState<"kanban" | "matches" | "bids">("kanban");
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [assistantListing, setAssistantListing] = useState<{ id: string; anonymous_id: string } | null>(null);
+  const [dueDiligenceListing, setDueDiligenceListing] = useState<{ id: string; anonymous_id: string; seller_cpf_cnpj: string | null } | null>(null);
   const [uploadingDoc, setUploadingDoc] = useState<string | null>(null);
   const [uploadingGallery, setUploadingGallery] = useState(false);
   const [generatingNarrative, setGeneratingNarrative] = useState(false);
@@ -2339,6 +2342,12 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
                 <Bot size={16} /> Assistente do Ativo (IA)
               </button>
               <button
+                onClick={() => { setDueDiligenceListing({ id: selectedListing.id, anonymous_id: selectedListing.anonymous_id, seller_cpf_cnpj: selectedListing.seller_cpf_cnpj ?? null }); }}
+                className="w-full flex items-center gap-3 px-4 py-3 bg-[#C9A84C]/10 border border-[#C9A84C]/20 rounded-lg text-[#C9A84C] text-xs font-bold hover:bg-[#C9A84C]/20 transition"
+              >
+                <Shield size={16} /> Due Diligence
+              </button>
+              <button
                 onClick={() => createDealRoom(selectedListing.id)}
                 disabled={creatingRoom}
                 className="w-full flex items-center gap-3 px-4 py-3 bg-[#162744] border border-[#9BAFC5]/15 rounded-lg text-[#F5F1E8] text-xs font-bold hover:bg-[#162744]/80 transition disabled:opacity-50"
@@ -3167,6 +3176,16 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
           listingId={assistantListing.id}
           anonymousId={assistantListing.anonymous_id}
           onClose={() => setAssistantListing(null)}
+        />
+      )}
+
+      {/* Due Diligence */}
+      {dueDiligenceListing && (
+        <DueDiligencePanel
+          listingId={dueDiligenceListing.id}
+          anonymousId={dueDiligenceListing.anonymous_id}
+          sellerCpfCnpj={dueDiligenceListing.seller_cpf_cnpj}
+          onClose={() => setDueDiligenceListing(null)}
         />
       )}
     </div>
