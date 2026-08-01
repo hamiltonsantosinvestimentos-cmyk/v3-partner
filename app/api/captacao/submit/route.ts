@@ -21,6 +21,51 @@ function normalizeStr(s: string) {
     .trim();
 }
 
+/** Gera o próximo code sequencial (`PREFIX-NNNN`) a partir do maior número já
+ *  usado na tabela — nunca de COUNT(*), que diverge do real assim que existe
+ *  qualquer gap (linha deletada ou code fora do padrão) e gera colisão
+ *  determinística de unique constraint. Usar sempre dentro de um loop de
+ *  retry no insert (ver `insertWithUniqueCode`), pois mesmo lendo o MAX real
+ *  duas requisições concorrentes podem calcular o mesmo próximo número. */
+async function nextSequentialCode(
+  svc: ReturnType<typeof serviceClient>,
+  table: string,
+  prefix: string,
+): Promise<string> {
+  const { data } = await svc.from(table).select("code").like("code", `${prefix}-%`);
+  const re = new RegExp(`^${prefix}-(\\d+)$`);
+  let max = 0;
+  for (const row of (data ?? []) as { code: string }[]) {
+    const match = row.code.match(re);
+    if (match) {
+      const n = parseInt(match[1], 10);
+      if (n > max) max = n;
+    }
+  }
+  return `${prefix}-${String(max + 1).padStart(4, "0")}`;
+}
+
+/** Insere com code gerado por `nextSequentialCode`, retentando com o próximo
+ *  número em caso de unique_violation (23505) — cobre a race condition entre
+ *  requisições concorrentes que o simples cálculo do MAX não elimina sozinho. */
+async function insertWithUniqueCode<T extends Record<string, unknown>>(
+  svc: ReturnType<typeof serviceClient>,
+  table: string,
+  prefix: string,
+  buildRow: (code: string) => T,
+  maxAttempts = 5,
+): Promise<{ data: Record<string, unknown> | null; error: { message: string; code?: string } | null }> {
+  let lastError: { message: string; code?: string } | null = null;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const code = await nextSequentialCode(svc, table, prefix);
+    const { data, error } = await svc.from(table).insert(buildRow(code)).select("*").single();
+    if (!error) return { data, error: null };
+    lastError = error;
+    if (error.code !== "23505") return { data: null, error };
+  }
+  return { data: null, error: lastError };
+}
+
 type ChecklistItem = { id: string; label: string };
 type PortfolioLinha = { nome: string; documentos_pf?: { id: string; nome: string; obrigatorio: boolean }[]; documentos_pj?: { id: string; nome: string; obrigatorio: boolean }[] };
 
@@ -120,9 +165,6 @@ async function createLinkedProposal(
   const level = resolveLevel(creditLine, baseVal);
   const requestedValue = level === "NIVEL_3" ? Math.max(baseVal, 5_000_000) : baseVal;
 
-  const { count } = await svc.from("credit_desk_proposals").select("id", { count: "exact", head: true });
-  const code = `CRED-26-${String((count ?? 0) + 1).padStart(4, "0")}`;
-
   // Resolve checklist e registra os documentos já anexados no formulário
   const { data: portfolioLinhas } = await svc.from("portfolio_linhas").select("nome, documentos_pf, documentos_pj").eq("ativo", true);
   const checklist = resolveChecklist(creditLine, clientType, (portfolioLinhas ?? []) as PortfolioLinha[]);
@@ -153,54 +195,60 @@ async function createLinkedProposal(
     }
   }
 
-  const { data: proposal, error } = await svc.from("credit_desk_proposals").insert({
-    id: proposalIdForPath,
-    code,
-    title: `${creditLine} - ${clientName}`,
-    client_name: clientName,
-    client_cpf_cnpj: (formData.cpfCnpj as string) ?? null,
-    credit_line: creditLine,
-    requested_value: requestedValue,
-    current_level: level,
-    status: "PENDING",
-    stage: "RECEBIDO",
-    partner_id: partnerId,
-    created_by: partnerId,
-    documents,
-    checklist: checklistChecked,
-    metadata: {
-      ...formData,
-      crm_lead_id: lead.id,
-      crm_lead_code: lead.code,
-      client_type: clientType,
-      email: formData.email,
-      telefone: formData.phone,
-      renda_mensal: clientType === "PF" ? rendaOuFaturamento : undefined,
-      faturamento_mensal: clientType === "PJ" ? rendaOuFaturamento : undefined,
-      estado_civil: formData.estadoCivil,
-      nascimento: formData.nascimento,
-      razao_social: formData.razaoSocial,
-      nome_fantasia: formData.nomeFantasia,
-      socio_responsavel: formData.socioResponsavel,
-      endereco_rua: formData.enderecoRua,
-      endereco_cep: formData.cep,
-      endereco_cidade: formData.city,
-      endereco_uf: formData.state,
-      restricao_cliente: formData.restricao,
-      prazo: formData.prazo,
-      finalidade: formData.finalidade,
-      observacoes: formData.observacoes,
-      imoveis: formData.imoveis,
-      documentos: formData.documentos,
-      captacao_origin: true,
-      crm_pending_review: true,
-    },
-  }).select("id, code").single();
+  const { data: proposal, error } = await insertWithUniqueCode(
+    svc,
+    "credit_desk_proposals",
+    "CRED-26",
+    (code) => ({
+      id: proposalIdForPath,
+      code,
+      title: `${creditLine} - ${clientName}`,
+      client_name: clientName,
+      client_cpf_cnpj: (formData.cpfCnpj as string) ?? null,
+      credit_line: creditLine,
+      requested_value: requestedValue,
+      current_level: level,
+      status: "PENDING",
+      stage: "RECEBIDO",
+      partner_id: partnerId,
+      created_by: partnerId,
+      documents,
+      checklist: checklistChecked,
+      metadata: {
+        ...formData,
+        crm_lead_id: lead.id,
+        crm_lead_code: lead.code,
+        client_type: clientType,
+        email: formData.email,
+        telefone: formData.phone,
+        renda_mensal: clientType === "PF" ? rendaOuFaturamento : undefined,
+        faturamento_mensal: clientType === "PJ" ? rendaOuFaturamento : undefined,
+        estado_civil: formData.estadoCivil,
+        nascimento: formData.nascimento,
+        razao_social: formData.razaoSocial,
+        nome_fantasia: formData.nomeFantasia,
+        socio_responsavel: formData.socioResponsavel,
+        endereco_rua: formData.enderecoRua,
+        endereco_cep: formData.cep,
+        endereco_cidade: formData.city,
+        endereco_uf: formData.state,
+        restricao_cliente: formData.restricao,
+        prazo: formData.prazo,
+        finalidade: formData.finalidade,
+        observacoes: formData.observacoes,
+        imoveis: formData.imoveis,
+        documentos: formData.documentos,
+        captacao_origin: true,
+        crm_pending_review: true,
+      },
+    }),
+  );
 
   if (error || !proposal) return null;
+  const typedProposal = proposal as { id: string; code: string };
 
-  await svc.from("crm_leads").update({ credit_proposal_id: proposal.id }).eq("id", lead.id);
-  return proposal;
+  await svc.from("crm_leads").update({ credit_proposal_id: typedProposal.id }).eq("id", lead.id);
+  return typedProposal;
 }
 
 // POST — recebe dados do formulário público de captação (sem auth)
@@ -231,17 +279,18 @@ export async function POST(req: NextRequest) {
 
   if (!clientName) return NextResponse.json({ error: "Nome do cliente obrigatório" }, { status: 400 });
 
-  // Gera código CRM
-  const { count } = await svc.from("crm_leads").select("*", { count: "exact", head: true });
-  const code = `CRM-26-${String((count ?? 0) + 1).padStart(4, "0")}`;
-
   // Calcula receita anual aproximada
   const annualRevenue = formData.personType === "PF"
     ? parseBRL(formData.renda) * 12
     : parseBRL(formData.faturamento) * 12;
 
-  // Insere lead no CRM
-  const { data: lead, error } = await svc.from("crm_leads").insert({
+  // Insere lead no CRM (code gerado a partir do MAX real + retry em conflito —
+  // nunca COUNT(*), que diverge do real assim que há qualquer gap na tabela)
+  const { data: lead, error } = await insertWithUniqueCode(
+    svc,
+    "crm_leads",
+    "CRM-26",
+    (code) => ({
     code,
     name: clientName,
     document:         formData.cpfCnpj ?? null,
@@ -269,9 +318,11 @@ export async function POST(req: NextRequest) {
       captacao_token: token,
       submitted_at: new Date().toISOString(),
     },
-  }).select().single();
+    }),
+  );
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error || !lead) return NextResponse.json({ error: error?.message ?? "Erro ao gerar código único do lead" }, { status: 500 });
+  const typedLead = lead as { id: string; code: string };
 
   // Incrementa uses_count
   await svc
@@ -297,17 +348,17 @@ export async function POST(req: NextRequest) {
                                 : `Produto: ${formData.productInterest ?? "-"}`,
     etapa:                    "prospect",
     created_by:               link.partner_id,
-    crm_lead_id:              (lead as { id: string }).id,
+    crm_lead_id:              typedLead.id,
   }).then(() => {}, () => {}); // fire-and-forget, não bloqueia resposta
 
   // Cria a proposta de crédito já vinculada ao lead, com dados e documentos do
   // formulário registrados contra o checklist — pendente de conferência do
   // partner antes de aparecer na Mesa de Crédito. Não bloqueia a resposta.
   try {
-    await createLinkedProposal(svc, lead as { id: string; code: string }, formData, link.partner_id, token);
+    await createLinkedProposal(svc, typedLead, formData, link.partner_id, token);
   } catch (e) {
     console.error("[captacao/submit] Erro ao criar proposta vinculada:", e);
   }
 
-  return NextResponse.json({ ok: true, code: lead.code });
+  return NextResponse.json({ ok: true, code: typedLead.code });
 }
