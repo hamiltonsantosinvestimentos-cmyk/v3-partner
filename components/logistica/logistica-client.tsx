@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import {
   Plus, X, Loader2, Plane, Car, Building2, Trash2, Pencil,
-  TrendingDown, TrendingUp, Minus, ArrowRight, ExternalLink,
+  TrendingDown, TrendingUp, Minus, ArrowRight, ExternalLink, Search, Check,
 } from "lucide-react";
 
 // ─── Paleta V4.2 ────────────────────────────────────────────────────────────
@@ -44,6 +44,18 @@ type LogisticsItem = {
   notes?: string | null;
   created_at: string;
   updated_at: string;
+};
+
+type FlightOffer = {
+  id: string;
+  price: number;
+  currency: string;
+  airlineCode: string;
+  airlineName: string;
+  stops: number;
+  durationOutbound: string;
+  durationReturn: string | null;
+  bookableSeats: number | null;
 };
 
 type PriceHistoryEntry = {
@@ -121,6 +133,16 @@ function fmtDate(iso?: string | null) {
   return new Date(iso + (iso.length === 10 ? "T00:00:00" : "")).toLocaleDateString("pt-BR");
 }
 
+// Converte duração ISO 8601 (ex.: "PT2H30M") em "2h30"
+function fmtDuration(iso?: string | null): string {
+  if (!iso) return "—";
+  const m = iso.match(/PT(?:(\d+)H)?(?:(\d+)M)?/);
+  if (!m) return iso;
+  const h = m[1] ?? "0";
+  const min = (m[2] ?? "0").padStart(2, "0");
+  return `${h}h${min}`;
+}
+
 // Monta link de busca no Google Flights a partir dos códigos IATA e datas do voo
 function flightSearchUrl(
   originIata?: string | null,
@@ -188,6 +210,12 @@ export function LogisticaClient({ category, initialItems }: { category: Category
   const [newPrice, setNewPrice]   = useState("");
   const [addingPrice, setAddingPrice] = useState(false);
 
+  // Busca ao vivo de preços de voo (Amadeus)
+  const [liveOffers, setLiveOffers] = useState<FlightOffer[]>([]);
+  const [liveLoading, setLiveLoading] = useState(false);
+  const [liveError, setLiveError] = useState<string | null>(null);
+  const [liveSearched, setLiveSearched] = useState(false);
+
   // Recarrega a categoria atual
   const reload = async () => {
     setLoading(true);
@@ -243,6 +271,9 @@ export function LogisticaClient({ category, initialItems }: { category: Category
     setEditing(null);
     setForm(EMPTY_FORM);
     setHistory([]);
+    setLiveOffers([]);
+    setLiveError(null);
+    setLiveSearched(false);
   };
 
   const buildPayload = () => {
@@ -317,6 +348,56 @@ export function LogisticaClient({ category, initialItems }: { category: Category
       }
     } catch {}
     setAddingPrice(false);
+  };
+
+  // Busca ofertas reais de voo (Amadeus) pra rota/data preenchidas no formulário
+  const handleLiveSearch = async () => {
+    if (form.origin_iata.length !== 3 || form.destination_iata.length !== 3 || !form.start_date) return;
+    setLiveLoading(true);
+    setLiveError(null);
+    setLiveSearched(true);
+    try {
+      const qs = new URLSearchParams({
+        origin: form.origin_iata,
+        destination: form.destination_iata,
+        departureDate: form.start_date,
+      });
+      if (form.trip_type === "ida_e_volta" && form.end_date) qs.set("returnDate", form.end_date);
+
+      const res = await fetch(`/api/logistica/flight-search?${qs.toString()}`);
+      const data = await res.json();
+      if (!res.ok) {
+        setLiveError(typeof data.error === "string" ? data.error : "Não foi possível buscar preços agora.");
+        setLiveOffers([]);
+      } else {
+        setLiveOffers(Array.isArray(data.offers) ? data.offers : []);
+      }
+    } catch {
+      setLiveError("Falha de conexão ao buscar preços.");
+      setLiveOffers([]);
+    }
+    setLiveLoading(false);
+  };
+
+  // Preenche o formulário com a oferta escolhida e, se estiver editando, já registra no histórico
+  const handleUseOffer = async (offer: FlightOffer) => {
+    setForm(prev => ({
+      ...prev,
+      provider: offer.airlineName,
+      current_price: String(offer.price),
+      currency: offer.currency,
+    }));
+    if (editing) {
+      try {
+        const res = await fetch(`/api/logistica/items/${editing.id}/price-history`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ price: offer.price, currency: offer.currency, source: "amadeus" }),
+        });
+        const data = await res.json();
+        if (data.entry) setHistory(prev => [...prev, data.entry]);
+      } catch {}
+    }
   };
 
   // ── KPIs ──
@@ -563,19 +644,89 @@ export function LogisticaClient({ category, initialItems }: { category: Category
             </div>
 
             {category === "voo" && (() => {
+              const canSearch = form.origin_iata.length === 3 && form.destination_iata.length === 3 && !!form.start_date;
               const url = flightSearchUrl(form.origin_iata, form.destination_iata, form.start_date, form.end_date, form.trip_type);
-              return url ? (
-                <a
-                  href={url} target="_blank" rel="noopener noreferrer"
-                  className="flex items-center gap-2"
-                  style={{
-                    color: V3.gold, fontSize: 11, fontWeight: 700,
-                    textDecoration: "none", marginBottom: 14, marginTop: -6,
-                  }}
-                >
-                  <ExternalLink size={13} /> Buscar passagem no Google Flights
-                </a>
-              ) : null;
+              return (
+                <div style={{ marginBottom: 14, marginTop: -6 }}>
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={handleLiveSearch}
+                      disabled={!canSearch || liveLoading}
+                      className="flex items-center gap-2"
+                      style={{
+                        background: V3.navyM, color: V3.cream, border: "none",
+                        borderRadius: 6, padding: "7px 12px", fontSize: 11, fontWeight: 700,
+                        cursor: !canSearch || liveLoading ? "not-allowed" : "pointer",
+                        opacity: !canSearch || liveLoading ? 0.5 : 1,
+                        fontFamily: "'DM Sans', sans-serif",
+                      }}
+                    >
+                      {liveLoading ? <Loader2 size={13} className="animate-spin" /> : <Search size={13} />}
+                      Buscar preços ao vivo
+                    </button>
+                    {url && (
+                      <a
+                        href={url} target="_blank" rel="noopener noreferrer"
+                        className="flex items-center gap-2"
+                        style={{ color: V3.gold, fontSize: 11, fontWeight: 700, textDecoration: "none" }}
+                      >
+                        <ExternalLink size={13} /> Ver no Google Flights
+                      </a>
+                    )}
+                  </div>
+
+                  {liveError && (
+                    <p style={{ fontSize: 11, color: V3.red, margin: "8px 0 0" }}>{liveError}</p>
+                  )}
+
+                  {!liveLoading && liveSearched && !liveError && liveOffers.length === 0 && (
+                    <p style={{ fontSize: 11, color: V3.muted, margin: "8px 0 0" }}>Nenhuma oferta encontrada pra essa rota/data.</p>
+                  )}
+
+                  {liveOffers.length > 0 && (
+                    <div style={{ display: "grid", gap: 6, marginTop: 10 }}>
+                      {liveOffers.map((offer, i) => (
+                        <div
+                          key={offer.id}
+                          className="flex items-center justify-between gap-3"
+                          style={{
+                            background: V3.navyC, border: `1px solid ${i === 0 ? V3.gold : V3.navyM}`,
+                            borderRadius: 6, padding: "8px 12px",
+                          }}
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            {i === 0 && (
+                              <span style={{
+                                fontSize: 8, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase",
+                                color: V3.navy, background: V3.gold, borderRadius: 4, padding: "2px 5px", flexShrink: 0,
+                              }}>Mais barato</span>
+                            )}
+                            <span style={{ fontSize: 12, fontWeight: 700, color: V3.cream }}>{offer.airlineName}</span>
+                            <span style={{ fontSize: 10, color: V3.muted }}>
+                              {offer.stops === 0 ? "direto" : `${offer.stops} parada${offer.stops > 1 ? "s" : ""}`} · {fmtDuration(offer.durationOutbound)}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-3 flex-shrink-0">
+                            <span style={{ fontSize: 13, fontWeight: 800, color: V3.goldL }}>{fmtMoney(offer.price, offer.currency)}</span>
+                            <button
+                              type="button"
+                              onClick={() => handleUseOffer(offer)}
+                              className="flex items-center gap-1"
+                              style={{
+                                background: "transparent", border: `1px solid ${V3.gold}`, color: V3.gold,
+                                borderRadius: 5, padding: "4px 8px", fontSize: 10, fontWeight: 700, cursor: "pointer",
+                              }}
+                            >
+                              <Check size={11} /> Usar
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
             })()}
 
             <Field label={cfg.providerLabel}>
