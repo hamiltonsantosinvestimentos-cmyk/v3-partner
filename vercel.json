@@ -5,6 +5,6 @@
     { "path": "/api/cron/assinaturas-vencendo",  "schedule": "0 9 * * *" },
     { "path": "/api/cron/academy-live-reminder", "schedule": "0 8 * * *" },
     { "path": "/api/cron/sync-contemplados",     "schedule": "0 8 * * *" },
-    { "path": "/api/cron/n8n-uptime-check",      "schedule": "0 */6 * * *" }
+    { "path": "/api/cron/n8n-uptime-check",      "schedule": "0 7 * * *" }
   ]
 }
