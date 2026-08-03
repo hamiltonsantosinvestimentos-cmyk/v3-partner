@@ -24,8 +24,15 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Server-to-server: n8n workflows com Bearer CRON_SECRET bypass
-  if (pathname.startsWith("/api/cm/") && request.headers.get("authorization") === `Bearer ${process.env.CRON_SECRET}`) {
+  // Server-to-server: n8n workflows com Bearer CRON_SECRET bypass.
+  // Deliberadamente NAO entra em PUBLIC_ROUTES: sem o token correto a rota
+  // continua atras do gate de sessao. /api/credit-engine/report/ e chamada pelo
+  // no "Gerar Dossie PDF" do W-CREDIT, que roda sem sessao de usuario.
+  const S2S_PREFIXES = ["/api/cm/", "/api/credit-engine/report/"];
+  if (
+    S2S_PREFIXES.some((p) => pathname.startsWith(p)) &&
+    request.headers.get("authorization") === `Bearer ${process.env.CRON_SECRET}`
+  ) {
     return NextResponse.next();
   }
 
