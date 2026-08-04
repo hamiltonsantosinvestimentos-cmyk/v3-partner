@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Copy, Check, Compass, FileText } from "lucide-react";
+import { Copy, Check, Compass } from "lucide-react";
 
 const GO = "#C9A84C", GL = "#E8C97A", CR = "#F5F1E8", MU = "#9BAFC5";
 const N2 = "#13223A", N3 = "#162744", N4 = "#243A66";
@@ -10,9 +10,11 @@ interface ReferralLinksCardProps {
   partnerId: string;
 }
 
+// Teste A/B encerrado em 03/08/2026: a página escolhida foi a B (metáfora da
+// bússola). A rota /analise continua no ar e redireciona para cá preservando
+// ?ref e UTM, para não quebrar link que partner já compartilhou.
 const PAGES = [
-  { path: "/analise", label: "Análise de Crédito Direta", desc: "Página principal, tom institucional", icon: FileText },
-  { path: "/analise-v2", label: "Análise de Crédito Direta (variante B)", desc: "Teste A/B, linguagem simples", icon: Compass },
+  { path: "/analise-v2", label: "Análise de Crédito Empresarial", desc: "Página de venda direta", icon: Compass },
 ];
 
 export function ReferralLinksCard({ partnerId }: ReferralLinksCardProps) {
@@ -34,7 +36,7 @@ export function ReferralLinksCard({ partnerId }: ReferralLinksCardProps) {
         Análise de Crédito Empresarial (venda direta)
       </div>
       <p style={{ color: MU, fontSize: 12.5, margin: "0 0 18px", lineHeight: 1.6 }}>
-        Compartilhe qualquer um dos links abaixo. Se o cliente comprar através dele, a venda fica atribuída a você
+        Compartilhe o link abaixo. Se o cliente comprar através dele, a venda fica atribuída a você
         automaticamente, sem precisar criar um link personalizado.
       </p>
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
