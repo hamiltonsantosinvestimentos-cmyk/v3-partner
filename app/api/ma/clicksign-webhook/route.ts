@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as sc, type SupabaseClient } from "@supabase/supabase-js";
-import { createHmac } from "crypto";
+import { createHmac, timingSafeEqual } from "crypto";
 import { auditHtml, auditText } from "@/lib/brand-guardian-gate";
 import { notifyDealTimeline } from "@/lib/ma-negociacao-notify";
 
@@ -155,14 +155,48 @@ export async function POST(request: NextRequest) {
   const webhookSecret = process.env.CLICKSIGN_WEBHOOK_SECRET;
   const rawBody = await request.text();
 
-  // Validação HMAC-SHA256: ClickSign assina o body com o secret
+  // Validação HMAC-SHA256 do webhook da ClickSign.
+  //
+  // CORRIGIDO 04/08/2026. A ClickSign desativou o canal após 10 dias de falhas.
+  // O histórico de entregas mostrava 100% de HTTP 401, de 28/07 a 03/08, em 5
+  // documentos, incluindo um Event::AutoClose (documento totalmente assinado)
+  // que o portal nunca registrou.
+  //
+  // A causa NÃO era o secret: o valor no painel da ClickSign e o da Vercel
+  // conferem. Era o NOME DO HEADER. A documentação oficial deles especifica
+  // `Content-Hmac`, com o valor prefixado por `sha256=`, calculado sobre o corpo
+  // bruto. Esta rota lia `x-clicksign-hmac-sha256` e comparava hex puro, então
+  // nenhuma entrega jamais passou.
+  //
+  // Aceita as duas grafias por tolerância, e o valor com ou sem prefixo.
   if (webhookSecret) {
-    const receivedSig = request.headers.get("x-clicksign-hmac-sha256") ?? "";
+    const raw =
+      request.headers.get("content-hmac") ??
+      request.headers.get("x-clicksign-hmac-sha256") ??
+      "";
+
+    // "sha256=abc..." e "abc..." são tratados igual
+    const receivedSig = raw.trim().replace(/^sha256=/i, "").toLowerCase();
     const expectedSig = createHmac("sha256", webhookSecret).update(rawBody).digest("hex");
-    if (receivedSig !== expectedSig) {
-      console.warn("[clicksign-webhook] HMAC inválido — rejeitado");
+
+    // Comparação em tempo constante. Antes era `!==`, que vaza informação por
+    // tempo de resposta e permite descobrir a assinatura byte a byte.
+    const a = Buffer.from(receivedSig, "utf8");
+    const b = Buffer.from(expectedSig, "utf8");
+    const assinaturaConfere = a.length === b.length && timingSafeEqual(a, b);
+
+    if (!assinaturaConfere) {
+      console.warn(
+        `[clicksign-webhook] HMAC invalido, rejeitado. Header presente: ${
+          raw ? "sim" : "NAO (nenhum dos nomes conhecidos veio na requisicao)"
+        }`
+      );
       return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
     }
+  } else {
+    // Sem secret configurado a rota aceitaria qualquer payload. Registrar alto e
+    // claro, porque é falha aberta de segurança, não apenas configuração ausente.
+    console.error("[clicksign-webhook] CLICKSIGN_WEBHOOK_SECRET ausente: payload aceito SEM validacao");
   }
 
   let payload: ClickSignWebhookPayload;
