@@ -112,7 +112,7 @@ async function buscarComparaveis(
     system,
     messages: [
       ...currentMessages,
-      { role: "user", content: "Você já pesquisou o suficiente. Responda AGORA apenas com o JSON final, sem mais buscas." },
+      { role: "user", content: 'Você já pesquisou o suficiente. Responda AGORA apenas com o JSON final, sem mais buscas, sem markdown e sem nenhum texto explicativo antes ou depois — mesmo que não tenha encontrado nenhum comparável, responda com {"comparaveis":[],"confianca":"BAIXA","observacoes":"..."} explicando brevemente o motivo em "observacoes".' },
     ],
   });
   return finalResponse.content
@@ -166,8 +166,17 @@ Regras:
     const raw = await buscarComparaveis(client, system, userPrompt);
     const aiResult = extrairJson(raw);
     if (!aiResult) {
+      // Modelo respondeu em texto livre (comum quando a busca não acha nada, ex.: cidades
+      // pequenas) em vez do JSON pedido — degrada para "nenhum comparável" em vez de bloquear.
       console.error("[avaliacao-mercado] resposta da IA não pôde ser interpretada como JSON:", raw);
-      return NextResponse.json({ error: "Não foi possível interpretar o resultado da pesquisa. Tente novamente." }, { status: 502 });
+      return NextResponse.json({
+        comparaveis: [],
+        preco_m2_medio: 0,
+        valor_estimado: 0,
+        confianca: "BAIXA",
+        observacoes: "Não foi possível encontrar comparáveis de mercado confiáveis para esta região. Tente novamente ou avalie o imóvel manualmente.",
+        buscado_em: new Date().toISOString(),
+      });
     }
 
     const comparaveisValidos: ComparavelComputado[] = (aiResult.comparaveis ?? [])
