@@ -11,6 +11,7 @@ import {
 import { cn, maskCpfCnpjInput, maskPhoneInput, isValidEmail, maskCurrencyBRLInput, parseCurrencyBRLInput, formatCurrencyBRLFromNumber, maskCurrencyInput, CM_CURRENCY_SYMBOL, type CmCurrency } from "@/lib/utils";
 import { AssetAssistant } from "./asset-assistant";
 import { DueDiligencePanel } from "./due-diligence-panel";
+import { CommissionCalculatorPanel } from "./commission-calculator-panel";
 import { CM_DOCUMENT_CHECKLISTS, type CmAssetType } from "@/lib/cm-checklists";
 import { createClient as createBrowserSupabaseClient } from "@/lib/supabase/client";
 
@@ -190,6 +191,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [assistantListing, setAssistantListing] = useState<{ id: string; anonymous_id: string } | null>(null);
   const [dueDiligenceListing, setDueDiligenceListing] = useState<{ id: string; anonymous_id: string; seller_cpf_cnpj: string | null } | null>(null);
+  const [showCommissionCalc, setShowCommissionCalc] = useState(false);
   const [uploadingDoc, setUploadingDoc] = useState<string | null>(null);
   const [uploadingGallery, setUploadingGallery] = useState(false);
   const [generatingNarrative, setGeneratingNarrative] = useState(false);
@@ -1341,6 +1343,12 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
           >
             {generatingLink ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
             Novo Ativo
+          </button>
+          <button
+            onClick={() => setShowCommissionCalc(true)}
+            className="flex items-center gap-2 px-4 py-2 border border-[#C9A84C]/30 text-[#C9A84C] rounded-lg text-sm font-medium hover:bg-[#C9A84C]/10 transition"
+          >
+            <DollarSign size={16} /> Calculadora Rápida
           </button>
           <button
             onClick={() => setShowManualForm(true)}
@@ -3187,6 +3195,11 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
           sellerCpfCnpj={dueDiligenceListing.seller_cpf_cnpj}
           onClose={() => setDueDiligenceListing(null)}
         />
+      )}
+
+      {/* Calculadora Rápida — Comissionamento & Lâmina de Fechamento */}
+      {showCommissionCalc && (
+        <CommissionCalculatorPanel onClose={() => setShowCommissionCalc(false)} />
       )}
     </div>
   );
