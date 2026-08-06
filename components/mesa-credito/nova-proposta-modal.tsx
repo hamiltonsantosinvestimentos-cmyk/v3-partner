@@ -514,9 +514,10 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
     };
     const proposal = {
       id: `new-${Date.now()}`,
-      // code não é mais gerado aqui: quem emite é o servidor. O valor real
-      // volta na resposta da API de propostas.
-      code: "",
+      // A chave `code` é deliberadamente OMITIDA, não vazia. Quem emite é o
+      // servidor, e este objeto é repassado adiante para a API: mandar string
+      // vazia faria a rota gravar código em branco, porque `??` intercepta
+      // null e undefined mas deixa "" passar.
       title: `${creditLine} — ${clientName}`,
       client_name: clientName,
       client_type: clientType,

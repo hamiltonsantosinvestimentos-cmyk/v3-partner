@@ -173,7 +173,9 @@ export async function POST(req: NextRequest) {
       "credit_desk_proposals",
       "CRED-26",
       (generatedCode) => ({
-        code:            d.code ?? generatedCode,
+        // Truthiness, não `??`: um chamador que mande code:"" (string vazia)
+        // gravaria código em branco e derrubaria a próxima inserção no unique.
+        code:            d.code || generatedCode,
         title:           d.title,
         client_name:     d.client_name,
         client_cpf_cnpj: d.client_cpf_cnpj ?? null,

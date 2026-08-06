@@ -131,7 +131,9 @@ export async function POST(req: NextRequest) {
     // O setor entra no codigo resolvido contra deal_sector_codes, e nao mais no
     // chute: era assim que MAC e CRE acabaram emitidos fora do dicionario.
     const sectorCode = await resolveSectorCode(d.sector, svcPost);
-    const code = d.code ?? (await issueV3Code("MA", sectorCode, svcPost));
+    // Truthiness, não `??`: um chamador que mande code:"" gravaria código em
+    // branco, porque `??` só intercepta null e undefined.
+    const code = d.code || (await issueV3Code("MA", sectorCode, svcPost));
     const codeWasIssued = !d.code;
 
     function deriveVertical(sector: string | null | undefined): "MA" | "Credito" | "Consorcios" {
