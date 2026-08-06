@@ -18,6 +18,7 @@ const searchSchema = z.object({
   cep: z.string().max(12).optional().nullable(),
   cidade: z.string().max(120).optional().nullable(),
   estado: z.string().max(2).optional().nullable(),
+  endereco: z.string().max(200).optional().nullable(),
   area_m2: z.number().gt(0, "Área do imóvel deve ser maior que zero"),
 });
 
@@ -138,15 +139,15 @@ export async function POST(req: NextRequest) {
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.flatten().fieldErrors }, { status: 400 });
   }
-  const { cep, cidade, estado, area_m2 } = parsed.data;
+  const { cep, cidade, estado, endereco, area_m2 } = parsed.data;
 
   if (!cep && !(cidade && estado)) {
     return NextResponse.json({ error: "Informe ao menos CEP, ou cidade e estado do imóvel" }, { status: 400 });
   }
 
-  const regiao = [cep ? `CEP ${cep}` : null, cidade, estado].filter(Boolean).join(", ");
+  const regiao = [endereco, cep ? `CEP ${cep}` : null, cidade, estado].filter(Boolean).join(", ");
 
-  const system = `Você é um assistente de pesquisa de mercado imobiliário da V3 Partners. Sua tarefa é usar a tool "web_search" para encontrar de 3 a 6 anúncios REAIS de imóveis à venda (não aluguel) na mesma região informada pelo usuário — priorize a mesma cidade/UF e, quando encontrar, o mesmo bairro/CEP. Prefira anúncios recentes de portais como ZAP Imóveis, VivaReal, OLX, QuintoAndar, Imovelweb ou sites de imobiliárias locais.
+  const system = `Você é um assistente de pesquisa de mercado imobiliário da V3 Partners. Sua tarefa é usar a tool "web_search" para encontrar de 3 a 6 anúncios REAIS de imóveis à venda (não aluguel) na mesma região informada pelo usuário. Quando um endereço for informado, ele já indica o bairro/rua do imóvel — priorize buscas por esse bairro específico antes de expandir para a cidade toda; use CEP e cidade/UF como critérios de desempate e apoio. Prefira anúncios recentes de portais como ZAP Imóveis, VivaReal, OLX, QuintoAndar, Imovelweb ou sites de imobiliárias locais.
 
 Depois de pesquisar, responda SOMENTE com um JSON válido (sem markdown, sem texto antes ou depois), no formato exato:
 {"comparaveis":[{"titulo":"...","valor":1000000,"area_m2":300,"fonte_nome":"ZAP Imóveis","fonte_url":"https://..."}],"confianca":"ALTA|MEDIA|BAIXA","observacoes":"..."}
@@ -157,7 +158,7 @@ Regras:
 - Nunca invente valores — se não encontrar comparáveis suficientes, retorne o array com o que encontrou (mesmo que só 1 ou 2) e "confianca":"BAIXA".
 - "observacoes" deve mencionar brevemente a qualidade dos comparáveis encontrados (ex.: região exata vs. cidade genérica).`;
 
-  const userPrompt = `Pesquise vendas comparáveis de imóveis na região: ${regiao}. O imóvel da proposta em avaliação tem ${area_m2}m².`;
+  const userPrompt = `Pesquise vendas comparáveis de imóveis na região: ${regiao}.${endereco ? " Comece a busca pelo bairro/rua indicado no endereço acima; só amplie para a cidade toda se não achar anúncios suficientes nesse bairro." : ""} O imóvel da proposta em avaliação tem ${area_m2}m².`;
 
   try {
     const { default: Anthropic } = await import("@anthropic-ai/sdk");

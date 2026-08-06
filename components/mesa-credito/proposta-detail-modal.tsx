@@ -1754,7 +1754,7 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
       const res = await fetch("/api/credit-proposals/avaliacao-mercado", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cep: im.cep, cidade: im.cidade, estado: im.estado, area_m2: im.area_m2 }),
+        body: JSON.stringify({ cep: im.cep, cidade: im.cidade, estado: im.estado, endereco: im.endereco, area_m2: im.area_m2 }),
       });
       const data = await res.json();
       if (!res.ok) {
