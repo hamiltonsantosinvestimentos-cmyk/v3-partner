@@ -35,6 +35,23 @@ interface ComparavelComputado extends Comparavel {
 
 const MAX_TOOL_ITERATIONS = 4;
 
+// Extrai o objeto JSON da resposta do modelo, tolerando texto/markdown ao redor
+function extrairJson(raw: string): { comparaveis?: Comparavel[]; confianca?: string; observacoes?: string } | null {
+  const semFences = raw.replace(/```(?:json)?/gi, "").trim();
+  try {
+    return JSON.parse(semFences);
+  } catch { /* tenta o fallback abaixo */ }
+
+  const inicio = semFences.indexOf("{");
+  const fim = semFences.lastIndexOf("}");
+  if (inicio === -1 || fim === -1 || fim <= inicio) return null;
+  try {
+    return JSON.parse(semFences.slice(inicio, fim + 1));
+  } catch {
+    return null;
+  }
+}
+
 // Loop de tool-use com web_search — encerra em MAX_TOOL_ITERATIONS forçando síntese em JSON
 async function buscarComparaveis(
   anthropic: InstanceType<typeof import("@anthropic-ai/sdk").default>,
@@ -146,15 +163,10 @@ Regras:
     const { default: Anthropic } = await import("@anthropic-ai/sdk");
     const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-    const raw = (await buscarComparaveis(client, system, userPrompt))
-      .trim()
-      .replace(/^```json\s*/i, "")
-      .replace(/```\s*$/i, "");
-
-    let aiResult: { comparaveis?: Comparavel[]; confianca?: string; observacoes?: string };
-    try {
-      aiResult = JSON.parse(raw);
-    } catch {
+    const raw = await buscarComparaveis(client, system, userPrompt);
+    const aiResult = extrairJson(raw);
+    if (!aiResult) {
+      console.error("[avaliacao-mercado] resposta da IA não pôde ser interpretada como JSON:", raw);
       return NextResponse.json({ error: "Não foi possível interpretar o resultado da pesquisa. Tente novamente." }, { status: 502 });
     }
 
