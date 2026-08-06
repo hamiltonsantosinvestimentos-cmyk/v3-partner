@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
-import { calculateCommission } from "@/lib/commission-calculator";
+import { calculateCommission, type MandatarioInput } from "@/lib/commission-calculator";
 
 const ALLOWED_ROLES = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"];
 
@@ -16,6 +16,14 @@ async function authorize(supabaseUser: { id: string } | null) {
     return { error: NextResponse.json({ error: "Sem permissão" }, { status: 403 }) };
   }
   return { userId: supabaseUser.id };
+}
+
+function parseMandatarioInput(raw: unknown, label: string): { value: MandatarioInput | null; error: string | null } {
+  if (!raw || typeof raw !== "object") return { value: null, error: `Campo obrigatório: ${label}` };
+  const { value, unit } = raw as Record<string, unknown>;
+  if (value === undefined || value === null || value === "") return { value: null, error: `Campo obrigatório: ${label}.value` };
+  if (unit !== "pct" && unit !== "valor") return { value: null, error: `${label}.unit precisa ser "pct" ou "valor"` };
+  return { value: { value: Number(value), unit }, error: null };
 }
 
 /** Historico das ultimas simulacoes da Mesa, mais recente primeiro. */
@@ -54,6 +62,8 @@ export async function POST(req: NextRequest) {
     fee_v3_pct,
     buy_side_pct,
     sell_side_pct,
+    buy_mandatario_input: buyMandatarioRaw,
+    sell_mandatario_input: sellMandatarioRaw,
     deducao_bancaria_pct,
   } = body as Record<string, unknown>;
 
@@ -78,6 +88,11 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  const buyMandatario = parseMandatarioInput(buyMandatarioRaw, "buy_mandatario_input");
+  if (buyMandatario.error) return NextResponse.json({ error: buyMandatario.error }, { status: 422 });
+  const sellMandatario = parseMandatarioInput(sellMandatarioRaw, "sell_mandatario_input");
+  if (sellMandatario.error) return NextResponse.json({ error: sellMandatario.error }, { status: 422 });
+
   const resultado = calculateCommission({
     valor_face: Number(valor_face),
     desagio_pct: desagio_pct != null ? Number(desagio_pct) : 0,
@@ -87,6 +102,8 @@ export async function POST(req: NextRequest) {
     fee_v3_pct: Number(fee_v3_pct),
     buy_side_pct: Number(buy_side_pct),
     sell_side_pct: Number(sell_side_pct),
+    buy_mandatario_input: buyMandatario.value!,
+    sell_mandatario_input: sellMandatario.value!,
     deducao_bancaria_pct: deducao_bancaria_pct != null ? Number(deducao_bancaria_pct) : 6,
   });
 
@@ -103,6 +120,10 @@ export async function POST(req: NextRequest) {
       fee_v3_pct: Number(fee_v3_pct),
       buy_side_pct: Number(buy_side_pct),
       sell_side_pct: Number(sell_side_pct),
+      buy_mandatario_input_value: buyMandatario.value!.value,
+      buy_mandatario_input_unit: buyMandatario.value!.unit,
+      sell_mandatario_input_value: sellMandatario.value!.value,
+      sell_mandatario_input_unit: sellMandatario.value!.unit,
       deducao_bancaria_pct: deducao_bancaria_pct != null ? Number(deducao_bancaria_pct) : 6,
       resultado,
       created_by: auth.userId,

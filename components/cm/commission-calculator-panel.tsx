@@ -1,8 +1,8 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Calculator, Loader2, Download, Image as ImageIcon, History } from "lucide-react";
-import type { CommissionCalculatorResult } from "@/lib/commission-calculator";
+import { Calculator, Loader2, Download, History } from "lucide-react";
+import type { CommissionCalculatorResult, MandatarioInputUnit, SideBreakdown } from "@/lib/commission-calculator";
 import { maskCurrencyBRLInput, parseCurrencyBRLInput } from "@/lib/utils";
 
 interface SimulationRecord {
@@ -24,6 +24,73 @@ function formatBRL(v: number) {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
+/** Input de Mandatario/Titular com toggle %/R$. Intermediarios nunca e digitado
+ * (e sempre o restante automatico do lado), por isso nao tem componente proprio. */
+function MandatarioField({
+  label,
+  unit,
+  onToggleUnit,
+  rawValue,
+  onChangeRaw,
+  fieldName,
+}: {
+  label: string;
+  unit: MandatarioInputUnit;
+  onToggleUnit: () => void;
+  rawValue: string;
+  onChangeRaw: (v: string) => void;
+  fieldName: string;
+}) {
+  return (
+    <div>
+      <div className="flex items-center justify-between text-[10px] text-[#9BAFC5] font-bold uppercase mb-1">
+        <span>{label}</span>
+        <button type="button" onClick={onToggleUnit}
+          className="text-[9px] text-[#C9A84C] border border-[#C9A84C]/30 rounded px-1.5 py-0.5 hover:bg-[#C9A84C]/10">
+          {unit === "pct" ? "% do lado" : "R$"}
+        </button>
+      </div>
+      <input
+        inputMode={unit === "pct" ? "decimal" : "numeric"}
+        name={fieldName}
+        value={rawValue}
+        placeholder={unit === "pct" ? "0" : "0,00"}
+        onChange={(e) => onChangeRaw(unit === "pct" ? e.target.value : maskCurrencyBRLInput(e.target.value))}
+        className="w-full bg-[#162744] border border-[#9BAFC5]/15 rounded-md px-3 py-2 text-xs text-[#F5F1E8]"
+      />
+    </div>
+  );
+}
+
+function SideTable({ title, breakdown }: { title: string; breakdown: SideBreakdown }) {
+  return (
+    <div className="bg-[#12112A] border border-[#9BAFC5]/10 rounded-lg p-3">
+      <div className="text-[10px] text-[#E8C97A] font-bold uppercase mb-2">{title}</div>
+      <div className="grid grid-cols-3 gap-2 text-[9px] text-[#9BAFC5] uppercase font-bold mb-1 px-1">
+        <span>Papel / Participante</span>
+        <span className="text-right">Bruto (R$)</span>
+        <span className="text-right">Líquido (R$)</span>
+      </div>
+      <SideRow label="Taxa de Estruturação V3" pct={breakdown.v3_share.pct_of_total} bruto={breakdown.v3_share.bruto} liquido={breakdown.v3_share.liquido} highlight />
+      <SideRow label="Mandatário / Titular" pct={breakdown.mandatario.pct_of_total} bruto={breakdown.mandatario.bruto} liquido={breakdown.mandatario.liquido} />
+      <SideRow label="Grupo de Intermediários" pct={breakdown.intermediarios.pct_of_total} bruto={breakdown.intermediarios.bruto} liquido={breakdown.intermediarios.liquido} />
+    </div>
+  );
+}
+
+function SideRow({ label, pct, bruto, liquido, highlight }: { label: string; pct: number; bruto: number; liquido: number; highlight?: boolean }) {
+  return (
+    <div className="grid grid-cols-3 gap-2 items-center bg-[#162744] rounded px-1 py-1.5 mb-1 text-xs">
+      <div>
+        <div className={highlight ? "text-[#C9A84C] font-bold" : "text-[#F5F1E8]"}>{label}</div>
+        <div className="text-[9px] text-[#9BAFC5]/70">{pct}% do fee total</div>
+      </div>
+      <div className="text-right text-[#F5F1E8]">{formatBRL(bruto)}</div>
+      <div className={`text-right font-bold ${highlight ? "text-[#C9A84C]" : "text-[#F5F1E8]"}`}>{formatBRL(liquido)}</div>
+    </div>
+  );
+}
+
 export function CommissionCalculatorPanel({ onClose }: Props) {
   const [dealLabel, setDealLabel] = useState("");
   const [valorFace, setValorFace] = useState("");
@@ -36,11 +103,16 @@ export function CommissionCalculatorPanel({ onClose }: Props) {
   const [sellSide, setSellSide] = useState("");
   const [deducao, setDeducao] = useState("6");
 
+  const [buyMandatarioUnit, setBuyMandatarioUnit] = useState<MandatarioInputUnit>("pct");
+  const [buyMandatarioRaw, setBuyMandatarioRaw] = useState("");
+  const [sellMandatarioUnit, setSellMandatarioUnit] = useState<MandatarioInputUnit>("pct");
+  const [sellMandatarioRaw, setSellMandatarioRaw] = useState("");
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [resultado, setResultado] = useState<CommissionCalculatorResult | null>(null);
   const [simId, setSimId] = useState<string | null>(null);
-  const [exporting, setExporting] = useState<"pdf" | "png" | null>(null);
+  const [exporting, setExporting] = useState<"buy" | "sell" | null>(null);
 
   const [history, setHistory] = useState<SimulationRecord[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(true);
@@ -58,6 +130,10 @@ export function CommissionCalculatorPanel({ onClose }: Props) {
   const somaSplit = (Number(buySide) || 0) + (Number(sellSide) || 0) + (Number(feeV3) || 0);
   const splitFecha = Math.abs(somaSplit - 100) < 0.01;
 
+  function mandatarioValue(raw: string, unit: MandatarioInputUnit) {
+    return unit === "pct" ? Number(raw) || 0 : parseCurrencyBRLInput(raw);
+  }
+
   async function handleCalcular() {
     if (loading) return;
     setError(null);
@@ -68,6 +144,8 @@ export function CommissionCalculatorPanel({ onClose }: Props) {
     if (feeV3 === "") return setError("Informe o Fee V3 (a Mesa define manualmente por operação).");
     if (buySide === "" || sellSide === "") return setError("Informe o split Compra/Venda.");
     if (!splitFecha) return setError(`Compra + Venda + V3 precisa somar 100% (soma atual: ${somaSplit.toFixed(2)}%)`);
+    if (buyMandatarioRaw === "") return setError("Informe o Mandatário/Titular do lado Compra.");
+    if (sellMandatarioRaw === "") return setError("Informe o Mandatário/Titular do lado Venda.");
 
     setLoading(true);
     try {
@@ -84,6 +162,8 @@ export function CommissionCalculatorPanel({ onClose }: Props) {
           fee_v3_pct: Number(feeV3),
           buy_side_pct: Number(buySide),
           sell_side_pct: Number(sellSide),
+          buy_mandatario_input: { value: mandatarioValue(buyMandatarioRaw, buyMandatarioUnit), unit: buyMandatarioUnit },
+          sell_mandatario_input: { value: mandatarioValue(sellMandatarioRaw, sellMandatarioUnit), unit: sellMandatarioUnit },
           deducao_bancaria_pct: Number(deducao) || 6,
         }),
       });
@@ -99,23 +179,12 @@ export function CommissionCalculatorPanel({ onClose }: Props) {
     }
   }
 
-  async function handleExportPDF() {
+  async function handleExportSide(side: "buy" | "sell") {
     if (!resultado || exporting) return;
-    setExporting("pdf");
+    setExporting(side);
     try {
-      const { renderLaminaPDF } = await import("@/lib/lamina-fechamento-render");
-      await renderLaminaPDF(resultado, { dealLabel, simId, dataSimulacao: new Date() });
-    } finally {
-      setExporting(null);
-    }
-  }
-
-  async function handleExportPNG() {
-    if (!resultado || exporting) return;
-    setExporting("png");
-    try {
-      const { renderLaminaPNG } = await import("@/lib/lamina-fechamento-render");
-      await renderLaminaPNG(resultado, { dealLabel, simId, dataSimulacao: new Date() });
+      const { renderLaminaSidePDF } = await import("@/lib/lamina-fechamento-render");
+      await renderLaminaSidePDF(resultado, side, { dealLabel, simId, dataSimulacao: new Date() });
     } finally {
       setExporting(null);
     }
@@ -130,25 +199,25 @@ export function CommissionCalculatorPanel({ onClose }: Props) {
           </div>
           <div className="flex items-center gap-2">
             <button
-              onClick={handleExportPDF}
+              onClick={() => handleExportSide("buy")}
               disabled={!resultado || !!exporting}
               className="flex items-center gap-1.5 text-[10px] font-bold uppercase text-[#C9A84C] border border-[#C9A84C]/30 rounded px-2.5 py-1.5 hover:bg-[#C9A84C]/10 transition disabled:opacity-30"
             >
-              {exporting === "pdf" ? <Loader2 size={12} className="animate-spin" /> : <Download size={12} />} Salvar PDF
+              {exporting === "buy" ? <Loader2 size={12} className="animate-spin" /> : <Download size={12} />} PDF Buy-Side
             </button>
             <button
-              onClick={handleExportPNG}
+              onClick={() => handleExportSide("sell")}
               disabled={!resultado || !!exporting}
-              className="flex items-center gap-1.5 text-[10px] font-bold uppercase text-[#9BAFC5] border border-[#9BAFC5]/20 rounded px-2.5 py-1.5 hover:bg-[#9BAFC5]/10 hover:text-[#F5F1E8] transition disabled:opacity-30"
+              className="flex items-center gap-1.5 text-[10px] font-bold uppercase text-[#C9A84C] border border-[#C9A84C]/30 rounded px-2.5 py-1.5 hover:bg-[#C9A84C]/10 transition disabled:opacity-30"
             >
-              {exporting === "png" ? <Loader2 size={12} className="animate-spin" /> : <ImageIcon size={12} />} Gerar Imagem
+              {exporting === "sell" ? <Loader2 size={12} className="animate-spin" /> : <Download size={12} />} PDF Sell-Side
             </button>
             <button onClick={onClose} className="text-[#9BAFC5] hover:text-[#F5F1E8] text-lg leading-none ml-2">&times;</button>
           </div>
         </div>
 
         <div className="flex-1 overflow-y-auto p-5">
-          {/* Inputs */}
+          {/* Inputs: base da operação */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <div className="col-span-2 md:col-span-1">
               <label className="block text-[10px] text-[#E8C97A] font-bold uppercase mb-1">Identificação (opcional)</label>
@@ -173,6 +242,7 @@ export function CommissionCalculatorPanel({ onClose }: Props) {
             </div>
           </div>
 
+          {/* Split de topo: Compra / Venda / V3 */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3">
             <div>
               <label className="block text-[10px] text-[#9BAFC5] font-bold uppercase mb-1">Fee V3 (%) (manual por operação)</label>
@@ -194,6 +264,26 @@ export function CommissionCalculatorPanel({ onClose }: Props) {
               <input type="number" name="deducao_bancaria_pct" value={deducao} onChange={(e) => setDeducao(e.target.value)}
                 className="w-full bg-[#162744] border border-[#9BAFC5]/15 rounded-md px-3 py-2 text-xs text-[#F5F1E8]" />
             </div>
+          </div>
+
+          {/* Mandatario/Titular por lado. Intermediarios e sempre o restante automatico */}
+          <div className="grid grid-cols-2 gap-3 mt-3">
+            <MandatarioField
+              label="Mandatário Compra"
+              unit={buyMandatarioUnit}
+              onToggleUnit={() => { setBuyMandatarioUnit((u) => (u === "pct" ? "valor" : "pct")); setBuyMandatarioRaw(""); }}
+              rawValue={buyMandatarioRaw}
+              onChangeRaw={setBuyMandatarioRaw}
+              fieldName="buy_mandatario_input"
+            />
+            <MandatarioField
+              label="Mandatário Venda"
+              unit={sellMandatarioUnit}
+              onToggleUnit={() => { setSellMandatarioUnit((u) => (u === "pct" ? "valor" : "pct")); setSellMandatarioRaw(""); }}
+              rawValue={sellMandatarioRaw}
+              onChangeRaw={setSellMandatarioRaw}
+              fieldName="sell_mandatario_input"
+            />
           </div>
 
           <div className="flex items-center justify-between mt-3">
@@ -222,34 +312,59 @@ export function CommissionCalculatorPanel({ onClose }: Props) {
             <div className="mt-3 py-2 px-3 bg-red-500/10 border border-red-500/20 rounded-lg text-xs text-red-400">{error}</div>
           )}
 
-          {/* Tabela A: Operação Mensal / Pontual */}
+          {/* Resumo da operação */}
           {resultado && (
-            <div className="mt-5">
-              <div className="text-[10px] text-[#E8C97A] font-bold uppercase mb-2">Tabela A: Operação Mensal / Pontual</div>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                <Stat label="Valor de Face" value={formatBRL(resultado.operacao.valor_face)} />
-                <Stat label="Deságio" value={`${resultado.operacao.desagio_pct}%`} />
-                <Stat label="Preço do Comprador" value={formatBRL(resultado.operacao.valor_comprador)} highlight />
-                <Stat label="Fee Total" value={`${resultado.split.fee_total_pct}% · ${formatBRL(resultado.split.fee_total_value)}`} />
-                <Stat label="Grupo Compra (líquido)" value={formatBRL(resultado.split.grupo_compra.liquido)} sub={`${resultado.split.grupo_compra.pct}% do fee`} />
-                <Stat label="Grupo Venda (líquido)" value={formatBRL(resultado.split.grupo_venda.liquido)} sub={`${resultado.split.grupo_venda.pct}% do fee`} />
-                <Stat label="V3 Partners (líquido)" value={formatBRL(resultado.split.v3_partners.liquido)} sub={`${resultado.split.v3_partners.pct}% do fee`} highlight />
-                <Stat label="Dedução Bancária" value={`${resultado.split.deducao_bancaria_pct}%`} />
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-5">
+              <div className="bg-[#162744] rounded-lg p-3">
+                <div className="text-[10px] text-[#9BAFC5]">Valor de Face</div>
+                <div className="text-sm font-bold text-[#F5F1E8]">{formatBRL(resultado.operacao.valor_face)}</div>
+              </div>
+              <div className="bg-[#162744] rounded-lg p-3">
+                <div className="text-[10px] text-[#9BAFC5]">Deságio</div>
+                <div className="text-sm font-bold text-[#F5F1E8]">{resultado.operacao.desagio_pct}%</div>
+              </div>
+              <div className="bg-[#162744] rounded-lg p-3">
+                <div className="text-[10px] text-[#9BAFC5]">Preço do Comprador</div>
+                <div className="text-sm font-bold text-[#C9A84C]">{formatBRL(resultado.operacao.valor_comprador)}</div>
+              </div>
+              <div className="bg-[#162744] rounded-lg p-3">
+                <div className="text-[10px] text-[#9BAFC5]">Fee Total</div>
+                <div className="text-sm font-bold text-[#F5F1E8]">{resultado.fee.fee_total_pct}% · {formatBRL(resultado.fee.fee_total_value)}</div>
               </div>
             </div>
           )}
 
-          {/* Tabela B: Projeção Acumulada da Recorrência */}
+          {/* Tabelas por lado: nunca combinadas num unico PDF, so na tela para conferencia da Mesa */}
+          {resultado && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+              <SideTable title="Lado Compra (Buy-Side)" breakdown={resultado.buy_side} />
+              <SideTable title="Lado Venda (Sell-Side)" breakdown={resultado.sell_side} />
+            </div>
+          )}
+
+          {/* Projeção acumulada da recorrência */}
           {resultado && resultado.recorrencia.is_recorrente && (
             <div className="mt-5">
               <div className="text-[10px] text-[#E8C97A] font-bold uppercase mb-2">
-                Tabela B: Projeção Acumulada ({resultado.recorrencia.meses_recorrencia} meses)
+                Projeção Acumulada ({resultado.recorrencia.meses_recorrencia} meses)
               </div>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                <Stat label="Volume Total Acumulado" value={formatBRL(resultado.recorrencia.volume_total_acumulado)} highlight className="total-accumulated-volume" />
-                <Stat label="Fee Total Acumulado" value={formatBRL(resultado.recorrencia.fee_total_acumulado)} />
-                <Stat label="Grupo Compra Acum. (líq.)" value={formatBRL(resultado.recorrencia.grupo_compra_acumulado_liquido)} />
-                <Stat label="Grupo Venda Acum. (líq.)" value={formatBRL(resultado.recorrencia.grupo_venda_acumulado_liquido)} />
+                <div className="bg-[#162744] rounded-lg p-3 total-accumulated-volume">
+                  <div className="text-[10px] text-[#9BAFC5]">Volume Total Acumulado</div>
+                  <div className="text-sm font-bold text-[#C9A84C]">{formatBRL(resultado.recorrencia.volume_total_acumulado)}</div>
+                </div>
+                <div className="bg-[#162744] rounded-lg p-3">
+                  <div className="text-[10px] text-[#9BAFC5]">Fee Total Acumulado</div>
+                  <div className="text-sm font-bold text-[#F5F1E8]">{formatBRL(resultado.recorrencia.fee_total_acumulado)}</div>
+                </div>
+                <div className="bg-[#162744] rounded-lg p-3">
+                  <div className="text-[10px] text-[#9BAFC5]">Lado Compra Acum. (líq.)</div>
+                  <div className="text-sm font-bold text-[#F5F1E8]">{formatBRL(resultado.recorrencia.buy_side_acumulado_liquido)}</div>
+                </div>
+                <div className="bg-[#162744] rounded-lg p-3">
+                  <div className="text-[10px] text-[#9BAFC5]">Lado Venda Acum. (líq.)</div>
+                  <div className="text-sm font-bold text-[#F5F1E8]">{formatBRL(resultado.recorrencia.sell_side_acumulado_liquido)}</div>
+                </div>
               </div>
             </div>
           )}
@@ -277,16 +392,6 @@ export function CommissionCalculatorPanel({ onClose }: Props) {
           </div>
         </div>
       </div>
-    </div>
-  );
-}
-
-function Stat({ label, value, sub, highlight, className }: { label: string; value: string; sub?: string; highlight?: boolean; className?: string }) {
-  return (
-    <div className={`bg-[#162744] rounded-lg p-3 ${className ?? ""}`}>
-      <div className="text-[10px] text-[#9BAFC5]">{label}</div>
-      <div className={`text-sm font-bold ${highlight ? "text-[#C9A84C]" : "text-[#F5F1E8]"}`}>{value}</div>
-      {sub && <div className="text-[9px] text-[#9BAFC5]/70">{sub}</div>}
     </div>
   );
 }
