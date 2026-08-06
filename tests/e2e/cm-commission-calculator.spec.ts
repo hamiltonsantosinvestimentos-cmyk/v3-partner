@@ -6,19 +6,16 @@ import { test, expect } from "@playwright/test";
 // Diferenca deliberada em relacao ao spec original recebido: nao existe rota
 // dedicada "/bolsa/calculadora". A calculadora rapida e um MODAL dentro de
 // "/bolsa/mesa", atras do mesmo gate de role (ADMIN/GESTAO/MESA_OPERACIONAL)
-// que ja protege a Mesa de Capitais inteira. Uma rota publica separada
-// obrigaria replicar o gate de acesso em mais um lugar, contrariando o
-// requisito explicito de Joao ("nao aparece para todos os partners").
+// que ja protege a Mesa de Capitais inteira.
 //
-// Fase 2 (06/08/2026): cada lado (Compra/Venda) quebra em Mandatario/Titular
-// (digitado em % do lado ou R$, com toggle) + Grupo de Intermediarios (sempre
-// o restante automatico). Os botoes de exportacao viraram "PDF Buy-Side" e
-// "PDF Sell-Side" (nunca um PDF combinado, decisao explicita de Joao para nao
-// gerar conflito entre as partes). Esta suite NAO abre o PDF baixado para ler
-// a nota do FPA dentro do arquivo, o projeto nao tem lib de parse de PDF e nao
-// vamos inventar uma dependencia nova so para o teste; confirma o download
-// real acontecendo (evento "download" do Playwright) e confere os mesmos
-// numeros por papel na tela, que sao a mesma fonte de dado usada no PDF.
+// Fase 3 (06/08/2026), cascata top-down sem trava de soma: cada lado
+// (Compra/Venda) recebe uma fatia bruta independente da Comissao Total,
+// V3 e Mandatario sao % manuais do lado, Intermediarios e sempre o resto
+// automatico (pode dar negativo, decisao explicita de Joao: tela nunca
+// bloqueia por mensagem de erro, so desabilita o botao de PDF daquele lado
+// especifico quando o saldo fica negativo). 3 variantes de PDF: Buy-Side,
+// Sell-Side (cada uma so com os proprios numeros) e Consolidado/Mesa V3
+// (uso interno, mostra os dois lados).
 //
 // Sessao QA compartilhada (tests/e2e/auth.setup.ts) e ADMIN, ja tem acesso
 // a Mesa de Capitais, sem setup adicional de role neste arquivo.
@@ -30,59 +27,38 @@ async function abrirCalculadora(page: import("@playwright/test").Page) {
   await expect(page.getByText("Calculadora Rápida · Comissionamento e Lâmina de Fechamento")).toBeVisible();
 }
 
-test.describe("Bolsa de Ativos - Calculadora Rapida de Comissionamento (Fase 2)", () => {
-  test("calcula o breakdown por papel (V3/Mandatario/Intermediarios) nos dois lados e multiplica pelos meses de recorrencia", async ({ page }) => {
+test.describe("Bolsa de Ativos - Calculadora Rapida de Comissionamento (Fase 3, cascata sem trava)", () => {
+  test("calcula em tempo real, sem bloqueio, e habilita os 3 PDFs quando os saldos ficam positivos", async ({ page }) => {
     await abrirCalculadora(page);
 
-    // Valor de face R$ 1.000.000,00, sem desagio, fee total 10%.
     // Mascara "maquineta" (maskCurrencyBRLInput): os digitos representam
-    // CENTAVOS ("100000000" -> R$ 1.000.000,00), nao o valor em reais direto.
+    // CENTAVOS ("100000000" -> R$ 1.000.000,00).
     await page.fill('input[name="face_value"]', "100000000");
-    await page.fill('input[name="desconto_desagio_pct"]', "0");
     await page.fill('input[name="fee_total_pct"]', "10");
 
-    // Split de topo: V3 20%, Compra 40%, Venda 40% (soma 100%).
-    await page.fill('input[name="fee_v3_pct"]', "20");
-    await page.fill('input[name="buy_side_pct"]', "40");
-    await page.fill('input[name="sell_side_pct"]', "40");
+    // Nunca deve aparecer qualquer mensagem de "precisa somar 100%" nesta
+    // versao, a trava foi removida deliberadamente.
+    await expect(page.getByText(/precisa somar 100%/i)).toHaveCount(0);
 
-    // Mandatario Compra: 60% do lado Compra (unidade default = "% do lado").
-    // Mandatario Venda: R$ 12.000,00 direto (troca o toggle pra R$ primeiro).
-    await page.fill('input[name="buy_mandatario_input"]', "60");
-    // Toggle do bloco Venda: comeca em "% do lado" (unit default = pct), clicar
-    // troca para "R$". nth(1) porque o bloco Compra tem o mesmo texto de botao.
-    await page.getByRole("button", { name: "% do lado" }).nth(1).click();
-    await page.fill('input[name="sell_mandatario_input"]', "1200000"); // maquineta -> R$ 12.000,00
+    // Lado Compra (default Fatia do Lado = 50%): V3 20%, Mandatario 30%
+    // -> Intermediarios = 50% do lado, positivo.
+    await page.fill('input[name="buy_fee_v3_pct"]', "20");
+    await page.fill('input[name="buy_mandatario_pct"]', "30");
 
-    // Ativa recorrencia de 12 meses
-    await page.check('input[name="is_recurrent"]');
-    await page.fill('input[name="recurrence_months"]', "12");
+    // Lado Venda (default 50%): V3 15%, Mandatario 25% -> Intermediarios = 60%, positivo.
+    await page.fill('input[name="sell_fee_v3_pct"]', "15");
+    await page.fill('input[name="sell_mandatario_pct"]', "25");
 
-    await page.getByRole("button", { name: "Calcular", exact: true }).click();
+    // Resultado calcula sozinho, sem clicar em nenhum botao "Calcular".
+    await expect(page.getByText("R$ 100.000,00")).toBeVisible(); // Comissao Total = 10% de R$1M
 
-    // Fee total = R$ 1.000.000,00 x 10% = R$ 100.000,00
-    await expect(page.getByText("R$ 100.000,00")).toBeVisible();
+    // Nenhum aviso de saldo negativo deve aparecer com esses valores.
+    await expect(page.getByText(/Ajuste as fatias/i)).toHaveCount(0);
 
-    // Lado Compra: bucket = R$ 40.000,00 (40% do fee). Mandatario = 60% disso
-    // = R$ 24.000,00. Intermediarios = restante = R$ 16.000,00.
-    await expect(page.getByText("R$ 24.000,00").first()).toBeVisible();
-    await expect(page.getByText("R$ 16.000,00").first()).toBeVisible();
-
-    // Lado Venda: bucket = R$ 40.000,00. Mandatario digitado direto em R$ 12.000,00.
-    // Intermediarios = restante = R$ 28.000,00.
-    await expect(page.getByText("R$ 12.000,00").first()).toBeVisible();
-    await expect(page.getByText("R$ 28.000,00").first()).toBeVisible();
-
-    // Volume acumulado de 12 meses = R$ 1.000.000,00 x 12 = R$ 12.000.000,00
-    const totalVolume = await page.locator(".total-accumulated-volume").textContent();
-    expect(totalVolume).toContain("12.000.000");
-
-    // Os dois botoes segregados ficam habilitados, e disparam download real
-    // (nunca um terceiro botao de PDF combinado, nem PNG).
+    // Os 3 botoes de PDF ficam habilitados.
     await expect(page.getByRole("button", { name: /PDF Buy-Side/i })).toBeEnabled();
     await expect(page.getByRole("button", { name: /PDF Sell-Side/i })).toBeEnabled();
-    await expect(page.getByRole("button", { name: /Salvar PDF/i })).toHaveCount(0);
-    await expect(page.getByRole("button", { name: /Gerar Imagem/i })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /PDF Consolidado/i })).toBeEnabled();
 
     const [downloadBuy] = await Promise.all([
       page.waitForEvent("download"),
@@ -90,23 +66,32 @@ test.describe("Bolsa de Ativos - Calculadora Rapida de Comissionamento (Fase 2)"
     ]);
     expect(downloadBuy.suggestedFilename()).toContain("BuySide");
 
-    const [downloadSell] = await Promise.all([
+    const [downloadConsolidado] = await Promise.all([
       page.waitForEvent("download"),
-      page.getByRole("button", { name: /PDF Sell-Side/i }).click(),
+      page.getByRole("button", { name: /PDF Consolidado/i }).click(),
     ]);
-    expect(downloadSell.suggestedFilename()).toContain("SellSide");
+    expect(downloadConsolidado.suggestedFilename()).toContain("Consolidado");
   });
 
-  test("bloqueia calculo quando compra + venda + V3 nao fecham 100%", async ({ page }) => {
+  test("saldo de Intermediarios negativo nao trava a tela, so desabilita o PDF daquele lado", async ({ page }) => {
     await abrirCalculadora(page);
 
-    await page.fill('input[name="face_value"]', "50000000"); // R$ 500.000,00 (mascara maquineta)
-    await page.fill('input[name="buy_side_pct"]', "30");
-    await page.fill('input[name="sell_side_pct"]', "30");
-    await page.fill('input[name="fee_v3_pct"]', "30"); // soma = 90%, nao fecha 100%
+    await page.fill('input[name="face_value"]', "50000000"); // R$ 500.000,00
+    await page.fill('input[name="fee_total_pct"]', "5");
 
-    await page.getByRole("button", { name: "Calcular", exact: true }).click();
+    // Lado Compra: V3 70% + Mandatario 50% = 120% do lado -> Intermediarios negativo.
+    await page.fill('input[name="buy_fee_v3_pct"]', "70");
+    await page.fill('input[name="buy_mandatario_pct"]', "50");
 
-    await expect(page.getByText(/precisa somar 100%/i)).toBeVisible();
+    // Nenhuma mensagem de erro bloqueante em nenhum momento.
+    await expect(page.getByText(/precisa somar 100%/i)).toHaveCount(0);
+    await expect(page.getByText(/erro ao calcular/i)).toHaveCount(0);
+
+    // Aviso especifico do lado negativo aparece, e o botao de PDF daquele
+    // lado fica desabilitado; o do outro lado continua livre.
+    await expect(page.getByText(/Ajuste as fatias/i)).toBeVisible();
+    await expect(page.getByRole("button", { name: /PDF Buy-Side/i })).toBeDisabled();
+    await expect(page.getByRole("button", { name: /PDF Sell-Side/i })).toBeEnabled();
+    await expect(page.getByRole("button", { name: /PDF Consolidado/i })).toBeDisabled();
   });
 });

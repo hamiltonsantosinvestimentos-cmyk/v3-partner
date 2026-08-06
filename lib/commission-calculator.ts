@@ -1,32 +1,27 @@
 /**
  * Motor de calculo da Calculadora Rapida de Comissionamento (Mesa de Capitais).
- * Puro, sem I/O, usado pela API (/api/cm/commission-calculator) para computar
- * e persistir, e pode ser reaproveitado em teste unitario sem tocar banco.
+ * Puro, sem I/O, roda igual no navegador (preview em tempo real, sem chamar
+ * a API a cada tecla) e no servidor (na hora de persistir a simulacao).
  *
- * Fase 2 (06/08/2026): quebra cada lado (Compra/Venda) em Mandatario/Titular +
- * Grupo de Intermediarios, e reparte a fatia da V3 entre os dois lados na
- * mesma proporcao que Compra/Venda tem entre si (decisao de Joao). O "%
- * Alocado" de toda linha e sempre % do FEE TOTAL da operacao, nunca % do
- * lado, para as 6 linhas das duas tabelas somarem 100% entre si.
+ * Fase 3 (06/08/2026), cascata top-down: fim da trava de soma 100%. Cada
+ * lado (Compra/Venda) recebe uma fatia bruta independente (% da Comissao
+ * Total, default 50/50, ajustavel, sem obrigacao de fechar 100% entre os
+ * dois). Dentro de cada lado, V3 e Mandatario sao % manuais DAQUELE LADO
+ * (nao mais uma fatia global da V3 repartida proporcionalmente, como era
+ * na Fase 2), e Grupo de Intermediarios e sempre o RESTO automatico:
  *
- * Convencao de base: o fee incide sobre valor_face, mesmo criterio ja usado
- * pela RPC calculate_cm_commission_split(p_valor_face, p_commission_percent).
+ *   Intermediarios (lado) = Fatia Bruta (lado) - V3 (lado) - Mandatario (lado)
  *
- * Split de topo: buy_side_pct + sell_side_pct + fee_v3_pct = 100% do
- * fee_total_pct. fee_v3_pct e sempre digitado manualmente por operacao,
- * porque a Mesa pode abrir mao ou aumentar o comissionamento da V3
- * negociacao a negociacao, nunca calculado/fixo.
- *
- * Dentro de cada lado: Mandatario/Titular e digitado em % DO LADO ou em R$
- * direto (unit "pct" ou "valor"). Grupo de Intermediarios nunca e digitado,
- * e sempre o restante automatico do lado (bruto do lado menos o Mandatario).
+ * Esse resto pode ficar negativo se a Mesa digitar V3 + Mandatario acima de
+ * 100% do lado. Isso NAO trava o calculo (decisao explicita de Joao: tela
+ * livre para digitar, nunca mensagem de erro bloqueante), so desabilita a
+ * exportacao do PDF daquele lado especifico, ver hasNegativeResidual().
  */
 
-export type MandatarioInputUnit = "pct" | "valor";
-
-export interface MandatarioInput {
-  value: number;
-  unit: MandatarioInputUnit;
+export interface SideCascadeInput {
+  side_pct: number; // % da Comissao Total alocada a este lado (independente do outro lado)
+  fee_v3_pct: number; // % da fatia bruta DESTE LADO que fica com a V3
+  mandatario_pct: number; // % da fatia bruta DESTE LADO que fica com o Mandatario/Titular
 }
 
 export interface CommissionCalculatorInput {
@@ -34,29 +29,19 @@ export interface CommissionCalculatorInput {
   desagio_pct?: number | null;
   is_recorrente: boolean;
   meses_recorrencia: number;
-  fee_total_pct: number;
-  fee_v3_pct: number;
-  buy_side_pct: number;
-  sell_side_pct: number;
-  buy_mandatario_input: MandatarioInput;
-  sell_mandatario_input: MandatarioInput;
+  comissao_total_pct: number;
+  buy_side: SideCascadeInput;
+  sell_side: SideCascadeInput;
   deducao_bancaria_pct: number;
 }
 
 export interface SideBreakdown {
-  side_total_pct: number; // % do fee total alocado a este lado
-  side_total_bruto: number;
-  side_total_liquido: number;
-  v3_share: { pct_of_total: number; bruto: number; liquido: number };
-  mandatario: {
-    input_unit: MandatarioInputUnit;
-    input_value: number;
-    pct_of_side: number;
-    pct_of_total: number;
-    bruto: number;
-    liquido: number;
-  };
-  intermediarios: { pct_of_side: number; pct_of_total: number; bruto: number; liquido: number };
+  side_pct: number;
+  side_bruto: number;
+  side_liquido: number;
+  v3: { pct_of_side: number; bruto: number; liquido: number };
+  mandatario: { pct_of_side: number; bruto: number; liquido: number };
+  intermediarios: { pct_of_side: number; bruto: number; liquido: number }; // pode ser negativo
 }
 
 export interface CommissionCalculatorResult {
@@ -66,10 +51,8 @@ export interface CommissionCalculatorResult {
     valor_comprador: number; // Valor de Face x (1 - deságio)
   };
   fee: {
-    fee_total_pct: number;
-    fee_total_value: number;
-    fee_v3_pct: number;
-    v3_total_value: number;
+    comissao_total_pct: number;
+    comissao_total_value: number;
     deducao_bancaria_pct: number;
   };
   buy_side: SideBreakdown;
@@ -91,103 +74,49 @@ function round4(n: number) {
   return Math.round(n * 10000) / 10000;
 }
 
-function buildSide(
-  sideTotalPct: number,
-  sideTotalBruto: number,
-  v3TotalValue: number,
-  v3SideRatio: number,
-  mandatarioInput: MandatarioInput,
-  liquidoFactor: number
-): SideBreakdown {
-  const v3ShareBruto = round2(v3TotalValue * v3SideRatio);
-  const v3SharePctOfTotal = round4(mandatarioInput ? 0 : 0); // placeholder, sobrescrito pelo chamador
+function buildSide(input: SideCascadeInput, comissaoTotalValue: number, liquidoFactor: number): SideBreakdown {
+  const sidePct = Number(input.side_pct) || 0;
+  const v3Pct = Number(input.fee_v3_pct) || 0;
+  const mandatarioPct = Number(input.mandatario_pct) || 0;
 
-  let mandatarioPctOfSide: number;
-  let mandatarioBruto: number;
-  if (mandatarioInput.unit === "pct") {
-    mandatarioPctOfSide = Math.max(0, Math.min(100, Number(mandatarioInput.value)));
-    mandatarioBruto = round2(sideTotalBruto * (mandatarioPctOfSide / 100));
-  } else {
-    mandatarioBruto = Math.max(0, Math.min(sideTotalBruto, Number(mandatarioInput.value)));
-    mandatarioPctOfSide = sideTotalBruto > 0 ? round4((mandatarioBruto / sideTotalBruto) * 100) : 0;
-  }
-
-  const intermediariosBruto = round2(Math.max(0, sideTotalBruto - mandatarioBruto));
-  const intermediariosPctOfSide = round4(100 - mandatarioPctOfSide);
-
-  const mandatarioPctOfTotal = round4(sideTotalPct * (mandatarioPctOfSide / 100));
-  const intermediariosPctOfTotal = round4(sideTotalPct * (intermediariosPctOfSide / 100));
+  const sideBruto = round2(comissaoTotalValue * (sidePct / 100));
+  const v3Bruto = round2(sideBruto * (v3Pct / 100));
+  const mandatarioBruto = round2(sideBruto * (mandatarioPct / 100));
+  // Resto automatico, nunca digitado, pode dar negativo de proposito (ver
+  // comentario no topo do arquivo), quem trata a exportacao e a UI.
+  const intermediariosBruto = round2(sideBruto - v3Bruto - mandatarioBruto);
+  const intermediariosPct = round4(100 - v3Pct - mandatarioPct);
 
   return {
-    side_total_pct: sideTotalPct,
-    side_total_bruto: sideTotalBruto,
-    side_total_liquido: round2(sideTotalBruto * liquidoFactor),
-    v3_share: {
-      pct_of_total: v3SharePctOfTotal, // sobrescrito pelo chamador (precisa de fee_v3_pct)
-      bruto: v3ShareBruto,
-      liquido: round2(v3ShareBruto * liquidoFactor),
-    },
-    mandatario: {
-      input_unit: mandatarioInput.unit,
-      input_value: Number(mandatarioInput.value),
-      pct_of_side: mandatarioPctOfSide,
-      pct_of_total: mandatarioPctOfTotal,
-      bruto: mandatarioBruto,
-      liquido: round2(mandatarioBruto * liquidoFactor),
-    },
-    intermediarios: {
-      pct_of_side: intermediariosPctOfSide,
-      pct_of_total: intermediariosPctOfTotal,
-      bruto: intermediariosBruto,
-      liquido: round2(intermediariosBruto * liquidoFactor),
-    },
+    side_pct: sidePct,
+    side_bruto: sideBruto,
+    side_liquido: round2(sideBruto * liquidoFactor),
+    v3: { pct_of_side: v3Pct, bruto: v3Bruto, liquido: round2(v3Bruto * liquidoFactor) },
+    mandatario: { pct_of_side: mandatarioPct, bruto: mandatarioBruto, liquido: round2(mandatarioBruto * liquidoFactor) },
+    intermediarios: { pct_of_side: intermediariosPct, bruto: intermediariosBruto, liquido: round2(intermediariosBruto * liquidoFactor) },
   };
 }
 
 export function calculateCommission(input: CommissionCalculatorInput): CommissionCalculatorResult {
-  const valorFace = Number(input.valor_face);
-  const desagioPct = Number(input.desagio_pct ?? 0);
-  const feeTotalPct = Number(input.fee_total_pct);
-  const feeV3Pct = Number(input.fee_v3_pct);
-  const buySidePct = Number(input.buy_side_pct);
-  const sellSidePct = Number(input.sell_side_pct);
-  const deducaoPct = Number(input.deducao_bancaria_pct);
+  const valorFace = Number(input.valor_face) || 0;
+  const desagioPct = Number(input.desagio_pct ?? 0) || 0;
+  const comissaoTotalPct = Number(input.comissao_total_pct) || 0;
+  const deducaoPct = Number(input.deducao_bancaria_pct) || 0;
   const meses = input.is_recorrente ? Math.max(1, Math.min(60, Number(input.meses_recorrencia) || 1)) : 1;
 
   const valorComprador = round2(valorFace * (1 - desagioPct / 100));
-  const feeTotalValue = round2(valorFace * (feeTotalPct / 100));
-  const v3TotalValue = round2(feeTotalValue * (feeV3Pct / 100));
-
+  const comissaoTotalValue = round2(valorFace * (comissaoTotalPct / 100));
   const liquidoFactor = 1 - deducaoPct / 100;
 
-  const buySideBruto = round2(feeTotalValue * (buySidePct / 100));
-  const sellSideBruto = round2(feeTotalValue * (sellSidePct / 100));
-
-  // Fatia da V3 repartida entre os lados na mesma proporcao que Compra/Venda
-  // tem entre si (decisao de Joao, 06/08/2026). Guarda contra divisao por
-  // zero no caso extremo de fee_v3_pct = 100% (buy+sell = 0).
-  const sideDenominator = buySidePct + sellSidePct;
-  const buySideRatio = sideDenominator > 0 ? buySidePct / sideDenominator : 0.5;
-  const sellSideRatio = sideDenominator > 0 ? sellSidePct / sideDenominator : 0.5;
-
-  const buySide = buildSide(buySidePct, buySideBruto, v3TotalValue, buySideRatio, input.buy_mandatario_input, liquidoFactor);
-  const sellSide = buildSide(sellSidePct, sellSideBruto, v3TotalValue, sellSideRatio, input.sell_mandatario_input, liquidoFactor);
-
-  buySide.v3_share.pct_of_total = round4(feeV3Pct * buySideRatio);
-  sellSide.v3_share.pct_of_total = round4(feeV3Pct * sellSideRatio);
+  const buySide = buildSide(input.buy_side, comissaoTotalValue, liquidoFactor);
+  const sellSide = buildSide(input.sell_side, comissaoTotalValue, liquidoFactor);
 
   const volumeTotalAcumulado = round2(valorFace * meses);
-  const feeTotalAcumulado = round2(feeTotalValue * meses);
+  const feeTotalAcumulado = round2(comissaoTotalValue * meses);
 
   return {
     operacao: { valor_face: valorFace, desagio_pct: desagioPct, valor_comprador: valorComprador },
-    fee: {
-      fee_total_pct: feeTotalPct,
-      fee_total_value: feeTotalValue,
-      fee_v3_pct: feeV3Pct,
-      v3_total_value: v3TotalValue,
-      deducao_bancaria_pct: deducaoPct,
-    },
+    fee: { comissao_total_pct: comissaoTotalPct, comissao_total_value: comissaoTotalValue, deducao_bancaria_pct: deducaoPct },
     buy_side: buySide,
     sell_side: sellSide,
     recorrencia: {
@@ -195,8 +124,13 @@ export function calculateCommission(input: CommissionCalculatorInput): Commissio
       meses_recorrencia: meses,
       volume_total_acumulado: volumeTotalAcumulado,
       fee_total_acumulado: feeTotalAcumulado,
-      buy_side_acumulado_liquido: round2(buySide.side_total_liquido * meses),
-      sell_side_acumulado_liquido: round2(sellSide.side_total_liquido * meses),
+      buy_side_acumulado_liquido: round2(buySide.side_liquido * meses),
+      sell_side_acumulado_liquido: round2(sellSide.side_liquido * meses),
     },
   };
+}
+
+/** Intermediarios negativo naquele lado: exportacao de PDF daquele lado fica bloqueada na UI. */
+export function hasNegativeResidual(side: SideBreakdown): boolean {
+  return side.intermediarios.bruto < 0;
 }

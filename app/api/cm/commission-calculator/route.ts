@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
-import { calculateCommission, type MandatarioInput } from "@/lib/commission-calculator";
+import { calculateCommission, type SideCascadeInput } from "@/lib/commission-calculator";
 
 const ALLOWED_ROLES = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"];
 
@@ -18,12 +18,18 @@ async function authorize(supabaseUser: { id: string } | null) {
   return { userId: supabaseUser.id };
 }
 
-function parseMandatarioInput(raw: unknown, label: string): { value: MandatarioInput | null; error: string | null } {
+function parseSide(raw: unknown, label: string): { value: SideCascadeInput | null; error: string | null } {
   if (!raw || typeof raw !== "object") return { value: null, error: `Campo obrigatório: ${label}` };
-  const { value, unit } = raw as Record<string, unknown>;
-  if (value === undefined || value === null || value === "") return { value: null, error: `Campo obrigatório: ${label}.value` };
-  if (unit !== "pct" && unit !== "valor") return { value: null, error: `${label}.unit precisa ser "pct" ou "valor"` };
-  return { value: { value: Number(value), unit }, error: null };
+  const { side_pct, fee_v3_pct, mandatario_pct } = raw as Record<string, unknown>;
+  if (side_pct === undefined || side_pct === null || side_pct === "") return { value: null, error: `Campo obrigatório: ${label}.side_pct` };
+  return {
+    value: {
+      side_pct: Number(side_pct),
+      fee_v3_pct: fee_v3_pct != null && fee_v3_pct !== "" ? Number(fee_v3_pct) : 0,
+      mandatario_pct: mandatario_pct != null && mandatario_pct !== "" ? Number(mandatario_pct) : 0,
+    },
+    error: null,
+  };
 }
 
 /** Historico das ultimas simulacoes da Mesa, mais recente primeiro. */
@@ -43,7 +49,14 @@ export async function GET(_req: NextRequest) {
   return NextResponse.json({ simulations: data ?? [] });
 }
 
-/** Calcula e persiste uma nova simulacao (log de auditoria da Mesa). */
+/**
+ * Calcula e persiste uma simulacao (log de auditoria da Mesa). Fase 3:
+ * NENHUMA validacao de soma/percentual bloqueia esta rota, a unica coisa
+ * exigida e valor_face e comissao_total_pct positivos, o resto (inclusive
+ * Intermediarios negativo) e aceito e gravado como esta, a decisao de
+ * bloquear so a EXPORTACAO do PDF daquele lado fica no cliente
+ * (hasNegativeResidual em lib/commission-calculator.ts).
+ */
 export async function POST(req: NextRequest) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -58,52 +71,32 @@ export async function POST(req: NextRequest) {
     desagio_pct,
     is_recorrente,
     meses_recorrencia,
-    fee_total_pct,
-    fee_v3_pct,
-    buy_side_pct,
-    sell_side_pct,
-    buy_mandatario_input: buyMandatarioRaw,
-    sell_mandatario_input: sellMandatarioRaw,
+    comissao_total_pct,
+    buy_side: buySideRaw,
+    sell_side: sellSideRaw,
     deducao_bancaria_pct,
   } = body as Record<string, unknown>;
 
   if (!valor_face || Number(valor_face) <= 0) {
     return NextResponse.json({ error: "Campo obrigatório: valor_face" }, { status: 422 });
   }
-  if (!fee_total_pct || Number(fee_total_pct) <= 0) {
-    return NextResponse.json({ error: "Campo obrigatório: fee_total_pct" }, { status: 422 });
-  }
-  if (fee_v3_pct === undefined || fee_v3_pct === null || fee_v3_pct === "") {
-    return NextResponse.json({ error: "Campo obrigatório: fee_v3_pct (a Mesa define manualmente por operação)" }, { status: 422 });
-  }
-  if (buy_side_pct === undefined || sell_side_pct === undefined) {
-    return NextResponse.json({ error: "Campos obrigatórios: buy_side_pct e sell_side_pct" }, { status: 422 });
+  if (!comissao_total_pct || Number(comissao_total_pct) <= 0) {
+    return NextResponse.json({ error: "Campo obrigatório: comissao_total_pct" }, { status: 422 });
   }
 
-  const somaSplit = Number(buy_side_pct) + Number(sell_side_pct) + Number(fee_v3_pct);
-  if (Math.abs(somaSplit - 100) > 0.01) {
-    return NextResponse.json(
-      { error: `buy_side_pct + sell_side_pct + fee_v3_pct deve somar 100% (soma atual: ${somaSplit.toFixed(2)}%)` },
-      { status: 422 }
-    );
-  }
-
-  const buyMandatario = parseMandatarioInput(buyMandatarioRaw, "buy_mandatario_input");
-  if (buyMandatario.error) return NextResponse.json({ error: buyMandatario.error }, { status: 422 });
-  const sellMandatario = parseMandatarioInput(sellMandatarioRaw, "sell_mandatario_input");
-  if (sellMandatario.error) return NextResponse.json({ error: sellMandatario.error }, { status: 422 });
+  const buySide = parseSide(buySideRaw, "buy_side");
+  if (buySide.error) return NextResponse.json({ error: buySide.error }, { status: 422 });
+  const sellSide = parseSide(sellSideRaw, "sell_side");
+  if (sellSide.error) return NextResponse.json({ error: sellSide.error }, { status: 422 });
 
   const resultado = calculateCommission({
     valor_face: Number(valor_face),
     desagio_pct: desagio_pct != null ? Number(desagio_pct) : 0,
     is_recorrente: Boolean(is_recorrente),
     meses_recorrencia: meses_recorrencia != null ? Number(meses_recorrencia) : 1,
-    fee_total_pct: Number(fee_total_pct),
-    fee_v3_pct: Number(fee_v3_pct),
-    buy_side_pct: Number(buy_side_pct),
-    sell_side_pct: Number(sell_side_pct),
-    buy_mandatario_input: buyMandatario.value!,
-    sell_mandatario_input: sellMandatario.value!,
+    comissao_total_pct: Number(comissao_total_pct),
+    buy_side: buySide.value!,
+    sell_side: sellSide.value!,
     deducao_bancaria_pct: deducao_bancaria_pct != null ? Number(deducao_bancaria_pct) : 6,
   });
 
@@ -116,14 +109,15 @@ export async function POST(req: NextRequest) {
       desagio_pct: desagio_pct != null ? Number(desagio_pct) : null,
       is_recorrente: Boolean(is_recorrente),
       meses_recorrencia: meses_recorrencia != null ? Number(meses_recorrencia) : 1,
-      fee_total_pct: Number(fee_total_pct),
-      fee_v3_pct: Number(fee_v3_pct),
-      buy_side_pct: Number(buy_side_pct),
-      sell_side_pct: Number(sell_side_pct),
-      buy_mandatario_input_value: buyMandatario.value!.value,
-      buy_mandatario_input_unit: buyMandatario.value!.unit,
-      sell_mandatario_input_value: sellMandatario.value!.value,
-      sell_mandatario_input_unit: sellMandatario.value!.unit,
+      fee_total_pct: Number(comissao_total_pct),
+      buy_side_pct: buySide.value!.side_pct,
+      sell_side_pct: sellSide.value!.side_pct,
+      fee_v3_buy_pct: buySide.value!.fee_v3_pct,
+      fee_v3_sell_pct: sellSide.value!.fee_v3_pct,
+      buy_mandatario_input_value: buySide.value!.mandatario_pct,
+      buy_mandatario_input_unit: "pct",
+      sell_mandatario_input_value: sellSide.value!.mandatario_pct,
+      sell_mandatario_input_unit: "pct",
       deducao_bancaria_pct: deducao_bancaria_pct != null ? Number(deducao_bancaria_pct) : 6,
       resultado,
       created_by: auth.userId,
