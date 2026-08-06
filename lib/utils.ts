@@ -102,6 +102,32 @@ export function parseCurrencyBRLInput(value: string): number {
   return parseInt(digits, 10) / 100;
 }
 
+/**
+ * Sanitiza digitacao livre de campo percentual/decimal (ex: Deságio, Fee, TIR):
+ * mantem so digitos e um separador decimal (virgula ou ponto), descarta o resto.
+ * Usar em onChange de input type="text" para esses campos.
+ */
+export function sanitizeDecimalInput(value: string): string {
+  return value.replace(/[^0-9,.]/g, "");
+}
+
+/**
+ * Converte texto digitado num campo percentual/decimal para number. Aceita
+ * "," ou "." como separador decimal.
+ *
+ * Existe porque input nativo type="number", sob locale/teclado PT-BR do
+ * Chrome, guarda "40" digitado como 0,40 (bug real reportado ao vivo em
+ * 06/08/2026 na Calculadora Rapida de Comissionamento, nao era erro de
+ * digitacao do usuario). Todo campo percentual/decimal de digitacao livre
+ * deve usar type="text" + sanitizeDecimalInput no onChange + parseDecimalInput
+ * na leitura, nunca type="number".
+ */
+export function parseDecimalInput(value: string): number {
+  if (!value) return 0;
+  const n = Number(value.replace(",", "."));
+  return Number.isFinite(n) ? n : 0;
+}
+
 /** Formata um number real (vindo do banco, ex: ask_price_floor) no mesmo padrao visual de maskCurrencyBRLInput, para popular campos mascarados ao carregar dado existente. */
 export function formatCurrencyBRLFromNumber(value: number | null | undefined): string {
   if (value === null || value === undefined || Number.isNaN(value)) return "";

@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { Calculator, Loader2, ArrowRightLeft, Settings2 } from "lucide-react";
-import { maskCurrencyBRLInput, parseCurrencyBRLInput, formatCurrencyBRLFromNumber } from "@/lib/utils";
+import { maskCurrencyBRLInput, parseCurrencyBRLInput, formatCurrencyBRLFromNumber, sanitizeDecimalInput, parseDecimalInput } from "@/lib/utils";
 
 const INTERNAL_ROLES = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"];
 
@@ -51,7 +51,7 @@ export function CalculadoraWidget({ userRole = "PARTNER" }: { userRole?: string 
       const res = await fetch("/api/cm/settings/taxa-estruturacao", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ divisao_partes: Number(divisaoPartes) }),
+        body: JSON.stringify({ divisao_partes: parseDecimalInput(divisaoPartes) }),
       });
       const json = await res.json();
       if (res.ok) { alert("Padrão salvo para toda a Mesa"); setEditingDefault(false); }
@@ -68,12 +68,12 @@ export function CalculadoraWidget({ userRole = "PARTNER" }: { userRole?: string 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           valor_face: parseCurrencyBRLInput(valorFace),
-          desagio: mode === "desagio" ? Number(desagio) : null,
-          tir: mode === "tir" ? Number(tir) : null,
-          prazo_meses: Number(prazo),
-          commission_percent: commPercent ? Number(commPercent) : null,
-          divisao_partes: divisaoPartes ? Number(divisaoPartes) : null,
-          taxa_intermediacao: taxaIntermediacao !== "" ? Number(taxaIntermediacao) : null,
+          desagio: mode === "desagio" ? parseDecimalInput(desagio) : null,
+          tir: mode === "tir" ? parseDecimalInput(tir) : null,
+          prazo_meses: parseDecimalInput(prazo),
+          commission_percent: commPercent ? parseDecimalInput(commPercent) : null,
+          divisao_partes: divisaoPartes ? parseDecimalInput(divisaoPartes) : null,
+          taxa_intermediacao: taxaIntermediacao !== "" ? parseDecimalInput(taxaIntermediacao) : null,
         }),
       });
       const json = await res.json();
@@ -113,7 +113,7 @@ export function CalculadoraWidget({ userRole = "PARTNER" }: { userRole?: string 
         <div>
           <label className="block text-[10px] text-[#C9A84C] font-bold uppercase mb-1">Prazo (meses)</label>
           <input
-            type="number" value={prazo} onChange={(e) => setPrazo(e.target.value)}
+            type="text" inputMode="numeric" value={prazo} onChange={(e) => setPrazo(sanitizeDecimalInput(e.target.value))}
             className="w-full bg-[#162744] border border-[#C9A84C]/30 rounded-md px-3 py-2 text-xs text-[#F5F1E8] font-semibold"
           />
         </div>
@@ -121,7 +121,7 @@ export function CalculadoraWidget({ userRole = "PARTNER" }: { userRole?: string 
           <div>
             <label className="block text-[10px] text-[#C9A84C] font-bold uppercase mb-1">Deságio (%)</label>
             <input
-              type="number" value={desagio} onChange={(e) => setDesagio(e.target.value)}
+              type="text" inputMode="decimal" value={desagio} onChange={(e) => setDesagio(sanitizeDecimalInput(e.target.value))}
               className="w-full bg-[#162744] border border-[#C9A84C]/30 rounded-md px-3 py-2 text-xs text-[#F5F1E8] font-semibold"
             />
           </div>
@@ -129,7 +129,7 @@ export function CalculadoraWidget({ userRole = "PARTNER" }: { userRole?: string 
           <div>
             <label className="block text-[10px] text-[#C9A84C] font-bold uppercase mb-1">TIR (% a.a.)</label>
             <input
-              type="number" value={tir} onChange={(e) => setTir(e.target.value)}
+              type="text" inputMode="decimal" value={tir} onChange={(e) => setTir(sanitizeDecimalInput(e.target.value))}
               className="w-full bg-[#162744] border border-[#C9A84C]/30 rounded-md px-3 py-2 text-xs text-[#F5F1E8] font-semibold"
             />
           </div>
@@ -138,7 +138,7 @@ export function CalculadoraWidget({ userRole = "PARTNER" }: { userRole?: string 
           <div>
             <label className="block text-[10px] text-[#C9A84C] font-bold uppercase mb-1">Comissão (%)</label>
             <input
-              type="number" value={commPercent} onChange={(e) => setCommPercent(e.target.value)}
+              type="text" inputMode="decimal" value={commPercent} onChange={(e) => setCommPercent(sanitizeDecimalInput(e.target.value))}
               className="w-full bg-[#162744] border border-[#9BAFC5]/15 rounded-md px-3 py-2 text-xs text-[#F5F1E8]"
             />
           </div>
@@ -163,7 +163,7 @@ export function CalculadoraWidget({ userRole = "PARTNER" }: { userRole?: string 
               </button>
             </label>
             <input
-              type="number" value={divisaoPartes} onChange={(e) => setDivisaoPartes(e.target.value)}
+              type="text" inputMode="numeric" value={divisaoPartes} onChange={(e) => setDivisaoPartes(sanitizeDecimalInput(e.target.value))}
               className="w-full bg-[#162744] border border-[#9BAFC5]/15 rounded-md px-3 py-2 text-xs text-[#F5F1E8]"
             />
             {editingDefault && (
@@ -176,7 +176,7 @@ export function CalculadoraWidget({ userRole = "PARTNER" }: { userRole?: string 
           <div>
             <label className="block text-[10px] text-[#9BAFC5] font-bold uppercase mb-1">Taxa de Intermediação (opcional)</label>
             <input
-              type="number" value={taxaIntermediacao} onChange={(e) => setTaxaIntermediacao(e.target.value)}
+              type="text" inputMode="decimal" value={taxaIntermediacao} onChange={(e) => setTaxaIntermediacao(sanitizeDecimalInput(e.target.value))}
               placeholder="Só se V3 também intermediar"
               className="w-full bg-[#162744] border border-[#9BAFC5]/15 rounded-md px-3 py-2 text-xs text-[#F5F1E8]"
             />

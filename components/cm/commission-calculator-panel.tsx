@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { Calculator, Loader2, Download, History } from "lucide-react";
 import type { CommissionCalculatorResult, MandatarioInputUnit, SideBreakdown } from "@/lib/commission-calculator";
-import { maskCurrencyBRLInput, parseCurrencyBRLInput } from "@/lib/utils";
+import { maskCurrencyBRLInput, parseCurrencyBRLInput, sanitizeDecimalInput, parseDecimalInput } from "@/lib/utils";
 
 interface SimulationRecord {
   id: string;
@@ -24,18 +24,10 @@ function formatBRL(v: number) {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
-/**
- * Parser de campo percentual digitado a mao. Usa texto puro (nao
- * type="number") de proposito: o input nativo type="number" do Chrome, sob
- * locale/teclado PT-BR, guarda "40" digitado como 0,40 (o valor some pra
- * dentro do decimal sozinho) — bug reportado ao vivo em 06/08/2026, nao era
- * erro de digitacao. Aceita "," ou "." como separador decimal.
- */
-function parsePct(raw: string): number {
-  if (!raw) return 0;
-  const n = Number(raw.replace(",", "."));
-  return Number.isFinite(n) ? n : 0;
-}
+// parsePct/sanitizacao dos campos percentuais: ver parseDecimalInput/
+// sanitizeDecimalInput em lib/utils.ts (motivo do porque nao usar type="number"
+// documentado la, compartilhado com calculadora-widget.tsx).
+const parsePct = parseDecimalInput;
 
 /** Input de Mandatario/Titular com toggle %/R$. Intermediarios nunca e digitado
  * (e sempre o restante automatico do lado), por isso nao tem componente proprio. */
@@ -69,7 +61,7 @@ function MandatarioField({
         name={fieldName}
         value={rawValue}
         placeholder={unit === "pct" ? "0" : "0,00"}
-        onChange={(e) => onChangeRaw(unit === "pct" ? e.target.value.replace(/[^0-9,.]/g, "") : maskCurrencyBRLInput(e.target.value))}
+        onChange={(e) => onChangeRaw(unit === "pct" ? sanitizeDecimalInput(e.target.value) : maskCurrencyBRLInput(e.target.value))}
         className="w-full bg-[#162744] border border-[#9BAFC5]/15 rounded-md px-3 py-2 text-xs text-[#F5F1E8]"
       />
     </div>
@@ -246,12 +238,12 @@ export function CommissionCalculatorPanel({ onClose }: Props) {
             </div>
             <div>
               <label className="block text-[10px] text-[#E8C97A] font-bold uppercase mb-1">Deságio (%)</label>
-              <input type="text" inputMode="decimal" name="desconto_desagio_pct" value={desagio} onChange={(e) => setDesagio(e.target.value.replace(/[^0-9,.]/g, ""))}
+              <input type="text" inputMode="decimal" name="desconto_desagio_pct" value={desagio} onChange={(e) => setDesagio(sanitizeDecimalInput(e.target.value))}
                 className="w-full bg-[#162744] border border-[#C9A84C]/30 rounded-md px-3 py-2 text-xs text-[#F5F1E8] font-semibold" />
             </div>
             <div>
               <label className="block text-[10px] text-[#E8C97A] font-bold uppercase mb-1">Fee Total (%)</label>
-              <input type="text" inputMode="decimal" name="fee_total_pct" value={feeTotal} onChange={(e) => setFeeTotal(e.target.value.replace(/[^0-9,.]/g, ""))}
+              <input type="text" inputMode="decimal" name="fee_total_pct" value={feeTotal} onChange={(e) => setFeeTotal(sanitizeDecimalInput(e.target.value))}
                 className="w-full bg-[#162744] border border-[#C9A84C]/30 rounded-md px-3 py-2 text-xs text-[#F5F1E8] font-semibold" />
             </div>
           </div>
@@ -260,22 +252,22 @@ export function CommissionCalculatorPanel({ onClose }: Props) {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3">
             <div>
               <label className="block text-[10px] text-[#9BAFC5] font-bold uppercase mb-1">Fee V3 (%) (manual por operação)</label>
-              <input type="text" inputMode="decimal" name="fee_v3_pct" value={feeV3} onChange={(e) => setFeeV3(e.target.value.replace(/[^0-9,.]/g, ""))} placeholder="Mesa define"
+              <input type="text" inputMode="decimal" name="fee_v3_pct" value={feeV3} onChange={(e) => setFeeV3(sanitizeDecimalInput(e.target.value))} placeholder="Mesa define"
                 className="w-full bg-[#162744] border border-[#9BAFC5]/15 rounded-md px-3 py-2 text-xs text-[#F5F1E8]" />
             </div>
             <div>
               <label className="block text-[10px] text-[#9BAFC5] font-bold uppercase mb-1">Split Compra (% do fee)</label>
-              <input type="text" inputMode="decimal" name="buy_side_pct" value={buySide} onChange={(e) => setBuySide(e.target.value.replace(/[^0-9,.]/g, ""))}
+              <input type="text" inputMode="decimal" name="buy_side_pct" value={buySide} onChange={(e) => setBuySide(sanitizeDecimalInput(e.target.value))}
                 className="w-full bg-[#162744] border border-[#9BAFC5]/15 rounded-md px-3 py-2 text-xs text-[#F5F1E8]" />
             </div>
             <div>
               <label className="block text-[10px] text-[#9BAFC5] font-bold uppercase mb-1">Split Venda (% do fee)</label>
-              <input type="text" inputMode="decimal" name="sell_side_pct" value={sellSide} onChange={(e) => setSellSide(e.target.value.replace(/[^0-9,.]/g, ""))}
+              <input type="text" inputMode="decimal" name="sell_side_pct" value={sellSide} onChange={(e) => setSellSide(sanitizeDecimalInput(e.target.value))}
                 className="w-full bg-[#162744] border border-[#9BAFC5]/15 rounded-md px-3 py-2 text-xs text-[#F5F1E8]" />
             </div>
             <div>
               <label className="block text-[10px] text-[#9BAFC5] font-bold uppercase mb-1">Dedução Bancária (%)</label>
-              <input type="text" inputMode="decimal" name="deducao_bancaria_pct" value={deducao} onChange={(e) => setDeducao(e.target.value.replace(/[^0-9,.]/g, ""))}
+              <input type="text" inputMode="decimal" name="deducao_bancaria_pct" value={deducao} onChange={(e) => setDeducao(sanitizeDecimalInput(e.target.value))}
                 className="w-full bg-[#162744] border border-[#9BAFC5]/15 rounded-md px-3 py-2 text-xs text-[#F5F1E8]" />
             </div>
           </div>
