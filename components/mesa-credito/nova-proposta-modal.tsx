@@ -473,7 +473,7 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
   async function handleSubmit() {
     setSaving(true);
     setSaveError(null);
-    const code = `CRED-26-${String(Date.now()).slice(-6)}`;
+    // Código emitido pelo servidor (ver app/api/credit-proposals/route.ts).
     const clientName = clientType === "PF" ? nome : (razaoSocial || nomeFantasia);
     const imoveisData = imoveis.map(im => ({
       endereco: im.endereco || undefined,
@@ -514,7 +514,9 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
     };
     const proposal = {
       id: `new-${Date.now()}`,
-      code,
+      // code não é mais gerado aqui: quem emite é o servidor. O valor real
+      // volta na resposta da API de propostas.
+      code: "",
       title: `${creditLine} — ${clientName}`,
       client_name: clientName,
       client_type: clientType,

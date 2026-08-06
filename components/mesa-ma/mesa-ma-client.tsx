@@ -670,7 +670,11 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
     if (!createdId) {
       const card: MaCard = {
         id: `ma-${Date.now()}`,
-        code: `MA-26-${String(cards.length + 1).padStart(3, "0")}`,
+        // Este card NÃO foi salvo no banco: a chamada à API falhou. Inventar um
+        // código aqui a partir de cards.length criava um identificador que
+        // parecia real, não existia em lugar nenhum e ainda colidia com a
+        // numeração de verdade. O rótulo agora diz o que aconteceu.
+        code: "NÃO SALVO",
         company: newCard.company,
         sector: newCard.sector,
         value: Number(newCard.value),

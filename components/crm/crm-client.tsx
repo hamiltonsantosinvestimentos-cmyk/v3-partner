@@ -1045,7 +1045,9 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
         high_ticket: "NIVEL_3",
       };
       const line = creditLine || (selectedConvert === "credito_varejo" ? "HOME EQUITY" : selectedConvert === "credito_estruturado" ? "HOMECASH" : "CRI");
-      const code = `CRED-26-${String(Date.now()).slice(-6)}`;
+      // Código emitido pelo servidor (ver app/api/credit-proposals/route.ts).
+      // Date.now() produzia CRED-26-974417 convivendo com CRED-26-0086, que é
+      // o que tornou impossível ordenar ou auditar a série de crédito.
       const meta = showConvert.metadata ?? {};
       const parseMeta = (v: unknown) => {
         if (typeof v === "number") return v;
@@ -1056,7 +1058,6 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
       // NIVEL_3 exige mínimo de R$ 5.000.000
       const requestedValue = levelMap[selectedConvert] === "NIVEL_3" ? Math.max(baseValue, 5_000_000) : baseValue;
       const proposalPayload = {
-        code,
         title:           `${line} — ${showConvert.name}`,
         client_name:     showConvert.name,
         client_cpf_cnpj: showConvert.document || (meta.cpfCnpj as string) || null,
@@ -1085,7 +1086,9 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
         },
       };
 
-      // Salva via API no Supabase
+      // Salva via API no Supabase. O código da proposta vem na resposta:
+      // quem emite é o servidor, não a tela.
+      let createdProposalCode = "";
       try {
         const res = await fetch("/api/credit-proposals", {
           method: "POST",
@@ -1093,6 +1096,7 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
           body: JSON.stringify(proposalPayload),
         });
         const json = await res.json();
+        createdProposalCode = (json?.proposal?.code as string) ?? "";
         if (!json.ok) {
           const errMsg = typeof json.error === "string"
             ? json.error
@@ -1109,7 +1113,7 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
         return;
       }
 
-      setMesaSuccess(`✅ Lead encaminhado como "Ganho"! Proposta ${code} criada na Mesa de Crédito — ${line}.`);
+      setMesaSuccess(`✅ Lead encaminhado como "Ganho"! Proposta ${createdProposalCode} criada na Mesa de Crédito — ${line}.`);
       setTimeout(() => setMesaSuccess(null), 7000);
     } else {
       setMesaSuccess(`✅ Lead encaminhado para ${CONVERT_OPTIONS.find(o => o.id === selectedConvert)?.label ?? selectedConvert} e marcado como Ganho.`);
@@ -1383,9 +1387,9 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
 
   async function handleNewLeadSubmit() {
     if (!newLead.name || !newLead.email) return;
-    const nextCode = `CRM-26-${String(leads.length + 1).padStart(3, "0")}`;
+    // O código do lead é emitido pelo servidor (ver app/api/crm/route.ts).
+    // Calcular aqui a partir de leads.length lia apenas o que estava na tela.
     const leadPayload = {
-      code: nextCode,
       name: newLead.name,
       document: newLead.document,
       personType: newLead.personType,
@@ -1454,8 +1458,13 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
       }
     } catch {}
 
-    // Fallback local (modo demo)
-    const lead: CRMLead = { ...leadPayload, id: `crm-${Date.now()}` } as CRMLead;
+    // Fallback local (modo demo). O código aqui é só rótulo de tela: este
+    // caminho não grava no banco, então não consome numeração real.
+    const lead: CRMLead = {
+      ...leadPayload,
+      id: `crm-${Date.now()}`,
+      code: `CRM-DEMO-${String(Date.now()).slice(-4)}`,
+    } as CRMLead;
     setLeads(prev => [lead, ...prev]);
     setShowNewLead(false);
     setNewLead({ personType: "PJ", name: "", document: "", email: "", phone: "", city: "", state: "", segment: "", annualRevenue: "", source: "ativo", notes: "", visitDate: "", nextContact: "", productInterest: "", creditLine: "" });
@@ -2368,9 +2377,8 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
         {tab === "prospeccao" && (
           <ProspeccaoTab
             onAddLead={async (prefill) => {
-              const code = `CRM-26-${String(leads.length + 1).padStart(3, "0")}`;
+              // Código emitido pelo servidor (ver app/api/crm/route.ts).
               const payload = {
-                code,
                 name:            prefill.name ?? "Sem nome",
                 document:        prefill.document ?? "",
                 personType:      prefill.personType ?? "PJ",
@@ -2436,8 +2444,12 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
                 }
               } catch {}
 
-              // Fallback local (demo)
-              setLeads(prev => [{ ...payload, id: `crm-${Date.now()}` } as CRMLead, ...prev]);
+              // Fallback local (demo). Código é só rótulo de tela, não grava.
+              setLeads(prev => [{
+                ...payload,
+                id: `crm-${Date.now()}`,
+                code: `CRM-DEMO-${String(Date.now()).slice(-4)}`,
+              } as CRMLead, ...prev]);
               setTab("pipeline");
             }}
           />
