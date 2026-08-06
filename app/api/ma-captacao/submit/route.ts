@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as sc } from "@supabase/supabase-js";
+import { nextLegacyCode } from "@/lib/v3-codes";
 
 function serviceClient() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -29,9 +30,10 @@ export async function POST(req: NextRequest) {
   const empresa = (formData.empresa || formData.nome || "").trim();
   if (!empresa) return NextResponse.json({ error: "Nome/Empresa obrigatório" }, { status: 400 });
 
-  // Gera código CRM
-  const { count } = await svc.from("crm_leads").select("*", { count: "exact", head: true });
-  const code = `CRM-26-${String((count ?? 0) + 1).padStart(4, "0")}`;
+  // Código CRM por MAX real, nunca por COUNT(*): COUNT diverge do real assim
+  // que existe qualquer vão na tabela e gera colisão determinística de unique
+  // constraint. Foi esse defeito que derrubou o link de captação em 31/07/2026.
+  const code = await nextLegacyCode(svc, "crm_leads", "CRM-26");
 
   const parseMoney = (v?: string) => parseFloat((v ?? "").replace(/[^\d,]/g, "").replace(",", ".")) || 0;
   const faturamento = parseMoney(formData.faturamento);

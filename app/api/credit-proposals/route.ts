@@ -5,6 +5,7 @@ import { z } from "zod";
 import { logAudit } from "@/lib/audit";
 import { notifyNovaProposta, notifyPropostaAtualizada } from "@/lib/email";
 import { createNotification, notifyByRoles } from "@/lib/notify";
+import { insertWithLegacyCode } from "@/lib/v3-codes";
 
 function serviceClient() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -154,31 +155,44 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { count } = await serviceClient()
-      .from("credit_desk_proposals").select("id", { count: "exact", head: true });
-    const code = d.code ?? `CRED-26-${String((count ?? 0) + 1).padStart(4, "0")}`;
-
     // Se admin/gestao enviou um partner_id específico no payload (ex: convertendo lead de um partner), usa ele
     // Caso contrário usa o usuário autenticado
     const isAdmin = ADMIN_ROLES.includes(profile?.role as typeof ADMIN_ROLES[number]);
     const effectivePartnerId = (isAdmin && d.partner_id) ? d.partner_id : user.id;
 
-    const { data, error } = await serviceClient().from("credit_desk_proposals").insert({
-      code,
-      title:           d.title,
-      client_name:     d.client_name,
-      client_cpf_cnpj: d.client_cpf_cnpj ?? null,
-      credit_line:     d.credit_line,
-      requested_value: d.requested_value,
-      current_level:   d.current_level,
-      status:          "PENDING",
-      stage:           "RECEBIDO",
-      partner_id:      effectivePartnerId,
-      created_by:      user.id,
-      metadata:        d.metadata ?? {},
-    }).select().single();
+    // Codigo por MAX real + retry no 23505, nunca por COUNT(*).
+    //
+    // Por que esta rota ainda emite CRED-26 e nao V3-CR / V3-CRI: a escolha
+    // entre as duas series depende do campo escopo em regras_linhas_credito,
+    // que so passa a existir na Fase 2a da governanca de numeracao. Emitir
+    // agora produziria V3-CR em operacao internacional, e codigo emitido e
+    // imutavel por desenho. Ate la, o formato atual e preservado e o unico
+    // problema resolvido e a colisao.
+    const { data: inserted, error } = await insertWithLegacyCode(
+      serviceClient(),
+      "credit_desk_proposals",
+      "CRED-26",
+      (generatedCode) => ({
+        code:            d.code ?? generatedCode,
+        title:           d.title,
+        client_name:     d.client_name,
+        client_cpf_cnpj: d.client_cpf_cnpj ?? null,
+        credit_line:     d.credit_line,
+        requested_value: d.requested_value,
+        current_level:   d.current_level,
+        status:          "PENDING",
+        stage:           "RECEBIDO",
+        partner_id:      effectivePartnerId,
+        created_by:      user.id,
+        metadata:        d.metadata ?? {},
+      })
+    );
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+    const data = inserted as unknown as {
+      id: string; code: string; title: string; client_name: string; credit_line: string;
+    };
 
     // Notifica admin por e-mail — isolado para não crashar o handler
     try {
@@ -203,12 +217,12 @@ export async function POST(req: NextRequest) {
         user_id: user.id,
         type: "proposal",
         title: "Proposta de crédito enviada",
-        message: `${code} — ${d.client_name} · ${d.credit_line}`,
+        message: `${data.code} — ${d.client_name} · ${d.credit_line}`,
         action_url: "/mesa-credito",
       }),
       notifyByRoles(["ADMIN", "GESTAO", "MESA_OPERACIONAL"], {
         type: "proposal",
-        title: `Nova Proposta — ${code}`,
+        title: `Nova Proposta — ${data.code}`,
         message: `${partnerName}: ${d.client_name} · ${d.credit_line} · ${new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(d.requested_value)}`,
         action_url: `/mesa-credito/${d.current_level.toLowerCase().replace("_", "-")}`,
       }),

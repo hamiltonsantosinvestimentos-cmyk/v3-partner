@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { z } from "zod";
+import { issueV3Code } from "@/lib/v3-codes";
 
 function serviceClient() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -44,8 +45,16 @@ export async function POST(req: NextRequest) {
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten().fieldErrors }, { status: 400 });
   const d = parsed.data;
   const svc = serviceClient();
-  const { count } = await svc.from("consorcio_cartas").select("*", { count: "exact", head: true });
-  const code = `CARTA-26-${String((count ?? 0) + 1).padStart(3, "0")}`;
+
+  // Codigo emitido pelo banco. O calculo anterior (COUNT(*)+1) estava a uma
+  // exclusao de quebrar: sao 301 cartas com numeracao perfeitamente densa, entao
+  // apagar qualquer uma faria COUNT+1 apontar para um codigo ja existente e toda
+  // emissao de carta passaria a falhar com 23505, exatamente como aconteceu em
+  // ma_deals em 05/08/2026.
+  // As 301 cartas no formato CARTA-26-NNN permanecem intocadas: a serie CS vale
+  // da emissao em diante, conforme decisao de congelar o historico (05/08/2026).
+  const code = await issueV3Code("CS", null, svc);
+
   const { data, error } = await svc.from("consorcio_cartas").insert({
     code, ...d, created_by: user.id,
   }).select().single();

@@ -4,6 +4,7 @@ import { createClient as sc } from "@supabase/supabase-js";
 import { z } from "zod";
 import { logAudit } from "@/lib/audit";
 import { createNotification, notifyByRoles } from "@/lib/notify";
+import { issueV3Code, resolveSectorCode, insertWithLegacyCode } from "@/lib/v3-codes";
 
 function serviceClient() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -121,8 +122,17 @@ export async function POST(req: NextRequest) {
     const d = parsed.data;
 
     const svcPost = serviceClient();
-    const { count } = await svcPost.from("ma_deals").select("*", { count: "exact", head: true });
-    const code = d.code ?? `MA-26-${String((count ?? 0) + 1).padStart(3, "0")}`;
+
+    // Codigo emitido pelo banco (funcao next_v3_code), nunca calculado aqui.
+    // O calculo anterior usava COUNT(*)+1, que colide assim que existe qualquer
+    // vao na numeracao: em 05/08/2026 a tabela tinha 29 linhas e o maior codigo
+    // era MA-26-030, entao COUNT+1 devolvia um codigo que ja existia e todo
+    // cadastro de deal falhava com 23505.
+    // O setor entra no codigo resolvido contra deal_sector_codes, e nao mais no
+    // chute: era assim que MAC e CRE acabaram emitidos fora do dicionario.
+    const sectorCode = await resolveSectorCode(d.sector, svcPost);
+    const code = d.code ?? (await issueV3Code("MA", sectorCode, svcPost));
+    const codeWasIssued = !d.code;
 
     function deriveVertical(sector: string | null | undefined): "MA" | "Credito" | "Consorcios" {
       const s = (sector ?? "").toLowerCase();
@@ -133,6 +143,9 @@ export async function POST(req: NextRequest) {
 
     const insertPayload = {
       code,
+      // v3_code so e preenchido quando o codigo foi emitido aqui. Se o chamador
+      // trouxe um codigo proprio, nao presumimos que ele siga a taxonomia V3.
+      ...(codeWasIssued ? { v3_code: code } : {}),
       title:                  d.title ?? d.company,
       target_company:         d.company,
       sector:                 d.sector ?? null,
@@ -185,31 +198,45 @@ export async function POST(req: NextRequest) {
         .limit(1);
 
       if (!dup || dup.length === 0) {
-        const { count } = await svcCrm.from("crm_leads").select("*", { count: "exact", head: true });
-        await svcCrm.from("crm_leads").insert({
-          code:             `CRM-26-${String((count ?? 0) + 1).padStart(4, "0")}`,
-          name:             d.company,
-          person_type:      "PJ",
-          segment:          d.sector ?? "M&A",
-          annual_revenue:   d.value ?? 0,
-          status:           "prospect",      // Prospecção — parceiro pode acompanhar no CRM
-          source:           "ativo",
-          product_interest: "ma",
-          credit_line:      "M&A",
-          partner_id:       insertPayload.assigned_to,
-          created_by:       user.id,
-          converted_to:     "ma",
-          interactions:     [{
-            id:         `intake-${Date.now()}`,
-            date:       new Date().toISOString().split("T")[0],
-            type:       "email",
-            notes:      `Deal ${code} cadastrado na Mesa M&A — aguardando qualificação.`,
-            author:     profile?.full_name ?? "Mesa V3",
-          }],
-          metadata: { ma_deal_id: data.id, ma_code: code },
-        });
+        // MAX real + retry no 23505, nunca COUNT(*). Mesmo defeito que derrubou
+        // o cadastro por link de captação em 31/07/2026.
+        const { error: leadErr } = await insertWithLegacyCode(
+          svcCrm,
+          "crm_leads",
+          "CRM-26",
+          (leadCode) => ({
+            code:             leadCode,
+            name:             d.company,
+            person_type:      "PJ",
+            segment:          d.sector ?? "M&A",
+            annual_revenue:   d.value ?? 0,
+            status:           "prospect",      // Prospecção — parceiro pode acompanhar no CRM
+            source:           "ativo",
+            product_interest: "ma",
+            credit_line:      "M&A",
+            partner_id:       insertPayload.assigned_to,
+            created_by:       user.id,
+            converted_to:     "ma",
+            interactions:     [{
+              id:         `intake-${Date.now()}`,
+              date:       new Date().toISOString().split("T")[0],
+              type:       "email",
+              notes:      `Deal ${code} cadastrado na Mesa M&A — aguardando qualificação.`,
+              author:     profile?.full_name ?? "Mesa V3",
+            }],
+            metadata: { ma_deal_id: data.id, ma_code: code },
+          })
+        );
+        // O CRM continua sendo best-effort e não bloqueia o deal, mas a falha
+        // deixa de ser invisível: antes este bloco inteiro morria dentro de um
+        // catch vazio, que foi como o defeito ficou latente por meses.
+        if (leadErr) {
+          console.error(`[ma-deals POST] Bridge A CRM falhou para o deal ${code}:`, leadErr.message);
+        }
       }
-    } catch { /* CRM é best-effort — falha aqui não bloqueia o deal */ }
+    } catch (bridgeErr) {
+      console.error("[ma-deals POST] Bridge A CRM lançou exceção:", bridgeErr);
+    }
 
     // Notificações in-app (fire-and-forget)
     const partnerName = profile?.full_name ?? "Partner";
@@ -349,9 +376,9 @@ export async function PATCH(req: NextRequest) {
             .limit(1);
 
           if (!dup || dup.length === 0) {
-            const { count } = await svc.from("crm_leads").select("*", { count: "exact", head: true });
-            await svc.from("crm_leads").insert({
-              code:             `CRM-26-${String((count ?? 0) + 1).padStart(4, "0")}`,
+            // MAX real + retry no 23505, nunca COUNT(*).
+            await insertWithLegacyCode(svc, "crm_leads", "CRM-26", (leadCode) => ({
+              code:             leadCode,
               name:             companyName,
               person_type:      "PJ",
               segment:          deal.sector ?? "M&A",
@@ -365,10 +392,14 @@ export async function PATCH(req: NextRequest) {
               created_by:       user.id,
               interactions:     [newInteraction], // primeira interação já registrada
               metadata:         { ma_deal_id: id, ma_code: (data as {code?: string})?.code },
-            });
+            }));
           }
         }
-      } catch { /* CRM é best-effort — nunca bloqueia o deal */ }
+      } catch (bridgeErr) {
+        // Continua best-effort e não bloqueia o deal, mas a falha passa a
+        // aparecer em log em vez de sumir num catch vazio.
+        console.error("[ma-deals PATCH] Bridge B CRM lançou exceção:", bridgeErr);
+      }
     }
   }
 
