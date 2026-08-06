@@ -50,14 +50,21 @@ interface Linha {
   liquido: number;
 }
 
+/** Mesma Linha, com o acumulado do periodo de recorrencia (bruto/liquido x meses).
+ * Quando is_recorrente = false, meses = 1 e acumulado espelha o mensal. */
+interface LinhaComAcumulado extends Linha {
+  acumulado_bruto: number;
+  acumulado_liquido: number;
+}
+
 export interface SideBreakdown {
   side_pct: number; // Grupo (Cheia), % direto
   side_bruto: number;
   side_liquido: number;
-  v3: Linha;
+  v3: LinhaComAcumulado;
   grupo_liquido: Linha; // Cheia - V3 (decote 1, exibido como etapa explicita)
-  mandatario: Linha;
-  intermediarios: Linha; // resto automatico = grupo_liquido - mandatario, pode ser negativo
+  mandatario: LinhaComAcumulado;
+  intermediarios: LinhaComAcumulado; // resto automatico = grupo_liquido - mandatario, pode ser negativo
 }
 
 export interface CommissionCalculatorResult {
@@ -100,7 +107,12 @@ function linha(pct: number, valorFace: number, liquidoFactor: number): Linha {
   return { pct: round4(pct), bruto, liquido: round2(bruto * liquidoFactor) };
 }
 
-function buildSide(input: SideCascadeInput, valorFace: number, liquidoFactor: number): SideBreakdown {
+function linhaComAcumulado(pct: number, valorFace: number, liquidoFactor: number, meses: number): LinhaComAcumulado {
+  const base = linha(pct, valorFace, liquidoFactor);
+  return { ...base, acumulado_bruto: round2(base.bruto * meses), acumulado_liquido: round2(base.liquido * meses) };
+}
+
+function buildSide(input: SideCascadeInput, valorFace: number, liquidoFactor: number, meses: number): SideBreakdown {
   const sidePct = Number(input.side_pct) || 0;
   const v3Pct = Number(input.fee_v3_pct) || 0;
   const mandatarioPct = Number(input.mandatario_pct) || 0;
@@ -112,10 +124,10 @@ function buildSide(input: SideCascadeInput, valorFace: number, liquidoFactor: nu
     side_pct: round4(sidePct),
     side_bruto: round2(valorFace * (sidePct / 100)),
     side_liquido: round2(valorFace * (sidePct / 100) * liquidoFactor),
-    v3: linha(v3Pct, valorFace, liquidoFactor),
+    v3: linhaComAcumulado(v3Pct, valorFace, liquidoFactor, meses),
     grupo_liquido: linha(grupoLiquidoPct, valorFace, liquidoFactor),
-    mandatario: linha(mandatarioPct, valorFace, liquidoFactor),
-    intermediarios: linha(intermediariosPct, valorFace, liquidoFactor),
+    mandatario: linhaComAcumulado(mandatarioPct, valorFace, liquidoFactor, meses),
+    intermediarios: linhaComAcumulado(intermediariosPct, valorFace, liquidoFactor, meses),
   };
 }
 
@@ -133,8 +145,8 @@ export function calculateCommission(input: CommissionCalculatorInput): Commissio
   const comissaoTotalValue = round2(valorFace * (comissaoTotalPct / 100));
   const liquidoFactor = 1 - deducaoPct / 100;
 
-  const buySide = buildSide(input.buy_side, valorFace, liquidoFactor);
-  const sellSide = buildSide(input.sell_side, valorFace, liquidoFactor);
+  const buySide = buildSide(input.buy_side, valorFace, liquidoFactor, meses);
+  const sellSide = buildSide(input.sell_side, valorFace, liquidoFactor, meses);
 
   const v3TotalPct = round4(buySide.v3.pct + sellSide.v3.pct);
   const v3TotalBruto = round2(buySide.v3.bruto + sellSide.v3.bruto);

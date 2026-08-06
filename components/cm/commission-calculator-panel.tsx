@@ -39,6 +39,8 @@ function SideCascadeInputs({
   v3Pct, onV3Pct,
   mandatarioPct, onMandatarioPct,
   breakdown,
+  isRecorrente,
+  mesesRecorrencia,
 }: {
   title: string;
   ladoNome: "Venda" | "Compra";
@@ -47,8 +49,11 @@ function SideCascadeInputs({
   v3Pct: string; onV3Pct: (v: string) => void;
   mandatarioPct: string; onMandatarioPct: (v: string) => void;
   breakdown: SideBreakdown;
+  isRecorrente: boolean;
+  mesesRecorrencia: number;
 }) {
   const negativo = hasNegativeResidual(breakdown);
+  const cols = isRecorrente ? "grid-cols-5" : "grid-cols-3";
   return (
     <div className="bg-[#12112A] border border-[#9BAFC5]/10 rounded-lg p-3">
       <div className="text-[10px] text-[#E8C97A] font-bold uppercase mb-2">{title}</div>
@@ -72,17 +77,19 @@ function SideCascadeInputs({
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-2 text-[9px] text-[#9BAFC5] uppercase font-bold mb-1 px-1">
+      <div className={`grid ${cols} gap-2 text-[9px] text-[#9BAFC5] uppercase font-bold mb-1 px-1`}>
         <span>Papel</span>
-        <span className="text-right">Bruto (R$)</span>
-        <span className="text-right">Líquido (R$)</span>
+        <span className="text-right">Mensal Bruto (R$)</span>
+        <span className="text-right">Mensal Líquido (R$)</span>
+        {isRecorrente && <span className="text-right">Acum. Bruto ({mesesRecorrencia}m)</span>}
+        {isRecorrente && <span className="text-right">Acum. Líquido ({mesesRecorrencia}m)</span>}
       </div>
-      <SideRow label={`Fee V3 (${ladoNome})`} pct={breakdown.v3.pct} bruto={breakdown.v3.bruto} liquido={breakdown.v3.liquido} highlight />
-      <SideRow label={`Grupo ${ladoNome} Líquido (pós V3)`} pct={breakdown.grupo_liquido.pct} bruto={breakdown.grupo_liquido.bruto} liquido={breakdown.grupo_liquido.liquido} />
-      <SideRow label={`Mandatário ${ladoNome} / Titular`} pct={breakdown.mandatario.pct} bruto={breakdown.mandatario.bruto} liquido={breakdown.mandatario.liquido} />
-      <SideRow label="Grupo de Intermediários (resto)" pct={breakdown.intermediarios.pct} bruto={breakdown.intermediarios.bruto} liquido={breakdown.intermediarios.liquido} negativo={negativo} />
+      <SideRow cols={cols} isRecorrente={isRecorrente} meses={mesesRecorrencia} label={`Fee V3 (${ladoNome})`} pct={breakdown.v3.pct} bruto={breakdown.v3.bruto} liquido={breakdown.v3.liquido} acumuladoBruto={breakdown.v3.acumulado_bruto} acumuladoLiquido={breakdown.v3.acumulado_liquido} highlight />
+      <SideRow cols={cols} isRecorrente={isRecorrente} meses={mesesRecorrencia} label={`Grupo ${ladoNome} Líquido (pós V3)`} pct={breakdown.grupo_liquido.pct} bruto={breakdown.grupo_liquido.bruto} liquido={breakdown.grupo_liquido.liquido} />
+      <SideRow cols={cols} isRecorrente={isRecorrente} meses={mesesRecorrencia} label={`Mandatário ${ladoNome} / Titular`} pct={breakdown.mandatario.pct} bruto={breakdown.mandatario.bruto} liquido={breakdown.mandatario.liquido} acumuladoBruto={breakdown.mandatario.acumulado_bruto} acumuladoLiquido={breakdown.mandatario.acumulado_liquido} />
+      <SideRow cols={cols} isRecorrente={isRecorrente} meses={mesesRecorrencia} label="Grupo de Intermediários (resto)" pct={breakdown.intermediarios.pct} bruto={breakdown.intermediarios.bruto} liquido={breakdown.intermediarios.liquido} acumuladoBruto={breakdown.intermediarios.acumulado_bruto} acumuladoLiquido={breakdown.intermediarios.acumulado_liquido} negativo={negativo} />
       <div className="border-t border-[#9BAFC5]/15 mt-1.5 pt-1.5">
-        <SideRow label={`SOMA GRUPO ${ladoNome.toUpperCase()} (CHEIA)`} pct={breakdown.side_pct} bruto={breakdown.side_bruto} liquido={breakdown.side_liquido} highlight />
+        <SideRow cols={cols} isRecorrente={isRecorrente} meses={mesesRecorrencia} label={`SOMA GRUPO ${ladoNome.toUpperCase()} (CHEIA)`} pct={breakdown.side_pct} bruto={breakdown.side_bruto} liquido={breakdown.side_liquido} highlight />
       </div>
 
       {negativo && (
@@ -95,16 +102,27 @@ function SideCascadeInputs({
   );
 }
 
-function SideRow({ label, pct, bruto, liquido, highlight, negativo }: { label: string; pct: number; bruto: number; liquido: number; highlight?: boolean; negativo?: boolean }) {
+function SideRow({
+  cols, isRecorrente, meses, label, pct, bruto, liquido, acumuladoBruto, acumuladoLiquido, highlight, negativo,
+}: {
+  cols: string; isRecorrente: boolean; meses: number; label: string; pct: number; bruto: number; liquido: number;
+  acumuladoBruto?: number; acumuladoLiquido?: number; highlight?: boolean; negativo?: boolean;
+}) {
   const cor = negativo ? "text-red-400" : highlight ? "text-[#C9A84C]" : "text-[#F5F1E8]";
+  // Fallback (Grupo Líquido/SOMA nao trazem acumulado pronto do motor, so
+  // as 3 linhas de participante trazem): multiplica pelos meses direto.
+  const accBruto = acumuladoBruto ?? bruto * meses;
+  const accLiquido = acumuladoLiquido ?? liquido * meses;
   return (
-    <div className="grid grid-cols-3 gap-2 items-center bg-[#162744] rounded px-1 py-1.5 mb-1 text-xs">
+    <div className={`grid ${cols} gap-2 items-center bg-[#162744] rounded px-1 py-1.5 mb-1 text-xs`}>
       <div>
         <div className={negativo ? "text-red-400 font-bold" : highlight ? "text-[#C9A84C] font-bold" : "text-[#F5F1E8]"}>{label}</div>
         <div className="text-[9px] text-[#9BAFC5]/70">{pct}%</div>
       </div>
       <div className={`text-right ${cor}`}>{formatBRL(bruto)}</div>
       <div className={`text-right font-bold ${cor}`}>{formatBRL(liquido)}</div>
+      {isRecorrente && <div className={`text-right ${cor}`}>{formatBRL(accBruto)}</div>}
+      {isRecorrente && <div className={`text-right font-bold ${cor}`}>{formatBRL(accLiquido)}</div>}
     </div>
   );
 }
@@ -312,8 +330,10 @@ export function CommissionCalculatorPanel({ onClose }: Props) {
             </label>
           </div>
 
-          {/* Cascata por lado, tela sempre livre, sem trava de soma */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4">
+          {/* Cascata por lado, tela sempre livre, sem trava de soma. Empilha
+              em coluna unica quando recorrente (5 colunas na tabela precisam
+              de largura cheia pra nao ficar espremido). */}
+          <div className={`grid grid-cols-1 ${isRecorrente ? "" : "md:grid-cols-2"} gap-3 mt-4`}>
             <SideCascadeInputs
               title="Lado Compra (Buy-Side)"
               ladoNome="Compra"
@@ -322,6 +342,8 @@ export function CommissionCalculatorPanel({ onClose }: Props) {
               v3Pct={buyV3Pct} onV3Pct={setBuyV3Pct}
               mandatarioPct={buyMandatarioPct} onMandatarioPct={setBuyMandatarioPct}
               breakdown={resultado.buy_side}
+              isRecorrente={isRecorrente}
+              mesesRecorrencia={resultado.recorrencia.meses_recorrencia}
             />
             <SideCascadeInputs
               title="Lado Venda (Sell-Side)"
@@ -331,6 +353,8 @@ export function CommissionCalculatorPanel({ onClose }: Props) {
               v3Pct={sellV3Pct} onV3Pct={setSellV3Pct}
               mandatarioPct={sellMandatarioPct} onMandatarioPct={setSellMandatarioPct}
               breakdown={resultado.sell_side}
+              isRecorrente={isRecorrente}
+              mesesRecorrencia={resultado.recorrencia.meses_recorrencia}
             />
           </div>
 

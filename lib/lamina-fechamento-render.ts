@@ -165,11 +165,46 @@ export async function renderLaminaPDF(resultado: CommissionCalculatorResult, var
     y += 4;
   }
 
-  if (variante === "buy") drawSideTable("LADO COMPRA (BUY-SIDE)", resultado.buy_side, "Compra");
-  else if (variante === "sell") drawSideTable("LADO VENDA (SELL-SIDE)", resultado.sell_side, "Venda");
-  else {
+  function drawProjecaoAcumulada(breakdown: SideBreakdown, ladoNome: "Compra" | "Venda") {
+    if (!resultado.recorrencia.is_recorrente) return;
+    if (y > 250) { doc.addPage(); doc.setFillColor(...NAVY_BODY); doc.rect(0, 0, W, 297, "F"); y = 20; }
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8);
+    doc.setTextColor(...GOLD_LIGHT);
+    doc.text(`PROJEÇÃO ACUMULADA DO CONTRATO (${resultado.recorrencia.meses_recorrencia} MESES) · ${ladoNome.toUpperCase()}`, M, y);
+    y += 5;
+
+    const linhas = [
+      { label: "Valor Acumulado Fee V3 (Líquido)", v: breakdown.v3.acumulado_liquido },
+      { label: "Valor Acumulado Mandatário (Líquido)", v: breakdown.mandatario.acumulado_liquido },
+      { label: "Valor Acumulado Grupo de Intermediários (Líquido)", v: breakdown.intermediarios.acumulado_liquido },
+    ];
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7.5);
+    for (const l of linhas) {
+      doc.setTextColor(...MUTED);
+      doc.text(l.label, M + 2, y);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(...(l.v < 0 ? RED : GOLD_LIGHT));
+      doc.text(formatBRL(l.v), W - M - 4, y, { align: "right" });
+      doc.setFont("helvetica", "normal");
+      y += 5;
+    }
+    y += 3;
+  }
+
+  if (variante === "buy") {
     drawSideTable("LADO COMPRA (BUY-SIDE)", resultado.buy_side, "Compra");
+    drawProjecaoAcumulada(resultado.buy_side, "Compra");
+  } else if (variante === "sell") {
     drawSideTable("LADO VENDA (SELL-SIDE)", resultado.sell_side, "Venda");
+    drawProjecaoAcumulada(resultado.sell_side, "Venda");
+  } else {
+    drawSideTable("LADO COMPRA (BUY-SIDE)", resultado.buy_side, "Compra");
+    drawProjecaoAcumulada(resultado.buy_side, "Compra");
+    drawSideTable("LADO VENDA (SELL-SIDE)", resultado.sell_side, "Venda");
+    drawProjecaoAcumulada(resultado.sell_side, "Venda");
   }
 
   y += 2;

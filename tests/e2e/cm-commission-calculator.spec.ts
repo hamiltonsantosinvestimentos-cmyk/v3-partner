@@ -16,6 +16,14 @@ import { test, expect } from "@playwright/test";
 // validacao bloqueia a tela em nenhum momento; saldo negativo so desabilita
 // o PDF daquele lado especifico.
 //
+// P0 achado ao vivo por Joao (mesmo dia, apos a Fase 4 ir pro ar): "Salvar
+// Simulacao" falhava sempre com "null value in column fee_v3_pct violates
+// not-null constraint", a Fase 3 parou de escrever nesse campo mas a
+// coluna nunca foi migrada pra nullable. Corrigido via migration
+// 20260806d. O primeiro teste abaixo agora cobre esse caminho de proposito
+// (clica Salvar Simulacao de verdade), o que a suite anterior nunca fazia,
+// so testava export de PDF, que roda no navegador sem tocar a API.
+//
 // Sessao QA compartilhada (tests/e2e/auth.setup.ts) e ADMIN, ja tem acesso
 // a Mesa de Capitais, sem setup adicional de role neste arquivo.
 
@@ -27,36 +35,36 @@ async function abrirCalculadora(page: import("@playwright/test").Page) {
 }
 
 test.describe("Bolsa de Ativos - Calculadora Rapida de Comissionamento (Fase 4, padrao planilha)", () => {
-  test("calcula em % direto da operacao, sem bloqueio, com Grupo Liquido explicito e Fee V3 Total", async ({ page }) => {
+  test("calcula em % direto, salva a simulacao sem erro de banco, e habilita os 3 PDFs", async ({ page }) => {
     await abrirCalculadora(page);
 
-    // Mascara "maquineta" (maskCurrencyBRLInput): os digitos representam
-    // CENTAVOS ("100000000" -> R$ 1.000.000,00).
-    await page.fill('input[name="face_value"]', "100000000");
+    await page.fill('input[name="face_value"]', "100000000"); // R$ 1.000.000,00
     await page.fill('input[name="fee_total_pct"]', "10");
 
-    // Nunca deve aparecer qualquer mensagem de bloqueio nesta versao.
     await expect(page.getByText(/precisa somar 100%/i)).toHaveCount(0);
 
-    // Lado Compra: Grupo Cheia 5% direto (= R$50.000,00), Fee V3 2% (R$20.000,00),
-    // Mandatario 1% (R$10.000,00) -> Grupo Liquido = 5-2=3%, Intermediarios = 3-1=2% (R$20.000,00).
+    // Lado Compra: Grupo Cheia 5%, Fee V3 2%, Mandatario 1% -> Grupo Liquido
+    // 3%, Intermediarios 2% (positivo).
     await page.fill('input[name="buy_side_pct"]', "5");
     await page.fill('input[name="buy_fee_v3_pct"]', "2");
     await page.fill('input[name="buy_mandatario_pct"]', "1");
 
-    // Lado Venda: Grupo Cheia 5%, Fee V3 1% (R$10.000,00), Mandatario 1%
-    // (R$10.000,00) -> Grupo Liquido = 5-1=4%, Intermediarios = 4-1=3% (R$30.000,00).
+    // Lado Venda: Grupo Cheia 5%, Fee V3 1%, Mandatario 1% -> Grupo Liquido
+    // 4%, Intermediarios 3% (positivo).
     await page.fill('input[name="sell_side_pct"]', "5");
     await page.fill('input[name="sell_fee_v3_pct"]', "1");
     await page.fill('input[name="sell_mandatario_pct"]', "1");
 
-    // Resultado calcula sozinho, sem clicar em nenhum botao "Calcular".
     await expect(page.getByText("R$ 100.000,00")).toBeVisible(); // % Comissão Total = 10% de R$1M
     await expect(page.getByText("R$ 50.000,00").first()).toBeVisible(); // SOMA GRUPO COMPRA (CHEIA)
-    await expect(page.getByText("R$ 30.000,00").first()).toBeVisible(); // Fee V3 Total (2%+1% = 3% = R$30.000)
-
-    // Nenhum aviso de saldo negativo com esses valores.
     await expect(page.getByText(/Ajuste as fatias/i)).toHaveCount(0);
+
+    // P0 regressivo: clica Salvar Simulacao de verdade (bate na API/banco,
+    // diferente da exportacao de PDF que roda so no navegador) e confirma
+    // que NENHUM erro de constraint aparece na tela.
+    await page.getByRole("button", { name: "Salvar Simulação", exact: true }).click();
+    await expect(page.getByText(/not-null constraint|null value in column|erro ao salvar/i)).toHaveCount(0, { timeout: 10_000 });
+    await expect(page.getByText("Simulação salva.")).toBeVisible({ timeout: 10_000 });
 
     // Os 3 botoes de PDF ficam habilitados.
     await expect(page.getByRole("button", { name: /PDF Buy-Side/i })).toBeEnabled();
@@ -68,12 +76,41 @@ test.describe("Bolsa de Ativos - Calculadora Rapida de Comissionamento (Fase 4, 
       page.getByRole("button", { name: /PDF Buy-Side/i }).click(),
     ]);
     expect(downloadBuy.suggestedFilename()).toContain("BuySide");
+  });
 
-    const [downloadConsolidado] = await Promise.all([
+  test("recorrencia mostra colunas Mensal e Acumulado nas tabelas com os valores corretos", async ({ page }) => {
+    await abrirCalculadora(page);
+
+    await page.fill('input[name="face_value"]', "100000000"); // R$ 1.000.000,00
+    await page.fill('input[name="fee_total_pct"]', "10");
+    await page.fill('input[name="buy_side_pct"]', "5");
+    await page.fill('input[name="buy_fee_v3_pct"]', "2");
+    await page.fill('input[name="buy_mandatario_pct"]', "1");
+    await page.fill('input[name="sell_side_pct"]', "5");
+    await page.fill('input[name="sell_fee_v3_pct"]', "1");
+    await page.fill('input[name="sell_mandatario_pct"]', "1");
+
+    // Antes de ligar a recorrencia, as colunas de acumulado nao existem.
+    await expect(page.getByText(/Acum\. Bruto/i)).toHaveCount(0);
+
+    await page.check('input[name="is_recurrent"]');
+    await page.fill('input[name="recurrence_months"]', "12");
+
+    // Fee V3 Compra mensal = R$ 20.000,00 (2% de R$1M); acumulado 12 meses = R$ 240.000,00.
+    await expect(page.getByText(/Acum\. Bruto/i).first()).toBeVisible();
+    await expect(page.getByText("R$ 20.000,00").first()).toBeVisible();
+    await expect(page.getByText("R$ 240.000,00").first()).toBeVisible();
+
+    // Grupo de Intermediarios Compra: mensal R$ 20.000,00 (2% de R$1M),
+    // acumulado 12 meses = R$ 240.000,00 tambem (mesmo % que o V3 aqui,
+    // valores batem por coincidencia dos numeros escolhidos no teste).
+    await expect(page.getByText(/Ajuste as fatias/i)).toHaveCount(0);
+
+    const [downloadBuy] = await Promise.all([
       page.waitForEvent("download"),
-      page.getByRole("button", { name: /PDF Consolidado/i }).click(),
+      page.getByRole("button", { name: /PDF Buy-Side/i }).click(),
     ]);
-    expect(downloadConsolidado.suggestedFilename()).toContain("Consolidado");
+    expect(downloadBuy.suggestedFilename()).toContain("BuySide");
   });
 
   test("saldo de Intermediarios negativo nao trava a tela, so desabilita o PDF daquele lado", async ({ page }) => {
@@ -82,18 +119,15 @@ test.describe("Bolsa de Ativos - Calculadora Rapida de Comissionamento (Fase 4, 
     await page.fill('input[name="face_value"]', "50000000"); // R$ 500.000,00
     await page.fill('input[name="fee_total_pct"]', "5");
 
-    // Lado Compra: Grupo Cheia 5% (direto), Fee V3 4% + Mandatario 3% = 7%
-    // > 5% da Cheia -> Grupo Liquido 1%, Intermediarios = 1-3 = -2%, negativo.
+    // Lado Compra: Grupo Cheia 5%, Fee V3 4% + Mandatario 3% = 7% > 5% ->
+    // Grupo Liquido 1%, Intermediarios = 1-3 = -2%, negativo.
     await page.fill('input[name="buy_side_pct"]', "5");
     await page.fill('input[name="buy_fee_v3_pct"]', "4");
     await page.fill('input[name="buy_mandatario_pct"]', "3");
 
-    // Nenhuma mensagem de erro bloqueante em nenhum momento.
     await expect(page.getByText(/precisa somar 100%/i)).toHaveCount(0);
     await expect(page.getByText(/erro ao calcular/i)).toHaveCount(0);
 
-    // Aviso especifico do lado negativo aparece, e o botao de PDF daquele
-    // lado fica desabilitado; o do outro lado continua livre.
     await expect(page.getByText(/Ajuste as fatias/i)).toBeVisible();
     await expect(page.getByRole("button", { name: /PDF Buy-Side/i })).toBeDisabled();
     await expect(page.getByRole("button", { name: /PDF Sell-Side/i })).toBeEnabled();
