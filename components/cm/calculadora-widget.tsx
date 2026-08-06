@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { Calculator, Loader2, ArrowRightLeft, Settings2 } from "lucide-react";
+import { maskCurrencyBRLInput, parseCurrencyBRLInput, formatCurrencyBRLFromNumber } from "@/lib/utils";
 
 const INTERNAL_ROLES = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"];
 
@@ -20,7 +21,7 @@ function formatBRL(v: number) {
 }
 
 export function CalculadoraWidget({ userRole = "PARTNER" }: { userRole?: string }) {
-  const [valorFace, setValorFace] = useState("4200000");
+  const [valorFace, setValorFace] = useState(formatCurrencyBRLFromNumber(4200000));
   const [prazo, setPrazo] = useState("18");
   const [desagio, setDesagio] = useState("32");
   const [tir, setTir] = useState("");
@@ -66,7 +67,7 @@ export function CalculadoraWidget({ userRole = "PARTNER" }: { userRole?: string 
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          valor_face: Number(valorFace),
+          valor_face: parseCurrencyBRLInput(valorFace),
           desagio: mode === "desagio" ? Number(desagio) : null,
           tir: mode === "tir" ? Number(tir) : null,
           prazo_meses: Number(prazo),
@@ -104,7 +105,8 @@ export function CalculadoraWidget({ userRole = "PARTNER" }: { userRole?: string 
         <div>
           <label className="block text-[10px] text-[#C9A84C] font-bold uppercase mb-1">Valor Face (R$)</label>
           <input
-            type="number" value={valorFace} onChange={(e) => setValorFace(e.target.value)}
+            inputMode="numeric" value={valorFace} onChange={(e) => setValorFace(maskCurrencyBRLInput(e.target.value))}
+            placeholder="0,00"
             className="w-full bg-[#162744] border border-[#C9A84C]/30 rounded-md px-3 py-2 text-xs text-[#F5F1E8] font-semibold"
           />
         </div>
