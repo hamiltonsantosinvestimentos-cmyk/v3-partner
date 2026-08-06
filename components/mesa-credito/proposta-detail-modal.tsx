@@ -44,6 +44,24 @@ export const PIPELINE_STAGES = [
 export const STAGE_REPROVADO = { key: "REPROVADO", label: "Reprovado", color: "text-red-400", bg: "bg-red-500/20" };
 export const STAGE_DECLINADO = { key: "DECLINADO", label: "Declinado (sem aderência)", color: "text-slate-400", bg: "bg-slate-500/20" };
 
+export interface ImovelComparavel {
+  titulo: string;
+  valor: number;
+  area_m2: number;
+  preco_m2: number;
+  fonte_nome: string;
+  fonte_url: string;
+}
+
+export interface PesquisaMercado {
+  preco_m2_medio: number;
+  valor_estimado: number;
+  comparaveis: ImovelComparavel[];
+  confianca: "ALTA" | "MEDIA" | "BAIXA";
+  observacoes?: string;
+  buscado_em: string;
+}
+
 export interface ImovelMeta {
   endereco?: string;
   cep?: string;
@@ -55,6 +73,8 @@ export interface ImovelMeta {
   estilo?: string;
   area_rural?: string;
   proprietario?: string;
+  area_m2?: number;
+  pesquisa_mercado?: PesquisaMercado;
 }
 
 export interface ProposalMeta {
@@ -722,7 +742,7 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
     }
   }
   // ── Modal tab ─────────────────────────────────────────────────────────────
-  type ModalTab = "detalhes" | "recomendacao" | "documentos" | "comentarios" | "analise_ia" | "chat_ia";
+  type ModalTab = "detalhes" | "recomendacao" | "avaliacao_imovel" | "documentos" | "comentarios" | "analise_ia" | "chat_ia";
   const [modalTab, setModalTab] = useState<ModalTab>("detalhes");
   const bodyRef = React.useRef<HTMLDivElement>(null);
 
@@ -1665,6 +1685,189 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
     }
   }
 
+  // ── Área (m²) inline edit ─────────────────────────────────────────────────
+  const [editingAreaIdx, setEditingAreaIdx] = useState<number | null>(null);
+  const [areaEditValue, setAreaEditValue] = useState("");
+  const [areaSaving, setAreaSaving] = useState(false);
+
+  function startEditArea(idx: number, current: number | undefined) {
+    setAreaEditValue(current ? String(current).replace(".", ",") : "");
+    setEditingAreaIdx(idx);
+  }
+
+  async function saveArea(idx: number) {
+    if (!proposal) return;
+    setAreaSaving(true);
+    const parsed = parseFloat(areaEditValue.replace(",", ".")) || 0;
+    const meta = { ...(proposal.metadata ?? {}) };
+    const imoveis: ImovelMeta[] = Array.isArray(meta.imoveis) ? meta.imoveis.map((im: ImovelMeta, i: number) =>
+      i === idx ? { ...im, area_m2: parsed || undefined } : im
+    ) : [];
+    meta.imoveis = imoveis;
+    try {
+      const res = await fetch("/api/credit-proposals", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: proposal.id, metadata: meta }),
+      });
+      if (res.ok) {
+        setEditingAreaIdx(null);
+        onProposalUpdate?.(proposal.id, { metadata: meta as ProposalMeta });
+      } else {
+        alert("Erro ao salvar área do imóvel.");
+      }
+    } catch {
+      alert("Erro de conexão.");
+    } finally {
+      setAreaSaving(false);
+    }
+  }
+
+  // ── Pesquisa de Valor de Mercado (IA + web search) ───────────────────────
+  const [searchingMercadoIdx, setSearchingMercadoIdx] = useState<number | null>(null);
+  const [mercadoError, setMercadoError] = useState<string | null>(null);
+
+  async function persistImovelPatch(idx: number, patch: Partial<ImovelMeta>) {
+    if (!proposal) return null;
+    const meta = { ...(proposal.metadata ?? {}) };
+    const imoveis: ImovelMeta[] = Array.isArray(meta.imoveis) ? meta.imoveis.map((im: ImovelMeta, i: number) =>
+      i === idx ? { ...im, ...patch } : im
+    ) : [];
+    meta.imoveis = imoveis;
+    const res = await fetch("/api/credit-proposals", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: proposal.id, metadata: meta }),
+    });
+    if (res.ok) {
+      onProposalUpdate?.(proposal.id, { metadata: meta as ProposalMeta });
+      return meta;
+    }
+    return null;
+  }
+
+  async function pesquisarValorMercado(idx: number, im: ImovelMeta) {
+    if (!proposal) return;
+    setMercadoError(null);
+    setSearchingMercadoIdx(idx);
+    try {
+      const res = await fetch("/api/credit-proposals/avaliacao-mercado", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cep: im.cep, cidade: im.cidade, estado: im.estado, area_m2: im.area_m2 }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setMercadoError(typeof data.error === "string" ? data.error : "Erro ao pesquisar valor de mercado.");
+        return;
+      }
+      await persistImovelPatch(idx, { pesquisa_mercado: data as PesquisaMercado });
+    } catch {
+      setMercadoError("Erro de conexão ao pesquisar valor de mercado.");
+    } finally {
+      setSearchingMercadoIdx(null);
+    }
+  }
+
+  async function usarComoValorMedio(idx: number, valorEstimado: number) {
+    setVmSaving(true);
+    try {
+      await persistImovelPatch(idx, { valor_medio: valorEstimado });
+    } finally {
+      setVmSaving(false);
+    }
+  }
+
+  // ── Aba Avaliação de Imóvel — cadastro do zero e edição de localização ────
+  const [addingImovel, setAddingImovel] = useState(false);
+  const [editingLocIdx, setEditingLocIdx] = useState<number | null>(null);
+  const [locCep, setLocCep] = useState("");
+  const [locCidade, setLocCidade] = useState("");
+  const [locEstado, setLocEstado] = useState("");
+  const [locEndereco, setLocEndereco] = useState("");
+  const [locCepLoading, setLocCepLoading] = useState(false);
+  const [locSaving, setLocSaving] = useState(false);
+
+  function maskCep(v: string) {
+    const d = v.replace(/\D/g, "").slice(0, 8);
+    return d.length > 5 ? `${d.slice(0, 5)}-${d.slice(5)}` : d;
+  }
+
+  async function buscarCep(cep: string) {
+    const digits = cep.replace(/\D/g, "");
+    if (digits.length !== 8) return null;
+    try {
+      const res = await fetch(`https://viacep.com.br/ws/${digits}/json/`);
+      if (!res.ok) return null;
+      const data = await res.json();
+      return data.erro ? null : data as { logradouro: string; bairro: string; localidade: string; uf: string };
+    } catch { return null; }
+  }
+
+  async function handleLocCepChange(value: string) {
+    const masked = maskCep(value);
+    setLocCep(masked);
+    if (value.replace(/\D/g, "").length === 8) {
+      setLocCepLoading(true);
+      const addr = await buscarCep(value);
+      setLocCepLoading(false);
+      if (addr) {
+        setLocEndereco(addr.logradouro ? `${addr.logradouro}${addr.bairro ? `, ${addr.bairro}` : ""}` : "");
+        setLocCidade(addr.localidade ?? "");
+        setLocEstado(addr.uf ?? "");
+      }
+    }
+  }
+
+  function startEditLoc(idx: number, im: ImovelMeta) {
+    setLocCep(im.cep ?? "");
+    setLocCidade(im.cidade ?? "");
+    setLocEstado(im.estado ?? "");
+    setLocEndereco(im.endereco ?? "");
+    setEditingLocIdx(idx);
+  }
+
+  async function saveLoc(idx: number) {
+    setLocSaving(true);
+    try {
+      await persistImovelPatch(idx, {
+        cep: locCep || undefined,
+        cidade: locCidade || undefined,
+        estado: locEstado || undefined,
+        endereco: locEndereco || undefined,
+      });
+      setEditingLocIdx(null);
+    } finally {
+      setLocSaving(false);
+    }
+  }
+
+  async function adicionarImovel() {
+    if (!proposal) return;
+    setAddingImovel(true);
+    try {
+      const meta = { ...(proposal.metadata ?? {}) };
+      const imoveis: ImovelMeta[] = Array.isArray(meta.imoveis) ? [...meta.imoveis] : [];
+      imoveis.push({});
+      meta.imoveis = imoveis;
+      const res = await fetch("/api/credit-proposals", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: proposal.id, metadata: meta }),
+      });
+      if (res.ok) {
+        onProposalUpdate?.(proposal.id, { metadata: meta as ProposalMeta });
+        startEditLoc(imoveis.length - 1, {});
+      } else {
+        alert("Erro ao adicionar imóvel.");
+      }
+    } catch {
+      alert("Erro de conexão.");
+    } finally {
+      setAddingImovel(false);
+    }
+  }
+
   function startEdit() {
     if (!proposal) return;
     const meta = proposal.metadata ?? {};
@@ -2284,6 +2487,7 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
           {([
             { id: "detalhes",      label: "Detalhes" },
             { id: "recomendacao",  label: "✦ Recomendação" },
+            { id: "avaliacao_imovel", label: "🏠 Avaliação de Imóvel" },
             { id: "documentos",    label: "Documentos" },
             { id: "comentarios",   label: "Comentários" },
             { id: "analise_ia",    label: "🧠 Análise IA" },
@@ -2303,7 +2507,7 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
         {/* Body */}
         <div ref={bodyRef} className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
           {/* ── Seção Detalhes e Recomendação ── */}
-          <div className={modalTab === "documentos" || modalTab === "comentarios" || modalTab === "analise_ia" || modalTab === "chat_ia" ? "hidden" : "contents"}>
+          <div className={modalTab === "documentos" || modalTab === "comentarios" || modalTab === "analise_ia" || modalTab === "chat_ia" || modalTab === "avaliacao_imovel" ? "hidden" : "contents"}>
 
           {/* ── Banner de Pendência de Stage ── visível quando stage = PENDENCIA */}
           {proposal.stage === "PENDENCIA" && (
@@ -2988,132 +3192,6 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
             </div>
           )}
 
-          {/* ── Imóveis em Garantia ── */}
-          {(() => {
-            const meta = proposal.metadata ?? {};
-            const imoveis: ImovelMeta[] = (meta.imoveis && meta.imoveis.length > 0)
-              ? meta.imoveis
-              : (proposal.imovel_cidade || proposal.imovel_endereco)
-                ? [{ endereco: proposal.imovel_endereco, valor_medio: proposal.imovel_valor_medio, cidade: proposal.imovel_cidade, estado: proposal.imovel_estado }]
-                : [];
-            const linhasComImovelKeywords = ["home equity","homecash","cgi","cri","fundo construção","fundo incorpor"];
-            const creditLineLower = (proposal.credit_line ?? "").toLowerCase();
-            const linhaTemImovel = linhasComImovelKeywords.some(kw => creditLineLower.includes(kw));
-            if (!linhaTemImovel || imoveis.length === 0) return null;
-            return (
-              <div className="space-y-2">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
-                  <Home className="w-3.5 h-3.5" /> Imóveis em Garantia ({imoveis.length})
-                </p>
-                {imoveis.map((im, idx) => (
-                  <div key={idx} className="p-4 rounded-xl border border-amber-500/30 bg-amber-500/5 space-y-2">
-                    <p className="text-[10px] font-bold text-amber-400 uppercase tracking-wider">Imóvel {imoveis.length > 1 ? `#${idx + 1}` : ""}</p>
-                    <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
-                      {(im.endereco || im.cep) && (
-                        <div className="col-span-2 flex items-start gap-1.5">
-                          <MapPin className="w-3 h-3 text-amber-400 flex-shrink-0 mt-0.5" />
-                          <span className="text-xs text-foreground">
-                            {im.endereco}
-                            {im.cep && <span className="ml-1 text-muted-foreground">— CEP: {im.cep}</span>}
-                          </span>
-                        </div>
-                      )}
-                      {(im.cidade || im.estado) && (
-                        <div className="flex items-start justify-between gap-2">
-                          <span className="text-xs text-muted-foreground">Cidade/UF</span>
-                          <span className="text-xs font-medium text-foreground">{[im.cidade, im.estado].filter(Boolean).join(" — ")}</span>
-                        </div>
-                      )}
-                      {im.zona && (
-                        <div className="flex items-start justify-between gap-2">
-                          <span className="text-xs text-muted-foreground">Zona</span>
-                          <span className="text-xs font-medium text-foreground">{im.zona}</span>
-                        </div>
-                      )}
-                      {im.padrao && (
-                        <div className="flex items-start justify-between gap-2">
-                          <span className="text-xs text-muted-foreground">Padrão</span>
-                          <span className="text-xs font-medium text-foreground">{im.padrao}</span>
-                        </div>
-                      )}
-                      {im.estilo && (
-                        <div className="flex items-start justify-between gap-2">
-                          <span className="text-xs text-muted-foreground">Estilo</span>
-                          <span className="text-xs font-medium text-foreground">{im.estilo}</span>
-                        </div>
-                      )}
-                      {im.proprietario && (
-                        <div className="flex items-start justify-between gap-2">
-                          <span className="text-xs text-muted-foreground">Proprietário</span>
-                          <span className="text-xs font-medium text-foreground">
-                            {im.proprietario === "MESMO_TITULAR" ? "Mesmo Titular" : im.proprietario}
-                          </span>
-                        </div>
-                      )}
-                      <div className="col-span-2 pt-1.5 border-t border-amber-500/20">
-                        {editingVmIdx === idx ? (
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs text-muted-foreground flex items-center gap-1 shrink-0"><Banknote className="w-3 h-3" /> Valor Médio</span>
-                            <div className="flex-1 flex items-center gap-1.5">
-                              <div className="relative flex-1">
-                                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">R$</span>
-                                <input
-                                  type="text" inputMode="numeric"
-                                  value={vmEditValue}
-                                  onChange={e => setVmEditValue(applyBRLMask(e.target.value))}
-                                  className="w-full h-7 pl-7 pr-2 text-xs bg-secondary border border-amber-500/50 rounded text-foreground focus:outline-none focus:ring-1 focus:ring-amber-500/50"
-                                  autoFocus
-                                />
-                              </div>
-                              <button
-                                onClick={() => saveVm(idx)}
-                                disabled={vmSaving}
-                                className="h-7 px-2 rounded bg-amber-500/20 border border-amber-500/40 text-amber-400 hover:bg-amber-500/30 transition-colors"
-                              >
-                                <Check className="w-3 h-3" />
-                              </button>
-                              <button
-                                onClick={() => setEditingVmIdx(null)}
-                                className="h-7 px-2 rounded border border-border text-muted-foreground hover:text-white transition-colors"
-                              >
-                                <X className="w-3 h-3" />
-                              </button>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs text-muted-foreground flex items-center gap-1"><Banknote className="w-3 h-3" /> Valor Médio de Avaliação</span>
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-xs font-bold text-amber-300">
-                                {im.valor_medio ? formatCurrency(im.valor_medio) : <span className="text-muted-foreground italic">não informado</span>}
-                              </span>
-                              <button
-                                onClick={() => startEditVm(idx, im.valor_medio)}
-                                className="p-0.5 rounded hover:bg-amber-500/15 text-muted-foreground hover:text-amber-400 transition-colors"
-                                title="Editar valor médio"
-                              >
-                                <Pencil className="w-3 h-3" />
-                              </button>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                      {im.valor_medio && (
-                        <div className="col-span-2 flex items-center justify-between text-xs">
-                          <span className="text-muted-foreground">LTV estimado</span>
-                          <span className={`font-bold ${(proposal.requested_value / im.valor_medio) > 0.7 ? "text-red-400" : "text-emerald-400"}`}>
-                            {((proposal.requested_value / im.valor_medio) * 100).toFixed(1)}%
-                            <span className="font-normal text-muted-foreground ml-1">(máx. 70%)</span>
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            );
-          })()}
-
           {/* Partner vinculado */}
           {proposal.partner_name && (
             <div className="p-3 rounded-xl bg-primary/5 border border-primary/20 flex items-center gap-3">
@@ -3281,6 +3359,321 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
           )}
 
           </div>{/* fim wrapper detalhes+recomendacao */}
+
+          {/* ── Aba Avaliação de Imóvel ── */}
+          {modalTab === "avaliacao_imovel" && (() => {
+            const meta = proposal.metadata ?? {};
+            const imoveis: ImovelMeta[] = (meta.imoveis && meta.imoveis.length > 0)
+              ? meta.imoveis
+              : (proposal.imovel_cidade || proposal.imovel_endereco)
+                ? [{ endereco: proposal.imovel_endereco, valor_medio: proposal.imovel_valor_medio, cidade: proposal.imovel_cidade, estado: proposal.imovel_estado }]
+                : [];
+            return (
+              <div className="space-y-3">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                  <Home className="w-3.5 h-3.5" /> Imóveis em Garantia {imoveis.length > 0 ? `(${imoveis.length})` : ""}
+                </p>
+
+                {imoveis.length === 0 && (
+                  <div className="flex flex-col items-center justify-center py-10 text-center border border-dashed border-border rounded-xl">
+                    <Home className="w-8 h-8 text-muted-foreground/40 mb-2" />
+                    <p className="text-sm text-muted-foreground mb-3">Nenhum imóvel cadastrado nesta proposta.</p>
+                    <button
+                      onClick={adicionarImovel}
+                      disabled={addingImovel}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/15 border border-amber-500/40 text-amber-400 text-xs font-semibold hover:bg-amber-500/25 transition-colors disabled:opacity-50"
+                    >
+                      {addingImovel ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Home className="w-3.5 h-3.5" />}
+                      Adicionar Imóvel
+                    </button>
+                  </div>
+                )}
+
+                {imoveis.map((im, idx) => (
+                  <div key={idx} className="p-4 rounded-xl border border-amber-500/30 bg-amber-500/5 space-y-2">
+                    <p className="text-[10px] font-bold text-amber-400 uppercase tracking-wider">Imóvel {imoveis.length > 1 ? `#${idx + 1}` : ""}</p>
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
+
+                      {/* ── Localização (CEP / cidade / estado / endereço) — editável ── */}
+                      <div className="col-span-2 pb-1.5 border-b border-amber-500/20">
+                        {editingLocIdx === idx ? (
+                          <div className="space-y-1.5">
+                            <div className="flex items-center gap-1.5">
+                              <input
+                                type="text" inputMode="numeric" placeholder="CEP"
+                                value={locCep}
+                                onChange={e => handleLocCepChange(e.target.value)}
+                                className="w-28 h-7 px-2 text-xs bg-secondary border border-amber-500/50 rounded text-foreground focus:outline-none focus:ring-1 focus:ring-amber-500/50"
+                                autoFocus
+                              />
+                              {locCepLoading && <Loader2 className="w-3 h-3 animate-spin text-amber-400 flex-shrink-0" />}
+                              <input
+                                type="text" placeholder="Cidade"
+                                value={locCidade}
+                                onChange={e => setLocCidade(e.target.value)}
+                                className="flex-1 h-7 px-2 text-xs bg-secondary border border-amber-500/50 rounded text-foreground focus:outline-none focus:ring-1 focus:ring-amber-500/50"
+                              />
+                              <input
+                                type="text" placeholder="UF" maxLength={2}
+                                value={locEstado}
+                                onChange={e => setLocEstado(e.target.value.toUpperCase())}
+                                className="w-14 h-7 px-2 text-xs bg-secondary border border-amber-500/50 rounded text-foreground focus:outline-none focus:ring-1 focus:ring-amber-500/50"
+                              />
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <input
+                                type="text" placeholder="Endereço (rua, número, bairro)"
+                                value={locEndereco}
+                                onChange={e => setLocEndereco(e.target.value)}
+                                className="flex-1 h-7 px-2 text-xs bg-secondary border border-amber-500/50 rounded text-foreground focus:outline-none focus:ring-1 focus:ring-amber-500/50"
+                              />
+                              <button
+                                onClick={() => saveLoc(idx)}
+                                disabled={locSaving}
+                                className="h-7 px-2 rounded bg-amber-500/20 border border-amber-500/40 text-amber-400 hover:bg-amber-500/30 transition-colors"
+                              >
+                                <Check className="w-3 h-3" />
+                              </button>
+                              <button
+                                onClick={() => setEditingLocIdx(null)}
+                                className="h-7 px-2 rounded border border-border text-muted-foreground hover:text-white transition-colors"
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex items-start gap-1.5">
+                              <MapPin className="w-3 h-3 text-amber-400 flex-shrink-0 mt-0.5" />
+                              <span className="text-xs text-foreground">
+                                {(im.endereco || im.cidade || im.cep) ? (
+                                  <>
+                                    {im.endereco}{im.endereco && (im.cidade || im.cep) ? " — " : ""}
+                                    {[im.cidade, im.estado].filter(Boolean).join("/")}
+                                    {im.cep && <span className="text-muted-foreground"> · CEP {im.cep}</span>}
+                                  </>
+                                ) : <span className="text-muted-foreground italic">localização não informada</span>}
+                              </span>
+                            </div>
+                            <button
+                              onClick={() => startEditLoc(idx, im)}
+                              className="p-0.5 rounded hover:bg-amber-500/15 text-muted-foreground hover:text-amber-400 transition-colors flex-shrink-0"
+                              title="Editar localização"
+                            >
+                              <Pencil className="w-3 h-3" />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="col-span-2 pt-1.5 border-t border-amber-500/20">
+                        {editingVmIdx === idx ? (
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-muted-foreground flex items-center gap-1 shrink-0"><Banknote className="w-3 h-3" /> Valor Médio</span>
+                            <div className="flex-1 flex items-center gap-1.5">
+                              <div className="relative flex-1">
+                                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">R$</span>
+                                <input
+                                  type="text" inputMode="numeric"
+                                  value={vmEditValue}
+                                  onChange={e => setVmEditValue(applyBRLMask(e.target.value))}
+                                  className="w-full h-7 pl-7 pr-2 text-xs bg-secondary border border-amber-500/50 rounded text-foreground focus:outline-none focus:ring-1 focus:ring-amber-500/50"
+                                  autoFocus
+                                />
+                              </div>
+                              <button
+                                onClick={() => saveVm(idx)}
+                                disabled={vmSaving}
+                                className="h-7 px-2 rounded bg-amber-500/20 border border-amber-500/40 text-amber-400 hover:bg-amber-500/30 transition-colors"
+                              >
+                                <Check className="w-3 h-3" />
+                              </button>
+                              <button
+                                onClick={() => setEditingVmIdx(null)}
+                                className="h-7 px-2 rounded border border-border text-muted-foreground hover:text-white transition-colors"
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs text-muted-foreground flex items-center gap-1"><Banknote className="w-3 h-3" /> Valor Médio de Avaliação</span>
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-xs font-bold text-amber-300">
+                                {im.valor_medio ? formatCurrency(im.valor_medio) : <span className="text-muted-foreground italic">não informado</span>}
+                              </span>
+                              <button
+                                onClick={() => startEditVm(idx, im.valor_medio)}
+                                className="p-0.5 rounded hover:bg-amber-500/15 text-muted-foreground hover:text-amber-400 transition-colors"
+                                title="Editar valor médio"
+                              >
+                                <Pencil className="w-3 h-3" />
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                      {im.valor_medio && (
+                        <div className="col-span-2 flex items-center justify-between text-xs">
+                          <span className="text-muted-foreground">LTV estimado</span>
+                          <span className={`font-bold ${(proposal.requested_value / im.valor_medio) > 0.7 ? "text-red-400" : "text-emerald-400"}`}>
+                            {((proposal.requested_value / im.valor_medio) * 100).toFixed(1)}%
+                            <span className="font-normal text-muted-foreground ml-1">(máx. 70%)</span>
+                          </span>
+                        </div>
+                      )}
+                      <div className="col-span-2 pt-1.5 border-t border-amber-500/20">
+                        {editingAreaIdx === idx ? (
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-muted-foreground flex items-center gap-1 shrink-0">Área (m²)</span>
+                            <div className="flex-1 flex items-center gap-1.5">
+                              <input
+                                type="text" inputMode="decimal"
+                                value={areaEditValue}
+                                onChange={e => setAreaEditValue(e.target.value.replace(/[^0-9,]/g, ""))}
+                                className="w-full h-7 px-2 text-xs bg-secondary border border-amber-500/50 rounded text-foreground focus:outline-none focus:ring-1 focus:ring-amber-500/50"
+                                autoFocus
+                              />
+                              <button
+                                onClick={() => saveArea(idx)}
+                                disabled={areaSaving}
+                                className="h-7 px-2 rounded bg-amber-500/20 border border-amber-500/40 text-amber-400 hover:bg-amber-500/30 transition-colors"
+                              >
+                                <Check className="w-3 h-3" />
+                              </button>
+                              <button
+                                onClick={() => setEditingAreaIdx(null)}
+                                className="h-7 px-2 rounded border border-border text-muted-foreground hover:text-white transition-colors"
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs text-muted-foreground">Área do Imóvel</span>
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-xs font-bold text-foreground">
+                                {im.area_m2 ? `${im.area_m2.toLocaleString("pt-BR")} m²` : <span className="text-muted-foreground italic">não informado</span>}
+                              </span>
+                              <button
+                                onClick={() => startEditArea(idx, im.area_m2)}
+                                className="p-0.5 rounded hover:bg-amber-500/15 text-muted-foreground hover:text-amber-400 transition-colors"
+                                title="Editar área do imóvel"
+                              >
+                                <Pencil className="w-3 h-3" />
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* ── Pesquisa de Valor de Mercado (IA + web search) ── */}
+                      <div className="col-span-2 pt-1.5 border-t border-amber-500/20 space-y-2">
+                        <button
+                          onClick={() => pesquisarValorMercado(idx, im)}
+                          disabled={searchingMercadoIdx === idx || !im.area_m2 || !(im.cep || (im.cidade && im.estado))}
+                          title={!im.area_m2 || !(im.cep || (im.cidade && im.estado)) ? "Preencha CEP (ou cidade/estado) e área do imóvel" : undefined}
+                          className="w-full h-7 px-2 rounded border border-amber-500/40 text-amber-400 text-xs font-semibold flex items-center justify-center gap-1.5 hover:bg-amber-500/15 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          {searchingMercadoIdx === idx ? (
+                            <><Loader2 className="w-3 h-3 animate-spin" /> Pesquisando comparáveis na região...</>
+                          ) : (
+                            <><Search className="w-3 h-3" /> {im.pesquisa_mercado ? "Pesquisar Novamente" : "Pesquisar Valor de Mercado"}</>
+                          )}
+                        </button>
+
+                        {mercadoError && searchingMercadoIdx === null && (
+                          <p className="text-[10px] text-red-400 flex items-center gap-1"><AlertCircle className="w-3 h-3" /> {mercadoError}</p>
+                        )}
+
+                        {im.pesquisa_mercado && (
+                          <div className="p-2.5 rounded-lg bg-cyan-500/5 border border-cyan-500/25 space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] font-bold text-cyan-400 uppercase tracking-wider">
+                                Valor de Mercado Estimado
+                              </span>
+                              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase ${
+                                im.pesquisa_mercado.confianca === "ALTA" ? "bg-emerald-500/20 text-emerald-400"
+                                : im.pesquisa_mercado.confianca === "MEDIA" ? "bg-amber-500/20 text-amber-400"
+                                : "bg-red-500/20 text-red-400"
+                              }`}>
+                                Confiança {im.pesquisa_mercado.confianca}
+                              </span>
+                            </div>
+
+                            {im.pesquisa_mercado.comparaveis.length > 0 ? (
+                              <>
+                                <div className="flex items-center justify-between text-xs">
+                                  <span className="text-muted-foreground">R$/m² médio da região</span>
+                                  <span className="font-semibold text-foreground">{formatCurrency(im.pesquisa_mercado.preco_m2_medio)}</span>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                  <span className="text-xs text-muted-foreground">Valor estimado ({im.area_m2}m²)</span>
+                                  <span className="text-sm font-black text-cyan-300">{formatCurrency(im.pesquisa_mercado.valor_estimado)}</span>
+                                </div>
+
+                                <div className="space-y-1 pt-1 border-t border-cyan-500/15">
+                                  <p className="text-[10px] font-semibold text-muted-foreground uppercase">Comparáveis encontrados</p>
+                                  {im.pesquisa_mercado.comparaveis.map((c, ci) => (
+                                    <a
+                                      key={ci}
+                                      href={c.fonte_url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="flex items-center justify-between gap-2 text-[10px] text-muted-foreground hover:text-cyan-400 transition-colors group"
+                                    >
+                                      <span className="truncate flex-1">
+                                        {c.titulo} <span className="text-muted-foreground/70">— {c.fonte_nome}</span>
+                                      </span>
+                                      <span className="shrink-0 font-medium">
+                                        {formatCurrency(c.valor)} ({c.area_m2}m² · {formatCurrency(c.preco_m2)}/m²)
+                                      </span>
+                                      <ExternalLink className="w-2.5 h-2.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                    </a>
+                                  ))}
+                                </div>
+
+                                <button
+                                  onClick={() => usarComoValorMedio(idx, im.pesquisa_mercado!.valor_estimado)}
+                                  disabled={vmSaving}
+                                  className="w-full h-7 px-2 rounded bg-cyan-500/20 border border-cyan-500/40 text-cyan-300 text-[11px] font-semibold hover:bg-cyan-500/30 transition-colors disabled:opacity-40"
+                                >
+                                  Usar como Valor Médio de Avaliação
+                                </button>
+                              </>
+                            ) : (
+                              <p className="text-[10px] text-muted-foreground italic">Nenhum comparável válido encontrado para a região.</p>
+                            )}
+
+                            {im.pesquisa_mercado.observacoes && (
+                              <p className="text-[10px] text-muted-foreground italic">{im.pesquisa_mercado.observacoes}</p>
+                            )}
+                            <p className="text-[9px] text-muted-foreground/70">
+                              Pesquisado em {new Date(im.pesquisa_mercado.buscado_em).toLocaleString("pt-BR")}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+
+                {imoveis.length > 0 && (
+                  <button
+                    onClick={adicionarImovel}
+                    disabled={addingImovel}
+                    className="w-full h-8 px-3 rounded-lg border border-dashed border-amber-500/40 text-amber-400 text-xs font-semibold flex items-center justify-center gap-1.5 hover:bg-amber-500/10 transition-colors disabled:opacity-50"
+                  >
+                    {addingImovel ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Home className="w-3.5 h-3.5" />}
+                    Adicionar outro imóvel
+                  </button>
+                )}
+              </div>
+            );
+          })()}
 
           {/* ── Upload livre de documentos (partner e admin) ── */}
           {modalTab === "documentos" && (
