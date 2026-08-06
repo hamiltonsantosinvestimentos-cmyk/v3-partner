@@ -8,14 +8,13 @@ import { test, expect } from "@playwright/test";
 // "/bolsa/mesa", atras do mesmo gate de role (ADMIN/GESTAO/MESA_OPERACIONAL)
 // que ja protege a Mesa de Capitais inteira.
 //
-// Fase 3 (06/08/2026), cascata top-down sem trava de soma: cada lado
-// (Compra/Venda) recebe uma fatia bruta independente da Comissao Total,
-// V3 e Mandatario sao % manuais do lado, Intermediarios e sempre o resto
-// automatico (pode dar negativo, decisao explicita de Joao: tela nunca
-// bloqueia por mensagem de erro, so desabilita o botao de PDF daquele lado
-// especifico quando o saldo fica negativo). 3 variantes de PDF: Buy-Side,
-// Sell-Side (cada uma so com os proprios numeros) e Consolidado/Mesa V3
-// (uso interno, mostra os dois lados).
+// Fase 4 (06/08/2026), padrao planilha "Simular Grades": todo percentual e
+// SEMPRE % DIRETO da operacao (mesma escala de % Comissão Total), nunca %
+// de um sub-total do lado. Cascata em 2 decotes explicitos por lado: Grupo
+// (Cheia) -> Fee V3 -> Grupo Liquido -> Mandatario -> Intermediarios
+// (residual automatico, nunca digitado, pode dar negativo). Nenhuma
+// validacao bloqueia a tela em nenhum momento; saldo negativo so desabilita
+// o PDF daquele lado especifico.
 //
 // Sessao QA compartilhada (tests/e2e/auth.setup.ts) e ADMIN, ja tem acesso
 // a Mesa de Capitais, sem setup adicional de role neste arquivo.
@@ -27,8 +26,8 @@ async function abrirCalculadora(page: import("@playwright/test").Page) {
   await expect(page.getByText("Calculadora Rápida · Comissionamento e Lâmina de Fechamento")).toBeVisible();
 }
 
-test.describe("Bolsa de Ativos - Calculadora Rapida de Comissionamento (Fase 3, cascata sem trava)", () => {
-  test("calcula em tempo real, sem bloqueio, e habilita os 3 PDFs quando os saldos ficam positivos", async ({ page }) => {
+test.describe("Bolsa de Ativos - Calculadora Rapida de Comissionamento (Fase 4, padrao planilha)", () => {
+  test("calcula em % direto da operacao, sem bloqueio, com Grupo Liquido explicito e Fee V3 Total", async ({ page }) => {
     await abrirCalculadora(page);
 
     // Mascara "maquineta" (maskCurrencyBRLInput): os digitos representam
@@ -36,23 +35,27 @@ test.describe("Bolsa de Ativos - Calculadora Rapida de Comissionamento (Fase 3, 
     await page.fill('input[name="face_value"]', "100000000");
     await page.fill('input[name="fee_total_pct"]', "10");
 
-    // Nunca deve aparecer qualquer mensagem de "precisa somar 100%" nesta
-    // versao, a trava foi removida deliberadamente.
+    // Nunca deve aparecer qualquer mensagem de bloqueio nesta versao.
     await expect(page.getByText(/precisa somar 100%/i)).toHaveCount(0);
 
-    // Lado Compra (default Fatia do Lado = 50%): V3 20%, Mandatario 30%
-    // -> Intermediarios = 50% do lado, positivo.
-    await page.fill('input[name="buy_fee_v3_pct"]', "20");
-    await page.fill('input[name="buy_mandatario_pct"]', "30");
+    // Lado Compra: Grupo Cheia 5% direto (= R$50.000,00), Fee V3 2% (R$20.000,00),
+    // Mandatario 1% (R$10.000,00) -> Grupo Liquido = 5-2=3%, Intermediarios = 3-1=2% (R$20.000,00).
+    await page.fill('input[name="buy_side_pct"]', "5");
+    await page.fill('input[name="buy_fee_v3_pct"]', "2");
+    await page.fill('input[name="buy_mandatario_pct"]', "1");
 
-    // Lado Venda (default 50%): V3 15%, Mandatario 25% -> Intermediarios = 60%, positivo.
-    await page.fill('input[name="sell_fee_v3_pct"]', "15");
-    await page.fill('input[name="sell_mandatario_pct"]', "25");
+    // Lado Venda: Grupo Cheia 5%, Fee V3 1% (R$10.000,00), Mandatario 1%
+    // (R$10.000,00) -> Grupo Liquido = 5-1=4%, Intermediarios = 4-1=3% (R$30.000,00).
+    await page.fill('input[name="sell_side_pct"]', "5");
+    await page.fill('input[name="sell_fee_v3_pct"]', "1");
+    await page.fill('input[name="sell_mandatario_pct"]', "1");
 
     // Resultado calcula sozinho, sem clicar em nenhum botao "Calcular".
-    await expect(page.getByText("R$ 100.000,00")).toBeVisible(); // Comissao Total = 10% de R$1M
+    await expect(page.getByText("R$ 100.000,00")).toBeVisible(); // % Comissão Total = 10% de R$1M
+    await expect(page.getByText("R$ 50.000,00").first()).toBeVisible(); // SOMA GRUPO COMPRA (CHEIA)
+    await expect(page.getByText("R$ 30.000,00").first()).toBeVisible(); // Fee V3 Total (2%+1% = 3% = R$30.000)
 
-    // Nenhum aviso de saldo negativo deve aparecer com esses valores.
+    // Nenhum aviso de saldo negativo com esses valores.
     await expect(page.getByText(/Ajuste as fatias/i)).toHaveCount(0);
 
     // Os 3 botoes de PDF ficam habilitados.
@@ -79,9 +82,11 @@ test.describe("Bolsa de Ativos - Calculadora Rapida de Comissionamento (Fase 3, 
     await page.fill('input[name="face_value"]', "50000000"); // R$ 500.000,00
     await page.fill('input[name="fee_total_pct"]', "5");
 
-    // Lado Compra: V3 70% + Mandatario 50% = 120% do lado -> Intermediarios negativo.
-    await page.fill('input[name="buy_fee_v3_pct"]', "70");
-    await page.fill('input[name="buy_mandatario_pct"]', "50");
+    // Lado Compra: Grupo Cheia 5% (direto), Fee V3 4% + Mandatario 3% = 7%
+    // > 5% da Cheia -> Grupo Liquido 1%, Intermediarios = 1-3 = -2%, negativo.
+    await page.fill('input[name="buy_side_pct"]', "5");
+    await page.fill('input[name="buy_fee_v3_pct"]', "4");
+    await page.fill('input[name="buy_mandatario_pct"]', "3");
 
     // Nenhuma mensagem de erro bloqueante em nenhum momento.
     await expect(page.getByText(/precisa somar 100%/i)).toHaveCount(0);

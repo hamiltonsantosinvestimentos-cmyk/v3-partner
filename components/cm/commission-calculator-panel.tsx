@@ -26,19 +26,24 @@ function formatBRL(v: number) {
 
 const NEGATIVE_RESIDUAL_MSG = "Ajuste as fatias para que o saldo dos intermediários seja positivo antes de exportar o PDF";
 
-/** Bloco de cascata de um lado: Fatia do Lado + V3 + Mandatário (manuais),
- * Intermediários sempre o resto automatico (nunca digitado, pode dar negativo). */
+/** Bloco de cascata de um lado, no padrao da planilha operacional "Simular
+ * Grades": Grupo (Cheia) → decote da Fee V3 → Grupo Líquido → decote do
+ * Mandatário → Intermediários (resto automatico, nunca digitado, pode dar
+ * negativo). Todo percentual aqui e SEMPRE % DIRETO da operacao (mesma
+ * escala da Comissão Total), nunca % de um sub-total do lado. */
 function SideCascadeInputs({
   title,
+  ladoNome,
   fieldPrefix,
-  sidePct, onSidePct,
+  sidePct, onSidePct, sidePctAuto,
   v3Pct, onV3Pct,
   mandatarioPct, onMandatarioPct,
   breakdown,
 }: {
   title: string;
+  ladoNome: "Venda" | "Compra";
   fieldPrefix: "buy" | "sell";
-  sidePct: string; onSidePct: (v: string) => void;
+  sidePct: string; onSidePct: (v: string) => void; sidePctAuto: number;
   v3Pct: string; onV3Pct: (v: string) => void;
   mandatarioPct: string; onMandatarioPct: (v: string) => void;
   breakdown: SideBreakdown;
@@ -47,19 +52,21 @@ function SideCascadeInputs({
   return (
     <div className="bg-[#12112A] border border-[#9BAFC5]/10 rounded-lg p-3">
       <div className="text-[10px] text-[#E8C97A] font-bold uppercase mb-2">{title}</div>
+      <div className="text-[9px] text-[#9BAFC5]/70 mb-2">Todo % abaixo é direto da operação (mesma escala da Comissão Total), nunca % de um sub-total.</div>
       <div className="grid grid-cols-3 gap-2 mb-2">
         <div>
-          <label className="block text-[9px] text-[#9BAFC5] uppercase mb-1">Fatia do Lado (%)</label>
+          <label className="block text-[9px] text-[#9BAFC5] uppercase mb-1">Grupo {ladoNome} (Cheia) (%)</label>
           <input type="text" inputMode="decimal" name={`${fieldPrefix}_side_pct`} value={sidePct} onChange={(e) => onSidePct(sanitizeDecimalInput(e.target.value))}
+            placeholder={`auto: ${sidePctAuto.toFixed(2)}`}
             className="w-full bg-[#162744] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]" />
         </div>
         <div>
-          <label className="block text-[9px] text-[#9BAFC5] uppercase mb-1">Taxa V3 (%)</label>
+          <label className="block text-[9px] text-[#9BAFC5] uppercase mb-1">Fee V3 ({ladoNome}) (%)</label>
           <input type="text" inputMode="decimal" name={`${fieldPrefix}_fee_v3_pct`} value={v3Pct} onChange={(e) => onV3Pct(sanitizeDecimalInput(e.target.value))} placeholder="Mesa define"
             className="w-full bg-[#162744] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]" />
         </div>
         <div>
-          <label className="block text-[9px] text-[#9BAFC5] uppercase mb-1">Mandatário (%)</label>
+          <label className="block text-[9px] text-[#9BAFC5] uppercase mb-1">Mandatário {ladoNome} (%)</label>
           <input type="text" inputMode="decimal" name={`${fieldPrefix}_mandatario_pct`} value={mandatarioPct} onChange={(e) => onMandatarioPct(sanitizeDecimalInput(e.target.value))}
             className="w-full bg-[#162744] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]" />
         </div>
@@ -70,9 +77,13 @@ function SideCascadeInputs({
         <span className="text-right">Bruto (R$)</span>
         <span className="text-right">Líquido (R$)</span>
       </div>
-      <SideRow label="Taxa de Estruturação V3" pct={breakdown.v3.pct_of_side} bruto={breakdown.v3.bruto} liquido={breakdown.v3.liquido} highlight />
-      <SideRow label="Mandatário / Titular" pct={breakdown.mandatario.pct_of_side} bruto={breakdown.mandatario.bruto} liquido={breakdown.mandatario.liquido} />
-      <SideRow label="Grupo de Intermediários" pct={breakdown.intermediarios.pct_of_side} bruto={breakdown.intermediarios.bruto} liquido={breakdown.intermediarios.liquido} negativo={negativo} />
+      <SideRow label={`Fee V3 (${ladoNome})`} pct={breakdown.v3.pct} bruto={breakdown.v3.bruto} liquido={breakdown.v3.liquido} highlight />
+      <SideRow label={`Grupo ${ladoNome} Líquido (pós V3)`} pct={breakdown.grupo_liquido.pct} bruto={breakdown.grupo_liquido.bruto} liquido={breakdown.grupo_liquido.liquido} />
+      <SideRow label={`Mandatário ${ladoNome} / Titular`} pct={breakdown.mandatario.pct} bruto={breakdown.mandatario.bruto} liquido={breakdown.mandatario.liquido} />
+      <SideRow label="Grupo de Intermediários (resto)" pct={breakdown.intermediarios.pct} bruto={breakdown.intermediarios.bruto} liquido={breakdown.intermediarios.liquido} negativo={negativo} />
+      <div className="border-t border-[#9BAFC5]/15 mt-1.5 pt-1.5">
+        <SideRow label={`SOMA GRUPO ${ladoNome.toUpperCase()} (CHEIA)`} pct={breakdown.side_pct} bruto={breakdown.side_bruto} liquido={breakdown.side_liquido} highlight />
+      </div>
 
       {negativo && (
         <div className="flex items-start gap-1.5 mt-2 text-[10px] text-red-400">
@@ -90,7 +101,7 @@ function SideRow({ label, pct, bruto, liquido, highlight, negativo }: { label: s
     <div className="grid grid-cols-3 gap-2 items-center bg-[#162744] rounded px-1 py-1.5 mb-1 text-xs">
       <div>
         <div className={negativo ? "text-red-400 font-bold" : highlight ? "text-[#C9A84C] font-bold" : "text-[#F5F1E8]"}>{label}</div>
-        <div className="text-[9px] text-[#9BAFC5]/70">{pct}% do lado</div>
+        <div className="text-[9px] text-[#9BAFC5]/70">{pct}%</div>
       </div>
       <div className={`text-right ${cor}`}>{formatBRL(bruto)}</div>
       <div className={`text-right font-bold ${cor}`}>{formatBRL(liquido)}</div>
@@ -102,16 +113,19 @@ export function CommissionCalculatorPanel({ onClose }: Props) {
   const [dealLabel, setDealLabel] = useState("");
   const [valorFace, setValorFace] = useState("");
   const [desagio, setDesagio] = useState("0");
+  const [titulares, setTitulares] = useState("0");
   const [isRecorrente, setIsRecorrente] = useState(false);
   const [meses, setMeses] = useState("1");
   const [comissaoTotal, setComissaoTotal] = useState("5");
   const [deducao, setDeducao] = useState("6");
 
-  const [buySidePct, setBuySidePct] = useState("50");
+  // Fatia do Lado vazia = auto (metade da Comissão Total, em % direto da
+  // operação). A Mesa pode sobrescrever a qualquer momento, sem trava.
+  const [buySidePct, setBuySidePct] = useState("");
   const [buyV3Pct, setBuyV3Pct] = useState("");
   const [buyMandatarioPct, setBuyMandatarioPct] = useState("");
 
-  const [sellSidePct, setSellSidePct] = useState("50");
+  const [sellSidePct, setSellSidePct] = useState("");
   const [sellV3Pct, setSellV3Pct] = useState("");
   const [sellMandatarioPct, setSellMandatarioPct] = useState("");
 
@@ -134,6 +148,12 @@ export function CommissionCalculatorPanel({ onClose }: Props) {
   }, []);
 
   const valorFaceNum = parseCurrencyBRLInput(valorFace);
+  const comissaoTotalNum = parseDecimalInput(comissaoTotal);
+  // Fatia do Lado vazia = auto (metade da Comissão Total, direto). Mesa pode
+  // sobrescrever a qualquer momento digitando um valor.
+  const sidePctAuto = comissaoTotalNum / 2;
+  const buySidePctResolved = buySidePct === "" ? sidePctAuto : parseDecimalInput(buySidePct);
+  const sellSidePctResolved = sellSidePct === "" ? sidePctAuto : parseDecimalInput(sellSidePct);
 
   // Cascata inteira roda no navegador, sem fetch, recalculada a cada tecla.
   // Nunca bloqueia, Intermediarios pode dar negativo, so afeta os botoes
@@ -141,23 +161,24 @@ export function CommissionCalculatorPanel({ onClose }: Props) {
   const resultado = useMemo<CommissionCalculatorResult>(() => calculateCommission({
     valor_face: valorFaceNum,
     desagio_pct: parseDecimalInput(desagio),
+    titulares_pct: parseDecimalInput(titulares),
     is_recorrente: isRecorrente,
     meses_recorrencia: Number(meses) || 1,
-    comissao_total_pct: parseDecimalInput(comissaoTotal),
+    comissao_total_pct: comissaoTotalNum,
     buy_side: {
-      side_pct: parseDecimalInput(buySidePct),
+      side_pct: buySidePctResolved,
       fee_v3_pct: parseDecimalInput(buyV3Pct),
       mandatario_pct: parseDecimalInput(buyMandatarioPct),
     },
     sell_side: {
-      side_pct: parseDecimalInput(sellSidePct),
+      side_pct: sellSidePctResolved,
       fee_v3_pct: parseDecimalInput(sellV3Pct),
       mandatario_pct: parseDecimalInput(sellMandatarioPct),
     },
     deducao_bancaria_pct: parseDecimalInput(deducao) || 6,
-  }), [valorFaceNum, desagio, isRecorrente, meses, comissaoTotal, buySidePct, buyV3Pct, buyMandatarioPct, sellSidePct, sellV3Pct, sellMandatarioPct, deducao]);
+  }), [valorFaceNum, desagio, titulares, isRecorrente, meses, comissaoTotalNum, buySidePctResolved, buyV3Pct, buyMandatarioPct, sellSidePctResolved, sellV3Pct, sellMandatarioPct, deducao]);
 
-  const temDado = valorFaceNum > 0 && parseDecimalInput(comissaoTotal) > 0;
+  const temDado = valorFaceNum > 0 && comissaoTotalNum > 0;
   const buyNegativo = hasNegativeResidual(resultado.buy_side);
   const sellNegativo = hasNegativeResidual(resultado.sell_side);
 
@@ -173,11 +194,12 @@ export function CommissionCalculatorPanel({ onClose }: Props) {
           deal_label: dealLabel || null,
           valor_face: valorFaceNum,
           desagio_pct: parseDecimalInput(desagio),
+          titulares_pct: parseDecimalInput(titulares),
           is_recorrente: isRecorrente,
           meses_recorrencia: isRecorrente ? Number(meses) || 1 : 1,
-          comissao_total_pct: parseDecimalInput(comissaoTotal),
-          buy_side: { side_pct: parseDecimalInput(buySidePct), fee_v3_pct: parseDecimalInput(buyV3Pct), mandatario_pct: parseDecimalInput(buyMandatarioPct) },
-          sell_side: { side_pct: parseDecimalInput(sellSidePct), fee_v3_pct: parseDecimalInput(sellV3Pct), mandatario_pct: parseDecimalInput(sellMandatarioPct) },
+          comissao_total_pct: comissaoTotalNum,
+          buy_side: { side_pct: buySidePctResolved, fee_v3_pct: parseDecimalInput(buyV3Pct), mandatario_pct: parseDecimalInput(buyMandatarioPct) },
+          sell_side: { side_pct: sellSidePctResolved, fee_v3_pct: parseDecimalInput(sellV3Pct), mandatario_pct: parseDecimalInput(sellMandatarioPct) },
           deducao_bancaria_pct: parseDecimalInput(deducao) || 6,
         }),
       });
@@ -185,7 +207,7 @@ export function CommissionCalculatorPanel({ onClose }: Props) {
       if (!res.ok) { setSaveMsg(json.error ?? "Erro ao salvar"); return; }
       setSimId(json.id);
       setSaveMsg("Simulação salva.");
-      setHistory((h) => [{ id: json.id, deal_label: dealLabel || null, valor_face: valorFaceNum, fee_total_pct: parseDecimalInput(comissaoTotal), is_recorrente: isRecorrente, meses_recorrencia: isRecorrente ? Number(meses) || 1 : 1, resultado: json.resultado, created_at: json.created_at }, ...h]);
+      setHistory((h) => [{ id: json.id, deal_label: dealLabel || null, valor_face: valorFaceNum, fee_total_pct: comissaoTotalNum, is_recorrente: isRecorrente, meses_recorrencia: isRecorrente ? Number(meses) || 1 : 1, resultado: json.resultado, created_at: json.created_at }, ...h]);
     } catch {
       setSaveMsg("Erro de conexão ao salvar.");
     } finally {
@@ -241,8 +263,8 @@ export function CommissionCalculatorPanel({ onClose }: Props) {
         </div>
 
         <div className="flex-1 overflow-y-auto p-5">
-          {/* Base da operação */}
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          {/* Base da operação: padrão planilha, todo % mostra o R$ correspondente ao lado */}
+          <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
             <div className="col-span-2 md:col-span-1">
               <label className="block text-[10px] text-[#E8C97A] font-bold uppercase mb-1">Identificação (opcional)</label>
               <input value={dealLabel} onChange={(e) => setDealLabel(e.target.value)} placeholder="Ex: Precatório XYZ"
@@ -255,13 +277,18 @@ export function CommissionCalculatorPanel({ onClose }: Props) {
                 className="w-full bg-[#162744] border border-[#C9A84C]/30 rounded-md px-3 py-2 text-xs text-[#F5F1E8] font-semibold" />
             </div>
             <div>
-              <label className="block text-[10px] text-[#E8C97A] font-bold uppercase mb-1">Deságio (%)</label>
-              <input type="text" inputMode="decimal" name="desconto_desagio_pct" value={desagio} onChange={(e) => setDesagio(sanitizeDecimalInput(e.target.value))}
+              <label className="block text-[10px] text-[#E8C97A] font-bold uppercase mb-1">% Titulares</label>
+              <input type="text" inputMode="decimal" name="titulares_pct" value={titulares} onChange={(e) => setTitulares(sanitizeDecimalInput(e.target.value))}
                 className="w-full bg-[#162744] border border-[#C9A84C]/30 rounded-md px-3 py-2 text-xs text-[#F5F1E8] font-semibold" />
             </div>
             <div>
-              <label className="block text-[10px] text-[#E8C97A] font-bold uppercase mb-1">Comissão Total (%)</label>
+              <label className="block text-[10px] text-[#E8C97A] font-bold uppercase mb-1">% Comissão Total</label>
               <input type="text" inputMode="decimal" name="fee_total_pct" value={comissaoTotal} onChange={(e) => setComissaoTotal(sanitizeDecimalInput(e.target.value))}
+                className="w-full bg-[#162744] border border-[#C9A84C]/30 rounded-md px-3 py-2 text-xs text-[#F5F1E8] font-semibold" />
+            </div>
+            <div>
+              <label className="block text-[10px] text-[#E8C97A] font-bold uppercase mb-1">% Deságio</label>
+              <input type="text" inputMode="decimal" name="desconto_desagio_pct" value={desagio} onChange={(e) => setDesagio(sanitizeDecimalInput(e.target.value))}
                 className="w-full bg-[#162744] border border-[#C9A84C]/30 rounded-md px-3 py-2 text-xs text-[#F5F1E8] font-semibold" />
             </div>
             <div>
@@ -289,40 +316,51 @@ export function CommissionCalculatorPanel({ onClose }: Props) {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4">
             <SideCascadeInputs
               title="Lado Compra (Buy-Side)"
+              ladoNome="Compra"
               fieldPrefix="buy"
-              sidePct={buySidePct} onSidePct={setBuySidePct}
+              sidePct={buySidePct} onSidePct={setBuySidePct} sidePctAuto={sidePctAuto}
               v3Pct={buyV3Pct} onV3Pct={setBuyV3Pct}
               mandatarioPct={buyMandatarioPct} onMandatarioPct={setBuyMandatarioPct}
               breakdown={resultado.buy_side}
             />
             <SideCascadeInputs
               title="Lado Venda (Sell-Side)"
+              ladoNome="Venda"
               fieldPrefix="sell"
-              sidePct={sellSidePct} onSidePct={setSellSidePct}
+              sidePct={sellSidePct} onSidePct={setSellSidePct} sidePctAuto={sidePctAuto}
               v3Pct={sellV3Pct} onV3Pct={setSellV3Pct}
               mandatarioPct={sellMandatarioPct} onMandatarioPct={setSellMandatarioPct}
               breakdown={resultado.sell_side}
             />
           </div>
 
-          {/* Resumo da operação */}
+          {/* Resumo da operação: padrão planilha, todo % com o R$ do lado */}
           {temDado && (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mt-4">
               <div className="bg-[#162744] rounded-lg p-3">
                 <div className="text-[10px] text-[#9BAFC5]">Valor de Face</div>
                 <div className="text-sm font-bold text-[#F5F1E8]">{formatBRL(resultado.operacao.valor_face)}</div>
               </div>
               <div className="bg-[#162744] rounded-lg p-3">
-                <div className="text-[10px] text-[#9BAFC5]">Preço do Comprador</div>
-                <div className="text-sm font-bold text-[#C9A84C]">{formatBRL(resultado.operacao.valor_comprador)}</div>
+                <div className="text-[10px] text-[#9BAFC5]">% Titulares</div>
+                <div className="text-sm font-bold text-[#F5F1E8]">{resultado.operacao.titulares_pct}% · {formatBRL(resultado.operacao.titulares_bruto)}</div>
               </div>
               <div className="bg-[#162744] rounded-lg p-3">
-                <div className="text-[10px] text-[#9BAFC5]">Comissão Total</div>
+                <div className="text-[10px] text-[#9BAFC5]">% Comissão Total</div>
                 <div className="text-sm font-bold text-[#F5F1E8]">{resultado.fee.comissao_total_pct}% · {formatBRL(resultado.fee.comissao_total_value)}</div>
               </div>
               <div className="bg-[#162744] rounded-lg p-3">
-                <div className="text-[10px] text-[#9BAFC5]">Compra + Venda (fatia bruta)</div>
-                <div className="text-sm font-bold text-[#F5F1E8]">{(resultado.buy_side.side_pct + resultado.sell_side.side_pct).toFixed(2)}% da comissão</div>
+                <div className="text-[10px] text-[#9BAFC5]">% Deságio</div>
+                <div className="text-sm font-bold text-[#F5F1E8]">{resultado.operacao.desagio_pct}% · {formatBRL(resultado.operacao.desagio_bruto)}</div>
+                <div className="text-[9px] text-[#9BAFC5]/70">Preço do Comprador: {formatBRL(resultado.operacao.valor_comprador)}</div>
+              </div>
+              <div className="bg-[#162744] rounded-lg p-3">
+                <div className="text-[10px] text-[#9BAFC5]">Fee V3 Total (Compra + Venda)</div>
+                <div className="text-sm font-bold text-[#C9A84C]">{resultado.fee.v3_total_pct}% · {formatBRL(resultado.fee.v3_total_bruto)}</div>
+              </div>
+              <div className="bg-[#162744] rounded-lg p-3">
+                <div className="text-[10px] text-[#9BAFC5]">Compra + Venda (fatia direta)</div>
+                <div className="text-sm font-bold text-[#F5F1E8]">{(resultado.buy_side.side_pct + resultado.sell_side.side_pct).toFixed(2)}% do valor de face</div>
               </div>
             </div>
           )}

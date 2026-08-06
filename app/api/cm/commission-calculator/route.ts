@@ -69,6 +69,7 @@ export async function POST(req: NextRequest) {
     deal_label,
     valor_face,
     desagio_pct,
+    titulares_pct,
     is_recorrente,
     meses_recorrencia,
     comissao_total_pct,
@@ -92,6 +93,7 @@ export async function POST(req: NextRequest) {
   const resultado = calculateCommission({
     valor_face: Number(valor_face),
     desagio_pct: desagio_pct != null ? Number(desagio_pct) : 0,
+    titulares_pct: titulares_pct != null ? Number(titulares_pct) : 0,
     is_recorrente: Boolean(is_recorrente),
     meses_recorrencia: meses_recorrencia != null ? Number(meses_recorrencia) : 1,
     comissao_total_pct: Number(comissao_total_pct),

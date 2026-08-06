@@ -1,5 +1,7 @@
 /**
- * Renderiza a Lamina de Fechamento da Calculadora Rapida (Fase 3).
+ * Renderiza a Lamina de Fechamento da Calculadora Rapida (Fase 4, escala
+ * unica "padrao planilha": todo % e direto da operacao, com linha SOMA DO
+ * LADO fechando cada tabela).
  *
  * 3 variantes: "buy" e "sell" (cada lado ve so os proprios numeros, nunca a
  * economia do outro lado, decisao de Joao pra nao gerar conflito entre as
@@ -46,11 +48,16 @@ function formatBRL(v: number) {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
-function buildSideRows(breakdown: SideBreakdown) {
+// Fase 4: todo % aqui e direto da operacao (padrao planilha "Simular
+// Grades"), nunca "% do lado". Decote em 2 passos explicitos (V3, depois
+// Grupo Liquido) igual a planilha, SOMA GRUPO fecha a tabela.
+function buildSideRows(breakdown: SideBreakdown, ladoNome: "Compra" | "Venda") {
   return [
-    { label: "Taxa de Estruturação V3", pct: `${breakdown.v3.pct_of_side}% do lado`, bruto: breakdown.v3.bruto, liquido: breakdown.v3.liquido },
-    { label: "Mandatário / Titular", pct: `${breakdown.mandatario.pct_of_side}% do lado`, bruto: breakdown.mandatario.bruto, liquido: breakdown.mandatario.liquido },
-    { label: "Grupo de Intermediários", pct: `${breakdown.intermediarios.pct_of_side}% do lado`, bruto: breakdown.intermediarios.bruto, liquido: breakdown.intermediarios.liquido },
+    { label: `Fee V3 (${ladoNome})`, pct: `${breakdown.v3.pct}%`, bruto: breakdown.v3.bruto, liquido: breakdown.v3.liquido, soma: false },
+    { label: `Grupo ${ladoNome} Líquido (pós V3)`, pct: `${breakdown.grupo_liquido.pct}%`, bruto: breakdown.grupo_liquido.bruto, liquido: breakdown.grupo_liquido.liquido, soma: false },
+    { label: `Mandatário ${ladoNome} / Titular`, pct: `${breakdown.mandatario.pct}%`, bruto: breakdown.mandatario.bruto, liquido: breakdown.mandatario.liquido, soma: false },
+    { label: "Grupo de Intermediários (resto)", pct: `${breakdown.intermediarios.pct}%`, bruto: breakdown.intermediarios.bruto, liquido: breakdown.intermediarios.liquido, soma: false },
+    { label: `SOMA GRUPO ${ladoNome.toUpperCase()} (CHEIA)`, pct: `${breakdown.side_pct}%`, bruto: breakdown.side_bruto, liquido: breakdown.side_liquido, soma: true },
   ];
 }
 
@@ -119,31 +126,35 @@ export async function renderLaminaPDF(resultado: CommissionCalculatorResult, var
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8);
   doc.setTextColor(...MUTED);
-  doc.text(`Valor de Face: ${formatBRL(resultado.operacao.valor_face)}  ·  Deságio: ${resultado.operacao.desagio_pct}%  ·  Preço do Comprador: ${formatBRL(resultado.operacao.valor_comprador)}`, M, y);
-  y += 10;
+  doc.text(`Valor de Face: ${formatBRL(resultado.operacao.valor_face)}  ·  % Titulares: ${resultado.operacao.titulares_pct}% (${formatBRL(resultado.operacao.titulares_bruto)})`, M, y);
+  y += 5;
+  doc.text(`% Deságio: ${resultado.operacao.desagio_pct}% (${formatBRL(resultado.operacao.desagio_bruto)})  ·  Preço do Comprador: ${formatBRL(resultado.operacao.valor_comprador)}`, M, y);
+  y += 5;
+  doc.text(`% Comissão Total: ${resultado.fee.comissao_total_pct}% (${formatBRL(resultado.fee.comissao_total_value)})`, M, y);
+  y += 9;
 
-  function drawSideTable(label: string, breakdown: SideBreakdown) {
+  function drawSideTable(label: string, breakdown: SideBreakdown, ladoNome: "Compra" | "Venda") {
     doc.setFont("helvetica", "bold");
     doc.setFontSize(9);
     doc.setTextColor(...GOLD);
     doc.text(label, M, y);
     y += 6;
 
-    const rows = buildSideRows(breakdown);
+    const rows = buildSideRows(breakdown, ladoNome);
     const rowH = 11;
     for (const row of rows) {
       const negativo = row.bruto < 0;
-      doc.setFillColor(...CARD);
+      doc.setFillColor(...(row.soma ? [30, 26, 10] : CARD) as [number, number, number]);
       doc.roundedRect(M, y - 5.5, W - M * 2, rowH - 2, 1.5, 1.5, "F");
-      doc.setFont("helvetica", "normal");
+      doc.setFont("helvetica", row.soma ? "bold" : "normal");
       doc.setFontSize(8);
-      doc.setTextColor(...(negativo ? RED : CREAM));
+      doc.setTextColor(...(negativo ? RED : row.soma ? GOLD : CREAM));
       doc.text(row.label, M + 4, y);
       doc.setFontSize(7);
       doc.setTextColor(...MUTED);
       doc.text(row.pct, W - M - 70, y, { align: "right" });
       doc.setFontSize(8.5);
-      doc.setTextColor(...(negativo ? RED : CREAM));
+      doc.setTextColor(...(negativo ? RED : row.soma ? GOLD : CREAM));
       doc.text(formatBRL(row.bruto), W - M - 40, y, { align: "right" });
       doc.setFont("helvetica", "bold");
       doc.setTextColor(...(negativo ? RED : GOLD));
@@ -154,11 +165,11 @@ export async function renderLaminaPDF(resultado: CommissionCalculatorResult, var
     y += 4;
   }
 
-  if (variante === "buy") drawSideTable("LADO COMPRA (BUY-SIDE)", resultado.buy_side);
-  else if (variante === "sell") drawSideTable("LADO VENDA (SELL-SIDE)", resultado.sell_side);
+  if (variante === "buy") drawSideTable("LADO COMPRA (BUY-SIDE)", resultado.buy_side, "Compra");
+  else if (variante === "sell") drawSideTable("LADO VENDA (SELL-SIDE)", resultado.sell_side, "Venda");
   else {
-    drawSideTable("LADO COMPRA (BUY-SIDE)", resultado.buy_side);
-    drawSideTable("LADO VENDA (SELL-SIDE)", resultado.sell_side);
+    drawSideTable("LADO COMPRA (BUY-SIDE)", resultado.buy_side, "Compra");
+    drawSideTable("LADO VENDA (SELL-SIDE)", resultado.sell_side, "Venda");
   }
 
   y += 2;
