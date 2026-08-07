@@ -84,7 +84,7 @@ function CopyButton({ text }: { text: string }) {
 
 export function IndicacoesDashboardClient({
   partnerName: _partnerName,
-  leadsLink,
+  leadsLink: _leadsLink,
   partnerLink,
   analiseV2Link,
   discountPercent,
@@ -92,9 +92,6 @@ export function IndicacoesDashboardClient({
   partnersIndicados,
   stats,
 }: Props) {
-  const whatsappLeads = encodeURIComponent(
-    `Olá! Sou parceiro da V3 Partners, uma boutique institucional multiproduto.\n\nConheça nossos serviços de crédito estruturado, consórcio, M&A e muito mais.\n\nAcesse pelo meu link: ${leadsLink}`
-  );
   const whatsappPartner = encodeURIComponent(
     `Olá! Estou te convidando para ser parceiro V3 Partners.\n\nAcesse pelo meu link e garanta condições especiais: ${partnerLink}`
   );
@@ -151,13 +148,7 @@ export function IndicacoesDashboardClient({
           <div className="w-12 h-12 rounded-xl bg-[#C9A84C]/20 flex items-center justify-center flex-shrink-0">
             <Gift className="w-6 h-6 text-[#C9A84C]" />
           </div>
-          <div className="grid sm:grid-cols-3 gap-3 flex-1">
-            <div>
-              <p className="text-sm font-bold text-[#E8C97A] mb-1">Indicar Clientes</p>
-              <p className="text-xs text-[#7A8FA8]">
-                Envie o link de leads. Quando o contato virar cliente V3, você ganha comissão da operação fechada.
-              </p>
-            </div>
+          <div className="grid sm:grid-cols-2 gap-3 flex-1">
             <div>
               <p className="text-sm font-bold text-[#E8C97A] mb-1">Indicar Parceiros</p>
               <p className="text-xs text-[#7A8FA8]">
@@ -175,40 +166,8 @@ export function IndicacoesDashboardClient({
         </div>
       </div>
 
-      {/* Link cards, quatro links */}
-      <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4">
-        {/* Link de leads */}
-        <div className="bg-[#111F35] border border-[#243A66] rounded-2xl p-5">
-          <div className="flex items-center gap-2 mb-3">
-            <Users className="w-4 h-4 text-[#C9A84C]" />
-            <p className="text-xs font-bold text-[#7A8FA8] uppercase tracking-wide">
-              Link de Clientes / Leads
-            </p>
-          </div>
-          <div className="flex items-center gap-2 bg-[#0D1B2E] border border-[#243A66] rounded-xl px-3 py-2.5 mb-3">
-            <span className="flex-1 text-xs text-[#F0ECE4] font-mono truncate">{leadsLink}</span>
-            <CopyButton text={leadsLink} />
-          </div>
-          <div className="flex gap-2">
-            <a
-              href={`https://wa.me/?text=${whatsappLeads}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-xs font-semibold hover:bg-emerald-500/25 transition-colors"
-            >
-              <Share2 className="w-3.5 h-3.5" /> WhatsApp
-            </a>
-            <a
-              href={`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(leadsLink)}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#243A66]/50 border border-[#3A5070] text-[#7A8FA8] text-xs font-semibold hover:text-[#F0ECE4] transition-colors"
-            >
-              <ExternalLink className="w-3.5 h-3.5" /> LinkedIn
-            </a>
-          </div>
-        </div>
-
+      {/* Link cards, dois links */}
+      <div className="grid sm:grid-cols-2 gap-4">
         {/* Link de parceiros */}
         <div className="bg-[#111F35] border border-[#C9A84C]/30 rounded-2xl p-5">
           <div className="flex items-center gap-2 mb-3">
