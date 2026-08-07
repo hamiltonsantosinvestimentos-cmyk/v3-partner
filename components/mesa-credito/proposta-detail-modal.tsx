@@ -1868,6 +1868,126 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
     }
   }
 
+  function handleExportImovelPDF(idx: number, im: ImovelMeta) {
+    if (!proposal) return;
+    const fmt = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+    const ltv = im.valor_medio ? (proposal.requested_value / im.valor_medio) * 100 : null;
+    const pm = im.pesquisa_mercado;
+
+    const html = `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<title>Avaliação de Imóvel — ${proposal.code}</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 12px; color: #1a1a2e; background: #fff; }
+  .header { background: linear-gradient(135deg, #09081A 0%, #111F35 100%); color: #F0ECE4; padding: 24px 32px; display: flex; justify-content: space-between; align-items: center; }
+  .header h1 { font-size: 20px; font-weight: 700; color: #C9A84C; }
+  .header .sub { font-size: 11px; color: #7A8FA8; margin-top: 2px; }
+  .header .code { font-size: 13px; font-weight: 600; color: #E8C97A; }
+  .badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 10px; font-weight: 700; text-transform: uppercase; }
+  .badge.alta { background: #10b98120; color: #059669; border: 1px solid #10b98140; }
+  .badge.media { background: #C9A84C20; color: #b48328; border: 1px solid #C9A84C40; }
+  .badge.baixa { background: #ef444420; color: #dc2626; border: 1px solid #ef444440; }
+  .content { padding: 24px 32px; }
+  .section { margin-bottom: 20px; }
+  .section-title { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em; color: #7A8FA8; border-bottom: 1px solid #e5e7eb; padding-bottom: 6px; margin-bottom: 12px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 24px; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px 16px; }
+  .field label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: #9ca3af; display: block; }
+  .field span { font-size: 12px; color: #1a1a2e; font-weight: 500; }
+  .highlight { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 12px 16px; }
+  .highlight label { color: #166534; }
+  .highlight span { color: #15803d; font-size: 16px; font-weight: 700; }
+  .highlight.risco { background: #fef2f2; border-color: #fecaca; }
+  .highlight.risco label { color: #991b1b; }
+  .highlight.risco span { color: #dc2626; }
+  table { width: 100%; border-collapse: collapse; margin-top: 4px; }
+  th { text-align: left; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #9ca3af; padding: 6px 8px; border-bottom: 1px solid #e5e7eb; }
+  td { font-size: 11px; color: #1a1a2e; padding: 6px 8px; border-bottom: 1px solid #f3f4f6; }
+  td a { color: #2563eb; text-decoration: none; }
+  .footer { margin-top: 32px; padding-top: 12px; border-top: 1px solid #e5e7eb; text-align: center; font-size: 9px; color: #9ca3af; }
+  @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+</style>
+</head>
+<body>
+<div class="header">
+  <div>
+    <div class="code">${proposal.code} — Avaliação de Imóvel${im.pesquisa_mercado ? ` <span class="badge ${pm!.confianca.toLowerCase()}">Confiança ${pm!.confianca}</span>` : ""}</div>
+    <h1>${proposal.client_name}</h1>
+    <div class="sub">${proposal.credit_line} · Gerado em ${new Date().toLocaleDateString("pt-BR")} às ${new Date().toLocaleTimeString("pt-BR")}</div>
+  </div>
+  <div style="text-align:right">
+    <div style="font-size:11px;color:#7A8FA8;">V3 Partners</div>
+    <div style="font-size:10px;color:#C9A84C;">Plataforma Institucional</div>
+  </div>
+</div>
+<div class="content">
+
+  <div class="section">
+    <div class="section-title">Dados do Imóvel${idx > 0 ? ` #${idx + 1}` : ""}</div>
+    <div class="grid">
+      ${im.endereco ? `<div class="field" style="grid-column:1/-1"><label>Endereço</label><span>${im.endereco}</span></div>` : ""}
+      ${im.cep ? `<div class="field"><label>CEP</label><span>${im.cep}</span></div>` : ""}
+      ${(im.cidade || im.estado) ? `<div class="field"><label>Cidade / UF</label><span>${[im.cidade, im.estado].filter(Boolean).join(" / ")}</span></div>` : ""}
+      ${im.area_m2 ? `<div class="field"><label>Área</label><span>${im.area_m2.toLocaleString("pt-BR")} m²</span></div>` : ""}
+      ${im.padrao ? `<div class="field"><label>Padrão</label><span>${im.padrao}</span></div>` : ""}
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Valor Solicitado × Garantia</div>
+    <div class="grid-3">
+      <div class="field"><label>Valor Solicitado</label><span>${fmt(proposal.requested_value)}</span></div>
+      <div class="field highlight"><label>Valor Médio de Avaliação</label><span>${im.valor_medio ? fmt(im.valor_medio) : "Não informado"}</span></div>
+      ${ltv !== null ? `<div class="field highlight ${ltv > 70 ? "risco" : ""}"><label>LTV Estimado</label><span>${ltv.toFixed(1)}% <span style="font-size:9px;font-weight:400;">(máx. 70%)</span></span></div>` : ""}
+    </div>
+  </div>
+
+  ${pm ? `
+  <div class="section">
+    <div class="section-title">Pesquisa de Valor de Mercado (IA + Web Search)</div>
+    <div class="grid-3">
+      <div class="field"><label>R$/m² Médio da Região</label><span>${fmt(pm.preco_m2_medio)}</span></div>
+      <div class="field highlight"><label>Valor Estimado (${im.area_m2}m²)</label><span>${fmt(pm.valor_estimado)}</span></div>
+      <div class="field"><label>Pesquisado em</label><span>${new Date(pm.buscado_em).toLocaleString("pt-BR")}</span></div>
+    </div>
+    ${pm.observacoes ? `<p style="font-size:11px;color:#4b5563;margin-top:10px;font-style:italic;">${pm.observacoes}</p>` : ""}
+    ${pm.comparaveis.length > 0 ? `
+    <table>
+      <thead><tr><th>Anúncio</th><th>Fonte</th><th>Área</th><th>Valor</th><th>R$/m²</th></tr></thead>
+      <tbody>
+        ${pm.comparaveis.map(c => `<tr>
+          <td>${c.titulo}</td>
+          <td><a href="${c.fonte_url}">${c.fonte_nome}</a></td>
+          <td>${c.area_m2}m²</td>
+          <td>${fmt(c.valor)}</td>
+          <td>${fmt(c.preco_m2)}</td>
+        </tr>`).join("")}
+      </tbody>
+    </table>` : `<p style="font-size:11px;color:#9ca3af;font-style:italic;margin-top:8px;">Nenhum comparável válido encontrado para a região.</p>`}
+  </div>` : `
+  <div class="section">
+    <div class="section-title">Pesquisa de Valor de Mercado</div>
+    <p style="font-size:11px;color:#9ca3af;font-style:italic;">Nenhuma pesquisa de mercado realizada para este imóvel ainda.</p>
+  </div>`}
+
+</div>
+<div class="footer">
+  V3 Partners · CNPJ 14.219.287/0001-50 · v3partners.com.br · Documento gerado automaticamente pela plataforma institucional
+</div>
+<script>window.onload = () => window.print();</script>
+</body>
+</html>`;
+
+    const win = window.open("", "_blank", "width=900,height=700");
+    if (win) {
+      win.document.write(html);
+      win.document.close();
+    }
+  }
+
   function startEdit() {
     if (!proposal) return;
     const meta = proposal.metadata ?? {};
@@ -1993,7 +2113,7 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
       const res = await fetch("/api/kyc/escavador", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tipo, valor, credit_profile_id: proposal.credit_profile_id }),
+        body: JSON.stringify({ tipo, valor }),
       });
       const json = await res.json();
       setEscavadorResult(json);
@@ -3391,7 +3511,16 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
 
                 {imoveis.map((im, idx) => (
                   <div key={idx} className="p-4 rounded-xl border border-amber-500/30 bg-amber-500/5 space-y-2">
-                    <p className="text-[10px] font-bold text-amber-400 uppercase tracking-wider">Imóvel {imoveis.length > 1 ? `#${idx + 1}` : ""}</p>
+                    <div className="flex items-center justify-between">
+                      <p className="text-[10px] font-bold text-amber-400 uppercase tracking-wider">Imóvel {imoveis.length > 1 ? `#${idx + 1}` : ""}</p>
+                      <button
+                        onClick={() => handleExportImovelPDF(idx, im)}
+                        className="flex items-center gap-1 px-2 py-1 rounded border border-amber-500/40 text-amber-400 text-[10px] font-semibold hover:bg-amber-500/15 transition-colors"
+                        title="Exportar PDF"
+                      >
+                        <Download className="w-3 h-3" /> PDF
+                      </button>
+                    </div>
                     <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
 
                       {/* ── Localização (CEP / cidade / estado / endereço) — editável ── */}
