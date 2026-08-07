@@ -22,6 +22,7 @@ interface Contract {
   contract_version: string;
   email: string;
   nome_representante: string | null;
+  contract_code?: string | null;
 }
 
 interface Commission {
@@ -462,6 +463,7 @@ export function MinhaAssinaturaClient({ profile, contract, commissions }: Props)
             </div>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-xs">
               {[
+                ...(contract.contract_code ? [{ label: "Número do contrato", value: contract.contract_code }] : []),
                 { label: "Plano", value: contract.plano },
                 { label: "Valor mensal", value: contract.valor_mensal ?? valorMensal },
                 { label: "Data de assinatura", value: dataFmt(contract.accepted_at) },

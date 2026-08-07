@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { notifyContratoParceriaAssinado } from "@/lib/email";
+import { issueV3Code } from "@/lib/v3-codes";
 
 function serviceClient() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -49,8 +50,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, already_signed: true });
   }
 
+  // Numero do contrato, serie V3C-PAR (Adesao de Partner). Emitido pelo
+  // banco, atomico -- nunca calculado aqui. Adesao nao referencia operacao
+  // de origem, por isso operation_code fica sempre nulo (a coluna tem CHECK
+  // no banco garantindo isso).
+  const contractCode = await issueV3Code("V3C-PAR", null, svc);
+
   // Salva contrato
   const { error } = await svc.from("partner_contracts").insert({
+    contract_code:     contractCode,
     user_id:           user.id,
     registration_id:   body.registration_id ?? null,
     plano:             body.plano,
@@ -86,6 +94,7 @@ export async function POST(req: NextRequest) {
       plano: planoLabel,
       valorMensal,
       dataAssinatura,
+      contractCode,
     });
   }
 
