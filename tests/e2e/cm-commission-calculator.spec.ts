@@ -1,4 +1,6 @@
 import { test, expect } from "@playwright/test";
+import { PDFParse } from "pdf-parse";
+import { readFile } from "node:fs/promises";
 
 // Bolsa de Ativos: Calculadora Rapida de Comissionamento, Recorrencia e
 // Lamina de Fechamento (Mesa de Capitais).
@@ -26,6 +28,20 @@ import { test, expect } from "@playwright/test";
 //
 // Sessao QA compartilhada (tests/e2e/auth.setup.ts) e ADMIN, ja tem acesso
 // a Mesa de Capitais, sem setup adicional de role neste arquivo.
+//
+// 06/08/2026: Joao reportou suspeita de bug no calculo de % Desagio ->
+// Preco do Comprador. Verificado ao vivo em producao ANTES de mexer em
+// codigo (regra do gate de verificacao): a formula ja funcionava
+// corretamente (lib/commission-calculator.ts nunca mudou essa parte desde
+// a Fase 4). O teste abaixo fecha essa cobertura que faltava, e o unico
+// gap real encontrado foi a ausencia de um bloco "RESUMO FINANCEIRO DE
+// AQUISICAO" com rotulo proprio no topo do PDF Buy-Side (o dado ja existia
+// disperso na lamina, so nao estava agrupado/rotulado do jeito pedido).
+// lib/lamina-fechamento-render.ts ganhou drawResumoAquisicao(), so no
+// variante "buy". O segundo teste abaixo baixa o PDF de verdade e usa
+// pdf-parse (ja instalado no repo, mesmo pacote usado em
+// app/api/contracts/templates/upload/route.ts) para ler o texto real
+// extraido do PDF, nao so o nome do arquivo/trigger de download.
 
 async function abrirCalculadora(page: import("@playwright/test").Page) {
   await page.goto("/bolsa/mesa");
@@ -132,5 +148,54 @@ test.describe("Bolsa de Ativos - Calculadora Rapida de Comissionamento (Fase 4, 
     await expect(page.getByRole("button", { name: /PDF Buy-Side/i })).toBeDisabled();
     await expect(page.getByRole("button", { name: /PDF Sell-Side/i })).toBeEnabled();
     await expect(page.getByRole("button", { name: /PDF Consolidado/i })).toBeDisabled();
+  });
+
+  test("% Desagio calcula Deságio (R$) e Preço do Comprador em tempo real, e % Titulares calcula o R$ junto", async ({ page }) => {
+    await abrirCalculadora(page);
+
+    // R$ 10.000.000,00 (mascara de moeda: digitos representam centavos).
+    await page.fill('input[name="face_value"]', "1000000000");
+    await page.fill('input[name="desconto_desagio_pct"]', "30");
+
+    // Desagio (R$) = Valor de Face x 30% = R$ 3.000.000,00.
+    // Preco do Comprador (R$) = Valor de Face - Desagio (R$) = R$ 7.000.000,00.
+    await expect(page.getByText("30% · R$ 3.000.000,00")).toBeVisible();
+    await expect(page.getByText("Preço do Comprador: R$ 7.000.000,00")).toBeVisible();
+
+    // % Titulares segue a mesma logica (Valor Titulares = Valor de Face x %Titulares).
+    await page.fill('input[name="titulares_pct"]', "10");
+    await expect(page.getByText("10% · R$ 1.000.000,00")).toBeVisible();
+  });
+
+  test("PDF Buy-Side traz o bloco RESUMO FINANCEIRO DE AQUISIÇÃO com Preço Final de Aquisição real", async ({ page }) => {
+    await abrirCalculadora(page);
+
+    await page.fill('input[name="face_value"]', "1000000000"); // R$ 10.000.000,00
+    await page.fill('input[name="desconto_desagio_pct"]', "30");
+    await page.fill('input[name="fee_total_pct"]', "5");
+    await page.fill('input[name="buy_side_pct"]', "2.5");
+    await page.fill('input[name="buy_fee_v3_pct"]', "0.5");
+    await page.fill('input[name="buy_mandatario_pct"]', "1");
+
+    const [download] = await Promise.all([
+      page.waitForEvent("download"),
+      page.getByRole("button", { name: /PDF Buy-Side/i }).click(),
+    ]);
+    expect(download.suggestedFilename()).toContain("BuySide");
+
+    const pdfPath = await download.path();
+    if (!pdfPath) throw new Error("Download do PDF Buy-Side nao gerou arquivo local (path nulo).");
+    const buffer = await readFile(pdfPath);
+    const parser = new PDFParse({ data: new Uint8Array(buffer) });
+    const { text } = await parser.getText();
+
+    expect(text).toContain("RESUMO FINANCEIRO DE AQUISIÇÃO");
+    expect(text).toContain("Valor de Face do Ativo");
+    expect(text).toContain("Deságio da Operação");
+    expect(text).toContain("Preço Final de Aquisição");
+    expect(text).toContain("Comissão/Fee de Estruturação Buy-Side");
+    // Confere o valor real, nao so o rotulo: R$ 10.000.000,00 com 30% de
+    // desagio fecha em R$ 7.000.000,00 (mesmo caso do teste anterior).
+    expect(text).toContain("R$ 7.000.000,00");
   });
 });

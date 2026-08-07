@@ -133,6 +133,46 @@ export async function renderLaminaPDF(resultado: CommissionCalculatorResult, var
   doc.text(`% Comissão Total: ${resultado.fee.comissao_total_pct}% (${formatBRL(resultado.fee.comissao_total_value)})`, M, y);
   y += 9;
 
+  function drawResumoAquisicao() {
+    if (y > 230) { doc.addPage(); doc.setFillColor(...NAVY_BODY); doc.rect(0, 0, W, 297, "F"); y = 20; }
+
+    const linhas = [
+      { label: "Valor de Face do Ativo", v: formatBRL(resultado.operacao.valor_face) },
+      {
+        label: "Deságio da Operação (%)",
+        v: `${resultado.operacao.desagio_pct}% (${formatBRL(resultado.operacao.desagio_bruto)})`,
+      },
+      { label: "Preço Final de Aquisição (Desembolso Comprador)", v: formatBRL(resultado.operacao.valor_comprador) },
+      { label: "Comissão/Fee de Estruturação Buy-Side", v: formatBRL(resultado.buy_side.side_bruto) },
+    ];
+
+    const boxH = 8 + linhas.length * 7 + 4;
+    doc.setFillColor(...[20, 32, 20] as [number, number, number]);
+    doc.roundedRect(M, y - 5, W - M * 2, boxH, 2, 2, "F");
+    doc.setDrawColor(...GOLD);
+    doc.setLineWidth(0.4);
+    doc.roundedRect(M, y - 5, W - M * 2, boxH, 2, 2, "S");
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.setTextColor(...GOLD);
+    doc.text("RESUMO FINANCEIRO DE AQUISIÇÃO", M + 4, y + 1);
+    y += 8;
+
+    for (const l of linhas) {
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      doc.setTextColor(...MUTED);
+      doc.text(l.label, M + 4, y);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9);
+      doc.setTextColor(...CREAM);
+      doc.text(l.v, W - M - 4, y, { align: "right" });
+      y += 7;
+    }
+    y += 8;
+  }
+
   function drawSideTable(label: string, breakdown: SideBreakdown, ladoNome: "Compra" | "Venda") {
     doc.setFont("helvetica", "bold");
     doc.setFontSize(9);
@@ -195,6 +235,7 @@ export async function renderLaminaPDF(resultado: CommissionCalculatorResult, var
   }
 
   if (variante === "buy") {
+    drawResumoAquisicao();
     drawSideTable("LADO COMPRA (BUY-SIDE)", resultado.buy_side, "Compra");
     drawProjecaoAcumulada(resultado.buy_side, "Compra");
   } else if (variante === "sell") {
