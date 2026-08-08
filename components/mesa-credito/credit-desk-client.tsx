@@ -206,14 +206,30 @@ export function CreditDeskClient({ proposals: initial, level, currentUser }: Cre
   }, [level]);
 
   const handleStageChange = useCallback((proposalId: string, newStage: string) => {
+    const prevStage = proposals.find(p => p.id === proposalId)?.stage;
     setProposals(prev => prev.map(p => p.id === proposalId ? { ...p, stage: newStage } : p));
     if (detailProposal?.id === proposalId) setDetailProposal(prev => prev ? { ...prev, stage: newStage } : prev);
     fetch("/api/credit-proposals", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id: proposalId, stage: newStage }),
-    }).catch(() => {});
-  }, [detailProposal]);
+    })
+      .then(async res => {
+        if (res.ok) return;
+        // Gate rejeitou a transição (ex: Plano de Negócios pendente em linha
+        // internacional) — reverte o otimismo, nunca deixa a tela mostrar um
+        // estágio que o banco recusou.
+        const body = await res.json().catch(() => ({}));
+        setProposals(prev => prev.map(p => p.id === proposalId ? { ...p, stage: prevStage ?? p.stage } : p));
+        if (detailProposal?.id === proposalId) setDetailProposal(prev => prev ? { ...prev, stage: prevStage ?? prev.stage } : prev);
+        alert(typeof body.error === "string" ? body.error : "Não foi possível mudar o estágio da proposta.");
+      })
+      .catch(() => {
+        setProposals(prev => prev.map(p => p.id === proposalId ? { ...p, stage: prevStage ?? p.stage } : p));
+        if (detailProposal?.id === proposalId) setDetailProposal(prev => prev ? { ...prev, stage: prevStage ?? prev.stage } : prev);
+        alert("Erro de conexão ao mudar o estágio da proposta.");
+      });
+  }, [detailProposal, proposals]);
 
   const handleProposalUpdate = useCallback((proposalId: string, updates: Partial<Proposal>) => {
     setProposals(prev => prev.map(p => p.id === proposalId ? { ...p, ...updates } : p));

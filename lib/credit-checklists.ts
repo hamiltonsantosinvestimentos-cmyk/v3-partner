@@ -298,6 +298,7 @@ export const CHECKLISTS: Record<string, Record<"PF" | "PJ", { id: string; label:
       { id: "ficc_pf_3", label: "Extrato de conta no exterior (6 meses)", required: true },
       { id: "ficc_pf_4", label: "Declaração BACEN (se aplicável)", required: true },
       { id: "ficc_pf_5", label: "Imposto de Renda + recibo", required: true },
+      { id: "plano_negocios", label: "Plano de Negócios", required: true, hint: "Pode ser elaborado pelo departamento V3 após o intake. Conferido antes da aprovação final." },
     ],
     PJ: [
       { id: "ficc_pj_1", label: "Contrato Social + alterações", required: true },
@@ -308,6 +309,11 @@ export const CHECKLISTS: Record<string, Record<"PF" | "PJ", { id: string; label:
       { id: "ficc_pj_6", label: "Declaração BACEN Capital Estrangeiro", required: true },
       { id: "ficc_pj_7", label: "Certidões Negativas completas", required: true },
       { id: "ficc_pj_8", label: "Relatório de compliance AML/KYC", required: true },
+      // Fase 2b (08/08/2026): Plano de Negócios obrigatório em toda linha
+      // internacional, mas nunca impeditivo para o envio da documentação —
+      // pode ser elaborado pelo próprio departamento V3 depois do intake.
+      // Gate real fica na aprovação final (stage=LIBERADO), não aqui.
+      { id: "plano_negocios", label: "Plano de Negócios", required: true, hint: "Pode ser elaborado pelo departamento V3 após o intake. Conferido antes da aprovação final." },
     ],
   },
   "Op. Internacional — Garantia Imobiliária": {
@@ -316,6 +322,7 @@ export const CHECKLISTS: Record<string, Record<"PF" | "PJ", { id: string; label:
       { id: "fii_pf_2", label: "Imposto de Renda + recibo", required: true },
       { id: "fii_pf_3", label: "Comprovante de patrimônio e renda", required: true },
       { id: "fii_pf_4", label: "Documentação do imóvel internacional (se aplicável)", required: false },
+      { id: "plano_negocios", label: "Plano de Negócios", required: true, hint: "Pode ser elaborado pelo departamento V3 após o intake. Conferido antes da aprovação final." },
     ],
     PJ: [
       { id: "fii_pj_1", label: "Contrato Social + alterações", required: true },
@@ -325,6 +332,7 @@ export const CHECKLISTS: Record<string, Record<"PF" | "PJ", { id: string; label:
       { id: "fii_pj_5", label: "Declaração BACEN Capital Estrangeiro", required: true },
       { id: "fii_pj_6", label: "Relatório de compliance AML/KYC", required: true },
       { id: "fii_pj_7", label: "Certidões Negativas completas", required: true },
+      { id: "plano_negocios", label: "Plano de Negócios", required: true, hint: "Pode ser elaborado pelo departamento V3 após o intake. Conferido antes da aprovação final." },
     ],
   },
   "Crédito Ponto / CRI Início de Obra": {
@@ -358,6 +366,103 @@ export const CHECKLISTS: Record<string, Record<"PF" | "PJ", { id: string; label:
       { id: "fce_pj_10", label: "Contrato de venda de unidades (se houver)", required: false },
       { id: "fce_pj_11", label: "Certidões Negativas completas (PGFN, Receita, FGTS)", required: true },
       { id: "fce_pj_12", label: "RG e CPF dos sócios e cônjuges", required: true },
+    ],
+  },
+  // ─── Fase 2b (08/08/2026) ──────────────────────────────────────────────
+  // 6 linhas internacionais sem checklist dedicado até aqui (caíam no
+  // DEFAULT_CHECKLIST silenciosamente). Base = mesma lista do DEFAULT_CHECKLIST
+  // (nenhum documento específico da linha foi inventado, a Mesa de Crédito
+  // ainda não definiu um checklist próprio para elas) + Plano de Negócios
+  // obrigatório, mesmo padrão das duas linhas internacionais que já tinham
+  // entrada dedicada acima.
+  "ACC — Adiantamento s/ Contrato de Câmbio": {
+    PF: [
+      { id: "acc_pf_1", label: "RG e CPF (ou CNH)", required: true },
+      { id: "acc_pf_2", label: "Comprovante de renda (3 últimos meses)", required: true },
+      { id: "acc_pf_3", label: "Comprovante de residência (máx. 90 dias)", required: true },
+      { id: "acc_pf_4", label: "Imposto de Renda completo + recibo", required: true },
+      { id: "plano_negocios", label: "Plano de Negócios", required: true, hint: "Pode ser elaborado pelo departamento V3 após o intake. Conferido antes da aprovação final." },
+    ],
+    PJ: [
+      { id: "acc_pj_1", label: "Contrato Social + alterações", required: true },
+      { id: "acc_pj_2", label: "Cartão CNPJ atualizado", required: true },
+      { id: "acc_pj_3", label: "Balanço Patrimonial + DRE", required: true },
+      { id: "acc_pj_4", label: "Certidões Negativas", required: true },
+      { id: "plano_negocios", label: "Plano de Negócios", required: true, hint: "Pode ser elaborado pelo departamento V3 após o intake. Conferido antes da aprovação final." },
+    ],
+  },
+  "ACE — Adiantamento s/ Cambiais Entregues": {
+    PF: [
+      { id: "ace_pf_1", label: "RG e CPF (ou CNH)", required: true },
+      { id: "ace_pf_2", label: "Comprovante de renda (3 últimos meses)", required: true },
+      { id: "ace_pf_3", label: "Comprovante de residência (máx. 90 dias)", required: true },
+      { id: "ace_pf_4", label: "Imposto de Renda completo + recibo", required: true },
+      { id: "plano_negocios", label: "Plano de Negócios", required: true, hint: "Pode ser elaborado pelo departamento V3 após o intake. Conferido antes da aprovação final." },
+    ],
+    PJ: [
+      { id: "ace_pj_1", label: "Contrato Social + alterações", required: true },
+      { id: "ace_pj_2", label: "Cartão CNPJ atualizado", required: true },
+      { id: "ace_pj_3", label: "Balanço Patrimonial + DRE", required: true },
+      { id: "ace_pj_4", label: "Certidões Negativas", required: true },
+      { id: "plano_negocios", label: "Plano de Negócios", required: true, hint: "Pode ser elaborado pelo departamento V3 após o intake. Conferido antes da aprovação final." },
+    ],
+  },
+  "Câmbio Pronto": {
+    PF: [
+      { id: "camb_pf_1", label: "RG e CPF (ou CNH)", required: true },
+      { id: "camb_pf_2", label: "Comprovante de renda (3 últimos meses)", required: true },
+      { id: "camb_pf_3", label: "Comprovante de residência (máx. 90 dias)", required: true },
+      { id: "camb_pf_4", label: "Imposto de Renda completo + recibo", required: true },
+      { id: "plano_negocios", label: "Plano de Negócios", required: true, hint: "Pode ser elaborado pelo departamento V3 após o intake. Conferido antes da aprovação final." },
+    ],
+    PJ: [
+      { id: "camb_pj_1", label: "Contrato Social + alterações", required: true },
+      { id: "camb_pj_2", label: "Cartão CNPJ atualizado", required: true },
+      { id: "camb_pj_3", label: "Balanço Patrimonial + DRE", required: true },
+      { id: "camb_pj_4", label: "Certidões Negativas", required: true },
+      { id: "plano_negocios", label: "Plano de Negócios", required: true, hint: "Pode ser elaborado pelo departamento V3 após o intake. Conferido antes da aprovação final." },
+    ],
+  },
+  "Cash Collateral": {
+    PF: [
+      { id: "cashc_pf_1", label: "RG e CPF (ou CNH)", required: true },
+      { id: "cashc_pf_2", label: "Comprovante de renda (3 últimos meses)", required: true },
+      { id: "cashc_pf_3", label: "Comprovante de residência (máx. 90 dias)", required: true },
+      { id: "cashc_pf_4", label: "Imposto de Renda completo + recibo", required: true },
+      { id: "plano_negocios", label: "Plano de Negócios", required: true, hint: "Pode ser elaborado pelo departamento V3 após o intake. Conferido antes da aprovação final." },
+    ],
+    PJ: [
+      { id: "cashc_pj_1", label: "Contrato Social + alterações", required: true },
+      { id: "cashc_pj_2", label: "Cartão CNPJ atualizado", required: true },
+      { id: "cashc_pj_3", label: "Balanço Patrimonial + DRE", required: true },
+      { id: "cashc_pj_4", label: "Certidões Negativas", required: true },
+      { id: "plano_negocios", label: "Plano de Negócios", required: true, hint: "Pode ser elaborado pelo departamento V3 após o intake. Conferido antes da aprovação final." },
+    ],
+  },
+  "Financiamento — Brasileiros no Exterior": {
+    PF: [
+      { id: "finext_pf_1", label: "RG e CPF (ou CNH)", required: true },
+      { id: "finext_pf_2", label: "Comprovante de renda (3 últimos meses)", required: true },
+      { id: "finext_pf_3", label: "Comprovante de residência (máx. 90 dias)", required: true },
+      { id: "finext_pf_4", label: "Imposto de Renda completo + recibo", required: true },
+      { id: "plano_negocios", label: "Plano de Negócios", required: true, hint: "Pode ser elaborado pelo departamento V3 após o intake. Conferido antes da aprovação final." },
+    ],
+    PJ: [
+      { id: "finext_pj_1", label: "Contrato Social + alterações", required: true },
+      { id: "finext_pj_2", label: "Cartão CNPJ atualizado", required: true },
+      { id: "finext_pj_3", label: "Balanço Patrimonial + DRE", required: true },
+      { id: "finext_pj_4", label: "Certidões Negativas", required: true },
+      { id: "plano_negocios", label: "Plano de Negócios", required: true, hint: "Pode ser elaborado pelo departamento V3 após o intake. Conferido antes da aprovação final." },
+    ],
+  },
+  "FINIMP — Financiamento de Importações": {
+    PF: [],
+    PJ: [
+      { id: "finimp_pj_1", label: "Contrato Social + alterações", required: true },
+      { id: "finimp_pj_2", label: "Cartão CNPJ atualizado", required: true },
+      { id: "finimp_pj_3", label: "Balanço Patrimonial + DRE", required: true },
+      { id: "finimp_pj_4", label: "Certidões Negativas", required: true },
+      { id: "plano_negocios", label: "Plano de Negócios", required: true, hint: "Pode ser elaborado pelo departamento V3 após o intake. Conferido antes da aprovação final." },
     ],
   },
 };
