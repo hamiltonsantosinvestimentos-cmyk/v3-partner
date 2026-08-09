@@ -791,6 +791,21 @@ function ResolveModal({ open, onClose, ticket, onConfirm }: {
   );
 }
 
+// ─── Helper: semáforo de prazo do ticket (due_date) ───────────────────────
+// Verde = dentro do prazo · Amarelo = vence hoje · Vermelho = atrasado
+const TICKET_SLA_TERMINAL_STATUSES = ["COMPLETED", "CANCELLED"];
+function getTicketSlaStatus(ticket: Ticket): "ok" | "warning" | "danger" | null {
+  if (!ticket.due_date || TICKET_SLA_TERMINAL_STATUSES.includes(ticket.status)) return null;
+  const due = new Date(ticket.due_date);
+  const isToday = due.toDateString() === new Date().toDateString();
+  due.setHours(23, 59, 59, 999); // fim do dia do prazo
+  if (due.getTime() < Date.now()) return "danger";
+  if (isToday) return "warning";
+  return "ok";
+}
+const TICKET_SLA_COLORS = { ok: "#10B981", warning: "#F59E0B", danger: "#EF4444" } as const;
+const TICKET_SLA_TEXT_CLASS = { ok: "text-emerald-400", warning: "text-amber-400", danger: "text-red-400" } as const;
+
 // ─── Helper: formata "há X tempo" ─────────────────────────────────────────
 function timeAgo(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
@@ -2198,15 +2213,18 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
                       // Reprovado/Declinado são terminais fora do fluxo linear — sem setas de avançar/retroceder
                       const hasPrev = canChangeStage && cardIdx > 0;
                       const hasNext = canChangeStage && cardIdx >= 0 && cardIdx < stageKeys.length - 1;
+                      const sla = getSlaStatus(p, slaConfig);
+                      // Verde (dentro do prazo) / Amarelo (vencendo) / Vermelho (atrasado) — mesmas cores do dot abaixo
+                      const slaBorderColor = sla?.status === "danger" ? "#EF4444" : sla?.status === "warning" ? "#F59E0B" : sla?.status === "ok" ? "#10B981" : undefined;
                       return (
                         <div key={p.id}
                           draggable={canChangeStage}
                           onDragStart={(e) => { e.dataTransfer.setData("proposalId", p.id); e.dataTransfer.effectAllowed = "move"; setDraggedId(p.id); }}
                           onDragEnd={() => { setDraggedId(null); setDragOverStage(null); }}
                           className={`relative w-full text-left p-3 rounded-xl bg-card border border-border hover:border-primary/40 hover:bg-secondary/50 transition-all group cursor-pointer ${draggedId === p.id ? "opacity-40 scale-95 cursor-grabbing" : canChangeStage ? "cursor-grab active:cursor-grabbing" : ""}`}
+                          style={slaBorderColor ? { borderLeftWidth: "3px", borderLeftColor: slaBorderColor } : undefined}
                           onClick={() => setDetailProposal(p)}>
                           {(() => {
-                            const sla = getSlaStatus(p, slaConfig);
                             if (!sla) return null;
                             const colors = { ok: "bg-emerald-500", warning: "bg-amber-500", danger: "bg-red-500" };
                             const fmtDate = sla.targetDate
@@ -2556,9 +2574,12 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
                   <tbody>
                     {filteredTickets.length === 0 ? (
                       <tr><td colSpan={8} className="px-4 py-10 text-center text-xs text-muted-foreground">Nenhum ticket encontrado.</td></tr>
-                    ) : filteredTickets.map((ticket) => (
+                    ) : filteredTickets.map((ticket) => {
+                      const slaStatus = getTicketSlaStatus(ticket);
+                      return (
                       <tr key={ticket.id}
                         className="data-table-row cursor-pointer hover:bg-secondary/30 transition-colors"
+                        style={slaStatus ? { borderLeftWidth: "3px", borderLeftColor: TICKET_SLA_COLORS[slaStatus] } : undefined}
                         onClick={() => setTicketDetail(ticket)}>
                         <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{ticket.code}</td>
                         <td className="px-4 py-3 max-w-52">
@@ -2591,7 +2612,10 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
                         <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">
                           {ticket.assignee?.full_name ?? "—"}
                         </td>
-                        <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">{ticket.due_date ? formatDateTime(ticket.due_date) : "—"}</td>
+                        <td className={`px-4 py-3 text-xs whitespace-nowrap flex items-center gap-1.5 ${slaStatus ? TICKET_SLA_TEXT_CLASS[slaStatus] + " font-semibold" : "text-muted-foreground"}`}>
+                          {slaStatus && <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: TICKET_SLA_COLORS[slaStatus] }} />}
+                          {ticket.due_date ? formatDateTime(ticket.due_date) : "—"}
+                        </td>
                         <td className="px-4 py-3 flex items-center gap-2 flex-wrap" onClick={e => e.stopPropagation()}>
                           {/* Botões especiais de pendência */}
                           {ticket.status === "PENDING" && ["ADMIN","GESTAO","MESA_OPERACIONAL"].includes(currentUser?.role ?? "") && (
@@ -2666,7 +2690,8 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
                           )}
                         </td>
                       </tr>
-                    ))}
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
