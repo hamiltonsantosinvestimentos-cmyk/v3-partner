@@ -10,7 +10,7 @@ import {
   Trophy, GraduationCap, Handshake, Settings2, Medal,
   ContactRound, DollarSign, Wallet, Zap, Target, ShieldCheck, Calculator, UserPlus, ClipboardList, BadgeCheck, Layers, BarChart2, BookMarked, BotMessageSquare,
   ShoppingBag, Radar, BookOpen, FileText, UserPlus2, MessageSquare, BarChart3, Video, UsersRound,
-  FileCheck2, Plane, FolderOpen, Gavel, Link2,
+  FileCheck2, Plane, FolderOpen, Gavel, Link2, Compass,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -22,7 +22,7 @@ const iconMap = {
   Settings2, Medal, ContactRound, DollarSign, Wallet, Zap,
   Target, ShieldCheck, Calculator, UserPlus, ClipboardList, BadgeCheck, Layers, BarChart2, BookMarked, BotMessageSquare,
   ShoppingBag, Radar, BookOpen, FileText, UserPlus2, MessageSquare, BarChart3, Video, UsersRound,
-  FileCheck2, Plane, FolderOpen, Gavel, Link2,
+  FileCheck2, Plane, FolderOpen, Gavel, Link2, Compass,
 };
 
 interface NavSubItem { href: string; label: string; roles: string[]; }
@@ -140,6 +140,7 @@ const NAV_SECTIONS: NavSection[] = [
       { href: "/ia-assistant", label: "V3 IA Partner", icon: "BrainCircuit", roles: ["ADMIN", "STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE", "MESA_OPERACIONAL", "GESTAO", "FINANCEIRO"] },
       { href: "/metas", label: "Metas & Performance", icon: "Target", roles: ["ADMIN", "GESTAO", "STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE"] },
       { href: "/projeto", label: "Projeto", icon: "ClipboardList", roles: ["ADMIN", "GESTAO"] },
+      { href: "/plan-strategy", label: "Plan Strategy", icon: "Compass", roles: ["ADMIN", "GESTAO"] },
       { href: "/compliance", label: "Compliance", icon: "ShieldCheck", roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL"] },
       { href: "/financeiro", label: "Financeiro", icon: "DollarSign", roles: ["ADMIN", "FINANCEIRO"] },
       { href: "/comissoes", label: "Comissões", icon: "Wallet", roles: ["ADMIN", "STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE", "FINANCEIRO"] },
