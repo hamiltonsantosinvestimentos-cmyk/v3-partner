@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
+import { nextLegacyCode } from "@/lib/v3-codes";
 
 function serviceClient() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -56,8 +57,9 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     if (consent?.subject_cpf_cnpj) clientCpfCnpj = consent.subject_cpf_cnpj;
   }
 
-  const { count } = await svc.from("credit_desk_proposals").select("id", { count: "exact", head: true });
-  const code = `CRED-26-${String((count ?? 0) + 1).padStart(4, "0")}`;
+  // MAX real, nunca COUNT(*). Ver nota em app/api/credit-proposals/route.ts
+  // sobre por que esta rota ainda emite CRED-26 e nao V3-CR / V3-CRI.
+  const code = await nextLegacyCode(svc, "credit_desk_proposals", "CRED-26");
 
   const { data: proposal, error: propErr } = await svc
     .from("credit_desk_proposals")

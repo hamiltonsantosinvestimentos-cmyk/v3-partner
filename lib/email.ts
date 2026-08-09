@@ -79,6 +79,7 @@ export async function notifyContratoParceriaAssinado(opts: {
   plano: string;
   valorMensal: string;
   dataAssinatura: string;
+  contractCode?: string;
 }): Promise<void> {
   const planoLabel = opts.plano === "PARTNER_PRO" ? "Partner PRO" : "Partner";
   const body = `
@@ -87,6 +88,7 @@ export async function notifyContratoParceriaAssinado(opts: {
       Seu contrato de parceria com a V3 Partners foi assinado com sucesso.
       Bem-vindo ao ecossistema V3!
     </p>
+    ${opts.contractCode ? row("Número do contrato", opts.contractCode) : ""}
     ${row("Plano contratado", planoLabel)}
     ${row("Mensalidade", opts.valorMensal)}
     ${row("Data da assinatura", opts.dataAssinatura)}

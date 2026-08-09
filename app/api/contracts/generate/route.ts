@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
   const caller = await requireRole(req);
   if (!caller) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
-  const { template_id, listing_id, bid_id, deal_id, credit_proposal_id, commission_percent, extra_data } = await req.json();
+  const { template_id, listing_id, bid_id, deal_id, credit_proposal_id, qualification_batch_id, commission_percent, extra_data } = await req.json();
 
   if (!template_id) return NextResponse.json({ error: "template_id obrigatório" }, { status: 422 });
 
@@ -99,6 +99,43 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // Padronização via Central de Contratos (decisão 2026-07-28): quando o
+  // contrato nasce de um lote da esteira de qualificação (NDA Quadripartite,
+  // FPA Venda/Compra, Mandato, Contrato Final), as partes e as variáveis do
+  // template vêm de cm_party_qualifications, não do cedente único da
+  // listagem. Convenção de variável por parte: {{<role_in_document>_nome}},
+  // {{<role_in_document>_cpf_cnpj}}, {{<role_in_document>_rg}},
+  // {{<role_in_document>_endereco}}, {{<role_in_document>_email}} — ex:
+  // {{mandatario_nome}}, {{intermediario_finder_venda_cpf_cnpj}}. Dr. Luis
+  // deve escrever os 4 templates reais usando essas chaves.
+  let qualificationParties: { role: string; name: string; doc: string | null; email: string }[] | null = null;
+
+  if (qualification_batch_id) {
+    const { data: qualifications } = await svc()
+      .from("cm_party_qualifications")
+      .select("full_name, email, role_in_document, cpf_cnpj, rg, endereco_completo")
+      .eq("batch_id", qualification_batch_id);
+
+    if (qualifications && qualifications.length > 0) {
+      qualificationParties = qualifications.map((q) => ({
+        role: q.role_in_document,
+        name: q.full_name,
+        doc: q.cpf_cnpj,
+        email: q.email,
+      }));
+
+      for (const q of qualifications) {
+        variables[`${q.role_in_document}_nome`] = q.full_name;
+        variables[`${q.role_in_document}_cpf_cnpj`] = q.cpf_cnpj ?? "[CPF/CNPJ]";
+        variables[`${q.role_in_document}_rg`] = q.rg ?? "[RG]";
+        variables[`${q.role_in_document}_endereco`] = q.endereco_completo ?? "[Endereço]";
+        variables[`${q.role_in_document}_email`] = q.email;
+      }
+
+      qualificationParties.push({ role: "v3_partners", name: "V3 Partners Soluções Ltda", doc: "14.219.287/0001-50", email: "" });
+    }
+  }
+
   if (commission_percent !== undefined) {
     variables.comissao_total = commission_percent;
     variables.comissao_v3 = (commission_percent * 0.5).toFixed(2);
@@ -106,9 +143,14 @@ export async function POST(req: NextRequest) {
     variables.comissao_intermediario = (commission_percent * 0.2).toFixed(2);
   }
 
+  const resolvedParties = qualificationParties ?? (variables.nome_cedente ? [
+    { role: "cedente", name: variables.nome_cedente, doc: variables.cpf_cnpj_cedente },
+    { role: "v3_partners", name: "V3 Partners Soluções Ltda", doc: "14.219.287/0001-50" },
+  ] : []);
+
   const renderedBody = resolveContractVariables(template.body_text_raw, variables);
   const contractTitle = resolveContractVariables(template.template_name, variables);
-  const renderedHtml = wrapContractInV3Html(contractTitle, renderedBody);
+  const renderedHtml = wrapContractInV3Html(contractTitle, renderedBody, resolvedParties);
 
   const { data: contract, error } = await svc()
     .from("operation_contracts")
@@ -119,14 +161,12 @@ export async function POST(req: NextRequest) {
       bid_id: bid_id ?? null,
       deal_id: deal_id ?? null,
       credit_proposal_id: credit_proposal_id ?? null,
+      qualification_batch_id: qualification_batch_id ?? null,
       contract_title: contractTitle,
       rendered_html: renderedHtml,
       status_signature: "rascunho",
       commission_percent: commission_percent ?? null,
-      parties: variables.nome_cedente ? [
-        { role: "cedente", name: variables.nome_cedente, doc: variables.cpf_cnpj_cedente },
-        { role: "v3_partners", name: "V3 Partners Soluções Ltda", doc: "14.219.287/0001-50" },
-      ] : [],
+      parties: resolvedParties,
       created_by: caller.userId,
     })
     .select()

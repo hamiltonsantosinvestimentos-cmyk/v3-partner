@@ -154,11 +154,24 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     registrato_extraction_id: extraction.id,
   }).eq("id", consent.id);
 
-  fetch(W9_WEBHOOK, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ extraction_id: extraction.id, deal_id: null, doc_id: docId, storage_path: storagePath, bucket }),
-  }).catch((err) => console.error("[credit-intake] Erro ao disparar W9:", err));
+  // Aguarda o disparo do webhook antes de responder: em função serverless, um fetch
+  // sem await pode ser encerrado junto com a função assim que a resposta é enviada,
+  // fazendo o OCR nunca rodar de verdade mesmo com ocr_queued retornando true.
+  let ocrQueued = true;
+  try {
+    const w9Res = await fetch(W9_WEBHOOK, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ extraction_id: extraction.id, deal_id: null, doc_id: docId, storage_path: storagePath, bucket }),
+    });
+    if (!w9Res.ok) {
+      console.error("[credit-intake] W9 respondeu com erro:", w9Res.status, await w9Res.text().catch(() => ""));
+      ocrQueued = false;
+    }
+  } catch (err) {
+    console.error("[credit-intake] Erro ao disparar W9:", err);
+    ocrQueued = false;
+  }
 
-  return NextResponse.json({ ok: true, consented: true, registrato_uploaded: true, ocr_queued: true });
+  return NextResponse.json({ ok: true, consented: true, registrato_uploaded: true, ocr_queued: ocrQueued });
 }

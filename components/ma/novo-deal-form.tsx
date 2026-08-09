@@ -319,7 +319,12 @@ export function NovoDealForm({ isDemo, userId, onSuccess, onCancel }: NovoDealFo
     setSaving(true);
     setError(null);
 
-    const dealCode = generateCode();
+    // Código de exibição usado APENAS no modo demo. No fluxo real quem emite é
+    // o servidor (next_v3_code), e o código volta na resposta da API. Antes
+    // este formulário gerava MA-26-{5 dígitos aleatórios}, que é a origem dos
+    // códigos fora de padrão como MA-26-37682 e o motivo de a contagem de
+    // ma_deals ter se descolado da numeração real.
+    const demoCode = generateCode();
 
     const assetData = {
       // Step 1 — Identificação
@@ -375,11 +380,12 @@ export function NovoDealForm({ isDemo, userId, onSuccess, onCancel }: NovoDealFo
       // Step 6 — Documentos
       documentos: uploadedFiles.map(f => ({ nome: f.name, tamanho: f.size, tipo: f.type })),
 
-      processo_v3: dealCode,
+      // processo_v3 não é mais preenchido aqui: o gerador de criativos já usa
+      // deal.code como fallback, e esse agora é o código canônico da operação.
     };
 
     const dealPayload = {
-      code:           dealCode,
+      code:           demoCode,
       title:          `${data.deal_type} — ${data.target_company}`,
       target_company: data.target_company,
       sector:         data.sector,
@@ -396,7 +402,7 @@ export function NovoDealForm({ isDemo, userId, onSuccess, onCancel }: NovoDealFo
 
     if (isDemo) {
       await new Promise(r => setTimeout(r, 1500));
-      if (onSuccess) { onSuccess("demo-id", dealCode); return; }
+      if (onSuccess) { onSuccess("demo-id", demoCode); return; }
       router.push("/mesa-ma");
       return;
     }
@@ -411,7 +417,6 @@ export function NovoDealForm({ isDemo, userId, onSuccess, onCancel }: NovoDealFo
           sector:              data.sector,
           value:               parseMoney(data.deal_value),
           notes:               data.info_adicionais ?? "",
-          code:                dealCode,
           tipo_participante:   data.tipo_participante,
           location:            data.location,
           asset_data:          assetData,
@@ -425,6 +430,9 @@ export function NovoDealForm({ isDemo, userId, onSuccess, onCancel }: NovoDealFo
         throw new Error(typeof json.error === "string" ? json.error : `Erro ao salvar (${res.status}). Tente novamente.`);
       }
       const dealId = (json.card as Record<string, unknown>).id as string;
+      // Código real emitido pelo servidor. É este que o usuário vê e que vai
+      // para contrato, pasta de deal e VDR.
+      const issuedCode = ((json.card as Record<string, unknown>).code as string) ?? "";
 
       // Upload dos arquivos do step 6
       if (uploadedFiles.length > 0) {
@@ -447,12 +455,12 @@ export function NovoDealForm({ isDemo, userId, onSuccess, onCancel }: NovoDealFo
         if (failed.length > 0) {
           setError(`Deal criado, mas falha ao enviar ${failed.length} arquivo(s):\n${failed.join("\n")}`);
           setSaving(false);
-          if (onSuccess) { onSuccess(dealId, dealCode); }
+          if (onSuccess) { onSuccess(dealId, issuedCode); }
           return;
         }
       }
 
-      if (onSuccess) { onSuccess(dealId, dealCode); return; }
+      if (onSuccess) { onSuccess(dealId, issuedCode); return; }
       router.push("/mesa-ma");
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Erro ao salvar. Tente novamente.");

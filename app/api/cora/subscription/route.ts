@@ -3,15 +3,11 @@ import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { coraFetch } from "@/lib/cora";
 import { randomUUID } from "crypto";
+import { getPlanoValor } from "@/lib/plano-valor";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 }
-
-const PLANO_VALOR: Record<string, number> = {
-  PARTNER: 19700,
-  PARTNER_PRO: 39700,
-};
 
 // GET — retorna cobrança vigente + histórico do partner
 export async function GET() {
@@ -70,7 +66,7 @@ export async function POST(req: NextRequest) {
   const dueDateStr = dueDate.toISOString().split("T")[0];
 
   const documento = p.cpf ?? p.cnpj ?? "";
-  const valor = PLANO_VALOR[p.role] ?? 19700;
+  const valor = getPlanoValor(p.role);
 
   // Gera cobrança na Cora
   let coraData: { id?: string; pix?: { emv?: string; qr_code?: string }; payment_options?: { bank_slip?: { digitable?: string; url?: string } }; payment_url?: string } = {};

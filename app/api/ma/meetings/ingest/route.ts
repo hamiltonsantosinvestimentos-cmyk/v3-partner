@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import Anthropic from "@anthropic-ai/sdk";
+import { issueV3Code, resolveSectorCode as resolveSectorCodeV3 } from "@/lib/v3-codes";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -147,41 +148,23 @@ export async function POST(req: NextRequest) {
   let dealCode: string | null = null;
 
   if (dealCtx?.empresa) {
-    const sectorCode = resolveSectorCode(dealCtx.setor_v3 ?? "");
-    const yearMonth = meeting_date.slice(0, 7);
-    const prefix = `V3-${yearMonth}-${sectorCode}-`;
-
-    // Calcular próximo v3_code sequencial para este mês/setor
-    const { data: lastDeal } = await db
-      .from("ma_deals")
-      .select("v3_code")
-      .like("v3_code", `${prefix}%`)
-      .order("v3_code", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    let seq = 1;
-    if (lastDeal?.v3_code) {
-      const lastSeq = parseInt((lastDeal.v3_code as string).slice(-3), 10);
-      seq = (isNaN(lastSeq) ? 0 : lastSeq) + 1;
-    }
-    const generatedCode = `${prefix}${String(seq).padStart(3, "0")}`;
-
-    // Próximo código legado MA-26-NNN
-    const { data: lastLegacy } = await db
-      .from("ma_deals")
-      .select("code")
-      .like("code", "MA-26-%")
-      .order("code", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    let legacySeq = 1;
-    if (lastLegacy?.code) {
-      const n = parseInt((lastLegacy.code as string).split("-").pop() ?? "0", 10);
-      legacySeq = (isNaN(n) ? 0 : n) + 1;
-    }
-    const legacyCode = `MA-26-${String(legacySeq).padStart(3, "0")}`;
+    // Codigo emitido pelo banco (next_v3_code), atomico e validado contra o
+    // dicionario deal_sector_codes.
+    //
+    // O calculo anterior tinha dois defeitos reais. O v3_code pegava o "maior"
+    // codigo ordenando por STRING, o que quebra assim que o sequencial passa de
+    // 099 (em ordem lexicografica "V3-...-100" vem antes de "V3-...-099"). E o
+    // legacy MA-26 ordenava a mesma coluna que hoje contem MA-26-37682 junto de
+    // MA-26-030, entao o "ultimo" lido era 37682 e o proximo sairia 37683.
+    //
+    // A sigla de setor passa pelo resolvedor central antes de virar codigo: era
+    // sem essa validacao que MAC e CRE acabaram emitidos fora do dicionario.
+    const sectorCode = await resolveSectorCodeV3(
+      resolveSectorCode(dealCtx.setor_v3 ?? "") || dealCtx.setor_v3,
+      db
+    );
+    const generatedCode = await issueV3Code("MA", sectorCode, db);
+    const legacyCode = generatedCode;
 
     const { data: newDeal, error: dealErr } = await db
       .from("ma_deals")

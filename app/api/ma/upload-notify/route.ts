@@ -108,6 +108,15 @@ export async function POST(req: NextRequest) {
   }
 }
 
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 function buildUploadNotifyEmail(p: {
   dealCodigo: string;
   dealNome:   string;
@@ -119,13 +128,18 @@ function buildUploadNotifyEmail(p: {
   docId:      string;
   isOcr:      boolean;
 }) {
-  const ext = p.fileName.split(".").pop()?.toUpperCase() ?? "DOC";
+  const ext = escapeHtml(p.fileName.split(".").pop()?.toUpperCase() ?? "DOC");
   const portalUrl = `${process.env.NEXT_PUBLIC_APP_URL ?? "https://app.v3partners.com.br"}/mesa-ma`;
+  const dealCodigo = escapeHtml(p.dealCodigo);
+  const dealNome = escapeHtml(p.dealNome);
+  const fileName = escapeHtml(p.fileName);
+  const tokenLabel = escapeHtml(p.tokenLabel);
+  const docId = escapeHtml(p.docId);
 
   return `<!DOCTYPE html>
 <html lang="pt-BR">
 <head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>Documento recebido — ${p.dealCodigo}</title></head>
+<title>Documento recebido — ${dealCodigo}</title></head>
 <body style="margin:0;padding:0;background:#07101E;font-family:'DM Sans',Arial,sans-serif;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="#07101E">
   <tr><td align="center" style="padding:40px 16px;">
@@ -149,8 +163,8 @@ function buildUploadNotifyEmail(p: {
                 <tr>
                   <td>
                     <p style="margin:0;font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#7A96AF;">Deal</p>
-                    <p style="margin:4px 0 0;font-size:18px;font-weight:700;color:#F5F1E8;">${p.dealCodigo}</p>
-                    <p style="margin:2px 0 0;font-size:12px;color:#9BAFC5;">${p.dealNome}</p>
+                    <p style="margin:4px 0 0;font-size:18px;font-weight:700;color:#F5F1E8;">${dealCodigo}</p>
+                    <p style="margin:2px 0 0;font-size:12px;color:#9BAFC5;">${dealNome}</p>
                   </td>
                   <td align="right">
                     <p style="margin:0;display:inline-block;background:#1E3A5A;color:#C9A84C;font-size:13px;font-weight:700;padding:6px 12px;border-radius:6px;">.${ext}</p>
@@ -172,7 +186,7 @@ function buildUploadNotifyEmail(p: {
                 <tr>
                   <td style="padding-bottom:8px;border-bottom:1px solid #1A3050;">
                     <p style="margin:0;font-size:11px;color:#9BAFC5;">Nome</p>
-                    <p style="margin:3px 0 0;font-size:13px;color:#F5F1E8;font-weight:600;">${p.fileName}</p>
+                    <p style="margin:3px 0 0;font-size:13px;color:#F5F1E8;font-weight:600;">${fileName}</p>
                   </td>
                 </tr>
                 <tr>
@@ -189,7 +203,7 @@ function buildUploadNotifyEmail(p: {
                         </td>
                         <td width="33%">
                           <p style="margin:0;font-size:10px;color:#9BAFC5;">Link usado</p>
-                          <p style="margin:2px 0 0;font-size:12px;color:#E8EDF5;">${p.tokenLabel}</p>
+                          <p style="margin:2px 0 0;font-size:12px;color:#E8EDF5;">${tokenLabel}</p>
                         </td>
                       </tr>
                     </table>
@@ -219,7 +233,7 @@ function buildUploadNotifyEmail(p: {
           <a href="${portalUrl}" style="display:inline-block;background:#C9A84C;color:#07101E;font-family:'DM Sans',Arial,sans-serif;font-weight:700;font-size:13px;padding:12px 28px;border-radius:8px;text-decoration:none;">
             Ver deal na Mesa M&amp;A
           </a>
-          <p style="margin:10px 0 0;font-size:10px;color:#7A96AF;">Doc ID: ${p.docId}</p>
+          <p style="margin:10px 0 0;font-size:10px;color:#7A96AF;">Doc ID: ${docId}</p>
         </td>
       </tr>
       <!-- Footer -->

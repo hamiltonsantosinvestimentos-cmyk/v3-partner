@@ -3,13 +3,7 @@ import { createClient as sc } from "@supabase/supabase-js";
 import { coraFetch } from "@/lib/cora";
 import { randomUUID } from "crypto";
 import { auditText, auditHtml } from "@/lib/brand-guardian-gate";
-
-const PLANO_VALOR: Record<string, number> = {
-  STARTER:     29700,   // R$ 297,00 em centavos
-  PARTNER:     49700,   // R$ 497,00 em centavos
-  PARTNER_PRO: 89700,   // R$ 897,00 em centavos
-  ENTERPRISE:  250000,  // R$ 2.500,00 em centavos
-};
+import { PLANO_VALOR } from "@/lib/plano-valor";
 
 // Fidelidade de 12 meses via Pix/Boleto Cora custa R$ 50,00 a mais por mês
 const ADICIONAL_FIDELIDADE_PIX_BOLETO = 5000;

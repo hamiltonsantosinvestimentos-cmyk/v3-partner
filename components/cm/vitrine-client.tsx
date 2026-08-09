@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import {
   SlidersHorizontal, Gavel, Calculator, Loader2,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, CM_CURRENCY_SYMBOL, type CmCurrency } from "@/lib/utils";
 import { BidModal } from "./bid-modal";
 import { CalculadoraWidget } from "./calculadora-widget";
 
@@ -15,6 +15,7 @@ interface Listing {
   esfera: string | null;
   tribunal: string | null;
   natureza: string | null;
+  currency?: CmCurrency;
   valor_face: number;
   valor_atualizado: number | null;
   desagio_pretendido: number | null;
@@ -51,10 +52,21 @@ function scoreColor(score: number | null) {
   return "text-red-400";
 }
 
-function formatBRL(v: number) {
-  if (v >= 1_000_000) return `R$ ${(v / 1_000_000).toFixed(1)}M`;
-  if (v >= 1_000) return `R$ ${(v / 1_000).toFixed(0)}K`;
-  return `R$ ${v.toLocaleString("pt-BR")}`;
+function formatBRL(v: number, currency?: CmCurrency) {
+  const cur = currency ?? "BRL";
+  const symbol = CM_CURRENCY_SYMBOL[cur];
+  const locale = cur === "BRL" ? "pt-BR" : "en-US";
+  if (v >= 1_000_000_000) {
+    const bi = v / 1_000_000_000;
+    const casas = Number.isInteger(bi) ? 0 : 2;
+    if (cur === "BRL") {
+      return `${symbol} ${bi.toLocaleString(locale, { minimumFractionDigits: casas, maximumFractionDigits: casas })} ${bi === 1 ? "Bilhão" : "Bilhões"}`;
+    }
+    return `${symbol} ${bi.toLocaleString(locale, { minimumFractionDigits: casas, maximumFractionDigits: casas })}Bi`;
+  }
+  if (v >= 1_000_000) return `${symbol} ${(v / 1_000_000).toFixed(1)}M`;
+  if (v >= 1_000) return `${symbol} ${(v / 1_000).toFixed(0)}K`;
+  return `${symbol} ${v.toLocaleString(locale)}`;
 }
 
 export function VitrineClient({ userRole = "PARTNER" }: { userRole?: string }) {
@@ -224,7 +236,7 @@ export function VitrineClient({ userRole = "PARTNER" }: { userRole?: string }) {
                 <div className="border-t border-[#9BAFC5]/10 mt-3 pt-3 space-y-1">
                   <div className="flex justify-between text-[10px]">
                     <span className="text-[#9BAFC5]">Valor de Face</span>
-                    <span className="text-[#F5F1E8] font-bold text-xs">{formatBRL(l.valor_face)}</span>
+                    <span className="text-[#F5F1E8] font-bold text-xs">{formatBRL(l.valor_face, l.currency)}</span>
                   </div>
                   <div className="flex justify-between text-[10px]">
                     <span className="text-[#9BAFC5]">Deságio</span>
@@ -233,7 +245,7 @@ export function VitrineClient({ userRole = "PARTNER" }: { userRole?: string }) {
                   {custo && (
                     <div className="flex justify-between text-[10px]">
                       <span className="text-[#9BAFC5]">Custo Estimado</span>
-                      <span className="text-emerald-400 font-bold text-xs">{formatBRL(custo)}</span>
+                      <span className="text-emerald-400 font-bold text-xs">{formatBRL(custo, l.currency)}</span>
                     </div>
                   )}
                 </div>

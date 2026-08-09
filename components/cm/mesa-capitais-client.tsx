@@ -8,8 +8,10 @@ import {
   Link2, Copy, Plus, FileText, UserPlus, ClipboardCheck,
   ToggleLeft, ToggleRight, Save, Download, ExternalLink, Trash2, X,
 } from "lucide-react";
-import { cn, maskCpfCnpjInput, maskPhoneInput, isValidEmail, maskCurrencyBRLInput, parseCurrencyBRLInput, formatCurrencyBRLFromNumber } from "@/lib/utils";
+import { cn, maskCpfCnpjInput, maskPhoneInput, isValidEmail, maskCurrencyBRLInput, parseCurrencyBRLInput, formatCurrencyBRLFromNumber, maskCurrencyInput, CM_CURRENCY_SYMBOL, type CmCurrency } from "@/lib/utils";
 import { AssetAssistant } from "./asset-assistant";
+import { DueDiligencePanel } from "./due-diligence-panel";
+import { CommissionCalculatorPanel } from "./commission-calculator-panel";
 import { CM_DOCUMENT_CHECKLISTS, type CmAssetType } from "@/lib/cm-checklists";
 import { createClient as createBrowserSupabaseClient } from "@/lib/supabase/client";
 
@@ -22,6 +24,7 @@ interface Listing {
   originator_referral_id: string | null;
   asset_type: string;
   valor_face: number;
+  currency?: CmCurrency;
   desagio_pretendido: number | null;
   listing_status: string;
   risk_score: number | null;
@@ -33,6 +36,7 @@ interface Listing {
   inspection_requests?: InspectionRequest[];
   selected_thesis_template?: string | null;
   public_narrative?: string | null;
+  seller_cpf_cnpj?: string | null;
 }
 
 interface InspectionRequest {
@@ -65,15 +69,33 @@ interface Bid {
   cm_asset_listings: { anonymous_id: string; valor_face: number } | null;
 }
 
+const DOCUMENT_TYPE_LABELS: Record<string, string> = {
+  nda_quadripartite: "NDA Quadripartite",
+  fpa_venda: "FPA Venda",
+  fpa_compra: "FPA Compra",
+  mandato: "Mandato",
+  contrato_final: "Contrato Final",
+};
+
 const STATUS_COLUMNS = [
   { key: "reuniao_validada,formulario_preenchido", label: "Intake", color: "border-blue-500", icon: Clock },
   { key: "nda_assinado,em_analise", label: "NDA / Análise", color: "border-orange-500", icon: Shield },
   { key: "aprovado_head", label: "Aguarda Head", color: "border-[#C9A84C]", icon: Gavel },
   { key: "ativo_vitrine,proposta_recebida", label: "Na Vitrine", color: "border-emerald-500", icon: BarChart3 },
   { key: "em_escrow_due_diligence", label: "Escrow / DD", color: "border-purple-500", icon: DollarSign },
+  // Coluna "Cancelado" testada em 27/07 e removida a pedido de Joao: ativo cancelado
+  // deve ir para a Lixeira (deleted_at), nao ficar visivel num board separado. O botao
+  // "Cancelar" na aba Governanca agora chama handleDeleteAsset em vez de setar
+  // listing_status="cancelado" (status morto, sem coluna nenhuma no board).
 ];
 
 function formatBRL(v: number) {
+  if (v >= 1_000_000_000) {
+    const bi = v / 1_000_000_000;
+    const casas = Number.isInteger(bi) ? 0 : 2;
+    const num = bi.toLocaleString("pt-BR", { minimumFractionDigits: casas, maximumFractionDigits: casas });
+    return `R$ ${num} ${bi === 1 ? "Bilhão" : "Bilhões"}`;
+  }
   if (v >= 1_000_000) return `R$ ${(v / 1_000_000).toFixed(1)}M`;
   if (v >= 1_000) return `R$ ${(v / 1_000).toFixed(0)}K`;
   return `R$ ${v.toLocaleString("pt-BR")}`;
@@ -81,6 +103,20 @@ function formatBRL(v: number) {
 
 function formatBRLFull(v: number) {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+
+/** Mesma logica compacta de formatBRL, mas respeitando a moeda do ativo (USD/EUR usam simbolo e notacao correspondentes). KPIs agregados (soma de varios ativos) continuam em BRL, ver formatBRL. */
+function formatListingValue(v: number, currency?: CmCurrency) {
+  if (!currency || currency === "BRL") return formatBRL(v);
+  const symbol = CM_CURRENCY_SYMBOL[currency];
+  if (v >= 1_000_000_000) {
+    const bi = v / 1_000_000_000;
+    const casas = Number.isInteger(bi) ? 0 : 2;
+    return `${symbol} ${bi.toLocaleString("en-US", { minimumFractionDigits: casas, maximumFractionDigits: casas })}Bi`;
+  }
+  if (v >= 1_000_000) return `${symbol} ${(v / 1_000_000).toFixed(1)}M`;
+  if (v >= 1_000) return `${symbol} ${(v / 1_000).toFixed(0)}K`;
+  return `${symbol} ${v.toLocaleString("en-US")}`;
 }
 
 function toFieldLabel(key: string): string {
@@ -154,6 +190,8 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
   const [tab, setTab] = useState<"kanban" | "matches" | "bids">("kanban");
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [assistantListing, setAssistantListing] = useState<{ id: string; anonymous_id: string } | null>(null);
+  const [dueDiligenceListing, setDueDiligenceListing] = useState<{ id: string; anonymous_id: string; seller_cpf_cnpj: string | null } | null>(null);
+  const [showCommissionCalc, setShowCommissionCalc] = useState(false);
   const [uploadingDoc, setUploadingDoc] = useState<string | null>(null);
   const [uploadingGallery, setUploadingGallery] = useState(false);
   const [generatingNarrative, setGeneratingNarrative] = useState(false);
@@ -184,6 +222,17 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
   const [noteMentionedIds, setNoteMentionedIds] = useState<string[]>([]);
   const [submittingNote, setSubmittingNote] = useState(false);
   const [intermediaries, setIntermediaries] = useState<any[]>([]);
+  const [slaSummary, setSlaSummary] = useState<Record<string, { hours_pending: number; pending_count: number }>>({});
+  const [slaContracts, setSlaContracts] = useState<any[]>([]);
+  const [resendingContractId, setResendingContractId] = useState<string | null>(null);
+  const [qualBatches, setQualBatches] = useState<any[]>([]);
+  const [showQualModal, setShowQualModal] = useState(false);
+  const [qualDocType, setQualDocType] = useState("nda_quadripartite");
+  const [qualParties, setQualParties] = useState<{ full_name: string; email: string; role_in_document: string }[]>([
+    { full_name: "", email: "", role_in_document: "parte_principal" },
+  ]);
+  const [creatingQualification, setCreatingQualification] = useState(false);
+  const [selectedQualBatchId, setSelectedQualBatchId] = useState("");
   const [partnersList, setPartnersList] = useState<{ id: string; full_name: string; email: string }[]>([]);
   const [interSide, setInterSide] = useState<"compra" | "venda">("venda");
   const [interName, setInterName] = useState("");
@@ -222,7 +271,8 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
   const [showManualForm, setShowManualForm] = useState(false);
   const [submittingManual, setSubmittingManual] = useState(false);
   const [manualForm, setManualForm] = useState({
-    asset_type: "precatorio" as CmAssetType,
+    asset_type: "" as CmAssetType | "",
+    currency: "BRL" as CmCurrency,
     apelido: "",
     originator_profile_id: "",
     seller_name: "",
@@ -302,17 +352,21 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
   const fetchAll = useCallback(async () => {
     setLoading(true);
     try {
-      const [listRes, matchRes, bidRes] = await Promise.all([
+      const [listRes, matchRes, bidRes, slaRes] = await Promise.all([
         fetch("/api/cm/listings"),
         fetch("/api/cm/matches"),
         fetch("/api/cm/bids?status=pendente"),
+        fetch("/api/cm/contracts/pending-sla"),
       ]);
-      const [listJson, matchJson, bidJson] = await Promise.all([
-        listRes.json(), matchRes.json(), bidRes.json(),
+      const [listJson, matchJson, bidJson, slaJson] = await Promise.all([
+        listRes.json(), matchRes.json(), bidRes.json(), slaRes.json(),
       ]);
       setListings(listJson.listings ?? []);
       setMatches(matchJson.matches ?? []);
       setBids(bidJson.bids ?? []);
+      const slaMap: Record<string, { hours_pending: number; pending_count: number }> = {};
+      for (const row of slaJson.summary ?? []) slaMap[row.listing_id] = row;
+      setSlaSummary(slaMap);
     } catch (err) {
       console.error("[Mesa CM]", err);
     } finally {
@@ -329,6 +383,18 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
     const interval = setInterval(() => fetchAll(), 20000);
     return () => clearInterval(interval);
   }, [tab, fetchAll]);
+
+  // Polling leve enquanto a aba "Documentos" do ativo selecionado fica aberta e ha
+  // documento ainda em processamento (OCR/Whisper) — corrige a mesma classe de bug
+  // do polling de Propostas acima: antes so atualizava com o botao "Atualizar" manual.
+  // Para de rodar sozinho assim que todo documento sair de pendente/processing.
+  useEffect(() => {
+    if (activeDetailTab !== "documentos" || !selectedListing) return;
+    const temPendente = listingDocs.some((d: any) => d.validation_status === "pendente" || d.validation_status === "processing");
+    if (!temPendente) return;
+    const interval = setInterval(() => loadDocs(selectedListing.id), 15000);
+    return () => clearInterval(interval);
+  }, [activeDetailTab, selectedListing, listingDocs]);
 
   useEffect(() => {
     fetch("/api/partners")
@@ -407,6 +473,87 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
     } catch { setIntermediaries([]); }
   };
 
+  const loadSlaContracts = async (listingId: string) => {
+    try {
+      const res = await fetch(`/api/cm/listings/${listingId}/contracts`);
+      const json = await res.json();
+      setSlaContracts(json.contracts ?? []);
+    } catch { setSlaContracts([]); }
+  };
+
+  // SLA 48h: Atenção (>=24h) / Estourado (>=48h). Fallback COALESCE(sent_to_signature_at,
+  // updated_at) para contratos anteriores a esta feature, que não tem o timestamp de envio.
+  const getSlaBadge = (contract: any): { label: string; color: string } | null => {
+    if (contract.status_signature === "assinado" || contract.status_signature === "cancelado") return null;
+    const baseTime = contract.sent_to_signature_at ?? contract.updated_at;
+    if (!baseTime) return null;
+    const hours = Math.floor((Date.now() - new Date(baseTime).getTime()) / 3_600_000);
+    if (hours >= 48) return { label: `SLA Estourado: ${hours}h`, color: "bg-red-500/15 text-red-400 border-red-500/30" };
+    if (hours >= 24) return { label: `SLA Atenção: ${hours}h`, color: "bg-amber-500/15 text-amber-400 border-amber-500/30" };
+    return { label: `${hours}h`, color: "bg-[#162744] text-[#9BAFC5] border-[#9BAFC5]/15" };
+  };
+
+  const loadQualifications = async (listingId: string) => {
+    try {
+      const res = await fetch(`/api/cm/qualifications?listing_id=${listingId}`);
+      const json = await res.json();
+      setQualBatches(json.batches ?? []);
+    } catch { setQualBatches([]); }
+  };
+
+  const addQualPartyRow = () => {
+    setQualParties((prev) => [...prev, { full_name: "", email: "", role_in_document: "parte_principal" }]);
+  };
+
+  const removeQualPartyRow = (index: number) => {
+    setQualParties((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const updateQualPartyRow = (index: number, field: "full_name" | "email" | "role_in_document", value: string) => {
+    setQualParties((prev) => prev.map((row, i) => (i === index ? { ...row, [field]: value } : row)));
+  };
+
+  const submitQualification = async (listingId: string) => {
+    const invalid = qualParties.some((p) => !p.full_name.trim() || !isValidEmail(p.email));
+    if (qualParties.length === 0 || invalid) {
+      alert("Preencha nome e e-mail válido para todos os envolvidos");
+      return;
+    }
+    setCreatingQualification(true);
+    try {
+      const res = await fetch("/api/cm/qualifications", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ listing_id: listingId, document_type: qualDocType, parties: qualParties }),
+      });
+      const json = await res.json();
+      if (res.ok) {
+        alert("Links de qualificação enviados aos envolvidos.");
+        setShowQualModal(false);
+        setQualParties([{ full_name: "", email: "", role_in_document: "parte_principal" }]);
+        loadQualifications(listingId);
+      } else {
+        alert(json.error ?? "Erro ao gerar qualificação");
+      }
+    } catch { alert("Erro de conexão"); }
+    finally { setCreatingQualification(false); }
+  };
+
+  const resendContractNotification = async (contractId: string) => {
+    setResendingContractId(contractId);
+    try {
+      const res = await fetch(`/api/cm/contracts/${contractId}/resend`, { method: "POST" });
+      const json = await res.json();
+      if (res.ok) {
+        alert(json.message ?? "Notificação reenviada com sucesso.");
+        if (selectedListing) loadSlaContracts(selectedListing.id);
+      } else {
+        alert(json.error ?? "Erro ao reenviar notificação");
+      }
+    } catch { alert("Erro de conexão"); }
+    finally { setResendingContractId(null); }
+  };
+
   const addIntermediary = async (listingId: string) => {
     if (!interName.trim() || !interPercentage || !interMandatarioId) {
       alert("Nome, percentual e Mandatário são obrigatórios");
@@ -454,6 +601,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
       const json = await res.json();
       if (res.ok) {
         alert(`Anexo gerado e enviado para assinatura do Mandatário.\nLink: ${json.signing_url}`);
+        loadSlaContracts(listingId);
       } else {
         alert(json.error ?? "Erro ao gerar Anexo");
       }
@@ -701,7 +849,12 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
       const res = await fetch("/api/contracts/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ template_id: templateId, listing_id: listingId, commission_percent: 7 }),
+        body: JSON.stringify({
+          template_id: templateId,
+          listing_id: listingId,
+          commission_percent: 7,
+          qualification_batch_id: selectedQualBatchId || undefined,
+        }),
       });
       const json = await res.json();
       if (res.ok) {
@@ -748,6 +901,8 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
     setNoteContent("");
     setNoteMentionedIds([]);
     loadIntermediaries(listing.id);
+    loadSlaContracts(listing.id);
+    loadQualifications(listing.id);
   };
 
   const handleStatusTransition = async (listingId: string, newStatus: string) => {
@@ -773,6 +928,9 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
       });
       const json = await res.json();
       if (!res.ok) { alert(json.error ?? "Erro"); return; }
+      if (action === "aceitar" && json.match_deal_id) {
+        alert(`Bid aceito. Operação: ${json.match_deal_id}${json.deal_room_url ? `\nDeal Room: ${json.deal_room_url}` : ""}`);
+      }
       fetchAll();
     } catch { alert("Erro de conexão"); }
     finally { setActionLoading(null); }
@@ -1053,6 +1211,10 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
   };
 
   const submitManualListing = async () => {
+    if (!manualForm.asset_type) {
+      alert("Selecione a classe do ativo antes de continuar");
+      return;
+    }
     if (!manualForm.seller_name.trim() || !manualForm.valor_face) {
       alert("Preencha ao menos: nome do cedente e valor de face");
       return;
@@ -1064,6 +1226,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           asset_type: manualForm.asset_type,
+          currency: manualForm.currency,
           apelido: manualForm.apelido.trim() || undefined,
           originator_profile_id: manualForm.originator_profile_id.startsWith("ref:") ? undefined : (manualForm.originator_profile_id || undefined),
           originator_referral_id: manualForm.originator_profile_id.startsWith("ref:") ? manualForm.originator_profile_id.slice(4) : undefined,
@@ -1087,7 +1250,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
         alert(`Ativo cadastrado: ${json.listing.anonymous_id}`);
         setShowManualForm(false);
         setManualForm({
-          asset_type: "precatorio", apelido: "", originator_profile_id: "", seller_name: "", seller_cpf_cnpj: "", ente_devedor: "",
+          asset_type: "", currency: "BRL", apelido: "", originator_profile_id: "", seller_name: "", seller_cpf_cnpj: "", ente_devedor: "",
           esfera: "", tribunal: "", natureza: "", numero_processo: "",
           valor_face: "", valor_atualizado: "", desagio_pretendido: "", prazo_estimado_meses: "",
           allows_tranching: false, tranche_valor_minimo: "",
@@ -1182,6 +1345,12 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
             Novo Ativo
           </button>
           <button
+            onClick={() => setShowCommissionCalc(true)}
+            className="flex items-center gap-2 px-4 py-2 border border-[#C9A84C]/30 text-[#C9A84C] rounded-lg text-sm font-medium hover:bg-[#C9A84C]/10 transition"
+          >
+            <DollarSign size={16} /> Calculadora Rápida
+          </button>
+          <button
             onClick={() => setShowManualForm(true)}
             className="flex items-center gap-2 px-4 py-2 border border-[#9BAFC5]/20 text-[#9BAFC5] rounded-lg text-sm font-medium hover:bg-[#9BAFC5]/10 hover:text-[#F5F1E8] transition"
           >
@@ -1254,6 +1423,65 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
         </div>
       )}
 
+      {/* Modal Qualificação de Partes */}
+      {showQualModal && selectedListing && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60" onClick={() => setShowQualModal(false)}>
+          <div className="w-full max-w-lg max-h-[85vh] bg-[#09081A] border border-[#C9A84C]/20 rounded-xl flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="p-4 border-b border-[#C9A84C]/20 flex items-center justify-between flex-shrink-0">
+              <div className="text-sm font-bold text-[#F5F1E8]">Gerar Qualificação de Partes</div>
+              <button onClick={() => setShowQualModal(false)} className="text-[#9BAFC5] hover:text-[#F5F1E8] text-xl">&times;</button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+              <div>
+                <label className="text-[9px] text-[#9BAFC5] uppercase">Documento</label>
+                <select value={qualDocType} onChange={(e) => setQualDocType(e.target.value)}
+                  className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8] mt-1">
+                  {Object.entries(DOCUMENT_TYPE_LABELS).map(([value, label]) => (
+                    <option key={value} value={value}>{label}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-2">
+                {qualParties.map((row, i) => (
+                  <div key={i} className="bg-[#12112A] border border-[#9BAFC5]/10 rounded-lg p-2 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[9px] text-[#9BAFC5] uppercase">Envolvido {i + 1}</span>
+                      {qualParties.length > 1 && (
+                        <button onClick={() => removeQualPartyRow(i)}><X size={12} className="text-red-400/70 hover:text-red-400" /></button>
+                      )}
+                    </div>
+                    <input value={row.full_name} onChange={(e) => updateQualPartyRow(i, "full_name", e.target.value)} placeholder="Nome completo *"
+                      className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]" />
+                    <input value={row.email} onChange={(e) => updateQualPartyRow(i, "email", e.target.value)} placeholder="E-mail *" type="email"
+                      className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]" />
+                    <select value={row.role_in_document} onChange={(e) => updateQualPartyRow(i, "role_in_document", e.target.value)}
+                      className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]">
+                      <option value="parte_principal">Parte Principal</option>
+                      <option value="intermediario_finder_venda">Intermediário/Finder Venda</option>
+                      <option value="intermediario_finder_compra">Intermediário/Finder Compra</option>
+                      <option value="mandatario">Mandatário</option>
+                      <option value="testemunha">Testemunha</option>
+                    </select>
+                  </div>
+                ))}
+              </div>
+
+              <button onClick={addQualPartyRow}
+                className="w-full flex items-center justify-center gap-1.5 px-3 py-2 bg-[#162744] border border-[#9BAFC5]/15 rounded text-[#9BAFC5] text-[10px] font-bold hover:text-[#F5F1E8] transition">
+                <Plus size={12} /> Adicionar Envolvido
+              </button>
+            </div>
+            <div className="p-4 border-t border-[#C9A84C]/20 flex-shrink-0">
+              <button onClick={() => submitQualification(selectedListing.id)} disabled={creatingQualification}
+                className="w-full px-3 py-2.5 bg-[#C9A84C] text-[#09081A] rounded-lg text-xs font-bold hover:bg-[#E8C97A] transition disabled:opacity-50 flex items-center justify-center gap-2">
+                {creatingQualification ? <Loader2 size={14} className="animate-spin" /> : null} Enviar Links de Qualificação
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Modal Cadastro Manual */}
       {showManualForm && (
         <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60">
@@ -1266,18 +1494,42 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
               <button onClick={() => setShowManualForm(false)} className="text-[#9BAFC5] hover:text-[#F5F1E8] text-xl">&times;</button>
             </div>
             <div className="flex-1 overflow-y-auto p-4 space-y-3">
-              <div>
-                <label className="text-[9px] text-[#9BAFC5] uppercase">Tipo de Ativo *</label>
-                <select name="asset_type" value={manualForm.asset_type} onChange={(e) => setManualForm((f) => ({ ...f, asset_type: e.target.value as CmAssetType }))}
-                  className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#F5F1E8] mt-1">
-                  <option value="precatorio">Precatório</option>
-                  <option value="direito_creditorio">Direito Creditório</option>
-                  <option value="ipi">IPI</option>
-                  <option value="icms">ICMS</option>
-                  <option value="imovel">Imóvel / Ativo Alternativo</option>
-                  <option value="outros">Outros</option>
-                </select>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[9px] text-[#9BAFC5] uppercase">Tipo de Ativo *</label>
+                  <select name="asset_type" value={manualForm.asset_type}
+                    onChange={(e) => setManualForm((f) => ({ ...f, asset_type: e.target.value as CmAssetType }))}
+                    className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#F5F1E8] mt-1">
+                    <option value="">Selecione a classe do ativo</option>
+                    <option value="precatorio">Precatório</option>
+                    <option value="direito_creditorio">Direito Creditório</option>
+                    <option value="ipi">IPI</option>
+                    <option value="icms">ICMS</option>
+                    <option value="imovel">Imóvel / Ativo Alternativo</option>
+                    <option value="outros">Outros</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[9px] text-[#9BAFC5] uppercase">Moeda</label>
+                  <select name="currency" value={manualForm.currency}
+                    onChange={(e) => setManualForm((f) => ({ ...f, currency: e.target.value as CmCurrency }))}
+                    className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#F5F1E8] mt-1">
+                    <option value="BRL">BRL (R$)</option>
+                    <option value="USD">USD ($)</option>
+                    <option value="EUR">EUR (€)</option>
+                  </select>
+                </div>
               </div>
+              {manualForm.asset_type && (
+                <div className="bg-[#12112A] border border-[#C9A84C]/15 rounded-lg px-3 py-2">
+                  <div className="text-[8px] text-[#E8C97A] font-bold uppercase tracking-wide mb-1">Documentos obrigatórios para este tipo</div>
+                  <div className="text-[10px] text-[#9BAFC5] leading-relaxed">
+                    {(CM_DOCUMENT_CHECKLISTS[manualForm.asset_type as CmAssetType] ?? CM_DOCUMENT_CHECKLISTS.outros)
+                      .filter((item) => item.required).map((item) => item.label).join(" · ")}
+                  </div>
+                </div>
+              )}
+              <fieldset disabled={!manualForm.asset_type} className={cn("space-y-3", !manualForm.asset_type && "opacity-40 pointer-events-none")}>
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="text-[9px] text-[#9BAFC5] uppercase">Apelido</label>
@@ -1343,14 +1595,14 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="text-[9px] text-[#9BAFC5] uppercase">Valor de Face (R$) *</label>
-                  <input inputMode="numeric" value={manualForm.valor_face} onChange={(e) => setManualForm((f) => ({ ...f, valor_face: maskCurrencyBRLInput(e.target.value) }))}
+                  <label className="text-[9px] text-[#9BAFC5] uppercase">Valor de Face ({CM_CURRENCY_SYMBOL[manualForm.currency]}) *</label>
+                  <input inputMode="numeric" value={manualForm.valor_face} onChange={(e) => setManualForm((f) => ({ ...f, valor_face: maskCurrencyInput(e.target.value, f.currency) }))}
                     placeholder="0,00"
                     className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#F5F1E8] mt-1" />
                 </div>
                 <div>
-                  <label className="text-[9px] text-[#9BAFC5] uppercase">Valor Atualizado (R$)</label>
-                  <input inputMode="numeric" value={manualForm.valor_atualizado} onChange={(e) => setManualForm((f) => ({ ...f, valor_atualizado: maskCurrencyBRLInput(e.target.value) }))}
+                  <label className="text-[9px] text-[#9BAFC5] uppercase">Valor Atualizado ({CM_CURRENCY_SYMBOL[manualForm.currency]})</label>
+                  <input inputMode="numeric" value={manualForm.valor_atualizado} onChange={(e) => setManualForm((f) => ({ ...f, valor_atualizado: maskCurrencyInput(e.target.value, f.currency) }))}
                     placeholder="0,00"
                     className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#F5F1E8] mt-1" />
                 </div>
@@ -1409,12 +1661,13 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
               </label>
               {manualForm.allows_tranching && (
                 <div>
-                  <label className="text-[9px] text-[#9BAFC5] uppercase">Valor Mínimo por Fração (R$)</label>
-                  <input inputMode="numeric" value={manualForm.tranche_valor_minimo} onChange={(e) => setManualForm((f) => ({ ...f, tranche_valor_minimo: maskCurrencyBRLInput(e.target.value) }))}
+                  <label className="text-[9px] text-[#9BAFC5] uppercase">Valor Mínimo por Fração ({CM_CURRENCY_SYMBOL[manualForm.currency]})</label>
+                  <input inputMode="numeric" value={manualForm.tranche_valor_minimo} onChange={(e) => setManualForm((f) => ({ ...f, tranche_valor_minimo: maskCurrencyInput(e.target.value, f.currency) }))}
                     placeholder="0,00"
                     className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#F5F1E8] mt-1" />
                 </div>
               )}
+              </fieldset>
               <button onClick={submitManualListing} disabled={submittingManual}
                 className="w-full flex items-center justify-center gap-2 px-3 py-2.5 bg-[#C9A84C] text-[#09081A] rounded-lg text-sm font-bold hover:bg-[#D4B96A] transition disabled:opacity-50">
                 {submittingManual ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
@@ -1572,7 +1825,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
                     <div key={l.id} onClick={() => openListingDetail(l)} className="bg-[#12112A] border border-[#9BAFC5]/10 rounded-md p-3 cursor-pointer hover:border-[#C9A84C]/30 transition">
                       <div className="text-[9px] text-[#C9A84C] font-bold">{l.anonymous_id}</div>
                       {l.apelido && <div className="text-[10px] text-[#F5F1E8] font-semibold truncate">{l.apelido}</div>}
-                      <div className="text-xs text-[#F5F1E8] font-semibold">{formatBRL(Number(l.valor_face))}</div>
+                      <div className="text-xs text-[#F5F1E8] font-semibold">{formatListingValue(Number(l.valor_face), l.currency)}</div>
                       {l.risk_score && (
                         <div className={cn("text-[9px] font-bold mt-1",
                           l.risk_score >= 70 ? "text-emerald-400" : l.risk_score >= 50 ? "text-[#C9A84C]" : "text-red-400"
@@ -1590,6 +1843,20 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
                       {Number((l.cm_listing_documents?.[0] as any)?.count) > 0 && (
                         <div className="text-[9px] text-[#9BAFC5] mt-1">{(l.cm_listing_documents[0] as any).count} doc(s)</div>
                       )}
+                      {slaSummary[l.id] && (() => {
+                        const h = slaSummary[l.id].hours_pending;
+                        const n = slaSummary[l.id].pending_count;
+                        const badge = h >= 48
+                          ? { label: `SLA Estourado: ${h}h`, cls: "bg-red-500/10 border-red-500/20 text-red-400" }
+                          : h >= 24
+                          ? { label: `SLA Atenção: ${h}h`, cls: "bg-amber-500/10 border-amber-500/20 text-amber-400" }
+                          : { label: `Assinatura: ${h}h`, cls: "bg-[#162744] border-[#9BAFC5]/15 text-[#9BAFC5]" };
+                        return (
+                          <div className={cn("text-[8px] font-bold uppercase mt-1 px-1.5 py-0.5 border rounded inline-block", badge.cls)}>
+                            {badge.label} ({n})
+                          </div>
+                        );
+                      })()}
                     </div>
                   ))}
                 </div>
@@ -1684,7 +1951,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
                   {selectedListing.anonymous_id}
                   {selectedListing.apelido && <span className="text-[#F5F1E8]"> · {selectedListing.apelido}</span>}
                 </div>
-                <div className="text-lg font-bold text-[#F5F1E8]">{formatBRL(Number(selectedListing.valor_face))}</div>
+                <div className="text-lg font-bold text-[#F5F1E8]">{formatListingValue(Number(selectedListing.valor_face), selectedListing.currency)}</div>
                 <div className="text-xs text-[#9BAFC5] mt-1">Status: <span className="text-[#F5F1E8]">{selectedListing.listing_status.replace(/_/g, " ")}</span></div>
               </div>
               <button onClick={() => setSelectedListing(null)} className="w-8 h-8 flex items-center justify-center rounded-full text-[#9BAFC5] hover:text-[#F5F1E8] hover:bg-[#F5F1E8]/10 transition text-xl">&times;</button>
@@ -2035,11 +2302,58 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
                   <p className="text-[9px] text-[#9BAFC5] mt-1.5">Envie este link ao cedente. Formulário público, sem login.</p>
                 </div>
               )}
+              <div className="mb-2">
+                <div className="text-[10px] text-[#C9A84C] font-bold uppercase tracking-wider mb-2">
+                  Checklist de Documentos Obrigatórios
+                </div>
+                <div className="space-y-1.5">
+                  {(CM_DOCUMENT_CHECKLISTS[selectedListing.asset_type as CmAssetType] ?? CM_DOCUMENT_CHECKLISTS.outros).map((item) => {
+                    const uploaded = listingDocs.find((d: any) => d.checklist_item_id === item.id);
+                    return (
+                      <div key={item.id} className="flex items-center justify-between gap-2 bg-[#12112A] border border-[#9BAFC5]/10 rounded-lg px-3 py-2">
+                        <div className="min-w-0 flex items-center gap-2">
+                          {uploaded ? <CheckCircle2 size={13} className="text-emerald-400 flex-shrink-0" /> : <Clock size={13} className="text-[#9BAFC5]/50 flex-shrink-0" />}
+                          <div className="min-w-0">
+                            <div className="text-[11px] text-[#F5F1E8] truncate">{item.label}</div>
+                            {item.required && !uploaded && (
+                              <div className="text-[8px] text-[#E8C97A] font-bold uppercase tracking-wide">Obrigatório</div>
+                            )}
+                          </div>
+                        </div>
+                        {uploaded ? (
+                          <span className="text-[9px] text-emerald-400 font-bold flex-shrink-0">Enviado</span>
+                        ) : (
+                          <label className="flex items-center gap-1 px-2 py-1 bg-[#162744] border border-[#9BAFC5]/15 rounded text-[#9BAFC5] text-[9px] font-bold hover:border-[#C9A84C]/30 hover:text-[#C9A84C] transition cursor-pointer flex-shrink-0">
+                            {uploadingDoc === selectedListing.id ? <Loader2 size={11} className="animate-spin" /> : <Upload size={11} />}
+                            Enviar
+                            <input type="file" className="hidden" accept=".pdf,.jpg,.png,.jpeg"
+                              onChange={(e) => { if (e.target.files?.[0]) handleUploadDoc(selectedListing.id, e.target.files[0], item.id); }}
+                            />
+                          </label>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+              <label className="w-full flex items-center gap-3 px-4 py-3 bg-[#162744] border border-[#9BAFC5]/15 rounded-lg text-[#9BAFC5] text-xs font-bold hover:bg-[#162744]/80 transition cursor-pointer">
+                {uploadingDoc === selectedListing.id ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
+                Outro Documento / Áudio
+                <input type="file" className="hidden" accept=".pdf,.mp3,.ogg,.wav,.m4a,.webm,.jpg,.png,.jpeg"
+                  onChange={(e) => { if (e.target.files?.[0]) handleUploadDoc(selectedListing.id, e.target.files[0]); }}
+                />
+              </label>
               <button
                 onClick={() => { setAssistantListing({ id: selectedListing.id, anonymous_id: selectedListing.anonymous_id }); }}
                 className="w-full flex items-center gap-3 px-4 py-3 bg-[#C9A84C]/10 border border-[#C9A84C]/20 rounded-lg text-[#C9A84C] text-xs font-bold hover:bg-[#C9A84C]/20 transition"
               >
                 <Bot size={16} /> Assistente do Ativo (IA)
+              </button>
+              <button
+                onClick={() => { setDueDiligenceListing({ id: selectedListing.id, anonymous_id: selectedListing.anonymous_id, seller_cpf_cnpj: selectedListing.seller_cpf_cnpj ?? null }); }}
+                className="w-full flex items-center gap-3 px-4 py-3 bg-[#C9A84C]/10 border border-[#C9A84C]/20 rounded-lg text-[#C9A84C] text-xs font-bold hover:bg-[#C9A84C]/20 transition"
+              >
+                <Shield size={16} /> Due Diligence
               </button>
               <button
                 onClick={() => createDealRoom(selectedListing.id)}
@@ -2100,6 +2414,18 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
               {contractTemplates.length > 0 && (
                 <div className="bg-[#12112A] border border-[#9BAFC5]/10 rounded-lg p-3">
                   <div className="text-[9px] text-[#C9A84C] font-bold uppercase mb-2">Gerar Contrato</div>
+                  {qualBatches.filter((b: any) => b.status === "completo").length > 0 && (
+                    <div className="mb-2">
+                      <label className="text-[9px] text-[#9BAFC5] uppercase">Puxar partes do lote de qualificação (opcional)</label>
+                      <select value={selectedQualBatchId} onChange={(e) => setSelectedQualBatchId(e.target.value)}
+                        className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8] mt-1">
+                        <option value="">Nenhum (só cedente da listagem)</option>
+                        {qualBatches.filter((b: any) => b.status === "completo").map((b: any) => (
+                          <option key={b.id} value={b.id}>{DOCUMENT_TYPE_LABELS[b.document_type] ?? b.document_type} · {(b.cm_party_qualifications ?? []).length} partes</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
                   {contractTemplates.map((t: any) => (
                     <button key={t.id} onClick={() => generateContract(selectedListing.id, t.id)}
                       disabled={generatingContract}
@@ -2115,48 +2441,6 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
                   )}
                 </div>
               )}
-              <div className="mb-2">
-                <div className="text-[10px] text-[#C9A84C] font-bold uppercase tracking-wider mb-2">
-                  Checklist de Documentos Obrigatórios
-                </div>
-                <div className="space-y-1.5">
-                  {(CM_DOCUMENT_CHECKLISTS[selectedListing.asset_type as CmAssetType] ?? CM_DOCUMENT_CHECKLISTS.outros).map((item) => {
-                    const uploaded = listingDocs.find((d: any) => d.checklist_item_id === item.id);
-                    return (
-                      <div key={item.id} className="flex items-center justify-between gap-2 bg-[#12112A] border border-[#9BAFC5]/10 rounded-lg px-3 py-2">
-                        <div className="min-w-0 flex items-center gap-2">
-                          {uploaded ? <CheckCircle2 size={13} className="text-emerald-400 flex-shrink-0" /> : <Clock size={13} className="text-[#9BAFC5]/50 flex-shrink-0" />}
-                          <div className="min-w-0">
-                            <div className="text-[11px] text-[#F5F1E8] truncate">{item.label}</div>
-                            {item.required && !uploaded && (
-                              <div className="text-[8px] text-[#E8C97A] font-bold uppercase tracking-wide">Obrigatório</div>
-                            )}
-                          </div>
-                        </div>
-                        {uploaded ? (
-                          <span className="text-[9px] text-emerald-400 font-bold flex-shrink-0">Enviado</span>
-                        ) : (
-                          <label className="flex items-center gap-1 px-2 py-1 bg-[#162744] border border-[#9BAFC5]/15 rounded text-[#9BAFC5] text-[9px] font-bold hover:border-[#C9A84C]/30 hover:text-[#C9A84C] transition cursor-pointer flex-shrink-0">
-                            {uploadingDoc === selectedListing.id ? <Loader2 size={11} className="animate-spin" /> : <Upload size={11} />}
-                            Enviar
-                            <input type="file" className="hidden" accept=".pdf,.jpg,.png,.jpeg"
-                              onChange={(e) => { if (e.target.files?.[0]) handleUploadDoc(selectedListing.id, e.target.files[0], item.id); }}
-                            />
-                          </label>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <label className="w-full flex items-center gap-3 px-4 py-3 bg-[#162744] border border-[#9BAFC5]/15 rounded-lg text-[#9BAFC5] text-xs font-bold hover:bg-[#162744]/80 transition cursor-pointer">
-                {uploadingDoc === selectedListing.id ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
-                Outro Documento / Áudio
-                <input type="file" className="hidden" accept=".pdf,.mp3,.ogg,.wav,.m4a,.webm,.jpg,.png,.jpeg"
-                  onChange={(e) => { if (e.target.files?.[0]) handleUploadDoc(selectedListing.id, e.target.files[0]); }}
-                />
-              </label>
             </div>
             </>)}
 
@@ -2176,6 +2460,88 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
                 </span>
                 <ExternalLink size={12} />
               </a>
+            </div>
+
+            {/* Painel de Monitoramento de Assinaturas — SLA 48h + Reenvio */}
+            <div className="px-4 mt-4">
+              <div className="text-[10px] text-[#C9A84C] font-bold uppercase tracking-wider mb-2">Andamento do Projeto · Assinaturas</div>
+              <div className="bg-[#12112A] border border-[#9BAFC5]/10 rounded-lg p-3 space-y-2">
+                {slaContracts.filter((c) => c.status_signature !== "cancelado").length === 0 ? (
+                  <p className="text-[10px] text-[#9BAFC5]">Nenhum contrato gerado para este ativo ainda.</p>
+                ) : (
+                  slaContracts.filter((c) => c.status_signature !== "cancelado").map((c) => {
+                    const badge = getSlaBadge(c);
+                    const parties = (c.parties as Array<{ role: string; name: string | null }> | null) ?? [];
+                    const signatario = parties.find((p) => p.role === "mandatario") ?? parties[0];
+                    const assinado = c.status_signature === "assinado";
+                    return (
+                      <div key={c.id} className="flex items-center justify-between gap-2 bg-[#09081A] rounded px-2 py-2">
+                        <div className="min-w-0">
+                          <div className="text-[10px] text-[#F5F1E8] truncate">{c.contract_title}</div>
+                          <div className="text-[9px] text-[#9BAFC5] truncate">
+                            {assinado
+                              ? `Assinado${c.signed_at ? ` em ${new Date(c.signed_at).toLocaleDateString("pt-BR")}` : ""}`
+                              : `Pendente: ${signatario?.name ?? "signatário não identificado"}`}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          {assinado ? (
+                            <span className="text-[8px] font-bold uppercase px-1.5 py-0.5 rounded border bg-emerald-500/15 text-emerald-400 border-emerald-500/30">Assinado</span>
+                          ) : (
+                            <>
+                              {badge && (
+                                <span className={cn("text-[8px] font-bold uppercase px-1.5 py-0.5 rounded border", badge.color)}>{badge.label}</span>
+                              )}
+                              <button
+                                onClick={() => resendContractNotification(c.id)}
+                                disabled={resendingContractId === c.id}
+                                className="flex items-center gap-1 px-2 py-1 bg-[#162744] border border-[#9BAFC5]/15 rounded text-[#C9A84C] text-[9px] font-bold hover:bg-[#243A66] transition disabled:opacity-50 flex-shrink-0"
+                              >
+                                {resendingContractId === c.id ? <Loader2 size={11} className="animate-spin" /> : null} Reenviar Notificação
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+
+            {/* Esteira de Qualificação de Partes */}
+            <div className="px-4 mt-4">
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-[10px] text-[#C9A84C] font-bold uppercase tracking-wider">Qualificação de Partes</div>
+                <button onClick={() => setShowQualModal(true)}
+                  className="flex items-center gap-1 px-2 py-1 bg-[#C9A84C]/20 border border-[#C9A84C]/30 rounded text-[#E8C97A] text-[9px] font-bold hover:bg-[#C9A84C]/30 transition">
+                  <UserPlus size={11} /> Gerar Qualificação de Partes
+                </button>
+              </div>
+              <div className="bg-[#12112A] border border-[#9BAFC5]/10 rounded-lg p-3 space-y-2">
+                {qualBatches.length === 0 ? (
+                  <p className="text-[10px] text-[#9BAFC5]">Nenhuma qualificação gerada para este ativo ainda.</p>
+                ) : (
+                  qualBatches.map((batch: any) => {
+                    const parties = batch.cm_party_qualifications ?? [];
+                    const filled = parties.filter((p: any) => p.status === "preenchido").length;
+                    const pending = parties.filter((p: any) => p.status !== "preenchido");
+                    return (
+                      <div key={batch.id} className="bg-[#09081A] rounded px-3 py-2">
+                        <div className="flex items-center justify-between">
+                          <div className="text-[10px] text-[#F5F1E8] font-semibold">{DOCUMENT_TYPE_LABELS[batch.document_type] ?? batch.document_type}</div>
+                          <span className={cn("text-[8px] font-bold uppercase px-1.5 py-0.5 rounded border",
+                            batch.status === "completo" ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" : "bg-[#162744] text-[#9BAFC5] border-[#9BAFC5]/15"
+                          )}>{filled}/{parties.length} qualificados</span>
+                        </div>
+                        {pending.length > 0 && (
+                          <div className="text-[9px] text-[#9BAFC5] mt-1">Pendente: {pending.map((p: any) => p.full_name).join(", ")}</div>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
             </div>
 
             {/* Cadeia de Intermediários: Anexo FPA/NCND (Single Payout) */}
@@ -2607,7 +2973,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
                     {t.label} &rarr;
                   </button>
                 ))}
-                <button onClick={() => handleStatusTransition(selectedListing.id, "cancelado")}
+                <button onClick={() => handleDeleteAsset(selectedListing.id)}
                   className="px-3 py-2 bg-red-600/10 border border-red-500/20 rounded-lg text-red-400 text-xs hover:bg-red-600/20 transition">
                   Cancelar
                 </button>
@@ -2666,10 +3032,10 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
                 <button
                   onClick={() => loadDocs(selectedListing.id)}
                   disabled={docsLoading}
-                  title="Atualizar lista de documentos"
+                  title="Verificar status de OCR/transcrição dos documentos"
                   className="flex items-center gap-1 px-2 py-1 bg-[#162744] border border-[#9BAFC5]/15 rounded text-[#9BAFC5] text-[9px] font-bold hover:border-[#C9A84C]/30 hover:text-[#C9A84C] transition disabled:opacity-50"
                 >
-                  <RefreshCw size={11} className={docsLoading ? "animate-spin" : ""} /> Atualizar
+                  <RefreshCw size={11} className={docsLoading ? "animate-spin" : ""} /> Atualizar Processamento
                 </button>
               </div>
 
@@ -2819,6 +3185,21 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
           anonymousId={assistantListing.anonymous_id}
           onClose={() => setAssistantListing(null)}
         />
+      )}
+
+      {/* Due Diligence */}
+      {dueDiligenceListing && (
+        <DueDiligencePanel
+          listingId={dueDiligenceListing.id}
+          anonymousId={dueDiligenceListing.anonymous_id}
+          sellerCpfCnpj={dueDiligenceListing.seller_cpf_cnpj}
+          onClose={() => setDueDiligenceListing(null)}
+        />
+      )}
+
+      {/* Calculadora Rápida — Comissionamento & Lâmina de Fechamento */}
+      {showCommissionCalc && (
+        <CommissionCalculatorPanel onClose={() => setShowCommissionCalc(false)} />
       )}
     </div>
   );

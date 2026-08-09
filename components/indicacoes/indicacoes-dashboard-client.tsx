@@ -16,7 +16,6 @@ import {
   ExternalLink,
   BadgePercent,
   UserPlus,
-  FileText,
   Compass,
 } from "lucide-react";
 
@@ -26,7 +25,6 @@ interface Props {
   role: string;
   leadsLink: string;
   partnerLink: string;
-  analiseLink: string;
   analiseV2Link: string;
   discountPercent: number;
   discountMonthsRemaining: number;
@@ -88,7 +86,6 @@ export function IndicacoesDashboardClient({
   partnerName: _partnerName,
   leadsLink,
   partnerLink,
-  analiseLink,
   analiseV2Link,
   discountPercent,
   discountMonthsRemaining,
@@ -101,22 +98,19 @@ export function IndicacoesDashboardClient({
   const whatsappPartner = encodeURIComponent(
     `Olá! Estou te convidando para ser parceiro V3 Partners.\n\nAcesse pelo meu link e garanta condições especiais: ${partnerLink}`
   );
-  const whatsappAnalise = encodeURIComponent(
-    `Olá! A V3 Partners faz o diagnóstico completo do perfil de crédito da sua empresa antes de você buscar capital no mercado.\n\nFaça sua Análise de Crédito pelo meu link: ${analiseLink}`
-  );
   const whatsappAnaliseV2 = encodeURIComponent(
     `Olá! Buscar crédito sem preparo é como andar sem bússola. A V3 Partners mostra o perfil real do seu CNPJ e qual fundo tem mais chance de aprovar sua operação.\n\nAcesse pelo meu link: ${analiseV2Link}`
   );
 
   const unlockedCount = MILESTONES.filter((m) => stats.totalIndicados >= m.required).length;
-  const rankPlaceholder = stats.totalIndicados > 0 ? Math.max(1, 10 - stats.totalIndicados) : "—";
+  const rankPlaceholder = stats.totalIndicados > 0 ? Math.max(1, 10 - stats.totalIndicados) : "n/d";
 
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-[#F0ECE4]">
-          Indicações —{" "}
+          Indicações ·{" "}
           <span className="bg-gradient-to-r from-[#C9A84C] to-[#E8C97A] bg-clip-text text-transparent">
             Programa de Parceiros
           </span>
@@ -182,7 +176,7 @@ export function IndicacoesDashboardClient({
       </div>
 
       {/* Link cards, quatro links */}
-      <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-4">
+      <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4">
         {/* Link de leads */}
         <div className="bg-[#111F35] border border-[#243A66] rounded-2xl p-5">
           <div className="flex items-center gap-2 mb-3">
@@ -220,7 +214,7 @@ export function IndicacoesDashboardClient({
           <div className="flex items-center gap-2 mb-3">
             <UserPlus className="w-4 h-4 text-[#C9A84C]" />
             <p className="text-xs font-bold text-[#C9A84C] uppercase tracking-wide">
-              Link de Parceiros — Desconto
+              Link de Parceiros · Desconto
             </p>
           </div>
           <div className="flex items-center gap-2 bg-[#0D1B2E] border border-[#243A66] rounded-xl px-3 py-2.5 mb-3">
@@ -250,47 +244,14 @@ export function IndicacoesDashboardClient({
           </p>
         </div>
 
-        {/* Link de venda direta: Análise de Crédito */}
-        <div className="bg-[#111F35] border border-[#243A66] rounded-2xl p-5">
-          <div className="flex items-center gap-2 mb-3">
-            <FileText className="w-4 h-4 text-[#C9A84C]" />
-            <p className="text-xs font-bold text-[#7A8FA8] uppercase tracking-wide">
-              Análise de Crédito Direta
-            </p>
-          </div>
-          <div className="flex items-center gap-2 bg-[#0D1B2E] border border-[#243A66] rounded-xl px-3 py-2.5 mb-3">
-            <span className="flex-1 text-xs text-[#F0ECE4] font-mono truncate">{analiseLink}</span>
-            <CopyButton text={analiseLink} />
-          </div>
-          <div className="flex gap-2">
-            <a
-              href={`https://wa.me/?text=${whatsappAnalise}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-xs font-semibold hover:bg-emerald-500/25 transition-colors"
-            >
-              <Share2 className="w-3.5 h-3.5" /> WhatsApp
-            </a>
-            <a
-              href={`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(analiseLink)}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#243A66]/50 border border-[#3A5070] text-[#7A8FA8] text-xs font-semibold hover:text-[#F0ECE4] transition-colors"
-            >
-              <ExternalLink className="w-3.5 h-3.5" /> LinkedIn
-            </a>
-          </div>
-          <p className="text-[10px] text-[#7A8FA8] mt-3 leading-relaxed">
-            Venda a partir de <span className="text-[#E8C97A]">R$ 497</span>, comissão atribuída no pagamento.
-          </p>
-        </div>
-
-        {/* Link de venda direta: Análise de Crédito, variante B */}
+        {/* Link de venda direta: Análise de Crédito. Teste A/B encerrado em
+            03/08/2026, a pagina escolhida foi a B (metafora da bussola). A rota
+            /analise segue no ar e redireciona para ca preservando ?ref e UTM. */}
         <div className="bg-[#111F35] border border-[#243A66] rounded-2xl p-5">
           <div className="flex items-center gap-2 mb-3">
             <Compass className="w-4 h-4 text-[#C9A84C]" />
             <p className="text-xs font-bold text-[#7A8FA8] uppercase tracking-wide">
-              Análise de Crédito (variante B)
+              Análise de Crédito Direta
             </p>
           </div>
           <div className="flex items-center gap-2 bg-[#0D1B2E] border border-[#243A66] rounded-xl px-3 py-2.5 mb-3">
@@ -316,7 +277,7 @@ export function IndicacoesDashboardClient({
             </a>
           </div>
           <p className="text-[10px] text-[#7A8FA8] mt-3 leading-relaxed">
-            Teste A/B, linguagem mais simples. Mesmo checkout e mesma comissão do link principal.
+            Venda a partir de <span className="text-[#E8C97A]">R$ 497</span>, comissão atribuída no pagamento.
           </p>
         </div>
       </div>

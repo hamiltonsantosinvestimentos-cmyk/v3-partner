@@ -1,0 +1,70 @@
+import { NextRequest, NextResponse } from "next/server";
+import { createClient } from "@/lib/supabase/server";
+import { createClient as sc } from "@supabase/supabase-js";
+import { normalizeDocument, detectDocumentType } from "@/lib/v3-clients";
+
+function serviceClient() {
+  return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+}
+
+const ALLOWED_ROLES = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"];
+
+// GET /api/clientes/[documento] — Registro Central de Cliente (Client 360).
+// Devolve tudo que está vinculado a um CPF/CNPJ entre as verticais que já
+// têm v3_client_id (Crédito, Bolsa de Ativos, Credit Engine, Partners).
+// Fase 1, 08/08/2026. Verticais sem coluna normalizada ainda (M&A, CRM,
+// Consórcios) ficam fora até terem seu próprio vínculo — nunca inventado
+// aqui a partir de JSONB solto.
+export async function GET(req: NextRequest, { params }: { params: Promise<{ documento: string }> }) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+
+  const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
+  if (!ALLOWED_ROLES.includes(profile?.role as string)) {
+    return NextResponse.json({ error: "Sem permissão para consultar o Registro Central de Cliente" }, { status: 403 });
+  }
+
+  const { documento } = await params;
+  const digits = normalizeDocument(documento);
+  const docType = detectDocumentType(digits);
+  if (!docType) {
+    return NextResponse.json({ error: "Documento inválido — informe um CPF (11 dígitos) ou CNPJ (14 dígitos)" }, { status: 400 });
+  }
+
+  const svc = serviceClient();
+  const { data: client, error: clientError } = await svc
+    .from("v3_clients")
+    .select("id, document_number, document_type, legal_name, first_seen_vertical, first_seen_at")
+    .eq("document_number", digits)
+    .maybeSingle();
+
+  if (clientError) return NextResponse.json({ error: clientError.message }, { status: 500 });
+  if (!client) {
+    return NextResponse.json({ found: false, document_number: digits, document_type: docType });
+  }
+
+  const [credito, bolsa, creditEngine, partners] = await Promise.all([
+    svc.from("credit_desk_proposals")
+      .select("id, code, title, client_name, credit_line, requested_value, stage, status, created_at")
+      .eq("v3_client_id", client.id),
+    svc.from("cm_asset_listings")
+      .select("id, numero_interno, seller_name, asset_type, valor_face, listing_status, created_at")
+      .eq("v3_client_id", client.id),
+    svc.from("credit_profiles")
+      .select("id, tier, score_total, analysis_type, created_at")
+      .eq("v3_client_id", client.id),
+    svc.from("partner_registrations")
+      .select("id, nome_completo, plano, status, created_at")
+      .eq("v3_client_id", client.id),
+  ]);
+
+  return NextResponse.json({
+    found: true,
+    client,
+    credito: credito.data ?? [],
+    bolsa_de_ativos: bolsa.data ?? [],
+    credit_engine: creditEngine.data ?? [],
+    partners: partners.data ?? [],
+  });
+}

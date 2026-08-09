@@ -10,15 +10,41 @@ function svc() {
 
 const ALLOWED = ["ADMIN", "GESTAO", "MESA", "MESA_OPERACIONAL"];
 
-export async function POST(req: NextRequest) {
+interface AssistantMessage { role: "user" | "assistant"; content: string; ts?: string; }
+
+async function requireAssistantUser(req: NextRequest) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+  const { data: profile } = await svc().from("profiles").select("role").eq("id", user.id).single();
+  if (!ALLOWED.includes(profile?.role ?? "")) return null;
+  return user;
+}
+
+// GET /api/cm/assistant?listing_id=... — devolve a conversa ja existente do
+// usuario logado para este ativo, pra reidratar o chat ao reabrir o modal
+// (antes desta correcao, o historico vivia so em useState e era perdido a
+// cada fechamento).
+export async function GET(req: NextRequest) {
+  const user = await requireAssistantUser(req);
   if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
-  const { data: profile } = await svc().from("profiles").select("role").eq("id", user.id).single();
-  if (!ALLOWED.includes(profile?.role ?? "")) {
-    return NextResponse.json({ error: "Acesso restrito" }, { status: 403 });
-  }
+  const listingId = req.nextUrl.searchParams.get("listing_id");
+  if (!listingId) return NextResponse.json({ error: "listing_id obrigatório" }, { status: 422 });
+
+  const { data: session } = await svc()
+    .from("cm_asset_assistant_sessions")
+    .select("messages")
+    .eq("listing_id", listingId)
+    .eq("user_id", user.id)
+    .single();
+
+  return NextResponse.json({ messages: (session?.messages as AssistantMessage[]) ?? [] });
+}
+
+export async function POST(req: NextRequest) {
+  const user = await requireAssistantUser(req);
+  if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
   const { listing_id, question } = await req.json();
   if (!listing_id || !question) {
@@ -26,6 +52,19 @@ export async function POST(req: NextRequest) {
   }
 
   const db = svc();
+
+  // Historico real da conversa (listing_id + user), carregado do banco —
+  // nunca do cliente, mesmo padrao de seguranca do chat dos Squads IA
+  // (app/api/agentes/chat/route.ts, QW-6: previne prompt injection via
+  // history vindo do front). Sem isso, a IA nao tinha memoria nem das
+  // perguntas anteriores na MESMA sessao aberta.
+  const { data: existingSession } = await db
+    .from("cm_asset_assistant_sessions")
+    .select("messages")
+    .eq("listing_id", listing_id)
+    .eq("user_id", user.id)
+    .single();
+  const dbHistory = (existingSession?.messages as AssistantMessage[]) ?? [];
 
   const { data: listing } = await db
     .from("cm_asset_listings")
@@ -77,13 +116,28 @@ ${docContext ? `DOCUMENTOS DISPONÍVEIS (${docs?.length ?? 0}):\n${docContext}` 
     model: "claude-haiku-4-5-20251001",
     max_tokens: 2048,
     system: systemPrompt,
-    messages: [{ role: "user", content: question }],
+    messages: [
+      ...dbHistory.map((m) => ({ role: m.role, content: m.content })),
+      { role: "user" as const, content: question },
+    ],
   });
 
   const answer = response.content
     .filter((b) => b.type === "text")
     .map((b) => (b as { type: "text"; text: string }).text)
     .join("");
+
+  const now = new Date().toISOString();
+  const newMessages: AssistantMessage[] = [
+    ...dbHistory,
+    { role: "user", content: question, ts: now },
+    { role: "assistant", content: answer, ts: now },
+  ];
+
+  await db.from("cm_asset_assistant_sessions").upsert(
+    { listing_id, user_id: user.id, messages: newMessages },
+    { onConflict: "listing_id,user_id" }
+  );
 
   return NextResponse.json({
     answer,

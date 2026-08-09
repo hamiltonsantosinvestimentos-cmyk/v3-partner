@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
+import { nextLegacyCode } from "@/lib/v3-codes";
 
 function serviceClient() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -34,8 +35,17 @@ export async function POST(req: NextRequest) {
   if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
   const body = await req.json();
+
+  // O código do lead passa a ser emitido no servidor, por MAX real, e não mais
+  // recebido do navegador. O cliente calculava `leads.length + 1` sobre a lista
+  // que estava na tela, que é a pior fonte possível: reflete apenas os leads
+  // carregados naquele filtro, ignora os de outros partners e produzia formato
+  // de 3 dígitos enquanto a tabela usa 4. O parâmetro do body ainda é aceito
+  // para não quebrar chamadas antigas em trânsito.
+  const code = body.code ?? (await nextLegacyCode(serviceClient(), "crm_leads", "CRM-26"));
+
   const { data, error } = await supabase.from("crm_leads").insert({
-    code:             body.code,
+    code,
     name:             body.name,
     document:         body.document ?? null,
     person_type:      body.personType ?? "PJ",

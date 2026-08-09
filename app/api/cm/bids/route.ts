@@ -26,7 +26,10 @@ export async function GET(req: NextRequest) {
 
   let query = svc()
     .from("cm_bids")
-    .select("*, cm_asset_listings(anonymous_id, asset_type, valor_face, listing_status)")
+    .select("*, cm_asset_listings:listing_id!inner(anonymous_id, asset_type, valor_face, listing_status)")
+    // !inner + filtro no join: exclui propostas de ativos ja excluidos (Lixeira),
+    // mesmo bug ja corrigido em /api/cm/matches e Total Ativos
+    .is("cm_asset_listings.deleted_at", null)
     .order("created_at", { ascending: false })
     .limit(50);
 

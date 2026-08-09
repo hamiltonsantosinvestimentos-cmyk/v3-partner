@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { randomUUID } from "crypto";
-import { buildCreditReportData } from "@/lib/credit-report-data";
-import { buildExternalReportFullHtml } from "@/lib/credit-report-template";
+import { buildCreditReportData, REPORT_VALIDITY_DAYS } from "@/lib/credit-report-data";
+import { buildExternalReportFullHtml, creditReportPdfOptions } from "@/lib/credit-report-template";
 
 export const maxDuration = 300;
 export const dynamic = "force-dynamic";
@@ -14,7 +14,7 @@ function serviceClient() {
 
 const ALLOWED_ROLES = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"] as const;
 const BUCKET = "credit-documents";
-const SIGNED_URL_SECONDS = 30 * 24 * 60 * 60; // 30 dias, mesma validade declarada no relatório
+const SIGNED_URL_SECONDS = REPORT_VALIDITY_DAYS * 24 * 60 * 60; // acompanha a validade declarada no relatório
 
 interface RouteParams { params: Promise<{ id: string }> }
 
@@ -89,7 +89,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     browser = await launchBrowser();
     const page = await browser.newPage();
     await page.setContent(html, { waitUntil: "load", timeout: 45000 });
-    const pdf = await page.pdf({ format: "A4", printBackground: true, margin: { top: "13mm", bottom: "13mm", left: "14mm", right: "14mm" } });
+    const pdf = await page.pdf(creditReportPdfOptions(reportData));
     pdfBuffer = Buffer.from(pdf);
   } catch (e) {
     return NextResponse.json({ error: `Falha ao gerar PDF: ${(e as Error).message}` }, { status: 500 });

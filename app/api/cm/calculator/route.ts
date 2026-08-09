@@ -6,13 +6,24 @@ function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 }
 
+const INTERNAL_ROLES = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"];
+
 export async function POST(req: NextRequest) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
+  const { data: profile } = await svc().from("profiles").select("role").eq("id", user.id).single();
+  const isInternal = INTERNAL_ROLES.includes(profile?.role ?? "");
+
   const body = await req.json();
   const { valor_face, desagio, tir, prazo_meses, commission_percent, divisao_partes, taxa_estruturacao, taxa_intermediacao } = body;
+
+  // Split de comissao interna da V3 (commission_percent) e informacao sensivel,
+  // nunca calculado/retornado para quem nao e Mesa/Gestao/Admin. Corrigido 2026-08-06:
+  // ate aqui a rota so checava autenticacao, entao qualquer Partner (inclusive Starter)
+  // conseguia ver o split de comissao da V3 preenchendo esse campo no widget publico.
+  const commissionPercentGated = isInternal ? commission_percent : null;
 
   if (!valor_face) {
     return NextResponse.json({ error: "Campo obrigatório: valor_face" }, { status: 422 });
@@ -30,22 +41,22 @@ export async function POST(req: NextRequest) {
 
   let commission = null;
   let commissionPrecision = null;
-  if (commission_percent) {
+  if (commissionPercentGated) {
     const { data: split } = await svc().rpc("calculate_cm_commission_split", {
       p_valor_face: Number(valor_face),
-      p_commission_percent: Number(commission_percent),
+      p_commission_percent: Number(commissionPercentGated),
     });
     commission = split;
 
     // Precisao de 4 casas decimais para o rateio percentual (resolve a dizima periodica
-    // da "cordinha de caranguejo") — arredonda em cada etapa da divisao, nao na fracao exata.
+    // da "cordinha de caranguejo"): arredonda em cada etapa da divisao, nao na fracao exata.
     // Ex: 5% / 3 partes = 1.6667%, dividido por 2 lados (compra/venda) = 0.8334% por lado.
     // Correcao Mesa Operacional 2026-07-15.
     const partes = divisao_partes ? Number(divisao_partes) : 3;
     const estruturacao = taxa_estruturacao ? Number(taxa_estruturacao) : 0;
-    const comissaoPorParte = Number((Number(commission_percent) / partes).toFixed(4));
+    const comissaoPorParte = Number((Number(commissionPercentGated) / partes).toFixed(4));
     const comissaoSplitLado = Number((comissaoPorParte / 2).toFixed(4));
-    const somaPercentuais = Number((Number(commission_percent) + estruturacao).toFixed(4));
+    const somaPercentuais = Number((Number(commissionPercentGated) + estruturacao).toFixed(4));
 
     // Taxa de Intermediacao: campo separado e opcional (nao obrigatorio). So existe quando a V3
     // tambem atua como intermediaria na operacao (alem de estruturar), pode ser maior que a
@@ -53,7 +64,7 @@ export async function POST(req: NextRequest) {
     const v3AtuaComoIntermediaria = taxa_intermediacao !== undefined && taxa_intermediacao !== null && taxa_intermediacao !== "";
     const taxaIntermediacaoPercent = v3AtuaComoIntermediaria ? Number(taxa_intermediacao) : null;
     const comissaoTotalComIntermediacao = v3AtuaComoIntermediaria
-      ? Number((Number(commission_percent) + Number(taxaIntermediacaoPercent)).toFixed(4))
+      ? Number((Number(commissionPercentGated) + Number(taxaIntermediacaoPercent)).toFixed(4))
       : null;
 
     commissionPrecision = {

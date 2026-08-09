@@ -5,6 +5,7 @@ import { z } from "zod";
 import { logAudit } from "@/lib/audit";
 import { notifyNovaProposta, notifyPropostaAtualizada } from "@/lib/email";
 import { createNotification, notifyByRoles } from "@/lib/notify";
+import { insertWithLegacyCode } from "@/lib/v3-codes";
 
 function serviceClient() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -154,31 +155,61 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { count } = await serviceClient()
-      .from("credit_desk_proposals").select("id", { count: "exact", head: true });
-    const code = d.code ?? `CRED-26-${String((count ?? 0) + 1).padStart(4, "0")}`;
-
     // Se admin/gestao enviou um partner_id específico no payload (ex: convertendo lead de um partner), usa ele
     // Caso contrário usa o usuário autenticado
     const isAdmin = ADMIN_ROLES.includes(profile?.role as typeof ADMIN_ROLES[number]);
     const effectivePartnerId = (isAdmin && d.partner_id) ? d.partner_id : user.id;
 
-    const { data, error } = await serviceClient().from("credit_desk_proposals").insert({
-      code,
-      title:           d.title,
-      client_name:     d.client_name,
-      client_cpf_cnpj: d.client_cpf_cnpj ?? null,
-      credit_line:     d.credit_line,
-      requested_value: d.requested_value,
-      current_level:   d.current_level,
-      status:          "PENDING",
-      stage:           "RECEBIDO",
-      partner_id:      effectivePartnerId,
-      created_by:      user.id,
-      metadata:        d.metadata ?? {},
-    }).select().single();
+    // Fase 2b (08/08/2026): resolve credit_line_id server-side a partir do
+    // texto de credit_line — nunca aceito do payload, porque é o vínculo que
+    // o gate de Plano de Negócios (linha internacional) usa na aprovação
+    // final. nova-proposta-modal.tsx sempre envia um dos nomes exatos de
+    // LEVEL_LINES (== regras_linhas_credito.nome), então o match direto
+    // cobre 100% do fluxo real de criação; se não casar, fica null e o gate
+    // simplesmente não se aplica (mesmo comportamento fail-open do backfill
+    // histórico da Fase 2a, nunca bloqueia por dado ausente).
+    const { data: linhaMatch } = await serviceClient()
+      .from("regras_linhas_credito")
+      .select("id")
+      .eq("nome", d.credit_line)
+      .maybeSingle();
+
+    // Codigo por MAX real + retry no 23505, nunca por COUNT(*).
+    //
+    // Por que esta rota ainda emite CRED-26 e nao V3-CR / V3-CRI: a escolha
+    // entre as duas series depende do campo escopo em regras_linhas_credito,
+    // que so passa a existir na Fase 2a da governanca de numeracao. Emitir
+    // agora produziria V3-CR em operacao internacional, e codigo emitido e
+    // imutavel por desenho. Ate la, o formato atual e preservado e o unico
+    // problema resolvido e a colisao.
+    const { data: inserted, error } = await insertWithLegacyCode(
+      serviceClient(),
+      "credit_desk_proposals",
+      "CRED-26",
+      (generatedCode) => ({
+        // Truthiness, não `??`: um chamador que mande code:"" (string vazia)
+        // gravaria código em branco e derrubaria a próxima inserção no unique.
+        code:            d.code || generatedCode,
+        title:           d.title,
+        client_name:     d.client_name,
+        client_cpf_cnpj: d.client_cpf_cnpj ?? null,
+        credit_line:     d.credit_line,
+        credit_line_id:  linhaMatch?.id ?? null,
+        requested_value: d.requested_value,
+        current_level:   d.current_level,
+        status:          "PENDING",
+        stage:           "RECEBIDO",
+        partner_id:      effectivePartnerId,
+        created_by:      user.id,
+        metadata:        d.metadata ?? {},
+      })
+    );
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+    const data = inserted as unknown as {
+      id: string; code: string; title: string; client_name: string; credit_line: string;
+    };
 
     // Notifica admin por e-mail — isolado para não crashar o handler
     try {
@@ -203,12 +234,12 @@ export async function POST(req: NextRequest) {
         user_id: user.id,
         type: "proposal",
         title: "Proposta de crédito enviada",
-        message: `${code} — ${d.client_name} · ${d.credit_line}`,
+        message: `${data.code} — ${d.client_name} · ${d.credit_line}`,
         action_url: "/mesa-credito",
       }),
       notifyByRoles(["ADMIN", "GESTAO", "MESA_OPERACIONAL"], {
         type: "proposal",
-        title: `Nova Proposta — ${code}`,
+        title: `Nova Proposta — ${data.code}`,
         message: `${partnerName}: ${d.client_name} · ${d.credit_line} · ${new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(d.requested_value)}`,
         action_url: `/mesa-credito/${d.current_level.toLowerCase().replace("_", "-")}`,
       }),
@@ -265,6 +296,57 @@ export async function PATCH(req: NextRequest) {
   }
 
   const updateData: Record<string, unknown> = { ...fields, updated_at: new Date().toISOString() };
+
+  // "Transferência de linha" (mesa/admin) muda credit_line direto — resolve
+  // credit_line_id junto, sempre, senão o vínculo fica obsoleto e o gate
+  // abaixo (e qualquer outro consumidor de credit_line_id) passa a
+  // trabalhar com a linha antiga da proposta.
+  let resolvedCreditLineId: string | null | undefined;
+  if (fields.credit_line) {
+    const { data: linhaMatch } = await serviceClient()
+      .from("regras_linhas_credito")
+      .select("id")
+      .eq("nome", fields.credit_line)
+      .maybeSingle();
+    resolvedCreditLineId = linhaMatch?.id ?? null;
+    updateData.credit_line_id = resolvedCreditLineId;
+  }
+
+  // Gate Fase 2b (08/08/2026): Plano de Negócios obrigatório em linha
+  // internacional, mas SÓ na aprovação final (stage=LIBERADO) — nunca no
+  // intake, upload de documentos ou análise N1/N2. Decisão explícita de
+  // João: o BP às vezes é elaborado pelo próprio departamento V3 depois
+  // do intake começar, então não pode impedir o envio da documentação.
+  if (fields.stage === "LIBERADO") {
+    const { data: gateCheck } = await serviceClient()
+      .from("credit_desk_proposals")
+      .select("checklist, credit_line_id, regras_linhas_credito(escopo)")
+      .eq("id", id)
+      .single();
+
+    // Se este mesmo PATCH também está trocando a linha, usa o vínculo novo
+    // (ainda não persistido) em vez do que está lido do banco.
+    const effectiveLineId = resolvedCreditLineId !== undefined ? resolvedCreditLineId : gateCheck?.credit_line_id;
+    let escopo = (gateCheck?.regras_linhas_credito as { escopo?: string } | null)?.escopo;
+    if (resolvedCreditLineId !== undefined) {
+      const { data: novaLinha } = await serviceClient()
+        .from("regras_linhas_credito")
+        .select("escopo")
+        .eq("id", effectiveLineId ?? "")
+        .maybeSingle();
+      escopo = novaLinha?.escopo;
+    }
+
+    if (escopo === "internacional") {
+      const checklist = (gateCheck?.checklist as Record<string, boolean>) ?? {};
+      if (checklist.plano_negocios !== true) {
+        return NextResponse.json(
+          { error: "Linha internacional: confira \"Plano de Negócios\" no checklist antes de liberar a aprovação final." },
+          { status: 422 }
+        );
+      }
+    }
+  }
 
   // Registra timestamp do nível se informado
   if (fields.level1_notes && !fields.level1_at) updateData.level1_at = new Date().toISOString();

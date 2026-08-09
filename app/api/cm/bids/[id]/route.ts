@@ -81,9 +81,20 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       }, { status: 422 });
     }
 
+    // Codigo legivel da operacao (MATCH-YYYY-NNN), gerado no aceite e
+    // propagado para cm_commission_splits e cm_deal_room_access abaixo —
+    // mesma chave real (bid_id+listing_id) que ja amarra os tres hoje,
+    // agora com um identificador humano exibivel na UI.
+    const { data: matchIdResult } = await svc().rpc("generate_cm_match_id");
+    const matchDealId: string | null = matchIdResult ?? null;
+    if (matchDealId) {
+      await svc().from("cm_bids").update({ match_deal_id: matchDealId }).eq("id", id);
+    }
+
     const { error: commError } = await svc().from("cm_commission_splits").insert({
       listing_id: listing.id,
       bid_id: id,
+      match_deal_id: matchDealId,
       valor_face: Number(listing.valor_face),
       commission_total_percent: splitResult.commission_total_percent,
       commission_total_value: splitResult.commission_total_value,
@@ -112,6 +123,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       listing_id: listing.id,
       access_token: token,
       bid_id: id,
+      match_deal_id: matchDealId,
       buyer_name: bid.buyer_name ?? null,
       created_by: caller.userId,
     }).select().single();
@@ -133,6 +145,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       success: true,
       bid: { id, status: newStatus },
       commission,
+      match_deal_id: matchDealId,
       deal_room_url: dealRoomUrl,
     });
   }

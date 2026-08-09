@@ -1,7 +1,10 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
-const PUBLIC_ROUTES = ["/login", "/auth/callback", "/auth/update-password", "/unauthorized", "/api/demo-login", "/api/auth/login", "/c/", "/api/captacao/", "/mf/", "/api/ma-captacao/", "/api/migrate-ma-captacao", "/assinar/", "/api/contratos/", "/api/cpf-validate", "/cadastro-partner", "/api/cadastro-partner", "/api/setup/check", "/status-cadastro", "/api/cadastro-partner/status", "/p/", "/vdr/", "/api/investor/", "/api/ma/preview-criativo", "/api/ma/cim-pdf", "/api/ma/meetings/ingest", "/api/sdr/webhook", "/upload/", "/api/public/upload/", "/api/ma/upload-notify", "/api/cron/", "/manifest.json", "/sw.js", "/api/ma/investor-demands", "/api/ma/clicksign-webhook", "/intake/", "/api/ma/bp-intake/", "/aceite-tec/", "/api/propostas/mandato-tec/accept/", "/api/cm/intake/", "/api/cm/deal-room/", "/vdr/cm/", "/api/guardian/run", "/api/relatorios/ingest", "/checkout/", "/api/checkout/", "/api/cora/webhook", "/intake/credit/", "/api/credit-engine/intake/", "/api/cm/annex-sign/", "/bolsa/imoveis", "/api/public/bolsa/imoveis", "/documentos/", "/api/public/credit-upload/", "/acompanhar/", "/preencher-intermediarios/", "/api/cm/deal-intermediaries/fill/", "/relatorio-credito/", "/aceite/", "/api/public/governance-signoff/", "/analise", "/analise-v2"];
+const PUBLIC_ROUTES = ["/login", "/auth/callback", "/auth/update-password", "/unauthorized", "/api/demo-login", "/api/auth/login", "/c/", "/api/captacao/", "/mf/", "/api/ma-captacao/", "/api/migrate-ma-captacao", "/assinar/", "/api/contratos/", "/api/cpf-validate", "/cadastro-partner", "/api/cadastro-partner", "/api/setup/check", "/status-cadastro", "/api/cadastro-partner/status", "/p/", "/vdr/", "/api/investor/", "/api/ma/preview-criativo", "/api/ma/cim-pdf", "/api/ma/meetings/ingest", "/api/sdr/webhook", "/upload/", "/api/public/upload/", "/api/ma/upload-notify", "/api/cron/", "/manifest.json", "/sw.js", "/api/ma/investor-demands", "/api/ma/clicksign-webhook", "/intake/", "/api/ma/bp-intake/", "/aceite-tec/", "/api/propostas/mandato-tec/accept/", "/api/cm/intake/", "/api/cm/deal-room/", "/vdr/cm/", "/api/guardian/run", "/api/relatorios/ingest", "/checkout/", "/api/checkout/", "/api/cora/webhook", "/intake/credit/", "/api/credit-engine/intake/", "/api/cm/annex-sign/", "/bolsa/imoveis", "/api/public/bolsa/imoveis", "/documentos/", "/api/public/credit-upload/", "/acompanhar/", "/preencher-intermediarios/", "/api/cm/deal-intermediaries/fill/", "/relatorio-credito/", "/aceite/", "/api/public/governance-signoff/", "/analise", "/analise-v2", "/api/cm/qualificacao/", "/api/contracts/html/"];
+// Nota: "/api/contracts/html/" casa apenas /api/contracts/html/[id]/[token]
+// (serve HTML pro ClickSign buscar) — nunca abre /api/contracts/generate,
+// /list, /approve, etc., que continuam atras do gate de sessao.
 
 const IS_DEMO = false;
 
@@ -21,8 +24,15 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Server-to-server: n8n workflows com Bearer CRON_SECRET bypass
-  if (pathname.startsWith("/api/cm/") && request.headers.get("authorization") === `Bearer ${process.env.CRON_SECRET}`) {
+  // Server-to-server: n8n workflows com Bearer CRON_SECRET bypass.
+  // Deliberadamente NAO entra em PUBLIC_ROUTES: sem o token correto a rota
+  // continua atras do gate de sessao. /api/credit-engine/report/ e chamada pelo
+  // no "Gerar Dossie PDF" do W-CREDIT, que roda sem sessao de usuario.
+  const S2S_PREFIXES = ["/api/cm/", "/api/credit-engine/report/"];
+  if (
+    S2S_PREFIXES.some((p) => pathname.startsWith(p)) &&
+    request.headers.get("authorization") === `Bearer ${process.env.CRON_SECRET}`
+  ) {
     return NextResponse.next();
   }
 

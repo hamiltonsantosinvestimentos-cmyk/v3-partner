@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { CheckCircle2, Clock, AlertCircle, FileText, Wallet, TrendingUp, Crown, Shield, RefreshCw, ArrowUpCircle, Loader2, QrCode, Copy, ExternalLink, CreditCard } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
+import { getPlanoValor } from "@/lib/plano-valor";
 
 interface Profile {
   id: string;
@@ -21,6 +22,7 @@ interface Contract {
   contract_version: string;
   email: string;
   nome_representante: string | null;
+  contract_code?: string | null;
 }
 
 interface Commission {
@@ -57,10 +59,25 @@ function getTrialStatus(profile: Profile) {
   return { label: "Ativa", color: "text-emerald-400", bg: "bg-emerald-500/20", icon: <CheckCircle2 className="w-4 h-4" />, daysLeft };
 }
 
+const PLANO_LABEL: Record<string, string> = {
+  STARTER: "Starter",
+  PARTNER: "Partner",
+  PARTNER_PRO: "Partner PRO",
+  ENTERPRISE: "Enterprise",
+};
+
+const COMISSAO_PCT: Record<string, string> = {
+  STARTER: "20%",
+  PARTNER: "30%",
+  PARTNER_PRO: "50%",
+  ENTERPRISE: "Negociável",
+};
+
 export function MinhaAssinaturaClient({ profile, contract, commissions }: Props) {
-  const planoLabel = profile.role === "PARTNER_PRO" ? "Partner PRO" : "Partner";
-  const valorMensal = profile.role === "PARTNER_PRO" ? "R$ 397,00" : "R$ 197,00";
-  const comissaoPct = profile.role === "PARTNER_PRO" ? "50%" : "30%";
+  const planoLabel = PLANO_LABEL[profile.role] ?? "Partner";
+  const comissaoPct = COMISSAO_PCT[profile.role] ?? "30%";
+  const partnerValor = moeda(getPlanoValor("PARTNER") / 100);
+  const partnerProValor = moeda(getPlanoValor("PARTNER_PRO") / 100);
   const trialStatus = getTrialStatus(profile);
 
   const [renovacaoStatus, setRenovacaoStatus] = useState<"idle" | "loading" | "ok" | "err">("idle");
@@ -79,6 +96,10 @@ export function MinhaAssinaturaClient({ profile, contract, commissions }: Props)
   const [pixCopiado, setPixCopiado] = useState(false);
   const [loadingCartao, setLoadingCartao] = useState(false);
   const [cartaoErro, setCartaoErro] = useState<string | null>(null);
+
+  // Reflete o valor real da cobrança vigente (mesma fonte que a aba Financeiro usa);
+  // só cai pro preço padrão do plano enquanto a cobrança ainda não carregou.
+  const valorMensal = moeda((subscription?.amount_cents ?? getPlanoValor(profile.role)) / 100);
 
   useEffect(() => {
     fetch("/api/cora/subscription")
@@ -359,7 +380,7 @@ export function MinhaAssinaturaClient({ profile, contract, commissions }: Props)
                   <p className="text-xs text-[#7A8FA8]">Plano atual</p>
                 </div>
               </div>
-              <p className="text-xl font-bold text-blue-400">R$ 197<span className="text-xs font-normal text-[#7A8FA8]">/mês</span></p>
+              <p className="text-xl font-bold text-blue-400">{partnerValor}<span className="text-xs font-normal text-[#7A8FA8]">/mês</span></p>
               <ul className="space-y-1.5 text-xs text-[#7A8FA8]">
                 {["30% de comissão", "Acesso a crédito N1 e N2", "CRM completo", "M&A pipeline", "Split Fiscal", "Academy básico"].map(b => (
                   <li key={b} className="flex items-center gap-1.5"><CheckCircle2 className="w-3 h-3 text-blue-400 flex-shrink-0" />{b}</li>
@@ -378,7 +399,7 @@ export function MinhaAssinaturaClient({ profile, contract, commissions }: Props)
                   <p className="text-xs text-[#C9A84C]">Upgrade disponível</p>
                 </div>
               </div>
-              <p className="text-xl font-bold text-[#C9A84C]">R$ 397<span className="text-xs font-normal text-[#7A8FA8]">/mês</span></p>
+              <p className="text-xl font-bold text-[#C9A84C]">{partnerProValor}<span className="text-xs font-normal text-[#7A8FA8]">/mês</span></p>
               <ul className="space-y-1.5 text-xs text-[#7A8FA8]">
                 {["50% de comissão (+67%)", "Crédito N1, N2 e N3 High Ticket", "Co-branding V3 Partners", "Priority support", "Mesa de Crédito completa", "Academy M&A exclusivo"].map(b => (
                   <li key={b} className="flex items-center gap-1.5"><CheckCircle2 className="w-3 h-3 text-[#C9A84C] flex-shrink-0" />{b}</li>
@@ -395,7 +416,7 @@ export function MinhaAssinaturaClient({ profile, contract, commissions }: Props)
                 </button>
               ) : (
                 <div className="mt-1 space-y-2">
-                  <p className="text-xs text-[#C9A84C] text-center">Confirmar upgrade para PRO por R$ 397/mês?</p>
+                  <p className="text-xs text-[#C9A84C] text-center">Confirmar upgrade para PRO por {partnerProValor}/mês?</p>
                   <div className="flex gap-2">
                     <button onClick={handleUpgrade} className="flex-1 py-2 rounded-lg bg-[#C9A84C] text-[#09081A] text-xs font-bold">Confirmar</button>
                     <button onClick={() => setConfirmUpgrade(false)} className="flex-1 py-2 rounded-lg bg-white/5 text-[#7A8FA8] text-xs">Cancelar</button>
@@ -442,6 +463,7 @@ export function MinhaAssinaturaClient({ profile, contract, commissions }: Props)
             </div>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-xs">
               {[
+                ...(contract.contract_code ? [{ label: "Número do contrato", value: contract.contract_code }] : []),
                 { label: "Plano", value: contract.plano },
                 { label: "Valor mensal", value: contract.valor_mensal ?? valorMensal },
                 { label: "Data de assinatura", value: dataFmt(contract.accepted_at) },

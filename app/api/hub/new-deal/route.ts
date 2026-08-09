@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as sc } from "@supabase/supabase-js";
+import { nextLegacyCode } from "@/lib/v3-codes";
 
 interface DealPayload {
   empresa_nome: string;
@@ -107,8 +108,8 @@ Retorne apenas o HTML completo, sem explicações.`,
   // Bridge A: Hub → CRM (fire-and-forget, não bloqueia resposta)
   if (inserted?.id) {
     try {
-      const { count } = await svc.from("crm_leads").select("*", { count: "exact", head: true });
-      const crmCode = `CRM-26-${String((count ?? 0) + 1).padStart(4, "0")}`;
+      // MAX real, nunca COUNT(*). Ver incidente de 31/07/2026 no link de captação.
+      const crmCode = await nextLegacyCode(svc, "crm_leads", "CRM-26");
       void svc.from("crm_leads").insert({
         code:             crmCode,
         name:             deal.empresa_nome,
