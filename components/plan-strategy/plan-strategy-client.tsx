@@ -1,13 +1,14 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { Compass, ChevronLeft, ChevronRight, Loader2, Save, Target, Info } from "lucide-react";
+import { Compass, ChevronLeft, ChevronRight, Loader2, Save, Target, Info, LayoutGrid, ListChecks } from "lucide-react";
 import { SECTORS, SECTOR_LABELS, type Sector } from "@/lib/sector-goals";
 import {
   CADENCES, CADENCE_LABELS, CADENCE_QUESTION, CADENCE_FORMAT,
   STATUS_OPTIONS, STATUS_LABELS, type Cadence, type CheckinStatus,
   periodLabel, shiftDate,
 } from "@/lib/plan-strategy";
+import { PlanStrategyDashboard } from "@/components/plan-strategy/plan-strategy-dashboard";
 
 interface Checkin {
   sector: string;
@@ -106,6 +107,7 @@ function SectorCheckinCard({ sector, checkin, onSave }: {
 }
 
 export function PlanStrategyClient() {
+  const [view, setView] = useState<"dashboard" | "cadencia">("dashboard");
   const [cadence, setCadence] = useState<Cadence>("SEMANAL");
   const [refDate, setRefDate] = useState(() => new Date());
   const [checkins, setCheckins] = useState<Record<string, Checkin> | null>(null);
@@ -161,6 +163,26 @@ export function PlanStrategyClient() {
         </div>
       </div>
 
+      {/* View switcher */}
+      <div className="flex items-center gap-1 bg-[#0D1929] border border-[#243A66] rounded-xl p-1 w-fit">
+        <button onClick={() => setView("dashboard")}
+          className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold transition-colors ${
+            view === "dashboard" ? "bg-[#C9A84C] text-[#09081A]" : "text-[#7A8FA8] hover:text-[#F0ECE4]"
+          }`}>
+          <LayoutGrid className="w-3.5 h-3.5" /> Dashboard
+        </button>
+        <button onClick={() => setView("cadencia")}
+          className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold transition-colors ${
+            view === "cadencia" ? "bg-[#C9A84C] text-[#09081A]" : "text-[#7A8FA8] hover:text-[#F0ECE4]"
+          }`}>
+          <ListChecks className="w-3.5 h-3.5" /> Cadência (check-ins)
+        </button>
+      </div>
+
+      {view === "dashboard" ? (
+        <PlanStrategyDashboard />
+      ) : (
+        <>
       {/* Cadence tabs */}
       <div className="flex items-center gap-1 bg-[#0D1929] border border-[#243A66] rounded-xl p-1 w-fit overflow-x-auto">
         {CADENCES.map(c => (
@@ -218,6 +240,8 @@ export function PlanStrategyClient() {
             />
           ))}
         </div>
+      )}
+        </>
       )}
     </div>
   );
