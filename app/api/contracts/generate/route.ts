@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { resolveContractVariables, wrapContractInV3Html } from "@/lib/contract-render";
+import type { V3Series } from "@/lib/v3-codes";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -152,10 +153,30 @@ export async function POST(req: NextRequest) {
   const contractTitle = resolveContractVariables(template.template_name, variables);
   const renderedHtml = wrapContractInV3Html(contractTitle, renderedBody, resolvedParties);
 
+  // Governanca de Numeracao V3 (10/08/2026): corrige P0 achado ao vivo.
+  // A migration 20260807b tornou operation_contracts.contract_code
+  // obrigatorio e unico, emitido por next_v3_code(template.contract_series,
+  // null) "no momento da geracao, nunca calculado na rota" (comentario da
+  // propria migration) — mas esta rota nunca foi atualizada para de fato
+  // chamar isso. Resultado: toda geracao de contrato falhava com violacao de
+  // not-null desde 07/08/2026, confirmado por teste real antes deste fix
+  // (zero contratos criados depois da migration, ultimo real de 28/07).
+  if (!template.contract_series) {
+    return NextResponse.json({ error: `Template "${template.template_name}" não declara contract_series — não é possível gerar contrato sem série de numeração.` }, { status: 422 });
+  }
+  const { data: contractCode, error: codeError } = await svc().rpc("next_v3_code", {
+    p_series: template.contract_series as V3Series,
+    p_class: null,
+  });
+  if (codeError || !contractCode) {
+    return NextResponse.json({ error: `Falha ao emitir número do contrato: ${codeError?.message ?? "resposta vazia"}` }, { status: 500 });
+  }
+
   const { data: contract, error } = await svc()
     .from("operation_contracts")
     .insert({
       template_id,
+      contract_code: contractCode,
       vertical: template.vertical,
       listing_id: listing_id ?? null,
       bid_id: bid_id ?? null,

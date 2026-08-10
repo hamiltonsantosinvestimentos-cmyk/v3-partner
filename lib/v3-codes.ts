@@ -40,8 +40,12 @@ export type V3Series =
   | "V3C-ORG"   // Contrato de originação
   | "V3C-MAN"   // Contrato de mandato
   | "V3C-PAR"   // Adesão de partner
-  | "V3C-CES"   // Contrato de cessão
-  | "V3C-NDA";  // NDA
+  | "V3C-CES"   // Contrato de cessão / compra-e-venda de ativo
+  | "V3C-NDA"   // NDA
+  | "V3C-LOI"   // Carta de Intenção (adicionada em 20260807b, nunca refletida aqui)
+  | "V3C-FPA"   // Acordo de Proteção de Honorários (idem)
+  | "V3C-FOR"   // Contrato de Fornecedor (idem)
+  | "V3C-FUN";  // Contrato de Fundo (idem)
 
 export type V3Esfera = "FED" | "EST" | "MUN";
 
