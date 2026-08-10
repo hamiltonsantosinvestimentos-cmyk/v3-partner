@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { notifyAgendamentoSDR } from "@/lib/email";
+import { syncSdrLeadToProspeccao } from "@/lib/sdr-prospeccao-sync";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -105,11 +106,16 @@ export async function POST(req: NextRequest) {
 
 // ── Detecção de agendamento via Haiku ───────────────────────────────────────
 
+type SinalFunil = "nenhum" | "qualificado" | "convertido" | "sem_interesse";
+
 type AgendamentoDetect = {
   agendado: boolean;
   data_hora: string | null;
   nome_lead: string | null;
+  sinal_funil: SinalFunil;
 };
+
+const SINAL_VAZIO: AgendamentoDetect = { agendado: false, data_hora: null, nome_lead: null, sinal_funil: "nenhum" };
 
 async function detectarAgendamento(
   userMsg: string,
@@ -121,13 +127,21 @@ async function detectarAgendamento(
 
     const result = await anthropic.messages.create({
       model: "claude-haiku-4-5-20251001",
-      max_tokens: 150,
+      max_tokens: 200,
       messages: [{
         role: "user",
-        content: `Analise se estas mensagens de WhatsApp confirmam um agendamento de reunião.
+        content: `Analise esta troca de mensagens de WhatsApp entre um lead e um agente de vendas (SDR) e classifique o momento do funil.
+
 Um agendamento é confirmado quando o usuário aceita ou sugere data/hora E o agente confirma.
+
+sinal_funil (escolha o que MAIS se aplica, seja conservador — só marque se houver confirmação clara e explícita, não apenas educação/interesse superficial):
+- "qualificado": o lead demonstrou claramente que o perfil se encaixa (quer ser partner, tem carteira de clientes, quer estruturar operação) — mais que curiosidade
+- "convertido": o lead confirmou EXPLICITAMENTE que vai fechar/assinar/virar partner (ex: "pode me mandar o contrato", "vou assinar", "quero começar")
+- "sem_interesse": o lead disse claramente que não tem interesse ou pediu para não ser mais contatado
+- "nenhum": nada disso ficou claro nesta troca — é o padrão na dúvida
+
 Retorne APENAS JSON sem markdown:
-{"agendado":true ou false,"data_hora":"data e hora extraída em português ex: 05/06 às 15h ou null","nome_lead":"nome mencionado pelo usuário ou null"}
+{"agendado":true ou false,"data_hora":"data e hora extraída em português ex: 05/06 às 15h ou null","nome_lead":"nome mencionado pelo usuário ou null","sinal_funil":"qualificado"|"convertido"|"sem_interesse"|"nenhum"}
 
 Usuário: "${userMsg.slice(0, 300)}"
 Agente: "${botMsg.slice(0, 300)}"
@@ -138,10 +152,10 @@ JSON:`,
     const text = result.content[0].type === "text" ? result.content[0].text : "{}";
     const start = text.indexOf("{");
     const end = text.lastIndexOf("}");
-    if (start === -1 || end === -1) return { agendado: false, data_hora: null, nome_lead: null };
-    return JSON.parse(text.slice(start, end + 1)) as AgendamentoDetect;
+    if (start === -1 || end === -1) return SINAL_VAZIO;
+    return { ...SINAL_VAZIO, ...JSON.parse(text.slice(start, end + 1)) } as AgendamentoDetect;
   } catch {
-    return { agendado: false, data_hora: null, nome_lead: null };
+    return SINAL_VAZIO;
   }
 }
 
@@ -209,8 +223,62 @@ async function processarAgendamento(
       });
       console.log(`[SDR Webhook] E-mail de agendamento enviado para admin (sem responsável atribuído)`);
     }
+
+    await syncSdrLeadToProspeccao({
+      phone, status: "agendado",
+      nome: nomeLead ?? lead?.nome ?? null,
+      responsavel_id: lead?.responsavel_id ?? null,
+      nota: `Reunião agendada automaticamente pelo Agente SDR${dataHora ? ` — ${dataHora}` : ""}`,
+    });
   } catch (e) {
     console.error("[SDR Webhook] Erro ao processar agendamento:", e);
+  }
+}
+
+// ── Aplica sinal de funil (qualificado/convertido/sem_interesse): status + vínculo com Prospecção ──
+
+const SINAL_PARA_STATUS: Record<Exclude<SinalFunil, "nenhum">, string> = {
+  qualificado: "qualificado",
+  convertido: "convertido",
+  sem_interesse: "sem_interesse",
+};
+
+// Ordem de avanço do status no CRM do WhatsApp — evita que um sinal fraco regrida um lead já avançado
+const STATUS_RANK: Record<string, number> = {
+  ativo: 0, qualificado: 1, agendado: 2, convertido: 3, sem_interesse: -1, arquivado: -1,
+};
+
+async function processarSinalFunil(phone: string, sinal: Exclude<SinalFunil, "nenhum">) {
+  try {
+    const { data: lead } = await supabase
+      .from("sdr_leads")
+      .select("nome, responsavel_id, status")
+      .eq("phone", phone)
+      .single();
+
+    const statusAlvo = SINAL_PARA_STATUS[sinal];
+    const statusAtual = lead?.status ?? "ativo";
+
+    // "sem_interesse" sempre pode ser aplicado (exceto se já convertido); os demais só avançam
+    const deveAtualizar = sinal === "sem_interesse"
+      ? statusAtual !== "convertido"
+      : (STATUS_RANK[statusAlvo] ?? 0) > (STATUS_RANK[statusAtual] ?? 0);
+
+    if (deveAtualizar) {
+      await supabase.from("sdr_leads").upsert({
+        phone, status: statusAlvo, updated_at: new Date().toISOString(),
+      }, { onConflict: "phone", ignoreDuplicates: false });
+      console.log(`[SDR Webhook] Sinal de funil "${sinal}" detectado para ${phone} — status atualizado`);
+    }
+
+    await syncSdrLeadToProspeccao({
+      phone, status: statusAlvo,
+      nome: lead?.nome ?? null,
+      responsavel_id: lead?.responsavel_id ?? null,
+      nota: `Sinal "${sinal}" detectado automaticamente pelo Agente SDR na conversa`,
+    });
+  } catch (e) {
+    console.error("[SDR Webhook] Erro ao processar sinal de funil:", e);
   }
 }
 
@@ -308,12 +376,15 @@ Você representa uma empresa séria e de alto padrão. Seu tom é profissional, 
 
     console.log(`[SDR Webhook] Resposta enviada para ${phone} (${partesMensagem.length} mensagem(ns))`);
 
-    // Detecta se houve agendamento na troca de mensagens (fire-and-forget)
+    // Detecta agendamento e progressão de funil na troca de mensagens (fire-and-forget)
     detectarAgendamento(mensagem, resposta).then(detect => {
       if (detect.agendado) {
         processarAgendamento(phone, detect.data_hora, detect.nome_lead);
       }
-    }).catch(e => console.error("[SDR Webhook] Erro na detecção de agendamento:", e));
+      if (detect.sinal_funil !== "nenhum") {
+        processarSinalFunil(phone, detect.sinal_funil);
+      }
+    }).catch(e => console.error("[SDR Webhook] Erro na detecção de agendamento/funil:", e));
 
   } catch (e) {
     console.error("[SDR Webhook] Erro ao processar mensagem:", e);

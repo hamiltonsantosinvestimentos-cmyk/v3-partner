@@ -27,6 +27,17 @@ type SdrLead = {
   last_message_at: string | null;
   last_message_preview: string | null;
   message_count: number;
+  prospeccao_etapa: string | null;
+};
+
+// Etapas do Kanban de Prospecção de Partners — mesmas cores usadas lá, pra reconhecimento visual
+const PROSPECCAO_ETAPA_LABELS: Record<string, { label: string; color: string }> = {
+  prospect:    { label: "Prospect",    color: "#7A8FA8" },
+  contatado:   { label: "Contatado",   color: "#60A5FA" },
+  interessado: { label: "Interessado", color: "#F59E0B" },
+  trial:       { label: "Em Trial",    color: "#A78BFA" },
+  convertido:  { label: "Convertido",  color: "#34D399" },
+  perdido:     { label: "Perdido",     color: "#EF4444" },
 };
 
 type Profile = { id: string; full_name: string; role: string };
@@ -300,7 +311,7 @@ export function SdrClient({ currentUserId, currentUserName }: SdrClientProps) {
               AGENTE SDR
             </p>
             <h1 style={{ color: "#F0ECE4", fontSize: 20, fontWeight: 700, margin: 0, lineHeight: 1.2 }}>
-              WhatsApp SDR
+              CRM do WhatsApp
             </h1>
           </div>
         </div>
@@ -509,6 +520,19 @@ export function SdrClient({ currentUserId, currentUserName }: SdrClientProps) {
                             {sb.label}
                           </span>
                         )}
+                        {lead.prospeccao_etapa && (() => {
+                          const pe = PROSPECCAO_ETAPA_LABELS[lead.prospeccao_etapa];
+                          if (!pe) return null;
+                          return (
+                            <span title="Etapa vinculada na Prospecção de Partners" style={{
+                              fontSize: 9, fontWeight: 700, letterSpacing: 0.5,
+                              padding: "2px 6px", borderRadius: 4,
+                              background: `${pe.color}20`, color: pe.color, border: `1px solid ${pe.color}40`,
+                            }}>
+                              ↗ {pe.label}
+                            </span>
+                          );
+                        })()}
                         {(lead.tags ?? []).slice(0, 2).map(tag => {
                           const tc = tagColor(tag);
                           return (
@@ -647,6 +671,17 @@ export function SdrClient({ currentUserId, currentUserName }: SdrClientProps) {
                       </option>
                     ))}
                   </select>
+                  {selectedLead.prospeccao_etapa && PROSPECCAO_ETAPA_LABELS[selectedLead.prospeccao_etapa] && (
+                    <span title="Etapa vinculada no Kanban de Prospecção de Partners" style={{
+                      fontSize: 11, fontWeight: 700,
+                      padding: "2px 8px", borderRadius: 20,
+                      background: `${PROSPECCAO_ETAPA_LABELS[selectedLead.prospeccao_etapa].color}20`,
+                      color: PROSPECCAO_ETAPA_LABELS[selectedLead.prospeccao_etapa].color,
+                      border: `1px solid ${PROSPECCAO_ETAPA_LABELS[selectedLead.prospeccao_etapa].color}40`,
+                    }}>
+                      ↗ Prospecção: {PROSPECCAO_ETAPA_LABELS[selectedLead.prospeccao_etapa].label}
+                    </span>
+                  )}
                 </div>
 
                 {/* Tags row */}
