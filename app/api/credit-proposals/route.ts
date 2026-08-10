@@ -6,6 +6,7 @@ import { logAudit } from "@/lib/audit";
 import { notifyNovaProposta, notifyPropostaAtualizada } from "@/lib/email";
 import { createNotification, notifyByRoles } from "@/lib/notify";
 import { issueCreditCode } from "@/lib/v3-codes";
+import { resolveClient } from "@/lib/v3-clients";
 
 function serviceClient() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -192,6 +193,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: `Falha ao emitir código da proposta: ${msg}` }, { status: 500 });
     }
 
+    // Client 360, Fase A (10/08/2026): toda proposta nova ja nasce ligada ao
+    // cliente quando ha CPF/CNPJ. Best-effort: nunca bloqueia a criacao da
+    // proposta se a resolucao falhar (mesmo padrao ja usado pra pasta MPS).
+    const v3ClientId = await resolveClient(d.client_cpf_cnpj, { legalName: d.client_name, vertical: "credito" }).catch(() => null);
+
     const { data: inserted, error } = await serviceClient()
       .from("credit_desk_proposals")
       .insert({
@@ -199,6 +205,7 @@ export async function POST(req: NextRequest) {
         title:           d.title,
         client_name:     d.client_name,
         client_cpf_cnpj: d.client_cpf_cnpj ?? null,
+        v3_client_id:    v3ClientId,
         credit_line:     d.credit_line,
         credit_line_id:  linhaMatch?.id ?? null,
         requested_value: d.requested_value,

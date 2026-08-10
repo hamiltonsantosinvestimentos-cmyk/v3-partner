@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { issueCreditCode } from "@/lib/v3-codes";
+import { resolveClient } from "@/lib/v3-clients";
 
 function serviceClient() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -70,6 +71,9 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: `Falha ao emitir código da proposta: ${msg}` }, { status: 500 });
   }
 
+  // Client 360, Fase A (10/08/2026): best-effort, nunca bloqueia a criacao.
+  const v3ClientId = await resolveClient(clientCpfCnpj, { legalName: order.client_name, vertical: "credito" }).catch(() => null);
+
   const { data: proposal, error: propErr } = await svc
     .from("credit_desk_proposals")
     .insert({
@@ -77,6 +81,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       title: `Análise de Crédito · ${order.client_name}`,
       client_name: order.client_name,
       client_cpf_cnpj: clientCpfCnpj,
+      v3_client_id: v3ClientId,
       credit_line: "ANALISE_AVULSA",
       requested_value: (order.amount_cents ?? 0) / 100,
       current_level: "NIVEL_1",

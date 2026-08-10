@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { issueV3Code, resolveSectorCode } from "@/lib/v3-codes";
+import { resolveClient } from "@/lib/v3-clients";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -99,6 +100,9 @@ export async function POST(req: NextRequest) {
   }
   const { data: numeroInterno } = await svc().rpc("generate_cm_numero_interno");
 
+  // Client 360, Fase A (10/08/2026): best-effort, nunca bloqueia a criacao.
+  const v3ClientId = await resolveClient(seller_cpf_cnpj, { legalName: seller_name, vertical: "bolsa_de_ativos" }).catch(() => null);
+
   const { data: listing, error } = await svc()
     .from("cm_asset_listings")
     .insert({
@@ -111,6 +115,7 @@ export async function POST(req: NextRequest) {
       currency: currency ?? "BRL",
       seller_name,
       seller_cpf_cnpj: seller_cpf_cnpj ?? null,
+      v3_client_id: v3ClientId,
       seller_profile_id: null,
       ma_deal_id: ma_deal_id ?? null,
       ente_devedor: ente_devedor ?? null,

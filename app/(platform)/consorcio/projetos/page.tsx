@@ -34,7 +34,7 @@ export default function ConsorcioProjetosPage() {
   const [userRole, setUserRole] = useState<string>("");
   const [showForm, setShowForm] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
-  const [form, setForm] = useState({ name: "", type: "IMOVEL", credit_value: "", client: "", admin: "", status: "AGUARDANDO" });
+  const [form, setForm] = useState({ name: "", type: "IMOVEL", credit_value: "", client: "", client_cpf_cnpj: "", admin: "", status: "AGUARDANDO" });
 
   useEffect(() => {
     Promise.all([
@@ -59,7 +59,7 @@ export default function ConsorcioProjetosPage() {
     if (json.projeto) {
       setProjects(prev => [json.projeto, ...prev]);
       setShowForm(false);
-      setForm({ name: "", type: "IMOVEL", credit_value: "", client: "", admin: "", status: "AGUARDANDO" });
+      setForm({ name: "", type: "IMOVEL", credit_value: "", client: "", client_cpf_cnpj: "", admin: "", status: "AGUARDANDO" });
     }
   };
 
@@ -99,6 +99,7 @@ export default function ConsorcioProjetosPage() {
             <form onSubmit={handleAdd} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
               <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Nome do Projeto" required className="h-9 px-3 text-sm bg-secondary border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50" />
               <input value={form.client} onChange={e => setForm({ ...form, client: e.target.value })} placeholder="Cliente" required className="h-9 px-3 text-sm bg-secondary border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50" />
+              <input value={form.client_cpf_cnpj} onChange={e => setForm({ ...form, client_cpf_cnpj: e.target.value })} placeholder="CPF/CNPJ do Cliente" className="h-9 px-3 text-sm bg-secondary border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50" />
               <input value={form.admin} onChange={e => setForm({ ...form, admin: e.target.value })} placeholder="Administradora" required className="h-9 px-3 text-sm bg-secondary border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50" />
               <input type="number" value={form.credit_value} onChange={e => setForm({ ...form, credit_value: e.target.value })} placeholder="Valor do Crédito" required min={0} className="h-9 px-3 text-sm bg-secondary border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50" />
               <select value={form.type} onChange={e => setForm({ ...form, type: e.target.value })} className="h-9 px-3 text-sm bg-secondary border border-border rounded-lg text-foreground focus:outline-none">

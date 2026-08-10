@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { z } from "zod";
 import { issueV3Code } from "@/lib/v3-codes";
+import { resolveClient } from "@/lib/v3-clients";
 
 function serviceClient() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -22,6 +23,7 @@ const createSchema = z.object({
   type: z.enum(["IMOVEL","VEICULO","SERVICO","OUTROS"]).default("IMOVEL"),
   credit_value: z.number().positive(),
   client: z.string().min(2).max(200),
+  client_cpf_cnpj: z.string().max(20).optional().nullable(),
   admin: z.string().min(1).max(200),
   status: z.enum(["EM_ANDAMENTO","CONCLUIDO","AGUARDANDO","CANCELADO"]).default("AGUARDANDO"),
 });
@@ -55,8 +57,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: `Falha ao emitir código do projeto: ${msg}` }, { status: 500 });
   }
 
+  // Client 360, Fase A (10/08/2026): best-effort, nunca bloqueia a criacao.
+  const v3ClientId = await resolveClient(d.client_cpf_cnpj, { legalName: d.client, vertical: "consorcio" }).catch(() => null);
+
   const { data, error } = await svc.from("consorcio_projetos").insert({
-    code, ...d, created_by: user.id,
+    code, ...d, v3_client_id: v3ClientId, created_by: user.id,
   }).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 

@@ -44,6 +44,7 @@ interface AdminUser {
 interface OfertaForm {
   interessado_nome: string;
   interessado_tel: string;
+  interessado_cpf_cnpj: string;
   valor_oferta: string;
   observacoes: string;
   responsavel_id: string;
@@ -218,6 +219,7 @@ export default function CartasContempladasPage() {
     setOfertaForm({
       interessado_nome: "",
       interessado_tel: "",
+      interessado_cpf_cnpj: "",
       valor_oferta: String(displayEntrada(letter)),
       observacoes: "",
       responsavel_id: userId ?? "",
@@ -268,6 +270,7 @@ export default function CartasContempladasPage() {
           carta_credit_value: ofertaModal.credit_value,
           interessado_nome: ofertaForm.interessado_nome,
           interessado_tel: ofertaForm.interessado_tel || null,
+          interessado_cpf_cnpj: ofertaForm.interessado_cpf_cnpj || null,
           valor_oferta: Number(ofertaForm.valor_oferta),
           observacoes: ofertaForm.observacoes || null,
           responsavel_id: ofertaForm.responsavel_id || null,
@@ -696,6 +699,16 @@ export default function CartasContempladasPage() {
                     value={ofertaForm.interessado_tel}
                     onChange={e => setOfertaForm(f => ({ ...f, interessado_tel: e.target.value }))}
                     placeholder="(51) 99999-0000"
+                    className="w-full h-9 px-3 text-sm bg-[#162744] border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-amber-500/40"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs text-muted-foreground mb-1.5">CPF/CNPJ</label>
+                  <input
+                    value={ofertaForm.interessado_cpf_cnpj}
+                    onChange={e => setOfertaForm(f => ({ ...f, interessado_cpf_cnpj: e.target.value }))}
+                    placeholder="000.000.000-00"
                     className="w-full h-9 px-3 text-sm bg-[#162744] border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-amber-500/40"
                   />
                 </div>

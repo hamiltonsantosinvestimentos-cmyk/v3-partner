@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
+import { resolveClient } from "@/lib/v3-clients";
 
 function serviceClient() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -33,7 +34,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const { data: oferta, error: ofertaErr } = await svc
     .from("consorcio_ofertas")
-    .select("id, carta_id, carta_code, interessado_nome, status")
+    .select("id, carta_id, carta_code, interessado_nome, interessado_cpf_cnpj, status")
     .eq("id", id)
     .single();
   if (ofertaErr || !oferta) return NextResponse.json({ error: "Oferta não encontrada" }, { status: 404 });
@@ -57,11 +58,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     .neq("id", id);
   if (cancelErr) console.error("[consorcio/ofertas/aceitar] falha ao cancelar ofertas concorrentes", cancelErr.message);
 
-  // 3. Marca a carta como VENDIDA — é este evento, não a oferta em si, que
-  // representa a aquisição real do cliente
+  // 3. Marca a carta como VENDIDA, é este evento, não a oferta em si, que
+  // representa a aquisição real do cliente. Client 360, Fase A (10/08/2026):
+  // resolveClient() acontece aqui, no mesmo momento, best-effort.
+  const v3ClientId = await resolveClient(oferta.interessado_cpf_cnpj, { legalName: oferta.interessado_nome, vertical: "consorcio" }).catch(() => null);
   const { error: cartaErr } = await svc
     .from("consorcio_cartas")
-    .update({ status: "VENDIDA" })
+    .update({ status: "VENDIDA", v3_client_id: v3ClientId })
     .eq("id", oferta.carta_id);
   if (cartaErr) return NextResponse.json({ error: cartaErr.message }, { status: 500 });
 

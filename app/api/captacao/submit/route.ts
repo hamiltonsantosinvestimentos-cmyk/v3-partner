@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { CHECKLISTS, DEFAULT_CHECKLIST, LEVEL_LINES } from "@/lib/credit-checklists";
 import { issueCreditCode } from "@/lib/v3-codes";
+import { resolveClient } from "@/lib/v3-clients";
 
 /** Parseia valor em formato BRL ("5.000,00") — não confundir com dígitos crus. */
 function parseBRL(v: unknown): number {
@@ -212,6 +213,9 @@ async function createLinkedProposal(
     return null;
   }
 
+  // Client 360, Fase A (10/08/2026): best-effort, nunca bloqueia a criacao.
+  const v3ClientId = await resolveClient((formData.cpfCnpj as string) ?? null, { legalName: clientName, vertical: "credito" }).catch(() => null);
+
   const { data: proposal, error } = await svc
     .from("credit_desk_proposals")
     .insert({
@@ -220,6 +224,7 @@ async function createLinkedProposal(
       title: `${creditLine} - ${clientName}`,
       client_name: clientName,
       client_cpf_cnpj: (formData.cpfCnpj as string) ?? null,
+      v3_client_id: v3ClientId,
       credit_line: creditLine,
       credit_line_id: linhaMatch?.id ?? null,
       requested_value: requestedValue,
