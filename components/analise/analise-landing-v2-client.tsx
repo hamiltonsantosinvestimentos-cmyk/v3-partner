@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { PlayCircle, Compass, Landmark, Handshake, ArrowRight, Check } from "lucide-react";
+import { Compass, Landmark, Handshake, ArrowRight, Check } from "lucide-react";
 import { captureRefFromUrl, captureUtmFromUrl } from "@/lib/ref-tracking";
 
 const N = "#09081A", N2 = "#13223A", N3 = "#162744", N4 = "#243A66";
@@ -114,11 +114,21 @@ export function AnaliseLandingV2Client() {
           </Link>
         </div>
 
-        {/* Video placeholder */}
+        {/* Video explicativo da Analise de Credito.
+            Substituiu o placeholder "Video explicativo em producao" em 10/08/2026,
+            que ficava visivel ao cliente numa pagina de venda ativa.
+            loading lazy para nao competir com o carregamento do Hero. */}
         <div style={{ maxWidth: 720, margin: "40px auto 0" }}>
-          <div style={{ position: "relative", aspectRatio: "16/9", background: "rgba(9,8,26,0.55)", backdropFilter: "blur(6px)", border: `1px solid ${GOLD_BORDER}`, borderRadius: 12, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10 }}>
-            <PlayCircle size={48} color={GO} strokeWidth={1.5} />
-            <span style={{ fontSize: 11, color: MU, letterSpacing: "0.04em", textTransform: "uppercase" }}>Vídeo explicativo em produção</span>
+          <div style={{ position: "relative", aspectRatio: "16/9", background: "rgba(9,8,26,0.55)", border: `1px solid ${GOLD_BORDER}`, borderRadius: 12, overflow: "hidden" }}>
+            <iframe
+              src="https://www.youtube.com/embed/Mt7Q-WwYlXw?rel=0&modestbranding=1"
+              title="Análise de Crédito V3 Partners"
+              loading="lazy"
+              allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+              referrerPolicy="strict-origin-when-cross-origin"
+              allowFullScreen
+              style={{ position: "absolute", inset: 0, width: "100%", height: "100%", border: 0 }}
+            />
           </div>
         </div>
       </section>
