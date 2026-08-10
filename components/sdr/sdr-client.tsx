@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import Image from "next/image";
 import { CampanhasClient } from "./campanhas-client";
+import { CampanhasWhatsappClient } from "./campanhas-whatsapp-client";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -116,7 +117,7 @@ export function SdrClient({ currentUserId, currentUserName }: SdrClientProps) {
   const [conversas, setConversas] = useState<Conversa[]>([]);
   const [loadingConversas, setLoadingConversas] = useState(false);
   const [search, setSearch] = useState("");
-  const [mainTab, setMainTab] = useState<"conversas" | "campanhas">("conversas");
+  const [mainTab, setMainTab] = useState<"conversas" | "campanhas" | "envio-massa">("conversas");
   const [showQr, setShowQr] = useState(false);
   const [editTag, setEditTag] = useState(false);
   const [savingLead, setSavingLead] = useState(false);
@@ -317,10 +318,14 @@ export function SdrClient({ currentUserId, currentUserName }: SdrClientProps) {
         </div>
         {/* Tabs */}
         <div style={{ display: "flex", gap: 4 }}>
-          {[{ key: "conversas", label: "💬 WhatsApp" }, { key: "campanhas", label: "📧 Campanhas" }].map(t => (
+          {[
+            { key: "conversas", label: "💬 WhatsApp" },
+            { key: "envio-massa", label: "📤 Envio em Massa" },
+            { key: "campanhas", label: "📧 Campanhas" },
+          ].map(t => (
             <button
               key={t.key}
-              onClick={() => setMainTab(t.key as "conversas" | "campanhas")}
+              onClick={() => setMainTab(t.key as "conversas" | "campanhas" | "envio-massa")}
               style={{
                 background: mainTab === t.key ? "#162744" : "transparent",
                 border: `1px solid ${mainTab === t.key ? "#C9A84C" : "#243A66"}`,
@@ -403,10 +408,17 @@ export function SdrClient({ currentUserId, currentUserName }: SdrClientProps) {
         </div>
       )}
 
-      {/* ── Campanhas tab ───────────────────────────────────────────────────── */}
+      {/* ── Campanhas tab (e-mail) ────────────────────────────────────────────── */}
       {mainTab === "campanhas" && (
         <div style={{ flex: 1, overflowY: "auto", background: "#0D1B2E" }}>
           <CampanhasClient />
+        </div>
+      )}
+
+      {/* ── Envio em Massa tab (fila WhatsApp — sem disparo automático) ──────── */}
+      {mainTab === "envio-massa" && (
+        <div style={{ flex: 1, overflow: "hidden", background: "#0D1B2E" }}>
+          <CampanhasWhatsappClient />
         </div>
       )}
 
