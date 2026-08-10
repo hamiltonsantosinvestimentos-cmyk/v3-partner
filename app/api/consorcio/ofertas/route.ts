@@ -15,6 +15,25 @@ function fmtCurrency(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 }
 
+// GET /api/consorcio/ofertas?carta_id=...&status=pendente
+export async function GET(req: NextRequest) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+
+  const { searchParams } = new URL(req.url);
+  const cartaId = searchParams.get("carta_id");
+  const status = searchParams.get("status");
+
+  let query = svc().from("consorcio_ofertas").select("*").order("created_at", { ascending: false });
+  if (cartaId) query = query.eq("carta_id", cartaId);
+  if (status) query = query.eq("status", status);
+
+  const { data, error } = await query;
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ ofertas: data ?? [] });
+}
+
 const ofertaSchema = z.object({
   carta_id: z.string().uuid(),
   carta_code: z.string().min(1),

@@ -49,6 +49,16 @@ interface OfertaForm {
   responsavel_id: string;
 }
 
+interface Oferta {
+  id: string;
+  interessado_nome: string;
+  interessado_tel: string | null;
+  valor_oferta: number;
+  responsavel_nome: string | null;
+  status: "pendente" | "aceita" | "recusada" | "cancelada";
+  created_at: string;
+}
+
 const TYPE_LABELS: Record<LetterType, string> = { IMOVEL: "Imóvel", VEICULO: "Veículo", SERVICO: "Serviço", OUTROS: "Outros" };
 const TYPE_ICONS: Record<LetterType, React.ReactNode> = {
   IMOVEL: <Home className="w-4 h-4" />, VEICULO: <Car className="w-4 h-4" />,
@@ -90,6 +100,9 @@ export default function CartasContempladasPage() {
   const [submittingOferta, setSubmittingOferta] = useState(false);
   const [ofertaSuccess, setOfertaSuccess] = useState(false);
   const [ofertaError, setOfertaError] = useState<string | null>(null);
+  const [ofertasPendentes, setOfertasPendentes] = useState<Oferta[]>([]);
+  const [loadingOfertas, setLoadingOfertas] = useState(false);
+  const [aceitandoId, setAceitandoId] = useState<string | null>(null);
 
   useEffect(() => {
     Promise.all([
@@ -211,6 +224,33 @@ export default function CartasContempladasPage() {
     });
     setOfertaSuccess(false);
     setOfertaError(null);
+    setOfertasPendentes([]);
+    if (isAdmin) {
+      setLoadingOfertas(true);
+      fetch(`/api/consorcio/ofertas?carta_id=${letter.id}&status=pendente`)
+        .then(r => r.json())
+        .then(json => setOfertasPendentes(Array.isArray(json.ofertas) ? json.ofertas : []))
+        .catch(() => {})
+        .finally(() => setLoadingOfertas(false));
+    }
+  };
+
+  const handleAceitarOferta = async (ofertaId: string) => {
+    setAceitandoId(ofertaId);
+    try {
+      const res = await fetch(`/api/consorcio/ofertas/${ofertaId}/aceitar`, { method: "POST" });
+      const json = await res.json();
+      if (!res.ok) {
+        alert(typeof json.error === "string" ? json.error : "Erro ao aceitar oferta");
+        return;
+      }
+      if (ofertaModal) setLetters(prev => prev.map(l => l.id === ofertaModal.id ? { ...l, status: "VENDIDA" } : l));
+      setOfertaModal(null);
+    } catch (err) {
+      alert(`Erro de conexão: ${String(err)}`);
+    } finally {
+      setAceitandoId(null);
+    }
   };
 
   const handleSubmitOferta = async (e: React.FormEvent) => {
@@ -588,6 +628,34 @@ export default function CartasContempladasPage() {
                 <X className="w-4 h-4" />
               </button>
             </div>
+
+            {isAdmin && (loadingOfertas || ofertasPendentes.length > 0) && (
+              <div className="px-6 pt-4 space-y-2">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Ofertas Pendentes</p>
+                {loadingOfertas ? (
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground py-2">
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" /> Carregando...
+                  </div>
+                ) : (
+                  ofertasPendentes.map(o => (
+                    <div key={o.id} className="flex items-center justify-between gap-3 px-3 py-2 rounded-lg bg-[#162744] border border-border/50">
+                      <div>
+                        <p className="text-xs font-semibold text-white">{o.interessado_nome}</p>
+                        <p className="text-[11px] text-muted-foreground">{formatCurrency(o.valor_oferta)}{o.responsavel_nome ? ` · ${o.responsavel_nome}` : ""}</p>
+                      </div>
+                      <Button
+                        size="sm"
+                        disabled={aceitandoId === o.id}
+                        onClick={() => handleAceitarOferta(o.id)}
+                        className="h-7 px-3 text-xs bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/30"
+                      >
+                        {aceitandoId === o.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Aceitar"}
+                      </Button>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
 
             {ofertaSuccess ? (
               <div className="px-6 py-10 text-center">

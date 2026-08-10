@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { z } from "zod";
+import { issueV3Code } from "@/lib/v3-codes";
 
 function serviceClient() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -42,10 +43,34 @@ export async function POST(req: NextRequest) {
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten().fieldErrors }, { status: 400 });
   const d = parsed.data;
   const svc = serviceClient();
+
+  // Governanca de Numeracao V3, Fase 2b (10/08/2026): codigo emitido pelo
+  // banco desde a criacao da tabela (consorcio_projetos nao existia em
+  // producao ate esta sessao), mesmo padrao ja usado em consorcio_cartas.
+  let code: string;
+  try {
+    code = await issueV3Code("CS", null, svc);
+  } catch (codeErr) {
+    const msg = codeErr instanceof Error ? codeErr.message : String(codeErr);
+    return NextResponse.json({ error: `Falha ao emitir código do projeto: ${msg}` }, { status: 500 });
+  }
+
   const { data, error } = await svc.from("consorcio_projetos").insert({
-    ...d, created_by: user.id,
+    code, ...d, created_by: user.id,
   }).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // Governanca Documental Universal, Fase 2b: cada projeto ja e um cliente
+  // real desde a criacao (diferente de carta contemplada, que so vira
+  // cliente na aceitacao de oferta). Best-effort, nunca bloqueia a criacao.
+  const { error: folderError } = await svc.rpc("create_deal_folder", {
+    p_vertical: "Consorcios",
+    p_deal_code: code,
+    p_client_name: d.client,
+    p_user_id: user.id,
+  });
+  if (folderError) console.error("[consorcio/projetos POST] falha ao criar pasta MPS", folderError.message);
+
   return NextResponse.json({ ok: true, projeto: data });
 }
 
