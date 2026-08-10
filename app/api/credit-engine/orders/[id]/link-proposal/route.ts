@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
-import { nextLegacyCode } from "@/lib/v3-codes";
+import { issueCreditCode } from "@/lib/v3-codes";
 
 function serviceClient() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -57,9 +57,18 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     if (consent?.subject_cpf_cnpj) clientCpfCnpj = consent.subject_cpf_cnpj;
   }
 
-  // MAX real, nunca COUNT(*). Ver nota em app/api/credit-proposals/route.ts
-  // sobre por que esta rota ainda emite CRED-26 e nao V3-CR / V3-CRI.
-  const code = await nextLegacyCode(svc, "credit_desk_proposals", "CRED-26");
+  // Governanca de Numeracao V3, Fase 3 (10/08/2026): serie CR/CRI, sucedendo
+  // CRED-26-NNNNNN. "ANALISE_AVULSA" nunca existe em regras_linhas_credito
+  // (nao e uma linha de credito real, e o produto do Credit Engine avulso),
+  // entao issueCreditCode(null, ...) trata como nacional por definicao,
+  // nunca internacional sem evidencia.
+  let code: string;
+  try {
+    code = (await issueCreditCode(null, undefined, svc)).code;
+  } catch (codeErr) {
+    const msg = codeErr instanceof Error ? codeErr.message : String(codeErr);
+    return NextResponse.json({ error: `Falha ao emitir código da proposta: ${msg}` }, { status: 500 });
+  }
 
   const { data: proposal, error: propErr } = await svc
     .from("credit_desk_proposals")

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { CHECKLISTS, DEFAULT_CHECKLIST, LEVEL_LINES } from "@/lib/credit-checklists";
+import { issueCreditCode } from "@/lib/v3-codes";
 
 /** Parseia valor em formato BRL ("5.000,00") — não confundir com dígitos crus. */
 function parseBRL(v: unknown): number {
@@ -195,17 +196,32 @@ async function createLinkedProposal(
     }
   }
 
-  const { data: proposal, error } = await insertWithUniqueCode(
-    svc,
-    "credit_desk_proposals",
-    "CRED-26",
-    (code) => ({
+  // Governanca de Numeracao V3, Fase 3 (10/08/2026): serie CR/CRI, sucedendo
+  // CRED-26-NNNNNN. Escopo lido de regras_linhas_credito pelo nome da linha
+  // do formulario publico, mesmo padrao ja usado em app/api/credit-proposals.
+  const { data: linhaMatch } = await svc
+    .from("regras_linhas_credito")
+    .select("id")
+    .eq("nome", creditLine)
+    .maybeSingle();
+
+  let code: string;
+  try {
+    code = (await issueCreditCode(linhaMatch?.id ?? null, undefined, svc)).code;
+  } catch {
+    return null;
+  }
+
+  const { data: proposal, error } = await svc
+    .from("credit_desk_proposals")
+    .insert({
       id: proposalIdForPath,
       code,
       title: `${creditLine} - ${clientName}`,
       client_name: clientName,
       client_cpf_cnpj: (formData.cpfCnpj as string) ?? null,
       credit_line: creditLine,
+      credit_line_id: linhaMatch?.id ?? null,
       requested_value: requestedValue,
       current_level: level,
       status: "PENDING",
@@ -241,8 +257,9 @@ async function createLinkedProposal(
         captacao_origin: true,
         crm_pending_review: true,
       },
-    }),
-  );
+    })
+    .select()
+    .single();
 
   if (error || !proposal) return null;
   const typedProposal = proposal as { id: string; code: string };

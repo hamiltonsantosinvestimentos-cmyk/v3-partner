@@ -259,9 +259,14 @@ export async function insertWithLegacyCode<T extends Record<string, unknown>>(
  * op_int_garantia, op_int_cash, acc, ace, finimp, fin_exterior, cambio_pronto
  * e cash_collateral.
  *
- * Pré-requisito: migration 20260805e (coluna escopo). Enquanto ela não existir,
- * esta função trata tudo como nacional e registra aviso, porque é o
- * comportamento idêntico ao de hoje e não introduz regressão.
+ * Pré-requisito: migration 20260808a (coluna escopo em regras_linhas_credito),
+ * aplicada em 08/08/2026. Wired de verdade em app/api/credit-proposals,
+ * app/api/credit-engine/orders/[id]/link-proposal e app/api/captacao/submit
+ * em 10/08/2026, sucedendo CRED-26-NNNNNN nos três pontos de emissão ao
+ * mesmo tempo — migrar só um deles reproduziria o mesmo defeito que motivou
+ * esta governança inteira (formatos convivendo, ver session-decisions.md).
+ * Se a coluna escopo não existir por qualquer motivo, trata tudo como
+ * nacional e registra aviso: fail-open, nunca bloqueia emissão de código.
  */
 export async function issueCreditCode(
   creditLineId: string | null,

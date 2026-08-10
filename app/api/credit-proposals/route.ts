@@ -5,7 +5,7 @@ import { z } from "zod";
 import { logAudit } from "@/lib/audit";
 import { notifyNovaProposta, notifyPropostaAtualizada } from "@/lib/email";
 import { createNotification, notifyByRoles } from "@/lib/notify";
-import { insertWithLegacyCode } from "@/lib/v3-codes";
+import { issueCreditCode } from "@/lib/v3-codes";
 
 function serviceClient() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -174,22 +174,28 @@ export async function POST(req: NextRequest) {
       .eq("nome", d.credit_line)
       .maybeSingle();
 
-    // Codigo por MAX real + retry no 23505, nunca por COUNT(*).
-    //
-    // Por que esta rota ainda emite CRED-26 e nao V3-CR / V3-CRI: a escolha
-    // entre as duas series depende do campo escopo em regras_linhas_credito,
-    // que so passa a existir na Fase 2a da governanca de numeracao. Emitir
-    // agora produziria V3-CR em operacao internacional, e codigo emitido e
-    // imutavel por desenho. Ate la, o formato atual e preservado e o unico
-    // problema resolvido e a colisao.
-    const { data: inserted, error } = await insertWithLegacyCode(
-      serviceClient(),
-      "credit_desk_proposals",
-      "CRED-26",
-      (generatedCode) => ({
-        // Truthiness, não `??`: um chamador que mande code:"" (string vazia)
-        // gravaria código em branco e derrubaria a próxima inserção no unique.
-        code:            d.code || generatedCode,
+    // Governanca de Numeracao V3, Fase 3 (10/08/2026): codigo emitido pela
+    // serie CR/CRI, sucedendo o formato legado CRED-26-NNNNNN. O bloqueio
+    // original (escopo nacional/internacional inexistente) foi resolvido na
+    // Fase 5 (regras_linhas_credito.escopo, 08/08), entao a escolha entre as
+    // duas series agora e segura: issueCreditCode() le o escopo real da
+    // linha (linhaMatch.id, ja resolvido acima) antes de emitir. Codigo
+    // emitido e imutavel por desenho, propostas antigas em CRED-26 nunca sao
+    // renomeadas, mesmo padrao de congelamento de historico usado em M&A.
+    let code: string;
+    try {
+      // Truthiness, não `??`: um chamador que mande code:"" (string vazia)
+      // gravaria código em branco e derrubaria a próxima inserção no unique.
+      code = d.code || (await issueCreditCode(linhaMatch?.id ?? null, undefined, serviceClient())).code;
+    } catch (codeErr) {
+      const msg = codeErr instanceof Error ? codeErr.message : String(codeErr);
+      return NextResponse.json({ error: `Falha ao emitir código da proposta: ${msg}` }, { status: 500 });
+    }
+
+    const { data: inserted, error } = await serviceClient()
+      .from("credit_desk_proposals")
+      .insert({
+        code,
         title:           d.title,
         client_name:     d.client_name,
         client_cpf_cnpj: d.client_cpf_cnpj ?? null,
@@ -203,7 +209,8 @@ export async function POST(req: NextRequest) {
         created_by:      user.id,
         metadata:        d.metadata ?? {},
       })
-    );
+      .select()
+      .single();
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
