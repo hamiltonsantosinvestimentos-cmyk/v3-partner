@@ -211,6 +211,19 @@ export async function POST(req: NextRequest) {
       id: string; code: string; title: string; client_name: string; credit_line: string;
     };
 
+    // Governanca Documental Universal, Fase 2 (10/08/2026): pasta publica do
+    // cliente em Credito. Usa o code ja emitido acima (formato legado
+    // CRED-26-NNNNNN por ora -- ver comentario da emissao acima), porque
+    // create_deal_folder() so usa o codigo como segmento de path, nao
+    // interpreta seu formato. Best-effort, nunca bloqueia a proposta.
+    const { error: folderError } = await serviceClient().rpc("create_deal_folder", {
+      p_vertical: "Credito",
+      p_deal_code: data.code,
+      p_client_name: data.client_name,
+      p_user_id: user.id,
+    });
+    if (folderError) console.error("[credit-proposals POST] falha ao criar pasta MPS", folderError.message);
+
     // Notifica admin por e-mail — isolado para não crashar o handler
     try {
       const adminEmail = process.env.EMAIL_ADMIN;

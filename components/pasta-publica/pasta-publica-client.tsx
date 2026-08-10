@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import {
   FolderOpen, FolderClosed, FileText, Download, ChevronRight,
-  ChevronDown, ArrowLeft, Search, Building2, CreditCard, Users, Shield,
+  ChevronDown, ArrowLeft, Search, Building2, CreditCard, Users, Shield, Gavel,
 } from "lucide-react";
 
 interface FileItem {
@@ -20,6 +20,7 @@ const VERTICAL_META: Record<string, { label: string; icon: React.ReactNode; colo
   Credito:        { label: "Crédito",         icon: <CreditCard size={16} />, color: "#10B981" },
   Consorcios:     { label: "Consórcios",     icon: <Users size={16} />,      color: "#6366F1" },
   Administracao:  { label: "Administração",  icon: <Shield size={16} />,     color: "#F59E0B" },
+  BolsaDeAtivos:  { label: "Bolsa de Ativos", icon: <Gavel size={16} />,     color: "#3B82F6" },
 };
 
 function formatSize(bytes: number): string {

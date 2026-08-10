@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
+import { issueV3Code, resolveSectorCode } from "@/lib/v3-codes";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -74,10 +75,28 @@ export async function POST(req: NextRequest) {
     }, { status: 422 });
   }
 
-  const { data: anonId } = await svc().rpc("generate_cm_anonymous_id", {
-    p_asset_type: asset_type,
-    p_esfera: esfera ?? "Federal",
-  });
+  // Governanca de Numeracao V3, Fase 2 (10/08/2026): anonymous_id passa a ser
+  // emitido por issueV3Code(), sucedendo generate_cm_anonymous_id() -- exatamente
+  // o alvo ja registrado em v3_code_series (BA/PR -> cm_asset_listings.anonymous_id)
+  // desde a Fase 1a (05/08). Listagens antigas no formato CM-OT-FED-NNNN /
+  // CM-PR-FED-NNNN permanecem intocadas; so listagens novas usam o formato V3.
+  const ESFERA_CODE: Record<string, string> = { federal: "FED", estadual: "EST", municipal: "MUN" };
+  let anonId: string;
+  try {
+    if (asset_type === "precatorio") {
+      const esferaCode = ESFERA_CODE[(esfera ?? "Federal").toLowerCase()] ?? "FED";
+      anonId = await issueV3Code("PR", esferaCode);
+    } else {
+      // Bolsa de Ativos nao tem campo de setor economico proprio na listagem
+      // hoje -- resolveSectorCode(null) cai no fallback GRL, intencional e
+      // auditavel (ver comentario da funcao em lib/v3-codes.ts).
+      const sectorCode = await resolveSectorCode(null);
+      anonId = await issueV3Code("BA", sectorCode);
+    }
+  } catch (codeErr) {
+    const msg = codeErr instanceof Error ? codeErr.message : String(codeErr);
+    return NextResponse.json({ error: `Falha ao emitir código da listagem: ${msg}` }, { status: 500 });
+  }
   const { data: numeroInterno } = await svc().rpc("generate_cm_numero_interno");
 
   const { data: listing, error } = await svc()
@@ -117,5 +136,18 @@ export async function POST(req: NextRequest) {
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // Governanca Documental Universal, Fase 2 (10/08/2026): pasta publica do
+  // cliente em BolsaDeAtivos. Best-effort -- nunca bloqueia a criacao da
+  // listagem, mesmo padrao do notificar-por-email em outras rotas do
+  // portal: a pasta e um reforco de governanca, nao um requisito de negocio.
+  const { error: folderError } = await svc().rpc("create_deal_folder", {
+    p_vertical: "BolsaDeAtivos",
+    p_deal_code: anonId,
+    p_client_name: seller_name,
+    p_user_id: caller.userId,
+  });
+  if (folderError) console.error("[cm/listings POST] falha ao criar pasta MPS", folderError.message);
+
   return NextResponse.json({ listing }, { status: 201 });
 }
