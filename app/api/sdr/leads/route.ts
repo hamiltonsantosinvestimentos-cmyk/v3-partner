@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
+import { syncSdrLeadToProspeccao, lookupProspeccaoEtapaByPhones } from "@/lib/sdr-prospeccao-sync";
 
 const ADMIN_ROLES = ["ADMIN", "GESTAO"] as const;
 
@@ -65,7 +66,10 @@ export async function GET() {
   const responsavelMap: Record<string, string> = {};
   for (const r of responsaveis ?? []) responsavelMap[r.id] = r.full_name ?? "";
 
-  // 5. Monta resultado ordenado por última mensagem
+  // 5. Etapa vinculada no Kanban de Prospecção de Partners (por telefone)
+  const prospeccaoEtapaByPhone = await lookupProspeccaoEtapaByPhones(Object.keys(phoneMap));
+
+  // 6. Monta resultado ordenado por última mensagem
   const result = Object.entries(phoneMap)
     .map(([phone, conv]) => {
       const lead = leadsMap[phone];
@@ -80,6 +84,7 @@ export async function GET() {
         last_message_at: conv.last_at,
         last_message_preview: conv.preview,
         message_count: conv.count,
+        prospeccao_etapa: prospeccaoEtapaByPhone[phone] ?? null,
       };
     })
     .sort((a, b) => b.last_message_at.localeCompare(a.last_message_at));
@@ -115,6 +120,30 @@ export async function PATCH(req: NextRequest) {
     .upsert(updateData, { onConflict: "phone" });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // Mudança de status (manual, via dropdown) também sincroniza com o Kanban de Prospecção
+  if (body.status !== undefined) {
+    const { data: lead } = await svc()
+      .from("sdr_leads")
+      .select("nome, responsavel_id")
+      .eq("phone", body.phone)
+      .single();
+
+    let responsavelNome: string | null = null;
+    if (lead?.responsavel_id) {
+      const { data: resp } = await svc().from("profiles").select("full_name").eq("id", lead.responsavel_id).single();
+      responsavelNome = resp?.full_name ?? null;
+    }
+
+    await syncSdrLeadToProspeccao({
+      phone: body.phone,
+      status: body.status,
+      nome: lead?.nome ?? null,
+      responsavel_id: lead?.responsavel_id ?? null,
+      responsavel_nome: responsavelNome,
+      nota: `Status alterado manualmente para "${body.status}" no CRM do WhatsApp por ${auth.profile?.full_name ?? "operador"}`,
+    }).catch(e => console.error("[SDR] Erro ao sincronizar com Prospecção:", e));
+  }
 
   return NextResponse.json({ ok: true });
 }
