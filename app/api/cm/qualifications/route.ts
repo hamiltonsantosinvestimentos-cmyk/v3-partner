@@ -45,9 +45,12 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "listing_id ou operation_contract_id é obrigatório" }, { status: 422 });
   }
 
+  // qualification_token incluso propositalmente: permite "Copiar link"/"WhatsApp"
+  // a qualquer momento depois da criação do lote, não só no instante do POST
+  // (achado 11/08/2026, ao trazer este fluxo para a Central de Contratos).
   let query = svc()
     .from("cm_qualification_batches")
-    .select("*, cm_party_qualifications(id, full_name, email, role_in_document, status, filled_at)")
+    .select("*, cm_party_qualifications(id, full_name, email, role_in_document, status, filled_at, qualification_token)")
     .order("created_at", { ascending: false });
   query = listingId ? query.eq("listing_id", listingId) : query.eq("operation_contract_id", operationContractId!);
 
