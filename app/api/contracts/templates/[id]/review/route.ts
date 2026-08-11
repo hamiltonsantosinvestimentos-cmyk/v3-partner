@@ -13,10 +13,13 @@ function svc() {
 const JURIDICO: Record<string, string> = {
   "82171bc1-edbd-40f8-936b-1b26d412a121": "Dr. Luis Athaydes", // jurídico V3
 };
+// Hamilton tem 2 contas: 27a8a72e... (hamilton@, PARTNER_PRO, demonstração
+// pra prospects/partners) e 75c6cac4... (suporte@, ADMIN, conta real dele).
+// Usa a real aqui — mesma correção aplicada em contracts/approve/route.ts.
 const COMPLIANCE_SOCIO: Record<string, string> = {
   "d5f26efd-8ed5-4d90-b3f4-9ce0004803c5": "Robson Lino", // compliance
   "d0af8eaa-9f3c-4e7a-b8c6-613736524317": "João Lemos", // sócio diretor
-  "27a8a72e-965d-48e8-88cf-e5afaf75d167": "Hamilton Santos", // sócio diretor
+  "75c6cac4-8d30-436e-b9a6-d5d494d7470b": "Hamilton Santos", // sócio diretor
 };
 
 async function getReviewer() {

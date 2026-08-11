@@ -6,9 +6,14 @@ function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 }
 
+// Hamilton tem 2 contas: 27a8a72e... (hamilton@, PARTNER_PRO, conta de
+// demonstração pra prospects/partners) e 75c6cac4... (suporte@, ADMIN, conta
+// real dele). Achado real 11/08/2026: este array usava a conta de demo desde
+// sempre — Hamilton nunca conseguiu aprovar contrato com a conta admin real,
+// sempre tomaria 403 mesmo sendo sócio de verdade. Corrigido.
 const SOCIOS = [
   "d0af8eaa-9f3c-4e7a-b8c6-613736524317", // João Lemos
-  "27a8a72e-965d-48e8-88cf-e5afaf75d167", // Hamilton Santos
+  "75c6cac4-8d30-436e-b9a6-d5d494d7470b", // Hamilton Santos (conta admin real, suporte@)
   "d5f26efd-8ed5-4d90-b3f4-9ce0004803c5", // Robson Lino
 ];
 
