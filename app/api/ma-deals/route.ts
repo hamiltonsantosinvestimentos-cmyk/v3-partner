@@ -325,6 +325,17 @@ export async function PATCH(req: NextRequest) {
 
   logAudit({ userId: user.id, userName: profile?.full_name, action: "UPDATE", entity: "ma_deals", entityId: id, newData: fields as Record<string, unknown> });
 
+  // Client 360, Fase B (10-11/08/2026): deal fechado com sucesso promove
+  // todos os clientes vinculados a "performado" (nunca rebaixa quem já
+  // estava lá, nunca mexe em quem ainda nem chegou a "a_performar").
+  if (fields.stage === "CLOSED_WON") {
+    await svc
+      .from("ma_deal_clients")
+      .update({ status: "performado", updated_at: new Date().toISOString() })
+      .eq("deal_id", id)
+      .neq("status", "performado");
+  }
+
   // Bridge B: Ma_deals → CRM (log de interação — fire-and-forget)
   // Princípio: CRM encerra em "ganho" quando lead é passado à Mesa.
   // A partir daí, apenas appendamos interações — NUNCA alteramos o status do lead.

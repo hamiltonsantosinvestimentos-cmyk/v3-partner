@@ -7,7 +7,7 @@ import {
   Paperclip, Trash2, ExternalLink, Upload, Copy, CheckCheck,
   MessageSquare, Send, Zap, FileImage, FileSignature,
   ArrowLeftRight, Pencil, Check, Loader2, DatabaseZap, Clock, TrendingUp, Bot,
-  Link2, AlertCircle, CheckCircle2, ClipboardCheck, Handshake,
+  Link2, AlertCircle, CheckCircle2, ClipboardCheck, Handshake, User,
 } from "lucide-react";
 import { ExportButton } from "@/components/financeiro/export-button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -17,6 +17,7 @@ import { DocumentRequestPanel } from "@/components/ma/document-request-panel";
 import { ContratoPanel } from "@/components/ma/contrato-panel";
 import { InvestorMatchPanel } from "@/components/ma/investor-match-panel";
 import { NegociacaoPanel } from "@/components/mesa-ma/negociacao-panel";
+import { DealClientesPanel } from "@/components/mesa-ma/deal-clientes-panel";
 import dynamic from "next/dynamic";
 const DealAnalyticsPanel = dynamic(
   () => import("@/components/ma/deal-analytics-panel").then(m => m.DealAnalyticsPanel),
@@ -243,7 +244,7 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
   const [cards, setCards] = useState<MaCard[]>(initialDeals);
   const [operators, setOperators] = useState<MesaOperator[]>([]);
   const [selectedCard, setSelectedCard] = useState<MaCard | null>(null);
-  const [detailTab, setDetailTab] = useState<"detalhes" | "forja" | "criativos" | "contrato" | "matches" | "negociacao" | "analytics" | "qa" | "doc-requests" | "timeline" | "business-plan" | "chat-ia">("detalhes");
+  const [detailTab, setDetailTab] = useState<"detalhes" | "forja" | "criativos" | "contrato" | "matches" | "negociacao" | "clientes" | "analytics" | "qa" | "doc-requests" | "timeline" | "business-plan" | "chat-ia">("detalhes");
   const [showNewCard, setShowNewCard] = useState(false);
   const [showFullForm, setShowFullForm] = useState(false);
   const [showNewOp, setShowNewOp] = useState(false);
@@ -1066,6 +1067,7 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
                   { id: "qa" as const, label: "Q&A", icon: <MessageSquare size={12} /> },
                   { id: "matches" as const, label: "Matches", icon: <ArrowLeftRight size={12} /> },
                   { id: "negociacao" as const, label: "Negociação", icon: <Handshake size={12} /> },
+                  { id: "clientes" as const, label: "Clientes", icon: <User size={12} /> },
                   { id: "criativos" as const, label: "Criativos", icon: <FileImage size={12} /> },
                   { id: "contrato" as const, label: "NDA / Mandato", icon: <FileSignature size={12} /> },
                   { id: "doc-requests" as const, label: "Docs", icon: <FileText size={12} /> },
@@ -1366,6 +1368,14 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
               return (
                 <div className="mt-2">
                   <NegociacaoPanel dealId={selectedCard.id} />
+                </div>
+              );
+            }
+
+            if (detailTab === "clientes") {
+              return (
+                <div className="mt-2">
+                  <DealClientesPanel dealId={selectedCard.id} />
                 </div>
               );
             }

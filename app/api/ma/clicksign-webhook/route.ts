@@ -294,6 +294,16 @@ async function handleV1Event(eventName: string, externalId: string) {
             message: `${signatario?.name ?? "Signatário"} assinou digitalmente via ClickSign, envelope ${externalId}.`,
             type: "negociacao_assinado",
           });
+
+          // Client 360, Fase B (10-11/08/2026): contrato assinado promove os
+          // clientes vinculados a este deal de "prospecto" para "a_performar".
+          // Nunca rebaixa quem já está "performado" (deal já fechado antes de
+          // uma assinatura tardia de outro documento do mesmo deal).
+          await db
+            .from("ma_deal_clients")
+            .update({ status: "a_performar", updated_at: new Date().toISOString() })
+            .eq("deal_id", contract.deal_id)
+            .eq("status", "prospecto");
         }
       }
     }
