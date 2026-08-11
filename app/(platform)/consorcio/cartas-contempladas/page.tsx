@@ -96,7 +96,7 @@ export default function CartasContempladasPage() {
 
   // Modal oferta
   const [ofertaModal, setOfertaModal] = useState<ContemplatedLetter | null>(null);
-  const [ofertaForm, setOfertaForm] = useState<OfertaForm>({ interessado_nome: "", interessado_tel: "", valor_oferta: "", observacoes: "", responsavel_id: "" });
+  const [ofertaForm, setOfertaForm] = useState<OfertaForm>({ interessado_nome: "", interessado_tel: "", interessado_cpf_cnpj: "", valor_oferta: "", observacoes: "", responsavel_id: "" });
   const [adminUsers, setAdminUsers] = useState<AdminUser[]>([]);
   const [submittingOferta, setSubmittingOferta] = useState(false);
   const [ofertaSuccess, setOfertaSuccess] = useState(false);
