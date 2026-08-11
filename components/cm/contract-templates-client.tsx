@@ -28,6 +28,18 @@ interface TemplateReview {
   created_at: string;
 }
 
+const SERIES_LABELS: Record<string, string> = {
+  "V3C-ORG": "V3C-ORG · Originação",
+  "V3C-MAN": "V3C-MAN · Mandato",
+  "V3C-PAR": "V3C-PAR · Adesão de Partner",
+  "V3C-CES": "V3C-CES · Cessão / Compra-e-Venda de Ativo",
+  "V3C-NDA": "V3C-NDA · NDA",
+  "V3C-LOI": "V3C-LOI · Carta de Intenção",
+  "V3C-FPA": "V3C-FPA · Proteção de Honorários",
+  "V3C-FOR": "V3C-FOR · Fornecedor",
+  "V3C-FUN": "V3C-FUN · Fundo",
+};
+
 const APPROVAL_STATUS_MAP: Record<string, { label: string; color: string }> = {
   rascunho: { label: "Rascunho", color: "bg-[#243A66] text-[#9BAFC5]" },
   em_revisao: { label: "Em Revisão Jurídica", color: "bg-amber-500/20 text-amber-400" },
@@ -78,6 +90,7 @@ export function ContractTemplatesClient() {
 
   const [formName, setFormName] = useState("");
   const [formVertical, setFormVertical] = useState("capital_markets");
+  const [formSeries, setFormSeries] = useState("V3C-PAR");
   const [formBody, setFormBody] = useState("");
   const [showVars, setShowVars] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -123,6 +136,7 @@ export function ContractTemplatesClient() {
     setIsNew(true);
     setFormName("");
     setFormVertical("capital_markets");
+    setFormSeries("V3C-PAR");
     setFormBody("");
     setReviews([]);
   };
@@ -199,7 +213,7 @@ export function ContractTemplatesClient() {
         const res = await fetch("/api/contracts/templates", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ template_name: formName, vertical: formVertical, body_text_raw: formBody }),
+          body: JSON.stringify({ template_name: formName, vertical: formVertical, contract_series: formSeries, body_text_raw: formBody }),
         });
         if (res.ok) { setIsNew(false); fetchTemplates(); }
         else { const j = await res.json(); alert(j.error); }
@@ -319,6 +333,17 @@ export function ContractTemplatesClient() {
                     <option value="colaboradores">Colaboradores</option>
                   </select>
                 </div>
+                {isNew && (
+                  <div className="col-span-2">
+                    <label className="block text-[10px] font-bold text-[#C9A84C] uppercase tracking-wider mb-1">Série V3C (numeração do contrato)</label>
+                    <select value={formSeries} onChange={(e) => setFormSeries(e.target.value)}
+                      className="w-full bg-[#162744] border border-[#9BAFC5]/15 rounded-lg px-4 py-2.5 text-sm text-[#F5F1E8]">
+                      {Object.entries(SERIES_LABELS).map(([value, label]) => (
+                        <option key={value} value={value}>{label}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
               </div>
 
               <div className="mb-3 flex items-center gap-2">
