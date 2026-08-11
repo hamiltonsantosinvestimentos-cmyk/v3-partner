@@ -12,7 +12,16 @@ const DOCUMENT_TYPE_LABELS: Record<string, string> = {
   fpa_compra: "FPA Compra",
   mandato: "Mandato",
   contrato_final: "Contrato Final",
+  contrato_parceria: "Contrato de Parceria",
 };
+
+// Papéis que recebem repasse de comissão precisam de dados bancários/PIX e
+// RG completos (mesmo padrão desde 28/07, Bolsa de Ativos). Testemunha e
+// parte principal de um contrato fora da Bolsa de Ativos só precisam de
+// CPF/CNPJ (suficiente para o texto do contrato e autenticação ClickSign) —
+// exigir dados bancários de uma testemunha não faz sentido (achado
+// 11/08/2026, ao generalizar este fluxo para a Central de Contratos).
+const ROLES_QUE_RECEBEM_REPASSE = ["mandatario", "intermediario_finder_venda", "intermediario_finder_compra"];
 
 // GET /api/cm/qualificacao/[token] — contexto público para o envolvido preencher.
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ token: string }> }) {
@@ -54,7 +63,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
 
   const { data: qualification } = await svc()
     .from("cm_party_qualifications")
-    .select("id, batch_id, status")
+    .select("id, batch_id, status, role_in_document")
     .eq("qualification_token", token)
     .single();
 
@@ -62,6 +71,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   if (qualification.status === "preenchido") {
     return NextResponse.json({ error: "Este link já foi preenchido." }, { status: 409 });
   }
+
+  const recebeRepasse = ROLES_QUE_RECEBEM_REPASSE.includes(qualification.role_in_document);
 
   const body = await req.json().catch(() => ({}));
   const { cpf_cnpj, rg, endereco_completo, dados_bancarios, pix_key } = body as {
@@ -72,7 +83,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
     pix_key?: string;
   };
 
-  const required = { cpf_cnpj, rg, endereco_completo };
+  // Testemunha/parte principal fora da Bolsa de Ativos: só CPF/CNPJ é
+  // obrigatório. Quem recebe repasse continua exigindo RG + endereço
+  // (mesma regra de sempre).
+  const required = recebeRepasse ? { cpf_cnpj, rg, endereco_completo } : { cpf_cnpj };
   const missing = Object.entries(required).filter(([, v]) => !v || String(v).trim() === "").map(([k]) => k);
   if (missing.length > 0) {
     return NextResponse.json({ error: `Campos obrigatórios ausentes: ${missing.join(", ")}` }, { status: 422 });
@@ -83,7 +97,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   if (!validDoc) {
     return NextResponse.json({ error: "CPF/CNPJ inválido, confira o número informado." }, { status: 422 });
   }
-  if (!pix_key && !dados_bancarios?.banco) {
+  if (recebeRepasse && !pix_key && !dados_bancarios?.banco) {
     return NextResponse.json({ error: "Informe ao menos dados bancários ou chave PIX para eventual repasse." }, { status: 422 });
   }
 
@@ -116,7 +130,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
       .from("cm_qualification_batches")
       .update({ status: "completo", completed_at: new Date().toISOString() })
       .eq("id", qualification.batch_id)
-      .select("created_by, document_type, listing_id")
+      .select("created_by, document_type, listing_id, operation_contract_id")
       .single();
 
     if (batch?.created_by) {
@@ -125,9 +139,40 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
         title: "Qualificação de partes completa",
         message: `Todos os envolvidos preencheram os dados de qualificação para ${DOCUMENT_TYPE_LABELS[batch.document_type] ?? batch.document_type}. Pronto para gerar o documento.`,
         type: "qualificacao_completa",
-        action_url: batch.listing_id ? `/bolsa/mesa` : null,
+        action_url: batch.listing_id ? `/bolsa/mesa` : "/juridico/contratos",
         read: false,
       });
+    }
+
+    // Central de Contratos (11/08/2026): quando o lote pertence a um
+    // operation_contract_id (não Bolsa de Ativos), os dados reais coletados
+    // (nome, e-mail, CPF/CNPJ) viram parties do contrato automaticamente —
+    // sem isso o botão "Enviar para Assinatura" nunca teria e-mail de quem
+    // acabou de se qualificar (testemunha, parte principal, etc).
+    if (batch?.operation_contract_id) {
+      const { data: allQualifications } = await db
+        .from("cm_party_qualifications")
+        .select("full_name, email, role_in_document, cpf_cnpj")
+        .eq("batch_id", qualification.batch_id);
+
+      const { data: contract } = await db
+        .from("operation_contracts")
+        .select("parties")
+        .eq("id", batch.operation_contract_id)
+        .single();
+
+      const existingParties = (contract?.parties as Array<{ role: string; name: string; doc?: string | null; email?: string }> | null) ?? [];
+      const v3Party = existingParties.find((p) => p.role === "v3_partners");
+      const novasPartes = (allQualifications ?? []).map((q) => ({
+        role: q.role_in_document,
+        name: q.full_name,
+        doc: q.cpf_cnpj ?? null,
+        email: q.email,
+      }));
+
+      await db.from("operation_contracts").update({
+        parties: v3Party ? [...novasPartes, v3Party] : novasPartes,
+      }).eq("id", batch.operation_contract_id);
     }
   }
 

@@ -43,13 +43,19 @@ export default function QualificacaoIntakePage() {
       });
   }, [token]);
 
+  // Só quem recebe repasse de comissão (mandatário/intermediário finder)
+  // precisa de RG, endereço e dados bancários/PIX. Testemunha e parte
+  // principal de um contrato fora da Bolsa de Ativos só assinam, não
+  // recebem nada — exigir isso delas não faz sentido (achado 11/08/2026).
+  const recebeRepasse = ["mandatario", "intermediario_finder_venda", "intermediario_finder_compra"].includes(data?.role_in_document);
+
   const submit = async () => {
     setFormError("");
-    if (!cpfCnpj.trim() || !rg.trim() || !endereco.trim()) {
-      setFormError("CPF/CNPJ, RG e endereço completo são obrigatórios");
+    if (!cpfCnpj.trim() || (recebeRepasse && (!rg.trim() || !endereco.trim()))) {
+      setFormError(recebeRepasse ? "CPF/CNPJ, RG e endereço completo são obrigatórios" : "CPF/CNPJ é obrigatório");
       return;
     }
-    if (!pixKey.trim() && !banco.trim()) {
+    if (recebeRepasse && !pixKey.trim() && !banco.trim()) {
       setFormError("Informe ao menos dados bancários ou uma chave PIX");
       return;
     }
@@ -60,8 +66,8 @@ export default function QualificacaoIntakePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           cpf_cnpj: cpfCnpj.trim(),
-          rg: rg.trim(),
-          endereco_completo: endereco.trim(),
+          rg: rg.trim() || null,
+          endereco_completo: endereco.trim() || null,
           dados_bancarios: banco.trim() ? { banco: banco.trim(), agencia: agencia.trim(), conta: conta.trim(), tipo_conta: tipoConta } : null,
           pix_key: pixKey.trim() || null,
         }),
@@ -86,7 +92,7 @@ export default function QualificacaoIntakePage() {
           <img src="https://app.v3partners.com.br/v3-logo-flat-gold-alpha.png" alt="V3 Partners" className="h-8" />
           <div>
             <p className="text-sm font-bold text-[#F5F1E8]">Qualificação de Partes</p>
-            <p className="text-[10px] text-[#9BAFC5]">Bolsa de Capitais, V3 Partners</p>
+            <p className="text-[10px] text-[#9BAFC5]">V3 Partners</p>
           </div>
         </div>
       </div>
@@ -147,37 +153,41 @@ export default function QualificacaoIntakePage() {
                 <input value={cpfCnpj} onChange={(e) => setCpfCnpj(e.target.value)}
                   className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-sm text-[#F5F1E8] mt-1" />
               </div>
-              <div>
-                <label className="text-[9px] text-[#9BAFC5] uppercase">RG *</label>
-                <input value={rg} onChange={(e) => setRg(e.target.value)}
-                  className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-sm text-[#F5F1E8] mt-1" />
-              </div>
-              <div>
-                <label className="text-[9px] text-[#9BAFC5] uppercase">Endereço completo *</label>
-                <textarea value={endereco} onChange={(e) => setEndereco(e.target.value)} rows={2}
-                  className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-sm text-[#F5F1E8] mt-1" />
-              </div>
+              {recebeRepasse && (
+                <>
+                  <div>
+                    <label className="text-[9px] text-[#9BAFC5] uppercase">RG *</label>
+                    <input value={rg} onChange={(e) => setRg(e.target.value)}
+                      className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-sm text-[#F5F1E8] mt-1" />
+                  </div>
+                  <div>
+                    <label className="text-[9px] text-[#9BAFC5] uppercase">Endereço completo *</label>
+                    <textarea value={endereco} onChange={(e) => setEndereco(e.target.value)} rows={2}
+                      className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-sm text-[#F5F1E8] mt-1" />
+                  </div>
 
-              <div className="pt-2 border-t border-[#9BAFC5]/10">
-                <p className="text-[10px] text-[#C9A84C] font-bold uppercase mb-2">Dados para repasse (ao menos um)</p>
-                <label className="text-[9px] text-[#9BAFC5] uppercase">Chave PIX</label>
-                <input value={pixKey} onChange={(e) => setPixKey(e.target.value)}
-                  className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-sm text-[#F5F1E8] mt-1 mb-3" />
+                  <div className="pt-2 border-t border-[#9BAFC5]/10">
+                    <p className="text-[10px] text-[#C9A84C] font-bold uppercase mb-2">Dados para repasse (ao menos um)</p>
+                    <label className="text-[9px] text-[#9BAFC5] uppercase">Chave PIX</label>
+                    <input value={pixKey} onChange={(e) => setPixKey(e.target.value)}
+                      className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-sm text-[#F5F1E8] mt-1 mb-3" />
 
-                <div className="grid grid-cols-2 gap-2">
-                  <input value={banco} onChange={(e) => setBanco(e.target.value)} placeholder="Banco"
-                    className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-sm text-[#F5F1E8]" />
-                  <select value={tipoConta} onChange={(e) => setTipoConta(e.target.value)}
-                    className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-sm text-[#F5F1E8]">
-                    <option value="corrente">Conta Corrente</option>
-                    <option value="poupanca">Poupança</option>
-                  </select>
-                  <input value={agencia} onChange={(e) => setAgencia(e.target.value)} placeholder="Agência"
-                    className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-sm text-[#F5F1E8]" />
-                  <input value={conta} onChange={(e) => setConta(e.target.value)} placeholder="Conta"
-                    className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-sm text-[#F5F1E8]" />
-                </div>
-              </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <input value={banco} onChange={(e) => setBanco(e.target.value)} placeholder="Banco"
+                        className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-sm text-[#F5F1E8]" />
+                      <select value={tipoConta} onChange={(e) => setTipoConta(e.target.value)}
+                        className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-sm text-[#F5F1E8]">
+                        <option value="corrente">Conta Corrente</option>
+                        <option value="poupanca">Poupança</option>
+                      </select>
+                      <input value={agencia} onChange={(e) => setAgencia(e.target.value)} placeholder="Agência"
+                        className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-sm text-[#F5F1E8]" />
+                      <input value={conta} onChange={(e) => setConta(e.target.value)} placeholder="Conta"
+                        className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-sm text-[#F5F1E8]" />
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
 
             {formError && <p className="text-[11px] text-red-400">{formError}</p>}

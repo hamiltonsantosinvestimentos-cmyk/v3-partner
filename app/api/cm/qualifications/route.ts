@@ -11,7 +11,7 @@ function svc() {
 
 const ALLOWED_ROLES = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"];
 const ROLES_IN_DOCUMENT = ["parte_principal", "intermediario_finder_venda", "intermediario_finder_compra", "mandatario", "testemunha"];
-const DOCUMENT_TYPES = ["nda_quadripartite", "fpa_venda", "fpa_compra", "mandato", "contrato_final"];
+const DOCUMENT_TYPES = ["nda_quadripartite", "fpa_venda", "fpa_compra", "mandato", "contrato_final", "contrato_parceria"];
 
 const DOCUMENT_TYPE_LABELS: Record<string, string> = {
   nda_quadripartite: "NDA Quadripartite",
@@ -19,6 +19,7 @@ const DOCUMENT_TYPE_LABELS: Record<string, string> = {
   fpa_compra: "FPA Compra",
   mandato: "Mandato",
   contrato_final: "Contrato Final",
+  contrato_parceria: "Contrato de Parceria",
 };
 
 async function getCaller() {
@@ -30,36 +31,45 @@ async function getCaller() {
   return { userId: user.id, role: profile.role as string };
 }
 
-// GET /api/cm/qualifications?listing_id=X — lotes de qualificação do ativo,
-// com o progresso de cada envolvido, para o card "Andamento" e o modal.
+// GET /api/cm/qualifications?listing_id=X ou ?operation_contract_id=Y —
+// lotes de qualificação do ativo (Bolsa de Ativos) ou do contrato (Central
+// de Contratos genérica, 11/08/2026), com o progresso de cada envolvido.
 export async function GET(req: NextRequest) {
   const caller = await getCaller();
   if (!caller) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
   const { searchParams } = new URL(req.url);
   const listingId = searchParams.get("listing_id");
-  if (!listingId) return NextResponse.json({ error: "listing_id é obrigatório" }, { status: 422 });
+  const operationContractId = searchParams.get("operation_contract_id");
+  if (!listingId && !operationContractId) {
+    return NextResponse.json({ error: "listing_id ou operation_contract_id é obrigatório" }, { status: 422 });
+  }
 
-  const { data: batches, error } = await svc()
+  let query = svc()
     .from("cm_qualification_batches")
     .select("*, cm_party_qualifications(id, full_name, email, role_in_document, status, filled_at)")
-    .eq("listing_id", listingId)
     .order("created_at", { ascending: false });
+  query = listingId ? query.eq("listing_id", listingId) : query.eq("operation_contract_id", operationContractId!);
+
+  const { data: batches, error } = await query;
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ batches: batches ?? [] });
 }
 
 // POST /api/cm/qualifications — Mesa cadastra os envolvidos de um instrumento
-// (NDA Quadripartite, FPA Venda/Compra, Mandato, Contrato Final) e dispara um
-// link individual de qualificação (/intake/qualificacao/[token]) para cada um.
+// (NDA Quadripartite, FPA Venda/Compra, Mandato, Contrato Final, ou qualquer
+// contrato da Central de Contratos via operation_contract_id, 11/08/2026) e
+// dispara um link individual de qualificação (/intake/qualificacao/[token])
+// para cada um, incluindo testemunhas.
 export async function POST(req: NextRequest) {
   const caller = await getCaller();
   if (!caller) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
   const body = await req.json().catch(() => ({}));
-  const { listing_id, match_deal_id, document_type, parties } = body as {
+  const { listing_id, operation_contract_id, match_deal_id, document_type, parties } = body as {
     listing_id?: string;
+    operation_contract_id?: string;
     match_deal_id?: string;
     document_type?: string;
     parties?: { full_name: string; email: string; role_in_document: string }[];
@@ -83,6 +93,7 @@ export async function POST(req: NextRequest) {
     .from("cm_qualification_batches")
     .insert({
       listing_id: listing_id ?? null,
+      operation_contract_id: operation_contract_id ?? null,
       match_deal_id: match_deal_id ?? null,
       document_type,
       created_by: caller.userId,
@@ -123,7 +134,7 @@ export async function POST(req: NextRequest) {
              <p>Complete seus dados de qualificação para prosseguirmos: https://app.v3partners.com.br/intake/qualificacao/${row.qualification_token}</p>`);
           if (htmlGate.blocking.length > 0) console.error("[qualifications] Brand Guardian bloqueou:", htmlGate.blocking);
           await resend.emails.send({
-            from: "V3 Partners Bolsa de Ativos <noreply@v3partners.com.br>",
+            from: listing_id ? "V3 Partners Bolsa de Ativos <noreply@v3partners.com.br>" : "V3 Partners <noreply@v3partners.com.br>",
             to: row.email,
             subject: subjectGate.corrected,
             html: htmlGate.corrected,
