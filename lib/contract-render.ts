@@ -65,6 +65,7 @@ ${renderPartiesBlock(parties)}
 <div class="footer">
 <p>Documento gerado automaticamente pela plataforma V3 Partners em ${new Date().toLocaleDateString("pt-BR")}.</p>
 <p>Este documento requer assinatura eletrônica para validade jurídica.</p>
+<p>Em caso de dúvida ou necessidade de ajuste em qualquer cláusula antes da assinatura, entre em contato: WhatsApp +55 11 93763-9475 ou e-mail juridico@v3partners.com.br.</p>
 </div>
 </body>
 </html>`;

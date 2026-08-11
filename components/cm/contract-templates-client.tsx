@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
-import { Plus, Save, Trash2, Loader2, FileText, Eye, ChevronDown, Upload } from "lucide-react";
+import { Plus, Save, Trash2, Loader2, FileText, Eye, ChevronDown, Upload, Send, CheckCircle2, XCircle, Scale } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface Template {
@@ -14,7 +14,26 @@ interface Template {
   version: number;
   is_active: boolean;
   created_at: string;
+  approval_status: "rascunho" | "em_revisao" | "aprovado" | "reprovado";
+  review_round: number;
 }
+
+interface TemplateReview {
+  id: string;
+  reviewer_name: string;
+  reviewer_type: "juridico" | "compliance_socio";
+  decision: "aprovado" | "reprovado";
+  comment: string | null;
+  body_edited: boolean;
+  created_at: string;
+}
+
+const APPROVAL_STATUS_MAP: Record<string, { label: string; color: string }> = {
+  rascunho: { label: "Rascunho", color: "bg-[#243A66] text-[#9BAFC5]" },
+  em_revisao: { label: "Em Revisão Jurídica", color: "bg-amber-500/20 text-amber-400" },
+  aprovado: { label: "Aprovada", color: "bg-emerald-500/20 text-emerald-400" },
+  reprovado: { label: "Reprovada", color: "bg-red-500/20 text-red-400" },
+};
 
 const VERTICAL_LABELS: Record<string, string> = {
   capital_markets: "Bolsa de Ativos",
@@ -63,6 +82,10 @@ export function ContractTemplatesClient() {
   const [showVars, setShowVars] = useState(false);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const [reviews, setReviews] = useState<TemplateReview[]>([]);
+  const [reviewComment, setReviewComment] = useState("");
+  const [submittingReview, setSubmittingReview] = useState(false);
+  const [submittingForReview, setSubmittingForReview] = useState(false);
 
   const fetchTemplates = useCallback(async () => {
     setLoading(true);
@@ -77,12 +100,22 @@ export function ContractTemplatesClient() {
 
   useEffect(() => { fetchTemplates(); }, [fetchTemplates]);
 
+  const loadReviews = async (templateId: string) => {
+    try {
+      const res = await fetch(`/api/contracts/templates/${templateId}/review`);
+      const json = await res.json();
+      setReviews(json.reviews ?? []);
+    } catch { setReviews([]); }
+  };
+
   const selectTemplate = (t: Template) => {
     setSelected(t);
     setIsNew(false);
     setFormName(t.template_name);
     setFormVertical(t.vertical);
     setFormBody(t.body_text_raw);
+    setReviewComment("");
+    loadReviews(t.id);
   };
 
   const startNew = () => {
@@ -91,6 +124,49 @@ export function ContractTemplatesClient() {
     setFormName("");
     setFormVertical("capital_markets");
     setFormBody("");
+    setReviews([]);
+  };
+
+  const handleSubmitForReview = async () => {
+    if (!selected) return;
+    setSubmittingForReview(true);
+    try {
+      const res = await fetch(`/api/contracts/templates/${selected.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ submit_for_review: true }),
+      });
+      const json = await res.json();
+      if (res.ok) { fetchTemplates(); selectTemplate(json.template); }
+      else alert(json.error);
+    } catch { alert("Erro de conexão"); }
+    finally { setSubmittingForReview(false); }
+  };
+
+  const handleReviewDecision = async (decision: "aprovado" | "reprovado") => {
+    if (!selected) return;
+    if (decision === "reprovado" && !reviewComment.trim()) {
+      alert("Reprovação exige comentário explicando o motivo");
+      return;
+    }
+    setSubmittingReview(true);
+    try {
+      const res = await fetch(`/api/contracts/templates/${selected.id}/review`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ decision, comment: reviewComment.trim() || undefined, body_text_raw: formBody }),
+      });
+      const json = await res.json();
+      if (res.ok) {
+        alert(json.message ?? "Revisão registrada");
+        setReviewComment("");
+        fetchTemplates();
+        loadReviews(selected.id);
+      } else {
+        alert(json.error);
+      }
+    } catch { alert("Erro de conexão"); }
+    finally { setSubmittingReview(false); }
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -191,9 +267,12 @@ export function ContractTemplatesClient() {
                 <span className="text-[9px] text-[#9BAFC5]">v{t.version}</span>
               </div>
               <div className="text-sm font-bold text-[#F5F1E8]">{t.template_name}</div>
-              <div className="text-[10px] text-[#9BAFC5] mt-1">
+              <div className="text-[10px] text-[#9BAFC5] mt-1 mb-2">
                 {(t.variables_map?.length ?? 0)} variáveis · {new Date(t.created_at).toLocaleDateString("pt-BR")}
               </div>
+              <span className={cn("text-[9px] font-bold px-2 py-0.5 rounded", (APPROVAL_STATUS_MAP[t.approval_status] ?? APPROVAL_STATUS_MAP.rascunho).color)}>
+                {(APPROVAL_STATUS_MAP[t.approval_status] ?? APPROVAL_STATUS_MAP.rascunho).label}
+              </span>
             </div>
           ))}
         </div>
@@ -206,6 +285,19 @@ export function ContractTemplatesClient() {
             </div>
           ) : (
             <div className="bg-[#12112A] border border-[#9BAFC5]/10 rounded-lg p-6">
+              {selected && (
+                <div className="flex items-center justify-between mb-4 pb-4 border-b border-[#9BAFC5]/10">
+                  <span className={cn("text-[10px] font-bold px-2.5 py-1 rounded", (APPROVAL_STATUS_MAP[selected.approval_status] ?? APPROVAL_STATUS_MAP.rascunho).color)}>
+                    {(APPROVAL_STATUS_MAP[selected.approval_status] ?? APPROVAL_STATUS_MAP.rascunho).label}
+                  </span>
+                  {["rascunho", "reprovado"].includes(selected.approval_status) && (
+                    <button onClick={handleSubmitForReview} disabled={submittingForReview}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-[#162744] text-[#C9A84C] border border-[#C9A84C]/30 rounded-lg text-xs font-bold hover:bg-[#C9A84C]/10 transition disabled:opacity-50">
+                      {submittingForReview ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />} Enviar para Revisão Jurídica
+                    </button>
+                  )}
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-4 mb-4">
                 <div>
                   <label className="block text-[10px] font-bold text-[#C9A84C] uppercase tracking-wider mb-1">Nome da Minuta</label>
@@ -290,6 +382,52 @@ export function ContractTemplatesClient() {
                   {isNew ? "Criar Minuta" : "Salvar Alterações"}
                 </button>
               </div>
+
+              {selected?.approval_status === "em_revisao" && (
+                <div className="mt-5 pt-5 border-t border-[#9BAFC5]/10">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Scale size={14} className="text-[#C9A84C]" />
+                    <span className="text-[10px] font-bold text-[#C9A84C] uppercase tracking-wider">Revisão Jurídica</span>
+                  </div>
+                  <p className="text-[10px] text-[#9BAFC5] mb-2">
+                    Jurídico ou compliance/sócio: se precisar ajustar o texto, edite direto no campo acima antes de decidir — a edição é salva junto com a aprovação/reprovação.
+                  </p>
+                  <textarea value={reviewComment} onChange={(e) => setReviewComment(e.target.value)}
+                    placeholder="Comentário (obrigatório para reprovar, opcional para aprovar)"
+                    className="w-full bg-[#162744] border border-[#9BAFC5]/15 rounded-lg px-3 py-2 text-xs text-[#F5F1E8] focus:border-[#C9A84C]/50 focus:outline-none min-h-[60px] resize-y mb-2" />
+                  <div className="flex gap-2">
+                    <button onClick={() => handleReviewDecision("aprovado")} disabled={submittingReview}
+                      className="flex items-center gap-1.5 px-4 py-2 bg-emerald-500/20 text-emerald-400 rounded-lg text-xs font-bold hover:bg-emerald-500/30 transition disabled:opacity-50">
+                      {submittingReview ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle2 size={13} />} Aprovar e Liberar
+                    </button>
+                    <button onClick={() => handleReviewDecision("reprovado")} disabled={submittingReview}
+                      className="flex items-center gap-1.5 px-4 py-2 bg-red-500/20 text-red-400 rounded-lg text-xs font-bold hover:bg-red-500/30 transition disabled:opacity-50">
+                      {submittingReview ? <Loader2 size={13} className="animate-spin" /> : <XCircle size={13} />} Reprovar
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {reviews.length > 0 && (
+                <div className="mt-5 pt-5 border-t border-[#9BAFC5]/10">
+                  <span className="text-[10px] font-bold text-[#C9A84C] uppercase tracking-wider">Histórico de Revisão</span>
+                  <div className="mt-2 space-y-2">
+                    {reviews.map((r) => (
+                      <div key={r.id} className="bg-[#162744] rounded-lg px-3 py-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs text-[#F5F1E8] font-medium">
+                            {r.reviewer_name} <span className="text-[9px] text-[#9BAFC5]">({r.reviewer_type === "juridico" ? "Jurídico" : "Compliance/Sócio"})</span>
+                            {" "}{r.decision === "aprovado" ? <span className="text-emerald-400">aprovou</span> : <span className="text-red-400">reprovou</span>}
+                            {r.body_edited && <span className="text-[9px] text-[#9BAFC5]"> · editou o texto</span>}
+                          </span>
+                          <span className="text-[9px] text-[#9BAFC5]">{new Date(r.created_at).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" })}</span>
+                        </div>
+                        {r.comment && <p className="text-[11px] text-[#9BAFC5] mt-1">{r.comment}</p>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>

@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import {
   FileText, Search, Filter, Clock, CheckCircle2, XCircle,
   Send, Eye, MessageSquare, Loader2, ChevronDown, User,
-  AlertTriangle, Shield, UserPlus, Plus, X, Copy, Share2,
+  AlertTriangle, Shield, UserPlus, Plus, X, Copy, Share2, Pencil,
 } from "lucide-react";
 import { cn, isValidEmail } from "@/lib/utils";
 
@@ -104,6 +104,10 @@ export function ContractsPanelClient() {
   ]);
   const [creatingQualification, setCreatingQualification] = useState(false);
   const [copiedToken, setCopiedToken] = useState("");
+  const [showEdit, setShowEdit] = useState(false);
+  const [editBody, setEditBody] = useState("");
+  const [editReason, setEditReason] = useState("");
+  const [savingEdit, setSavingEdit] = useState(false);
 
   const fetchContracts = useCallback(async () => {
     setLoading(true);
@@ -174,6 +178,28 @@ export function ContractsPanelClient() {
       }
     } catch { alert("Erro de conexão"); }
     finally { setSendingToSignature(false); }
+  };
+
+  const handleSaveEdit = async () => {
+    if (!selected || !editBody.trim()) return;
+    setSavingEdit(true);
+    try {
+      const res = await fetch(`/api/contracts/${selected.id}/edit-body`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rendered_html: editBody, reason: editReason.trim() || undefined }),
+      });
+      const json = await res.json();
+      if (res.ok) {
+        alert(json.warning ?? "Contrato atualizado.");
+        setShowEdit(false);
+        setEditReason("");
+        fetchContracts();
+      } else {
+        alert(json.error ?? "Erro ao editar contrato");
+      }
+    } catch { alert("Erro de conexão"); }
+    finally { setSavingEdit(false); }
   };
 
   const loadQualifications = async (contractId: string) => {
@@ -415,6 +441,15 @@ export function ContractsPanelClient() {
                     <Eye size={13} /> {showPreview ? "Ocultar" : "Visualizar"}
                   </button>
 
+                  {!["assinado", "cancelado"].includes(selected.status_signature) && (
+                    <button
+                      onClick={() => { setShowEdit(!showEdit); setEditBody(selected.rendered_html ?? ""); setShowPreview(false); }}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-[#162744] text-[#F5F1E8] rounded-lg text-xs hover:bg-[#243A66] transition"
+                    >
+                      <Pencil size={13} /> {showEdit ? "Cancelar Edição" : "Editar Contrato"}
+                    </button>
+                  )}
+
                   {selected.status_signature === "rascunho" && (
                     <>
                       <button
@@ -509,6 +544,25 @@ export function ContractsPanelClient() {
                     className="w-full h-[400px] border-0"
                     title="Preview do contrato"
                   />
+                </div>
+              )}
+
+              {/* Edição pontual (11/08/2026): correção de cláusula reportada por
+                  signatário via WhatsApp/e-mail, sem depender de gerar minuta nova */}
+              {showEdit && (
+                <div className="bg-[#12112A] border border-[#9BAFC5]/10 rounded-lg p-4 space-y-2">
+                  <p className="text-[10px] text-[#9BAFC5]">
+                    Edite o HTML do contrato diretamente. {selected.status_signature === "enviado_assinatura" && "Este contrato já foi enviado ao ClickSign — ao salvar, ele volta para Rascunho e você precisa cancelar o envelope antigo manualmente no painel da ClickSign antes de reenviar."}
+                  </p>
+                  <textarea value={editBody} onChange={(e) => setEditBody(e.target.value)}
+                    className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded-lg px-3 py-2 text-[11px] text-[#F5F1E8] font-mono min-h-[280px] resize-y" />
+                  <input value={editReason} onChange={(e) => setEditReason(e.target.value)}
+                    placeholder="Motivo da alteração (ex: cliente apontou erro na cláusula 5)"
+                    className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded-lg px-3 py-2 text-xs text-[#F5F1E8]" />
+                  <button onClick={handleSaveEdit} disabled={savingEdit || !editBody.trim()}
+                    className="flex items-center gap-2 px-4 py-2 bg-[#C9A84C] text-[#09081A] rounded-lg text-xs font-bold hover:bg-[#E8C97A] disabled:opacity-50 transition">
+                    {savingEdit ? <Loader2 size={14} className="animate-spin" /> : <Pencil size={14} />} Salvar Edição
+                  </button>
                 </div>
               )}
 

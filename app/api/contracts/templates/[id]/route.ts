@@ -24,20 +24,32 @@ export async function PATCH(
 
   const { id } = await params;
   const body = await req.json();
-  const { template_name, body_text_raw, is_active } = body;
+  const { template_name, body_text_raw, is_active, submit_for_review } = body;
+
+  const { data: current } = await svc().from("contract_templates").select("version, approval_status, review_round").eq("id", id).single();
+  if (!current) return NextResponse.json({ error: "Minuta não encontrada" }, { status: 404 });
 
   const updates: Record<string, any> = {};
   if (template_name !== undefined) updates.template_name = template_name;
   if (is_active !== undefined) updates.is_active = is_active;
   if (body_text_raw !== undefined) {
     updates.body_text_raw = body_text_raw;
-    updates.version = svc().rpc("", {});
     const vars = (body_text_raw.match(/\{\{([^}]+)\}\}/g) || []).map((v: string) => v.replace(/\{\{|\}\}/g, "").trim());
     updates.variables_map = vars.map((v: string) => ({ key: v, label: v.replace(/_/g, " "), source: "auto" }));
+    updates.version = (current.version ?? 0) + 1;
+    // Editar o texto de uma minuta já aprovada invalida a aprovação — o
+    // jurídico aprovou UM texto específico, não qualquer versão futura dele.
+    if (current.approval_status === "aprovado") updates.approval_status = "rascunho";
   }
 
-  const { data: current } = await svc().from("contract_templates").select("version").eq("id", id).single();
-  if (body_text_raw !== undefined) updates.version = (current?.version ?? 0) + 1;
+  // "Enviar para Revisão Jurídica": autor (ADMIN) pede revisão explicitamente.
+  // Só sai de rascunho/reprovado — nunca pula revisão em andamento.
+  if (submit_for_review) {
+    if (!["rascunho", "reprovado"].includes(updates.approval_status ?? current.approval_status))
+      return NextResponse.json({ error: `Minuta não pode ser enviada para revisão no status atual (${current.approval_status})` }, { status: 409 });
+    updates.approval_status = "em_revisao";
+    updates.review_round = (current.review_round ?? 1) + (current.approval_status === "reprovado" ? 1 : 0);
+  }
 
   const { data, error } = await svc()
     .from("contract_templates")

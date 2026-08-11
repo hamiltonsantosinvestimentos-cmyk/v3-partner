@@ -34,6 +34,16 @@ export async function POST(req: NextRequest) {
 
   if (!template) return NextResponse.json({ error: "Template não encontrado ou inativo" }, { status: 404 });
 
+  // Gate de revisão jurídica (11/08/2026): minuta só gera contrato depois de
+  // aprovada pelo jurídico + compliance/sócio diretor. approval_status
+  // grandfathered para 'aprovado' nas minutas já existentes antes desta data.
+  if (template.approval_status !== "aprovado") {
+    return NextResponse.json(
+      { error: `Minuta "${template.template_name}" ainda não foi aprovada pelo jurídico (status atual: ${template.approval_status}). Envie para revisão em Central de Contratos > Minutas antes de gerar contrato.` },
+      { status: 422 }
+    );
+  }
+
   const variables: Record<string, any> = {
     data_geracao: new Date().toLocaleDateString("pt-BR"),
     data_geracao_extenso: new Date().toLocaleDateString("pt-BR", { day: "numeric", month: "long", year: "numeric" }),
