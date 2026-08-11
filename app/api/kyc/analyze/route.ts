@@ -165,6 +165,10 @@ export async function POST(req: Request) {
   });
 
   // ── 6. Salvar análise ────────────────────────────────────────
+  // Client 360, Fase C (11/08/2026): best-effort, nunca bloqueia a análise.
+  const { resolveClient } = await import("@/lib/v3-clients");
+  const v3ClientId = await resolveClient(entity_doc, { legalName: searchName || entity_name, vertical: "kyc" }).catch(() => null);
+
   const { data: analysis } = await supabase
     .from("kyc_analyses")
     .insert({
@@ -179,6 +183,7 @@ export async function POST(req: Request) {
       verdict,
       sources_used,
       raw_data: raw_data as unknown as Json,
+      v3_client_id: v3ClientId,
     })
     .select()
     .single();

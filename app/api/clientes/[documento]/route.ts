@@ -11,10 +11,12 @@ const ALLOWED_ROLES = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"];
 
 // GET /api/clientes/[documento] — Registro Central de Cliente (Client 360).
 // Devolve tudo que está vinculado a um CPF/CNPJ entre as verticais que já
-// têm v3_client_id (Crédito, Bolsa de Ativos, Credit Engine, Partners).
-// Fase 1, 08/08/2026. Verticais sem coluna normalizada ainda (M&A, CRM,
-// Consórcios) ficam fora até terem seu próprio vínculo — nunca inventado
-// aqui a partir de JSONB solto.
+// têm v3_client_id. Fase 1 (08/08): Crédito, Bolsa de Ativos, Credit Engine,
+// Partners. Fase B (11/08): M&A, via ma_deal_clients (papel + ciclo de vida
+// por deal). Fase C (11/08): KYC + trajetória de risco por dimensão
+// (crédito e compliance nunca fundidos num indicador só — são instrumentos
+// diferentes, ver migration 20260811b). CRM/Consórcio ficam fora até terem
+// vínculo próprio — nunca inventado aqui a partir de JSONB solto.
 export async function GET(req: NextRequest, { params }: { params: Promise<{ documento: string }> }) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -44,7 +46,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ docu
     return NextResponse.json({ found: false, document_number: digits, document_type: docType });
   }
 
-  const [credito, bolsa, creditEngine, partners] = await Promise.all([
+  const [credito, bolsa, creditEngine, partners, maDeals, kyc, trajetoria, sugestoes] = await Promise.all([
     svc.from("credit_desk_proposals")
       .select("id, code, title, client_name, credit_line, requested_value, stage, status, created_at")
       .eq("v3_client_id", client.id),
@@ -57,7 +59,28 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ docu
     svc.from("partner_registrations")
       .select("id, nome_completo, plano, status, created_at")
       .eq("v3_client_id", client.id),
+    svc.from("ma_deal_clients")
+      .select("id, role, status, created_at, ma_deals(id, code, title, stage)")
+      .eq("v3_client_id", client.id),
+    svc.from("kyc_analyses")
+      .select("id, score, risk_label, verdict, dd_level, created_at")
+      .eq("v3_client_id", client.id),
+    svc.from("v3_client_risk_trajectory")
+      .select("dimension, score_atual, classificacao_atual, score_anterior, direcao, created_at")
+      .eq("v3_client_id", client.id)
+      .order("created_at", { ascending: false }),
+    svc.from("v3_client_risk_suggestions")
+      .select("id, dimension, suggestion, status, created_at")
+      .eq("v3_client_id", client.id)
+      .eq("status", "aberta"),
   ]);
+
+  // Trajetória: só a linha mais recente de cada dimensão (a view devolve o
+  // histórico inteiro, o resumo pro card é só o estado atual + direção).
+  const trajetoriaPorDimensao: Record<string, unknown> = {};
+  for (const row of trajetoria.data ?? []) {
+    if (!trajetoriaPorDimensao[row.dimension]) trajetoriaPorDimensao[row.dimension] = row;
+  }
 
   return NextResponse.json({
     found: true,
@@ -66,5 +89,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ docu
     bolsa_de_ativos: bolsa.data ?? [],
     credit_engine: creditEngine.data ?? [],
     partners: partners.data ?? [],
+    ma: maDeals.data ?? [],
+    kyc: kyc.data ?? [],
+    risco: { trajetoria: trajetoriaPorDimensao, sugestoes: sugestoes.data ?? [] },
   });
 }
