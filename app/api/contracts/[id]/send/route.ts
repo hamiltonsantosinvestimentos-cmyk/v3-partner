@@ -57,9 +57,34 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   }
 
   const parties = (contract.parties as Array<{ role: string; name: string | null; email?: string | null }> | null) ?? [];
+
+  // Gate de integridade (11/08/2026, P0 real): antes deste gate, um bug na
+  // esteira de qualificação sobrescrevia `parties` e derrubava a contraparte
+  // principal sem ninguém perceber, dois contratos reais chegaram a ser
+  // enviados pra assinatura só com testemunhas, sem a V3 e sem a contraparte.
+  // Bloqueia ANTES de qualquer chamada à ClickSign se: (a) alguma parte tem
+  // nome mas não tem e-mail (dado corrompido/parcial), ou (b) não existe
+  // nenhum signatário fora do papel de testemunha (contrato sem parte
+  // principal cadastrada não pode ser "enviado", mesmo que tenha testemunha).
+  // v3_partners agora ENTRA como signatário de verdade (pedido de João
+  // 11/08/2026: ele assina digitalmente pela V3, não é só metadado).
+  const incomplete = parties.filter((p) => p.name?.trim() && !p.email?.trim());
+  if (incomplete.length > 0) {
+    return NextResponse.json({
+      error: `Contrato não pode ser enviado: ${incomplete.length} parte(s) sem e-mail cadastrado (${incomplete.map((p) => p.name).join(", ")}). Corrija antes de enviar.`,
+    }, { status: 422 });
+  }
+
   const signatories = parties
-    .filter((p) => p.role !== "v3_partners" && p.email)
+    .filter((p) => p.email?.trim())
     .map((p) => ({ name: p.name ?? "", email: p.email! }));
+
+  const nonWitnessSignatories = parties.filter((p) => p.role !== "testemunha" && p.email?.trim());
+  if (nonWitnessSignatories.length === 0) {
+    return NextResponse.json({
+      error: "Contrato não pode ser enviado: só há testemunha(s) cadastrada(s), falta a(s) parte(s) principal(is) (contraparte e/ou V3 Partners). Verifique o array de partes antes de reenviar.",
+    }, { status: 422 });
+  }
 
   if (signatories.length === 0) {
     return NextResponse.json({ error: "Contrato sem signatários com e-mail cadastrado (parties vazio ou sem e-mail)." }, { status: 422 });

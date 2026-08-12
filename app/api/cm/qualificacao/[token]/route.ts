@@ -161,8 +161,20 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
         .eq("id", batch.operation_contract_id)
         .single();
 
+      // P0 real achado 11/08/2026, corrigido no mesmo bloco: esta rota
+      // sobrescrevia o array `parties` INTEIRO só com o que veio deste
+      // lote + v3_partners, apagando silenciosamente qualquer outra parte
+      // já existente no contrato (ex: a contraparte principal, cadastrada
+      // na criação do contrato, nunca parte de nenhum lote de
+      // qualificação). Isso derrubou a contraparte de 2 contratos reais
+      // (Iris no Closer, Daniel+Diogo no Home Cash) do array de
+      // signatários sem ninguém perceber, porque o "Enviar para
+      // Assinatura" nunca avisa quem ficou de fora. Corrigido para
+      // MESCLAR: preserva toda parte existente cujo e-mail não é de
+      // ninguém deste lote, e só então acrescenta/atualiza as deste lote.
       const existingParties = (contract?.parties as Array<{ role: string; name: string; doc?: string | null; email?: string }> | null) ?? [];
-      const v3Party = existingParties.find((p) => p.role === "v3_partners");
+      const batchEmails = new Set((allQualifications ?? []).map((q) => q.email.toLowerCase()));
+      const preservedParties = existingParties.filter((p) => !p.email || !batchEmails.has(p.email.toLowerCase()));
       const novasPartes = (allQualifications ?? []).map((q) => ({
         role: q.role_in_document,
         name: q.full_name,
@@ -171,7 +183,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
       }));
 
       await db.from("operation_contracts").update({
-        parties: v3Party ? [...novasPartes, v3Party] : novasPartes,
+        parties: [...preservedParties, ...novasPartes],
       }).eq("id", batch.operation_contract_id);
     }
   }
