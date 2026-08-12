@@ -19,6 +19,7 @@ import {
   type OperationStatus, type TicketPriority,
 } from "@/lib/constants";
 import { PropostaDetailModal, PIPELINE_STAGES, STAGE_REPROVADO, STAGE_DECLINADO, type ProposalFull, type MesaComment } from "@/components/mesa-credito/proposta-detail-modal";
+import { InstituicoesPanel } from "@/components/mesa-operacional/instituicoes-panel";
 
 // Colunas do kanban = fluxo linear + os 2 estágios terminais (fora do avançar/retroceder sequencial)
 const KANBAN_COLUMNS = [...PIPELINE_STAGES, STAGE_REPROVADO, STAGE_DECLINADO];
@@ -1436,7 +1437,7 @@ function EditarPropostaModal({ open, onClose, proposal, onSaved }: {
 
 // ─── Main Component ────────────────────────────────────────────────────────
 export function MesaOpClient({ tickets: initialTickets, proposals: initialProposals, currentUser }: MesaOpClientProps) {
-  const [view, setView] = useState<"kanban" | "tickets" | "contratos" | "dashboard">("kanban");
+  const [view, setView] = useState<"kanban" | "tickets" | "contratos" | "dashboard" | "instituicoes">("kanban");
   const [tickets, setTickets] = useState<Ticket[]>(initialTickets);
   const [proposals, setProposals] = useState<ProposalCard[]>(initialProposals);
 
@@ -2066,6 +2067,10 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
             <button onClick={() => setView("contratos")}
               className={`px-3 py-1.5 text-xs font-medium flex items-center gap-1.5 transition-colors ${view === "contratos" ? "bg-[#C9A84C]/15 text-[#E8C97A]" : "text-muted-foreground hover:text-white hover:bg-secondary"}`}>
               <ScrollText className="w-3.5 h-3.5" /> Contratos
+            </button>
+            <button onClick={() => setView("instituicoes")}
+              className={`px-3 py-1.5 text-xs font-medium flex items-center gap-1.5 transition-colors ${view === "instituicoes" ? "bg-[#C9A84C]/15 text-[#E8C97A]" : "text-muted-foreground hover:text-white hover:bg-secondary"}`}>
+              <Building2 className="w-3.5 h-3.5" /> Instituições
             </button>
           </div>
           {canChangeStage && (
@@ -3111,6 +3116,11 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
             </div>
           </div>
         </div>
+      )}
+
+      {/* ── VIEW: INSTITUIÇÕES ── */}
+      {view === "instituicoes" && (
+        <InstituicoesPanel currentUser={currentUser} />
       )}
 
       {/* ── VIEW: DASHBOARD ── */}
