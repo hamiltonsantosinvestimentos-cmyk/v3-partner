@@ -47,7 +47,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
 
   const { data: contract } = await db
     .from("operation_contracts")
-    .select("id, vertical, contract_title, status_signature, parties, signing_token")
+    .select("id, vertical, contract_title, contract_code, status_signature, parties, signing_token")
     .eq("id", id)
     .single();
 
@@ -72,12 +72,22 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
 
   const documentUrl = `${process.env.NEXT_PUBLIC_APP_URL ?? "https://app.v3partners.com.br"}/api/contracts/html/${id}/${signingToken}`;
 
+  // Label prefixado com contract_code (11/08/2026, ciclo ClickSign Fase 2):
+  // vira o nome do envelope E o nome do arquivo (filename: `${documentLabel}.pdf`),
+  // dá uma chave de correlação confiável pra identificar o contrato quando
+  // o PDF assinado retornar por e-mail via Observador de Assinatura, sem
+  // depender do formato de e-mail da própria ClickSign, que não controlamos.
+  const documentLabel = contract.contract_code
+    ? `${contract.contract_code} · ${contract.contract_title}`
+    : contract.contract_title;
+
   const result = await sendToClickSign({
     dealId: id,
     documentType: resolveDocumentType(contract.contract_title, contract.vertical),
     documentUrl,
-    documentLabel: contract.contract_title,
+    documentLabel,
     signatories,
+    watcherEmail: "joao.lemos@v3partners.com.br",
   });
 
   if (!result.ok) {
@@ -87,6 +97,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   await db.from("operation_contracts").update({
     status_signature: "enviado_assinatura",
     external_envelope_id: result.envelopeId,
+    external_document_id: result.documentId,
     sent_to_signature_at: new Date().toISOString(),
   }).eq("id", id);
 

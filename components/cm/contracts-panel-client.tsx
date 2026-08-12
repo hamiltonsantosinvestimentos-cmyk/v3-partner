@@ -191,7 +191,7 @@ export function ContractsPanelClient() {
       });
       const json = await res.json();
       if (res.ok) {
-        alert(json.warning ?? "Contrato atualizado.");
+        alert(json.warning ?? (json.envelope_cancelado_automaticamente ? "Contrato atualizado. Envelope antigo cancelado automaticamente na ClickSign." : "Contrato atualizado."));
         setShowEdit(false);
         setEditReason("");
         fetchContracts();

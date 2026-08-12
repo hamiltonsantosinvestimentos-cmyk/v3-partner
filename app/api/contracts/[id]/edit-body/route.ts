@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
+import { cancelClickSignDocument } from "@/lib/clicksign";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -23,14 +24,15 @@ async function requireRole(req: NextRequest) {
 // rendered_html era imutável: nenhuma rota jamais escrevia nele depois do
 // INSERT original em /api/contracts/generate.
 //
-// Se o contrato já tinha sido enviado ao ClickSign (enviado_assinatura), o
-// envelope antigo fica órfão — ClickSign não permite editar documento em
-// processo de assinatura. Esta rota NÃO cancela o envelope automaticamente
-// (nenhuma função de cancelamento existe em lib/clicksign.ts hoje e não
-// verificamos a API real de cancelamento ainda — não adivinhar contrato de
-// API externa, regra do projeto). Reseta o contrato para "rascunho" e avisa
-// explicitamente na resposta para cancelar o envelope antigo manualmente no
-// painel da ClickSign antes de clicar "Enviar para Assinatura" de novo.
+// Se o contrato já tinha sido enviado ao ClickSign (enviado_assinatura), a
+// rota agora CANCELA automaticamente o documento antigo (11/08/2026, ciclo
+// ClickSign Fase 1: PATCH /envelopes/{id}/documents/{document_id}, status
+// canceled, endpoint confirmado na documentação oficial da ClickSign) antes
+// de resetar para "rascunho" — evita que o signatário assine a versão
+// desatualizada. Se o cancelamento automático falhar (documento já
+// finalizado, API fora do ar), a edição NÃO é bloqueada, mas o aviso de
+// cancelamento manual continua na resposta, agora como fallback explícito
+// de uma tentativa automática que não deu certo, não como único caminho.
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const caller = await requireRole(req);
   if (!caller) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
@@ -45,7 +47,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   const { data: contract } = await db
     .from("operation_contracts")
-    .select("id, rendered_html, status_signature, external_envelope_id")
+    .select("id, rendered_html, status_signature, external_envelope_id, external_document_id")
     .eq("id", id)
     .single();
 
@@ -68,13 +70,22 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     });
   }
 
+  let cancelResult: { attempted: boolean; ok: boolean; error?: string } = { attempted: false, ok: false };
+
   const updates: Record<string, any> = { rendered_html };
   if (hadPendingEnvelope) {
-    // Envelope antigo fica órfão no ClickSign — precisa ser cancelado lá
-    // manualmente (ver comentário acima). Contrato volta pra rascunho pra
-    // poder ser reenviado pela rota /send normal, que gera envelope novo.
+    if (contract.external_document_id) {
+      cancelResult.attempted = true;
+      const result = await cancelClickSignDocument(contract.external_envelope_id!, contract.external_document_id);
+      cancelResult.ok = result.ok;
+      if (!result.ok) cancelResult.error = result.error;
+    }
+    // Contrato volta pra rascunho pra poder ser reenviado pela rota /send
+    // normal, que gera envelope (e document_id) novo, independente do
+    // cancelamento automático ter dado certo ou não.
     updates.status_signature = "rascunho";
     updates.external_envelope_id = null;
+    updates.external_document_id = null;
     updates.sent_to_signature_at = null;
   }
 
@@ -87,15 +98,16 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       author_id: caller.userId,
       author_name: caller.name,
       note_type: "edicao_pos_geracao",
-      content: `Contrato editado: ${reason.trim()}`,
+      content: `Contrato editado: ${reason.trim()}${hadPendingEnvelope ? ` (cancelamento automático do envelope antigo: ${cancelResult.ok ? "sucesso" : cancelResult.attempted ? `falhou, ${cancelResult.error}` : "não tentado, sem document_id salvo"})` : ""}`,
     });
   }
 
   return NextResponse.json({
     success: true,
     reset_to_rascunho: hadPendingEnvelope,
-    warning: hadPendingEnvelope
-      ? "Este contrato já tinha sido enviado ao ClickSign. Cancele o envelope antigo manualmente no painel da ClickSign antes de reenviar — a plataforma não faz isso automaticamente."
+    envelope_cancelado_automaticamente: hadPendingEnvelope ? cancelResult.ok : null,
+    warning: hadPendingEnvelope && !cancelResult.ok
+      ? "Este contrato já tinha sido enviado ao ClickSign. O cancelamento automático do envelope antigo falhou (ou não havia document_id salvo para tentar) — cancele manualmente no painel da ClickSign antes de reenviar."
       : null,
   });
 }

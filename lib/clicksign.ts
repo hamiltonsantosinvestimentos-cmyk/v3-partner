@@ -9,6 +9,13 @@ export interface SendToClickSignInput {
   signatories: ClickSignSignatory[];
   documentUrl?: string;
   documentLabel?: string;
+  // Observador de Assinatura (11/08/2026, ciclo ClickSign Fase 2): quando
+  // informado, a V3 é cadastrada como signature_watcher do envelope com
+  // attach_documents_enabled=true — a ClickSign envia o PDF final assinado
+  // por e-mail para este endereço sozinha, sem necessidade de endpoint de
+  // download (não confirmado existir na API v3, ver lib/clicksign.ts nota
+  // em sendToClickSignV3). Opcional: nem todo caller precisa disso hoje.
+  watcherEmail?: string;
 }
 
 // documentTypes que usam a API v3 (envelopes), confirmadamente funcional.
@@ -21,7 +28,7 @@ export interface SendToClickSignInput {
 const V3_DOCUMENT_TYPES = new Set(["loi", "contrato_venda", "fpa_venda", "fpa_compra", "mandato", "nda_quadripartite", "contrato_final"]);
 
 export type SendToClickSignResult =
-  | { ok: true; envelopeId: string; signUrl: string; status: "PENDING" }
+  | { ok: true; envelopeId: string; documentId: string | null; signUrl: string; status: "PENDING" }
   | { ok: false; error: string; status: number };
 
 const IS_DEMO = false;
@@ -161,6 +168,7 @@ async function sendToClickSignV3(input: SendToClickSignInput): Promise<SendToCli
     return {
       ok: true,
       envelopeId: `DEMO-ENV-${Date.now()}`,
+      documentId: null,
       signUrl: "https://app.clicksign.com/sign/demo",
       status: "PENDING",
     };
@@ -225,6 +233,32 @@ async function sendToClickSignV3(input: SendToClickSignInput): Promise<SendToCli
     }
     const docData = await docRes.json();
     const documentId: string = docData.data?.id;
+
+    // Observador de Assinatura (11/08/2026): best-effort, nunca falha o envio
+    // inteiro por causa disso. attach_documents_enabled faz a ClickSign
+    // mandar o PDF final assinado por e-mail sozinha quando o envelope
+    // fecha, endpoint e payload confirmados na documentação oficial
+    // (developers.clicksign.com/v3.0/reference/api-criar-observadores).
+    if (input.watcherEmail) {
+      const watcherRes = await fetch(`${baseUrl}/api/v3/envelopes/${envelopeId}/signature_watchers`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          data: {
+            type: "signature_watchers",
+            attributes: {
+              email: input.watcherEmail,
+              kind: "all_steps",
+              communicate_events: { signature_watcher_envelope_closed: "email" },
+              attach_documents_enabled: true,
+            },
+          },
+        }),
+      });
+      if (!watcherRes.ok) {
+        console.error(`[clicksign] falha ao cadastrar observador (${input.watcherEmail}) no envelope ${envelopeId}:`, await watcherRes.text());
+      }
+    }
 
     for (const signatory of signatories) {
       const signerRes = await fetch(`${baseUrl}/api/v3/envelopes/${envelopeId}/signers`, {
@@ -307,9 +341,50 @@ async function sendToClickSignV3(input: SendToClickSignInput): Promise<SendToCli
     return {
       ok: true,
       envelopeId,
+      documentId,
       signUrl: `${baseUrl}/envelopes/${envelopeId}`,
       status: "PENDING",
     };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Erro desconhecido";
+    return { ok: false, error: message, status: 500 };
+  }
+}
+
+export type CancelClickSignDocumentResult = { ok: true } | { ok: false; error: string; status: number };
+
+// Cancela um documento AINDA EM ABERTO (status running) dentro de um
+// envelope v3. Usado por PATCH /api/contracts/[id]/edit-body (11/08/2026,
+// ciclo ClickSign Fase 1) para invalidar o link de assinatura antigo antes
+// de reenviar um contrato editado, evitando que o signatário assine a
+// versão desatualizada. Endpoint e payload confirmados na documentação
+// oficial (developers.clicksign.com/reference/editar-documento): o
+// cancelamento é no nível do DOCUMENTO, não do envelope — não existe
+// endpoint de cancelamento de envelope na API v3. Retorna erro (não lança)
+// se o documento já estiver finalizado (422 esperado da ClickSign nesse
+// caso) — quem chama decide se isso bloqueia ou só avisa.
+export async function cancelClickSignDocument(envelopeId: string, documentId: string): Promise<CancelClickSignDocumentResult> {
+  const accessToken = process.env.CLICKSIGN_ACCESS_TOKEN;
+  const baseUrl = process.env.CLICKSIGN_BASE_URL ?? "https://sandbox.clicksign.com";
+  if (!accessToken) return { ok: false, error: "CLICKSIGN_ACCESS_TOKEN não configurado", status: 500 };
+
+  try {
+    const res = await fetch(`${baseUrl}/api/v3/envelopes/${envelopeId}/documents/${documentId}`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/vnd.api+json",
+        Accept: "application/json",
+        Authorization: accessToken,
+      },
+      body: JSON.stringify({
+        data: { id: documentId, type: "documents", attributes: { status: "canceled" } },
+      }),
+    });
+    if (!res.ok) {
+      const err = await res.text();
+      return { ok: false, error: err, status: res.status };
+    }
+    return { ok: true };
   } catch (err) {
     const message = err instanceof Error ? err.message : "Erro desconhecido";
     return { ok: false, error: message, status: 500 };
@@ -331,6 +406,7 @@ async function sendToClickSignV1(input: SendToClickSignInput): Promise<SendToCli
     return {
       ok: true,
       envelopeId: `DEMO-ENV-${Date.now()}`,
+      documentId: null,
       signUrl: "https://app.clicksign.com/sign/demo",
       status: "PENDING",
     };
@@ -447,6 +523,7 @@ async function sendToClickSignV1(input: SendToClickSignInput): Promise<SendToCli
     return {
       ok: true,
       envelopeId: documentKey,
+      documentId: null, // v1 (legado) não tem o cancelamento de documento da v3, ver cancelClickSignDocument
       signUrl: `${baseUrl}/sign/${documentKey}`,
       status: "PENDING",
     };
