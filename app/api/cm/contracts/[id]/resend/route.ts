@@ -49,7 +49,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   const signatario = parties.find((p) => p.role === "mandatario") ?? parties[0];
 
   if (contract.external_envelope_id) {
-    const result = await notifyClickSignEnvelope(contract.external_envelope_id, signatario?.name ?? "");
+    const result = await notifyClickSignEnvelope(contract.external_envelope_id, signatario?.name ?? "", contract.contract_title);
     if (!result.ok) {
       return NextResponse.json({ error: `Falha ao reenviar notificação: ${result.error}` }, { status: 502 });
     }

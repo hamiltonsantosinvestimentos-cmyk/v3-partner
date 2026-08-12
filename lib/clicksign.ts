@@ -39,7 +39,18 @@ export type NotifyClickSignResult = { ok: true } | { ok: false; error: string; s
 // e-mail de assinatura). Extraído de sendToClickSignV3 para ser reutilizável
 // pelo botão "Reenviar notificação" do painel de acompanhamento, sem
 // duplicar a copy já aprovada pelo brand-guardian em dois lugares.
-export async function notifyClickSignEnvelope(envelopeId: string, signatoryName: string): Promise<NotifyClickSignResult> {
+//
+// P0 REAL achado 11/08/2026 (não por mim, por João, lendo o e-mail de
+// verdade que o Robson e o Hamilton receberam): esta função tinha o texto
+// "Carta de Intenção de Compra" FIXO no assunto e no corpo, escrito
+// originalmente só para o fluxo de LOI (M&A) e nunca adaptado quando outros
+// 6 documentTypes passaram a chamar sendToClickSignV3. Os 2 contratos reais
+// de hoje (Closer, Home Cash) saíram com e-mail dizendo "Carta de Intenção
+// de Compra" quando não são isso. Eu nunca tinha checado o TEXTO do e-mail,
+// só se o envio retornava 200 — confirmar envio não é confirmar conteúdo.
+// documentLabel agora é obrigatório, para nenhum caller poder esquecer de
+// passar o contexto real do documento.
+export async function notifyClickSignEnvelope(envelopeId: string, signatoryName: string, documentLabel: string): Promise<NotifyClickSignResult> {
   const accessToken = process.env.CLICKSIGN_ACCESS_TOKEN;
   const baseUrl = process.env.CLICKSIGN_BASE_URL ?? "https://sandbox.clicksign.com";
   if (!accessToken) return { ok: false, error: "CLICKSIGN_ACCESS_TOKEN não configurado", status: 500 };
@@ -57,11 +68,11 @@ export async function notifyClickSignEnvelope(envelopeId: string, signatoryName:
         attributes: {
           message: null,
           email_customization: {
-            subject: "V3 Partners: Assinatura Digital da Carta de Intenção de Compra",
+            subject: `V3 Partners: Assinatura Digital, ${documentLabel}`,
             head: "V3 Partners Soluções Ltda",
             greeting: `Prezado(a) ${signatoryName || "Sr(a)"},`,
             principal:
-              "A V3 Partners encaminha a Carta de Intenção de Compra referente à operação sob sua intermediação. Revise o documento e confirme sua assinatura digital abaixo.",
+              `A V3 Partners encaminha o documento "${documentLabel}" para sua assinatura digital. Revise o documento e confirme sua assinatura abaixo.`,
             button: "Verificar e Assinar",
             final: "Em caso de dúvidas, entre em contato com privacidade@v3partners.com.br.",
             align: "left",
@@ -333,7 +344,7 @@ async function sendToClickSignV3(input: SendToClickSignInput): Promise<SendToCli
     // pelo link; só o lembrete automático (remind_interval) cobriria o
     // signatário eventualmente, então logamos em vez de falhar a operação
     // inteira por um problema de notificação.
-    const notifyRes = await notifyClickSignEnvelope(envelopeId, signatories[0]?.name ?? "");
+    const notifyRes = await notifyClickSignEnvelope(envelopeId, signatories[0]?.name ?? "", documentLabel);
     if (!notifyRes.ok) {
       console.error(`[clicksign] notifyEnvelope falhou para envelope ${envelopeId}: ${notifyRes.error}`);
     }

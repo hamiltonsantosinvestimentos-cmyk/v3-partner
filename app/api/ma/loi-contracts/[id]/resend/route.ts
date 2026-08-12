@@ -46,7 +46,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   const parties = (contract.parties as Array<{ role: string; name: string; email: string }> | null) ?? [];
   const signatario = parties.find(p => ["comprador", "vendedor", "participante", "comissionado_compra"].includes(p.role));
 
-  const result = await notifyClickSignEnvelope(contract.external_envelope_id, signatario?.name ?? "");
+  const result = await notifyClickSignEnvelope(contract.external_envelope_id, signatario?.name ?? "", "Carta de Intenção de Compra");
   if (!result.ok) {
     return NextResponse.json({ error: `Falha ao reenviar notificação: ${result.error}` }, { status: 502 });
   }
