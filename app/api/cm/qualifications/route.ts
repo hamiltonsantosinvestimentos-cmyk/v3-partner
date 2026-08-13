@@ -10,7 +10,11 @@ function svc() {
 }
 
 const ALLOWED_ROLES = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"];
-const ROLES_IN_DOCUMENT = ["parte_principal", "intermediario_finder_venda", "intermediario_finder_compra", "mandatario", "testemunha"];
+const ROLES_IN_DOCUMENT = [
+  "parte_principal", "intermediario_finder_venda", "intermediario_finder_compra", "mandatario", "testemunha",
+  // Papeis granulares da indicacao rapida (13/08/2026) -- ver 20260813_qualificacoes_pf_pj_fpa.sql
+  "finder_originacao_venda", "finder_originacao_compra", "intermediario_venda", "intermediario_compra",
+];
 const DOCUMENT_TYPES = ["nda_quadripartite", "fpa_venda", "fpa_compra", "mandato", "contrato_final", "contrato_parceria"];
 
 const DOCUMENT_TYPE_LABELS: Record<string, string> = {
@@ -41,8 +45,9 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const listingId = searchParams.get("listing_id");
   const operationContractId = searchParams.get("operation_contract_id");
-  if (!listingId && !operationContractId) {
-    return NextResponse.json({ error: "listing_id ou operation_contract_id é obrigatório" }, { status: 422 });
+  const demandId = searchParams.get("demand_id");
+  if (!listingId && !operationContractId && !demandId) {
+    return NextResponse.json({ error: "listing_id, operation_contract_id ou demand_id é obrigatório" }, { status: 422 });
   }
 
   // qualification_token incluso propositalmente: permite "Copiar link"/"WhatsApp"
@@ -52,7 +57,11 @@ export async function GET(req: NextRequest) {
     .from("cm_qualification_batches")
     .select("*, cm_party_qualifications(id, full_name, email, role_in_document, status, filled_at, qualification_token)")
     .order("created_at", { ascending: false });
-  query = listingId ? query.eq("listing_id", listingId) : query.eq("operation_contract_id", operationContractId!);
+  query = listingId
+    ? query.eq("listing_id", listingId)
+    : operationContractId
+    ? query.eq("operation_contract_id", operationContractId)
+    : query.eq("demand_id", demandId!);
 
   const { data: batches, error } = await query;
 
@@ -70,16 +79,29 @@ export async function POST(req: NextRequest) {
   if (!caller) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
   const body = await req.json().catch(() => ({}));
-  const { listing_id, operation_contract_id, match_deal_id, document_type, parties } = body as {
+  const { listing_id, operation_contract_id, demand_id, match_deal_id, document_type, parties } = body as {
     listing_id?: string;
     operation_contract_id?: string;
+    demand_id?: string;
     match_deal_id?: string;
     document_type?: string;
     parties?: { full_name: string; email: string; role_in_document: string }[];
   };
 
-  if (!document_type || !DOCUMENT_TYPES.includes(document_type)) {
+  // document_type so e obrigatorio quando o lote ja nasce sabendo o instrumento (fluxo antigo,
+  // Bolsa de Ativos/Central de Contratos). A indicacao rapida (13/08/2026, botao no card de
+  // Ativo/Comprador) cria o lote ANTES da Governanca decidir o instrumento -- nesse caso o lote
+  // nasce em status "aguardando_triagem_governanca", sem document_type, sem disparar email ainda
+  // (o email/link formal e responsabilidade do dispatch da Governanca, nao desta rota).
+  const isQuickIndication = !document_type && !!demand_id;
+  if (document_type && !DOCUMENT_TYPES.includes(document_type)) {
     return NextResponse.json({ error: `document_type inválido. Use um de: ${DOCUMENT_TYPES.join(", ")}` }, { status: 422 });
+  }
+  if (!document_type && !demand_id) {
+    return NextResponse.json({ error: "document_type é obrigatório fora do fluxo de indicação rápida (demand_id)" }, { status: 422 });
+  }
+  if (!listing_id && !operation_contract_id && !demand_id) {
+    return NextResponse.json({ error: "Informe listing_id, operation_contract_id ou demand_id" }, { status: 422 });
   }
   if (!Array.isArray(parties) || parties.length === 0) {
     return NextResponse.json({ error: "Informe ao menos um envolvido" }, { status: 422 });
@@ -92,13 +114,21 @@ export async function POST(req: NextRequest) {
 
   const db = svc();
 
+  // Lado travado no servidor pelo tipo de ancora que originou a chamada -- nunca aceito do
+  // client. Card de Ativo (listing_id) so pode gerar SELL_SIDE, card de Comprador (demand_id)
+  // so pode gerar BUY_SIDE. Sem isso um intermediario nao tem como migrar de lado por engano.
+  const side = listing_id ? "SELL_SIDE" : demand_id ? "BUY_SIDE" : null;
+
   const { data: batch, error: batchError } = await db
     .from("cm_qualification_batches")
     .insert({
       listing_id: listing_id ?? null,
       operation_contract_id: operation_contract_id ?? null,
+      demand_id: demand_id ?? null,
       match_deal_id: match_deal_id ?? null,
-      document_type,
+      document_type: document_type ?? null,
+      status: isQuickIndication ? "aguardando_triagem_governanca" : undefined,
+      side,
       created_by: caller.userId,
     })
     .select("id")
@@ -124,10 +154,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: insertError?.message ?? "Erro ao criar qualificações" }, { status: 500 });
   }
 
-  if (process.env.RESEND_API_KEY) {
+  // Indicacao rapida nao dispara email: o instrumento ainda nao foi decidido pela Governanca,
+  // entao nao ha o que o indicado preencher ainda de forma util. O envio formal do link
+  // acontece no dispatch (Fase 3 do BRIEF de 13/08/2026), quando document_type e definido.
+  if (process.env.RESEND_API_KEY && !isQuickIndication) {
     const { Resend } = await import("resend");
     const resend = new Resend(process.env.RESEND_API_KEY);
-    const docLabel = DOCUMENT_TYPE_LABELS[document_type] ?? document_type;
+    const docLabel = DOCUMENT_TYPE_LABELS[document_type!] ?? document_type;
     await Promise.all(
       inserted.map(async (row) => {
         try {

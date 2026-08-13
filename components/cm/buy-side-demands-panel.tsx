@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Loader2, FileText, X, Download, RefreshCw, Repeat, ShoppingCart, IdCard, Target, ShieldCheck, Link2, Check } from "lucide-react";
+import { Loader2, FileText, X, Download, RefreshCw, Repeat, ShoppingCart, IdCard, Target, ShieldCheck, Link2, Check, UserPlus } from "lucide-react";
+import { QuickIndicateModal } from "@/components/cm/quick-indicate-modal";
 
 type BuyDemand = {
   id: string;
@@ -114,6 +115,7 @@ export function BuySideDemandsPanel({ mode = "mesa", title, subtitle }: BuySideD
   const [docs, setDocs] = useState<KycDoc[]>([]);
   const [docsLoading, setDocsLoading] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [indicateDemand, setIndicateDemand] = useState<BuyDemand | null>(null);
 
   const copyLink = (d: BuyDemand) => {
     const url = `${window.location.origin}/intake/buy/${d.intake_token}`;
@@ -252,6 +254,15 @@ export function BuySideDemandsPanel({ mode = "mesa", title, subtitle }: BuySideD
                       >
                         {copiedId === d.id ? <Check size={11} className="text-emerald-400" /> : <Link2 size={11} />}
                       </button>
+                      {mode === "mesa" && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setIndicateDemand(d); }}
+                          title="Indicar finder, intermediário ou mandatário deste comprador"
+                          className="flex items-center gap-1.5 rounded-lg border border-[#243A66] text-[#9BAFC5] text-[10px] font-semibold px-2.5 py-1.5 hover:border-[#C9A84C]/40 hover:text-[#C9A84C] transition-colors"
+                        >
+                          <UserPlus size={11} />
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -272,6 +283,14 @@ export function BuySideDemandsPanel({ mode = "mesa", title, subtitle }: BuySideD
                 <div className="mt-1.5"><StatusChip status={detailDemand.pipeline_status} /></div>
               </div>
               <div className="flex items-center gap-2 flex-shrink-0">
+                {mode === "mesa" && (
+                  <button
+                    onClick={() => setIndicateDemand(detailDemand)}
+                    className="flex items-center gap-1.5 rounded-lg border border-[#243A66] text-[#9BAFC5] text-[10px] font-semibold px-2.5 py-1.5 hover:border-[#C9A84C]/40 hover:text-[#C9A84C] transition-colors"
+                  >
+                    <UserPlus size={12} /> Indicar
+                  </button>
+                )}
                 <button
                   onClick={() => copyLink(detailDemand)}
                   className="flex items-center gap-1.5 rounded-lg border border-[#243A66] text-[#9BAFC5] text-[10px] font-semibold px-2.5 py-1.5 hover:border-[#C9A84C]/40 hover:text-[#C9A84C] transition-colors"
@@ -366,6 +385,15 @@ export function BuySideDemandsPanel({ mode = "mesa", title, subtitle }: BuySideD
             </div>
           </div>
         </div>
+      )}
+
+      {indicateDemand && (
+        <QuickIndicateModal
+          side="BUY_SIDE"
+          demandId={indicateDemand.id}
+          anchorLabel={indicateDemand.nome_contato}
+          onClose={() => setIndicateDemand(null)}
+        />
       )}
     </div>
   );

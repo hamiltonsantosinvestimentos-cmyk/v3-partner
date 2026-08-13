@@ -14,6 +14,7 @@ import { DueDiligencePanel } from "./due-diligence-panel";
 import { CommissionCalculatorPanel } from "./commission-calculator-panel";
 import { BuySideDemandsPanel } from "./buy-side-demands-panel";
 import { NdaAuthorizationQueuePanel } from "./nda-authorization-queue-panel";
+import { QuickIndicateModal } from "./quick-indicate-modal";
 import { CM_DOCUMENT_CHECKLISTS, type CmAssetType } from "@/lib/cm-checklists";
 import { createClient as createBrowserSupabaseClient } from "@/lib/supabase/client";
 
@@ -206,6 +207,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [assistantListing, setAssistantListing] = useState<{ id: string; anonymous_id: string } | null>(null);
   const [dueDiligenceListing, setDueDiligenceListing] = useState<{ id: string; anonymous_id: string; seller_cpf_cnpj: string | null } | null>(null);
+  const [indicateListing, setIndicateListing] = useState<{ id: string; anonymous_id: string } | null>(null);
   const [showCommissionCalc, setShowCommissionCalc] = useState(false);
   const [uploadingDoc, setUploadingDoc] = useState<string | null>(null);
   const [uploadingGallery, setUploadingGallery] = useState(false);
@@ -2451,6 +2453,12 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
                 <Shield size={16} /> Due Diligence
               </button>
               <button
+                onClick={() => { setIndicateListing({ id: selectedListing.id, anonymous_id: selectedListing.anonymous_id }); }}
+                className="w-full flex items-center gap-3 px-4 py-3 bg-[#162744] border border-[#9BAFC5]/15 rounded-lg text-[#F5F1E8] text-xs font-bold hover:bg-[#162744]/80 transition"
+              >
+                <UserPlus size={16} /> Indicar Integrante / Comissionado
+              </button>
+              <button
                 onClick={() => createDealRoom(selectedListing.id)}
                 disabled={creatingRoom}
                 className="w-full flex items-center gap-3 px-4 py-3 bg-[#162744] border border-[#9BAFC5]/15 rounded-lg text-[#F5F1E8] text-xs font-bold hover:bg-[#162744]/80 transition disabled:opacity-50"
@@ -3289,6 +3297,16 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
           anonymousId={dueDiligenceListing.anonymous_id}
           sellerCpfCnpj={dueDiligenceListing.seller_cpf_cnpj}
           onClose={() => setDueDiligenceListing(null)}
+        />
+      )}
+
+      {/* Indicacao Rapida -- SELL_SIDE travado pelo card de Ativo */}
+      {indicateListing && (
+        <QuickIndicateModal
+          side="SELL_SIDE"
+          listingId={indicateListing.id}
+          anchorLabel={indicateListing.anonymous_id}
+          onClose={() => setIndicateListing(null)}
         />
       )}
 
