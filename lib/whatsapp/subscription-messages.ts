@@ -1,21 +1,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-
-const INSTANCE = "v3-sdr-whatsapp";
+import { sendText } from "./openwa-client";
 
 export async function sendWhatsApp(phone: string, text: string): Promise<boolean> {
   try {
-    const res = await fetch(
-      `${process.env.EVOLUTION_API_URL}/message/sendText/${INSTANCE}`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          apikey: process.env.EVOLUTION_API_KEY!,
-        },
-        body: JSON.stringify({ number: phone, text }),
-      }
-    );
-    return res.ok;
+    return await sendText(phone, text);
   } catch {
     return false;
   }
