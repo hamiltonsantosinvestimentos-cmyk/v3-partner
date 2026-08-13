@@ -51,6 +51,7 @@ const NAV_SECTIONS: NavSection[] = [
       },
       { href: "/minhas-operacoes", label: "Minhas Operações", icon: "ClipboardList", roles: ["STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE"] },
       { href: "/meus-links", label: "Links de Serviço", icon: "Link2", roles: ["ADMIN", "GESTAO", "PARTNER", "PARTNER_PRO", "MESA_OPERACIONAL"] },
+      { href: "/meus-compradores", label: "Meus Compradores", icon: "ShoppingBag", roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL", "PARTNER", "PARTNER_PRO", "STARTER", "ENTERPRISE"] },
       { href: "/ranking", label: "Ranking", icon: "Medal", roles: ["ADMIN", "STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE"] },
       { href: "/indicacoes", label: "Indicações", icon: "UserPlus2", roles: ["ADMIN", "STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE", "GESTAO"] },
     ],

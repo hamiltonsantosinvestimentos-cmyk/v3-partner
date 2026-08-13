@@ -7,6 +7,7 @@ function svc() {
 }
 
 const INTERNAL_ROLES = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"];
+const PARTNER_ROLES = ["PARTNER", "PARTNER_PRO", "STARTER", "ENTERPRISE"];
 
 async function getCaller(req: NextRequest) {
   const supabase = await createClient();
@@ -17,13 +18,28 @@ async function getCaller(req: NextRequest) {
   return { userId: user.id, role: profile.role as string };
 }
 
+// Mesmo criterio de getCaller, mas tambem libera role de Partner externo -- usado so pelo
+// GET, nunca pelo POST (cadastro manual continua exclusivo da Mesa). isPartner=true forca
+// o filtro por origin_partner_id = caller.userId mais abaixo, nunca aceito do cliente.
+async function getCallerOrPartner(req: NextRequest) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+  const { data: profile } = await svc().from("profiles").select("id, role").eq("id", user.id).single();
+  const role = profile?.role as string | undefined;
+  if (!role) return null;
+  if (INTERNAL_ROLES.includes(role)) return { userId: user.id, role, isPartner: false };
+  if (PARTNER_ROLES.includes(role)) return { userId: user.id, role, isPartner: true };
+  return null;
+}
+
 /** GET /api/cm/investor-demands — lista compradores da Bolsa de Ativos (aba "Demandas de Compra")
  *  Filtra por origem intake_buy/manual_mesa (os 2 caminhos de criacao especificos de CM) para nao
  *  misturar com investor_demands criadas pelo lado M&A (/api/ma/investor-demands, origem "portal").
  *  Traz contagem de documentos e de matches SEM depender de nenhum dos dois existir -- e exatamente
  *  o gap que motivou esta rota: antes so dava pra ver um comprador se ele ja tivesse match com listing. */
 export async function GET(req: NextRequest) {
-  const caller = await getCaller(req);
+  const caller = await getCallerOrPartner(req);
   if (!caller) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
   const { searchParams } = new URL(req.url);
@@ -36,6 +52,10 @@ export async function GET(req: NextRequest) {
     .in("origem", ["intake_buy", "manual_mesa"])
     .order("created_at", { ascending: false })
     .limit(100);
+
+  // Partner externo so ve o que ele mesmo originou -- filtro forcado no servidor, nunca
+  // aceito de query param do cliente (evitaria um partner ver a demanda de outro).
+  if (caller.isPartner) query = query.eq("origin_partner_id", caller.userId);
 
   if (status !== "all") query = query.eq("status", status);
 

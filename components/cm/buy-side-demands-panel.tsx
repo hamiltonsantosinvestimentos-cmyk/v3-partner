@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Loader2, FileText, X, Download, RefreshCw, Repeat, ShoppingCart, IdCard, Target, ShieldCheck } from "lucide-react";
+import { Loader2, FileText, X, Download, RefreshCw, Repeat, ShoppingCart, IdCard, Target, ShieldCheck, Link2, Check } from "lucide-react";
 
 type BuyDemand = {
   id: string;
+  intake_token: string;
   nome_contato: string;
   empresa: string | null;
   cpf: string | null;
@@ -98,12 +99,28 @@ function Field({ label, value }: { label: string; value: string | null | undefin
   );
 }
 
-export function BuySideDemandsPanel() {
+interface BuySideDemandsPanelProps {
+  /** "mesa": Mesa/Gestao/Admin, ve tudo. "mine": Partner externo, API ja forca o filtro por
+   *  origin_partner_id no servidor -- aqui so ajusta o texto e esconde a coluna redundante. */
+  mode?: "mesa" | "mine";
+  title?: string;
+  subtitle?: string;
+}
+
+export function BuySideDemandsPanel({ mode = "mesa", title, subtitle }: BuySideDemandsPanelProps) {
   const [demands, setDemands] = useState<BuyDemand[]>([]);
   const [loading, setLoading] = useState(true);
   const [detailDemand, setDetailDemand] = useState<BuyDemand | null>(null);
   const [docs, setDocs] = useState<KycDoc[]>([]);
   const [docsLoading, setDocsLoading] = useState(false);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const copyLink = (d: BuyDemand) => {
+    const url = `${window.location.origin}/intake/buy/${d.intake_token}`;
+    navigator.clipboard.writeText(url);
+    setCopiedId(d.id);
+    setTimeout(() => setCopiedId((cur) => (cur === d.id ? null : cur)), 2000);
+  };
 
   const fetchDemands = useCallback(async () => {
     setLoading(true);
@@ -140,8 +157,8 @@ export function BuySideDemandsPanel() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-sm font-bold text-[#F5F1E8]">Demandas de Compra (Buy-Side)</p>
-          <p className="text-xs text-[#9BAFC5]">Compradores cadastrados via link de intake, com ou sem match já executado</p>
+          <p className="text-sm font-bold text-[#F5F1E8]">{title ?? "Demandas de Compra (Buy-Side)"}</p>
+          <p className="text-xs text-[#9BAFC5]">{subtitle ?? "Compradores cadastrados via link de intake, com ou sem match já executado"}</p>
         </div>
         <button
           onClick={fetchDemands}
@@ -167,7 +184,7 @@ export function BuySideDemandsPanel() {
             <thead>
               <tr className="border-b border-[#243A66] bg-[#13223A] text-left">
                 <th className="px-3 py-2.5 font-bold text-[10px] uppercase tracking-widest text-[#E8C97A]">Comprador</th>
-                <th className="px-3 py-2.5 font-bold text-[10px] uppercase tracking-widest text-[#E8C97A]">Partner de Origem</th>
+                {mode === "mesa" && <th className="px-3 py-2.5 font-bold text-[10px] uppercase tracking-widest text-[#E8C97A]">Partner de Origem</th>}
                 <th className="px-3 py-2.5 font-bold text-[10px] uppercase tracking-widest text-[#E8C97A]">Ativo Pretendido</th>
                 <th className="px-3 py-2.5 font-bold text-[10px] uppercase tracking-widest text-[#E8C97A]">Ticket</th>
                 <th className="px-3 py-2.5 font-bold text-[10px] uppercase tracking-widest text-[#E8C97A]">Frequência</th>
@@ -186,9 +203,11 @@ export function BuySideDemandsPanel() {
                     <div className="text-[#F5F1E8] font-semibold">{d.nome_contato}</div>
                     {d.empresa && <div className="text-[#9BAFC5] text-[10px]">{d.empresa}</div>}
                   </td>
-                  <td className="px-3 py-3 text-[#9BAFC5]">
-                    {d.origin_partner?.full_name ?? <span className="text-[#5A7490]">Sem atribuição</span>}
-                  </td>
+                  {mode === "mesa" && (
+                    <td className="px-3 py-3 text-[#9BAFC5]">
+                      {d.origin_partner?.full_name ?? <span className="text-[#5A7490]">Sem atribuição</span>}
+                    </td>
+                  )}
                   <td className="px-3 py-3">
                     <div className="flex flex-wrap gap-1">
                       {(d.asset_types_preferidos ?? []).map((t) => (
@@ -219,12 +238,21 @@ export function BuySideDemandsPanel() {
                     )}
                   </td>
                   <td className="px-3 py-3">
-                    <button
-                      onClick={(e) => { e.stopPropagation(); openDetail(d); }}
-                      className="flex items-center gap-1.5 rounded-lg border border-[#243A66] text-[#9BAFC5] text-[10px] font-semibold px-2.5 py-1.5 hover:border-[#C9A84C]/40 hover:text-[#C9A84C] transition-colors"
-                    >
-                      <FileText size={11} /> Ver Ficha
-                    </button>
+                    <div className="flex gap-1.5">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); openDetail(d); }}
+                        className="flex items-center gap-1.5 rounded-lg border border-[#243A66] text-[#9BAFC5] text-[10px] font-semibold px-2.5 py-1.5 hover:border-[#C9A84C]/40 hover:text-[#C9A84C] transition-colors"
+                      >
+                        <FileText size={11} /> Ficha
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); copyLink(d); }}
+                        title="Copiar link de intake para reenviar ao comprador"
+                        className="flex items-center gap-1.5 rounded-lg border border-[#243A66] text-[#9BAFC5] text-[10px] font-semibold px-2.5 py-1.5 hover:border-[#C9A84C]/40 hover:text-[#C9A84C] transition-colors"
+                      >
+                        {copiedId === d.id ? <Check size={11} className="text-emerald-400" /> : <Link2 size={11} />}
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -243,9 +271,18 @@ export function BuySideDemandsPanel() {
                 {detailDemand.empresa && <div className="text-[10px] text-[#9BAFC5]">{detailDemand.empresa}</div>}
                 <div className="mt-1.5"><StatusChip status={detailDemand.pipeline_status} /></div>
               </div>
-              <button onClick={() => setDetailDemand(null)} className="text-[#9BAFC5] hover:text-[#F5F1E8] flex-shrink-0">
-                <X size={18} />
-              </button>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <button
+                  onClick={() => copyLink(detailDemand)}
+                  className="flex items-center gap-1.5 rounded-lg border border-[#243A66] text-[#9BAFC5] text-[10px] font-semibold px-2.5 py-1.5 hover:border-[#C9A84C]/40 hover:text-[#C9A84C] transition-colors"
+                >
+                  {copiedId === detailDemand.id ? <Check size={12} className="text-emerald-400" /> : <Link2 size={12} />}
+                  {copiedId === detailDemand.id ? "Copiado" : "Copiar Link"}
+                </button>
+                <button onClick={() => setDetailDemand(null)} className="text-[#9BAFC5] hover:text-[#F5F1E8]">
+                  <X size={18} />
+                </button>
+              </div>
             </div>
 
             <div className="flex-1 overflow-y-auto p-4 space-y-5">

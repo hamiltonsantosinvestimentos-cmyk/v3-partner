@@ -7,6 +7,7 @@ function svc() {
 }
 
 const ALLOWED_ROLES = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"];
+const PARTNER_ROLES = ["PARTNER", "PARTNER_PRO", "STARTER", "ENTERPRISE"];
 
 async function getCaller(req: NextRequest) {
   const supabase = await createClient();
@@ -15,6 +16,21 @@ async function getCaller(req: NextRequest) {
   const { data: profile } = await svc().from("profiles").select("id, role").eq("id", user.id).single();
   if (!profile || !ALLOWED_ROLES.includes(profile.role as string)) return null;
   return { userId: user.id, role: profile.role as string };
+}
+
+// So pro modo demand_id (ficha do comprador) -- libera Partner externo, mas quem chama
+// GET precisa verificar depois que o demand_id pertence a esse partner antes de devolver
+// documento nenhum (ver checagem de origin_partner_id logo abaixo).
+async function getCallerOrPartner(req: NextRequest) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+  const { data: profile } = await svc().from("profiles").select("id, role").eq("id", user.id).single();
+  const role = profile?.role as string | undefined;
+  if (!role) return null;
+  if (ALLOWED_ROLES.includes(role)) return { userId: user.id, role, isPartner: false };
+  if (PARTNER_ROLES.includes(role)) return { userId: user.id, role, isPartner: true };
+  return null;
 }
 
 /** GET /api/cm/kyc-documents?listing_id=X OU ?demand_id=X — painel segregado, documentos retidos ate aprovacao
@@ -28,19 +44,24 @@ async function getCaller(req: NextRequest) {
  *  demand_id direto -- o painel "Demandas de Compra" da Mesa de Capitais usa esse modo, sem depender
  *  de nenhum match ter acontecido. */
 export async function GET(req: NextRequest) {
-  const caller = await getCaller(req);
-  if (!caller) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
-
   const { searchParams } = new URL(req.url);
   const listingId = searchParams.get("listing_id");
   const demandId = searchParams.get("demand_id");
   if (!listingId && !demandId) return NextResponse.json({ error: "listing_id ou demand_id obrigatório" }, { status: 422 });
 
+  // listing_id (KYC de ativo) continua exclusivo da Mesa. demand_id (ficha de comprador)
+  // tambem libera Partner externo, com checagem de dono logo abaixo.
+  const caller = demandId ? await getCallerOrPartner(req) : await getCaller(req);
+  if (!caller) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+
   const db = svc();
 
   if (demandId) {
-    const { data: demand } = await db.from("investor_demands").select("id, nome_contato").eq("id", demandId).maybeSingle();
+    const { data: demand } = await db.from("investor_demands").select("id, nome_contato, origin_partner_id").eq("id", demandId).maybeSingle();
     if (!demand) return NextResponse.json({ error: "Comprador não encontrado" }, { status: 404 });
+    if ("isPartner" in caller && caller.isPartner && demand.origin_partner_id !== caller.userId) {
+      return NextResponse.json({ error: "Não autorizado" }, { status: 403 });
+    }
 
     const { data: demandDocs, error } = await db
       .from("investor_demand_documents")

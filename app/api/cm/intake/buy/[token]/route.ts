@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as sc } from "@supabase/supabase-js";
+import { auditText, auditHtml } from "@/lib/brand-guardian-gate";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -130,6 +131,44 @@ export async function POST(
     .eq("id", demand.id);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // E-mail de confirmacao ao comprador -- ate 12/08/2026 esse envio simplesmente nao
+  // existia, o unico sinal de "recebido" era a tela de confirmacao no navegador, que
+  // desaparece se ele fechar a aba. Best-effort: nunca bloqueia a resposta de sucesso.
+  if (process.env.RESEND_API_KEY) {
+    try {
+      const { Resend } = await import("resend");
+      const resend = new Resend(process.env.RESEND_API_KEY);
+      const ASSET_LABEL: Record<string, string> = {
+        precatorio: "Precatório", direito_creditorio: "Direito Creditório",
+        icms: "ICMS", ipi: "IPI", outros: "Outros",
+      };
+      const tiposLabel = (asset_types_preferidos ?? []).map((t: string) => ASSET_LABEL[t] ?? t).join(", ") || "não especificado";
+      const subjectGate = auditText("Cadastro recebido — V3 Partners, Bolsa de Ativos");
+      const htmlGate = auditHtml(`
+        <p>Olá, <strong>${nome_contato}</strong>.</p>
+        <p>Seu cadastro de interesse na Bolsa de Ativos V3 Partners foi recebido com sucesso.</p>
+        <table border="1" cellpadding="8" cellspacing="0" style="border-collapse:collapse;margin:16px 0;">
+          <tr><td><strong>Tipo de ativo</strong></td><td>${tiposLabel}</td></tr>
+          <tr><td><strong>Ticket</strong></td><td>R$ ${Number(ticket_min || 0).toLocaleString("pt-BR")} a R$ ${Number(ticket_max || 0).toLocaleString("pt-BR")}</td></tr>
+        </table>
+        <p>A equipe V3 Partners entrará em contato quando ativos compatíveis com seu perfil estiverem disponíveis na vitrine.</p>
+        <p style="margin-top:24px;color:#888;font-size:12px">V3 Partners Soluções Ltda — CNPJ 14.219.287/0001-50</p>
+      `);
+      if (htmlGate.blocking.length > 0) {
+        console.error("[cm/intake/buy] Brand Guardian bloqueou e-mail de confirmacao:", htmlGate.blocking);
+      } else {
+        await resend.emails.send({
+          from: "V3 Partners Bolsa de Ativos <deal@v3partners.com.br>",
+          to: [email],
+          subject: subjectGate.corrected,
+          html: htmlGate.corrected,
+        });
+      }
+    } catch (emailErr) {
+      console.error("[cm/intake/buy] falha ao enviar e-mail de confirmacao:", emailErr);
+    }
+  }
 
   return NextResponse.json({
     success: true,
