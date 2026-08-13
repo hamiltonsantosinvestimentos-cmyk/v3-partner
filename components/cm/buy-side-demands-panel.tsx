@@ -1,22 +1,40 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Loader2, FileText, X, Download, RefreshCw, Repeat, ShoppingCart } from "lucide-react";
+import { Loader2, FileText, X, Download, RefreshCw, Repeat, ShoppingCart, IdCard, Target, ShieldCheck } from "lucide-react";
 
 type BuyDemand = {
   id: string;
   nome_contato: string;
   empresa: string | null;
+  cpf: string | null;
+  cnpj: string | null;
+  nacionalidade: string | null;
+  profissao: string | null;
+  estado_civil: string | null;
+  identidade_orgao: string | null;
+  endereco: string | null;
+  telefone: string | null;
+  email: string;
+  jurisdicao_alvo: string[] | null;
+  natureza_preferida: string[] | null;
+  desagio_min: number | null;
+  criterios: string | null;
   asset_types_preferidos: string[] | null;
   setores: string[];
   ticket_min: number;
   ticket_max: number;
   status: string;
+  intake_locked: boolean;
+  nda_accepted: boolean;
+  nda_accepted_at: string | null;
   purchase_frequency_type: string | null;
   recurrence_months: number | null;
   origin_partner: { id: string; full_name: string } | null;
   document_count: number;
+  document_types: string[];
   match_count: number;
+  pipeline_status: "aguardando_preenchimento" | "documentos_pendentes" | "documentacao_completa";
   created_at: string;
 };
 
@@ -42,6 +60,14 @@ const DOC_TYPE_LABEL: Record<string, string> = {
   outro: "Outro",
 };
 
+// Status de fila -- cor ajuda a Mesa a escanear rapido quem ja esta pronto pra Full DD
+// vs quem ainda falta documento vs quem nem preencheu o formulario ainda.
+const PIPELINE_STATUS: Record<BuyDemand["pipeline_status"], { label: string; dot: string; text: string; bg: string; border: string }> = {
+  aguardando_preenchimento: { label: "Aguardando Preenchimento", dot: "#5A7490", text: "#9BAFC5", bg: "rgba(90,116,144,0.12)", border: "rgba(90,116,144,0.3)" },
+  documentos_pendentes: { label: "Documentos Pendentes", dot: "#E8935A", text: "#E8935A", bg: "rgba(232,147,90,0.12)", border: "rgba(232,147,90,0.3)" },
+  documentacao_completa: { label: "Documentação Completa", dot: "#4ADE80", text: "#4ADE80", bg: "rgba(74,222,128,0.12)", border: "rgba(74,222,128,0.3)" },
+};
+
 function formatM(v: number) {
   if (!v) return "R$ 0";
   if (v >= 1e9) return `R$ ${(v / 1e9).toFixed(1)}B`;
@@ -49,10 +75,33 @@ function formatM(v: number) {
   return `R$ ${(v / 1e3).toFixed(0)}K`;
 }
 
+function StatusChip({ status }: { status: BuyDemand["pipeline_status"] }) {
+  const s = PIPELINE_STATUS[status];
+  return (
+    <span
+      className="inline-flex items-center gap-1.5 text-[9px] font-bold px-2 py-1 rounded-full border w-fit whitespace-nowrap"
+      style={{ color: s.text, background: s.bg, borderColor: s.border }}
+    >
+      <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: s.dot }} />
+      {s.label}
+    </span>
+  );
+}
+
+function Field({ label, value }: { label: string; value: string | null | undefined }) {
+  if (!value) return null;
+  return (
+    <div>
+      <div className="text-[9px] font-bold uppercase tracking-wider text-[#9BAFC5]/70">{label}</div>
+      <div className="text-xs text-[#F5F1E8] mt-0.5">{value}</div>
+    </div>
+  );
+}
+
 export function BuySideDemandsPanel() {
   const [demands, setDemands] = useState<BuyDemand[]>([]);
   const [loading, setLoading] = useState(true);
-  const [docsModalDemand, setDocsModalDemand] = useState<BuyDemand | null>(null);
+  const [detailDemand, setDetailDemand] = useState<BuyDemand | null>(null);
   const [docs, setDocs] = useState<KycDoc[]>([]);
   const [docsLoading, setDocsLoading] = useState(false);
 
@@ -71,8 +120,8 @@ export function BuySideDemandsPanel() {
 
   useEffect(() => { fetchDemands(); }, [fetchDemands]);
 
-  const openDocs = async (demand: BuyDemand) => {
-    setDocsModalDemand(demand);
+  const openDetail = async (demand: BuyDemand) => {
+    setDetailDemand(demand);
     setDocsLoading(true);
     try {
       const res = await fetch(`/api/cm/kyc-documents?demand_id=${demand.id}`);
@@ -84,6 +133,8 @@ export function BuySideDemandsPanel() {
       setDocsLoading(false);
     }
   };
+
+  const statusHeader = detailDemand ? PIPELINE_STATUS[detailDemand.pipeline_status] : null;
 
   return (
     <div className="space-y-4">
@@ -120,13 +171,17 @@ export function BuySideDemandsPanel() {
                 <th className="px-3 py-2.5 font-bold text-[10px] uppercase tracking-widest text-[#E8C97A]">Ativo Pretendido</th>
                 <th className="px-3 py-2.5 font-bold text-[10px] uppercase tracking-widest text-[#E8C97A]">Ticket</th>
                 <th className="px-3 py-2.5 font-bold text-[10px] uppercase tracking-widest text-[#E8C97A]">Frequência</th>
-                <th className="px-3 py-2.5 font-bold text-[10px] uppercase tracking-widest text-[#E8C97A]">Status</th>
+                <th className="px-3 py-2.5 font-bold text-[10px] uppercase tracking-widest text-[#E8C97A]">Status da Fila</th>
                 <th className="px-3 py-2.5 font-bold text-[10px] uppercase tracking-widest text-[#E8C97A]">Ação</th>
               </tr>
             </thead>
             <tbody>
               {demands.map((d) => (
-                <tr key={d.id} className="border-b border-[#162744] last:border-0 hover:bg-[#162744]/40">
+                <tr
+                  key={d.id}
+                  onClick={() => openDetail(d)}
+                  className="border-b border-[#162744] last:border-0 hover:bg-[#162744]/40 cursor-pointer transition-colors"
+                >
                   <td className="px-3 py-3">
                     <div className="text-[#F5F1E8] font-semibold">{d.nome_contato}</div>
                     {d.empresa && <div className="text-[#9BAFC5] text-[10px]">{d.empresa}</div>}
@@ -158,19 +213,17 @@ export function BuySideDemandsPanel() {
                     )}
                   </td>
                   <td className="px-3 py-3">
-                    <span className="text-[9px] px-2 py-0.5 rounded-full border border-[#C9A84C]/30 bg-[#C9A84C]/10 text-[#E8C97A] font-semibold">
-                      {d.status}
-                    </span>
+                    <StatusChip status={d.pipeline_status} />
                     {d.match_count > 0 && (
                       <div className="text-[9px] text-[#9BAFC5] mt-1">{d.match_count} match(es)</div>
                     )}
                   </td>
                   <td className="px-3 py-3">
                     <button
-                      onClick={() => openDocs(d)}
+                      onClick={(e) => { e.stopPropagation(); openDetail(d); }}
                       className="flex items-center gap-1.5 rounded-lg border border-[#243A66] text-[#9BAFC5] text-[10px] font-semibold px-2.5 py-1.5 hover:border-[#C9A84C]/40 hover:text-[#C9A84C] transition-colors"
                     >
-                      <FileText size={11} /> Documentos ({d.document_count})
+                      <FileText size={11} /> Ver Ficha
                     </button>
                   </td>
                 </tr>
@@ -180,44 +233,99 @@ export function BuySideDemandsPanel() {
         </div>
       )}
 
-      {/* Modal de documentos */}
-      {docsModalDemand && (
-        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60" onClick={() => setDocsModalDemand(null)}>
-          <div className="w-full max-w-md max-h-[70vh] bg-[#09081A] border border-[#C9A84C]/20 rounded-xl flex flex-col" onClick={(e) => e.stopPropagation()}>
-            <div className="p-4 border-b border-[#C9A84C]/20 flex items-center justify-between flex-shrink-0">
+      {/* Card de detalhe: identificacao + mandato de busca + NDA + documentos, tudo num so lugar */}
+      {detailDemand && statusHeader && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60 p-4" onClick={() => setDetailDemand(null)}>
+          <div className="w-full max-w-2xl max-h-[85vh] bg-[#09081A] border border-[#C9A84C]/20 rounded-xl flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="p-4 border-b flex items-center justify-between flex-shrink-0" style={{ borderColor: statusHeader.border }}>
               <div>
-                <div className="text-sm font-bold text-[#F5F1E8]">Documentos / KYC</div>
-                <div className="text-[10px] text-[#9BAFC5]">{docsModalDemand.nome_contato}</div>
+                <div className="text-sm font-bold text-[#F5F1E8]">{detailDemand.nome_contato}</div>
+                {detailDemand.empresa && <div className="text-[10px] text-[#9BAFC5]">{detailDemand.empresa}</div>}
+                <div className="mt-1.5"><StatusChip status={detailDemand.pipeline_status} /></div>
               </div>
-              <button onClick={() => setDocsModalDemand(null)} className="text-[#9BAFC5] hover:text-[#F5F1E8]">
+              <button onClick={() => setDetailDemand(null)} className="text-[#9BAFC5] hover:text-[#F5F1E8] flex-shrink-0">
                 <X size={18} />
               </button>
             </div>
-            <div className="flex-1 overflow-y-auto p-4 space-y-2">
-              {docsLoading ? (
-                <div className="flex items-center justify-center py-8">
-                  <Loader2 size={18} className="text-[#9BAFC5] animate-spin" />
+
+            <div className="flex-1 overflow-y-auto p-4 space-y-5">
+              {/* Identificacao */}
+              <div>
+                <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-[#E8C97A] mb-2.5">
+                  <IdCard size={12} /> Identificação
                 </div>
-              ) : docs.length === 0 ? (
-                <p className="text-center text-[#5A7490] text-xs py-8">Nenhum documento enviado ainda pelo comprador.</p>
-              ) : (
-                docs.map((doc) => (
-                  <div key={doc.id} className="flex items-center justify-between gap-2 bg-[#162744] rounded-lg px-3 py-2.5">
-                    <div className="min-w-0">
-                      <div className="text-xs text-[#F5F1E8] font-semibold">{DOC_TYPE_LABEL[doc.document_type] ?? doc.document_type}</div>
-                      <div className="text-[10px] text-[#9BAFC5] truncate">{doc.original_filename}</div>
-                    </div>
-                    {doc.download_url ? (
-                      <a href={doc.download_url} target="_blank" rel="noreferrer"
-                        className="flex items-center gap-1 text-[10px] font-bold text-[#C9A84C] hover:text-[#E8C97A] flex-shrink-0">
-                        <Download size={12} /> Baixar
-                      </a>
-                    ) : (
-                      <span className="text-[9px] text-[#5A7490] flex-shrink-0">indisponível</span>
-                    )}
+                <div className="grid grid-cols-2 gap-3 bg-[#12112A] border border-[#243A66] rounded-lg p-3">
+                  <Field label="Email" value={detailDemand.email} />
+                  <Field label="Telefone" value={detailDemand.telefone} />
+                  <Field label="CPF" value={detailDemand.cpf} />
+                  <Field label="CNPJ" value={detailDemand.cnpj} />
+                  <Field label="Nacionalidade" value={detailDemand.nacionalidade} />
+                  <Field label="Profissão" value={detailDemand.profissao} />
+                  <Field label="Estado Civil" value={detailDemand.estado_civil} />
+                  <Field label="Identidade / Órgão" value={detailDemand.identidade_orgao} />
+                  {detailDemand.endereco && <div className="col-span-2"><Field label="Endereço" value={detailDemand.endereco} /></div>}
+                  {!detailDemand.cpf && !detailDemand.cnpj && !detailDemand.nacionalidade && !detailDemand.profissao && !detailDemand.endereco && (
+                    <div className="col-span-2 text-xs text-[#5A7490]">Comprador ainda não preencheu identificação completa.</div>
+                  )}
+                </div>
+              </div>
+
+              {/* Mandato de Busca */}
+              <div>
+                <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-[#E8C97A] mb-2.5">
+                  <Target size={12} /> Mandato de Busca
+                </div>
+                <div className="bg-[#12112A] border border-[#243A66] rounded-lg p-3 space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field label="Ticket" value={`${formatM(detailDemand.ticket_min)} a ${formatM(detailDemand.ticket_max)}`} />
+                    <Field label="Deságio Mínimo" value={detailDemand.desagio_min ? `${detailDemand.desagio_min}%` : null} />
+                    <Field label="Jurisdição de Interesse" value={detailDemand.jurisdicao_alvo?.join(", ")} />
+                    <Field label="Natureza Preferida" value={detailDemand.natureza_preferida?.join(", ")} />
                   </div>
-                ))
-              )}
+                  {detailDemand.criterios && <Field label="Critérios Adicionais" value={detailDemand.criterios} />}
+                </div>
+              </div>
+
+              {/* NDA */}
+              <div className="flex items-center gap-2 text-xs">
+                <ShieldCheck size={14} className={detailDemand.nda_accepted ? "text-emerald-400" : "text-[#5A7490]"} />
+                <span className={detailDemand.nda_accepted ? "text-emerald-400 font-semibold" : "text-[#5A7490]"}>
+                  {detailDemand.nda_accepted
+                    ? `NDA aceito${detailDemand.nda_accepted_at ? ` em ${new Date(detailDemand.nda_accepted_at).toLocaleString("pt-BR")}` : ""}`
+                    : "NDA ainda não aceito"}
+                </span>
+              </div>
+
+              {/* Documentos */}
+              <div>
+                <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-[#E8C97A] mb-2.5">
+                  <FileText size={12} /> Documentos
+                </div>
+                {docsLoading ? (
+                  <div className="flex items-center justify-center py-6"><Loader2 size={16} className="text-[#9BAFC5] animate-spin" /></div>
+                ) : docs.length === 0 ? (
+                  <p className="text-xs text-[#5A7490] bg-[#12112A] border border-dashed border-[#243A66] rounded-lg py-4 text-center">Nenhum documento enviado ainda pelo comprador.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {docs.map((doc) => (
+                      <div key={doc.id} className="flex items-center justify-between gap-2 bg-[#162744] rounded-lg px-3 py-2.5">
+                        <div className="min-w-0">
+                          <div className="text-xs text-[#F5F1E8] font-semibold">{DOC_TYPE_LABEL[doc.document_type] ?? doc.document_type}</div>
+                          <div className="text-[10px] text-[#9BAFC5] truncate">{doc.original_filename}</div>
+                        </div>
+                        {doc.download_url ? (
+                          <a href={doc.download_url} target="_blank" rel="noreferrer"
+                            className="flex items-center gap-1 text-[10px] font-bold text-[#C9A84C] hover:text-[#E8C97A] flex-shrink-0">
+                            <Download size={12} /> Baixar
+                          </a>
+                        ) : (
+                          <span className="text-[9px] text-[#5A7490] flex-shrink-0">indisponível</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>

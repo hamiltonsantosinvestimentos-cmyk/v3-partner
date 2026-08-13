@@ -46,21 +46,37 @@ export async function GET(req: NextRequest) {
   if (demandIds.length === 0) return NextResponse.json({ demands: [] });
 
   const [docsRes, matchesRes] = await Promise.all([
-    db.from("investor_demand_documents").select("demand_id").in("demand_id", demandIds),
+    db.from("investor_demand_documents").select("demand_id, document_type").in("demand_id", demandIds),
     db.from("demand_matches").select("demand_id").in("demand_id", demandIds).not("listing_id", "is", null),
   ]);
 
-  const docCountByDemand = new Map<string, number>();
-  for (const d of docsRes.data ?? []) docCountByDemand.set(d.demand_id, (docCountByDemand.get(d.demand_id) ?? 0) + 1);
+  // Tipos de documento por comprador (nao so contagem) -- alimenta o status de fila
+  // colorido no painel: Aguardando Preenchimento / Documentos Pendentes / Documentacao Completa.
+  const docTypesByDemand = new Map<string, Set<string>>();
+  for (const d of docsRes.data ?? []) {
+    if (!docTypesByDemand.has(d.demand_id)) docTypesByDemand.set(d.demand_id, new Set());
+    docTypesByDemand.get(d.demand_id)!.add(d.document_type);
+  }
 
   const matchCountByDemand = new Map<string, number>();
   for (const m of matchesRes.data ?? []) matchCountByDemand.set(m.demand_id, (matchCountByDemand.get(m.demand_id) ?? 0) + 1);
 
-  const enriched = (demands ?? []).map((d) => ({
-    ...d,
-    document_count: docCountByDemand.get(d.id) ?? 0,
-    match_count: matchCountByDemand.get(d.id) ?? 0,
-  }));
+  const enriched = (demands ?? []).map((d) => {
+    const docTypes = docTypesByDemand.get(d.id) ?? new Set<string>();
+    const hasAllDocs = docTypes.has("loi_mou") && docTypes.has("procuracao");
+    const pipeline_status = !d.intake_locked
+      ? "aguardando_preenchimento"
+      : hasAllDocs
+      ? "documentacao_completa"
+      : "documentos_pendentes";
+    return {
+      ...d,
+      document_count: docTypes.size,
+      document_types: Array.from(docTypes),
+      match_count: matchCountByDemand.get(d.id) ?? 0,
+      pipeline_status,
+    };
+  });
 
   return NextResponse.json({ demands: enriched });
 }
