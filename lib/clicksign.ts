@@ -1,3 +1,5 @@
+import { auditText } from "@/lib/brand-guardian-gate";
+
 export interface ClickSignSignatory {
   name: string;
   email: string;
@@ -50,10 +52,25 @@ export type NotifyClickSignResult = { ok: true } | { ok: false; error: string; s
 // só se o envio retornava 200 — confirmar envio não é confirmar conteúdo.
 // documentLabel agora é obrigatório, para nenhum caller poder esquecer de
 // passar o contexto real do documento.
+// Gate Brand & Grammar Guardian (11/08/2026, ciclo ClickSign): esta função já
+// levou um P0 real por texto fixo indo pro signatário sem revisão de
+// conteúdo (ver comentário acima). auditText() roda em processo, sem n8n,
+// mesmo padrão já usado por notifyFpaVendaDisponivel/sendNdaCopyByEmail —
+// nunca bloqueia o envio (nenhum check de auditText é blocking hoje), só
+// corrige travessão/emoji/acentuação/menção a Bloxs antes do payload sair
+// para a API do ClickSign, que dispara o e-mail sozinha.
 export async function notifyClickSignEnvelope(envelopeId: string, signatoryName: string, documentLabel: string): Promise<NotifyClickSignResult> {
   const accessToken = process.env.CLICKSIGN_ACCESS_TOKEN;
   const baseUrl = process.env.CLICKSIGN_BASE_URL ?? "https://sandbox.clicksign.com";
   if (!accessToken) return { ok: false, error: "CLICKSIGN_ACCESS_TOKEN não configurado", status: 500 };
+
+  const safeLabel = auditText(documentLabel).corrected;
+  const safeName = auditText(signatoryName || "Sr(a)").corrected;
+  const subject = auditText(`V3 Partners: Assinatura Digital, ${safeLabel}`).corrected;
+  const greeting = auditText(`Prezado(a) ${safeName},`).corrected;
+  const principal = auditText(
+    `A V3 Partners encaminha o documento "${safeLabel}" para sua assinatura digital. Revise o documento e confirme sua assinatura abaixo.`
+  ).corrected;
 
   const notifyRes = await fetch(`${baseUrl}/api/v3/envelopes/${envelopeId}/notifications`, {
     method: "POST",
@@ -68,11 +85,10 @@ export async function notifyClickSignEnvelope(envelopeId: string, signatoryName:
         attributes: {
           message: null,
           email_customization: {
-            subject: `V3 Partners: Assinatura Digital, ${documentLabel}`,
+            subject,
             head: "V3 Partners Soluções Ltda",
-            greeting: `Prezado(a) ${signatoryName || "Sr(a)"},`,
-            principal:
-              `A V3 Partners encaminha o documento "${documentLabel}" para sua assinatura digital. Revise o documento e confirme sua assinatura abaixo.`,
+            greeting,
+            principal,
             button: "Verificar e Assinar",
             final: "Em caso de dúvidas, entre em contato com privacidade@v3partners.com.br.",
             align: "left",
