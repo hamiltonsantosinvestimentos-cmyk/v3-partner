@@ -2,66 +2,52 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { notifyAgendamentoSDR } from "@/lib/email";
 import { syncSdrLeadToProspeccao } from "@/lib/sdr-prospeccao-sync";
+import { chatIdToPhone, sendText } from "@/lib/whatsapp/openwa-client";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
+// Envelope enviado pelo OpenWA: { event, timestamp, sessionId, idempotencyKey, deliveryId, data }
+type OpenwaWebhookPayload = {
+  event: string;
+  sessionId: string;
+  data: {
+    id?: string;
+    from?: string;
+    chatId?: string;
+    body?: string;
+    fromMe?: boolean;
+    isGroup?: boolean;
+    phone?: string | null;
+    pushName?: string | null;
+    status?: string;
+  };
+};
+
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
-    const { event, instance, data } = body;
+    const body = await req.json() as OpenwaWebhookPayload;
+    const { event, data } = body;
+    const instance = "openwa";
 
-    // Ignora chamadas do webhook global (duplicatas)
-    if (body.local?.includes("Global")) return NextResponse.json({ ok: true });
+    console.log(`[SDR Webhook] evento: ${event}`);
 
-    console.log(`[SDR Webhook] evento: ${event} | instância: ${instance}`);
-
-    // ── QR Code gerado ──────────────────────────────────────────────────────
-    if (event === "qrcode.updated" && data?.qrcode?.base64) {
-      await supabase.from("sdr_config").upsert({
-        key: "qrcode",
-        value: data.qrcode.base64,
-        updated_at: new Date().toISOString(),
-      }, { onConflict: "key" });
-      console.log("[SDR Webhook] QR code salvo no Supabase");
-      return NextResponse.json({ ok: true });
-    }
-
-    // ── Status de conexão ───────────────────────────────────────────────────
-    if (event === "connection.update") {
-      const state = data?.state;
-      console.log(`[SDR Webhook] Conexão WhatsApp: ${state}`);
-      await supabase.from("sdr_config").upsert({
-        key: "connection_state",
-        value: state ?? "unknown",
-        updated_at: new Date().toISOString(),
-      }, { onConflict: "key" });
-
-      if (state === "open") {
-        await supabase.from("sdr_config").upsert({
-          key: "qrcode",
-          value: null,
-          updated_at: new Date().toISOString(),
-        }, { onConflict: "key" });
-        console.log("[SDR Webhook] WhatsApp CONECTADO!");
-      }
+    // ── Status da sessão (QR, autenticado, desconectado) ──────────────────────
+    // O frontend consulta status/QR diretamente em /api/sdr/qrcode (que fala com o
+    // OpenWA em tempo real), então esses eventos aqui são só para log/observabilidade.
+    if (event === "session.qr" || event === "session.authenticated" || event === "session.disconnected") {
+      console.log(`[SDR Webhook] ${event}`, data);
       return NextResponse.json({ ok: true });
     }
 
     // ── Mensagem recebida ───────────────────────────────────────────────────
-    if (event === "messages.upsert") {
-      const msg = data;
-      if (!msg || msg.key?.fromMe) return NextResponse.json({ ok: true });
+    if (event === "message.received") {
+      if (!data || data.fromMe || data.isGroup) return NextResponse.json({ ok: true });
 
-      const remoteJid = msg.key?.remoteJid;
-      const phone = remoteJid?.replace("@s.whatsapp.net", "").replace("@g.us", "");
-      const messageText =
-        msg.message?.conversation ||
-        msg.message?.extendedTextMessage?.text ||
-        msg.message?.imageMessage?.caption ||
-        "";
+      const phone = chatIdToPhone(data.chatId ?? data.from ?? "");
+      const messageText = data.body ?? "";
 
       if (!messageText || !phone) return NextResponse.json({ ok: true });
 
@@ -71,7 +57,7 @@ export async function POST(req: NextRequest) {
         phone,
         role: "user",
         content: messageText,
-        instance: instance || "v3-sdr-whatsapp",
+        instance,
       });
 
       // Cria/atualiza registro de lead com preview da última mensagem
@@ -94,7 +80,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ ok: true });
       }
 
-      await processarMensagemSDR(phone, messageText, instance || "v3-sdr-whatsapp");
+      await processarMensagemSDR(phone, messageText, instance);
     }
 
     return NextResponse.json({ ok: true });
@@ -298,6 +284,17 @@ async function processarMensagemSDR(phone: string, mensagem: string, instance: s
       content: h.content,
     }));
 
+    // A Anthropic exige que a conversa termine em "user". Duas entregas concorrentes do
+    // mesmo webhook (retry do OpenWA) podem intercalar um "assistant" já respondido por
+    // outra execução por cima da mensagem atual — apara qualquer cauda de assistant.
+    while (messages.length > 0 && messages[messages.length - 1].role === "assistant") {
+      messages.pop();
+    }
+    if (messages.length === 0 || messages[messages.length - 1].role !== "user") {
+      console.log(`[SDR Webhook] Histórico sem mensagem de usuário no final para ${phone} — pulando resposta (provável entrega duplicada)`);
+      return;
+    }
+
     // Delay humanizado: tempo de "leitura" antes de começar a responder (1,5-3s)
     const delayLeitura = 1500 + Math.floor(Math.random() * 1500);
     await new Promise(r => setTimeout(r, delayLeitura));
@@ -361,17 +358,7 @@ Você representa uma empresa séria e de alto padrão. Seu tom é profissional, 
         const pausaDigitando = 700 + Math.min(partesMensagem[i].length * 25, 1500) + Math.floor(Math.random() * 400);
         await new Promise(r => setTimeout(r, pausaDigitando));
       }
-      await fetch(
-        `${process.env.EVOLUTION_API_URL}/message/sendText/${instance}`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            apikey: process.env.EVOLUTION_API_KEY!,
-          },
-          body: JSON.stringify({ number: phone, text: partesMensagem[i] }),
-        }
-      );
+      await sendText(phone, partesMensagem[i]);
     }
 
     console.log(`[SDR Webhook] Resposta enviada para ${phone} (${partesMensagem.length} mensagem(ns))`);

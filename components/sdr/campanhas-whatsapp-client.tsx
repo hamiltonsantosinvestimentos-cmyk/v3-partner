@@ -79,6 +79,9 @@ export function CampanhasWhatsappClient() {
   const [preview, setPreview] = useState<ContatoParseado[] | null>(null);
   const [uploading, setUploading] = useState(false);
   const [parseError, setParseError] = useState<string | null>(null);
+  const [disparando, setDisparando] = useState(false);
+  const [disparoResultado, setDisparoResultado] = useState<{ enviados: number; erros: number; restantes: number } | null>(null);
+  const [disparoErro, setDisparoErro] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const selected = campanhas.find(c => c.id === selectedId) ?? null;
@@ -167,6 +170,27 @@ export function CampanhasWhatsappClient() {
   }
 
   const validosNoPreview = preview?.filter(p => isValidPhonePreview(p.phone)).length ?? 0;
+  const pendentes = contatos.filter(c => c.status === "pendente").length;
+
+  async function dispararFila() {
+    if (!selected) return;
+    setDisparando(true);
+    setDisparoErro(null);
+    setDisparoResultado(null);
+    try {
+      const res = await fetch(`/api/sdr/campanhas-whatsapp/${selected.id}/disparar`, { method: "POST" }).then(r => r.json());
+      if (res.error) {
+        setDisparoErro(res.error);
+      } else {
+        setDisparoResultado({ enviados: res.enviados ?? 0, erros: res.erros ?? 0, restantes: res.restantes ?? 0 });
+      }
+    } catch {
+      setDisparoErro("Falha de conexão ao disparar a fila.");
+    } finally {
+      setDisparando(false);
+      await Promise.all([loadCampanhas(), loadDetalhe(selected.id)]);
+    }
+  }
 
   return (
     <div style={{ display: "flex", height: "100%", overflow: "hidden" }}>
@@ -222,15 +246,46 @@ export function CampanhasWhatsappClient() {
           </div>
         ) : (
           <div style={{ maxWidth: 780, display: "flex", flexDirection: "column", gap: 18 }}>
-            {/* Aviso — sem disparo automático */}
+            {/* Painel de disparo — envio real via OpenWA */}
             <div style={{
-              background: "#3A2F1F", border: "1px solid rgba(245,158,11,0.4)", borderRadius: 10,
-              padding: "12px 16px", color: "#F59E0B", fontSize: 12, lineHeight: 1.5,
+              background: "#111F35", border: "1px solid #243A66", borderRadius: 10,
+              padding: "14px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
             }}>
-              <strong>Envio automático ainda não está ativo.</strong> Esta fila organiza os contatos e a
-              mensagem para quando a integração com a API oficial do WhatsApp Business estiver pronta.
-              Nenhuma mensagem é disparada a partir desta tela.
+              <div style={{ fontSize: 12, color: "#7A8FA8", lineHeight: 1.5 }}>
+                {selected.status !== "pronta_para_envio" ? (
+                  <>Mude o status para <strong style={{ color: "#C9A84C" }}>Pronta p/ envio</strong> para poder disparar.</>
+                ) : pendentes === 0 ? (
+                  <>Nenhum contato pendente — carregue uma planilha ou aguarde um disparo anterior.</>
+                ) : (
+                  <><strong style={{ color: "#F0ECE4" }}>{pendentes}</strong> contato{pendentes !== 1 ? "s" : ""} pendente{pendentes !== 1 ? "s" : ""}, um a cada <strong style={{ color: "#F0ECE4" }}>{selected.intervalo_segundos}s</strong>. Envio real via WhatsApp — não dá pra desfazer.</>
+                )}
+              </div>
+              <button
+                onClick={dispararFila}
+                disabled={disparando || selected.status !== "pronta_para_envio" || pendentes === 0}
+                style={{
+                  background: disparando ? "#243A66" : "#C9A84C", border: "none", borderRadius: 8,
+                  padding: "8px 16px", color: disparando ? "#7A8FA8" : "#09081A", fontWeight: 700, fontSize: 12,
+                  cursor: (disparando || selected.status !== "pronta_para_envio" || pendentes === 0) ? "not-allowed" : "pointer",
+                  opacity: (selected.status !== "pronta_para_envio" || pendentes === 0) ? 0.5 : 1,
+                  flexShrink: 0, whiteSpace: "nowrap",
+                }}
+              >
+                {disparando ? "Disparando..." : "🚀 Disparar"}
+              </button>
             </div>
+            {disparoResultado && (
+              <div style={{ background: "#0F2A1A", border: "1px solid rgba(52,211,153,0.4)", borderRadius: 10, padding: "10px 16px", color: "#34D399", fontSize: 12 }}>
+                ✅ {disparoResultado.enviados} enviado{disparoResultado.enviados !== 1 ? "s" : ""}
+                {disparoResultado.erros > 0 && <span style={{ color: "#EF4444" }}> · {disparoResultado.erros} com erro</span>}
+                {disparoResultado.restantes > 0 && <span> · {disparoResultado.restantes} restante{disparoResultado.restantes !== 1 ? "s" : ""} (clique em Disparar de novo pra continuar)</span>}
+              </div>
+            )}
+            {disparoErro && (
+              <div style={{ background: "#2A1414", border: "1px solid rgba(239,68,68,0.4)", borderRadius: 10, padding: "10px 16px", color: "#EF4444", fontSize: 12 }}>
+                ⚠️ {disparoErro}
+              </div>
+            )}
 
             {/* Nome + status */}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
