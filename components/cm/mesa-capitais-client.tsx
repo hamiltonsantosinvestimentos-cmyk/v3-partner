@@ -12,6 +12,8 @@ import { cn, maskCpfCnpjInput, maskPhoneInput, isValidEmail, maskCurrencyBRLInpu
 import { AssetAssistant } from "./asset-assistant";
 import { DueDiligencePanel } from "./due-diligence-panel";
 import { CommissionCalculatorPanel } from "./commission-calculator-panel";
+import { BuySideDemandsPanel } from "./buy-side-demands-panel";
+import { NdaAuthorizationQueuePanel } from "./nda-authorization-queue-panel";
 import { CM_DOCUMENT_CHECKLISTS, type CmAssetType } from "@/lib/cm-checklists";
 import { createClient as createBrowserSupabaseClient } from "@/lib/supabase/client";
 
@@ -75,6 +77,17 @@ const DOCUMENT_TYPE_LABELS: Record<string, string> = {
   fpa_compra: "FPA Compra",
   mandato: "Mandato",
   contrato_final: "Contrato Final",
+};
+
+// Publicacao em lote (12/08/2026): so hops SEM gate de compliance adicional (nda_assinado
+// ja exige nda_signed_at, aprovado via /nda-authorize individual antes de chegar aqui --
+// em_analise e aprovado_head nao pedem nenhum dado novo, transition_cm_listing_status so
+// exige head_approved_by pra aprovado_head, que a propria rota PATCH /status auto-preenche).
+const BULK_PUBLISH_ELIGIBLE = ["nda_assinado", "em_analise", "aprovado_head"];
+const BULK_PUBLISH_CHAIN: Record<string, string[]> = {
+  nda_assinado: ["em_analise", "aprovado_head", "ativo_vitrine"],
+  em_analise: ["aprovado_head", "ativo_vitrine"],
+  aprovado_head: ["ativo_vitrine"],
 };
 
 const STATUS_COLUMNS = [
@@ -187,7 +200,9 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
   const [savingReferralPartner, setSavingReferralPartner] = useState(false);
   const [loading, setLoading] = useState(true);
   const [runningMatch, setRunningMatch] = useState(false);
-  const [tab, setTab] = useState<"kanban" | "matches" | "bids">("kanban");
+  const [tab, setTab] = useState<"kanban" | "matches" | "bids" | "buydemands" | "ndaqueue">("kanban");
+  const [bulkPublishSelection, setBulkPublishSelection] = useState<Set<string>>(new Set());
+  const [bulkPublishing, setBulkPublishing] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [assistantListing, setAssistantListing] = useState<{ id: string; anonymous_id: string } | null>(null);
   const [dueDiligenceListing, setDueDiligenceListing] = useState<{ id: string; anonymous_id: string; seller_cpf_cnpj: string | null } | null>(null);
@@ -916,6 +931,40 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
       if (res.ok) { alert("Status atualizado"); fetchAll(); setSelectedListing(null); }
       else alert(json.error ?? "Erro ao transicionar status");
     } catch { alert("Erro de conexão"); }
+  };
+
+  // Publicacao em lote (12/08/2026): so anda pelos hops sem gate de compliance adicional
+  // (ver comentario de BULK_PUBLISH_CHAIN). Nunca fabrica nda_signed_at/nda_document_url --
+  // isso so acontece via /nda-authorize individual, revisado na Fila NDA.
+  const runBulkPublish = async () => {
+    if (bulkPublishSelection.size === 0) return;
+    if (!confirm(`Confirma publicar ${bulkPublishSelection.size} ativo(s) na Vitrine? Cada um vai passar pelas etapas restantes até "ativo_vitrine".`)) return;
+
+    setBulkPublishing(true);
+    let ok = 0, fail = 0;
+    for (const listingId of bulkPublishSelection) {
+      const current = listings.find((l) => l.id === listingId);
+      const chain = current ? BULK_PUBLISH_CHAIN[current.listing_status] ?? [] : [];
+      let stepOk = true;
+      for (const nextStatus of chain) {
+        try {
+          const res = await fetch(`/api/cm/listings/${listingId}/status`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ new_status: nextStatus }),
+          });
+          if (!res.ok) { stepOk = false; break; }
+        } catch {
+          stepOk = false;
+          break;
+        }
+      }
+      if (stepOk && chain.length > 0) ok++; else fail++;
+    }
+    setBulkPublishing(false);
+    setBulkPublishSelection(new Set());
+    alert(`${ok} ativo(s) publicado(s) na Vitrine.${fail > 0 ? ` ${fail} não completaram (verifique status individual).` : ""}`);
+    fetchAll();
   };
 
   const handleBidAction = async (bidId: string, action: string, commissionPercent = 7) => {
@@ -1795,7 +1844,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
 
       {/* Tabs */}
       <div className="flex gap-1 mb-6 border-b border-[#9BAFC5]/10">
-        {(["kanban", "matches", "bids"] as const).map((t) => (
+        {(["kanban", "matches", "bids", "buydemands"] as const).map((t) => (
           <button
             key={t} onClick={() => { setTab(t); if (t === "bids") fetchAll(); }}
             className={cn(
@@ -1803,13 +1852,38 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
               tab === t ? "border-[#C9A84C] text-[#C9A84C]" : "border-transparent text-[#9BAFC5] hover:text-[#F5F1E8]"
             )}
           >
-            {t === "kanban" ? "Pipeline" : t === "matches" ? `Matches (${matches.length})` : `Propostas (${bids.length})`}
+            {t === "kanban" ? "Pipeline" : t === "matches" ? `Matches (${matches.length})` : t === "bids" ? `Propostas (${bids.length})` : "Demandas de Compra"}
           </button>
         ))}
+        {userRole === "ADMIN" && (
+          <button
+            onClick={() => setTab("ndaqueue")}
+            className={cn(
+              "px-4 py-2 text-sm font-medium border-b-2 transition",
+              tab === "ndaqueue" ? "border-[#C9A84C] text-[#C9A84C]" : "border-transparent text-[#9BAFC5] hover:text-[#F5F1E8]"
+            )}
+          >
+            Fila NDA
+          </button>
+        )}
       </div>
 
       {/* Kanban */}
       {tab === "kanban" && (
+        <div>
+          {bulkPublishSelection.size > 0 && (
+            <div className="flex items-center justify-between mb-3 bg-[#C9A84C]/10 border border-[#C9A84C]/30 rounded-lg px-4 py-2.5">
+              <span className="text-xs text-[#F5F1E8]">{bulkPublishSelection.size} ativo(s) selecionado(s) para publicação em lote</span>
+              <div className="flex gap-2">
+                <button onClick={() => setBulkPublishSelection(new Set())} className="text-xs text-[#9BAFC5] hover:text-[#F5F1E8] px-3 py-1.5">Limpar</button>
+                <button onClick={runBulkPublish} disabled={bulkPublishing}
+                  className="flex items-center gap-1.5 rounded-lg bg-[#C9A84C] text-[#09081A] text-xs font-bold px-4 py-1.5 hover:bg-[#D4B96A] transition disabled:opacity-50">
+                  {bulkPublishing ? <Loader2 size={13} className="animate-spin" /> : <BarChart3 size={13} />}
+                  Publicar em Lote
+                </button>
+              </div>
+            </div>
+          )}
         <div className="grid grid-cols-5 gap-3">
           {STATUS_COLUMNS.map((col) => {
             const statuses = col.key.split(",");
@@ -1822,7 +1896,21 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
                 </div>
                 <div className="bg-[#09081A]/50 rounded-b-lg p-2 min-h-[200px] space-y-2">
                   {items.map((l) => (
-                    <div key={l.id} onClick={() => openListingDetail(l)} className="bg-[#12112A] border border-[#9BAFC5]/10 rounded-md p-3 cursor-pointer hover:border-[#C9A84C]/30 transition">
+                    <div key={l.id} onClick={() => openListingDetail(l)} className="relative bg-[#12112A] border border-[#9BAFC5]/10 rounded-md p-3 cursor-pointer hover:border-[#C9A84C]/30 transition">
+                      {["ADMIN", "GESTAO"].includes(userRole) && BULK_PUBLISH_ELIGIBLE.includes(l.listing_status) && (
+                        <input
+                          type="checkbox"
+                          checked={bulkPublishSelection.has(l.id)}
+                          onClick={(e) => e.stopPropagation()}
+                          onChange={() => setBulkPublishSelection((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(l.id)) next.delete(l.id); else next.add(l.id);
+                            return next;
+                          })}
+                          className="absolute top-2 right-2 w-3.5 h-3.5 accent-[#C9A84C]"
+                          title="Selecionar para publicação em lote"
+                        />
+                      )}
                       <div className="text-[9px] text-[#C9A84C] font-bold">{l.anonymous_id}</div>
                       {l.apelido && <div className="text-[10px] text-[#F5F1E8] font-semibold truncate">{l.apelido}</div>}
                       <div className="text-xs text-[#F5F1E8] font-semibold">{formatListingValue(Number(l.valor_face), l.currency)}</div>
@@ -1864,6 +1952,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
             );
           })}
         </div>
+        </div>
       )}
 
       {/* Matches */}
@@ -1899,6 +1988,12 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
           ))}
         </div>
       )}
+
+      {/* Demandas de Compra (Buy-Side) */}
+      {tab === "buydemands" && <BuySideDemandsPanel />}
+
+      {/* Fila de Autorização NDA (ADMIN only) */}
+      {tab === "ndaqueue" && userRole === "ADMIN" && <NdaAuthorizationQueuePanel />}
 
       {/* Bids */}
       {tab === "bids" && (

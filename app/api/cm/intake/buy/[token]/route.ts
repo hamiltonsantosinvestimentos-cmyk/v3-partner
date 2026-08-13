@@ -63,10 +63,31 @@ export async function POST(
     nacionalidade, profissao, estado_civil, identidade_orgao, endereco,
     setores, jurisdicao_alvo, natureza_preferida, asset_types_preferidos,
     ticket_min, ticket_max, desagio_min, criterios, nda_accepted,
+    purchase_frequency_type, recurrence_months, origin_partner_id,
   } = body;
 
   if (!nome_contato || !email)
     return NextResponse.json({ error: "Nome e email são obrigatórios" }, { status: 422 });
+
+  // Origin partner e sempre resolvido no servidor contra profiles.id real -- um valor
+  // invalido/malformado em ?partner= nunca bloqueia o cadastro do comprador, so fica sem
+  // atribuicao (mesmo principio ja usado para documento opcional: nada trava o registro).
+  let resolvedOriginPartnerId: string | null = null;
+  if (origin_partner_id && typeof origin_partner_id === "string") {
+    const { data: partnerProfile } = await svc()
+      .from("profiles")
+      .select("id")
+      .eq("id", origin_partner_id)
+      .maybeSingle();
+    if (partnerProfile) resolvedOriginPartnerId = partnerProfile.id;
+  }
+
+  const freqType = ["SINGLE_PURCHASE", "RECURRENT_MONTHLY"].includes(purchase_frequency_type)
+    ? purchase_frequency_type
+    : null;
+  const recMonths = freqType === "RECURRENT_MONTHLY" && recurrence_months
+    ? Math.min(60, Math.max(1, Number(recurrence_months)))
+    : null;
 
   const { error } = await svc()
     .from("investor_demands")
@@ -97,6 +118,9 @@ export async function POST(
       alerta_ativo: true,
       nda_accepted: nda_accepted ?? false,
       nda_accepted_at: nda_accepted ? new Date().toISOString() : null,
+      purchase_frequency_type: freqType,
+      recurrence_months: recMonths,
+      origin_partner_id: resolvedOriginPartnerId,
       intake_locked: true,
       intake_data: {
         submitted_at: new Date().toISOString(),

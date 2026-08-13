@@ -32,7 +32,11 @@ export async function GET(
   return NextResponse.json({ documents: data ?? [] });
 }
 
-/** POST /api/cm/intake/buy/[token]/documents — upload publico de LOI/MOU ou procuracao, gated pelo token */
+/** POST /api/cm/intake/buy/[token]/documents — upload publico de LOI/MOU ou procuracao, gated pelo token
+ *  Deliberadamente NAO checa intake_locked: o wizard sempre disse "pode enviar agora ou depois", mas
+ *  ate 12/08/2026 essa promessa era falsa (o form principal trava o token e o upload trava junto, sem
+ *  nenhum caminho de volta). Documento e sempre um anexo aberto, independente do formulario principal
+ *  ja ter sido enviado -- so o token precisar existir e ser valido. */
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ token: string }> }
@@ -41,17 +45,11 @@ export async function POST(
 
   const { data: demand } = await svc()
     .from("investor_demands")
-    .select("id, intake_locked")
+    .select("id")
     .eq("intake_token", token)
     .single();
 
   if (!demand) return NextResponse.json({ error: "Link inválido ou expirado" }, { status: 404 });
-  if (demand.intake_locked) {
-    return NextResponse.json({
-      error: "Formulário já enviado. Solicite um novo link à equipe V3 Partners.",
-      locked: true,
-    }, { status: 409 });
-  }
 
   const formData = await req.formData();
   const file = formData.get("file") as File | null;

@@ -15,9 +15,18 @@ const STEPS = [
 interface BuyIntakeWizardProps {
   token: string;
   prefill: Record<string, any>;
+  originPartnerId?: string;
+  /** Formulário principal já travado (intake_locked=true) — renderiza só o
+   *  upload de documentos, sem os passos de identificação/NDA/mandato. */
+  lockedFollowUp?: boolean;
 }
 
-export function BuyIntakeWizard({ token, prefill }: BuyIntakeWizardProps) {
+const DOC_TYPES = [
+  { type: "loi_mou", label: "Carta de Intenções (LOI) ou Memorando de Entendimento (MOU)" },
+  { type: "procuracao", label: "Procuração / autorização" },
+] as const;
+
+export function BuyIntakeWizard({ token, prefill, originPartnerId, lockedFollowUp }: BuyIntakeWizardProps) {
   const [step, setStep] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -54,6 +63,37 @@ export function BuyIntakeWizard({ token, prefill }: BuyIntakeWizardProps) {
     }
   };
 
+  if (lockedFollowUp) {
+    return (
+      <div className="bg-[#12112A] border border-[#9BAFC5]/10 rounded-xl p-6 sm:p-8">
+        <h3 className="text-lg font-bold text-[#F5F1E8] mb-1">Envio de documentos</h3>
+        <p className="text-xs text-[#9BAFC5] mb-6">
+          Seu cadastro já foi registrado. Você ainda pode enviar ou completar os documentos abaixo — eles ficam retidos para validação da Mesa V3 antes de liberar o Full DD.
+        </p>
+        <div className="space-y-2">
+          {DOC_TYPES.map(({ type, label }) => (
+            <div key={type} className="flex items-center justify-between gap-3 bg-[#162744] border border-[#9BAFC5]/10 rounded-lg px-4 py-3">
+              <span className="text-xs text-[#F5F1E8]">{label}</span>
+              {hasDoc(type) ? (
+                <span className="text-[10px] text-emerald-400 font-bold flex items-center gap-1"><CheckCircle2 size={12} /> Enviado</span>
+              ) : (
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <span className="text-[10px] text-[#9BAFC5] font-bold uppercase tracking-wider">Pendente</span>
+                  <label className="flex items-center gap-1.5 px-3 py-1.5 bg-[#12112A] border border-[#9BAFC5]/15 rounded text-[#9BAFC5] text-[10px] font-bold hover:border-[#C9A84C]/30 hover:text-[#C9A84C] transition cursor-pointer">
+                    {uploadingDoc === type ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
+                    Enviar
+                    <input type="file" className="hidden" accept=".pdf,.doc,.docx,.jpg,.png"
+                      onChange={(e) => { if (e.target.files?.[0]) uploadDoc(e.target.files[0], type); }} />
+                  </label>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   const [form, setForm] = useState({
     nome_contato: prefill.nome_contato || "",
     email: prefill.email || "",
@@ -74,6 +114,8 @@ export function BuyIntakeWizard({ token, prefill }: BuyIntakeWizardProps) {
     desagio_min: prefill.desagio_min || "",
     criterios: prefill.criterios || "",
     nda_accepted: false,
+    purchase_frequency_type: prefill.purchase_frequency_type || "SINGLE_PURCHASE",
+    recurrence_months: prefill.recurrence_months ? String(prefill.recurrence_months) : "",
   });
 
   const upd = (field: string, value: any) => setForm((p) => ({ ...p, [field]: value }));
@@ -102,6 +144,10 @@ export function BuyIntakeWizard({ token, prefill }: BuyIntakeWizardProps) {
           ...form,
           ticket_min: form.ticket_min ? parseCurrencyBRLInput(form.ticket_min) : "",
           ticket_max: form.ticket_max ? parseCurrencyBRLInput(form.ticket_max) : "",
+          recurrence_months: form.purchase_frequency_type === "RECURRENT_MONTHLY" && form.recurrence_months
+            ? Number(form.recurrence_months)
+            : null,
+          origin_partner_id: originPartnerId ?? null,
         }),
       });
       const data = await res.json();
@@ -248,10 +294,7 @@ export function BuyIntakeWizard({ token, prefill }: BuyIntakeWizardProps) {
               <label className={labelClass}>Documentos (KYC)</label>
               <p className="text-[11px] text-[#9BAFC5]/70 mb-2">Você pode enviar agora ou depois, o cadastro não fica bloqueado. Documentos pendentes ficam retidos para validação da Mesa V3 antes de liberar o Full DD.</p>
               <div className="space-y-2 mt-2">
-                {([
-                  { type: "loi_mou", label: "Carta de Intenções (LOI) ou Memorando de Entendimento (MOU)" },
-                  { type: "procuracao", label: "Procuração / autorização" },
-                ] as const).map(({ type, label }) => (
+                {DOC_TYPES.map(({ type, label }) => (
                   <div key={type} className="flex items-center justify-between gap-3 bg-[#162744] border border-[#9BAFC5]/10 rounded-lg px-4 py-3">
                     <span className="text-xs text-[#F5F1E8]">{label}</span>
                     {hasDoc(type) ? (
@@ -327,6 +370,26 @@ export function BuyIntakeWizard({ token, prefill }: BuyIntakeWizardProps) {
                 </div>
               </div>
               <div>
+                <label className={labelClass}>Frequência de Compra</label>
+                <div className="flex flex-wrap gap-2 mb-3">
+                  <button type="button" onClick={() => upd("purchase_frequency_type", "SINGLE_PURCHASE")}
+                    className={chipClass(form.purchase_frequency_type === "SINGLE_PURCHASE")}>
+                    Compra Única
+                  </button>
+                  <button type="button" onClick={() => upd("purchase_frequency_type", "RECURRENT_MONTHLY")}
+                    className={chipClass(form.purchase_frequency_type === "RECURRENT_MONTHLY")}>
+                    Recorrência Mensal
+                  </button>
+                </div>
+                {form.purchase_frequency_type === "RECURRENT_MONTHLY" && (
+                  <div className="max-w-[180px]">
+                    <label className={labelClass}>Por quantos meses?</label>
+                    <input type="number" min={1} max={60} className={inputClass} value={form.recurrence_months}
+                      onChange={(e) => upd("recurrence_months", e.target.value)} placeholder="Ex: 12" />
+                  </div>
+                )}
+              </div>
+              <div>
                 <label className={labelClass}>Critérios adicionais</label>
                 <textarea className={inputClass + " min-h-[80px]"} value={form.criterios} onChange={(e) => upd("criterios", e.target.value)} placeholder="Preferências específicas, restrições, prazos de interesse..." />
               </div>
@@ -346,6 +409,11 @@ export function BuyIntakeWizard({ token, prefill }: BuyIntakeWizardProps) {
               <div>Email: <span className="text-[#F5F1E8]">{form.email}</span></div>
               <div>Tipos: <span className="text-[#F5F1E8]">{form.asset_types_preferidos.join(", ") || "—"}</span></div>
               <div>Ticket: <span className="text-[#F5F1E8]">R$ {form.ticket_min || "0"} — R$ {form.ticket_max || "ilimitado"}</span></div>
+              <div>Frequência: <span className="text-[#F5F1E8]">
+                {form.purchase_frequency_type === "RECURRENT_MONTHLY"
+                  ? `Recorrência Mensal (${form.recurrence_months || "?"} meses)`
+                  : "Compra Única"}
+              </span></div>
             </div>
           </div>
         )}

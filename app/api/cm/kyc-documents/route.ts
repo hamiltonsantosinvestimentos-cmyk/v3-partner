@@ -17,21 +17,58 @@ async function getCaller(req: NextRequest) {
   return { userId: user.id, role: profile.role as string };
 }
 
-/** GET /api/cm/kyc-documents?listing_id=X — painel segregado, documentos retidos ate aprovacao
+/** GET /api/cm/kyc-documents?listing_id=X OU ?demand_id=X — painel segregado, documentos retidos ate aprovacao
  *  Mescla dois fluxos que antes ficavam desconectados (bug reportado pela Mesa Operacional 2026-07-15,
  *  "propostas nao aparecem no quadro de KYC"): uploads internos da Mesa (cm_kyc_documents, por listing_id)
  *  + LOI/MOU e Procuracao que o proprio comprador ja enviou no Buy Intake Wizard publico
- *  (investor_demand_documents, ligados por demand_id — sem listing_id proprio, so existe via
- *  demand_matches quando o motor de matchmaking cruzou o mandato de busca com este ativo). */
+ *  (investor_demand_documents, ligados por demand_id).
+ *
+ *  Ate 12/08/2026 o documento do comprador SO aparecia via listing_id, dependendo de demand_matches ja
+ *  existir (motor de matching ter cruzado o mandato com um ativo ativo_vitrine). Agora tambem aceita
+ *  demand_id direto -- o painel "Demandas de Compra" da Mesa de Capitais usa esse modo, sem depender
+ *  de nenhum match ter acontecido. */
 export async function GET(req: NextRequest) {
   const caller = await getCaller(req);
   if (!caller) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
   const { searchParams } = new URL(req.url);
   const listingId = searchParams.get("listing_id");
-  if (!listingId) return NextResponse.json({ error: "listing_id obrigatório" }, { status: 422 });
+  const demandId = searchParams.get("demand_id");
+  if (!listingId && !demandId) return NextResponse.json({ error: "listing_id ou demand_id obrigatório" }, { status: 422 });
 
   const db = svc();
+
+  if (demandId) {
+    const { data: demand } = await db.from("investor_demands").select("id, nome_contato").eq("id", demandId).maybeSingle();
+    if (!demand) return NextResponse.json({ error: "Comprador não encontrado" }, { status: 404 });
+
+    const { data: demandDocs, error } = await db
+      .from("investor_demand_documents")
+      .select("id, demand_id, document_type, storage_path, original_filename, created_at")
+      .eq("demand_id", demandId)
+      .order("created_at", { ascending: false });
+
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+    const documents = await Promise.all((demandDocs ?? []).map(async (d) => {
+      const { data: signed } = await db.storage.from("documents").createSignedUrl(d.storage_path, 3600);
+      return {
+        id: d.id,
+        demand_id: d.demand_id,
+        party_type: "comprador",
+        party_name: demand.nome_contato ?? "Comprador",
+        document_type: d.document_type,
+        storage_path: d.storage_path,
+        original_filename: d.original_filename,
+        status: "enviado_pelo_comprador",
+        created_at: d.created_at,
+        source: "buyer_intake",
+        download_url: signed?.signedUrl ?? null,
+      };
+    }));
+
+    return NextResponse.json({ documents });
+  }
 
   const [internalDocs, matches] = await Promise.all([
     db.from("cm_kyc_documents").select("*").eq("listing_id", listingId).order("created_at", { ascending: false }),

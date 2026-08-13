@@ -1,12 +1,18 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useEffect, useState, Suspense } from "react";
+import { useParams, useSearchParams } from "next/navigation";
 import { Loader2, AlertTriangle } from "lucide-react";
 import { BuyIntakeWizard } from "@/components/cm/buy-intake-wizard";
 
-export default function BuyIntakePage() {
+// UUID v4-ish, o suficiente pra descartar lixo antes de mandar pro servidor validar de verdade
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function BuyIntakePageInner() {
   const { token } = useParams<{ token: string }>();
+  const searchParams = useSearchParams();
+  const partnerParam = searchParams.get("partner");
+  const originPartnerId = partnerParam && UUID_RE.test(partnerParam) ? partnerParam : undefined;
   const [state, setState] = useState<"loading" | "ready" | "locked" | "error">("loading");
   const [data, setData] = useState<any>(null);
   const [errorMsg, setErrorMsg] = useState("");
@@ -50,14 +56,18 @@ export default function BuyIntakePage() {
           </div>
         )}
         {state === "locked" && (
-          <div className="flex flex-col items-center justify-center min-h-[50vh] text-center">
-            <AlertTriangle className="w-8 h-8 text-[#C9A84C] mb-4" />
-            <h2 className="text-xl font-bold text-[#F5F1E8] mb-2">Formulário já enviado</h2>
-            <p className="text-sm text-[#9BAFC5]">{errorMsg}</p>
+          <div>
+            <div className="flex flex-col items-center text-center mb-8">
+              <AlertTriangle className="w-8 h-8 text-[#C9A84C] mb-4" />
+              <h2 className="text-xl font-bold text-[#F5F1E8] mb-2">Formulário já enviado</h2>
+              <p className="text-sm text-[#9BAFC5] max-w-md">{errorMsg}</p>
+            </div>
+            {/* Cadastro travado, mas documentos continuam abertos -- "enviar depois" agora e real */}
+            <BuyIntakeWizard token={token} prefill={{}} lockedFollowUp />
           </div>
         )}
         {state === "ready" && data && (
-          <BuyIntakeWizard token={token} prefill={data.prefill} />
+          <BuyIntakeWizard token={token} prefill={data.prefill} originPartnerId={originPartnerId} />
         )}
       </div>
       <div className="border-t border-[#9BAFC5]/10 mt-auto">
@@ -67,5 +77,17 @@ export default function BuyIntakePage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function BuyIntakePage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-[#09081A] flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-[#C9A84C]" />
+      </div>
+    }>
+      <BuyIntakePageInner />
+    </Suspense>
   );
 }
