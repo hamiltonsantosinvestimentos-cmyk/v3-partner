@@ -123,7 +123,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
     razao_social_estaleiro, cnpj_estaleiro, nome_representante, local, data_extenso: dataExtenso,
   });
   const contractTitle = `Contrato de Compra e Venda de Ativo Naval, Deal ${dealCode}`;
-  const renderedHtml = wrapContractInV3Html(contractTitle, bodyHtml);
+  // Bug real (12/08/2026, mesmo padrão em 6 rotas de geração de contrato):
+  // parties nunca chegava em wrapContractInV3Html, então o PDF enviado ao
+  // ClickSign saía sem o bloco visual de assinatura.
+  const parties = [
+    { role: "vendedor", name: nome_representante, doc: cnpj_estaleiro, email },
+    { role: "v3_partners", name: "V3 Partners Soluções Ltda", doc: "14.219.287/0001-50" },
+  ];
+  const renderedHtml = wrapContractInV3Html(contractTitle, bodyHtml, parties);
   const signingToken = crypto.randomUUID().replace(/-/g, "");
 
   const { data: contract, error: insertErr } = await db
@@ -134,10 +141,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
       contract_title: contractTitle,
       rendered_html: renderedHtml,
       status_signature: "rascunho",
-      parties: [
-        { role: "vendedor", name: nome_representante, doc: cnpj_estaleiro, email },
-        { role: "v3_partners", name: "V3 Partners Soluções Ltda", doc: "14.219.287/0001-50" },
-      ],
+      parties,
       deal_id: deal.id,
       deal_room_invite_id: invite.id,
       signing_token: signingToken,

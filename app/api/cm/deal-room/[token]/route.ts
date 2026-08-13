@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { createHash } from "crypto";
-import { resolveContractVariables, wrapContractInV3Html } from "@/lib/contract-render";
+import { resolveContractVariables, wrapContractInV3Html, type ContractParty } from "@/lib/contract-render";
 import { auditText, auditHtml } from "@/lib/brand-guardian-gate";
 
 function svc() {
@@ -51,7 +51,7 @@ async function sendNdaCopyByEmail(params: {
   }
 }
 
-async function renderNdaDocument(listing: any) {
+async function renderNdaDocument(listing: any, parties?: ContractParty[]) {
   const { data: template } = await svc()
     .from("contract_templates")
     .select("*")
@@ -83,7 +83,12 @@ async function renderNdaDocument(listing: any) {
 
   const renderedBody = resolveContractVariables(template.body_text_raw, variables);
   const contractTitle = resolveContractVariables(template.template_name, variables);
-  const renderedHtml = wrapContractInV3Html(contractTitle, renderedBody);
+  // Bug real (12/08/2026, mesmo padrão em 6 rotas de geração de contrato):
+  // esta função nunca recebia parties, então o NDA "assinado" (aceite via
+  // clique + hash, cópia emailada ao comprador) saía sem o bloco visual de
+  // assinatura. Opcional porque a chamada de preview (GET, NDA ainda não
+  // aceito) não tem identidade do comprador confirmada ainda.
+  const renderedHtml = wrapContractInV3Html(contractTitle, renderedBody, parties);
 
   return { template, variables, contractTitle, renderedBody, renderedHtml };
 }
@@ -237,7 +242,13 @@ export async function POST(
     const userAgent = req.headers.get("user-agent") ?? "unknown";
     const timestamp = new Date().toISOString();
 
-    const ndaDoc = await renderNdaDocument(access.cm_asset_listings);
+    const listingForParties = access.cm_asset_listings as any;
+    const ndaParties: ContractParty[] = [
+      { role: "cedente", name: listingForParties?.seller_name ?? "Cedente", doc: listingForParties?.seller_cpf_cnpj ?? null },
+      { role: "receptora", name: access.buyer_name ?? "Receptora", doc: effectiveEmail },
+      { role: "v3_partners", name: "V3 Partners Soluções Ltda", doc: "14.219.287/0001-50" },
+    ];
+    const ndaDoc = await renderNdaDocument(access.cm_asset_listings, ndaParties);
 
     // Hash amarrado ao conteudo do documento aceito, nao so a metadados de acesso —
     // se o template mudar depois, o hash deste aceite continua provando exatamente

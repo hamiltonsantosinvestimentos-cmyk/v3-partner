@@ -182,7 +182,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
 
   const bodyHtml = resolveContractVariables(template.body_text_raw, variables);
   const contractTitle = `Carta de Intenção de Compra, Deal ${dealCode}`;
-  const renderedHtml = wrapContractInV3Html(contractTitle, bodyHtml);
+  // Bug real achado 12/08/2026: parties nunca era passado para
+  // wrapContractInV3Html, então o PDF que sobe pro ClickSign (via
+  // annex-sign?format=html, que serve este rendered_html sem alteração)
+  // saía sem o bloco visual de assinatura (linha + nome + CPF), mesmo com o
+  // dado já disponível aqui, alguns milímetros abaixo, para o insert.
+  // Hoisted para render e insert usarem o mesmo array.
+  const parties = [
+    { role: "comprador", name: nome_completo_socio, doc: cpf, email },
+    { role: "v3_partners", name: "V3 Partners Soluções Ltda", doc: "14.219.287/0001-50" },
+  ];
+  const renderedHtml = wrapContractInV3Html(contractTitle, bodyHtml, parties);
 
   const signingToken = crypto.randomUUID().replace(/-/g, "");
 
@@ -194,10 +204,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
       contract_title: contractTitle,
       rendered_html: renderedHtml,
       status_signature: "rascunho",
-      parties: [
-        { role: "comprador", name: nome_completo_socio, doc: cpf, email },
-        { role: "v3_partners", name: "V3 Partners Soluções Ltda", doc: "14.219.287/0001-50" },
-      ],
+      parties,
       deal_id: deal.id,
       deal_room_invite_id: invite.id,
       signing_token: signingToken,

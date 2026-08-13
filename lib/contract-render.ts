@@ -22,6 +22,25 @@ export interface ContractParty {
 // HTML real. Não depende do ClickSign posicionar nada — o PDF que sobe pra
 // assinatura é gerado por nós (htmlToPdfBase64), então a posição da "área de
 // assinatura" de cada parte já vem definida no próprio documento.
+//
+// Pesquisa fechada 12/08/2026 (ciclo ClickSign, item "posicionamento de
+// assinatura"): a API v3 (envelopes) não tem NENHUM mecanismo programático
+// de posicionamento de assinatura, nem tag de texto (não existe
+// "{{~position_sign_ID}}" ou equivalente na documentação oficial,
+// confirmado por múltiplas buscas independentes na doc e na central de
+// ajuda), nem parâmetro de coordenada no payload de requirements/documents.
+// O posicionamento de campos ("Posicionar assinatura ou rubrica") é
+// exclusivamente manual, feito pelo remetente na interface web do ClickSign
+// no momento do envio, ajuda.clicksign.com/posicionar-assinatura-rubrica.
+// Como esta integração ativa o envelope via API (nunca passa pela tela de
+// envio manual), esse recurso simplesmente não se aplica aqui. Este bloco
+// renderizado por nós é a única forma real de dar à assinatura uma
+// referência visual no documento, e por isso PRECISA receber `parties`
+// preenchido em toda chamada de wrapContractInV3Html que gera documento
+// destinado a assinatura — bug real encontrado e corrigido em 12/08/2026:
+// 6 rotas chamavam wrapContractInV3Html sem o 3o argumento, mesmo já tendo
+// o array de partes pronto ali perto (para o INSERT em operation_contracts),
+// e o PDF que o ClickSign efetivamente buscava saía sem este bloco.
 function renderPartiesBlock(parties?: ContractParty[]): string {
   if (!parties || parties.length === 0) return "";
   const cards = parties

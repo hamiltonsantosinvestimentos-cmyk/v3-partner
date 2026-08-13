@@ -142,7 +142,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
     lista_participantes: listaParticipantes, local, data_extenso: dataExtenso,
   });
   const contractTitle = `FPA Compra, Deal ${dealCode}`;
-  const renderedHtml = wrapContractInV3Html(contractTitle, bodyHtml);
+  // Bug real (12/08/2026, mesmo padrão em 6 rotas de geração de contrato):
+  // parties nunca chegava em wrapContractInV3Html, então o PDF enviado ao
+  // ClickSign saía sem o bloco visual de assinatura de cada comissionado.
+  const parties = [
+    ...participantes.map(p => ({ role: "comissionado_compra", name: p.nome, doc: p.cpf_cnpj, email: p.email, bluepay_pix: p.bluepay_pix, valor_bruto: p.valor_bruto })),
+    { role: "v3_partners", name: "V3 Partners Soluções Ltda", doc: "14.219.287/0001-50" },
+  ];
+  const renderedHtml = wrapContractInV3Html(contractTitle, bodyHtml, parties);
   const signingToken = crypto.randomUUID().replace(/-/g, "");
 
   const { data: contract, error: insertErr } = await db
@@ -154,10 +161,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
       rendered_html: renderedHtml,
       status_signature: "rascunho",
       commission_percent: DEDUCAO_PERCENT,
-      parties: [
-        ...participantes.map(p => ({ role: "comissionado_compra", name: p.nome, doc: p.cpf_cnpj, email: p.email, bluepay_pix: p.bluepay_pix, valor_bruto: p.valor_bruto })),
-        { role: "v3_partners", name: "V3 Partners Soluções Ltda", doc: "14.219.287/0001-50" },
-      ],
+      parties,
       deal_id: deal.id,
       deal_room_invite_id: invite.id,
       signing_token: signingToken,

@@ -101,7 +101,15 @@ export async function POST(req: NextRequest) {
 
   const renderedBody = resolveContractVariables(template.body_text_raw, variables);
   const contractTitle = `${resolveContractVariables(template.template_name, variables)}, ${listing.anonymous_id} (${variables.lado_operacao})`;
-  const renderedHtml = wrapContractInV3Html(contractTitle, renderedBody);
+  // Bug real (12/08/2026, mesmo padrão em 6 rotas de geração de contrato):
+  // parties nunca chegava em wrapContractInV3Html, então o PDF servido por
+  // annex-sign?format=html (o que o ClickSign efetivamente busca e assina)
+  // saía sem o bloco visual de assinatura do mandatário.
+  const parties = [
+    { role: "mandatario", name: mandatario?.full_name ?? null, doc: mandatario?.document_cpf ?? null, email: mandatario?.email ?? null },
+    { role: "v3_partners", name: "V3 Partners Soluções Ltda", doc: "14.219.287/0001-50" },
+  ];
+  const renderedHtml = wrapContractInV3Html(contractTitle, renderedBody, parties);
   const signingToken = randomUUID().replace(/-/g, "");
 
   const { data: contract, error } = await svc()
@@ -115,10 +123,7 @@ export async function POST(req: NextRequest) {
       status_signature: "enviado_assinatura",
       signing_token: signingToken,
       sent_to_signature_at: new Date().toISOString(),
-      parties: [
-        { role: "mandatario", name: mandatario?.full_name ?? null, doc: mandatario?.document_cpf ?? null, email: mandatario?.email ?? null },
-        { role: "v3_partners", name: "V3 Partners Soluções Ltda", doc: "14.219.287/0001-50" },
-      ],
+      parties,
       created_by: caller.userId,
     })
     .select("id, signing_token")
