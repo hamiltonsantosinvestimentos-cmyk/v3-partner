@@ -130,3 +130,69 @@ export async function lookupProspeccaoEtapaByPhones(phones: string[]): Promise<R
   }
   return result;
 }
+
+/** Mesma busca que lookupProspeccaoEtapaByPhones, mas retorna também o id — usado pelo Kanban do SDR pra mover etapa. */
+export async function lookupProspeccaoLeadsByPhones(
+  phones: string[]
+): Promise<Record<string, { id: string; etapa: string }>> {
+  if (phones.length === 0) return {};
+  const db = svc();
+  const { data } = await db.from("prospeccao_leads").select("id, telefone, etapa").not("telefone", "is", null);
+
+  const byNormalized = new Map<string, { id: string; etapa: string }>();
+  for (const row of data ?? []) {
+    if (row.telefone) byNormalized.set(normalizePhone(row.telefone), { id: row.id, etapa: row.etapa });
+  }
+
+  const result: Record<string, { id: string; etapa: string }> = {};
+  for (const phone of phones) {
+    const found = byNormalized.get(normalizePhone(phone));
+    if (found) result[phone] = found;
+  }
+  return result;
+}
+
+/**
+ * Garante que existe um prospeccao_leads pro telefone informado, criando com
+ * etapa "prospect" se necessário — usado quando o Kanban do SDR move um card
+ * que ainda não tem contrapartida em Prospecção de Partners.
+ */
+export async function ensureProspeccaoLead(opts: {
+  phone: string;
+  nome?: string | null;
+  responsavel_id?: string | null;
+  responsavel_nome?: string | null;
+}): Promise<{ id: string; etapa: string }> {
+  const db = svc();
+  const normalized = normalizePhone(opts.phone);
+  const sufixo = normalized.slice(-8);
+
+  const { data: candidatos } = await db
+    .from("prospeccao_leads")
+    .select("id, etapa, telefone")
+    .ilike("telefone", `%${sufixo}`);
+
+  const match = (candidatos ?? []).find(c => c.telefone && normalizePhone(c.telefone) === normalized);
+  if (match) return { id: match.id, etapa: match.etapa };
+
+  const { data: created, error } = await db.from("prospeccao_leads").insert({
+    nome: opts.nome ?? "Lead WhatsApp",
+    telefone: opts.phone,
+    origem: "whatsapp",
+    responsavel_id: opts.responsavel_id ?? null,
+    responsavel_nome: opts.responsavel_nome ?? null,
+    etapa: "prospect",
+    notas: "Criado automaticamente a partir do Kanban de WhatsApp (SDR)",
+  }).select("id, etapa").single();
+
+  if (error || !created) throw new Error(error?.message ?? "Falha ao criar prospeccao_leads");
+
+  await db.from("prospeccao_historico").insert({
+    lead_id: created.id,
+    etapa_anterior: null,
+    etapa_nova: "prospect",
+    nota: "Criado automaticamente a partir do Kanban de WhatsApp",
+  });
+
+  return created;
+}
