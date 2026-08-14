@@ -6,6 +6,9 @@ import { CampanhasClient } from "./campanhas-client";
 import { CampanhasWhatsappClient } from "./campanhas-whatsapp-client";
 import { SdrKanbanClient } from "./sdr-kanban-client";
 import { SdrDashboardClient } from "./sdr-dashboard-client";
+import { SdrLeadDetailPanel, PROSPECCAO_ETAPA_LABELS, tagClass, statusClass, type SdrLead } from "./sdr-lead-detail-panel";
+import { QuickReplyOptionsEditor, DEFAULT_QUICK_REPLY_OPTIONS } from "./quick-reply-options-editor";
+import type { QuickReplyOption } from "@/lib/whatsapp/quick-reply";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -17,66 +20,14 @@ type Conversa = {
   role: "user" | "assistant";
   content: string;
   created_at: string;
-};
-
-type SdrLead = {
-  phone: string;
-  nome: string | null;
-  tags: string[];
-  responsavel_id: string | null;
-  responsavel_nome: string | null;
-  status: string;
-  humano_ativo: boolean;
-  last_message_at: string | null;
-  last_message_preview: string | null;
-  message_count: number;
-  prospeccao_etapa: string | null;
-};
-
-// Etapas do Kanban de Prospecção de Partners — mesmas cores usadas lá, pra reconhecimento visual
-const PROSPECCAO_ETAPA_LABELS: Record<string, { label: string; color: string }> = {
-  prospect:    { label: "Prospect",    color: "#7A8FA8" },
-  contatado:   { label: "Contatado",   color: "#60A5FA" },
-  interessado: { label: "Interessado", color: "#F59E0B" },
-  trial:       { label: "Em Trial",    color: "#A78BFA" },
-  convertido:  { label: "Convertido",  color: "#34D399" },
-  perdido:     { label: "Perdido",     color: "#EF4444" },
+  quick_reply_options?: QuickReplyOption[] | null;
 };
 
 type Profile = { id: string; full_name: string; role: string };
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
-const PRESET_TAGS = ["Hot Lead", "Qualificado", "Partner", "Investidor", "Agendado", "Em Negociação", "Sem Interesse", "Aguardando"];
-
-const STATUS_OPTIONS = [
-  { value: "ativo", label: "Ativo" },
-  { value: "qualificado", label: "Qualificado" },
-  { value: "agendado", label: "Agendado" },
-  { value: "convertido", label: "Convertido" },
-  { value: "sem_interesse", label: "Sem Interesse" },
-  { value: "arquivado", label: "Arquivado" },
-];
-
-function tagColor(tag: string): { bg: string; border: string; color: string } {
-  if (["Hot Lead", "Agendado"].includes(tag))
-    return { bg: "#C9A84C20", border: "#C9A84C", color: "#C9A84C" };
-  if (["Qualificado", "Partner", "Investidor", "Em Negociação"].includes(tag))
-    return { bg: "#243A66", border: "#243A66", color: "#F0ECE4" };
-  return { bg: "#111F35", border: "#243A66", color: "#7A8FA8" };
-}
-
-function statusBadge(status: string) {
-  const map: Record<string, { label: string; color: string; bg: string }> = {
-    ativo:          { label: "Ativo",        color: "#4ade80", bg: "#4ade8015" },
-    qualificado:    { label: "Qualificado",  color: "#C9A84C", bg: "#C9A84C15" },
-    agendado:       { label: "Agendado",     color: "#60a5fa", bg: "#60a5fa15" },
-    convertido:     { label: "Convertido",   color: "#4ade80", bg: "#4ade8030" },
-    sem_interesse:  { label: "Sem Interesse",color: "#7A8FA8", bg: "#243A66" },
-    arquivado:      { label: "Arquivado",    color: "#7A8FA8", bg: "#111F35" },
-  };
-  return map[status] ?? map.ativo;
-}
+const QUICK_REPLY_MARKER = "Digite o número da opção:";
 
 function initials(phone: string, nome: string | null) {
   if (nome) return nome.split(" ").slice(0, 2).map(n => n[0]).join("").toUpperCase();
@@ -104,6 +55,18 @@ function formatDateSeparator(iso: string) {
   return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" });
 }
 
+// Separa o texto normal do bloco de opções de resposta rápida (simulado por texto,
+// já que o WhatsApp bloqueia botão nativo fora da API oficial da Meta) pra renderizar
+// as opções como chips em vez de texto cru.
+function splitQuickReplyContent(content: string): { text: string; options: string[] | null } {
+  const idx = content.indexOf(QUICK_REPLY_MARKER);
+  if (idx === -1) return { text: content, options: null };
+  const before = content.slice(0, idx).trim();
+  const block = content.slice(idx + QUICK_REPLY_MARKER.length).trim();
+  const options = block.split("\n").map(l => l.trim()).filter(Boolean);
+  return { text: before, options };
+}
+
 // ─── Component ──────────────────────────────────────────────────────────────
 
 interface SdrClientProps {
@@ -125,12 +88,12 @@ export function SdrClient({ currentUserId, currentUserName, currentUserRole }: S
   const [search, setSearch] = useState("");
   const [mainTab, setMainTab] = useState<MainTab>(isAdminGestao ? "conversas" : "kanban");
   const [showQr, setShowQr] = useState(false);
-  const [editTag, setEditTag] = useState(false);
   const [savingLead, setSavingLead] = useState(false);
-  const [editNome, setEditNome] = useState(false);
-  const [nomeInput, setNomeInput] = useState("");
   const [humanMsg, setHumanMsg] = useState("");
   const [sendingHuman, setSendingHuman] = useState(false);
+  const [showQuickReplyEditor, setShowQuickReplyEditor] = useState(false);
+  const [quickReplyDraft, setQuickReplyDraft] = useState<QuickReplyOption[]>(DEFAULT_QUICK_REPLY_OPTIONS);
+  const [pendingQuickReply, setPendingQuickReply] = useState<QuickReplyOption[] | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const selectedLead = leads.find(l => l.phone === selectedPhone) ?? null;
@@ -192,10 +155,8 @@ export function SdrClient({ currentUserId, currentUserName, currentUserRole }: S
   // ── Handlers ──────────────────────────────────────────────────────────────
   const handleSelectPhone = (phone: string) => {
     setSelectedPhone(phone);
-    setEditTag(false);
-    setEditNome(false);
-    const lead = leads.find(l => l.phone === phone);
-    setNomeInput(lead?.nome ?? "");
+    setShowQuickReplyEditor(false);
+    setPendingQuickReply(null);
   };
 
   const patchLead = useCallback(async (patch: Partial<SdrLead> & { phone: string }) => {
@@ -211,29 +172,6 @@ export function SdrClient({ currentUserId, currentUserName, currentUserRole }: S
       setSavingLead(false);
     }
   }, [fetchLeads]);
-
-  const toggleTag = (tag: string) => {
-    if (!selectedLead) return;
-    const current = selectedLead.tags ?? [];
-    const next = current.includes(tag) ? current.filter(t => t !== tag) : [...current, tag];
-    patchLead({ phone: selectedLead.phone, tags: next });
-  };
-
-  const handleResponsavel = (responsavel_id: string) => {
-    if (!selectedLead) return;
-    patchLead({ phone: selectedLead.phone, responsavel_id });
-  };
-
-  const handleStatus = (status: string) => {
-    if (!selectedLead) return;
-    patchLead({ phone: selectedLead.phone, status });
-  };
-
-  const handleSaveNome = () => {
-    if (!selectedLead) return;
-    patchLead({ phone: selectedLead.phone, nome: nomeInput.trim() || null as unknown as string });
-    setEditNome(false);
-  };
 
   const handleAssignSelf = () => {
     if (!selectedLead) return;
@@ -257,10 +195,15 @@ export function SdrClient({ currentUserId, currentUserName, currentUserRole }: S
       const res = await fetch("/api/sdr/enviar", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone: selectedLead.phone, text: humanMsg.trim() }),
+        body: JSON.stringify({
+          phone: selectedLead.phone,
+          text: humanMsg.trim(),
+          quickReplyOptions: pendingQuickReply ?? undefined,
+        }),
       });
       if (res.ok) {
         setHumanMsg("");
+        setPendingQuickReply(null);
         await fetchConversas(selectedLead.phone);
       } else {
         const json = await res.json();
@@ -270,6 +213,13 @@ export function SdrClient({ currentUserId, currentUserName, currentUserRole }: S
       setSendingHuman(false);
     }
   };
+
+  function attachQuickReply() {
+    const validas = quickReplyDraft.map(o => ({ ...o, label: o.label.trim() })).filter(o => o.label);
+    if (validas.length === 0) return;
+    setPendingQuickReply(validas);
+    setShowQuickReplyEditor(false);
+  }
 
   // ── QR status ─────────────────────────────────────────────────────────────
   const statusColor = ({
@@ -302,122 +252,90 @@ export function SdrClient({ currentUserId, currentUserName, currentUserRole }: S
     (l.nome?.toLowerCase().includes(search.toLowerCase()))
   );
 
+  const TABS: { key: MainTab; label: string }[] = [
+    ...(isAdminGestao ? ([
+      { key: "conversas", label: "💬 WhatsApp" },
+      { key: "envio-massa", label: "📤 Envio em Massa" },
+      { key: "campanhas", label: "📧 Campanhas" },
+    ] as { key: MainTab; label: string }[]) : []),
+    { key: "kanban", label: "🗂️ Kanban" },
+    { key: "dashboard", label: "📊 Dashboard" },
+  ];
+
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "calc(100vh - 64px)", overflow: "hidden" }}>
+    <div className="flex flex-col overflow-hidden" style={{ height: "calc(100vh - 64px)" }}>
 
       {/* ── Top bar ─────────────────────────────────────────────────────────── */}
-      <div style={{
-        display: "flex", alignItems: "center", justifyContent: "space-between",
-        padding: "12px 24px",
-        background: "#09081A",
-        borderBottom: "1px solid #243A66",
-        flexShrink: 0,
-      }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <div>
-            <p style={{ color: "#C9A84C", fontSize: 10, fontWeight: 700, letterSpacing: 2, textTransform: "uppercase", margin: 0 }}>
-              AGENTE SDR
-            </p>
-            <h1 style={{ color: "#F0ECE4", fontSize: 20, fontWeight: 700, margin: 0, lineHeight: 1.2 }}>
-              CRM do WhatsApp
-            </h1>
-          </div>
+      <div className="flex items-center justify-between px-6 py-3 bg-[#09081A] border-b border-[#243A66] shrink-0">
+        <div>
+          <p className="text-[#C9A84C] text-[10px] font-bold tracking-[2px] uppercase">AGENTE SDR</p>
+          <h1 className="text-[#F0ECE4] text-xl font-bold leading-tight">CRM do WhatsApp</h1>
         </div>
+
         {/* Tabs */}
-        <div style={{ display: "flex", gap: 4 }}>
-          {[
-            ...(isAdminGestao ? [
-              { key: "conversas", label: "💬 WhatsApp" },
-              { key: "envio-massa", label: "📤 Envio em Massa" },
-              { key: "campanhas", label: "📧 Campanhas" },
-            ] : []),
-            { key: "kanban", label: "🗂️ Kanban" },
-            { key: "dashboard", label: "📊 Dashboard" },
-          ].map(t => (
+        <div className="flex items-center gap-1 bg-[#0D1929] border border-[#243A66] rounded-xl p-1 w-fit">
+          {TABS.map(t => (
             <button
               key={t.key}
-              onClick={() => setMainTab(t.key as MainTab)}
-              style={{
-                background: mainTab === t.key ? "#162744" : "transparent",
-                border: `1px solid ${mainTab === t.key ? "#C9A84C" : "#243A66"}`,
-                borderRadius: 8, padding: "6px 16px",
-                color: mainTab === t.key ? "#C9A84C" : "#7A8FA8",
-                fontSize: 12, fontWeight: 600, cursor: "pointer",
-              }}
+              onClick={() => setMainTab(t.key)}
+              className={mainTab === t.key
+                ? "bg-[#C9A84C] text-[#09081A] px-4 py-2 rounded-lg text-xs font-semibold whitespace-nowrap"
+                : "text-[#7A8FA8] hover:text-[#F0ECE4] px-4 py-2 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap"}
             >
               {t.label}
             </button>
           ))}
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          {/* Connection badge */}
+        <div className="flex items-center gap-3">
           {isAdminGestao && (
-          <div
-            onClick={() => setShowQr(!showQr)}
-            style={{
-              display: "flex", alignItems: "center", gap: 6,
-              background: "#162744", border: "1px solid #243A66",
-              borderRadius: 20, padding: "6px 14px",
-              cursor: "pointer",
-            }}
-          >
-            <div style={{ width: 8, height: 8, borderRadius: "50%", background: statusColor, boxShadow: `0 0 6px ${statusColor}` }} />
-            <span style={{ color: "#F0ECE4", fontSize: 12, fontWeight: 600 }}>{statusLabel}</span>
-          </div>
+            <div
+              onClick={() => setShowQr(!showQr)}
+              className="flex items-center gap-1.5 bg-[#162744] border border-[#243A66] rounded-full px-3.5 py-1.5 cursor-pointer"
+            >
+              <div className="w-2 h-2 rounded-full" style={{ background: statusColor, boxShadow: `0 0 6px ${statusColor}` }} />
+              <span className="text-[#F0ECE4] text-xs font-semibold">{statusLabel}</span>
+            </div>
           )}
           {isAdminGestao && (
-          <div style={{ color: "#7A8FA8", fontSize: 12 }}>
-            {leads.length} lead{leads.length !== 1 ? "s" : ""}
-          </div>
+            <div className="text-[#7A8FA8] text-xs">
+              {leads.length} lead{leads.length !== 1 ? "s" : ""}
+            </div>
           )}
         </div>
       </div>
 
       {/* ── QR Panel (dropdown) ─────────────────────────────────────────────── */}
       {isAdminGestao && showQr && (
-        <div style={{
-          position: "absolute", top: 120, right: 24, zIndex: 100,
-          background: "#162744", border: "1px solid #243A66",
-          borderRadius: 16, padding: 20, width: 300,
-          boxShadow: "0 8px 32px #09081A88",
-        }}>
+        <div className="absolute z-[100] bg-[#162744] border border-[#243A66] rounded-2xl p-5 w-[300px] shadow-2xl" style={{ top: 120, right: 24 }}>
           {qr.status === "connected" ? (
-            <div style={{ textAlign: "center" }}>
-              <div style={{ fontSize: 36, marginBottom: 8 }}>✅</div>
-              <p style={{ color: "#4ade80", fontWeight: 600, margin: 0 }}>WhatsApp Conectado!</p>
-              <p style={{ color: "#7A8FA8", fontSize: 12, marginTop: 4 }}>
-                Agente SDR ativo e respondendo leads.
-              </p>
+            <div className="text-center">
+              <div className="text-4xl mb-2">✅</div>
+              <p className="text-emerald-400 font-semibold">WhatsApp Conectado!</p>
+              <p className="text-[#7A8FA8] text-xs mt-1">Agente SDR ativo e respondendo leads.</p>
             </div>
           ) : qr.qrcode ? (
-            <div style={{ textAlign: "center" }}>
-              <p style={{ color: "#7A8FA8", fontSize: 12, marginBottom: 12 }}>
-                Escaneie com seu WhatsApp Business
-              </p>
-              <div style={{ background: "#fff", borderRadius: 8, padding: 8, display: "inline-block" }}>
+            <div className="text-center">
+              <p className="text-[#7A8FA8] text-xs mb-3">Escaneie com seu WhatsApp Business</p>
+              <div className="bg-white rounded-lg p-2 inline-block">
                 <Image
                   src={qr.qrcode.startsWith("data:") ? qr.qrcode : `data:image/png;base64,${qr.qrcode}`}
                   alt="QR Code WhatsApp"
                   width={200} height={200}
-                  style={{ display: "block" }}
+                  className="block"
                 />
               </div>
-              <p style={{ color: "#7A8FA8", fontSize: 11, marginTop: 8 }}>Expira em 60 segundos</p>
+              <p className="text-[#7A8FA8] text-[11px] mt-2">Expira em 60 segundos</p>
             </div>
           ) : (
-            <div style={{ textAlign: "center", color: "#7A8FA8", fontSize: 13, padding: 16 }}>
+            <div className="text-center text-[#7A8FA8] text-sm py-4">
               {qr.status === "loading" ? "Verificando conexão..." : "Nenhum QR disponível"}
             </div>
           )}
           <button
             onClick={fetchQr}
-            style={{
-              marginTop: 12, width: "100%", padding: "8px",
-              background: "#243A66", border: "1px solid #C9A84C",
-              borderRadius: 8, color: "#C9A84C", fontWeight: 600, fontSize: 13, cursor: "pointer",
-            }}
+            className="mt-3 w-full py-2 bg-[#243A66] border border-[#C9A84C] rounded-lg text-[#C9A84C] font-semibold text-sm"
           >
             Atualizar
           </button>
@@ -426,50 +344,39 @@ export function SdrClient({ currentUserId, currentUserName, currentUserRole }: S
 
       {/* ── Campanhas tab (e-mail) ────────────────────────────────────────────── */}
       {mainTab === "campanhas" && (
-        <div style={{ flex: 1, overflowY: "auto", background: "#0D1B2E" }}>
+        <div className="flex-1 overflow-y-auto bg-[#0D1B2E]">
           <CampanhasClient />
         </div>
       )}
 
-      {/* ── Envio em Massa tab (fila WhatsApp — sem disparo automático) ──────── */}
+      {/* ── Envio em Massa tab ────────────────────────────────────────────────── */}
       {mainTab === "envio-massa" && (
-        <div style={{ flex: 1, overflow: "hidden", background: "#0D1B2E" }}>
+        <div className="flex-1 overflow-hidden bg-[#0D1B2E]">
           <CampanhasWhatsappClient />
         </div>
       )}
 
       {/* ── Kanban tab ────────────────────────────────────────────────────────── */}
       {mainTab === "kanban" && (
-        <div style={{ flex: 1, overflow: "hidden", background: "#0D1B2E" }}>
+        <div className="flex-1 overflow-hidden bg-[#0D1B2E]">
           <SdrKanbanClient />
         </div>
       )}
 
       {/* ── Dashboard tab ─────────────────────────────────────────────────────── */}
       {mainTab === "dashboard" && (
-        <div style={{ flex: 1, overflow: "hidden", background: "#0D1B2E" }}>
+        <div className="flex-1 overflow-hidden bg-[#0D1B2E]">
           <SdrDashboardClient userName={currentUserName} role={currentUserRole} />
         </div>
       )}
 
-      {/* ── Main WhatsApp layout ─────────────────────────────────────────────── */}
-      <div style={{ display: isAdminGestao && mainTab === "conversas" ? "flex" : "none", flex: 1, overflow: "hidden" }}>
+      {/* ── Main WhatsApp layout (3 colunas: leads | chat | detalhes) ────────── */}
+      <div className={isAdminGestao && mainTab === "conversas" ? "flex flex-1 overflow-hidden" : "hidden"}>
 
-        {/* ── Left panel: lista de conversas ───────────────────────────────── */}
-        <div style={{
-          width: 320, flexShrink: 0,
-          background: "#111F35",
-          borderRight: "1px solid #243A66",
-          display: "flex", flexDirection: "column",
-          overflow: "hidden",
-        }}>
-          {/* Search */}
-          <div style={{ padding: "12px 12px 8px" }}>
-            <div style={{
-              display: "flex", alignItems: "center", gap: 8,
-              background: "#162744", border: "1px solid #243A66",
-              borderRadius: 10, padding: "8px 12px",
-            }}>
+        {/* ── Coluna 1: lista de leads ──────────────────────────────────────── */}
+        <div className="w-80 shrink-0 bg-[#111F35] border-r border-[#243A66] flex flex-col overflow-hidden">
+          <div className="px-3 pt-3 pb-2">
+            <div className="flex items-center gap-2 bg-[#162744] border border-[#243A66] rounded-lg px-3 py-2">
               <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="#7A8FA8" strokeWidth={2}>
                 <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
               </svg>
@@ -478,129 +385,65 @@ export function SdrClient({ currentUserId, currentUserName, currentUserRole }: S
                 placeholder="Buscar contato..."
                 value={search}
                 onChange={e => setSearch(e.target.value)}
-                style={{
-                  background: "transparent", border: "none", outline: "none",
-                  color: "#F0ECE4", fontSize: 13, flex: 1,
-                }}
+                className="bg-transparent border-none outline-none text-[#F0ECE4] text-sm flex-1"
               />
             </div>
           </div>
 
-          {/* Lead list */}
-          <div style={{ flex: 1, overflowY: "auto" }}>
+          <div className="flex-1 overflow-y-auto">
             {filteredLeads.length === 0 ? (
-              <div style={{ color: "#7A8FA8", textAlign: "center", padding: 32, fontSize: 13 }}>
-                Nenhuma conversa ainda
-              </div>
+              <div className="text-[#7A8FA8] text-center py-8 text-sm">Nenhuma conversa ainda</div>
             ) : (
               filteredLeads.map(lead => {
                 const isSelected = lead.phone === selectedPhone;
-                const sb = statusBadge(lead.status);
+                const sb = statusClass(lead.status);
+                const pe = lead.prospeccao_etapa ? PROSPECCAO_ETAPA_LABELS[lead.prospeccao_etapa] : null;
                 return (
                   <div
                     key={lead.phone}
                     onClick={() => handleSelectPhone(lead.phone)}
-                    style={{
-                      display: "flex", gap: 10, padding: "12px 14px",
-                      background: isSelected ? "#162744" : "transparent",
-                      borderLeft: isSelected ? "3px solid #C9A84C" : "3px solid transparent",
-                      cursor: "pointer",
-                      transition: "background 0.15s",
-                      borderBottom: "1px solid #162744",
-                    }}
+                    className={`flex gap-2.5 px-3.5 py-3 cursor-pointer border-b border-[#162744] transition-colors ${isSelected ? "bg-[#162744] border-l-[3px] border-l-[#C9A84C]" : "border-l-[3px] border-l-transparent hover:bg-[#162744]/50"}`}
                   >
-                    {/* Avatar */}
-                    <div style={{
-                      width: 44, height: 44, borderRadius: "50%", flexShrink: 0,
-                      background: isSelected ? "#C9A84C20" : "#243A66",
-                      border: `2px solid ${isSelected ? "#C9A84C" : "#243A66"}`,
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                      color: isSelected ? "#C9A84C" : "#F0ECE4",
-                      fontWeight: 700, fontSize: 14,
-                    }}>
+                    <div className={`w-11 h-11 rounded-full shrink-0 flex items-center justify-center font-bold text-sm border-2 ${isSelected ? "bg-[#C9A84C]/20 border-[#C9A84C] text-[#C9A84C]" : "bg-[#243A66] border-[#243A66] text-[#F0ECE4]"}`}>
                       {initials(lead.phone, lead.nome)}
                     </div>
-                    {/* Info */}
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 2 }}>
-                        <span style={{
-                          color: "#F0ECE4", fontWeight: 600, fontSize: 13,
-                          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                          maxWidth: 150,
-                        }}>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex justify-between items-baseline mb-0.5">
+                        <span className="text-[#F0ECE4] font-semibold text-[13px] truncate max-w-[150px]">
                           {lead.nome ?? lead.phone}
                         </span>
-                        <span style={{ color: "#7A8FA8", fontSize: 11, flexShrink: 0 }}>
-                          {formatTime(lead.last_message_at)}
-                        </span>
+                        <span className="text-[#7A8FA8] text-[11px] shrink-0">{formatTime(lead.last_message_at)}</span>
                       </div>
-                      {lead.nome && (
-                        <div style={{ color: "#7A8FA8", fontSize: 11, marginBottom: 2 }}>{lead.phone}</div>
-                      )}
-                      <div style={{ color: "#7A8FA8", fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {lead.last_message_preview ?? "Sem mensagens"}
-                      </div>
-                      {/* Tags + status */}
-                      <div style={{ display: "flex", gap: 4, marginTop: 4, flexWrap: "wrap" }}>
+                      {lead.nome && <div className="text-[#7A8FA8] text-[11px] mb-0.5">{lead.phone}</div>}
+                      <div className="text-[#7A8FA8] text-xs truncate">{lead.last_message_preview ?? "Sem mensagens"}</div>
+                      <div className="flex gap-1 mt-1 flex-wrap items-center">
                         {lead.humano_ativo && (
-                          <span style={{
-                            fontSize: 9, fontWeight: 700, letterSpacing: 0.5,
-                            padding: "2px 6px", borderRadius: 4,
-                            background: "#C9A84C20", color: "#C9A84C", border: "1px solid #C9A84C40",
-                            textTransform: "uppercase",
-                          }}>
+                          <span className="text-[9px] font-bold tracking-wide uppercase px-1.5 py-0.5 rounded bg-[#C9A84C]/10 text-[#C9A84C] border border-[#C9A84C]/30">
                             👤 Humano
                           </span>
                         )}
                         {lead.status !== "ativo" && (
-                          <span style={{
-                            fontSize: 9, fontWeight: 700, letterSpacing: 0.5,
-                            padding: "2px 6px", borderRadius: 4,
-                            background: sb.bg, color: sb.color, border: `1px solid ${sb.color}30`,
-                            textTransform: "uppercase",
-                          }}>
+                          <span className={`text-[9px] font-bold tracking-wide uppercase px-1.5 py-0.5 rounded border ${sb.bg} ${sb.text} ${sb.border}`}>
                             {sb.label}
                           </span>
                         )}
-                        {lead.prospeccao_etapa && (() => {
-                          const pe = PROSPECCAO_ETAPA_LABELS[lead.prospeccao_etapa];
-                          if (!pe) return null;
-                          return (
-                            <span title="Etapa vinculada na Prospecção de Partners" style={{
-                              fontSize: 9, fontWeight: 700, letterSpacing: 0.5,
-                              padding: "2px 6px", borderRadius: 4,
-                              background: `${pe.color}20`, color: pe.color, border: `1px solid ${pe.color}40`,
-                            }}>
-                              ↗ {pe.label}
-                            </span>
-                          );
-                        })()}
-                        {(lead.tags ?? []).slice(0, 2).map(tag => {
-                          const tc = tagColor(tag);
-                          return (
-                            <span key={tag} style={{
-                              fontSize: 9, fontWeight: 700, letterSpacing: 0.3,
-                              padding: "2px 6px", borderRadius: 4,
-                              background: tc.bg, color: tc.color,
-                              border: `1px solid ${tc.border}50`,
-                            }}>
-                              {tag}
-                            </span>
-                          );
-                        })}
+                        {pe && (
+                          <span title="Etapa vinculada na Prospecção de Partners" className={`text-[9px] font-bold tracking-wide px-1.5 py-0.5 rounded border ${pe.bg} ${pe.text} ${pe.border}`}>
+                            ↗ {pe.label}
+                          </span>
+                        )}
+                        {(lead.tags ?? []).slice(0, 2).map(tag => (
+                          <span key={tag} className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${tagClass(tag)}`}>
+                            {tag}
+                          </span>
+                        ))}
                         {(lead.tags ?? []).length > 2 && (
-                          <span style={{ fontSize: 10, color: "#7A8FA8" }}>+{lead.tags.length - 2}</span>
+                          <span className="text-[10px] text-[#7A8FA8]">+{lead.tags.length - 2}</span>
                         )}
                       </div>
-                      {/* Responsável */}
                       {lead.responsavel_nome && (
-                        <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 3 }}>
-                          <div style={{ width: 14, height: 14, borderRadius: "50%", background: "#243A66", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                            <svg width="8" height="8" fill="#7A8FA8" viewBox="0 0 24 24">
-                              <path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z" />
-                            </svg>
-                          </div>
-                          <span style={{ color: "#7A8FA8", fontSize: 10 }}>{lead.responsavel_nome}</span>
+                        <div className="flex items-center gap-1 mt-1">
+                          <span className="text-[#7A8FA8] text-[10px]">👤 {lead.responsavel_nome}</span>
                         </div>
                       )}
                     </div>
@@ -610,413 +453,221 @@ export function SdrClient({ currentUserId, currentUserName, currentUserRole }: S
             )}
           </div>
 
-          {/* Stats footer */}
-          <div style={{
-            padding: "10px 16px",
-            borderTop: "1px solid #243A66",
-            background: "#09081A",
-            display: "flex", gap: 16,
-          }}>
-            <div style={{ textAlign: "center" }}>
-              <div style={{ color: "#F0ECE4", fontWeight: 700, fontSize: 16 }}>{leads.length}</div>
-              <div style={{ color: "#7A8FA8", fontSize: 10 }}>Leads</div>
+          <div className="px-4 py-2.5 border-t border-[#243A66] bg-[#09081A] flex gap-4">
+            <div className="text-center">
+              <div className="text-[#F0ECE4] font-bold text-base">{leads.length}</div>
+              <div className="text-[#7A8FA8] text-[10px]">Leads</div>
             </div>
-            <div style={{ textAlign: "center" }}>
-              <div style={{ color: "#F0ECE4", fontWeight: 700, fontSize: 16 }}>
+            <div className="text-center">
+              <div className="text-[#F0ECE4] font-bold text-base">
                 {leads.filter(l => l.status === "qualificado" || l.status === "agendado" || l.status === "convertido").length}
               </div>
-              <div style={{ color: "#7A8FA8", fontSize: 10 }}>Qualificados</div>
+              <div className="text-[#7A8FA8] text-[10px]">Qualificados</div>
             </div>
-            <div style={{ textAlign: "center" }}>
-              <div style={{ color: "#F0ECE4", fontWeight: 700, fontSize: 16 }}>
-                {leads.filter(l => l.status === "agendado").length}
-              </div>
-              <div style={{ color: "#7A8FA8", fontSize: 10 }}>Agendados</div>
+            <div className="text-center">
+              <div className="text-[#F0ECE4] font-bold text-base">{leads.filter(l => l.status === "agendado").length}</div>
+              <div className="text-[#7A8FA8] text-[10px]">Agendados</div>
             </div>
           </div>
         </div>
 
-        {/* ── Right panel: chat ────────────────────────────────────────────── */}
+        {/* ── Coluna 2 + 3: chat e detalhes do lead ────────────────────────── */}
         {selectedLead ? (
-          <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", background: "#0D1B2E" }}>
+          <>
+            <div className="flex-1 flex flex-col overflow-hidden bg-[#0D1B2E]">
 
-            {/* Chat header */}
-            <div style={{
-              display: "flex", alignItems: "flex-start", gap: 12,
-              padding: "12px 20px",
-              background: "#111F35",
-              borderBottom: "1px solid #243A66",
-              flexShrink: 0,
-            }}>
-              {/* Avatar */}
-              <div style={{
-                width: 42, height: 42, borderRadius: "50%", flexShrink: 0,
-                background: "#C9A84C20", border: "2px solid #C9A84C",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                color: "#C9A84C", fontWeight: 700, fontSize: 15,
-              }}>
-                {initials(selectedLead.phone, selectedLead.nome)}
+              {/* Chat header (enxuto — detalhes completos ficam na coluna 3) */}
+              <div className="flex items-center gap-3 px-5 py-3 bg-[#111F35] border-b border-[#243A66] shrink-0">
+                <div className="w-10 h-10 rounded-full shrink-0 bg-[#C9A84C]/20 border-2 border-[#C9A84C] flex items-center justify-center text-[#C9A84C] font-bold text-sm">
+                  {initials(selectedLead.phone, selectedLead.nome)}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[#F0ECE4] font-bold text-[15px] truncate">{selectedLead.nome ?? selectedLead.phone}</p>
+                  <p className="text-[#7A8FA8] text-xs">{selectedLead.phone}</p>
+                </div>
+                {!selectedLead.responsavel_id && (
+                  <button
+                    onClick={handleAssignSelf}
+                    title={`Atribuir a ${currentUserName}`}
+                    className="text-xs font-semibold text-[#C9A84C] bg-[#C9A84C]/10 border border-[#C9A84C] rounded-md px-2.5 py-1.5 whitespace-nowrap"
+                  >
+                    Atribuir a mim
+                  </button>
+                )}
               </div>
 
-              {/* Name + phone + tags */}
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2 }}>
-                  {editNome ? (
-                    <div style={{ display: "flex", gap: 6 }}>
-                      <input
-                        autoFocus
-                        value={nomeInput}
-                        onChange={e => setNomeInput(e.target.value)}
-                        onKeyDown={e => { if (e.key === "Enter") handleSaveNome(); if (e.key === "Escape") setEditNome(false); }}
-                        placeholder="Nome do contato..."
-                        style={{
-                          background: "#162744", border: "1px solid #C9A84C", borderRadius: 6,
-                          padding: "2px 8px", color: "#F0ECE4", fontSize: 14, outline: "none",
-                        }}
-                      />
-                      <button onClick={handleSaveNome} style={{ background: "#C9A84C", border: "none", borderRadius: 6, padding: "2px 10px", color: "#09081A", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>
-                        ✓
-                      </button>
-                      <button onClick={() => setEditNome(false)} style={{ background: "#243A66", border: "none", borderRadius: 6, padding: "2px 8px", color: "#7A8FA8", cursor: "pointer" }}>
-                        ✕
-                      </button>
-                    </div>
-                  ) : (
-                    <span
-                      onClick={() => { setEditNome(true); setNomeInput(selectedLead.nome ?? ""); }}
-                      style={{ color: "#F0ECE4", fontWeight: 700, fontSize: 15, cursor: "pointer" }}
-                      title="Clique para editar nome"
-                    >
-                      {selectedLead.nome ?? selectedLead.phone}
-                    </span>
-                  )}
-                  {selectedLead.nome && (
-                    <span style={{ color: "#7A8FA8", fontSize: 12 }}>{selectedLead.phone}</span>
-                  )}
-                  {/* Status dropdown */}
-                  <select
-                    value={selectedLead.status}
-                    onChange={e => handleStatus(e.target.value)}
-                    disabled={savingLead}
-                    style={{
-                      background: statusBadge(selectedLead.status).bg,
-                      color: statusBadge(selectedLead.status).color,
-                      border: `1px solid ${statusBadge(selectedLead.status).color}40`,
-                      borderRadius: 20, padding: "2px 8px",
-                      fontSize: 11, fontWeight: 700, cursor: "pointer",
-                      outline: "none",
-                    }}
-                  >
-                    {STATUS_OPTIONS.map(s => (
-                      <option key={s.value} value={s.value} style={{ background: "#162744", color: "#F0ECE4" }}>
-                        {s.label}
-                      </option>
-                    ))}
-                  </select>
-                  {selectedLead.prospeccao_etapa && PROSPECCAO_ETAPA_LABELS[selectedLead.prospeccao_etapa] && (
-                    <span title="Etapa vinculada no Kanban de Prospecção de Partners" style={{
-                      fontSize: 11, fontWeight: 700,
-                      padding: "2px 8px", borderRadius: 20,
-                      background: `${PROSPECCAO_ETAPA_LABELS[selectedLead.prospeccao_etapa].color}20`,
-                      color: PROSPECCAO_ETAPA_LABELS[selectedLead.prospeccao_etapa].color,
-                      border: `1px solid ${PROSPECCAO_ETAPA_LABELS[selectedLead.prospeccao_etapa].color}40`,
-                    }}>
-                      ↗ Prospecção: {PROSPECCAO_ETAPA_LABELS[selectedLead.prospeccao_etapa].label}
-                    </span>
-                  )}
-                </div>
+              {/* Messages area */}
+              <div className="flex-1 overflow-y-auto px-5 py-4 flex flex-col gap-0.5">
+                {loadingConversas ? (
+                  <div className="text-[#7A8FA8] text-center py-10">Carregando mensagens...</div>
+                ) : conversas.length === 0 ? (
+                  <div className="text-[#7A8FA8] text-center py-10">Nenhuma mensagem</div>
+                ) : (
+                  buildMessageGroups().map(group => (
+                    <div key={group.date}>
+                      <div className="flex items-center gap-3 my-3">
+                        <div className="flex-1 h-px bg-[#243A66]" />
+                        <span className="text-[#7A8FA8] text-[11px] font-semibold bg-[#162744] border border-[#243A66] rounded-full px-2.5 py-0.5">
+                          {group.date}
+                        </span>
+                        <div className="flex-1 h-px bg-[#243A66]" />
+                      </div>
 
-                {/* Tags row */}
-                <div style={{ display: "flex", gap: 4, flexWrap: "wrap", alignItems: "center" }}>
-                  {(selectedLead.tags ?? []).map(tag => {
-                    const tc = tagColor(tag);
-                    return (
-                      <span
-                        key={tag}
-                        onClick={() => toggleTag(tag)}
-                        style={{
-                          fontSize: 10, fontWeight: 700, letterSpacing: 0.3,
-                          padding: "2px 8px", borderRadius: 4,
-                          background: tc.bg, color: tc.color,
-                          border: `1px solid ${tc.border}`,
-                          cursor: "pointer",
-                        }}
-                        title="Clique para remover"
-                      >
-                        {tag} ×
-                      </span>
-                    );
-                  })}
-
-                  {/* Add tag button */}
-                  <div style={{ position: "relative" }}>
-                    <button
-                      onClick={() => setEditTag(!editTag)}
-                      style={{
-                        background: "#162744", border: "1px dashed #243A66",
-                        borderRadius: 4, padding: "2px 8px", color: "#7A8FA8",
-                        fontSize: 10, cursor: "pointer",
-                      }}
-                    >
-                      + Tag
-                    </button>
-                    {editTag && (
-                      <div style={{
-                        position: "absolute", top: 24, left: 0, zIndex: 50,
-                        background: "#162744", border: "1px solid #243A66",
-                        borderRadius: 10, padding: 8, minWidth: 200,
-                        boxShadow: "0 4px 20px #09081A88",
-                        display: "flex", flexWrap: "wrap", gap: 4,
-                      }}>
-                        {PRESET_TAGS.map(tag => {
-                          const active = (selectedLead.tags ?? []).includes(tag);
-                          const tc = tagColor(tag);
-                          return (
-                            <button
-                              key={tag}
-                              onClick={() => toggleTag(tag)}
+                      {group.messages.map((c, idx) => {
+                        const isUser = c.role === "user";
+                        const prev = idx > 0 ? group.messages[idx - 1] : null;
+                        const sameRole = prev?.role === c.role;
+                        const { text, options } = splitQuickReplyContent(c.content);
+                        return (
+                          <div key={c.id} className={`flex ${isUser ? "justify-start" : "justify-end"}`} style={{ marginBottom: sameRole ? 2 : 8 }}>
+                            <div
+                              className={`max-w-[72%] px-3 py-2 border ${isUser ? "bg-[#162744] border-[#243A66]" : "bg-[#1A3A28] border-[#2A5A3A]"}`}
                               style={{
-                                padding: "4px 8px", borderRadius: 4, fontSize: 11, cursor: "pointer",
-                                fontWeight: 600,
-                                background: active ? tc.bg : "#111F35",
-                                color: active ? tc.color : "#7A8FA8",
-                                border: `1px solid ${active ? tc.border : "#243A66"}`,
+                                borderRadius: isUser
+                                  ? `${sameRole ? 4 : 14}px 14px 14px 4px`
+                                  : `14px ${sameRole ? 4 : 14}px 4px 14px`,
                               }}
                             >
-                              {active ? "✓ " : ""}{tag}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Responsável */}
-              <div style={{ flexShrink: 0, minWidth: 180 }}>
-                <div style={{ color: "#7A8FA8", fontSize: 10, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", marginBottom: 4 }}>
-                  Responsável
-                </div>
-                <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                  <select
-                    value={selectedLead.responsavel_id ?? ""}
-                    onChange={e => handleResponsavel(e.target.value)}
-                    disabled={savingLead}
-                    style={{
-                      background: "#162744", border: "1px solid #243A66",
-                      borderRadius: 8, padding: "4px 8px",
-                      color: selectedLead.responsavel_id ? "#F0ECE4" : "#7A8FA8",
-                      fontSize: 12, cursor: "pointer", outline: "none",
-                      flex: 1,
-                    }}
-                  >
-                    <option value="" style={{ background: "#162744" }}>Sem responsável</option>
-                    {profiles.map(p => (
-                      <option key={p.id} value={p.id} style={{ background: "#162744", color: "#F0ECE4" }}>
-                        {p.full_name}
-                      </option>
-                    ))}
-                  </select>
-                  {!selectedLead.responsavel_id && (
-                    <button
-                      onClick={handleAssignSelf}
-                      title={`Atribuir a ${currentUserName}`}
-                      style={{
-                        background: "#C9A84C20", border: "1px solid #C9A84C",
-                        borderRadius: 6, padding: "4px 8px",
-                        color: "#C9A84C", fontSize: 11, cursor: "pointer", whiteSpace: "nowrap",
-                      }}
-                    >
-                      Eu
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Messages area */}
-            <div style={{
-              flex: 1, overflowY: "auto", padding: "16px 20px",
-              display: "flex", flexDirection: "column", gap: 2,
-            }}>
-              {loadingConversas ? (
-                <div style={{ color: "#7A8FA8", textAlign: "center", padding: 40 }}>Carregando mensagens...</div>
-              ) : conversas.length === 0 ? (
-                <div style={{ color: "#7A8FA8", textAlign: "center", padding: 40 }}>Nenhuma mensagem</div>
-              ) : (
-                buildMessageGroups().map(group => (
-                  <div key={group.date}>
-                    {/* Date separator */}
-                    <div style={{ display: "flex", alignItems: "center", gap: 12, margin: "12px 0" }}>
-                      <div style={{ flex: 1, height: 1, background: "#243A66" }} />
-                      <span style={{
-                        color: "#7A8FA8", fontSize: 11, fontWeight: 600,
-                        background: "#162744", padding: "2px 10px", borderRadius: 10,
-                        border: "1px solid #243A66",
-                      }}>
-                        {group.date}
-                      </span>
-                      <div style={{ flex: 1, height: 1, background: "#243A66" }} />
-                    </div>
-
-                    {group.messages.map((c, idx) => {
-                      const isUser = c.role === "user";
-                      const prev = idx > 0 ? group.messages[idx - 1] : null;
-                      const sameRole = prev?.role === c.role;
-                      return (
-                        <div
-                          key={c.id}
-                          style={{
-                            display: "flex",
-                            justifyContent: isUser ? "flex-start" : "flex-end",
-                            marginBottom: sameRole ? 2 : 8,
-                          }}
-                        >
-                          <div style={{
-                            maxWidth: "72%",
-                            background: isUser ? "#162744" : "#1A3A28",
-                            border: `1px solid ${isUser ? "#243A66" : "#2A5A3A"}`,
-                            borderRadius: isUser
-                              ? `${sameRole ? 4 : 14}px 14px 14px 4px`
-                              : `14px ${sameRole ? 4 : 14}px 4px 14px`,
-                            padding: "8px 12px",
-                          }}>
-                            {!sameRole && (
-                              <div style={{
-                                fontSize: 11, fontWeight: 700, marginBottom: 4,
-                                color: isUser ? "#C9A84C" : "#4ade80",
-                              }}>
-                                {isUser ? (selectedLead.nome ?? c.phone) : "Agente SDR (Matheus)"}
+                              {!sameRole && (
+                                <div className={`text-[11px] font-bold mb-1 ${isUser ? "text-[#C9A84C]" : "text-emerald-400"}`}>
+                                  {isUser ? (selectedLead.nome ?? c.phone) : "Agente SDR (Matheus)"}
+                                </div>
+                              )}
+                              {text && <div className="text-[#F0ECE4] text-[13px] leading-[1.55] whitespace-pre-wrap">{text}</div>}
+                              {options && (
+                                <div className="mt-2 flex flex-col gap-1.5">
+                                  {options.map(opt => (
+                                    <div key={opt} className="text-xs font-semibold text-center px-3 py-1.5 rounded-lg bg-[#C9A84C]/10 border border-[#C9A84C]/30 text-[#C9A84C]">
+                                      {opt}
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                              <div className="text-[#7A8FA8] text-[10px] mt-1 text-right">
+                                {new Date(c.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
                               </div>
-                            )}
-                            <div style={{ color: "#F0ECE4", fontSize: 13, lineHeight: 1.55, whiteSpace: "pre-wrap" }}>
-                              {c.content}
-                            </div>
-                            <div style={{ color: "#7A8FA8", fontSize: 10, marginTop: 4, textAlign: "right" }}>
-                              {new Date(c.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
                             </div>
                           </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ))
-              )}
-              <div ref={messagesEndRef} />
-            </div>
+                        );
+                      })}
+                    </div>
+                  ))
+                )}
+                <div ref={messagesEndRef} />
+              </div>
 
-            {/* Footer */}
-            <div style={{
-              background: "#111F35",
-              borderTop: "1px solid #243A66",
-              flexShrink: 0,
-            }}>
-              {/* Input humano (visível só quando humano_ativo) */}
-              {selectedLead.humano_ativo && (
-                <div style={{ padding: "10px 16px", display: "flex", gap: 8, borderBottom: "1px solid #243A66" }}>
-                  <input
-                    value={humanMsg}
-                    onChange={e => setHumanMsg(e.target.value)}
-                    onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSendHuman(); } }}
-                    placeholder="Digite uma mensagem como operador..."
-                    disabled={sendingHuman}
-                    style={{
-                      flex: 1, background: "#162744", border: "1px solid #243A66",
-                      borderRadius: 10, padding: "8px 14px",
-                      color: "#F0ECE4", fontSize: 13, outline: "none",
-                    }}
-                  />
+              {/* Footer */}
+              <div className="bg-[#111F35] border-t border-[#243A66] shrink-0">
+                {selectedLead.humano_ativo && (
+                  <div className="px-4 py-2.5 border-b border-[#243A66] space-y-2">
+                    {pendingQuickReply && (
+                      <div className="flex items-center gap-2 flex-wrap bg-[#0A1628] border border-[#C9A84C]/30 rounded-lg px-2.5 py-1.5">
+                        <span className="text-[10px] font-bold text-[#C9A84C] uppercase tracking-wide">Opções anexadas:</span>
+                        {pendingQuickReply.map(o => (
+                          <span key={o.key} className="text-[11px] text-[#F0ECE4]">{o.key}. {o.label}</span>
+                        ))}
+                        <button onClick={() => setPendingQuickReply(null)} className="text-[#7A8FA8] hover:text-red-400 text-xs ml-auto">✕</button>
+                      </div>
+                    )}
+                    {showQuickReplyEditor && (
+                      <div className="bg-[#0A1628] border border-[#243A66] rounded-lg p-2.5 space-y-2">
+                        <QuickReplyOptionsEditor options={quickReplyDraft} onChange={setQuickReplyDraft} />
+                        <div className="flex gap-2">
+                          <button onClick={attachQuickReply} className="text-[11px] font-semibold bg-[#C9A84C]/10 border border-[#C9A84C]/30 text-[#C9A84C] rounded-md px-2.5 py-1">
+                            Anexar
+                          </button>
+                          <button onClick={() => setShowQuickReplyEditor(false)} className="text-[11px] text-[#7A8FA8] px-2.5 py-1">
+                            Cancelar
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setShowQuickReplyEditor(!showQuickReplyEditor)}
+                        title="Anexar opções de resposta rápida"
+                        className="shrink-0 px-2.5 rounded-lg border border-[#243A66] text-[#7A8FA8] hover:text-[#C9A84C] hover:border-[#C9A84C]/40 transition-colors text-xs"
+                      >
+                        + Opções
+                      </button>
+                      <input
+                        value={humanMsg}
+                        onChange={e => setHumanMsg(e.target.value)}
+                        onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSendHuman(); } }}
+                        placeholder="Digite uma mensagem como operador..."
+                        disabled={sendingHuman}
+                        className="flex-1 bg-[#162744] border border-[#243A66] rounded-lg px-3.5 py-2 text-[#F0ECE4] text-[13px] outline-none"
+                      />
+                      <button
+                        onClick={handleSendHuman}
+                        disabled={sendingHuman || !humanMsg.trim()}
+                        className={`rounded-lg px-4 py-2 font-bold text-[13px] ${sendingHuman || !humanMsg.trim() ? "bg-[#243A66] text-[#7A8FA8]" : "bg-[#C9A84C] text-[#09081A]"}`}
+                      >
+                        {sendingHuman ? "..." : "Enviar"}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                <div className="px-5 py-2 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    {selectedLead.humano_ativo ? (
+                      <>
+                        <div className="w-2 h-2 rounded-full bg-[#C9A84C]" style={{ boxShadow: "0 0 6px #C9A84C" }} />
+                        <span className="text-[#C9A84C] text-xs font-semibold">Atendimento humano ativo · IA pausada</span>
+                      </>
+                    ) : (
+                      <>
+                        <div className="w-2 h-2 rounded-full bg-emerald-400" style={{ boxShadow: "0 0 6px #4ade80" }} />
+                        <span className="text-[#7A8FA8] text-xs">Agente SDR (Matheus) respondendo automaticamente</span>
+                      </>
+                    )}
+                  </div>
                   <button
-                    onClick={handleSendHuman}
-                    disabled={sendingHuman || !humanMsg.trim()}
-                    style={{
-                      background: sendingHuman || !humanMsg.trim() ? "#243A66" : "#C9A84C",
-                      border: "none", borderRadius: 10, padding: "8px 18px",
-                      color: sendingHuman || !humanMsg.trim() ? "#7A8FA8" : "#09081A",
-                      fontWeight: 700, fontSize: 13, cursor: "pointer",
-                    }}
+                    onClick={handleToggleHumano}
+                    disabled={savingLead}
+                    className={`rounded-lg px-3.5 py-1.5 text-xs font-bold whitespace-nowrap border ${selectedLead.humano_ativo ? "bg-emerald-400/10 border-emerald-400 text-emerald-400" : "bg-[#C9A84C]/10 border-[#C9A84C] text-[#C9A84C]"}`}
                   >
-                    {sendingHuman ? "..." : "Enviar"}
+                    {selectedLead.humano_ativo ? "↩ Devolver para IA" : "👤 Assumir Atendimento"}
                   </button>
                 </div>
-              )}
-
-              {/* Status bar */}
-              <div style={{ padding: "8px 20px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  {selectedLead.humano_ativo ? (
-                    <>
-                      <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#C9A84C", boxShadow: "0 0 6px #C9A84C" }} />
-                      <span style={{ color: "#C9A84C", fontSize: 12, fontWeight: 600 }}>
-                        Atendimento humano ativo · IA pausada
-                      </span>
-                    </>
-                  ) : (
-                    <>
-                      <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#4ade80", boxShadow: "0 0 6px #4ade80" }} />
-                      <span style={{ color: "#7A8FA8", fontSize: 12 }}>
-                        Agente SDR (Matheus) respondendo automaticamente
-                      </span>
-                    </>
-                  )}
-                </div>
-                <button
-                  onClick={handleToggleHumano}
-                  disabled={savingLead}
-                  style={{
-                    background: selectedLead.humano_ativo ? "#4ade8015" : "#C9A84C15",
-                    border: `1px solid ${selectedLead.humano_ativo ? "#4ade80" : "#C9A84C"}`,
-                    borderRadius: 8, padding: "5px 14px",
-                    color: selectedLead.humano_ativo ? "#4ade80" : "#C9A84C",
-                    fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap",
-                  }}
-                >
-                  {selectedLead.humano_ativo ? "↩ Devolver para IA" : "👤 Assumir Atendimento"}
-                </button>
               </div>
             </div>
-          </div>
+
+            {/* ── Coluna 3: detalhes do lead ─────────────────────────────────── */}
+            <SdrLeadDetailPanel
+              key={selectedLead.phone}
+              lead={selectedLead}
+              profiles={profiles}
+              currentUserId={currentUserId}
+              currentUserName={currentUserName}
+              savingLead={savingLead}
+              onPatch={patchLead}
+            />
+          </>
         ) : (
-          /* Empty state */
-          <div style={{
-            flex: 1, display: "flex", flexDirection: "column",
-            alignItems: "center", justifyContent: "center",
-            background: "#0D1B2E",
-            gap: 16,
-          }}>
-            <div style={{
-              width: 80, height: 80, borderRadius: "50%",
-              background: "#C9A84C15", border: "2px solid #C9A84C30",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: 36,
-            }}>
+          <div className="flex-1 flex flex-col items-center justify-center gap-4 bg-[#0D1B2E]">
+            <div className="w-20 h-20 rounded-full bg-[#C9A84C]/[0.08] border-2 border-[#C9A84C]/30 flex items-center justify-center text-4xl">
               💬
             </div>
-            <div style={{ textAlign: "center" }}>
-              <p style={{ color: "#F0ECE4", fontSize: 18, fontWeight: 700, margin: 0 }}>
-                Selecione uma conversa
-              </p>
-              <p style={{ color: "#7A8FA8", fontSize: 14, marginTop: 6 }}>
-                Escolha um lead no painel esquerdo para visualizar as mensagens
-              </p>
+            <div className="text-center">
+              <p className="text-[#F0ECE4] text-lg font-bold">Selecione uma conversa</p>
+              <p className="text-[#7A8FA8] text-sm mt-1.5">Escolha um lead no painel esquerdo para visualizar as mensagens</p>
             </div>
-            <div style={{ display: "flex", gap: 32, marginTop: 8 }}>
-              <div style={{ textAlign: "center" }}>
-                <div style={{ color: "#C9A84C", fontSize: 24, fontWeight: 800 }}>{leads.length}</div>
-                <div style={{ color: "#7A8FA8", fontSize: 12 }}>Leads totais</div>
+            <div className="flex gap-8 mt-2">
+              <div className="text-center">
+                <div className="text-[#C9A84C] text-2xl font-extrabold">{leads.length}</div>
+                <div className="text-[#7A8FA8] text-xs">Leads totais</div>
               </div>
-              <div style={{ textAlign: "center" }}>
-                <div style={{ color: "#4ade80", fontSize: 24, fontWeight: 800 }}>
-                  {leads.reduce((a, l) => a + l.message_count, 0)}
-                </div>
-                <div style={{ color: "#7A8FA8", fontSize: 12 }}>Mensagens</div>
+              <div className="text-center">
+                <div className="text-emerald-400 text-2xl font-extrabold">{leads.reduce((a, l) => a + l.message_count, 0)}</div>
+                <div className="text-[#7A8FA8] text-xs">Mensagens</div>
               </div>
-              <div style={{ textAlign: "center" }}>
-                <div style={{ color: "#C9A84C", fontSize: 24, fontWeight: 800 }}>
+              <div className="text-center">
+                <div className="text-[#C9A84C] text-2xl font-extrabold">
                   {leads.filter(l => l.status === "agendado" || l.status === "convertido").length}
                 </div>
-                <div style={{ color: "#7A8FA8", fontSize: 12 }}>Convertidos</div>
+                <div className="text-[#7A8FA8] text-xs">Convertidos</div>
               </div>
             </div>
           </div>
@@ -1025,4 +676,3 @@ export function SdrClient({ currentUserId, currentUserName, currentUserRole }: S
     </div>
   );
 }
-
