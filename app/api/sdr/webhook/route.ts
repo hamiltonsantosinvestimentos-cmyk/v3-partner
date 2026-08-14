@@ -312,18 +312,32 @@ async function processarSinalFunil(phone: string, sinal: Exclude<SinalFunil, "ne
   }
 }
 
+// O prompt já proíbe markdown/bullets, mas o modelo às vezes ignora a instrução — no
+// WhatsApp isso aparece como asterisco/traço literal na tela do lead, parecendo robótico.
+// Rede de segurança: limpa qualquer resíduo antes de enviar.
+function stripWhatsappMarkdown(text: string): string {
+  return text
+    .replace(/\*\*(.+?)\*\*/g, "$1")
+    .replace(/^[ \t]*[-*•]\s+/gm, "")
+    .replace(/^#{1,6}\s+/gm, "");
+}
+
 // ── Processa mensagem SDR ───────────────────────────────────────────────────
 
 async function processarMensagemSDR(phone: string, mensagem: string, instance: string) {
   try {
+    // Busca as 40 mensagens mais RECENTES (desc + limit) e devolve pra ordem cronológica
+    // depois — pegar ascendente direto travava a IA nas primeiras 40 mensagens da conversa
+    // inteira (congelado no passado) assim que ela passava desse tamanho, ignorando tudo
+    // que o lead mandasse depois disso.
     const { data: historico } = await supabase
       .from("sdr_conversas")
       .select("role, content")
       .eq("phone", phone)
-      .order("created_at", { ascending: true })
+      .order("created_at", { ascending: false })
       .limit(40);
 
-    const messages = (historico || []).map((h) => ({
+    const messages = (historico || []).reverse().map((h) => ({
       role: h.role as "user" | "assistant",
       content: h.content,
     }));
@@ -348,7 +362,7 @@ async function processarMensagemSDR(phone: string, mensagem: string, instance: s
 
     const response = await anthropic.messages.create({
       model: "claude-sonnet-4-6",
-      max_tokens: 300,
+      max_tokens: 180,
       system: `Você é o Matheus, consultor de relacionamento da V3 Partners — uma boutique institucional de estruturação financeira e securitização.
 
 Você representa uma empresa séria e de alto padrão. Seu tom é profissional, caloroso e consultivo. Você escreve como um humano experiente, não como um robô.
@@ -369,8 +383,9 @@ Você representa uma empresa séria e de alto padrão. Seu tom é profissional, 
 
 **Regras de comunicação — MUITO IMPORTANTE:**
 - Escreva exatamente como alguém digitando rápido no WhatsApp: frases curtas e diretas
-- Cada frase sua deve ter no máximo ~15 palavras
-- Nunca escreva mais de 2 frases seguidas sem quebrar
+- Cada frase sua deve ter no máximo ~10 palavras
+- No máximo 1 frase por parágrafo — raramente 2, nunca mais que isso
+- Resposta inteira com no máximo 3 parágrafos curtos (3 mensagens no WhatsApp) — se não couber, fale só o essencial agora e continue no próximo turno
 - Se precisar falar de mais de uma coisa (ex: apresentar a empresa E qualificar), separe as ideias em parágrafos curtos com uma linha em branco entre eles — cada parágrafo vira uma mensagem separada no WhatsApp, então prefira várias mensagens curtas a uma única mensagem longa
 - Nunca use bullet points, markdown ou asteriscos
 - Nunca use emojis excessivos ou linguagem de chatbot
@@ -380,8 +395,9 @@ Você representa uma empresa séria e de alto padrão. Seu tom é profissional, 
       messages,
     });
 
-    const resposta = response.content[0].type === "text" ? response.content[0].text : "";
-    if (!resposta) return;
+    const respostaBruta = response.content[0].type === "text" ? response.content[0].text : "";
+    if (!respostaBruta) return;
+    const resposta = stripWhatsappMarkdown(respostaBruta);
 
     // Detecta agendamento e progressão de funil ANTES de enviar — precisa do resultado
     // agora (não só como fire-and-forget) para decidir se oferece opções de resposta
