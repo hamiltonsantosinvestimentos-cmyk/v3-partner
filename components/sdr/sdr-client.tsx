@@ -8,7 +8,7 @@ import { SdrKanbanClient } from "./sdr-kanban-client";
 import { SdrDashboardClient } from "./sdr-dashboard-client";
 import { SdrLeadDetailPanel, PROSPECCAO_ETAPA_LABELS, tagClass, statusClass, type SdrLead } from "./sdr-lead-detail-panel";
 import { QuickReplyOptionsEditor, DEFAULT_QUICK_REPLY_OPTIONS } from "./quick-reply-options-editor";
-import { formatQuickReplyBlock, type QuickReplyOption } from "@/lib/whatsapp/quick-reply";
+import type { QuickReplyOption } from "@/lib/whatsapp/quick-reply";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
