@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -46,6 +48,19 @@ const TEMPLATE_PADRAO = `<!DOCTYPE html>
   </div>
 </body>
 </html>`;
+
+const STATUS_CLASSES: Record<Campanha["status"], { label: string; text: string; bg: string; border: string }> = {
+  rascunho: { label: "Rascunho",     text: "text-[#7A8FA8]",   bg: "bg-[#243A66]",       border: "border-[#243A66]" },
+  enviando: { label: "Enviando...",  text: "text-[#C9A84C]",   bg: "bg-[#C9A84C]/10",    border: "border-[#C9A84C]/40" },
+  enviada:  { label: "Enviada",      text: "text-emerald-400", bg: "bg-emerald-400/10",  border: "border-emerald-400/40" },
+  pausada:  { label: "Pausada",      text: "text-red-400",     bg: "bg-red-400/10",      border: "border-red-400/40" },
+};
+
+const TABS: { key: "editor" | "preview" | "contatos"; label: string }[] = [
+  { key: "editor", label: "✏️ Template HTML" },
+  { key: "preview", label: "👁 Preview" },
+  { key: "contatos", label: "👥 Contatos" },
+];
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
@@ -100,8 +115,8 @@ export function CampanhasClient() {
 
       const email = parts.find(p => emailRegex.test(p));
       if (!email) continue;
-      const nome = parts.find(p => p && !emailRegex.test(p) && p.length > 1) ?? "";
-      result.push({ email: email.toLowerCase(), nome });
+      const nomeContato = parts.find(p => p && !emailRegex.test(p) && p.length > 1) ?? "";
+      result.push({ email: email.toLowerCase(), nome: nomeContato });
     }
 
     if (result.length === 0) {
@@ -189,129 +204,99 @@ export function CampanhasClient() {
     }
   };
 
-  // ── Status badge ───────────────────────────────────────────────────────────
-  const statusBadge = (status: Campanha["status"]) => {
-    const map = {
-      rascunho: { label: "Rascunho", color: "#7A8FA8", bg: "#243A66" },
-      enviando: { label: "Enviando...", color: "#C9A84C", bg: "#C9A84C15" },
-      enviada:  { label: "Enviada", color: "#4ade80", bg: "#4ade8015" },
-      pausada:  { label: "Pausada", color: "#f87171", bg: "#f8717115" },
-    };
-    return map[status] ?? map.rascunho;
-  };
-
   const fmtDate = (iso: string | null) => iso ? new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" }) : "—";
 
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
-    <div style={{ padding: "20px 24px" }}>
+    <div className="px-6 py-5">
 
       {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+      <div className="flex justify-between items-center mb-5">
         <div>
-          <p style={{ color: "#C9A84C", fontSize: 10, fontWeight: 700, letterSpacing: 2, textTransform: "uppercase", margin: 0 }}>SDR</p>
-          <h2 style={{ color: "#F0ECE4", fontSize: 18, fontWeight: 700, margin: 0 }}>Campanhas de E-mail</h2>
+          <p className="text-[#C9A84C] text-[10px] font-bold tracking-[2px] uppercase">SDR</p>
+          <h2 className="text-[#F0ECE4] text-lg font-bold">Campanhas de E-mail</h2>
         </div>
-        <button
-          onClick={openNova}
-          style={{
-            background: "#C9A84C", border: "none", borderRadius: 10,
-            padding: "9px 20px", color: "#09081A", fontWeight: 700, fontSize: 13, cursor: "pointer",
-          }}
-        >
-          + Nova Campanha
-        </button>
+        <Button onClick={openNova}>+ Nova Campanha</Button>
       </div>
 
       {/* Resultado do último disparo */}
       {disparoResult && (
-        <div style={{ marginBottom: 16, padding: "12px 16px", background: "#4ade8015", border: "1px solid #4ade8040", borderRadius: 10, display: "flex", gap: 16, alignItems: "center" }}>
-          <span style={{ color: "#4ade80", fontWeight: 700 }}>✓ Disparo concluído</span>
-          <span style={{ color: "#7A8FA8", fontSize: 13 }}>{disparoResult.enviados} enviados · {disparoResult.erros} erros</span>
-          <button onClick={() => setDisparoResult(null)} style={{ marginLeft: "auto", background: "none", border: "none", color: "#7A8FA8", cursor: "pointer", fontSize: 16 }}>×</button>
+        <div className="mb-4 px-4 py-3 bg-emerald-400/10 border border-emerald-400/40 rounded-xl flex gap-4 items-center">
+          <span className="text-emerald-400 font-bold">✓ Disparo concluído</span>
+          <span className="text-[#7A8FA8] text-[13px]">{disparoResult.enviados} enviados · {disparoResult.erros} erros</span>
+          <button onClick={() => setDisparoResult(null)} className="ml-auto text-[#7A8FA8] hover:text-[#F0ECE4] text-lg">×</button>
         </div>
       )}
 
       {/* Lista */}
       {loading ? (
-        <div style={{ color: "#7A8FA8", textAlign: "center", padding: 60 }}>Carregando...</div>
+        <div className="text-[#7A8FA8] text-center py-16">Carregando...</div>
       ) : campanhas.length === 0 ? (
-        <div style={{ textAlign: "center", padding: 60 }}>
-          <div style={{ fontSize: 48, marginBottom: 12 }}>📧</div>
-          <p style={{ color: "#F0ECE4", fontWeight: 700, fontSize: 16, margin: "0 0 8px" }}>Nenhuma campanha criada</p>
-          <p style={{ color: "#7A8FA8", fontSize: 13 }}>Crie sua primeira campanha de prospecção por e-mail</p>
+        <div className="text-center py-16">
+          <div className="text-5xl mb-3">📧</div>
+          <p className="text-[#F0ECE4] font-bold text-base mb-2">Nenhuma campanha criada</p>
+          <p className="text-[#7A8FA8] text-[13px]">Crie sua primeira campanha de prospecção por e-mail</p>
         </div>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <div className="flex flex-col gap-2">
           {campanhas.map(c => {
-            const sb = statusBadge(c.status);
+            const sb = STATUS_CLASSES[c.status];
             const taxaAbertura = c.total_enviados > 0 ? Math.round((c.total_abertos / c.total_enviados) * 100) : 0;
             return (
-              <div key={c.id} style={{
-                background: "#111F35", border: "1px solid #243A66", borderRadius: 12,
-                padding: "14px 18px", display: "flex", alignItems: "center", gap: 16,
-              }}>
+              <div key={c.id} className="bg-[#111F35] border border-[#243A66] rounded-xl px-4.5 py-3.5 flex items-center gap-4">
                 {/* Info */}
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-                    <span style={{ color: "#F0ECE4", fontWeight: 700, fontSize: 14 }}>{c.nome}</span>
-                    <span style={{
-                      fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 20,
-                      background: sb.bg, color: sb.color, border: `1px solid ${sb.color}40`,
-                    }}>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-[#F0ECE4] font-bold text-sm">{c.nome}</span>
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${sb.bg} ${sb.text} ${sb.border}`}>
                       {sb.label}
                     </span>
                   </div>
-                  <p style={{ color: "#7A8FA8", fontSize: 12, margin: 0 }}>Assunto: {c.assunto}</p>
+                  <p className="text-[#7A8FA8] text-xs">Assunto: {c.assunto}</p>
                 </div>
 
                 {/* Stats */}
-                <div style={{ display: "flex", gap: 20, flexShrink: 0 }}>
-                  <div style={{ textAlign: "center" }}>
-                    <div style={{ color: "#F0ECE4", fontWeight: 700, fontSize: 16 }}>{c.total_contatos}</div>
-                    <div style={{ color: "#7A8FA8", fontSize: 10 }}>Contatos</div>
+                <div className="flex gap-5 shrink-0">
+                  <div className="text-center">
+                    <div className="text-[#F0ECE4] font-bold text-base">{c.total_contatos}</div>
+                    <div className="text-[#7A8FA8] text-[10px]">Contatos</div>
                   </div>
-                  <div style={{ textAlign: "center" }}>
-                    <div style={{ color: "#4ade80", fontWeight: 700, fontSize: 16 }}>{c.total_enviados}</div>
-                    <div style={{ color: "#7A8FA8", fontSize: 10 }}>Enviados</div>
+                  <div className="text-center">
+                    <div className="text-emerald-400 font-bold text-base">{c.total_enviados}</div>
+                    <div className="text-[#7A8FA8] text-[10px]">Enviados</div>
                   </div>
-                  <div style={{ textAlign: "center" }}>
-                    <div style={{ color: "#C9A84C", fontWeight: 700, fontSize: 16 }}>{taxaAbertura}%</div>
-                    <div style={{ color: "#7A8FA8", fontSize: 10 }}>Abertos</div>
+                  <div className="text-center">
+                    <div className="text-[#C9A84C] font-bold text-base">{taxaAbertura}%</div>
+                    <div className="text-[#7A8FA8] text-[10px]">Abertos</div>
                   </div>
-                  <div style={{ textAlign: "center" }}>
-                    <div style={{ color: "#7A8FA8", fontWeight: 600, fontSize: 13 }}>{fmtDate(c.enviada_at ?? c.created_at)}</div>
-                    <div style={{ color: "#7A8FA8", fontSize: 10 }}>{c.enviada_at ? "Enviada" : "Criada"}</div>
+                  <div className="text-center">
+                    <div className="text-[#7A8FA8] font-semibold text-[13px]">{fmtDate(c.enviada_at ?? c.created_at)}</div>
+                    <div className="text-[#7A8FA8] text-[10px]">{c.enviada_at ? "Enviada" : "Criada"}</div>
                   </div>
                 </div>
 
                 {/* Ações */}
-                <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+                <div className="flex gap-2 shrink-0">
                   {c.status === "rascunho" && (
                     <>
                       <button
                         onClick={() => openEditar(c)}
-                        style={{ background: "#162744", border: "1px solid #243A66", borderRadius: 8, padding: "6px 12px", color: "#F0ECE4", fontSize: 12, cursor: "pointer" }}
+                        className="bg-[#162744] border border-[#243A66] rounded-lg px-3 py-1.5 text-[#F0ECE4] text-xs"
                       >
                         Editar
                       </button>
-                      <button
+                      <Button
                         onClick={() => handleDisparar(c)}
                         disabled={c.total_contatos === 0 || disparando === c.id}
-                        style={{
-                          background: c.total_contatos === 0 ? "#243A66" : "#C9A84C",
-                          border: "none", borderRadius: 8, padding: "6px 14px",
-                          color: c.total_contatos === 0 ? "#7A8FA8" : "#09081A",
-                          fontSize: 12, fontWeight: 700, cursor: c.total_contatos === 0 ? "not-allowed" : "pointer",
-                        }}
+                        size="sm"
                       >
                         {disparando === c.id ? "Enviando..." : "▶ Disparar"}
-                      </button>
+                      </Button>
                     </>
                   )}
                   <button
                     onClick={() => handleDelete(c.id, c.nome)}
-                    style={{ background: "none", border: "1px solid #f8717130", borderRadius: 8, padding: "6px 10px", color: "#f87171", fontSize: 12, cursor: "pointer" }}
+                    className="bg-transparent border border-red-400/30 rounded-lg px-2.5 py-1.5 text-red-400 text-xs"
                   >
                     🗑
                   </button>
@@ -323,179 +308,144 @@ export function CampanhasClient() {
       )}
 
       {/* ── Modal Criar/Editar ──────────────────────────────────────────────── */}
-      {showModal && (
-        <div style={{
-          position: "fixed", inset: 0, zIndex: 200,
-          background: "#09081Aee", display: "flex", alignItems: "center", justifyContent: "center",
-        }}
-          onClick={e => { if (e.target === e.currentTarget) setShowModal(false); }}
-        >
-          <div style={{
-            width: "min(900px, 95vw)", maxHeight: "90vh",
-            background: "#111F35", border: "1px solid #243A66", borderRadius: 16,
-            display: "flex", flexDirection: "column", overflow: "hidden",
-          }}>
-            {/* Modal header */}
-            <div style={{ padding: "16px 24px", borderBottom: "1px solid #243A66", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <h3 style={{ color: "#F0ECE4", fontWeight: 700, fontSize: 16, margin: 0 }}>
-                {editando ? "Editar Campanha" : "Nova Campanha"}
-              </h3>
-              <button onClick={() => setShowModal(false)} style={{ background: "none", border: "none", color: "#7A8FA8", fontSize: 20, cursor: "pointer" }}>×</button>
-            </div>
+      <Dialog open={showModal} onOpenChange={setShowModal}>
+        <DialogContent className="max-w-[900px] w-[95vw] max-h-[90vh] flex flex-col p-0 gap-0">
+          <DialogHeader className="px-6 py-4 border-b border-[#243A66]">
+            <DialogTitle>{editando ? "Editar Campanha" : "Nova Campanha"}</DialogTitle>
+          </DialogHeader>
 
-            {/* Campos base */}
-            <div style={{ padding: "16px 24px 0", display: "flex", gap: 12 }}>
-              <div style={{ flex: 1 }}>
-                <label style={{ color: "#7A8FA8", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1 }}>Nome da Campanha</label>
-                <input
-                  value={nome} onChange={e => setNome(e.target.value)}
-                  placeholder="Ex: Prospecção Junho 2026"
-                  style={{ display: "block", width: "100%", marginTop: 4, background: "#162744", border: "1px solid #243A66", borderRadius: 8, padding: "8px 12px", color: "#F0ECE4", fontSize: 13, outline: "none", boxSizing: "border-box" }}
-                />
-              </div>
-              <div style={{ flex: 1 }}>
-                <label style={{ color: "#7A8FA8", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1 }}>Assunto do E-mail</label>
-                <input
-                  value={assunto} onChange={e => setAssunto(e.target.value)}
-                  placeholder="Ex: Oportunidade exclusiva V3 Partners"
-                  style={{ display: "block", width: "100%", marginTop: 4, background: "#162744", border: "1px solid #243A66", borderRadius: 8, padding: "8px 12px", color: "#F0ECE4", fontSize: 13, outline: "none", boxSizing: "border-box" }}
-                />
-              </div>
+          {/* Campos base */}
+          <div className="px-6 pt-4 flex gap-3">
+            <div className="flex-1">
+              <label className="text-[#7A8FA8] text-[11px] font-bold uppercase tracking-wide">Nome da Campanha</label>
+              <input
+                value={nome} onChange={e => setNome(e.target.value)}
+                placeholder="Ex: Prospecção Junho 2026"
+                className="block w-full mt-1 bg-[#162744] border border-[#243A66] rounded-lg px-3 py-2 text-[#F0ECE4] text-[13px] focus:outline-none focus:ring-1 focus:ring-[#C9A84C]/50"
+              />
             </div>
+            <div className="flex-1">
+              <label className="text-[#7A8FA8] text-[11px] font-bold uppercase tracking-wide">Assunto do E-mail</label>
+              <input
+                value={assunto} onChange={e => setAssunto(e.target.value)}
+                placeholder="Ex: Oportunidade exclusiva V3 Partners"
+                className="block w-full mt-1 bg-[#162744] border border-[#243A66] rounded-lg px-3 py-2 text-[#F0ECE4] text-[13px] focus:outline-none focus:ring-1 focus:ring-[#C9A84C]/50"
+              />
+            </div>
+          </div>
 
-            {/* Tabs */}
-            <div style={{ padding: "12px 24px 0", display: "flex", gap: 4, borderBottom: "1px solid #243A66", marginTop: 12 }}>
-              {[{ key: "editor", label: "✏️ Template HTML" }, { key: "preview", label: "👁 Preview" }, { key: "contatos", label: `👥 Contatos ${contatos.length > 0 ? `(${contatos.length})` : ""}` }].map(t => (
+          {/* Tabs */}
+          <div className="px-6 pt-3">
+            <div className="flex items-center gap-1 bg-[#0D1929] border border-[#243A66] rounded-xl p-1 w-fit">
+              {TABS.map(t => (
                 <button
                   key={t.key}
-                  onClick={() => setTab(t.key as "editor" | "preview" | "contatos")}
-                  style={{
-                    background: tab === t.key ? "#162744" : "transparent",
-                    border: `1px solid ${tab === t.key ? "#C9A84C" : "transparent"}`,
-                    borderBottom: "none", borderRadius: "8px 8px 0 0",
-                    padding: "8px 16px", color: tab === t.key ? "#C9A84C" : "#7A8FA8",
-                    fontSize: 12, fontWeight: 600, cursor: "pointer",
-                  }}
+                  onClick={() => setTab(t.key)}
+                  className={tab === t.key
+                    ? "bg-[#C9A84C] text-[#09081A] px-4 py-2 rounded-lg text-xs font-semibold whitespace-nowrap"
+                    : "text-[#7A8FA8] hover:text-[#F0ECE4] px-4 py-2 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap"}
                 >
-                  {t.label}
+                  {t.key === "contatos" ? `${t.label} ${contatos.length > 0 ? `(${contatos.length})` : ""}` : t.label}
                 </button>
               ))}
             </div>
-
-            {/* Tab content */}
-            <div style={{ flex: 1, overflow: "auto", padding: "16px 24px" }}>
-              {tab === "editor" && (
-                <div>
-                  <p style={{ color: "#7A8FA8", fontSize: 12, margin: "0 0 8px" }}>
-                    Use <code style={{ background: "#162744", padding: "1px 6px", borderRadius: 4, color: "#C9A84C" }}>{`{{nome}}`}</code> e <code style={{ background: "#162744", padding: "1px 6px", borderRadius: 4, color: "#C9A84C" }}>{`{{email}}`}</code> para personalizar. O link de opt-out é inserido automaticamente.
-                  </p>
-                  <textarea
-                    value={templateHtml}
-                    onChange={e => setTemplateHtml(e.target.value)}
-                    style={{
-                      width: "100%", height: 380, background: "#0D1928", border: "1px solid #243A66",
-                      borderRadius: 8, padding: 12, color: "#F0ECE4", fontSize: 12,
-                      fontFamily: "monospace", outline: "none", resize: "vertical", boxSizing: "border-box",
-                    }}
-                  />
-                </div>
-              )}
-
-              {tab === "preview" && (
-                <div style={{ border: "1px solid #243A66", borderRadius: 8, overflow: "hidden", background: "#fff" }}>
-                  <iframe
-                    srcDoc={templateHtml.replace(/\{\{nome\}\}/g, "João Silva").replace(/\{\{email\}\}/g, "joao@exemplo.com")}
-                    style={{ width: "100%", height: 420, border: "none" }}
-                    title="Preview"
-                  />
-                </div>
-              )}
-
-              {tab === "contatos" && (
-                <div>
-                  <div style={{ marginBottom: 16, padding: 16, background: "#162744", borderRadius: 10, border: "1px solid #243A66" }}>
-                    <p style={{ color: "#C9A84C", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, margin: "0 0 8px" }}>Importar CSV</p>
-                    <p style={{ color: "#7A8FA8", fontSize: 12, margin: "0 0 12px" }}>
-                      Formatos aceitos: <code style={{ color: "#F0ECE4" }}>email,nome</code> ou apenas <code style={{ color: "#F0ECE4" }}>email</code> — um por linha. Cabeçalho opcional.
-                    </p>
-                    <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                      <button
-                        onClick={() => fileRef.current?.click()}
-                        style={{ background: "#243A66", border: "1px solid #C9A84C", borderRadius: 8, padding: "8px 16px", color: "#C9A84C", fontSize: 12, fontWeight: 700, cursor: "pointer" }}
-                      >
-                        📂 Selecionar arquivo CSV
-                      </button>
-                      <span style={{ color: "#7A8FA8", fontSize: 12 }}>ou cole abaixo</span>
-                    </div>
-                    <input ref={fileRef} type="file" accept=".csv,.txt" style={{ display: "none" }} onChange={handleFileUpload} />
-                    <textarea
-                      value={csvText}
-                      onChange={e => { setCsvText(e.target.value); parseCsv(e.target.value); }}
-                      placeholder={"email,nome\njoao@empresa.com,João Silva\nmaria@empresa.com,Maria Santos"}
-                      style={{
-                        width: "100%", height: 120, marginTop: 10, background: "#0D1928",
-                        border: "1px solid #243A66", borderRadius: 8, padding: 10,
-                        color: "#F0ECE4", fontSize: 12, fontFamily: "monospace", outline: "none",
-                        resize: "vertical", boxSizing: "border-box",
-                      }}
-                    />
-                    {csvErro && <p style={{ color: "#f87171", fontSize: 12, margin: "6px 0 0" }}>⚠ {csvErro}</p>}
-                  </div>
-
-                  {contatos.length > 0 && (
-                    <div>
-                      <p style={{ color: "#4ade80", fontSize: 13, fontWeight: 600, margin: "0 0 10px" }}>
-                        ✓ {contatos.length} contato{contatos.length !== 1 ? "s" : ""} importado{contatos.length !== 1 ? "s" : ""}
-                      </p>
-                      <div style={{ maxHeight: 200, overflowY: "auto", background: "#0D1928", borderRadius: 8, border: "1px solid #243A66" }}>
-                        {contatos.slice(0, 50).map((c, i) => (
-                          <div key={i} style={{ padding: "6px 12px", borderBottom: "1px solid #162744", display: "flex", gap: 12, fontSize: 12 }}>
-                            <span style={{ color: "#C9A84C" }}>{c.email}</span>
-                            {c.nome && <span style={{ color: "#7A8FA8" }}>{c.nome}</span>}
-                          </div>
-                        ))}
-                        {contatos.length > 50 && (
-                          <div style={{ padding: "6px 12px", color: "#7A8FA8", fontSize: 12 }}>
-                            ... e mais {contatos.length - 50} contatos
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {editando && contatos.length === 0 && (
-                    <p style={{ color: "#7A8FA8", fontSize: 12 }}>
-                      Importe um CSV apenas se quiser substituir a lista de contatos atual da campanha.
-                    </p>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* Footer */}
-            <div style={{ padding: "14px 24px", borderTop: "1px solid #243A66", display: "flex", justifyContent: "flex-end", gap: 10 }}>
-              <button
-                onClick={() => setShowModal(false)}
-                style={{ background: "#162744", border: "1px solid #243A66", borderRadius: 8, padding: "8px 18px", color: "#7A8FA8", fontSize: 13, cursor: "pointer" }}
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={handleSave}
-                disabled={saving || !nome.trim() || !assunto.trim()}
-                style={{
-                  background: saving || !nome.trim() || !assunto.trim() ? "#243A66" : "#C9A84C",
-                  border: "none", borderRadius: 8, padding: "8px 22px",
-                  color: saving || !nome.trim() || !assunto.trim() ? "#7A8FA8" : "#09081A",
-                  fontSize: 13, fontWeight: 700, cursor: "pointer",
-                }}
-              >
-                {saving ? "Salvando..." : editando ? "Salvar Alterações" : "Criar Campanha"}
-              </button>
-            </div>
           </div>
-        </div>
-      )}
+
+          {/* Tab content */}
+          <div className="flex-1 overflow-auto px-6 py-4">
+            {tab === "editor" && (
+              <div>
+                <p className="text-[#7A8FA8] text-xs mb-2">
+                  Use <code className="bg-[#162744] px-1.5 py-0.5 rounded text-[#C9A84C]">{`{{nome}}`}</code> e <code className="bg-[#162744] px-1.5 py-0.5 rounded text-[#C9A84C]">{`{{email}}`}</code> para personalizar. O link de opt-out é inserido automaticamente.
+                </p>
+                <textarea
+                  value={templateHtml}
+                  onChange={e => setTemplateHtml(e.target.value)}
+                  className="w-full h-[380px] bg-[#0D1928] border border-[#243A66] rounded-lg p-3 text-[#F0ECE4] text-xs font-mono resize-y focus:outline-none focus:ring-1 focus:ring-[#C9A84C]/50"
+                />
+              </div>
+            )}
+
+            {tab === "preview" && (
+              <div className="border border-[#243A66] rounded-lg overflow-hidden bg-white">
+                <iframe
+                  srcDoc={templateHtml.replace(/\{\{nome\}\}/g, "João Silva").replace(/\{\{email\}\}/g, "joao@exemplo.com")}
+                  className="w-full h-[420px] border-none"
+                  title="Preview"
+                />
+              </div>
+            )}
+
+            {tab === "contatos" && (
+              <div>
+                <div className="mb-4 p-4 bg-[#162744] rounded-xl border border-[#243A66]">
+                  <p className="text-[#C9A84C] text-[11px] font-bold uppercase tracking-wide mb-2">Importar CSV</p>
+                  <p className="text-[#7A8FA8] text-xs mb-3">
+                    Formatos aceitos: <code className="text-[#F0ECE4]">email,nome</code> ou apenas <code className="text-[#F0ECE4]">email</code> — um por linha. Cabeçalho opcional.
+                  </p>
+                  <div className="flex gap-2.5 items-center">
+                    <button
+                      onClick={() => fileRef.current?.click()}
+                      className="bg-[#243A66] border border-[#C9A84C] rounded-lg px-4 py-2 text-[#C9A84C] text-xs font-bold"
+                    >
+                      📂 Selecionar arquivo CSV
+                    </button>
+                    <span className="text-[#7A8FA8] text-xs">ou cole abaixo</span>
+                  </div>
+                  <input ref={fileRef} type="file" accept=".csv,.txt" className="hidden" onChange={handleFileUpload} />
+                  <textarea
+                    value={csvText}
+                    onChange={e => { setCsvText(e.target.value); parseCsv(e.target.value); }}
+                    placeholder={"email,nome\njoao@empresa.com,João Silva\nmaria@empresa.com,Maria Santos"}
+                    className="w-full h-[120px] mt-2.5 bg-[#0D1928] border border-[#243A66] rounded-lg p-2.5 text-[#F0ECE4] text-xs font-mono resize-y focus:outline-none focus:ring-1 focus:ring-[#C9A84C]/50"
+                  />
+                  {csvErro && <p className="text-red-400 text-xs mt-1.5">⚠ {csvErro}</p>}
+                </div>
+
+                {contatos.length > 0 && (
+                  <div>
+                    <p className="text-emerald-400 text-[13px] font-semibold mb-2.5">
+                      ✓ {contatos.length} contato{contatos.length !== 1 ? "s" : ""} importado{contatos.length !== 1 ? "s" : ""}
+                    </p>
+                    <div className="max-h-52 overflow-y-auto bg-[#0D1928] rounded-lg border border-[#243A66]">
+                      {contatos.slice(0, 50).map((c, i) => (
+                        <div key={i} className="px-3 py-1.5 border-b border-[#162744] flex gap-3 text-xs">
+                          <span className="text-[#C9A84C]">{c.email}</span>
+                          {c.nome && <span className="text-[#7A8FA8]">{c.nome}</span>}
+                        </div>
+                      ))}
+                      {contatos.length > 50 && (
+                        <div className="px-3 py-1.5 text-[#7A8FA8] text-xs">
+                          ... e mais {contatos.length - 50} contatos
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {editando && contatos.length === 0 && (
+                  <p className="text-[#7A8FA8] text-xs">
+                    Importe um CSV apenas se quiser substituir a lista de contatos atual da campanha.
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Footer */}
+          <div className="px-6 py-3.5 border-t border-[#243A66] flex justify-end gap-2.5">
+            <button
+              onClick={() => setShowModal(false)}
+              className="bg-[#162744] border border-[#243A66] rounded-lg px-4.5 py-2 text-[#7A8FA8] text-[13px]"
+            >
+              Cancelar
+            </button>
+            <Button onClick={handleSave} disabled={saving || !nome.trim() || !assunto.trim()}>
+              {saving ? "Salvando..." : editando ? "Salvar Alterações" : "Criar Campanha"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
