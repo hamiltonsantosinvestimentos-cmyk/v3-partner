@@ -129,9 +129,21 @@ export async function archiveClickSignSignedDocuments(): Promise<ArchiveResult> 
         }
 
         if (!matched || !matchedAttachment) {
-          orphaned.push({
-            subject: parsed.subject ?? "(sem assunto)",
-            attachmentNames: attachments.map((a) => a.filename ?? "(sem nome)"),
+          const subject = parsed.subject ?? "(sem assunto)";
+          const attachmentNames = attachments.map((a) => a.filename ?? "(sem nome)");
+          orphaned.push({ subject, attachmentNames });
+          // Achado no code review desta feature (14/08/2026): console.warn
+          // dentro de função serverless não é visível pra ninguém no dia a
+          // dia (mesma causa raiz já documentada na auditoria do Credit
+          // Engine, 03/08/2026, que escondeu falhas reais por meses). Grava
+          // em execution_errors, não resolvido por padrão, pra aparecer em
+          // qualquer painel/consulta que já lê essa tabela.
+          await db.from("execution_errors").insert({
+            source: "clicksign-archive",
+            error_type: "unmatched_signature_watcher_email",
+            error_message: `PDF assinado recebido sem correlação a nenhum operation_contracts: assunto "${subject}", anexo(s) ${attachmentNames.join(", ")}`,
+            context: { subject, attachmentNames },
+            resolved: false,
           });
           await client.messageFlagsAdd({ uid: message.uid }, ["\\Seen"], { uid: true });
           continue;
@@ -144,7 +156,13 @@ export async function archiveClickSignSignedDocuments(): Promise<ArchiveResult> 
         });
 
         if (uploadErr) {
-          console.error(`[clicksign-archive] falha ao subir PDF do contrato ${matched.id}:`, uploadErr.message);
+          await db.from("execution_errors").insert({
+            source: "clicksign-archive",
+            error_type: "storage_upload_failed",
+            error_message: `Falha ao subir PDF assinado do contrato ${matched.id} para o Storage: ${uploadErr.message}`,
+            context: { contractId: matched.id, storagePath },
+            resolved: false,
+          });
           continue; // não marca \Seen: tenta de novo na próxima execução
         }
 
