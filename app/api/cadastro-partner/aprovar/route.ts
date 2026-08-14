@@ -14,7 +14,7 @@ async function enviarBoasVindas(email: string, nome: string, plano: string, cart
   if (!resendKey) return; // sem chave, ignora silenciosamente
 
   const planoLabel = plano === "ENTERPRISE" ? "V3 Enterprise" : plano === "PARTNER_PRO" ? "V3 Partner PRO" : plano === "STARTER" ? "V3 Starter" : "V3 Partner";
-  const comissao   = plano === "ENTERPRISE" ? "negociável" : plano === "PARTNER_PRO" ? "50%" : plano === "STARTER" ? "20%" : "30%";
+  const comissao   = plano === "ENTERPRISE" ? "55%" : plano === "PARTNER_PRO" ? "50%" : plano === "STARTER" ? "20%" : "35%";
 
   const html = `<!DOCTYPE html>
 <html lang="pt-BR">
