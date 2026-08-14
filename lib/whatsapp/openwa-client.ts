@@ -50,6 +50,24 @@ export async function sendText(phone: string, text: string): Promise<boolean> {
   return res.ok;
 }
 
+export async function sendImage(phone: string, url: string, caption?: string): Promise<boolean> {
+  const res = await fetch(`${BASE_URL}/api/sessions/${SESSION_ID}/messages/send-image`, {
+    method: "POST",
+    headers: headers(),
+    body: JSON.stringify({ chatId: phoneToChatId(phone), url, caption }),
+  });
+  return res.ok;
+}
+
+export async function sendVideo(phone: string, url: string, caption?: string): Promise<boolean> {
+  const res = await fetch(`${BASE_URL}/api/sessions/${SESSION_ID}/messages/send-video`, {
+    method: "POST",
+    headers: headers(),
+    body: JSON.stringify({ chatId: phoneToChatId(phone), url, caption }),
+  });
+  return res.ok;
+}
+
 export type BulkRecipient = { phone: string; text: string };
 
 export async function sendBulk(

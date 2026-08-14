@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { after } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { notifyAgendamentoSDR } from "@/lib/email";
 import { syncSdrLeadToProspeccao } from "@/lib/sdr-prospeccao-sync";
@@ -53,12 +54,25 @@ export async function POST(req: NextRequest) {
 
       console.log(`[SDR Webhook] Mensagem de ${phone}: ${messageText.substring(0, 80)}`);
 
-      await supabase.from("sdr_conversas").insert({
+      // Idempotência: o OpenWA pode reentregar o mesmo evento (rede, retry) — o id da
+      // mensagem do WhatsApp é estável entre entregas, então um conflito aqui significa
+      // "já processei essa exata mensagem", e paramos sem gerar uma segunda resposta.
+      const waMessageId = data.id ?? null;
+      const { error: insertErr } = await supabase.from("sdr_conversas").insert({
         phone,
         role: "user",
         content: messageText,
         instance,
+        wa_message_id: waMessageId,
       });
+
+      if (insertErr) {
+        if (insertErr.code === "23505") {
+          console.log(`[SDR Webhook] Mensagem ${waMessageId} de ${phone} já processada — ignorando reentrega`);
+          return NextResponse.json({ ok: true });
+        }
+        console.error("[SDR Webhook] Erro ao salvar mensagem:", insertErr);
+      }
 
       // Cria/atualiza registro de lead com preview da última mensagem
       await supabase.from("sdr_leads").upsert({
@@ -80,7 +94,12 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ ok: true });
       }
 
-      await processarMensagemSDR(phone, messageText, instance);
+      // Responde ao OpenWA imediatamente (evita timeout/retry, que era a causa das
+      // respostas duplicadas) — a IA gera e envia a resposta em segundo plano, mantendo
+      // o delay humanizado sem bloquear o webhook.
+      after(() => processarMensagemSDR(phone, messageText, instance).catch(e =>
+        console.error("[SDR Webhook] Erro ao processar mensagem (background):", e)
+      ));
     }
 
     return NextResponse.json({ ok: true });
@@ -295,8 +314,8 @@ async function processarMensagemSDR(phone: string, mensagem: string, instance: s
       return;
     }
 
-    // Delay humanizado: tempo de "leitura" antes de começar a responder (1,5-3s)
-    const delayLeitura = 1500 + Math.floor(Math.random() * 1500);
+    // Delay humanizado: tempo de "leitura" antes de começar a responder (3-6s)
+    const delayLeitura = 3000 + Math.floor(Math.random() * 3000);
     await new Promise(r => setTimeout(r, delayLeitura));
 
     const { default: Anthropic } = await import("@anthropic-ai/sdk");
