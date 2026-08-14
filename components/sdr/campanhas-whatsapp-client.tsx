@@ -2,6 +2,10 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import * as XLSX from "xlsx";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { QuickReplyOptionsEditor, DEFAULT_QUICK_REPLY_OPTIONS } from "./quick-reply-options-editor";
+import type { QuickReplyOption } from "@/lib/whatsapp/quick-reply";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -15,6 +19,7 @@ type Campanha = {
   created_at: string;
   media_url: string | null;
   media_type: "image" | "video" | null;
+  quick_reply_options: QuickReplyOption[] | null;
 };
 
 type Contato = {
@@ -56,17 +61,17 @@ function isValidPhonePreview(phone: string) {
   return digits.length >= 10 && digits.length <= 13;
 }
 
-const STATUS_LABELS: Record<Campanha["status"], { label: string; color: string }> = {
-  rascunho:          { label: "Rascunho",          color: "#7A8FA8" },
-  pronta_para_envio: { label: "Pronta p/ envio",   color: "#C9A84C" },
-  pausada:           { label: "Pausada",           color: "#F59E0B" },
+const STATUS_LABELS: Record<Campanha["status"], { label: string; text: string; bg: string; border: string }> = {
+  rascunho:          { label: "Rascunho",        text: "text-[#7A8FA8]", bg: "bg-[#7A8FA8]/10", border: "border-[#7A8FA8]/30" },
+  pronta_para_envio: { label: "Pronta p/ envio", text: "text-[#C9A84C]", bg: "bg-[#C9A84C]/10", border: "border-[#C9A84C]/30" },
+  pausada:           { label: "Pausada",         text: "text-amber-400", bg: "bg-amber-400/10", border: "border-amber-400/30" },
 };
 
-const CONTATO_STATUS: Record<Contato["status"], { label: string; color: string }> = {
-  pendente: { label: "Pendente", color: "#60A5FA" },
-  invalido: { label: "Inválido", color: "#EF4444" },
-  enviado:  { label: "Enviado",  color: "#34D399" },
-  erro:     { label: "Erro",     color: "#EF4444" },
+const CONTATO_STATUS: Record<Contato["status"], { label: string; text: string; bg: string }> = {
+  pendente: { label: "Pendente", text: "text-blue-400",    bg: "bg-blue-400/10" },
+  invalido: { label: "Inválido", text: "text-red-400",     bg: "bg-red-400/10" },
+  enviado:  { label: "Enviado",  text: "text-emerald-400", bg: "bg-emerald-400/10" },
+  erro:     { label: "Erro",     text: "text-red-400",     bg: "bg-red-400/10" },
 };
 
 // ─── Componente ─────────────────────────────────────────────────────────────
@@ -86,6 +91,8 @@ export function CampanhasWhatsappClient() {
   const [disparoErro, setDisparoErro] = useState<string | null>(null);
   const [uploadingMidia, setUploadingMidia] = useState(false);
   const [midiaError, setMidiaError] = useState<string | null>(null);
+  const [qrEnabled, setQrEnabled] = useState(false);
+  const [qrDraft, setQrDraft] = useState<QuickReplyOption[]>(DEFAULT_QUICK_REPLY_OPTIONS);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const midiaInputRef = useRef<HTMLInputElement>(null);
 
@@ -110,6 +117,17 @@ export function CampanhasWhatsappClient() {
   useEffect(() => { loadCampanhas(); }, [loadCampanhas]);
   useEffect(() => { if (selectedId) loadDetalhe(selectedId); else setContatos([]); }, [selectedId, loadDetalhe]);
 
+  // Reseta o rascunho de opções rápidas ao trocar de campanha (ou ao recarregar a lista)
+  useEffect(() => {
+    if (selected?.quick_reply_options?.length) {
+      setQrEnabled(true);
+      setQrDraft(selected.quick_reply_options);
+    } else {
+      setQrEnabled(false);
+      setQrDraft(DEFAULT_QUICK_REPLY_OPTIONS);
+    }
+  }, [selectedId, campanhas]); // eslint-disable-line react-hooks/exhaustive-deps
+
   async function criarCampanha() {
     if (!novoNome.trim()) return;
     const res = await fetch("/api/sdr/campanhas-whatsapp", {
@@ -123,7 +141,10 @@ export function CampanhasWhatsappClient() {
     if (res.campanha?.id) setSelectedId(res.campanha.id);
   }
 
-  async function salvarCampo(campo: "mensagem_template" | "intervalo_segundos" | "status", valor: string | number) {
+  async function salvarCampo(
+    campo: "mensagem_template" | "intervalo_segundos" | "status" | "quick_reply_options",
+    valor: string | number | QuickReplyOption[] | null
+  ) {
     if (!selected) return;
     setCampanhas(prev => prev.map(c => c.id === selected.id ? { ...c, [campo]: valor } as Campanha : c));
     await fetch(`/api/sdr/campanhas-whatsapp/${selected.id}`, {
@@ -131,6 +152,15 @@ export function CampanhasWhatsappClient() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ [campo]: valor }),
     }).catch(() => {});
+  }
+
+  function toggleQuickReply(enabled: boolean) {
+    setQrEnabled(enabled);
+    if (!enabled) {
+      salvarCampo("quick_reply_options", null);
+    } else if (!qrDraft.some(o => o.label.trim())) {
+      setQrDraft(DEFAULT_QUICK_REPLY_OPTIONS);
+    }
   }
 
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -226,44 +256,38 @@ export function CampanhasWhatsappClient() {
   }
 
   return (
-    <div style={{ display: "flex", height: "100%", overflow: "hidden" }}>
+    <div className="flex h-full overflow-hidden">
       {/* ── Lista de campanhas ── */}
-      <div style={{ width: 280, borderRight: "1px solid #243A66", display: "flex", flexDirection: "column", overflow: "hidden" }}>
-        <div style={{ padding: 14, borderBottom: "1px solid #243A66" }}>
-          <button
-            onClick={() => setShowNovaModal(true)}
-            style={{
-              width: "100%", background: "#C9A84C", border: "none", borderRadius: 8,
-              padding: "8px 12px", color: "#09081A", fontWeight: 700, fontSize: 12, cursor: "pointer",
-            }}
-          >
+      <div className="w-70 border-r border-[#243A66] flex flex-col overflow-hidden" style={{ width: 280 }}>
+        <div className="p-3.5 border-b border-[#243A66]">
+          <Button onClick={() => setShowNovaModal(true)} size="sm" className="w-full">
             + Nova Fila de Envio
-          </button>
+          </Button>
         </div>
-        <div style={{ flex: 1, overflowY: "auto" }}>
+        <div className="flex-1 overflow-y-auto">
           {loading ? (
-            <div style={{ padding: 20, textAlign: "center", color: "#7A8FA8", fontSize: 12 }}>Carregando...</div>
+            <div className="p-5 text-center text-[#7A8FA8] text-xs">Carregando...</div>
           ) : campanhas.length === 0 ? (
-            <div style={{ padding: 20, textAlign: "center", color: "#7A8FA8", fontSize: 12 }}>Nenhuma fila criada ainda.</div>
+            <div className="p-5 text-center text-[#7A8FA8] text-xs">Nenhuma fila criada ainda.</div>
           ) : campanhas.map(c => {
             const st = STATUS_LABELS[c.status];
             return (
               <div
                 key={c.id}
                 onClick={() => setSelectedId(c.id)}
-                style={{
-                  padding: "12px 14px", cursor: "pointer",
-                  background: selectedId === c.id ? "#162744" : "transparent",
-                  borderLeft: selectedId === c.id ? "3px solid #C9A84C" : "3px solid transparent",
-                  borderBottom: "1px solid #162744",
-                }}
+                className={`px-3.5 py-3 cursor-pointer border-b border-[#162744] ${selectedId === c.id ? "bg-[#162744] border-l-[3px] border-l-[#C9A84C]" : "border-l-[3px] border-l-transparent hover:bg-[#162744]/50"}`}
               >
-                <div style={{ color: "#F0ECE4", fontWeight: 600, fontSize: 13, marginBottom: 4 }}>{c.nome}</div>
-                <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                  <span style={{ fontSize: 9, fontWeight: 700, padding: "2px 6px", borderRadius: 4, background: `${st.color}20`, color: st.color, textTransform: "uppercase" }}>
+                <div className="text-[#F0ECE4] font-semibold text-[13px] mb-1">{c.nome}</div>
+                <div className="flex gap-1.5 items-center">
+                  <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase border ${st.bg} ${st.text} ${st.border}`}>
                     {st.label}
                   </span>
-                  <span style={{ fontSize: 11, color: "#7A8FA8" }}>{c.total_contatos} contato{c.total_contatos !== 1 ? "s" : ""}</span>
+                  <span className="text-[11px] text-[#7A8FA8]">{c.total_contatos} contato{c.total_contatos !== 1 ? "s" : ""}</span>
+                  {c.quick_reply_options?.length ? (
+                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded border bg-blue-400/10 text-blue-400 border-blue-400/30">
+                      Opções
+                    </span>
+                  ) : null}
                 </div>
               </div>
             );
@@ -272,75 +296,63 @@ export function CampanhasWhatsappClient() {
       </div>
 
       {/* ── Detalhe da campanha ── */}
-      <div style={{ flex: 1, overflowY: "auto", padding: 24 }}>
+      <div className="flex-1 overflow-y-auto p-6">
         {!selected ? (
-          <div style={{ color: "#7A8FA8", fontSize: 13, textAlign: "center", marginTop: 60 }}>
+          <div className="text-[#7A8FA8] text-sm text-center mt-16">
             Selecione uma fila à esquerda ou crie uma nova.
           </div>
         ) : (
-          <div style={{ maxWidth: 780, display: "flex", flexDirection: "column", gap: 18 }}>
+          <div className="max-w-3xl flex flex-col gap-4">
             {/* Painel de disparo — envio real via OpenWA */}
-            <div style={{
-              background: "#111F35", border: "1px solid #243A66", borderRadius: 10,
-              padding: "14px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
-            }}>
-              <div style={{ fontSize: 12, color: "#7A8FA8", lineHeight: 1.5 }}>
+            <div className="bg-[#111F35] border border-[#243A66] rounded-xl px-4 py-3.5 flex items-center justify-between gap-3">
+              <div className="text-xs text-[#7A8FA8] leading-relaxed">
                 {selected.status !== "pronta_para_envio" ? (
-                  <>Mude o status para <strong style={{ color: "#C9A84C" }}>Pronta p/ envio</strong> para poder disparar.</>
+                  <>Mude o status para <strong className="text-[#C9A84C]">Pronta p/ envio</strong> para poder disparar.</>
                 ) : pendentes === 0 ? (
                   <>Nenhum contato pendente — carregue uma planilha ou aguarde um disparo anterior.</>
                 ) : (
-                  <><strong style={{ color: "#F0ECE4" }}>{pendentes}</strong> contato{pendentes !== 1 ? "s" : ""} pendente{pendentes !== 1 ? "s" : ""}, um a cada <strong style={{ color: "#F0ECE4" }}>{selected.intervalo_segundos}s</strong>. Envio real via WhatsApp — não dá pra desfazer.</>
+                  <><strong className="text-[#F0ECE4]">{pendentes}</strong> contato{pendentes !== 1 ? "s" : ""} pendente{pendentes !== 1 ? "s" : ""}, um a cada <strong className="text-[#F0ECE4]">{selected.intervalo_segundos}s</strong>. Envio real via WhatsApp — não dá pra desfazer.</>
                 )}
               </div>
-              <button
+              <Button
                 onClick={dispararFila}
                 disabled={disparando || selected.status !== "pronta_para_envio" || pendentes === 0}
-                style={{
-                  background: disparando ? "#243A66" : "#C9A84C", border: "none", borderRadius: 8,
-                  padding: "8px 16px", color: disparando ? "#7A8FA8" : "#09081A", fontWeight: 700, fontSize: 12,
-                  cursor: (disparando || selected.status !== "pronta_para_envio" || pendentes === 0) ? "not-allowed" : "pointer",
-                  opacity: (selected.status !== "pronta_para_envio" || pendentes === 0) ? 0.5 : 1,
-                  flexShrink: 0, whiteSpace: "nowrap",
-                }}
+                size="sm"
+                className="shrink-0 whitespace-nowrap"
               >
                 {disparando ? "Disparando..." : "🚀 Disparar"}
-              </button>
+              </Button>
             </div>
             {disparoResultado && (
-              <div style={{ background: "#0F2A1A", border: "1px solid rgba(52,211,153,0.4)", borderRadius: 10, padding: "10px 16px", color: "#34D399", fontSize: 12 }}>
+              <div className="bg-emerald-950/40 border border-emerald-500/40 rounded-xl px-4 py-2.5 text-emerald-400 text-xs">
                 ✅ {disparoResultado.enviados} enviado{disparoResultado.enviados !== 1 ? "s" : ""}
-                {disparoResultado.erros > 0 && <span style={{ color: "#EF4444" }}> · {disparoResultado.erros} com erro</span>}
+                {disparoResultado.erros > 0 && <span className="text-red-400"> · {disparoResultado.erros} com erro</span>}
                 {disparoResultado.restantes > 0 && <span> · {disparoResultado.restantes} restante{disparoResultado.restantes !== 1 ? "s" : ""} (clique em Disparar de novo pra continuar)</span>}
               </div>
             )}
             {disparoErro && (
-              <div style={{ background: "#2A1414", border: "1px solid rgba(239,68,68,0.4)", borderRadius: 10, padding: "10px 16px", color: "#EF4444", fontSize: 12 }}>
+              <div className="bg-red-950/40 border border-red-500/40 rounded-xl px-4 py-2.5 text-red-400 text-xs">
                 ⚠️ {disparoErro}
               </div>
             )}
 
             {/* Nome + status */}
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <h2 style={{ color: "#F0ECE4", fontSize: 18, fontWeight: 700, margin: 0 }}>{selected.nome}</h2>
+            <div className="flex justify-between items-center">
+              <h2 className="text-[#F0ECE4] text-lg font-bold">{selected.nome}</h2>
               <select
                 value={selected.status}
                 onChange={e => salvarCampo("status", e.target.value)}
-                style={{
-                  background: `${STATUS_LABELS[selected.status].color}20`, color: STATUS_LABELS[selected.status].color,
-                  border: `1px solid ${STATUS_LABELS[selected.status].color}40`, borderRadius: 20,
-                  padding: "4px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer", outline: "none",
-                }}
+                className={`rounded-full px-2.5 py-1 text-[11px] font-bold border focus:outline-none ${STATUS_LABELS[selected.status].bg} ${STATUS_LABELS[selected.status].text} ${STATUS_LABELS[selected.status].border}`}
               >
                 {Object.entries(STATUS_LABELS).map(([v, s]) => (
-                  <option key={v} value={v} style={{ background: "#162744", color: "#F0ECE4" }}>{s.label}</option>
+                  <option key={v} value={v} className="bg-[#162744] text-[#F0ECE4]">{s.label}</option>
                 ))}
               </select>
             </div>
 
             {/* Mensagem template */}
             <div>
-              <label style={{ display: "block", color: "#7A8FA8", fontSize: 10, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", marginBottom: 6 }}>
+              <label className="block text-[#7A8FA8] text-[10px] font-bold tracking-wide uppercase mb-1.5">
                 Mensagem (use {"{{nome}}"} para personalizar)
               </label>
               <textarea
@@ -348,29 +360,27 @@ export function CampanhasWhatsappClient() {
                 onBlur={e => salvarCampo("mensagem_template", e.target.value)}
                 rows={4}
                 placeholder="Olá {{nome}}, tudo bem? ..."
-                style={{
-                  width: "100%", background: "#111F35", border: "1px solid #243A66", borderRadius: 8,
-                  padding: 10, color: "#F0ECE4", fontSize: 13, resize: "vertical", outline: "none",
-                }}
+                className="w-full bg-[#111F35] border border-[#243A66] rounded-lg p-2.5 text-[#F0ECE4] text-[13px] resize-y focus:outline-none focus:ring-1 focus:ring-[#C9A84C]/50"
               />
             </div>
 
             {/* Mídia (imagem ou vídeo) */}
             <div>
-              <label style={{ display: "block", color: "#7A8FA8", fontSize: 10, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", marginBottom: 6 }}>
+              <label className="block text-[#7A8FA8] text-[10px] font-bold tracking-wide uppercase mb-1.5">
                 Imagem ou vídeo (opcional — a mensagem vira a legenda)
               </label>
               {selected.media_url ? (
-                <div style={{ display: "flex", alignItems: "center", gap: 10, background: "#111F35", border: "1px solid #243A66", borderRadius: 8, padding: 10 }}>
+                <div className="flex items-center gap-2.5 bg-[#111F35] border border-[#243A66] rounded-lg p-2.5">
                   {selected.media_type === "video" ? (
-                    <video src={selected.media_url} style={{ width: 64, height: 64, objectFit: "cover", borderRadius: 6 }} muted />
+                    <video src={selected.media_url} className="w-16 h-16 object-cover rounded-md" muted />
                   ) : (
-                    <img src={selected.media_url} alt="" style={{ width: 64, height: 64, objectFit: "cover", borderRadius: 6 }} />
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={selected.media_url} alt="" className="w-16 h-16 object-cover rounded-md" />
                   )}
-                  <span style={{ flex: 1, color: "#F0ECE4", fontSize: 12 }}>
+                  <span className="flex-1 text-[#F0ECE4] text-xs">
                     {selected.media_type === "video" ? "🎬 Vídeo anexado" : "🖼️ Imagem anexada"}
                   </span>
-                  <button onClick={removerMidia} style={{ background: "#243A66", border: "none", borderRadius: 8, padding: "6px 12px", color: "#7A8FA8", fontSize: 12, cursor: "pointer" }}>
+                  <button onClick={removerMidia} className="bg-[#243A66] rounded-lg px-3 py-1.5 text-[#7A8FA8] text-xs">
                     Remover
                   </button>
                 </div>
@@ -378,22 +388,44 @@ export function CampanhasWhatsappClient() {
                 <button
                   onClick={() => midiaInputRef.current?.click()}
                   disabled={uploadingMidia}
-                  style={{
-                    background: "#162744", border: "1px dashed #243A66", borderRadius: 8,
-                    padding: "10px 14px", color: "#7A8FA8", fontSize: 12, fontWeight: 600, cursor: "pointer",
-                    width: "100%", opacity: uploadingMidia ? 0.6 : 1,
-                  }}
+                  className={`bg-[#162744] border border-dashed border-[#243A66] rounded-lg px-3.5 py-2.5 text-[#7A8FA8] text-xs font-semibold w-full ${uploadingMidia ? "opacity-60" : ""}`}
                 >
                   {uploadingMidia ? "Enviando..." : "📎 Anexar imagem ou vídeo"}
                 </button>
               )}
-              <input ref={midiaInputRef} type="file" accept="image/*,video/*" onChange={handleMidiaChange} style={{ display: "none" }} />
-              {midiaError && <p style={{ color: "#EF4444", fontSize: 12, marginTop: 6 }}>{midiaError}</p>}
+              <input ref={midiaInputRef} type="file" accept="image/*,video/*" onChange={handleMidiaChange} className="hidden" />
+              {midiaError && <p className="text-red-400 text-xs mt-1.5">{midiaError}</p>}
+            </div>
+
+            {/* Botões de resposta rápida */}
+            <div className="border-t border-[#243A66] pt-4">
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-[10px] font-bold uppercase tracking-widest text-[#C9A84C]">
+                  Botões de resposta rápida (opcional)
+                </label>
+                <button
+                  onClick={() => toggleQuickReply(!qrEnabled)}
+                  className={`text-[11px] font-semibold px-2.5 py-1 rounded-full border ${qrEnabled ? "bg-[#C9A84C]/10 border-[#C9A84C] text-[#C9A84C]" : "bg-[#111F35] border-[#243A66] text-[#7A8FA8]"}`}
+                >
+                  {qrEnabled ? "Ativado" : "Desativado"}
+                </button>
+              </div>
+              {qrEnabled && (
+                <div className="bg-[#111F35] border border-[#243A66] rounded-xl p-3 space-y-2">
+                  <p className="text-[11px] text-[#7A8FA8]">
+                    Anexadas ao final da mensagem em todos os disparos desta fila (o WhatsApp não permite botão nativo fora da API oficial da Meta — o lead responde digitando o número da opção).
+                  </p>
+                  <QuickReplyOptionsEditor options={qrDraft} onChange={setQrDraft} />
+                  <Button size="sm" onClick={() => salvarCampo("quick_reply_options", qrDraft.filter(o => o.label.trim()))}>
+                    Salvar opções
+                  </Button>
+                </div>
+              )}
             </div>
 
             {/* Intervalo */}
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <label style={{ color: "#7A8FA8", fontSize: 10, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase" }}>
+            <div className="flex items-center gap-2.5">
+              <label className="text-[#7A8FA8] text-[10px] font-bold tracking-wide uppercase">
                 Intervalo entre envios
               </label>
               <input
@@ -401,80 +433,74 @@ export function CampanhasWhatsappClient() {
                 min={5}
                 defaultValue={selected.intervalo_segundos}
                 onBlur={e => salvarCampo("intervalo_segundos", Math.max(5, parseInt(e.target.value) || 30))}
-                style={{
-                  width: 80, background: "#111F35", border: "1px solid #243A66", borderRadius: 8,
-                  padding: "6px 10px", color: "#F0ECE4", fontSize: 13, outline: "none",
-                }}
+                className="w-20 bg-[#111F35] border border-[#243A66] rounded-lg px-2.5 py-1.5 text-[#F0ECE4] text-[13px] focus:outline-none focus:ring-1 focus:ring-[#C9A84C]/50"
               />
-              <span style={{ color: "#7A8FA8", fontSize: 12 }}>segundos</span>
+              <span className="text-[#7A8FA8] text-xs">segundos</span>
             </div>
 
             {/* Upload */}
-            <div style={{ borderTop: "1px solid #243A66", paddingTop: 16 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                <span style={{ color: "#F0ECE4", fontWeight: 700, fontSize: 13 }}>
+            <div className="border-t border-[#243A66] pt-4">
+              <div className="flex justify-between items-center mb-2.5">
+                <span className="text-[#F0ECE4] font-bold text-[13px]">
                   Contatos na fila ({contatos.length})
                 </span>
                 <button
                   onClick={() => fileInputRef.current?.click()}
-                  style={{
-                    background: "#162744", border: "1px solid #C9A84C", borderRadius: 8,
-                    padding: "6px 14px", color: "#C9A84C", fontSize: 12, fontWeight: 600, cursor: "pointer",
-                  }}
+                  className="bg-[#162744] border border-[#C9A84C] rounded-lg px-3.5 py-1.5 text-[#C9A84C] text-xs font-semibold"
                 >
                   📎 Carregar Excel (.xlsx, .csv)
                 </button>
-                <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleFileChange} style={{ display: "none" }} />
+                <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleFileChange} className="hidden" />
               </div>
-              {parseError && <p style={{ color: "#EF4444", fontSize: 12 }}>{parseError}</p>}
+              {parseError && <p className="text-red-400 text-xs">{parseError}</p>}
 
               {/* Preview antes de confirmar */}
               {preview && (
-                <div style={{ background: "#111F35", border: "1px solid #243A66", borderRadius: 10, padding: 14, marginBottom: 12 }}>
-                  <p style={{ color: "#F0ECE4", fontSize: 12, marginBottom: 8 }}>
+                <div className="bg-[#111F35] border border-[#243A66] rounded-xl p-3.5 mb-3">
+                  <p className="text-[#F0ECE4] text-xs mb-2">
                     {preview.length} linha{preview.length !== 1 ? "s" : ""} lida{preview.length !== 1 ? "s" : ""} —{" "}
-                    <span style={{ color: "#34D399" }}>{validosNoPreview} válido{validosNoPreview !== 1 ? "s" : ""}</span>
+                    <span className="text-emerald-400">{validosNoPreview} válido{validosNoPreview !== 1 ? "s" : ""}</span>
                     {preview.length - validosNoPreview > 0 && (
-                      <span style={{ color: "#EF4444" }}> · {preview.length - validosNoPreview} inválido{preview.length - validosNoPreview !== 1 ? "s" : ""}</span>
+                      <span className="text-red-400"> · {preview.length - validosNoPreview} inválido{preview.length - validosNoPreview !== 1 ? "s" : ""}</span>
                     )}
                   </p>
-                  <div style={{ maxHeight: 160, overflowY: "auto", marginBottom: 10 }}>
+                  <div className="max-h-40 overflow-y-auto mb-2.5">
                     {preview.slice(0, 50).map((p, i) => {
                       const valido = isValidPhonePreview(p.phone);
                       return (
-                        <div key={i} style={{ display: "flex", gap: 10, fontSize: 11, padding: "3px 0", color: valido ? "#F0ECE4" : "#EF4444" }}>
-                          <span style={{ width: 140 }}>{p.phone}</span>
-                          <span style={{ color: "#7A8FA8" }}>{p.nome ?? "—"}</span>
+                        <div key={i} className={`flex gap-2.5 text-[11px] py-0.5 ${valido ? "text-[#F0ECE4]" : "text-red-400"}`}>
+                          <span className="w-36">{p.phone}</span>
+                          <span className="text-[#7A8FA8]">{p.nome ?? "—"}</span>
                         </div>
                       );
                     })}
-                    {preview.length > 50 && <p style={{ color: "#7A8FA8", fontSize: 11 }}>+ {preview.length - 50} outras...</p>}
+                    {preview.length > 50 && <p className="text-[#7A8FA8] text-[11px]">+ {preview.length - 50} outras...</p>}
                   </div>
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <button onClick={() => setPreview(null)} style={{ background: "#243A66", border: "none", borderRadius: 8, padding: "6px 14px", color: "#7A8FA8", fontSize: 12, cursor: "pointer" }}>
+                  <div className="flex gap-2">
+                    <button onClick={() => setPreview(null)} className="bg-[#243A66] rounded-lg px-3.5 py-1.5 text-[#7A8FA8] text-xs">
                       Cancelar
                     </button>
-                    <button onClick={confirmarUpload} disabled={uploading} style={{ background: "#C9A84C", border: "none", borderRadius: 8, padding: "6px 14px", color: "#09081A", fontWeight: 700, fontSize: 12, cursor: "pointer", opacity: uploading ? 0.6 : 1 }}>
+                    <Button size="sm" onClick={confirmarUpload} disabled={uploading}>
                       {uploading ? "Adicionando..." : `Adicionar ${preview.length} à fila`}
-                    </button>
+                    </Button>
                   </div>
                 </div>
               )}
 
               {/* Lista de contatos já na fila */}
-              <div style={{ maxHeight: 320, overflowY: "auto" }}>
+              <div className="max-h-80 overflow-y-auto">
                 {contatos.length === 0 ? (
-                  <p style={{ color: "#7A8FA8", fontSize: 12, textAlign: "center", padding: 16 }}>Nenhum contato carregado ainda.</p>
+                  <p className="text-[#7A8FA8] text-xs text-center py-4">Nenhum contato carregado ainda.</p>
                 ) : contatos.map(c => {
                   const cs = CONTATO_STATUS[c.status];
                   return (
-                    <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 0", borderBottom: "1px solid #162744" }}>
-                      <span style={{ fontSize: 9, fontWeight: 700, padding: "2px 6px", borderRadius: 4, background: `${cs.color}20`, color: cs.color, textTransform: "uppercase", flexShrink: 0 }}>
+                    <div key={c.id} className="flex items-center gap-2.5 py-1.5 border-b border-[#162744]">
+                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase shrink-0 ${cs.bg} ${cs.text}`}>
                         {cs.label}
                       </span>
-                      <span style={{ color: "#F0ECE4", fontSize: 12, width: 150 }}>{c.phone}</span>
-                      <span style={{ color: "#7A8FA8", fontSize: 12, flex: 1 }}>{c.nome ?? "—"}</span>
-                      <button onClick={() => removerContato(c.id)} title="Remover" style={{ background: "none", border: "none", color: "#7A8FA8", cursor: "pointer", fontSize: 14 }}>
+                      <span className="text-[#F0ECE4] text-xs" style={{ width: 150 }}>{c.phone}</span>
+                      <span className="text-[#7A8FA8] text-xs flex-1">{c.nome ?? "—"}</span>
+                      <button onClick={() => removerContato(c.id)} title="Remover" className="text-[#7A8FA8] hover:text-red-400 text-sm">
                         ×
                       </button>
                     </div>
@@ -487,32 +513,29 @@ export function CampanhasWhatsappClient() {
       </div>
 
       {/* Modal nova campanha */}
-      {showNovaModal && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", display: "flex", alignItems: "flex-start", justifyContent: "center", paddingTop: 100, zIndex: 90 }}>
-          <div style={{ background: "#111F35", border: "1px solid #243A66", borderRadius: 16, padding: 20, width: 360 }}>
-            <h3 style={{ color: "#F0ECE4", fontSize: 15, fontWeight: 700, marginBottom: 14 }}>Nova Fila de Envio</h3>
-            <input
-              autoFocus
-              value={novoNome}
-              onChange={e => setNovoNome(e.target.value)}
-              onKeyDown={e => { if (e.key === "Enter") criarCampanha(); }}
-              placeholder="Nome da fila (ex: Recrutamento SP - Ago/26)"
-              style={{
-                width: "100%", background: "#162744", border: "1px solid #243A66", borderRadius: 8,
-                padding: "8px 12px", color: "#F0ECE4", fontSize: 13, outline: "none", marginBottom: 14,
-              }}
-            />
-            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-              <button onClick={() => setShowNovaModal(false)} style={{ background: "#243A66", border: "none", borderRadius: 8, padding: "8px 14px", color: "#7A8FA8", fontSize: 12, cursor: "pointer" }}>
-                Cancelar
-              </button>
-              <button onClick={criarCampanha} disabled={!novoNome.trim()} style={{ background: "#C9A84C", border: "none", borderRadius: 8, padding: "8px 14px", color: "#09081A", fontWeight: 700, fontSize: 12, cursor: "pointer", opacity: novoNome.trim() ? 1 : 0.5 }}>
-                Criar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <Dialog open={showNovaModal} onOpenChange={setShowNovaModal}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Nova Fila de Envio</DialogTitle>
+          </DialogHeader>
+          <input
+            autoFocus
+            value={novoNome}
+            onChange={e => setNovoNome(e.target.value)}
+            onKeyDown={e => { if (e.key === "Enter") criarCampanha(); }}
+            placeholder="Nome da fila (ex: Recrutamento SP - Ago/26)"
+            className="w-full bg-[#162744] border border-[#243A66] rounded-lg px-3 py-2 text-[#F0ECE4] text-[13px] focus:outline-none focus:ring-1 focus:ring-[#C9A84C]/50"
+          />
+          <DialogFooter>
+            <button onClick={() => setShowNovaModal(false)} className="bg-[#243A66] rounded-lg px-3.5 py-2 text-[#7A8FA8] text-xs">
+              Cancelar
+            </button>
+            <Button size="sm" onClick={criarCampanha} disabled={!novoNome.trim()}>
+              Criar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

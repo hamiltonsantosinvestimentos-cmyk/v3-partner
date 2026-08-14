@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { sendText, sendImage, sendVideo, getSessionStatus } from "@/lib/whatsapp/openwa-client";
+import { formatQuickReplyBlock, type QuickReplyOption } from "@/lib/whatsapp/quick-reply";
 
 // Vercel Pro permite até 300s em funções Node — um disparo grande pode ser
 // interrompido no meio; como cada contato só é reprocessado se ainda estiver
@@ -63,13 +64,17 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   }
 
   const intervaloMs = Math.max(5, campanha.intervalo_segundos ?? 30) * 1000;
+  const quickReplyOptions = (campanha.quick_reply_options as QuickReplyOption[] | null) ?? null;
 
   let enviados = 0;
   let erros = 0;
 
   for (let i = 0; i < pendentes.length; i++) {
     const contato = pendentes[i];
-    const mensagem = renderTemplate(campanha.mensagem_template, contato.nome);
+    const mensagemBase = renderTemplate(campanha.mensagem_template, contato.nome);
+    const mensagem = quickReplyOptions?.length
+      ? `${mensagemBase}\n\n${formatQuickReplyBlock(quickReplyOptions)}`
+      : mensagemBase;
 
     try {
       const ok = campanha.media_url
@@ -80,6 +85,14 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
       await db.from("sdr_campanha_whatsapp_contatos")
         .update({ status: ok ? "enviado" : "erro", erro_detalhe: ok ? null : "Falha no envio via OpenWA" })
         .eq("id", contato.id);
+      // Registra em sdr_conversas pra o webhook conseguir resolver a resposta numérica do
+      // lead contra as opções desta campanha (o mesmo mecanismo do chat 1:1 e da IA).
+      if (ok && quickReplyOptions?.length) {
+        await db.from("sdr_conversas").insert({
+          phone: contato.phone, role: "assistant", content: mensagem, instance: "openwa",
+          quick_reply_options: quickReplyOptions,
+        });
+      }
       if (ok) enviados++; else erros++;
     } catch (e) {
       await db.from("sdr_campanha_whatsapp_contatos")
