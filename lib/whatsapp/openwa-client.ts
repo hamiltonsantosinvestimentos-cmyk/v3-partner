@@ -9,9 +9,17 @@ function headers() {
   };
 }
 
+// Números BR sem DDI vêm com 10 dígitos (DDD + fixo) ou 11 (DDD + 9 + celular) — sem o 55
+// na frente, o WhatsApp resolve pra um chatId que não existe e o envio falha em silêncio
+// (a API do OpenWA retorna ok mesmo assim). Números com 12-13 dígitos já trazem o DDI.
+function normalizeBrazilianPhone(digits: string): string {
+  if (digits.length === 10 || digits.length === 11) return `55${digits}`;
+  return digits;
+}
+
 // OpenWA chatId format: "<digits>@c.us" (individual) or "<digits>@g.us" (group)
 export function phoneToChatId(phone: string): string {
-  const digits = phone.replace(/\D/g, "");
+  const digits = normalizeBrazilianPhone(phone.replace(/\D/g, ""));
   return `${digits}@c.us`;
 }
 
