@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
+import type { QuickReplyOption } from "@/lib/whatsapp/quick-reply";
 
 const ADMIN_ROLES = ["ADMIN", "GESTAO"] as const;
 
@@ -44,6 +45,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     mensagem_template?: string;
     intervalo_segundos?: number;
     status?: "rascunho" | "pronta_para_envio" | "pausada";
+    quick_reply_options?: QuickReplyOption[] | null;
   };
 
   const updates: Record<string, unknown> = {};
@@ -55,6 +57,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       return NextResponse.json({ error: "status inválido" }, { status: 400 });
     }
     updates.status = body.status;
+  }
+  if (body.quick_reply_options !== undefined) {
+    updates.quick_reply_options = body.quick_reply_options?.length ? body.quick_reply_options : null;
   }
 
   if (Object.keys(updates).length === 0) {
