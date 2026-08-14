@@ -75,12 +75,29 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   const recebeRepasse = ROLES_QUE_RECEBEM_REPASSE.includes(qualification.role_in_document);
 
   const body = await req.json().catch(() => ({}));
-  const { cpf_cnpj, rg, endereco_completo, dados_bancarios, pix_key } = body as {
+  const {
+    cpf_cnpj, rg, endereco_completo, dados_bancarios, pix_key,
+    person_type, company_name, company_cnpj, company_address,
+    nationality, marital_status, profession, birth_date, phone,
+  } = body as {
     cpf_cnpj?: string;
     rg?: string;
     endereco_completo?: string;
     dados_bancarios?: { banco?: string; agencia?: string; conta?: string; tipo_conta?: string };
     pix_key?: string;
+    // Campos PF/PJ (13/08/2026, Fase 2) -- ligados aqui pela primeira vez.
+    // As colunas já existiam desde a migration da Fase 1, mas nenhuma rota
+    // gravava nelas -- achado ao construir o endpoint de texto jurídico,
+    // que dependia desse dado existir de verdade.
+    person_type?: "PF" | "PJ";
+    company_name?: string;
+    company_cnpj?: string;
+    company_address?: string;
+    nationality?: string;
+    marital_status?: string;
+    profession?: string;
+    birth_date?: string;
+    phone?: string;
   };
 
   // Testemunha/parte principal fora da Bolsa de Ativos: só CPF/CNPJ é
@@ -91,14 +108,30 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   if (missing.length > 0) {
     return NextResponse.json({ error: `Campos obrigatórios ausentes: ${missing.join(", ")}` }, { status: 422 });
   }
+  if (person_type && !["PF", "PJ"].includes(person_type)) {
+    return NextResponse.json({ error: "person_type inválido, use PF ou PJ." }, { status: 422 });
+  }
 
+  // cpf_cnpj é sempre o documento PESSOAL de quem assina (mesmo em caso PJ,
+  // é o representante) -- comentário original da coluna, migration
+  // 20260813_qualificacoes_pf_pj_fpa.sql. Quando person_type é conhecido,
+  // valida estritamente como CPF. Fluxo antigo (sem seletor, pré-13/08)
+  // preserva o auto-detect por tamanho, para não quebrar link já enviado.
   const docDigits = String(cpf_cnpj).replace(/\D/g, "");
-  const validDoc = docDigits.length > 11 ? isValidCNPJ(cpf_cnpj!) : isValidCPF(cpf_cnpj!);
+  const validDoc = person_type ? isValidCPF(cpf_cnpj!) : (docDigits.length > 11 ? isValidCNPJ(cpf_cnpj!) : isValidCPF(cpf_cnpj!));
   if (!validDoc) {
-    return NextResponse.json({ error: "CPF/CNPJ inválido, confira o número informado." }, { status: 422 });
+    return NextResponse.json({ error: person_type ? "CPF inválido, confira o número informado (documento pessoal de quem assina)." : "CPF/CNPJ inválido, confira o número informado." }, { status: 422 });
   }
   if (recebeRepasse && !pix_key && !dados_bancarios?.banco) {
     return NextResponse.json({ error: "Informe ao menos dados bancários ou chave PIX para eventual repasse." }, { status: 422 });
+  }
+  if (person_type === "PJ") {
+    if (!company_name?.trim() || !company_cnpj?.trim()) {
+      return NextResponse.json({ error: "Razão social e CNPJ da empresa são obrigatórios para pessoa jurídica." }, { status: 422 });
+    }
+    if (!isValidCNPJ(company_cnpj)) {
+      return NextResponse.json({ error: "CNPJ da empresa inválido, confira o número informado." }, { status: 422 });
+    }
   }
 
   const db = svc();
@@ -111,6 +144,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
       endereco_completo,
       dados_bancarios: dados_bancarios ?? null,
       pix_key: pix_key ?? null,
+      person_type: person_type ?? null,
+      company_name: person_type === "PJ" ? company_name!.trim() : null,
+      company_cnpj: person_type === "PJ" ? company_cnpj!.trim() : null,
+      company_address: person_type === "PJ" ? (company_address?.trim() || null) : null,
+      nationality: nationality?.trim() || null,
+      marital_status: marital_status?.trim() || null,
+      profession: profession?.trim() || null,
+      birth_date: birth_date?.trim() || null,
+      phone: phone?.trim() || null,
       status: "preenchido",
       filled_at: new Date().toISOString(),
     })

@@ -7,6 +7,7 @@ import {
   AlertTriangle, Shield, UserPlus, Plus, X, Copy, Share2, Pencil,
 } from "lucide-react";
 import { cn, isValidEmail } from "@/lib/utils";
+import { ROLE_LABELS } from "@/lib/qualification-roles";
 
 interface Approval {
   id: string;
@@ -77,14 +78,6 @@ interface QualBatch {
   status: string;
   cm_party_qualifications: QualParty[];
 }
-
-const ROLE_LABELS: Record<string, string> = {
-  parte_principal: "Parte Principal",
-  intermediario_finder_venda: "Intermediário/Finder Venda",
-  intermediario_finder_compra: "Intermediário/Finder Compra",
-  mandatario: "Mandatário",
-  testemunha: "Testemunha",
-};
 
 export function ContractsPanelClient() {
   const [contracts, setContracts] = useState<Contract[]>([]);

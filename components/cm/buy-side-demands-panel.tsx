@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Loader2, FileText, X, Download, RefreshCw, Repeat, ShoppingCart, IdCard, Target, ShieldCheck, Link2, Check, UserPlus } from "lucide-react";
 import { QuickIndicateModal } from "@/components/cm/quick-indicate-modal";
+import { QualificationBatchesPanel } from "@/components/cm/qualification-batches-panel";
 
 type BuyDemand = {
   id: string;
@@ -378,6 +379,8 @@ export function BuySideDemandsPanel({ mode = "mesa", title, subtitle }: BuySideD
                   </div>
                 )}
               </div>
+
+              <QualificationBatchesPanel demandId={detailDemand.id} cardLabel={`Comprador ${detailDemand.nome_contato}`} />
             </div>
           </div>
         </div>

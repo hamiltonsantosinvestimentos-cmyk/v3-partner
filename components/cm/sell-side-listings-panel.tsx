@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Loader2, FileText, X, Download, RefreshCw, Package, Link2, Check, UserPlus, Upload } from "lucide-react";
 import { QuickIndicateModal } from "@/components/cm/quick-indicate-modal";
+import { QualificationBatchesPanel } from "@/components/cm/qualification-batches-panel";
 
 // Equivalente Sell-Side de buy-side-demands-panel.tsx (13/08/2026). Mesmo motivo de existir:
 // Joao relatou que o Partner que origina um ATIVO (nao so um comprador) tambem nao tinha
@@ -354,6 +355,8 @@ export function SellSideListingsPanel({ mode = "mine", title, subtitle }: SellSi
                   </div>
                 )}
               </div>
+
+              <QualificationBatchesPanel listingId={detail.id} cardLabel={`Ativo ${detail.anonymous_id}`} />
             </div>
           </div>
         </div>

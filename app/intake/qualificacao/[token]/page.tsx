@@ -21,6 +21,19 @@ export default function QualificacaoIntakePage() {
   const [pixKey, setPixKey] = useState("");
   const [formError, setFormError] = useState("");
 
+  // Campos PF/PJ (13/08/2026, Fase 2): a migration da Fase 1 já tinha criado
+  // as colunas, mas nenhuma tela gravava nelas até agora -- achado ao
+  // construir o endpoint de texto jurídico, que precisa desse dado real.
+  const [personType, setPersonType] = useState<"PF" | "PJ">("PF");
+  const [companyName, setCompanyName] = useState("");
+  const [companyCnpj, setCompanyCnpj] = useState("");
+  const [companyAddress, setCompanyAddress] = useState("");
+  const [nationality, setNationality] = useState("");
+  const [maritalStatus, setMaritalStatus] = useState("");
+  const [profession, setProfession] = useState("");
+  const [birthDate, setBirthDate] = useState("");
+  const [phone, setPhone] = useState("");
+
   useEffect(() => {
     if (!token) return;
     fetch(`/api/cm/qualificacao/${token}`)
@@ -52,7 +65,11 @@ export default function QualificacaoIntakePage() {
   const submit = async () => {
     setFormError("");
     if (!cpfCnpj.trim() || (recebeRepasse && (!rg.trim() || !endereco.trim()))) {
-      setFormError(recebeRepasse ? "CPF/CNPJ, RG e endereço completo são obrigatórios" : "CPF/CNPJ é obrigatório");
+      setFormError(recebeRepasse ? `${personType === "PJ" ? "CPF do representante" : "CPF"}, RG e endereço completo são obrigatórios` : `${personType === "PJ" ? "CPF do representante" : "CPF"} é obrigatório`);
+      return;
+    }
+    if (personType === "PJ" && (!companyName.trim() || !companyCnpj.trim())) {
+      setFormError("Razão social e CNPJ da empresa são obrigatórios para pessoa jurídica");
       return;
     }
     if (recebeRepasse && !pixKey.trim() && !banco.trim()) {
@@ -70,6 +87,15 @@ export default function QualificacaoIntakePage() {
           endereco_completo: endereco.trim() || null,
           dados_bancarios: banco.trim() ? { banco: banco.trim(), agencia: agencia.trim(), conta: conta.trim(), tipo_conta: tipoConta } : null,
           pix_key: pixKey.trim() || null,
+          person_type: personType,
+          company_name: personType === "PJ" ? companyName.trim() : null,
+          company_cnpj: personType === "PJ" ? companyCnpj.trim() : null,
+          company_address: personType === "PJ" ? companyAddress.trim() || null : null,
+          nationality: nationality.trim() || null,
+          marital_status: maritalStatus.trim() || null,
+          profession: profession.trim() || null,
+          birth_date: birthDate || null,
+          phone: phone.trim() || null,
         }),
       });
       const json = await res.json();
@@ -149,10 +175,63 @@ export default function QualificacaoIntakePage() {
 
             <div className="space-y-3">
               <div>
-                <label className="text-[9px] text-[#9BAFC5] uppercase">CPF ou CNPJ *</label>
+                <label className="text-[9px] text-[#9BAFC5] uppercase">Você está preenchendo como *</label>
+                <div className="flex gap-2 mt-1">
+                  <button type="button" onClick={() => setPersonType("PF")}
+                    className={`flex-1 px-3 py-2 rounded text-sm font-semibold border transition ${personType === "PF" ? "bg-[#C9A84C]/15 border-[#C9A84C] text-[#F5F1E8]" : "bg-[#12112A] border-[#9BAFC5]/15 text-[#9BAFC5]"}`}>
+                    Pessoa Física
+                  </button>
+                  <button type="button" onClick={() => setPersonType("PJ")}
+                    className={`flex-1 px-3 py-2 rounded text-sm font-semibold border transition ${personType === "PJ" ? "bg-[#C9A84C]/15 border-[#C9A84C] text-[#F5F1E8]" : "bg-[#12112A] border-[#9BAFC5]/15 text-[#9BAFC5]"}`}>
+                    Pessoa Jurídica
+                  </button>
+                </div>
+              </div>
+
+              {personType === "PJ" && (
+                <div className="pt-2 border-t border-[#9BAFC5]/10 space-y-3">
+                  <p className="text-[10px] text-[#C9A84C] font-bold uppercase">Dados da empresa</p>
+                  <div>
+                    <label className="text-[9px] text-[#9BAFC5] uppercase">Razão Social *</label>
+                    <input value={companyName} onChange={(e) => setCompanyName(e.target.value)}
+                      className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-sm text-[#F5F1E8] mt-1" />
+                  </div>
+                  <div>
+                    <label className="text-[9px] text-[#9BAFC5] uppercase">CNPJ da Empresa *</label>
+                    <input value={companyCnpj} onChange={(e) => setCompanyCnpj(e.target.value)}
+                      className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-sm text-[#F5F1E8] mt-1" />
+                  </div>
+                  <div>
+                    <label className="text-[9px] text-[#9BAFC5] uppercase">Endereço da Sede</label>
+                    <textarea value={companyAddress} onChange={(e) => setCompanyAddress(e.target.value)} rows={2}
+                      className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-sm text-[#F5F1E8] mt-1" />
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <label className="text-[9px] text-[#9BAFC5] uppercase">{personType === "PJ" ? "CPF do Representante *" : "CPF *"}</label>
                 <input value={cpfCnpj} onChange={(e) => setCpfCnpj(e.target.value)}
                   className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-sm text-[#F5F1E8] mt-1" />
+                {personType === "PJ" && <p className="text-[10px] text-[#9BAFC5]/70 mt-1">Documento pessoal de quem assina pela empresa, não o CNPJ.</p>}
               </div>
+
+              <div className="pt-2 border-t border-[#9BAFC5]/10 space-y-3">
+                <p className="text-[10px] text-[#C9A84C] font-bold uppercase">{personType === "PJ" ? "Dados do representante (opcional)" : "Dados complementares (opcional)"}</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <input value={nationality} onChange={(e) => setNationality(e.target.value)} placeholder="Nacionalidade"
+                    className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-sm text-[#F5F1E8]" />
+                  <input value={maritalStatus} onChange={(e) => setMaritalStatus(e.target.value)} placeholder="Estado civil"
+                    className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-sm text-[#F5F1E8]" />
+                  <input value={profession} onChange={(e) => setProfession(e.target.value)} placeholder="Profissão"
+                    className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-sm text-[#F5F1E8]" />
+                  <input value={birthDate} onChange={(e) => setBirthDate(e.target.value)} type="date"
+                    className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-sm text-[#F5F1E8]" />
+                  <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Telefone"
+                    className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-sm text-[#F5F1E8] col-span-2" />
+                </div>
+              </div>
+
               {recebeRepasse && (
                 <>
                   <div>
