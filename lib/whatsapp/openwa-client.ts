@@ -17,9 +17,31 @@ function normalizeBrazilianPhone(digits: string): string {
   return digits;
 }
 
-// OpenWA chatId format: "<digits>@c.us" (individual) or "<digits>@g.us" (group)
+// OpenWA chatId format: "<digits>@c.us" (individual) or "<digits>@g.us" (group).
+// Fallback ingênuo — usado só quando /contacts/check falha; ver resolveChatId abaixo.
 export function phoneToChatId(phone: string): string {
   const digits = normalizeBrazilianPhone(phone.replace(/\D/g, ""));
+  return `${digits}@c.us`;
+}
+
+// Contas do WhatsApp registradas antes da adoção do 9º dígito (comum em vários DDDs) usam
+// um JID interno de 12 dígitos (sem o 9), mesmo o número dialável tendo 13. Montar o chatId
+// só com regex erra esses casos — a mensagem "sai" (OpenWA responde ok) mas nunca chega,
+// sem nenhum erro visível. /contacts/check devolve o whatsappId canônico; se a checagem
+// falhar por qualquer motivo, cai no formato ingênuo de phoneToChatId como fallback.
+async function resolveChatId(phone: string): Promise<string> {
+  const digits = normalizeBrazilianPhone(phone.replace(/\D/g, ""));
+  try {
+    const res = await fetch(`${BASE_URL}/api/sessions/${SESSION_ID}/contacts/check/${digits}`, {
+      headers: headers(),
+    });
+    if (res.ok) {
+      const data = await res.json() as { exists?: boolean; whatsappId?: string };
+      if (data.exists && data.whatsappId) return data.whatsappId;
+    }
+  } catch {
+    // segue com o fallback abaixo
+  }
   return `${digits}@c.us`;
 }
 
@@ -53,7 +75,7 @@ export async function sendText(phone: string, text: string): Promise<boolean> {
   const res = await fetch(`${BASE_URL}/api/sessions/${SESSION_ID}/messages/send-text`, {
     method: "POST",
     headers: headers(),
-    body: JSON.stringify({ chatId: phoneToChatId(phone), text }),
+    body: JSON.stringify({ chatId: await resolveChatId(phone), text }),
   });
   return res.ok;
 }
@@ -62,7 +84,7 @@ export async function sendImage(phone: string, url: string, caption?: string): P
   const res = await fetch(`${BASE_URL}/api/sessions/${SESSION_ID}/messages/send-image`, {
     method: "POST",
     headers: headers(),
-    body: JSON.stringify({ chatId: phoneToChatId(phone), url, caption }),
+    body: JSON.stringify({ chatId: await resolveChatId(phone), url, caption }),
   });
   return res.ok;
 }
@@ -71,7 +93,7 @@ export async function sendVideo(phone: string, url: string, caption?: string): P
   const res = await fetch(`${BASE_URL}/api/sessions/${SESSION_ID}/messages/send-video`, {
     method: "POST",
     headers: headers(),
-    body: JSON.stringify({ chatId: phoneToChatId(phone), url, caption }),
+    body: JSON.stringify({ chatId: await resolveChatId(phone), url, caption }),
   });
   return res.ok;
 }
@@ -82,11 +104,14 @@ export async function sendBulk(
   recipients: BulkRecipient[],
   delayBetweenMessagesMs: number
 ): Promise<{ batchId: string; statusUrl: string }> {
+  const messages = await Promise.all(
+    recipients.map(async r => ({ chatId: await resolveChatId(r.phone), text: r.text }))
+  );
   const res = await fetch(`${BASE_URL}/api/sessions/${SESSION_ID}/messages/send-bulk`, {
     method: "POST",
     headers: headers(),
     body: JSON.stringify({
-      messages: recipients.map(r => ({ chatId: phoneToChatId(r.phone), text: r.text })),
+      messages,
       options: { delayBetweenMessages: delayBetweenMessagesMs, randomizeDelay: true },
     }),
   });
