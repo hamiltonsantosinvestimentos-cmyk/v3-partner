@@ -41,9 +41,9 @@ const STATUS_CONFIG = {
 
 const PLANO_LABEL: Record<string, string> = {
   STARTER: "V3 Starter — R$ 297/mês",
-  PARTNER: "V3 Partner — R$ 497/mês",
-  PARTNER_PRO: "V3 Partner PRO — R$ 897/mês",
-  ENTERPRISE: "V3 Enterprise — R$ 2.500+/mês",
+  PARTNER: "V3 Partner — R$ 908,08/mês",
+  PARTNER_PRO: "V3 Partner PRO — R$ 1.324,75/mês",
+  ENTERPRISE: "V3 Enterprise — R$ 4.158,08/mês",
 };
 
 export default function StatusCadastroPage() {

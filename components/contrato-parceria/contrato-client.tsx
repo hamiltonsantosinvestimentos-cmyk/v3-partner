@@ -54,8 +54,8 @@ export function ContratoClient({ dados }: { dados: DadosContrato }) {
   const contratoRef = useRef<HTMLDivElement>(null);
 
   const planoLabel   = dados.plano === "PARTNER_PRO" ? "Partner PRO" : "Partner";
-  const valorMensal  = dados.plano === "PARTNER_PRO" ? "R$ 897,00" : "R$ 497,00";
-  const comissao     = dados.plano === "PARTNER_PRO" ? "50%" : "30%";
+  const valorMensal  = dados.plano === "PARTNER_PRO" ? "R$ 1.324,75" : "R$ 908,08";
+  const comissao     = dados.plano === "PARTNER_PRO" ? "50%" : "35%";
   const agora        = new Date();
   const dataHoje     = agora.toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" });
 
@@ -120,7 +120,7 @@ p{margin:6px 0}ul{margin:4px 0 4px 20px}
 <p>Todo conteúdo pertence exclusivamente ao LICENCIANTE. É proibido copiar, adaptar, replicar modelo ou criar negócio similar. Penalidade: multa de 200 salários mínimos + indenização integral.</p>
 
 <h2>9. Remuneração</h2>
-<p>Partner: 30% | Partner PRO: 50% — sobre resultado líquido. Pagamento condicionado à conclusão da operação, semanal, mediante nota fiscal. Não há garantia de ganhos.</p>
+<p>Partner: 35% | Partner PRO: 50% — sobre resultado líquido. Pagamento condicionado à conclusão da operação, semanal, mediante nota fiscal. Não há garantia de ganhos.</p>
 
 <h2>10. Leads</h2>
 <p>Leads fornecidos facultativamente. Prazo para conversão: 30 dias. Após prazo, lead retorna ao LICENCIANTE. Proibido: compartilhar leads ou vender fora do portfólio.</p>
@@ -318,7 +318,7 @@ p{margin:6px 0}ul{margin:4px 0 4px 20px}
 
           {/* 9. Remuneração */}
           <Secao num="9" titulo="Remuneração">
-            <Item>9.1 Percentuais: Partner <Campo v="30%" /> | Partner PRO <Campo v="50%" /> — sobre resultado líquido.</Item>
+            <Item>9.1 Percentuais: Partner <Campo v="35%" /> | Partner PRO <Campo v="50%" /> — sobre resultado líquido.</Item>
             <Item>9.2 Pagamento condicionado à conclusão da operação. 9.3 Pagamento semanal. 9.4 Necessário emissão de nota fiscal.</Item>
             <Item>9.5 Possibilidade de estorno em caso de fraude ou irregularidade. 9.6 Não há garantia de ganhos.</Item>
           </Secao>

@@ -6,7 +6,7 @@ import Image from "next/image";
 import {
   User, Building2, CheckCircle2, ChevronRight, ChevronLeft,
   Upload, X, Star, Zap, Shield, ArrowRight, Phone,
-  MapPin, FileText, Home, Loader2,
+  MapPin, FileText, Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -51,36 +51,18 @@ const OPCOES_RECORRENCIA: { id: PlanoRecorrencia; titulo: string; descricao: str
 
 const PLANOS = [
   {
-    id: "STARTER" as Plano,
-    nome: "V3 Starter",
-    preco: "R$ 297",
-    periodo: "/mês",
-    cor: "#7A8FA8",
-    icone: <Home className="w-6 h-6" />,
-    comissao: "20%",
-    descricao: "Para quem está começando no mercado financeiro e quer estruturar sua operação.",
-    beneficios: [
-      "Acesso à Mesa de Crédito N1",
-      "CRM integrado",
-      "20% de comissionamento",
-      "V3 IA Partner",
-      "Academy completo",
-      "Suporte por e-mail",
-    ],
-  },
-  {
     id: "PARTNER" as Plano,
     nome: "V3 Partner",
-    preco: "R$ 497",
+    preco: "R$ 908,08",
     periodo: "/mês",
     cor: "#C9A84C",
     icone: <Star className="w-6 h-6" />,
-    comissao: "30%",
+    comissao: "35%",
     descricao: "Ideal para assessores e correspondentes que querem ampliar sua carteira.",
     beneficios: [
       "Acesso à Mesa de Crédito N1 e N2",
       "Pipeline M&A completo",
-      "30% de comissionamento",
+      "35% de comissionamento por deal originado",
       "V3 IA Partner",
       "Academy completo",
       "CRM integrado",
@@ -89,7 +71,7 @@ const PLANOS = [
   {
     id: "PARTNER_PRO" as Plano,
     nome: "V3 Partner PRO",
-    preco: "R$ 897",
+    preco: "R$ 1.324,75",
     periodo: "/mês",
     cor: "#E8C97A",
     icone: <Zap className="w-6 h-6" />,
@@ -99,7 +81,7 @@ const PLANOS = [
     beneficios: [
       "Tudo do Partner +",
       "Mesa de Crédito N3 (High Ticket ≥ R$5M)",
-      "50% de comissionamento",
+      "50% de comissionamento por deal originado",
       "Co-branding V3 Partners",
       "Academy M&A avançado",
       "Suporte dedicado",
@@ -108,15 +90,15 @@ const PLANOS = [
   {
     id: "ENTERPRISE" as Plano,
     nome: "V3 Enterprise",
-    preco: "R$ 2.500",
-    periodo: "+/mês",
+    preco: "R$ 4.158,08",
+    periodo: "/mês",
     cor: "#C9A84C",
     icone: <Shield className="w-6 h-6" />,
-    comissao: "Negociável",
+    comissao: "55%",
     descricao: "Para estruturadores e escritórios com operações institucionais de grande porte.",
     beneficios: [
       "Acesso total à plataforma",
-      "Comissionamento negociável",
+      "55% de comissionamento por deal originado",
       "White-label e co-branding completo",
       "Gerente de conta dedicado",
       "SLA prioritário",
@@ -405,10 +387,9 @@ export function CadastroPartnerForm() {
   if (sucesso) {
     const valorFmt = cobranca?.valor
       ? (cobranca.valor / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
-      : plano === "ENTERPRISE" ? "R$ 2.500,00+"
-      : plano === "PARTNER_PRO" ? "R$ 897,00"
-      : plano === "PARTNER" ? "R$ 497,00"
-      : "R$ 297,00";
+      : plano === "ENTERPRISE" ? "R$ 4.158,08"
+      : plano === "PARTNER_PRO" ? "R$ 1.324,75"
+      : "R$ 908,08";
 
     return (
       <div className="min-h-screen bg-[#09081A] py-8 px-4">
