@@ -15,7 +15,7 @@ export default async function SdrPage() {
     .eq("id", user.id)
     .single();
 
-  if (!["ADMIN", "GESTAO"].includes(profile?.role ?? "")) {
+  if (!["ADMIN", "GESTAO", "SDR", "CLOSER"].includes(profile?.role ?? "")) {
     redirect("/unauthorized");
   }
 
@@ -23,6 +23,7 @@ export default async function SdrPage() {
     <SdrClient
       currentUserId={user.id}
       currentUserName={profile?.full_name ?? "Usuário"}
+      currentUserRole={profile?.role ?? ""}
     />
   );
 }

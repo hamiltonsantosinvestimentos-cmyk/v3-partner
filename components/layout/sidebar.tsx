@@ -138,7 +138,7 @@ const NAV_SECTIONS: NavSection[] = [
     label: "PLATAFORMA",
     items: [
       { href: "/agentes", label: "Squads de IA", icon: "BotMessageSquare", roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL", "FINANCEIRO"] },
-      { href: "/sdr", label: "SDR WhatsApp", icon: "BotMessageSquare", roles: ["ADMIN", "GESTAO"] },
+      { href: "/sdr", label: "SDR WhatsApp", icon: "BotMessageSquare", roles: ["ADMIN", "GESTAO", "SDR", "CLOSER"] },
       { href: "/deal-rooms", label: "Deal Rooms", icon: "Layers", roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL", "FINANCEIRO"] },
       { href: "/ia-assistant", label: "V3 IA Partner", icon: "BrainCircuit", roles: ["ADMIN", "STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE", "MESA_OPERACIONAL", "GESTAO", "FINANCEIRO"] },
       { href: "/metas", label: "Metas & Performance", icon: "Target", roles: ["ADMIN", "GESTAO", "STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE"] },

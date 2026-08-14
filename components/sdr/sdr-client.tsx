@@ -4,6 +4,8 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import Image from "next/image";
 import { CampanhasClient } from "./campanhas-client";
 import { CampanhasWhatsappClient } from "./campanhas-whatsapp-client";
+import { SdrKanbanClient } from "./sdr-kanban-client";
+import { SdrDashboardClient } from "./sdr-dashboard-client";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -107,9 +109,13 @@ function formatDateSeparator(iso: string) {
 interface SdrClientProps {
   currentUserId: string;
   currentUserName: string;
+  currentUserRole: string;
 }
 
-export function SdrClient({ currentUserId, currentUserName }: SdrClientProps) {
+type MainTab = "conversas" | "campanhas" | "envio-massa" | "kanban" | "dashboard";
+
+export function SdrClient({ currentUserId, currentUserName, currentUserRole }: SdrClientProps) {
+  const isAdminGestao = currentUserRole === "ADMIN" || currentUserRole === "GESTAO";
   const [qr, setQr] = useState<QrState>({ qrcode: null, status: "loading" });
   const [leads, setLeads] = useState<SdrLead[]>([]);
   const [profiles, setProfiles] = useState<Profile[]>([]);
@@ -117,7 +123,7 @@ export function SdrClient({ currentUserId, currentUserName }: SdrClientProps) {
   const [conversas, setConversas] = useState<Conversa[]>([]);
   const [loadingConversas, setLoadingConversas] = useState(false);
   const [search, setSearch] = useState("");
-  const [mainTab, setMainTab] = useState<"conversas" | "campanhas" | "envio-massa">("conversas");
+  const [mainTab, setMainTab] = useState<MainTab>(isAdminGestao ? "conversas" : "kanban");
   const [showQr, setShowQr] = useState(false);
   const [editTag, setEditTag] = useState(false);
   const [savingLead, setSavingLead] = useState(false);
@@ -166,12 +172,14 @@ export function SdrClient({ currentUserId, currentUserName }: SdrClientProps) {
 
   // ── Efeitos ────────────────────────────────────────────────────────────────
   useEffect(() => {
+    // Conversas/QR/Envio em massa são exclusivos de ADMIN/GESTAO — SDR/CLOSER só usam Kanban/Dashboard
+    if (!isAdminGestao) return;
     fetchLeads();
     fetchQr();
     const qrInterval = setInterval(fetchQr, 10000);
     const leadsInterval = setInterval(fetchLeads, 30000);
     return () => { clearInterval(qrInterval); clearInterval(leadsInterval); };
-  }, [fetchLeads, fetchQr]);
+  }, [fetchLeads, fetchQr, isAdminGestao]);
 
   useEffect(() => {
     if (selectedPhone) fetchConversas(selectedPhone);
@@ -319,13 +327,17 @@ export function SdrClient({ currentUserId, currentUserName }: SdrClientProps) {
         {/* Tabs */}
         <div style={{ display: "flex", gap: 4 }}>
           {[
-            { key: "conversas", label: "💬 WhatsApp" },
-            { key: "envio-massa", label: "📤 Envio em Massa" },
-            { key: "campanhas", label: "📧 Campanhas" },
+            ...(isAdminGestao ? [
+              { key: "conversas", label: "💬 WhatsApp" },
+              { key: "envio-massa", label: "📤 Envio em Massa" },
+              { key: "campanhas", label: "📧 Campanhas" },
+            ] : []),
+            { key: "kanban", label: "🗂️ Kanban" },
+            { key: "dashboard", label: "📊 Dashboard" },
           ].map(t => (
             <button
               key={t.key}
-              onClick={() => setMainTab(t.key as "conversas" | "campanhas" | "envio-massa")}
+              onClick={() => setMainTab(t.key as MainTab)}
               style={{
                 background: mainTab === t.key ? "#162744" : "transparent",
                 border: `1px solid ${mainTab === t.key ? "#C9A84C" : "#243A66"}`,
@@ -341,6 +353,7 @@ export function SdrClient({ currentUserId, currentUserName }: SdrClientProps) {
 
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           {/* Connection badge */}
+          {isAdminGestao && (
           <div
             onClick={() => setShowQr(!showQr)}
             style={{
@@ -353,14 +366,17 @@ export function SdrClient({ currentUserId, currentUserName }: SdrClientProps) {
             <div style={{ width: 8, height: 8, borderRadius: "50%", background: statusColor, boxShadow: `0 0 6px ${statusColor}` }} />
             <span style={{ color: "#F0ECE4", fontSize: 12, fontWeight: 600 }}>{statusLabel}</span>
           </div>
+          )}
+          {isAdminGestao && (
           <div style={{ color: "#7A8FA8", fontSize: 12 }}>
             {leads.length} lead{leads.length !== 1 ? "s" : ""}
           </div>
+          )}
         </div>
       </div>
 
       {/* ── QR Panel (dropdown) ─────────────────────────────────────────────── */}
-      {showQr && (
+      {isAdminGestao && showQr && (
         <div style={{
           position: "absolute", top: 120, right: 24, zIndex: 100,
           background: "#162744", border: "1px solid #243A66",
@@ -422,8 +438,22 @@ export function SdrClient({ currentUserId, currentUserName }: SdrClientProps) {
         </div>
       )}
 
+      {/* ── Kanban tab ────────────────────────────────────────────────────────── */}
+      {mainTab === "kanban" && (
+        <div style={{ flex: 1, overflow: "hidden", background: "#0D1B2E" }}>
+          <SdrKanbanClient />
+        </div>
+      )}
+
+      {/* ── Dashboard tab ─────────────────────────────────────────────────────── */}
+      {mainTab === "dashboard" && (
+        <div style={{ flex: 1, overflow: "hidden", background: "#0D1B2E" }}>
+          <SdrDashboardClient userName={currentUserName} role={currentUserRole} />
+        </div>
+      )}
+
       {/* ── Main WhatsApp layout ─────────────────────────────────────────────── */}
-      <div style={{ display: mainTab === "conversas" ? "flex" : "none", flex: 1, overflow: "hidden" }}>
+      <div style={{ display: isAdminGestao && mainTab === "conversas" ? "flex" : "none", flex: 1, overflow: "hidden" }}>
 
         {/* ── Left panel: lista de conversas ───────────────────────────────── */}
         <div style={{
