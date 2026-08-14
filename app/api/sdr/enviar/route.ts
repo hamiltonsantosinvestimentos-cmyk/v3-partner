@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { sendText } from "@/lib/whatsapp/openwa-client";
+import { formatQuickReplyBlock, type QuickReplyOption } from "@/lib/whatsapp/quick-reply";
 
 const ADMIN_ROLES = ["ADMIN", "GESTAO"] as const;
 
@@ -19,10 +20,18 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
   }
 
-  const { phone, text } = await req.json() as { phone: string; text: string };
+  const { phone, text, quickReplyOptions } = await req.json() as {
+    phone: string; text: string; quickReplyOptions?: QuickReplyOption[];
+  };
   if (!phone || !text) return NextResponse.json({ error: "phone e text obrigatórios" }, { status: 400 });
 
-  const sent = await sendText(phone, text);
+  // Opções de resposta rápida (WhatsApp não permite botão nativo fora da API oficial da
+  // Meta) viram um bloco de texto numerado anexado à mensagem.
+  const textoFinal = quickReplyOptions?.length
+    ? `${text}\n\n${formatQuickReplyBlock(quickReplyOptions)}`
+    : text;
+
+  const sent = await sendText(phone, textoFinal);
   if (!sent) {
     return NextResponse.json({ error: "Falha ao enviar via OpenWA" }, { status: 500 });
   }
@@ -31,8 +40,9 @@ export async function POST(req: NextRequest) {
   await svc().from("sdr_conversas").insert({
     phone,
     role: "assistant",
-    content: `[${profile?.full_name ?? "Operador"}] ${text}`,
+    content: `[${profile?.full_name ?? "Operador"}] ${textoFinal}`,
     instance: "openwa",
+    quick_reply_options: quickReplyOptions?.length ? quickReplyOptions : null,
   });
 
   return NextResponse.json({ ok: true });

@@ -4,6 +4,13 @@ import { createClient } from "@supabase/supabase-js";
 import { notifyAgendamentoSDR } from "@/lib/email";
 import { syncSdrLeadToProspeccao } from "@/lib/sdr-prospeccao-sync";
 import { chatIdToPhone, sendText } from "@/lib/whatsapp/openwa-client";
+import { formatQuickReplyBlock, resolveQuickReply, type QuickReplyOption } from "@/lib/whatsapp/quick-reply";
+
+// Opções oferecidas automaticamente quando a IA detecta que o lead qualificou
+const OFERTA_QUALIFICADO: QuickReplyOption[] = [
+  { key: "1", label: "Tenho interesse" },
+  { key: "2", label: "Agendar apresentação" },
+];
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -48,11 +55,29 @@ export async function POST(req: NextRequest) {
       if (!data || data.fromMe || data.isGroup) return NextResponse.json({ ok: true });
 
       const phone = chatIdToPhone(data.chatId ?? data.from ?? "");
-      const messageText = data.body ?? "";
+      const rawMessageText = data.body ?? "";
 
-      if (!messageText || !phone) return NextResponse.json({ ok: true });
+      if (!rawMessageText || !phone) return NextResponse.json({ ok: true });
 
-      console.log(`[SDR Webhook] Mensagem de ${phone}: ${messageText.substring(0, 80)}`);
+      console.log(`[SDR Webhook] Mensagem de ${phone}: ${rawMessageText.substring(0, 80)}`);
+
+      // Botões de resposta rápida são simulados por texto (WhatsApp bloqueia botão nativo
+      // fora da API oficial da Meta) — se a última mensagem do assistente ofereceu opções,
+      // resolve a resposta do lead ("1", "1️⃣"...) contra elas e usa o label em vez do dígito
+      // cru daqui em diante (histórico da IA, pipeline de qualificação, etc).
+      let messageText = rawMessageText;
+      const { data: ultimaConversa } = await supabase
+        .from("sdr_conversas")
+        .select("role, quick_reply_options")
+        .eq("phone", phone)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (ultimaConversa?.role === "assistant" && Array.isArray(ultimaConversa.quick_reply_options)) {
+        const resolvida = resolveQuickReply(rawMessageText, ultimaConversa.quick_reply_options as QuickReplyOption[]);
+        if (resolvida) messageText = resolvida.label;
+      }
 
       // Idempotência: o OpenWA pode reentregar o mesmo evento (rede, retry) — o id da
       // mensagem do WhatsApp é estável entre entregas, então um conflito aqui significa
@@ -358,16 +383,39 @@ Você representa uma empresa séria e de alto padrão. Seu tom é profissional, 
     const resposta = response.content[0].type === "text" ? response.content[0].text : "";
     if (!resposta) return;
 
+    // Detecta agendamento e progressão de funil ANTES de enviar — precisa do resultado
+    // agora (não só como fire-and-forget) para decidir se oferece opções de resposta
+    // rápida nesta mesma resposta.
+    const detect = await detectarAgendamento(mensagem, resposta);
+
+    let respostaFinal = resposta;
+    let quickReplyOptions: QuickReplyOption[] | null = null;
+    if (detect.sinal_funil === "qualificado") {
+      const { data: jaOfereceu } = await supabase
+        .from("sdr_conversas")
+        .select("id")
+        .eq("phone", phone)
+        .not("quick_reply_options", "is", null)
+        .limit(1)
+        .maybeSingle();
+
+      if (!jaOfereceu) {
+        quickReplyOptions = OFERTA_QUALIFICADO;
+        respostaFinal = `${resposta}\n\n${formatQuickReplyBlock(quickReplyOptions)}`;
+      }
+    }
+
     await supabase.from("sdr_conversas").insert({
       phone,
       role: "assistant",
-      content: resposta,
+      content: respostaFinal,
       instance,
+      quick_reply_options: quickReplyOptions,
     });
 
     // Envia como várias mensagens curtas em sequência (um parágrafo = uma mensagem),
     // com uma pequena pausa "digitando" entre elas, ao invés de um bloco único de texto.
-    const partesMensagem = resposta
+    const partesMensagem = respostaFinal
       .split(/\n\s*\n/)
       .map(p => p.trim())
       .filter(Boolean);
@@ -382,15 +430,8 @@ Você representa uma empresa séria e de alto padrão. Seu tom é profissional, 
 
     console.log(`[SDR Webhook] Resposta enviada para ${phone} (${partesMensagem.length} mensagem(ns))`);
 
-    // Detecta agendamento e progressão de funil na troca de mensagens (fire-and-forget)
-    detectarAgendamento(mensagem, resposta).then(detect => {
-      if (detect.agendado) {
-        processarAgendamento(phone, detect.data_hora, detect.nome_lead);
-      }
-      if (detect.sinal_funil !== "nenhum") {
-        processarSinalFunil(phone, detect.sinal_funil);
-      }
-    }).catch(e => console.error("[SDR Webhook] Erro na detecção de agendamento/funil:", e));
+    if (detect.agendado) await processarAgendamento(phone, detect.data_hora, detect.nome_lead);
+    if (detect.sinal_funil !== "nenhum") await processarSinalFunil(phone, detect.sinal_funil);
 
   } catch (e) {
     console.error("[SDR Webhook] Erro ao processar mensagem:", e);
