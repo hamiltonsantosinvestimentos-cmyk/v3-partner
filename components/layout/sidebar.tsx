@@ -10,7 +10,7 @@ import {
   Trophy, GraduationCap, Handshake, Settings2, Medal,
   ContactRound, DollarSign, Wallet, Zap, Target, ShieldCheck, Calculator, UserPlus, ClipboardList, BadgeCheck, Layers, BarChart2, BookMarked, BotMessageSquare,
   ShoppingBag, Radar, BookOpen, FileText, UserPlus2, MessageSquare, BarChart3, Video, UsersRound,
-  FileCheck2, Plane, FolderOpen, Gavel, Link2, Compass, User,
+  FileCheck2, Plane, FolderOpen, Gavel, Link2, Compass, User, Package,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -22,7 +22,7 @@ const iconMap = {
   Settings2, Medal, ContactRound, DollarSign, Wallet, Zap,
   Target, ShieldCheck, Calculator, UserPlus, ClipboardList, BadgeCheck, Layers, BarChart2, BookMarked, BotMessageSquare,
   ShoppingBag, Radar, BookOpen, FileText, UserPlus2, MessageSquare, BarChart3, Video, UsersRound,
-  FileCheck2, Plane, FolderOpen, Gavel, Link2, Compass, User,
+  FileCheck2, Plane, FolderOpen, Gavel, Link2, Compass, User, Package,
 };
 
 interface NavSubItem { href: string; label: string; roles: string[]; }
@@ -52,6 +52,7 @@ const NAV_SECTIONS: NavSection[] = [
       { href: "/minhas-operacoes", label: "Minhas Operações", icon: "ClipboardList", roles: ["STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE"] },
       { href: "/meus-links", label: "Links de Serviço", icon: "Link2", roles: ["ADMIN", "GESTAO", "PARTNER", "PARTNER_PRO", "MESA_OPERACIONAL"] },
       { href: "/meus-compradores", label: "Meus Compradores", icon: "ShoppingBag", roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL", "PARTNER", "PARTNER_PRO", "STARTER", "ENTERPRISE"] },
+      { href: "/meus-ativos", label: "Meus Ativos", icon: "Package", roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL", "PARTNER", "PARTNER_PRO", "STARTER", "ENTERPRISE"] },
       { href: "/ranking", label: "Ranking", icon: "Medal", roles: ["ADMIN", "STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE"] },
       { href: "/indicacoes", label: "Indicações", icon: "UserPlus2", roles: ["ADMIN", "STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE", "GESTAO"] },
     ],

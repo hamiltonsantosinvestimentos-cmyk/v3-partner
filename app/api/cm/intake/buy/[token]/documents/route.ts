@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as sc } from "@supabase/supabase-js";
+import { createNotification } from "@/lib/notify";
 
 export const dynamic = "force-dynamic";
 
@@ -45,7 +46,7 @@ export async function POST(
 
   const { data: demand } = await svc()
     .from("investor_demands")
-    .select("id")
+    .select("id, nome_contato, origin_partner_id")
     .eq("intake_token", token)
     .single();
 
@@ -83,6 +84,18 @@ export async function POST(
     .single();
 
   if (insertError) return NextResponse.json({ error: insertError.message }, { status: 500 });
+
+  // Notifica o Partner que originou este comprador (push real + in-app) -- mesmo padrao do
+  // sell-side (status/route.ts), fire-and-forget.
+  if (demand.origin_partner_id) {
+    void createNotification({
+      user_id: demand.origin_partner_id,
+      title: `${demand.nome_contato} enviou um documento`,
+      message: `Novo documento (${documentType === "loi_mou" ? "LOI/MOU" : documentType === "procuracao" ? "Procuração" : "Outro"}) no comprador que você indicou.`,
+      type: "marketplace",
+      action_url: "/meus-compradores",
+    });
+  }
 
   return NextResponse.json({ document: doc }, { status: 201 });
 }

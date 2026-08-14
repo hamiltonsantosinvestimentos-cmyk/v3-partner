@@ -9,6 +9,10 @@ function svc() {
 }
 
 const ALLOWED_ROLES = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"];
+// Partner originador (originator_profile_id) so ve os proprios ativos -- achado 13/08/2026:
+// esta rota nunca liberou leitura pra Partner nenhum, mesmo tabela ja tendo originator_profile_id
+// desde 07/07 (espelha ma_deals). Mesmo padrao ja usado em GET /api/cm/investor-demands.
+const PARTNER_ROLES = ["PARTNER", "PARTNER_PRO", "STARTER", "ENTERPRISE"];
 
 async function getCallerRole(req: NextRequest) {
   const supabase = await createClient();
@@ -19,8 +23,20 @@ async function getCallerRole(req: NextRequest) {
   return { userId: user.id, role: profile.role as string };
 }
 
+async function getCallerOrPartner(req: NextRequest) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+  const { data: profile } = await svc().from("profiles").select("id, role").eq("id", user.id).single();
+  if (!profile) return null;
+  const role = profile.role as string;
+  if (ALLOWED_ROLES.includes(role)) return { userId: user.id, role, isPartner: false as const };
+  if (PARTNER_ROLES.includes(role)) return { userId: user.id, role, isPartner: true as const };
+  return null;
+}
+
 export async function GET(req: NextRequest) {
-  const caller = await getCallerRole(req);
+  const caller = await getCallerOrPartner(req);
   if (!caller) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
   const { searchParams } = new URL(req.url);
@@ -29,13 +45,16 @@ export async function GET(req: NextRequest) {
 
   let query = svc()
     .from("cm_asset_listings")
-    .select("*, cm_bids(count), cm_listing_documents(count)")
+    .select("*, cm_bids(count), cm_listing_documents(count), originator:originator_profile_id(id, full_name)")
     .is("deleted_at", null)
     .order("created_at", { ascending: false })
     .limit(50);
 
   if (status) query = query.eq("listing_status", status);
-  if (mine) query = query.eq("created_by", caller.userId);
+  // Partner nunca ve o portfolio inteiro, so o que ele mesmo originou -- filtro forcado no
+  // servidor, nunca aceito do client (mesmo principio de origin_partner_id em investor_demands).
+  if (caller.isPartner) query = query.eq("originator_profile_id", caller.userId);
+  else if (mine) query = query.eq("created_by", caller.userId);
 
   const { data, error } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

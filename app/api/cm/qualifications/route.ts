@@ -26,20 +26,47 @@ const DOCUMENT_TYPE_LABELS: Record<string, string> = {
   contrato_parceria: "Contrato de Parceria",
 };
 
-async function getCaller() {
+const PARTNER_ROLES = ["PARTNER", "PARTNER_PRO", "STARTER", "ENTERPRISE"];
+
+// "Cadastrar outros parceiros" (pedido de Joao, 13/08/2026): o Partner que originou o ativo
+// ou o comprador pode indicar finder/intermediario/mandatario do proprio card, mas nunca
+// especificar document_type (isso segue exclusivo da Governanca, no dispatch).
+async function getCallerOrPartner() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
   const { data: profile } = await svc().from("profiles").select("id, role").eq("id", user.id).single();
-  if (!profile || !ALLOWED_ROLES.includes(profile.role as string)) return null;
-  return { userId: user.id, role: profile.role as string };
+  if (!profile) return null;
+  const role = profile.role as string;
+  if (ALLOWED_ROLES.includes(role)) return { userId: user.id, role, isPartner: false as const };
+  if (PARTNER_ROLES.includes(role)) return { userId: user.id, role, isPartner: true as const };
+  return null;
+}
+
+// Checa posse de listing_id/demand_id pra Partner (interno sempre passa). operation_contract_id
+// segue exclusivo de Mesa/Governanca -- fora do escopo do pedido de 13/08/2026 (card de
+// ativo/comprador), Central de Contratos generica nao tem conceito de "Partner dono" hoje.
+async function assertPartnerOwnership(
+  caller: { userId: string; isPartner: boolean },
+  opts: { listingId?: string | null; demandId?: string | null }
+): Promise<boolean> {
+  if (!caller.isPartner) return true;
+  if (opts.listingId) {
+    const { data } = await svc().from("cm_asset_listings").select("originator_profile_id").eq("id", opts.listingId).maybeSingle();
+    return !!data && data.originator_profile_id === caller.userId;
+  }
+  if (opts.demandId) {
+    const { data } = await svc().from("investor_demands").select("origin_partner_id").eq("id", opts.demandId).maybeSingle();
+    return !!data && data.origin_partner_id === caller.userId;
+  }
+  return false;
 }
 
 // GET /api/cm/qualifications?listing_id=X ou ?operation_contract_id=Y —
 // lotes de qualificação do ativo (Bolsa de Ativos) ou do contrato (Central
 // de Contratos genérica, 11/08/2026), com o progresso de cada envolvido.
 export async function GET(req: NextRequest) {
-  const caller = await getCaller();
+  const caller = await getCallerOrPartner();
   if (!caller) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
   const { searchParams } = new URL(req.url);
@@ -48,6 +75,12 @@ export async function GET(req: NextRequest) {
   const demandId = searchParams.get("demand_id");
   if (!listingId && !operationContractId && !demandId) {
     return NextResponse.json({ error: "listing_id, operation_contract_id ou demand_id é obrigatório" }, { status: 422 });
+  }
+  if (caller.isPartner && operationContractId) {
+    return NextResponse.json({ error: "Não autorizado" }, { status: 403 });
+  }
+  if (!(await assertPartnerOwnership(caller, { listingId, demandId }))) {
+    return NextResponse.json({ error: "Não autorizado" }, { status: 403 });
   }
 
   // qualification_token incluso propositalmente: permite "Copiar link"/"WhatsApp"
@@ -75,7 +108,7 @@ export async function GET(req: NextRequest) {
 // dispara um link individual de qualificação (/intake/qualificacao/[token])
 // para cada um, incluindo testemunhas.
 export async function POST(req: NextRequest) {
-  const caller = await getCaller();
+  const caller = await getCallerOrPartner();
   if (!caller) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
   const body = await req.json().catch(() => ({}));
@@ -92,13 +125,15 @@ export async function POST(req: NextRequest) {
   // Bolsa de Ativos/Central de Contratos). A indicacao rapida (13/08/2026, botao no card de
   // Ativo/Comprador) cria o lote ANTES da Governanca decidir o instrumento -- nesse caso o lote
   // nasce em status "aguardando_triagem_governanca", sem document_type, sem disparar email ainda
-  // (o email/link formal e responsabilidade do dispatch da Governanca, nao desta rota).
-  const isQuickIndication = !document_type && !!demand_id;
+  // (o email/link formal e responsabilidade do dispatch da Governanca, nao desta rota). Fix
+  // 13/08/2026: a checagem original so reconhecia demand_id como indicacao rapida -- o botao do
+  // card de Ativo (listing_id, SELL_SIDE) caia sempre no erro "document_type obrigatorio".
+  const isQuickIndication = !document_type && (!!demand_id || !!listing_id);
   if (document_type && !DOCUMENT_TYPES.includes(document_type)) {
     return NextResponse.json({ error: `document_type inválido. Use um de: ${DOCUMENT_TYPES.join(", ")}` }, { status: 422 });
   }
-  if (!document_type && !demand_id) {
-    return NextResponse.json({ error: "document_type é obrigatório fora do fluxo de indicação rápida (demand_id)" }, { status: 422 });
+  if (!document_type && !demand_id && !listing_id) {
+    return NextResponse.json({ error: "document_type é obrigatório fora do fluxo de indicação rápida (listing_id ou demand_id)" }, { status: 422 });
   }
   if (!listing_id && !operation_contract_id && !demand_id) {
     return NextResponse.json({ error: "Informe listing_id, operation_contract_id ou demand_id" }, { status: 422 });
@@ -109,6 +144,17 @@ export async function POST(req: NextRequest) {
   for (const p of parties) {
     if (!p.full_name?.trim() || !isValidEmail(p.email ?? "") || !ROLES_IN_DOCUMENT.includes(p.role_in_document)) {
       return NextResponse.json({ error: "Cada envolvido precisa de nome, e-mail válido e posição no documento" }, { status: 422 });
+    }
+  }
+
+  // Partner so pode indicar (nunca definir document_type, isso e exclusivo da Governanca), e
+  // so no proprio card (listing_id/demand_id que ele originou, nunca operation_contract_id).
+  if (caller.isPartner) {
+    if (!isQuickIndication || operation_contract_id) {
+      return NextResponse.json({ error: "Não autorizado" }, { status: 403 });
+    }
+    if (!(await assertPartnerOwnership(caller, { listingId: listing_id, demandId: demand_id }))) {
+      return NextResponse.json({ error: "Não autorizado" }, { status: 403 });
     }
   }
 

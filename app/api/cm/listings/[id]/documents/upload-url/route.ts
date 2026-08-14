@@ -15,6 +15,9 @@ function sanitizeAscii(name: string): string {
     .replace(/[^a-zA-Z0-9._-]/g, "_");
 }
 
+const ALLOWED_ROLES = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"];
+const PARTNER_ROLES = ["PARTNER", "PARTNER_PRO", "STARTER", "ENTERPRISE"];
+
 // GET — gera signed upload URL para upload direto do browser ao Supabase Storage.
 // Contorna o limite de body do Vercel serverless (~4.5MB) para documentos grandes
 // (ex: anexo com múltiplos sub-documentos anexados para OCR na Bolsa de Ativos).
@@ -33,11 +36,17 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
   const { data: listing } = await svcClient
     .from("cm_asset_listings")
-    .select("id, anonymous_id")
+    .select("id, anonymous_id, originator_profile_id")
     .eq("id", id)
     .single();
 
   if (!listing) return NextResponse.json({ error: "Listing não encontrado" }, { status: 404 });
+
+  // Mesma checagem de posse do POST em .../documents/route.ts (achado 13/08/2026): sem isso,
+  // qualquer usuario autenticado conseguia gerar signed URL de upload pra QUALQUER listing_id.
+  const role = profile.role as string;
+  const isOwner = ALLOWED_ROLES.includes(role) || (PARTNER_ROLES.includes(role) && listing.originator_profile_id === user.id);
+  if (!isOwner) return NextResponse.json({ error: "Não autorizado" }, { status: 403 });
 
   const safeName = sanitizeAscii(fileName);
   const storagePath = `cm-documents/${listing.anonymous_id}/${Date.now()}_${safeName}`;

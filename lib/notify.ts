@@ -12,7 +12,7 @@ export interface NotificationPayload {
   user_id: string;
   title: string;
   message?: string;
-  type: "deal" | "proposal" | "ticket" | "commission" | "split" | "info";
+  type: "deal" | "proposal" | "ticket" | "commission" | "split" | "info" | "marketplace";
   action_url?: string;
 }
 

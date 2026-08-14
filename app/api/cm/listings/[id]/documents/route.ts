@@ -5,6 +5,9 @@ import { createClient as sc } from "@supabase/supabase-js";
 export const maxDuration = 60;
 export const dynamic = "force-dynamic";
 
+const ALLOWED_ROLES = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"];
+const PARTNER_ROLES = ["PARTNER", "PARTNER_PRO", "STARTER", "ENTERPRISE"];
+
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 }
@@ -18,11 +21,24 @@ async function getCallerRole(req: NextRequest) {
   return { userId: user.id, role: profile.role as string };
 }
 
+// Checa posse: interno (ADMIN/GESTAO/MESA_OPERACIONAL) sempre passa; Partner so passa se for
+// o originator_profile_id daquele listing especifico. Achado 13/08/2026: antes desta checagem,
+// QUALQUER usuario autenticado conseguia ler/gravar documento de QUALQUER listing_id, sem
+// verificar posse nenhuma -- gap de autorizacao real, corrigido no mesmo commit que libera
+// acesso pro Partner (nao só um "adicionar Partner", um fechamento de gap pre-existente).
+async function assertOwnership(caller: { userId: string; role: string }, listingId: string): Promise<boolean> {
+  if (ALLOWED_ROLES.includes(caller.role)) return true;
+  if (!PARTNER_ROLES.includes(caller.role)) return false;
+  const { data: listing } = await svc().from("cm_asset_listings").select("originator_profile_id").eq("id", listingId).maybeSingle();
+  return !!listing && listing.originator_profile_id === caller.userId;
+}
+
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const caller = await getCallerRole(req);
   if (!caller) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
   const { id } = await params;
+  if (!(await assertOwnership(caller, id))) return NextResponse.json({ error: "Não autorizado" }, { status: 403 });
 
   const { data, error } = await svc()
     .from("cm_listing_documents")
@@ -52,6 +68,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (!caller) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
   const { id } = await params;
+  if (!(await assertOwnership(caller, id))) return NextResponse.json({ error: "Não autorizado" }, { status: 403 });
 
   const { data: listing } = await svc()
     .from("cm_asset_listings")

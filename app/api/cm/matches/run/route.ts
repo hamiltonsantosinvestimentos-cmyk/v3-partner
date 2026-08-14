@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { Resend } from "resend";
 import { auditText, auditHtml } from "@/lib/brand-guardian-gate";
+import { createNotification } from "@/lib/notify";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -40,9 +41,9 @@ export async function POST(req: NextRequest) {
       const { data: matches } = await svc()
         .from("demand_matches")
         .select(`
-          score, match_reasons,
-          investor_demands(nome_contato, email),
-          cm_asset_listings:listing_id(anonymous_id, asset_type, valor_face, desagio_pretendido)
+          id, score, match_reasons,
+          investor_demands(nome_contato, email, origin_partner_id),
+          cm_asset_listings:listing_id(anonymous_id, asset_type, valor_face, desagio_pretendido, originator_profile_id)
         `)
         .not("listing_id", "is", null)
         .eq("notification_sent", false)
@@ -77,6 +78,34 @@ export async function POST(req: NextRequest) {
           subject: matchesSubjectGate.corrected,
           html: matchesHtmlGate.corrected,
         });
+
+        // Notifica os Partners de origem de cada lado (push real + in-app), alem do e-mail
+        // interno acima. Achado 13/08/2026, mesma causa raiz do bug de id ausente no select
+        // (corrigido acima): "id" nunca era selecionado, entao matchIds ficava sempre vazio e
+        // notification_sent nunca era marcado -- os mesmos matches antigos reapareciam e
+        // reenviavam e-mail em toda execucao, indefinidamente.
+        for (const m of matches as any[]) {
+          const listing = m.cm_asset_listings;
+          const demand = m.investor_demands;
+          if (listing?.originator_profile_id) {
+            void createNotification({
+              user_id: listing.originator_profile_id,
+              title: `Novo match para ${listing.anonymous_id}`,
+              message: `Comprador ${demand?.nome_contato ?? "identificado"} (score ${m.score}/100) pro ativo que você originou.`,
+              type: "marketplace",
+              action_url: "/meus-ativos",
+            });
+          }
+          if (demand?.origin_partner_id) {
+            void createNotification({
+              user_id: demand.origin_partner_id,
+              title: `Novo match para ${demand.nome_contato}`,
+              message: `Ativo ${listing?.anonymous_id ?? "identificado"} (score ${m.score}/100) compatível com o comprador que você indicou.`,
+              type: "marketplace",
+              action_url: "/meus-compradores",
+            });
+          }
+        }
 
         const matchIds = matches.map((m: any) => m.id).filter(Boolean);
         if (matchIds.length > 0) {

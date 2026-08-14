@@ -1,12 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
+import { createNotification } from "@/lib/notify";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 }
 
 const ADMIN_ROLES = ["ADMIN", "GESTAO"];
+
+const STATUS_LABELS: Record<string, string> = {
+  reuniao_validada: "Reunião Validada",
+  formulario_preenchido: "Formulário Preenchido",
+  nda_assinado: "NDA Assinado",
+  em_analise: "Em Análise",
+  aprovado_head: "Aprovado pela Diretoria",
+  ativo_vitrine: "Ativo na Vitrine",
+  proposta_recebida: "Proposta Recebida",
+  em_escrow_due_diligence: "Em Escrow / Due Diligence",
+  liquidado: "Liquidado",
+  cancelado: "Cancelado",
+  expirado: "Expirado",
+};
 
 async function getCallerRole(req: NextRequest) {
   const supabase = await createClient();
@@ -69,8 +84,22 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   }
 
   const { data: listing } = await svc().from("cm_asset_listings")
-    .select("id, anonymous_id, listing_status, nda_signed_at, head_approved_at")
+    .select("id, anonymous_id, listing_status, nda_signed_at, head_approved_at, originator_profile_id")
     .eq("id", id).single();
+
+  // Notifica o Partner originador (push real + in-app) -- achado 13/08/2026: a infra ja
+  // existia (lib/push.ts, VAPID configurado) mas nunca era chamada em nenhuma transicao de
+  // status da Bolsa de Ativos. Fire-and-forget, nunca bloqueia a resposta da rota.
+  if (listing?.originator_profile_id) {
+    const label = STATUS_LABELS[listing.listing_status] ?? listing.listing_status;
+    void createNotification({
+      user_id: listing.originator_profile_id,
+      title: `Ativo ${listing.anonymous_id}: ${label}`,
+      message: `O status do ativo que você originou mudou para "${label}".`,
+      type: "marketplace",
+      action_url: "/meus-ativos",
+    });
+  }
 
   return NextResponse.json({ success: true, listing });
 }
