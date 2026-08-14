@@ -25,7 +25,7 @@ async function authGuard() {
 }
 
 function renderTemplate(template: string, nome: string | null): string {
-  return template.replaceAll("{{nome}}", nome?.trim() || "tudo bem");
+  return template.replace(/\{\{\s*nome\s*\}\}/gi, nome?.trim() || "tudo bem");
 }
 
 // POST /api/sdr/campanhas-whatsapp/[id]/disparar — envia a fila pendente, um a um, respeitando o intervalo
