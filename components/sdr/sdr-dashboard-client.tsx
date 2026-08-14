@@ -7,10 +7,8 @@ import {
 
 const GOLD = "#C9A84C";
 const GOLD_LIGHT = "#E8C97A";
-const NAVY_CARD = "#162744";
 const NAVY_MED = "#243A66";
 const MUTED = "#7A8FA8";
-const CREAM = "#F0ECE4";
 
 const ETAPA_LABELS: Record<string, string> = {
   prospect: "Prospect",
@@ -48,14 +46,14 @@ function KpiCard({ label, value, sub, icon: Icon, color }: {
   label: string; value: string | number; sub?: string; icon: React.ElementType; color: string;
 }) {
   return (
-    <div className="rounded-2xl border border-white/5 p-4 flex items-start gap-3" style={{ background: NAVY_CARD }}>
+    <div className="bg-[#111F35] border border-[#243A66] rounded-2xl p-4 flex items-start gap-3">
       <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 mt-0.5" style={{ background: `${color}20` }}>
         <Icon className="w-4.5 h-4.5" style={{ color }} />
       </div>
       <div>
-        <p className="text-xl font-bold" style={{ color: CREAM }}>{value}</p>
-        <p className="text-[11px] font-semibold" style={{ color: MUTED }}>{label}</p>
-        {sub && <p className="text-[10px] mt-0.5" style={{ color: MUTED }}>{sub}</p>}
+        <p className="text-xl font-bold text-[#F0ECE4]">{value}</p>
+        <p className="text-[11px] font-semibold text-[#7A8FA8]">{label}</p>
+        {sub && <p className="text-[10px] mt-0.5 text-[#7A8FA8]">{sub}</p>}
       </div>
     </div>
   );
@@ -68,9 +66,9 @@ function FunilVisual({ funil }: { funil: { etapa: string; count: number }[] }) {
   const colors = [MUTED, "#60A5FA", "#F59E0B", "#A78BFA", GOLD];
 
   return (
-    <div className="rounded-2xl border border-white/5 p-5" style={{ background: NAVY_CARD }}>
+    <div className="bg-[#111F35] border border-[#243A66] rounded-2xl p-5">
       <div className="flex items-center justify-between mb-4">
-        <p className="text-xs font-bold uppercase tracking-widest" style={{ color: GOLD }}>Funil (etapas de Prospecção)</p>
+        <p className="text-xs font-bold uppercase tracking-widest text-[#C9A84C]">Funil (etapas de Prospecção)</p>
         {perdidos > 0 && (
           <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-500/20 text-red-400">{perdidos} perdidos</span>
         )}
@@ -85,7 +83,7 @@ function FunilVisual({ funil }: { funil: { etapa: string; count: number }[] }) {
               />
             </div>
             <p className="text-2xl font-bold" style={{ color: colors[i] }}>{f.count}</p>
-            <p className="text-[10px] font-semibold text-center mt-0.5" style={{ color: MUTED }}>{ETAPA_LABELS[f.etapa] ?? f.etapa}</p>
+            <p className="text-[10px] font-semibold text-center mt-0.5 text-[#7A8FA8]">{ETAPA_LABELS[f.etapa] ?? f.etapa}</p>
           </div>
         ))}
       </div>
@@ -96,20 +94,20 @@ function FunilVisual({ funil }: { funil: { etapa: string; count: number }[] }) {
 function Evolucao7Dias({ data }: { data: { date: string; novos: number }[] }) {
   const max = Math.max(...data.map(d => d.novos), 1);
   return (
-    <div className="rounded-2xl border border-white/5 p-5" style={{ background: NAVY_CARD }}>
-      <p className="text-xs font-bold uppercase tracking-widest mb-4" style={{ color: GOLD }}>Novos Leads WhatsApp — Últimos 7 dias</p>
+    <div className="bg-[#111F35] border border-[#243A66] rounded-2xl p-5">
+      <p className="text-xs font-bold uppercase tracking-widest mb-4 text-[#C9A84C]">Novos Leads WhatsApp — Últimos 7 dias</p>
       <div className="flex items-end gap-2 h-28">
         {data.map(d => {
           const pct = max > 0 ? d.novos / max : 0;
           const minH = d.novos > 0 ? 8 : 4;
           return (
             <div key={d.date} className="flex flex-col items-center flex-1 gap-1">
-              <span className="text-[10px] font-bold" style={{ color: d.novos > 0 ? GOLD_LIGHT : MUTED }}>{d.novos > 0 ? d.novos : ""}</span>
+              <span className={`text-[10px] font-bold ${d.novos > 0 ? "text-[#E8C97A]" : "text-[#7A8FA8]"}`}>{d.novos > 0 ? d.novos : ""}</span>
               <div
                 className="w-full rounded-t-lg transition-all duration-500"
                 style={{ height: `${Math.max(minH, pct * 72)}px`, background: d.novos > 0 ? `linear-gradient(to top, ${GOLD}, ${GOLD_LIGHT}80)` : NAVY_MED }}
               />
-              <span className="text-[9px]" style={{ color: MUTED }}>{fmtDate(d.date)}</span>
+              <span className="text-[9px] text-[#7A8FA8]">{fmtDate(d.date)}</span>
             </div>
           );
         })}
@@ -124,39 +122,39 @@ function PorResponsavel({ lista, semResponsavel }: {
 }) {
   const max = Math.max(...lista.map(l => l.totalLeads), 1);
   return (
-    <div className="rounded-2xl border border-white/5 p-5 flex flex-col gap-3" style={{ background: NAVY_CARD }}>
+    <div className="bg-[#111F35] border border-[#243A66] rounded-2xl p-5 flex flex-col gap-3">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Crown className="w-4 h-4" style={{ color: GOLD }} />
-          <p className="text-xs font-bold uppercase tracking-widest" style={{ color: GOLD }}>Por Responsável</p>
+          <Crown className="w-4 h-4 text-[#C9A84C]" />
+          <p className="text-xs font-bold uppercase tracking-widest text-[#C9A84C]">Por Responsável</p>
         </div>
         {!!semResponsavel && (
-          <span className="text-[10px] flex items-center gap-1" style={{ color: MUTED }}>
+          <span className="text-[10px] flex items-center gap-1 text-[#7A8FA8]">
             <UserX className="w-3 h-3" /> {semResponsavel} sem responsável
           </span>
         )}
       </div>
       {lista.filter(l => l.totalLeads > 0).length === 0 && (
-        <p className="text-xs text-center py-4" style={{ color: MUTED }}>Nenhum lead atribuído ainda</p>
+        <p className="text-xs text-center py-4 text-[#7A8FA8]">Nenhum lead atribuído ainda</p>
       )}
       {lista.filter(l => l.totalLeads > 0).map(l => {
         const initials = l.nome.split(" ").slice(0, 2).map(w => w[0]).join("").toUpperCase();
         const pct = Math.round((l.totalLeads / max) * 100);
         return (
           <div key={l.id} className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 text-xs font-bold" style={{ background: `${GOLD}20`, color: GOLD }}>
+            <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 text-xs font-bold bg-[#C9A84C]/20 text-[#C9A84C]">
               {initials}
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center justify-between mb-1">
-                <span className="text-[12px] font-semibold truncate" style={{ color: CREAM }}>
-                  {l.nome.split(" ")[0]} <span className="text-[9px] font-normal" style={{ color: MUTED }}>· {ROLE_LABELS[l.role] ?? l.role}</span>
+                <span className="text-[12px] font-semibold truncate text-[#F0ECE4]">
+                  {l.nome.split(" ")[0]} <span className="text-[9px] font-normal text-[#7A8FA8]">· {ROLE_LABELS[l.role] ?? l.role}</span>
                 </span>
-                <span className="text-[11px] shrink-0 ml-2" style={{ color: MUTED }}>
-                  <span className="font-bold" style={{ color: GOLD }}>{l.totalLeads}</span> leads · {l.convertidos} conv. · {l.mensagensHoje} hoje
+                <span className="text-[11px] shrink-0 ml-2 text-[#7A8FA8]">
+                  <span className="font-bold text-[#C9A84C]">{l.totalLeads}</span> leads · {l.convertidos} conv. · {l.mensagensHoje} hoje
                 </span>
               </div>
-              <div className="w-full rounded-full h-1.5" style={{ background: NAVY_MED }}>
+              <div className="w-full rounded-full h-1.5 bg-[#243A66]">
                 <div className="h-1.5 rounded-full transition-all duration-500" style={{ width: `${pct}%`, background: `linear-gradient(to right, ${GOLD}, ${GOLD_LIGHT})` }} />
               </div>
             </div>
@@ -189,19 +187,19 @@ export function SdrDashboardClient({ userName, role }: { userName: string; role:
     <div className="space-y-5 p-4 overflow-y-auto h-full">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-base font-bold text-white">Dashboard WhatsApp</h2>
-          <p className="text-xs mt-0.5" style={{ color: MUTED }}>
+          <h2 className="text-base font-bold text-[#F0ECE4]">Dashboard WhatsApp</h2>
+          <p className="text-xs mt-0.5 text-[#7A8FA8]">
             {userName} · {isAdmin ? "Visão de todos os responsáveis" : "Seus números"}
           </p>
         </div>
-        <button onClick={load} className="p-1.5 rounded-xl border border-white/10 hover:border-white/20 transition-colors">
-          <RefreshCw className="w-4 h-4" style={{ color: MUTED }} />
+        <button onClick={load} className="p-1.5 rounded-xl border border-[#243A66] hover:border-[#3A5070] transition-colors">
+          <RefreshCw className="w-4 h-4 text-[#7A8FA8]" />
         </button>
       </div>
 
       {loading && (
-        <div className="flex items-center justify-center h-48 gap-2" style={{ color: MUTED }}>
-          <Loader2 className="w-4 h-4 animate-spin" style={{ color: GOLD }} />
+        <div className="flex items-center justify-center h-48 gap-2 text-[#7A8FA8]">
+          <Loader2 className="w-4 h-4 animate-spin text-[#C9A84C]" />
           <span className="text-sm">Carregando…</span>
         </div>
       )}
