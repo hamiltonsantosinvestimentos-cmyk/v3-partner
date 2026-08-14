@@ -162,6 +162,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
     documentUrl,
     documentLabel: contractTitle,
     signatories: [{ name: nome_representante, email }],
+    watcherEmail: "deal@v3partners.com.br",
   });
 
   if (!clicksignRes.ok) {

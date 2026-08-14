@@ -229,6 +229,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
     documentUrl,
     documentLabel: contractTitle,
     signatories: [{ name: nome_completo_socio, email }],
+    // Fase 2 do ciclo ClickSign (14/08/2026): registra o Observador de
+    // Assinatura na mesma caixa que lib/clicksign-archive.ts lê via IMAP,
+    // fecha o arquivamento automático do PDF quando o envelope fechar.
+    watcherEmail: "deal@v3partners.com.br",
   });
 
   if (!clicksignRes.ok) {

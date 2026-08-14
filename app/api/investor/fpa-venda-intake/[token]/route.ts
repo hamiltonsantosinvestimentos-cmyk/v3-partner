@@ -180,6 +180,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
     documentUrl,
     documentLabel: contractTitle,
     signatories: participantes.map(p => ({ name: p.nome, email: p.email })),
+    watcherEmail: "deal@v3partners.com.br",
   });
 
   if (!clicksignRes.ok) {
