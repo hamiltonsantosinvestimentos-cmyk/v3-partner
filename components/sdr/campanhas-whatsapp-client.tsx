@@ -13,6 +13,8 @@ type Campanha = {
   status: "rascunho" | "pronta_para_envio" | "pausada";
   total_contatos: number;
   created_at: string;
+  media_url: string | null;
+  media_type: "image" | "video" | null;
 };
 
 type Contato = {
@@ -82,7 +84,10 @@ export function CampanhasWhatsappClient() {
   const [disparando, setDisparando] = useState(false);
   const [disparoResultado, setDisparoResultado] = useState<{ enviados: number; erros: number; restantes: number } | null>(null);
   const [disparoErro, setDisparoErro] = useState<string | null>(null);
+  const [uploadingMidia, setUploadingMidia] = useState(false);
+  const [midiaError, setMidiaError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const midiaInputRef = useRef<HTMLInputElement>(null);
 
   const selected = campanhas.find(c => c.id === selectedId) ?? null;
 
@@ -190,6 +195,34 @@ export function CampanhasWhatsappClient() {
       setDisparando(false);
       await Promise.all([loadCampanhas(), loadDetalhe(selected.id)]);
     }
+  }
+
+  async function handleMidiaChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file || !selected) return;
+    setMidiaError(null);
+    setUploadingMidia(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch(`/api/sdr/campanhas-whatsapp/${selected.id}/media`, {
+        method: "POST",
+        body: formData,
+      }).then(r => r.json());
+      if (res.error) setMidiaError(res.error);
+      else await loadCampanhas();
+    } catch {
+      setMidiaError("Falha ao enviar o arquivo.");
+    } finally {
+      setUploadingMidia(false);
+      if (midiaInputRef.current) midiaInputRef.current.value = "";
+    }
+  }
+
+  async function removerMidia() {
+    if (!selected) return;
+    await fetch(`/api/sdr/campanhas-whatsapp/${selected.id}/media`, { method: "DELETE" }).catch(() => {});
+    await loadCampanhas();
   }
 
   return (
@@ -320,6 +353,42 @@ export function CampanhasWhatsappClient() {
                   padding: 10, color: "#F0ECE4", fontSize: 13, resize: "vertical", outline: "none",
                 }}
               />
+            </div>
+
+            {/* Mídia (imagem ou vídeo) */}
+            <div>
+              <label style={{ display: "block", color: "#7A8FA8", fontSize: 10, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", marginBottom: 6 }}>
+                Imagem ou vídeo (opcional — a mensagem vira a legenda)
+              </label>
+              {selected.media_url ? (
+                <div style={{ display: "flex", alignItems: "center", gap: 10, background: "#111F35", border: "1px solid #243A66", borderRadius: 8, padding: 10 }}>
+                  {selected.media_type === "video" ? (
+                    <video src={selected.media_url} style={{ width: 64, height: 64, objectFit: "cover", borderRadius: 6 }} muted />
+                  ) : (
+                    <img src={selected.media_url} alt="" style={{ width: 64, height: 64, objectFit: "cover", borderRadius: 6 }} />
+                  )}
+                  <span style={{ flex: 1, color: "#F0ECE4", fontSize: 12 }}>
+                    {selected.media_type === "video" ? "🎬 Vídeo anexado" : "🖼️ Imagem anexada"}
+                  </span>
+                  <button onClick={removerMidia} style={{ background: "#243A66", border: "none", borderRadius: 8, padding: "6px 12px", color: "#7A8FA8", fontSize: 12, cursor: "pointer" }}>
+                    Remover
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => midiaInputRef.current?.click()}
+                  disabled={uploadingMidia}
+                  style={{
+                    background: "#162744", border: "1px dashed #243A66", borderRadius: 8,
+                    padding: "10px 14px", color: "#7A8FA8", fontSize: 12, fontWeight: 600, cursor: "pointer",
+                    width: "100%", opacity: uploadingMidia ? 0.6 : 1,
+                  }}
+                >
+                  {uploadingMidia ? "Enviando..." : "📎 Anexar imagem ou vídeo"}
+                </button>
+              )}
+              <input ref={midiaInputRef} type="file" accept="image/*,video/*" onChange={handleMidiaChange} style={{ display: "none" }} />
+              {midiaError && <p style={{ color: "#EF4444", fontSize: 12, marginTop: 6 }}>{midiaError}</p>}
             </div>
 
             {/* Intervalo */}

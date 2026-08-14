@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
-import { sendText } from "@/lib/whatsapp/openwa-client";
-import { getSessionStatus } from "@/lib/whatsapp/openwa-client";
+import { sendText, sendImage, sendVideo, getSessionStatus } from "@/lib/whatsapp/openwa-client";
 
 // Vercel Pro permite até 300s em funções Node — um disparo grande pode ser
 // interrompido no meio; como cada contato só é reprocessado se ainda estiver
@@ -73,7 +72,11 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     const mensagem = renderTemplate(campanha.mensagem_template, contato.nome);
 
     try {
-      const ok = await sendText(contato.phone, mensagem);
+      const ok = campanha.media_url
+        ? campanha.media_type === "video"
+          ? await sendVideo(contato.phone, campanha.media_url, mensagem)
+          : await sendImage(contato.phone, campanha.media_url, mensagem)
+        : await sendText(contato.phone, mensagem);
       await db.from("sdr_campanha_whatsapp_contatos")
         .update({ status: ok ? "enviado" : "erro", erro_detalhe: ok ? null : "Falha no envio via OpenWA" })
         .eq("id", contato.id);
