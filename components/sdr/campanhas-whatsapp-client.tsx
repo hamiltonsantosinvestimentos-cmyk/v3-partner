@@ -93,6 +93,7 @@ export function CampanhasWhatsappClient() {
   const [midiaError, setMidiaError] = useState<string | null>(null);
   const [qrEnabled, setQrEnabled] = useState(false);
   const [qrDraft, setQrDraft] = useState<QuickReplyOption[]>(DEFAULT_QUICK_REPLY_OPTIONS);
+  const [msgPreview, setMsgPreview] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const midiaInputRef = useRef<HTMLInputElement>(null);
 
@@ -116,6 +117,7 @@ export function CampanhasWhatsappClient() {
 
   useEffect(() => { loadCampanhas(); }, [loadCampanhas]);
   useEffect(() => { if (selectedId) loadDetalhe(selectedId); else setContatos([]); }, [selectedId, loadDetalhe]);
+  useEffect(() => { setMsgPreview(selected?.mensagem_template ?? ""); }, [selectedId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Reseta o rascunho de opções rápidas ao trocar de campanha (ou ao recarregar a lista)
   useEffect(() => {
@@ -302,7 +304,8 @@ export function CampanhasWhatsappClient() {
             Selecione uma fila à esquerda ou crie uma nova.
           </div>
         ) : (
-          <div className="max-w-3xl flex flex-col gap-4">
+          <div className="max-w-5xl grid grid-cols-1 xl:grid-cols-[1fr_300px] gap-6 items-start">
+          <div className="flex flex-col gap-4 min-w-0">
             {/* Painel de disparo — envio real via OpenWA */}
             <div className="bg-[#111F35] border border-[#243A66] rounded-xl px-4 py-3.5 flex items-center justify-between gap-3">
               <div className="text-xs text-[#7A8FA8] leading-relaxed">
@@ -357,6 +360,7 @@ export function CampanhasWhatsappClient() {
               </label>
               <textarea
                 defaultValue={selected.mensagem_template}
+                onChange={e => setMsgPreview(e.target.value)}
                 onBlur={e => salvarCampo("mensagem_template", e.target.value)}
                 rows={4}
                 placeholder="Olá {{nome}}, tudo bem? ..."
@@ -508,6 +512,45 @@ export function CampanhasWhatsappClient() {
                 })}
               </div>
             </div>
+          </div>
+
+          {/* ── Preview estilo bolha do WhatsApp (estilo ManyChat) ── */}
+          <div className="sticky top-6 flex flex-col items-center">
+            <p className="text-[#7A8FA8] text-[10px] font-bold tracking-wide uppercase mb-2 self-start">Pré-visualização</p>
+            <div className="w-[270px] rounded-[28px] border-[6px] border-[#162744] bg-[#0B141A] overflow-hidden shadow-xl">
+              <div
+                className="px-3 py-8 min-h-[360px] flex flex-col justify-end gap-2"
+                style={{ background: "linear-gradient(180deg,#0B141A,#111B21)" }}
+              >
+                <div className="bg-[#005C4B] rounded-lg rounded-br-sm px-2.5 py-2 max-w-[90%] self-end">
+                  {selected.media_url && (
+                    selected.media_type === "video" ? (
+                      <video src={selected.media_url} className="w-full rounded-md mb-1.5" muted />
+                    ) : (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={selected.media_url} alt="" className="w-full rounded-md mb-1.5" />
+                    )
+                  )}
+                  <p className="text-[#E9EDEF] text-[12.5px] leading-snug whitespace-pre-wrap break-words">
+                    {(msgPreview || "Sua mensagem aparece aqui...").replace(/\{\{\s*nome\s*\}\}/gi, "João")}
+                  </p>
+                  <p className="text-[#8696A0] text-[10px] text-right mt-1">12:0{new Date().getMinutes() % 6}</p>
+                </div>
+                {qrEnabled && qrDraft.some(o => o.label.trim()) && (
+                  <div className="bg-[#005C4B] rounded-lg rounded-br-sm px-2.5 py-1.5 max-w-[90%] self-end flex flex-col gap-1">
+                    {qrDraft.filter(o => o.label.trim()).map(o => (
+                      <div key={o.key} className="text-[#E9EDEF] text-[11px] font-semibold text-center bg-black/15 rounded px-2 py-1">
+                        {o.key}. {o.label}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+            <p className="text-[#7A8FA8] text-[10px] mt-2 text-center max-w-[240px]">
+              {"{{nome}}"} vira o nome de cada contato no envio real
+            </p>
+          </div>
           </div>
         )}
       </div>

@@ -1,14 +1,34 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, type ReactNode } from "react";
 import Image from "next/image";
 import { CampanhasClient } from "./campanhas-client";
 import { CampanhasWhatsappClient } from "./campanhas-whatsapp-client";
 import { SdrKanbanClient } from "./sdr-kanban-client";
 import { SdrDashboardClient } from "./sdr-dashboard-client";
+import { SdrFlowBuilderClient } from "./sdr-flow-builder-client";
 import { SdrLeadDetailPanel, PROSPECCAO_ETAPA_LABELS, tagClass, statusClass, type SdrLead } from "./sdr-lead-detail-panel";
 import { QuickReplyOptionsEditor, DEFAULT_QUICK_REPLY_OPTIONS } from "./quick-reply-options-editor";
 import type { QuickReplyOption } from "@/lib/whatsapp/quick-reply";
+
+// ─── Ícones de navegação (estilo linha, 20x20) ─────────────────────────────
+
+function NavIcon({ path, viewBox = "0 0 24 24" }: { path: ReactNode; viewBox?: string }) {
+  return (
+    <svg width="19" height="19" viewBox={viewBox} fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+      {path}
+    </svg>
+  );
+}
+
+const ICONS = {
+  conversas: <NavIcon path={<><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" /></>} />,
+  automacao: <NavIcon path={<><rect x="4" y="4" width="6" height="6" rx="1.5" /><rect x="14" y="4" width="6" height="6" rx="1.5" /><rect x="9" y="14" width="6" height="6" rx="1.5" /><path d="M7 10v2a2 2 0 0 0 2 2h1" /><path d="M17 10v2a2 2 0 0 0-2 2h-1" /></>} />,
+  envioMassa: <NavIcon path={<><path d="M22 2 11 13" /><path d="M22 2 15 22l-4-9-9-4 20-7z" /></>} />,
+  campanhas: <NavIcon path={<><rect x="2" y="4" width="20" height="16" rx="2" /><path d="m2 7 10 6 10-6" /></>} />,
+  kanban: <NavIcon path={<><rect x="3" y="3" width="7" height="18" rx="1.5" /><rect x="14" y="3" width="7" height="10" rx="1.5" /></>} />,
+  dashboard: <NavIcon path={<><path d="M3 3v18h18" /><path d="M18 17V9" /><path d="M13 17V5" /><path d="M8 17v-3" /></>} />,
+};
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -75,7 +95,8 @@ interface SdrClientProps {
   currentUserRole: string;
 }
 
-type MainTab = "conversas" | "campanhas" | "envio-massa" | "kanban" | "dashboard";
+type MainTab = "conversas" | "automacao" | "campanhas" | "envio-massa" | "kanban" | "dashboard";
+type LeadFilter = "todos" | "meus" | "nao_atribuidos" | "humano";
 
 export function SdrClient({ currentUserId, currentUserName, currentUserRole }: SdrClientProps) {
   const isAdminGestao = currentUserRole === "ADMIN" || currentUserRole === "GESTAO";
@@ -86,6 +107,7 @@ export function SdrClient({ currentUserId, currentUserName, currentUserRole }: S
   const [conversas, setConversas] = useState<Conversa[]>([]);
   const [loadingConversas, setLoadingConversas] = useState(false);
   const [search, setSearch] = useState("");
+  const [leadFilter, setLeadFilter] = useState<LeadFilter>("todos");
   const [mainTab, setMainTab] = useState<MainTab>(isAdminGestao ? "conversas" : "kanban");
   const [showQr, setShowQr] = useState(false);
   const [savingLead, setSavingLead] = useState(false);
@@ -247,45 +269,69 @@ export function SdrClient({ currentUserId, currentUserName, currentUserRole }: S
     return groups;
   }
 
-  const filteredLeads = leads.filter(l =>
-    l.phone.includes(search) ||
-    (l.nome?.toLowerCase().includes(search.toLowerCase()))
-  );
+  const filteredLeads = leads
+    .filter(l => l.phone.includes(search) || (l.nome?.toLowerCase().includes(search.toLowerCase())))
+    .filter(l => {
+      if (leadFilter === "meus") return l.responsavel_id === currentUserId;
+      if (leadFilter === "nao_atribuidos") return !l.responsavel_id;
+      if (leadFilter === "humano") return l.humano_ativo;
+      return true;
+    });
 
-  const TABS: { key: MainTab; label: string }[] = [
+  const LEAD_FILTERS: { key: LeadFilter; label: string }[] = [
+    { key: "todos", label: "Todos" },
+    { key: "meus", label: "Meus" },
+    { key: "nao_atribuidos", label: "Sem dono" },
+    { key: "humano", label: "Humano" },
+  ];
+
+  const TABS: { key: MainTab; label: string; icon: ReactNode }[] = [
     ...(isAdminGestao ? ([
-      { key: "conversas", label: "💬 WhatsApp" },
-      { key: "envio-massa", label: "📤 Envio em Massa" },
-      { key: "campanhas", label: "📧 Campanhas" },
-    ] as { key: MainTab; label: string }[]) : []),
-    { key: "kanban", label: "🗂️ Kanban" },
-    { key: "dashboard", label: "📊 Dashboard" },
+      { key: "conversas", label: "Conversas", icon: ICONS.conversas },
+      { key: "automacao", label: "Automação", icon: ICONS.automacao },
+      { key: "envio-massa", label: "Envio em Massa", icon: ICONS.envioMassa },
+      { key: "campanhas", label: "Campanhas", icon: ICONS.campanhas },
+    ] as { key: MainTab; label: string; icon: ReactNode }[]) : []),
+    { key: "kanban", label: "Kanban", icon: ICONS.kanban },
+    { key: "dashboard", label: "Dashboard", icon: ICONS.dashboard },
   ];
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col overflow-hidden" style={{ height: "calc(100vh - 64px)" }}>
+    <div className="flex overflow-hidden" style={{ height: "calc(100vh - 64px)" }}>
+
+      {/* ── Rail lateral de ícones (estilo ManyChat) ──────────────────────────── */}
+      <div className="w-[76px] shrink-0 bg-[#09081A] border-r border-[#243A66] flex flex-col items-center py-4 gap-1 overflow-y-auto">
+        <div className="w-10 h-10 rounded-xl bg-[#C9A84C]/10 border border-[#C9A84C]/30 flex items-center justify-center text-[#C9A84C] font-extrabold text-sm mb-3 shrink-0">
+          SDR
+        </div>
+        {TABS.map(t => (
+          <button
+            key={t.key}
+            onClick={() => setMainTab(t.key)}
+            title={t.label}
+            className={`w-[62px] shrink-0 flex flex-col items-center gap-1 py-2.5 rounded-xl transition-colors ${
+              mainTab === t.key
+                ? "bg-[#C9A84C]/10 text-[#C9A84C] border border-[#C9A84C]/30"
+                : "text-[#7A8FA8] border border-transparent hover:text-[#F0ECE4] hover:bg-[#162744]/60"
+            }`}
+          >
+            {t.icon}
+            <span className="text-[8.5px] font-bold leading-none text-center px-0.5">{t.label}</span>
+          </button>
+        ))}
+      </div>
+
+      {/* ── Coluna principal ───────────────────────────────────────────────────── */}
+      <div className="flex flex-col flex-1 overflow-hidden relative">
 
       {/* ── Top bar ─────────────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between px-6 py-3 bg-[#09081A] border-b border-[#243A66] shrink-0">
         <div>
           <p className="text-[#C9A84C] text-[10px] font-bold tracking-[2px] uppercase">AGENTE SDR</p>
-          <h1 className="text-[#F0ECE4] text-xl font-bold leading-tight">CRM do WhatsApp</h1>
-        </div>
-
-        {/* Tabs */}
-        <div className="flex items-center gap-1 bg-[#0D1929] border border-[#243A66] rounded-xl p-1 w-fit">
-          {TABS.map(t => (
-            <button
-              key={t.key}
-              onClick={() => setMainTab(t.key)}
-              className={mainTab === t.key
-                ? "bg-[#C9A84C] text-[#09081A] px-4 py-2 rounded-lg text-xs font-semibold whitespace-nowrap"
-                : "text-[#7A8FA8] hover:text-[#F0ECE4] px-4 py-2 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap"}
-            >
-              {t.label}
-            </button>
-          ))}
+          <h1 className="text-[#F0ECE4] text-xl font-bold leading-tight">
+            {TABS.find(t => t.key === mainTab)?.label ?? "CRM do WhatsApp"}
+          </h1>
         </div>
 
         <div className="flex items-center gap-3">
@@ -308,7 +354,7 @@ export function SdrClient({ currentUserId, currentUserName, currentUserRole }: S
 
       {/* ── QR Panel (dropdown) ─────────────────────────────────────────────── */}
       {isAdminGestao && showQr && (
-        <div className="absolute z-[100] bg-[#162744] border border-[#243A66] rounded-2xl p-5 w-[300px] shadow-2xl" style={{ top: 120, right: 24 }}>
+        <div className="absolute z-[100] bg-[#162744] border border-[#243A66] rounded-2xl p-5 w-[300px] shadow-2xl" style={{ top: 60, right: 24 }}>
           {qr.status === "connected" ? (
             <div className="text-center">
               <div className="text-4xl mb-2">✅</div>
@@ -339,6 +385,13 @@ export function SdrClient({ currentUserId, currentUserName, currentUserRole }: S
           >
             Atualizar
           </button>
+        </div>
+      )}
+
+      {/* ── Automação tab (flow builder visual) ──────────────────────────────── */}
+      {mainTab === "automacao" && (
+        <div className="flex-1 overflow-hidden bg-[#0D1B2E]">
+          <SdrFlowBuilderClient />
         </div>
       )}
 
@@ -387,6 +440,21 @@ export function SdrClient({ currentUserId, currentUserName, currentUserRole }: S
                 onChange={e => setSearch(e.target.value)}
                 className="bg-transparent border-none outline-none text-[#F0ECE4] text-sm flex-1"
               />
+            </div>
+            <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+              {LEAD_FILTERS.map(f => (
+                <button
+                  key={f.key}
+                  onClick={() => setLeadFilter(f.key)}
+                  className={`text-[10px] font-bold px-2.5 py-1 rounded-full border transition-colors ${
+                    leadFilter === f.key
+                      ? "bg-[#C9A84C] text-[#09081A] border-[#C9A84C]"
+                      : "bg-transparent text-[#7A8FA8] border-[#243A66] hover:text-[#F0ECE4] hover:border-[#C9A84C]/40"
+                  }`}
+                >
+                  {f.label}
+                </button>
+              ))}
             </div>
           </div>
 
@@ -672,6 +740,7 @@ export function SdrClient({ currentUserId, currentUserName, currentUserRole }: S
             </div>
           </div>
         )}
+      </div>
       </div>
     </div>
   );
