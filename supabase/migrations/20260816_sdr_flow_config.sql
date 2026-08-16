@@ -4,23 +4,23 @@
 -- isso só torna o roteiro/persona editável visualmente em vez de hardcoded.
 
 CREATE TABLE IF NOT EXISTS public.sdr_flow_config (
-  id                  text PRIMARY KEY DEFAULT 'default',
-  agente_nome         text NOT NULL DEFAULT 'Matheus',
-  empresa_contexto    text NOT NULL DEFAULT '',
-  regras_comunicacao  text NOT NULL DEFAULT '',
-  updated_at          timestamptz NOT NULL DEFAULT now(),
-  updated_by          uuid REFERENCES public.profiles(id) ON DELETE SET NULL
+  id text PRIMARY KEY DEFAULT 'default',
+  agente_nome text NOT NULL DEFAULT 'Matheus',
+  empresa_contexto text NOT NULL DEFAULT '',
+  regras_comunicacao text NOT NULL DEFAULT '',
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  updated_by uuid REFERENCES public.profiles(id) ON DELETE SET NULL
 );
 
 CREATE TABLE IF NOT EXISTS public.sdr_flow_stages (
-  id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  ordem        integer NOT NULL,
-  titulo       text NOT NULL,
-  objetivo     text NOT NULL DEFAULT '',
-  instrucoes   text NOT NULL DEFAULT '',
-  ativo        boolean NOT NULL DEFAULT true,
-  created_at   timestamptz NOT NULL DEFAULT now(),
-  updated_at   timestamptz NOT NULL DEFAULT now()
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  ordem integer NOT NULL,
+  titulo text NOT NULL,
+  objetivo text NOT NULL DEFAULT '',
+  instrucoes text NOT NULL DEFAULT '',
+  ativo boolean NOT NULL DEFAULT true,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
 );
 
 CREATE INDEX IF NOT EXISTS idx_sdr_flow_stages_ordem ON public.sdr_flow_stages (ordem);
