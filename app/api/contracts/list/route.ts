@@ -23,6 +23,7 @@ export async function GET(req: NextRequest) {
   const vertical = url.searchParams.get("vertical");
   const status = url.searchParams.get("status");
   const search = url.searchParams.get("q");
+  const ticketId = url.searchParams.get("ticket_id");
 
   let query = svc()
     .from("operation_contracts")
@@ -32,6 +33,7 @@ export async function GET(req: NextRequest) {
   if (vertical) query = query.eq("vertical", vertical);
   if (status) query = query.eq("status_signature", status);
   if (search) query = query.ilike("contract_title", `%${search}%`);
+  if (ticketId) query = query.eq("ticket_id", ticketId);
 
   const { data, error } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

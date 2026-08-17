@@ -6,7 +6,7 @@ import {
   Clock, CheckCircle2, AlertCircle, Link2,
   LayoutGrid, List, Search, X, FileText, ArrowRight, ArrowLeft, MessageSquare, Trash2,
   ScrollText, RefreshCw, XCircle, Download, Edit2, Users, Filter, Settings, Bell, Mail, MessageCircle,
-  BarChart2, TrendingUp, AlertTriangle, Timer, ClipboardCheck, Loader2,
+  BarChart2, TrendingUp, AlertTriangle, Timer, ClipboardCheck, Loader2, Send,
 } from "lucide-react";
 import { ExportButton } from "@/components/financeiro/export-button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -869,8 +869,151 @@ function PendingBadge({ ticket }: { ticket: Ticket }) {
   );
 }
 
+// ─── Modal Enviar NDA (Central de Contratos → template "NDA (Mesa de operações)") ──
+type OperationContract = {
+  id: string;
+  contract_code: string | null;
+  status_signature: string;
+};
+
+const NDA_STATUS_LABELS: Record<string, string> = {
+  rascunho: "Gerado — ainda não enviado",
+  enviado_assinatura: "Enviado — aguardando assinatura",
+  assinado: "Assinado",
+};
+
+function SendNdaModal({ open, onClose, ticket }: {
+  open: boolean;
+  onClose: () => void;
+  ticket: Ticket | null;
+}) {
+  const [loading, setLoading] = useState(true);
+  const [contract, setContract] = useState<OperationContract | null>(null);
+  const [nome, setNome] = useState("");
+  const [cpfCnpj, setCpfCnpj] = useState("");
+  const [email, setEmail] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!open || !ticket) return;
+    setError(""); setNome(""); setCpfCnpj(""); setEmail(""); setContract(null);
+    setLoading(true);
+    fetch(`/api/contracts/list?ticket_id=${ticket.id}`)
+      .then(r => r.json())
+      .then(d => setContract((d.contracts ?? [])[0] ?? null))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, ticket?.id]);
+
+  async function handleGerarEEnviar() {
+    if (!ticket || !nome.trim() || !email.trim()) return;
+    setBusy(true);
+    setError("");
+    try {
+      const tplRes = await fetch("/api/contracts/templates?vertical=credito").then(r => r.json());
+      const templates: { id: string; template_name: string; contract_series: string }[] = tplRes.templates ?? [];
+      const tpl = templates.find(t => t.template_name.toLowerCase().includes("mesa de opera"))
+        ?? templates.find(t => t.contract_series === "V3C-NDA");
+      if (!tpl) { setError("Nenhum template de NDA encontrado na Central de Contratos (vertical Mesa de Crédito)."); return; }
+
+      const genRes = await fetch("/api/contracts/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          template_id: tpl.id,
+          ticket_id: ticket.id,
+          extra_data: { nome_cedente: nome.trim(), cpf_cnpj_cedente: cpfCnpj.trim() || "[CPF/CNPJ]", email_cedente: email.trim() },
+        }),
+      }).then(r => r.json());
+      if (genRes.error) { setError(genRes.error); return; }
+
+      const sendRes = await fetch(`/api/contracts/${genRes.contract.id}/send`, { method: "POST" }).then(r => r.json());
+      if (sendRes.error) {
+        setContract({ id: genRes.contract.id, contract_code: genRes.contract.contract_code ?? null, status_signature: "rascunho" });
+        setError(sendRes.error);
+        return;
+      }
+
+      setContract({ id: genRes.contract.id, contract_code: genRes.contract.contract_code ?? null, status_signature: "enviado_assinatura" });
+    } catch {
+      setError("Erro de conexão.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!open || !ticket) return null;
+
+  return (
+    <div className="fixed inset-0 z-[95] flex items-start justify-center p-4 pt-10 bg-black/70 backdrop-blur-sm">
+      <div className="bg-card border border-[#C9A84C]/30 rounded-2xl w-full max-w-md animate-fade-in">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+          <div className="flex items-center gap-2">
+            <FileText className="w-4 h-4 text-[#C9A84C]" />
+            <h2 className="text-sm font-bold text-white">Enviar NDA</h2>
+          </div>
+          <button onClick={onClose} className="w-8 h-8 rounded-lg hover:bg-secondary flex items-center justify-center text-muted-foreground hover:text-white transition-colors">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="px-6 py-5 space-y-4">
+          <p className="text-xs text-muted-foreground">
+            Ticket <span className="font-mono text-[#C9A84C]">{ticket.code}</span> — usa o template{" "}
+            <strong className="text-foreground">NDA (Mesa de operações)</strong> da Central de Contratos.
+          </p>
+
+          {loading ? (
+            <p className="text-xs text-muted-foreground text-center py-4">Verificando...</p>
+          ) : contract ? (
+            <div className="rounded-xl p-4 space-y-1" style={{ background: "#111F35", border: "1px solid rgba(201,168,76,0.2)" }}>
+              <p className="text-xs font-semibold text-white">{contract.contract_code ?? "NDA gerado"}</p>
+              <p className="text-xs" style={{ color: "#C9A84C" }}>
+                {NDA_STATUS_LABELS[contract.status_signature] ?? contract.status_signature}
+              </p>
+            </div>
+          ) : (
+            <>
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Nome do cliente *</label>
+                <input value={nome} onChange={e => setNome(e.target.value)}
+                  className="w-full h-9 px-3 text-sm bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">CPF/CNPJ</label>
+                <input value={cpfCnpj} onChange={e => setCpfCnpj(e.target.value)}
+                  className="w-full h-9 px-3 text-sm bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">E-mail *</label>
+                <input type="email" value={email} onChange={e => setEmail(e.target.value)}
+                  className="w-full h-9 px-3 text-sm bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50" />
+              </div>
+            </>
+          )}
+          {error && <p className="text-[11px] text-[#FF6B6B]">{error}</p>}
+        </div>
+
+        <div className="px-6 py-4 border-t border-border flex gap-2 justify-end">
+          <Button variant="outline" size="sm" onClick={onClose}>{contract ? "Fechar" : "Cancelar"}</Button>
+          {!loading && !contract && (
+            <Button size="sm" onClick={handleGerarEEnviar} disabled={!nome.trim() || !email.trim() || busy} className="gap-1.5">
+              {busy
+                ? <span className="w-3 h-3 rounded-full border-2 border-current border-t-transparent animate-spin" />
+                : <Send className="w-3.5 h-3.5" />}
+              {busy ? "Enviando..." : "Gerar e Enviar NDA"}
+            </Button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Ticket Detail Modal ───────────────────────────────────────────────────
-function TicketDetailModal({ open, onClose, ticket, currentUser, onUpdated, onOpenPending, onOpenResolve, onSendReminder }: {
+function TicketDetailModal({ open, onClose, ticket, currentUser, onUpdated, onOpenPending, onOpenResolve, onSendReminder, onOpenNda }: {
   open: boolean;
   onClose: () => void;
   ticket: Ticket | null;
@@ -879,6 +1022,7 @@ function TicketDetailModal({ open, onClose, ticket, currentUser, onUpdated, onOp
   onOpenPending: () => void;
   onOpenResolve: () => void;
   onSendReminder: () => void;
+  onOpenNda: () => void;
 }) {
   const [comments, setComments] = useState<TicketComment[]>([]);
   const [commentsLoading, setCommentsLoading] = useState(false);
@@ -892,6 +1036,10 @@ function TicketDetailModal({ open, onClose, ticket, currentUser, onUpdated, onOp
   const commentsEndRef = useRef<HTMLDivElement>(null);
 
   const isAdmin = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"].includes(currentUser?.role ?? "");
+  // Central de Contratos (geração/envio de NDA) é restrita a ADMIN/GESTAO no
+  // backend (mesmo gate de /api/contracts/*) — mais estrito que o isAdmin
+  // geral do ticket, que também libera MESA_OPERACIONAL pras ações de status.
+  const canSendNda = ["ADMIN", "GESTAO"].includes(currentUser?.role ?? "");
 
   useEffect(() => {
     if (!open || !ticket) return;
@@ -1223,6 +1371,17 @@ function TicketDetailModal({ open, onClose, ticket, currentUser, onUpdated, onOp
 
         {/* Footer */}
         <div className="px-6 py-4 border-t border-border flex gap-2 justify-end flex-shrink-0">
+          {canSendNda && (
+            <Button
+              variant="outline" size="sm"
+              onClick={() => { onClose(); onOpenNda(); }}
+              className="gap-1.5 mr-auto"
+              style={{ borderColor: "rgba(201,168,76,0.4)", color: "#C9A84C" }}
+            >
+              <FileText className="w-3.5 h-3.5" />
+              Enviar NDA
+            </Button>
+          )}
           <Button variant="outline" size="sm" onClick={onClose} disabled={saving}>Fechar</Button>
           {isAdmin && (
             <Button size="sm" onClick={handleSave} disabled={saving} className="gap-1.5">
@@ -1547,6 +1706,7 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
   // ─── Estado de pendência ─────────────────────────────────────────────────
   const [pendingTarget, setPendingTarget] = useState<Ticket | null>(null);
   const [resolveTarget, setResolveTarget] = useState<Ticket | null>(null);
+  const [ndaTarget, setNdaTarget] = useState<Ticket | null>(null);
   // Pendência de deal/proposta
   const [pendingProposalTarget, setPendingProposalTarget] = useState<ProposalCard | null>(null);
   const [reminderLoading, setReminderLoading] = useState(false);
@@ -2891,6 +3051,14 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
         onOpenPending={() => { setPendingTarget(ticketDetail); setTicketDetail(null); }}
         onOpenResolve={() => { setResolveTarget(ticketDetail); setTicketDetail(null); }}
         onSendReminder={() => { if (ticketDetail) handleSendReminder(ticketDetail); }}
+        onOpenNda={() => { setNdaTarget(ticketDetail); setTicketDetail(null); }}
+      />
+
+      {/* ── Modal Enviar NDA ── */}
+      <SendNdaModal
+        open={!!ndaTarget}
+        onClose={() => setNdaTarget(null)}
+        ticket={ndaTarget}
       />
 
       <EditarPropostaModal

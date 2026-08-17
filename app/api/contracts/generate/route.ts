@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
   const caller = await requireRole(req);
   if (!caller) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
-  const { template_id, listing_id, bid_id, deal_id, credit_proposal_id, qualification_batch_id, commission_percent, extra_data } = await req.json();
+  const { template_id, listing_id, bid_id, deal_id, credit_proposal_id, ticket_id, qualification_batch_id, commission_percent, extra_data } = await req.json();
 
   if (!template_id) return NextResponse.json({ error: "template_id obrigatório" }, { status: 422 });
 
@@ -110,6 +110,26 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // Mesa Operacional: ticket não tem contraparte cadastrada (é um ticket
+  // interno, não um deal/listing com "cedente"), então a contraparte do
+  // documento vem inteira de extra_data (nome/CPF-CNPJ/e-mail digitados no
+  // botão "Enviar NDA" do modal do ticket) — aqui só valida que o ticket
+  // existe e guarda code/título como referência.
+  if (ticket_id) {
+    const { data: ticket } = await svc()
+      .from("operational_tickets")
+      .select("code, title")
+      .eq("id", ticket_id)
+      .single();
+
+    if (!ticket) return NextResponse.json({ error: "Ticket não encontrado" }, { status: 404 });
+
+    Object.assign(variables, {
+      ticket_code: ticket.code,
+      ticket_titulo: ticket.title,
+    });
+  }
+
   // Padronização via Central de Contratos (decisão 2026-07-28): quando o
   // contrato nasce de um lote da esteira de qualificação (NDA Quadripartite,
   // FPA Venda/Compra, Mandato, Contrato Final), as partes e as variáveis do
@@ -154,9 +174,15 @@ export async function POST(req: NextRequest) {
     variables.comissao_intermediario = (commission_percent * 0.2).toFixed(2);
   }
 
+  // E-mail é obrigatório pra cada parte poder assinar de verdade (gate de
+  // /api/contracts/[id]/send bloqueia parte sem e-mail) — esse fallback
+  // genérico (fora da esteira de qualificação) nunca preenchia email, então
+  // nenhum contrato gerado por aqui conseguia ser enviado. extra_data.email_cedente
+  // é o e-mail digitado no formulário de quem está gerando (ex: botão
+  // "Enviar NDA" da Mesa Operacional).
   const resolvedParties = qualificationParties ?? (variables.nome_cedente ? [
-    { role: "cedente", name: variables.nome_cedente, doc: variables.cpf_cnpj_cedente },
-    { role: "v3_partners", name: "V3 Partners Soluções Ltda", doc: "14.219.287/0001-50" },
+    { role: "cedente", name: variables.nome_cedente, doc: variables.cpf_cnpj_cedente, email: variables.email_cedente ?? null },
+    { role: "v3_partners", name: "V3 Partners Soluções Ltda", doc: "14.219.287/0001-50", email: "joao.lemos@v3partners.com.br" },
   ] : []);
 
   const renderedBody = resolveContractVariables(template.body_text_raw, variables);
@@ -192,6 +218,7 @@ export async function POST(req: NextRequest) {
       bid_id: bid_id ?? null,
       deal_id: deal_id ?? null,
       credit_proposal_id: credit_proposal_id ?? null,
+      ticket_id: ticket_id ?? null,
       qualification_batch_id: qualification_batch_id ?? null,
       contract_title: contractTitle,
       rendered_html: renderedHtml,
