@@ -275,9 +275,19 @@ export async function POST(req: NextRequest) {
   // nenhum contrato gerado por aqui conseguia ser enviado. extra_data.email_cedente
   // é o e-mail digitado no formulário de quem está gerando (ex: botão
   // "Enviar NDA" da Mesa Operacional).
+  // Representante da V3 que assina ao lado do cliente (papel "cedente"):
+  // usa o Head da mesa de origem quando o generate() já resolveu um (ex:
+  // credit_proposal_id -> Head da Mesa de Crédito), já que quem assina pela
+  // V3 deve ser quem responde por aquela mesa, não sempre o mesmo sócio.
+  // Sem mesa identificada (ex: ticket avulso da Mesa Operacional), cai pro
+  // João como responsável institucional padrão.
+  const v3PartnersSignatario = typeof variables.head_email === "string" && typeof variables.head_full_name === "string"
+    ? { role: "v3_partners", name: "V3 Partners Soluções Ltda", doc: "14.219.287/0001-50", email: variables.head_email }
+    : { role: "v3_partners", name: "V3 Partners Soluções Ltda", doc: "14.219.287/0001-50", email: "joao.lemos@v3partners.com.br" };
+
   const resolvedParties = qualificationParties ?? (variables.nome_cedente ? [
     { role: "cedente", name: variables.nome_cedente, doc: variables.cpf_cnpj_cedente, email: variables.email_cedente ?? null },
-    { role: "v3_partners", name: "V3 Partners Soluções Ltda", doc: "14.219.287/0001-50", email: "joao.lemos@v3partners.com.br" },
+    v3PartnersSignatario,
   ] : headParty.length > 0 ? [
     ...headParty,
     { role: "v3_partners", name: "V3 Partners Soluções Ltda", doc: "14.219.287/0001-50" },
