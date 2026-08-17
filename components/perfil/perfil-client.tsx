@@ -19,6 +19,9 @@ interface ProfileData {
   avatar_url: string | null;
   phone: string | null;
   document_cpf: string | null;
+  nationality: string | null;
+  marital_status: string | null;
+  profession: string | null;
   created_at: string;
   last_login_at: string | null;
   is_active: boolean;
@@ -103,6 +106,12 @@ export function PerfilClient({ initialProfile }: { initialProfile: ProfileData }
   const [fullName, setFullName] = useState(profile.full_name ?? "");
   const [phone, setPhone] = useState(profile.phone ?? "");
   const [cpf, setCpf] = useState(profile.document_cpf ?? "");
+  // 17/08/2026: qualificação jurídica para assinatura de contratos (NCNDA
+  // Mestre e futuros instrumentos) — cada Head da mesa preenche o próprio
+  // dado, fica gravado pras próximas gerações (lib/ncnda-desk-head.ts).
+  const [nationality, setNationality] = useState(profile.nationality ?? "");
+  const [maritalStatus, setMaritalStatus] = useState(profile.marital_status ?? "");
+  const [profession, setProfession] = useState(profile.profession ?? "");
 
   // Co-branding / Mini-site
   const [cobSlug, setCobSlug] = useState(profile.cobranding_slug ?? "");
@@ -137,11 +146,11 @@ export function PerfilClient({ initialProfile }: { initialProfile: ProfileData }
       const res = await fetch("/api/profile", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ full_name: fullName, phone, document_cpf: cpf }),
+        body: JSON.stringify({ full_name: fullName, phone, document_cpf: cpf, nationality: nationality || null, marital_status: maritalStatus || null, profession: profession || null }),
       });
       const json = await res.json();
       if (!res.ok) { showToast(json.error ?? "Erro ao salvar.", "error"); return; }
-      setProfile(prev => ({ ...prev, full_name: fullName, phone, document_cpf: cpf }));
+      setProfile(prev => ({ ...prev, full_name: fullName, phone, document_cpf: cpf, nationality: nationality || null, marital_status: maritalStatus || null, profession: profession || null }));
       showToast("Perfil atualizado com sucesso!", "success");
     } finally {
       setSaving(false);
@@ -360,6 +369,27 @@ export function PerfilClient({ initialProfile }: { initialProfile: ProfileData }
                 <Field label="Cargo / Função" value={ROLE_LABELS[profile.role]} readOnly />
                 <Field label="Status da conta" value={profile.is_active ? "Ativa" : "Inativa"} readOnly />
               </div>
+
+              {/* 17/08/2026: Dados para Assinatura de Contratos — só quem
+                  assina como Head de mesa (ADMIN/GESTAO) precisa disso.
+                  Preenchido uma vez, fica valendo pras próximas gerações
+                  de NCNDA (lib/ncnda-desk-head.ts resolve isso em tempo
+                  real, sem precisar de deploy novo). */}
+              {(profile.role === "ADMIN" || profile.role === "GESTAO") && (
+                <div className="pt-2 mt-2 border-t border-[#1E3050]/60 space-y-3">
+                  <div>
+                    <h3 className="text-xs font-bold text-[#E8C97A] uppercase tracking-wide">Dados para Assinatura de Contratos</h3>
+                    <p className="text-[11px] text-[#7A8FA8] mt-0.5">
+                      Usado quando você assina como Head de mesa em contratos gerados pela Central de Contratos (ex: NCNDA Mestre). Preencha uma vez, fica gravado para as próximas gerações.
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <Field label="Nacionalidade" value={nationality} onChange={setNationality} placeholder="brasileiro" />
+                    <Field label="Estado civil" value={maritalStatus} onChange={setMaritalStatus} placeholder="casado" />
+                    <Field label="Profissão" value={profession} onChange={setProfession} placeholder="empresário" />
+                  </div>
+                </div>
+              )}
 
               <div className="flex justify-end pt-2">
                 <button onClick={handleSaveProfile} disabled={saving}

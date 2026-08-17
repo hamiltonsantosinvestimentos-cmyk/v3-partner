@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { resolveContractVariables, wrapContractInV3Html } from "@/lib/contract-render";
 import type { V3Series } from "@/lib/v3-codes";
-import { DESK_HEADS } from "@/lib/ncnda-desk-head";
+import { resolveDeskHead } from "@/lib/ncnda-desk-head";
 import { renderPartyQualificationProse } from "@/lib/qualification-roles";
 
 function svc() {
@@ -132,10 +132,12 @@ export async function POST(req: NextRequest) {
       .eq("id", credit_proposal_id)
       .single();
 
-    const head = DESK_HEADS.CREDITO_ESTRUTURADO;
+    // 17/08/2026: resolvido em tempo real via profiles (cada Head
+    // preenche o próprio CPF/qualificação em /perfil), não mais hardcode.
+    const head = await resolveDeskHead("CREDITO_ESTRUTURADO");
     if (!head.cpf) {
       return NextResponse.json({
-        error: `Bloco de assinatura da Mesa de Crédito incompleto: CPF de ${head.fullName} (lib/ncnda-desk-head.ts) não foi informado ainda. Peça a João o CPF e profissão reais antes de gerar contratos de crédito por esta rota.`,
+        error: `Bloco de assinatura da Mesa de Crédito incompleto: ${head.fullName} ainda não preencheu CPF em /perfil (aba Meu Perfil, bloco "Dados para Assinatura de Contratos"). Peça a ele para preencher antes de gerar contratos de crédito por esta rota.`,
       }, { status: 422 });
     }
 

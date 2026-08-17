@@ -14,7 +14,7 @@ export async function GET() {
 
   const { data: profile, error } = await serviceClient()
     .from("profiles")
-    .select("id, full_name, email, role, avatar_url, phone, document_cpf, created_at, last_login_at, is_active, onboarding_dismissed")
+    .select("id, full_name, email, role, avatar_url, phone, document_cpf, nationality, marital_status, profession, is_socio, created_at, last_login_at, is_active, onboarding_dismissed")
     .eq("id", user.id)
     .single();
 
@@ -31,7 +31,11 @@ export async function PATCH(req: NextRequest) {
   if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
   const body = await req.json();
-  const allowed = ["full_name", "phone", "document_cpf", "cobranding_slug", "cobranding_bio", "cobranding_whatsapp", "cobranding_instagram", "onboarding_dismissed"];
+  // 17/08/2026: nationality/marital_status/profession adicionados —
+  // fecham o bloqueio de CPF de lib/ncnda-desk-head.ts (Hamilton/Robson),
+  // cada Head da mesa preenche a própria qualificação jurídica aqui,
+  // mesmo padrão de auto-edição já usado para document_cpf.
+  const allowed = ["full_name", "phone", "document_cpf", "nationality", "marital_status", "profession", "cobranding_slug", "cobranding_bio", "cobranding_whatsapp", "cobranding_instagram", "onboarding_dismissed"];
   const updates: Record<string, string> = {};
   for (const key of allowed) {
     if (body[key] !== undefined) updates[key] = body[key];
