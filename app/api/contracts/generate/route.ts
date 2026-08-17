@@ -3,17 +3,24 @@ import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { resolveContractVariables, wrapContractInV3Html } from "@/lib/contract-render";
 import type { V3Series } from "@/lib/v3-codes";
+import { resolveDeskHead } from "@/lib/ncnda-desk-head";
+import { renderPartyQualificationProse } from "@/lib/qualification-roles";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 }
 
+// 14/08/2026: MESA_OPERACIONAL adicionado. Achado real ao destravar NDA da
+// Mesa de Crédito (Hamilton reportou não conseguir gerar): sem isso, a
+// analista de crédito de plantão (ex: Taisa Pedroso, mesmo padrão de bug já
+// corrigido em outras 5 rotas em 04/07/2026) veria o botão novo no modal da
+// proposta e tomaria 401 clicando nele.
 async function requireRole(req: NextRequest) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
   const { data: profile } = await svc().from("profiles").select("role").eq("id", user.id).single();
-  if (!profile || !["ADMIN", "GESTAO"].includes(profile.role as string)) return null;
+  if (!profile || !["ADMIN", "GESTAO", "MESA_OPERACIONAL"].includes(profile.role as string)) return null;
   return { userId: user.id, role: profile.role as string };
 }
 
@@ -110,6 +117,45 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // NCNDA Mestre / Mesa de Crédito (14/08/2026): credit_proposal_id já era
+  // aceito e gravado desde sempre, mas nunca resolvia variável nenhuma —
+  // bloco morto, causa raiz real de "Hamilton não consegue gerar NDA pela
+  // Mesa de Crédito" (nenhum template de vertical='credito' existia
+  // também, ver migration 20260814b). deal_origin_desk fixo em
+  // CREDITO_ESTRUTURADO porque hoje só a Mesa de Crédito chama esta rota
+  // com credit_proposal_id preenchido; se outra mesa vier a usar o mesmo
+  // template no futuro, resolver por outro sinal (não por credit_proposal_id).
+  if (credit_proposal_id) {
+    const { data: proposal } = await svc()
+      .from("credit_desk_proposals")
+      .select("code, client_name")
+      .eq("id", credit_proposal_id)
+      .single();
+
+    // 17/08/2026: resolvido em tempo real via profiles (cada Head
+    // preenche o próprio CPF/qualificação em /perfil), não mais hardcode.
+    const head = await resolveDeskHead("CREDITO_ESTRUTURADO");
+    if (!head.cpf) {
+      return NextResponse.json({
+        error: `Bloco de assinatura da Mesa de Crédito incompleto: ${head.fullName} ainda não preencheu CPF em /perfil (aba Meu Perfil, bloco "Dados para Assinatura de Contratos"). Peça a ele para preencher antes de gerar contratos de crédito por esta rota.`,
+      }, { status: 422 });
+    }
+
+    Object.assign(variables, {
+      deal_id: proposal?.code ?? credit_proposal_id,
+      deal_origin_desk: "Mesa de Crédito, Crédito Estruturado",
+      considerando_escopo_mesa:
+        "estruturação, análise e intermediação de operações de crédito estruturado, home equity e capital de giro lastreado em garantias reais, no âmbito da Mesa de Crédito V3 Partners",
+      objeto_operacao_detalhado:
+        `Modelagem financeira, securitização de recebíveis, emissão de debêntures, estruturação de CRI/CRA ou estruturação de funding com lastro em ativos reais sob o Deal nº ${proposal?.code ?? credit_proposal_id}${proposal?.client_name ? `, tomador ${proposal.client_name}` : ""}.`,
+      head_role_label: head.roleLabel,
+      head_full_name: head.fullName,
+      head_qualificacao: head.qualificacao,
+      head_cpf: head.cpf,
+      head_email: head.email,
+    });
+  }
+
   // Mesa Operacional: ticket não tem contraparte cadastrada (é um ticket
   // interno, não um deal/listing com "cedente"), então a contraparte do
   // documento vem inteira de extra_data (nome/CPF-CNPJ/e-mail digitados no
@@ -144,7 +190,7 @@ export async function POST(req: NextRequest) {
   if (qualification_batch_id) {
     const { data: qualifications } = await svc()
       .from("cm_party_qualifications")
-      .select("full_name, email, role_in_document, cpf_cnpj, rg, endereco_completo")
+      .select("full_name, email, role_in_document, cpf_cnpj, rg, endereco_completo, person_type, company_name, company_cnpj, company_address, nationality, marital_status, profession, birth_date")
       .eq("batch_id", qualification_batch_id);
 
     if (qualifications && qualifications.length > 0) {
@@ -164,7 +210,46 @@ export async function POST(req: NextRequest) {
       }
 
       qualificationParties.push({ role: "v3_partners", name: "V3 Partners Soluções Ltda", doc: "14.219.287/0001-50", email: "" });
+
+      // NCNDA Mestre / credit_proposal_id: Head da mesa também é signatário
+      // fixo quando o template resolveu head_*, mesmo com lote de
+      // qualificação presente. variables.head_* já foi setado acima
+      // (bloco credit_proposal_id roda antes deste).
+      if (typeof variables.head_email === "string" && typeof variables.head_full_name === "string") {
+        qualificationParties.push({
+          role: "head_mesa",
+          name: variables.head_full_name,
+          doc: typeof variables.head_cpf === "string" ? variables.head_cpf : null,
+          email: variables.head_email,
+        });
+      }
+
+      // NCNDA Mestre (14/08/2026): mesmo dado, formato de prosa corrida em
+      // vez de variável por chave de role, reaproveitado de
+      // app/api/cm/qualifications/legal-text/route.ts (identBlock), mesma
+      // regra PF/PJ. Só populado quando o template usa esse placeholder.
+      variables.party_qualifications_block = qualifications.map(renderPartyQualificationProse).join("<br/>");
+      variables.official_emails_protocol = Array.from(new Set([
+        "joao.lemos@v3partners.com.br",
+        typeof variables.head_email === "string" ? variables.head_email : null,
+        ...qualifications.map((q) => q.email),
+      ].filter((e): e is string => !!e))).join(", ");
     }
+  }
+
+  // Placeholders honestos (nunca "[party_qualifications_block]" literal via
+  // o fallback padrão de resolveContractVariables) quando o template pede
+  // esses blocos mas nenhum lote de qualificação foi selecionado ainda —
+  // caso normal na primeira geração, antes de "Gerar Link de Qualificação".
+  if (variables.party_qualifications_block === undefined) {
+    variables.party_qualifications_block =
+      "[Nenhuma parte aderente qualificada até o momento da geração desta minuta. Use \"Gerar Link de Qualificação\" para incluir intermediários/mandatários.]";
+  }
+  if (variables.official_emails_protocol === undefined) {
+    variables.official_emails_protocol = Array.from(new Set([
+      "joao.lemos@v3partners.com.br",
+      typeof variables.head_email === "string" ? variables.head_email : null,
+    ].filter((e): e is string => !!e))).join(", ");
   }
 
   if (commission_percent !== undefined) {
@@ -173,6 +258,16 @@ export async function POST(req: NextRequest) {
     variables.comissao_partner = (commission_percent * 0.3).toFixed(2);
     variables.comissao_intermediario = (commission_percent * 0.2).toFixed(2);
   }
+
+  // NCNDA Mestre / credit_proposal_id: V3 Partners + Head da mesa são
+  // signatários fixos desde a primeira geração (mesmo sem nenhum
+  // intermediário/mandatário qualificado ainda, ver Cláusula das Partes
+  // Signatárias do template) — sem isso, "Enviar para Assinatura" nunca
+  // aparece em contracts-panel-client.tsx (exige ao menos 1 parte não-V3
+  // com e-mail).
+  const headParty = typeof variables.head_email === "string" && typeof variables.head_full_name === "string"
+    ? [{ role: "head_mesa", name: variables.head_full_name, doc: typeof variables.head_cpf === "string" ? variables.head_cpf : null, email: variables.head_email }]
+    : [];
 
   // E-mail é obrigatório pra cada parte poder assinar de verdade (gate de
   // /api/contracts/[id]/send bloqueia parte sem e-mail) — esse fallback
@@ -183,6 +278,9 @@ export async function POST(req: NextRequest) {
   const resolvedParties = qualificationParties ?? (variables.nome_cedente ? [
     { role: "cedente", name: variables.nome_cedente, doc: variables.cpf_cnpj_cedente, email: variables.email_cedente ?? null },
     { role: "v3_partners", name: "V3 Partners Soluções Ltda", doc: "14.219.287/0001-50", email: "joao.lemos@v3partners.com.br" },
+  ] : headParty.length > 0 ? [
+    ...headParty,
+    { role: "v3_partners", name: "V3 Partners Soluções Ltda", doc: "14.219.287/0001-50" },
   ] : []);
 
   const renderedBody = resolveContractVariables(template.body_text_raw, variables);

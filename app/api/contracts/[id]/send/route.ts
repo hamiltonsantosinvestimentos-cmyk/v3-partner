@@ -112,7 +112,13 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     documentUrl,
     documentLabel,
     signatories,
-    watcherEmail: "joao.lemos@v3partners.com.br",
+    // 14/08/2026: apontado para deal@v3partners.com.br (era
+    // joao.lemos@v3partners.com.br). Mudança deliberada: lib/clicksign-archive.ts
+    // (Fase 2, arquivamento automático) só tem credencial IMAP testada para
+    // esta caixa — é a única que o poller consegue ler. Padroniza a caixa
+    // observadora em todos os pontos de envio para o poller cobrir 100% dos
+    // contratos, não só os das 4 rotas públicas de intake.
+    watcherEmail: "deal@v3partners.com.br",
   });
 
   if (!result.ok) {

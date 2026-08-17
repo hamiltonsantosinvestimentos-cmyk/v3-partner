@@ -6,12 +6,16 @@ function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 }
 
+// 14/08/2026: MESA_OPERACIONAL adicionado ao GET (listar templates), mesmo
+// motivo do requireRole de app/api/contracts/generate/route.ts — analista
+// de crédito de plantão precisa listar o template NCNDA pra gerar o
+// contrato, não só ADMIN/GESTAO.
 async function requireAdmin(req: NextRequest) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
   const { data: profile } = await svc().from("profiles").select("role").eq("id", user.id).single();
-  if (!profile || !["ADMIN", "GESTAO"].includes(profile.role as string)) return null;
+  if (!profile || !["ADMIN", "GESTAO", "MESA_OPERACIONAL"].includes(profile.role as string)) return null;
   return { userId: user.id, role: profile.role as string };
 }
 

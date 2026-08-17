@@ -199,6 +199,10 @@ interface PropostaDetailModalProps {
    *  pelo partner — some da Mesa de Crédito até onConfirmSendToMesa rodar. */
   pendingCrmReview?: boolean;
   onConfirmSendToMesa?: () => Promise<void> | void;
+  /** 14/08/2026: libera o painel "Gerar NDA / Vínculo pela Introdução"
+   *  (contract_templates vertical='credito'). Mesmo gate de role do backend
+   *  (/api/contracts/generate, /api/contracts/templates): ADMIN/GESTAO/MESA_OPERACIONAL. */
+  canGenerateContract?: boolean;
 }
 
 // ── CopyClientLinkButton ── botão para copiar link de acompanhamento ──────────
@@ -730,7 +734,48 @@ function TimelineOperacao({ proposal }: { proposal: ProposalFull }) {
   );
 }
 
-export function PropostaDetailModal({ open, onClose, proposal, onStageChange, onProposalUpdate, canChangeStage, canEditValorSolicitado, canCompileDocuments, canEditInstituicao, pendingCrmReview, onConfirmSendToMesa }: PropostaDetailModalProps) {
+export function PropostaDetailModal({ open, onClose, proposal, onStageChange, onProposalUpdate, canChangeStage, canEditValorSolicitado, canCompileDocuments, canEditInstituicao, pendingCrmReview, onConfirmSendToMesa, canGenerateContract }: PropostaDetailModalProps) {
+  // ── Gerar NDA / Vínculo pela Introdução (14/08/2026) ────────────────────
+  // Mesma UX da Bolsa de Ativos (mesa-capitais-client.tsx: loadContractTemplates
+  // + generateContract), reaproveitada aqui pra fechar o gap real reportado
+  // por Hamilton (Mesa de Crédito nunca teve nenhum jeito de gerar contrato).
+  const [ncndaTemplates, setNcndaTemplates] = useState<{ id: string; template_name: string }[]>([]);
+  const [generatingNcnda, setGeneratingNcnda] = useState(false);
+  const [ncndaResult, setNcndaResult] = useState<{ contract_code: string | null; contract_title: string } | null>(null);
+  const [ncndaError, setNcndaError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open || !proposal || !canGenerateContract) return;
+    setNcndaResult(null);
+    setNcndaError(null);
+    fetch("/api/contracts/templates?vertical=credito")
+      .then((r) => r.json())
+      .then((json) => setNcndaTemplates(json.templates ?? []))
+      .catch(() => setNcndaTemplates([]));
+  }, [open, proposal?.id, canGenerateContract]);
+
+  async function handleGenerateNcnda(templateId: string) {
+    if (!proposal) return;
+    setGeneratingNcnda(true);
+    setNcndaError(null);
+    try {
+      const res = await fetch("/api/contracts/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ template_id: templateId, credit_proposal_id: proposal.id }),
+      });
+      const json = await res.json();
+      if (res.ok) {
+        setNcndaResult({ contract_code: json.contract.contract_code, contract_title: json.contract.contract_title });
+      } else {
+        setNcndaError(json.error ?? "Erro ao gerar contrato");
+      }
+    } catch {
+      setNcndaError("Erro de conexão");
+    } finally {
+      setGeneratingNcnda(false);
+    }
+  }
   const [confirmandoEnvioMesa, setConfirmandoEnvioMesa] = useState(false);
   async function handleConfirmSendToMesa() {
     if (!onConfirmSendToMesa) return;
@@ -3678,6 +3723,39 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
           {/* ── Upload livre de documentos (partner e admin) ── */}
           {modalTab === "documentos" && (
             <PartnerDocUpload proposalId={proposal.id} />
+          )}
+
+          {/* ── Gerar NDA / Vínculo pela Introdução (14/08/2026) ── */}
+          {modalTab === "documentos" && canGenerateContract && (
+            <div className="p-4 rounded-xl border border-[#C9A84C]/20 bg-[#12112A] space-y-2">
+              <p className="text-xs font-semibold text-[#C9A84C] flex items-center gap-1.5">
+                <FileText className="w-3.5 h-3.5" /> Gerar NDA / Vínculo pela Introdução
+              </p>
+              <p className="text-[10px] text-muted-foreground">
+                Gera a minuta em rascunho na Central de Contratos. Depois, use "Gerar Link de Qualificação"
+                lá (Contratos e Minutas) para qualificar intermediários/mandatários e enviar para assinatura.
+              </p>
+              {ncndaTemplates.length === 0 && (
+                <p className="text-[10px] text-amber-400">Nenhuma minuta ativa para vertical "credito" encontrada.</p>
+              )}
+              {ncndaTemplates.map((t) => (
+                <button
+                  key={t.id}
+                  onClick={() => handleGenerateNcnda(t.id)}
+                  disabled={generatingNcnda}
+                  className="w-full flex items-center gap-2 px-3 py-2 bg-[#162744] border border-[#9BAFC5]/10 rounded-md text-[#F5F1E8] text-[11px] font-medium hover:border-[#C9A84C]/30 transition disabled:opacity-50"
+                >
+                  {generatingNcnda ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileText className="w-3.5 h-3.5 text-[#C9A84C]" />}
+                  {t.template_name}
+                </button>
+              ))}
+              {ncndaResult && (
+                <p className="text-[10px] text-emerald-400">
+                  Gerado: {ncndaResult.contract_code ?? ncndaResult.contract_title}. Vá em Central de Contratos &gt; Contratos e Minutas para qualificar as partes e enviar.
+                </p>
+              )}
+              {ncndaError && <p className="text-[10px] text-red-400">{ncndaError}</p>}
+            </div>
           )}
 
           {/* ── Documentos Enviados pelo Cliente (Captação) ── */}
