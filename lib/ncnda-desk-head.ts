@@ -45,10 +45,14 @@ const DESK_CONFIG: Record<DeskOrigin, { roleLabel: string; fullName: string; loo
   CREDITO_ESTRUTURADO: {
     roleLabel: "SÓCIO RESPONSÁVEL, MESA DE CRÉDITO / V3 PARTNERS",
     fullName: "Hamilton Santos",
-    // 17/08/2026: conta real confirmada por João (não a conta de demo
-    // hamilton@v3partners.com.br, PARTNER_PRO, usada pra prospects/partners).
+    // 17/08/2026: lookupEmail confirmado por João (CPF/qualificação ficam
+    // salvos no perfil de suporte@v3partners.com.br, não no de demo).
+    // notifyEmail corrigido no mesmo dia, direto pelo Hamilton: a caixa
+    // hamilton.santos@v3partners.com.br não existe — a conta real é
+    // hamilton@v3partners.com.br mesmo (o rótulo "conta de demo" valia só
+    // pro uso de PARTNER_PRO nela, não pra caixa de e-mail em si).
     lookupEmail: "suporte@v3partners.com.br",
-    notifyEmail: "hamilton.santos@v3partners.com.br",
+    notifyEmail: "hamilton@v3partners.com.br",
   },
   CONSORCIO: {
     roleLabel: "SÓCIO RESPONSÁVEL, COMPLIANCE / V3 PARTNERS",
