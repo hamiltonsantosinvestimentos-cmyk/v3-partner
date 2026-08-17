@@ -739,15 +739,75 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
   // Mesma UX da Bolsa de Ativos (mesa-capitais-client.tsx: loadContractTemplates
   // + generateContract), reaproveitada aqui pra fechar o gap real reportado
   // por Hamilton (Mesa de Crédito nunca teve nenhum jeito de gerar contrato).
-  const [ncndaTemplates, setNcndaTemplates] = useState<{ id: string; template_name: string }[]>([]);
+  const [ncndaTemplates, setNcndaTemplates] = useState<{ id: string; template_name: string; approval_status: string }[]>([]);
   const [generatingNcnda, setGeneratingNcnda] = useState(false);
   const [ncndaResult, setNcndaResult] = useState<{ contract_code: string | null; contract_title: string } | null>(null);
   const [ncndaError, setNcndaError] = useState<string | null>(null);
+
+  // ── Enviar NDA pro cliente (17/08/2026) ──────────────────────────────────
+  // Não reaproveita o template "NCNDA Mestre" acima — aquele é entre V3/Head
+  // da Mesa e intermediários qualificados (vínculo pela introdução), o
+  // cliente da proposta nunca entra como parte nele. Este botão usa
+  // especificamente o template "NDA (Mesa de operações)" (variáveis
+  // nome_cedente/cpf_cnpj_cedente — o cliente É a parte receptora), mesmo
+  // template já conectado no botão "Enviar NDA" da Mesa Operacional.
+  const [sendingNda, setSendingNda] = useState(false);
+  const [ndaSentInfo, setNdaSentInfo] = useState<{ contract_code: string | null } | null>(null);
+  const [ndaSendError, setNdaSendError] = useState<string | null>(null);
+
+  async function handleEnviarNda() {
+    if (!proposal) return;
+    setSendingNda(true);
+    setNdaSendError(null);
+    try {
+      const tpl = ncndaTemplates.find(t => t.template_name.toLowerCase().includes("mesa de opera"));
+      if (!tpl) {
+        setNdaSendError('Template "NDA (Mesa de operações)" não encontrado na Central de Contratos.');
+        return;
+      }
+
+      const clientEmail = ((proposal.metadata as Record<string, unknown>)?.email as string | undefined) ?? proposal.email;
+      if (!clientEmail) {
+        setNdaSendError("Cliente sem e-mail cadastrado — edite a proposta antes de enviar o NDA.");
+        return;
+      }
+
+      const genRes = await fetch("/api/contracts/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          template_id: tpl.id,
+          credit_proposal_id: proposal.id,
+          extra_data: {
+            nome_cedente: proposal.client_name,
+            cpf_cnpj_cedente: proposal.client_cpf_cnpj ?? proposal.cpf_cnpj ?? "[CPF/CNPJ]",
+            email_cedente: clientEmail,
+          },
+        }),
+      }).then(r => r.json());
+      if (genRes.error) { setNdaSendError(genRes.error); return; }
+
+      const sendRes = await fetch(`/api/contracts/${genRes.contract.id}/send`, { method: "POST" }).then(r => r.json());
+      if (sendRes.error) {
+        setNdaSentInfo({ contract_code: genRes.contract.contract_code ?? null });
+        setNdaSendError(sendRes.error);
+        return;
+      }
+
+      setNdaSentInfo({ contract_code: genRes.contract.contract_code ?? null });
+    } catch {
+      setNdaSendError("Erro de conexão.");
+    } finally {
+      setSendingNda(false);
+    }
+  }
 
   useEffect(() => {
     if (!open || !proposal || !canGenerateContract) return;
     setNcndaResult(null);
     setNcndaError(null);
+    setNdaSentInfo(null);
+    setNdaSendError(null);
     fetch("/api/contracts/templates?vertical=credito")
       .then((r) => r.json())
       .then((json) => setNcndaTemplates(json.templates ?? []))
@@ -4569,6 +4629,28 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
                     )}
                     Enviar Contrato
                   </Button>
+                </div>
+              );
+            })()}
+            {canGenerateContract && (() => {
+              const hasEmail = !!(((proposal.metadata as Record<string, unknown>)?.email as string | undefined) ?? proposal.email);
+              return (
+                <div title={!hasEmail ? "Cadastre o e-mail do cliente antes de enviar o NDA" : ndaSentInfo ? `NDA gerado: ${ndaSentInfo.contract_code ?? ""}` : undefined}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleEnviarNda}
+                    disabled={sendingNda || !hasEmail || !!ndaSentInfo}
+                    className="gap-1.5 border-[#C9A84C]/40 text-[#C9A84C] hover:bg-[#C9A84C]/10 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    {sendingNda ? (
+                      <span className="w-3.5 h-3.5 rounded-full border-2 border-[#C9A84C] border-t-transparent animate-spin" />
+                    ) : (
+                      <FileText className="w-3.5 h-3.5" />
+                    )}
+                    {ndaSentInfo ? "NDA enviado" : "Enviar NDA"}
+                  </Button>
+                  {ndaSendError && <p className="text-[10px] text-red-400 mt-1 max-w-xs">{ndaSendError}</p>}
                 </div>
               );
             })()}
