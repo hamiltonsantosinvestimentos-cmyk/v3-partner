@@ -25,7 +25,7 @@ async function requireRole(req: NextRequest) {
 // (só qualification_batch_id, que aponta pro lote).
 function resolveDocumentType(contractTitle: string, vertical: string): SendToClickSignInput["documentType"] {
   const title = contractTitle.toLowerCase();
-  if (title.includes("quadripartite")) return "nda_quadripartite";
+  if (title.includes("nda")) return "nda_quadripartite";
   if (title.includes("fpa venda") || title.includes("fpa_venda")) return "fpa_venda";
   if (title.includes("fpa compra") || title.includes("fpa_compra")) return "fpa_compra";
   if (title.includes("mandato")) return "mandato";
