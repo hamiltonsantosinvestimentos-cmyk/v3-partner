@@ -125,10 +125,16 @@ export async function POST(req: NextRequest) {
   // CREDITO_ESTRUTURADO porque hoje só a Mesa de Crédito chama esta rota
   // com credit_proposal_id preenchido; se outra mesa vier a usar o mesmo
   // template no futuro, resolver por outro sinal (não por credit_proposal_id).
+  // Partner que originou/cadastrou o cliente — quando presente, entra no
+  // NDA como testemunha (17/08/2026, pedido direto do Hamilton: o NDA do
+  // cliente vai pro cliente, pro representante legal da V3 e pro partner
+  // que trouxe esse cliente, pra todo mundo da cadeia acompanhar).
+  let partnerParty: { role: string; name: string; doc: string | null; email: string } | null = null;
+
   if (credit_proposal_id) {
     const { data: proposal } = await svc()
       .from("credit_desk_proposals")
-      .select("code, client_name")
+      .select("code, client_name, partner_id")
       .eq("id", credit_proposal_id)
       .single();
 
@@ -154,6 +160,17 @@ export async function POST(req: NextRequest) {
       head_cpf: head.cpf,
       head_email: head.email,
     });
+
+    if (proposal?.partner_id) {
+      const { data: partnerProfile } = await svc()
+        .from("profiles")
+        .select("full_name, email")
+        .eq("id", proposal.partner_id)
+        .single();
+      if (partnerProfile?.email) {
+        partnerParty = { role: "testemunha", name: partnerProfile.full_name ?? "Partner", doc: null, email: partnerProfile.email };
+      }
+    }
   }
 
   // Mesa Operacional: ticket não tem contraparte cadastrada (é um ticket
@@ -275,19 +292,17 @@ export async function POST(req: NextRequest) {
   // nenhum contrato gerado por aqui conseguia ser enviado. extra_data.email_cedente
   // é o e-mail digitado no formulário de quem está gerando (ex: botão
   // "Enviar NDA" da Mesa Operacional).
-  // Representante da V3 que assina ao lado do cliente (papel "cedente"):
-  // usa o Head da mesa de origem quando o generate() já resolveu um (ex:
-  // credit_proposal_id -> Head da Mesa de Crédito), já que quem assina pela
-  // V3 deve ser quem responde por aquela mesa, não sempre o mesmo sócio.
-  // Sem mesa identificada (ex: ticket avulso da Mesa Operacional), cai pro
-  // João como responsável institucional padrão.
-  const v3PartnersSignatario = typeof variables.head_email === "string" && typeof variables.head_full_name === "string"
-    ? { role: "v3_partners", name: "V3 Partners Soluções Ltda", doc: "14.219.287/0001-50", email: variables.head_email }
-    : { role: "v3_partners", name: "V3 Partners Soluções Ltda", doc: "14.219.287/0001-50", email: "joao.lemos@v3partners.com.br" };
-
+  //
+  // 17/08/2026, confirmado direto pelo Hamilton: o NDA do cliente (branch
+  // nome_cedente) sempre assina com João Lemos como representante legal da
+  // V3 — não varia por mesa de origem (diferente do headParty abaixo, que é
+  // o instrumento interno entre V3 e intermediários, esse sim por Head da
+  // mesa). Quando a proposta tem partner_id resolvido, o partner que
+  // cadastrou o cliente entra como testemunha, pra acompanhar o envio.
   const resolvedParties = qualificationParties ?? (variables.nome_cedente ? [
     { role: "cedente", name: variables.nome_cedente, doc: variables.cpf_cnpj_cedente, email: variables.email_cedente ?? null },
-    v3PartnersSignatario,
+    { role: "v3_partners", name: "V3 Partners Soluções Ltda", doc: "14.219.287/0001-50", email: "joao.lemos@v3partners.com.br" },
+    ...(partnerParty ? [partnerParty] : []),
   ] : headParty.length > 0 ? [
     ...headParty,
     { role: "v3_partners", name: "V3 Partners Soluções Ltda", doc: "14.219.287/0001-50" },
