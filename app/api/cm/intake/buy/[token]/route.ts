@@ -45,7 +45,7 @@ export async function POST(
 
   const { data: demand } = await svc()
     .from("investor_demands")
-    .select("id, intake_locked")
+    .select("id, intake_locked, origin_partner_id")
     .eq("intake_token", token)
     .single();
 
@@ -73,7 +73,10 @@ export async function POST(
   // Origin partner e sempre resolvido no servidor contra profiles.id real -- um valor
   // invalido/malformado em ?partner= nunca bloqueia o cadastro do comprador, so fica sem
   // atribuicao (mesmo principio ja usado para documento opcional: nada trava o registro).
-  let resolvedOriginPartnerId: string | null = null;
+  // Preserva o que a Mesa ja tiver atribuido no momento de gerar o link (18/08/2026): o
+  // formulario publico nunca manda origin_partner_id, entao sem este fallback o submit
+  // apagava silenciosamente a atribuicao feita na criacao do link.
+  let resolvedOriginPartnerId: string | null = demand.origin_partner_id ?? null;
   if (origin_partner_id && typeof origin_partner_id === "string") {
     const { data: partnerProfile } = await svc()
       .from("profiles")

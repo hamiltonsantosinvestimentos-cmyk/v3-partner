@@ -226,6 +226,8 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
   const [contractResult, setContractResult] = useState<any>(null);
   const [buyLinkUrl, setBuyLinkUrl] = useState<string | null>(null);
   const [generatingBuyLink, setGeneratingBuyLink] = useState(false);
+  const [showBuyLinkPartnerModal, setShowBuyLinkPartnerModal] = useState(false);
+  const [buyLinkPartnerValue, setBuyLinkPartnerValue] = useState<string>("");
   const [checklists, setChecklists] = useState<any[]>([]);
   const [kycDocs, setKycDocs] = useState<any[]>([]);
   const [kycPartyType, setKycPartyType] = useState<"comprador" | "vendedor">("vendedor");
@@ -1361,10 +1363,22 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
     setGeneratingBuyLink(true);
     setBuyLinkUrl(null);
     try {
-      const res = await fetch("/api/cm/intake/buy/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+      const res = await fetch("/api/cm/intake/buy/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          origin_partner_id: buyLinkPartnerValue.startsWith("ref:") ? null : (buyLinkPartnerValue || null),
+          origin_referral_id: buyLinkPartnerValue.startsWith("ref:") ? buyLinkPartnerValue.slice(4) : null,
+        }),
+      });
       const json = await res.json();
-      if (res.ok) { setBuyLinkUrl(json.url); navigator.clipboard.writeText(json.url); alert("Link do comprador copiado!"); }
-      else alert(json.error ?? "Erro ao gerar link");
+      if (res.ok) {
+        setBuyLinkUrl(json.url);
+        navigator.clipboard.writeText(json.url);
+        alert("Link do comprador copiado!");
+        setShowBuyLinkPartnerModal(false);
+        setBuyLinkPartnerValue("");
+      } else alert(json.error ?? "Erro ao gerar link");
     } catch { alert("Erro de conexão"); }
     finally { setGeneratingBuyLink(false); }
   };
@@ -1414,7 +1428,8 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
             <UserPlus size={16} /> Novo Comprador
           </button>
           <button
-            onClick={generateBuyLink} disabled={generatingBuyLink}
+            onClick={() => { setBuyLinkPartnerValue(""); setShowNewReferralPartner(false); setShowBuyLinkPartnerModal(true); }}
+            disabled={generatingBuyLink}
             className="flex items-center gap-2 px-4 py-2 border border-[#9BAFC5]/20 text-[#9BAFC5] rounded-lg text-sm font-medium hover:bg-[#9BAFC5]/10 hover:text-[#F5F1E8] transition disabled:opacity-50"
           >
             {generatingBuyLink ? <Loader2 size={16} className="animate-spin" /> : <Link2 size={16} />}
@@ -1725,6 +1740,76 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
                 Cadastrar Ativo
               </button>
               <p className="text-[9px] text-[#9BAFC5] text-center">Entra direto no pipeline em &quot;Reunião Validada&quot;, mesmo ponto de partida do intake público.</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Link Comprador — atribuicao de partner de origem antes de gerar (BRIEF 18/08/2026),
+          mesmo padrao "listar + cadastrar" ja usado no Partner de Origem do lado vendedor: partner
+          real (profiles, via /api/cm/partners-list) ou partner leve sem conta (cm_referral_partners,
+          via createReferralPartner ja compartilhado com o resto do arquivo). */}
+      {showBuyLinkPartnerModal && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60" onClick={() => setShowBuyLinkPartnerModal(false)}>
+          <div className="w-full max-w-sm bg-[#09081A] border border-[#C9A84C]/20 rounded-xl flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="p-4 border-b border-[#C9A84C]/20 flex items-center justify-between">
+              <div>
+                <div className="text-sm font-bold text-[#F5F1E8]">Gerar Link Comprador</div>
+                <div className="text-[10px] text-[#9BAFC5]">Quem trouxe este lead? Opcional, mas fica registrado desde a criação.</div>
+              </div>
+              <button onClick={() => setShowBuyLinkPartnerModal(false)} className="text-[#9BAFC5] hover:text-[#F5F1E8] text-xl">&times;</button>
+            </div>
+            <div className="p-4 space-y-3">
+              <div>
+                <label className="text-[9px] text-[#9BAFC5] uppercase">Partner Dono do Lead</label>
+                <select
+                  value={buyLinkPartnerValue}
+                  onChange={(e) => { if (e.target.value === "__new__") setShowNewReferralPartner(true); else setBuyLinkPartnerValue(e.target.value); }}
+                  className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#F5F1E8] mt-1 focus:border-[#C9A84C]/50 focus:outline-none"
+                >
+                  <option value="">Sem partner de origem</option>
+                  {partners.map((p) => (
+                    <option key={p.id} value={p.id}>{p.full_name}</option>
+                  ))}
+                  {referralPartners.length > 0 && (
+                    <optgroup label="Sem conta no portal">
+                      {referralPartners.map((p) => (
+                        <option key={p.id} value={`ref:${p.id}`}>{p.full_name}</option>
+                      ))}
+                    </optgroup>
+                  )}
+                  <option value="__new__">+ Novo partner (sem conta)</option>
+                </select>
+                {showNewReferralPartner && (
+                  <div className="mt-2 p-2 bg-[#12112A] border border-[#C9A84C]/20 rounded space-y-2">
+                    <input value={newReferralName} onChange={(e) => setNewReferralName(e.target.value)}
+                      placeholder="Nome do partner *"
+                      className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]" />
+                    <input value={newReferralContact} onChange={(e) => setNewReferralContact(e.target.value)}
+                      placeholder="Contato (telefone/email)"
+                      className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]" />
+                    <div className="flex gap-2">
+                      <button
+                        onClick={async () => { const v = await createReferralPartner(); if (v) setBuyLinkPartnerValue(v); }}
+                        disabled={savingReferralPartner}
+                        className="flex-1 px-2 py-1.5 bg-[#C9A84C]/10 border border-[#C9A84C]/20 rounded text-[#C9A84C] text-[10px] font-bold disabled:opacity-50">
+                        {savingReferralPartner ? "Salvando..." : "Salvar"}
+                      </button>
+                      <button onClick={() => { setShowNewReferralPartner(false); setNewReferralName(""); setNewReferralContact(""); }}
+                        className="px-2 py-1.5 border border-[#9BAFC5]/20 rounded text-[#9BAFC5] text-[10px]">
+                        Cancelar
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+              <button
+                onClick={generateBuyLink} disabled={generatingBuyLink}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-[#C9A84C] text-[#09081A] rounded-lg text-sm font-bold hover:bg-[#D4B96A] transition disabled:opacity-50"
+              >
+                {generatingBuyLink ? <Loader2 size={16} className="animate-spin" /> : <Link2 size={16} />}
+                Gerar Link
+              </button>
             </div>
           </div>
         </div>

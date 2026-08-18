@@ -20,6 +20,23 @@ export async function POST(req: NextRequest) {
 
   const token = randomUUID().replace(/-/g, "");
 
+  // Partner dono do lead, atribuido no momento da geracao (BRIEF 18/08/2026) -- nunca
+  // confiado sem checar, mesmo criterio ja usado no POST publico deste mesmo intake:
+  // um id invalido nunca bloqueia a geracao do link, so fica sem atribuicao.
+  const body = await req.json().catch(() => ({} as Record<string, unknown>));
+  const rawPartnerId = typeof body.origin_partner_id === "string" ? body.origin_partner_id : null;
+  const rawReferralId = typeof body.origin_referral_id === "string" ? body.origin_referral_id : null;
+
+  let originPartnerId: string | null = null;
+  let originReferralId: string | null = null;
+  if (rawPartnerId) {
+    const { data } = await svc().from("profiles").select("id").eq("id", rawPartnerId).maybeSingle();
+    if (data) originPartnerId = data.id;
+  } else if (rawReferralId) {
+    const { data } = await svc().from("cm_referral_partners").select("id").eq("id", rawReferralId).maybeSingle();
+    if (data) originReferralId = data.id;
+  }
+
   const { data: demand, error } = await svc()
     .from("investor_demands")
     .insert({
@@ -34,6 +51,8 @@ export async function POST(req: NextRequest) {
       status: "pendente",
       intake_token: token,
       created_by: user.id,
+      origin_partner_id: originPartnerId,
+      origin_referral_id: originReferralId,
     })
     .select("id")
     .single();
