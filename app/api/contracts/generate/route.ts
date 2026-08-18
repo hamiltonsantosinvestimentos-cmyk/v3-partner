@@ -185,8 +185,11 @@ export async function POST(req: NextRequest) {
         .select("full_name, email")
         .eq("id", proposal.partner_id)
         .single();
-      if (partnerProfile?.email) {
-        partnerParty = { role: "testemunha", name: partnerProfile.full_name ?? "Partner", doc: null, email: partnerProfile.email };
+      // full_name precisa ter pelo menos 2 palavras pra ClickSign aceitar
+      // como nome de signatário — sem isso, não adiciona (melhor pular a
+      // testemunha do que quebrar o envio inteiro).
+      if (partnerProfile?.email && partnerProfile.full_name && partnerProfile.full_name.trim().split(/\s+/).length >= 2) {
+        partnerParty = { role: "testemunha", name: partnerProfile.full_name.trim(), doc: null, email: partnerProfile.email };
       }
     }
   }
@@ -317,9 +320,16 @@ export async function POST(req: NextRequest) {
   // o instrumento interno entre V3 e intermediários, esse sim por Head da
   // mesa). Quando a proposta tem partner_id resolvido, o partner que
   // cadastrou o cliente entra como testemunha, pra acompanhar o envio.
+  // Nome do signatário na ClickSign precisa ser de pessoa física (mínimo 2
+  // palavras, sem números — confirmado na doc oficial deles) — "V3 Partners
+  // Soluções Ltda" quebra a validação por causa do "3" em "V3" ("name não
+  // está em um formato válido"). Nas outras linhas de resolvedParties que
+  // também usam esse texto, ele nunca chega em signers de verdade (email
+  // vazio ou ausente); aqui é a única com e-mail real, então é a única que
+  // precisava do nome de pessoa.
   const resolvedParties = qualificationParties ?? (variables.nome_cedente ? [
     { role: "cedente", name: variables.nome_cedente, doc: variables.cpf_cnpj_cedente, email: variables.email_cedente ?? null },
-    { role: "v3_partners", name: "V3 Partners Soluções Ltda", doc: "14.219.287/0001-50", email: "joao.lemos@v3partners.com.br" },
+    { role: "v3_partners", name: "João Lemos Netto", doc: "14.219.287/0001-50", email: "joao.lemos@v3partners.com.br" },
     ...(partnerParty ? [partnerParty] : []),
   ] : headParty.length > 0 ? [
     ...headParty,
