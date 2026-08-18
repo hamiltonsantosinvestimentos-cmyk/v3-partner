@@ -10,7 +10,7 @@ import {
   Trophy, GraduationCap, Handshake, Settings2, Medal,
   ContactRound, DollarSign, Wallet, Zap, Target, ShieldCheck, Calculator, UserPlus, ClipboardList, BadgeCheck, Layers, BarChart2, BookMarked, BotMessageSquare,
   ShoppingBag, Radar, BookOpen, FileText, UserPlus2, MessageSquare, BarChart3, Video, UsersRound,
-  FileCheck2, Plane, FolderOpen, Gavel, Link2, Compass, User, Package,
+  FileCheck2, Plane, FolderOpen, Gavel, Link2, Compass, User, Package, Megaphone,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -22,7 +22,7 @@ const iconMap = {
   Settings2, Medal, ContactRound, DollarSign, Wallet, Zap,
   Target, ShieldCheck, Calculator, UserPlus, ClipboardList, BadgeCheck, Layers, BarChart2, BookMarked, BotMessageSquare,
   ShoppingBag, Radar, BookOpen, FileText, UserPlus2, MessageSquare, BarChart3, Video, UsersRound,
-  FileCheck2, Plane, FolderOpen, Gavel, Link2, Compass, User, Package,
+  FileCheck2, Plane, FolderOpen, Gavel, Link2, Compass, User, Package, Megaphone,
 };
 
 interface NavSubItem { href: string; label: string; roles: string[]; }
@@ -97,6 +97,7 @@ const NAV_SECTIONS: NavSection[] = [
       { href: "/ma/oportunidades", label: "Deal Discovery", icon: "Radar", roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL"] },
       { href: "/mesa-operacional", label: "Mesa Operacional", icon: "Headphones", roles: ["ADMIN", "MESA_OPERACIONAL", "GESTAO"] },
       { href: "/mesa-consorcio-op", label: "Mesa Consórcio", icon: "Settings2", roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL"] },
+      { href: "/mesa-trafego", label: "Mesa de Tráfego", icon: "Megaphone", roles: ["ADMIN", "GESTAO"] },
       {
         href: "/logistica", label: "Logística V3", icon: "Plane",
         roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL"],
