@@ -134,13 +134,30 @@ export async function POST(req: NextRequest) {
   if (credit_proposal_id) {
     const { data: proposal } = await svc()
       .from("credit_desk_proposals")
-      .select("code, client_name, partner_id")
+      .select("code, client_name, partner_id, credit_line_id")
       .eq("id", credit_proposal_id)
       .single();
 
+    // 18/08/2026: achado real ao João pedir link de qualificação pra uma
+    // operação de crédito internacional — o Head sempre resolvia
+    // CREDITO_ESTRUTURADO (Hamilton), mesmo quando a linha é de escopo
+    // internacional (que o próprio ncnda-desk-head.ts já previa dever ser
+    // Robson, CREDITO_INTERNACIONAL, só nunca tinha sido de fato checado
+    // aqui). Resolvido pelo escopo real da linha vinculada à proposta
+    // (regras_linhas_credito.escopo), nunca hardcoded.
+    let deskOrigin: "CREDITO_ESTRUTURADO" | "CREDITO_INTERNACIONAL" = "CREDITO_ESTRUTURADO";
+    if (proposal?.credit_line_id) {
+      const { data: linha } = await svc()
+        .from("regras_linhas_credito")
+        .select("escopo")
+        .eq("id", proposal.credit_line_id)
+        .maybeSingle();
+      if (linha?.escopo === "internacional") deskOrigin = "CREDITO_INTERNACIONAL";
+    }
+
     // 17/08/2026: resolvido em tempo real via profiles (cada Head
     // preenche o próprio CPF/qualificação em /perfil), não mais hardcode.
-    const head = await resolveDeskHead("CREDITO_ESTRUTURADO");
+    const head = await resolveDeskHead(deskOrigin);
     if (!head.cpf) {
       return NextResponse.json({
         error: `Bloco de assinatura da Mesa de Crédito incompleto: ${head.fullName} ainda não preencheu CPF em /perfil (aba Meu Perfil, bloco "Dados para Assinatura de Contratos"). Peça a ele para preencher antes de gerar contratos de crédito por esta rota.`,
@@ -149,9 +166,10 @@ export async function POST(req: NextRequest) {
 
     Object.assign(variables, {
       deal_id: proposal?.code ?? credit_proposal_id,
-      deal_origin_desk: "Mesa de Crédito, Crédito Estruturado",
-      considerando_escopo_mesa:
-        "estruturação, análise e intermediação de operações de crédito estruturado, home equity e capital de giro lastreado em garantias reais, no âmbito da Mesa de Crédito V3 Partners",
+      deal_origin_desk: deskOrigin === "CREDITO_INTERNACIONAL" ? "Mesa de Crédito, Crédito Internacional" : "Mesa de Crédito, Crédito Estruturado",
+      considerando_escopo_mesa: deskOrigin === "CREDITO_INTERNACIONAL"
+        ? "estruturação, análise e intermediação de operações de crédito internacional, financiamento a brasileiros no exterior e demais linhas de escopo internacional, no âmbito da Mesa de Crédito V3 Partners"
+        : "estruturação, análise e intermediação de operações de crédito estruturado, home equity e capital de giro lastreado em garantias reais, no âmbito da Mesa de Crédito V3 Partners",
       objeto_operacao_detalhado:
         `Modelagem financeira, securitização de recebíveis, emissão de debêntures, estruturação de CRI/CRA ou estruturação de funding com lastro em ativos reais sob o Deal nº ${proposal?.code ?? credit_proposal_id}${proposal?.client_name ? `, tomador ${proposal.client_name}` : ""}.`,
       head_role_label: head.roleLabel,
