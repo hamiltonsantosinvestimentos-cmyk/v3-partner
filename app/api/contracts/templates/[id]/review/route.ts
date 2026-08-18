@@ -7,9 +7,11 @@ function svc() {
 }
 
 // Grupos de revisor (11/08/2026, decisão de João). A aprovação final de uma
-// minuta exige 1 decisão "aprovado" de alguém do grupo JURIDICO + 1 decisão
-// "aprovado" de alguém do grupo COMPLIANCE_SOCIO, no mesmo review_round —
-// nunca uma pessoa só, e nunca dois do mesmo grupo.
+// minuta fecha quórum por dois caminhos possíveis, no mesmo review_round:
+// (a) 1 decisão "aprovado" de alguém do grupo JURIDICO + 1 decisão
+// "aprovado" de alguém do grupo COMPLIANCE_SOCIO; ou (b) 2 dos 3 sócios
+// diretores (COMPLIANCE_SOCIO) aprovando, dispensando o jurídico —
+// maioria de sócios adicionada em 17/08/2026, decisão de João.
 const JURIDICO: Record<string, string> = {
   "82171bc1-edbd-40f8-936b-1b26d412a121": "Dr. Luis Athaydes", // jurídico V3
 };
@@ -72,7 +74,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }).eq("id", id);
   }
 
-  await db.from("contract_template_reviews").insert({
+  // 17/08/2026: upsert em vez de insert puro. Achado real: Hamilton e
+  // Robson tinham voto duplicado na mesma minuta/rodada (clique duplo ou
+  // reenvio), sem nenhuma guarda — inflava o histórico e a contagem de
+  // quórum por sócio (ver migration 20260817b + constraint UNIQUE
+  // template_id+review_round+reviewer_id). Reenviar o voto agora
+  // atualiza a decisão existente em vez de duplicar linha.
+  await db.from("contract_template_reviews").upsert({
     template_id: id,
     review_round: template.review_round,
     reviewer_id: reviewer.userId,
@@ -81,24 +89,31 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     decision,
     comment: comment?.trim() || null,
     body_edited: !!bodyEdited,
-  });
+  }, { onConflict: "template_id,review_round,reviewer_id" });
 
   if (decision === "reprovado") {
     await db.from("contract_templates").update({ approval_status: "reprovado" }).eq("id", id);
     return NextResponse.json({ approval_status: "reprovado" });
   }
 
-  // decision === "aprovado": checar se o quórum do round atual já fechou
-  // (1 aprovado de cada grupo, podendo ser este próprio voto).
+  // decision === "aprovado": checar se o quórum do round atual já fechou.
+  // 17/08/2026, decisão de João: dois caminhos fecham o quórum agora —
+  // (a) o original, 1 aprovado de cada grupo (jurídico + compliance/sócio);
+  // (b) novo, 2 dos 3 sócios diretores (compliance_socio) aprovando,
+  // dispensa o jurídico. Constraint UNIQUE (migration 20260817b) garante
+  // que cada reviewer_id conta uma vez só por rodada, então contar linhas
+  // já equivale a contar pessoas distintas.
   const { data: roundReviews } = await db
     .from("contract_template_reviews")
-    .select("reviewer_type, decision")
+    .select("reviewer_id, reviewer_type, decision")
     .eq("template_id", id)
     .eq("review_round", template.review_round);
 
+  const approvedSocios = (roundReviews ?? []).filter((r) => r.reviewer_type === "compliance_socio" && r.decision === "aprovado");
   const hasJuridico = (roundReviews ?? []).some((r) => r.reviewer_type === "juridico" && r.decision === "aprovado");
-  const hasComplianceSocio = (roundReviews ?? []).some((r) => r.reviewer_type === "compliance_socio" && r.decision === "aprovado");
-  const quorumMet = hasJuridico && hasComplianceSocio;
+  const hasComplianceSocio = approvedSocios.length > 0;
+  const socioMajority = approvedSocios.length >= 2;
+  const quorumMet = (hasJuridico && hasComplianceSocio) || socioMajority;
 
   if (quorumMet) {
     await db.from("contract_templates").update({ approval_status: "aprovado" }).eq("id", id);
@@ -106,10 +121,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   return NextResponse.json({
     approval_status: quorumMet ? "aprovado" : "em_revisao",
-    quorum: { juridico: hasJuridico, compliance_socio: hasComplianceSocio, met: quorumMet },
+    quorum: { juridico: hasJuridico, compliance_socio: hasComplianceSocio, socios_aprovaram: approvedSocios.length, met: quorumMet },
     message: quorumMet
-      ? "Quórum atingido (jurídico + compliance/sócio). Minuta aprovada, liberada para gerar contrato."
-      : `Aprovação de ${reviewer.type === "juridico" ? "jurídico" : "compliance/sócio"} registrada. Aguardando aprovação de ${hasJuridico ? "compliance/sócio" : "jurídico"}.`,
+      ? socioMajority && !hasJuridico
+        ? `Quórum atingido por maioria de sócios (${approvedSocios.length}/3), dispensando o jurídico. Minuta aprovada, liberada para gerar contrato.`
+        : "Quórum atingido (jurídico + compliance/sócio). Minuta aprovada, liberada para gerar contrato."
+      : `Aprovação de ${reviewer.type === "juridico" ? "jurídico" : "compliance/sócio"} registrada (${approvedSocios.length}/3 sócios, jurídico: ${hasJuridico ? "sim" : "não"}). Aguardando 2 sócios OU jurídico + 1 sócio.`,
   });
 }
 

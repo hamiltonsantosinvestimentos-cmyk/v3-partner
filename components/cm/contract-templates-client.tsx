@@ -435,6 +435,30 @@ export function ContractTemplatesClient() {
 
               {reviews.length > 0 && (
                 <div className="mt-5 pt-5 border-t border-[#9BAFC5]/10">
+                  {/* 17/08/2026: indicador de quórum, pedido explícito de
+                      João ("não tenho um painel pra poder justificar") —
+                      mostra o placar em tempo real sem precisar contar
+                      linha por linha do histórico abaixo. */}
+                  {(() => {
+                    const sociosAprovados = Array.from(new Set(
+                      reviews.filter(r => r.reviewer_type === "compliance_socio" && r.decision === "aprovado").map(r => r.reviewer_name)
+                    ));
+                    const juridicoAprovou = reviews.some(r => r.reviewer_type === "juridico" && r.decision === "aprovado");
+                    return (
+                      <div className="flex flex-wrap items-center gap-2 mb-3 p-3 rounded-lg bg-[#09081A] border border-[#9BAFC5]/10">
+                        <span className="text-[10px] font-bold text-[#C9A84C] uppercase tracking-wider mr-1">Quórum</span>
+                        <span className={cn("text-[10px] font-bold px-2 py-0.5 rounded", sociosAprovados.length >= 2 ? "bg-emerald-500/20 text-emerald-400" : "bg-[#243A66] text-[#9BAFC5]")}>
+                          {sociosAprovados.length}/3 sócios {sociosAprovados.length > 0 ? `(${sociosAprovados.join(", ")})` : ""}
+                        </span>
+                        <span className={cn("text-[10px] font-bold px-2 py-0.5 rounded", juridicoAprovou ? "bg-emerald-500/20 text-emerald-400" : "bg-[#243A66] text-[#9BAFC5]")}>
+                          Jurídico {juridicoAprovou ? "✓ aprovou" : "pendente"}
+                        </span>
+                        <span className="text-[9px] text-[#9BAFC5]">
+                          {sociosAprovados.length >= 2 ? "Fechado por maioria de sócios" : juridicoAprovou && sociosAprovados.length > 0 ? "Fechado por jurídico + sócio" : "Falta jurídico + 1 sócio, ou 2 sócios"}
+                        </span>
+                      </div>
+                    );
+                  })()}
                   <span className="text-[10px] font-bold text-[#C9A84C] uppercase tracking-wider">Histórico de Revisão</span>
                   <div className="mt-2 space-y-2">
                     {reviews.map((r) => (
