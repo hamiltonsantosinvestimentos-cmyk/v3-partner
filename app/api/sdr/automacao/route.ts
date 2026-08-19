@@ -44,12 +44,16 @@ export async function PATCH(req: NextRequest) {
     agente_nome?: string;
     empresa_contexto?: string;
     regras_comunicacao?: string;
+    ia_ativa_whatsapp?: boolean;
+    ia_ativa_instagram?: boolean;
   };
 
   const update: Record<string, unknown> = { updated_at: new Date().toISOString(), updated_by: auth.user.id };
   if (body.agente_nome !== undefined) update.agente_nome = body.agente_nome;
   if (body.empresa_contexto !== undefined) update.empresa_contexto = body.empresa_contexto;
   if (body.regras_comunicacao !== undefined) update.regras_comunicacao = body.regras_comunicacao;
+  if (body.ia_ativa_whatsapp !== undefined) update.ia_ativa_whatsapp = body.ia_ativa_whatsapp;
+  if (body.ia_ativa_instagram !== undefined) update.ia_ativa_instagram = body.ia_ativa_instagram;
 
   const { error } = await svc().from("sdr_flow_config").upsert({ id: "default", ...update });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

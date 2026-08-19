@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { after } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { sendInstagramText } from "@/lib/instagram-dm";
-import { processarMensagemSDRCore } from "@/lib/sdr-agent";
+import { processarMensagemSDRCore, isIaAtiva } from "@/lib/sdr-agent";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -118,6 +118,11 @@ async function processarEvento(event: InstagramMessagingEvent) {
 
   if (leadData?.humano_ativo) {
     console.log(`[SDR Instagram Webhook] Atendimento humano ativo para ${igsid} — IA pausada`);
+    return;
+  }
+
+  if (!(await isIaAtiva(CANAL))) {
+    console.log(`[SDR Instagram Webhook] IA automática desligada globalmente — mensagem de ${igsid} só salva`);
     return;
   }
 
