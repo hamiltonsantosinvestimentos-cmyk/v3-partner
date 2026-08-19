@@ -10,6 +10,7 @@ export type SdrLead = {
   responsavel_nome: string | null;
   status: string;
   humano_ativo: boolean;
+  canal?: "whatsapp" | "instagram";
   last_message_at: string | null;
   last_message_preview: string | null;
   message_count: number;
