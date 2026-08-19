@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { syncSdrLeadToProspeccao, lookupProspeccaoEtapaByPhones } from "@/lib/sdr-prospeccao-sync";
 
+const ALLOWED_ROLES = ["ADMIN", "GESTAO", "SDR", "CLOSER"] as const;
 const ADMIN_ROLES = ["ADMIN", "GESTAO"] as const;
 
 function svc() {
@@ -14,14 +15,16 @@ async function authGuard() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
   const { data: profile } = await supabase.from("profiles").select("id, full_name, role").eq("id", user.id).single();
-  if (!ADMIN_ROLES.includes(profile?.role as typeof ADMIN_ROLES[number])) return null;
+  if (!ALLOWED_ROLES.includes(profile?.role as typeof ALLOWED_ROLES[number])) return null;
   return { user, profile };
 }
 
-// GET /api/sdr/leads — lista todos os leads com metadados
+// GET /api/sdr/leads — lista leads com metadados. ADMIN/GESTAO veem todos;
+// SDR/CLOSER veem só os que são responsáveis (ou ainda sem dono).
 export async function GET() {
   const auth = await authGuard();
   if (!auth) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+  const isAdmin = ADMIN_ROLES.includes(auth.profile?.role as typeof ADMIN_ROLES[number]);
 
   const db = svc();
 
@@ -47,7 +50,7 @@ export async function GET() {
   // 2. Busca metadados dos leads
   const { data: leads } = await db
     .from("sdr_leads")
-    .select("phone, nome, tags, responsavel_id, status, last_message_at, last_message_preview, humano_ativo");
+    .select("phone, nome, tags, responsavel_id, status, last_message_at, last_message_preview, humano_ativo, canal");
 
   const leadsMap: Record<string, typeof leads extends (infer T)[] | null ? T : never> = {};
   for (const l of leads ?? []) leadsMap[l.phone] = l;
@@ -71,6 +74,11 @@ export async function GET() {
 
   // 6. Monta resultado ordenado por última mensagem
   const result = Object.entries(phoneMap)
+    .filter(([phone]) => {
+      if (isAdmin) return true;
+      const lead = leadsMap[phone];
+      return !lead?.responsavel_id || lead.responsavel_id === auth.user.id;
+    })
     .map(([phone, conv]) => {
       const lead = leadsMap[phone];
       return {
@@ -81,6 +89,7 @@ export async function GET() {
         responsavel_nome: lead?.responsavel_id ? (responsavelMap[lead.responsavel_id] ?? null) : null,
         status: lead?.status ?? "ativo",
         humano_ativo: lead?.humano_ativo ?? false,
+        canal: lead?.canal ?? "whatsapp",
         last_message_at: conv.last_at,
         last_message_preview: conv.preview,
         message_count: conv.count,
@@ -92,10 +101,13 @@ export async function GET() {
   return NextResponse.json({ leads: result, profiles: profiles ?? [] });
 }
 
-// PATCH /api/sdr/leads — atualiza metadados de um lead
+// PATCH /api/sdr/leads — atualiza metadados de um lead. ADMIN/GESTAO podem
+// mexer em qualquer lead; SDR/CLOSER só em leads sem dono (pra se autoatribuir)
+// ou já atribuídos a eles mesmos.
 export async function PATCH(req: NextRequest) {
   const auth = await authGuard();
   if (!auth) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+  const isAdmin = ADMIN_ROLES.includes(auth.profile?.role as typeof ADMIN_ROLES[number]);
 
   const body = await req.json() as {
     phone: string;
@@ -107,6 +119,13 @@ export async function PATCH(req: NextRequest) {
   };
 
   if (!body.phone) return NextResponse.json({ error: "phone obrigatório" }, { status: 400 });
+
+  if (!isAdmin) {
+    const { data: existing } = await svc().from("sdr_leads").select("responsavel_id").eq("phone", body.phone).maybeSingle();
+    if (existing?.responsavel_id && existing.responsavel_id !== auth.user.id) {
+      return NextResponse.json({ error: "Esse lead já tem outro responsável" }, { status: 403 });
+    }
+  }
 
   const updateData: Record<string, unknown> = { phone: body.phone, updated_at: new Date().toISOString() };
   if (body.nome !== undefined) updateData.nome = body.nome;

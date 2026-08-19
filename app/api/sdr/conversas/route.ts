@@ -8,12 +8,21 @@ export async function GET(req: NextRequest) {
   if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
   const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
-  if (!["ADMIN", "GESTAO"].includes(profile?.role ?? "")) {
+  if (!["ADMIN", "GESTAO", "SDR", "CLOSER"].includes(profile?.role ?? "")) {
     return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
   }
+  const isAdmin = ["ADMIN", "GESTAO"].includes(profile?.role ?? "");
 
   const svc = sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
   const phone = req.nextUrl.searchParams.get("phone");
+
+  // SDR/CLOSER só leem a conversa de leads sem dono ou já atribuídos a eles.
+  if (phone && !isAdmin) {
+    const { data: lead } = await svc.from("sdr_leads").select("responsavel_id").eq("phone", phone).maybeSingle();
+    if (lead?.responsavel_id && lead.responsavel_id !== user.id) {
+      return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
+    }
+  }
 
   let query = svc
     .from("sdr_conversas")

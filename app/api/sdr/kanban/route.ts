@@ -31,7 +31,7 @@ export async function GET() {
 
   let query = db
     .from("sdr_leads")
-    .select("phone, nome, tags, responsavel_id, status, last_message_at, last_message_preview")
+    .select("phone, nome, tags, responsavel_id, status, last_message_at, last_message_preview, canal")
     .order("last_message_at", { ascending: false, nullsFirst: false });
   if (!isAdmin) query = query.eq("responsavel_id", auth.user.id);
 
@@ -55,6 +55,7 @@ export async function GET() {
     responsavel_id: l.responsavel_id,
     responsavel_nome: l.responsavel_id ? (responsavelMap[l.responsavel_id] ?? null) : null,
     status: l.status,
+    canal: l.canal ?? "whatsapp",
     last_message_at: l.last_message_at,
     last_message_preview: l.last_message_preview,
     prospeccao_lead_id: prospeccaoByPhone[l.phone]?.id ?? null,

@@ -49,6 +49,30 @@ type Profile = { id: string; full_name: string; role: string };
 
 const QUICK_REPLY_MARKER = "Digite o número da opção:";
 
+function ChannelBadge({ canal }: { canal?: "whatsapp" | "instagram" }) {
+  if (canal === "instagram") {
+    return (
+      <div
+        title="Instagram"
+        className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full flex items-center justify-center border-2 border-[#09081A]"
+        style={{ background: "radial-gradient(circle at 30% 107%, #fdf497, #fdf497 5%, #fd5949 45%, #d6249f 60%, #285AEB 90%)" }}
+      >
+        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth={2.5} strokeLinecap="round">
+          <rect x="3" y="3" width="18" height="18" rx="5" />
+          <circle cx="12" cy="12" r="3.2" />
+        </svg>
+      </div>
+    );
+  }
+  return (
+    <div title="WhatsApp" className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full flex items-center justify-center bg-[#25D366] border-2 border-[#09081A]">
+      <svg width="9" height="9" viewBox="0 0 24 24" fill="white">
+        <path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.74.46 3.44 1.32 4.94L2 22l5.29-1.39a9.9 9.9 0 0 0 4.75 1.21h.01c5.46 0 9.9-4.45 9.9-9.91 0-2.65-1.03-5.14-2.9-7.01A9.82 9.82 0 0 0 12.04 2z" />
+      </svg>
+    </div>
+  );
+}
+
 function initials(phone: string, nome: string | null) {
   if (nome) return nome.split(" ").slice(0, 2).map(n => n[0]).join("").toUpperCase();
   const digits = phone.replace(/\D/g, "").slice(-4);
@@ -108,7 +132,7 @@ export function SdrClient({ currentUserId, currentUserName, currentUserRole }: S
   const [loadingConversas, setLoadingConversas] = useState(false);
   const [search, setSearch] = useState("");
   const [leadFilter, setLeadFilter] = useState<LeadFilter>("todos");
-  const [mainTab, setMainTab] = useState<MainTab>(isAdminGestao ? "conversas" : "kanban");
+  const [mainTab, setMainTab] = useState<MainTab>("conversas");
   const [showQr, setShowQr] = useState(false);
   const [savingLead, setSavingLead] = useState(false);
   const [humanMsg, setHumanMsg] = useState("");
@@ -157,12 +181,14 @@ export function SdrClient({ currentUserId, currentUserName, currentUserRole }: S
 
   // ── Efeitos ────────────────────────────────────────────────────────────────
   useEffect(() => {
-    // Conversas/QR/Envio em massa são exclusivos de ADMIN/GESTAO — SDR/CLOSER só usam Kanban/Dashboard
-    if (!isAdminGestao) return;
+    // Conversas (leads) é comum a todo mundo com acesso à aba SDR — a API já
+    // restringe SDR/CLOSER aos próprios leads. QR do WhatsApp (pareamento da
+    // sessão) continua exclusivo de ADMIN/GESTAO.
     fetchLeads();
+    const leadsInterval = setInterval(fetchLeads, 30000);
+    if (!isAdminGestao) return () => clearInterval(leadsInterval);
     fetchQr();
     const qrInterval = setInterval(fetchQr, 10000);
-    const leadsInterval = setInterval(fetchLeads, 30000);
     return () => { clearInterval(qrInterval); clearInterval(leadsInterval); };
   }, [fetchLeads, fetchQr, isAdminGestao]);
 
@@ -286,8 +312,8 @@ export function SdrClient({ currentUserId, currentUserName, currentUserRole }: S
   ];
 
   const TABS: { key: MainTab; label: string; icon: ReactNode }[] = [
+    { key: "conversas", label: "Conversas", icon: ICONS.conversas },
     ...(isAdminGestao ? ([
-      { key: "conversas", label: "Conversas", icon: ICONS.conversas },
       { key: "automacao", label: "Automação", icon: ICONS.automacao },
       { key: "envio-massa", label: "Envio em Massa", icon: ICONS.envioMassa },
       { key: "campanhas", label: "Campanhas", icon: ICONS.campanhas },
@@ -424,7 +450,7 @@ export function SdrClient({ currentUserId, currentUserName, currentUserRole }: S
       )}
 
       {/* ── Main WhatsApp layout (3 colunas: leads | chat | detalhes) ────────── */}
-      <div className={isAdminGestao && mainTab === "conversas" ? "flex flex-1 overflow-hidden" : "hidden"}>
+      <div className={mainTab === "conversas" ? "flex flex-1 overflow-hidden" : "hidden"}>
 
         {/* ── Coluna 1: lista de leads ──────────────────────────────────────── */}
         <div className="w-80 shrink-0 bg-[#111F35] border-r border-[#243A66] flex flex-col overflow-hidden">
@@ -472,8 +498,11 @@ export function SdrClient({ currentUserId, currentUserName, currentUserRole }: S
                     onClick={() => handleSelectPhone(lead.phone)}
                     className={`flex gap-2.5 px-3.5 py-3 cursor-pointer border-b border-[#162744] transition-colors ${isSelected ? "bg-[#162744] border-l-[3px] border-l-[#C9A84C]" : "border-l-[3px] border-l-transparent hover:bg-[#162744]/50"}`}
                   >
-                    <div className={`w-11 h-11 rounded-full shrink-0 flex items-center justify-center font-bold text-sm border-2 ${isSelected ? "bg-[#C9A84C]/20 border-[#C9A84C] text-[#C9A84C]" : "bg-[#243A66] border-[#243A66] text-[#F0ECE4]"}`}>
-                      {initials(lead.phone, lead.nome)}
+                    <div className="relative shrink-0">
+                      <div className={`w-11 h-11 rounded-full flex items-center justify-center font-bold text-sm border-2 ${isSelected ? "bg-[#C9A84C]/20 border-[#C9A84C] text-[#C9A84C]" : "bg-[#243A66] border-[#243A66] text-[#F0ECE4]"}`}>
+                        {initials(lead.phone, lead.nome)}
+                      </div>
+                      <ChannelBadge canal={lead.canal} />
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex justify-between items-baseline mb-0.5">
@@ -546,8 +575,11 @@ export function SdrClient({ currentUserId, currentUserName, currentUserRole }: S
 
               {/* Chat header (enxuto — detalhes completos ficam na coluna 3) */}
               <div className="flex items-center gap-3 px-5 py-3 bg-[#111F35] border-b border-[#243A66] shrink-0">
-                <div className="w-10 h-10 rounded-full shrink-0 bg-[#C9A84C]/20 border-2 border-[#C9A84C] flex items-center justify-center text-[#C9A84C] font-bold text-sm">
-                  {initials(selectedLead.phone, selectedLead.nome)}
+                <div className="relative shrink-0">
+                  <div className="w-10 h-10 rounded-full bg-[#C9A84C]/20 border-2 border-[#C9A84C] flex items-center justify-center text-[#C9A84C] font-bold text-sm">
+                    {initials(selectedLead.phone, selectedLead.nome)}
+                  </div>
+                  <ChannelBadge canal={selectedLead.canal} />
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-[#F0ECE4] font-bold text-[15px] truncate">{selectedLead.nome ?? selectedLead.phone}</p>
