@@ -81,6 +81,9 @@ export async function GET(req: NextRequest) {
   const matchCountByDemand = new Map<string, number>();
   for (const m of matchesRes.data ?? []) matchCountByDemand.set(m.demand_id, (matchCountByDemand.get(m.demand_id) ?? 0) + 1);
 
+  // Checklist de KYC (BRIEF 3b, 19/08/2026) -- fixo: identidade + comprovante de residencia,
+  // e contrato social so quando o comprador e PJ (cnpj preenchido). Distinto do pipeline_status
+  // acima, que e sobre LOI/MOU + procuracao (documentos de mandato, nao de identidade).
   const enriched = (demands ?? []).map((d) => {
     const docTypes = docTypesByDemand.get(d.id) ?? new Set<string>();
     const hasAllDocs = docTypes.has("loi_mou") && docTypes.has("procuracao");
@@ -89,12 +92,21 @@ export async function GET(req: NextRequest) {
       : hasAllDocs
       ? "documentacao_completa"
       : "documentos_pendentes";
+
+    const isPJ = !!d.cnpj;
+    const kycMissing: string[] = [];
+    if (!docTypes.has("kyc_identidade")) kycMissing.push("Identidade (RG/CNH)");
+    if (!docTypes.has("kyc_comprovante_residencia")) kycMissing.push("Comprovante de Residência");
+    if (isPJ && !docTypes.has("kyc_contrato_social")) kycMissing.push("Contrato Social");
+
     return {
       ...d,
       document_count: docTypes.size,
       document_types: Array.from(docTypes),
       match_count: matchCountByDemand.get(d.id) ?? 0,
       pipeline_status,
+      kyc_missing: kycMissing,
+      kyc_ready_for_approval: kycMissing.length === 0,
     };
   });
 

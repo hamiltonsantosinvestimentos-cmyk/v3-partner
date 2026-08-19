@@ -21,10 +21,22 @@ interface BuyIntakeWizardProps {
   lockedFollowUp?: boolean;
 }
 
-const DOC_TYPES = [
+const MANDATO_DOC_TYPES = [
   { type: "loi_mou", label: "Carta de Intenções (LOI) ou Memorando de Entendimento (MOU)" },
   { type: "procuracao", label: "Procuração / autorização" },
 ] as const;
+
+// Checklist fixo de KYC (BRIEF 3b, 19/08/2026): contrato social so entra quando o
+// comprador e PJ (CNPJ preenchido) -- nao ha campo person_type neste form, mesma
+// inferencia ja usada no resto do modulo Buy-Side.
+function getKycDocTypes(cnpj: string | undefined) {
+  const base = [
+    { type: "kyc_identidade", label: "Identidade (RG ou CNH)" },
+    { type: "kyc_comprovante_residencia", label: "Comprovante de Residência" },
+  ];
+  if (cnpj && cnpj.trim()) base.push({ type: "kyc_contrato_social", label: "Contrato Social" });
+  return base;
+}
 
 export function BuyIntakeWizard({ token, prefill, originPartnerId, lockedFollowUp }: BuyIntakeWizardProps) {
   const [step, setStep] = useState(0);
@@ -64,31 +76,60 @@ export function BuyIntakeWizard({ token, prefill, originPartnerId, lockedFollowU
   };
 
   if (lockedFollowUp) {
+    const kycTypes = getKycDocTypes(prefill.cnpj);
     return (
-      <div className="bg-[#12112A] border border-[#9BAFC5]/10 rounded-xl p-6 sm:p-8">
-        <h3 className="text-lg font-bold text-[#F5F1E8] mb-1">Envio de documentos</h3>
-        <p className="text-xs text-[#9BAFC5] mb-6">
-          Seu cadastro já foi registrado. Você ainda pode enviar ou completar os documentos abaixo — eles ficam retidos para validação da Mesa V3 antes de liberar o Full DD.
-        </p>
-        <div className="space-y-2">
-          {DOC_TYPES.map(({ type, label }) => (
-            <div key={type} className="flex items-center justify-between gap-3 bg-[#162744] border border-[#9BAFC5]/10 rounded-lg px-4 py-3">
-              <span className="text-xs text-[#F5F1E8]">{label}</span>
-              {hasDoc(type) ? (
-                <span className="text-[10px] text-emerald-400 font-bold flex items-center gap-1"><CheckCircle2 size={12} /> Enviado</span>
-              ) : (
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  <span className="text-[10px] text-[#9BAFC5] font-bold uppercase tracking-wider">Pendente</span>
-                  <label className="flex items-center gap-1.5 px-3 py-1.5 bg-[#12112A] border border-[#9BAFC5]/15 rounded text-[#9BAFC5] text-[10px] font-bold hover:border-[#C9A84C]/30 hover:text-[#C9A84C] transition cursor-pointer">
-                    {uploadingDoc === type ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
-                    Enviar
-                    <input type="file" className="hidden" accept=".pdf,.doc,.docx,.jpg,.png"
-                      onChange={(e) => { if (e.target.files?.[0]) uploadDoc(e.target.files[0], type); }} />
-                  </label>
-                </div>
-              )}
-            </div>
-          ))}
+      <div className="bg-[#12112A] border border-[#9BAFC5]/10 rounded-xl p-6 sm:p-8 space-y-6">
+        <div>
+          <h3 className="text-lg font-bold text-[#F5F1E8] mb-1">Envio de documentos</h3>
+          <p className="text-xs text-[#9BAFC5] mb-6">
+            Seu cadastro já foi registrado. Você ainda pode enviar ou completar os documentos abaixo — eles ficam retidos para validação da Mesa V3 antes de liberar o Full DD.
+          </p>
+        </div>
+        <div>
+          <label className="block text-[10px] font-bold text-[#C9A84C] uppercase tracking-wider mb-2">Documentos de Mandato</label>
+          <div className="space-y-2">
+            {MANDATO_DOC_TYPES.map(({ type, label }) => (
+              <div key={type} className="flex items-center justify-between gap-3 bg-[#162744] border border-[#9BAFC5]/10 rounded-lg px-4 py-3">
+                <span className="text-xs text-[#F5F1E8]">{label}</span>
+                {hasDoc(type) ? (
+                  <span className="text-[10px] text-emerald-400 font-bold flex items-center gap-1"><CheckCircle2 size={12} /> Enviado</span>
+                ) : (
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <span className="text-[10px] text-[#9BAFC5] font-bold uppercase tracking-wider">Pendente</span>
+                    <label className="flex items-center gap-1.5 px-3 py-1.5 bg-[#12112A] border border-[#9BAFC5]/15 rounded text-[#9BAFC5] text-[10px] font-bold hover:border-[#C9A84C]/30 hover:text-[#C9A84C] transition cursor-pointer">
+                      {uploadingDoc === type ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
+                      Enviar
+                      <input type="file" className="hidden" accept=".pdf,.doc,.docx,.jpg,.png"
+                        onChange={(e) => { if (e.target.files?.[0]) uploadDoc(e.target.files[0], type); }} />
+                    </label>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+        <div>
+          <label className="block text-[10px] font-bold text-[#C9A84C] uppercase tracking-wider mb-2">Documentos de KYC</label>
+          <div className="space-y-2">
+            {kycTypes.map(({ type, label }) => (
+              <div key={type} className="flex items-center justify-between gap-3 bg-[#162744] border border-[#9BAFC5]/10 rounded-lg px-4 py-3">
+                <span className="text-xs text-[#F5F1E8]">{label}</span>
+                {hasDoc(type) ? (
+                  <span className="text-[10px] text-emerald-400 font-bold flex items-center gap-1"><CheckCircle2 size={12} /> Enviado</span>
+                ) : (
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <span className="text-[10px] text-[#9BAFC5] font-bold uppercase tracking-wider">Pendente</span>
+                    <label className="flex items-center gap-1.5 px-3 py-1.5 bg-[#12112A] border border-[#9BAFC5]/15 rounded text-[#9BAFC5] text-[10px] font-bold hover:border-[#C9A84C]/30 hover:text-[#C9A84C] transition cursor-pointer">
+                      {uploadingDoc === type ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
+                      Enviar
+                      <input type="file" className="hidden" accept=".pdf,.doc,.docx,.jpg,.png"
+                        onChange={(e) => { if (e.target.files?.[0]) uploadDoc(e.target.files[0], type); }} />
+                    </label>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     );
@@ -291,10 +332,35 @@ export function BuyIntakeWizard({ token, prefill, originPartnerId, lockedFollowU
             </div>
 
             <div className="mt-6 pt-6 border-t border-[#9BAFC5]/10">
-              <label className={labelClass}>Documentos (KYC)</label>
+              <label className={labelClass}>Documentos de Mandato</label>
               <p className="text-[11px] text-[#9BAFC5]/70 mb-2">Você pode enviar agora ou depois, o cadastro não fica bloqueado. Documentos pendentes ficam retidos para validação da Mesa V3 antes de liberar o Full DD.</p>
               <div className="space-y-2 mt-2">
-                {DOC_TYPES.map(({ type, label }) => (
+                {MANDATO_DOC_TYPES.map(({ type, label }) => (
+                  <div key={type} className="flex items-center justify-between gap-3 bg-[#162744] border border-[#9BAFC5]/10 rounded-lg px-4 py-3">
+                    <span className="text-xs text-[#F5F1E8]">{label}</span>
+                    {hasDoc(type) ? (
+                      <span className="text-[10px] text-emerald-400 font-bold flex items-center gap-1"><CheckCircle2 size={12} /> Enviado</span>
+                    ) : (
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <span className="text-[10px] text-[#9BAFC5] font-bold uppercase tracking-wider">Pendente</span>
+                        <label className="flex items-center gap-1.5 px-3 py-1.5 bg-[#12112A] border border-[#9BAFC5]/15 rounded text-[#9BAFC5] text-[10px] font-bold hover:border-[#C9A84C]/30 hover:text-[#C9A84C] transition cursor-pointer">
+                          {uploadingDoc === type ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
+                          Enviar
+                          <input type="file" className="hidden" accept=".pdf,.doc,.docx,.jpg,.png"
+                            onChange={(e) => { if (e.target.files?.[0]) uploadDoc(e.target.files[0], type); }} />
+                        </label>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="mt-6 pt-6 border-t border-[#9BAFC5]/10">
+              <label className={labelClass}>Documentos de KYC</label>
+              <p className="text-[11px] text-[#9BAFC5]/70 mb-2">Identidade, comprovante de residência e, se pessoa jurídica, contrato social. Exigidos pela Mesa antes de aprovar o Full DD.</p>
+              <div className="space-y-2 mt-2">
+                {getKycDocTypes(form.cnpj).map(({ type, label }) => (
                   <div key={type} className="flex items-center justify-between gap-3 bg-[#162744] border border-[#9BAFC5]/10 rounded-lg px-4 py-3">
                     <span className="text-xs text-[#F5F1E8]">{label}</span>
                     {hasDoc(type) ? (

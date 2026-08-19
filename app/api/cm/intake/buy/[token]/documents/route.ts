@@ -8,6 +8,15 @@ function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 }
 
+const DOC_TYPE_LABELS: Record<string, string> = {
+  loi_mou: "LOI/MOU",
+  procuracao: "Procuração",
+  outro: "Outro",
+  kyc_identidade: "KYC, Identidade (RG/CNH)",
+  kyc_comprovante_residencia: "KYC, Comprovante de Residência",
+  kyc_contrato_social: "KYC, Contrato Social",
+};
+
 /** GET /api/cm/intake/buy/[token]/documents — lista documentos ja anexados (para retomar o wizard) */
 export async function GET(
   _req: NextRequest,
@@ -57,7 +66,7 @@ export async function POST(
   const documentType = (formData.get("document_type") as string) || "outro";
 
   if (!file) return NextResponse.json({ error: "Arquivo obrigatório" }, { status: 422 });
-  if (!["loi_mou", "procuracao", "outro"].includes(documentType)) {
+  if (!["loi_mou", "procuracao", "outro", "kyc_identidade", "kyc_comprovante_residencia", "kyc_contrato_social"].includes(documentType)) {
     return NextResponse.json({ error: "document_type inválido" }, { status: 422 });
   }
 
@@ -85,13 +94,21 @@ export async function POST(
 
   if (insertError) return NextResponse.json({ error: insertError.message }, { status: 500 });
 
+  // Timeline da ficha (BRIEF 19/08/2026) -- nota de sistema, sem author_id humano
+  // (is_system=true), visivel pra Mesa e pro Partner de origem na aba Timeline.
+  void svc().from("cm_deal_notes").insert({
+    demand_id: demand.id,
+    content: `Documento anexado pelo comprador: ${DOC_TYPE_LABELS[documentType] ?? documentType} (${file.name}).`,
+    is_system: true,
+  });
+
   // Notifica o Partner que originou este comprador (push real + in-app) -- mesmo padrao do
   // sell-side (status/route.ts), fire-and-forget.
   if (demand.origin_partner_id) {
     void createNotification({
       user_id: demand.origin_partner_id,
       title: `${demand.nome_contato} enviou um documento`,
-      message: `Novo documento (${documentType === "loi_mou" ? "LOI/MOU" : documentType === "procuracao" ? "Procuração" : "Outro"}) no comprador que você indicou.`,
+      message: `Novo documento (${DOC_TYPE_LABELS[documentType] ?? documentType}) no comprador que você indicou.`,
       type: "marketplace",
       action_url: "/meus-compradores",
     });

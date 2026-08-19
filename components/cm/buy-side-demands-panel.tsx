@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Loader2, FileText, X, Download, RefreshCw, Repeat, ShoppingCart, IdCard, Target, ShieldCheck, Link2, Check, UserPlus } from "lucide-react";
+import { Loader2, FileText, X, Download, RefreshCw, Repeat, ShoppingCart, IdCard, Target, ShieldCheck, Link2, Check, UserPlus, ClipboardCheck, History, Send } from "lucide-react";
 import { QuickIndicateModal } from "@/components/cm/quick-indicate-modal";
 import { QualificationBatchesPanel } from "@/components/cm/qualification-batches-panel";
 
@@ -38,6 +38,9 @@ type BuyDemand = {
   document_types: string[];
   match_count: number;
   pipeline_status: "aguardando_preenchimento" | "documentos_pendentes" | "documentacao_completa";
+  kyc_approved_at: string | null;
+  kyc_missing: string[];
+  kyc_ready_for_approval: boolean;
   created_at: string;
 };
 
@@ -47,6 +50,14 @@ type KycDoc = {
   original_filename: string;
   download_url: string | null;
   created_at: string;
+};
+
+type TimelineNote = {
+  id: string;
+  content: string;
+  is_system: boolean;
+  created_at: string;
+  profiles: { full_name: string } | null;
 };
 
 const ASSET_LABEL: Record<string, string> = {
@@ -61,6 +72,9 @@ const DOC_TYPE_LABEL: Record<string, string> = {
   loi_mou: "LOI / MOU",
   procuracao: "Procuração",
   outro: "Outro",
+  kyc_identidade: "KYC, Identidade",
+  kyc_comprovante_residencia: "KYC, Comprovante de Residência",
+  kyc_contrato_social: "KYC, Contrato Social",
 };
 
 // Status de fila -- cor ajuda a Mesa a escanear rapido quem ja esta pronto pra Full DD
@@ -117,6 +131,11 @@ export function BuySideDemandsPanel({ mode = "mesa", title, subtitle }: BuySideD
   const [docsLoading, setDocsLoading] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [indicateDemand, setIndicateDemand] = useState<BuyDemand | null>(null);
+  const [timeline, setTimeline] = useState<TimelineNote[]>([]);
+  const [timelineLoading, setTimelineLoading] = useState(false);
+  const [newNote, setNewNote] = useState("");
+  const [savingNote, setSavingNote] = useState(false);
+  const [approvingKyc, setApprovingKyc] = useState(false);
 
   const copyLink = (d: BuyDemand) => {
     const url = `${window.location.origin}/intake/buy/${d.intake_token}`;
@@ -143,6 +162,7 @@ export function BuySideDemandsPanel({ mode = "mesa", title, subtitle }: BuySideD
   const openDetail = async (demand: BuyDemand) => {
     setDetailDemand(demand);
     setDocsLoading(true);
+    setTimelineLoading(true);
     try {
       const res = await fetch(`/api/cm/kyc-documents?demand_id=${demand.id}`);
       const json = await res.json();
@@ -151,6 +171,58 @@ export function BuySideDemandsPanel({ mode = "mesa", title, subtitle }: BuySideD
       setDocs([]);
     } finally {
       setDocsLoading(false);
+    }
+    try {
+      const res = await fetch(`/api/cm/deal-notes?demand_id=${demand.id}`);
+      const json = await res.json();
+      setTimeline(json.notes ?? []);
+    } catch {
+      setTimeline([]);
+    } finally {
+      setTimelineLoading(false);
+    }
+  };
+
+  const addNote = async () => {
+    if (!detailDemand || !newNote.trim()) return;
+    setSavingNote(true);
+    try {
+      const res = await fetch("/api/cm/deal-notes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ demand_id: detailDemand.id, content: newNote.trim() }),
+      });
+      const json = await res.json();
+      if (res.ok) {
+        setTimeline((prev) => [json.note, ...prev]);
+        setNewNote("");
+      } else {
+        alert(json.error ?? "Erro ao salvar nota");
+      }
+    } catch {
+      alert("Erro de conexão");
+    } finally {
+      setSavingNote(false);
+    }
+  };
+
+  const approveKyc = async () => {
+    if (!detailDemand) return;
+    setApprovingKyc(true);
+    try {
+      const res = await fetch(`/api/cm/investor-demands/${detailDemand.id}/approve-kyc`, { method: "POST" });
+      const json = await res.json();
+      if (res.ok) {
+        setDetailDemand((prev) => (prev ? { ...prev, kyc_approved_at: new Date().toISOString(), kyc_missing: [], kyc_ready_for_approval: true } : prev));
+        setTimeline((prev) => [{ id: `local-${Date.now()}`, content: "KYC aprovado pela Mesa. Full DD liberado para este comprador.", is_system: true, created_at: new Date().toISOString(), profiles: null }, ...prev]);
+        fetchDemands();
+      } else {
+        alert(json.error ?? "Erro ao aprovar KYC");
+      }
+    } catch {
+      alert("Erro de conexão");
+    } finally {
+      setApprovingKyc(false);
     }
   };
 
@@ -329,10 +401,24 @@ export function BuySideDemandsPanel({ mode = "mesa", title, subtitle }: BuySideD
                   <Target size={12} /> Mandato de Busca
                 </div>
                 <div className="bg-[#12112A] border border-[#243A66] rounded-lg p-3 space-y-3">
+                  <div>
+                    <div className="text-[9px] font-bold uppercase tracking-wider text-[#9BAFC5]/70">Ativo Pretendido</div>
+                    <div className="flex flex-wrap gap-1.5 mt-1">
+                      {(detailDemand.asset_types_preferidos ?? []).length > 0 ? (
+                        detailDemand.asset_types_preferidos!.map((t) => (
+                          <span key={t} className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#C9A84C]/10 text-[#E8C97A]">
+                            {ASSET_LABEL[t] ?? t}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="text-xs text-[#5A7490]">Nenhum tipo selecionado ainda.</span>
+                      )}
+                    </div>
+                  </div>
                   <div className="grid grid-cols-2 gap-3">
                     <Field label="Ticket" value={`${formatM(detailDemand.ticket_min)} a ${formatM(detailDemand.ticket_max)}`} />
                     <Field label="Deságio Mínimo" value={detailDemand.desagio_min ? `${detailDemand.desagio_min}%` : null} />
-                    <Field label="Jurisdição de Interesse" value={detailDemand.jurisdicao_alvo?.join(", ")} />
+                    <Field label="Jurisdição de Interesse (Esfera)" value={detailDemand.jurisdicao_alvo?.join(", ")} />
                     <Field label="Natureza Preferida" value={detailDemand.natureza_preferida?.join(", ")} />
                   </div>
                   {detailDemand.criterios && <Field label="Critérios Adicionais" value={detailDemand.criterios} />}
@@ -374,6 +460,93 @@ export function BuySideDemandsPanel({ mode = "mesa", title, subtitle }: BuySideD
                         ) : (
                           <span className="text-[9px] text-[#5A7490] flex-shrink-0">indisponível</span>
                         )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Checklist de KYC + Aprovacao (BRIEF 3b, 19/08/2026) */}
+              <div>
+                <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-[#E8C97A] mb-2.5">
+                  <ClipboardCheck size={12} /> KYC, Checklist de Aprovação
+                </div>
+                <div className="bg-[#12112A] border border-[#243A66] rounded-lg p-3 space-y-3">
+                  {detailDemand.kyc_approved_at ? (
+                    <div className="flex items-center gap-2 text-emerald-400 text-xs font-semibold">
+                      <ShieldCheck size={14} /> KYC aprovado em {new Date(detailDemand.kyc_approved_at).toLocaleString("pt-BR")}, Full DD liberado
+                    </div>
+                  ) : (
+                    <>
+                      <div className="space-y-1.5">
+                        {["Identidade (RG/CNH)", "Comprovante de Residência", ...(detailDemand.cnpj ? ["Contrato Social"] : [])].map((item) => {
+                          const pending = detailDemand.kyc_missing.includes(item);
+                          return (
+                            <div key={item} className="flex items-center gap-2 text-xs">
+                              {pending ? (
+                                <span className="w-3.5 h-3.5 rounded-full border border-[#9BAFC5]/40 flex-shrink-0" />
+                              ) : (
+                                <Check size={14} className="text-emerald-400 flex-shrink-0" />
+                              )}
+                              <span className={pending ? "text-[#9BAFC5]" : "text-[#F5F1E8]"}>{item}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      {mode === "mesa" && (
+                        <button
+                          onClick={approveKyc}
+                          disabled={!detailDemand.kyc_ready_for_approval || approvingKyc}
+                          className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-[#C9A84C] text-[#09081A] rounded-lg text-xs font-bold hover:bg-[#D4B96A] transition disabled:opacity-30 disabled:cursor-not-allowed"
+                        >
+                          {approvingKyc ? <Loader2 size={13} className="animate-spin" /> : <ShieldCheck size={13} />}
+                          Aprovar KYC
+                        </button>
+                      )}
+                      {!detailDemand.kyc_ready_for_approval && (
+                        <p className="text-[10px] text-[#5A7490]">Faltando: {detailDemand.kyc_missing.join(", ")}.</p>
+                      )}
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* Timeline (BRIEF 3b, 19/08/2026): eventos automaticos (documento anexado, KYC
+                  aprovado) + notas manuais da Mesa, visivel pra quem estrutura/origina o deal. */}
+              <div>
+                <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-[#E8C97A] mb-2.5">
+                  <History size={12} /> Timeline
+                </div>
+                {mode === "mesa" && (
+                  <div className="flex gap-2 mb-3">
+                    <input
+                      value={newNote}
+                      onChange={(e) => setNewNote(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && addNote()}
+                      placeholder="Adicionar nota..."
+                      className="flex-1 bg-[#12112A] border border-[#9BAFC5]/15 rounded-lg px-3 py-2 text-xs text-[#F5F1E8] placeholder:text-[#9BAFC5]/40 focus:border-[#C9A84C]/40 focus:outline-none"
+                    />
+                    <button
+                      onClick={addNote}
+                      disabled={savingNote || !newNote.trim()}
+                      className="px-3 py-2 bg-[#C9A84C]/10 border border-[#C9A84C]/20 rounded-lg text-[#C9A84C] disabled:opacity-30"
+                    >
+                      {savingNote ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
+                    </button>
+                  </div>
+                )}
+                {timelineLoading ? (
+                  <div className="flex items-center justify-center py-6"><Loader2 size={16} className="text-[#9BAFC5] animate-spin" /></div>
+                ) : timeline.length === 0 ? (
+                  <p className="text-xs text-[#5A7490] bg-[#12112A] border border-dashed border-[#243A66] rounded-lg py-4 text-center">Nenhum evento registrado ainda.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {timeline.map((n) => (
+                      <div key={n.id} className={`rounded-lg px-3 py-2.5 text-xs ${n.is_system ? "bg-[#12112A] border border-dashed border-[#243A66] text-[#9BAFC5]" : "bg-[#162744] text-[#F5F1E8]"}`}>
+                        <p>{n.content}</p>
+                        <div className="text-[9px] text-[#5A7490] mt-1">
+                          {n.is_system ? "Sistema" : n.profiles?.full_name ?? "Mesa"} · {new Date(n.created_at).toLocaleString("pt-BR")}
+                        </div>
                       </div>
                     ))}
                   </div>
