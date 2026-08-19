@@ -27,6 +27,9 @@ export interface SendToClickSignInput {
   // auditText() do texto padrão: nenhum texto para o signatário sai sem
   // essa revisão, mesmo padrão que corrigiu o P0 de 11/08.
   signatureMessage?: string;
+  // Par de signatureMessage: assunto customizado do e-mail (attributes.
+  // email_customization.subject), mesmo mecanismo, mesmo gate auditText().
+  signatureSubject?: string;
   // 19/08/2026, regularização de contrato manual (série V3C-REG): quando
   // presente, pula o fetch(documentUrl)+htmlToPdfBase64 e usa este PDF já
   // pronto (capa Termo + original mesclados e estampados, ver
@@ -75,15 +78,21 @@ export type NotifyClickSignResult = { ok: true } | { ok: false; error: string; s
 // nunca bloqueia o envio (nenhum check de auditText é blocking hoje), só
 // corrige travessão/emoji/acentuação/menção a Bloxs antes do payload sair
 // para a API do ClickSign, que dispara o e-mail sozinha.
-export async function notifyClickSignEnvelope(envelopeId: string, signatoryName: string, documentLabel: string, customMessage?: string): Promise<NotifyClickSignResult> {
+export async function notifyClickSignEnvelope(envelopeId: string, signatoryName: string, documentLabel: string, customMessage?: string, customSubject?: string): Promise<NotifyClickSignResult> {
   const accessToken = process.env.CLICKSIGN_ACCESS_TOKEN;
   const baseUrl = process.env.CLICKSIGN_BASE_URL ?? "https://sandbox.clicksign.com";
   if (!accessToken) return { ok: false, error: "CLICKSIGN_ACCESS_TOKEN não configurado", status: 500 };
 
   const safeLabel = auditText(documentLabel).corrected;
   const safeName = auditText(signatoryName || "Sr(a)").corrected;
-  const subject = auditText(`V3 Partners: Assinatura Digital, ${safeLabel}`).corrected;
-  const greeting = auditText(`Prezado(a) ${safeName},`).corrected;
+  const subject = customSubject
+    ? auditText(customSubject).corrected
+    : auditText(`V3 Partners: Assinatura Digital, ${safeLabel}`).corrected;
+  // 19/08/2026: quando vem mensagem customizada (série V3C-REG), o texto já
+  // traz a própria saudação embutida ("Prezado(a) Parceiro(a),"), então a
+  // saudação separada é suprimida para não duplicar ("Prezado(a) Fulano,"
+  // seguido de "Prezado(a) Parceiro(a),").
+  const greeting = customMessage ? "" : auditText(`Prezado(a) ${safeName},`).corrected;
   // 19/08/2026: quando o caller passa uma mensagem customizada (série
   // V3C-REG, "isso é uma revalidação/integração ao sistema V3"), ela
   // substitui o parágrafo padrão, passando pelo mesmo gate auditText().
@@ -391,7 +400,7 @@ async function sendToClickSignV3(input: SendToClickSignInput): Promise<SendToCli
     // pelo link; só o lembrete automático (remind_interval) cobriria o
     // signatário eventualmente, então logamos em vez de falhar a operação
     // inteira por um problema de notificação.
-    const notifyRes = await notifyClickSignEnvelope(envelopeId, signatories[0]?.name ?? "", documentLabel, input.signatureMessage);
+    const notifyRes = await notifyClickSignEnvelope(envelopeId, signatories[0]?.name ?? "", documentLabel, input.signatureMessage, input.signatureSubject);
     if (!notifyRes.ok) {
       console.error(`[clicksign] notifyEnvelope falhou para envelope ${envelopeId}: ${notifyRes.error}`);
     }

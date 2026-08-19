@@ -36,12 +36,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const { id } = await params;
   const body = await req.json().catch(() => ({}));
-  const customMessage = typeof body.custom_message === "string" ? body.custom_message.trim() : undefined;
+  const customSubjectOverride = typeof body.custom_subject === "string" ? body.custom_subject.trim() : undefined;
+  const customMessageOverride = typeof body.custom_message === "string" ? body.custom_message.trim() : undefined;
 
   const db = svc();
   const { data: contract } = await db
     .from("operation_contracts")
-    .select("id, contract_code, contract_title, status_signature, external_envelope_id, parties")
+    .select("id, contract_code, contract_title, status_signature, external_envelope_id, parties, signature_message, signature_subject")
     .eq("id", id)
     .single();
 
@@ -63,15 +64,25 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     ? `${contract.contract_code} · ${contract.contract_title}`
     : contract.contract_title;
 
+  // custom_message/custom_subject no payload sempre vencem; na ausência,
+  // cai no signature_message/signature_subject já gravados no contrato
+  // (ex: contratos V3C-REG têm o texto oficial fixado no upload manual).
+  const customMessage = customMessageOverride ?? contract.signature_message ?? undefined;
+  const customSubject = customSubjectOverride ?? contract.signature_subject ?? undefined;
+
   // Gate Brand & Grammar Guardian: roda ANTES de qualquer chamada à ClickSign.
   // Mesma função já usada em produção (não uma cópia paralela) — se a
   // mensagem customizada trouxer alguma violação bloqueante, o envio inteiro
   // é recusado, nunca corrigido em silêncio para depois virar e-mail real.
-  if (customMessage) {
-    const gate = auditText(customMessage);
+  // signature_message já gravado passou por esse gate no momento em que foi
+  // salvo (manual-intake), mas é revalidado aqui também: nunca confiar em
+  // texto sensível sem re-checar no ponto de disparo real.
+  for (const [label, text] of [["mensagem", customMessage], ["assunto", customSubject]] as const) {
+    if (!text) continue;
+    const gate = auditText(text);
     if (gate.blocking.length > 0) {
       return NextResponse.json({
-        error: "Brand Guardian bloqueou a mensagem customizada.",
+        error: `Brand Guardian bloqueou o(a) ${label} customizado(a).`,
         violations: gate.blocking,
       }, { status: 422 });
     }
@@ -81,7 +92,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     contract.external_envelope_id,
     pendingSignatory?.name ?? "",
     documentLabel,
-    customMessage
+    customMessage,
+    customSubject
   );
 
   if (!result.ok) {

@@ -47,7 +47,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
 
   const { data: contract } = await db
     .from("operation_contracts")
-    .select("id, vertical, contract_title, contract_code, status_signature, parties, signing_token, signature_message, is_master_agreement, stamped_document_path")
+    .select("id, vertical, contract_title, contract_code, status_signature, parties, signing_token, signature_message, signature_subject, is_master_agreement, stamped_document_path")
     .eq("id", id)
     .single();
 
@@ -142,6 +142,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     // manual-intake) e fica disponível para qualquer contrato, não só
     // V3C-REG — column nullable, sem efeito quando ausente.
     signatureMessage: contract.signature_message ?? undefined,
+    signatureSubject: contract.signature_subject ?? undefined,
   });
 
   if (!result.ok) {

@@ -41,6 +41,25 @@ async function requireRole(req: NextRequest) {
 const MAX_SIZE = 10 * 1024 * 1024; // 10MB, maior que o limite de minuta (5MB) porque aqui é scan real de contrato assinado, não texto de template
 const ALLOWED_EXT = [".pdf", ".docx", ".txt"];
 
+// Assunto e corpo oficiais do e-mail de convite ClickSign para a série
+// V3C-REG (19/08/2026), texto final aprovado pelo Dr. Athaydes (Jurídico),
+// reproduzido literalmente, sem alteração de palavra nenhuma. Aplicado como
+// default de todo upload manual desta rota; signatureMessageOverride (campo
+// signature_message do formulário) continua disponível para um caso
+// pontual que precise de texto diferente, mas nunca é o padrão.
+const DEFAULT_V3C_REG_SIGNATURE_SUBJECT =
+  "V3 Partners: Assinatura de Termo de Ratificação e Vinculação (Acordo Guarda-Chuva)";
+
+const DEFAULT_V3C_REG_SIGNATURE_MESSAGE = `Prezado(a) Parceiro(a),
+
+Como parte da modernização da nossa infraestrutura de governança e estruturação financeira (Central de Contratos V3), estamos consolidando nossos acordos vigentes.
+
+O documento anexo refere-se ao Acordo de Confidencialidade/Parceria firmado anteriormente. Para que ele continue válido e sirva como 'Acordo Guarda-Chuva' (Master Agreement) para o trânsito de novas oportunidades e fechamento de futuros negócios, precisamos de sua ratificação digital.
+
+Por favor, acesse o link abaixo para assinar o Termo de Ratificação e Vinculação Comercial, que atesta a revalidação deste documento no nosso novo sistema.
+
+Em caso de dúvidas, nossa equipe jurídica estará à disposição.`;
+
 interface AvulsoParty {
   name: string;
   email: string;
@@ -196,9 +215,6 @@ export async function POST(req: NextRequest) {
     }, { status: 500 });
   }
 
-  const defaultSignatureMessage =
-    `Este documento consolida a revalidação e a integração do contrato original ao sistema V3 Partners, sob o código de registro ${contractCode}. Sua assinatura digital abaixo ratifica os termos já vigentes entre as partes e formaliza o registro deste instrumento na Central de Contratos.`;
-
   const { data: contract, error } = await db
     .from("operation_contracts")
     .insert({
@@ -218,7 +234,8 @@ export async function POST(req: NextRequest) {
       regularization_expires_at: regularizationExpiresAtRaw || null,
       original_file_hash: originalFileHash,
       stamped_file_hash: stampedFileHash,
-      signature_message: signatureMessageOverride ?? defaultSignatureMessage,
+      signature_message: signatureMessageOverride ?? DEFAULT_V3C_REG_SIGNATURE_MESSAGE,
+      signature_subject: DEFAULT_V3C_REG_SIGNATURE_SUBJECT,
       created_by: caller.userId,
     })
     .select()
