@@ -39,6 +39,7 @@ const PLANOS = [
     periodo: "/mês",
     precoAnual: "R$ 10.896,96",
     precoAnualDesconto: "R$ 9.807,26",
+    precoParcelaDesconto: "R$ 817,27",
     cor: "#C9A84C",
     icone: <Star className="w-6 h-6" />,
     comissao: "35%",
@@ -59,6 +60,7 @@ const PLANOS = [
     periodo: "/mês",
     precoAnual: "R$ 15.897,00",
     precoAnualDesconto: "R$ 14.307,30",
+    precoParcelaDesconto: "R$ 1.192,28",
     cor: "#E8C97A",
     icone: <Zap className="w-6 h-6" />,
     comissao: "50%",
@@ -80,6 +82,7 @@ const PLANOS = [
     periodo: "/mês",
     precoAnual: "R$ 49.896,96",
     precoAnualDesconto: "R$ 44.907,26",
+    precoParcelaDesconto: "R$ 3.742,27",
     cor: "#C9A84C",
     icone: <Shield className="w-6 h-6" />,
     comissao: "55%",
@@ -582,15 +585,27 @@ export function CadastroPartnerForm() {
                     <h3 className="font-bold text-[#F0ECE4] text-base">{p.nome}</h3>
                     <p className="text-xs text-[#7A8FA8] mt-1 mb-3">{p.descricao}</p>
                     <div className="mb-3">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-xs text-[#7A8FA8] line-through">{p.precoAnual}</span>
-                        <span className="text-[9px] font-bold text-emerald-400 bg-emerald-400/10 border border-emerald-400/30 px-1.5 py-0.5 rounded-full">-10%</span>
-                      </div>
-                      <div className="flex items-baseline gap-1">
-                        <span className="text-2xl font-bold text-[#C9A84C]">{p.precoAnualDesconto}</span>
-                        <span className="text-xs text-[#7A8FA8]">/ano</span>
-                      </div>
-                      <p className="text-[11px] text-[#7A8FA8] mt-0.5">à vista via Pix ou Boleto — equivale a {p.preco}{p.periodo}</p>
+                      {planoRecorrencia === "ANUAL_CARTAO" ? (
+                        <>
+                          <div className="flex items-baseline gap-1">
+                            <span className="text-2xl font-bold text-[#C9A84C]">{p.precoAnual}</span>
+                            <span className="text-xs text-[#7A8FA8]">/ano</span>
+                          </div>
+                          <p className="text-[11px] text-[#7A8FA8] mt-0.5">ou 12x de {p.preco} sem juros no cartão</p>
+                        </>
+                      ) : (
+                        <>
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs text-[#7A8FA8] line-through">{p.precoAnual}</span>
+                            <span className="text-[9px] font-bold text-emerald-400 bg-emerald-400/10 border border-emerald-400/30 px-1.5 py-0.5 rounded-full">-10%</span>
+                          </div>
+                          <div className="flex items-baseline gap-1">
+                            <span className="text-2xl font-bold text-[#C9A84C]">{p.precoAnualDesconto}</span>
+                            <span className="text-xs text-[#7A8FA8]">/ano</span>
+                          </div>
+                          <p className="text-[11px] text-[#7A8FA8] mt-0.5">à vista via Pix ou Boleto — equivale a {p.precoParcelaDesconto}/mês</p>
+                        </>
+                      )}
                     </div>
                     <div className="space-y-1.5">
                       {p.beneficios.map((b, i) => (
