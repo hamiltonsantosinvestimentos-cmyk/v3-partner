@@ -173,9 +173,9 @@ function ModalDetalhe({
                   : "V3 Enterprise — R$ 2.500+/mês"}
               </p>
               <p className="text-[11px] text-muted-foreground mt-0.5">
-                {reg.plano_recorrencia === "ANUAL_PIX_BOLETO" ? "Anual via Pix/Boleto (+R$50/mês)"
-                  : reg.plano_recorrencia === "ANUAL_CARTAO" ? "Anual recorrente no cartão"
-                  : "Mensal, sem fidelidade"}
+                {reg.plano_recorrencia === "ANUAL_PIX_BOLETO" ? "Anual à vista via Pix/Boleto (10% off)"
+                  : reg.plano_recorrencia === "ANUAL_CARTAO" ? "Anual em até 12x no cartão"
+                  : "Mensal, sem fidelidade (legado)"}
               </p>
             </div>
           </div>

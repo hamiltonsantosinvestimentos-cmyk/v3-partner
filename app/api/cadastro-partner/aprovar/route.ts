@@ -181,6 +181,16 @@ export async function POST(req: NextRequest) {
 
     // Cria o profile na tabela
     if (newUser?.user) {
+      // Quem entrou num dos dois planos anuais (Pix/Boleto à vista OU cartão em
+      // 12x, ambos com fidelidade de 12 meses) já está coberto por 12 meses --
+      // trial_expires_at é a mesma data que efetivoVencimento()
+      // (lib/partner-vencimento.ts) usa pra decidir quando o cron de cobrança
+      // mensal (assinaturas-vencendo) deve gerar a próxima fatura via Cora.
+      // Sem isso, o cron cairia no default de created_at + 30 dias e tentaria
+      // gerar uma cobrança Cora extra um mês depois -- duplicando quem pagou
+      // à vista, ou brigando com a cobrança recorrente que o InfinitePay já
+      // está fazendo por fora pra quem escolheu cartão.
+      const compromissoDe12Meses = reg.plano_recorrencia === "ANUAL_PIX_BOLETO" || reg.plano_recorrencia === "ANUAL_CARTAO";
       await svc.from("profiles").upsert({
         id:         newUser.user.id,
         full_name:  nome,
@@ -188,6 +198,7 @@ export async function POST(req: NextRequest) {
         email,
         kyc_status: "APROVADO",
         updated_at: new Date().toISOString(),
+        ...(compromissoDe12Meses ? { trial_expires_at: new Date(Date.now() + 365 * 86400000).toISOString() } : {}),
         ...(reg.referred_by_partner_id ? { referred_by_partner_id: reg.referred_by_partner_id } : {}),
       }, { onConflict: "id" });
     }
