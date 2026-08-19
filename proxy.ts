@@ -36,6 +36,20 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // Server-to-server (19/08/2026): /api/contracts/{id}/resend-notification,
+  // acionada pelo workflow n8n W15 (Webhook -> Chamar Portal), nunca por
+  // sessao de navegador. O id é dinâmico no meio do path, então não cabe em
+  // PUBLIC_ROUTES (prefixo simples) nem em S2S_PREFIXES acima (sufixo
+  // fixo). Regex precisa, casa só esta rota exata — a rota em si já valida
+  // x-v3-service-token/V3_INGEST_SECRET de novo internamente, este bypass
+  // só evita o redirect 307 pro /login antes de a rota rodar.
+  if (
+    /^\/api\/contracts\/[^/]+\/resend-notification$/.test(pathname) &&
+    request.headers.get("x-v3-service-token") === process.env.V3_INGEST_SECRET
+  ) {
+    return NextResponse.next();
+  }
+
   // Demo mode
   if (IS_DEMO) {
     const demoSession = request.cookies.get("v3_demo_session");
