@@ -19,6 +19,14 @@ function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 }
 
+// contract_notes.author_id tem FK real para auth.users(id) (confirmado
+// contra o schema real em 19/08/2026): "00000000-0000-0000-0000-000000000000"
+// falha a constraint e é engolido em silêncio se o erro do insert não for
+// checado. Reaproveita o mesmo UUID real já usado como autor de sistema em
+// app/api/relatorios/ingest/route.ts, author_name continua honesto
+// ("Reenvio via n8n"), só o id satisfaz a FK.
+const SYSTEM_USER_ID = "d0af8eaa-9f3c-4e7a-b8c6-613736524317";
+
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const serviceToken = req.headers.get("x-v3-service-token");
   const validToken = process.env.V3_INGEST_SECRET;
@@ -80,13 +88,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: `Falha ao reenviar notificação ClickSign: ${result.error}` }, { status: 502 });
   }
 
-  await db.from("contract_notes").insert({
+  const { error: noteError } = await db.from("contract_notes").insert({
     contract_id: contract.id,
-    author_id: "00000000-0000-0000-0000-000000000000",
+    author_id: SYSTEM_USER_ID,
     author_name: "Reenvio via n8n",
     note_type: "sistema",
     content: `Lembrete de assinatura pendente reenviado a ${pendingSignatory?.name ?? "signatário(s)"}${customMessage ? " com mensagem customizada" : ""}.`,
   });
+  if (noteError) {
+    console.error("[resend-notification] falha ao gravar contract_notes (notificação já foi enviada de verdade):", noteError.message);
+  }
 
   return NextResponse.json({ ok: true, contract_code: contract.contract_code, notified: pendingSignatory?.name ?? null });
 }

@@ -26,6 +26,13 @@ function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 }
 
+// contract_notes.author_id tem FK real para auth.users(id), confirmado
+// contra o schema em 19/08/2026 (achado ao testar o resend-notification:
+// "00000000-0000-0000-0000-000000000000" falha a constraint em silêncio se
+// o erro não for checado). Mesmo UUID real já usado como autor de sistema
+// em app/api/relatorios/ingest/route.ts.
+const SYSTEM_USER_ID = "d0af8eaa-9f3c-4e7a-b8c6-613736524317";
+
 interface PendingContract {
   id: string;
   contract_code: string | null;
@@ -81,13 +88,16 @@ export async function GET(req: NextRequest) {
     // Timeline real (fecha o item 2 do pedido de João: a tela de contratos
     // não mostrava nenhum evento de assinatura, mesmo quando o envelope já
     // tinha fechado na ClickSign há dias).
-    await db.from("contract_notes").insert({
+    const { error: noteError } = await db.from("contract_notes").insert({
       contract_id: contract.id,
-      author_id: "00000000-0000-0000-0000-000000000000",
+      author_id: SYSTEM_USER_ID,
       author_name: "Sincronização ClickSign",
       note_type: "sistema",
       content: `Envelope ClickSign fechado, todos os signatários assinaram digitalmente${signatario ? `, incluindo ${signatario.name}` : ""}.`,
     });
+    if (noteError) {
+      console.error(`[clicksign-sync] falha ao gravar contract_notes do contrato ${contract.id} (status já atualizado):`, noteError.message);
+    }
 
     // Arquivamento best-effort do PDF assinado (link presigned S3, TTL
     // curto, precisa ser baixado na hora). Falha aqui nunca desfaz a
