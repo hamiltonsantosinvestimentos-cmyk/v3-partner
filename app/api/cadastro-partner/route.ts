@@ -5,8 +5,9 @@ import { randomUUID } from "crypto";
 import { auditText, auditHtml } from "@/lib/brand-guardian-gate";
 import { PLANO_VALOR } from "@/lib/plano-valor";
 
-// Fidelidade de 12 meses via Pix/Boleto Cora custa R$ 50,00 a mais por mês
-const ADICIONAL_FIDELIDADE_PIX_BOLETO = 5000;
+// Único plano de pagamento hoje: valor anual (12x o mensal) com 10% de desconto,
+// pago à vista via Pix ou Boleto na aprovação. Fidelidade de 12 meses.
+const DESCONTO_ANUAL_PIX_BOLETO = 0.9;
 
 async function gerarCobrancaCora(params: {
   regId: string;
@@ -98,9 +99,7 @@ export async function POST(req: NextRequest) {
     const email       = formData.get("email") as string;
     const telefone    = formData.get("telefone") as string;
     const planoRecorrenciaRaw = formData.get("plano_recorrencia") as string | null;
-    const planoRecorrencia = ["MENSAL", "ANUAL_PIX_BOLETO", "ANUAL_CARTAO"].includes(planoRecorrenciaRaw ?? "")
-      ? planoRecorrenciaRaw!
-      : "MENSAL";
+    const planoRecorrencia = planoRecorrenciaRaw === "ANUAL_CARTAO" ? "ANUAL_CARTAO" : "ANUAL_PIX_BOLETO";
 
     // Validações básicas
     if (!plano || !tipoPessoa || !email || !telefone) {
@@ -206,10 +205,20 @@ export async function POST(req: NextRequest) {
       ? (formData.get("cpf") as string ?? "")
       : (formData.get("cnpj") as string ?? "");
 
-    // Fidelidade de 12 meses via Pix/Boleto soma R$50/mês; esse valor também é
-    // salvo como cora_amount_cents (preço "contratado") pra ser herdado por
-    // todas as próximas mensalidades (cron + geração manual).
-    const valorFinal = (PLANO_VALOR[plano] ?? 29700) + (planoRecorrencia === "ANUAL_PIX_BOLETO" ? ADICIONAL_FIDELIDADE_PIX_BOLETO : 0);
+    // Pix/Boleto: cobrança única dos 12 meses à vista, com 10% de desconto,
+    // gerada agora na Cora. Cartão: 12x sem juros do valor anual cheio (sem
+    // desconto), configurado manualmente pelo admin via InfinitePay na
+    // aprovação -- não gera cobrança Cora aqui, só guarda o valor de referência.
+    //
+    // Em ambos os casos esse valor é salvo em cora_amount_cents só como
+    // referência histórica do que foi contratado -- o cron de renovação mensal
+    // (assinaturas-vencendo) só usa esse campo como piso de preço
+    // "grandfathered" quando ele é MENOR que o preço mensal vigente, então
+    // esse valor anual (bem maior) nunca é interpretado como mensalidade
+    // recorrente.
+    const valorFinal = planoRecorrencia === "ANUAL_CARTAO"
+      ? Math.round((PLANO_VALOR[plano] ?? 29700) * 12)
+      : Math.round((PLANO_VALOR[plano] ?? 29700) * 12 * DESCONTO_ANUAL_PIX_BOLETO);
 
     // Cartão recorrente (InfinitePay) é configurado manualmente pelo admin na
     // aprovação — não gera cobrança Cora nesse caso.
@@ -228,9 +237,12 @@ export async function POST(req: NextRequest) {
         cora_payment_url:    cora.paymentUrl,
         cora_amount_cents:   valorFinal,
       }).eq("id", regId);
+    } else if (planoRecorrencia === "ANUAL_CARTAO") {
+      await svc.from("partner_registrations").update({ cora_amount_cents: valorFinal }).eq("id", regId);
     }
 
     // Envia e-mail com dados de pagamento (#6) — não se aplica ao cartão recorrente
+    // (o link de assinatura é enviado à parte pelo admin após configurar no InfinitePay)
     if (planoRecorrencia !== "ANUAL_CARTAO") try {
       const { Resend } = await import("resend");
       const resend = new Resend(process.env.RESEND_API_KEY);
@@ -249,7 +261,7 @@ export async function POST(req: NextRequest) {
             <p style="color: #7A8FA8; margin-bottom: 24px;">Olá <strong style="color:#F0ECE4">${nome}</strong>, seu cadastro no plano <strong style="color:#C9A84C">${planoLabel}</strong> foi recebido com sucesso.</p>
 
             <div style="background: #111F35; border: 1px solid #243A66; border-radius: 12px; padding: 20px; margin-bottom: 24px;">
-              <p style="margin: 0 0 8px; color: #7A8FA8; font-size: 12px;">VALOR DA ADESÃO</p>
+              <p style="margin: 0 0 8px; color: #7A8FA8; font-size: 12px;">VALOR DA ANUIDADE (12 MESES, 10% OFF)</p>
               <p style="margin: 0 0 16px; color: #C9A84C; font-size: 28px; font-weight: bold;">${valorFmt}</p>
               <p style="margin: 0; color: #7A8FA8; font-size: 12px;">Vencimento: <strong style="color:#F0ECE4">${vencimento}</strong></p>
             </div>

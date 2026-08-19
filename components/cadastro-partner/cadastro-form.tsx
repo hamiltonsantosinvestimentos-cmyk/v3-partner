@@ -29,25 +29,7 @@ function fmtCEP(v: string) {
 type Plano = "STARTER" | "PARTNER" | "PARTNER_PRO" | "ENTERPRISE";
 type TipoPessoa = "PF" | "PJ";
 type Step = 1 | 2 | 3 | 4 | 5;
-type PlanoRecorrencia = "MENSAL" | "ANUAL_PIX_BOLETO" | "ANUAL_CARTAO";
-
-const OPCOES_RECORRENCIA: { id: PlanoRecorrencia; titulo: string; descricao: string }[] = [
-  {
-    id: "MENSAL",
-    titulo: "Mensal, sem fidelidade",
-    descricao: "Pague mês a mês via Pix ou Boleto (Cora), sem compromisso de permanência.",
-  },
-  {
-    id: "ANUAL_PIX_BOLETO",
-    titulo: "Anual via Pix ou Boleto (+R$ 50/mês)",
-    descricao: "Fidelidade de 12 meses. A mensalidade fica R$ 50,00 a mais em relação ao plano mensal.",
-  },
-  {
-    id: "ANUAL_CARTAO",
-    titulo: "Anual recorrente no cartão",
-    descricao: "Fidelidade de 12 meses, cobrança recorrente automática no cartão, sem acréscimo no valor. O link de assinatura recorrente é enviado por e-mail após a aprovação do cadastro.",
-  },
-];
+type PlanoRecorrencia = "ANUAL_PIX_BOLETO" | "ANUAL_CARTAO";
 
 const PLANOS = [
   {
@@ -55,6 +37,8 @@ const PLANOS = [
     nome: "V3 Partner",
     preco: "R$ 908,08",
     periodo: "/mês",
+    precoAnual: "R$ 10.896,96",
+    precoAnualDesconto: "R$ 9.807,26",
     cor: "#C9A84C",
     icone: <Star className="w-6 h-6" />,
     comissao: "35%",
@@ -73,6 +57,8 @@ const PLANOS = [
     nome: "V3 Partner PRO",
     preco: "R$ 1.324,75",
     periodo: "/mês",
+    precoAnual: "R$ 15.897,00",
+    precoAnualDesconto: "R$ 14.307,30",
     cor: "#E8C97A",
     icone: <Zap className="w-6 h-6" />,
     comissao: "50%",
@@ -92,6 +78,8 @@ const PLANOS = [
     nome: "V3 Enterprise",
     preco: "R$ 4.158,08",
     periodo: "/mês",
+    precoAnual: "R$ 49.896,96",
+    precoAnualDesconto: "R$ 44.907,26",
     cor: "#C9A84C",
     icone: <Shield className="w-6 h-6" />,
     comissao: "55%",
@@ -232,7 +220,7 @@ export function CadastroPartnerForm() {
 
   const [step, setStep] = useState<Step>(1);
   const [plano, setPlano] = useState<Plano | null>(null);
-  const [planoRecorrencia, setPlanoRecorrencia] = useState<PlanoRecorrencia>("MENSAL");
+  const [planoRecorrencia, setPlanoRecorrencia] = useState<PlanoRecorrencia>("ANUAL_PIX_BOLETO");
   const [tipoPessoa, setTipoPessoa] = useState<TipoPessoa | null>(null);
 
   // Dados PF
@@ -385,11 +373,12 @@ export function CadastroPartnerForm() {
 
   // ─── Sucesso ──────────────────────────────────────────────────────────────
   if (sucesso) {
+    const planoInfo = PLANOS.find((p) => p.id === plano);
     const valorFmt = cobranca?.valor
       ? (cobranca.valor / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
-      : plano === "ENTERPRISE" ? "R$ 4.158,08"
-      : plano === "PARTNER_PRO" ? "R$ 1.324,75"
-      : "R$ 908,08";
+      : planoInfo
+        ? (planoRecorrencia === "ANUAL_PIX_BOLETO" ? planoInfo.precoAnualDesconto : planoInfo.precoAnual)
+        : "R$ 9.807,26";
 
     return (
       <div className="min-h-screen bg-[#09081A] py-8 px-4">
@@ -401,7 +390,7 @@ export function CadastroPartnerForm() {
             </div>
             <h1 className="text-2xl font-bold text-[#F0ECE4]">Cadastro Recebido!</h1>
             <p className="text-[#7A8FA8] text-sm">
-              Para ativar seu acesso ao plano <strong className="text-[#C9A84C]">{plano === "PARTNER_PRO" ? "V3 Partner PRO" : "V3 Partner"}</strong>, realize o pagamento da adesão:
+              Para ativar seu acesso ao plano <strong className="text-[#C9A84C]">{plano === "PARTNER_PRO" ? "V3 Partner PRO" : "V3 Partner"}</strong>, realize o pagamento da anuidade:
             </p>
           </div>
 
@@ -410,7 +399,7 @@ export function CadastroPartnerForm() {
             {/* Valor */}
             <div className="px-6 py-4 border-b border-[#243A66] flex items-center justify-between">
               <div>
-                <p className="text-xs text-[#7A8FA8]">Valor da adesão</p>
+                <p className="text-xs text-[#7A8FA8]">{planoRecorrencia === "ANUAL_PIX_BOLETO" ? "Valor da anuidade (12 meses, 10% off)" : "Valor anual — 12x no cartão"}</p>
                 <p className="text-2xl font-bold text-[#C9A84C]">{valorFmt}</p>
               </div>
               <div className="text-right">
@@ -592,9 +581,16 @@ export function CadastroPartnerForm() {
                     </div>
                     <h3 className="font-bold text-[#F0ECE4] text-base">{p.nome}</h3>
                     <p className="text-xs text-[#7A8FA8] mt-1 mb-3">{p.descricao}</p>
-                    <div className="flex items-baseline gap-1 mb-3">
-                      <span className="text-2xl font-bold text-[#C9A84C]">{p.preco}</span>
-                      <span className="text-xs text-[#7A8FA8]">{p.periodo}</span>
+                    <div className="mb-3">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs text-[#7A8FA8] line-through">{p.precoAnual}</span>
+                        <span className="text-[9px] font-bold text-emerald-400 bg-emerald-400/10 border border-emerald-400/30 px-1.5 py-0.5 rounded-full">-10%</span>
+                      </div>
+                      <div className="flex items-baseline gap-1">
+                        <span className="text-2xl font-bold text-[#C9A84C]">{p.precoAnualDesconto}</span>
+                        <span className="text-xs text-[#7A8FA8]">/ano</span>
+                      </div>
+                      <p className="text-[11px] text-[#7A8FA8] mt-0.5">à vista via Pix ou Boleto — equivale a {p.preco}{p.periodo}</p>
                     </div>
                     <div className="space-y-1.5">
                       {p.beneficios.map((b, i) => (
@@ -608,30 +604,70 @@ export function CadastroPartnerForm() {
                 ))}
               </div>
 
-              {/* Forma de compromisso / recorrência */}
+              {/* Garantias */}
+              <div className="pt-2 space-y-2">
+                <div className="flex items-start gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-[#C9A84C] flex-shrink-0 mt-0.5" />
+                  <p className="text-xs text-[#7A8FA8] leading-relaxed">
+                    <strong className="text-[#F0ECE4]">Fidelidade de 12 meses</strong> — parceria de médio prazo, para dar tempo real de originação e resultado
+                  </p>
+                </div>
+                <div className="flex items-start gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-[#C9A84C] flex-shrink-0 mt-0.5" />
+                  <p className="text-xs text-[#7A8FA8] leading-relaxed">
+                    <strong className="text-[#F0ECE4]">Garantia de retorno</strong>: mantido o KPI de originação definido em contrato, se em 12 meses não houver retorno sobre o valor investido, devolvemos o seu investimento.
+                  </p>
+                </div>
+              </div>
+
+              {/* Forma de pagamento da anuidade */}
               <div className="pt-2">
-                <h3 className="text-sm font-bold text-[#F0ECE4]">Forma de pagamento da mensalidade</h3>
-                <p className="text-xs text-[#7A8FA8] mt-1 mb-3">Escolha como prefere pagar sua mensalidade</p>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  {OPCOES_RECORRENCIA.map((o) => (
-                    <button
-                      key={o.id}
-                      type="button"
-                      onClick={() => setPlanoRecorrencia(o.id)}
-                      className={cn(
-                        "text-left p-4 rounded-xl border-2 transition-all",
-                        planoRecorrencia === o.id
-                          ? "border-[#C9A84C] bg-[#C9A84C]/10"
-                          : "border-[#243A66] bg-[#0D1B2E] hover:border-[#C9A84C]/40"
-                      )}
-                    >
-                      <div className="flex items-center justify-between mb-1.5">
-                        <p className="text-xs font-bold text-[#F0ECE4]">{o.titulo}</p>
-                        {planoRecorrencia === o.id && <CheckCircle2 className="w-4 h-4 text-[#C9A84C] flex-shrink-0" />}
-                      </div>
-                      <p className="text-[11px] text-[#7A8FA8] leading-relaxed">{o.descricao}</p>
-                    </button>
-                  ))}
+                <h3 className="text-sm font-bold text-[#F0ECE4]">Forma de pagamento</h3>
+                <p className="text-xs text-[#7A8FA8] mt-1 mb-3">Como prefere pagar os 12 meses do plano</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {(() => {
+                    const p = PLANOS.find((pl) => pl.id === plano);
+                    return (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => setPlanoRecorrencia("ANUAL_PIX_BOLETO")}
+                          className={cn(
+                            "text-left p-4 rounded-xl border-2 transition-all",
+                            planoRecorrencia === "ANUAL_PIX_BOLETO"
+                              ? "border-[#C9A84C] bg-[#C9A84C]/10"
+                              : "border-[#243A66] bg-[#0D1B2E] hover:border-[#C9A84C]/40"
+                          )}
+                        >
+                          <div className="flex items-center justify-between mb-1.5">
+                            <p className="text-xs font-bold text-[#F0ECE4]">Pix ou Boleto à vista — 10% OFF</p>
+                            {planoRecorrencia === "ANUAL_PIX_BOLETO" && <CheckCircle2 className="w-4 h-4 text-[#C9A84C] flex-shrink-0" />}
+                          </div>
+                          <p className="text-[11px] text-[#7A8FA8] leading-relaxed">
+                            {p ? `Pague o ano inteiro de uma vez e economize 10%: ${p.precoAnualDesconto} em vez de ${p.precoAnual}.` : "Pague o ano inteiro de uma vez e economize 10%."}
+                          </p>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPlanoRecorrencia("ANUAL_CARTAO")}
+                          className={cn(
+                            "text-left p-4 rounded-xl border-2 transition-all",
+                            planoRecorrencia === "ANUAL_CARTAO"
+                              ? "border-[#C9A84C] bg-[#C9A84C]/10"
+                              : "border-[#243A66] bg-[#0D1B2E] hover:border-[#C9A84C]/40"
+                          )}
+                        >
+                          <div className="flex items-center justify-between mb-1.5">
+                            <p className="text-xs font-bold text-[#F0ECE4]">Cartão em até 12x sem juros</p>
+                            {planoRecorrencia === "ANUAL_CARTAO" && <CheckCircle2 className="w-4 h-4 text-[#C9A84C] flex-shrink-0" />}
+                          </div>
+                          <p className="text-[11px] text-[#7A8FA8] leading-relaxed">
+                            {p ? `Parcele o valor anual em até 12x de ${p.preco} sem juros no cartão. Sem desconto, sem acréscimo. O link de assinatura recorrente é enviado por e-mail após a aprovação.` : "Parcele o valor anual em até 12x sem juros no cartão, sem desconto e sem acréscimo."}
+                          </p>
+                        </button>
+                      </>
+                    );
+                  })()}
                 </div>
               </div>
             </div>
@@ -868,7 +904,11 @@ export function CadastroPartnerForm() {
                 <p className="text-xs font-semibold text-[#C9A84C] uppercase tracking-wide mb-2">Resumo do cadastro</p>
                 {[
                   ["Plano", PLANOS.find((p) => p.id === plano)
-                    ? `${PLANOS.find((p) => p.id === plano)!.nome} — ${PLANOS.find((p) => p.id === plano)!.preco}${PLANOS.find((p) => p.id === plano)!.periodo}`
+                    ? `${PLANOS.find((p) => p.id === plano)!.nome} — ${
+                        planoRecorrencia === "ANUAL_PIX_BOLETO"
+                          ? `${PLANOS.find((p) => p.id === plano)!.precoAnualDesconto}/ano à vista`
+                          : `${PLANOS.find((p) => p.id === plano)!.preco}${PLANOS.find((p) => p.id === plano)!.periodo} em até 12x no cartão`
+                      }`
                     : "—"],
                   ["Tipo", tipoPessoa === "PF" ? "Pessoa Física" : "Pessoa Jurídica"],
                   ["Nome", tipoPessoa === "PF" ? nomeCompleto : razaoSocial],
