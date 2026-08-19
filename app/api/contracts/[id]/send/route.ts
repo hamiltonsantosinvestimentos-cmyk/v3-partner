@@ -47,7 +47,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
 
   const { data: contract } = await db
     .from("operation_contracts")
-    .select("id, vertical, contract_title, contract_code, status_signature, parties, signing_token")
+    .select("id, vertical, contract_title, contract_code, status_signature, parties, signing_token, signature_message, is_master_agreement, stamped_document_path")
     .eq("id", id)
     .single();
 
@@ -106,10 +106,26 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     ? `${contract.contract_code} · ${contract.contract_title}`
     : contract.contract_title;
 
+  // Regularização de contrato manual (19/08/2026): o PDF já está pronto no
+  // Storage (capa Termo + original mesclados e estampados, ver
+  // lib/contract-watermark.ts e app/api/contracts/manual-intake) — envia
+  // esse arquivo direto, nunca gera PDF a partir de rendered_html (que aqui
+  // é só a capa, não conteria o documento manual original).
+  let documentContentBase64: string | undefined;
+  if (contract.is_master_agreement && contract.stamped_document_path) {
+    const { data: fileData, error: downloadErr } = await db.storage.from("documents").download(contract.stamped_document_path);
+    if (downloadErr || !fileData) {
+      return NextResponse.json({ error: `Falha ao recuperar o PDF estampado do Storage: ${downloadErr?.message ?? "arquivo não encontrado"}` }, { status: 500 });
+    }
+    const buffer = Buffer.from(await fileData.arrayBuffer());
+    documentContentBase64 = `data:application/pdf;base64,${buffer.toString("base64")}`;
+  }
+
   const result = await sendToClickSign({
     dealId: id,
     documentType: resolveDocumentType(contract.contract_title, contract.vertical),
     documentUrl,
+    documentContentBase64,
     documentLabel,
     signatories,
     // 14/08/2026: apontado para deal@v3partners.com.br (era
@@ -119,6 +135,13 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     // observadora em todos os pontos de envio para o poller cobrir 100% dos
     // contratos, não só os das 4 rotas públicas de intake.
     watcherEmail: "deal@v3partners.com.br",
+    // Item 4 dos ajustes de governança (19/08/2026): mensagem customizada
+    // para a série V3C-REG (regularização de contrato manual), explicando
+    // ao signatário que se trata de revalidação/integração ao sistema V3.
+    // signature_message é gravado no upload manual (app/api/contracts/
+    // manual-intake) e fica disponível para qualquer contrato, não só
+    // V3C-REG — column nullable, sem efeito quando ausente.
+    signatureMessage: contract.signature_message ?? undefined,
   });
 
   if (!result.ok) {

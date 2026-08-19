@@ -18,6 +18,22 @@ export interface SendToClickSignInput {
   // download (não confirmado existir na API v3, ver lib/clicksign.ts nota
   // em sendToClickSignV3). Opcional: nem todo caller precisa disso hoje.
   watcherEmail?: string;
+  // Mensagem customizada (19/08/2026, item 4 dos ajustes de governança
+  // pedidos por João, série V3C-REG): substitui o parágrafo principal do
+  // e-mail de convite de assinatura (attributes.email_customization.principal
+  // em POST /envelopes/{id}/notifications, mesmo endpoint real já usado por
+  // notifyClickSignEnvelope, endpoint e payload confirmados ao vivo contra a
+  // conta de produção em 11/08/2026, não é novo). Passa pelo mesmo gate
+  // auditText() do texto padrão: nenhum texto para o signatário sai sem
+  // essa revisão, mesmo padrão que corrigiu o P0 de 11/08.
+  signatureMessage?: string;
+  // 19/08/2026, regularização de contrato manual (série V3C-REG): quando
+  // presente, pula o fetch(documentUrl)+htmlToPdfBase64 e usa este PDF já
+  // pronto (capa Termo + original mesclados e estampados, ver
+  // lib/contract-watermark.ts) como content_base64 do documento. Precisa
+  // vir no formato "data:application/pdf;base64,...", igual ao que
+  // htmlToPdfBase64 já produz.
+  documentContentBase64?: string;
 }
 
 // documentTypes que usam a API v3 (envelopes), confirmadamente funcional.
@@ -59,7 +75,7 @@ export type NotifyClickSignResult = { ok: true } | { ok: false; error: string; s
 // nunca bloqueia o envio (nenhum check de auditText é blocking hoje), só
 // corrige travessão/emoji/acentuação/menção a Bloxs antes do payload sair
 // para a API do ClickSign, que dispara o e-mail sozinha.
-export async function notifyClickSignEnvelope(envelopeId: string, signatoryName: string, documentLabel: string): Promise<NotifyClickSignResult> {
+export async function notifyClickSignEnvelope(envelopeId: string, signatoryName: string, documentLabel: string, customMessage?: string): Promise<NotifyClickSignResult> {
   const accessToken = process.env.CLICKSIGN_ACCESS_TOKEN;
   const baseUrl = process.env.CLICKSIGN_BASE_URL ?? "https://sandbox.clicksign.com";
   if (!accessToken) return { ok: false, error: "CLICKSIGN_ACCESS_TOKEN não configurado", status: 500 };
@@ -68,9 +84,14 @@ export async function notifyClickSignEnvelope(envelopeId: string, signatoryName:
   const safeName = auditText(signatoryName || "Sr(a)").corrected;
   const subject = auditText(`V3 Partners: Assinatura Digital, ${safeLabel}`).corrected;
   const greeting = auditText(`Prezado(a) ${safeName},`).corrected;
-  const principal = auditText(
-    `A V3 Partners encaminha o documento "${safeLabel}" para sua assinatura digital. Revise o documento e confirme sua assinatura abaixo.`
-  ).corrected;
+  // 19/08/2026: quando o caller passa uma mensagem customizada (série
+  // V3C-REG, "isso é uma revalidação/integração ao sistema V3"), ela
+  // substitui o parágrafo padrão, passando pelo mesmo gate auditText().
+  const principal = customMessage
+    ? auditText(customMessage).corrected
+    : auditText(
+        `A V3 Partners encaminha o documento "${safeLabel}" para sua assinatura digital. Revise o documento e confirme sua assinatura abaixo.`
+      ).corrected;
 
   const notifyRes = await fetch(`${baseUrl}/api/v3/envelopes/${envelopeId}/notifications`, {
     method: "POST",
@@ -135,7 +156,10 @@ async function launchBrowser() {
 // vivo: HTML retorna "Documento deve ser em formato pdf, Word (doc e docx),
 // Imagens (png ou jpeg) ou Texto (txt)"), então todo HTML precisa virar PDF
 // antes de subir. Mesmo padrão de launch do Puppeteer usado em cim-pdf.
-async function htmlToPdfBase64(html: string): Promise<string> {
+// Exportado em 19/08/2026 para reuso por app/api/contracts/manual-intake
+// (item 4 dos ajustes de governança): o mesmo Puppeteer/Chromium já
+// homologado aqui, sem duplicar a lógica de launch (production vs local).
+export async function htmlToPdfBase64(html: string): Promise<string> {
   const browser = await launchBrowser();
   try {
     const page = await browser.newPage();
@@ -216,16 +240,23 @@ async function sendToClickSignV3(input: SendToClickSignInput): Promise<SendToCli
 
   try {
     const documentLabel = overrideLabel ?? `Carta de Intenção, Deal ${dealId}`;
-    const documentUrl =
-      overrideUrl ??
-      `${process.env.NEXT_PUBLIC_APP_URL ?? "https://app.v3partners.com.br"}/api/ma/gerar-contrato?dealId=${dealId}&tipo=${documentType}&lang=pt-br`;
 
-    const htmlRes = await fetch(documentUrl);
-    if (!htmlRes.ok) {
-      return { ok: false, error: `Falha ao buscar o conteúdo do documento em ${documentUrl}: HTTP ${htmlRes.status}`, status: 502 };
+    // Regularização de contrato manual (19/08/2026): o PDF já vem pronto
+    // (capa + original mesclados e estampados), pula o fetch+conversão.
+    let contentBase64: string;
+    if (input.documentContentBase64) {
+      contentBase64 = input.documentContentBase64;
+    } else {
+      const documentUrl =
+        overrideUrl ??
+        `${process.env.NEXT_PUBLIC_APP_URL ?? "https://app.v3partners.com.br"}/api/ma/gerar-contrato?dealId=${dealId}&tipo=${documentType}&lang=pt-br`;
+      const htmlRes = await fetch(documentUrl);
+      if (!htmlRes.ok) {
+        return { ok: false, error: `Falha ao buscar o conteúdo do documento em ${documentUrl}: HTTP ${htmlRes.status}`, status: 502 };
+      }
+      const html = await htmlRes.text();
+      contentBase64 = await htmlToPdfBase64(html);
     }
-    const html = await htmlRes.text();
-    const contentBase64 = await htmlToPdfBase64(html);
 
     const envelopeRes = await fetch(`${baseUrl}/api/v3/envelopes`, {
       method: "POST",
@@ -360,7 +391,7 @@ async function sendToClickSignV3(input: SendToClickSignInput): Promise<SendToCli
     // pelo link; só o lembrete automático (remind_interval) cobriria o
     // signatário eventualmente, então logamos em vez de falhar a operação
     // inteira por um problema de notificação.
-    const notifyRes = await notifyClickSignEnvelope(envelopeId, signatories[0]?.name ?? "", documentLabel);
+    const notifyRes = await notifyClickSignEnvelope(envelopeId, signatories[0]?.name ?? "", documentLabel, input.signatureMessage);
     if (!notifyRes.ok) {
       console.error(`[clicksign] notifyEnvelope falhou para envelope ${envelopeId}: ${notifyRes.error}`);
     }
@@ -372,6 +403,60 @@ async function sendToClickSignV3(input: SendToClickSignInput): Promise<SendToCli
       signUrl: `${baseUrl}/envelopes/${envelopeId}`,
       status: "PENDING",
     };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Erro desconhecido";
+    return { ok: false, error: message, status: 500 };
+  }
+}
+
+export type EnvelopeStatusV3Result =
+  | {
+      ok: true;
+      status: string; // "running" | "closed" | "canceled" | outro valor real da ClickSign
+      signedDocumentUrl: string | null; // presigned S3, TTL curto (~5min): baixar na hora, nunca guardar a URL
+    }
+  | { ok: false; error: string; status: number };
+
+// Sincronização real de status por envelope (19/08/2026, item 2 dos ajustes
+// de governança pedidos por João, disparado por n8n a cada 30min via
+// GET /api/cron/clicksign-sync, não por cron da Vercel). Confirmado ao vivo
+// contra os 2 envelopes reais de parceria em 19/08/2026: GET
+// /envelopes/{id} retorna status real ("closed" para V3C-PAR-2026-0037,
+// assinado por todos e nunca refletido no portal por falha do webhook;
+// "running" para V3C-PAR-2026-0038, ainda pendente). GET
+// /envelopes/{id}/documents retorna, quando fechado, um link presigned S3
+// em data[0].links.files.signed. CORRIGE a suposição da migration
+// 20260814, que afirmava não existir esse endpoint (não tinha sido testado
+// ao vivo até agora, só pesquisado em documentação).
+export async function getEnvelopeStatusV3(envelopeId: string): Promise<EnvelopeStatusV3Result> {
+  const accessToken = process.env.CLICKSIGN_ACCESS_TOKEN;
+  const baseUrl = process.env.CLICKSIGN_BASE_URL ?? "https://sandbox.clicksign.com";
+  if (!accessToken) return { ok: false, error: "CLICKSIGN_ACCESS_TOKEN não configurado", status: 500 };
+
+  const headers = { Accept: "application/json", Authorization: accessToken };
+
+  try {
+    const envRes = await fetch(`${baseUrl}/api/v3/envelopes/${envelopeId}`, { headers });
+    if (!envRes.ok) {
+      const err = await envRes.text();
+      return { ok: false, error: `ClickSign getEnvelope: ${err}`, status: envRes.status };
+    }
+    const envData = await envRes.json();
+    const status: string = envData.data?.attributes?.status ?? "desconhecido";
+
+    let signedDocumentUrl: string | null = null;
+    if (status === "closed" || status === "auto_closed") {
+      const docsRes = await fetch(`${baseUrl}/api/v3/envelopes/${envelopeId}/documents`, { headers });
+      if (docsRes.ok) {
+        const docsData = await docsRes.json();
+        signedDocumentUrl = docsData.data?.[0]?.links?.files?.signed ?? null;
+      }
+      // Falha ao buscar o PDF assinado não derruba a sincronização de status:
+      // o poller de e-mail (lib/clicksign-archive.ts) continua como
+      // segunda chance de arquivar o documento.
+    }
+
+    return { ok: true, status, signedDocumentUrl };
   } catch (err) {
     const message = err instanceof Error ? err.message : "Erro desconhecido";
     return { ok: false, error: message, status: 500 };

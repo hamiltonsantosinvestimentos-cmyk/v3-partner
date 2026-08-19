@@ -28,9 +28,28 @@ export async function POST(req: NextRequest) {
   const caller = await requireRole(req);
   if (!caller) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
-  const { template_id, listing_id, bid_id, deal_id, credit_proposal_id, ticket_id, qualification_batch_id, commission_percent, extra_data } = await req.json();
+  const { template_id, listing_id, bid_id, deal_id, credit_proposal_id, ticket_id, qualification_batch_id, commission_percent, extra_data, avulso_parties, is_master_agreement } = await req.json();
 
   if (!template_id) return NextResponse.json({ error: "template_id obrigatório" }, { status: 422 });
+
+  // Origem "avulso" (19/08/2026, item 1 dos ajustes de governança pedidos
+  // por João): contrato de parceria com um grupo livre de indicadores, sem
+  // nenhuma das 5 origens operacionais (listing/bid/deal/credit_proposal/
+  // ticket) exigir um registro pré-existente. Cada parte já entra completa
+  // no payload — nada é resolvido a partir de outra tabela.
+  let avulsoParties: { role: string; name: string; doc: string | null; email: string }[] | null = null;
+  if (Array.isArray(avulso_parties) && avulso_parties.length > 0) {
+    const invalid = avulso_parties.some((p: any) => !p?.name?.trim() || !p?.email?.trim());
+    if (invalid) {
+      return NextResponse.json({ error: "Cada indicador precisa de nome e e-mail preenchidos." }, { status: 422 });
+    }
+    avulsoParties = avulso_parties.map((p: any) => ({
+      role: (p.role as string)?.trim() || "indicador",
+      name: (p.name as string).trim(),
+      doc: p.doc?.trim() || null,
+      email: (p.email as string).trim(),
+    }));
+  }
 
   const { data: template } = await svc()
     .from("contract_templates")
@@ -327,7 +346,10 @@ export async function POST(req: NextRequest) {
   // também usam esse texto, ele nunca chega em signers de verdade (email
   // vazio ou ausente); aqui é a única com e-mail real, então é a única que
   // precisava do nome de pessoa.
-  const resolvedParties = qualificationParties ?? (variables.nome_cedente ? [
+  const resolvedParties = avulsoParties ? [
+    ...avulsoParties,
+    { role: "v3_partners", name: "João Lemos Netto", doc: "14.219.287/0001-50", email: "joao.lemos@v3partners.com.br" },
+  ] : qualificationParties ?? (variables.nome_cedente ? [
     { role: "cedente", name: variables.nome_cedente, doc: variables.cpf_cnpj_cedente, email: variables.email_cedente ?? null },
     { role: "v3_partners", name: "João Lemos Netto", doc: "14.219.287/0001-50", email: "joao.lemos@v3partners.com.br" },
     ...(partnerParty ? [partnerParty] : []),
@@ -371,6 +393,7 @@ export async function POST(req: NextRequest) {
       credit_proposal_id: credit_proposal_id ?? null,
       ticket_id: ticket_id ?? null,
       qualification_batch_id: qualification_batch_id ?? null,
+      is_master_agreement: is_master_agreement === true,
       contract_title: contractTitle,
       rendered_html: renderedHtml,
       status_signature: "rascunho",

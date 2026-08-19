@@ -45,7 +45,8 @@ export type V3Series =
   | "V3C-LOI"   // Carta de Intenção (adicionada em 20260807b, nunca refletida aqui)
   | "V3C-FPA"   // Acordo de Proteção de Honorários (idem)
   | "V3C-FOR"   // Contrato de Fornecedor (idem)
-  | "V3C-FUN";  // Contrato de Fundo (idem)
+  | "V3C-FUN"   // Contrato de Fundo (idem)
+  | "V3C-REG";  // Regularização de contrato manual pré-Central de Contratos (19/08/2026)
 
 export type V3Esfera = "FED" | "EST" | "MUN";
 

@@ -5,6 +5,7 @@ import {
   FileText, Search, Filter, Clock, CheckCircle2, XCircle,
   Send, Eye, MessageSquare, Loader2, ChevronDown, User,
   AlertTriangle, Shield, UserPlus, Plus, X, Copy, Share2, Pencil,
+  Upload, Link2, Crown,
 } from "lucide-react";
 import { cn, isValidEmail } from "@/lib/utils";
 import { ROLE_LABELS } from "@/lib/qualification-roles";
@@ -31,6 +32,7 @@ interface Contract {
   template_id: string;
   vertical: string;
   contract_title: string;
+  contract_code: string | null;
   rendered_html: string | null;
   status_signature: string;
   commission_percent: number | null;
@@ -43,6 +45,19 @@ interface Contract {
   requires_review: boolean;
   approvals: Approval[];
   notes: Note[];
+  is_master_agreement: boolean;
+  regularization_expires_at: string | null;
+}
+
+interface ContractLink {
+  id: string;
+  deal_id: string | null;
+  listing_id: string | null;
+  credit_proposal_id: string | null;
+  ticket_id: string | null;
+  expiration_date: string;
+  justification: string;
+  created_at: string;
 }
 
 const STATUS_MAP: Record<string, { label: string; color: string; icon: React.ReactNode }> = {
@@ -101,6 +116,102 @@ export function ContractsPanelClient() {
   const [editBody, setEditBody] = useState("");
   const [editReason, setEditReason] = useState("");
   const [savingEdit, setSavingEdit] = useState(false);
+
+  // Regularização de Contrato Manual (19/08/2026, item 4 dos ajustes de
+  // governança pedidos por João): upload + estampilha, série V3C-REG.
+  const [showRegularizeModal, setShowRegularizeModal] = useState(false);
+  const [regFile, setRegFile] = useState<File | null>(null);
+  const [regJustification, setRegJustification] = useState("");
+  const [regExpiresAt, setRegExpiresAt] = useState("");
+  const [regParties, setRegParties] = useState<{ name: string; email: string; doc: string; role: string }[]>([
+    { name: "", email: "", doc: "", role: "contraparte" },
+  ]);
+  const [regularizing, setRegularizing] = useState(false);
+  const [regResult, setRegResult] = useState<{ contract_code: string | null } | null>(null);
+  const [regError, setRegError] = useState<string | null>(null);
+
+  // Vínculo de deal futuro a contrato-mãe já ratificado.
+  const [contractLinks, setContractLinks] = useState<ContractLink[]>([]);
+  const [showLinkModal, setShowLinkModal] = useState(false);
+  const [linkTargetType, setLinkTargetType] = useState<"deal_id" | "listing_id" | "credit_proposal_id" | "ticket_id">("deal_id");
+  const [linkTargetId, setLinkTargetId] = useState("");
+  const [linkJustification, setLinkJustification] = useState("");
+  const [linking, setLinking] = useState(false);
+  const [linkError, setLinkError] = useState<string | null>(null);
+
+  const loadContractLinks = async (contractId: string) => {
+    try {
+      const res = await fetch(`/api/contracts/${contractId}/link-deal`);
+      const json = await res.json();
+      setContractLinks(json.links ?? []);
+    } catch { setContractLinks([]); }
+  };
+
+  const addRegPartyRow = () => setRegParties((prev) => [...prev, { name: "", email: "", doc: "", role: "contraparte" }]);
+  const removeRegPartyRow = (i: number) => setRegParties((prev) => prev.filter((_, idx) => idx !== i));
+  const updateRegPartyRow = (i: number, field: "name" | "email" | "doc" | "role", value: string) =>
+    setRegParties((prev) => prev.map((row, idx) => (idx === i ? { ...row, [field]: value } : row)));
+
+  const openRegularizeModal = () => {
+    setRegFile(null);
+    setRegJustification("");
+    setRegExpiresAt("");
+    setRegParties([{ name: "", email: "", doc: "", role: "contraparte" }]);
+    setRegResult(null);
+    setRegError(null);
+    setShowRegularizeModal(true);
+  };
+
+  const handleRegularize = async () => {
+    if (!regFile) { setRegError("Selecione o arquivo do contrato manual."); return; }
+    if (!regJustification.trim()) { setRegError("Justificativa operacional obrigatória."); return; }
+    const invalid = regParties.some((p) => !p.name.trim() || !p.email.trim());
+    if (regParties.length === 0 || invalid) { setRegError("Preencha nome e e-mail de todas as contrapartes."); return; }
+
+    setRegularizing(true);
+    setRegError(null);
+    try {
+      const fd = new FormData();
+      fd.append("file", regFile);
+      fd.append("justification", regJustification.trim());
+      fd.append("parties", JSON.stringify(regParties.map((p) => ({ name: p.name.trim(), email: p.email.trim(), doc: p.doc.trim() || undefined, role: p.role }))));
+      if (regExpiresAt) fd.append("regularization_expires_at", new Date(regExpiresAt).toISOString());
+      const res = await fetch("/api/contracts/manual-intake", { method: "POST", body: fd });
+      const json = await res.json();
+      if (res.ok) {
+        setRegResult({ contract_code: json.contract.contract_code });
+        fetchContracts();
+      } else {
+        setRegError(json.error ?? "Erro ao regularizar contrato");
+      }
+    } catch { setRegError("Erro de conexão"); }
+    finally { setRegularizing(false); }
+  };
+
+  const handleLinkDeal = async () => {
+    if (!selected) return;
+    if (!linkTargetId.trim()) { setLinkError("Informe o ID do deal/listing/proposta/ticket."); return; }
+    if (!linkJustification.trim()) { setLinkError("Justificativa obrigatória."); return; }
+    setLinking(true);
+    setLinkError(null);
+    try {
+      const res = await fetch(`/api/contracts/${selected.id}/link-deal`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ [linkTargetType]: linkTargetId.trim(), justification: linkJustification.trim() }),
+      });
+      const json = await res.json();
+      if (res.ok) {
+        setShowLinkModal(false);
+        setLinkTargetId("");
+        setLinkJustification("");
+        loadContractLinks(selected.id);
+      } else {
+        setLinkError(json.error ?? "Erro ao vincular");
+      }
+    } catch { setLinkError("Erro de conexão"); }
+    finally { setLinking(false); }
+  };
 
   const fetchContracts = useCallback(async () => {
     setLoading(true);
@@ -267,9 +378,14 @@ export function ContractsPanelClient() {
     ...selected.notes.map(n => ({
       type: "note" as const,
       date: n.created_at,
-      title: `${n.author_name} — ${n.note_type === "comentario" ? "comentou" : n.note_type}`,
+      // "sistema" (19/08/2026): eventos automáticos como fechamento de
+      // envelope ClickSign, disparados pela sincronização de assinatura,
+      // não por uma pessoa comentando: título e ícone distintos.
+      title: n.note_type === "sistema" ? n.author_name : `${n.author_name} — ${n.note_type === "comentario" ? "comentou" : n.note_type}`,
       detail: n.content,
-      icon: <MessageSquare size={14} className="text-[#9BAFC5]" />,
+      icon: n.note_type === "sistema"
+        ? <Shield size={14} className="text-[#C9A84C]" />
+        : <MessageSquare size={14} className="text-[#9BAFC5]" />,
     })),
     { type: "creation" as const, date: selected.created_at, title: "Contrato gerado", detail: null, icon: <FileText size={14} className="text-[#C9A84C]" /> },
   ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()) : [];
@@ -281,9 +397,15 @@ export function ContractsPanelClient() {
           <h1 className="text-2xl font-bold text-[#F5F1E8]">Painel de Contratos</h1>
           <p className="text-sm text-[#9BAFC5]">Gestão de contratos gerados — aprovações, alterações e timeline</p>
         </div>
-        <div className="flex items-center gap-2 text-xs text-[#9BAFC5]">
-          <Shield size={14} className="text-[#C9A84C]" />
-          <span>Quórum: 2/3 sócios</span>
+        <div className="flex items-center gap-3">
+          <button onClick={openRegularizeModal}
+            className="flex items-center gap-1.5 px-3 py-2 bg-[#162744] text-[#C9A84C] border border-[#C9A84C]/30 rounded-lg text-xs font-bold hover:bg-[#C9A84C]/10 transition">
+            <Upload size={14} /> Regularizar Contrato Manual
+          </button>
+          <div className="flex items-center gap-2 text-xs text-[#9BAFC5]">
+            <Shield size={14} className="text-[#C9A84C]" />
+            <span>Quórum: 2/3 sócios</span>
+          </div>
         </div>
       </div>
 
@@ -334,7 +456,7 @@ export function ContractsPanelClient() {
             return (
               <div
                 key={c.id}
-                onClick={() => { setSelected(c); setShowPreview(false); loadQualifications(c.id); }}
+                onClick={() => { setSelected(c); setShowPreview(false); loadQualifications(c.id); loadContractLinks(c.id); }}
                 className={cn(
                   "bg-[#12112A] border rounded-lg p-4 cursor-pointer transition",
                   selected?.id === c.id ? "border-[#C9A84C]/50" : "border-[#9BAFC5]/10 hover:border-[#C9A84C]/20"
@@ -348,7 +470,10 @@ export function ContractsPanelClient() {
                     {new Date(c.created_at).toLocaleDateString("pt-BR")}
                   </span>
                 </div>
-                <div className="text-sm font-bold text-[#F5F1E8] mb-1 line-clamp-1">{c.contract_title}</div>
+                <div className="text-sm font-bold text-[#F5F1E8] mb-1 line-clamp-1 flex items-center gap-1.5">
+                  {c.is_master_agreement && <Crown size={12} className="text-[#C9A84C] flex-shrink-0" />}
+                  {c.contract_title}
+                </div>
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] text-[#9BAFC5]">{VERTICAL_LABELS[c.vertical] ?? c.vertical}</span>
                   <div className="flex items-center gap-1">
@@ -389,11 +514,24 @@ export function ContractsPanelClient() {
               {/* Header do contrato */}
               <div className="bg-[#12112A] border border-[#9BAFC5]/10 rounded-lg p-5">
                 <div className="flex items-center justify-between mb-3">
-                  <h2 className="text-lg font-bold text-[#F5F1E8]">{selected.contract_title}</h2>
+                  <h2 className="text-lg font-bold text-[#F5F1E8] flex items-center gap-2">
+                    {selected.contract_title}
+                    {selected.is_master_agreement && (
+                      <span className="flex items-center gap-1 text-[9px] font-bold px-2 py-0.5 rounded bg-[#C9A84C]/15 text-[#C9A84C] border border-[#C9A84C]/30">
+                        <Crown size={10} /> Documento-Mãe
+                      </span>
+                    )}
+                  </h2>
                   <span className={cn("text-[10px] font-bold px-2.5 py-1 rounded flex items-center gap-1", statusInfo(selected.status_signature).color)}>
                     {statusInfo(selected.status_signature).icon} {statusInfo(selected.status_signature).label}
                   </span>
                 </div>
+                {selected.is_master_agreement && selected.regularization_expires_at && (
+                  <p className={cn("text-[10px] mb-2", new Date(selected.regularization_expires_at) < new Date() ? "text-red-400" : "text-[#9BAFC5]")}>
+                    Validade do contrato-mãe: {new Date(selected.regularization_expires_at).toLocaleDateString("pt-BR")}
+                    {new Date(selected.regularization_expires_at) < new Date() && " (EXPIRADO, novos vínculos bloqueados)"}
+                  </p>
+                )}
 
                 <div className="grid grid-cols-3 gap-4 text-xs">
                   <div>
@@ -529,6 +667,40 @@ export function ContractsPanelClient() {
                 )}
               </div>
 
+              {/* Deals Vinculados ao Contrato-Mãe (19/08/2026) */}
+              {selected.is_master_agreement && (
+                <div className="bg-[#12112A] border border-[#9BAFC5]/10 rounded-lg p-5">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-sm font-bold text-[#F5F1E8] flex items-center gap-2">
+                      <Link2 size={14} className="text-[#C9A84C]" /> Deals Vinculados
+                    </h3>
+                    <button
+                      onClick={() => { setLinkError(null); setShowLinkModal(true); }}
+                      disabled={!!selected.regularization_expires_at && new Date(selected.regularization_expires_at) < new Date()}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-[#162744] text-[#9BAFC5] rounded-lg text-xs font-bold hover:text-[#F5F1E8] hover:bg-[#243A66] transition disabled:opacity-40 disabled:cursor-not-allowed">
+                      <Plus size={13} /> Vincular Novo Deal
+                    </button>
+                  </div>
+                  {contractLinks.length === 0 ? (
+                    <p className="text-xs text-[#9BAFC5]">Nenhum deal vinculado a este contrato-mãe ainda.</p>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {contractLinks.map((l) => (
+                        <div key={l.id} className="bg-[#162744] rounded-lg px-3 py-2 text-xs">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[#F5F1E8] font-medium">
+                              {l.deal_id ? `Deal ${l.deal_id.slice(0, 8)}` : l.listing_id ? `Ativo ${l.listing_id.slice(0, 8)}` : l.credit_proposal_id ? `Proposta ${l.credit_proposal_id.slice(0, 8)}` : `Ticket ${l.ticket_id?.slice(0, 8)}`}
+                            </span>
+                            <span className="text-[9px] text-[#9BAFC5]">{new Date(l.created_at).toLocaleDateString("pt-BR")}</span>
+                          </div>
+                          <p className="text-[10px] text-[#9BAFC5] mt-0.5">{l.justification}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Preview HTML */}
               {showPreview && selected.rendered_html && (
                 <div className="bg-white rounded-lg overflow-hidden max-h-[400px] overflow-y-auto">
@@ -659,6 +831,120 @@ export function ContractsPanelClient() {
               <button onClick={submitQualification} disabled={creatingQualification}
                 className="w-full px-3 py-2.5 bg-[#C9A84C] text-[#09081A] rounded-lg text-xs font-bold hover:bg-[#E8C97A] transition disabled:opacity-50 flex items-center justify-center gap-2">
                 {creatingQualification ? <Loader2 size={14} className="animate-spin" /> : null} Enviar Links de Qualificação
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Regularizar Contrato Manual (19/08/2026, item 4) */}
+      {showRegularizeModal && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60" onClick={() => setShowRegularizeModal(false)}>
+          <div className="w-full max-w-lg max-h-[85vh] bg-[#09081A] border border-[#C9A84C]/20 rounded-xl flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="p-4 border-b border-[#C9A84C]/20 flex items-center justify-between flex-shrink-0">
+              <div className="text-sm font-bold text-[#F5F1E8]">Regularizar Contrato Manual</div>
+              <button onClick={() => setShowRegularizeModal(false)} className="text-[#9BAFC5] hover:text-[#F5F1E8] text-xl">&times;</button>
+            </div>
+            {regResult ? (
+              <div className="p-6 space-y-3">
+                <div className="flex items-center gap-2 text-emerald-400"><CheckCircle2 size={16} /> <span className="text-sm font-bold">Contrato regularizado</span></div>
+                <p className="text-xs text-[#9BAFC5]">Código emitido: {regResult.contract_code}. O contrato entrou como rascunho na lista, com o PDF original + Termo de Ratificação mesclados e estampados. Envie para assinatura quando estiver pronto.</p>
+                <button onClick={() => setShowRegularizeModal(false)}
+                  className="w-full px-3 py-2 bg-[#162744] text-[#F5F1E8] rounded-lg text-xs font-bold hover:bg-[#243A66] transition">Fechar</button>
+              </div>
+            ) : (
+              <>
+                <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                  <p className="text-[11px] text-[#9BAFC5] leading-relaxed">
+                    Exige uma minuta "Termo de Ratificação e Vinculação Comercial" (série V3C-REG) já aprovada pelo jurídico em Central de Contratos &gt; Minutas.
+                  </p>
+                  <div>
+                    <label className="block text-[10px] font-bold text-[#C9A84C] uppercase tracking-wider mb-1">Arquivo do Contrato Original *</label>
+                    <input type="file" accept=".pdf,.docx,.txt" onChange={(e) => setRegFile(e.target.files?.[0] ?? null)}
+                      className="w-full text-xs text-[#9BAFC5] file:mr-2 file:px-2 file:py-1.5 file:rounded file:border-0 file:bg-[#162744] file:text-[#C9A84C] file:text-xs" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-[#C9A84C] uppercase tracking-wider mb-1">Justificativa Operacional *</label>
+                    <textarea value={regJustification} onChange={(e) => setRegJustification(e.target.value)}
+                      placeholder="Ex: NDA físico assinado em 2023 com a Home Cash, nunca teve número V3, regularizado a pedido de João"
+                      className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded-lg px-3 py-2 text-xs text-[#F5F1E8] min-h-[60px] resize-y" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-[#C9A84C] uppercase tracking-wider mb-1">Validade (opcional, em branco nunca expira)</label>
+                    <input type="date" value={regExpiresAt} onChange={(e) => setRegExpiresAt(e.target.value)}
+                      className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded-lg px-3 py-2 text-xs text-[#F5F1E8]" />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="block text-[10px] font-bold text-[#C9A84C] uppercase tracking-wider">Contrapartes</label>
+                    {regParties.map((row, i) => (
+                      <div key={i} className="bg-[#12112A] border border-[#9BAFC5]/10 rounded-lg p-2 space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[9px] text-[#9BAFC5] uppercase">Contraparte {i + 1}</span>
+                          {regParties.length > 1 && (
+                            <button onClick={() => removeRegPartyRow(i)}><X size={12} className="text-red-400/70 hover:text-red-400" /></button>
+                          )}
+                        </div>
+                        <input value={row.name} onChange={(e) => updateRegPartyRow(i, "name", e.target.value)} placeholder="Nome completo *"
+                          className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]" />
+                        <input value={row.email} onChange={(e) => updateRegPartyRow(i, "email", e.target.value)} placeholder="E-mail *" type="email"
+                          className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]" />
+                        <input value={row.doc} onChange={(e) => updateRegPartyRow(i, "doc", e.target.value)} placeholder="CPF/CNPJ (opcional)"
+                          className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]" />
+                      </div>
+                    ))}
+                    <button onClick={addRegPartyRow}
+                      className="w-full flex items-center justify-center gap-1.5 px-3 py-2 bg-[#162744] border border-[#9BAFC5]/15 rounded text-[#9BAFC5] text-[10px] font-bold hover:text-[#F5F1E8] transition">
+                      <Plus size={12} /> Adicionar Contraparte
+                    </button>
+                  </div>
+                  {regError && <p className="text-[11px] text-red-400">{regError}</p>}
+                </div>
+                <div className="p-4 border-t border-[#C9A84C]/20 flex-shrink-0">
+                  <button onClick={handleRegularize} disabled={regularizing}
+                    className="w-full px-3 py-2.5 bg-[#C9A84C] text-[#09081A] rounded-lg text-xs font-bold hover:bg-[#E8C97A] transition disabled:opacity-50 flex items-center justify-center gap-2">
+                    {regularizing ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />} Regularizar
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Modal Vincular Novo Deal (19/08/2026, item 2) */}
+      {showLinkModal && selected && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60" onClick={() => setShowLinkModal(false)}>
+          <div className="w-full max-w-md bg-[#09081A] border border-[#C9A84C]/20 rounded-xl flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="p-4 border-b border-[#C9A84C]/20 flex items-center justify-between flex-shrink-0">
+              <div className="text-sm font-bold text-[#F5F1E8]">Vincular Novo Deal</div>
+              <button onClick={() => setShowLinkModal(false)} className="text-[#9BAFC5] hover:text-[#F5F1E8] text-xl">&times;</button>
+            </div>
+            <div className="p-4 space-y-3">
+              <div>
+                <label className="block text-[10px] font-bold text-[#C9A84C] uppercase tracking-wider mb-1">Tipo de Destino</label>
+                <select value={linkTargetType} onChange={(e) => setLinkTargetType(e.target.value as typeof linkTargetType)}
+                  className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded-lg px-3 py-2 text-xs text-[#F5F1E8]">
+                  <option value="deal_id">Deal M&amp;A</option>
+                  <option value="listing_id">Ativo (Bolsa de Ativos)</option>
+                  <option value="credit_proposal_id">Proposta de Crédito</option>
+                  <option value="ticket_id">Ticket (Mesa Operacional)</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold text-[#C9A84C] uppercase tracking-wider mb-1">ID do Destino</label>
+                <input value={linkTargetId} onChange={(e) => setLinkTargetId(e.target.value)} placeholder="UUID do deal/ativo/proposta/ticket"
+                  className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded-lg px-3 py-2 text-xs text-[#F5F1E8] font-mono" />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold text-[#C9A84C] uppercase tracking-wider mb-1">Justificativa *</label>
+                <textarea value={linkJustification} onChange={(e) => setLinkJustification(e.target.value)}
+                  placeholder="Por que este negócio está coberto pelo contrato-mãe já ratificado"
+                  className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded-lg px-3 py-2 text-xs text-[#F5F1E8] min-h-[60px] resize-y" />
+              </div>
+              {linkError && <p className="text-[11px] text-red-400">{linkError}</p>}
+              <button onClick={handleLinkDeal} disabled={linking}
+                className="w-full px-3 py-2.5 bg-[#C9A84C] text-[#09081A] rounded-lg text-xs font-bold hover:bg-[#E8C97A] transition disabled:opacity-50 flex items-center justify-center gap-2">
+                {linking ? <Loader2 size={14} className="animate-spin" /> : <Link2 size={14} />} Vincular
               </button>
             </div>
           </div>

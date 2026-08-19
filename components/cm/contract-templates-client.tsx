@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
-import { Plus, Save, Trash2, Loader2, FileText, Eye, ChevronDown, Upload, Send, CheckCircle2, XCircle, Scale } from "lucide-react";
+import { Plus, Save, Trash2, Loader2, FileText, Eye, ChevronDown, Upload, Send, CheckCircle2, XCircle, Scale, Users, X, FilePlus2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface Template {
@@ -38,6 +38,7 @@ const SERIES_LABELS: Record<string, string> = {
   "V3C-FPA": "V3C-FPA · Proteção de Honorários",
   "V3C-FOR": "V3C-FOR · Fornecedor",
   "V3C-FUN": "V3C-FUN · Fundo",
+  "V3C-REG": "V3C-REG · Regularização de Contrato Manual",
 };
 
 const APPROVAL_STATUS_MAP: Record<string, { label: string; color: string }> = {
@@ -99,6 +100,59 @@ export function ContractTemplatesClient() {
   const [reviewComment, setReviewComment] = useState("");
   const [submittingReview, setSubmittingReview] = useState(false);
   const [submittingForReview, setSubmittingForReview] = useState(false);
+
+  // Gerar Contrato a partir de minuta aprovada (19/08/2026, itens 1 e 3 dos
+  // ajustes de governança pedidos por João): reaproveita a origem "avulso"
+  // de /api/contracts/generate, sem depender de listing/bid/deal/ticket.
+  const [showGenerateModal, setShowGenerateModal] = useState(false);
+  const [genParties, setGenParties] = useState<{ name: string; email: string; doc: string; role: string }[]>([
+    { name: "", email: "", doc: "", role: "indicador" },
+  ]);
+  const [genCommission, setGenCommission] = useState("");
+  const [generating, setGenerating] = useState(false);
+  const [genResult, setGenResult] = useState<{ contract_code: string | null; contract_title: string } | null>(null);
+  const [genError, setGenError] = useState<string | null>(null);
+
+  const openGenerateModal = () => {
+    setGenParties([{ name: "", email: "", doc: "", role: "indicador" }]);
+    setGenCommission("");
+    setGenResult(null);
+    setGenError(null);
+    setShowGenerateModal(true);
+  };
+  const addGenPartyRow = () => setGenParties((prev) => [...prev, { name: "", email: "", doc: "", role: "indicador" }]);
+  const removeGenPartyRow = (i: number) => setGenParties((prev) => prev.filter((_, idx) => idx !== i));
+  const updateGenPartyRow = (i: number, field: "name" | "email" | "doc" | "role", value: string) =>
+    setGenParties((prev) => prev.map((row, idx) => (idx === i ? { ...row, [field]: value } : row)));
+
+  const handleGenerateContract = async () => {
+    if (!selected) return;
+    const invalid = genParties.some((p) => !p.name.trim() || !p.email.trim());
+    if (genParties.length === 0 || invalid) {
+      setGenError("Preencha nome e e-mail de todos os indicadores.");
+      return;
+    }
+    setGenerating(true);
+    setGenError(null);
+    try {
+      const res = await fetch("/api/contracts/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          template_id: selected.id,
+          avulso_parties: genParties.map((p) => ({ name: p.name.trim(), email: p.email.trim(), doc: p.doc.trim() || undefined, role: p.role })),
+          commission_percent: genCommission ? Number(genCommission) : undefined,
+        }),
+      });
+      const json = await res.json();
+      if (res.ok) {
+        setGenResult({ contract_code: json.contract.contract_code, contract_title: json.contract.contract_title });
+      } else {
+        setGenError(json.error ?? "Erro ao gerar contrato");
+      }
+    } catch { setGenError("Erro de conexão"); }
+    finally { setGenerating(false); }
+  };
 
   const fetchTemplates = useCallback(async () => {
     setLoading(true);
@@ -304,12 +358,20 @@ export function ContractTemplatesClient() {
                   <span className={cn("text-[10px] font-bold px-2.5 py-1 rounded", (APPROVAL_STATUS_MAP[selected.approval_status] ?? APPROVAL_STATUS_MAP.rascunho).color)}>
                     {(APPROVAL_STATUS_MAP[selected.approval_status] ?? APPROVAL_STATUS_MAP.rascunho).label}
                   </span>
-                  {["rascunho", "reprovado"].includes(selected.approval_status) && (
-                    <button onClick={handleSubmitForReview} disabled={submittingForReview}
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-[#162744] text-[#C9A84C] border border-[#C9A84C]/30 rounded-lg text-xs font-bold hover:bg-[#C9A84C]/10 transition disabled:opacity-50">
-                      {submittingForReview ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />} Enviar para Revisão Jurídica
-                    </button>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {["rascunho", "reprovado"].includes(selected.approval_status) && (
+                      <button onClick={handleSubmitForReview} disabled={submittingForReview}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-[#162744] text-[#C9A84C] border border-[#C9A84C]/30 rounded-lg text-xs font-bold hover:bg-[#C9A84C]/10 transition disabled:opacity-50">
+                        {submittingForReview ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />} Enviar para Revisão Jurídica
+                      </button>
+                    )}
+                    {selected.approval_status === "aprovado" && (
+                      <button onClick={openGenerateModal}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-[#C9A84C]/15 text-[#C9A84C] border border-[#C9A84C]/40 rounded-lg text-xs font-bold hover:bg-[#C9A84C]/25 transition">
+                        <FilePlus2 size={13} /> Gerar Contrato
+                      </button>
+                    )}
+                  </div>
                 </div>
               )}
               <div className="grid grid-cols-2 gap-4 mb-4">
@@ -481,6 +543,75 @@ export function ContractTemplatesClient() {
           )}
         </div>
       </div>
+
+      {/* Modal Gerar Contrato (19/08/2026): dispara /api/contracts/generate
+          com origem "avulso": não depende de listing/bid/deal/credit_proposal/
+          ticket, cada indicador é digitado direto aqui. */}
+      {showGenerateModal && selected && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60" onClick={() => setShowGenerateModal(false)}>
+          <div className="w-full max-w-lg max-h-[85vh] bg-[#09081A] border border-[#C9A84C]/20 rounded-xl flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="p-4 border-b border-[#C9A84C]/20 flex items-center justify-between flex-shrink-0">
+              <div>
+                <div className="text-sm font-bold text-[#F5F1E8] flex items-center gap-2"><Users size={14} className="text-[#C9A84C]" /> Gerar Contrato</div>
+                <div className="text-[10px] text-[#9BAFC5]">{selected.template_name}</div>
+              </div>
+              <button onClick={() => setShowGenerateModal(false)} className="text-[#9BAFC5] hover:text-[#F5F1E8] text-xl">&times;</button>
+            </div>
+            {genResult ? (
+              <div className="p-6 space-y-3">
+                <div className="flex items-center gap-2 text-emerald-400"><CheckCircle2 size={16} /> <span className="text-sm font-bold">Contrato gerado</span></div>
+                <p className="text-xs text-[#9BAFC5]">
+                  {genResult.contract_code ?? genResult.contract_title}. Vá em Central de Contratos &gt; Contratos Gerados para revisar, aprovar e enviar para assinatura.
+                </p>
+                <button onClick={() => setShowGenerateModal(false)}
+                  className="w-full px-3 py-2 bg-[#162744] text-[#F5F1E8] rounded-lg text-xs font-bold hover:bg-[#243A66] transition">Fechar</button>
+              </div>
+            ) : (
+              <>
+                <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                  <p className="text-[11px] text-[#9BAFC5] leading-relaxed">
+                    Cada indicador/parceiro do grupo entra como signatário do contrato, junto com a V3 Partners. Nome e e-mail são obrigatórios (a ClickSign exige e-mail válido para enviar o link de assinatura).
+                  </p>
+                  <div className="space-y-2">
+                    {genParties.map((row, i) => (
+                      <div key={i} className="bg-[#12112A] border border-[#9BAFC5]/10 rounded-lg p-2 space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[9px] text-[#9BAFC5] uppercase">Indicador {i + 1}</span>
+                          {genParties.length > 1 && (
+                            <button onClick={() => removeGenPartyRow(i)}><X size={12} className="text-red-400/70 hover:text-red-400" /></button>
+                          )}
+                        </div>
+                        <input value={row.name} onChange={(e) => updateGenPartyRow(i, "name", e.target.value)} placeholder="Nome completo *"
+                          className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]" />
+                        <input value={row.email} onChange={(e) => updateGenPartyRow(i, "email", e.target.value)} placeholder="E-mail *" type="email"
+                          className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]" />
+                        <input value={row.doc} onChange={(e) => updateGenPartyRow(i, "doc", e.target.value)} placeholder="CPF/CNPJ (opcional)"
+                          className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]" />
+                      </div>
+                    ))}
+                  </div>
+                  <button onClick={addGenPartyRow}
+                    className="w-full flex items-center justify-center gap-1.5 px-3 py-2 bg-[#162744] border border-[#9BAFC5]/15 rounded text-[#9BAFC5] text-[10px] font-bold hover:text-[#F5F1E8] transition">
+                    <Plus size={12} /> Adicionar Indicador
+                  </button>
+                  <div>
+                    <label className="block text-[10px] font-bold text-[#C9A84C] uppercase tracking-wider mb-1">Comissão Total % (opcional)</label>
+                    <input value={genCommission} onChange={(e) => setGenCommission(e.target.value)} placeholder="Ex: 5"
+                      className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]" />
+                  </div>
+                  {genError && <p className="text-[11px] text-red-400">{genError}</p>}
+                </div>
+                <div className="p-4 border-t border-[#C9A84C]/20 flex-shrink-0">
+                  <button onClick={handleGenerateContract} disabled={generating}
+                    className="w-full px-3 py-2.5 bg-[#C9A84C] text-[#09081A] rounded-lg text-xs font-bold hover:bg-[#E8C97A] transition disabled:opacity-50 flex items-center justify-center gap-2">
+                    {generating ? <Loader2 size={14} className="animate-spin" /> : <FilePlus2 size={14} />} Gerar Contrato
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
