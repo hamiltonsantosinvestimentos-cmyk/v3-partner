@@ -49,15 +49,21 @@ type Profile = { id: string; full_name: string; role: string };
 
 const QUICK_REPLY_MARKER = "Digite o número da opção:";
 
-function ChannelBadge({ canal }: { canal?: "whatsapp" | "instagram" }) {
+// Glifo redondo do canal (cores de marca — convenção padrão pra indicador de
+// canal, igual o próprio ManyChat usa, independente da paleta V3). `size` em
+// px; `bordered` acrescenta o contorno usado quando o glifo fica sobreposto
+// num avatar (badge de canto).
+function ChannelBadgeIcon({ canal, size = 16, bordered = false }: { canal?: "whatsapp" | "instagram"; size?: number; bordered?: boolean }) {
+  const iconSize = Math.round(size * 0.56);
+  const borderClass = bordered ? "border-2 border-[#09081A]" : "";
   if (canal === "instagram") {
     return (
       <div
         title="Instagram"
-        className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full flex items-center justify-center border-2 border-[#09081A]"
-        style={{ background: "radial-gradient(circle at 30% 107%, #fdf497, #fdf497 5%, #fd5949 45%, #d6249f 60%, #285AEB 90%)" }}
+        className={`rounded-full flex items-center justify-center shrink-0 ${borderClass}`}
+        style={{ width: size, height: size, background: "radial-gradient(circle at 30% 107%, #fdf497, #fdf497 5%, #fd5949 45%, #d6249f 60%, #285AEB 90%)" }}
       >
-        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth={2.5} strokeLinecap="round">
+        <svg width={iconSize} height={iconSize} viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth={2.5} strokeLinecap="round">
           <rect x="3" y="3" width="18" height="18" rx="5" />
           <circle cx="12" cy="12" r="3.2" />
         </svg>
@@ -65,10 +71,18 @@ function ChannelBadge({ canal }: { canal?: "whatsapp" | "instagram" }) {
     );
   }
   return (
-    <div title="WhatsApp" className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full flex items-center justify-center bg-[#25D366] border-2 border-[#09081A]">
-      <svg width="9" height="9" viewBox="0 0 24 24" fill="white">
+    <div title="WhatsApp" className={`rounded-full flex items-center justify-center shrink-0 bg-[#25D366] ${borderClass}`} style={{ width: size, height: size }}>
+      <svg width={iconSize} height={iconSize} viewBox="0 0 24 24" fill="white">
         <path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.74.46 3.44 1.32 4.94L2 22l5.29-1.39a9.9 9.9 0 0 0 4.75 1.21h.01c5.46 0 9.9-4.45 9.9-9.91 0-2.65-1.03-5.14-2.9-7.01A9.82 9.82 0 0 0 12.04 2z" />
       </svg>
+    </div>
+  );
+}
+
+function ChannelBadge({ canal }: { canal?: "whatsapp" | "instagram" }) {
+  return (
+    <div className="absolute -bottom-0.5 -right-0.5">
+      <ChannelBadgeIcon canal={canal} size={16} bordered />
     </div>
   );
 }
@@ -134,6 +148,8 @@ export function SdrClient({ currentUserId, currentUserName, currentUserRole }: S
   const [leadFilter, setLeadFilter] = useState<LeadFilter>("todos");
   const [mainTab, setMainTab] = useState<MainTab>("conversas");
   const [showQr, setShowQr] = useState(false);
+  const [iaAtivaCanal, setIaAtivaCanal] = useState<Record<"whatsapp" | "instagram", boolean>>({ whatsapp: true, instagram: true });
+  const [togglingIaCanal, setTogglingIaCanal] = useState<"whatsapp" | "instagram" | null>(null);
   const [savingLead, setSavingLead] = useState(false);
   const [humanMsg, setHumanMsg] = useState("");
   const [sendingHuman, setSendingHuman] = useState(false);
@@ -165,6 +181,20 @@ export function SdrClient({ currentUserId, currentUserName, currentUserRole }: S
     }
   }, []);
 
+  // ── Fetch interruptor da IA por canal ────────────────────────────────────────
+  const fetchIaAtiva = useCallback(async () => {
+    try {
+      const res = await fetch("/api/sdr/automacao");
+      const data = await res.json();
+      if (data.config) {
+        setIaAtivaCanal({
+          whatsapp: data.config.ia_ativa_whatsapp !== false,
+          instagram: data.config.ia_ativa_instagram !== false,
+        });
+      }
+    } catch { /* ignore */ }
+  }, []);
+
   // ── Fetch conversas para phone selecionado ────────────────────────────────
   const fetchConversas = useCallback(async (phone: string) => {
     setLoadingConversas(true);
@@ -188,9 +218,10 @@ export function SdrClient({ currentUserId, currentUserName, currentUserRole }: S
     const leadsInterval = setInterval(fetchLeads, 30000);
     if (!isAdminGestao) return () => clearInterval(leadsInterval);
     fetchQr();
+    fetchIaAtiva();
     const qrInterval = setInterval(fetchQr, 10000);
     return () => { clearInterval(qrInterval); clearInterval(leadsInterval); };
-  }, [fetchLeads, fetchQr, isAdminGestao]);
+  }, [fetchLeads, fetchQr, fetchIaAtiva, isAdminGestao]);
 
   useEffect(() => {
     if (selectedPhone) fetchConversas(selectedPhone);
@@ -233,6 +264,24 @@ export function SdrClient({ currentUserId, currentUserName, currentUserRole }: S
     // Se assumindo, atribui automaticamente ao usuário atual se sem responsável
     if (next && !selectedLead.responsavel_id) {
       patchLead({ phone: selectedLead.phone, humano_ativo: next, responsavel_id: currentUserId });
+    }
+  };
+
+  const handleToggleIaAtiva = async (canal: "whatsapp" | "instagram") => {
+    const next = !iaAtivaCanal[canal];
+    setTogglingIaCanal(canal);
+    setIaAtivaCanal(prev => ({ ...prev, [canal]: next })); // otimista
+    try {
+      const res = await fetch("/api/sdr/automacao", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(canal === "whatsapp" ? { ia_ativa_whatsapp: next } : { ia_ativa_instagram: next }),
+      });
+      if (!res.ok) setIaAtivaCanal(prev => ({ ...prev, [canal]: !next })); // reverte se falhou
+    } catch {
+      setIaAtivaCanal(prev => ({ ...prev, [canal]: !next }));
+    } finally {
+      setTogglingIaCanal(null);
     }
   };
 
@@ -361,6 +410,29 @@ export function SdrClient({ currentUserId, currentUserName, currentUserRole }: S
         </div>
 
         <div className="flex items-center gap-3">
+          {isAdminGestao && (["whatsapp", "instagram"] as const).map(canal => {
+            const ativa = iaAtivaCanal[canal];
+            const label = canal === "whatsapp" ? "WhatsApp" : "Instagram";
+            return (
+              <button
+                key={canal}
+                onClick={() => handleToggleIaAtiva(canal)}
+                disabled={togglingIaCanal === canal}
+                title={ativa ? `IA respondendo automaticamente no ${label} — clique pra desligar` : `IA desligada no ${label} — só humanos respondem, em todas as conversas desse canal`}
+                className={`flex items-center gap-2 rounded-full pl-1.5 pr-3 py-1.5 border transition-colors disabled:opacity-60 ${
+                  ativa
+                    ? "bg-emerald-400/10 border-emerald-400/40 text-emerald-400"
+                    : "bg-[#f87171]/10 border-[#f87171]/40 text-[#f87171]"
+                }`}
+              >
+                <ChannelBadgeIcon canal={canal} />
+                <span className={`relative w-8 h-[18px] rounded-full transition-colors shrink-0 ${ativa ? "bg-emerald-400" : "bg-[#243A66]"}`}>
+                  <span className={`absolute top-[2px] w-[14px] h-[14px] rounded-full bg-[#09081A] transition-all ${ativa ? "left-[16px]" : "left-[2px]"}`} />
+                </span>
+                <span className="text-xs font-bold whitespace-nowrap">{ativa ? "IA ativa" : "IA desligada"}</span>
+              </button>
+            );
+          })}
           {isAdminGestao && (
             <div
               onClick={() => setShowQr(!showQr)}

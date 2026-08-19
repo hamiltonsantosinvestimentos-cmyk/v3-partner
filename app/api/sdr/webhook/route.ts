@@ -3,7 +3,7 @@ import { after } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { chatIdToPhone, sendText } from "@/lib/whatsapp/openwa-client";
 import { resolveQuickReply, type QuickReplyOption } from "@/lib/whatsapp/quick-reply";
-import { processarMensagemSDRCore } from "@/lib/sdr-agent";
+import { processarMensagemSDRCore, isIaAtiva } from "@/lib/sdr-agent";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -114,6 +114,12 @@ export async function POST(req: NextRequest) {
 
       if (leadData?.humano_ativo) {
         console.log(`[SDR Webhook] Atendimento humano ativo para ${phone} — IA pausada`);
+        return NextResponse.json({ ok: true });
+      }
+
+      // Interruptor global (aba SDR) — quando desligado, ninguém recebe resposta automática
+      if (!(await isIaAtiva(CANAL))) {
+        console.log(`[SDR Webhook] IA automática desligada globalmente — mensagem de ${phone} só salva`);
         return NextResponse.json({ ok: true });
       }
 

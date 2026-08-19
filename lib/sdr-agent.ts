@@ -228,6 +228,26 @@ Você representa uma empresa séria e de alto padrão. Seu tom é profissional, 
 - Se o lead confirmar reunião, diga que um dos sócios vai entrar em contato para confirmar o link do Meet
 - Lembre-se do histórico da conversa para não repetir perguntas já feitas`;
 
+// Interruptor por canal: quando desligado para um canal, nenhum webhook
+// desse canal dispara resposta automática da IA, em nenhuma conversa (o
+// outro canal não é afetado). Falha aberta (retorna true) se a
+// coluna/linha ainda não existir — a IA nunca fica muda por causa de um
+// erro de leitura de config, só por ação explícita do admin.
+export async function isIaAtiva(canal: SdrCanal): Promise<boolean> {
+  try {
+    const { data, error } = await supabase
+      .from("sdr_flow_config")
+      .select("ia_ativa_whatsapp, ia_ativa_instagram")
+      .eq("id", "default")
+      .maybeSingle();
+    if (error || !data) return true;
+    const valor = canal === "instagram" ? data.ia_ativa_instagram : data.ia_ativa_whatsapp;
+    return valor !== false;
+  } catch {
+    return true;
+  }
+}
+
 export async function buildSystemPrompt(): Promise<string> {
   try {
     const [{ data: config, error: configErr }, { data: stages, error: stagesErr }] = await Promise.all([
