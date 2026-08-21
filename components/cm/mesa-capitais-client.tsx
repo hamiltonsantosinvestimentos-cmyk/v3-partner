@@ -1539,13 +1539,15 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
 
   return (
     <div className="min-h-screen p-6">
-      {/* Header */}
+      {/* Header — titulo com flex-shrink-0 (achado 21/08/2026): sem isso, a fileira de 7
+          botoes ao lado espremia o bloco do titulo ate sobrar so a largura da palavra
+          "Capitais", quebrando "Mesa de Capitais" em 3 linhas empilhadas no desktop. */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-[#F5F1E8]">Mesa de Capitais</h1>
+        <div className="shrink-0">
+          <h1 className="text-xl sm:text-2xl font-bold text-[#F5F1E8] whitespace-nowrap">Mesa de Capitais</h1>
           <p className="text-sm text-[#9BAFC5]">Painel do Head de Ativos</p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2 sm:justify-end">
           <button
             onClick={() => generateIntakeLink()} disabled={generatingLink}
             className="flex items-center gap-2 px-4 py-2 border border-[#C9A84C]/30 text-[#C9A84C] rounded-lg text-sm font-medium hover:bg-[#C9A84C]/10 transition disabled:opacity-50"
@@ -2066,8 +2068,12 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
           { label: "Volume Pipeline", value: formatBRL(totalVolume), color: "text-emerald-400" },
           { label: "Matches", value: matches.length, color: "text-[#C9A84C]" },
         ].map((kpi) => (
-          <div key={kpi.label} className="bg-[#12112A] rounded-lg p-3 sm:p-4 text-center">
-            <div className={cn("text-base sm:text-2xl font-bold whitespace-nowrap", kpi.color)}>{kpi.value}</div>
+          <div key={kpi.label} className="bg-[#12112A] rounded-lg p-3 sm:p-4 text-center overflow-hidden">
+            {/* Fix 21/08/2026: whitespace-nowrap sozinho estourava a borda do card em
+                "R$ 41,78 Bilhões" (16 caracteres) num grid de 5 colunas — troquei nowrap
+                por leading-tight + break-words, volta a quebrar em 2 linhas graciosamente
+                quando o valor e um numero curto, o resto (28, 0) continua numa linha so. */}
+            <div className={cn("text-base sm:text-xl font-bold leading-tight break-words", kpi.color)}>{kpi.value}</div>
             <div className="text-[9px] text-[#9BAFC5] uppercase mt-1">{kpi.label}</div>
           </div>
         ))}
