@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
+import Fuse from "fuse.js";
 import {
   BarChart3, Users, Gavel, DollarSign, Play,
   Loader2, AlertTriangle, CheckCircle2, Clock,
@@ -15,6 +16,8 @@ import { CommissionCalculatorPanel } from "./commission-calculator-panel";
 import { BuySideDemandsPanel } from "./buy-side-demands-panel";
 import { NdaAuthorizationQueuePanel } from "./nda-authorization-queue-panel";
 import { QuickIndicateModal } from "./quick-indicate-modal";
+import { KanbanCard } from "./kanban-card";
+import { CmSearchFilterBar, EMPTY_CM_FILTERS, CM_STATUS_LABELS, CM_VALOR_FACE_BUCKETS, type CmListingFilters } from "./filter-drawer";
 import { CM_DOCUMENT_CHECKLISTS, type CmAssetType } from "@/lib/cm-checklists";
 import { createClient as createBrowserSupabaseClient } from "@/lib/supabase/client";
 
@@ -40,6 +43,15 @@ interface Listing {
   selected_thesis_template?: string | null;
   public_narrative?: string | null;
   seller_cpf_cnpj?: string | null;
+  // Etapa 6 (Kanban UX, 21/08/2026): campos ja existentes no schema real de
+  // cm_asset_listings (usados por POST /listings desde 19/06) mas que a interface
+  // do client nunca declarava -- ver select("*") em GET /api/cm/listings.
+  seller_name?: string | null;
+  tribunal?: string | null;
+  numero_processo?: string | null;
+  esfera?: string | null;
+  days_in_stage?: number;
+  originator?: { id: string; full_name: string } | null;
 }
 
 interface InspectionRequest {
@@ -102,6 +114,31 @@ const STATUS_COLUMNS = [
   // "Cancelar" na aba Governanca agora chama handleDeleteAsset em vez de setar
   // listing_status="cancelado" (status morto, sem coluna nenhuma no board).
 ];
+
+// Cadeia de avanco "de um passo" ja usada nos botoes de Transicao de Status do painel
+// de detalhe (antes duplicada inline la embaixo, agora unica fonte pros dois lugares:
+// menu de 3 pontos do card, drag-and-drop, e painel de detalhe). Nao cobre
+// proposta_recebida/em_escrow_due_diligence/liquidado de proposito -- essas transicoes
+// acontecem via aceite de bid (handleBidAction) e fluxo de escrow, nao por um clique solto.
+const STATUS_QUICK_TRANSITIONS = [
+  { from: "reuniao_validada", to: "formulario_preenchido", label: "Formulário OK" },
+  { from: "formulario_preenchido", to: "nda_assinado", label: "NDA Assinado" },
+  { from: "nda_assinado", to: "em_analise", label: "Iniciar Análise" },
+  { from: "em_analise", to: "aprovado_head", label: "Aprovar (Head)" },
+  { from: "aprovado_head", to: "ativo_vitrine", label: "Publicar Vitrine" },
+] as const;
+
+// Espelha headOnlyStatuses de app/api/cm/listings/[id]/status/route.ts -- a autoridade
+// real fica sempre no servidor (a rota rejeita com 403 mesmo se este espelho divergir).
+// Isso so evita oferecer, no menu/drag, um atalho que o backend ja vai recusar.
+const HEAD_ONLY_STATUSES = ["aprovado_head", "ativo_vitrine", "em_escrow_due_diligence", "liquidado"];
+
+function nextQuickTransition(status: string, role: string): { to: string; label: string } | null {
+  const t = STATUS_QUICK_TRANSITIONS.find((x) => x.from === status);
+  if (!t) return null;
+  if (HEAD_ONLY_STATUSES.includes(t.to) && !["ADMIN", "GESTAO"].includes(role)) return null;
+  return t;
+}
 
 function formatBRL(v: number) {
   if (v >= 1_000_000_000) {
@@ -243,6 +280,10 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
   const [intermediaries, setIntermediaries] = useState<any[]>([]);
   const [slaSummary, setSlaSummary] = useState<Record<string, { hours_pending: number; pending_count: number }>>({});
   const [slaContracts, setSlaContracts] = useState<any[]>([]);
+  // Etapa 6 (Kanban UX + busca facetada, 21/08/2026)
+  const [cmFilters, setCmFilters] = useState<CmListingFilters>(EMPTY_CM_FILTERS);
+  const [boardError, setBoardError] = useState<string | null>(null);
+  const [draggingListingId, setDraggingListingId] = useState<string | null>(null);
   const [resendingContractId, setResendingContractId] = useState<string | null>(null);
   const [qualBatches, setQualBatches] = useState<any[]>([]);
   const [showQualModal, setShowQualModal] = useState(false);
@@ -937,6 +978,65 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
     } catch { alert("Erro de conexão"); }
   };
 
+  // Variante sem alert() pro menu de 3 pontos e pro drag-and-drop do board (Etapa 6,
+  // 21/08/2026): a mesma rota PATCH /status de sempre, o banco (transition_cm_listing_status)
+  // continua sendo a unica autoridade -- aqui so troca o feedback de alert() bloqueante por
+  // um banner inline que some sozinho, pra nao interromper o fluxo de arrastar varios cards.
+  const handleQuickTransition = async (listingId: string, newStatus: string) => {
+    try {
+      const res = await fetch(`/api/cm/listings/${listingId}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ new_status: newStatus }),
+      });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        setBoardError(json.error ?? "Transição rejeitada pelo servidor.");
+        setTimeout(() => setBoardError(null), 6000);
+        return;
+      }
+      fetchAll();
+    } catch {
+      setBoardError("Erro de conexão ao tentar mudar o status.");
+      setTimeout(() => setBoardError(null), 6000);
+    }
+  };
+
+  const handleCardDragStart = (e: React.DragEvent<HTMLDivElement>, listingId: string) => {
+    e.dataTransfer.setData("text/plain", listingId);
+    e.dataTransfer.effectAllowed = "move";
+    setDraggingListingId(listingId);
+  };
+
+  const handleCardDragEnd = () => setDraggingListingId(null);
+
+  // O front so mostra/mira a proxima fase valida (STATUS_QUICK_TRANSITIONS) -- nunca
+  // pula etapa nem inventa transicao. A validacao final e sempre a chamada real ao
+  // PATCH /status, que usa transition_cm_listing_status() no banco.
+  const handleColumnDrop = (e: React.DragEvent<HTMLDivElement>, columnKey: string) => {
+    e.preventDefault();
+    const listingId = e.dataTransfer.getData("text/plain");
+    setDraggingListingId(null);
+    if (!listingId) return;
+    const listing = listings.find((l) => l.id === listingId);
+    if (!listing) return;
+
+    const targetStatuses = columnKey.split(",");
+    if (targetStatuses.includes(listing.listing_status)) return; // soltou na mesma coluna: no-op
+
+    const next = nextQuickTransition(listing.listing_status, userRole);
+    if (!next || !targetStatuses.includes(next.to)) {
+      setBoardError(
+        next
+          ? `Só é possível avançar uma fase por vez (próxima: "${CM_STATUS_LABELS[next.to] ?? next.to}"). Use o painel de detalhe para pular etapas com justificativa.`
+          : "Este ativo não tem uma próxima fase automática nesta etapa — use o painel de detalhe."
+      );
+      setTimeout(() => setBoardError(null), 6000);
+      return;
+    }
+    handleQuickTransition(listing.id, next.to);
+  };
+
   // Publicacao em lote (12/08/2026): so anda pelos hops sem gate de compliance adicional
   // (ver comentario de BULK_PUBLISH_CHAIN). Nunca fabrica nda_signed_at/nda_document_url --
   // isso so acontece via /nda-authorize individual, revisado na Fila NDA.
@@ -1387,6 +1487,50 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
   const naVitrine = listings.filter((l) => ["ativo_vitrine", "proposta_recebida"].includes(l.listing_status)).length;
   const propostas = bids.length;
 
+  // Etapa 6 (Busca Facetada, 21/08/2026): valores distintos de tribunal ja cadastrados,
+  // campo livre no banco (nunca um enum TRF1-TRF6 fixo) -- ver BRIEF, "Alternativa descartada".
+  const availableTribunals = useMemo(() => {
+    const set = new Set<string>();
+    for (const l of listings) if (l.tribunal && l.tribunal.trim()) set.add(l.tribunal.trim());
+    return Array.from(set).sort((a, b) => a.localeCompare(b, "pt-BR"));
+  }, [listings]);
+
+  const cmFuse = useMemo(
+    () =>
+      new Fuse(listings, {
+        keys: ["numero_processo", "seller_name", "anonymous_id", "apelido", "originator.full_name"],
+        threshold: 0.35,
+        ignoreLocation: true,
+      }),
+    [listings]
+  );
+
+  const filteredListings = useMemo(() => {
+    const term = cmFilters.search.trim();
+    let base = term ? cmFuse.search(term).map((r) => r.item) : listings;
+
+    if (cmFilters.assetTypes.length > 0) base = base.filter((l) => cmFilters.assetTypes.includes(l.asset_type));
+    if (cmFilters.esferas.length > 0) base = base.filter((l) => cmFilters.esferas.includes((l.esfera ?? "").toLowerCase()));
+    if (cmFilters.statuses.length > 0) base = base.filter((l) => cmFilters.statuses.includes(l.listing_status));
+    if (cmFilters.tribunais.length > 0) base = base.filter((l) => cmFilters.tribunais.includes((l.tribunal ?? "").trim()));
+    if (cmFilters.valorFaceBuckets.length > 0) {
+      base = base.filter((l) => {
+        const v = Number(l.valor_face);
+        return CM_VALOR_FACE_BUCKETS.some((b) => cmFilters.valorFaceBuckets.includes(b.key) && b.test(v));
+      });
+    }
+    if (cmFilters.desagioMin !== "" || cmFilters.desagioMax !== "") {
+      const min = cmFilters.desagioMin !== "" ? parseFloat(cmFilters.desagioMin.replace(",", ".")) : -Infinity;
+      const max = cmFilters.desagioMax !== "" ? parseFloat(cmFilters.desagioMax.replace(",", ".")) : Infinity;
+      base = base.filter((l) => {
+        if (l.desagio_pretendido === null || l.desagio_pretendido === undefined) return false;
+        const d = Number(l.desagio_pretendido);
+        return d >= min && d <= max;
+      });
+    }
+    return base;
+  }, [listings, cmFilters, cmFuse]);
+
   if (loading) return (
     <div className="flex items-center justify-center h-64">
       <Loader2 className="animate-spin text-[#C9A84C]" size={32} />
@@ -1396,12 +1540,12 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
   return (
     <div className="min-h-screen p-6">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-[#F5F1E8]">Mesa de Capitais</h1>
+          <h1 className="text-xl sm:text-2xl font-bold text-[#F5F1E8]">Mesa de Capitais</h1>
           <p className="text-sm text-[#9BAFC5]">Painel do Head de Ativos</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <button
             onClick={() => generateIntakeLink()} disabled={generatingLink}
             className="flex items-center gap-2 px-4 py-2 border border-[#C9A84C]/30 text-[#C9A84C] rounded-lg text-sm font-medium hover:bg-[#C9A84C]/10 transition disabled:opacity-50"
@@ -1913,8 +2057,8 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
         </div>
       )}
 
-      {/* KPIs */}
-      <div className="grid grid-cols-5 gap-3 mb-6">
+      {/* KPIs — tipografia fluida pra "R$ X Bilhões" nunca quebrar linha em mobile (Etapa 6) */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
         {[
           { label: "Total Ativos", value: listings.length, color: "text-[#F5F1E8]" },
           { label: "Na Vitrine", value: naVitrine, color: "text-[#C9A84C]" },
@@ -1922,20 +2066,20 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
           { label: "Volume Pipeline", value: formatBRL(totalVolume), color: "text-emerald-400" },
           { label: "Matches", value: matches.length, color: "text-[#C9A84C]" },
         ].map((kpi) => (
-          <div key={kpi.label} className="bg-[#12112A] rounded-lg p-4 text-center">
-            <div className={cn("text-2xl font-bold", kpi.color)}>{kpi.value}</div>
+          <div key={kpi.label} className="bg-[#12112A] rounded-lg p-3 sm:p-4 text-center">
+            <div className={cn("text-base sm:text-2xl font-bold whitespace-nowrap", kpi.color)}>{kpi.value}</div>
             <div className="text-[9px] text-[#9BAFC5] uppercase mt-1">{kpi.label}</div>
           </div>
         ))}
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-1 mb-6 border-b border-[#9BAFC5]/10">
+      {/* Tabs — colapsavel/deslizante em mobile (Etapa 6, 21/08/2026) */}
+      <div className="flex gap-1 mb-6 border-b border-[#9BAFC5]/10 overflow-x-auto">
         {(["kanban", "matches", "bids", "buydemands"] as const).map((t) => (
           <button
             key={t} onClick={() => { setTab(t); if (t === "bids") fetchAll(); }}
             className={cn(
-              "px-4 py-2 text-sm font-medium border-b-2 transition",
+              "px-4 min-h-[44px] sm:min-h-0 sm:py-2 text-sm font-medium border-b-2 transition whitespace-nowrap flex-shrink-0",
               tab === t ? "border-[#C9A84C] text-[#C9A84C]" : "border-transparent text-[#9BAFC5] hover:text-[#F5F1E8]"
             )}
           >
@@ -1946,7 +2090,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
           <button
             onClick={() => setTab("ndaqueue")}
             className={cn(
-              "px-4 py-2 text-sm font-medium border-b-2 transition",
+              "px-4 min-h-[44px] sm:min-h-0 sm:py-2 text-sm font-medium border-b-2 transition whitespace-nowrap flex-shrink-0",
               tab === "ndaqueue" ? "border-[#C9A84C] text-[#C9A84C]" : "border-transparent text-[#9BAFC5] hover:text-[#F5F1E8]"
             )}
           >
@@ -1958,6 +2102,23 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
       {/* Kanban */}
       {tab === "kanban" && (
         <div>
+          <CmSearchFilterBar filters={cmFilters} onChange={setCmFilters} availableTribunals={availableTribunals} />
+
+          {boardError && (
+            <div className="flex items-center justify-between mb-3 bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-2.5">
+              <span className="text-xs text-red-400">{boardError}</span>
+              <button onClick={() => setBoardError(null)} className="text-red-400/70 hover:text-red-400 flex-shrink-0 ml-3">
+                <X size={14} />
+              </button>
+            </div>
+          )}
+
+          {filteredListings.length !== listings.length && (
+            <div className="text-[10px] text-[#9BAFC5] mb-2">
+              {filteredListings.length} de {listings.length} ativo(s) — filtros ou busca ativos
+            </div>
+          )}
+
           {bulkPublishSelection.size > 0 && (
             <div className="flex items-center justify-between mb-3 bg-[#C9A84C]/10 border border-[#C9A84C]/30 rounded-lg px-4 py-2.5">
               <span className="text-xs text-[#F5F1E8]">{bulkPublishSelection.size} ativo(s) selecionado(s) para publicação em lote</span>
@@ -1971,69 +2132,65 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
               </div>
             </div>
           )}
-        <div className="grid grid-cols-5 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
           {STATUS_COLUMNS.map((col) => {
             const statuses = col.key.split(",");
-            const items = listings.filter((l) => statuses.includes(l.listing_status));
-            const Icon = col.icon;
+            const items = filteredListings.filter((l) => statuses.includes(l.listing_status));
+            const canDrag = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"].includes(userRole);
+            const isDropTarget =
+              draggingListingId != null &&
+              (() => {
+                const dragged = listings.find((l) => l.id === draggingListingId);
+                if (!dragged) return false;
+                const next = nextQuickTransition(dragged.listing_status, userRole);
+                return !!next && statuses.includes(next.to);
+              })();
             return (
               <div key={col.key}>
                 <div className={cn("text-center text-[10px] font-bold uppercase text-[#9BAFC5] p-2 bg-[#12112A] rounded-t-lg border-b-2", col.color)}>
                   {col.label} ({items.length})
                 </div>
-                <div className="bg-[#09081A]/50 rounded-b-lg p-2 min-h-[200px] space-y-2">
-                  {items.map((l) => (
-                    <div key={l.id} onClick={() => openListingDetail(l)} className="relative bg-[#12112A] border border-[#9BAFC5]/10 rounded-md p-3 cursor-pointer hover:border-[#C9A84C]/30 transition">
-                      {["ADMIN", "GESTAO"].includes(userRole) && BULK_PUBLISH_ELIGIBLE.includes(l.listing_status) && (
-                        <input
-                          type="checkbox"
-                          checked={bulkPublishSelection.has(l.id)}
-                          onClick={(e) => e.stopPropagation()}
-                          onChange={() => setBulkPublishSelection((prev) => {
-                            const next = new Set(prev);
-                            if (next.has(l.id)) next.delete(l.id); else next.add(l.id);
-                            return next;
-                          })}
-                          className="absolute top-2 right-2 w-3.5 h-3.5 accent-[#C9A84C]"
-                          title="Selecionar para publicação em lote"
-                        />
-                      )}
-                      <div className="text-[9px] text-[#C9A84C] font-bold">{l.anonymous_id}</div>
-                      {l.apelido && <div className="text-[10px] text-[#F5F1E8] font-semibold truncate">{l.apelido}</div>}
-                      <div className="text-xs text-[#F5F1E8] font-semibold">{formatListingValue(Number(l.valor_face), l.currency)}</div>
-                      {l.risk_score && (
-                        <div className={cn("text-[9px] font-bold mt-1",
-                          l.risk_score >= 70 ? "text-emerald-400" : l.risk_score >= 50 ? "text-[#C9A84C]" : "text-red-400"
-                        )}>Score {l.risk_score}</div>
-                      )}
-                      {(l.cm_bids?.[0] as any)?.count > 0 && (
-                        <div className="text-[9px] text-orange-400 mt-1">{(l.cm_bids[0] as any).count} proposta(s)</div>
-                      )}
-                      {(l as any).deletion_status === "pending_governance" && (
-                        <div className="text-[8px] text-red-400 font-bold uppercase mt-1 px-1.5 py-0.5 bg-red-500/10 border border-red-500/20 rounded inline-block">Exclusão Solicitada</div>
-                      )}
-                      {(l as any).nda_authorization_status === "pending_director" && (
-                        <div className="text-[8px] text-[#C9A84C] font-bold uppercase mt-1 px-1.5 py-0.5 bg-[#C9A84C]/10 border border-[#C9A84C]/20 rounded inline-block">Enviado: Aguardando Diretoria</div>
-                      )}
-                      {Number((l.cm_listing_documents?.[0] as any)?.count) > 0 && (
-                        <div className="text-[9px] text-[#9BAFC5] mt-1">{(l.cm_listing_documents[0] as any).count} doc(s)</div>
-                      )}
-                      {slaSummary[l.id] && (() => {
-                        const h = slaSummary[l.id].hours_pending;
-                        const n = slaSummary[l.id].pending_count;
-                        const badge = h >= 48
-                          ? { label: `SLA Estourado: ${h}h`, cls: "bg-red-500/10 border-red-500/20 text-red-400" }
-                          : h >= 24
-                          ? { label: `SLA Atenção: ${h}h`, cls: "bg-amber-500/10 border-amber-500/20 text-amber-400" }
-                          : { label: `Assinatura: ${h}h`, cls: "bg-[#162744] border-[#9BAFC5]/15 text-[#9BAFC5]" };
-                        return (
-                          <div className={cn("text-[8px] font-bold uppercase mt-1 px-1.5 py-0.5 border rounded inline-block", badge.cls)}>
-                            {badge.label} ({n})
-                          </div>
-                        );
-                      })()}
+                <div
+                  onDragOver={(e) => { if (canDrag) e.preventDefault(); }}
+                  onDrop={(e) => { if (canDrag) handleColumnDrop(e, col.key); }}
+                  className={cn(
+                    "bg-[#09081A]/50 rounded-b-lg p-2 min-h-[200px] space-y-2 transition",
+                    isDropTarget && "ring-2 ring-emerald-500/50 ring-inset bg-emerald-500/5"
+                  )}
+                >
+                  {items.map((l) => {
+                    const next = nextQuickTransition(l.listing_status, userRole);
+                    return (
+                      <KanbanCard
+                        key={l.id}
+                        listing={l}
+                        userRole={userRole}
+                        valueLabel={formatListingValue(Number(l.valor_face), l.currency)}
+                        isBulkEligible={["ADMIN", "GESTAO"].includes(userRole) && BULK_PUBLISH_ELIGIBLE.includes(l.listing_status)}
+                        isBulkSelected={bulkPublishSelection.has(l.id)}
+                        onToggleBulk={() => setBulkPublishSelection((prev) => {
+                          const nextSel = new Set(prev);
+                          if (nextSel.has(l.id)) nextSel.delete(l.id); else nextSel.add(l.id);
+                          return nextSel;
+                        })}
+                        onOpenDetail={() => openListingDetail(l)}
+                        slaInfo={slaSummary[l.id]}
+                        nextAction={next ? { label: `Avançar: ${next.label}` } : null}
+                        onAdvance={() => next && handleQuickTransition(l.id, next.to)}
+                        onRequestDelete={() => handleDeleteAsset(l.id)}
+                        draggable={canDrag}
+                        onDragStart={(e) => handleCardDragStart(e, l.id)}
+                        onDragEnd={handleCardDragEnd}
+                      />
+                    );
+                  })}
+                  {items.length === 0 && (
+                    <div className="text-center text-[9px] text-[#9BAFC5]/50 py-6">
+                      {listings.filter((l) => statuses.includes(l.listing_status)).length === 0
+                        ? "Nenhum ativo"
+                        : "Nenhum resultado com os filtros atuais"}
                     </div>
-                  ))}
+                  )}
                 </div>
               </div>
             );
@@ -3149,13 +3306,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
             <div className="px-4 mt-4 space-y-2">
               <div className="text-[10px] text-[#C9A84C] font-bold uppercase tracking-wider mb-2">Transição de Status</div>
               <div className="flex flex-wrap gap-2">
-                {[
-                  { from: "reuniao_validada", to: "formulario_preenchido", label: "Formulário OK" },
-                  { from: "formulario_preenchido", to: "nda_assinado", label: "NDA Assinado" },
-                  { from: "nda_assinado", to: "em_analise", label: "Iniciar Análise" },
-                  { from: "em_analise", to: "aprovado_head", label: "Aprovar (Head)" },
-                  { from: "aprovado_head", to: "ativo_vitrine", label: "Publicar Vitrine" },
-                ].filter((t) => t.from === selectedListing.listing_status).map((t) => (
+                {STATUS_QUICK_TRANSITIONS.filter((t) => t.from === selectedListing.listing_status).map((t) => (
                   <button key={t.to} onClick={() => handleStatusTransition(selectedListing.id, t.to)}
                     className="px-3 py-2 bg-emerald-600/20 border border-emerald-500/30 rounded-lg text-emerald-400 text-xs font-bold hover:bg-emerald-600/30 transition">
                     {t.label} &rarr;

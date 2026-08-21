@@ -58,7 +58,40 @@ export async function GET(req: NextRequest) {
 
   const { data, error } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ listings: data ?? [] });
+
+  const listings = data ?? [];
+  return NextResponse.json({ listings: await withDaysInStage(listings) });
+}
+
+// Etapa 6 (Kanban UX, 21/08/2026): "dias na fase atual" pro badge/micro-timeline do board.
+// cm_status_transitions ja existe desde 19/06 (grava toda chamada de
+// transition_cm_listing_status()) mas nunca foi lida pela UI. Uma listagem recem-criada
+// nunca passou pela funcao de transicao (o INSERT em POST /listings seta listing_status
+// direto), entao ela nao tem nenhuma linha em cm_status_transitions ainda -- nesse caso o
+// fallback e o created_at da propria listagem. 1 query agregada pro lote inteiro, nunca N+1.
+async function withDaysInStage<T extends { id: string; listing_status: string; created_at: string }>(
+  listings: T[]
+): Promise<(T & { days_in_stage: number })[]> {
+  if (listings.length === 0) return [];
+  const ids = listings.map((l) => l.id);
+  const { data: transitions } = await svc()
+    .from("cm_status_transitions")
+    .select("listing_id, to_status, created_at")
+    .in("listing_id", ids)
+    .order("created_at", { ascending: false });
+
+  const enteredAt = new Map<string, string>();
+  for (const t of transitions ?? []) {
+    const key = `${t.listing_id}:${t.to_status}`;
+    if (!enteredAt.has(key)) enteredAt.set(key, t.created_at); // primeira ocorrencia = mais recente (ordenado desc)
+  }
+
+  const now = Date.now();
+  return listings.map((l) => {
+    const since = enteredAt.get(`${l.id}:${l.listing_status}`) ?? l.created_at;
+    const days = Math.max(0, Math.floor((now - new Date(since).getTime()) / 86_400_000));
+    return { ...l, days_in_stage: days };
+  });
 }
 
 export async function POST(req: NextRequest) {
