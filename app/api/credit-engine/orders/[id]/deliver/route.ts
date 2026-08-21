@@ -61,7 +61,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
             </a>
             <p style="color:#9BAFC5;font-size:11px;margin-top:24px;line-height:1.6">
               O link fica disponível por 30 dias a partir da emissão.<br>
-              Dúvidas: <a href="mailto:operacoes@v3partners.com.br" style="color:#C9A84C">operacoes@v3partners.com.br</a>
+              Dúvidas: <a href="mailto:financeiro@v3partners.com.br" style="color:#C9A84C">financeiro@v3partners.com.br</a>
             </p>
           </div>
         `,

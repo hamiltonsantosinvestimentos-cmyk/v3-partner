@@ -1,23 +1,18 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
 import Image from "next/image";
-import { Copy, Check, AlertCircle, Loader2, CreditCard, QrCode, FileText, Plus } from "lucide-react";
+import { Copy, Check, AlertCircle, Loader2, CreditCard, QrCode, FileText, Minus, Plus } from "lucide-react";
 import { getStoredRefPartnerId } from "@/lib/ref-tracking";
 import { trackEvent } from "@/lib/analytics";
+import { UNIT_PRICE_CENTS, MIN_CNPJ_COUNT, MIN_CPF_COUNT, clampSelection, calcTotalCents, buildModularTitle, legacyPlanoToSelection, fmtBRL, type ModularSelection } from "@/lib/credit-analysis-pricing";
 
 const N = "#09081A", N2 = "#13223A", N3 = "#162744", N4 = "#243A66";
 const GO = "#C9A84C", GL = "#E8C97A", CR = "#F5F1E8", MU = "#9BAFC5";
 
 type Step = "form" | "payment" | "success";
 type PayMethod = "pix" | "boleto";
-type PlanoType = "credit_analysis" | "credit_analysis_consultoria";
-
-const PLANOS: Record<PlanoType, { title: string; price_cents: number }> = {
-  credit_analysis: { title: "Análise de Crédito Empresarial", price_cents: 49700 },
-  credit_analysis_consultoria: { title: "Análise de Crédito Empresarial + Consultoria Estratégica V3", price_cents: 99700 },
-};
 
 interface OrderResult {
   order_id: string;
@@ -30,16 +25,28 @@ interface OrderResult {
   intake_token: string | null;
 }
 
-function fmt(cents: number) {
-  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(cents / 100);
+const fmt = fmtBRL;
+
+// Lê a seleção inicial da URL: ?cnpj=&cpf=&consultoria= (vindo do
+// configurador de /analise-v2) ou ?plano= (legado, vindo de /analise
+// Variante A, que não tem configurador — mapeado para 1 CNPJ + consultoria
+// on/off conforme o pacote fixo antigo).
+function selectionFromParams(params: URLSearchParams): ModularSelection {
+  if (params.has("cnpj") || params.has("cpf") || params.has("consultoria")) {
+    return clampSelection({
+      cnpjCount: Number(params.get("cnpj") ?? MIN_CNPJ_COUNT),
+      cpfCount: Number(params.get("cpf") ?? MIN_CPF_COUNT),
+      hasConsultancy: params.get("consultoria") === "1",
+    });
+  }
+  return legacyPlanoToSelection(params.get("plano"));
 }
 
 export function DirectCheckoutClient() {
   const searchParams = useSearchParams();
-  const planoParam = searchParams.get("plano");
-  const initialPlano: PlanoType = planoParam === "credit_analysis_consultoria" ? "credit_analysis_consultoria" : "credit_analysis";
+  const initialSelection = useMemo(() => selectionFromParams(searchParams), [searchParams]);
 
-  const [plano, setPlano] = useState<PlanoType>(initialPlano);
+  const [selection, setSelection] = useState<ModularSelection>(initialSelection);
   const [step, setStep] = useState<Step>("form");
   const [payMethod, setPayMethod] = useState<PayMethod>("pix");
   const [form, setForm] = useState({ client_name: "", client_email: "", client_doc: "" });
@@ -49,8 +56,19 @@ export function DirectCheckoutClient() {
   const [copied, setCopied] = useState(false);
   const [polling, setPolling] = useState(false);
 
-  const bumpDiff = PLANOS.credit_analysis_consultoria.price_cents - PLANOS.credit_analysis.price_cents;
-  const selected = PLANOS[plano];
+  const totalCents = calcTotalCents(selection);
+  const title = buildModularTitle(selection);
+  const totalAnalyses = selection.cnpjCount + selection.cpfCount;
+
+  function setCnpjCount(n: number) {
+    setSelection((p) => clampSelection({ ...p, cnpjCount: n }));
+  }
+  function setCpfCount(n: number) {
+    setSelection((p) => clampSelection({ ...p, cpfCount: n }));
+  }
+  function toggleConsultancy() {
+    setSelection((p) => ({ ...p, hasConsultancy: !p.hasConsultancy }));
+  }
 
   const pollStatus = useCallback(async (orderId: string) => {
     if (polling) return;
@@ -79,13 +97,13 @@ export function DirectCheckoutClient() {
   }, [step, payMethod, order?.order_id]);
 
   useEffect(() => {
-    trackEvent("InitiateCheckout", { value: PLANOS[initialPlano].price_cents / 100, currency: "BRL", content_name: PLANOS[initialPlano].title });
+    trackEvent("InitiateCheckout", { value: calcTotalCents(initialSelection) / 100, currency: "BRL", content_name: buildModularTitle(initialSelection) });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     if (step === "success" && order) {
-      trackEvent("Purchase", { value: selected.price_cents / 100, currency: "BRL", content_name: selected.title, order_id: order.order_id });
+      trackEvent("Purchase", { value: order.price_cents / 100, currency: "BRL", content_name: title, order_id: order.order_id });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step]);
@@ -103,7 +121,13 @@ export function DirectCheckoutClient() {
       const r = await fetch("/api/checkout/direct", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, service_type: plano, ref_partner_id: refPartnerId }),
+        body: JSON.stringify({
+          ...form,
+          cnpj_count: selection.cnpjCount,
+          cpf_count: selection.cpfCount,
+          has_consultancy: selection.hasConsultancy,
+          ref_partner_id: refPartnerId,
+        }),
       });
       const d = await r.json() as OrderResult & { error?: string };
       if (d.error) { setFormError(d.error); return; }
@@ -132,34 +156,47 @@ export function DirectCheckoutClient() {
 
         <div style={{ background: N2, border: `1px solid ${N4}`, borderRadius: 14, padding: 32 }}>
           <div style={{ display: "inline-block", background: "rgba(201,168,76,0.1)", border: `1px solid ${GO}`, color: GL, fontSize: 10, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", padding: "4px 10px", borderRadius: 4, marginBottom: 14 }}>
-            Análise de Crédito Empresarial
+            Análise de Crédito Empresarial · R$ 197,00 por análise
           </div>
-          <div style={{ color: CR, fontSize: 19, fontWeight: 700, marginBottom: 4, lineHeight: 1.3 }}>{selected.title}</div>
-          <div style={{ color: GO, fontSize: 28, fontWeight: 800, marginTop: 12 }}>{fmt(selected.price_cents)}</div>
+          <div style={{ color: CR, fontSize: 15, fontWeight: 700, marginBottom: 4, lineHeight: 1.3 }}>{title}</div>
+          <div style={{ color: GO, fontSize: 28, fontWeight: 800, marginTop: 12 }}>{fmt(totalCents)}</div>
 
-          {step === "form" && plano === "credit_analysis" && (
-            <button
-              type="button"
-              onClick={() => setPlano("credit_analysis_consultoria")}
-              style={{
-                marginTop: 16, width: "100%", textAlign: "left", background: N3, border: `1px dashed ${GO}`,
-                borderRadius: 8, padding: "12px 14px", cursor: "pointer", display: "flex", gap: 10, alignItems: "flex-start",
-              }}
-            >
-              <Plus size={16} color={GO} style={{ flexShrink: 0, marginTop: 2 }} />
-              <span style={{ fontSize: 12, color: MU, lineHeight: 1.5 }}>
-                <strong style={{ color: CR }}>Adicionar Consultoria Estratégica V3</strong> por mais {fmt(bumpDiff)}: reunião de 45 minutos com especialista de crédito e devolutiva personalizada do relatório.
-              </span>
-            </button>
-          )}
-          {step === "form" && plano === "credit_analysis_consultoria" && (
-            <button
-              type="button"
-              onClick={() => setPlano("credit_analysis")}
-              style={{ marginTop: 10, background: "none", border: "none", color: MU, fontSize: 11, textDecoration: "underline", cursor: "pointer", padding: 0 }}
-            >
-              Remover consultoria e manter só a análise ({fmt(PLANOS.credit_analysis.price_cents)})
-            </button>
+          {step === "form" && (
+            <div style={{ marginTop: 20, display: "flex", flexDirection: "column", gap: 12 }}>
+              <CounterRow
+                label="Empresas do grupo (CNPJ)"
+                hint="Uma análise completa por empresa"
+                value={selection.cnpjCount}
+                min={MIN_CNPJ_COUNT}
+                onChange={setCnpjCount}
+              />
+              <CounterRow
+                label="Sócios ou garantidores (CPF)"
+                hint="Inclua quem também compõe a operação"
+                value={selection.cpfCount}
+                min={MIN_CPF_COUNT}
+                onChange={setCpfCount}
+              />
+
+              <button
+                type="button"
+                onClick={toggleConsultancy}
+                style={{
+                  marginTop: 4, width: "100%", textAlign: "left", background: selection.hasConsultancy ? "rgba(201,168,76,0.08)" : N3,
+                  border: `1px solid ${selection.hasConsultancy ? GO : N4}`, borderRadius: 8, padding: "14px", cursor: "pointer",
+                  display: "flex", gap: 12, alignItems: "flex-start",
+                }}
+              >
+                <Switch on={selection.hasConsultancy} />
+                <span style={{ fontSize: 12, color: MU, lineHeight: 1.5 }}>
+                  <strong style={{ color: CR }}>Consultoria Estratégica V3</strong> (+ {fmt(UNIT_PRICE_CENTS)}): reunião de 45 minutos com a mesa de crédito, com devolutiva completa dos relatórios e plano de ação prático.
+                </span>
+              </button>
+
+              <div style={{ fontSize: 11, color: MU, textAlign: "right" }}>
+                {totalAnalyses} análise{totalAnalyses !== 1 ? "s" : ""} selecionada{totalAnalyses !== 1 ? "s" : ""} · Consultoria {selection.hasConsultancy ? "incluída" : "não incluída"}
+              </div>
+            </div>
           )}
 
           <div style={{ height: 1, background: N4, margin: "24px 0" }} />
@@ -276,9 +313,47 @@ export function DirectCheckoutClient() {
 
         <div style={{ color: MU, fontSize: 10, marginTop: 24, textAlign: "center" }}>
           V3 Partners Soluções Ltda · CNPJ 14.219.287/0001-50<br />
-          <a href="mailto:operacoes@v3partners.com.br" style={{ color: MU }}>operacoes@v3partners.com.br</a>
+          <a href="mailto:financeiro@v3partners.com.br" style={{ color: MU }}>financeiro@v3partners.com.br</a>
         </div>
       </div>
     </div>
+  );
+}
+
+// Contador +/- reutilizado para CNPJ e CPF no configurador modular.
+function CounterRow({ label, hint, value, min, onChange }: { label: string; hint: string; value: number; min: number; onChange: (n: number) => void }) {
+  return (
+    <div style={{ background: N3, border: `1px solid ${N4}`, borderRadius: 8, padding: "12px 14px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+      <div>
+        <div style={{ fontSize: 12.5, fontWeight: 600, color: CR }}>{label}</div>
+        <div style={{ fontSize: 10.5, color: MU, marginTop: 2 }}>{hint}</div>
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+        <button type="button" onClick={() => onChange(value - 1)} disabled={value <= min}
+          style={{ width: 26, height: 26, borderRadius: 6, border: `1px solid ${N4}`, background: N2, color: value <= min ? N4 : CR, display: "flex", alignItems: "center", justifyContent: "center", cursor: value <= min ? "not-allowed" : "pointer" }}>
+          <Minus size={13} />
+        </button>
+        <span style={{ minWidth: 16, textAlign: "center", fontSize: 14, fontWeight: 700, color: CR, fontVariantNumeric: "tabular-nums" }}>{value}</span>
+        <button type="button" onClick={() => onChange(value + 1)}
+          style={{ width: 26, height: 26, borderRadius: 6, border: `1px solid ${GO}`, background: N2, color: GO, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+          <Plus size={13} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// Switch visual para o upsell de Consultoria (estado controlado pelo pai via clique no card inteiro).
+function Switch({ on }: { on: boolean }) {
+  return (
+    <span style={{
+      flexShrink: 0, width: 34, height: 19, borderRadius: 10, background: on ? GO : N4,
+      position: "relative", transition: "background 0.15s", marginTop: 1,
+    }}>
+      <span style={{
+        position: "absolute", top: 2, left: on ? 17 : 2, width: 15, height: 15, borderRadius: "50%",
+        background: N, transition: "left 0.15s",
+      }} />
+    </span>
   );
 }

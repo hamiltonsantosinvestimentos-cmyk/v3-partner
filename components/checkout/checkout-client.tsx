@@ -281,7 +281,7 @@ export function CheckoutClient({ token }: { token: string }) {
 
       <div style={{ color: MU, fontSize: 10, marginTop: 24, textAlign: "center" }}>
         V3 Partners Soluções Ltda · CNPJ 14.219.287/0001-50<br />
-        <a href="mailto:operacoes@v3partners.com.br" style={{ color: MU }}>operacoes@v3partners.com.br</a>
+        <a href="mailto:financeiro@v3partners.com.br" style={{ color: MU }}>financeiro@v3partners.com.br</a>
       </div>
     </div>
   );

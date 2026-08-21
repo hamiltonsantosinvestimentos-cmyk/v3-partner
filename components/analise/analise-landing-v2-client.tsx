@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { Compass, Landmark, Handshake, ArrowRight, Check } from "lucide-react";
+import { Compass, Landmark, Handshake, ArrowRight, Check, Minus, Plus } from "lucide-react";
 import { captureRefFromUrl, captureUtmFromUrl } from "@/lib/ref-tracking";
+import { UNIT_PRICE_CENTS, MIN_CNPJ_COUNT, MIN_CPF_COUNT, clampSelection, calcTotalCents, fmtBRL, type ModularSelection } from "@/lib/credit-analysis-pricing";
 
 const N = "#09081A", N2 = "#13223A", N3 = "#162744", N4 = "#243A66";
 const GO = "#C9A84C", GL = "#E8C97A", CR = "#F5F1E8", MU = "#9BAFC5";
@@ -60,8 +61,16 @@ const FAQ = [
     a: "Não. A V3 Partners não empresta dinheiro. Somos uma boutique de estruturação financeira: organizamos o perfil da sua empresa e fazemos a ponte até os fundos, FIDCs e securitizadoras cuja tese é aderente ao seu caso.",
   },
   {
+    q: "Quantos CNPJs ou CPFs eu devo incluir?",
+    a: "Inclua um CNPJ para cada empresa do seu grupo econômico que vai compor a operação, e um CPF para cada sócio ou garantidor que também precisa ser analisado. Na dúvida, comece com 1 CNPJ: nossa mesa orienta se for necessário ampliar depois.",
+  },
+  {
     q: "Em quanto tempo eu recebo o resultado?",
     a: "O relatório é processado assim que seus dados são confirmados. Se você escolher a consultoria, a conversa com nosso especialista é agendada conforme a disponibilidade da mesa.",
+  },
+  {
+    q: "O que está incluído na Consultoria Estratégica?",
+    a: "Uma reunião online de 45 minutos com a mesa de crédito da V3, com a devolutiva completa dos relatórios gerados e um plano de ação prático para os próximos passos da captação.",
   },
   {
     q: "Contratando a análise, meu crédito é aprovado?",
@@ -79,6 +88,7 @@ function Eyebrow({ children }: { children: React.ReactNode }) {
 
 export function AnaliseLandingV2Client() {
   const [ref, setRef] = useState<string | null>(null);
+  const [selection, setSelection] = useState<ModularSelection>({ cnpjCount: MIN_CNPJ_COUNT, cpfCount: MIN_CPF_COUNT, hasConsultancy: false });
 
   useEffect(() => {
     captureRefFromUrl();
@@ -87,7 +97,28 @@ export function AnaliseLandingV2Client() {
     setRef(params.get("ref"));
   }, []);
 
-  const checkoutHref = (plano: string) => `/analise/checkout?plano=${plano}${ref ? `&ref=${ref}` : ""}`;
+  const totalCents = useMemo(() => calcTotalCents(selection), [selection]);
+  const totalAnalyses = selection.cnpjCount + selection.cpfCount;
+
+  function setCnpjCount(n: number) {
+    setSelection((p) => clampSelection({ ...p, cnpjCount: n }));
+  }
+  function setCpfCount(n: number) {
+    setSelection((p) => clampSelection({ ...p, cpfCount: n }));
+  }
+  function toggleConsultancy() {
+    setSelection((p) => ({ ...p, hasConsultancy: !p.hasConsultancy }));
+  }
+
+  const configuratorCheckoutHref = () => {
+    const params = new URLSearchParams({
+      cnpj: String(selection.cnpjCount),
+      cpf: String(selection.cpfCount),
+      consultoria: selection.hasConsultancy ? "1" : "0",
+    });
+    if (ref) params.set("ref", ref);
+    return `/analise/checkout?${params.toString()}`;
+  };
 
   return (
     <div style={{ background: N, fontFamily: "'DM Sans', sans-serif", color: CR }}>
@@ -108,10 +139,10 @@ export function AnaliseLandingV2Client() {
           <p style={{ fontSize: 15, lineHeight: 1.7, color: MU, maxWidth: 600, margin: "0 auto 32px" }}>
             Muitos empresários têm o crédito negado no banco tradicional não porque a empresa é ruim, mas porque bateram na porta errada e apresentaram a operação numa linguagem que aquele banco não usa. A V3 organiza o perfil do seu CNPJ e mostra qual fundo tem mais chance de dizer sim.
           </p>
-          <Link href={checkoutHref("credit_analysis")}
+          <a href="#configurador"
             style={{ display: "inline-flex", alignItems: "center", gap: 8, background: GO, color: N, fontWeight: 700, fontSize: 14, padding: "14px 28px", borderRadius: 8, textDecoration: "none" }}>
-            Descobrir o Perfil do Meu CNPJ Agora <ArrowRight size={16} />
-          </Link>
+            Montar Meu Diagnóstico a partir de R$ 197 <ArrowRight size={16} />
+          </a>
         </div>
 
         {/* Video explicativo da Analise de Credito.
@@ -174,50 +205,60 @@ export function AnaliseLandingV2Client() {
         </div>
       </section>
 
-      {/* 4. PREÇOS */}
-      <section style={{ padding: "48px 20px", background: N2, borderTop: `1px solid ${N4}`, borderBottom: `1px solid ${N4}` }}>
-        <div style={{ maxWidth: 860, margin: "0 auto" }}>
-          <Eyebrow>Planos</Eyebrow>
-          <h2 style={{ fontSize: "clamp(22px, 4vw, 30px)", fontWeight: 800, textAlign: "center", marginBottom: 40, lineHeight: 1.3 }}>
-            Escolha o nível de profundidade do seu diagnóstico
+      {/* 4. CONFIGURADOR DE DIAGNÓSTICO MODULAR */}
+      <section id="configurador" style={{ padding: "48px 20px", background: N2, borderTop: `1px solid ${N4}`, borderBottom: `1px solid ${N4}`, scrollMarginTop: 76 }}>
+        <div style={{ maxWidth: 640, margin: "0 auto" }}>
+          <Eyebrow>Diagnóstico sob Medida</Eyebrow>
+          <h2 style={{ fontSize: "clamp(22px, 4vw, 30px)", fontWeight: 800, textAlign: "center", marginBottom: 14, lineHeight: 1.3 }}>
+            Pague só pelo que a sua operação precisa analisar
           </h2>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 24 }}>
-            {/* Plano 1 */}
-            <div style={{ background: N3, border: `1px solid ${N4}`, borderRadius: 12, padding: 28, display: "flex", flexDirection: "column" }}>
-              <div style={{ fontSize: 15, fontWeight: 700, color: CR, marginBottom: 4 }}>Relatório de Análise de Crédito</div>
-              <div style={{ fontSize: 28, fontWeight: 800, color: GO, margin: "12px 0 20px" }}>R$ 497,00</div>
-              <ul style={{ listStyle: "none", padding: 0, margin: "0 0 24px", display: "flex", flexDirection: "column", gap: 10, flex: 1 }}>
-                {["Raio-X completo do CNPJ e CPF dos sócios", "Mapeamento de restrições e notas de risco (rating)", "Relatório visual entregue em PDF"].map((item) => (
-                  <li key={item} style={{ display: "flex", gap: 8, fontSize: 12.5, color: MU, lineHeight: 1.5 }}>
-                    <Check size={15} color={GO} style={{ flexShrink: 0, marginTop: 1 }} /> {item}
-                  </li>
-                ))}
-              </ul>
-              <Link href={checkoutHref("credit_analysis")}
-                style={{ textAlign: "center", background: N4, color: CR, fontWeight: 700, fontSize: 13, padding: "12px 0", borderRadius: 8, textDecoration: "none" }}>
-                Comprar Somente a Análise
-              </Link>
+          <p style={{ fontSize: 13.5, color: MU, lineHeight: 1.7, textAlign: "center", maxWidth: 520, margin: "0 auto 36px" }}>
+            Cada análise completa, de uma empresa (CNPJ) ou de um sócio/garantidor (CPF), custa R$ 197,00.
+            Grupo com mais de uma empresa? Sócio que também entra como garantia da operação? Inclua quantos precisar.
+          </p>
+
+          <div style={{ background: N3, border: `1px solid ${N4}`, borderRadius: 12, padding: 28 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 20 }}>
+              <ConfigCounter label="Empresas do grupo (CNPJ)" hint="Uma análise completa por empresa" value={selection.cnpjCount} min={MIN_CNPJ_COUNT} onChange={setCnpjCount} />
+              <ConfigCounter label="Sócios ou garantidores (CPF)" hint="Inclua quem também compõe a operação" value={selection.cpfCount} min={MIN_CPF_COUNT} onChange={setCpfCount} />
             </div>
 
-            {/* Plano 2: recomendado */}
-            <div style={{ ...cardBg("/analise-v2/consultoria.jpg"), border: `1px solid ${GO}`, borderRadius: 12, padding: 28, display: "flex", flexDirection: "column", position: "relative" }}>
-              <div style={{ position: "absolute", top: -12, left: 28, background: GO, color: N, fontSize: 9.5, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", padding: "4px 10px", borderRadius: 4 }}>
-                Recomendado
+            <ul style={{ listStyle: "none", padding: 0, margin: "0 0 20px", display: "flex", flexDirection: "column", gap: 8 }}>
+              {["Raio-X completo de cada CNPJ ou CPF incluído", "Mapeamento de restrições e notas de risco (rating)", "Relatório visual entregue em PDF"].map((item) => (
+                <li key={item} style={{ display: "flex", gap: 8, fontSize: 12.5, color: MU, lineHeight: 1.5 }}>
+                  <Check size={15} color={GO} style={{ flexShrink: 0, marginTop: 1 }} /> {item}
+                </li>
+              ))}
+            </ul>
+
+            <button
+              type="button"
+              onClick={toggleConsultancy}
+              style={{
+                width: "100%", textAlign: "left", background: selection.hasConsultancy ? "rgba(201,168,76,0.08)" : N2,
+                border: `1px solid ${selection.hasConsultancy ? GO : N4}`, borderRadius: 10, padding: 16, cursor: "pointer",
+                display: "flex", gap: 12, alignItems: "flex-start", marginBottom: 20,
+              }}
+            >
+              <ConfigSwitch on={selection.hasConsultancy} />
+              <span style={{ fontSize: 12.5, color: MU, lineHeight: 1.6 }}>
+                <strong style={{ color: CR }}>Quer a devolutiva com um especialista da mesa de crédito?</strong><br />
+                Adicione uma reunião online de 45 minutos: você recebe a leitura completa dos relatórios e o plano de ação prático pra captar, direto com quem estrutura a operação. + {fmtBRL(UNIT_PRICE_CENTS)}
+              </span>
+            </button>
+
+            <div style={{ borderTop: `1px solid ${N4}`, paddingTop: 18, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 18 }}>
+              <div style={{ fontSize: 11.5, color: MU, lineHeight: 1.5 }}>
+                {totalAnalyses} análise{totalAnalyses !== 1 ? "s" : ""} selecionada{totalAnalyses !== 1 ? "s" : ""}<br />
+                Consultoria {selection.hasConsultancy ? "incluída" : "não incluída"}
               </div>
-              <div style={{ fontSize: 15, fontWeight: 700, color: CR, marginBottom: 4, marginTop: 6 }}>Análise + Consultoria Estratégica V3</div>
-              <div style={{ fontSize: 28, fontWeight: 800, color: GO, margin: "12px 0 20px" }}>R$ 997,00</div>
-              <ul style={{ listStyle: "none", padding: 0, margin: "0 0 24px", display: "flex", flexDirection: "column", gap: 10, flex: 1 }}>
-                {["Tudo do Relatório de Análise", "Reunião online de 45 minutos com especialista da V3", "Devolutiva personalizada + plano de ação prático para o CNPJ"].map((item) => (
-                  <li key={item} style={{ display: "flex", gap: 8, fontSize: 12.5, color: MU, lineHeight: 1.5 }}>
-                    <Check size={15} color={GO} style={{ flexShrink: 0, marginTop: 1 }} /> {item}
-                  </li>
-                ))}
-              </ul>
-              <Link href={checkoutHref("credit_analysis_consultoria")}
-                style={{ textAlign: "center", background: GO, color: N, fontWeight: 700, fontSize: 13, padding: "12px 0", borderRadius: 8, textDecoration: "none" }}>
-                Garantir Análise + Consultoria do Time V3
-              </Link>
+              <div style={{ fontSize: 26, fontWeight: 800, color: GO, whiteSpace: "nowrap" }}>{fmtBRL(totalCents)}</div>
             </div>
+
+            <Link href={configuratorCheckoutHref()}
+              style={{ display: "block", textAlign: "center", background: GO, color: N, fontWeight: 700, fontSize: 14, padding: "14px 0", borderRadius: 8, textDecoration: "none" }}>
+              Avançar para Pagamento Seguro
+            </Link>
           </div>
         </div>
       </section>
@@ -244,9 +285,41 @@ export function AnaliseLandingV2Client() {
       <footer style={{ padding: "32px 20px", borderTop: `1px solid ${N4}`, textAlign: "center" }}>
         <div style={{ fontSize: 10.5, color: MU, lineHeight: 1.8 }}>
           V3 Partners Soluções Ltda · CNPJ 14.219.287/0001-50<br />
-          <a href="mailto:operacoes@v3partners.com.br" style={{ color: MU }}>operacoes@v3partners.com.br</a>
+          <a href="mailto:financeiro@v3partners.com.br" style={{ color: MU }}>financeiro@v3partners.com.br</a>
         </div>
       </footer>
     </div>
+  );
+}
+
+// Contador +/- reutilizado para CNPJ e CPF no configurador da Seção 4.
+function ConfigCounter({ label, hint, value, min, onChange }: { label: string; hint: string; value: number; min: number; onChange: (n: number) => void }) {
+  return (
+    <div style={{ background: N2, border: `1px solid ${N4}`, borderRadius: 8, padding: "14px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+      <div>
+        <div style={{ fontSize: 13, fontWeight: 600, color: CR }}>{label}</div>
+        <div style={{ fontSize: 11, color: MU, marginTop: 2 }}>{hint}</div>
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+        <button type="button" onClick={() => onChange(value - 1)} disabled={value <= min}
+          style={{ width: 28, height: 28, borderRadius: 6, border: `1px solid ${N4}`, background: N3, color: value <= min ? N4 : CR, display: "flex", alignItems: "center", justifyContent: "center", cursor: value <= min ? "not-allowed" : "pointer" }}>
+          <Minus size={14} />
+        </button>
+        <span style={{ minWidth: 18, textAlign: "center", fontSize: 15, fontWeight: 700, color: CR, fontVariantNumeric: "tabular-nums" }}>{value}</span>
+        <button type="button" onClick={() => onChange(value + 1)}
+          style={{ width: 28, height: 28, borderRadius: 6, border: `1px solid ${GO}`, background: N3, color: GO, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+          <Plus size={14} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// Switch visual do upsell de Consultoria (estado controlado pelo clique no card inteiro).
+function ConfigSwitch({ on }: { on: boolean }) {
+  return (
+    <span style={{ flexShrink: 0, width: 34, height: 19, borderRadius: 10, background: on ? GO : N4, position: "relative", transition: "background 0.15s", marginTop: 2 }}>
+      <span style={{ position: "absolute", top: 2, left: on ? 17 : 2, width: 15, height: 15, borderRadius: "50%", background: N, transition: "left 0.15s" }} />
+    </span>
   );
 }

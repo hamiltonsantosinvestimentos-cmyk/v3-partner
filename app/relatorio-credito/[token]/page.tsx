@@ -51,7 +51,7 @@ export default async function RelatorioCreditoPage({ params }: PageProps) {
           <h1 className="text-xl font-bold mb-2">Link expirado</h1>
           <p className="text-sm text-[#9BAFC5]">
             Este relatório venceu em {reportData.validUntil}. Entre em contato com{" "}
-            <a href="mailto:operacoes@v3partners.com.br" className="text-[#C9A84C]">operacoes@v3partners.com.br</a>{" "}
+            <a href="mailto:financeiro@v3partners.com.br" className="text-[#C9A84C]">financeiro@v3partners.com.br</a>{" "}
             para solicitar uma nova emissão.
           </p>
         </div>

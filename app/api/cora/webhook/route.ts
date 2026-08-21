@@ -3,6 +3,7 @@ import { createClient as sc } from "@supabase/supabase-js";
 import { coraFetch } from "@/lib/cora";
 import { randomUUID } from "crypto";
 import { getPlanoValor } from "@/lib/plano-valor";
+import { buildModularTitle, LEGACY_DIRECT_TITLES } from "@/lib/credit-analysis-pricing";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -295,7 +296,7 @@ export async function POST(req: NextRequest) {
                 </a>
                 <p style="color:#9BAFC5;font-size:11px;margin-top:24px;line-height:1.6">
                   Nossa mesa entrará em contato em até 24h úteis após o preenchimento.<br>
-                  Dúvidas: <a href="mailto:operacoes@v3partners.com.br" style="color:#C9A84C">operacoes@v3partners.com.br</a>
+                  Dúvidas: <a href="mailto:financeiro@v3partners.com.br" style="color:#C9A84C">financeiro@v3partners.com.br</a>
                 </p>
               </div>
             `,
@@ -323,7 +324,7 @@ export async function POST(req: NextRequest) {
     // trigger automático, decisão registrada na sessão que criou esta feature).
     const { data: directOrder } = await db
       .from("partner_service_orders")
-      .select("id, ref_partner_id, client_name, client_email, client_doc, service_type, amount_cents")
+      .select("id, ref_partner_id, client_name, client_email, client_doc, service_type, amount_cents, cnpj_count, cpf_count, has_consultancy")
       .eq("cora_invoice_id", invoiceId)
       .eq("status", "PENDING")
       .eq("source", "direct")
@@ -331,11 +332,16 @@ export async function POST(req: NextRequest) {
 
     if (directOrder) {
       const intakeToken = randomUUID().replace(/-/g, "") + randomUUID().replace(/-/g, "").slice(0, 8);
-      const DIRECT_TITLES: Record<string, string> = {
-        credit_analysis: "Análise de Crédito Empresarial",
-        credit_analysis_consultoria: "Análise de Crédito Empresarial + Consultoria Estratégica V3",
-      };
-      const title = DIRECT_TITLES[directOrder.service_type ?? ""] ?? "Análise de Crédito Empresarial";
+      // cnpj_count só é NULL em pedido criado antes da migration de preço
+      // modular (20/08/2026) — nesse caso cai no dicionário legado de pacote
+      // fixo. Pedido novo sempre tem cnpj_count preenchido pela API de checkout.
+      const title = directOrder.cnpj_count != null
+        ? buildModularTitle({
+            cnpjCount: directOrder.cnpj_count,
+            cpfCount: directOrder.cpf_count ?? 0,
+            hasConsultancy: Boolean(directOrder.has_consultancy),
+          })
+        : LEGACY_DIRECT_TITLES[directOrder.service_type ?? ""] ?? "Análise de Crédito Empresarial";
 
       await db.from("partner_service_orders").update({
         status: "PAID",
@@ -379,7 +385,7 @@ export async function POST(req: NextRequest) {
                 </a>
                 <p style="color:#9BAFC5;font-size:11px;margin-top:24px;line-height:1.6">
                   Nossa mesa entrará em contato em até 24h úteis após o preenchimento.<br>
-                  Dúvidas: <a href="mailto:operacoes@v3partners.com.br" style="color:#C9A84C">operacoes@v3partners.com.br</a>
+                  Dúvidas: <a href="mailto:financeiro@v3partners.com.br" style="color:#C9A84C">financeiro@v3partners.com.br</a>
                 </p>
               </div>
             `,

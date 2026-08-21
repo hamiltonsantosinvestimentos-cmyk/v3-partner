@@ -213,7 +213,7 @@ export function AnaliseLandingClient() {
       <footer style={{ padding: "32px 20px", borderTop: `1px solid ${N4}`, textAlign: "center" }}>
         <div style={{ fontSize: 10.5, color: MU, lineHeight: 1.8 }}>
           V3 Partners Soluções Ltda · CNPJ 14.219.287/0001-50<br />
-          <a href="mailto:operacoes@v3partners.com.br" style={{ color: MU }}>operacoes@v3partners.com.br</a>
+          <a href="mailto:financeiro@v3partners.com.br" style={{ color: MU }}>financeiro@v3partners.com.br</a>
         </div>
       </footer>
     </div>

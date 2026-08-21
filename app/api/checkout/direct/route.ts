@@ -2,33 +2,37 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { coraFetch } from "@/lib/cora";
 import { randomUUID } from "crypto";
+import { clampSelection, calcTotalCents, buildModularTitle, MIN_CNPJ_COUNT, MIN_CPF_COUNT } from "@/lib/credit-analysis-pricing";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 }
 
-const DIRECT_PRODUCTS = {
-  credit_analysis: { title: "Análise de Crédito Empresarial", price_cents: 49700 },
-  credit_analysis_consultoria: { title: "Análise de Crédito Empresarial + Consultoria Estratégica V3", price_cents: 99700 },
-} as const;
-
-type DirectProductType = keyof typeof DIRECT_PRODUCTS;
-
-// POST — venda direta na landing page /analise, sem link de partner.
+// POST — venda direta na landing page /analise-v2, sem link de partner.
+// Preço modular: R$197 por CNPJ + R$197 por CPF + R$197 opcional de
+// Consultoria (ver lib/credit-analysis-pricing.ts). Substituiu os 2
+// pacotes fixos (R$497/R$997) em 20/08/2026.
 // ref_partner_id é só atribuição opcional (?ref= na URL), nunca o "dono" do pedido.
 export async function POST(req: NextRequest) {
   const db = svc();
 
   const body = await req.json() as {
-    service_type?: string;
+    cnpj_count?: number;
+    cpf_count?: number;
+    has_consultancy?: boolean;
     client_name?: string;
     client_email?: string;
     client_doc?: string;
     ref_partner_id?: string | null;
   };
 
-  const product = DIRECT_PRODUCTS[body.service_type as DirectProductType];
-  if (!product) return NextResponse.json({ error: "Produto inválido" }, { status: 400 });
+  const selection = clampSelection({
+    cnpjCount: Number(body.cnpj_count ?? MIN_CNPJ_COUNT),
+    cpfCount: Number(body.cpf_count ?? MIN_CPF_COUNT),
+    hasConsultancy: Boolean(body.has_consultancy),
+  });
+  const priceCents = calcTotalCents(selection);
+  const title = buildModularTitle(selection);
 
   if (!body.client_name?.trim()) return NextResponse.json({ error: "Nome obrigatório" }, { status: 400 });
   if (!body.client_email?.trim()) return NextResponse.json({ error: "Email obrigatório" }, { status: 400 });
@@ -64,10 +68,10 @@ export async function POST(req: NextRequest) {
           document: { identity: docDigits, type: docType },
           contacts: [{ contact: body.client_email.trim(), type: "EMAIL" }],
         },
-        payment_terms: { due_date: dueDateStr, amount: product.price_cents },
+        payment_terms: { due_date: dueDateStr, amount: priceCents },
         payment_options: { interest: { type: "MONTHLY_PERCENTAGE", value: 1 }, fine: { type: "PERCENTAGE", value: 2 } },
         payment_forms: ["BANK_SLIP", "PIX"],
-        services: [{ name: product.title, amount: product.price_cents }],
+        services: [{ name: title, amount: priceCents }],
         notifications: { formats: ["EMAIL"], by_email: { should_notify: true } },
       }),
       idempotencyKey: randomUUID(),
@@ -91,13 +95,16 @@ export async function POST(req: NextRequest) {
       link_id: null,
       partner_id: null,
       source: "direct",
-      service_type: body.service_type,
+      service_type: "credit_analysis",
+      cnpj_count: selection.cnpjCount,
+      cpf_count: selection.cpfCount,
+      has_consultancy: selection.hasConsultancy,
       ref_partner_id: refPartnerId,
       client_name: body.client_name.trim(),
       client_email: body.client_email.trim(),
       client_doc: docDigits,
       cora_invoice_id: coraData.id ?? null,
-      amount_cents: product.price_cents,
+      amount_cents: priceCents,
       status: "PENDING",
       pix_emv: coraData.pix?.emv ?? null,
       pix_qr_code: coraData.pix?.qr_code ?? null,
@@ -112,11 +119,13 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({
     order_id: order.id,
     status: order.status,
-    price_cents: product.price_cents,
+    price_cents: priceCents,
     pix_emv: order.pix_emv,
     pix_qr_code: order.pix_qr_code,
     boleto_barcode: order.boleto_barcode,
     boleto_pdf: order.boleto_pdf,
-    service_type: body.service_type,
+    cnpj_count: selection.cnpjCount,
+    cpf_count: selection.cpfCount,
+    has_consultancy: selection.hasConsultancy,
   });
 }

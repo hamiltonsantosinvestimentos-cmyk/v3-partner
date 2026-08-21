@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
+import { buildModularTitle, LEGACY_DIRECT_TITLES } from "@/lib/credit-analysis-pricing";
 
 function serviceClient() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -29,7 +30,7 @@ export async function GET(req: NextRequest) {
       id, partner_id, client_name, client_email, client_doc, amount_cents, status,
       paid_at, intake_token, intake_submitted_at, credit_desk_proposal_id,
       report_public_token, report_delivered_at, created_at,
-      service_type, source, ref_partner_id,
+      service_type, source, ref_partner_id, cnpj_count, cpf_count, has_consultancy,
       partner_service_links(title, service_type),
       credit_desk_proposals(id, credit_profile_id, status),
       partner:profiles!partner_id(full_name),
@@ -64,11 +65,6 @@ export async function GET(req: NextRequest) {
     consentsByToken = Object.fromEntries((consents ?? []).map((c) => [c.intake_token, c]));
   }
 
-  const DIRECT_TITLES: Record<string, string> = {
-    credit_analysis: "Análise de Crédito Empresarial",
-    credit_analysis_consultoria: "Análise de Crédito Empresarial + Consultoria Estratégica V3",
-  };
-
   const result = filtered.map((o) => {
     const row = o as unknown as {
       id: string; partner_id: string | null; client_name: string; client_email: string; client_doc: string;
@@ -76,12 +72,18 @@ export async function GET(req: NextRequest) {
       intake_submitted_at: string | null; credit_desk_proposal_id: string | null;
       report_public_token: string | null; report_delivered_at: string | null; created_at: string;
       service_type: string | null; source: string; ref_partner_id: string | null;
+      cnpj_count: number | null; cpf_count: number | null; has_consultancy: boolean | null;
       partner_service_links: { title?: string } | null;
       credit_desk_proposals: { id: string; credit_profile_id: string | null; status: string } | null;
       partner: { full_name?: string } | null;
       ref_partner: { full_name?: string } | null;
     };
     const consent = row.intake_token ? consentsByToken[row.intake_token] : null;
+    // cnpj_count NULL = pedido de link de partner (usa o título do próprio
+    // link) ou pedido direct legado (pacote fixo pré-20/08/2026).
+    const directTitle = row.cnpj_count != null
+      ? buildModularTitle({ cnpjCount: row.cnpj_count, cpfCount: row.cpf_count ?? 0, hasConsultancy: Boolean(row.has_consultancy) })
+      : LEGACY_DIRECT_TITLES[row.service_type ?? ""] ?? "Análise de Crédito Empresarial";
     return {
       id: row.id,
       client_name: row.client_name,
@@ -90,7 +92,7 @@ export async function GET(req: NextRequest) {
       partner_name: row.partner?.full_name ?? null,
       source: row.source,
       ref_partner_name: row.ref_partner?.full_name ?? null,
-      service_title: row.partner_service_links?.title ?? DIRECT_TITLES[row.service_type ?? ""] ?? "Análise de Crédito Empresarial",
+      service_title: row.partner_service_links?.title ?? directTitle,
       amount_cents: row.amount_cents,
       status: row.status,
       paid_at: row.paid_at,
