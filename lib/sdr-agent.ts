@@ -8,6 +8,7 @@ import { createClient } from "@supabase/supabase-js";
 import { notifyAgendamentoSDR } from "@/lib/email";
 import { syncSdrLeadToProspeccao } from "@/lib/sdr-prospeccao-sync";
 import { formatQuickReplyBlock, type QuickReplyOption } from "@/lib/whatsapp/quick-reply";
+import { listAvailableSlots, withTracking, type CalendlySlot } from "@/lib/calendly";
 
 export type SdrCanal = "whatsapp" | "instagram";
 
@@ -33,14 +34,18 @@ type AgendamentoDetect = {
   data_hora: string | null;
   nome_lead: string | null;
   sinal_funil: SinalFunil;
+  /** Label exata (igual às oferecidas) do horário que o lead confirmou nesta troca, ou null. */
+  horario_confirmado: string | null;
 };
 
-const SINAL_VAZIO: AgendamentoDetect = { agendado: false, data_hora: null, nome_lead: null, sinal_funil: "nenhum" };
+const SINAL_VAZIO: AgendamentoDetect = { agendado: false, data_hora: null, nome_lead: null, sinal_funil: "nenhum", horario_confirmado: null };
 
-async function detectarAgendamento(userMsg: string, botMsg: string): Promise<AgendamentoDetect> {
+async function detectarAgendamento(userMsg: string, botMsg: string, slotsOferecidos: CalendlySlot[]): Promise<AgendamentoDetect> {
   try {
     const { default: Anthropic } = await import("@anthropic-ai/sdk");
     const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
+
+    const listaSlots = slotsOferecidos.map((s) => `"${s.labelPtBR}"`).join(", ");
 
     const result = await anthropic.messages.create({
       model: "claude-haiku-4-5-20251001",
@@ -51,6 +56,8 @@ async function detectarAgendamento(userMsg: string, botMsg: string): Promise<Age
 
 Um agendamento é confirmado quando o usuário aceita ou sugere data/hora E o agente confirma.
 
+Horários que o agente tinha disponível pra oferecer nesta conversa: [${listaSlots || "nenhum"}].
+
 sinal_funil (escolha o que MAIS se aplica, seja conservador — só marque se houver confirmação clara e explícita, não apenas educação/interesse superficial):
 - "qualificado": o lead demonstrou claramente que o perfil se encaixa (quer ser partner, tem carteira de clientes, quer estruturar operação) — mais que curiosidade
 - "convertido": o lead confirmou EXPLICITAMENTE que vai fechar/assinar/virar partner (ex: "pode me mandar o contrato", "vou assinar", "quero começar")
@@ -58,7 +65,7 @@ sinal_funil (escolha o que MAIS se aplica, seja conservador — só marque se ho
 - "nenhum": nada disso ficou claro nesta troca — é o padrão na dúvida
 
 Retorne APENAS JSON sem markdown:
-{"agendado":true ou false,"data_hora":"data e hora extraída em português ex: 05/06 às 15h ou null","nome_lead":"nome mencionado pelo usuário ou null","sinal_funil":"qualificado"|"convertido"|"sem_interesse"|"nenhum"}
+{"agendado":true ou false,"data_hora":"data e hora extraída em português ex: 05/06 às 15h ou null","nome_lead":"nome mencionado pelo usuário ou null","sinal_funil":"qualificado"|"convertido"|"sem_interesse"|"nenhum","horario_confirmado":"copie EXATAMENTE uma das labels da lista de horários acima se o lead confirmou esse horário nesta troca, senão null"}
 
 Usuário: "${userMsg.slice(0, 300)}"
 Agente: "${botMsg.slice(0, 300)}"
@@ -225,7 +232,7 @@ Você representa uma empresa séria e de alto padrão. Seu tom é profissional, 
 - Nunca use bullet points, markdown ou asteriscos
 - Nunca use emojis excessivos ou linguagem de chatbot
 - Nunca invente taxas, retornos ou produtos específicos — diga que os detalhes serão apresentados na reunião
-- Se o lead confirmar reunião, diga que um dos sócios vai entrar em contato para confirmar o link do Meet
+- Se o lead confirmar um horário de reunião, apenas confirme a data e hora escolhidas — o sistema já anexa o link de confirmação automaticamente
 - Lembre-se do histórico da conversa para não repetir perguntas já feitas`;
 
 // Interruptor por canal: quando desligado para um canal, nenhum webhook
@@ -246,6 +253,15 @@ export async function isIaAtiva(canal: SdrCanal): Promise<boolean> {
   } catch {
     return true;
   }
+}
+
+// Bloco de horários reais anexado ao system prompt — a IA só pode oferecer
+// os horários desta lista, nunca inventar data/hora. Vazio quando a consulta
+// ao Calendly falhou ou não há vaga nos próximos dias.
+function buildBlocoHorarios(slots: CalendlySlot[]): string {
+  if (slots.length === 0) return "";
+  const lista = slots.slice(0, 8).map((s) => `- ${s.labelPtBR}`).join("\n");
+  return `\n\n**Horários reais disponíveis pra agendar (horário de Brasília) — só ofereça agendamento se o lead já estiver qualificado, e use exatamente um destes horários, nunca invente outro:**\n${lista}\n\nQuando o lead confirmar um desses horários, repita a data e hora exatas na sua resposta pra confirmar — o sistema vai anexar automaticamente o link de confirmação.`;
 }
 
 export async function buildSystemPrompt(): Promise<string> {
@@ -328,7 +344,17 @@ export async function processarMensagemSDRCore(params: {
     const { default: Anthropic } = await import("@anthropic-ai/sdk");
     const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
 
-    const systemPrompt = await buildSystemPrompt();
+    // Horários reais do Calendly — nunca deixa a IA inventar data/hora. Se a
+    // consulta falhar (token não configurado, API fora), segue sem oferecer
+    // agendamento nesta resposta em vez de travar o agente inteiro.
+    let slotsDisponiveis: CalendlySlot[] = [];
+    try {
+      slotsDisponiveis = await listAvailableSlots();
+    } catch (e) {
+      console.error("[SDR Agent] Erro ao consultar disponibilidade no Calendly:", e);
+    }
+
+    const systemPrompt = await buildSystemPrompt() + buildBlocoHorarios(slotsDisponiveis);
 
     const response = await anthropic.messages.create({
       model: "claude-sonnet-4-6",
@@ -344,7 +370,7 @@ export async function processarMensagemSDRCore(params: {
     // Detecta agendamento e progressão de funil ANTES de enviar — precisa do
     // resultado agora (não só fire-and-forget) pra decidir se oferece opções
     // de resposta rápida nesta mesma resposta.
-    const detect = await detectarAgendamento(mensagem, resposta);
+    const detect = await detectarAgendamento(mensagem, resposta, slotsDisponiveis);
 
     let respostaFinal = resposta;
     let quickReplyOptions: QuickReplyOption[] | null = null;
@@ -364,6 +390,43 @@ export async function processarMensagemSDRCore(params: {
       if (!jaOfereceu) {
         quickReplyOptions = OFERTA_QUALIFICADO;
         respostaFinal = `${resposta}\n\n${formatQuickReplyBlock(quickReplyOptions)}`;
+      }
+    }
+
+    // Horário confirmado nesta troca — anexa o link de agendamento real
+    // (rastreável, pra sabermos depois via webhook do Calendly que foi ESTE
+    // lead que agendou). Só cria se ainda não há um agendamento ativo pra
+    // este contato, pra não empilhar links a cada nova troca sobre o mesmo horário.
+    if (detect.horario_confirmado) {
+      const slotEscolhido = slotsDisponiveis.find((s) => s.labelPtBR === detect.horario_confirmado);
+      if (slotEscolhido) {
+        const { data: agendamentoExistente } = await supabase
+          .from("sdr_agendamentos")
+          .select("id")
+          .eq("phone", phone)
+          .eq("canal", canal)
+          .in("status", ["link_enviado", "confirmado"])
+          .limit(1)
+          .maybeSingle();
+
+        if (!agendamentoExistente) {
+          const trackingId = crypto.randomUUID();
+          const linkComTracking = withTracking(slotEscolhido.schedulingUrl, trackingId);
+
+          const { error: agendamentoErr } = await supabase.from("sdr_agendamentos").insert({
+            id: trackingId,
+            phone,
+            canal,
+            slot_start_time: slotEscolhido.startTimeISO,
+            scheduling_url: linkComTracking,
+          });
+
+          if (!agendamentoErr) {
+            respostaFinal = `${respostaFinal}\n\nPra confirmar, é só clicar aqui: ${linkComTracking}`;
+          } else {
+            console.error("[SDR Agent] Erro ao registrar agendamento:", agendamentoErr);
+          }
+        }
       }
     }
 
