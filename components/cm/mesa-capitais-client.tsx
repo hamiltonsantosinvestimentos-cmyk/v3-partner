@@ -231,7 +231,7 @@ function buildConsolidatedSummary(docs: any[]): { label: string; values: { value
   return Array.from(map.entries()).map(([label, values]) => ({ label, values }));
 }
 
-export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string }) {
+export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = false }: { userRole?: string; hasComplianceAccess?: boolean }) {
   const [listings, setListings] = useState<Listing[]>([]);
   const [matches, setMatches] = useState<Match[]>([]);
   const [bids, setBids] = useState<Bid[]>([]);
@@ -255,7 +255,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
   const [uploadingGallery, setUploadingGallery] = useState(false);
   const [generatingNarrative, setGeneratingNarrative] = useState(false);
   const [selectedListing, setSelectedListing] = useState<Listing | null>(null);
-  const [activeDetailTab, setActiveDetailTab] = useState<"geral" | "documentos" | "orderbook" | "governanca" | "notas" | "forja">("geral");
+  const [activeDetailTab, setActiveDetailTab] = useState<"geral" | "documentos" | "orderbook" | "governanca" | "notas" | "forja" | "compliance">("geral");
   const [listingDocs, setListingDocs] = useState<any[]>([]);
   const [docsLoading, setDocsLoading] = useState(false);
   const [intakeUrl, setIntakeUrl] = useState<string | null>(null);
@@ -2316,6 +2316,10 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
                 { id: "governanca" as const, label: "Governança" },
                 { id: "notas" as const, label: "Notas" },
                 { id: "forja" as const, label: "Forja Jurídico" },
+                // Cockpit de Due Diligence e Compliance (22/08/2026): restrito a 5 pessoas
+                // nomeadas (gate real no servidor, ver app/(platform)/bolsa/mesa/page.tsx +
+                // lib/cm/compliance-access.ts). Nunca mostrar para quem nao tem o grant.
+                ...(hasComplianceAccess ? [{ id: "compliance" as const, label: "Due Diligence & Compliance" }] : []),
               ]).map((tab) => (
                 <button
                   key={tab.id}
@@ -2701,10 +2705,16 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
                 <Bot size={16} /> Assistente do Ativo (IA)
               </button>
               <button
-                onClick={() => { setDueDiligenceListing({ id: selectedListing.id, anonymous_id: selectedListing.anonymous_id, seller_cpf_cnpj: selectedListing.seller_cpf_cnpj ?? null }); }}
+                onClick={() => {
+                  // Absorvido pelo Cockpit de Compliance (22/08/2026, decisão de João): quem tem
+                  // o grant nominal vai direto para a aba consolidada; quem não tem, mantém o
+                  // modal simples de sempre (busca Escavador + link gov.br), sem mudança nenhuma.
+                  if (hasComplianceAccess) { setActiveDetailTab("compliance"); return; }
+                  setDueDiligenceListing({ id: selectedListing.id, anonymous_id: selectedListing.anonymous_id, seller_cpf_cnpj: selectedListing.seller_cpf_cnpj ?? null });
+                }}
                 className="w-full flex items-center gap-3 px-4 py-3 bg-[#C9A84C]/10 border border-[#C9A84C]/20 rounded-lg text-[#C9A84C] text-xs font-bold hover:bg-[#C9A84C]/20 transition"
               >
-                <Shield size={16} /> Due Diligence
+                <Shield size={16} /> {hasComplianceAccess ? "Due Diligence & Compliance" : "Due Diligence"}
               </button>
               <button
                 onClick={() => { setIndicateListing({ id: selectedListing.id, anonymous_id: selectedListing.anonymous_id }); }}
@@ -3243,6 +3253,100 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
                   setSelectedListing((prev) => prev ? { ...prev, internal_thesis: thesis, internal_thesis_generated_at: generatedAt } : prev);
                 }}
               />
+            )}
+
+            {/* ══ ABA: DUE DILIGENCE & COMPLIANCE (Cockpit, Fase 0-1, 22/08/2026) ══ */}
+            {/* Restrito a 5 pessoas nomeadas (gate real no servidor). Reaproveita: Coluna 1 =
+                DueDiligencePanel embutido (Escavador + gov.br, ja existente); Coluna 2 = mesmo
+                checklist de CM_DOCUMENT_CHECKLISTS + listingDocs ja usado na aba Visao Geral,
+                nao uma tabela nova; Coluna 3 = placeholder ate a Fase 4 (sintese IA + PDF). */}
+            {activeDetailTab === "compliance" && (
+              <div className="p-4 space-y-4">
+                {/* Timeline de 5 estágios (esqueleto visual da Fase 0, sem cálculo de estágio real) */}
+                <div className="flex items-center bg-[#12112A] border border-[#9BAFC5]/10 rounded-lg px-3 py-2.5 overflow-x-auto">
+                  {["Intake & Triagem", "Varredura de APIs", "Cruzamento IA", "Validação Humana", "Dossiê & Closing"].map((label, i, arr) => (
+                    <div key={label} className="flex items-center flex-shrink-0">
+                      <div className="flex flex-col items-center gap-1 px-2">
+                        <div className="w-5 h-5 rounded-full border border-[#9BAFC5]/30 flex items-center justify-center text-[9px] text-[#9BAFC5] font-bold">{i + 1}</div>
+                        <div className="text-[8px] text-[#9BAFC5] uppercase tracking-wide whitespace-nowrap">{label}</div>
+                      </div>
+                      {i < arr.length - 1 && <div className="w-6 h-px bg-[#9BAFC5]/20 mx-1" />}
+                    </div>
+                  ))}
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+                  {/* Coluna 1: Partes & Compliance */}
+                  <div className="bg-[#12112A] border border-[#9BAFC5]/10 rounded-lg overflow-hidden flex flex-col">
+                    <div className="px-3 py-2 border-b border-[#9BAFC5]/10 bg-[#162744]">
+                      <div className="text-[10px] text-[#C9A84C] font-bold uppercase tracking-wider">Partes &amp; Compliance</div>
+                    </div>
+                    <div className="p-3 flex-1">
+                      <DueDiligencePanel
+                        listingId={selectedListing.id}
+                        anonymousId={selectedListing.anonymous_id}
+                        sellerCpfCnpj={selectedListing.seller_cpf_cnpj ?? null}
+                        onClose={() => {}}
+                        embedded
+                      />
+                    </div>
+                  </div>
+
+                  {/* Coluna 2: CNDs & Regularidade (mesmo checklist e dados da aba Visão Geral) */}
+                  <div className="bg-[#12112A] border border-[#9BAFC5]/10 rounded-lg overflow-hidden flex flex-col">
+                    <div className="px-3 py-2 border-b border-[#9BAFC5]/10 bg-[#162744]">
+                      <div className="text-[10px] text-[#C9A84C] font-bold uppercase tracking-wider">CNDs &amp; Regularidade</div>
+                    </div>
+                    <div className="p-3 space-y-1.5">
+                      {(CM_DOCUMENT_CHECKLISTS[selectedListing.asset_type as CmAssetType] ?? CM_DOCUMENT_CHECKLISTS.outros).map((item) => {
+                        const uploaded = listingDocs.find((d: any) => d.checklist_item_id === item.id);
+                        return (
+                          <div key={item.id} className="flex items-center justify-between gap-2 bg-[#162744] border border-[#9BAFC5]/10 rounded-lg px-3 py-2">
+                            <div className="min-w-0 flex items-center gap-2">
+                              {uploaded ? <CheckCircle2 size={13} className="text-emerald-400 flex-shrink-0" /> : <Clock size={13} className="text-[#9BAFC5]/50 flex-shrink-0" />}
+                              <div className="min-w-0">
+                                <div className="text-[11px] text-[#F5F1E8] truncate">{item.label}</div>
+                                {item.required && !uploaded && (
+                                  <div className="text-[8px] text-[#E8C97A] font-bold uppercase tracking-wide">Obrigatório</div>
+                                )}
+                              </div>
+                            </div>
+                            {uploaded ? (
+                              <span className="text-[9px] text-emerald-400 font-bold flex-shrink-0">Enviado</span>
+                            ) : (
+                              <label className="flex items-center gap-1 px-2 py-1 bg-[#12112A] border border-[#9BAFC5]/15 rounded text-[#9BAFC5] text-[9px] font-bold hover:border-[#C9A84C]/30 hover:text-[#C9A84C] transition cursor-pointer flex-shrink-0">
+                                {uploadingDoc === selectedListing.id ? <Loader2 size={11} className="animate-spin" /> : <Upload size={11} />}
+                                Enviar
+                                <input type="file" className="hidden" accept=".pdf,.jpg,.png,.jpeg"
+                                  onChange={(e) => { if (e.target.files?.[0]) handleUploadDoc(selectedListing.id, e.target.files[0], item.id); }}
+                                />
+                              </label>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Coluna 3: Tese & Parecer IA (Fase 4, ainda não implementada) */}
+                  <div className="bg-[#12112A] border border-[#9BAFC5]/10 rounded-lg overflow-hidden flex flex-col">
+                    <div className="px-3 py-2 border-b border-[#9BAFC5]/10 bg-[#162744] flex items-center justify-between">
+                      <div className="text-[10px] text-[#C9A84C] font-bold uppercase tracking-wider">Tese &amp; Parecer IA</div>
+                      <span className="text-[8px] font-bold text-[#9BAFC5] uppercase bg-[#9BAFC5]/10 px-1.5 py-0.5 rounded">Fase 4</span>
+                    </div>
+                    <div className="p-4 flex-1 flex items-center justify-center text-center">
+                      <div>
+                        <FileText size={28} className="mx-auto mb-2 text-[#9BAFC5]/40" />
+                        <p className="text-[11px] text-[#9BAFC5]">
+                          Síntese de IA, semáforo de risco e Dossiê de Risco em PDF entram na Fase 4 do
+                          BRIEF, após a integração com a Checktudo e o quórum de assinatura já aprovado
+                          (1 Sócio ADMIN + Dr. Luis Athaydes).
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             )}
 
             {/* ══ ABA: ORDER BOOK ══ */}

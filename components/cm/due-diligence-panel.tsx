@@ -30,6 +30,10 @@ interface Props {
   anonymousId: string;
   sellerCpfCnpj: string | null;
   onClose: () => void;
+  // Cockpit de Compliance (22/08/2026): quando true, renderiza sem o overlay/backdrop e sem
+  // header proprio (o container que chama ja fornece isso), para uso embutido dentro de uma
+  // coluna do cockpit em vez de modal fixo em tela cheia. onClose vira no-op nesse modo.
+  embedded?: boolean;
 }
 
 function formatCurrencyBRL(v: number | null) {
@@ -37,7 +41,7 @@ function formatCurrencyBRL(v: number | null) {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
-export function DueDiligencePanel({ listingId, anonymousId, sellerCpfCnpj, onClose }: Props) {
+export function DueDiligencePanel({ listingId, anonymousId, sellerCpfCnpj, onClose, embedded = false }: Props) {
   const [valor, setValor] = useState(sellerCpfCnpj ?? "");
   const [tipo, setTipo] = useState<"cpf" | "cnpj">(
     (sellerCpfCnpj?.replace(/\D/g, "").length ?? 0) > 11 ? "cnpj" : "cpf"
@@ -86,10 +90,10 @@ export function DueDiligencePanel({ listingId, anonymousId, sellerCpfCnpj, onClo
     }
   }
 
-  return (
-    <div className="fixed inset-0 z-[130] flex items-center justify-center bg-black/60">
-      <div className="w-full max-w-lg bg-[#09081A] border border-[#C9A84C]/30 rounded-xl overflow-hidden flex flex-col" style={{ height: "70vh" }}>
-        {/* Header */}
+  const content = (
+    <>
+        {/* Header (só no modo modal — o embutido usa o header da coluna do cockpit) */}
+        {!embedded && (
         <div className="flex items-center justify-between px-5 py-3 border-b border-[#C9A84C]/20 bg-[#12112A]">
           <div className="flex items-center gap-2">
             <ShieldCheck size={18} className="text-[#C9A84C]" />
@@ -98,6 +102,7 @@ export function DueDiligencePanel({ listingId, anonymousId, sellerCpfCnpj, onClo
           </div>
           <button onClick={onClose} className="text-[#9BAFC5] hover:text-[#F5F1E8] text-lg leading-none">&times;</button>
         </div>
+        )}
 
         {/* Ferramentas */}
         <div className="px-4 py-3 border-b border-[#9BAFC5]/10 bg-[#12112A] space-y-3">
@@ -180,6 +185,15 @@ export function DueDiligencePanel({ listingId, anonymousId, sellerCpfCnpj, onClo
             </div>
           ))}
         </div>
+    </>
+  );
+
+  if (embedded) return content;
+
+  return (
+    <div className="fixed inset-0 z-[130] flex items-center justify-center bg-black/60">
+      <div className="w-full max-w-lg bg-[#09081A] border border-[#C9A84C]/30 rounded-xl overflow-hidden flex flex-col" style={{ height: "70vh" }}>
+        {content}
       </div>
     </div>
   );

@@ -20,6 +20,10 @@ export const CM_DOCUMENT_CHECKLISTS: Record<CmAssetType, CmChecklistItem[]> = {
     { id: "prec_5", label: "CND Municipal", required: true },
     { id: "prec_6", label: "Procuração", required: true },
     { id: "prec_7", label: "Contrato de Cessão", required: false, hint: "Gerado pela Mesa na fase de fechamento — não obrigatório no intake" },
+    // Item novo (22/08/2026, Cockpit de Compliance Fase 1): CNDT nao existia no checklist,
+    // achado ao comparar com a matriz de KYC/KYA revisada com Joao. Aditivo, id novo, nao
+    // afeta nenhum documento ja anexado com os ids anteriores.
+    { id: "prec_8", label: "CNDT (Certidão Negativa de Débitos Trabalhistas)", required: true },
   ],
   direito_creditorio: [
     { id: "dc_1", label: "Título ou Contrato de Crédito original", required: true },
@@ -30,6 +34,8 @@ export const CM_DOCUMENT_CHECKLISTS: Record<CmAssetType, CmChecklistItem[]> = {
     { id: "dc_6", label: "Procuração", required: true },
     { id: "dc_7", label: "Contrato Social + alterações (se cedente PJ)", required: true },
     { id: "dc_8", label: "Balanço Patrimonial + DRE (se cedente PJ)", required: true },
+    { id: "dc_9", label: "CNDT (Certidão Negativa de Débitos Trabalhistas)", required: true },
+    { id: "dc_10", label: "Certidão de Falência e Concordata", required: true },
   ],
   cgi: [
     { id: "cgi_1", label: "Matrícula do imóvel atualizada (máx. 30 dias)", required: true },
@@ -39,6 +45,7 @@ export const CM_DOCUMENT_CHECKLISTS: Record<CmAssetType, CmChecklistItem[]> = {
     { id: "cgi_5", label: "CND Estadual", required: true },
     { id: "cgi_6", label: "CND Municipal", required: true },
     { id: "cgi_7", label: "RG e CPF (PF) ou Contrato Social (PJ)", required: true },
+    { id: "cgi_8", label: "CNDT (Certidão Negativa de Débitos Trabalhistas)", required: true },
   ],
   cri: [
     { id: "cri_1", label: "Escritura de Emissão do CRI", required: true },

@@ -1,7 +1,8 @@
 import { MesaCapitaisClient } from "@/components/cm/mesa-capitais-client";
 import { createClient as sc } from "@supabase/supabase-js";
+import { hasComplianceDashboardAccess } from "@/lib/cm/compliance-access";
 
-export const metadata = { title: "Mesa de Capitais — V3 Partners" };
+export const metadata = { title: "Mesa de Capitais - V3 Partners" };
 export const dynamic = "force-dynamic";
 
 export default async function MesaCapitaisPage() {
@@ -13,5 +14,9 @@ export default async function MesaCapitaisPage() {
   const { data: profile } = await svc.from("profiles").select("role").eq("id", user?.id ?? "").single();
   const userRole = (profile as { role?: string } | null)?.role ?? "GESTAO";
 
-  return <MesaCapitaisClient userRole={userRole} />;
+  // Cockpit de Due Diligence e Compliance: gate por user_id nominal (5 pessoas),
+  // nao por role. Ver lib/cm/compliance-access.ts.
+  const hasComplianceAccess = await hasComplianceDashboardAccess(user?.id);
+
+  return <MesaCapitaisClient userRole={userRole} hasComplianceAccess={hasComplianceAccess} />;
 }
