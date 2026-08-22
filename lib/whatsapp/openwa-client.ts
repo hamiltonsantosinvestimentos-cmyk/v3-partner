@@ -17,21 +17,36 @@ function resolveSessionId(sessionId?: string): string {
   return sessionId ?? DEFAULT_SESSION_ID;
 }
 
-// Cria uma sessão OpenWA nova (um número de WhatsApp novo) — usado pra
-// provisionar a conexão de um partner. O gateway já suporta múltiplas
-// sessões simultâneas nativamente; a V3 continua sendo a única dona da
-// OPENWA_API_KEY, o partner nunca vê essa chave, só escaneia o QR da sessão
-// criada pra ele.
-export async function createSession(): Promise<string> {
+// Cria uma sessão OpenWA nova (um número de WhatsApp novo) e já inicia ela —
+// usado pra provisionar a conexão de um partner. O gateway já suporta
+// múltiplas sessões simultâneas nativamente; a V3 continua sendo a única
+// dona da OPENWA_API_KEY, o partner nunca vê essa chave, só escaneia o QR
+// da sessão criada pra ele.
+//
+// Duas pegadinhas do CreateSessionDto do gateway (services/whatsapp-gateway):
+// 1. `name` é obrigatório (3-50 chars, só letras/números/hífen) — POST com
+//    corpo vazio devolve 400 Bad Request, sem isso a sessão nunca é criada.
+// 2. Criar a sessão só a deixa em status "created" (engine ainda não
+//    carregado) — sem chamar POST /api/sessions/:id/start ela nunca sai
+//    desse estado e o QR nunca é gerado. Ver services/whatsapp-gateway/src/
+//    modules/session/session.controller.ts (@Post() e @Post(':id/start')).
+export async function createSession(name: string): Promise<string> {
   const res = await fetch(`${BASE_URL}/api/sessions`, {
     method: "POST",
     headers: headers(),
-    body: JSON.stringify({}),
+    body: JSON.stringify({ name }),
   });
-  if (!res.ok) throw new Error(`OpenWA: falha ao criar sessão (${res.status})`);
+  if (!res.ok) throw new Error(`OpenWA: falha ao criar sessão (${res.status}) ${await res.text().catch(() => "")}`);
   const data = (await res.json()) as { id?: string; sessionId?: string };
   const sessionId = data.id ?? data.sessionId;
   if (!sessionId) throw new Error("OpenWA: resposta de criação de sessão sem id");
+
+  const startRes = await fetch(`${BASE_URL}/api/sessions/${sessionId}/start`, {
+    method: "POST",
+    headers: headers(),
+  });
+  if (!startRes.ok) throw new Error(`OpenWA: sessão criada mas falha ao iniciar (${startRes.status})`);
+
   return sessionId;
 }
 
