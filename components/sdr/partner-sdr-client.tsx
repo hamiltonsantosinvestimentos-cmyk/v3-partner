@@ -271,7 +271,7 @@ function ConectarTab() {
         ) : qrcode ? (
           <>
             <p className="text-sm font-bold text-[#F0ECE4] mb-3">Escaneie com seu WhatsApp Business</p>
-            <img src={`data:image/png;base64,${qrcode}`} alt="QR Code WhatsApp" className="w-48 h-48 mx-auto rounded-xl border border-[#243A66]" />
+            <img src={qrcode.startsWith("data:") ? qrcode : `data:image/png;base64,${qrcode}`} alt="QR Code WhatsApp" className="w-48 h-48 mx-auto rounded-xl border border-[#243A66]" />
             <p className="text-xs text-[#7A8FA8] mt-3">Expira em instantes — atualiza automaticamente</p>
           </>
         ) : (
