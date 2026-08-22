@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { lookupProspeccaoLeadsByPhones, ensureProspeccaoLead } from "@/lib/sdr-prospeccao-sync";
+import { SDR_INTERNO_PARTNER_ID } from "@/lib/sdr-agent";
 
 const ALLOWED_ROLES = ["ADMIN", "GESTAO", "SDR", "CLOSER"] as const;
 const ADMIN_ROLES = ["ADMIN", "GESTAO"] as const;
@@ -32,6 +33,7 @@ export async function GET() {
   let query = db
     .from("sdr_leads")
     .select("phone, nome, tags, responsavel_id, status, last_message_at, last_message_preview, canal")
+    .eq("partner_id", SDR_INTERNO_PARTNER_ID)
     .order("last_message_at", { ascending: false, nullsFirst: false });
   if (!isAdmin) query = query.eq("responsavel_id", auth.user.id);
 
@@ -82,7 +84,7 @@ export async function PATCH(req: NextRequest) {
   }
 
   const db = svc();
-  const { data: lead } = await db.from("sdr_leads").select("nome, responsavel_id").eq("phone", phone).single();
+  const { data: lead } = await db.from("sdr_leads").select("nome, responsavel_id").eq("phone", phone).eq("partner_id", SDR_INTERNO_PARTNER_ID).single();
 
   if (!isAdmin && lead?.responsavel_id !== auth.user.id) {
     return NextResponse.json({ error: "Você só pode mover leads dos quais é responsável" }, { status: 403 });

@@ -8,7 +8,7 @@ import {
   replyToInstagramComment,
   checkIsFollowing,
 } from "@/lib/instagram-dm";
-import { processarMensagemSDRCore, isIaAtiva } from "@/lib/sdr-agent";
+import { processarMensagemSDRCore, isIaAtiva, SDR_INTERNO_PARTNER_ID } from "@/lib/sdr-agent";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -146,16 +146,18 @@ async function processarEvento(event: InstagramMessagingEvent) {
 
   await supabase.from("sdr_leads").upsert({
     phone: igsid,
+    partner_id: SDR_INTERNO_PARTNER_ID,
     canal: CANAL,
     last_message_at: new Date().toISOString(),
     last_message_preview: messageText.slice(0, 80),
     updated_at: new Date().toISOString(),
-  }, { onConflict: "phone", ignoreDuplicates: false });
+  }, { onConflict: "phone,partner_id", ignoreDuplicates: false });
 
   const { data: leadData } = await supabase
     .from("sdr_leads")
     .select("humano_ativo")
     .eq("phone", igsid)
+    .eq("partner_id", SDR_INTERNO_PARTNER_ID)
     .single();
 
   if (leadData?.humano_ativo) {

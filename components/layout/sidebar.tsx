@@ -140,6 +140,7 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { href: "/agentes", label: "Squads de IA", icon: "BotMessageSquare", roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL", "FINANCEIRO"] },
       { href: "/sdr", label: "SDR WhatsApp", icon: "BotMessageSquare", roles: ["ADMIN", "GESTAO", "SDR", "CLOSER"] },
+      { href: "/meu-atendimento-ia", label: "Atendimento IA", icon: "MessageSquare", roles: ["STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE"] },
       { href: "/deal-rooms", label: "Deal Rooms", icon: "Layers", roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL", "FINANCEIRO"] },
       { href: "/ia-assistant", label: "V3 IA Partner", icon: "BrainCircuit", roles: ["ADMIN", "STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE", "MESA_OPERACIONAL", "GESTAO", "FINANCEIRO"] },
       { href: "/metas", label: "Metas & Performance", icon: "Target", roles: ["ADMIN", "GESTAO", "STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE"] },
@@ -175,6 +176,7 @@ const NAV_SECTIONS: NavSection[] = [
       { href: "/admin-dashboard",  label: "Painel Admin",    icon: "LayoutDashboard", roles: ["ADMIN"] },
       { href: "/admin-cadastros", label: "Cadastros",      icon: "UserPlus", roles: ["ADMIN"] },
       { href: "/admin-marketplace", label: "Marketplace Admin", icon: "ShoppingBag", roles: ["ADMIN", "GESTAO"] },
+      { href: "/admin-sdr-addon", label: "Add-on Atendimento IA", icon: "MessageSquare", roles: ["ADMIN", "GESTAO"] },
       { href: "/usuarios",       label: "Usuários",       icon: "Users",    roles: ["ADMIN"] },
       { href: "/configuracoes",  label: "Configurações",  icon: "Settings2", roles: ["ADMIN", "STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE", "GESTAO", "MESA_OPERACIONAL", "FINANCEIRO"] },
     ],

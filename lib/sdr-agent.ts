@@ -12,6 +12,11 @@ import { listAvailableSlots, withTracking, type CalendlySlot } from "@/lib/calen
 
 export type SdrCanal = "whatsapp" | "instagram";
 
+// UUID sentinela usado em sdr_leads.partner_id pro bot interno da V3 (não
+// referencia nenhum profiles.id de verdade — ver migration
+// 20260823_sdr_whitelabel_partner.sql pro motivo de não usar NULL ali).
+export const SDR_INTERNO_PARTNER_ID = "00000000-0000-0000-0000-000000000000";
+
 // Opções oferecidas automaticamente quando a IA detecta que o lead qualificou.
 // Só usado no WhatsApp (simulado por texto) — Instagram tem quick replies
 // nativos da API, que ainda não estão implementados aqui.
@@ -85,12 +90,14 @@ JSON:`,
 
 // ── Aplica agendamento: tag + status + email ────────────────────────────────
 
-async function processarAgendamento(phone: string, dataHora: string | null, nomeLead: string | null) {
+async function processarAgendamento(phone: string, dataHora: string | null, nomeLead: string | null, partnerId: string | null) {
+  const partnerIdColuna = partnerId ?? SDR_INTERNO_PARTNER_ID;
   try {
     const { data: lead } = await supabase
       .from("sdr_leads")
       .select("tags, responsavel_id, nome, status")
       .eq("phone", phone)
+      .eq("partner_id", partnerIdColuna)
       .single();
 
     if (lead?.status === "agendado" || lead?.status === "convertido") return;
@@ -100,15 +107,34 @@ async function processarAgendamento(phone: string, dataHora: string | null, nome
 
     await supabase.from("sdr_leads").upsert({
       phone,
+      partner_id: partnerIdColuna,
       status: "agendado",
       tags: novasTags,
       nome: nomeLead ?? lead?.nome ?? null,
       updated_at: new Date().toISOString(),
-    }, { onConflict: "phone", ignoreDuplicates: false });
+    }, { onConflict: "phone,partner_id", ignoreDuplicates: false });
 
     console.log(`[SDR Agent] Agendamento detectado para ${phone} — ${dataHora ?? "sem horário definido"}`);
 
-    if (lead?.responsavel_id) {
+    // Instância de partner: notifica o próprio partner (é o dono do lead),
+    // não a equipe interna da V3 — cada um cuida da própria agenda.
+    if (partnerId) {
+      const { data: partner } = await supabase
+        .from("profiles")
+        .select("full_name, email")
+        .eq("id", partnerId)
+        .single();
+
+      if (partner?.email) {
+        await notifyAgendamentoSDR({
+          responsavelEmail: partner.email,
+          responsavelNome: partner.full_name ?? "Responsável",
+          phone,
+          nomeLead: nomeLead ?? lead?.nome ?? null,
+          dataHora,
+        });
+      }
+    } else if (lead?.responsavel_id) {
       const { data: responsavel } = await supabase
         .from("profiles")
         .select("full_name, email")
@@ -135,12 +161,17 @@ async function processarAgendamento(phone: string, dataHora: string | null, nome
       });
     }
 
-    await syncSdrLeadToProspeccao({
-      phone, status: "agendado",
-      nome: nomeLead ?? lead?.nome ?? null,
-      responsavel_id: lead?.responsavel_id ?? null,
-      nota: `Reunião agendada automaticamente pelo Agente SDR${dataHora ? ` — ${dataHora}` : ""}`,
-    });
+    // Sincronização com o CRM de Prospecção é só do bot interno da V3 — o
+    // pipeline de prospeccao_leads é pra prospectar NOVOS partners, não faz
+    // sentido puxar leads de clientes de um partner pra lá.
+    if (!partnerId) {
+      await syncSdrLeadToProspeccao({
+        phone, status: "agendado",
+        nome: nomeLead ?? lead?.nome ?? null,
+        responsavel_id: lead?.responsavel_id ?? null,
+        nota: `Reunião agendada automaticamente pelo Agente SDR${dataHora ? ` — ${dataHora}` : ""}`,
+      });
+    }
   } catch (e) {
     console.error("[SDR Agent] Erro ao processar agendamento:", e);
   }
@@ -159,12 +190,14 @@ const STATUS_RANK: Record<string, number> = {
   ativo: 0, qualificado: 1, agendado: 2, convertido: 3, sem_interesse: -1, arquivado: -1,
 };
 
-async function processarSinalFunil(phone: string, sinal: Exclude<SinalFunil, "nenhum">) {
+async function processarSinalFunil(phone: string, sinal: Exclude<SinalFunil, "nenhum">, partnerId: string | null) {
+  const partnerIdColuna = partnerId ?? SDR_INTERNO_PARTNER_ID;
   try {
     const { data: lead } = await supabase
       .from("sdr_leads")
       .select("nome, responsavel_id, status")
       .eq("phone", phone)
+      .eq("partner_id", partnerIdColuna)
       .single();
 
     const statusAlvo = SINAL_PARA_STATUS[sinal];
@@ -176,17 +209,21 @@ async function processarSinalFunil(phone: string, sinal: Exclude<SinalFunil, "ne
 
     if (deveAtualizar) {
       await supabase.from("sdr_leads").upsert({
-        phone, status: statusAlvo, updated_at: new Date().toISOString(),
-      }, { onConflict: "phone", ignoreDuplicates: false });
+        phone, partner_id: partnerIdColuna, status: statusAlvo, updated_at: new Date().toISOString(),
+      }, { onConflict: "phone,partner_id", ignoreDuplicates: false });
       console.log(`[SDR Agent] Sinal de funil "${sinal}" detectado para ${phone} — status atualizado`);
     }
 
-    await syncSdrLeadToProspeccao({
-      phone, status: statusAlvo,
-      nome: lead?.nome ?? null,
-      responsavel_id: lead?.responsavel_id ?? null,
-      nota: `Sinal "${sinal}" detectado automaticamente pelo Agente SDR na conversa`,
-    });
+    // Ver comentário equivalente em processarAgendamento: só sincroniza com o
+    // CRM interno de Prospecção quando é o bot interno da V3.
+    if (!partnerId) {
+      await syncSdrLeadToProspeccao({
+        phone, status: statusAlvo,
+        nome: lead?.nome ?? null,
+        responsavel_id: lead?.responsavel_id ?? null,
+        nota: `Sinal "${sinal}" detectado automaticamente pelo Agente SDR na conversa`,
+      });
+    }
   } catch (e) {
     console.error("[SDR Agent] Erro ao processar sinal de funil:", e);
   }
@@ -240,13 +277,12 @@ Você representa uma empresa séria e de alto padrão. Seu tom é profissional, 
 // outro canal não é afetado). Falha aberta (retorna true) se a
 // coluna/linha ainda não existir — a IA nunca fica muda por causa de um
 // erro de leitura de config, só por ação explícita do admin.
-export async function isIaAtiva(canal: SdrCanal): Promise<boolean> {
+export async function isIaAtiva(canal: SdrCanal, partnerId: string | null = null): Promise<boolean> {
   try {
-    const { data, error } = await supabase
+    const query = supabase
       .from("sdr_flow_config")
-      .select("ia_ativa_whatsapp, ia_ativa_instagram")
-      .eq("id", "default")
-      .maybeSingle();
+      .select("ia_ativa_whatsapp, ia_ativa_instagram");
+    const { data, error } = await (partnerId ? query.eq("partner_id", partnerId) : query.eq("id", "default")).maybeSingle();
     if (error || !data) return true;
     const valor = canal === "instagram" ? data.ia_ativa_instagram : data.ia_ativa_whatsapp;
     return valor !== false;
@@ -264,8 +300,57 @@ function buildBlocoHorarios(slots: CalendlySlot[]): string {
   return `\n\n**Horários reais disponíveis pra agendar (horário de Brasília) — só ofereça agendamento se o lead já estiver qualificado, e use exatamente um destes horários, nunca invente outro:**\n${lista}\n\nQuando o lead confirmar um desses horários, repita a data e hora exatas na sua resposta pra confirmar — o sistema vai anexar automaticamente o link de confirmação.`;
 }
 
-export async function buildSystemPrompt(): Promise<string> {
+// Etapas genéricas usadas no prompt de um partner — sdr_flow_stages (o editor
+// visual de etapas) continua sendo só do bot interno da V3; não faz sentido
+// expor esse builder pros partners nesta fase (só pediram nome/contexto/regras
+// configuráveis). Um roteiro fixo e neutro é suficiente pra maioria dos usos.
+const ETAPAS_GENERICAS_PARTNER = `1. Cumprimentar com naturalidade, sem exageros
+2. Entender o que o lead precisa e o momento dele
+3. Apresentar o que você (o agente) representa, de forma contextualizada
+4. Qualificar o interesse real do lead
+5. Se fizer sentido, propor um próximo passo (reunião, ligação, envio de material)
+6. Coletar os dados necessários pra dar esse próximo passo`;
+
+const REGRAS_GENERICAS_PARTNER = `- Escreva exatamente como alguém digitando rápido no celular: frases curtas e diretas
+- Cada frase sua deve ter no máximo ~10 palavras
+- No máximo 1 frase por parágrafo — raramente 2, nunca mais que isso
+- Resposta inteira com no máximo 3 parágrafos curtos — se não couber, fale só o essencial agora e continue no próximo turno
+- Nunca use bullet points, markdown ou asteriscos
+- Nunca use emojis excessivos ou linguagem de chatbot
+- Nunca invente informações, preços ou condições que você não tem certeza
+- Lembre-se do histórico da conversa para não repetir perguntas já feitas`;
+
+// Fallback pro partner que ainda não configurou a própria IA (ou cuja linha
+// de sdr_flow_config sumiu por algum erro) — NUNCA cai no PROMPT_PADRAO, que
+// é a V3 se vendendo; isso faria o bot do partner promover a V3 pros
+// clientes DELE, o que é exatamente o oposto do produto white label.
+function promptFallbackPartner(): string {
+  return `Você é um assistente de atendimento via WhatsApp. Seu tom é profissional, caloroso e consultivo. Você escreve como um humano experiente, não como um robô.
+
+**Seu papel:**
+${ETAPAS_GENERICAS_PARTNER}
+
+**Regras de comunicação — MUITO IMPORTANTE:**
+${REGRAS_GENERICAS_PARTNER}`;
+}
+
+export async function buildSystemPrompt(partnerId: string | null = null): Promise<string> {
   try {
+    if (partnerId) {
+      const { data: config, error: configErr } = await supabase
+        .from("sdr_flow_config").select("*").eq("partner_id", partnerId).maybeSingle();
+      if (configErr || !config) return promptFallbackPartner();
+
+      const regras = String(config.regras_comunicacao ?? "").trim() || REGRAS_GENERICAS_PARTNER;
+      return `Você é o ${config.agente_nome}${config.empresa_contexto ? `.\n\n${config.empresa_contexto}` : ", um assistente de atendimento via WhatsApp."}
+
+**Seu papel:**
+${ETAPAS_GENERICAS_PARTNER}
+
+**Regras de comunicação — MUITO IMPORTANTE:**
+${regras}`;
+    }
+
     const [{ data: config, error: configErr }, { data: stages, error: stagesErr }] = await Promise.all([
       supabase.from("sdr_flow_config").select("*").eq("id", "default").maybeSingle(),
       supabase.from("sdr_flow_stages").select("*").eq("ativo", true).order("ordem", { ascending: true }),
@@ -287,7 +372,7 @@ ${etapas}
 **Regras de comunicação — MUITO IMPORTANTE:**
 ${regras}`;
   } catch {
-    return PROMPT_PADRAO;
+    return partnerId ? promptFallbackPartner() : PROMPT_PADRAO;
   }
 }
 
@@ -305,19 +390,25 @@ export async function processarMensagemSDRCore(params: {
   instance: string;
   canal: SdrCanal;
   enviarTexto: (texto: string) => Promise<void>;
+  /** null = bot interno da V3 (comportamento atual). Preenchido = instância white label desse partner. */
+  partnerId?: string | null;
 }) {
-  const { phone, mensagem, instance, canal, enviarTexto } = params;
+  const { phone, mensagem, instance, canal, enviarTexto, partnerId = null } = params;
   try {
     // Busca as 40 mensagens mais RECENTES (desc + limit) e devolve pra ordem
     // cronológica depois — pegar ascendente direto travava a IA nas primeiras
     // 40 mensagens da conversa inteira assim que ela passava desse tamanho.
     // Filtra por canal também: mesmo phone/IGSID nunca deveria colidir entre
     // canais na prática, mas evita cross-contamination se algum dia colidir.
-    const { data: historico } = await supabase
+    // Filtra por partner_id (ou IS NULL pro bot interno) pra isolar
+    // completamente a conversa de cada instância white label.
+    let historicoQuery = supabase
       .from("sdr_conversas")
       .select("role, content")
       .eq("phone", phone)
-      .eq("canal", canal)
+      .eq("canal", canal);
+    historicoQuery = partnerId ? historicoQuery.eq("partner_id", partnerId) : historicoQuery.is("partner_id", null);
+    const { data: historico } = await historicoQuery
       .order("created_at", { ascending: false })
       .limit(40);
 
@@ -346,15 +437,20 @@ export async function processarMensagemSDRCore(params: {
 
     // Horários reais do Calendly — nunca deixa a IA inventar data/hora. Se a
     // consulta falhar (token não configurado, API fora), segue sem oferecer
-    // agendamento nesta resposta em vez de travar o agente inteiro.
+    // agendamento nesta resposta em vez de travar o agente inteiro. É
+    // integração exclusiva da V3 (CALENDLY_EVENT_TYPE_URI é o calendário dos
+    // sócios) — instâncias de partner nunca consultam nem oferecem esses
+    // horários, pra não vazar a agenda da V3 pros leads DELE.
     let slotsDisponiveis: CalendlySlot[] = [];
-    try {
-      slotsDisponiveis = await listAvailableSlots();
-    } catch (e) {
-      console.error("[SDR Agent] Erro ao consultar disponibilidade no Calendly:", e);
+    if (!partnerId) {
+      try {
+        slotsDisponiveis = await listAvailableSlots();
+      } catch (e) {
+        console.error("[SDR Agent] Erro ao consultar disponibilidade no Calendly:", e);
+      }
     }
 
-    const systemPrompt = await buildSystemPrompt() + buildBlocoHorarios(slotsDisponiveis);
+    const systemPrompt = await buildSystemPrompt(partnerId) + buildBlocoHorarios(slotsDisponiveis);
 
     const response = await anthropic.messages.create({
       model: "claude-sonnet-4-6",
@@ -378,14 +474,14 @@ export async function processarMensagemSDRCore(params: {
     // oficial não suporta botão nativo) — Instagram tem quick replies nativos
     // da própria API, ainda não implementados aqui, então não anexa o bloco.
     if (canal === "whatsapp" && detect.sinal_funil === "qualificado") {
-      const { data: jaOfereceu } = await supabase
+      let jaOfereceuQuery = supabase
         .from("sdr_conversas")
         .select("id")
         .eq("phone", phone)
         .eq("canal", canal)
-        .not("quick_reply_options", "is", null)
-        .limit(1)
-        .maybeSingle();
+        .not("quick_reply_options", "is", null);
+      jaOfereceuQuery = partnerId ? jaOfereceuQuery.eq("partner_id", partnerId) : jaOfereceuQuery.is("partner_id", null);
+      const { data: jaOfereceu } = await jaOfereceuQuery.limit(1).maybeSingle();
 
       if (!jaOfereceu) {
         quickReplyOptions = OFERTA_QUALIFICADO;
@@ -437,6 +533,7 @@ export async function processarMensagemSDRCore(params: {
       content: respostaFinal,
       instance,
       quick_reply_options: quickReplyOptions,
+      partner_id: partnerId,
     });
 
     // Envia como várias mensagens curtas em sequência (um parágrafo = uma
@@ -456,8 +553,8 @@ export async function processarMensagemSDRCore(params: {
 
     console.log(`[SDR Agent] Resposta enviada para ${phone} via ${canal} (${partesMensagem.length} mensagem(ns))`);
 
-    if (detect.agendado) await processarAgendamento(phone, detect.data_hora, detect.nome_lead);
-    if (detect.sinal_funil !== "nenhum") await processarSinalFunil(phone, detect.sinal_funil);
+    if (detect.agendado) await processarAgendamento(phone, detect.data_hora, detect.nome_lead, partnerId);
+    if (detect.sinal_funil !== "nenhum") await processarSinalFunil(phone, detect.sinal_funil, partnerId);
   } catch (e) {
     console.error(`[SDR Agent] Erro ao processar mensagem (${canal}):`, e);
   }
