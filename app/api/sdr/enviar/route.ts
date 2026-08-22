@@ -4,6 +4,7 @@ import { createClient as sc } from "@supabase/supabase-js";
 import { sendText } from "@/lib/whatsapp/openwa-client";
 import { sendInstagramText } from "@/lib/instagram-dm";
 import { formatQuickReplyBlock, type QuickReplyOption } from "@/lib/whatsapp/quick-reply";
+import { SDR_INTERNO_PARTNER_ID } from "@/lib/sdr-agent";
 
 const ALLOWED_ROLES = ["ADMIN", "GESTAO", "SDR", "CLOSER"] as const;
 const ADMIN_ROLES = ["ADMIN", "GESTAO"] as const;
@@ -28,7 +29,7 @@ export async function POST(req: NextRequest) {
   };
   if (!phone || !text) return NextResponse.json({ error: "phone e text obrigatórios" }, { status: 400 });
 
-  const { data: lead } = await svc().from("sdr_leads").select("canal, responsavel_id").eq("phone", phone).maybeSingle();
+  const { data: lead } = await svc().from("sdr_leads").select("canal, responsavel_id").eq("phone", phone).eq("partner_id", SDR_INTERNO_PARTNER_ID).maybeSingle();
   if (!isAdmin && lead?.responsavel_id && lead.responsavel_id !== user.id) {
     return NextResponse.json({ error: "Esse lead já tem outro responsável" }, { status: 403 });
   }

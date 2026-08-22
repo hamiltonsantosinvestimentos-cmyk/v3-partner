@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { lookupProspeccaoEtapaByPhones } from "@/lib/sdr-prospeccao-sync";
+import { SDR_INTERNO_PARTNER_ID } from "@/lib/sdr-agent";
 
 const ALLOWED_ROLES = ["ADMIN", "GESTAO", "SDR", "CLOSER"] as const;
 const ADMIN_ROLES = ["ADMIN", "GESTAO"] as const;
@@ -26,7 +27,8 @@ export async function GET() {
 
   let leadsQuery = db
     .from("sdr_leads")
-    .select("phone, nome, responsavel_id, status, created_at");
+    .select("phone, nome, responsavel_id, status, created_at")
+    .eq("partner_id", SDR_INTERNO_PARTNER_ID);
   if (!isAdmin) leadsQuery = leadsQuery.eq("responsavel_id", me.id);
   const { data: leadsData } = await leadsQuery;
 
@@ -52,6 +54,7 @@ export async function GET() {
       .from("sdr_conversas")
       .select("phone")
       .eq("role", "user")
+      .is("partner_id", null)
       .gte("created_at", inicioHoje.toISOString())
       .in("phone", phones);
     for (const m of msgs ?? []) {

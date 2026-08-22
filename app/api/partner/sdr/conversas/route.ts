@@ -1,37 +1,36 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
-import { SDR_INTERNO_PARTNER_ID } from "@/lib/sdr-agent";
 
+const PARTNER_ROLES = ["STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE"] as const;
+
+function svc() {
+  return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+}
+
+// GET — histórico de mensagens de um contato (?phone=...), escopado ao
+// próprio partner_id. Espelha /api/sdr/conversas.
 export async function GET(req: NextRequest) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
   const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
-  if (!["ADMIN", "GESTAO", "SDR", "CLOSER"].includes(profile?.role ?? "")) {
+  if (!PARTNER_ROLES.includes(profile?.role as typeof PARTNER_ROLES[number])) {
     return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
   }
-  const isAdmin = ["ADMIN", "GESTAO"].includes(profile?.role ?? "");
 
-  const svc = sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+  const db = svc();
+  const { data: conexao } = await db.from("partner_sdr_connections").select("addon_ativo").eq("partner_id", user.id).maybeSingle();
+  if (!conexao?.addon_ativo) return NextResponse.json({ error: "Add-on não contratado" }, { status: 403 });
+
   const phone = req.nextUrl.searchParams.get("phone");
-
-  // SDR/CLOSER só leem a conversa de leads sem dono ou já atribuídos a eles.
-  if (phone && !isAdmin) {
-    const { data: lead } = await svc.from("sdr_leads").select("responsavel_id").eq("phone", phone).eq("partner_id", SDR_INTERNO_PARTNER_ID).maybeSingle();
-    if (lead?.responsavel_id && lead.responsavel_id !== user.id) {
-      return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
-    }
-  }
-
-  let query = svc
+  let query = db
     .from("sdr_conversas")
     .select("*")
-    .is("partner_id", null)
+    .eq("partner_id", user.id)
     .order("created_at", { ascending: true })
     .limit(200);
-
   if (phone) query = query.eq("phone", phone);
 
   const { data, error } = await query;

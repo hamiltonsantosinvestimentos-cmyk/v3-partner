@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { CheckCircle2, Clock, AlertCircle, FileText, Wallet, TrendingUp, Crown, Shield, RefreshCw, ArrowUpCircle, Loader2, QrCode, Copy, ExternalLink, CreditCard } from "lucide-react";
+import { CheckCircle2, Clock, AlertCircle, FileText, Wallet, TrendingUp, Crown, Shield, RefreshCw, ArrowUpCircle, Loader2, QrCode, Copy, ExternalLink, CreditCard, MessageSquare, Lock } from "lucide-react";
+import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 import { getPlanoValor } from "@/lib/plano-valor";
 
@@ -96,6 +97,14 @@ export function MinhaAssinaturaClient({ profile, contract, commissions }: Props)
   const [pixCopiado, setPixCopiado] = useState(false);
   const [loadingCartao, setLoadingCartao] = useState(false);
   const [cartaoErro, setCartaoErro] = useState<string | null>(null);
+  const [addonStatus, setAddonStatus] = useState<{ addon_ativo: boolean; addon_solicitado_em: string | null } | null>(null);
+
+  useEffect(() => {
+    fetch("/api/partner/sdr/addon-status")
+      .then((r) => r.json())
+      .then((d) => setAddonStatus(d))
+      .catch(() => {});
+  }, []);
 
   // Reflete o valor real da cobrança vigente (mesma fonte que a aba Financeiro usa);
   // só cai pro preço padrão do plano enquanto a cobrança ainda não carregou.
@@ -246,6 +255,37 @@ export function MinhaAssinaturaClient({ profile, contract, commissions }: Props)
             </div>
           )}
           {/* Upgrade movido para card de comparação abaixo */}
+        </div>
+      </div>
+
+      {/* Add-ons */}
+      <div>
+        <p className="text-xs font-bold text-[#C9A84C] uppercase tracking-widest mb-3">Add-ons</p>
+        <div className="bg-[#111F35] border border-[#243A66] rounded-2xl p-5 flex items-center justify-between gap-4 flex-wrap">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-xl bg-emerald-500/15 flex items-center justify-center flex-shrink-0">
+              <MessageSquare className="w-6 h-6 text-emerald-400" />
+            </div>
+            <div>
+              <p className="text-sm font-bold text-[#F0ECE4]">Atendimento IA no WhatsApp</p>
+              <p className="text-xs text-[#7A8FA8] mt-0.5">
+                Conecte seu próprio WhatsApp: IA responde e qualifica seus leads automaticamente, com disparo em massa.
+              </p>
+              <p className="text-sm font-bold text-[#C9A84C] mt-1.5">R$29,90/mês</p>
+            </div>
+          </div>
+          {addonStatus?.addon_ativo ? (
+            <Link href="/meu-atendimento-ia"
+              className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/25 transition-all">
+              <CheckCircle2 className="w-4 h-4" /> Ativo — Gerenciar
+            </Link>
+          ) : (
+            <Link href="/meu-atendimento-ia"
+              className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold bg-[#C9A84C] text-[#09081A] hover:bg-[#E8C97A] transition-all">
+              <Lock className="w-4 h-4" />
+              {addonStatus?.addon_solicitado_em ? "Pedido enviado" : "Contratar"}
+            </Link>
+          )}
         </div>
       </div>
 

@@ -3,7 +3,7 @@ import { after } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { chatIdToPhone, sendText } from "@/lib/whatsapp/openwa-client";
 import { resolveQuickReply, type QuickReplyOption } from "@/lib/whatsapp/quick-reply";
-import { processarMensagemSDRCore, isIaAtiva } from "@/lib/sdr-agent";
+import { processarMensagemSDRCore, isIaAtiva, SDR_INTERNO_PARTNER_ID } from "@/lib/sdr-agent";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -32,10 +32,21 @@ type OpenwaWebhookPayload = {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json() as OpenwaWebhookPayload;
-    const { event, data } = body;
+    const { event, data, sessionId } = body;
     const instance = "openwa";
 
     console.log(`[SDR Webhook] evento: ${event}`);
+
+    // White label: resolve de qual partner é essa sessão OpenWA (session_id
+    // vem em todo evento do gateway). Sessão não encontrada = bot interno da
+    // V3 (comportamento de sempre, sessão global via env var).
+    const { data: conexao } = await supabase
+      .from("partner_sdr_connections")
+      .select("partner_id")
+      .eq("openwa_session_id", sessionId)
+      .maybeSingle();
+    const partnerId: string | null = conexao?.partner_id ?? null;
+    const sessionIdParaEnvio = partnerId ? sessionId : undefined;
 
     // ── Status da sessão (QR, autenticado, desconectado) ──────────────────────
     // O frontend consulta status/QR diretamente em /api/sdr/qrcode (que fala com o
@@ -61,11 +72,13 @@ export async function POST(req: NextRequest) {
       // resolve a resposta do lead ("1", "1️⃣"...) contra elas e usa o label em vez do dígito
       // cru daqui em diante (histórico da IA, pipeline de qualificação, etc).
       let messageText = rawMessageText;
-      const { data: ultimaConversa } = await supabase
+      let ultimaConversaQuery = supabase
         .from("sdr_conversas")
         .select("role, quick_reply_options")
         .eq("phone", phone)
-        .eq("canal", CANAL)
+        .eq("canal", CANAL);
+      ultimaConversaQuery = partnerId ? ultimaConversaQuery.eq("partner_id", partnerId) : ultimaConversaQuery.is("partner_id", null);
+      const { data: ultimaConversa } = await ultimaConversaQuery
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -86,6 +99,7 @@ export async function POST(req: NextRequest) {
         content: messageText,
         instance,
         wa_message_id: waMessageId,
+        partner_id: partnerId,
       });
 
       if (insertErr) {
@@ -97,19 +111,22 @@ export async function POST(req: NextRequest) {
       }
 
       // Cria/atualiza registro de lead com preview da última mensagem
+      const leadPartnerIdColuna = partnerId ?? SDR_INTERNO_PARTNER_ID;
       await supabase.from("sdr_leads").upsert({
         phone,
+        partner_id: leadPartnerIdColuna,
         canal: CANAL,
         last_message_at: new Date().toISOString(),
         last_message_preview: messageText.slice(0, 80),
         updated_at: new Date().toISOString(),
-      }, { onConflict: "phone", ignoreDuplicates: false });
+      }, { onConflict: "phone,partner_id", ignoreDuplicates: false });
 
       // Verifica se atendimento humano está ativo — se sim, não responde com IA
       const { data: leadData } = await supabase
         .from("sdr_leads")
         .select("humano_ativo")
         .eq("phone", phone)
+        .eq("partner_id", leadPartnerIdColuna)
         .single();
 
       if (leadData?.humano_ativo) {
@@ -117,9 +134,10 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ ok: true });
       }
 
-      // Interruptor global (aba SDR) — quando desligado, ninguém recebe resposta automática
-      if (!(await isIaAtiva(CANAL))) {
-        console.log(`[SDR Webhook] IA automática desligada globalmente — mensagem de ${phone} só salva`);
+      // Interruptor (aba SDR / Automação do partner) — quando desligado, ninguém
+      // recebe resposta automática nessa instância
+      if (!(await isIaAtiva(CANAL, partnerId))) {
+        console.log(`[SDR Webhook] IA automática desligada — mensagem de ${phone} só salva`);
         return NextResponse.json({ ok: true });
       }
 
@@ -131,7 +149,8 @@ export async function POST(req: NextRequest) {
         mensagem: messageText,
         instance,
         canal: CANAL,
-        enviarTexto: async (texto) => { await sendText(phone, texto); },
+        partnerId,
+        enviarTexto: async (texto) => { await sendText(phone, texto, sessionIdParaEnvio); },
       }).catch(e =>
         console.error("[SDR Webhook] Erro ao processar mensagem (background):", e)
       ));

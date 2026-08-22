@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { syncSdrLeadToProspeccao, lookupProspeccaoEtapaByPhones } from "@/lib/sdr-prospeccao-sync";
+import { SDR_INTERNO_PARTNER_ID } from "@/lib/sdr-agent";
 
 const ALLOWED_ROLES = ["ADMIN", "GESTAO", "SDR", "CLOSER"] as const;
 const ADMIN_ROLES = ["ADMIN", "GESTAO"] as const;
@@ -29,9 +30,12 @@ export async function GET() {
   const db = svc();
 
   // 1. Busca todas as mensagens agrupadas por phone (última mensagem + contagem)
+  // Rota interna da V3 (bot próprio) -- filtra fora dados de instâncias white
+  // label de partners, que têm o próprio painel em /api/partner/sdr/*.
   const { data: allMsgs } = await db
     .from("sdr_conversas")
     .select("phone, content, role, created_at")
+    .is("partner_id", null)
     .order("created_at", { ascending: false });
 
   // Agrupa por phone
@@ -50,7 +54,8 @@ export async function GET() {
   // 2. Busca metadados dos leads
   const { data: leads } = await db
     .from("sdr_leads")
-    .select("phone, nome, tags, responsavel_id, status, last_message_at, last_message_preview, humano_ativo, canal");
+    .select("phone, nome, tags, responsavel_id, status, last_message_at, last_message_preview, humano_ativo, canal")
+    .eq("partner_id", SDR_INTERNO_PARTNER_ID);
 
   const leadsMap: Record<string, typeof leads extends (infer T)[] | null ? T : never> = {};
   for (const l of leads ?? []) leadsMap[l.phone] = l;
@@ -121,13 +126,13 @@ export async function PATCH(req: NextRequest) {
   if (!body.phone) return NextResponse.json({ error: "phone obrigatório" }, { status: 400 });
 
   if (!isAdmin) {
-    const { data: existing } = await svc().from("sdr_leads").select("responsavel_id").eq("phone", body.phone).maybeSingle();
+    const { data: existing } = await svc().from("sdr_leads").select("responsavel_id").eq("phone", body.phone).eq("partner_id", SDR_INTERNO_PARTNER_ID).maybeSingle();
     if (existing?.responsavel_id && existing.responsavel_id !== auth.user.id) {
       return NextResponse.json({ error: "Esse lead já tem outro responsável" }, { status: 403 });
     }
   }
 
-  const updateData: Record<string, unknown> = { phone: body.phone, updated_at: new Date().toISOString() };
+  const updateData: Record<string, unknown> = { phone: body.phone, partner_id: SDR_INTERNO_PARTNER_ID, updated_at: new Date().toISOString() };
   if (body.nome !== undefined) updateData.nome = body.nome;
   if (body.tags !== undefined) updateData.tags = body.tags;
   if (body.responsavel_id !== undefined) updateData.responsavel_id = body.responsavel_id;
@@ -136,7 +141,7 @@ export async function PATCH(req: NextRequest) {
 
   const { error } = await svc()
     .from("sdr_leads")
-    .upsert(updateData, { onConflict: "phone" });
+    .upsert(updateData, { onConflict: "phone,partner_id" });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
@@ -146,6 +151,7 @@ export async function PATCH(req: NextRequest) {
       .from("sdr_leads")
       .select("nome, responsavel_id")
       .eq("phone", body.phone)
+      .eq("partner_id", SDR_INTERNO_PARTNER_ID)
       .single();
 
     let responsavelNome: string | null = null;
