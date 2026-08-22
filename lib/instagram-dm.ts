@@ -55,3 +55,74 @@ export async function sendInstagramText(igsid: string, text: string): Promise<vo
     });
   }
 }
+
+// Comment-to-DM: manda uma "Private Reply" pro autor de um comentário —
+// funciona como resposta ao comment_id em vez de um IGSID direto. Regra da
+// Meta: só é possível uma private reply por comentário, e só dentro de 7
+// dias da publicação do comentário (fora disso a Graph API rejeita).
+export async function sendInstagramPrivateReply(commentId: string, text: string): Promise<void> {
+  const res = await fetch(`${GRAPH_BASE}/me/messages?access_token=${encodeURIComponent(pageAccessToken())}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      recipient: { comment_id: commentId },
+      message: { text },
+    }),
+  });
+
+  const json = (await res.json()) as MetaErrorBody;
+  if (!res.ok || json.error) {
+    const err = json.error;
+    throw new InstagramDmError(err?.message ?? `Erro HTTP ${res.status} na Private Reply do Instagram`, {
+      code: err?.code,
+      subcode: err?.error_subcode,
+    });
+  }
+}
+
+export type InstagramMediaSummary = {
+  id: string;
+  caption?: string;
+  permalink?: string;
+  media_type?: string;
+  thumbnail_url?: string;
+  media_url?: string;
+  timestamp?: string;
+};
+
+// Lista os posts recentes da conta — usado pra deixar escolher o post de um
+// gatilho de Comment-to-DM numa lista em vez de exigir colar a URL (que não
+// dá pra resolver pro media_id sem outra chamada à API mesmo assim).
+export async function listRecentInstagramMedia(limit = 25): Promise<InstagramMediaSummary[]> {
+  const res = await fetch(
+    `${GRAPH_BASE}/me/media?fields=id,caption,permalink,media_type,thumbnail_url,media_url,timestamp&limit=${limit}&access_token=${encodeURIComponent(pageAccessToken())}`
+  );
+  const json = (await res.json()) as MetaErrorBody & { data?: InstagramMediaSummary[] };
+  if (!res.ok || json.error) {
+    const err = json.error;
+    throw new InstagramDmError(err?.message ?? `Erro HTTP ${res.status} ao listar posts do Instagram`, {
+      code: err?.code,
+      subcode: err?.error_subcode,
+    });
+  }
+  return json.data ?? [];
+}
+
+// Resposta pública opcional no próprio comentário (complementa a private
+// reply — ex: "Te chamei no Direct! 📩"), via endpoint de replies do comentário.
+export async function replyToInstagramComment(commentId: string, text: string): Promise<void> {
+  const res = await fetch(`${GRAPH_BASE}/${commentId}/replies?access_token=${encodeURIComponent(pageAccessToken())}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ message: text }),
+  });
+
+  const json = (await res.json()) as MetaErrorBody;
+  if (!res.ok || json.error) {
+    const err = json.error;
+    throw new InstagramDmError(err?.message ?? `Erro HTTP ${res.status} ao responder o comentário`, {
+      code: err?.code,
+      subcode: err?.error_subcode,
+    });
+  }
+}
