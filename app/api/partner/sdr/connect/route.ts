@@ -82,7 +82,7 @@ export async function POST() {
   }
 
   try {
-    const sessionId = await createSession();
+    const sessionId = await createSession(`partner-${auth.user.id}`);
     await db.from("partner_sdr_connections").upsert({
       partner_id: auth.user.id,
       openwa_session_id: sessionId,

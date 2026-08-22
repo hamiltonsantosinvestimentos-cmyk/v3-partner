@@ -224,6 +224,7 @@ function ConectarTab() {
   const [phone, setPhone] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [criando, setCriando] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
 
   const carregar = useCallback(async () => {
     try {
@@ -244,10 +245,15 @@ function ConectarTab() {
 
   async function criarSessao() {
     setCriando(true);
+    setErro(null);
     try {
-      await fetch("/api/partner/sdr/connect", { method: "POST" });
+      const res = await fetch("/api/partner/sdr/connect", { method: "POST" });
+      const d = await res.json();
+      if (!res.ok) setErro(d.error ?? "Não foi possível gerar o QR Code");
       await carregar();
-    } catch { /* silencioso */ }
+    } catch {
+      setErro("Não foi possível gerar o QR Code");
+    }
     setCriando(false);
   }
 
@@ -280,6 +286,7 @@ function ConectarTab() {
               {criando ? <Loader2 className="w-4 h-4 animate-spin" /> : <QrCode className="w-4 h-4" />}
               {criando ? "Gerando..." : "Gerar QR Code"}
             </button>
+            {erro && <p className="text-xs text-red-400 mt-3">{erro}</p>}
           </>
         )}
         <button onClick={carregar} className="mt-4 inline-flex items-center gap-1.5 text-xs text-[#7A8FA8] hover:text-[#F0ECE4]">
