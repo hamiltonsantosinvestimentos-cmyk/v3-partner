@@ -7,6 +7,7 @@ import { CampanhasWhatsappClient } from "./campanhas-whatsapp-client";
 import { SdrKanbanClient } from "./sdr-kanban-client";
 import { SdrDashboardClient } from "./sdr-dashboard-client";
 import { SdrFlowBuilderClient } from "./sdr-flow-builder-client";
+import { SdrCommentTriggersClient } from "./sdr-comment-triggers-client";
 import { SdrLeadDetailPanel, PROSPECCAO_ETAPA_LABELS, tagClass, statusClass, type SdrLead } from "./sdr-lead-detail-panel";
 import { QuickReplyOptionsEditor, DEFAULT_QUICK_REPLY_OPTIONS } from "./quick-reply-options-editor";
 import type { QuickReplyOption } from "@/lib/whatsapp/quick-reply";
@@ -28,6 +29,7 @@ const ICONS = {
   campanhas: <NavIcon path={<><rect x="2" y="4" width="20" height="16" rx="2" /><path d="m2 7 10 6 10-6" /></>} />,
   kanban: <NavIcon path={<><rect x="3" y="3" width="7" height="18" rx="1.5" /><rect x="14" y="3" width="7" height="10" rx="1.5" /></>} />,
   dashboard: <NavIcon path={<><path d="M3 3v18h18" /><path d="M18 17V9" /><path d="M13 17V5" /><path d="M8 17v-3" /></>} />,
+  comentarioDm: <NavIcon path={<><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z" /><path d="M8 10h.01" /><path d="M12 10h.01" /><path d="M16 10h.01" /></>} />,
 };
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -133,7 +135,7 @@ interface SdrClientProps {
   currentUserRole: string;
 }
 
-type MainTab = "conversas" | "automacao" | "campanhas" | "envio-massa" | "kanban" | "dashboard";
+type MainTab = "conversas" | "automacao" | "campanhas" | "envio-massa" | "kanban" | "dashboard" | "comentario-dm";
 type LeadFilter = "todos" | "meus" | "nao_atribuidos" | "humano";
 
 export function SdrClient({ currentUserId, currentUserName, currentUserRole }: SdrClientProps) {
@@ -364,6 +366,7 @@ export function SdrClient({ currentUserId, currentUserName, currentUserRole }: S
     { key: "conversas", label: "Conversas", icon: ICONS.conversas },
     ...(isAdminGestao ? ([
       { key: "automacao", label: "Automação", icon: ICONS.automacao },
+      { key: "comentario-dm", label: "Comentário → DM", icon: ICONS.comentarioDm },
       { key: "envio-massa", label: "Envio em Massa", icon: ICONS.envioMassa },
       { key: "campanhas", label: "Campanhas", icon: ICONS.campanhas },
     ] as { key: MainTab; label: string; icon: ReactNode }[]) : []),
@@ -490,6 +493,13 @@ export function SdrClient({ currentUserId, currentUserName, currentUserRole }: S
       {mainTab === "automacao" && (
         <div className="flex-1 overflow-hidden bg-[#0D1B2E]">
           <SdrFlowBuilderClient />
+        </div>
+      )}
+
+      {/* ── Comentário → DM tab (Comment-to-DM do Instagram) ─────────────────── */}
+      {mainTab === "comentario-dm" && (
+        <div className="flex-1 overflow-hidden bg-[#0D1B2E]">
+          <SdrCommentTriggersClient />
         </div>
       )}
 
