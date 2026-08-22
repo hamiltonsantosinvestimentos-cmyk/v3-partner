@@ -5,7 +5,11 @@
 // tokens diferentes, não reaproveitar.
 
 const GRAPH_API_VERSION = "v26.0";
-const GRAPH_BASE = `https://graph.facebook.com/${GRAPH_API_VERSION}`;
+// graph.instagram.com, nao graph.facebook.com -- o token e um Instagram User
+// Access Token (prefixo IGAAU, gerado via Instagram API with Instagram Login),
+// que so e aceito no host do Instagram. Ver lib/meta-ads.ts pro caso do token
+// de Pagina classico, que usa graph.facebook.com.
+const GRAPH_BASE = `https://graph.instagram.com/${GRAPH_API_VERSION}`;
 
 function pageAccessToken(): string {
   const v = process.env.INSTAGRAM_PAGE_ACCESS_TOKEN;
