@@ -18,6 +18,7 @@ import { NdaAuthorizationQueuePanel } from "./nda-authorization-queue-panel";
 import { QuickIndicateModal } from "./quick-indicate-modal";
 import { KanbanCard } from "./kanban-card";
 import { CmSearchFilterBar, EMPTY_CM_FILTERS, CM_STATUS_LABELS, CM_VALOR_FACE_BUCKETS, type CmListingFilters } from "./filter-drawer";
+import { ForjaJuridicoPanel } from "./forja-juridico-panel";
 import { CM_DOCUMENT_CHECKLISTS, type CmAssetType } from "@/lib/cm-checklists";
 import { createClient as createBrowserSupabaseClient } from "@/lib/supabase/client";
 
@@ -52,6 +53,10 @@ interface Listing {
   esfera?: string | null;
   days_in_stage?: number;
   originator?: { id: string; full_name: string } | null;
+  // Forja Jurídico (Etapa 7, 21/08/2026) — parecer interno, nunca confundir
+  // com public_narrative (linha 40, vitrine pública, anônimo)
+  internal_thesis?: string | null;
+  internal_thesis_generated_at?: string | null;
 }
 
 interface InspectionRequest {
@@ -250,7 +255,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
   const [uploadingGallery, setUploadingGallery] = useState(false);
   const [generatingNarrative, setGeneratingNarrative] = useState(false);
   const [selectedListing, setSelectedListing] = useState<Listing | null>(null);
-  const [activeDetailTab, setActiveDetailTab] = useState<"geral" | "documentos" | "orderbook" | "governanca" | "notas">("geral");
+  const [activeDetailTab, setActiveDetailTab] = useState<"geral" | "documentos" | "orderbook" | "governanca" | "notas" | "forja">("geral");
   const [listingDocs, setListingDocs] = useState<any[]>([]);
   const [docsLoading, setDocsLoading] = useState(false);
   const [intakeUrl, setIntakeUrl] = useState<string | null>(null);
@@ -2310,6 +2315,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
                 { id: "orderbook" as const, label: "Order Book" },
                 { id: "governanca" as const, label: "Governança" },
                 { id: "notas" as const, label: "Notas" },
+                { id: "forja" as const, label: "Forja Jurídico" },
               ]).map((tab) => (
                 <button
                   key={tab.id}
@@ -3225,6 +3231,19 @@ export function MesaCapitaisClient({ userRole = "GESTAO" }: { userRole?: string 
               )}
             </div>
             </>)}
+
+            {/* ══ ABA: FORJA JURÍDICO ══ */}
+            {activeDetailTab === "forja" && (
+              <ForjaJuridicoPanel
+                listingId={selectedListing.id}
+                assetLabel={selectedListing.apelido ? `${selectedListing.anonymous_id} · ${selectedListing.apelido}` : selectedListing.anonymous_id}
+                internalThesis={selectedListing.internal_thesis ?? null}
+                internalThesisGeneratedAt={selectedListing.internal_thesis_generated_at ?? null}
+                onThesisUpdated={(thesis, generatedAt) => {
+                  setSelectedListing((prev) => prev ? { ...prev, internal_thesis: thesis, internal_thesis_generated_at: generatedAt } : prev);
+                }}
+              />
+            )}
 
             {/* ══ ABA: ORDER BOOK ══ */}
             {activeDetailTab === "orderbook" && (<>

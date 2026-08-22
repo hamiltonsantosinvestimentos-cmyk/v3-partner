@@ -1,5 +1,5 @@
 import { Resend } from "resend";
-import { auditText, auditHtml } from "@/lib/brand-guardian-gate";
+import { auditText, auditHtml, type GateViolation } from "@/lib/brand-guardian-gate";
 
 const FROM = process.env.EMAIL_FROM || "V3 Partners <onboarding@resend.dev>";
 
@@ -1319,4 +1319,146 @@ export async function notifyAulaAoVivoLembrete(opts: {
       url: opts.zoomLink,
     })
   );
+}
+
+// ── Forja Jurídico — E-mails Institucionais (Etapa 7, 21/08/2026) ─────────
+// Família nova, separada dos notify* acima. Diferença deliberada: essas
+// funções NÃO chamam Resend (não usam send()). Constroem e gateiam
+// (auditText/auditHtml) o e-mail e devolvem { subject, html, violations,
+// blocking } -- quem envia de fato é o workflow n8n W-CM-Email, chamado
+// por app/api/cm/institutional-email/trigger/route.ts (ver BRIEF Etapa 7).
+// n8n não tem acesso a este módulo (roda isolado, fora do Next.js), então
+// o HTML final já tem que sair pronto e gateado daqui -- nunca duplicar
+// esse markup dentro do Code node do n8n.
+
+export type InstitutionalTemplateKey =
+  | "solicitacao_documentos"
+  | "link_qualificacao"
+  | "aviso_minuta_ncnda"
+  | "convocacao_alinhamento";
+
+export type InstitutionalBuildResult = {
+  subject: string;
+  html: string;
+  violations: GateViolation[];
+  blocking: GateViolation[];
+};
+
+function buildInstitutional(opts: {
+  subjectRaw: string;
+  title: string;
+  bodyHtml: string;
+  cta?: { label: string; url: string };
+}): InstitutionalBuildResult {
+  const subjectGate = auditText(opts.subjectRaw);
+  const htmlGate = auditHtml(template(opts.title, opts.bodyHtml, opts.cta));
+  return {
+    subject: subjectGate.corrected,
+    html: htmlGate.corrected,
+    violations: [...subjectGate.violations, ...htmlGate.violations],
+    blocking: [...subjectGate.blocking, ...htmlGate.blocking],
+  };
+}
+
+/** Solicitação de Documentos — Forja Jurídico */
+export function buildSolicitacaoDocumentos(opts: {
+  recipientName: string;
+  assetLabel: string;
+  customMessage: string;
+  documentsList: string[];
+}): InstitutionalBuildResult {
+  const body = `
+    <p style="color:#F5F1E8;font-size:14px;margin:0 0 20px;">Prezado(a) ${opts.recipientName},</p>
+    <p style="color:#9BAFC5;font-size:14px;margin:0 0 20px;white-space:pre-line;line-height:1.6;">${opts.customMessage}</p>
+    ${opts.documentsList.length > 0 ? `
+    <div style="background:#0D1C2E;border-radius:10px;padding:18px;margin-bottom:20px;">
+      <p style="margin:0 0 10px;font-size:11px;font-weight:700;color:#C9A84C;letter-spacing:0.08em;text-transform:uppercase;">Documentos Solicitados</p>
+      <ul style="margin:0;padding-left:18px;color:#F5F1E8;font-size:13px;line-height:1.9;">
+        ${opts.documentsList.map((d) => `<li>${d}</li>`).join("")}
+      </ul>
+    </div>` : ""}
+    ${row("Referência", opts.assetLabel)}
+  `;
+  return buildInstitutional({
+    subjectRaw: `Solicitação de Documentos — ${opts.assetLabel}`,
+    title: "Solicitação de Documentos",
+    bodyHtml: body,
+  });
+}
+
+/** Envio de Link de Qualificação — Forja Jurídico. O token/URL já existe
+ *  (mesma esteira pública de /intake/qualificacao/[token] em produção
+ *  desde 13/08), esta função só empacota o link já gerado, nunca cria um. */
+export function buildLinkQualificacao(opts: {
+  recipientName: string;
+  assetLabel: string;
+  customMessage: string;
+  qualificationUrl: string;
+}): InstitutionalBuildResult {
+  const body = `
+    <p style="color:#F5F1E8;font-size:14px;margin:0 0 20px;">Prezado(a) ${opts.recipientName},</p>
+    <p style="color:#9BAFC5;font-size:14px;margin:0 0 20px;white-space:pre-line;line-height:1.6;">${opts.customMessage}</p>
+    <p style="color:#9BAFC5;font-size:13px;margin:0 0 4px;">
+      Clique no botão abaixo para preencher seus dados de qualificação. O preenchimento leva poucos minutos.
+    </p>
+    ${row("Referência", opts.assetLabel)}
+  `;
+  return buildInstitutional({
+    subjectRaw: `Link de Qualificação — ${opts.assetLabel}`,
+    title: "Qualificação de Parte",
+    bodyHtml: body,
+    cta: { label: "Preencher Qualificação", url: opts.qualificationUrl },
+  });
+}
+
+/** Aviso de Minuta de NCNDA — Forja Jurídico. Aviso institucional, não
+ *  substitui o envio real via ClickSign (Central de Contratos, botão
+ *  "Enviar para Assinatura" já em produção) -- só avisa que está a caminho. */
+export function buildAvisoMinutaNcnda(opts: {
+  recipientName: string;
+  assetLabel: string;
+  customMessage: string;
+}): InstitutionalBuildResult {
+  const body = `
+    <p style="color:#F5F1E8;font-size:14px;margin:0 0 20px;">Prezado(a) ${opts.recipientName},</p>
+    <p style="color:#9BAFC5;font-size:14px;margin:0 0 20px;white-space:pre-line;line-height:1.6;">${opts.customMessage}</p>
+    <div style="margin-top:16px;padding:14px 18px;background:#13223A;border-radius:8px;border-left:3px solid #C9A84C;">
+      <p style="margin:0;font-size:13px;color:#E8C97A;">
+        A minuta do NCNDA (Acordo de Não Circunvenção e Confidencialidade) será enviada em seguida
+        por e-mail separado, via ClickSign, para assinatura eletrônica.
+      </p>
+    </div>
+    ${row("Referência", opts.assetLabel)}
+  `;
+  return buildInstitutional({
+    subjectRaw: `Minuta de NCNDA a caminho — ${opts.assetLabel}`,
+    title: "Minuta de NCNDA",
+    bodyHtml: body,
+  });
+}
+
+/** Convocação de Alinhamento — Forja Jurídico */
+export function buildConvocacaoAlinhamento(opts: {
+  recipientName: string;
+  assetLabel: string;
+  customMessage: string;
+  meetingDateTime?: string;
+  meetingUrl?: string;
+}): InstitutionalBuildResult {
+  const body = `
+    <p style="color:#F5F1E8;font-size:14px;margin:0 0 20px;">Prezado(a) ${opts.recipientName},</p>
+    <p style="color:#9BAFC5;font-size:14px;margin:0 0 20px;white-space:pre-line;line-height:1.6;">${opts.customMessage}</p>
+    ${opts.meetingDateTime ? `
+    <div style="margin:0 0 20px;padding:18px 20px;background:#13223A;border-radius:10px;border-left:4px solid #C9A84C;">
+      <p style="margin:0 0 4px;font-size:11px;font-weight:700;letter-spacing:1px;color:#C9A84C;text-transform:uppercase;">Reunião de Alinhamento</p>
+      <p style="margin:0;font-size:18px;font-weight:800;color:#E8C97A;">${opts.meetingDateTime}</p>
+    </div>` : ""}
+    ${row("Referência", opts.assetLabel)}
+  `;
+  return buildInstitutional({
+    subjectRaw: `Convocação de Alinhamento — ${opts.assetLabel}`,
+    title: "Convocação de Alinhamento",
+    bodyHtml: body,
+    cta: opts.meetingUrl ? { label: "Acessar Reunião", url: opts.meetingUrl } : undefined,
+  });
 }
