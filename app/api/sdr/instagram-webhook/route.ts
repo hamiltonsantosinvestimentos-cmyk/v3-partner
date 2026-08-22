@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { after } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { sendInstagramText, sendInstagramPrivateReply, replyToInstagramComment } from "@/lib/instagram-dm";
+import {
+  sendInstagramText,
+  sendInstagramPrivateReply,
+  sendInstagramPrivateReplyWithQuickReplies,
+  replyToInstagramComment,
+  checkIsFollowing,
+} from "@/lib/instagram-dm";
 import { processarMensagemSDRCore, isIaAtiva } from "@/lib/sdr-agent";
 
 const supabase = createClient(
@@ -36,8 +42,13 @@ type InstagramMessagingEvent = {
     text?: string;
     is_echo?: boolean;
     attachments?: unknown[];
+    quick_reply?: { payload?: string };
   };
 };
+
+// Prefixo do payload do botão "Já sigo" mandado no gate de follow do
+// Comment-to-DM — ver processarComentario / processarFollowCheck abaixo.
+const FOLLOW_CHECK_PREFIX = "FOLLOW_CHECK:";
 
 // Payload de comentários (campo "comments" do webhook — Comment-to-DM):
 // { object: "instagram", entry: [{ id, time, changes: [{ field: "comments", value: {...} }] }] }
@@ -91,6 +102,15 @@ async function processarEvento(event: InstagramMessagingEvent) {
   // is_echo: eco da própria mensagem que o SDR acabou de enviar via Send API —
   // a Meta reenvia ela pro webhook também; ignorar, senão o bot responde a si mesmo.
   if (!igsid || !message || message.is_echo) return;
+
+  // Clique no botão "Já sigo" do gate de follow do Comment-to-DM — desvia
+  // do fluxo normal do agente SDR, é tratado à parte.
+  const quickReplyPayload = message.quick_reply?.payload;
+  if (quickReplyPayload?.startsWith(FOLLOW_CHECK_PREFIX)) {
+    const commentEventId = quickReplyPayload.slice(FOLLOW_CHECK_PREFIX.length);
+    await processarFollowCheck(igsid, commentEventId);
+    return;
+  }
 
   const messageText = message.text;
   if (!messageText) {
@@ -217,18 +237,82 @@ async function processarComentario(value: InstagramCommentChange["value"], ownAc
 
   after(async () => {
     try {
-      await sendInstagramPrivateReply(commentId, trigger.mensagem_dm);
-      if (trigger.resposta_publica) {
-        await replyToInstagramComment(commentId, trigger.resposta_publica);
+      // Gate de follow: só libera a DM do gatilho pra quem já segue a conta.
+      // null (consulta falhou) é tratado como "pode passar" — fail-open, um
+      // erro de API não pode travar o lead pra sempre no meio do caminho.
+      const segue = await checkIsFollowing(fromId);
+      if (segue === false) {
+        await sendInstagramPrivateReplyWithQuickReplies(
+          commentId,
+          "Pra eu te mandar essa informação, segue a gente aqui no Instagram 🙂 Depois é só clicar no botão abaixo.",
+          [{ title: "Já sigo!", payload: `${FOLLOW_CHECK_PREFIX}${commentId}` }]
+        );
+        await supabase.from("sdr_comment_events").update({ aguardando_follow: true }).eq("comment_id", commentId);
+        return;
       }
-      await supabase.from("sdr_comment_events").update({ dm_enviada: true }).eq("comment_id", commentId);
-      await supabase
-        .from("sdr_comment_triggers")
-        .update({ total_disparos: (trigger.total_disparos ?? 0) + 1 })
-        .eq("id", trigger.id);
+
+      // Primeiro contato pra esse comentário: usa Private Reply (única forma
+      // de iniciar conversa a partir de um comentário de quem nunca te mandou DM).
+      await enviarDmDoGatilho(trigger, (texto) => sendInstagramPrivateReply(commentId, texto), commentId);
     } catch (e) {
       console.error("[SDR Instagram Webhook] Erro ao enviar private reply:", e);
       await supabase.from("sdr_comment_events").update({ erro: String(e) }).eq("comment_id", commentId);
     }
   });
+}
+
+// Envia de fato a DM configurada no gatilho (+ resposta pública opcional) e
+// marca o evento como concluído. `enviarTexto` decide a API certa pra
+// entregar: Private Reply (comment_id) no primeiro contato, mensagem comum
+// (igsid) quando já veio de uma Private Reply anterior (a Meta só permite
+// UMA Private Reply por comentário -- usar de novo aqui falharia).
+async function enviarDmDoGatilho(
+  trigger: { id: string; mensagem_dm: string; resposta_publica: string | null; total_disparos: number },
+  enviarTexto: (texto: string) => Promise<void>,
+  commentId: string
+) {
+  await enviarTexto(trigger.mensagem_dm);
+  if (trigger.resposta_publica) {
+    await replyToInstagramComment(commentId, trigger.resposta_publica);
+  }
+  await supabase.from("sdr_comment_events").update({ dm_enviada: true, aguardando_follow: false }).eq("comment_id", commentId);
+  await supabase
+    .from("sdr_comment_triggers")
+    .update({ total_disparos: (trigger.total_disparos ?? 0) + 1 })
+    .eq("id", trigger.id);
+}
+
+// ── Confirmação do gate de follow (clique no botão "Já sigo") ──────────────
+async function processarFollowCheck(igsid: string, commentEventId: string) {
+  const { data: evento, error: eventoErr } = await supabase
+    .from("sdr_comment_events")
+    .select("*, sdr_comment_triggers(*)")
+    .eq("comment_id", commentEventId)
+    .maybeSingle();
+
+  if (eventoErr || !evento) {
+    console.log(`[SDR Instagram Webhook] Follow check pra evento ${commentEventId} não encontrado`);
+    return;
+  }
+
+  if (evento.dm_enviada) {
+    console.log(`[SDR Instagram Webhook] Follow check pra evento ${commentEventId} já tinha DM enviada — ignorando reentrega`);
+    return;
+  }
+
+  const trigger = evento.sdr_comment_triggers as { id: string; mensagem_dm: string; resposta_publica: string | null; total_disparos: number } | null;
+  if (!trigger) {
+    console.error(`[SDR Instagram Webhook] Gatilho do evento ${commentEventId} não encontrado (excluído?)`);
+    return;
+  }
+
+  const segue = await checkIsFollowing(igsid);
+  if (segue === false) {
+    await sendInstagramText(igsid, "Ainda não encontrei você seguindo a gente — dá uma conferida e clica de novo, por favor 🙂");
+    return;
+  }
+
+  // Já mandamos a Private Reply do pedido de follow pra esse comentário —
+  // não dá pra usar de novo (só 1 por comentário), segue pelo IGSID normal.
+  await enviarDmDoGatilho(trigger, (texto) => sendInstagramText(igsid, texto), commentEventId);
 }
