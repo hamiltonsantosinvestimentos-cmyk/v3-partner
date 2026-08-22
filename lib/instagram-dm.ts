@@ -80,6 +80,55 @@ export async function sendInstagramPrivateReply(commentId: string, text: string)
   }
 }
 
+// Checa se o IGSID segue a conta comercial (usado no gate do Comment-to-DM
+// pra não liberar a DM do gatilho pra quem ainda não segue). Retorna null
+// (não false!) quando a consulta falha -- quem chama deve tratar null como
+// "não sei", fail-open, pra um erro de API não bloquear a conversa indevidamente.
+export async function checkIsFollowing(igsid: string): Promise<boolean | null> {
+  try {
+    const res = await fetch(
+      `${GRAPH_BASE}/${igsid}?fields=is_user_follow_business&access_token=${encodeURIComponent(pageAccessToken())}`
+    );
+    const json = (await res.json()) as MetaErrorBody & { is_user_follow_business?: boolean };
+    if (!res.ok || json.error) return null;
+    return json.is_user_follow_business ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export type InstagramQuickReply = { title: string; payload: string };
+
+// Private Reply com botões (quick replies) -- usado pro pedido de "segue a
+// gente" no gate do Comment-to-DM. Título tem limite curto na API (~20
+// caracteres), quem chama deve manter os títulos enxutos.
+export async function sendInstagramPrivateReplyWithQuickReplies(
+  commentId: string,
+  text: string,
+  quickReplies: InstagramQuickReply[]
+): Promise<void> {
+  const res = await fetch(`${GRAPH_BASE}/me/messages?access_token=${encodeURIComponent(pageAccessToken())}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      recipient: { comment_id: commentId },
+      message: {
+        text,
+        quick_replies: quickReplies.map((q) => ({ content_type: "text", title: q.title, payload: q.payload })),
+      },
+    }),
+  });
+
+  const json = (await res.json()) as MetaErrorBody;
+  if (!res.ok || json.error) {
+    const err = json.error;
+    throw new InstagramDmError(err?.message ?? `Erro HTTP ${res.status} na Private Reply com quick replies do Instagram`, {
+      code: err?.code,
+      subcode: err?.error_subcode,
+    });
+  }
+}
+
 export type InstagramMediaSummary = {
   id: string;
   caption?: string;
