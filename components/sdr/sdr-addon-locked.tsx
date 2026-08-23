@@ -3,7 +3,9 @@
 import { useState } from "react";
 import { Lock, MessageSquare, CheckCircle2, Loader2, Bot, Send, Zap } from "lucide-react";
 
-export function SdrAddonLocked({ jaSolicitado }: { jaSolicitado: boolean }) {
+type Status = "nao_contratado" | "pausado" | "cancelado";
+
+export function SdrAddonLocked({ jaSolicitado, status: addonStatus = "nao_contratado" }: { jaSolicitado: boolean; status?: Status }) {
   const [status, setStatus] = useState<"idle" | "loading" | "ok" | "err">(jaSolicitado ? "ok" : "idle");
 
   async function solicitar() {
@@ -25,10 +27,20 @@ export function SdrAddonLocked({ jaSolicitado }: { jaSolicitado: boolean }) {
         </div>
 
         <h1 className="text-2xl font-bold text-[#F0ECE4]">Atendimento IA no WhatsApp</h1>
-        <p className="text-sm text-[#7A8FA8] mt-2 max-w-md mx-auto">
-          Conecte o seu próprio número de WhatsApp e deixe uma IA configurada por você
-          responder, qualificar e agendar com os seus leads — automaticamente.
-        </p>
+        {addonStatus === "pausado" ? (
+          <p className="text-sm text-orange-400 mt-2 max-w-md mx-auto">
+            Sua assinatura está pausada no momento. Fale com a V3 pra reativar.
+          </p>
+        ) : addonStatus === "cancelado" ? (
+          <p className="text-sm text-red-400 mt-2 max-w-md mx-auto">
+            Sua assinatura foi cancelada. Se quiser contratar de novo, é só pedir abaixo.
+          </p>
+        ) : (
+          <p className="text-sm text-[#7A8FA8] mt-2 max-w-md mx-auto">
+            Conecte o seu próprio número de WhatsApp e deixe uma IA configurada por você
+            responder, qualificar e agendar com os seus leads — automaticamente.
+          </p>
+        )}
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-6 text-left">
           {[
@@ -49,7 +61,11 @@ export function SdrAddonLocked({ jaSolicitado }: { jaSolicitado: boolean }) {
         </div>
 
         <div className="mt-6">
-          {status === "ok" ? (
+          {addonStatus === "pausado" ? (
+            <div className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-orange-500/15 border border-orange-500/30 text-orange-400 text-sm font-semibold">
+              Assinatura pausada pela V3
+            </div>
+          ) : status === "ok" ? (
             <div className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-sm font-semibold">
               <CheckCircle2 className="w-4 h-4" /> Pedido enviado — aguarde a ativação
             </div>
@@ -60,14 +76,16 @@ export function SdrAddonLocked({ jaSolicitado }: { jaSolicitado: boolean }) {
               className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-[#C9A84C] hover:bg-[#E8C97A] text-[#09081A] text-sm font-bold transition-all disabled:opacity-60"
             >
               {status === "loading" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Lock className="w-4 h-4" />}
-              {status === "loading" ? "Enviando..." : "Quero Contratar"}
+              {status === "loading" ? "Enviando..." : addonStatus === "cancelado" ? "Quero Contratar de Novo" : "Quero Contratar"}
             </button>
           )}
           {status === "err" && <p className="text-xs text-red-400 mt-2">Não foi possível enviar o pedido. Tente novamente.</p>}
         </div>
-        <p className="text-[11px] text-[#7A8FA8] mt-4">
-          Após o pedido, nossa equipe confirma o pagamento e libera o acesso.
-        </p>
+        {addonStatus !== "pausado" && (
+          <p className="text-[11px] text-[#7A8FA8] mt-4">
+            Após o pedido, nossa equipe confirma o pagamento e libera o acesso.
+          </p>
+        )}
       </div>
     </div>
   );

@@ -22,11 +22,18 @@ export async function PATCH(_req: NextRequest, { params }: { params: Promise<{ p
   const { partnerId } = await params;
   const db = svc();
 
+  const hoje = new Date();
+  const proximaCobranca = new Date(hoje);
+  proximaCobranca.setDate(proximaCobranca.getDate() + 30);
+
   const { error } = await db.from("partner_sdr_connections").upsert({
     partner_id: partnerId,
     addon_ativo: true,
-    addon_ativado_em: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
+    addon_status: "ativo",
+    addon_ativado_em: hoje.toISOString(),
+    addon_ultimo_pagamento_em: hoje.toISOString().slice(0, 10),
+    addon_proxima_cobranca: proximaCobranca.toISOString().slice(0, 10),
+    updated_at: hoje.toISOString(),
   }, { onConflict: "partner_id" });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

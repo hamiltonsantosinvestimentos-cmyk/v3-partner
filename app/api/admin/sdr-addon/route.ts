@@ -22,7 +22,11 @@ export async function GET() {
   const db = svc();
   const { data: conexoes } = await db
     .from("partner_sdr_connections")
-    .select("partner_id, status, whatsapp_phone, addon_ativo, addon_solicitado_em, addon_ativado_em")
+    .select(`
+      partner_id, status, whatsapp_phone, addon_ativo, addon_status,
+      addon_solicitado_em, addon_ativado_em, addon_pausado_em, addon_cancelado_em,
+      addon_ultimo_pagamento_em, addon_proxima_cobranca
+    `)
     .not("addon_solicitado_em", "is", null)
     .order("addon_solicitado_em", { ascending: false });
 
@@ -32,10 +36,12 @@ export async function GET() {
     : { data: [] };
   const perfilMap = new Map((perfis ?? []).map((p) => [p.id, p]));
 
+  const hoje = new Date().toISOString().slice(0, 10);
   const pedidos = (conexoes ?? []).map((c) => ({
     ...c,
     partner_nome: perfilMap.get(c.partner_id)?.full_name ?? null,
     partner_email: perfilMap.get(c.partner_id)?.email ?? null,
+    atrasado: c.addon_status === "ativo" && !!c.addon_proxima_cobranca && c.addon_proxima_cobranca < hoje,
   }));
 
   return NextResponse.json({ pedidos });

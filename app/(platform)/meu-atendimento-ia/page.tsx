@@ -24,12 +24,17 @@ export default async function MeuAtendimentoIaPage() {
   const db = sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
   const { data: conexao } = await db
     .from("partner_sdr_connections")
-    .select("addon_ativo, addon_solicitado_em")
+    .select("addon_ativo, addon_solicitado_em, addon_status")
     .eq("partner_id", user.id)
     .maybeSingle();
 
   if (!conexao?.addon_ativo) {
-    return <SdrAddonLocked jaSolicitado={!!conexao?.addon_solicitado_em} />;
+    return (
+      <SdrAddonLocked
+        jaSolicitado={!!conexao?.addon_solicitado_em}
+        status={conexao?.addon_status === "pausado" || conexao?.addon_status === "cancelado" ? conexao.addon_status : "nao_contratado"}
+      />
+    );
   }
 
   return <PartnerSdrClient />;
