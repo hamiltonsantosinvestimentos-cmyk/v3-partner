@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
-import { createAd, createAdCreative, MetaAdsError } from "@/lib/meta-ads";
+import { createAd, createAdCreative, listAds, MetaAdsError } from "@/lib/meta-ads";
 
 const ADMIN_ROLES = ["ADMIN", "GESTAO"] as const;
 
@@ -18,22 +18,45 @@ async function authGuard() {
   return { user };
 }
 
-// GET — lista os anúncios criados pela plataforma pra um ad set.
+// GET — lista os anúncios de um ad set direto na Meta, com o criativo
+// (imagem/vídeo, texto, CTA) — fonte de verdade, pega qualquer anúncio.
+// ad_set_id é o meta_adset_id.
 export async function GET(req: NextRequest) {
   const auth = await authGuard();
   if (!auth) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
-  const adSetLocalId = req.nextUrl.searchParams.get("ad_set_local_id");
-  if (!adSetLocalId) return NextResponse.json({ error: "ad_set_local_id obrigatório" }, { status: 422 });
+  const adSetId = req.nextUrl.searchParams.get("ad_set_id");
+  if (!adSetId) return NextResponse.json({ error: "ad_set_id obrigatório" }, { status: 422 });
 
-  const { data, error } = await svc()
-    .from("trafego_ads")
-    .select("*")
-    .eq("ad_set_id", adSetLocalId)
-    .order("created_at", { ascending: false });
+  try {
+    const ads = await listAds(adSetId);
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ ads: data ?? [] });
+    const db = svc();
+    const { data: adSetLocal } = await db
+      .from("trafego_ad_sets")
+      .select("id")
+      .eq("meta_adset_id", adSetId)
+      .maybeSingle();
+
+    if (adSetLocal && ads.length > 0) {
+      await db.from("trafego_ads").upsert(
+        ads.map((a) => ({
+          ad_set_id: adSetLocal.id,
+          meta_ad_id: a.id,
+          nome: a.name,
+          status: a.status,
+          criativo: a.creative ?? null,
+          updated_at: new Date().toISOString(),
+        })),
+        { onConflict: "meta_ad_id", ignoreDuplicates: false }
+      );
+    }
+
+    return NextResponse.json({ ads });
+  } catch (e) {
+    const msg = e instanceof MetaAdsError ? e.message : "Erro ao consultar anúncios na Meta Ads";
+    return NextResponse.json({ error: msg }, { status: 502 });
+  }
 }
 
 // POST — cria o criativo e o anúncio numa tacada só. ad_set_id no body é o
