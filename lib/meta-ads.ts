@@ -106,6 +106,39 @@ export interface InsightsRow {
   date_stop?: string;
 }
 
+export interface AdSetSummary {
+  id: string;
+  name: string;
+  status: string;
+  daily_budget?: string;
+  lifetime_budget?: string;
+  optimization_goal?: string;
+  destination_type?: string;
+  targeting?: Record<string, unknown>;
+  created_time?: string;
+}
+
+export interface AdCreativeDetail {
+  id?: string;
+  name?: string;
+  thumbnail_url?: string;
+  image_url?: string;
+  video_id?: string;
+  object_type?: string;
+  call_to_action_type?: string;
+  body?: string;
+  title?: string;
+  instagram_permalink_url?: string;
+}
+
+export interface AdSummary {
+  id: string;
+  name: string;
+  status: string;
+  created_time?: string;
+  creative?: AdCreativeDetail;
+}
+
 // ─── Campanhas ──────────────────────────────────────────────────────────────
 
 export async function listCampaigns(): Promise<CampaignSummary[]> {
@@ -139,6 +172,20 @@ export async function createCampaign(input: {
 }
 
 // ─── Ad Sets ────────────────────────────────────────────────────────────────
+
+// Lista os ad sets de uma campanha direto na Meta -- fonte de verdade, pega
+// qualquer ad set (criado pela plataforma ou não, ex: direto no Ads Manager
+// ou via curl/script). O cache local (trafego_ad_sets) é só espelho/trilha,
+// nunca a fonte pra listagem.
+export async function listAdSets(campaignId: string): Promise<AdSetSummary[]> {
+  const data = await graphRequest<{ data: AdSetSummary[] }>(`/${campaignId}/adsets`, {
+    params: {
+      fields: "id,name,status,daily_budget,lifetime_budget,optimization_goal,destination_type,targeting,created_time",
+      limit: 100,
+    },
+  });
+  return data.data;
+}
 
 export async function createAdSet(input: {
   campaignId: string;
@@ -182,6 +229,19 @@ export async function createAdSet(input: {
 }
 
 // ─── Criativos e anúncios ───────────────────────────────────────────────────
+
+// Lista os anúncios de um ad set direto na Meta, já trazendo o criativo
+// (imagem/vídeo, texto, CTA) -- é o que dá pra "ver o anúncio de verdade"
+// no painel, não só o nome/status.
+export async function listAds(adSetId: string): Promise<AdSummary[]> {
+  const data = await graphRequest<{ data: AdSummary[] }>(`/${adSetId}/ads`, {
+    params: {
+      fields: "id,name,status,created_time,creative{id,name,thumbnail_url,image_url,video_id,object_type,call_to_action_type,body,title,instagram_permalink_url}",
+      limit: 100,
+    },
+  });
+  return data.data;
+}
 
 export async function createAdCreative(input: {
   name: string;
@@ -315,6 +375,24 @@ export async function getInsights(
   }
   const data = await graphRequest<{ data: InsightsRow[] }>(`/${objectId}/insights`, { params });
   return data.data;
+}
+
+// Resumo agregado de TODA a conta (todas as campanhas juntas) -- usado pros
+// cards de visão geral no topo do dashboard, sem precisar somar campanha por
+// campanha no frontend.
+export async function getAccountInsights(
+  opts: { datePreset?: string; since?: string; until?: string } = {}
+): Promise<InsightsRow | null> {
+  const params: Record<string, string> = {
+    fields: "impressions,clicks,spend,ctr,cpc,reach,date_start,date_stop",
+  };
+  if (opts.since && opts.until) {
+    params.time_range = JSON.stringify({ since: opts.since, until: opts.until });
+  } else {
+    params.date_preset = opts.datePreset ?? "last_7d";
+  }
+  const data = await graphRequest<{ data: InsightsRow[] }>(`/${adAccountId()}/insights`, { params });
+  return data.data[0] ?? null;
 }
 
 // ─── Upload de imagem (pra usar em criativos) ──────────────────────────────

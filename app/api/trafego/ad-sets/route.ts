@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
-import { createAdSet, MetaAdsError } from "@/lib/meta-ads";
+import { createAdSet, listAdSets, MetaAdsError } from "@/lib/meta-ads";
 
 const ADMIN_ROLES = ["ADMIN", "GESTAO"] as const;
 
@@ -18,23 +18,47 @@ async function authGuard() {
   return { user };
 }
 
-// GET — lista os ad sets criados pela plataforma pra uma campanha (cache
-// local; não busca ad sets criados fora da plataforma, direto no Meta).
+// GET — lista os ad sets de uma campanha direto na Meta (fonte de verdade:
+// pega qualquer ad set, criado pela plataforma ou não). campaign_id é o
+// meta_campaign_id. Sincroniza o cache local como efeito colateral, igual
+// /api/trafego/campanhas faz.
 export async function GET(req: NextRequest) {
   const auth = await authGuard();
   if (!auth) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
-  const campanhaLocalId = req.nextUrl.searchParams.get("campanha_local_id");
-  if (!campanhaLocalId) return NextResponse.json({ error: "campanha_local_id obrigatório" }, { status: 422 });
+  const campaignId = req.nextUrl.searchParams.get("campaign_id");
+  if (!campaignId) return NextResponse.json({ error: "campaign_id obrigatório" }, { status: 422 });
 
-  const { data, error } = await svc()
-    .from("trafego_ad_sets")
-    .select("*")
-    .eq("campanha_id", campanhaLocalId)
-    .order("created_at", { ascending: false });
+  try {
+    const adSets = await listAdSets(campaignId);
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ ad_sets: data ?? [] });
+    const db = svc();
+    const { data: campanhaLocal } = await db
+      .from("trafego_campanhas")
+      .select("id")
+      .eq("meta_campaign_id", campaignId)
+      .maybeSingle();
+
+    if (campanhaLocal && adSets.length > 0) {
+      await db.from("trafego_ad_sets").upsert(
+        adSets.map((a) => ({
+          campanha_id: campanhaLocal.id,
+          meta_adset_id: a.id,
+          nome: a.name,
+          status: a.status,
+          orcamento_diario_centavos: a.daily_budget ? Number(a.daily_budget) : null,
+          segmentacao: a.targeting ?? null,
+          updated_at: new Date().toISOString(),
+        })),
+        { onConflict: "meta_adset_id", ignoreDuplicates: false }
+      );
+    }
+
+    return NextResponse.json({ ad_sets: adSets });
+  } catch (e) {
+    const msg = e instanceof MetaAdsError ? e.message : "Erro ao consultar conjuntos de anúncios na Meta Ads";
+    return NextResponse.json({ error: msg }, { status: 502 });
+  }
 }
 
 // POST — cria um conjunto de anúncios (ad set) dentro de uma campanha já
