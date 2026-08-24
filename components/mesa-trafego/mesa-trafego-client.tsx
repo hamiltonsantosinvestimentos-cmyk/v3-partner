@@ -63,7 +63,9 @@ const DATE_PRESETS: { value: string; label: string }[] = [
   { value: "today", label: "Hoje" },
   { value: "last_7d", label: "Últimos 7 dias" },
   { value: "last_30d", label: "Últimos 30 dias" },
-  { value: "lifetime", label: "Desde o início" },
+  // "lifetime" não é um date_preset válido na Graph API (erro 100) -- o nome
+  // correto pro "desde sempre" é "maximum". Ver developers.facebook.com/docs/marketing-api/insights/parameters.
+  { value: "maximum", label: "Desde o início" },
 ];
 
 const STATUS_CFG: Record<string, { label: string; text: string; bg: string; border: string }> = {
