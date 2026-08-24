@@ -14,7 +14,7 @@ const securityHeaders = [
       "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://fonts.googleapis.com https://cdn.jsdelivr.net",
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com",
-      "img-src 'self' data: blob: https://avatars.githubusercontent.com https://lh3.googleusercontent.com https://img.youtube.com https://i.ytimg.com https://sbmuashewklfhdyyuezr.supabase.co https://feosfhqlofkfuwdsyeaq.supabase.co",
+      "img-src 'self' data: blob: https://avatars.githubusercontent.com https://lh3.googleusercontent.com https://img.youtube.com https://i.ytimg.com https://sbmuashewklfhdyyuezr.supabase.co https://feosfhqlofkfuwdsyeaq.supabase.co https://*.fbcdn.net https://www.facebook.com https://*.cdninstagram.com",
       "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com",
       "connect-src 'self' https://sbmuashewklfhdyyuezr.supabase.co wss://sbmuashewklfhdyyuezr.supabase.co https://feosfhqlofkfuwdsyeaq.supabase.co wss://feosfhqlofkfuwdsyeaq.supabase.co https://api.anthropic.com https://brasilapi.com.br https://receitaws.com.br https://publica.cnj.jus.br https://viacep.com.br https://n8n-514n.onrender.com",
       "frame-ancestors 'none'",
