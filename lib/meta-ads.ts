@@ -128,6 +128,12 @@ export async function createCampaign(input: {
       objective: input.objective,
       status: input.status ?? "PAUSED",
       special_ad_categories: input.specialAdCategories ?? [],
+      // Obrigatório desde a v26.0 quando o orçamento é definido no ad set (não
+      // na campanha) — sem isso a API recusa com "Invalid parameter" (subcode
+      // 4834011). false = cada ad set usa só o próprio orçamento, sem
+      // compartilhar 20% com os outros ad sets da campanha (Advantage
+      // campaign budget).
+      is_adset_budget_sharing_enabled: false,
     },
   });
 }
@@ -142,7 +148,20 @@ export async function createAdSet(input: {
   optimizationGoal?: string;
   targeting: Record<string, unknown>;
   status?: EntityStatus;
+  bidStrategy?: "LOWEST_COST_WITHOUT_CAP" | "LOWEST_COST_WITH_BID_CAP" | "COST_CAP";
+  // Click-to-WhatsApp: quando definido, o clique no anúncio abre uma conversa
+  // no WhatsApp em vez de um link/site. whatsappPhoneNumber precisa estar
+  // vinculado à Página nos Anúncios (Business Suite > Configurações >
+  // Contas do WhatsApp) — senão a criação falha com erro de permissão.
+  destinationType?: "WHATSAPP";
+  promotedObject?: { pageId: string; whatsappPhoneNumber?: string };
 }): Promise<{ id: string }> {
+  const targeting = input.destinationType === "WHATSAPP" && input.targeting.targeting_automation === undefined
+    // Obrigatório em CTWA (subcode 1870227) -- 0 = não deixa a Meta expandir
+    // o público além do que foi definido em targeting.
+    ? { ...input.targeting, targeting_automation: { advantage_audience: 0 } }
+    : input.targeting;
+
   return graphRequest(`/${adAccountId()}/adsets`, {
     method: "POST",
     body: {
@@ -150,9 +169,14 @@ export async function createAdSet(input: {
       campaign_id: input.campaignId,
       daily_budget: input.dailyBudgetCentavos,
       billing_event: input.billingEvent ?? "IMPRESSIONS",
-      optimization_goal: input.optimizationGoal ?? "REACH",
-      targeting: input.targeting,
+      optimization_goal: input.optimizationGoal ?? (input.destinationType === "WHATSAPP" ? "CONVERSATIONS" : "REACH"),
+      bid_strategy: input.bidStrategy ?? "LOWEST_COST_WITHOUT_CAP",
+      targeting,
       status: input.status ?? "PAUSED",
+      destination_type: input.destinationType,
+      promoted_object: input.promotedObject
+        ? { page_id: input.promotedObject.pageId, whatsapp_phone_number: input.promotedObject.whatsappPhoneNumber }
+        : undefined,
     },
   });
 }
@@ -178,6 +202,70 @@ export async function createAdCreative(input: {
           link: input.link,
           name: input.linkTitle,
           image_hash: input.imageHash,
+        },
+      },
+    },
+  });
+}
+
+// Upload de vídeo por URL remota (ex: media_url de um post do Instagram) —
+// a Meta baixa o arquivo ela mesma, não precisa passar pelo nosso servidor.
+// Usa graph-video.facebook.com (host separado do resto da Marketing API,
+// dedicado a upload de mídia grande) em vez de graphRequest/GRAPH_BASE.
+export async function uploadVideoFromUrl(input: { name: string; fileUrl: string }): Promise<{ id: string }> {
+  const url = new URL(`https://graph-video.facebook.com/${GRAPH_API_VERSION}/${adAccountId()}/advideos`);
+  url.searchParams.set("access_token", accessToken());
+  const form = new URLSearchParams({ name: input.name, file_url: input.fileUrl });
+  const res = await fetch(url.toString(), { method: "POST", body: form });
+  const json = (await res.json()) as { id?: string } & MetaErrorBody;
+  if (!res.ok || json.error || !json.id) {
+    const err = json.error;
+    throw new MetaAdsError(err?.message ?? `Erro HTTP ${res.status} no upload de vídeo`, { code: err?.code, subcode: err?.error_subcode, fbtraceId: err?.fbtrace_id });
+  }
+  return { id: json.id };
+}
+
+export type VideoProcessingStatus = "ready" | "processing" | "error" | "upload_failed" | string;
+
+// Vídeo grande demora a processar depois do upload -- consultar antes de
+// usar video_id num criativo, senão a Meta recusa (vídeo ainda não pronto).
+export async function getVideoStatus(videoId: string): Promise<VideoProcessingStatus> {
+  const data = await graphRequest<{ status?: { video_status?: string } }>(`/${videoId}`, {
+    params: { fields: "status" },
+  });
+  return data.status?.video_status ?? "processing";
+}
+
+// Criativo "Clique para o WhatsApp" a partir de um vídeo (reaproveita um
+// vídeo já enviado via uploadVideoFromUrl) -- o clique no anúncio abre uma
+// conversa no WhatsApp em vez de um link. Detalhe que só se descobre na
+// prática (erro subcode 1815630): o campo "link" NÃO pode ir dentro de
+// call_to_action.value aqui (diferente de outros fluxos de CTWA que pedem
+// esse link) -- só app_destination.
+//
+// Nota: reaproveitar diretamente um vídeo ORGÂNICO do Instagram como
+// criativo (via source_instagram_media_id) falha com "O vídeo do Instagram
+// deve ser carregado no Facebook" (subcode 1815279) -- por isso o vídeo
+// precisa passar por uploadVideoFromUrl primeiro (pegando a media_url do
+// post via Instagram Graph API) e só depois entrar aqui como video_id.
+export async function createWhatsAppVideoAdCreative(input: {
+  name: string;
+  pageId: string;
+  videoId: string;
+  thumbnailUrl: string;
+  message: string;
+}): Promise<{ id: string }> {
+  return graphRequest(`/${adAccountId()}/adcreatives`, {
+    method: "POST",
+    body: {
+      name: input.name,
+      object_story_spec: {
+        page_id: input.pageId,
+        video_data: {
+          video_id: input.videoId,
+          image_url: input.thumbnailUrl,
+          message: input.message,
+          call_to_action: { type: "WHATSAPP_MESSAGE", value: { app_destination: "WHATSAPP" } },
         },
       },
     },
