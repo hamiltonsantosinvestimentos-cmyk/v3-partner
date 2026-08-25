@@ -1169,6 +1169,8 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
   const [compileLoading, setCompileLoading] = useState(false);
   const [compileDocs, setCompileDocs] = useState<CompiledDoc[]>([]);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [baixandoZip, setBaixandoZip] = useState(false);
+  const [zipError, setZipError] = useState<string | null>(null);
 
   // Instituição encaminhada (apenas mesa/admin) — suporta múltiplas
   const INSTITUICOES = [
@@ -1617,6 +1619,35 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
       setCopiedId("__all__");
       setTimeout(() => setCopiedId(null), 2000);
     });
+  }
+
+  // Baixa todos os documentos da proposta compactados num .zip só — o
+  // navegador salva na pasta de downloads padrão do usuário (não dá pra
+  // escolher a pasta local por código, é o próprio navegador quem decide).
+  async function baixarTodosZip() {
+    if (!proposal) return;
+    setBaixandoZip(true);
+    setZipError(null);
+    try {
+      const res = await fetch(`/api/credit-proposals/documents/zip?proposal_id=${proposal.id}`);
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new Error(body?.error ?? "Erro ao gerar o arquivo .zip");
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${proposal.code ?? "documentos"}-documentos.zip`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setZipError(e instanceof Error ? e.message : "Erro ao gerar o arquivo .zip");
+    } finally {
+      setBaixandoZip(false);
+    }
   }
 
   // ── Mesa Comments state ───────────────────────────────────────────────────
@@ -4938,13 +4969,23 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
             </div>
 
             {compileDocs.length > 0 && !compileLoading && (
-              <div className="px-6 py-4 border-t border-border flex items-center justify-between">
-                <p className="text-[11px] text-muted-foreground">{compileDocs.length} documento(s) · validade 20 dias</p>
-                <Button size="sm" variant="outline" onClick={copyAllLinks} className="gap-1.5 text-xs">
-                  {copiedId === "__all__"
-                    ? <><CheckCheck className="w-3.5 h-3.5 text-emerald-400" /> Copiado!</>
-                    : <><Copy className="w-3.5 h-3.5" /> Copiar todos os links</>}
-                </Button>
+              <div className="px-6 py-4 border-t border-border space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-[11px] text-muted-foreground">{compileDocs.length} documento(s) · validade 20 dias</p>
+                  <div className="flex items-center gap-2">
+                    <Button size="sm" variant="outline" onClick={copyAllLinks} className="gap-1.5 text-xs">
+                      {copiedId === "__all__"
+                        ? <><CheckCheck className="w-3.5 h-3.5 text-emerald-400" /> Copiado!</>
+                        : <><Copy className="w-3.5 h-3.5" /> Copiar todos os links</>}
+                    </Button>
+                    <Button size="sm" onClick={baixarTodosZip} disabled={baixandoZip} className="gap-1.5 text-xs">
+                      {baixandoZip
+                        ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Compactando...</>
+                        : <><Download className="w-3.5 h-3.5" /> Baixar tudo (.zip)</>}
+                    </Button>
+                  </div>
+                </div>
+                {zipError && <p className="text-[11px] text-red-400">{zipError}</p>}
               </div>
             )}
           </div>
