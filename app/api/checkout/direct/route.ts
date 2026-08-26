@@ -24,6 +24,7 @@ export async function POST(req: NextRequest) {
     client_email?: string;
     client_doc?: string;
     ref_partner_id?: string | null;
+    prop_code?: string | null;
   };
 
   const selection = clampSelection({
@@ -38,13 +39,34 @@ export async function POST(req: NextRequest) {
   if (!body.client_email?.trim()) return NextResponse.json({ error: "Email obrigatório" }, { status: 400 });
   if (!body.client_doc?.replace(/\D/g, "")) return NextResponse.json({ error: "CPF/CNPJ obrigatório" }, { status: 400 });
 
+  // Link por proposta (?prop=<code> em /analise-v2, gerado no modal da proposta
+  // na Mesa de Crédito): valida contra uma proposta real e, se achar, já grava
+  // credit_desk_proposal_id na criação do pedido -- o pedido nasce vinculado,
+  // sem precisar do fluxo manual de "Pedidos de Partners" depois.
+  let creditDeskProposalId: string | null = null;
+  let proposalPartnerId: string | null = null;
+  if (body.prop_code) {
+    const { data: prop } = await db
+      .from("credit_desk_proposals")
+      .select("id, partner_id")
+      .eq("code", body.prop_code.trim().toUpperCase())
+      .single();
+    if (prop) {
+      creditDeskProposalId = prop.id;
+      proposalPartnerId = prop.partner_id ?? null;
+    }
+  }
+
   // Valida ref_partner_id contra um profile real antes de gravar, para não
   // persistir lixo de query string malformada (ads mal configurado, bot, etc).
+  // Se não veio ref (ou veio inválido) mas a proposta tem partner, usa o
+  // partner da proposta -- é uma atribuição mais confiável que o ref genérico.
   let refPartnerId: string | null = null;
   if (body.ref_partner_id) {
     const { data: refProfile } = await db.from("profiles").select("id").eq("id", body.ref_partner_id).single();
     if (refProfile) refPartnerId = refProfile.id;
   }
+  if (!refPartnerId && proposalPartnerId) refPartnerId = proposalPartnerId;
 
   const docDigits = body.client_doc.replace(/\D/g, "");
   const docType = docDigits.length === 11 ? "CPF" : "CNPJ";
@@ -100,6 +122,7 @@ export async function POST(req: NextRequest) {
       cpf_count: selection.cpfCount,
       has_consultancy: selection.hasConsultancy,
       ref_partner_id: refPartnerId,
+      credit_desk_proposal_id: creditDeskProposalId,
       client_name: body.client_name.trim(),
       client_email: body.client_email.trim(),
       client_doc: docDigits,

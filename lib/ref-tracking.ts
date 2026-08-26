@@ -2,6 +2,7 @@
 
 const REF_STORAGE_KEY = "v3_ref_partner_id";
 const UTM_STORAGE_KEY = "v3_utm_params";
+const PROP_STORAGE_KEY = "v3_prop_proposal_code";
 const REF_TTL_DAYS = 30;
 
 interface StoredRef {
@@ -42,6 +43,46 @@ export function getStoredRefPartnerId(): string | null {
       return null;
     }
     return parsed.partnerId || null;
+  } catch {
+    return null;
+  }
+}
+
+interface StoredProp {
+  code: string;
+  capturedAt: number;
+}
+
+// Link de Análise de Crédito gerado por proposta (?prop=<code> em /analise-v2),
+// pra distinguir de ?ref= (identifica o partner, não a proposta). Mesmo TTL e
+// storage local do ref -- se o pedido acabar sendo pago fora da mesma aba/sessão
+// que abriu o link, cai no fluxo manual de vínculo em "Pedidos de Partners".
+export function capturePropFromUrl(): void {
+  if (typeof window === "undefined") return;
+  const params = new URLSearchParams(window.location.search);
+  const prop = params.get("prop");
+  if (!prop) return;
+
+  const payload: StoredProp = { code: prop, capturedAt: Date.now() };
+  try {
+    window.localStorage.setItem(PROP_STORAGE_KEY, JSON.stringify(payload));
+  } catch {
+    // localStorage indisponível (modo privado, etc): segue sem o vínculo automático
+  }
+}
+
+export function getStoredPropCode(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(PROP_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as StoredProp;
+    const ageMs = Date.now() - parsed.capturedAt;
+    if (ageMs > REF_TTL_DAYS * 24 * 60 * 60 * 1000) {
+      window.localStorage.removeItem(PROP_STORAGE_KEY);
+      return null;
+    }
+    return parsed.code || null;
   } catch {
     return null;
   }
