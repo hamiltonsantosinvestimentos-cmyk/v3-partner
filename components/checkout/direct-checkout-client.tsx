@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
 import Image from "next/image";
 import { Copy, Check, AlertCircle, Loader2, CreditCard, QrCode, FileText, Minus, Plus } from "lucide-react";
-import { getStoredRefPartnerId } from "@/lib/ref-tracking";
+import { getStoredRefPartnerId, getStoredPropCode } from "@/lib/ref-tracking";
 import { trackEvent } from "@/lib/analytics";
 import { UNIT_PRICE_CENTS, MIN_CNPJ_COUNT, MIN_CPF_COUNT, clampSelection, calcTotalCents, buildModularTitle, legacyPlanoToSelection, fmtBRL, type ModularSelection } from "@/lib/credit-analysis-pricing";
 
@@ -118,6 +118,7 @@ export function DirectCheckoutClient() {
     setSubmitting(true);
     try {
       const refPartnerId = getStoredRefPartnerId();
+      const propCode = searchParams.get("prop") ?? getStoredPropCode();
       const r = await fetch("/api/checkout/direct", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -127,6 +128,7 @@ export function DirectCheckoutClient() {
           cpf_count: selection.cpfCount,
           has_consultancy: selection.hasConsultancy,
           ref_partner_id: refPartnerId,
+          prop_code: propCode,
         }),
       });
       const d = await r.json() as OrderResult & { error?: string };

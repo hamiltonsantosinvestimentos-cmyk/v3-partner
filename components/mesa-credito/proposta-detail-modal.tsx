@@ -286,6 +286,66 @@ function GenerateUploadLinkButton({ proposalId }: { proposalId: string }) {
   );
 }
 
+// ── AnaliseCreditoLinkButton ── link de venda da Análise de Crédito vinculado
+// a esta proposta (?prop=<code>&ref=<partner> em /analise-v2#configurador).
+// O pedido nasce vinculado à proposta assim que o checkout é criado (ver
+// app/api/checkout/direct/route.ts), então o badge de status aqui reflete
+// isso sem precisar de nenhum passo manual de vínculo.
+type AnaliseOrderStatus = { status: string; amount_cents: number | null; paid_at: string | null } | null;
+
+function AnaliseCreditoLinkButton({ proposalId, proposalCode, partnerId }: { proposalId: string; proposalCode: string; partnerId?: string }) {
+  const [copied, setCopied] = React.useState(false);
+  const [order, setOrder] = React.useState<AnaliseOrderStatus | "loading">("loading");
+
+  React.useEffect(() => {
+    let cancelled = false;
+    fetch(`/api/credit-proposals/analise-status?proposal_id=${proposalId}`)
+      .then((r) => r.json())
+      .then((d) => { if (!cancelled) setOrder((d.order as AnaliseOrderStatus) ?? null); })
+      .catch(() => { if (!cancelled) setOrder(null); });
+    return () => { cancelled = true; };
+  }, [proposalId]);
+
+  function handleCopy() {
+    const params = new URLSearchParams({ prop: proposalCode });
+    if (partnerId) params.set("ref", partnerId);
+    const url = `https://app.v3partners.com.br/analise-v2?${params.toString()}#configurador`;
+    navigator.clipboard.writeText(url).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }
+
+  const badge = order === "loading" || !order
+    ? null
+    : order.status === "PAID"
+    ? { label: `Pago${order.paid_at ? " " + formatDate(order.paid_at) : ""}`, cls: "text-emerald-400" }
+    : { label: "Aguardando pagamento", cls: "text-amber-400" };
+
+  return (
+    <div className="flex items-center gap-1.5">
+      {badge && <span className={`text-[10px] font-semibold ${badge.cls}`}>{badge.label}</span>}
+      <button
+        onClick={handleCopy}
+        title="Copiar link de Análise de Crédito vinculado a esta proposta"
+        className="flex items-center gap-1.5 h-8 px-2.5 rounded-lg bg-[#243A66]/50 border border-[#243A66] text-[#7A8FA8] hover:bg-[#243A66] hover:text-[#F0ECE4] transition-colors text-xs font-semibold"
+      >
+        {copied ? (
+          <>
+            <CheckCheck className="w-3.5 h-3.5 text-emerald-400" />
+            <span className="text-emerald-400">Copiado!</span>
+          </>
+        ) : (
+          <>
+            <Link2 className="w-3.5 h-3.5" />
+            Link Análise
+          </>
+        )}
+      </button>
+    </div>
+  );
+}
+
 // ── PartnerDocUpload ── upload livre de documentos (partner e admin) ──────────
 type FreeDoc = { doc_id: string; file_name: string; storage_path: string; uploaded_at: string; url: string | null };
 
@@ -2584,6 +2644,7 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
               PDF
             </button>
             <CopyClientLinkButton proposalId={proposal.id} />
+            <AnaliseCreditoLinkButton proposalId={proposal.id} proposalCode={proposal.code} partnerId={proposal.partner_id} />
             {(canChangeStage || canEditValorSolicitado) && <GenerateUploadLinkButton proposalId={proposal.id} />}
             <button onClick={onClose} className="w-8 h-8 rounded-lg hover:bg-secondary flex items-center justify-center text-muted-foreground hover:text-white transition-colors">
               <X className="w-4 h-4" />

@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { Compass, Landmark, Handshake, ArrowRight, Check, Minus, Plus } from "lucide-react";
-import { captureRefFromUrl, captureUtmFromUrl } from "@/lib/ref-tracking";
+import { captureRefFromUrl, captureUtmFromUrl, capturePropFromUrl } from "@/lib/ref-tracking";
 import { UNIT_PRICE_CENTS, MIN_CNPJ_COUNT, MIN_CPF_COUNT, clampSelection, calcTotalCents, fmtBRL, type ModularSelection } from "@/lib/credit-analysis-pricing";
 
 const N = "#09081A", N2 = "#13223A", N3 = "#162744", N4 = "#243A66";
@@ -88,13 +88,16 @@ function Eyebrow({ children }: { children: React.ReactNode }) {
 
 export function AnaliseLandingV2Client() {
   const [ref, setRef] = useState<string | null>(null);
+  const [prop, setProp] = useState<string | null>(null);
   const [selection, setSelection] = useState<ModularSelection>({ cnpjCount: MIN_CNPJ_COUNT, cpfCount: MIN_CPF_COUNT, hasConsultancy: false });
 
   useEffect(() => {
     captureRefFromUrl();
+    capturePropFromUrl();
     captureUtmFromUrl();
     const params = new URLSearchParams(window.location.search);
     setRef(params.get("ref"));
+    setProp(params.get("prop"));
   }, []);
 
   const totalCents = useMemo(() => calcTotalCents(selection), [selection]);
@@ -117,6 +120,7 @@ export function AnaliseLandingV2Client() {
       consultoria: selection.hasConsultancy ? "1" : "0",
     });
     if (ref) params.set("ref", ref);
+    if (prop) params.set("prop", prop);
     return `/analise/checkout?${params.toString()}`;
   };
 
