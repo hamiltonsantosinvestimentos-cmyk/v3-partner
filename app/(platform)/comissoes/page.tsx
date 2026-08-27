@@ -23,6 +23,7 @@ export default async function ComissoesPage() {
         partnerId={session.id}
         partnerName={session.full_name}
         role={session.role}
+        taxPercent={0}
         commissions={DEMO_COMISSOES.map(c => ({
           id: c.id,
           code: c.codigo,
@@ -57,11 +58,21 @@ export default async function ComissoesPage() {
   const svc = sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
   const isAdmin = ["ADMIN", "GESTAO", "FINANCEIRO"].includes(profile.role);
 
+  // Alíquota global de imposto sobre comissões (Configurações → Comissões)
+  const { data: taxRow } = await svc
+    .from("platform_settings")
+    .select("value")
+    .eq("key", "commission_tax_percent")
+    .single();
+  const taxPercentRaw = taxRow?.value != null ? Number(taxRow.value) : 0;
+  const taxPercent = Number.isFinite(taxPercentRaw) && taxPercentRaw >= 0 && taxPercentRaw <= 100 ? taxPercentRaw : 0;
+
   let query = svc
     .from("commissions")
     .select(`
       id, code, partner_id, operation_type, operation_code, operation_description,
-      operation_value, commission_percent, commission_value, status,
+      operation_value, commission_percent, commission_value,
+      tax_percent, tax_value, commission_net_value, status,
       operation_closed_at, payment_date, notes, created_at
     `)
     .order("created_at", { ascending: false });
@@ -98,6 +109,7 @@ export default async function ComissoesPage() {
       partnerId={user.id}
       partnerName={profile.full_name ?? ""}
       role={profile.role}
+      taxPercent={taxPercent}
       commissions={(commissions ?? []) as Parameters<typeof ComissoesPartnerClient>[0]["commissions"]}
       partners={partners}
       marketplaceLeads={(marketplaceLeads ?? []) as unknown as Parameters<typeof ComissoesPartnerClient>[0]["marketplaceLeads"]}

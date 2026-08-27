@@ -17,11 +17,27 @@ export interface CommissionRow {
   operation_value: number;
   commission_percent: number;
   commission_value: number;
+  tax_percent?: number | null;
+  tax_value?: number | null;
+  commission_net_value?: number | null;
   status: string;
   operation_closed_at: string | null;
   payment_date: string | null;
   notes: string | null;
   created_at: string;
+}
+
+/** Imposto retido nesta comissão (0 se ainda não migrado). */
+function taxOf(c: CommissionRow): number {
+  if (c.tax_value != null) return c.tax_value;
+  const gross = c.commission_value ?? 0;
+  return c.tax_percent != null ? Math.round(gross * c.tax_percent) / 100 : 0;
+}
+
+/** Valor líquido a receber = comissão bruta - imposto retido. */
+function netOf(c: CommissionRow): number {
+  if (c.commission_net_value != null) return c.commission_net_value;
+  return (c.commission_value ?? 0) - taxOf(c);
 }
 
 export interface MarketplaceLead {
@@ -44,6 +60,8 @@ interface Props {
   partnerId: string;
   partnerName: string;
   role: string;
+  /** Alíquota global de imposto sobre comissões (%), configurada em Configurações → Comissões. */
+  taxPercent?: number;
   commissions: CommissionRow[];
   partners?: Partner[];
   marketplaceLeads?: MarketplaceLead[];
@@ -69,10 +87,9 @@ function TipoBadge({ tipo }: { tipo: string }) {
     CREDITO: "bg-blue-500/20 text-blue-400 border-blue-500/30",
     MA: "bg-purple-500/20 text-purple-400 border-purple-500/30",
     CONSORCIO: "bg-amber-500/20 text-amber-400 border-amber-500/30",
-    SPLIT_FISCAL: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
     MARKETPLACE: "bg-[#C9A84C]/20 text-[#C9A84C] border-[#C9A84C]/30",
   };
-  const labels: Record<string, string> = { CREDITO: "Crédito", MA: "M&A", CONSORCIO: "Consórcio", SPLIT_FISCAL: "Split", MARKETPLACE: "Marketplace" };
+  const labels: Record<string, string> = { CREDITO: "Crédito", MA: "M&A", CONSORCIO: "Consórcio", MARKETPLACE: "Marketplace" };
   return (
     <span className={`text-[10px] font-semibold border px-2 py-0.5 rounded-full ${map[tipo] ?? "bg-gray-500/20 text-gray-400 border-gray-500/30"}`}>
       {labels[tipo] ?? tipo}
@@ -96,12 +113,12 @@ const labelCls = "block text-xs font-semibold text-[#7A8FA8] mb-1";
 
 // ── FEATURE A helpers ─────────────────────────────────────────────────────────
 
-const TIPOS = ["CREDITO", "MA", "CONSORCIO", "SPLIT_FISCAL", "MARKETPLACE"] as const;
+const TIPOS = ["CREDITO", "MA", "CONSORCIO", "MARKETPLACE"] as const;
 type TipoOp = typeof TIPOS[number];
 
-const tipoLabels: Record<TipoOp, string> = { CREDITO: "Crédito", MA: "M&A", CONSORCIO: "Consórcio", SPLIT_FISCAL: "Split Fiscal", MARKETPLACE: "Marketplace" };
-const tipoColors: Record<TipoOp, string> = { CREDITO: "#3B82F6", MA: "#8B5CF6", CONSORCIO: "#F59E0B", SPLIT_FISCAL: "#10B981", MARKETPLACE: "#C9A84C" };
-const tipoIcons: Record<TipoOp, string> = { CREDITO: "💳", MA: "🤝", CONSORCIO: "🏆", SPLIT_FISCAL: "📊", MARKETPLACE: "🛒" };
+const tipoLabels: Record<TipoOp, string> = { CREDITO: "Crédito", MA: "M&A", CONSORCIO: "Consórcio", MARKETPLACE: "Marketplace" };
+const tipoColors: Record<TipoOp, string> = { CREDITO: "#3B82F6", MA: "#8B5CF6", CONSORCIO: "#F59E0B", MARKETPLACE: "#C9A84C" };
+const tipoIcons: Record<TipoOp, string> = { CREDITO: "💳", MA: "🤝", CONSORCIO: "🏆", MARKETPLACE: "🛒" };
 
 const MONTH_NAMES_SHORT = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 
@@ -109,7 +126,7 @@ function buildMonthKey(year: number, month: number) {
   return `${year}-${String(month).padStart(2, "0")}`;
 }
 
-export function ComissoesPartnerClient({ partnerId, partnerName, role, commissions: initialCommissions, partners = [], marketplaceLeads = [], partnerPixKey }: Props) {
+export function ComissoesPartnerClient({ partnerId, partnerName, role, taxPercent = 0, commissions: initialCommissions, partners = [], marketplaceLeads = [], partnerPixKey }: Props) {
   const [commissions, setCommissions] = useState<CommissionRow[]>(initialCommissions);
   const [activeTab, setActiveTab] = useState<"comissoes" | "projecao" | "doze-meses">("comissoes");
   const [filtroTipo, setFiltroTipo] = useState<"TODOS" | TipoOp>("TODOS");
@@ -313,13 +330,19 @@ export function ComissoesPartnerClient({ partnerId, partnerName, role, commissio
     (filtroStatus === "TODOS" || c.status === filtroStatus)
   );
 
-  const aReceber = commissions.filter(c => c.status === "A_PAGAR").reduce((s, c) => s + (c.commission_value ?? 0), 0);
-  const recebido = commissions.filter(c => c.status === "PAGA").reduce((s, c) => s + (c.commission_value ?? 0), 0);
+  const aReceber = commissions.filter(c => c.status === "A_PAGAR").reduce((s, c) => s + netOf(c), 0);
+  const recebido = commissions.filter(c => c.status === "PAGA").reduce((s, c) => s + netOf(c), 0);
   const totalGeral = aReceber + recebido;
+
+  // ── Impostos sobre comissões ──
+  const totalImpostos = commissions.reduce((s, c) => s + taxOf(c), 0);
+  const anyTax = taxPercent > 0 || totalImpostos > 0;
+  const impostosFiltrados = filtradas.reduce((s, c) => s + taxOf(c), 0);
+  const tabelaColCount = anyTax ? 11 : 9;
 
   const porTipo = TIPOS.map(tipo => ({
     tipo,
-    total: commissions.filter(c => c.operation_type === tipo).reduce((s, c) => s + (c.commission_value ?? 0), 0),
+    total: commissions.filter(c => c.operation_type === tipo).reduce((s, c) => s + netOf(c), 0),
     qtd: commissions.filter(c => c.operation_type === tipo).length,
   }));
 
@@ -342,7 +365,7 @@ export function ComissoesPartnerClient({ partnerId, partnerName, role, commissio
     const d = new Date(c.payment_date);
     return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
   });
-  const thisMonthTotal = thisMonthPendentes.reduce((s, c) => s + (c.commission_value ?? 0), 0);
+  const thisMonthTotal = thisMonthPendentes.reduce((s, c) => s + netOf(c), 0);
 
   // avg monthly from paid history
   const paidMonths: Record<string, number> = {};
@@ -350,20 +373,20 @@ export function ComissoesPartnerClient({ partnerId, partnerName, role, commissio
     if (!c.payment_date) return;
     const d = new Date(c.payment_date);
     const key = buildMonthKey(d.getFullYear(), d.getMonth() + 1);
-    paidMonths[key] = (paidMonths[key] ?? 0) + (c.commission_value ?? 0);
+    paidMonths[key] = (paidMonths[key] ?? 0) + netOf(c);
   });
   const paidMonthVals = Object.values(paidMonths);
   const avgMonthly = paidMonthVals.length > 0
     ? paidMonthVals.reduce((a, b) => a + b, 0) / paidMonthVals.length
-    : pendentes.reduce((s, c) => s + (c.commission_value ?? 0), 0) / 3;
+    : pendentes.reduce((s, c) => s + netOf(c), 0) / 3;
 
-  const yearTotal = pendentes.reduce((s, c) => s + (c.commission_value ?? 0), 0);
+  const yearTotal = pendentes.reduce((s, c) => s + netOf(c), 0);
 
   const tipoGroups = TIPOS.map(tipo => {
     const tipoPend = pendentes.filter(c => c.operation_type === tipo);
     const tipoPaid = pagas.filter(c => c.operation_type === tipo);
-    const totalPend = tipoPend.reduce((s, c) => s + (c.commission_value ?? 0), 0);
-    const totalPaid = tipoPaid.reduce((s, c) => s + (c.commission_value ?? 0), 0);
+    const totalPend = tipoPend.reduce((s, c) => s + netOf(c), 0);
+    const totalPaid = tipoPaid.reduce((s, c) => s + netOf(c), 0);
     const totalAll = totalPend + totalPaid;
     const dates = tipoPend
       .map(c => c.payment_date)
@@ -383,19 +406,19 @@ export function ComissoesPartnerClient({ partnerId, partnerName, role, commissio
       if (!c.payment_date) return false;
       const pd = new Date(c.payment_date);
       return pd.getFullYear() === d.getFullYear() && pd.getMonth() === d.getMonth();
-    }).reduce((s, c) => s + (c.commission_value ?? 0), 0);
+    }).reduce((s, c) => s + netOf(c), 0);
     monthlyBars.push({ label, value: val, month: d.getMonth(), year: d.getFullYear() });
   }
   const semData = pendentes
     .filter(c => !c.payment_date)
-    .reduce((s, c) => s + (c.commission_value ?? 0), 0);
+    .reduce((s, c) => s + netOf(c), 0);
   if (semData > 0) monthlyBars.push({ label: "S/ Data", value: semData, month: -1, year: -1 });
 
   const maxBarVal = Math.max(...monthlyBars.map(b => b.value), 1);
 
   // Goal milestones
   const milestones = [5000, 10000, 25000, 50000, 100000];
-  const totalAReceber = pendentes.reduce((s, c) => s + (c.commission_value ?? 0), 0);
+  const totalAReceber = pendentes.reduce((s, c) => s + netOf(c), 0);
   const nextMilestone = milestones.find(m => m > totalAReceber) ?? milestones[milestones.length - 1];
   const prevMilestone = milestones.slice().reverse().find(m => m <= totalAReceber) ?? 0;
   const goalProgress = nextMilestone > prevMilestone
@@ -429,7 +452,7 @@ export function ComissoesPartnerClient({ partnerId, partnerName, role, commissio
           const pd = new Date(c.payment_date!);
           return pd.getFullYear() === yr && pd.getMonth() === mo;
         })
-        .reduce((s, c) => s + (c.commission_value ?? 0), 0);
+        .reduce((s, c) => s + netOf(c), 0);
 
       const aPagarVal = commissions
         .filter(c => c.status === "A_PAGAR" && c.payment_date)
@@ -437,7 +460,7 @@ export function ComissoesPartnerClient({ partnerId, partnerName, role, commissio
           const pd = new Date(c.payment_date!);
           return pd.getFullYear() === yr && pd.getMonth() === mo;
         })
-        .reduce((s, c) => s + (c.commission_value ?? 0), 0);
+        .reduce((s, c) => s + netOf(c), 0);
 
       result.push({
         key,
@@ -494,14 +517,14 @@ export function ComissoesPartnerClient({ partnerId, partnerName, role, commissio
   const totalPagoAnual = commissions
     .filter(c => c.status === "PAGA" && c.payment_date)
     .filter(c => new Date(c.payment_date!).getFullYear() === now.getFullYear())
-    .reduce((s, c) => s + (c.commission_value ?? 0), 0);
+    .reduce((s, c) => s + netOf(c), 0);
   const metaProgress = Math.min(100, (totalPagoAnual / META_ANUAL) * 100);
 
   // Breakdown por tipo for 12m tab
   const breakdownTipo = useMemo(() => {
-    const totalAll = commissions.reduce((s, c) => s + (c.commission_value ?? 0), 0);
+    const totalAll = commissions.reduce((s, c) => s + netOf(c), 0);
     return TIPOS.map(tipo => {
-      const val = commissions.filter(c => c.operation_type === tipo).reduce((s, c) => s + (c.commission_value ?? 0), 0);
+      const val = commissions.filter(c => c.operation_type === tipo).reduce((s, c) => s + netOf(c), 0);
       const pct = totalAll > 0 ? (val / totalAll) * 100 : 0;
       return { tipo, val, pct };
     }).filter(b => b.val > 0);
@@ -516,6 +539,9 @@ export function ComissoesPartnerClient({ partnerId, partnerName, role, commissio
   const commValueTotal = !isNaN(opValue) && opValue > 0 ? opValue * basePercent / 100 : 0;
   const p1Value = coOriginada ? commValueTotal * splitPercent / 100 : commValueTotal;
   const p2Value = coOriginada ? commValueTotal * (100 - splitPercent) / 100 : 0;
+  // Imposto global aplicado no registro da comissão
+  const previewTax = commValueTotal * taxPercent / 100;
+  const previewNet = commValueTotal - previewTax;
 
   const p1Partner = partners.find(p => p.id === form.partner_id);
   const p2Partner = partners.find(p => p.id === coPartnerId);
@@ -554,6 +580,26 @@ export function ComissoesPartnerClient({ partnerId, partnerName, role, commissio
           )}
         </div>
       </div>
+
+      {/* Aviso de imposto sobre comissões */}
+      {anyTax && (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-xl border border-[#C9A84C]/20 bg-[#C9A84C]/5 px-4 py-3 text-xs">
+          <span className="font-semibold text-[#E8C97A]">
+            Imposto sobre comissões: {taxPercent.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}%
+          </span>
+          <span className="text-[#7A8FA8]">
+            Total já retido: <strong className="text-[#F0ECE4]">{formatMoeda(totalImpostos)}</strong>
+          </span>
+          <span className="text-[#7A8FA8]">
+            Os valores exibidos são <strong className="text-[#F0ECE4]">líquidos</strong> (comissão bruta − imposto).
+          </span>
+          {isAdmin && (
+            <a href="/configuracoes" className="ml-auto font-semibold text-[#C9A84C] hover:underline">
+              Ajustar alíquota →
+            </a>
+          )}
+        </div>
+      )}
 
       {/* Tab switcher */}
       <div className="flex bg-[#111F35] border border-[#243A66] rounded-xl p-1 w-fit gap-1">
@@ -1044,9 +1090,9 @@ export function ComissoesPartnerClient({ partnerId, partnerName, role, commissio
       {/* Por tipo */}
       <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
         {porTipo.map(({ tipo, total, qtd }) => {
-          const labels: Record<string, string> = { CREDITO: "Crédito", MA: "M&A", CONSORCIO: "Consórcio", SPLIT_FISCAL: "Split Fiscal", MARKETPLACE: "Marketplace" };
-          const colors: Record<string, string> = { CREDITO: "#3B82F6", MA: "#8B5CF6", CONSORCIO: "#F59E0B", SPLIT_FISCAL: "#10B981", MARKETPLACE: "#C9A84C" };
-          const icons: Record<string, string> = { CREDITO: "💳", MA: "🤝", CONSORCIO: "🏆", SPLIT_FISCAL: "📊", MARKETPLACE: "🛒" };
+          const labels: Record<string, string> = { CREDITO: "Crédito", MA: "M&A", CONSORCIO: "Consórcio", MARKETPLACE: "Marketplace" };
+          const colors: Record<string, string> = { CREDITO: "#3B82F6", MA: "#8B5CF6", CONSORCIO: "#F59E0B", MARKETPLACE: "#C9A84C" };
+          const icons: Record<string, string> = { CREDITO: "💳", MA: "🤝", CONSORCIO: "🏆", MARKETPLACE: "🛒" };
           return (
             <div key={tipo} className="bg-[#091221] border border-[#122036] rounded-xl p-4">
               <div className="flex items-center gap-2 mb-3">
@@ -1173,8 +1219,8 @@ export function ComissoesPartnerClient({ partnerId, partnerName, role, commissio
       {/* Filtros */}
       <div className="flex items-center gap-3 flex-wrap">
         <div className="flex bg-secondary rounded-lg p-0.5 flex-wrap gap-0.5">
-          {(["TODOS", "CREDITO", "MA", "CONSORCIO", "SPLIT_FISCAL", "MARKETPLACE"] as const).map(t => {
-            const labels = { TODOS: "Todos", CREDITO: "Crédito", MA: "M&A", CONSORCIO: "Consórcio", SPLIT_FISCAL: "Split", MARKETPLACE: "Marketplace" };
+          {(["TODOS", "CREDITO", "MA", "CONSORCIO", "MARKETPLACE"] as const).map(t => {
+            const labels = { TODOS: "Todos", CREDITO: "Crédito", MA: "M&A", CONSORCIO: "Consórcio", MARKETPLACE: "Marketplace" };
             return (
               <button key={t} onClick={() => setFiltroTipo(t)} className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${filtroTipo === t ? "bg-[#C9A84C] text-[#09081A]" : "text-muted-foreground hover:text-foreground"}`}>
                 {labels[t]}
@@ -1204,13 +1250,29 @@ export function ComissoesPartnerClient({ partnerId, partnerName, role, commissio
             { header: "Tipo", key: "operation_type", width: 12 },
             { header: "Vlr. Operação", key: "operation_value", format: "moeda", width: 18 },
             { header: "% Comissão", key: "commission_percent", format: "percent", width: 13 },
-            { header: "Vlr. a Receber", key: "commission_value", format: "moeda", width: 18 },
+            ...(anyTax
+              ? [
+                  { header: "Comissão Bruta", key: "commission_value", format: "moeda" as const, width: 16 },
+                  { header: "Imposto", key: "tax_value", format: "moeda" as const, width: 14 },
+                  { header: "Líquido a Receber", key: "commission_net_value", format: "moeda" as const, width: 18 },
+                ]
+              : [{ header: "Vlr. a Receber", key: "commission_value", format: "moeda" as const, width: 18 }]),
             { header: "Finalizada em", key: "operation_closed_at", format: "date", width: 16 },
             { header: "Previsão Pgto.", key: "payment_date", format: "date", width: 16 },
             { header: "Status", key: "status", width: 12 },
           ],
-          dados: filtradas,
-          totais: { label: "TOTAL", valores: { code: "TOTAL", commission_value: filtradas.reduce((s, c) => s + (c.commission_value ?? 0), 0) } },
+          dados: filtradas.map(c => ({ ...c, commission_value: c.commission_value, tax_value: taxOf(c), commission_net_value: netOf(c) })),
+          totais: {
+            label: "TOTAL",
+            valores: anyTax
+              ? {
+                  code: "TOTAL",
+                  commission_value: filtradas.reduce((s, c) => s + (c.commission_value ?? 0), 0),
+                  tax_value: impostosFiltrados,
+                  commission_net_value: filtradas.reduce((s, c) => s + netOf(c), 0),
+                }
+              : { code: "TOTAL", commission_value: filtradas.reduce((s, c) => s + netOf(c), 0) },
+          },
         }} />
       </div>
 
@@ -1221,7 +1283,9 @@ export function ComissoesPartnerClient({ partnerId, partnerName, role, commissio
             <table className="w-full text-xs">
               <thead>
                 <tr className="border-b border-border/40">
-                  {["Código", "Operação", "Tipo", "Vlr. Operação", "% Comissão", "Vlr. a Receber", "Finalizada em", "Previsão Pgto.", "Status"].map(h => (
+                  {["Código", "Operação", "Tipo", "Vlr. Operação", "% Comissão",
+                    ...(anyTax ? ["Comissão Bruta", "Imposto", "Líquido a Receber"] : ["Vlr. a Receber"]),
+                    "Finalizada em", "Previsão Pgto.", "Status"].map(h => (
                     <th key={h} className="text-left px-4 py-3 text-muted-foreground font-semibold uppercase tracking-wide text-[10px]">{h}</th>
                   ))}
                 </tr>
@@ -1229,7 +1293,7 @@ export function ComissoesPartnerClient({ partnerId, partnerName, role, commissio
               <tbody>
                 {filtradas.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="px-4 py-12 text-center text-muted-foreground">
+                    <td colSpan={tabelaColCount} className="px-4 py-12 text-center text-muted-foreground">
                       <Wallet className="w-8 h-8 mx-auto mb-2 opacity-30" />
                       Nenhuma comissão encontrada com esses filtros
                     </td>
@@ -1244,7 +1308,20 @@ export function ComissoesPartnerClient({ partnerId, partnerName, role, commissio
                     <td className="px-4 py-3"><TipoBadge tipo={c.operation_type} /></td>
                     <td className="px-4 py-3 text-white">{formatMoeda(c.operation_value)}</td>
                     <td className="px-4 py-3 text-[#C9A84C] font-semibold">{c.commission_percent}%</td>
-                    <td className="px-4 py-3 font-bold text-white">{formatMoeda(c.commission_value)}</td>
+                    {anyTax ? (
+                      <>
+                        <td className="px-4 py-3 text-muted-foreground">{formatMoeda(c.commission_value)}</td>
+                        <td className="px-4 py-3 text-red-400 whitespace-nowrap">
+                          {taxOf(c) > 0 ? `- ${formatMoeda(taxOf(c))}` : "—"}
+                          {c.tax_percent != null && c.tax_percent > 0 && (
+                            <span className="text-[10px] text-[#3A5070] ml-1">({c.tax_percent}%)</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 font-bold text-white">{formatMoeda(netOf(c))}</td>
+                      </>
+                    ) : (
+                      <td className="px-4 py-3 font-bold text-white">{formatMoeda(c.commission_value)}</td>
+                    )}
                     <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
                       {c.operation_closed_at ? new Date(c.operation_closed_at).toLocaleDateString("pt-BR") : "—"}
                     </td>
@@ -1259,9 +1336,23 @@ export function ComissoesPartnerClient({ partnerId, partnerName, role, commissio
                 <tfoot>
                   <tr className="bg-[#0F1E35] border-t border-[#C9A84C]/30">
                     <td className="px-4 py-3 font-bold text-[#C9A84C]" colSpan={5}>TOTAL FILTRADO</td>
-                    <td className="px-4 py-3 font-bold text-[#C9A84C]">
-                      {formatMoeda(filtradas.reduce((s, c) => s + (c.commission_value ?? 0), 0))}
-                    </td>
+                    {anyTax ? (
+                      <>
+                        <td className="px-4 py-3 font-semibold text-[#7A8FA8]">
+                          {formatMoeda(filtradas.reduce((s, c) => s + (c.commission_value ?? 0), 0))}
+                        </td>
+                        <td className="px-4 py-3 font-semibold text-red-400">
+                          {impostosFiltrados > 0 ? `- ${formatMoeda(impostosFiltrados)}` : "—"}
+                        </td>
+                        <td className="px-4 py-3 font-bold text-[#C9A84C]">
+                          {formatMoeda(filtradas.reduce((s, c) => s + netOf(c), 0))}
+                        </td>
+                      </>
+                    ) : (
+                      <td className="px-4 py-3 font-bold text-[#C9A84C]">
+                        {formatMoeda(filtradas.reduce((s, c) => s + netOf(c), 0))}
+                      </td>
+                    )}
                     <td colSpan={3} />
                   </tr>
                 </tfoot>
@@ -1413,7 +1504,6 @@ export function ComissoesPartnerClient({ partnerId, partnerName, role, commissio
                     <option value="CREDITO">Crédito</option>
                     <option value="MA">M&A</option>
                     <option value="CONSORCIO">Consórcio</option>
-                    <option value="SPLIT_FISCAL">Split Fiscal</option>
                     <option value="MARKETPLACE">Marketplace</option>
                   </select>
                 </div>
@@ -1484,9 +1574,19 @@ export function ComissoesPartnerClient({ partnerId, partnerName, role, commissio
               )}
               {/* Preview comissão (não co-originada) */}
               {!coOriginada && commValueTotal > 0 && (
-                <div className="bg-[#C9A84C]/10 border border-[#C9A84C]/30 rounded-lg px-3 py-2 text-xs text-[#C9A84C]">
-                  Comissão estimada:{" "}
-                  <strong>{formatMoeda(commValueTotal)}</strong>
+                <div className="bg-[#C9A84C]/10 border border-[#C9A84C]/30 rounded-lg px-3 py-2 text-xs text-[#C9A84C] space-y-0.5">
+                  <div>Comissão bruta: <strong>{formatMoeda(commValueTotal)}</strong></div>
+                  {taxPercent > 0 && (
+                    <>
+                      <div className="text-red-400">Imposto ({taxPercent}%): <strong>- {formatMoeda(previewTax)}</strong></div>
+                      <div className="text-[#E8C97A]">Líquido a receber: <strong>{formatMoeda(previewNet)}</strong></div>
+                    </>
+                  )}
+                </div>
+              )}
+              {coOriginada && commValueTotal > 0 && taxPercent > 0 && (
+                <div className="bg-[#C9A84C]/10 border border-[#C9A84C]/30 rounded-lg px-3 py-2 text-[10px] text-[#7A8FA8]">
+                  Imposto de <strong className="text-[#C9A84C]">{taxPercent}%</strong> será retido de cada comissão no registro.
                 </div>
               )}
               <button

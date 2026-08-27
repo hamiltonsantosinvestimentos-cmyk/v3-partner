@@ -10,6 +10,17 @@ function serviceClient() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 }
 
+// Alíquota global de imposto sobre comissões (%), configurada em Configurações → Comissões
+async function getGlobalTaxPercent(svc: ReturnType<typeof serviceClient>): Promise<number> {
+  const { data } = await svc
+    .from("platform_settings")
+    .select("value")
+    .eq("key", "commission_tax_percent")
+    .single();
+  const n = data?.value != null ? Number(data.value) : 0;
+  return Number.isFinite(n) && n >= 0 && n <= 100 ? n : 0;
+}
+
 async function getAuthedUser() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -40,6 +51,7 @@ async function gerarComissaoIndicacao(
   const commValue      = comissaoOriginal.commission_value ?? (comissaoOriginal.operation_value * comissaoOriginal.commission_percent / 100);
   const referralValue  = Math.round(commValue * 0.10 * 100) / 100;
   const partnerName    = (partnerProfile as { full_name?: string | null }).full_name ?? "Partner";
+  const taxPercent     = await getGlobalTaxPercent(svc);
 
   const { count } = await svc.from("commissions").select("*", { count: "exact", head: true });
   const code = `COM-26-${String((count ?? 0) + 1).padStart(4, "0")}-IND`;
@@ -52,6 +64,7 @@ async function gerarComissaoIndicacao(
     operation_value:             commValue,
     commission_percent:          10,
     commission_value:            referralValue,
+    tax_percent:                 taxPercent,
     status:                      comissaoOriginal.status,
     operation_closed_at:         comissaoOriginal.operation_closed_at,
     notes:                       `Ref. ${comissaoOriginal.code} — gerado automaticamente pelo sistema de indicações`,
@@ -74,7 +87,7 @@ async function gerarComissaoIndicacao(
 
 const createSchema = z.object({
   partner_id:           z.string().uuid("Partner obrigatório"),
-  operation_type:       z.enum(["CREDITO", "MA", "CONSORCIO", "SPLIT_FISCAL", "MARKETPLACE"]),
+  operation_type:       z.enum(["CREDITO", "MA", "CONSORCIO", "MARKETPLACE"]),
   operation_id:         z.string().uuid().optional().nullable(),
   operation_code:       z.string().max(50).optional().nullable(),
   operation_description: z.string().min(3).max(300),
@@ -92,6 +105,7 @@ const patchSchema = z.object({
   payment_date:   z.string().optional().nullable(),
   commission_percent: z.number().min(0).max(100).optional(),
   operation_value:    z.number().positive().optional(),
+  tax_percent:    z.number().min(0).max(100).optional(),
   notes:          z.string().max(1000).optional().nullable(),
 });
 
@@ -112,6 +126,7 @@ export async function GET(req: NextRequest) {
     .select(`
       id, code, partner_id, operation_type, operation_id, operation_code,
       operation_description, operation_value, commission_percent, commission_value,
+      tax_percent, tax_value, commission_net_value,
       status, operation_closed_at, payment_date, notes, created_at
     `)
     .order("created_at", { ascending: false });
@@ -142,6 +157,7 @@ export async function POST(req: NextRequest) {
   const d = parsed.data;
 
   const svc = serviceClient();
+  const taxPercent = await getGlobalTaxPercent(svc);
   const { count } = await svc.from("commissions").select("*", { count: "exact", head: true });
   const code = `COM-26-${String((count ?? 0) + 1).padStart(4, "0")}`;
 
@@ -154,6 +170,7 @@ export async function POST(req: NextRequest) {
     operation_description: d.operation_description,
     operation_value:       d.operation_value,
     commission_percent:    d.commission_percent,
+    tax_percent:           taxPercent,
     status:                d.status,
     operation_closed_at:   d.operation_closed_at ?? null,
     payment_date:          d.payment_date ?? null,
@@ -174,6 +191,9 @@ export async function POST(req: NextRequest) {
   const partnerEmail = partnerUser?.user?.email;
   const { data: partnerProfile } = await svcEmail
     .from("profiles").select("full_name").eq("id", d.partner_id).single();
+  const grossValue = data.commission_value ?? (d.operation_value * d.commission_percent / 100);
+  const netValue   = data.commission_net_value ?? (grossValue * (1 - taxPercent / 100));
+
   if (partnerEmail) {
     notifyNovaComissao({
       partnerEmail,
@@ -181,14 +201,15 @@ export async function POST(req: NextRequest) {
       commissionCode:       data.code,
       operationDescription: d.operation_description,
       operationType:        d.operation_type,
-      commissionValue:      data.commission_value ?? (d.operation_value * d.commission_percent / 100),
+      commissionValue:      netValue,
+      grossValue,
+      taxPercent,
       paymentDate:          d.payment_date ?? null,
     });
   }
 
   // Notificação in-app para o partner (nova comissão registrada)
-  const commValue = data.commission_value ?? (d.operation_value * d.commission_percent / 100);
-  const formatted = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(commValue);
+  const formatted = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(netValue);
   createNotification({
     user_id: d.partner_id,
     type: "commission",
