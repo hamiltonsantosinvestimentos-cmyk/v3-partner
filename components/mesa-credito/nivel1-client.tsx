@@ -366,7 +366,7 @@ export function CreditDeskLevel1Client({ proposals: initial, currentUser }: Cred
         proposal={detailProposal as ProposalFull | null}
         onStageChange={handleStageChange} onProposalUpdate={handleProposalUpdate}
         canChangeStage={canChangeStage} canEditValorSolicitado={canEditValorSolicitado} canEditInstituicao={isAdmin}
-        canGenerateContract={isAdmin}
+        canGenerateContract={isAdmin} isAdmin={currentUser?.role === "ADMIN"}
       />
     </div>
   );

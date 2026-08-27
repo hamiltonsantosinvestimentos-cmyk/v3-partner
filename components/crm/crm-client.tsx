@@ -3586,6 +3586,7 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
         canEditInstituicao={canChangeStageInCrm}
         pendingCrmReview={!!(crmProposal?.metadata as Record<string, unknown> | undefined)?.crm_pending_review}
         onConfirmSendToMesa={handleConfirmCrmSendToMesa}
+        isAdmin={userRole === "ADMIN"}
       />
 
       {/* ── MODAL: Convert Lead ── */}
