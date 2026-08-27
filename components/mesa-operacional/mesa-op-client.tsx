@@ -3082,6 +3082,7 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
         canCompileDocuments={canChangeStage}
         canEditInstituicao={canChangeStage}
         canGenerateContract={["ADMIN", "GESTAO"].includes(currentUser?.role ?? "")}
+        isAdmin={currentUser?.role === "ADMIN"}
       />
 
       {/* ── Modal de Pendência ── */}

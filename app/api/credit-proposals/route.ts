@@ -21,6 +21,13 @@ async function getAuthedUser() {
 }
 
 const ADMIN_ROLES    = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"] as const;
+
+// Ordem do funil linear principal (espelha PIPELINE_STAGES em
+// components/mesa-credito/proposta-detail-modal.tsx) -- usada só para
+// distinguir avanço de retrocesso no gate da Análise de Crédito abaixo.
+// REPROVADO/DECLINADO ficam fora de propósito: são saídas do funil, não
+// posições nele.
+const PIPELINE_STAGE_ORDER = ["RECEBIDO", "TRIAGEM", "ANALISE", "PENDENCIA", "AVALIACAO_IMOVEL", "APROVACAO", "CONTRATO_ASSINADO", "REGISTRO_IMOVEL", "LIBERADO"];
 const CREDIT_LINES_N1 = ["HOME EQUITY", "AVAL", "CDC", "CREDITO PESSOAL", "CONSIGNADO"];
 const CREDIT_LINES_N2 = ["FIDC", "CRI", "CRA", "V3GIRO", "CGI", "RECEIVABLES"];
 const CREDIT_LINES_N3 = ["CPR", "FUNDOS", "PROJECT FINANCE", "REAL ESTATE", "INFRASTRUCTURE"];
@@ -308,6 +315,23 @@ export async function PATCH(req: NextRequest) {
 
   const { id, ...fields } = parsed.data;
 
+  // Autorizar avanço sem a Análise de Crédito paga (gate abaixo) é decisão
+  // exclusiva de ADMIN -- nem GESTAO nem MESA_OPERACIONAL, apesar de estarem
+  // em ADMIN_ROLES pro resto deste endpoint. Guard isolado porque "metadata"
+  // já é campo liberado pra partner editar por outros motivos legítimos.
+  if (fields.metadata && typeof fields.metadata === "object" && "analise_gate_override" in fields.metadata) {
+    if (profile?.role !== "ADMIN") {
+      return NextResponse.json({ error: "Somente um usuário ADMIN pode autorizar o avanço sem a Análise de Crédito paga" }, { status: 403 });
+    }
+    // Autoria vem do servidor, nunca do que o cliente mandou -- evita um
+    // ADMIN real carimbar a autorização em nome de outra pessoa.
+    (fields.metadata as Record<string, unknown>).analise_gate_override = {
+      by: user.id,
+      by_name: profile.full_name,
+      at: new Date().toISOString(),
+    };
+  }
+
   // Partners só podem editar campos permitidos nas próprias propostas
   if (isPartner && !isAdmin) {
     const forbiddenFields = Object.keys(fields).filter(k => !PARTNER_ALLOWED_FIELDS.has(k));
@@ -406,6 +430,34 @@ export async function PATCH(req: NextRequest) {
 
     if (current) {
       const existingMeta = (current.metadata as Record<string, unknown>) ?? {};
+
+      // Gate Análise de Crédito (26/08/2026): avançar de etapa exige a
+      // Análise de Crédito do cliente paga (partner_service_orders vinculado
+      // via credit_desk_proposal_id) OU autorização explícita de um ADMIN
+      // (metadata.analise_gate_override, ver guard acima). Só barra avanço de
+      // verdade -- goBack() sempre manda um stage de índice menor, então
+      // targetIdx > currentIdx já exclui retrocesso sem precisar de outro caso.
+      if (fields.stage && current.stage !== fields.stage) {
+        const currentIdx = PIPELINE_STAGE_ORDER.indexOf(current.stage as string);
+        const targetIdx = PIPELINE_STAGE_ORDER.indexOf(fields.stage);
+        const isAdvancePastTriagem = targetIdx > currentIdx && targetIdx >= PIPELINE_STAGE_ORDER.indexOf("ANALISE");
+        if (isAdvancePastTriagem && !existingMeta.analise_gate_override) {
+          const { data: paidOrder } = await serviceClient()
+            .from("partner_service_orders")
+            .select("id")
+            .eq("credit_desk_proposal_id", id)
+            .eq("status", "PAID")
+            .limit(1)
+            .maybeSingle();
+          if (!paidOrder) {
+            return NextResponse.json(
+              { error: "Avanço bloqueado: a Análise de Crédito do cliente ainda está pendente de pagamento. Gere o link na proposta ou peça autorização a um ADMIN." },
+              { status: 422 }
+            );
+          }
+        }
+      }
+
       if (fields.stage && current.stage !== fields.stage) {
         // Stage mudou — registra histórico e faz merge completo
         updateData.metadata = {

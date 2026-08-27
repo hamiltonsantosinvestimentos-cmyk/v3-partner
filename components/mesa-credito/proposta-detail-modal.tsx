@@ -203,6 +203,10 @@ interface PropostaDetailModalProps {
    *  (contract_templates vertical='credito'). Mesmo gate de role do backend
    *  (/api/contracts/generate, /api/contracts/templates): ADMIN/GESTAO/MESA_OPERACIONAL. */
   canGenerateContract?: boolean;
+  /** 26/08/2026: estritamente role === "ADMIN" (nunca GESTAO/MESA_OPERACIONAL)
+   *  -- libera o botão "Autorizar avanço sem Análise" no gate de Análise de
+   *  Crédito. Mesmo critério exigido pelo backend em /api/credit-proposals. */
+  isAdmin?: boolean;
 }
 
 // ── CopyClientLinkButton ── botão para copiar link de acompanhamento ──────────
@@ -293,7 +297,7 @@ function GenerateUploadLinkButton({ proposalId }: { proposalId: string }) {
 // isso sem precisar de nenhum passo manual de vínculo.
 type AnaliseOrderStatus = { status: string; amount_cents: number | null; paid_at: string | null } | null;
 
-function AnaliseCreditoLinkButton({ proposalId, proposalCode, partnerId }: { proposalId: string; proposalCode: string; partnerId?: string }) {
+function AnaliseCreditoLinkButton({ proposalId, proposalCode, partnerId, hideBadge }: { proposalId: string; proposalCode: string; partnerId?: string; hideBadge?: boolean }) {
   const [copied, setCopied] = React.useState(false);
   const [order, setOrder] = React.useState<AnaliseOrderStatus | "loading">("loading");
 
@@ -324,7 +328,7 @@ function AnaliseCreditoLinkButton({ proposalId, proposalCode, partnerId }: { pro
 
   return (
     <div className="flex items-center gap-1.5">
-      {badge && <span className={`text-[10px] font-semibold ${badge.cls}`}>{badge.label}</span>}
+      {badge && !hideBadge && <span className={`text-[10px] font-semibold ${badge.cls}`}>{badge.label}</span>}
       <button
         onClick={handleCopy}
         title="Copiar link de Análise de Crédito vinculado a esta proposta"
@@ -794,7 +798,53 @@ function TimelineOperacao({ proposal }: { proposal: ProposalFull }) {
   );
 }
 
-export function PropostaDetailModal({ open, onClose, proposal, onStageChange, onProposalUpdate, canChangeStage, canEditValorSolicitado, canCompileDocuments, canEditInstituicao, pendingCrmReview, onConfirmSendToMesa, canGenerateContract }: PropostaDetailModalProps) {
+export function PropostaDetailModal({ open, onClose, proposal, onStageChange, onProposalUpdate, canChangeStage, canEditValorSolicitado, canCompileDocuments, canEditInstituicao, pendingCrmReview, onConfirmSendToMesa, canGenerateContract, isAdmin }: PropostaDetailModalProps) {
+  // ── Gate Análise de Crédito (26/08/2026) ─────────────────────────────────
+  // Status do pedido de Análise vinculado a esta proposta (?prop=<code> em
+  // /analise-v2) -- alimenta a tarja grande na aba Detalhes e o bloqueio do
+  // botão Avançar. O bloqueio de verdade é enforced no backend
+  // (app/api/credit-proposals/route.ts); isto aqui é só a UI refletindo o
+  // mesmo critério pra não deixar o usuário clicar num botão que vai falhar.
+  const [analiseOrder, setAnaliseOrder] = useState<{ status: string; paid_at: string | null } | null | "loading">("loading");
+  const [autorizandoAvanco, setAutorizandoAvanco] = useState(false);
+  const [erroAutorizarAvanco, setErroAutorizarAvanco] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!proposal?.id) { setAnaliseOrder(null); return; }
+    let cancelled = false;
+    setAnaliseOrder("loading");
+    fetch(`/api/credit-proposals/analise-status?proposal_id=${proposal.id}`)
+      .then((r) => r.json())
+      .then((d) => { if (!cancelled) setAnaliseOrder(d.order ?? null); })
+      .catch(() => { if (!cancelled) setAnaliseOrder(null); });
+    return () => { cancelled = true; };
+  }, [proposal?.id]);
+
+  const analiseOverride = (proposal?.metadata as Record<string, unknown> | undefined)?.analise_gate_override as
+    { by_name?: string; at?: string } | undefined;
+  const analisePaid = analiseOrder !== "loading" && analiseOrder?.status === "PAID";
+  const analiseGateOpen = analisePaid || !!analiseOverride;
+
+  async function handleAutorizarAvanco() {
+    if (!proposal) return;
+    setAutorizandoAvanco(true);
+    setErroAutorizarAvanco(null);
+    try {
+      const res = await fetch("/api/credit-proposals", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: proposal.id, metadata: { analise_gate_override: true } }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error ?? "Erro ao autorizar avanço");
+      onProposalUpdate?.(proposal.id, { metadata: json.proposal?.metadata ?? proposal.metadata });
+    } catch (e) {
+      setErroAutorizarAvanco(e instanceof Error ? e.message : "Erro ao autorizar avanço");
+    } finally {
+      setAutorizandoAvanco(false);
+    }
+  }
+
   // ── Gerar NDA / Vínculo pela Introdução (14/08/2026) ────────────────────
   // Mesma UX da Bolsa de Ativos (mesa-capitais-client.tsx: loadContractTemplates
   // + generateContract), reaproveitada aqui pra fechar o gap real reportado
@@ -2611,6 +2661,13 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
   const nextStage = !isFinished ? PIPELINE_STAGES[activeIdx + 1] : null;
   const prevStage = activeIdx > 0 ? PIPELINE_STAGES[activeIdx - 1] : null;
 
+  // Espelha o gate do backend (app/api/credit-proposals/route.ts): avançar
+  // pra ANALISE ou além exige Análise de Crédito paga ou autorização de
+  // ADMIN. Só desabilita o botão pra não deixar clicar num avanço que o
+  // servidor vai recusar — a recusa de verdade é sempre do backend.
+  const analiseStageIdx = PIPELINE_STAGES.findIndex((s) => s.key === "ANALISE");
+  const advanceBlockedByAnalise = !!nextStage && activeIdx + 1 >= analiseStageIdx && !analiseGateOpen;
+
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/60">
       <div className="bg-card border-0 rounded-none w-screen h-screen max-w-none max-h-none flex flex-col animate-fade-in">
@@ -2705,6 +2762,55 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
         <div ref={bodyRef} className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
           {/* ── Seção Detalhes e Recomendação ── */}
           <div className={modalTab === "documentos" || modalTab === "comentarios" || modalTab === "analise_ia" || modalTab === "chat_ia" || modalTab === "avaliacao_imovel" ? "hidden" : "contents"}>
+
+          {/* ── Tarja Gate Análise de Crédito ── só na aba Detalhes, bem no topo.
+              Avançar de etapa (RECEBIDO/TRIAGEM em diante) exige a Análise de
+              Crédito do cliente paga, ou autorização explícita de ADMIN — o
+              bloqueio de verdade é no backend, isto aqui só deixa o estado
+              óbvio antes de tentar. */}
+          {modalTab === "detalhes" && analiseOrder !== "loading" && (
+            analiseGateOpen ? (
+              <div className="rounded-xl border-2 border-emerald-500/50 bg-emerald-500/10 px-5 py-4 flex items-center gap-4">
+                <CheckCircle2 className="w-8 h-8 text-emerald-400 flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-bold text-emerald-300">
+                    {analisePaid ? "Análise de Crédito paga" : "Avanço autorizado sem Análise de Crédito"}
+                    {analisePaid && typeof analiseOrder === "object" && analiseOrder?.paid_at ? ` em ${formatDate(analiseOrder.paid_at)}` : ""}
+                  </p>
+                  <p className="text-xs text-emerald-400/80 mt-0.5">
+                    {analisePaid
+                      ? "Liberado para avançar de etapa."
+                      : `Autorizado por ${analiseOverride?.by_name ?? "ADMIN"}${analiseOverride?.at ? ` em ${formatDate(analiseOverride.at)}` : ""} — a Análise de Crédito do cliente segue pendente de pagamento.`}
+                  </p>
+                </div>
+                <AnaliseCreditoLinkButton proposalId={proposal.id} proposalCode={proposal.code} partnerId={proposal.partner_id} hideBadge />
+              </div>
+            ) : (
+              <div className="rounded-xl border-2 border-amber-500/50 bg-amber-500/10 px-5 py-4 flex items-center gap-4 flex-wrap">
+                <AlertTriangle className="w-8 h-8 text-amber-400 flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-bold text-amber-300">Análise de Crédito do cliente pendente</p>
+                  <p className="text-xs text-amber-400/80 mt-0.5">
+                    Obrigatória para avançar de etapa. Gere o link, envie pro cliente e aguarde o pagamento — ou peça autorização a um ADMIN.
+                  </p>
+                  {erroAutorizarAvanco && <p className="text-xs text-red-400 mt-1">{erroAutorizarAvanco}</p>}
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  {isAdmin && (
+                    <button
+                      onClick={handleAutorizarAvanco}
+                      disabled={autorizandoAvanco}
+                      className="flex items-center gap-1.5 h-9 px-3 rounded-lg bg-amber-500/20 border border-amber-500/50 text-amber-300 hover:bg-amber-500/30 transition-colors text-xs font-bold disabled:opacity-50"
+                    >
+                      {autorizandoAvanco ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+                      Autorizar avanço sem Análise
+                    </button>
+                  )}
+                  <AnaliseCreditoLinkButton proposalId={proposal.id} proposalCode={proposal.code} partnerId={proposal.partner_id} hideBadge />
+                </div>
+              </div>
+            )
+          )}
 
           {/* ── Banner de Pendência de Stage ── visível quando stage = PENDENCIA */}
           {proposal.stage === "PENDENCIA" && (
@@ -4765,10 +4871,12 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
             </Button>
           )}
           {canChangeStage && !isFinished && nextStage && !isEmAprovacao && (
-            <Button size="sm" onClick={advance} className="gap-2">
-              Avançar para <span className={nextStage.color}>{nextStage.label}</span>
-              <ArrowRight className="w-4 h-4" />
-            </Button>
+            <div title={advanceBlockedByAnalise ? "Bloqueado: Análise de Crédito do cliente pendente de pagamento (peça autorização a um ADMIN se necessário)" : undefined}>
+              <Button size="sm" onClick={advance} disabled={advanceBlockedByAnalise} className="gap-2 disabled:opacity-40 disabled:cursor-not-allowed">
+                Avançar para <span className={nextStage.color}>{nextStage.label}</span>
+                <ArrowRight className="w-4 h-4" />
+              </Button>
+            </div>
           )}
           {/* ── Pular Registro de Imóveis quando não aplicável (ex: crédito sem garantia real) ── */}
           {canChangeStage && proposal?.stage === "REGISTRO_IMOVEL" && (
