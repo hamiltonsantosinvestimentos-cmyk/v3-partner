@@ -162,6 +162,39 @@ export function AnaliseLandingV2Client() {
 
   return (
     <div style={{ background: N, fontFamily: "'DM Sans', sans-serif", color: CR }}>
+      {/* Sinalização visual dos cards de escolha de perfil (Passo 1) e das
+          opções de estrutura societária (Passo 2): pulso sutil pra chamar o
+          clique (para no hover) + elevação/brilho dourado no hover. Precisa
+          ser CSS de verdade (não inline) por causa do :hover e @keyframes;
+          !important só nas propriedades que também têm valor inline (border,
+          background), que sempre vencem uma classe CSS comum. */}
+      <style>{`
+        @keyframes v3ProfilePulse {
+          0%, 100% { box-shadow: 0 0 0 0 rgba(201,168,76,0.28); }
+          50% { box-shadow: 0 0 0 10px rgba(201,168,76,0); }
+        }
+        .v3-profile-card {
+          animation: v3ProfilePulse 2.6s ease-in-out infinite;
+          transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+        }
+        .v3-profile-card:hover {
+          animation: none;
+          transform: translateY(-4px);
+          border-color: #C9A84C !important;
+          box-shadow: 0 10px 28px rgba(201,168,76,0.22);
+        }
+        .v3-profile-card:hover .v3-profile-card-arrow { transform: translateX(4px); }
+        .v3-profile-card-arrow { transition: transform 0.15s ease; }
+        .v3-structure-option {
+          transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+        }
+        .v3-structure-option:hover {
+          transform: translateX(4px);
+          border-color: #C9A84C !important;
+          background: rgba(201,168,76,0.08) !important;
+        }
+        .v3-structure-option:hover .v3-profile-card-arrow { transform: translateX(4px); }
+      `}</style>
       {/* Header */}
       <header style={{ position: "sticky", top: 0, zIndex: 20, background: "rgba(9,8,26,0.92)", backdropFilter: "blur(8px)", borderBottom: `1px solid ${N4}`, padding: "16px 20px" }}>
         <div style={{ maxWidth: 1100, margin: "0 auto", display: "flex", justifyContent: "center" }}>
@@ -256,8 +289,11 @@ export function AnaliseLandingV2Client() {
           {/* PASSO 1: Pessoa Física vs Empresário/Sócio */}
           {qualifyStep === "perfil" && (
             <>
-              <p style={{ fontSize: 13.5, color: MU, lineHeight: 1.7, textAlign: "center", maxWidth: 520, margin: "0 auto 32px" }}>
+              <p style={{ fontSize: 13.5, color: MU, lineHeight: 1.7, textAlign: "center", maxWidth: 520, margin: "0 auto 8px" }}>
                 A composição do seu diagnóstico muda conforme seu perfil: uma empresa nunca é avaliada isoladamente pelo mercado de crédito, sempre junto de quem responde por ela.
+              </p>
+              <p style={{ fontSize: 11.5, fontWeight: 700, color: GL, textTransform: "uppercase", letterSpacing: "0.06em", textAlign: "center", margin: "0 0 24px" }}>
+                Toque em uma das opções abaixo para continuar
               </p>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 16 }}>
                 <ProfileCard
@@ -429,25 +465,40 @@ function ConfigCounter({ label, hint, value, min, onChange }: { label: string; h
   );
 }
 
-// Card de seleção do Passo 1 (Pessoa Física vs Empresário/Sócio).
+// Card de seleção do Passo 1 (Pessoa Física vs Empresário/Sócio). Visual de
+// botão de escolha de verdade (ícone em destaque + CTA com seta), não um
+// bloco informativo: achado real de UX, o card original não sinalizava que
+// era clicável, e quem chegava direto no configurador (ex.: link de
+// indicação com #configurador) ficava parado no Passo 1 sem entender que
+// precisava tocar numa das duas opções.
 function ProfileCard({ icon: Icon, title, text, onClick }: { icon: typeof UserRound; title: string; text: string; onClick: () => void }) {
   return (
-    <button type="button" onClick={onClick}
+    <button type="button" onClick={onClick} className="v3-profile-card"
       style={{ textAlign: "left", background: N2, border: `1px solid ${N4}`, borderRadius: 10, padding: 22, cursor: "pointer", display: "flex", flexDirection: "column", gap: 10 }}>
-      <Icon size={24} color={GO} strokeWidth={1.5} />
+      <div style={{ width: 44, height: 44, borderRadius: 10, background: "rgba(201,168,76,0.12)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <Icon size={22} color={GO} strokeWidth={1.5} />
+      </div>
       <div style={{ fontSize: 14.5, fontWeight: 700, color: CR }}>{title}</div>
       <div style={{ fontSize: 12, color: MU, lineHeight: 1.6 }}>{text}</div>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 6, fontSize: 11, fontWeight: 700, color: GO, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+        Escolher esta opção <ArrowRight size={13} className="v3-profile-card-arrow" />
+      </div>
     </button>
   );
 }
 
-// Opção de estrutura societária do modal do Passo 2.
+// Opção de estrutura societária do modal do Passo 2. Mesmo tratamento de
+// botão-escolha do ProfileCard (seta que desliza no hover), consistência de
+// interação entre os dois passos guiados.
 function StructureOption({ icon: Icon, title, onClick }: { icon: typeof UserRound; title: string; onClick: () => void }) {
   return (
-    <button type="button" onClick={onClick}
+    <button type="button" onClick={onClick} className="v3-structure-option"
       style={{ textAlign: "left", background: N2, border: `1px solid ${N4}`, borderRadius: 10, padding: 16, cursor: "pointer", display: "flex", gap: 12, alignItems: "center" }}>
-      <Icon size={20} color={GO} strokeWidth={1.5} style={{ flexShrink: 0 }} />
-      <span style={{ fontSize: 13, fontWeight: 600, color: CR, lineHeight: 1.4 }}>{title}</span>
+      <div style={{ width: 34, height: 34, borderRadius: 8, background: "rgba(201,168,76,0.12)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+        <Icon size={17} color={GO} strokeWidth={1.5} />
+      </div>
+      <span style={{ fontSize: 13, fontWeight: 600, color: CR, lineHeight: 1.4, flex: 1 }}>{title}</span>
+      <ArrowRight size={15} color={GO} className="v3-profile-card-arrow" style={{ flexShrink: 0 }} />
     </button>
   );
 }
