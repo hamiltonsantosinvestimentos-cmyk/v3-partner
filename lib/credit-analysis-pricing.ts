@@ -5,6 +5,9 @@
 // a fórmula em outro lugar.
 
 export const UNIT_PRICE_CENTS = 19700; // R$ 197,00 por CNPJ ou CPF analisado
+// Fallback legado (sem perfil definido): usado por legacyPlanoToSelection
+// (/analise Variante A, congelada) e por qualquer clampSelection() chamado
+// sem mínimos explícitos. Nunca usado no fluxo novo de /analise-v2.
 export const MIN_CNPJ_COUNT = 1;
 export const MIN_CPF_COUNT = 0;
 
@@ -14,9 +17,36 @@ export interface ModularSelection {
   hasConsultancy: boolean;
 }
 
-export function clampSelection(sel: Partial<ModularSelection>): ModularSelection {
-  const cnpjCount = Math.max(MIN_CNPJ_COUNT, Math.floor(sel.cnpjCount ?? MIN_CNPJ_COUNT));
-  const cpfCount = Math.max(MIN_CPF_COUNT, Math.floor(sel.cpfCount ?? MIN_CPF_COUNT));
+export interface MinCounts {
+  minCnpj: number;
+  minCpf: number;
+}
+
+// Qualificação de perfil, adicionada em 26/08/2026 para blindar 2 problemas
+// reais: empresário comprando só CNPJ (diagnóstico incompleto sem o sócio/
+// garantidor, que é quem qualquer fundo/securitizadora também analisa) e
+// pessoa física sem empresa travada comprando 1 CNPJ que não precisa (o
+// antigo MIN_CNPJ_COUNT=1 era aplicado incondicionalmente).
+export type ProfileType = "PF" | "PJ";
+export type CompanyStructure = "UNIPESSOAL" | "MULTIPLOS_SOCIOS";
+
+// Mínimos de negócio por perfil. `profileType`/`companyStructure` nulos
+// (perfil ainda não escolhido no fluxo guiado, ou chamada fora desse fluxo)
+// caem no fallback legado MIN_CNPJ_COUNT/MIN_CPF_COUNT.
+export function getMinCounts(profileType: ProfileType | null, companyStructure: CompanyStructure | null): MinCounts {
+  if (profileType === "PF") return { minCnpj: 0, minCpf: 1 };
+  if (profileType === "PJ") {
+    if (companyStructure === "MULTIPLOS_SOCIOS") return { minCnpj: 1, minCpf: 2 };
+    return { minCnpj: 1, minCpf: 1 }; // UNIPESSOAL, ou estrutura ainda não escolhida
+  }
+  return { minCnpj: MIN_CNPJ_COUNT, minCpf: MIN_CPF_COUNT };
+}
+
+export function clampSelection(sel: Partial<ModularSelection>, min?: Partial<MinCounts>): ModularSelection {
+  const minCnpj = min?.minCnpj ?? MIN_CNPJ_COUNT;
+  const minCpf = min?.minCpf ?? MIN_CPF_COUNT;
+  const cnpjCount = Math.max(minCnpj, Math.floor(sel.cnpjCount ?? minCnpj));
+  const cpfCount = Math.max(minCpf, Math.floor(sel.cpfCount ?? minCpf));
   return { cnpjCount, cpfCount, hasConsultancy: Boolean(sel.hasConsultancy) };
 }
 

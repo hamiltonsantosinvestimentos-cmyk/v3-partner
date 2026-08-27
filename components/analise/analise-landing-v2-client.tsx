@@ -3,9 +3,9 @@
 import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { Compass, Landmark, Handshake, ArrowRight, Check, Minus, Plus } from "lucide-react";
+import { Compass, Landmark, Handshake, ArrowRight, Check, Minus, Plus, Building2, UserRound, Users, AlertTriangle } from "lucide-react";
 import { captureRefFromUrl, captureUtmFromUrl, capturePropFromUrl } from "@/lib/ref-tracking";
-import { UNIT_PRICE_CENTS, MIN_CNPJ_COUNT, MIN_CPF_COUNT, clampSelection, calcTotalCents, fmtBRL, type ModularSelection } from "@/lib/credit-analysis-pricing";
+import { clampSelection, calcTotalCents, fmtBRL, getMinCounts, UNIT_PRICE_CENTS, type ModularSelection, type ProfileType, type CompanyStructure } from "@/lib/credit-analysis-pricing";
 
 const N = "#09081A", N2 = "#13223A", N3 = "#162744", N4 = "#243A66";
 const GO = "#C9A84C", GL = "#E8C97A", CR = "#F5F1E8", MU = "#9BAFC5";
@@ -62,7 +62,7 @@ const FAQ = [
   },
   {
     q: "Quantos CNPJs ou CPFs eu devo incluir?",
-    a: "Inclua um CNPJ para cada empresa do seu grupo econômico que vai compor a operação, e um CPF para cada sócio ou garantidor que também precisa ser analisado. Na dúvida, comece com 1 CNPJ: nossa mesa orienta se for necessário ampliar depois.",
+    a: "O configurador já te guia por isso: se você é Pessoa Física, só entra CPF. Se você é Empresário, o mínimo já vem travado no CNPJ da empresa mais os sócios/garantidores da operação (1 para empresa unipessoal, 2 ou mais para sociedade com múltiplos sócios), porque nenhum fundo avalia uma empresa isoladamente. Precisa incluir mais de uma empresa do grupo ou mais garantidores? É só somar no configurador.",
   },
   {
     q: "Em quanto tempo eu recebo o resultado?",
@@ -86,10 +86,19 @@ function Eyebrow({ children }: { children: React.ReactNode }) {
   );
 }
 
+// Fluxo condicional PF/PJ (26/08/2026): blinda 2 problemas reais — empresário
+// comprando só CNPJ (diagnóstico incompleto sem sócio/garantidor) e pessoa
+// física sem empresa travada comprando 1 CNPJ que não precisa. Ver
+// lib/credit-analysis-pricing.ts getMinCounts() para a regra de negócio.
+type QualifyStep = "perfil" | "estrutura" | "configurador";
+
 export function AnaliseLandingV2Client() {
   const [ref, setRef] = useState<string | null>(null);
   const [prop, setProp] = useState<string | null>(null);
-  const [selection, setSelection] = useState<ModularSelection>({ cnpjCount: MIN_CNPJ_COUNT, cpfCount: MIN_CPF_COUNT, hasConsultancy: false });
+  const [qualifyStep, setQualifyStep] = useState<QualifyStep>("perfil");
+  const [profileType, setProfileType] = useState<ProfileType | null>(null);
+  const [companyStructure, setCompanyStructure] = useState<CompanyStructure | null>(null);
+  const [selection, setSelection] = useState<ModularSelection>({ cnpjCount: 0, cpfCount: 0, hasConsultancy: false });
 
   useEffect(() => {
     captureRefFromUrl();
@@ -100,14 +109,39 @@ export function AnaliseLandingV2Client() {
     setProp(params.get("prop"));
   }, []);
 
+  const min = useMemo(() => getMinCounts(profileType, companyStructure), [profileType, companyStructure]);
   const totalCents = useMemo(() => calcTotalCents(selection), [selection]);
   const totalAnalyses = selection.cnpjCount + selection.cpfCount;
 
+  function selectPessoaFisica() {
+    const m = getMinCounts("PF", null);
+    setProfileType("PF");
+    setCompanyStructure(null);
+    setSelection(clampSelection({ cnpjCount: m.minCnpj, cpfCount: m.minCpf, hasConsultancy: false }, m));
+    setQualifyStep("configurador");
+  }
+  function selectEmpresario() {
+    setProfileType("PJ");
+    setQualifyStep("estrutura");
+  }
+  function selectStructure(structure: CompanyStructure) {
+    const m = getMinCounts("PJ", structure);
+    setCompanyStructure(structure);
+    setSelection(clampSelection({ cnpjCount: m.minCnpj, cpfCount: m.minCpf, hasConsultancy: false }, m));
+    setQualifyStep("configurador");
+  }
+  function trocarPerfil() {
+    setQualifyStep("perfil");
+    setProfileType(null);
+    setCompanyStructure(null);
+    setSelection({ cnpjCount: 0, cpfCount: 0, hasConsultancy: false });
+  }
+
   function setCnpjCount(n: number) {
-    setSelection((p) => clampSelection({ ...p, cnpjCount: n }));
+    setSelection((p) => clampSelection({ ...p, cnpjCount: n }, min));
   }
   function setCpfCount(n: number) {
-    setSelection((p) => clampSelection({ ...p, cpfCount: n }));
+    setSelection((p) => clampSelection({ ...p, cpfCount: n }, min));
   }
   function toggleConsultancy() {
     setSelection((p) => ({ ...p, hasConsultancy: !p.hasConsultancy }));
@@ -119,6 +153,8 @@ export function AnaliseLandingV2Client() {
       cpf: String(selection.cpfCount),
       consultoria: selection.hasConsultancy ? "1" : "0",
     });
+    if (profileType) params.set("perfil", profileType);
+    if (companyStructure) params.set("estrutura", companyStructure);
     if (ref) params.set("ref", ref);
     if (prop) params.set("prop", prop);
     return `/analise/checkout?${params.toString()}`;
@@ -209,61 +245,135 @@ export function AnaliseLandingV2Client() {
         </div>
       </section>
 
-      {/* 4. CONFIGURADOR DE DIAGNÓSTICO MODULAR */}
+      {/* 4. QUALIFICAÇÃO DE PERFIL + CONFIGURADOR DE DIAGNÓSTICO MODULAR */}
       <section id="configurador" style={{ padding: "48px 20px", background: N2, borderTop: `1px solid ${N4}`, borderBottom: `1px solid ${N4}`, scrollMarginTop: 76 }}>
         <div style={{ maxWidth: 640, margin: "0 auto" }}>
           <Eyebrow>Diagnóstico sob Medida</Eyebrow>
           <h2 style={{ fontSize: "clamp(22px, 4vw, 30px)", fontWeight: 800, textAlign: "center", marginBottom: 14, lineHeight: 1.3 }}>
-            Pague só pelo que a sua operação precisa analisar
+            {qualifyStep === "perfil" ? "Antes de tudo, qual é o seu perfil?" : "Pague só pelo que a sua operação precisa analisar"}
           </h2>
-          <p style={{ fontSize: 13.5, color: MU, lineHeight: 1.7, textAlign: "center", maxWidth: 520, margin: "0 auto 36px" }}>
-            Cada análise completa, de uma empresa (CNPJ) ou de um sócio/garantidor (CPF), custa R$ 197,00.
-            Grupo com mais de uma empresa? Sócio que também entra como garantia da operação? Inclua quantos precisar.
-          </p>
 
-          <div style={{ background: N3, border: `1px solid ${N4}`, borderRadius: 12, padding: 28 }}>
-            <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 20 }}>
-              <ConfigCounter label="Empresas do grupo (CNPJ)" hint="Uma análise completa por empresa" value={selection.cnpjCount} min={MIN_CNPJ_COUNT} onChange={setCnpjCount} />
-              <ConfigCounter label="Sócios ou garantidores (CPF)" hint="Inclua quem também compõe a operação" value={selection.cpfCount} min={MIN_CPF_COUNT} onChange={setCpfCount} />
-            </div>
-
-            <ul style={{ listStyle: "none", padding: 0, margin: "0 0 20px", display: "flex", flexDirection: "column", gap: 8 }}>
-              {["Raio-X completo de cada CNPJ ou CPF incluído", "Mapeamento de restrições e notas de risco (rating)", "Relatório visual entregue em PDF"].map((item) => (
-                <li key={item} style={{ display: "flex", gap: 8, fontSize: 12.5, color: MU, lineHeight: 1.5 }}>
-                  <Check size={15} color={GO} style={{ flexShrink: 0, marginTop: 1 }} /> {item}
-                </li>
-              ))}
-            </ul>
-
-            <button
-              type="button"
-              onClick={toggleConsultancy}
-              style={{
-                width: "100%", textAlign: "left", background: selection.hasConsultancy ? "rgba(201,168,76,0.08)" : N2,
-                border: `1px solid ${selection.hasConsultancy ? GO : N4}`, borderRadius: 10, padding: 16, cursor: "pointer",
-                display: "flex", gap: 12, alignItems: "flex-start", marginBottom: 20,
-              }}
-            >
-              <ConfigSwitch on={selection.hasConsultancy} />
-              <span style={{ fontSize: 12.5, color: MU, lineHeight: 1.6 }}>
-                <strong style={{ color: CR }}>Quer a devolutiva com um especialista da mesa de crédito?</strong><br />
-                Adicione uma reunião online de 45 minutos: você recebe a leitura completa dos relatórios e o plano de ação prático pra captar, direto com quem estrutura a operação. + {fmtBRL(UNIT_PRICE_CENTS)}
-              </span>
-            </button>
-
-            <div style={{ borderTop: `1px solid ${N4}`, paddingTop: 18, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 18 }}>
-              <div style={{ fontSize: 11.5, color: MU, lineHeight: 1.5 }}>
-                {totalAnalyses} análise{totalAnalyses !== 1 ? "s" : ""} selecionada{totalAnalyses !== 1 ? "s" : ""}<br />
-                Consultoria {selection.hasConsultancy ? "incluída" : "não incluída"}
+          {/* PASSO 1: Pessoa Física vs Empresário/Sócio */}
+          {qualifyStep === "perfil" && (
+            <>
+              <p style={{ fontSize: 13.5, color: MU, lineHeight: 1.7, textAlign: "center", maxWidth: 520, margin: "0 auto 32px" }}>
+                A composição do seu diagnóstico muda conforme seu perfil: uma empresa nunca é avaliada isoladamente pelo mercado de crédito, sempre junto de quem responde por ela.
+              </p>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 16 }}>
+                <ProfileCard
+                  icon={UserRound}
+                  title="Sou Pessoa Física"
+                  text="Não possuo empresa ou não busco crédito PJ neste momento."
+                  onClick={selectPessoaFisica}
+                />
+                <ProfileCard
+                  icon={Building2}
+                  title="Sou Empresário / Sócio"
+                  text="Busco crédito ou diagnóstico empresarial para minha empresa."
+                  onClick={selectEmpresario}
+                />
               </div>
-              <div style={{ fontSize: 26, fontWeight: 800, color: GO, whiteSpace: "nowrap" }}>{fmtBRL(totalCents)}</div>
-            </div>
+            </>
+          )}
 
-            <Link href={configuratorCheckoutHref()}
-              style={{ display: "block", textAlign: "center", background: GO, color: N, fontWeight: 700, fontSize: 14, padding: "14px 0", borderRadius: 8, textDecoration: "none" }}>
-              Avançar para Pagamento Seguro
-            </Link>
-          </div>
+          {/* PASSO 2: Estrutura societária (modal, só para Empresário/Sócio) */}
+          {qualifyStep === "estrutura" && (
+            <div role="dialog" aria-modal="true" style={{ position: "fixed", inset: 0, zIndex: 30, background: "rgba(9,8,26,0.82)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+              <div style={{ background: N3, border: `1px solid ${GO}`, borderRadius: 14, padding: 32, maxWidth: 480, width: "100%" }}>
+                <div style={{ fontSize: 17, fontWeight: 800, color: CR, marginBottom: 8, textAlign: "center" }}>
+                  Qual é a estrutura societária da sua empresa?
+                </div>
+                <p style={{ fontSize: 12.5, color: MU, lineHeight: 1.6, textAlign: "center", marginBottom: 24 }}>
+                  Isso define quantos sócios/garantidores precisam entrar no diagnóstico junto com o CNPJ.
+                </p>
+                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                  <StructureOption
+                    icon={UserRound}
+                    title="Unipessoal (SLU / MEI / Apenas 1 Sócio)"
+                    onClick={() => selectStructure("UNIPESSOAL")}
+                  />
+                  <StructureOption
+                    icon={Users}
+                    title="Sociedade com 2+ Sócios / Grupo Econômico"
+                    onClick={() => selectStructure("MULTIPLOS_SOCIOS")}
+                  />
+                </div>
+                <button type="button" onClick={trocarPerfil}
+                  style={{ display: "block", margin: "18px auto 0", background: "none", border: "none", color: MU, fontSize: 11.5, textDecoration: "underline", cursor: "pointer" }}>
+                  Voltar
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* PASSO 3: Configurador, com mínimos já travados pelo perfil escolhido */}
+          {qualifyStep === "configurador" && (
+            <>
+              <p style={{ fontSize: 13.5, color: MU, lineHeight: 1.7, textAlign: "center", maxWidth: 520, margin: "0 auto 20px" }}>
+                Cada análise completa, de uma empresa (CNPJ) ou de um sócio/garantidor (CPF), custa R$ 197,00.
+                Grupo com mais de uma empresa? Sócio que também entra como garantia da operação? Inclua quantos precisar.
+              </p>
+              <button type="button" onClick={trocarPerfil}
+                style={{ display: "block", margin: "0 auto 20px", background: "none", border: "none", color: GL, fontSize: 11.5, textDecoration: "underline", cursor: "pointer" }}>
+                Trocar perfil selecionado
+              </button>
+
+              <div style={{ background: N3, border: `1px solid ${N4}`, borderRadius: 12, padding: 28 }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 20 }}>
+                  {profileType !== "PF" && (
+                    <ConfigCounter label="Empresas do grupo (CNPJ)" hint="Uma análise completa por empresa" value={selection.cnpjCount} min={min.minCnpj} onChange={setCnpjCount} />
+                  )}
+                  <ConfigCounter label="Sócios ou garantidores (CPF)" hint="Inclua quem também compõe a operação" value={selection.cpfCount} min={min.minCpf} onChange={setCpfCount} />
+                </div>
+
+                {companyStructure === "MULTIPLOS_SOCIOS" && (
+                  <div style={{ display: "flex", gap: 10, alignItems: "flex-start", background: "rgba(201,168,76,0.08)", border: `1px solid ${GOLD_BORDER}`, borderRadius: 8, padding: 14, marginBottom: 20 }}>
+                    <AlertTriangle size={16} color={GO} style={{ flexShrink: 0, marginTop: 1 }} />
+                    <span style={{ fontSize: 12, color: MU, lineHeight: 1.6 }}>
+                      Para avaliação precisa de risco por fundos de investimento, é obrigatória a análise da empresa e de todos os sócios/garantidores.
+                    </span>
+                  </div>
+                )}
+
+                <ul style={{ listStyle: "none", padding: 0, margin: "0 0 20px", display: "flex", flexDirection: "column", gap: 8 }}>
+                  {["Raio-X completo de cada CNPJ ou CPF incluído", "Mapeamento de restrições e notas de risco (rating)", "Relatório visual entregue em PDF"].map((item) => (
+                    <li key={item} style={{ display: "flex", gap: 8, fontSize: 12.5, color: MU, lineHeight: 1.5 }}>
+                      <Check size={15} color={GO} style={{ flexShrink: 0, marginTop: 1 }} /> {item}
+                    </li>
+                  ))}
+                </ul>
+
+                <button
+                  type="button"
+                  onClick={toggleConsultancy}
+                  style={{
+                    width: "100%", textAlign: "left", background: selection.hasConsultancy ? "rgba(201,168,76,0.08)" : N2,
+                    border: `1px solid ${selection.hasConsultancy ? GO : N4}`, borderRadius: 10, padding: 16, cursor: "pointer",
+                    display: "flex", gap: 12, alignItems: "flex-start", marginBottom: 20,
+                  }}
+                >
+                  <ConfigSwitch on={selection.hasConsultancy} />
+                  <span style={{ fontSize: 12.5, color: MU, lineHeight: 1.6 }}>
+                    <strong style={{ color: CR }}>Quer a devolutiva com um especialista da mesa de crédito?</strong><br />
+                    Adicione uma reunião online de 45 minutos: você recebe a leitura completa dos relatórios e o plano de ação prático pra captar, direto com quem estrutura a operação. + {fmtBRL(UNIT_PRICE_CENTS)}
+                  </span>
+                </button>
+
+                <div style={{ borderTop: `1px solid ${N4}`, paddingTop: 18, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 18 }}>
+                  <div style={{ fontSize: 11.5, color: MU, lineHeight: 1.5 }}>
+                    {totalAnalyses} análise{totalAnalyses !== 1 ? "s" : ""} selecionada{totalAnalyses !== 1 ? "s" : ""}<br />
+                    Consultoria {selection.hasConsultancy ? "incluída" : "não incluída"}
+                  </div>
+                  <div style={{ fontSize: 26, fontWeight: 800, color: GO, whiteSpace: "nowrap" }}>{fmtBRL(totalCents)}</div>
+                </div>
+
+                <Link href={configuratorCheckoutHref()}
+                  style={{ display: "block", textAlign: "center", background: GO, color: N, fontWeight: 700, fontSize: 14, padding: "14px 0", borderRadius: 8, textDecoration: "none" }}>
+                  Avançar para Pagamento Seguro
+                </Link>
+              </div>
+            </>
+          )}
         </div>
       </section>
 
@@ -316,6 +426,29 @@ function ConfigCounter({ label, hint, value, min, onChange }: { label: string; h
         </button>
       </div>
     </div>
+  );
+}
+
+// Card de seleção do Passo 1 (Pessoa Física vs Empresário/Sócio).
+function ProfileCard({ icon: Icon, title, text, onClick }: { icon: typeof UserRound; title: string; text: string; onClick: () => void }) {
+  return (
+    <button type="button" onClick={onClick}
+      style={{ textAlign: "left", background: N2, border: `1px solid ${N4}`, borderRadius: 10, padding: 22, cursor: "pointer", display: "flex", flexDirection: "column", gap: 10 }}>
+      <Icon size={24} color={GO} strokeWidth={1.5} />
+      <div style={{ fontSize: 14.5, fontWeight: 700, color: CR }}>{title}</div>
+      <div style={{ fontSize: 12, color: MU, lineHeight: 1.6 }}>{text}</div>
+    </button>
+  );
+}
+
+// Opção de estrutura societária do modal do Passo 2.
+function StructureOption({ icon: Icon, title, onClick }: { icon: typeof UserRound; title: string; onClick: () => void }) {
+  return (
+    <button type="button" onClick={onClick}
+      style={{ textAlign: "left", background: N2, border: `1px solid ${N4}`, borderRadius: 10, padding: 16, cursor: "pointer", display: "flex", gap: 12, alignItems: "center" }}>
+      <Icon size={20} color={GO} strokeWidth={1.5} style={{ flexShrink: 0 }} />
+      <span style={{ fontSize: 13, fontWeight: 600, color: CR, lineHeight: 1.4 }}>{title}</span>
+    </button>
   );
 }
 

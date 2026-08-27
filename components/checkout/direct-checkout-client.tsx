@@ -3,10 +3,10 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
 import Image from "next/image";
-import { Copy, Check, AlertCircle, Loader2, CreditCard, QrCode, FileText, Minus, Plus } from "lucide-react";
+import { Copy, Check, AlertCircle, AlertTriangle, Loader2, CreditCard, QrCode, FileText, Minus, Plus } from "lucide-react";
 import { getStoredRefPartnerId, getStoredPropCode } from "@/lib/ref-tracking";
 import { trackEvent } from "@/lib/analytics";
-import { UNIT_PRICE_CENTS, MIN_CNPJ_COUNT, MIN_CPF_COUNT, clampSelection, calcTotalCents, buildModularTitle, legacyPlanoToSelection, fmtBRL, type ModularSelection } from "@/lib/credit-analysis-pricing";
+import { UNIT_PRICE_CENTS, clampSelection, calcTotalCents, buildModularTitle, legacyPlanoToSelection, getMinCounts, fmtBRL, type ModularSelection, type ProfileType, type CompanyStructure } from "@/lib/credit-analysis-pricing";
 
 const N = "#09081A", N2 = "#13223A", N3 = "#162744", N4 = "#243A66";
 const GO = "#C9A84C", GL = "#E8C97A", CR = "#F5F1E8", MU = "#9BAFC5";
@@ -27,24 +27,40 @@ interface OrderResult {
 
 const fmt = fmtBRL;
 
+// Lê perfil/estrutura da URL (?perfil=PF|PJ&estrutura=UNIPESSOAL|MULTIPLOS_SOCIOS),
+// propagados pelo configurador guiado de /analise-v2. Ausentes = link legado
+// (bookmark antigo, /analise Variante A) — cai no fallback global de
+// getMinCounts(null, null).
+function profileFromParams(params: URLSearchParams): { profileType: ProfileType | null; companyStructure: CompanyStructure | null } {
+  const perfil = params.get("perfil");
+  const estrutura = params.get("estrutura");
+  return {
+    profileType: perfil === "PF" || perfil === "PJ" ? perfil : null,
+    companyStructure: estrutura === "UNIPESSOAL" || estrutura === "MULTIPLOS_SOCIOS" ? estrutura : null,
+  };
+}
+
 // Lê a seleção inicial da URL: ?cnpj=&cpf=&consultoria= (vindo do
 // configurador de /analise-v2) ou ?plano= (legado, vindo de /analise
 // Variante A, que não tem configurador — mapeado para 1 CNPJ + consultoria
-// on/off conforme o pacote fixo antigo).
-function selectionFromParams(params: URLSearchParams): ModularSelection {
+// on/off conforme o pacote fixo antigo). `min` trava a seleção nos mínimos
+// de negócio do perfil já escolhido na landing (ver getMinCounts).
+function selectionFromParams(params: URLSearchParams, min: ReturnType<typeof getMinCounts>): ModularSelection {
   if (params.has("cnpj") || params.has("cpf") || params.has("consultoria")) {
     return clampSelection({
-      cnpjCount: Number(params.get("cnpj") ?? MIN_CNPJ_COUNT),
-      cpfCount: Number(params.get("cpf") ?? MIN_CPF_COUNT),
+      cnpjCount: Number(params.get("cnpj") ?? min.minCnpj),
+      cpfCount: Number(params.get("cpf") ?? min.minCpf),
       hasConsultancy: params.get("consultoria") === "1",
-    });
+    }, min);
   }
   return legacyPlanoToSelection(params.get("plano"));
 }
 
 export function DirectCheckoutClient() {
   const searchParams = useSearchParams();
-  const initialSelection = useMemo(() => selectionFromParams(searchParams), [searchParams]);
+  const { profileType, companyStructure } = useMemo(() => profileFromParams(searchParams), [searchParams]);
+  const min = useMemo(() => getMinCounts(profileType, companyStructure), [profileType, companyStructure]);
+  const initialSelection = useMemo(() => selectionFromParams(searchParams, min), [searchParams, min]);
 
   const [selection, setSelection] = useState<ModularSelection>(initialSelection);
   const [step, setStep] = useState<Step>("form");
@@ -61,10 +77,10 @@ export function DirectCheckoutClient() {
   const totalAnalyses = selection.cnpjCount + selection.cpfCount;
 
   function setCnpjCount(n: number) {
-    setSelection((p) => clampSelection({ ...p, cnpjCount: n }));
+    setSelection((p) => clampSelection({ ...p, cnpjCount: n }, min));
   }
   function setCpfCount(n: number) {
-    setSelection((p) => clampSelection({ ...p, cpfCount: n }));
+    setSelection((p) => clampSelection({ ...p, cpfCount: n }, min));
   }
   function toggleConsultancy() {
     setSelection((p) => ({ ...p, hasConsultancy: !p.hasConsultancy }));
@@ -129,6 +145,8 @@ export function DirectCheckoutClient() {
           has_consultancy: selection.hasConsultancy,
           ref_partner_id: refPartnerId,
           prop_code: propCode,
+          profile_type: profileType,
+          company_structure: companyStructure,
         }),
       });
       const d = await r.json() as OrderResult & { error?: string };
@@ -165,20 +183,31 @@ export function DirectCheckoutClient() {
 
           {step === "form" && (
             <div style={{ marginTop: 20, display: "flex", flexDirection: "column", gap: 12 }}>
-              <CounterRow
-                label="Empresas do grupo (CNPJ)"
-                hint="Uma análise completa por empresa"
-                value={selection.cnpjCount}
-                min={MIN_CNPJ_COUNT}
-                onChange={setCnpjCount}
-              />
+              {profileType !== "PF" && (
+                <CounterRow
+                  label="Empresas do grupo (CNPJ)"
+                  hint="Uma análise completa por empresa"
+                  value={selection.cnpjCount}
+                  min={min.minCnpj}
+                  onChange={setCnpjCount}
+                />
+              )}
               <CounterRow
                 label="Sócios ou garantidores (CPF)"
                 hint="Inclua quem também compõe a operação"
                 value={selection.cpfCount}
-                min={MIN_CPF_COUNT}
+                min={min.minCpf}
                 onChange={setCpfCount}
               />
+
+              {companyStructure === "MULTIPLOS_SOCIOS" && (
+                <div style={{ display: "flex", gap: 8, alignItems: "flex-start", background: "rgba(201,168,76,0.08)", border: "1px solid rgba(201,168,76,0.35)", borderRadius: 8, padding: 12 }}>
+                  <AlertTriangle size={14} color={GO} style={{ flexShrink: 0, marginTop: 1 }} />
+                  <span style={{ fontSize: 11, color: MU, lineHeight: 1.5 }}>
+                    Para avaliação precisa de risco por fundos de investimento, é obrigatória a análise da empresa e de todos os sócios/garantidores.
+                  </span>
+                </div>
+              )}
 
               <button
                 type="button"

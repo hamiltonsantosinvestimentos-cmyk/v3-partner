@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { coraFetch } from "@/lib/cora";
 import { randomUUID } from "crypto";
-import { clampSelection, calcTotalCents, buildModularTitle, MIN_CNPJ_COUNT, MIN_CPF_COUNT } from "@/lib/credit-analysis-pricing";
+import { clampSelection, calcTotalCents, buildModularTitle, getMinCounts, type ProfileType, type CompanyStructure } from "@/lib/credit-analysis-pricing";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -25,13 +25,24 @@ export async function POST(req: NextRequest) {
     client_doc?: string;
     ref_partner_id?: string | null;
     prop_code?: string | null;
+    profile_type?: string | null;
+    company_structure?: string | null;
   };
 
+  // Mínimos de negócio (ver PATCH 26/08/2026) resolvidos e aplicados no
+  // servidor, nunca confiando só no client: sem isso, editar a URL/payload
+  // do checkout direto driblaria a trava de "CNPJ sem sócio" ou "CPF sem
+  // necessidade" que essa regra existe pra impedir.
+  const profileType: ProfileType | null = body.profile_type === "PF" || body.profile_type === "PJ" ? body.profile_type : null;
+  const companyStructure: CompanyStructure | null =
+    body.company_structure === "UNIPESSOAL" || body.company_structure === "MULTIPLOS_SOCIOS" ? body.company_structure : null;
+  const min = getMinCounts(profileType, companyStructure);
+
   const selection = clampSelection({
-    cnpjCount: Number(body.cnpj_count ?? MIN_CNPJ_COUNT),
-    cpfCount: Number(body.cpf_count ?? MIN_CPF_COUNT),
+    cnpjCount: Number(body.cnpj_count ?? min.minCnpj),
+    cpfCount: Number(body.cpf_count ?? min.minCpf),
     hasConsultancy: Boolean(body.has_consultancy),
-  });
+  }, min);
   const priceCents = calcTotalCents(selection);
   const title = buildModularTitle(selection);
 
@@ -121,6 +132,8 @@ export async function POST(req: NextRequest) {
       cnpj_count: selection.cnpjCount,
       cpf_count: selection.cpfCount,
       has_consultancy: selection.hasConsultancy,
+      profile_type: profileType,
+      company_structure: companyStructure,
       ref_partner_id: refPartnerId,
       credit_desk_proposal_id: creditDeskProposalId,
       client_name: body.client_name.trim(),
