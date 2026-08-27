@@ -258,6 +258,10 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
   const [activeDetailTab, setActiveDetailTab] = useState<"geral" | "documentos" | "orderbook" | "governanca" | "notas" | "forja" | "compliance">("geral");
   const [listingDocs, setListingDocs] = useState<any[]>([]);
   const [docsLoading, setDocsLoading] = useState(false);
+  // Fase 2 do Cockpit de Compliance (27/08/2026): varredura Checktudo (SCR + Dossiê Resumido).
+  const [checktudoRecords, setChecktudoRecords] = useState<any[]>([]);
+  const [checktudoScanning, setChecktudoScanning] = useState(false);
+  const [checktudoError, setChecktudoError] = useState<string | null>(null);
   const [intakeUrl, setIntakeUrl] = useState<string | null>(null);
   const [generatingLink, setGeneratingLink] = useState(false);
   const [dealRoomUrl, setDealRoomUrl] = useState<string | null>(null);
@@ -490,6 +494,17 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
       .then((json) => setPartnersList(json.partners ?? []))
       .catch(() => setPartnersList([]));
   }, []);
+
+  // Fase 2 do Cockpit de Compliance (27/08/2026): carrega o histórico de varreduras
+  // Checktudo já feitas neste ativo ao abrir a aba, sem esperar clique no botão.
+  useEffect(() => {
+    if (activeDetailTab === "compliance" && selectedListing?.id) {
+      setChecktudoRecords([]);
+      setChecktudoError(null);
+      loadChecktudoRecords(selectedListing.id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeDetailTab, selectedListing?.id]);
 
   const loadDealNotes = async (listingId: string) => {
     try {
@@ -806,6 +821,36 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
       }
     } catch { alert("Erro de conexão"); }
     finally { setUploadingDoc(null); }
+  };
+
+  const loadChecktudoRecords = async (listingId: string) => {
+    try {
+      const res = await fetch(`/api/cm/listings/${listingId}/compliance-scan`);
+      const json = await res.json();
+      if (res.ok) setChecktudoRecords(json.records ?? []);
+    } catch { /* silencioso, botão de varredura mostra erro próprio */ }
+  };
+
+  const runChecktudoScan = async (listingId: string, documentType: "cpf" | "cnpj", documentValue: string) => {
+    setChecktudoScanning(true);
+    setChecktudoError(null);
+    try {
+      const res = await fetch(`/api/cm/listings/${listingId}/compliance-scan`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ document_type: documentType, document_value: documentValue }),
+      });
+      const json = await res.json();
+      if (res.ok) {
+        loadChecktudoRecords(listingId);
+      } else {
+        setChecktudoError(json.error ?? "Erro ao executar varredura");
+      }
+    } catch {
+      setChecktudoError("Erro de conexão");
+    } finally {
+      setChecktudoScanning(false);
+    }
   };
 
   const createDealRoom = async (listingId: string) => {
@@ -3262,6 +3307,33 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
                 nao uma tabela nova; Coluna 3 = placeholder ate a Fase 4 (sintese IA + PDF). */}
             {activeDetailTab === "compliance" && (
               <div className="p-4 space-y-4">
+                {/* Header da aba: varredura Checktudo (Fase 2, 27/08/2026) */}
+                <div className="flex items-center justify-between gap-3 bg-[#12112A] border border-[#9BAFC5]/10 rounded-lg px-3 py-2.5">
+                  <div className="min-w-0">
+                    <div className="text-[11px] text-[#F5F1E8] font-bold">Varredura Checktudo</div>
+                    <div className="text-[9px] text-[#9BAFC5]">SCR (BACEN) + Dossiê Jurídico Resumido do CPF/CNPJ do cedente</div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      const raw = (selectedListing.seller_cpf_cnpj ?? "").replace(/\D/g, "");
+                      if (!raw) { setChecktudoError("Ativo sem CPF/CNPJ do cedente cadastrado"); return; }
+                      const docType = raw.length > 11 ? "cnpj" : "cpf";
+                      runChecktudoScan(selectedListing.id, docType, raw);
+                    }}
+                    disabled={checktudoScanning}
+                    className="flex items-center gap-2 px-3 py-2 bg-[#C9A84C]/10 border border-[#C9A84C]/20 rounded text-[#C9A84C] text-[10px] font-bold hover:bg-[#C9A84C]/20 transition disabled:opacity-50 flex-shrink-0"
+                  >
+                    {checktudoScanning ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
+                    Executar Varredura Completa
+                  </button>
+                </div>
+                {checktudoError && (
+                  <div className="flex items-start gap-2 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
+                    <AlertTriangle size={13} className="text-red-400 flex-shrink-0 mt-0.5" />
+                    <div className="text-[10px] text-red-300">{checktudoError}</div>
+                  </div>
+                )}
+
                 {/* Timeline de 5 estágios (esqueleto visual da Fase 0, sem cálculo de estágio real) */}
                 <div className="flex items-center bg-[#12112A] border border-[#9BAFC5]/10 rounded-lg px-3 py-2.5 overflow-x-auto">
                   {["Intake & Triagem", "Varredura de APIs", "Cruzamento IA", "Validação Humana", "Dossiê & Closing"].map((label, i, arr) => (
@@ -3281,7 +3353,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
                     <div className="px-3 py-2 border-b border-[#9BAFC5]/10 bg-[#162744]">
                       <div className="text-[10px] text-[#C9A84C] font-bold uppercase tracking-wider">Partes &amp; Compliance</div>
                     </div>
-                    <div className="p-3 flex-1">
+                    <div className="p-3 flex-1 space-y-3">
                       <DueDiligencePanel
                         listingId={selectedListing.id}
                         anonymousId={selectedListing.anonymous_id}
@@ -3289,6 +3361,29 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
                         onClose={() => {}}
                         embedded
                       />
+                      {checktudoRecords.length > 0 && (
+                        <div className="space-y-2 pt-2 border-t border-[#9BAFC5]/10">
+                          <div className="text-[9px] text-[#C9A84C] font-bold uppercase tracking-wider">Checktudo · Última Varredura</div>
+                          {checktudoRecords.slice(0, 2).map((r: any) => (
+                            <div key={r.id} className="bg-[#162744] border border-[#9BAFC5]/10 rounded-lg px-3 py-2">
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="text-[10px] text-[#F5F1E8] font-bold">
+                                  {r.querycode === 3090 ? "SCR (BACEN)" : r.querycode === 200 ? "Dossiê Jurídico Resumido" : `Querycode ${r.querycode}`}
+                                </span>
+                                <span className="text-[8px] text-[#9BAFC5]">{new Date(r.created_at).toLocaleString("pt-BR")}</span>
+                              </div>
+                              <div className="space-y-0.5">
+                                {Object.entries(r.risk_flags ?? {}).map(([k, v]) => (
+                                  <div key={k} className="flex items-center justify-between text-[9.5px]">
+                                    <span className="text-[#9BAFC5]">{k}</span>
+                                    <span className="text-[#F5F1E8]">{v === null || v === undefined ? "—" : String(v)}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
 
