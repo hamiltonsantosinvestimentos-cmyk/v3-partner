@@ -1948,6 +1948,7 @@ export type Database = {
       commissions: {
         Row: {
           code: string
+          commission_net_value: number | null
           commission_percent: number
           commission_value: number | null
           created_at: string
@@ -1970,6 +1971,8 @@ export type Database = {
           split_platform: number | null
           split_sell: number | null
           status: string
+          tax_percent: number
+          tax_value: number | null
           updated_at: string
         }
         Insert: {
@@ -1996,6 +1999,7 @@ export type Database = {
           split_platform?: number | null
           split_sell?: number | null
           status?: string
+          tax_percent?: number
           updated_at?: string
         }
         Update: {
@@ -2022,6 +2026,7 @@ export type Database = {
           split_platform?: number | null
           split_sell?: number | null
           status?: string
+          tax_percent?: number
           updated_at?: string
         }
         Relationships: [

@@ -201,11 +201,14 @@ export async function notifyNovaComissao(opts: {
   operationDescription: string;
   operationType: string;
   commissionValue: number;
+  grossValue?: number;
+  taxPercent?: number;
   paymentDate?: string | null;
 }) {
   const tipoLabels: Record<string, string> = {
-    CREDITO: "Crédito", MA: "M&A", CONSORCIO: "Consórcio", SPLIT_FISCAL: "Split Fiscal",
+    CREDITO: "Crédito", MA: "M&A", CONSORCIO: "Consórcio", MARKETPLACE: "Marketplace",
   };
+  const hasTax = (opts.taxPercent ?? 0) > 0 && opts.grossValue != null;
   const body = `
     <p style="color:#9BAFC5;font-size:14px;margin:0 0 20px;">
       Olá, <strong style="color:#F5F1E8;">${opts.partnerName}</strong>!
@@ -215,7 +218,9 @@ export async function notifyNovaComissao(opts: {
     ${row("Operação", opts.operationDescription)}
     ${row("Tipo", tipoLabels[opts.operationType] ?? opts.operationType)}
     ${opts.paymentDate ? row("Previsão de Pagamento", dataLocal(opts.paymentDate)) : ""}
-    ${highlight("Valor a Receber", moeda(opts.commissionValue), "#C9A84C")}
+    ${hasTax ? row("Comissão Bruta", moeda(opts.grossValue!)) : ""}
+    ${hasTax ? row(`Imposto retido (${opts.taxPercent}%)`, "- " + moeda(opts.grossValue! - opts.commissionValue)) : ""}
+    ${highlight(hasTax ? "Líquido a Receber" : "Valor a Receber", moeda(opts.commissionValue), "#C9A84C")}
   `;
   await send(
     opts.partnerEmail,

@@ -46,11 +46,12 @@ interface Props {
   systemStats: SystemStats | null;
 }
 
-type Tab = "captacao" | "notificacoes" | "sistema" | "integracoes" | "cobranding" | "regras-credito" | "portfolio";
+type Tab = "captacao" | "notificacoes" | "sistema" | "integracoes" | "cobranding" | "regras-credito" | "portfolio" | "comissoes-config";
 
 const IS_PARTNER = (role: string) => ["PARTNER", "PARTNER_PRO", "ADMIN", "GESTAO"].includes(role);
 const IS_ADMIN   = (role: string) => ["ADMIN", "GESTAO"].includes(role);
 const IS_ADMIN_ONLY = (role: string) => role === "ADMIN";
+const IS_FINANCEIRO = (role: string) => ["ADMIN", "GESTAO", "FINANCEIRO"].includes(role);
 
 const BASE_URL = typeof window !== "undefined"
   ? `${window.location.origin}/c/`
@@ -428,11 +429,89 @@ function VideoBoasVindasEditor() {
   );
 }
 
+function CommissionTaxEditor() {
+  const [value, setValue] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [err, setErr] = useState("");
+
+  useEffect(() => {
+    fetch("/api/settings/commission-tax")
+      .then(r => r.json())
+      .then(d => setValue(d.tax_percent != null ? String(d.tax_percent) : "0"))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  async function handleSave(e: React.FormEvent) {
+    e.preventDefault();
+    setErr("");
+    const n = Number(String(value).replace(",", "."));
+    if (Number.isNaN(n) || n < 0 || n > 100) {
+      setErr("Informe uma alíquota entre 0 e 100.");
+      return;
+    }
+    setSaving(true);
+    const res = await fetch("/api/settings/commission-tax", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tax_percent: n }),
+    });
+    const data = await res.json();
+    if (!res.ok) { setErr(data.error ?? "Erro ao salvar."); setSaving(false); return; }
+    setValue(String(data.tax_percent));
+    setSaved(true); setSaving(false);
+    setTimeout(() => setSaved(false), 3000);
+  }
+
+  const inputCls = "w-full h-10 px-3 text-sm rounded-lg border bg-[#0A1628] border-[#243A66] text-[#F0ECE4] placeholder:text-[#3A5070] focus:outline-none focus:ring-1 focus:ring-[#C9A84C]/50";
+
+  return (
+    <div className="p-6 rounded-2xl border border-[#1E3050] bg-[#0A1628]/60 space-y-4">
+      <h2 className="text-sm font-bold text-[#F0ECE4] flex items-center gap-2">
+        <CreditCard className="w-4 h-4 text-[#C9A84C]" /> Imposto sobre Comissões
+      </h2>
+      <p className="text-xs text-[#7A8FA8]">
+        Alíquota global retida de toda comissão no momento do registro. O partner passa a ver o valor
+        líquido (comissão bruta − imposto) na tela de Comissões. Use <strong className="text-[#F0ECE4]">0</strong> para não reter nada.
+      </p>
+      <form onSubmit={handleSave} className="space-y-3">
+        <div>
+          <label className="block text-xs font-semibold text-[#7A8FA8] mb-1.5">Alíquota (%)</label>
+          <div className="flex items-center gap-2 max-w-[200px]">
+            <input
+              type="number" min="0" max="100" step="0.01"
+              value={loading ? "" : value}
+              onChange={e => setValue(e.target.value)}
+              placeholder={loading ? "Carregando..." : "0"}
+              disabled={loading || saving}
+              className={inputCls}
+            />
+            <span className="text-sm font-bold text-[#C9A84C]">%</span>
+          </div>
+          <p className="text-[10px] text-[#3A5070] mt-1">
+            Aplica-se a novas comissões e às comissões de indicação geradas automaticamente.
+            Comissões já registradas mantêm a alíquota do momento em que foram criadas.
+          </p>
+        </div>
+        {err && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{err}</p>}
+        <button type="submit" disabled={saving || loading}
+          className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-[#C9A84C] hover:bg-[#E8C97A] text-[#09081A] text-sm font-bold transition-colors disabled:opacity-60">
+          {saving ? <RefreshCw className="w-4 h-4 animate-spin" /> : saved ? <Check className="w-4 h-4" /> : null}
+          {saving ? "Salvando..." : saved ? "Salvo!" : "Salvar alíquota"}
+        </button>
+      </form>
+    </div>
+  );
+}
+
 export function ConfiguracoesClient({ profile, initialLinks, systemStats }: Props) {
   const tabs = ([
     { key: "captacao"    as Tab, label: "Links de Captação", icon: <Link2 className="w-4 h-4" />,   show: IS_PARTNER(profile.role) },
     { key: "cobranding"  as Tab, label: "Co-branding PRO",   icon: <Globe className="w-4 h-4" />,   show: profile.role === "PARTNER_PRO" },
     { key: "notificacoes" as Tab, label: "Notificações",      icon: <Bell className="w-4 h-4" />,    show: true },
+    { key: "comissoes-config" as Tab, label: "Comissões", icon: <CreditCard className="w-4 h-4" />, show: IS_FINANCEIRO(profile.role) },
     { key: "regras-credito" as Tab, label: "Regras de Crédito", icon: <CreditCard className="w-4 h-4" />, show: IS_ADMIN(profile.role) },
     { key: "portfolio"   as Tab, label: "Portfólio",          icon: <Briefcase className="w-4 h-4" />, show: IS_ADMIN(profile.role) },
     { key: "sistema"     as Tab, label: "Sistema",            icon: <Shield className="w-4 h-4" />, show: IS_ADMIN(profile.role) },
@@ -664,6 +743,22 @@ export function ConfiguracoesClient({ profile, initialLinks, systemStats }: Prop
       {/* ── TAB: CO-BRANDING PRO ── */}
       {tab === "cobranding" && profile.role === "PARTNER_PRO" && (
         <CobrandingTab profile={profile} />
+      )}
+
+      {/* ── TAB: COMISSÕES ── */}
+      {tab === "comissoes-config" && IS_FINANCEIRO(profile.role) && (
+        <div className="space-y-4">
+          <div className="p-4 rounded-xl bg-[#C9A84C]/5 border border-[#C9A84C]/20 flex gap-3">
+            <CreditCard className="w-4 h-4 text-[#C9A84C] flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-xs font-semibold text-[#E8C97A]">Parâmetros de comissionamento</p>
+              <p className="text-xs text-[#7A8FA8] mt-0.5">
+                Configure o percentual de imposto retido das comissões pagas aos partners.
+              </p>
+            </div>
+          </div>
+          <CommissionTaxEditor />
+        </div>
       )}
 
       {/* ── TAB: NOTIFICAÇÕES ── */}
