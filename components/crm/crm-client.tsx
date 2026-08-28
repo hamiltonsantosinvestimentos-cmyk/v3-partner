@@ -1274,8 +1274,8 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
         const res = await fetch(`/api/credit-proposals?id=${lead.creditProposalId}`);
         const json = await res.json();
         if (res.ok && json.proposal) {
-          const p = json.proposal as ProposalFull & { partner?: { full_name?: string } | null };
-          setCrmProposal({ ...p, partner_name: p.partner?.full_name });
+          const p = json.proposal as ProposalFull & { partner?: { full_name?: string; role?: string } | null };
+          setCrmProposal({ ...p, partner_name: p.partner?.full_name, partner_role: p.partner?.role });
           return;
         }
       } catch { /* cai no fallback abaixo */ }
