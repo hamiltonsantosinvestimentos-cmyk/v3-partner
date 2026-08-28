@@ -6,14 +6,29 @@ const FROM = process.env.EMAIL_FROM || "V3 Partners <onboarding@resend.dev>";
 // Envia e-mail — nunca bloqueia a operação principal
 // Resend é instanciado em runtime (não em build time) para evitar erro de chave ausente
 // Gate Brand Guardian aplicado aqui (ponto único de saída) cobre as 11 funções deste arquivo
-async function send(to: string, subject: string, html: string): Promise<void> {
+type MailAttachment = { filename: string; content: Buffer };
+
+async function send(
+  to: string,
+  subject: string,
+  html: string,
+  attachments?: MailAttachment[],
+): Promise<void> {
   if (!process.env.RESEND_API_KEY || !to) return;
   try {
     const subjectGate = auditText(subject);
     const htmlGate = auditHtml(html);
     if (htmlGate.blocking.length > 0) console.error("[lib/email] Brand Guardian bloqueou:", htmlGate.blocking);
     const resend = new Resend(process.env.RESEND_API_KEY);
-    await resend.emails.send({ from: FROM, to, subject: subjectGate.corrected, html: htmlGate.corrected });
+    await resend.emails.send({
+      from: FROM,
+      to,
+      subject: subjectGate.corrected,
+      html: htmlGate.corrected,
+      ...(attachments && attachments.length > 0
+        ? { attachments: attachments.map(a => ({ filename: a.filename, content: a.content })) }
+        : {}),
+    });
   } catch { /* silent */ }
 }
 
@@ -764,7 +779,13 @@ export async function notifyComissaoPaga(opts: {
   commissionCode: string;
   operationDescription: string;
   commissionValue: number;
+  paymentDate?: string | null;
+  /** Comprovante em PDF anexado ao e-mail. */
+  pdf?: { filename: string; content: Buffer };
 }) {
+  const dataPgto = opts.paymentDate
+    ? new Date(opts.paymentDate).toLocaleDateString("pt-BR")
+    : new Date().toLocaleDateString("pt-BR");
   const body = `
     <p style="color:#9BAFC5;font-size:14px;margin:0 0 20px;">
       Olá, <strong style="color:#F5F1E8;">${opts.partnerName}</strong>!
@@ -772,7 +793,7 @@ export async function notifyComissaoPaga(opts: {
     </p>
     ${row("Código", opts.commissionCode)}
     ${row("Operação", opts.operationDescription)}
-    ${row("Data do Pagamento", new Date().toLocaleDateString("pt-BR"))}
+    ${row("Data do Pagamento", dataPgto)}
     <div style="margin-top:16px;padding:14px 18px;background:#0A2018;
                 border-radius:8px;border-left:3px solid #10B981;">
       <p style="margin:0 0 4px;font-size:11px;color:#9BAFC5;">Valor pago</p>
@@ -781,7 +802,8 @@ export async function notifyComissaoPaga(opts: {
       </p>
     </div>
     <p style="color:#9BAFC5;font-size:13px;margin-top:16px;">
-      O valor foi liquidado conforme acordado. Acesse a plataforma para ver o extrato completo.
+      O valor foi liquidado conforme acordado.${opts.pdf ? " O comprovante em PDF está anexado a este e-mail." : ""}
+      Acesse a plataforma para ver o extrato completo.
     </p>
   `;
   await send(
@@ -790,7 +812,8 @@ export async function notifyComissaoPaga(opts: {
     template("Comissão Liquidada", body, {
       label: "Ver Extrato",
       url: "https://app.v3partners.com.br/comissoes",
-    })
+    }),
+    opts.pdf ? [opts.pdf] : undefined,
   );
 }
 

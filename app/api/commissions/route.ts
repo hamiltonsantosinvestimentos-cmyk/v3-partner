@@ -5,6 +5,10 @@ import { z } from "zod";
 import { logAudit } from "@/lib/audit";
 import { notifyNovaComissao, notifyComissaoPaga } from "@/lib/email";
 import { createNotification } from "@/lib/notify";
+import { renderComprovanteComissaoPDF } from "@/lib/comprovante-comissao-pdf";
+
+// PATCH → PAGA gera o comprovante em PDF (render server-side); folga extra de tempo.
+export const maxDuration = 60;
 
 function serviceClient() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -138,7 +142,23 @@ export async function GET(req: NextRequest) {
 
   const { data, error } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ commissions: data ?? [] });
+
+  const rows = data ?? [];
+
+  // Visão ADMIN/GESTAO/FINANCEIRO: anexa o nome do partner para a aba Financeiro
+  if (isAdmin && rows.length > 0) {
+    const partnerIds = [...new Set(rows.map((r) => r.partner_id).filter(Boolean))];
+    const { data: profs } = await svc
+      .from("profiles")
+      .select("id, full_name")
+      .in("id", partnerIds);
+    const nameById = new Map((profs ?? []).map((p) => [p.id, p.full_name]));
+    return NextResponse.json({
+      commissions: rows.map((r) => ({ ...r, partner_name: nameById.get(r.partner_id) ?? null })),
+    });
+  }
+
+  return NextResponse.json({ commissions: rows });
 }
 
 // POST — cria comissão (ADMIN/GESTAO/FINANCEIRO)
@@ -270,7 +290,12 @@ export async function PATCH(req: NextRequest) {
     const svcEmail = serviceClient();
     const { data: commission } = await svcEmail
       .from("commissions")
-      .select("partner_id, code, operation_description, commission_value")
+      .select(`
+        partner_id, code, operation_type, operation_code, operation_description,
+        operation_value, commission_percent, commission_value,
+        tax_percent, tax_value, commission_net_value,
+        status, operation_closed_at, payment_date, notes
+      `)
       .eq("id", id)
       .single();
     if (commission?.partner_id) {
@@ -278,17 +303,52 @@ export async function PATCH(req: NextRequest) {
       const partnerEmail = partnerUser?.user?.email;
       const { data: partnerProfile } = await svcEmail
         .from("profiles").select("full_name").eq("id", commission.partner_id).single();
+
+      const gross   = commission.commission_value ?? (commission.operation_value * commission.commission_percent / 100);
+      const taxPct  = commission.tax_percent ?? 0;
+      const taxVal  = commission.tax_value ?? (taxPct > 0 ? gross * taxPct / 100 : 0);
+      const netVal  = commission.commission_net_value ?? (gross - taxVal);
+      const partnerName = partnerProfile?.full_name ?? "Partner";
+
+      // Comprovante em PDF (não bloqueia o e-mail se falhar)
+      let pdf: { filename: string; content: Buffer } | undefined;
+      try {
+        const buffer = await renderComprovanteComissaoPDF({
+          code:              commission.code,
+          partnerName,
+          operationType:     commission.operation_type,
+          operationDescription: commission.operation_description,
+          operationCode:     commission.operation_code,
+          operationValue:    commission.operation_value ?? 0,
+          commissionPercent: commission.commission_percent ?? 0,
+          grossValue:        gross,
+          taxPercent:        taxPct,
+          taxValue:          taxVal,
+          netValue:          netVal,
+          status:            commission.status,
+          operationClosedAt: commission.operation_closed_at,
+          paymentDate:       commission.payment_date,
+          generatedAt:       new Date().toISOString(),
+          notes:             commission.notes,
+        });
+        pdf = { filename: `comprovante-comissao-${commission.code}.pdf`, content: buffer };
+      } catch (e) {
+        console.error("[commissions PATCH] falha ao gerar comprovante PDF:", e);
+      }
+
       if (partnerEmail) {
         notifyComissaoPaga({
           partnerEmail,
-          partnerName:          partnerProfile?.full_name ?? "Partner",
+          partnerName,
           commissionCode:       commission.code,
           operationDescription: commission.operation_description,
-          commissionValue:      commission.commission_value ?? 0,
+          commissionValue:      netVal,
+          paymentDate:          commission.payment_date,
+          pdf,
         });
       }
       // Notificação in-app para o partner
-      const valFormatted = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(commission.commission_value ?? 0);
+      const valFormatted = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(netVal);
       createNotification({
         user_id: commission.partner_id,
         type: "commission",
