@@ -7,6 +7,7 @@ import { notifyNovaProposta, notifyPropostaAtualizada } from "@/lib/email";
 import { createNotification, notifyByRoles } from "@/lib/notify";
 import { issueCreditCode } from "@/lib/v3-codes";
 import { resolveClient } from "@/lib/v3-clients";
+import { gerarComissoesCreditoLiberado } from "@/lib/credit-commissions";
 
 function serviceClient() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -420,6 +421,9 @@ export async function PATCH(req: NextRequest) {
     updateData.status = "CANCELLED";
   }
 
+  // Stage anterior — usado pelo gatilho de geração de comissões ao liberar o recurso
+  let previousStage: string | undefined;
+
   // Quando o stage muda OU metadata é enviado, garante merge correto (nunca sobrescreve dados existentes)
   if (fields.stage || fields.metadata !== undefined) {
     const { data: current } = await serviceClient()
@@ -429,6 +433,7 @@ export async function PATCH(req: NextRequest) {
       .single();
 
     if (current) {
+      previousStage = current.stage as string | undefined;
       const existingMeta = (current.metadata as Record<string, unknown>) ?? {};
 
       // Gate Análise de Crédito (26/08/2026): avançar de etapa exige a
@@ -488,6 +493,34 @@ export async function PATCH(req: NextRequest) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   logAudit({ userId: user.id!, userName: profile?.full_name, action: "UPDATE", entity: "credit_desk_proposals", entityId: id, newData: fields as Record<string, unknown> });
+
+  // ── Gatilho: proposta entrou em "Recurso Liberado" (LIBERADO) ──
+  // Gera as comissões (licenciado + indicação 10%) com status
+  // AGUARDANDO_AUTORIZACAO e alerta ADMIN/FINANCEIRO para autorizar o
+  // pagamento e definir a data prevista na aba Comissões.
+  if (fields.stage === "LIBERADO" && previousStage !== "LIBERADO") {
+    try {
+      const res = await gerarComissoesCreditoLiberado(id, user.id ?? null);
+      if (res.status === "created") {
+        const svcN = serviceClient();
+        const { data: prop } = await svcN
+          .from("credit_desk_proposals").select("code, client_name").eq("id", id).single();
+        const valorFmt = res.licenciadoValue != null
+          ? new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(res.licenciadoValue)
+          : null;
+        await notifyByRoles(["ADMIN", "FINANCEIRO"], {
+          title: "Comissão aguardando autorização 💰",
+          message: res.needsManualValue
+            ? `${prop?.code ?? "Proposta"} — ${prop?.client_name ?? ""}: recurso liberado. Parceiro ENTERPRISE — defina o valor da comissão e autorize o pagamento.`
+            : `${prop?.code ?? "Proposta"} — ${prop?.client_name ?? ""}: recurso liberado. Comissão do licenciado${valorFmt ? ` de ${valorFmt}` : ""}${res.referralId ? " + indicação 10%" : ""} pronta para autorização.`,
+          type: "commission",
+          action_url: "/comissoes",
+        });
+      }
+    } catch (e) {
+      console.error("[credit-proposals PATCH] falha ao gerar comissões da liberação", e instanceof Error ? e.message : e);
+    }
+  }
 
   // Notifica partner se status mudou (fire and forget)
   if (fields.status) {

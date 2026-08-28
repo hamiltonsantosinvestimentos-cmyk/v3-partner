@@ -101,7 +101,7 @@ const createSchema = z.object({
 
 const patchSchema = z.object({
   id:             z.string().uuid(),
-  status:         z.enum(["A_PAGAR", "PAGA", "CANCELADA"]).optional(),
+  status:         z.enum(["AGUARDANDO_AUTORIZACAO", "A_PAGAR", "PAGA", "CANCELADA"]).optional(),
   payment_date:   z.string().optional().nullable(),
   commission_percent: z.number().min(0).max(100).optional(),
   operation_value:    z.number().positive().optional(),
@@ -237,6 +237,21 @@ export async function PATCH(req: NextRequest) {
 
   const { id, ...fields } = parsed.data;
   const updateData: Record<string, unknown> = { ...fields, updated_at: new Date().toISOString() };
+
+  // Autorização de pagamento: sair de AGUARDANDO_AUTORIZACAO para A_PAGAR exige
+  // a data prevista e carimba quem autorizou.
+  if (fields.status === "A_PAGAR") {
+    const { data: atual } = await serviceClient()
+      .from("commissions").select("status, payment_date").eq("id", id).single();
+    if (atual?.status === "AGUARDANDO_AUTORIZACAO") {
+      const dataPrevista = fields.payment_date ?? atual.payment_date;
+      if (!dataPrevista) {
+        return NextResponse.json({ error: "Informe a data prevista de pagamento para autorizar a comissão." }, { status: 422 });
+      }
+      updateData.authorized_by = user.id;
+      updateData.authorized_at = new Date().toISOString();
+    }
+  }
 
   // Marca payment_date automático quando status → PAGA
   if (fields.status === "PAGA" && !fields.payment_date) {
