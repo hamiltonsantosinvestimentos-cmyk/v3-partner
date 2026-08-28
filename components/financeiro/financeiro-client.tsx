@@ -21,7 +21,6 @@ import {
   DEMO_FUNCIONARIOS, DEMO_DESPESAS_VARIAVEIS, DESPESAS_FIXAS_TEMPLATES,
   expandirDespesasFixas, DEMO_COMISSOES, DEMO_DRE, DEMO_MOVIMENTOS,
   DEMO_IMPOSTOS, MESES_PT, formatMoeda, totalFolha, SALDO_INICIAL_MARCO,
-  type Comissao,
 } from "@/lib/demo-data-financeiro";
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
@@ -1429,58 +1428,139 @@ function NpsAdminPanel() {
   );
 }
 
+interface ComissaoAdminRow {
+  id: string;
+  codigo: string;
+  partnerNome: string;
+  operacaoTipo: "CREDITO" | "MA" | "CONSORCIO" | "MARKETPLACE";
+  operacaoDescricao: string;
+  operacaoCodigo: string | null;
+  valorOperacao: number;
+  percentualComissao: number;
+  valorBruto: number;
+  imposto: number;
+  valorLiquido: number;
+  status: string;
+  dataFinalizada: string | null;
+  dataPagamento: string | null;
+  /** true = comissão real (tabela commissions); permite registrar pagamento. */
+  isReal: boolean;
+}
+
 function ComissoesAdminTab() {
   const [filtroTipo, setFiltroTipo] = useState<"TODOS" | "CREDITO" | "MA" | "CONSORCIO" | "MARKETPLACE">("TODOS");
-  const [filtroStatus, setFiltroStatus] = useState<"TODOS" | "A_PAGAR" | "PAGA">("TODOS");
+  const [filtroStatus, setFiltroStatus] = useState<"TODOS" | "AGUARDANDO_AUTORIZACAO" | "A_PAGAR" | "PAGA">("TODOS");
   const [filtroPartner, setFiltroPartner] = useState<string>("TODOS");
   const [buscaPartner, setBuscaPartner] = useState("");
-  const [mktComissoes, setMktComissoes] = useState<Comissao[]>([]);
+  const [reais, setReais] = useState<ComissaoAdminRow[]>([]);
+  const [mktComissoes, setMktComissoes] = useState<ComissaoAdminRow[]>([]);
+  const [carregando, setCarregando] = useState(true);
+
+  // Ação: registrar pagamento (A_PAGAR -> PAGA)
+  const [pagando, setPagando] = useState<string | null>(null);
+  const [dataPagto, setDataPagto] = useState<Record<string, string>>({});
+  const [pagtoBusy, setPagtoBusy] = useState(false);
+  const [pagtoErro, setPagtoErro] = useState("");
+
+  useEffect(() => {
+    fetch("/api/commissions")
+      .then(r => r.json())
+      .then(({ commissions }) => {
+        if (!Array.isArray(commissions)) return;
+        setReais((commissions as Array<Record<string, unknown>>).map((c): ComissaoAdminRow => {
+          const opValue = Number(c.operation_value ?? 0);
+          const pct = Number(c.commission_percent ?? 0);
+          const bruto = c.commission_value != null ? Number(c.commission_value) : opValue * pct / 100;
+          const taxPct = c.tax_percent != null ? Number(c.tax_percent) : 0;
+          const imposto = c.tax_value != null ? Number(c.tax_value) : bruto * taxPct / 100;
+          const liquido = c.commission_net_value != null ? Number(c.commission_net_value) : bruto - imposto;
+          return {
+            id: String(c.id),
+            codigo: String(c.code ?? ""),
+            partnerNome: (c.partner_name as string | null) ?? "Partner",
+            operacaoTipo: (c.operation_type as ComissaoAdminRow["operacaoTipo"]) ?? "CREDITO",
+            operacaoDescricao: String(c.operation_description ?? ""),
+            operacaoCodigo: (c.operation_code as string | null) ?? null,
+            valorOperacao: opValue,
+            percentualComissao: pct,
+            valorBruto: bruto,
+            imposto,
+            valorLiquido: liquido,
+            status: String(c.status ?? "A_PAGAR"),
+            dataFinalizada: (c.operation_closed_at as string | null) ?? (c.created_at as string | null) ?? null,
+            dataPagamento: (c.payment_date as string | null) ?? null,
+            isReal: true,
+          };
+        }));
+      })
+      .catch(() => {})
+      .finally(() => setCarregando(false));
+  }, []);
 
   useEffect(() => {
     fetch("/api/marketplace/leads?admin=true")
       .then(r => r.json())
       .then(({ leads }) => {
         if (!leads) return;
-        const statusMap: Record<string, "A_PAGAR" | "PAGA" | "CANCELADA"> = {
+        const statusMap: Record<string, string> = {
           NEW: "A_PAGAR", IN_PROGRESS: "A_PAGAR", PENDING: "A_PAGAR",
           CONVERTED: "PAGA", LOST: "CANCELADA",
         };
-        const converted = (leads as Array<{
+        setMktComissoes((leads as Array<{
           id: string; created_at: string; status: string;
           product?: { name: string; partner_commission_percent: number | null; commission_percent: number } | null;
           partner?: { full_name: string } | null;
-        }>)
-          .map((l): Comissao => ({
-            id: `MKT-${l.id}`,
-            codigo: `MKT-${l.id.slice(0, 8).toUpperCase()}`,
-            partnerId: "",
-            partnerNome: l.partner?.full_name ?? "Partner",
-            operacaoTipo: "MARKETPLACE",
-            operacaoId: l.id,
-            operacaoCodigo: `MKT-${l.id.slice(0, 8).toUpperCase()}`,
-            operacaoDescricao: `Marketplace — ${l.product?.name ?? "Produto"}`,
-            valorOperacao: 0,
-            percentualComissao: l.product?.partner_commission_percent ?? l.product?.commission_percent ?? 0,
-            valorComissao: 0,
-            mes: new Date(l.created_at).getMonth() + 1,
-            ano: new Date(l.created_at).getFullYear(),
-            dataOperacaoFinalizada: l.created_at,
-            status: statusMap[l.status] ?? "A_PAGAR",
-            dataPagamento: null,
-            observacoes: null,
-          }));
-        setMktComissoes(converted);
+        }>).map((l): ComissaoAdminRow => ({
+          id: `MKT-${l.id}`,
+          codigo: `MKT-${l.id.slice(0, 8).toUpperCase()}`,
+          partnerNome: l.partner?.full_name ?? "Partner",
+          operacaoTipo: "MARKETPLACE",
+          operacaoDescricao: `Marketplace — ${l.product?.name ?? "Produto"}`,
+          operacaoCodigo: `MKT-${l.id.slice(0, 8).toUpperCase()}`,
+          valorOperacao: 0,
+          percentualComissao: l.product?.partner_commission_percent ?? l.product?.commission_percent ?? 0,
+          valorBruto: 0,
+          imposto: 0,
+          valorLiquido: 0,
+          status: statusMap[l.status] ?? "A_PAGAR",
+          dataFinalizada: l.created_at,
+          dataPagamento: null,
+          isReal: false,
+        })));
       })
       .catch(() => {});
   }, []);
 
-  const todasComissoes = useMemo(() => [...DEMO_COMISSOES, ...mktComissoes], [mktComissoes]);
+  async function registrarPagamento(id: string) {
+    const d = dataPagto[id] || new Date().toISOString().slice(0, 10);
+    setPagtoBusy(true);
+    setPagtoErro("");
+    try {
+      const res = await fetch("/api/commissions", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, status: "PAGA", payment_date: d }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setPagtoErro(typeof j.error === "string" ? j.error : "Não foi possível registrar o pagamento.");
+        return;
+      }
+      setReais(prev => prev.map(c => c.id === id ? { ...c, status: "PAGA", dataPagamento: d } : c));
+      setPagando(null);
+    } catch {
+      setPagtoErro("Falha de rede ao registrar o pagamento.");
+    } finally {
+      setPagtoBusy(false);
+    }
+  }
 
-  // Lista única de partners presentes nas comissões
-  const parceiros = useMemo(() => {
-    const nomes = Array.from(new Set(todasComissoes.map(c => c.partnerNome))).sort();
-    return nomes;
-  }, [todasComissoes]);
+  const todasComissoes = useMemo(() => [...reais, ...mktComissoes], [reais, mktComissoes]);
+
+  const parceiros = useMemo(
+    () => Array.from(new Set(todasComissoes.map(c => c.partnerNome))).sort(),
+    [todasComissoes],
+  );
 
   const filtradas = todasComissoes.filter(c =>
     (filtroTipo === "TODOS" || c.operacaoTipo === filtroTipo) &&
@@ -1489,40 +1569,46 @@ function ComissoesAdminTab() {
     (!buscaPartner || c.partnerNome.toLowerCase().includes(buscaPartner.toLowerCase()) || c.operacaoDescricao.toLowerCase().includes(buscaPartner.toLowerCase()))
   );
 
+  const somaLiquido = (arr: ComissaoAdminRow[]) => arr.reduce((s, c) => s + (c.valorLiquido || c.valorBruto), 0);
+  const aguardando = todasComissoes.filter(c => c.status === "AGUARDANDO_AUTORIZACAO");
+  const aPagar = todasComissoes.filter(c => c.status === "A_PAGAR");
+  const pagas = todasComissoes.filter(c => c.status === "PAGA");
+
   // Extrato por partner selecionado
   const extratoPartner = filtroPartner !== "TODOS" ? {
-    totalPago: filtradas.filter(c => c.status === "PAGA").reduce((s, c) => s + c.valorComissao, 0),
-    totalPendente: filtradas.filter(c => c.status === "A_PAGAR").reduce((s, c) => s + c.valorComissao, 0),
+    totalPago: somaLiquido(filtradas.filter(c => c.status === "PAGA")),
+    totalPendente: somaLiquido(filtradas.filter(c => c.status === "A_PAGAR" || c.status === "AGUARDANDO_AUTORIZACAO")),
     totalOperacoes: filtradas.length,
-    mediaMensal: (() => {
-      const meses = new Set(filtradas.map(c => `${c.ano}-${c.mes}`));
-      const total = filtradas.reduce((s, c) => s + c.valorComissao, 0);
-      return meses.size > 0 ? total / meses.size : 0;
-    })(),
   } : null;
-
-  const totalAPagar = todasComissoes.filter(c => c.status === "A_PAGAR").reduce((s, c) => s + c.valorComissao, 0);
-  const totalPago = todasComissoes.filter(c => c.status === "PAGA").reduce((s, c) => s + c.valorComissao, 0);
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
         <div className="bg-[#091221] border border-[#122036] rounded-xl p-4">
-          <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Total a Pagar</p>
-          <p className="text-xl font-bold text-amber-400">{formatMoeda(totalAPagar)}</p>
-          <p className="text-xs text-muted-foreground mt-1">{todasComissoes.filter(c => c.status === "A_PAGAR").length} comissões pendentes</p>
+          <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Aguardando Autorização</p>
+          <p className="text-xl font-bold text-orange-400">{formatMoeda(somaLiquido(aguardando))}</p>
+          <p className="text-xs text-muted-foreground mt-1">{aguardando.length} a autorizar em Comissões</p>
         </div>
         <div className="bg-[#091221] border border-[#122036] rounded-xl p-4">
-          <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Total Pago</p>
-          <p className="text-xl font-bold text-emerald-400">{formatMoeda(totalPago)}</p>
-          <p className="text-xs text-muted-foreground mt-1">{todasComissoes.filter(c => c.status === "PAGA").length} comissões liquidadas</p>
+          <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">A Pagar</p>
+          <p className="text-xl font-bold text-amber-400">{formatMoeda(somaLiquido(aPagar))}</p>
+          <p className="text-xs text-muted-foreground mt-1">{aPagar.length} autorizadas, aguardando pagamento</p>
+        </div>
+        <div className="bg-[#091221] border border-[#122036] rounded-xl p-4">
+          <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Pago</p>
+          <p className="text-xl font-bold text-emerald-400">{formatMoeda(somaLiquido(pagas))}</p>
+          <p className="text-xs text-muted-foreground mt-1">{pagas.length} comissões liquidadas</p>
         </div>
         <div className="bg-[#091221] border border-[#122036] rounded-xl p-4">
           <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Total Geral</p>
-          <p className="text-xl font-bold text-[#C9A84C]">{formatMoeda(totalAPagar + totalPago)}</p>
-          <p className="text-xs text-muted-foreground mt-1">{todasComissoes.length} operações com comissão{mktComissoes.length > 0 ? ` · ${mktComissoes.length} marketplace` : ""}</p>
+          <p className="text-xl font-bold text-[#C9A84C]">{formatMoeda(somaLiquido(todasComissoes))}</p>
+          <p className="text-xs text-muted-foreground mt-1">{todasComissoes.length} operações{mktComissoes.length > 0 ? ` · ${mktComissoes.length} marketplace` : ""}</p>
         </div>
       </div>
+
+      {pagtoErro && (
+        <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{pagtoErro}</p>
+      )}
 
       {/* Seletor de partner para extrato individual */}
       <div className="flex flex-wrap items-center gap-3">
@@ -1545,14 +1631,14 @@ function ComissoesAdminTab() {
 
       {/* Extrato do partner selecionado */}
       {extratoPartner && (
-        <div className="grid grid-cols-4 gap-3 bg-[#C9A84C]/5 border border-[#C9A84C]/20 rounded-xl p-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-[#C9A84C]/5 border border-[#C9A84C]/20 rounded-xl p-4">
           <div>
             <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Extrato — {filtroPartner}</p>
             <p className="text-lg font-bold text-[#C9A84C]">{formatMoeda(extratoPartner.totalPago + extratoPartner.totalPendente)}</p>
             <p className="text-xs text-muted-foreground">total acumulado</p>
           </div>
           <div>
-            <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Recebido</p>
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Pago</p>
             <p className="text-lg font-bold text-emerald-400">{formatMoeda(extratoPartner.totalPago)}</p>
           </div>
           <div>
@@ -1560,9 +1646,8 @@ function ComissoesAdminTab() {
             <p className="text-lg font-bold text-amber-400">{formatMoeda(extratoPartner.totalPendente)}</p>
           </div>
           <div>
-            <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Média / Mês</p>
-            <p className="text-lg font-bold text-white">{formatMoeda(extratoPartner.mediaMensal)}</p>
-            <p className="text-xs text-muted-foreground">{extratoPartner.totalOperacoes} operações</p>
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Operações</p>
+            <p className="text-lg font-bold text-white">{extratoPartner.totalOperacoes}</p>
           </div>
         </div>
       )}
@@ -1580,8 +1665,8 @@ function ComissoesAdminTab() {
           })}
         </div>
         <div className="flex bg-secondary rounded-lg p-0.5">
-          {(["TODOS", "A_PAGAR", "PAGA"] as const).map(t => {
-            const labels = { TODOS: "Todos", A_PAGAR: "A Pagar", PAGA: "Pago" };
+          {(["TODOS", "AGUARDANDO_AUTORIZACAO", "A_PAGAR", "PAGA"] as const).map(t => {
+            const labels = { TODOS: "Todos", AGUARDANDO_AUTORIZACAO: "Aguard. Autorização", A_PAGAR: "A Pagar", PAGA: "Pago" };
             return (
               <button key={t} onClick={() => setFiltroStatus(t)} className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${filtroStatus === t ? "bg-[#C9A84C] text-white" : "text-muted-foreground hover:text-foreground"}`}>
                 {labels[t]}
@@ -1601,12 +1686,15 @@ function ComissoesAdminTab() {
             { header: "Tipo", key: "operacaoTipo", width: 12 },
             { header: "Vlr. Operação", key: "valorOperacao", format: "moeda", width: 18 },
             { header: "% Comissão", key: "percentualComissao", format: "percent", width: 13 },
-            { header: "Vlr. Comissão", key: "valorComissao", format: "moeda", width: 18 },
-            { header: "Finalizada em", key: "dataOperacaoFinalizada", format: "date", width: 16 },
-            { header: "Status", key: "status", width: 12 },
+            { header: "Bruto", key: "valorBruto", format: "moeda", width: 16 },
+            { header: "Imposto", key: "imposto", format: "moeda", width: 14 },
+            { header: "Líquido", key: "valorLiquido", format: "moeda", width: 16 },
+            { header: "Finalizada em", key: "dataFinalizada", format: "date", width: 16 },
+            { header: "Pago em", key: "dataPagamento", format: "date", width: 14 },
+            { header: "Status", key: "status", width: 14 },
           ],
           dados: filtradas,
-          totais: { label: "TOTAL", valores: { codigo: "TOTAL", valorComissao: filtradas.reduce((s, c) => s + c.valorComissao, 0) } },
+          totais: { label: "TOTAL", valores: { codigo: "TOTAL", valorLiquido: somaLiquido(filtradas) } },
         }} />
       </div>
 
@@ -1616,24 +1704,90 @@ function ComissoesAdminTab() {
             <table className="w-full text-xs">
               <thead>
                 <tr className="border-b border-border/40">
-                  {["Código", "Partner", "Operação", "Tipo", "Vlr. Operação", "% Comissão", "Vlr. Comissão", "Finalizada em", "Status"].map(h => (
+                  {["Código", "Partner", "Operação", "Tipo", "Vlr. Operação", "% Comissão", "Bruto", "Imposto", "Líquido", "Finalizada em", "Status", "Ação"].map(h => (
                     <th key={h} className="text-left px-4 py-3 text-muted-foreground font-semibold uppercase tracking-wide text-[10px]">{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {filtradas.map((c, i) => (
-                  <tr key={c.id} className={`border-b border-border/20 hover:bg-secondary/30 transition-colors ${i % 2 === 0 ? "" : "bg-[#091221]/40"}`}>
-                    <td className="px-4 py-3 font-mono text-muted-foreground">{c.codigo}</td>
-                    <td className="px-4 py-3 font-medium text-white whitespace-nowrap">{c.partnerNome}</td>
-                    <td className="px-4 py-3 text-muted-foreground max-w-[180px] truncate" title={c.operacaoDescricao}>{c.operacaoDescricao}</td>
-                    <td className="px-4 py-3"><TipoComissaoBadge tipo={c.operacaoTipo} /></td>
-                    <td className="px-4 py-3 text-white">{c.operacaoTipo === "MARKETPLACE" ? <span className="text-muted-foreground">—</span> : formatMoeda(c.valorOperacao)}</td>
-                    <td className="px-4 py-3 text-[#C9A84C] font-semibold">{c.percentualComissao}%</td>
-                    <td className="px-4 py-3 font-bold text-white">{c.operacaoTipo === "MARKETPLACE" ? <span className="text-muted-foreground text-xs">a calcular</span> : formatMoeda(c.valorComissao)}</td>
-                    <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">{new Date(c.dataOperacaoFinalizada).toLocaleDateString("pt-BR")}</td>
-                    <td className="px-4 py-3"><StatusBadge status={c.status} /></td>
-                  </tr>
+                {carregando ? (
+                  <tr><td colSpan={12} className="px-4 py-12 text-center text-muted-foreground">
+                    <Loader2 className="w-5 h-5 mx-auto animate-spin opacity-50" />
+                  </td></tr>
+                ) : filtradas.length === 0 ? (
+                  <tr><td colSpan={12} className="px-4 py-12 text-center text-muted-foreground">
+                    Nenhuma comissão encontrada com esses filtros
+                  </td></tr>
+                ) : filtradas.map((c, i) => (
+                  <React.Fragment key={c.id}>
+                    <tr className={`border-b border-border/20 hover:bg-secondary/30 transition-colors ${i % 2 === 0 ? "" : "bg-[#091221]/40"}`}>
+                      <td className="px-4 py-3 font-mono text-muted-foreground">{c.codigo}</td>
+                      <td className="px-4 py-3 font-medium text-white whitespace-nowrap">{c.partnerNome}</td>
+                      <td className="px-4 py-3 text-muted-foreground max-w-[180px] truncate" title={c.operacaoDescricao}>{c.operacaoDescricao}</td>
+                      <td className="px-4 py-3"><TipoComissaoBadge tipo={c.operacaoTipo} /></td>
+                      <td className="px-4 py-3 text-white">{c.operacaoTipo === "MARKETPLACE" ? <span className="text-muted-foreground">—</span> : formatMoeda(c.valorOperacao)}</td>
+                      <td className="px-4 py-3 text-[#C9A84C] font-semibold">{c.percentualComissao}%</td>
+                      <td className="px-4 py-3 text-muted-foreground">{c.isReal ? formatMoeda(c.valorBruto) : <span className="text-muted-foreground text-xs">a calcular</span>}</td>
+                      <td className="px-4 py-3 text-red-400 whitespace-nowrap">{c.imposto > 0 ? `- ${formatMoeda(c.imposto)}` : "—"}</td>
+                      <td className="px-4 py-3 font-bold text-white">{c.isReal ? formatMoeda(c.valorLiquido) : "—"}</td>
+                      <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">{c.dataFinalizada ? new Date(c.dataFinalizada).toLocaleDateString("pt-BR") : "—"}</td>
+                      <td className="px-4 py-3"><StatusBadge status={c.status} /></td>
+                      <td className="px-4 py-3">
+                        <div className="flex flex-col items-start gap-1.5">
+                          {c.isReal && c.status === "A_PAGAR" ? (
+                            <button
+                              onClick={() => { setPagando(pagando === c.id ? null : c.id); setPagtoErro(""); }}
+                              className="px-2.5 py-1.5 rounded-lg text-[11px] font-bold bg-emerald-600 text-white hover:bg-emerald-500 whitespace-nowrap">
+                              Registrar pagamento
+                            </button>
+                          ) : c.status === "AGUARDANDO_AUTORIZACAO" ? (
+                            <a href="/comissoes" className="text-[11px] text-orange-400 hover:underline whitespace-nowrap">Autorizar em Comissões →</a>
+                          ) : c.status === "PAGA" ? (
+                            <span className="text-[11px] text-emerald-400 inline-flex items-center gap-1 whitespace-nowrap">
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              {c.dataPagamento ? new Date(c.dataPagamento).toLocaleDateString("pt-BR") : "Pago"}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                          {c.isReal && (
+                            <a
+                              href={`/api/commissions/${c.id}/comprovante`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-[11px] text-[#C9A84C] hover:underline inline-flex items-center gap-1 whitespace-nowrap">
+                              <Download className="w-3 h-3" />
+                              {c.status === "PAGA" ? "Comprovante PDF" : "Demonstrativo PDF"}
+                            </a>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                    {pagando === c.id && (
+                      <tr className="bg-emerald-500/5 border-b border-emerald-500/20">
+                        <td colSpan={12} className="px-4 py-3">
+                          <div className="flex items-end gap-2 flex-wrap">
+                            <label className="text-[10px] text-muted-foreground">Data do pagamento
+                              <input type="date" value={dataPagto[c.id] ?? new Date().toISOString().slice(0, 10)}
+                                onChange={e => setDataPagto(prev => ({ ...prev, [c.id]: e.target.value }))}
+                                className="mt-1 block h-8 px-2 text-xs rounded-lg bg-[#0A1628] border border-[#243A66] text-[#F0ECE4]" />
+                            </label>
+                            <button disabled={pagtoBusy} onClick={() => registrarPagamento(c.id)}
+                              className="px-3 py-1.5 rounded-lg text-[11px] font-bold bg-emerald-600 text-white hover:bg-emerald-500 disabled:opacity-60">
+                              {pagtoBusy ? "Registrando..." : "Confirmar pagamento"}
+                            </button>
+                            <button onClick={() => setPagando(null)}
+                              className="px-3 py-1.5 rounded-lg text-[11px] font-semibold border border-[#243A66] text-muted-foreground hover:text-white">
+                              Cancelar
+                            </button>
+                            <p className="text-[10px] text-muted-foreground/70 w-full">
+                              Marca a comissão {c.codigo} como paga e notifica {c.partnerNome} por e-mail e no app.
+                            </p>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
                 ))}
               </tbody>
             </table>

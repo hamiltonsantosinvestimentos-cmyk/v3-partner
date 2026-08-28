@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useMemo, useEffect } from "react";
-import { Wallet, TrendingUp, Clock, CheckCircle2, Plus, X, Loader2, ShoppingBag, Send, Trophy, AlertCircle, Target, BarChart3, ChevronRight, Calendar, CreditCard, Banknote } from "lucide-react";
+import { Wallet, TrendingUp, Clock, CheckCircle2, Plus, X, Loader2, ShoppingBag, Send, Trophy, AlertCircle, Target, BarChart3, ChevronRight, Calendar, CreditCard, Banknote, Download } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatMoeda } from "@/lib/demo-data-financeiro";
 import { ExportButton } from "@/components/financeiro/export-button";
@@ -1455,7 +1455,21 @@ export function ComissoesPartnerClient({ partnerId, partnerName, role, taxPercen
                     <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
                       {c.payment_date ? new Date(c.payment_date).toLocaleDateString("pt-BR") : "—"}
                     </td>
-                    <td className="px-4 py-3"><StatusBadge status={c.status} /></td>
+                    <td className="px-4 py-3">
+                      <div className="flex flex-col items-start gap-1">
+                        <StatusBadge status={c.status} />
+                        {(c.status === "PAGA" || c.status === "A_PAGAR") && (
+                          <a
+                            href={`/api/commissions/${c.id}/comprovante`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[10px] text-[#C9A84C] hover:underline inline-flex items-center gap-1 whitespace-nowrap">
+                            <Download className="w-3 h-3" />
+                            {c.status === "PAGA" ? "Comprovante PDF" : "Demonstrativo PDF"}
+                          </a>
+                        )}
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>
