@@ -70,11 +70,12 @@ interface Props {
 
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, string> = {
+    AGUARDANDO_AUTORIZACAO: "bg-orange-500/20 text-orange-400 border-orange-500/30",
     A_PAGAR: "bg-amber-500/20 text-amber-400 border-amber-500/30",
     PAGA: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
     CANCELADA: "bg-gray-500/20 text-gray-400 border-gray-500/30",
   };
-  const labels: Record<string, string> = { A_PAGAR: "A Receber", PAGA: "Recebida", CANCELADA: "Cancelada" };
+  const labels: Record<string, string> = { AGUARDANDO_AUTORIZACAO: "Aguardando Autorização", A_PAGAR: "A Receber", PAGA: "Recebida", CANCELADA: "Cancelada" };
   return (
     <span className={`text-[10px] font-semibold border px-2 py-0.5 rounded-full ${map[status] ?? ""}`}>
       {labels[status] ?? status}
@@ -130,7 +131,56 @@ export function ComissoesPartnerClient({ partnerId, partnerName, role, taxPercen
   const [commissions, setCommissions] = useState<CommissionRow[]>(initialCommissions);
   const [activeTab, setActiveTab] = useState<"comissoes" | "projecao" | "doze-meses">("comissoes");
   const [filtroTipo, setFiltroTipo] = useState<"TODOS" | TipoOp>("TODOS");
-  const [filtroStatus, setFiltroStatus] = useState<"TODOS" | "A_PAGAR" | "PAGA">("TODOS");
+  const [filtroStatus, setFiltroStatus] = useState<"TODOS" | "AGUARDANDO_AUTORIZACAO" | "A_PAGAR" | "PAGA">("TODOS");
+  // ── Autorização de comissões (ADMIN/GESTAO/FINANCEIRO) ──
+  const [autorizando, setAutorizando] = useState<string | null>(null);
+  const [autorizaData, setAutorizaData] = useState<Record<string, string>>({});
+  const [editandoComissao, setEditandoComissao] = useState<string | null>(null);
+  const [editComissaoForm, setEditComissaoForm] = useState<{ operation_value: string; commission_percent: string; notes: string }>({ operation_value: "", commission_percent: "", notes: "" });
+  const [comissaoAcaoErro, setComissaoAcaoErro] = useState("");
+  const [comissaoAcaoBusy, setComissaoAcaoBusy] = useState(false);
+
+  async function patchComissao(id: string, patch: Record<string, unknown>): Promise<boolean> {
+    setComissaoAcaoErro("");
+    setComissaoAcaoBusy(true);
+    try {
+      const res = await fetch("/api/commissions", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, ...patch }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setComissaoAcaoErro(typeof data.error === "string" ? data.error : "Não foi possível atualizar a comissão.");
+        return false;
+      }
+      setCommissions(prev => prev.map(c => c.id === id ? ({ ...c, ...(data.commission ?? patch) } as CommissionRow) : c));
+      return true;
+    } catch {
+      setComissaoAcaoErro("Falha de rede ao atualizar a comissão.");
+      return false;
+    } finally {
+      setComissaoAcaoBusy(false);
+    }
+  }
+
+  async function autorizarComissao(id: string) {
+    const data = autorizaData[id];
+    if (!data) { setComissaoAcaoErro("Informe a data prevista de pagamento."); return; }
+    const ok = await patchComissao(id, { status: "A_PAGAR", payment_date: data });
+    if (ok) { setAutorizando(null); setAutorizaData(prev => { const n = { ...prev }; delete n[id]; return n; }); }
+  }
+
+  async function salvarEdicaoComissao(id: string) {
+    const patch: Record<string, unknown> = {};
+    const ov = Number(editComissaoForm.operation_value.replace(",", "."));
+    const cp = Number(editComissaoForm.commission_percent.replace(",", "."));
+    if (!Number.isNaN(ov) && ov > 0) patch.operation_value = ov;
+    if (!Number.isNaN(cp) && cp >= 0 && cp <= 100) patch.commission_percent = cp;
+    patch.notes = editComissaoForm.notes || null;
+    const ok = await patchComissao(id, patch);
+    if (ok) setEditandoComissao(null);
+  }
   const [mktPage, setMktPage] = useState(0);
   const MKT_PAGE_SIZE = 5;
 
@@ -1216,6 +1266,83 @@ export function ComissoesPartnerClient({ partnerId, partnerName, role, taxPercen
         )}
       </div>
 
+      {/* ── Fila de autorização de comissões (ADMIN/GESTAO/FINANCEIRO) ── */}
+      {isAdmin && commissions.some(c => c.status === "AGUARDANDO_AUTORIZACAO") && (
+        <div className="rounded-2xl border border-orange-500/30 bg-orange-500/5 p-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold text-orange-400 uppercase tracking-widest">Aguardando autorização de pagamento</span>
+            <span className="text-[10px] text-muted-foreground">{commissions.filter(c => c.status === "AGUARDANDO_AUTORIZACAO").length} pendente(s)</span>
+          </div>
+          {comissaoAcaoErro && (
+            <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{comissaoAcaoErro}</p>
+          )}
+          <div className="space-y-2">
+            {commissions.filter(c => c.status === "AGUARDANDO_AUTORIZACAO").map(c => (
+              <div key={c.id} className="rounded-xl border border-[#243A66] bg-[#111F35] p-3 space-y-2">
+                <div className="flex items-start justify-between gap-3 flex-wrap">
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-[#F0ECE4] truncate">{c.code} · {c.operation_description}</p>
+                    <p className="text-[10px] text-muted-foreground">
+                      {c.operation_code ?? "—"} · base {formatMoeda(c.operation_value)} · {c.commission_percent}% ·
+                      {" "}<span className="text-[#C9A84C] font-semibold">{formatMoeda(c.commission_value)}</span>
+                    </p>
+                    {c.notes && <p className="text-[10px] text-muted-foreground/70 mt-0.5 line-clamp-2">{c.notes}</p>}
+                  </div>
+                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                    <button
+                      onClick={() => { setEditandoComissao(editandoComissao === c.id ? null : c.id); setEditComissaoForm({ operation_value: String(c.operation_value ?? ""), commission_percent: String(c.commission_percent ?? ""), notes: c.notes ?? "" }); }}
+                      className="px-2.5 py-1.5 rounded-lg text-[11px] font-semibold border border-[#243A66] text-muted-foreground hover:text-white">
+                      Editar
+                    </button>
+                    <button
+                      onClick={() => setAutorizando(autorizando === c.id ? null : c.id)}
+                      className="px-2.5 py-1.5 rounded-lg text-[11px] font-bold bg-[#C9A84C] text-[#09081A] hover:bg-[#E8C97A]">
+                      Autorizar
+                    </button>
+                  </div>
+                </div>
+
+                {editandoComissao === c.id && (
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-2 border-t border-[#243A66]">
+                    <label className="text-[10px] text-muted-foreground">Base (R$)
+                      <input value={editComissaoForm.operation_value} onChange={e => setEditComissaoForm(f => ({ ...f, operation_value: e.target.value }))}
+                        className="mt-1 w-full h-8 px-2 text-xs rounded-lg bg-[#0A1628] border border-[#243A66] text-[#F0ECE4]" />
+                    </label>
+                    <label className="text-[10px] text-muted-foreground">% Comissão
+                      <input value={editComissaoForm.commission_percent} onChange={e => setEditComissaoForm(f => ({ ...f, commission_percent: e.target.value }))}
+                        className="mt-1 w-full h-8 px-2 text-xs rounded-lg bg-[#0A1628] border border-[#243A66] text-[#F0ECE4]" />
+                    </label>
+                    <label className="text-[10px] text-muted-foreground">Observação
+                      <input value={editComissaoForm.notes} onChange={e => setEditComissaoForm(f => ({ ...f, notes: e.target.value }))}
+                        className="mt-1 w-full h-8 px-2 text-xs rounded-lg bg-[#0A1628] border border-[#243A66] text-[#F0ECE4]" />
+                    </label>
+                    <div className="sm:col-span-3 flex justify-end">
+                      <button disabled={comissaoAcaoBusy} onClick={() => salvarEdicaoComissao(c.id)}
+                        className="px-3 py-1.5 rounded-lg text-[11px] font-bold bg-emerald-600 text-white hover:bg-emerald-500 disabled:opacity-60">
+                        {comissaoAcaoBusy ? "Salvando..." : "Salvar valores"}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {autorizando === c.id && (
+                  <div className="flex items-end gap-2 pt-2 border-t border-[#243A66] flex-wrap">
+                    <label className="text-[10px] text-muted-foreground">Data prevista de pagamento
+                      <input type="date" value={autorizaData[c.id] ?? ""} onChange={e => setAutorizaData(prev => ({ ...prev, [c.id]: e.target.value }))}
+                        className="mt-1 block h-8 px-2 text-xs rounded-lg bg-[#0A1628] border border-[#243A66] text-[#F0ECE4]" />
+                    </label>
+                    <button disabled={comissaoAcaoBusy || !autorizaData[c.id]} onClick={() => autorizarComissao(c.id)}
+                      className="px-3 py-1.5 rounded-lg text-[11px] font-bold bg-[#C9A84C] text-[#09081A] hover:bg-[#E8C97A] disabled:opacity-60">
+                      {comissaoAcaoBusy ? "Autorizando..." : "Confirmar autorização"}
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Filtros */}
       <div className="flex items-center gap-3 flex-wrap">
         <div className="flex bg-secondary rounded-lg p-0.5 flex-wrap gap-0.5">
@@ -1228,9 +1355,9 @@ export function ComissoesPartnerClient({ partnerId, partnerName, role, taxPercen
             );
           })}
         </div>
-        <div className="flex bg-secondary rounded-lg p-0.5">
-          {(["TODOS", "A_PAGAR", "PAGA"] as const).map(t => {
-            const labels = { TODOS: "Todos", A_PAGAR: "A Receber", PAGA: "Recebido" };
+        <div className="flex bg-secondary rounded-lg p-0.5 flex-wrap gap-0.5">
+          {(["TODOS", "AGUARDANDO_AUTORIZACAO", "A_PAGAR", "PAGA"] as const).map(t => {
+            const labels = { TODOS: "Todos", AGUARDANDO_AUTORIZACAO: "Aguard. Autorização", A_PAGAR: "A Receber", PAGA: "Recebido" };
             return (
               <button key={t} onClick={() => setFiltroStatus(t)} className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${filtroStatus === t ? "bg-[#C9A84C] text-[#09081A]" : "text-muted-foreground hover:text-foreground"}`}>
                 {labels[t]}

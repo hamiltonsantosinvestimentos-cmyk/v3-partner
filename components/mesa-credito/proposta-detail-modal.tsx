@@ -1149,6 +1149,9 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
   const [showReprovar, setShowReprovar] = useState(false);
   const [showDeclinar, setShowDeclinar] = useState(false);
   const [showEscalar, setShowEscalar] = useState(false);
+  const [showLiberar, setShowLiberar] = useState(false);
+  const [savingLiberar, setSavingLiberar] = useState(false);
+  const [liberarError, setLiberarError] = useState("");
   const [valorAprovado, setValorAprovado] = useState("");
   const [motivoReprovacao, setMotivoReprovacao] = useState("");
   const [motivoDeclinio, setMotivoDeclinio] = useState("");
@@ -1186,6 +1189,29 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
       setShowAprovar(false);
       setValorAprovado("");
     } finally { setSavingAprovacao(false); }
+  }
+
+  async function handleLiberar() {
+    if (!proposal) return;
+    setSavingLiberar(true);
+    setLiberarError("");
+    try {
+      const res = await fetch("/api/credit-proposals", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: proposal.id, stage: "LIBERADO" }),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        setLiberarError(typeof j.error === "string" ? j.error : "Não foi possível liberar o recurso.");
+        return;
+      }
+      onProposalUpdate?.(proposal.id, { stage: "LIBERADO", status: "APPROVED" });
+      onStageChange?.(proposal.id, "LIBERADO");
+      setShowLiberar(false);
+    } catch {
+      setLiberarError("Falha de rede ao liberar o recurso.");
+    } finally { setSavingLiberar(false); }
   }
 
   async function handleReprovar() {
@@ -4933,6 +4959,15 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
               <ArrowRight className="w-3.5 h-3.5" /> Não aplicável — pular para Liberado
             </Button>
           )}
+          {/* ── Botão Liberar Recurso — proposta aprovada, ainda não liberada ── */}
+          {canChangeStage && proposal?.status === "APPROVED"
+            && proposal?.stage !== "LIBERADO" && proposal?.stage !== "REPROVADO"
+            && proposal?.stage !== "DECLINADO" && proposal?.stage !== "FINALIZADO" && (
+            <Button size="sm" onClick={() => { setLiberarError(""); setShowLiberar(true); }}
+              className="gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white border-0">
+              <Banknote className="w-3.5 h-3.5" /> Liberar Recurso
+            </Button>
+          )}
           {/* ── Botão Reprovar — disponível em qualquer estágio ── */}
           {canChangeStage && !isFinished && proposal?.status !== "REJECTED" && (
             <Button size="sm" variant="outline" onClick={() => setShowReprovar(true)}
@@ -4980,6 +5015,38 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
           </div>
         </div>
       </div>
+
+      {/* ── Modal: Liberar Recurso ── */}
+      {showLiberar && (
+        <div className="fixed inset-0 z-[70] flex items-start justify-center p-4 pt-10 bg-black/70 backdrop-blur-sm">
+          <div className="bg-card border border-emerald-500/30 rounded-2xl w-full max-w-sm animate-fade-in">
+            <div className="flex items-center gap-2 px-5 py-4 border-b border-border">
+              <Banknote className="w-4 h-4 text-emerald-400" />
+              <h3 className="text-sm font-bold text-white">Liberar Recurso</h3>
+            </div>
+            <div className="px-5 py-4 space-y-3">
+              <p className="text-xs text-muted-foreground">
+                A proposta vai para a coluna <strong className="text-emerald-400">Recurso Liberado</strong> e as
+                comissões (licenciado{proposal?.partner_id ? "" : " — sem parceiro vinculado"} + indicação 10%, quando houver)
+                são geradas com status <strong className="text-amber-400">Aguardando Autorização</strong> na aba Comissões.
+                ADMIN e Financeiro recebem um alerta para autorizar o pagamento e definir a data.
+              </p>
+              <p className="text-[11px] text-muted-foreground/70">Esta ação não pode ser desfeita pela mesa.</p>
+              {liberarError && (
+                <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{liberarError}</p>
+              )}
+            </div>
+            <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-border">
+              <Button size="sm" variant="outline" onClick={() => { setShowLiberar(false); setLiberarError(""); }}>Cancelar</Button>
+              <Button size="sm" onClick={handleLiberar} disabled={savingLiberar}
+                className="bg-emerald-600 hover:bg-emerald-500 text-white border-0 gap-1.5">
+                {savingLiberar ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Banknote className="w-3.5 h-3.5" />}
+                {savingLiberar ? "Liberando..." : "Confirmar liberação"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Modal: Aprovar ── */}
       {showAprovar && (
