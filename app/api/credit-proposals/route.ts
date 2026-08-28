@@ -92,7 +92,7 @@ const PROPOSAL_SELECT = `
   pending_reason, pending_responsible, pending_at,
   pending_resolved_at, pending_resolved_by,
   documents, checklist, metadata,
-  partner:profiles!partner_id(id, full_name)
+  partner:profiles!partner_id(id, full_name, role)
 `;
 
 // GET — lista propostas (partner vê as suas, admin/mesa vê todas), ou uma

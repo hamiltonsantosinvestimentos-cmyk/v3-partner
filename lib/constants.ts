@@ -15,6 +15,15 @@ export const USER_ROLES = {
 
 export type UserRole = keyof typeof USER_ROLES;
 
+// Comissionamento do licenciado por plano contratado — % sobre a comissão
+// LÍQUIDA da V3 (total bruto mandato + instituição, já descontados os impostos).
+// ENTERPRISE é negociável caso a caso, portanto não tem percentual fixo aqui.
+export const PLAN_COMMISSION_PCT: Partial<Record<UserRole, number>> = {
+  STARTER: 20,
+  PARTNER: 30,
+  PARTNER_PRO: 50,
+};
+
 export const ROLE_LABELS: Record<UserRole, string> = {
   ADMIN: "Administrador",
   STARTER: "V3 Starter",

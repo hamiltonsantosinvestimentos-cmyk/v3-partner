@@ -57,7 +57,7 @@ interface ProposalCard {
   client_name: string; client_type?: string;
   credit_line: string; requested_value: number;
   stage: string; status: string;
-  partner_name?: string; partner_id?: string;
+  partner_name?: string; partner_id?: string; partner_role?: string;
   docs_uploaded?: number; docs_required?: number;
   created_at: string;
   cpf_cnpj?: string; email?: string; telefone?: string;
@@ -1396,7 +1396,7 @@ function TicketDetailModal({ open, onClose, ticket, currentUser, onUpdated, onOp
 }
 
 // ─── Editar Proposta Modal ────────────────────────────────────────────────
-interface Partner { id: string; full_name: string }
+interface Partner { id: string; full_name: string; role?: string }
 type CreditLevel = "NIVEL_1" | "NIVEL_2" | "NIVEL_3";
 
 function EditarPropostaModal({ open, onClose, proposal, onSaved }: {
@@ -1460,10 +1460,12 @@ function EditarPropostaModal({ open, onClose, proposal, onSaved }: {
       });
 
       if (res.ok) {
-        const partnerName = partners.find(p => p.id === partnerId)?.full_name ?? proposal.partner_name;
+        const chosenPartner = partners.find(p => p.id === partnerId);
+        const partnerName = chosenPartner?.full_name ?? proposal.partner_name;
         onSaved(proposal.id, {
           partner_id: partnerId || proposal.partner_id,
           partner_name: partnerName,
+          partner_role: partnerId ? chosenPartner?.role : proposal.partner_role,
           current_level: level,
           credit_line: creditLine,
         });
@@ -1627,6 +1629,7 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
             stage: (p.stage as string | undefined) ?? "RECEBIDO",
             partner_id: (p.partner as { id?: string } | null)?.id,
             partner_name: (p.partner as { full_name?: string } | null)?.full_name,
+            partner_role: (p.partner as { role?: string } | null)?.role,
             created_at: p.created_at as string,
             valor_credito_atual: p.valor_credito_atual as number | undefined,
             comissao_mandato_perc: p.comissao_mandato_perc as number | undefined,
@@ -1697,7 +1700,7 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
   const [npLevel, setNpLevel] = useState<"NIVEL_1" | "NIVEL_2" | "NIVEL_3">("NIVEL_1");
   const [npPartnerId, setNpPartnerId] = useState("");
   const [npPartnerName, setNpPartnerName] = useState("");
-  const [npPartners, setNpPartners] = useState<{ id: string; full_name: string }[]>([]);
+  const [npPartners, setNpPartners] = useState<{ id: string; full_name: string; role?: string }[]>([]);
   const [npPartnersLoading, setNpPartnersLoading] = useState(false);
   const [npPartnerSearch, setNpPartnerSearch] = useState("");
   // ─── OCR automático (ao entrar em TRIAGEM) ───────────────────────────────
@@ -2089,6 +2092,7 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
         ...p, id: json.proposal.id,
         partner_id: npPartnerId || json.proposal.partner_id,
         partner_name: npPartnerName || json.proposal.partner_name,
+        partner_role: npPartners.find(x => x.id === npPartnerId)?.role ?? json.proposal.partner?.role,
         current_level: npLevel,
         metadata: json.proposal.metadata ?? metadata,
       }, ...prev]);
@@ -2097,7 +2101,7 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
     if (typeof json.error === "string") throw new Error(json.error);
     throw new Error("Erro ao salvar proposta. Tente novamente.");
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [npLevel, npPartnerId, npPartnerName]);
+  }, [npLevel, npPartnerId, npPartnerName, npPartners]);
 
   // ─── Métricas ─────────────────────────────────────────────────────────────
   const openCount = tickets.filter((t) => ["PENDING", "IN_REVIEW"].includes(t.status)).length;
