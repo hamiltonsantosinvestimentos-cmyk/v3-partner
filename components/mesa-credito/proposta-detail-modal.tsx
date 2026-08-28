@@ -11,7 +11,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatCurrency, formatDate } from "@/lib/utils";
-import { STATUS_LABELS, STATUS_COLORS, type OperationStatus } from "@/lib/constants";
+import { STATUS_LABELS, STATUS_COLORS, PLAN_COMMISSION_PCT, ROLE_LABELS, type OperationStatus, type UserRole } from "@/lib/constants";
 import { uploadCreditDocument } from "@/lib/credit-documents/upload";
 import { CHECKLISTS, DEFAULT_CHECKLIST } from "./nova-proposta-modal";
 import { RecomendacaoLinha } from "./recomendacao-linha";
@@ -23,8 +23,9 @@ export type MesaComment = {
   created_at: string;
 };
 
-// Taxa de impostos sobre comissões (ISS 2% + PIS 0,65% + COFINS 3%) — sincronizado com aba Financeiro
-const TAXA_IMPOSTOS_COMISSAO = 5.65;
+// Alíquota de imposto sobre comissões usada como fallback enquanto a alíquota
+// global (Configurações → Comissões) não carrega. ISS 2% + PIS 0,65% + COFINS 3%.
+const TAXA_IMPOSTOS_COMISSAO_FALLBACK = 5.65;
 
 export const PIPELINE_STAGES = [
   { key: "RECEBIDO", label: "Recebido", color: "text-slate-400", bg: "bg-slate-500/20" },
@@ -127,6 +128,8 @@ export interface ProposalFull {
   stage?: string;
   partner_id?: string;
   partner_name?: string;
+  /** Plano/role do parceiro (STARTER/PARTNER/PARTNER_PRO/ENTERPRISE) — define o % da comissão do licenciado. */
+  partner_role?: string;
   docs_uploaded?: number;
   docs_required?: number;
   created_at: string;
@@ -2212,6 +2215,18 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
   const [valorSolicitado, setValorSolicitado] = useState(0);
   const [valorSolicitadoEdit, setValorSolicitadoEdit] = useState("");
   const [editandoValorSolicitado, setEditandoValorSolicitado] = useState(false);
+  // Alíquota global de imposto sobre comissões (Configurações → Comissões)
+  const [taxPercent, setTaxPercent] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    let cancel = false;
+    fetch("/api/settings/commission-tax")
+      .then(r => r.json())
+      .then(d => { if (!cancel) setTaxPercent(Number.isFinite(Number(d?.tax_percent)) ? Number(d.tax_percent) : null); })
+      .catch(() => { if (!cancel) setTaxPercent(null); });
+    return () => { cancel = true; };
+  }, [open]);
 
   // ── Escavador state ──────────────────────────────────────────────────────
   const [escavadorLoading, setEscavadorLoading] = useState(false);
@@ -2334,7 +2349,20 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
   const comissaoMandato = valorCredito * (percMandato / 100);
   const comissaoInstituicao = valorCredito * (percInstituicao / 100);
   const totalComissao = comissaoMandato + comissaoInstituicao;
-  const comissaoLicenciado = totalComissao * ((50 - TAXA_IMPOSTOS_COMISSAO) / 100);
+
+  // Imposto sobre a comissão: alíquota global de Configurações → Comissões.
+  // Enquanto o fetch não retorna, usa o fallback histórico (ISS+PIS+COFINS 5,65%).
+  const aliquotaImposto = taxPercent ?? TAXA_IMPOSTOS_COMISSAO_FALLBACK;
+  const impostoComissao = totalComissao * (aliquotaImposto / 100);
+  const comissaoLiquida = totalComissao - impostoComissao;
+
+  // Comissão do licenciado = % do plano contratado pelo parceiro, aplicado
+  // sobre a comissão líquida (total bruto − impostos). ENTERPRISE é negociável
+  // e não tem percentual fixo, então fica sem valor automático.
+  const partnerRole = (proposal.partner_role ?? "") as UserRole;
+  const planoComissaoPerc = PLAN_COMMISSION_PCT[partnerRole] ?? null;
+  const planoLabel = ROLE_LABELS[partnerRole] ?? (proposal.partner_role || "plano não identificado");
+  const comissaoLicenciado = planoComissaoPerc != null ? comissaoLiquida * (planoComissaoPerc / 100) : null;
 
   function persistPatch(updates: Record<string, unknown>) {
     fetch("/api/credit-proposals", {
@@ -2607,7 +2635,10 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
     <div class="grid-3">
       <div class="field"><label>Comissão Mandato</label><span>${percMandato.toFixed(2)}% — ${fmt(comissaoMandato)}</span></div>
       <div class="field"><label>Comissão Instituição</label><span>${percInstituicao.toFixed(2)}% — ${fmt(comissaoInstituicao)}</span></div>
-      <div class="field"><label>Total Comissão</label><span>${fmt(totalComissao)}</span></div>
+      <div class="field"><label>Total Bruto</label><span>${fmt(totalComissao)}</span></div>
+      <div class="field"><label>Impostos (${aliquotaImposto.toFixed(2)}%)</label><span>- ${fmt(impostoComissao)}</span></div>
+      <div class="field"><label>Comissão Líquida</label><span>${fmt(comissaoLiquida)}</span></div>
+      <div class="field"><label>Comissão Licenciado (${planoLabel}${planoComissaoPerc != null ? ` · ${planoComissaoPerc}%` : " · negociável"})</label><span>${comissaoLicenciado != null ? fmt(comissaoLicenciado) : "definir manualmente"}</span></div>
     </div>
   </div>` : ""}
 
@@ -3625,16 +3656,33 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
                 <span className="font-semibold text-amber-300">{formatCurrency(totalComissao)}</span>
               </div>
               <div className="flex items-center justify-between text-xs">
-                <span className="text-muted-foreground">Impostos (ISS+PIS+COFINS {TAXA_IMPOSTOS_COMISSAO}%)</span>
-                <span className="text-red-400">− {formatCurrency(totalComissao * TAXA_IMPOSTOS_COMISSAO / 100)}</span>
+                <span className="text-muted-foreground">
+                  Impostos ({aliquotaImposto.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}%)
+                  {taxPercent == null && <span className="text-[10px] text-muted-foreground/60"> · padrão</span>}
+                </span>
+                <span className="text-red-400">− {formatCurrency(impostoComissao)}</span>
+              </div>
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-muted-foreground">Comissão Líquida (Bruto − Impostos)</span>
+                <span className="font-semibold text-amber-300">{formatCurrency(comissaoLiquida)}</span>
               </div>
             </div>
 
-            {/* Campo 3 — Comissão Licenciado */}
+            {/* Campo 3 — Comissão Licenciado (% do plano contratado sobre a líquida) */}
             <div className="flex items-center justify-between p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/30">
-              <span className="text-xs font-semibold text-emerald-400">Comissão Licenciado (50% líquido)</span>
-              <span className="text-sm font-bold text-emerald-400">{formatCurrency(comissaoLicenciado)}</span>
+              <span className="text-xs font-semibold text-emerald-400">
+                Comissão Licenciado
+                <span className="text-[10px] font-normal text-emerald-400/70">
+                  {" "}({planoLabel}{planoComissaoPerc != null ? ` · ${planoComissaoPerc}% da líquida` : " · negociável"})
+                </span>
+              </span>
+              <span className="text-sm font-bold text-emerald-400">
+                {comissaoLicenciado != null ? formatCurrency(comissaoLicenciado) : "definir manualmente"}
+              </span>
             </div>
+            {!proposal.partner_id && (
+              <p className="text-[10px] text-amber-400/80 text-center italic">Proposta sem parceiro vinculado — comissão do licenciado não se aplica.</p>
+            )}
 
             {!canChangeStage && (
               <p className="text-[10px] text-muted-foreground text-center italic">Somente analistas e administradores podem editar os campos de comissão.</p>

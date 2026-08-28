@@ -22,7 +22,7 @@ interface Proposal {
   credit_line: string; requested_value: number;
   approved_value: number | null; prazo?: string; finalidade?: string;
   current_level: string; status: string; stage?: string;
-  partner_id?: string; partner_name?: string;
+  partner_id?: string; partner_name?: string; partner_role?: string;
   docs_uploaded?: number; docs_required?: number;
   created_at: string;
   valor_credito_atual?: number;
@@ -130,6 +130,7 @@ export function CreditDeskClient({ proposals: initial, level, currentUser }: Cre
           stage: p.stage as string | undefined,
           partner_id: (p.partner as { id?: string } | null)?.id,
           partner_name: (p.partner as { full_name?: string } | null)?.full_name,
+          partner_role: (p.partner as { role?: string } | null)?.role,
           created_at: p.created_at as string,
           valor_credito_atual: p.valor_credito_atual as number | undefined,
           comissao_mandato_perc: p.comissao_mandato_perc as number | undefined,
