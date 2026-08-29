@@ -159,6 +159,43 @@ export async function listRecentInstagramMedia(limit = 25): Promise<InstagramMed
 
 // Resposta pública opcional no próprio comentário (complementa a private
 // reply — ex: "Te chamei no Direct! 📩"), via endpoint de replies do comentário.
+// ── Modo white label (partner) ──────────────────────────────────────────────
+// As funções acima usam o Instagram User Access Token (login direto do IG,
+// prefixo IGAAU) do bot interno da V3, via graph.instagram.com. Isso só
+// funciona pra UMA conta (quem fez o login direto na Meta pra gerar esse
+// token). Pra atender vários partners, cada um com a própria Página/conta
+// profissional, usamos o outro fluxo oficial da Meta — "Facebook Login for
+// Business" (OAuth, ver lib/meta-oauth.ts) — que devolve um token de PÁGINA,
+// aceito em graph.facebook.com (não graph.instagram.com), endereçado pelo
+// instagram_business_account_id da conta vinculada àquela Página.
+const GRAPH_FACEBOOK_BASE = `https://graph.facebook.com/${GRAPH_API_VERSION}`;
+
+export async function sendInstagramTextAsPage(
+  igBusinessAccountId: string,
+  igsid: string,
+  text: string,
+  pageAccessToken: string
+): Promise<void> {
+  const res = await fetch(`${GRAPH_FACEBOOK_BASE}/${igBusinessAccountId}/messages?access_token=${encodeURIComponent(pageAccessToken)}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      recipient: { id: igsid },
+      message: { text },
+      messaging_type: "RESPONSE",
+    }),
+  });
+
+  const json = (await res.json()) as MetaErrorBody;
+  if (!res.ok || json.error) {
+    const err = json.error;
+    throw new InstagramDmError(err?.message ?? `Erro HTTP ${res.status} no Send API do Instagram (Página)`, {
+      code: err?.code,
+      subcode: err?.error_subcode,
+    });
+  }
+}
+
 export async function replyToInstagramComment(commentId: string, text: string): Promise<void> {
   const res = await fetch(`${GRAPH_BASE}/${commentId}/replies?access_token=${encodeURIComponent(pageAccessToken())}`, {
     method: "POST",

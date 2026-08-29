@@ -46,6 +46,8 @@ export async function PATCH(req: NextRequest) {
     regras_comunicacao?: string;
     ia_ativa_whatsapp?: boolean;
     ia_ativa_instagram?: boolean;
+    ia_ativa_messenger?: boolean;
+    ia_ativa_telegram?: boolean;
   };
 
   const update: Record<string, unknown> = { updated_at: new Date().toISOString(), updated_by: auth.user.id };
@@ -54,6 +56,8 @@ export async function PATCH(req: NextRequest) {
   if (body.regras_comunicacao !== undefined) update.regras_comunicacao = body.regras_comunicacao;
   if (body.ia_ativa_whatsapp !== undefined) update.ia_ativa_whatsapp = body.ia_ativa_whatsapp;
   if (body.ia_ativa_instagram !== undefined) update.ia_ativa_instagram = body.ia_ativa_instagram;
+  if (body.ia_ativa_messenger !== undefined) update.ia_ativa_messenger = body.ia_ativa_messenger;
+  if (body.ia_ativa_telegram !== undefined) update.ia_ativa_telegram = body.ia_ativa_telegram;
 
   const { error } = await svc().from("sdr_flow_config").upsert({ id: "default", ...update });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

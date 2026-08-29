@@ -27,7 +27,7 @@ export async function GET() {
 
   const { data: config } = await svc()
     .from("sdr_flow_config")
-    .select("agente_nome, empresa_contexto, regras_comunicacao, ia_ativa_whatsapp")
+    .select("agente_nome, empresa_contexto, regras_comunicacao, ia_ativa_whatsapp, ia_ativa_instagram, ia_ativa_messenger, ia_ativa_telegram")
     .eq("partner_id", auth.user.id)
     .maybeSingle();
 
@@ -36,6 +36,9 @@ export async function GET() {
     empresa_contexto: config?.empresa_contexto ?? "",
     regras_comunicacao: config?.regras_comunicacao ?? "",
     ia_ativa_whatsapp: config?.ia_ativa_whatsapp ?? true,
+    ia_ativa_instagram: config?.ia_ativa_instagram ?? true,
+    ia_ativa_messenger: config?.ia_ativa_messenger ?? true,
+    ia_ativa_telegram: config?.ia_ativa_telegram ?? true,
   });
 }
 
@@ -49,6 +52,9 @@ export async function PUT(req: NextRequest) {
     empresa_contexto?: string;
     regras_comunicacao?: string;
     ia_ativa_whatsapp?: boolean;
+    ia_ativa_instagram?: boolean;
+    ia_ativa_messenger?: boolean;
+    ia_ativa_telegram?: boolean;
   };
 
   const updates: Record<string, unknown> = { partner_id: auth.user.id, id: auth.user.id, updated_at: new Date().toISOString(), updated_by: auth.user.id };
@@ -56,6 +62,9 @@ export async function PUT(req: NextRequest) {
   if (body.empresa_contexto !== undefined) updates.empresa_contexto = body.empresa_contexto;
   if (body.regras_comunicacao !== undefined) updates.regras_comunicacao = body.regras_comunicacao;
   if (body.ia_ativa_whatsapp !== undefined) updates.ia_ativa_whatsapp = body.ia_ativa_whatsapp;
+  if (body.ia_ativa_instagram !== undefined) updates.ia_ativa_instagram = body.ia_ativa_instagram;
+  if (body.ia_ativa_messenger !== undefined) updates.ia_ativa_messenger = body.ia_ativa_messenger;
+  if (body.ia_ativa_telegram !== undefined) updates.ia_ativa_telegram = body.ia_ativa_telegram;
 
   const { error } = await svc().from("sdr_flow_config").upsert(updates, { onConflict: "partner_id" });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
