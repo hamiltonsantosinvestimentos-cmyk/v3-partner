@@ -3,11 +3,14 @@ import { after } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import {
   sendInstagramText,
+  sendInstagramTextAsPage,
   sendInstagramPrivateReply,
   sendInstagramPrivateReplyWithQuickReplies,
   replyToInstagramComment,
   checkIsFollowing,
 } from "@/lib/instagram-dm";
+import { decryptPageToken } from "@/lib/meta-oauth";
+import { resolveQuickReply, type QuickReplyOption } from "@/lib/whatsapp/quick-reply";
 import { processarMensagemSDRCore, isIaAtiva, SDR_INTERNO_PARTNER_ID } from "@/lib/sdr-agent";
 
 const supabase = createClient(
@@ -79,10 +82,13 @@ export async function POST(req: NextRequest) {
 
     for (const entry of body.entry ?? []) {
       for (const event of entry.messaging ?? []) {
-        await processarEvento(event);
+        await processarEvento(event, entry.id);
       }
       for (const change of entry.changes ?? []) {
         if (change.field === "comments") {
+          // Comment-to-DM continua exclusivo do bot interno da V3 — é um
+          // recurso mais especializado (gatilhos por palavra-chave/post) que
+          // ainda não foi levado pro white label de partners.
           await processarComentario(change.value, entry.id);
         }
       }
@@ -95,7 +101,34 @@ export async function POST(req: NextRequest) {
   }
 }
 
-async function processarEvento(event: InstagramMessagingEvent) {
+// Resolve de qual partner é essa conta do Instagram (entry.id = o
+// instagram_business_account_id inscrito no webhook) — mesmo princípio do
+// whitelabel do WhatsApp (ver comentário em app/api/sdr/webhook/route.ts pro
+// session_id do OpenWA). Conta não encontrada = bot interno da V3.
+async function resolveContextoInstagram(igBusinessAccountId?: string): Promise<{
+  partnerId: string | null;
+  enviarTexto: (igsid: string, texto: string) => Promise<void>;
+}> {
+  if (igBusinessAccountId) {
+    const { data: conexao } = await supabase
+      .from("partner_sdr_connections")
+      .select("partner_id, meta_page_access_token_encrypted, instagram_status")
+      .eq("instagram_business_account_id", igBusinessAccountId)
+      .eq("instagram_status", "conectado")
+      .maybeSingle();
+
+    if (conexao?.meta_page_access_token_encrypted) {
+      const pageToken = decryptPageToken(conexao.meta_page_access_token_encrypted);
+      return {
+        partnerId: conexao.partner_id,
+        enviarTexto: (igsid, texto) => sendInstagramTextAsPage(igBusinessAccountId, igsid, texto, pageToken),
+      };
+    }
+  }
+  return { partnerId: null, enviarTexto: (igsid, texto) => sendInstagramText(igsid, texto) };
+}
+
+async function processarEvento(event: InstagramMessagingEvent, entryId?: string) {
   const igsid = event.sender?.id;
   const message = event.message;
 
@@ -104,7 +137,7 @@ async function processarEvento(event: InstagramMessagingEvent) {
   if (!igsid || !message || message.is_echo) return;
 
   // Clique no botão "Já sigo" do gate de follow do Comment-to-DM — desvia
-  // do fluxo normal do agente SDR, é tratado à parte.
+  // do fluxo normal do agente SDR, é tratado à parte (só bot interno).
   const quickReplyPayload = message.quick_reply?.payload;
   if (quickReplyPayload?.startsWith(FOLLOW_CHECK_PREFIX)) {
     const commentEventId = quickReplyPayload.slice(FOLLOW_CHECK_PREFIX.length);
@@ -122,6 +155,30 @@ async function processarEvento(event: InstagramMessagingEvent) {
   console.log(`[SDR Instagram Webhook] Mensagem de ${igsid}: ${messageText.substring(0, 80)}`);
 
   const instance = "instagram";
+  const { partnerId, enviarTexto } = await resolveContextoInstagram(entryId);
+  const partnerIdColuna = partnerId ?? SDR_INTERNO_PARTNER_ID;
+
+  // Resolve resposta a opções de quick reply simuladas por texto — mesmo
+  // método do WhatsApp (ver lib/whatsapp/quick-reply.ts). Antes só o
+  // WhatsApp fazia essa resolução; sem ela, quem respondia "1" a uma oferta
+  // qualificada aqui no Instagram tinha o dígito cru salvo no histórico em
+  // vez do label da opção escolhida.
+  let messageTextResolvido = messageText;
+  let ultimaConversaQuery = supabase
+    .from("sdr_conversas")
+    .select("role, quick_reply_options")
+    .eq("phone", igsid)
+    .eq("canal", CANAL);
+  ultimaConversaQuery = partnerId ? ultimaConversaQuery.eq("partner_id", partnerId) : ultimaConversaQuery.is("partner_id", null);
+  const { data: ultimaConversa } = await ultimaConversaQuery
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (ultimaConversa?.role === "assistant" && Array.isArray(ultimaConversa.quick_reply_options)) {
+    const resolvida = resolveQuickReply(messageText, ultimaConversa.quick_reply_options as QuickReplyOption[]);
+    if (resolvida) messageTextResolvido = resolvida.label;
+  }
 
   // Idempotência: reaproveita a coluna wa_message_id (e seu índice único em
   // (phone, wa_message_id)) — apesar do nome, ela só guarda "id externo da
@@ -131,9 +188,10 @@ async function processarEvento(event: InstagramMessagingEvent) {
     phone: igsid,
     canal: CANAL,
     role: "user",
-    content: messageText,
+    content: messageTextResolvido,
     instance,
     wa_message_id: message.mid ?? null,
+    partner_id: partnerId,
   });
 
   if (insertErr) {
@@ -146,10 +204,10 @@ async function processarEvento(event: InstagramMessagingEvent) {
 
   await supabase.from("sdr_leads").upsert({
     phone: igsid,
-    partner_id: SDR_INTERNO_PARTNER_ID,
+    partner_id: partnerIdColuna,
     canal: CANAL,
     last_message_at: new Date().toISOString(),
-    last_message_preview: messageText.slice(0, 80),
+    last_message_preview: messageTextResolvido.slice(0, 80),
     updated_at: new Date().toISOString(),
   }, { onConflict: "phone,partner_id", ignoreDuplicates: false });
 
@@ -157,7 +215,7 @@ async function processarEvento(event: InstagramMessagingEvent) {
     .from("sdr_leads")
     .select("humano_ativo")
     .eq("phone", igsid)
-    .eq("partner_id", SDR_INTERNO_PARTNER_ID)
+    .eq("partner_id", partnerIdColuna)
     .single();
 
   if (leadData?.humano_ativo) {
@@ -165,17 +223,18 @@ async function processarEvento(event: InstagramMessagingEvent) {
     return;
   }
 
-  if (!(await isIaAtiva(CANAL))) {
-    console.log(`[SDR Instagram Webhook] IA automática desligada globalmente — mensagem de ${igsid} só salva`);
+  if (!(await isIaAtiva(CANAL, partnerId))) {
+    console.log(`[SDR Instagram Webhook] IA automática desligada (partner ${partnerId ?? "interno"}) — mensagem de ${igsid} só salva`);
     return;
   }
 
   after(() => processarMensagemSDRCore({
     phone: igsid,
-    mensagem: messageText,
+    mensagem: messageTextResolvido,
     instance,
     canal: CANAL,
-    enviarTexto: (texto) => sendInstagramText(igsid, texto),
+    partnerId,
+    enviarTexto: (texto) => enviarTexto(igsid, texto),
   }).catch(e =>
     console.error("[SDR Instagram Webhook] Erro ao processar mensagem (background):", e)
   ));

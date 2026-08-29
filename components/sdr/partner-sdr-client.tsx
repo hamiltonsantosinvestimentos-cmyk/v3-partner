@@ -1,16 +1,36 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   MessageSquare, Bot, Send, QrCode, Loader2, CheckCircle2, RefreshCw,
-  Plus, Trash2, Play, Pause, Users as UsersIcon,
+  Plus, Trash2, Play, Pause, Users as UsersIcon, Unlink,
 } from "lucide-react";
+
+// lucide-react não tem ícones de marca (Instagram/Facebook) — glifos simples
+// próprios, mesma ideia visual do ChannelBadgeIcon em sdr-client.tsx.
+function InstagramGlyph({ className }: { className?: string }) {
+  return (
+    <svg className={className} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+      <rect x="3" y="3" width="18" height="18" rx="5" />
+      <circle cx="12" cy="12" r="3.5" />
+      <circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+function FacebookGlyph({ className }: { className?: string }) {
+  return (
+    <svg className={className} width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M22 12.06C22 6.5 17.52 2 12 2S2 6.5 2 12.06c0 5 3.66 9.15 8.44 9.94v-7.03H7.9v-2.9h2.54V9.85c0-2.5 1.49-3.89 3.77-3.89 1.09 0 2.23.2 2.23.2v2.45h-1.26c-1.24 0-1.63.77-1.63 1.56v1.88h2.78l-.44 2.9h-2.34V22c4.78-.8 8.44-4.94 8.44-9.94z" />
+    </svg>
+  );
+}
 
 type MainTab = "conversas" | "conectar" | "automacao" | "campanhas";
 
 const TABS: { id: MainTab; label: string; icon: React.ElementType }[] = [
   { id: "conversas", label: "Conversas", icon: MessageSquare },
-  { id: "conectar", label: "Conectar WhatsApp", icon: QrCode },
+  { id: "conectar", label: "Canais", icon: QrCode },
   { id: "automacao", label: "Automação", icon: Bot },
   { id: "campanhas", label: "Envio em Massa", icon: Send },
 ];
@@ -44,8 +64,8 @@ export function PartnerSdrClient() {
   return (
     <div className="animate-fade-in">
       <div className="mb-1">
-        <h1 className="text-2xl font-bold text-[#F0ECE4]">Atendimento IA no WhatsApp</h1>
-        <p className="text-sm text-[#7A8FA8] mt-1">Seu número, sua IA, seus leads.</p>
+        <h1 className="text-2xl font-bold text-[#F0ECE4]">Atendimento IA multicanal</h1>
+        <p className="text-sm text-[#7A8FA8] mt-1">Seu WhatsApp, Instagram, Messenger e Telegram — sua IA, seus leads.</p>
       </div>
       <Tabs active={tab} onChange={setTab} />
       {tab === "conversas" && <ConversasTab />}
@@ -216,9 +236,34 @@ function ConversasTab() {
   );
 }
 
-// ── Conectar WhatsApp ───────────────────────────────────────────────────
+// ── Canais (WhatsApp + Instagram/Messenger + Telegram) ─────────────────────
 
 function ConectarTab() {
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
+      <ConectarWhatsappCard />
+      {/* useSearchParams (lê ?meta_oauth= do redirect do OAuth) exige boundary de Suspense */}
+      <Suspense fallback={<CanalCardShell titulo="Instagram + Messenger" icone={<Loader2 className="w-4 h-4 animate-spin text-[#C9A84C]" />}><div /></CanalCardShell>}>
+        <ConectarMetaCard />
+      </Suspense>
+      <ConectarTelegramCard />
+    </div>
+  );
+}
+
+function CanalCardShell({ titulo, icone, children }: { titulo: string; icone: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <div className="bg-[#111F35] border border-[#243A66] rounded-2xl p-5">
+      <div className="flex items-center gap-2 mb-4">
+        {icone}
+        <p className="text-sm font-bold text-[#F0ECE4]">{titulo}</p>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function ConectarWhatsappCard() {
   const [status, setStatus] = useState<string>("desconectado");
   const [qrcode, setQrcode] = useState<string | null>(null);
   const [phone, setPhone] = useState<string | null>(null);
@@ -258,26 +303,25 @@ function ConectarTab() {
   }
 
   return (
-    <div className="max-w-md">
-      <div className="bg-[#111F35] border border-[#243A66] rounded-2xl p-6 text-center">
+    <CanalCardShell titulo="WhatsApp" icone={<MessageSquare className="w-4 h-4 text-[#25D366]" />}>
+      <div className="text-center">
         {loading ? (
           <Loader2 className="w-6 h-6 animate-spin text-[#C9A84C] mx-auto" />
         ) : status === "conectado" ? (
           <>
             <CheckCircle2 className="w-10 h-10 text-emerald-400 mx-auto mb-3" />
-            <p className="text-sm font-bold text-[#F0ECE4]">WhatsApp Conectado!</p>
+            <p className="text-sm font-bold text-[#F0ECE4]">Conectado!</p>
             {phone && <p className="text-xs text-[#7A8FA8] mt-1">{phone}</p>}
           </>
         ) : qrcode ? (
           <>
-            <p className="text-sm font-bold text-[#F0ECE4] mb-3">Escaneie com seu WhatsApp Business</p>
-            <img src={qrcode.startsWith("data:") ? qrcode : `data:image/png;base64,${qrcode}`} alt="QR Code WhatsApp" className="w-48 h-48 mx-auto rounded-xl border border-[#243A66]" />
-            <p className="text-xs text-[#7A8FA8] mt-3">Expira em instantes — atualiza automaticamente</p>
+            <p className="text-xs font-semibold text-[#F0ECE4] mb-3">Escaneie com seu WhatsApp Business</p>
+            <img src={qrcode.startsWith("data:") ? qrcode : `data:image/png;base64,${qrcode}`} alt="QR Code WhatsApp" className="w-40 h-40 mx-auto rounded-xl border border-[#243A66]" />
+            <p className="text-[10px] text-[#7A8FA8] mt-3">Expira em instantes — atualiza automaticamente</p>
           </>
         ) : (
           <>
-            <QrCode className="w-10 h-10 text-[#7A8FA8] mx-auto mb-3" />
-            <p className="text-sm text-[#7A8FA8] mb-4">Nenhum WhatsApp conectado ainda.</p>
+            <p className="text-xs text-[#7A8FA8] mb-4">Nenhum WhatsApp conectado ainda.</p>
             <button
               onClick={criarSessao}
               disabled={criando}
@@ -293,14 +337,255 @@ function ConectarTab() {
           <RefreshCw className="w-3 h-3" /> Atualizar
         </button>
       </div>
-    </div>
+    </CanalCardShell>
+  );
+}
+
+// Instagram + Messenger compartilham uma Página só, conectada via OAuth
+// "Conectar com Facebook" — ver lib/meta-oauth.ts.
+type MetaPendingPage = { id: string; name: string; instagram_username: string | null; has_instagram: boolean };
+
+function ConectarMetaCard() {
+  const searchParams = useSearchParams();
+  const [status, setStatus] = useState<{
+    messenger_status: string; instagram_status: string;
+    instagram_username: string | null; meta_page_name: string | null;
+    meta_paginas_pendentes: boolean;
+  } | null>(null);
+  const [pendentes, setPendentes] = useState<MetaPendingPage[] | null>(null);
+  const [escolhendo, setEscolhendo] = useState<string | null>(null);
+  const [desconectando, setDesconectando] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const resultadoOAuth = searchParams.get("meta_oauth");
+
+  const carregar = useCallback(async () => {
+    try {
+      const res = await fetch("/api/partner/sdr/addon-status");
+      const d = await res.json();
+      setStatus(d);
+      if (d.meta_paginas_pendentes) {
+        const rp = await fetch("/api/partner/sdr/meta-oauth/pages");
+        const pd = await rp.json();
+        setPendentes(pd.pages ?? []);
+      } else {
+        setPendentes(null);
+      }
+    } catch { /* silencioso */ }
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { carregar(); }, [carregar, resultadoOAuth]);
+
+  async function escolherPagina(pageId: string) {
+    setEscolhendo(pageId);
+    try {
+      await fetch("/api/partner/sdr/meta-oauth/pages", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ page_id: pageId }),
+      });
+      await carregar();
+    } finally {
+      setEscolhendo(null);
+    }
+  }
+
+  async function desconectar() {
+    setDesconectando(true);
+    try {
+      await fetch("/api/partner/sdr/meta-oauth/disconnect", { method: "POST" });
+      await carregar();
+    } finally {
+      setDesconectando(false);
+    }
+  }
+
+  const conectado = status?.messenger_status === "conectado";
+
+  const MENSAGENS_OAUTH: Record<string, { texto: string; cor: string }> = {
+    cancelado: { texto: "Conexão cancelada.", cor: "text-amber-400" },
+    erro: { texto: "Não foi possível conectar — tente de novo.", cor: "text-red-400" },
+    sem_paginas: { texto: "Nenhuma Página do Facebook encontrada nesse login.", cor: "text-red-400" },
+    conectado: { texto: "Conectado com sucesso!", cor: "text-emerald-400" },
+  };
+
+  return (
+    <CanalCardShell
+      titulo="Instagram + Messenger"
+      icone={<div className="flex -space-x-1"><InstagramGlyph className="text-pink-400" /><FacebookGlyph className="text-blue-400" /></div>}
+    >
+      <div className="text-center">
+        {loading ? (
+          <Loader2 className="w-6 h-6 animate-spin text-[#C9A84C] mx-auto" />
+        ) : resultadoOAuth && MENSAGENS_OAUTH[resultadoOAuth] && !pendentes?.length ? (
+          <p className={`text-xs font-semibold mb-3 ${MENSAGENS_OAUTH[resultadoOAuth].cor}`}>{MENSAGENS_OAUTH[resultadoOAuth].texto}</p>
+        ) : null}
+
+        {pendentes && pendentes.length > 0 ? (
+          <div className="space-y-2 text-left">
+            <p className="text-xs text-[#7A8FA8] mb-2 text-center">Sua conta administra mais de uma Página — escolha qual conectar:</p>
+            {pendentes.map((p) => (
+              <button
+                key={p.id}
+                onClick={() => escolherPagina(p.id)}
+                disabled={escolhendo === p.id}
+                className="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-xl border border-[#243A66] hover:border-[#C9A84C]/50 text-left disabled:opacity-60"
+              >
+                <span className="min-w-0">
+                  <span className="block text-xs font-semibold text-[#F0ECE4] truncate">{p.name}</span>
+                  {p.has_instagram && <span className="block text-[10px] text-pink-400">@{p.instagram_username}</span>}
+                </span>
+                {escolhendo === p.id ? <Loader2 className="w-3.5 h-3.5 animate-spin text-[#C9A84C] flex-shrink-0" /> : null}
+              </button>
+            ))}
+          </div>
+        ) : conectado ? (
+          <>
+            <CheckCircle2 className="w-10 h-10 text-emerald-400 mx-auto mb-3" />
+            <p className="text-sm font-bold text-[#F0ECE4]">{status?.meta_page_name}</p>
+            {status?.instagram_status === "conectado" && status.instagram_username && (
+              <p className="text-xs text-pink-400 mt-1">Instagram: @{status.instagram_username}</p>
+            )}
+            {status?.instagram_status !== "conectado" && (
+              <p className="text-[10px] text-[#7A8FA8] mt-1">Essa Página não tem Instagram Profissional vinculado — só Messenger ativo.</p>
+            )}
+            <button
+              onClick={desconectar}
+              disabled={desconectando}
+              className="mt-4 inline-flex items-center gap-1.5 text-xs text-[#7A8FA8] hover:text-red-400"
+            >
+              {desconectando ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Unlink className="w-3.5 h-3.5" />} Desconectar
+            </button>
+          </>
+        ) : (
+          <>
+            <p className="text-xs text-[#7A8FA8] mb-4">Conecte a Página do Facebook (e o Instagram vinculado a ela) num clique.</p>
+            <a
+              href="/api/partner/sdr/meta-oauth/start"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#1877F2] text-white text-sm font-bold hover:bg-[#1662d1]"
+            >
+              <FacebookGlyph /> Conectar com Facebook
+            </a>
+          </>
+        )}
+      </div>
+    </CanalCardShell>
+  );
+}
+
+function ConectarTelegramCard() {
+  const [status, setStatus] = useState<string>("desconectado");
+  const [botUsername, setBotUsername] = useState<string | null>(null);
+  const [token, setToken] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [conectando, setConectando] = useState(false);
+  const [desconectando, setDesconectando] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+
+  const carregar = useCallback(async () => {
+    try {
+      const res = await fetch("/api/partner/sdr/telegram");
+      const d = await res.json();
+      setStatus(d.status ?? "desconectado");
+      setBotUsername(d.bot_username ?? null);
+    } catch { /* silencioso */ }
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { carregar(); }, [carregar]);
+
+  async function conectar() {
+    if (!token.trim()) return;
+    setConectando(true);
+    setErro(null);
+    try {
+      const res = await fetch("/api/partner/sdr/telegram", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ bot_token: token.trim() }),
+      });
+      const d = await res.json();
+      if (!res.ok) { setErro(d.error ?? "Token inválido"); return; }
+      setToken("");
+      await carregar();
+    } catch {
+      setErro("Falha de rede ao conectar");
+    } finally {
+      setConectando(false);
+    }
+  }
+
+  async function desconectar() {
+    setDesconectando(true);
+    try {
+      await fetch("/api/partner/sdr/telegram", { method: "DELETE" });
+      await carregar();
+    } finally {
+      setDesconectando(false);
+    }
+  }
+
+  return (
+    <CanalCardShell titulo="Telegram" icone={<Send className="w-4 h-4 text-[#26A5E4]" />}>
+      <div className="text-center">
+        {loading ? (
+          <Loader2 className="w-6 h-6 animate-spin text-[#C9A84C] mx-auto" />
+        ) : status === "conectado" ? (
+          <>
+            <CheckCircle2 className="w-10 h-10 text-emerald-400 mx-auto mb-3" />
+            <p className="text-sm font-bold text-[#F0ECE4]">@{botUsername}</p>
+            <button
+              onClick={desconectar}
+              disabled={desconectando}
+              className="mt-4 inline-flex items-center gap-1.5 text-xs text-[#7A8FA8] hover:text-red-400"
+            >
+              {desconectando ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Unlink className="w-3.5 h-3.5" />} Desconectar
+            </button>
+          </>
+        ) : (
+          <div className="text-left space-y-2">
+            <p className="text-xs text-[#7A8FA8]">
+              Crie um bot grátis com{" "}
+              <a href="https://t.me/BotFather" target="_blank" rel="noreferrer" className="text-[#26A5E4] underline">@BotFather</a>
+              {" "}no Telegram e cole o token aqui:
+            </p>
+            <input
+              value={token}
+              onChange={(e) => setToken(e.target.value)}
+              placeholder="123456:ABC-DEF..."
+              className="w-full bg-[#0D1929] border border-[#243A66] rounded-lg px-3 py-2 text-xs text-[#F0ECE4] placeholder:text-[#7A8FA8] outline-none focus:border-[#C9A84C]/50"
+            />
+            <button
+              onClick={conectar}
+              disabled={conectando || !token.trim()}
+              className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-[#26A5E4] text-white text-sm font-bold disabled:opacity-60"
+            >
+              {conectando ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+              {conectando ? "Conectando..." : "Conectar bot"}
+            </button>
+            {erro && <p className="text-xs text-red-400">{erro}</p>}
+          </div>
+        )}
+      </div>
+    </CanalCardShell>
   );
 }
 
 // ── Automação ────────────────────────────────────────────────────────────
 
+type IaAtivaForm = {
+  agente_nome: string; empresa_contexto: string; regras_comunicacao: string;
+  ia_ativa_whatsapp: boolean; ia_ativa_instagram: boolean; ia_ativa_messenger: boolean; ia_ativa_telegram: boolean;
+};
+
+const CANAIS_IA_ATIVA: { key: keyof Pick<IaAtivaForm, "ia_ativa_whatsapp" | "ia_ativa_instagram" | "ia_ativa_messenger" | "ia_ativa_telegram">; label: string }[] = [
+  { key: "ia_ativa_whatsapp", label: "WhatsApp" },
+  { key: "ia_ativa_instagram", label: "Instagram" },
+  { key: "ia_ativa_messenger", label: "Messenger" },
+  { key: "ia_ativa_telegram", label: "Telegram" },
+];
+
 function AutomacaoTab() {
-  const [form, setForm] = useState({ agente_nome: "", empresa_contexto: "", regras_comunicacao: "", ia_ativa_whatsapp: true });
+  const [form, setForm] = useState<IaAtivaForm>({
+    agente_nome: "", empresa_contexto: "", regras_comunicacao: "",
+    ia_ativa_whatsapp: true, ia_ativa_instagram: true, ia_ativa_messenger: true, ia_ativa_telegram: true,
+  });
   const [loading, setLoading] = useState(true);
   const [salvando, setSalvando] = useState(false);
   const [salvo, setSalvo] = useState(false);
@@ -331,17 +616,20 @@ function AutomacaoTab() {
 
   return (
     <div className="max-w-2xl space-y-4">
-      <div className="bg-[#111F35] border border-[#243A66] rounded-2xl p-5 flex items-center justify-between">
-        <div>
-          <p className="text-sm font-bold text-[#F0ECE4]">IA automática</p>
-          <p className="text-xs text-[#7A8FA8]">Quando desligada, ninguém recebe resposta automática — só você respondendo manualmente.</p>
-        </div>
-        <button
-          onClick={() => setForm((f) => ({ ...f, ia_ativa_whatsapp: !f.ia_ativa_whatsapp }))}
-          className={`w-12 h-7 rounded-full flex-shrink-0 transition-colors relative ${form.ia_ativa_whatsapp ? "bg-emerald-500" : "bg-[#243A66]"}`}
-        >
-          <span className={`absolute top-1 w-5 h-5 rounded-full bg-white transition-transform ${form.ia_ativa_whatsapp ? "translate-x-6" : "translate-x-1"}`} />
-        </button>
+      <div className="bg-[#111F35] border border-[#243A66] rounded-2xl p-5 space-y-3">
+        <p className="text-sm font-bold text-[#F0ECE4]">IA automática por canal</p>
+        <p className="text-xs text-[#7A8FA8] -mt-2">Quando desligada num canal, ninguém recebe resposta automática nele — só você respondendo manualmente. Só afeta os canais já conectados na aba Canais.</p>
+        {CANAIS_IA_ATIVA.map((c) => (
+          <div key={c.key} className="flex items-center justify-between">
+            <span className="text-sm text-[#F0ECE4]">{c.label}</span>
+            <button
+              onClick={() => setForm((f) => ({ ...f, [c.key]: !f[c.key] }))}
+              className={`w-12 h-7 rounded-full flex-shrink-0 transition-colors relative ${form[c.key] ? "bg-emerald-500" : "bg-[#243A66]"}`}
+            >
+              <span className={`absolute top-1 w-5 h-5 rounded-full bg-white transition-transform ${form[c.key] ? "translate-x-6" : "translate-x-1"}`} />
+            </button>
+          </div>
+        ))}
       </div>
 
       <div className="bg-[#111F35] border border-[#243A66] rounded-2xl p-5 space-y-4">

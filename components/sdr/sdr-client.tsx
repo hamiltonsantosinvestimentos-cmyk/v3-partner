@@ -7,6 +7,7 @@ import { CampanhasWhatsappClient } from "./campanhas-whatsapp-client";
 import { SdrKanbanClient } from "./sdr-kanban-client";
 import { SdrDashboardClient } from "./sdr-dashboard-client";
 import { SdrFlowBuilderClient } from "./sdr-flow-builder-client";
+import { AgentConfigClient } from "./agent-config-client";
 import { SdrCommentTriggersClient } from "./sdr-comment-triggers-client";
 import { SdrLeadDetailPanel, PROSPECCAO_ETAPA_LABELS, tagClass, statusClass, type SdrLead } from "./sdr-lead-detail-panel";
 import { QuickReplyOptionsEditor, DEFAULT_QUICK_REPLY_OPTIONS } from "./quick-reply-options-editor";
@@ -30,6 +31,7 @@ const ICONS = {
   kanban: <NavIcon path={<><rect x="3" y="3" width="7" height="18" rx="1.5" /><rect x="14" y="3" width="7" height="10" rx="1.5" /></>} />,
   dashboard: <NavIcon path={<><path d="M3 3v18h18" /><path d="M18 17V9" /><path d="M13 17V5" /><path d="M8 17v-3" /></>} />,
   comentarioDm: <NavIcon path={<><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z" /><path d="M8 10h.01" /><path d="M12 10h.01" /><path d="M16 10h.01" /></>} />,
+  agente: <NavIcon path={<><path d="M12 8V4" /><rect x="4" y="8" width="16" height="12" rx="2" /><path d="M2 14h2" /><path d="M20 14h2" /><path d="M9 13v2" /><path d="M15 13v2" /><circle cx="12" cy="4" r="1" /></>} />,
 };
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -51,13 +53,20 @@ type Profile = { id: string; full_name: string; role: string };
 
 const QUICK_REPLY_MARKER = "Digite o número da opção:";
 
+type Canal = "whatsapp" | "instagram" | "messenger" | "telegram";
+
+const CANAL_LABELS: Record<Canal, string> = {
+  whatsapp: "WhatsApp", instagram: "Instagram", messenger: "Messenger", telegram: "Telegram",
+};
+
 // Glifo redondo do canal (cores de marca — convenção padrão pra indicador de
 // canal, igual o próprio ManyChat usa, independente da paleta V3). `size` em
 // px; `bordered` acrescenta o contorno usado quando o glifo fica sobreposto
 // num avatar (badge de canto).
-function ChannelBadgeIcon({ canal, size = 16, bordered = false }: { canal?: "whatsapp" | "instagram"; size?: number; bordered?: boolean }) {
+function ChannelBadgeIcon({ canal, size = 16, bordered = false }: { canal?: Canal; size?: number; bordered?: boolean }) {
   const iconSize = Math.round(size * 0.56);
   const borderClass = bordered ? "border-2 border-[#09081A]" : "";
+
   if (canal === "instagram") {
     return (
       <div
@@ -72,6 +81,31 @@ function ChannelBadgeIcon({ canal, size = 16, bordered = false }: { canal?: "wha
       </div>
     );
   }
+
+  if (canal === "messenger") {
+    return (
+      <div
+        title="Messenger"
+        className={`rounded-full flex items-center justify-center shrink-0 ${borderClass}`}
+        style={{ width: size, height: size, background: "linear-gradient(45deg, #00c6ff, #0078ff 45%, #a033ff 75%, #ff5197)" }}
+      >
+        <svg width={iconSize} height={iconSize} viewBox="0 0 24 24" fill="white">
+          <path d="M12 2C6.48 2 2 6.15 2 11.27c0 2.91 1.44 5.51 3.7 7.21V22l3.38-1.86c.9.25 1.86.38 2.92.38 5.52 0 10-4.15 10-9.27C22 6.15 17.52 2 12 2zm1.03 12.48-2.55-2.72-4.98 2.72 5.48-5.82 2.61 2.72 4.92-2.72-5.48 5.82z" />
+        </svg>
+      </div>
+    );
+  }
+
+  if (canal === "telegram") {
+    return (
+      <div title="Telegram" className={`rounded-full flex items-center justify-center shrink-0 bg-[#26A5E4] ${borderClass}`} style={{ width: size, height: size }}>
+        <svg width={iconSize} height={iconSize} viewBox="0 0 24 24" fill="white">
+          <path d="M21.05 3.16 2.9 10.24c-1.24.5-1.23 1.19-.23 1.5l4.65 1.45 1.8 5.5c.22.6.37.84.75.84.35 0 .5-.16.7-.35l1.9-1.85 4.35 3.2c.8.45 1.37.22 1.57-.75l2.85-13.5c.28-1.2-.45-1.72-1.24-1.42Zm-9.34 11.4-.8 3.7-1.6-5.02 8.9-6.2c.28-.18.02-.27-.18-.1l-9.98 6.3-4.3-1.34 15.75-6.07-.9 8.73-6.9 0Z" />
+        </svg>
+      </div>
+    );
+  }
+
   return (
     <div title="WhatsApp" className={`rounded-full flex items-center justify-center shrink-0 bg-[#25D366] ${borderClass}`} style={{ width: size, height: size }}>
       <svg width={iconSize} height={iconSize} viewBox="0 0 24 24" fill="white">
@@ -81,7 +115,7 @@ function ChannelBadgeIcon({ canal, size = 16, bordered = false }: { canal?: "wha
   );
 }
 
-function ChannelBadge({ canal }: { canal?: "whatsapp" | "instagram" }) {
+function ChannelBadge({ canal }: { canal?: Canal }) {
   return (
     <div className="absolute -bottom-0.5 -right-0.5">
       <ChannelBadgeIcon canal={canal} size={16} bordered />
@@ -135,7 +169,7 @@ interface SdrClientProps {
   currentUserRole: string;
 }
 
-type MainTab = "conversas" | "automacao" | "campanhas" | "envio-massa" | "kanban" | "dashboard" | "comentario-dm";
+type MainTab = "conversas" | "agente" | "automacao" | "campanhas" | "envio-massa" | "kanban" | "dashboard" | "comentario-dm";
 type LeadFilter = "todos" | "meus" | "nao_atribuidos" | "humano";
 
 export function SdrClient({ currentUserId, currentUserName, currentUserRole }: SdrClientProps) {
@@ -150,8 +184,8 @@ export function SdrClient({ currentUserId, currentUserName, currentUserRole }: S
   const [leadFilter, setLeadFilter] = useState<LeadFilter>("todos");
   const [mainTab, setMainTab] = useState<MainTab>("conversas");
   const [showQr, setShowQr] = useState(false);
-  const [iaAtivaCanal, setIaAtivaCanal] = useState<Record<"whatsapp" | "instagram", boolean>>({ whatsapp: true, instagram: true });
-  const [togglingIaCanal, setTogglingIaCanal] = useState<"whatsapp" | "instagram" | null>(null);
+  const [iaAtivaCanal, setIaAtivaCanal] = useState<Record<Canal, boolean>>({ whatsapp: true, instagram: true, messenger: true, telegram: true });
+  const [togglingIaCanal, setTogglingIaCanal] = useState<Canal | null>(null);
   const [savingLead, setSavingLead] = useState(false);
   const [humanMsg, setHumanMsg] = useState("");
   const [sendingHuman, setSendingHuman] = useState(false);
@@ -192,6 +226,8 @@ export function SdrClient({ currentUserId, currentUserName, currentUserRole }: S
         setIaAtivaCanal({
           whatsapp: data.config.ia_ativa_whatsapp !== false,
           instagram: data.config.ia_ativa_instagram !== false,
+          messenger: data.config.ia_ativa_messenger !== false,
+          telegram: data.config.ia_ativa_telegram !== false,
         });
       }
     } catch { /* ignore */ }
@@ -269,7 +305,7 @@ export function SdrClient({ currentUserId, currentUserName, currentUserRole }: S
     }
   };
 
-  const handleToggleIaAtiva = async (canal: "whatsapp" | "instagram") => {
+  const handleToggleIaAtiva = async (canal: Canal) => {
     const next = !iaAtivaCanal[canal];
     setTogglingIaCanal(canal);
     setIaAtivaCanal(prev => ({ ...prev, [canal]: next })); // otimista
@@ -277,7 +313,7 @@ export function SdrClient({ currentUserId, currentUserName, currentUserRole }: S
       const res = await fetch("/api/sdr/automacao", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(canal === "whatsapp" ? { ia_ativa_whatsapp: next } : { ia_ativa_instagram: next }),
+        body: JSON.stringify({ [`ia_ativa_${canal}`]: next }),
       });
       if (!res.ok) setIaAtivaCanal(prev => ({ ...prev, [canal]: !next })); // reverte se falhou
     } catch {
@@ -365,6 +401,7 @@ export function SdrClient({ currentUserId, currentUserName, currentUserRole }: S
   const TABS: { key: MainTab; label: string; icon: ReactNode }[] = [
     { key: "conversas", label: "Conversas", icon: ICONS.conversas },
     ...(isAdminGestao ? ([
+      { key: "agente", label: "Agente IA", icon: ICONS.agente },
       { key: "automacao", label: "Automação", icon: ICONS.automacao },
       { key: "comentario-dm", label: "Comentário → DM", icon: ICONS.comentarioDm },
       { key: "envio-massa", label: "Envio em Massa", icon: ICONS.envioMassa },
@@ -413,9 +450,9 @@ export function SdrClient({ currentUserId, currentUserName, currentUserRole }: S
         </div>
 
         <div className="flex items-center gap-3">
-          {isAdminGestao && (["whatsapp", "instagram"] as const).map(canal => {
+          {isAdminGestao && (["whatsapp", "instagram", "messenger", "telegram"] as const).map(canal => {
             const ativa = iaAtivaCanal[canal];
-            const label = canal === "whatsapp" ? "WhatsApp" : "Instagram";
+            const label = CANAL_LABELS[canal];
             return (
               <button
                 key={canal}
@@ -486,6 +523,15 @@ export function SdrClient({ currentUserId, currentUserName, currentUserRole }: S
           >
             Atualizar
           </button>
+        </div>
+      )}
+
+      {/* ── Agente IA tab (config multi-provedor + prompt) ───────────────────── */}
+      {mainTab === "agente" && (
+        <div className="flex-1 overflow-y-auto bg-[#0D1B2E] p-5">
+          <div className="max-w-3xl mx-auto">
+            <AgentConfigClient owner="interno" />
+          </div>
         </div>
       )}
 

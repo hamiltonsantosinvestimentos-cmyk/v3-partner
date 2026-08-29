@@ -23,7 +23,11 @@ export async function GET() {
 
   const { data: conexao } = await svc()
     .from("partner_sdr_connections")
-    .select("addon_ativo, addon_solicitado_em, status")
+    .select(`
+      addon_ativo, addon_solicitado_em, status,
+      messenger_status, instagram_status, instagram_username, meta_page_name, meta_pending_pages,
+      telegram_status, telegram_bot_username
+    `)
     .eq("partner_id", user.id)
     .maybeSingle();
 
@@ -31,5 +35,12 @@ export async function GET() {
     addon_ativo: conexao?.addon_ativo ?? false,
     addon_solicitado_em: conexao?.addon_solicitado_em ?? null,
     whatsapp_status: conexao?.status ?? "desconectado",
+    messenger_status: conexao?.messenger_status ?? "desconectado",
+    instagram_status: conexao?.instagram_status ?? "desconectado",
+    instagram_username: conexao?.instagram_username ?? null,
+    meta_page_name: conexao?.meta_page_name ?? null,
+    meta_paginas_pendentes: Array.isArray(conexao?.meta_pending_pages) && conexao.meta_pending_pages.length > 0,
+    telegram_status: conexao?.telegram_status ?? "desconectado",
+    telegram_bot_username: conexao?.telegram_bot_username ?? null,
   });
 }

@@ -3,8 +3,10 @@ import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { sendText } from "@/lib/whatsapp/openwa-client";
 import { sendInstagramText } from "@/lib/instagram-dm";
+import { sendMessengerText } from "@/lib/messenger-dm";
+import { sendTelegramText } from "@/lib/telegram-dm";
 import { formatQuickReplyBlock, type QuickReplyOption } from "@/lib/whatsapp/quick-reply";
-import { SDR_INTERNO_PARTNER_ID } from "@/lib/sdr-agent";
+import { SDR_INTERNO_PARTNER_ID, type SdrCanal } from "@/lib/sdr-agent";
 
 const ALLOWED_ROLES = ["ADMIN", "GESTAO", "SDR", "CLOSER"] as const;
 const ADMIN_ROLES = ["ADMIN", "GESTAO"] as const;
@@ -33,27 +35,33 @@ export async function POST(req: NextRequest) {
   if (!isAdmin && lead?.responsavel_id && lead.responsavel_id !== user.id) {
     return NextResponse.json({ error: "Esse lead já tem outro responsável" }, { status: 403 });
   }
-  const canal = lead?.canal ?? "whatsapp";
+  const canal = (lead?.canal ?? "whatsapp") as SdrCanal;
 
-  // Opções de resposta rápida simulado por texto é um hack específico do WhatsApp (a API
-  // não oficial não permite botão nativo) — Instagram tem quick replies nativos da própria
-  // API, ainda não implementados aqui, então nunca anexa o bloco nesse canal.
-  const textoFinal = canal === "whatsapp" && quickReplyOptions?.length
+  // Opções de resposta rápida simuladas por texto — mesmo método nos 4 canais
+  // (ver comentário em lib/sdr-agent.ts sobre OFERTA_QUALIFICADO).
+  const textoFinal = quickReplyOptions?.length
     ? `${text}\n\n${formatQuickReplyBlock(quickReplyOptions)}`
     : text;
 
-  if (canal === "instagram") {
-    try {
-      await sendInstagramText(phone, textoFinal);
-    } catch (e) {
-      return NextResponse.json({ error: e instanceof Error ? e.message : "Falha ao enviar via Instagram" }, { status: 500 });
-    }
-  } else {
-    const sent = await sendText(phone, textoFinal);
-    if (!sent) {
-      return NextResponse.json({ error: "Falha ao enviar via OpenWA" }, { status: 500 });
-    }
+  const ENVIO_POR_CANAL: Record<SdrCanal, (texto: string) => Promise<void>> = {
+    whatsapp: async (texto) => {
+      const sent = await sendText(phone, texto);
+      if (!sent) throw new Error("Falha ao enviar via OpenWA");
+    },
+    instagram: (texto) => sendInstagramText(phone, texto),
+    messenger: (texto) => sendMessengerText(phone, texto),
+    telegram: (texto) => sendTelegramText(phone, texto),
+  };
+
+  try {
+    await ENVIO_POR_CANAL[canal](textoFinal);
+  } catch (e) {
+    return NextResponse.json({ error: e instanceof Error ? e.message : `Falha ao enviar via ${canal}` }, { status: 500 });
   }
+
+  const INSTANCE_POR_CANAL: Record<SdrCanal, string> = {
+    whatsapp: "openwa", instagram: "instagram", messenger: "messenger", telegram: "telegram",
+  };
 
   // Salva no histórico como assistant (mas marcado como humano)
   await svc().from("sdr_conversas").insert({
@@ -61,8 +69,8 @@ export async function POST(req: NextRequest) {
     canal,
     role: "assistant",
     content: `[${profile?.full_name ?? "Operador"}] ${textoFinal}`,
-    instance: canal === "instagram" ? "instagram" : "openwa",
-    quick_reply_options: canal === "whatsapp" && quickReplyOptions?.length ? quickReplyOptions : null,
+    instance: INSTANCE_POR_CANAL[canal],
+    quick_reply_options: quickReplyOptions?.length ? quickReplyOptions : null,
   });
 
   return NextResponse.json({ ok: true });

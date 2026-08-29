@@ -9,8 +9,10 @@ import { notifyAgendamentoSDR } from "@/lib/email";
 import { syncSdrLeadToProspeccao } from "@/lib/sdr-prospeccao-sync";
 import { formatQuickReplyBlock, type QuickReplyOption } from "@/lib/whatsapp/quick-reply";
 import { listAvailableSlots, withTracking, type CalendlySlot } from "@/lib/calendly";
+import { chatComplete, AiProviderError, type AiProvider } from "@/lib/ai/registry";
+import { decryptSecret } from "@/lib/crypto/secret";
 
-export type SdrCanal = "whatsapp" | "instagram";
+export type SdrCanal = "whatsapp" | "instagram" | "messenger" | "telegram";
 
 // UUID sentinela usado em sdr_leads.partner_id pro bot interno da V3 (não
 // referencia nenhum profiles.id de verdade — ver migration
@@ -18,8 +20,10 @@ export type SdrCanal = "whatsapp" | "instagram";
 export const SDR_INTERNO_PARTNER_ID = "00000000-0000-0000-0000-000000000000";
 
 // Opções oferecidas automaticamente quando a IA detecta que o lead qualificou.
-// Só usado no WhatsApp (simulado por texto) — Instagram tem quick replies
-// nativos da API, que ainda não estão implementados aqui.
+// Simulado por texto (ver lib/whatsapp/quick-reply.ts) — mesmo método nos 4
+// canais (whatsapp/instagram/messenger/telegram), mesmo os 3 últimos tendo
+// suporte nativo a botão na própria API: manter um único mecanismo evita
+// duplicar a lógica de resolução da resposta do lead ("1", "2"...) por canal.
 const OFERTA_QUALIFICADO: QuickReplyOption[] = [
   { key: "1", label: "Tenho interesse" },
   { key: "2", label: "Agendar apresentação" },
@@ -277,14 +281,22 @@ Você representa uma empresa séria e de alto padrão. Seu tom é profissional, 
 // outro canal não é afetado). Falha aberta (retorna true) se a
 // coluna/linha ainda não existir — a IA nunca fica muda por causa de um
 // erro de leitura de config, só por ação explícita do admin.
+const IA_ATIVA_COLUNA: Record<SdrCanal, "ia_ativa_whatsapp" | "ia_ativa_instagram" | "ia_ativa_messenger" | "ia_ativa_telegram"> = {
+  whatsapp: "ia_ativa_whatsapp",
+  instagram: "ia_ativa_instagram",
+  messenger: "ia_ativa_messenger",
+  telegram: "ia_ativa_telegram",
+};
+
 export async function isIaAtiva(canal: SdrCanal, partnerId: string | null = null): Promise<boolean> {
   try {
     const query = supabase
       .from("sdr_flow_config")
-      .select("ia_ativa_whatsapp, ia_ativa_instagram");
+      .select("ia_ativa_whatsapp, ia_ativa_instagram, ia_ativa_messenger, ia_ativa_telegram");
     const { data, error } = await (partnerId ? query.eq("partner_id", partnerId) : query.eq("id", "default")).maybeSingle();
     if (error || !data) return true;
-    const valor = canal === "instagram" ? data.ia_ativa_instagram : data.ia_ativa_whatsapp;
+    const coluna = IA_ATIVA_COLUNA[canal];
+    const valor = (data as Record<string, boolean>)[coluna];
     return valor !== false;
   } catch {
     return true;
@@ -332,6 +344,52 @@ ${ETAPAS_GENERICAS_PARTNER}
 
 **Regras de comunicação — MUITO IMPORTANTE:**
 ${REGRAS_GENERICAS_PARTNER}`;
+}
+
+// ── Agente configurável (sdr_agents) — Fase 1 ──────────────────────────────
+// Carrega o agente ATIVO do dono (partner ou bot interno da V3). Quando não há
+// nenhum, o runtime continua com o caminho legado (Anthropic SDK + prompt do
+// Flow Builder), sem regressão.
+
+type AgentConfig = {
+  provider: AiProvider;
+  model: string;
+  temperature: number;
+  max_tokens: number;
+  system_prompt: string;
+  api_key_encrypted: string | null;
+};
+
+async function loadAgentConfig(partnerId: string | null): Promise<AgentConfig | null> {
+  const owner = partnerId ?? SDR_INTERNO_PARTNER_ID;
+  try {
+    const { data } = await supabase
+      .from("sdr_agents")
+      .select("provider, model, temperature, max_tokens, system_prompt, api_key_encrypted")
+      .eq("owner_partner_id", owner)
+      .eq("enabled", true)
+      .maybeSingle();
+    if (!data) return null;
+    return {
+      provider: data.provider as AiProvider,
+      model: data.model as string,
+      temperature: Number(data.temperature ?? 0.6),
+      max_tokens: Number(data.max_tokens ?? 180),
+      system_prompt: (data.system_prompt as string) ?? "",
+      api_key_encrypted: (data.api_key_encrypted as string | null) ?? null,
+    };
+  } catch {
+    return null; // tabela ainda não migrada → caminho legado
+  }
+}
+
+function resolveAgentKey(cfg: AgentConfig): string | null {
+  if (cfg.api_key_encrypted) {
+    try { return decryptSecret(cfg.api_key_encrypted); } catch { return null; }
+  }
+  // Sem chave própria: só o provedor Anthropic pode cair na chave global da V3.
+  if (cfg.provider === "anthropic") return process.env.ANTHROPIC_API_KEY ?? null;
+  return null;
 }
 
 export async function buildSystemPrompt(partnerId: string | null = null): Promise<string> {
@@ -450,16 +508,51 @@ export async function processarMensagemSDRCore(params: {
       }
     }
 
-    const systemPrompt = await buildSystemPrompt(partnerId) + buildBlocoHorarios(slotsDisponiveis);
+    const blocoHorarios = buildBlocoHorarios(slotsDisponiveis);
+    const agentCfg = await loadAgentConfig(partnerId);
 
-    const response = await anthropic.messages.create({
-      model: "claude-sonnet-4-6",
-      max_tokens: 180,
-      system: systemPrompt,
-      messages,
-    });
+    let respostaBruta = "";
+    if (agentCfg) {
+      // Caminho novo: agente configurável (provedor/modelo/prompt do sdr_agents).
+      const base = agentCfg.system_prompt.trim() || await buildSystemPrompt(partnerId);
+      const systemPrompt = base + blocoHorarios;
+      const apiKey = resolveAgentKey(agentCfg);
+      if (apiKey) {
+        try {
+          const out = await chatComplete({
+            provider: agentCfg.provider,
+            model: agentCfg.model,
+            apiKey,
+            system: systemPrompt,
+            messages: messages.map((m) => ({
+              role: m.role === "assistant" ? "assistant" : "user",
+              content: typeof m.content === "string" ? m.content : "",
+            })),
+            temperature: agentCfg.temperature,
+            maxTokens: agentCfg.max_tokens,
+          });
+          respostaBruta = out.text;
+        } catch (e) {
+          const msg = e instanceof AiProviderError ? `${e.provider}: ${e.message}` : String(e);
+          console.error("[SDR Agent] provedor configurado falhou, caindo no legado:", msg);
+        }
+      } else {
+        console.error(`[SDR Agent] agente ${agentCfg.provider} sem chave de API utilizável — usando legado`);
+      }
+    }
 
-    const respostaBruta = response.content[0].type === "text" ? response.content[0].text : "";
+    if (!respostaBruta) {
+      // Fallback legado: Anthropic SDK + prompt do Flow Builder.
+      const systemPrompt = await buildSystemPrompt(partnerId) + blocoHorarios;
+      const response = await anthropic.messages.create({
+        model: "claude-sonnet-4-6",
+        max_tokens: 180,
+        system: systemPrompt,
+        messages,
+      });
+      respostaBruta = response.content[0].type === "text" ? response.content[0].text : "";
+    }
+
     if (!respostaBruta) return;
     const resposta = stripChatMarkdown(respostaBruta);
 
@@ -470,10 +563,9 @@ export async function processarMensagemSDRCore(params: {
 
     let respostaFinal = resposta;
     let quickReplyOptions: QuickReplyOption[] | null = null;
-    // Quick reply simulado por texto é hack específico do WhatsApp (a API não
-    // oficial não suporta botão nativo) — Instagram tem quick replies nativos
-    // da própria API, ainda não implementados aqui, então não anexa o bloco.
-    if (canal === "whatsapp" && detect.sinal_funil === "qualificado") {
+    // Quick reply simulado por texto — mesmo método nos 4 canais (ver
+    // comentário em OFERTA_QUALIFICADO acima).
+    if (detect.sinal_funil === "qualificado") {
       let jaOfereceuQuery = supabase
         .from("sdr_conversas")
         .select("id")
