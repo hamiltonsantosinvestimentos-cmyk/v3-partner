@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
+import { notifySociosMinutaEmRevisao } from "@/lib/socios-notify";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -26,7 +27,7 @@ export async function PATCH(
   const body = await req.json();
   const { template_name, body_text_raw, is_active, submit_for_review } = body;
 
-  const { data: current } = await svc().from("contract_templates").select("version, approval_status, review_round").eq("id", id).single();
+  const { data: current } = await svc().from("contract_templates").select("template_name, version, approval_status, review_round").eq("id", id).single();
   if (!current) return NextResponse.json({ error: "Minuta não encontrada" }, { status: 404 });
 
   const updates: Record<string, any> = {};
@@ -59,6 +60,21 @@ export async function PATCH(
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // Notificação Universal (BRIEF 30/08/2026, item residual 1): a mesma
+  // rotina do Fast-Track avisa os 3 sócios também quando a minuta entra em
+  // em_revisao pelo fluxo manual ("Enviar para Revisão Jurídica"). Antes
+  // disso o gap era real: nenhuma minuta manual jamais notificava ninguém,
+  // só descoberta entrando na Central de Contratos. Best-effort — falha de
+  // notificação nunca desfaz a transição de status já persistida acima.
+  if (submit_for_review) {
+    await notifySociosMinutaEmRevisao({
+      templateId: id,
+      templateName: data.template_name ?? current.template_name,
+      origem: "manual",
+    }).catch((e) => console.error("[templates/[id] PATCH] falha ao notificar sócios:", e));
+  }
+
   return NextResponse.json({ template: data });
 }
 

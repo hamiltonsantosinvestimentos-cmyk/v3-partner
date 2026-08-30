@@ -145,6 +145,13 @@ export function ContractTemplatesClient() {
   const [genLoiSide, setGenLoiSide] = useState<"compra" | "venda">("venda");
   const [genLoiMatchedId, setGenLoiMatchedId] = useState("");
   const [genLoiJustification, setGenLoiJustification] = useState("");
+  // Mitigação de Erro na LOI Casada (BRIEF 30/08/2026, item residual 2): a
+  // Mesa escolhe a LOI de compra casada num dropdown em vez de digitar o
+  // UUID de cabeça — nunca mostra nome/documento da contraparte real
+  // (decisão de negócio de João: quebraria o anti-bypass da LOI), só código,
+  // título e valor.
+  const [loiCandidates, setLoiCandidates] = useState<{ id: string; contract_code: string; contract_title: string; valor_operacao: number | null }[]>([]);
+  const [loadingLoiCandidates, setLoadingLoiCandidates] = useState(false);
 
   const openGenerateModal = () => {
     setGenParties([{ name: "", email: "", doc: "", role: "indicador" }]);
@@ -163,6 +170,16 @@ export function ContractTemplatesClient() {
     setGenParties((prev) => prev.map((row, idx) => (idx === i ? { ...row, [field]: value } : row)));
 
   const isLoiSeries = selected?.contract_series === "V3C-LOI";
+
+  useEffect(() => {
+    if (!showGenerateModal || !isLoiSeries || genLoiSide !== "venda") return;
+    setLoadingLoiCandidates(true);
+    fetch("/api/contracts/loi-candidates")
+      .then((res) => res.json())
+      .then((json) => setLoiCandidates(json.candidates ?? []))
+      .catch(() => setLoiCandidates([]))
+      .finally(() => setLoadingLoiCandidates(false));
+  }, [showGenerateModal, isLoiSeries, genLoiSide]);
 
   const handleGenerateContract = async () => {
     if (!selected) return;
@@ -889,9 +906,19 @@ export function ContractTemplatesClient() {
                       {genLoiSide === "venda" && (
                         <>
                           <div>
-                            <label className="block text-[9px] font-bold text-[#C9A84C] uppercase tracking-wider mb-1">ID da LOI de Compra Casada (opcional)</label>
-                            <input value={genLoiMatchedId} onChange={(e) => setGenLoiMatchedId(e.target.value)} placeholder="UUID do contrato de compra já emitido"
-                              className="w-full bg-[#162744] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]" />
+                            <label className="block text-[9px] font-bold text-[#C9A84C] uppercase tracking-wider mb-1">LOI de Compra Casada (opcional)</label>
+                            <select value={genLoiMatchedId} onChange={(e) => setGenLoiMatchedId(e.target.value)} disabled={loadingLoiCandidates}
+                              className="w-full bg-[#162744] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8] disabled:opacity-50">
+                              <option value="">
+                                {loadingLoiCandidates ? "Carregando..." : loiCandidates.length === 0 ? "Nenhuma LOI de compra ativa" : "Sem par casado"}
+                              </option>
+                              {loiCandidates.map((c) => (
+                                <option key={c.id} value={c.id}>
+                                  {c.contract_code} · {c.contract_title} · {c.valor_operacao != null ? `R$ ${c.valor_operacao.toLocaleString("pt-BR")}` : "valor n/d"}
+                                </option>
+                              ))}
+                            </select>
+                            <p className="text-[9px] text-[#9BAFC5] mt-1">Lista só código, título e valor — nunca a identidade da contraparte, por desenho.</p>
                           </div>
                           <div>
                             <label className="block text-[9px] font-bold text-[#C9A84C] uppercase tracking-wider mb-1">Justificativa se emitir sem par casado</label>
