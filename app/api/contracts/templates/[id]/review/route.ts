@@ -55,7 +55,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const { data: template } = await db
     .from("contract_templates")
-    .select("id, approval_status, review_round, body_text_raw, version")
+    .select("id, approval_status, review_round, body_text_raw, version, valor_operacao_estimado")
     .eq("id", id)
     .single();
 
@@ -113,7 +113,22 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const hasJuridico = (roundReviews ?? []).some((r) => r.reviewer_type === "juridico" && r.decision === "aprovado");
   const hasComplianceSocio = approvedSocios.length > 0;
   const socioMajority = approvedSocios.length >= 2;
-  const quorumMet = (hasJuridico && hasComplianceSocio) || socioMajority;
+
+  // Trava manual temporária dos R$50 mil (BRIEF Fast-Track, 30/08/2026,
+  // ajuste 3 explícito de João): acima do valor declarado no upload, o
+  // caminho "2/3 sócios dispensa jurídico" fica bloqueado, exige sempre
+  // jurídico + compliance/sócio. Só aplica quando o valor foi de fato
+  // declarado (minutas do fluxo manual antigo não têm esse campo e não são
+  // afetadas). Temporária até a governança financeira completa (Fases C-G,
+  // BRIEF separado) substituir isso por regra ligada ao valor real do
+  // contrato gerado, não ao valor estimado da minuta.
+  const VALOR_LIMITE_DISPENSA_JURIDICO = 50000;
+  const valorDeclarado = template.valor_operacao_estimado;
+  const socioMajorityBloqueadaPorValor =
+    typeof valorDeclarado === "number" && valorDeclarado > VALOR_LIMITE_DISPENSA_JURIDICO;
+  const socioMajorityValida = socioMajority && !socioMajorityBloqueadaPorValor;
+
+  const quorumMet = (hasJuridico && hasComplianceSocio) || socioMajorityValida;
 
   if (quorumMet) {
     await db.from("contract_templates").update({ approval_status: "aprovado" }).eq("id", id);
@@ -121,12 +136,20 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   return NextResponse.json({
     approval_status: quorumMet ? "aprovado" : "em_revisao",
-    quorum: { juridico: hasJuridico, compliance_socio: hasComplianceSocio, socios_aprovaram: approvedSocios.length, met: quorumMet },
+    quorum: {
+      juridico: hasJuridico,
+      compliance_socio: hasComplianceSocio,
+      socios_aprovaram: approvedSocios.length,
+      met: quorumMet,
+      bloqueado_por_valor: socioMajorityBloqueadaPorValor,
+    },
     message: quorumMet
-      ? socioMajority && !hasJuridico
+      ? socioMajorityValida && !hasJuridico
         ? `Quórum atingido por maioria de sócios (${approvedSocios.length}/3), dispensando o jurídico. Minuta aprovada, liberada para gerar contrato.`
         : "Quórum atingido (jurídico + compliance/sócio). Minuta aprovada, liberada para gerar contrato."
-      : `Aprovação de ${reviewer.type === "juridico" ? "jurídico" : "compliance/sócio"} registrada (${approvedSocios.length}/3 sócios, jurídico: ${hasJuridico ? "sim" : "não"}). Aguardando 2 sócios OU jurídico + 1 sócio.`,
+      : socioMajorityBloqueadaPorValor && socioMajority && !hasJuridico
+        ? `Maioria de sócios atingida (${approvedSocios.length}/3), mas o valor declarado da operação (R$${valorDeclarado?.toLocaleString("pt-BR")}) passa de R$50.000, então o jurídico é obrigatório nesta minuta. Aguardando voto do Dr. Athaydes.`
+        : `Aprovação de ${reviewer.type === "juridico" ? "jurídico" : "compliance/sócio"} registrada (${approvedSocios.length}/3 sócios, jurídico: ${hasJuridico ? "sim" : "não"}). Aguardando 2 sócios OU jurídico + 1 sócio.`,
   });
 }
 
