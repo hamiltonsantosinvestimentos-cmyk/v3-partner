@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
   const caller = await requireRole(req);
   if (!caller) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
-  const { template_id, listing_id, bid_id, deal_id, credit_proposal_id, ticket_id, qualification_batch_id, commission_percent, extra_data, avulso_parties, is_master_agreement } = await req.json();
+  const { template_id, listing_id, bid_id, deal_id, credit_proposal_id, ticket_id, qualification_batch_id, commission_percent, extra_data, avulso_parties, is_master_agreement, valor_operacao, loi_side, loi_matched_contract_id, loi_override_justification } = await req.json();
 
   if (!template_id) return NextResponse.json({ error: "template_id obrigatório" }, { status: 422 });
 
@@ -381,6 +381,40 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: `Falha ao emitir número do contrato: ${codeError?.message ?? "resposta vazia"}` }, { status: 500 });
   }
 
+  // Trava de LOI Casada (BRIEF 2, 30/08/2026, item 3): qualquer operação da
+  // série V3C-LOI do lado "venda" só pode ser emitida sem risco de expor a
+  // V3 se já existir uma LOI de compra casada, com valor igual ou superior.
+  // Gate SOFT por desenho (decisão de João em conversa anterior à mesma
+  // sessão): nunca bloqueia a criação, mas exige justificativa quando não
+  // há par casado, e o envio real para assinatura (send/route.ts) exige
+  // depois aprovação unânime dos 3 sócios nesse caso.
+  let loiMatchingStatus: "casada" | "nao_casada" | null = null;
+  if (template.contract_series === "V3C-LOI" && loi_side === "venda") {
+    if (loi_matched_contract_id) {
+      const { data: matched } = await svc()
+        .from("operation_contracts")
+        .select("id, loi_side, valor_operacao")
+        .eq("id", loi_matched_contract_id)
+        .single();
+      const valorValido =
+        typeof matched?.valor_operacao === "number" &&
+        typeof valor_operacao === "number" &&
+        matched.valor_operacao >= valor_operacao;
+      loiMatchingStatus = matched?.loi_side === "compra" && valorValido ? "casada" : "nao_casada";
+    } else {
+      loiMatchingStatus = "nao_casada";
+    }
+    if (loiMatchingStatus === "nao_casada" && !loi_override_justification?.trim()) {
+      return NextResponse.json(
+        {
+          error:
+            "Carta de Intenção de venda sem par de compra casado (valor igual ou superior). Informe loi_matched_contract_id com uma LOI de compra válida, ou justifique explicitamente em loi_override_justification para emitir mesmo assim — neste caso o envio para assinatura exigirá aprovação unânime dos 3 sócios.",
+        },
+        { status: 422 }
+      );
+    }
+  }
+
   const { data: contract, error } = await svc()
     .from("operation_contracts")
     .insert({
@@ -398,6 +432,11 @@ export async function POST(req: NextRequest) {
       rendered_html: renderedHtml,
       status_signature: "rascunho",
       commission_percent: commission_percent ?? null,
+      valor_operacao: typeof valor_operacao === "number" ? valor_operacao : null,
+      loi_side: loi_side ?? null,
+      loi_matched_contract_id: loi_matched_contract_id ?? null,
+      loi_matching_status: loiMatchingStatus,
+      loi_override_justification: loiMatchingStatus === "nao_casada" ? loi_override_justification.trim() : null,
       parties: resolvedParties,
       created_by: caller.userId,
     })

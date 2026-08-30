@@ -47,13 +47,34 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
 
   const { data: contract } = await db
     .from("operation_contracts")
-    .select("id, vertical, contract_title, contract_code, status_signature, parties, signing_token, signature_message, signature_subject, is_master_agreement, stamped_document_path")
+    .select("id, vertical, contract_title, contract_code, status_signature, parties, signing_token, signature_message, signature_subject, is_master_agreement, stamped_document_path, loi_matching_status, loi_override_justification")
     .eq("id", id)
     .single();
 
   if (!contract) return NextResponse.json({ error: "Contrato não encontrado" }, { status: 404 });
   if (!["rascunho", "aprovado"].includes(contract.status_signature)) {
     return NextResponse.json({ error: `Contrato em status "${contract.status_signature}" não pode ser (re)enviado por esta rota.` }, { status: 409 });
+  }
+
+  // Trava de LOI Casada (BRIEF 2, 30/08/2026): barreira final antes do
+  // envio real. Uma LOI de venda sem par de compra casado só pode ser
+  // enviada com aprovação UNÂNIME dos 3 sócios (contract_approvals),
+  // reaproveitando o mecanismo de aprovação já existente em vez de criar
+  // um trilho novo — aqui o "3/3" é o próprio override, não uma opção.
+  if (contract.loi_matching_status === "nao_casada") {
+    const { data: approvals } = await db
+      .from("contract_approvals")
+      .select("decision")
+      .eq("contract_id", id);
+    const aprovados = (approvals ?? []).filter((a) => a.decision === "aprovado").length;
+    if (aprovados < 3) {
+      return NextResponse.json(
+        {
+          error: `Este contrato é uma Carta de Intenção de venda sem par de compra casado (justificativa registrada: "${contract.loi_override_justification}"). Envio para assinatura exige aprovação unânime dos 3 sócios (hoje: ${aprovados}/3).`,
+        },
+        { status: 422 }
+      );
+    }
   }
 
   const parties = (contract.parties as Array<{ role: string; name: string | null; email?: string | null }> | null) ?? [];

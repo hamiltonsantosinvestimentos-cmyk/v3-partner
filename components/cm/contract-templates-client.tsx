@@ -21,6 +21,7 @@ interface Template {
   created_at: string;
   approval_status: "rascunho" | "em_revisao" | "aprovado" | "reprovado";
   review_round: number;
+  contract_series?: string;
   // Fast-Track de Contratos Simples (30/08/2026)
   origem?: "manual" | "agente_ia";
   laudo_risco?: RiscoLaudo | null;
@@ -92,6 +93,7 @@ SISTEMA: {{data_geracao}}, {{data_geracao_extenso}}`;
 export function ContractTemplatesClient() {
   const searchParams = useSearchParams();
   const initialVertical = searchParams.get("vertical") ?? "";
+  const highlightTemplateId = searchParams.get("template_id");
 
   const [templates, setTemplates] = useState<Template[]>([]);
   const [loading, setLoading] = useState(true);
@@ -136,9 +138,21 @@ export function ContractTemplatesClient() {
   const [genResult, setGenResult] = useState<{ contract_code: string | null; contract_title: string } | null>(null);
   const [genError, setGenError] = useState<string | null>(null);
 
+  // Trava de LOI Casada (BRIEF 2, 30/08/2026): só aparece quando a minuta é
+  // da série V3C-LOI. Sem UI aqui, o gate do backend nunca seria acionado
+  // por ninguém fora de uma chamada de API direta.
+  const [genValorOperacao, setGenValorOperacao] = useState("");
+  const [genLoiSide, setGenLoiSide] = useState<"compra" | "venda">("venda");
+  const [genLoiMatchedId, setGenLoiMatchedId] = useState("");
+  const [genLoiJustification, setGenLoiJustification] = useState("");
+
   const openGenerateModal = () => {
     setGenParties([{ name: "", email: "", doc: "", role: "indicador" }]);
     setGenCommission("");
+    setGenValorOperacao("");
+    setGenLoiSide("venda");
+    setGenLoiMatchedId("");
+    setGenLoiJustification("");
     setGenResult(null);
     setGenError(null);
     setShowGenerateModal(true);
@@ -148,11 +162,17 @@ export function ContractTemplatesClient() {
   const updateGenPartyRow = (i: number, field: "name" | "email" | "doc" | "role", value: string) =>
     setGenParties((prev) => prev.map((row, idx) => (idx === i ? { ...row, [field]: value } : row)));
 
+  const isLoiSeries = selected?.contract_series === "V3C-LOI";
+
   const handleGenerateContract = async () => {
     if (!selected) return;
     const invalid = genParties.some((p) => !p.name.trim() || !p.email.trim());
     if (genParties.length === 0 || invalid) {
       setGenError("Preencha nome e e-mail de todos os indicadores.");
+      return;
+    }
+    if (isLoiSeries && !genValorOperacao.trim()) {
+      setGenError("Valor da Operação é obrigatório para Carta de Intenção (trava de LOI casada).");
       return;
     }
     setGenerating(true);
@@ -165,6 +185,12 @@ export function ContractTemplatesClient() {
           template_id: selected.id,
           avulso_parties: genParties.map((p) => ({ name: p.name.trim(), email: p.email.trim(), doc: p.doc.trim() || undefined, role: p.role })),
           commission_percent: genCommission ? Number(genCommission) : undefined,
+          ...(isLoiSeries ? {
+            valor_operacao: Number(genValorOperacao),
+            loi_side: genLoiSide,
+            loi_matched_contract_id: genLoiMatchedId.trim() || undefined,
+            loi_override_justification: genLoiJustification.trim() || undefined,
+          } : {}),
         }),
       });
       const json = await res.json();
@@ -189,6 +215,21 @@ export function ContractTemplatesClient() {
   }, [filterVertical]);
 
   useEffect(() => { fetchTemplates(); }, [fetchTemplates]);
+
+  // Deep-link (BRIEF 2, 30/08/2026, notificação proativa item 1): auto
+  // seleciona a minuta quando a URL vem com ?template_id=, mesmo link que
+  // o e-mail/WhatsApp de notificação aos sócios manda. Só roda uma vez
+  // (didAutoSelect) pra não brigar com a seleção manual do usuário depois.
+  const didAutoSelectRef = React.useRef(false);
+  useEffect(() => {
+    if (!highlightTemplateId || didAutoSelectRef.current || templates.length === 0) return;
+    const target = templates.find((t) => t.id === highlightTemplateId);
+    if (target) {
+      didAutoSelectRef.current = true;
+      selectTemplate(target);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [templates, highlightTemplateId]);
 
   // Polling: enquanto alguma minuta estiver com analysis_status=processando
   // (Agente Revisor de Riscos rodando em background via n8n), re-busca a
@@ -826,6 +867,42 @@ export function ContractTemplatesClient() {
                     <input value={genCommission} onChange={(e) => setGenCommission(e.target.value)} placeholder="Ex: 5"
                       className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]" />
                   </div>
+
+                  {isLoiSeries && (
+                    <div className="border border-blue-500/20 rounded-lg p-3 space-y-2 bg-[#09081A]">
+                      <div className="text-[10px] font-bold text-blue-400 uppercase tracking-wider">Trava de LOI Casada</div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="block text-[9px] font-bold text-[#C9A84C] uppercase tracking-wider mb-1">Lado</label>
+                          <select value={genLoiSide} onChange={(e) => setGenLoiSide(e.target.value as "compra" | "venda")}
+                            className="w-full bg-[#162744] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]">
+                            <option value="venda">Venda</option>
+                            <option value="compra">Compra</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[9px] font-bold text-[#C9A84C] uppercase tracking-wider mb-1">Valor da Operação (R$) *</label>
+                          <input value={genValorOperacao} onChange={(e) => setGenValorOperacao(e.target.value)} placeholder="Ex: 500000"
+                            className="w-full bg-[#162744] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]" />
+                        </div>
+                      </div>
+                      {genLoiSide === "venda" && (
+                        <>
+                          <div>
+                            <label className="block text-[9px] font-bold text-[#C9A84C] uppercase tracking-wider mb-1">ID da LOI de Compra Casada (opcional)</label>
+                            <input value={genLoiMatchedId} onChange={(e) => setGenLoiMatchedId(e.target.value)} placeholder="UUID do contrato de compra já emitido"
+                              className="w-full bg-[#162744] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]" />
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-[#C9A84C] uppercase tracking-wider mb-1">Justificativa se emitir sem par casado</label>
+                            <textarea value={genLoiJustification} onChange={(e) => setGenLoiJustification(e.target.value)} placeholder="Obrigatório se não houver LOI de compra vinculada. Exige aprovação unânime dos 3 sócios pra enviar depois."
+                              className="w-full bg-[#162744] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8] min-h-[50px] resize-y" />
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  )}
+
                   {genError && <p className="text-[11px] text-red-400">{genError}</p>}
                 </div>
                 <div className="p-4 border-t border-[#C9A84C]/20 flex-shrink-0">
