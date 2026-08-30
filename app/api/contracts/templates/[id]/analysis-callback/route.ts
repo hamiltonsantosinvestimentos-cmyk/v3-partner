@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as sc } from "@supabase/supabase-js";
+import { notifySociosMinutaEmRevisao, logAgentAuditEvent } from "@/lib/socios-notify";
 
 // POST /api/contracts/templates/[id]/analysis-callback — server-to-server
 // apenas (n8n, workflow "W17 — Analisar Contrato Recebido"). Fecha o ciclo
@@ -32,7 +33,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const { data: template } = await db
     .from("contract_templates")
-    .select("id, origem, analysis_status")
+    .select("id, template_name, origem, analysis_status")
     .eq("id", id)
     .single();
 
@@ -43,10 +44,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: `analysis_status atual (${template.analysis_status}) não está em processando` }, { status: 409 });
 
   if (status === "erro") {
+    const errMsg = error_message?.trim() || "Falha não especificada na análise do agente";
     await db.from("contract_templates").update({
       analysis_status: "erro",
-      analysis_error: error_message?.trim() || "Falha não especificada na análise do agente",
+      analysis_error: errMsg,
     }).eq("id", id);
+    await logAgentAuditEvent({
+      templateId: id,
+      eventType: "analise_erro",
+      actorName: "Agente Revisor de Riscos",
+      detail: { error_message: errMsg },
+    });
     return NextResponse.json({ ok: true, analysis_status: "erro" });
   }
 
@@ -68,6 +76,26 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }).eq("id", id);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  await logAgentAuditEvent({
+    templateId: id,
+    eventType: "analise_concluida",
+    actorName: "Agente Revisor de Riscos",
+    detail: { laudo_risco: laudo_risco ?? null },
+  });
+
+  // Notificação Proativa (BRIEF 2, item 1): dispara pros 3 sócios assim que
+  // a minuta entra em em_revisao. Best-effort — falha aqui nunca desfaz a
+  // gravação acima, a minuta já está em em_revisao de qualquer forma.
+  try {
+    await notifySociosMinutaEmRevisao({
+      templateId: id,
+      templateName: template.template_name as string,
+      origem: "agente_ia",
+    });
+  } catch (e) {
+    console.error(`[analysis-callback] falha ao notificar sócios pra minuta ${id}:`, e);
+  }
 
   return NextResponse.json({ ok: true, analysis_status: "concluido", approval_status: "em_revisao" });
 }

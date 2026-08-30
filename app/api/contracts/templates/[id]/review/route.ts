@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 
+import { logAgentAuditEvent } from "@/lib/socios-notify";
+
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 }
@@ -55,7 +57,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const { data: template } = await db
     .from("contract_templates")
-    .select("id, approval_status, review_round, body_text_raw, version, valor_operacao_estimado")
+    .select("id, approval_status, review_round, body_text_raw, version, valor_operacao_estimado, origem")
     .eq("id", id)
     .single();
 
@@ -93,6 +95,22 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   if (decision === "reprovado") {
     await db.from("contract_templates").update({ approval_status: "reprovado" }).eq("id", id);
+    if (template.origem === "agente_ia") {
+      await logAgentAuditEvent({
+        templateId: id,
+        eventType: "voto_registrado",
+        actorId: reviewer.userId,
+        actorName: reviewer.name,
+        detail: { decision, comment: comment?.trim() || null, reviewer_type: reviewer.type },
+      });
+      await logAgentAuditEvent({
+        templateId: id,
+        eventType: "minuta_reprovada",
+        actorId: reviewer.userId,
+        actorName: reviewer.name,
+        detail: { comment: comment?.trim() || null },
+      });
+    }
     return NextResponse.json({ approval_status: "reprovado" });
   }
 
@@ -114,24 +132,60 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const hasComplianceSocio = approvedSocios.length > 0;
   const socioMajority = approvedSocios.length >= 2;
 
-  // Trava manual temporária dos R$50 mil (BRIEF Fast-Track, 30/08/2026,
-  // ajuste 3 explícito de João): acima do valor declarado no upload, o
-  // caminho "2/3 sócios dispensa jurídico" fica bloqueado, exige sempre
-  // jurídico + compliance/sócio. Só aplica quando o valor foi de fato
-  // declarado (minutas do fluxo manual antigo não têm esse campo e não são
-  // afetadas). Temporária até a governança financeira completa (Fases C-G,
-  // BRIEF separado) substituir isso por regra ligada ao valor real do
-  // contrato gerado, não ao valor estimado da minuta.
+  // Regra de Quórum Soberano (BRIEF 2, 30/08/2026, decisão explícita da
+  // diretoria, atualiza a trava temporária dos R$50 mil criada mais cedo
+  // no mesmo dia): 3 caminhos possíveis, nesta ordem de prioridade.
+  //   (a) UNANIMIDADE (3/3 sócios) sempre fecha quórum, qualquer valor,
+  //       inclusive acima de R$50 mil — "exceção soberana", dispensa o
+  //       jurídico mesmo quando ele seria obrigatório pela regra de valor.
+  //   (b) Valor declarado <= R$50 mil: maioria de sócios (2/3) fecha
+  //       quórum, dispensando o jurídico (trilho rápido original).
+  //   (c) Valor declarado > R$50 mil, sem unanimidade: exige jurídico +
+  //       1 compliance/sócio, sem exceção por vertical (regra única,
+  //       confirmada por João em 30/08, substitui a proposta anterior de
+  //       diferenciar por vertical).
+  // Minutas sem valor declarado (fluxo manual antigo) sempre caem no
+  // caminho (b), comportamento idêntico ao que já existia antes desta
+  // regra — nenhuma quebra retroativa.
   const VALOR_LIMITE_DISPENSA_JURIDICO = 50000;
   const valorDeclarado = template.valor_operacao_estimado;
-  const socioMajorityBloqueadaPorValor =
-    typeof valorDeclarado === "number" && valorDeclarado > VALOR_LIMITE_DISPENSA_JURIDICO;
-  const socioMajorityValida = socioMajority && !socioMajorityBloqueadaPorValor;
+  const valorAcimaDoLimite = typeof valorDeclarado === "number" && valorDeclarado > VALOR_LIMITE_DISPENSA_JURIDICO;
+  const unanimidade = approvedSocios.length >= 3;
+  const maioriaValidaPorValor = socioMajority && !valorAcimaDoLimite;
+  const quorumViaSocios = unanimidade || maioriaValidaPorValor;
+  const quorumViaJuridico = hasJuridico && hasComplianceSocio;
 
-  const quorumMet = (hasJuridico && hasComplianceSocio) || socioMajorityValida;
+  const quorumMet = quorumViaJuridico || quorumViaSocios;
 
   if (quorumMet) {
     await db.from("contract_templates").update({ approval_status: "aprovado" }).eq("id", id);
+  }
+
+  // Auditoria dedicada (BRIEF 2, item 3): só grava para minutas geradas
+  // pelo Agente Revisor de Riscos (contract_ai_agent_audit_log.template_id
+  // não é útil pro fluxo manual, que já tem sua própria trilha em
+  // contract_template_reviews desde sempre).
+  if (template.origem === "agente_ia") {
+    await logAgentAuditEvent({
+      templateId: id,
+      eventType: "voto_registrado",
+      actorId: reviewer.userId,
+      actorName: reviewer.name,
+      detail: { decision, comment: comment?.trim() || null, reviewer_type: reviewer.type },
+    });
+    if (quorumMet) {
+      await logAgentAuditEvent({
+        templateId: id,
+        eventType: "minuta_aprovada",
+        actorName: "Sistema",
+        detail: {
+          via: unanimidade ? "unanimidade_3_socios" : quorumViaJuridico ? "juridico_mais_socio" : "maioria_socios",
+          socios_aprovaram: approvedSocios.length,
+          juridico_aprovou: hasJuridico,
+          valor_operacao_estimado: valorDeclarado,
+        },
+      });
+    }
   }
 
   return NextResponse.json({
@@ -141,15 +195,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       compliance_socio: hasComplianceSocio,
       socios_aprovaram: approvedSocios.length,
       met: quorumMet,
-      bloqueado_por_valor: socioMajorityBloqueadaPorValor,
+      unanimidade,
+      bloqueado_por_valor: valorAcimaDoLimite && !unanimidade,
     },
     message: quorumMet
-      ? socioMajorityValida && !hasJuridico
+      ? unanimidade && !hasJuridico
+        ? `Quórum atingido por unanimidade dos 3 sócios, exceção soberana dispensando o jurídico. Minuta aprovada, liberada para gerar contrato.`
+        : quorumViaSocios && !hasJuridico
         ? `Quórum atingido por maioria de sócios (${approvedSocios.length}/3), dispensando o jurídico. Minuta aprovada, liberada para gerar contrato.`
         : "Quórum atingido (jurídico + compliance/sócio). Minuta aprovada, liberada para gerar contrato."
-      : socioMajorityBloqueadaPorValor && socioMajority && !hasJuridico
-        ? `Maioria de sócios atingida (${approvedSocios.length}/3), mas o valor declarado da operação (R$${valorDeclarado?.toLocaleString("pt-BR")}) passa de R$50.000, então o jurídico é obrigatório nesta minuta. Aguardando voto do Dr. Athaydes.`
-        : `Aprovação de ${reviewer.type === "juridico" ? "jurídico" : "compliance/sócio"} registrada (${approvedSocios.length}/3 sócios, jurídico: ${hasJuridico ? "sim" : "não"}). Aguardando 2 sócios OU jurídico + 1 sócio.`,
+      : valorAcimaDoLimite && socioMajority && !unanimidade && !hasJuridico
+        ? `Maioria de sócios atingida (${approvedSocios.length}/3), mas o valor declarado da operação (R$${valorDeclarado?.toLocaleString("pt-BR")}) passa de R$50.000: precisa do voto do jurídico, ou dos 3 sócios (unanimidade) para dispensar. Aguardando.`
+        : `Aprovação de ${reviewer.type === "juridico" ? "jurídico" : "compliance/sócio"} registrada (${approvedSocios.length}/3 sócios, jurídico: ${hasJuridico ? "sim" : "não"}). Aguardando 2 sócios OU jurídico + 1 sócio${valorAcimaDoLimite ? " (ou os 3 sócios, dado o valor acima de R$50 mil)" : ""}.`,
   });
 }
 

@@ -47,6 +47,9 @@ interface Contract {
   notes: Note[];
   is_master_agreement: boolean;
   regularization_expires_at: string | null;
+  loi_matching_status?: "casada" | "nao_casada" | null;
+  loi_override_justification?: string | null;
+  valor_operacao?: number | null;
 }
 
 interface ContractLink {
@@ -531,6 +534,13 @@ export function ContractsPanelClient() {
                     Validade do contrato-mãe: {new Date(selected.regularization_expires_at).toLocaleDateString("pt-BR")}
                     {new Date(selected.regularization_expires_at) < new Date() && " (EXPIRADO, novos vínculos bloqueados)"}
                   </p>
+                )}
+                {selected.loi_matching_status === "nao_casada" && (
+                  <div className="mb-3 p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30">
+                    <p className="text-[10px] font-bold text-amber-400 uppercase tracking-wider mb-1">LOI sem par de compra casado</p>
+                    <p className="text-[10px] text-[#9BAFC5]">{selected.loi_override_justification}</p>
+                    <p className="text-[9px] text-amber-400/80 mt-1">Envio para assinatura exige aprovação unânime dos 3 sócios (não o 2/3 padrão).</p>
+                  </div>
                 )}
 
                 <div className="grid grid-cols-3 gap-4 text-xs">
