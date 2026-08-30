@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
-import mammoth from "mammoth";
-import { PDFParse } from "pdf-parse";
+import { extractContractText } from "@/lib/contract-upload-extract";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -15,28 +14,6 @@ async function requireAdmin(req: NextRequest) {
   const { data: profile } = await svc().from("profiles").select("role").eq("id", user.id).single();
   if (!profile || profile.role !== "ADMIN") return null;
   return { userId: user.id };
-}
-
-async function extractText(buffer: Buffer, mimeType: string, fileName: string): Promise<string> {
-  if (mimeType === "text/plain" || fileName.endsWith(".txt")) {
-    return buffer.toString("utf-8");
-  }
-
-  if (
-    mimeType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
-    fileName.endsWith(".docx")
-  ) {
-    const result = await mammoth.extractRawText({ buffer });
-    return result.value;
-  }
-
-  if (mimeType === "application/pdf" || fileName.endsWith(".pdf")) {
-    const parser = new PDFParse({ data: new Uint8Array(buffer) });
-    const textResult = await parser.getText();
-    return textResult.text;
-  }
-
-  throw new Error(`Formato não suportado: ${mimeType}`);
 }
 
 export async function POST(req: NextRequest) {
@@ -60,7 +37,7 @@ export async function POST(req: NextRequest) {
   try {
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
-    const text = await extractText(buffer, file.type, file.name);
+    const text = await extractContractText(buffer, file.type, file.name);
 
     if (!text.trim())
       return NextResponse.json({ error: "Arquivo vazio ou sem texto extraível" }, { status: 422 });

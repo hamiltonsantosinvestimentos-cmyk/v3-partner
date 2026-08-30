@@ -5,6 +5,11 @@ import { useSearchParams } from "next/navigation";
 import { Plus, Save, Trash2, Loader2, FileText, Eye, ChevronDown, Upload, Send, CheckCircle2, XCircle, Scale, Users, X, FilePlus2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+interface RiscoLaudo {
+  resumo?: string;
+  pontos_criticos?: { clausula_original: string; severidade: "alto" | "medio" | "baixo"; risco: string }[];
+}
+
 interface Template {
   id: string;
   template_name: string;
@@ -16,6 +21,12 @@ interface Template {
   created_at: string;
   approval_status: "rascunho" | "em_revisao" | "aprovado" | "reprovado";
   review_round: number;
+  // Fast-Track de Contratos Simples (30/08/2026)
+  origem?: "manual" | "agente_ia";
+  laudo_risco?: RiscoLaudo | null;
+  analysis_status?: "processando" | "concluido" | "erro" | null;
+  analysis_error?: string | null;
+  valor_operacao_estimado?: number | null;
 }
 
 interface TemplateReview {
@@ -96,6 +107,18 @@ export function ContractTemplatesClient() {
   const [showVars, setShowVars] = useState(false);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  // Fast-Track de Contratos Simples (30/08/2026): upload de contrato
+  // recebido para o Agente Revisor de Riscos analisar.
+  const [showAnalyzeModal, setShowAnalyzeModal] = useState(false);
+  const [analyzeFile, setAnalyzeFile] = useState<File | null>(null);
+  const [analyzeVertical, setAnalyzeVertical] = useState("capital_markets");
+  const [analyzeSeries, setAnalyzeSeries] = useState("V3C-NDA");
+  const [analyzeTemplateName, setAnalyzeTemplateName] = useState("");
+  const [analyzeValor, setAnalyzeValor] = useState("");
+  const [analyzing, setAnalyzing] = useState(false);
+  const [analyzeError, setAnalyzeError] = useState<string | null>(null);
+  const analyzeFileInputRef = React.useRef<HTMLInputElement>(null);
   const [reviews, setReviews] = useState<TemplateReview[]>([]);
   const [reviewComment, setReviewComment] = useState("");
   const [submittingReview, setSubmittingReview] = useState(false);
@@ -166,6 +189,59 @@ export function ContractTemplatesClient() {
   }, [filterVertical]);
 
   useEffect(() => { fetchTemplates(); }, [fetchTemplates]);
+
+  // Polling: enquanto alguma minuta estiver com analysis_status=processando
+  // (Agente Revisor de Riscos rodando em background via n8n), re-busca a
+  // lista a cada 10s. Mesmo padrão já usado em components/ma/forja-panel.tsx
+  // para extração de documentos.
+  useEffect(() => {
+    const hasProcessing = templates.some((t) => t.analysis_status === "processando");
+    if (!hasProcessing) return;
+    const interval = setInterval(fetchTemplates, 10_000);
+    return () => clearInterval(interval);
+  }, [templates, fetchTemplates]);
+
+  // Mantém o painel de detalhe sincronizado quando o polling acima traz o
+  // resultado da análise (laudo_risco + minuta saneada) para a minuta
+  // atualmente selecionada.
+  useEffect(() => {
+    if (!selected) return;
+    const fresh = templates.find((t) => t.id === selected.id);
+    if (fresh && fresh.analysis_status !== selected.analysis_status) {
+      setSelected(fresh);
+      setFormBody(fresh.body_text_raw);
+    }
+  }, [templates, selected]);
+
+  const handleAnalyzeUpload = async () => {
+    if (!analyzeFile) { setAnalyzeError("Selecione um arquivo"); return; }
+    if (!analyzeValor.trim()) { setAnalyzeError("Valor da Operação estimado é obrigatório"); return; }
+    setAnalyzing(true);
+    setAnalyzeError(null);
+    try {
+      const fd = new FormData();
+      fd.append("file", analyzeFile);
+      fd.append("vertical", analyzeVertical);
+      fd.append("contract_series", analyzeSeries);
+      if (analyzeTemplateName.trim()) fd.append("template_name", analyzeTemplateName.trim());
+      fd.append("valor_operacao_estimado", analyzeValor);
+      const res = await fetch("/api/contracts/templates/analyze-upload", { method: "POST", body: fd });
+      const json = await res.json();
+      if (!res.ok) { setAnalyzeError(json.error ?? "Erro ao enviar para análise"); return; }
+      setShowAnalyzeModal(false);
+      setAnalyzeFile(null);
+      setAnalyzeTemplateName("");
+      setAnalyzeValor("");
+      await fetchTemplates();
+      const created = (await (await fetch(`/api/contracts/templates`)).json()).templates?.find((t: Template) => t.id === json.template_id);
+      if (created) selectTemplate(created);
+    } catch {
+      setAnalyzeError("Erro de conexão");
+    } finally {
+      setAnalyzing(false);
+      if (analyzeFileInputRef.current) analyzeFileInputRef.current.value = "";
+    }
+  };
 
   const loadReviews = async (templateId: string) => {
     try {
@@ -300,9 +376,15 @@ export function ContractTemplatesClient() {
           <h1 className="text-2xl font-bold text-[#F5F1E8]">Central de Contratos</h1>
           <p className="text-sm text-[#9BAFC5]">Biblioteca de minutas com injeção automática de variáveis</p>
         </div>
-        <button onClick={startNew} className="flex items-center gap-2 px-4 py-2 bg-[#C9A84C] text-[#09081A] rounded-lg text-sm font-bold hover:bg-[#E8C97A] transition">
-          <Plus size={16} /> Nova Minuta
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={() => { setShowAnalyzeModal(true); setAnalyzeError(null); }}
+            className="flex items-center gap-2 px-4 py-2 bg-[#162744] text-[#C9A84C] border border-[#C9A84C]/30 rounded-lg text-sm font-bold hover:bg-[#C9A84C]/10 transition">
+            <FileText size={16} /> Analisar Contrato Recebido
+          </button>
+          <button onClick={startNew} className="flex items-center gap-2 px-4 py-2 bg-[#C9A84C] text-[#09081A] rounded-lg text-sm font-bold hover:bg-[#E8C97A] transition">
+            <Plus size={16} /> Nova Minuta
+          </button>
+        </div>
       </div>
 
       <div className="flex gap-2 mb-4">
@@ -374,6 +456,61 @@ export function ContractTemplatesClient() {
                   </div>
                 </div>
               )}
+
+              {selected?.origem === "agente_ia" && (
+                <div className="mb-4 p-3 rounded-lg bg-[#09081A] border border-blue-500/20">
+                  <div className="flex flex-wrap items-center gap-2 mb-2">
+                    <span className="text-[9px] font-bold px-2 py-0.5 rounded bg-blue-500/20 text-blue-400">Origem: Agente Revisor de Riscos</span>
+                    {typeof selected.valor_operacao_estimado === "number" && (
+                      <span className={cn("text-[9px] font-bold px-2 py-0.5 rounded",
+                        selected.valor_operacao_estimado > 50000 ? "bg-amber-500/20 text-amber-400" : "bg-[#243A66] text-[#9BAFC5]")}>
+                        Valor declarado: {selected.valor_operacao_estimado.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                        {selected.valor_operacao_estimado > 50000 ? " · exige jurídico" : " · fast-track (2/3 sócios)"}
+                      </span>
+                    )}
+                  </div>
+
+                  {selected.analysis_status === "processando" && (
+                    <div className="flex items-center gap-2 text-xs text-[#9BAFC5]">
+                      <Loader2 size={14} className="animate-spin text-blue-400" />
+                      Agente Revisor de Riscos analisando o contrato recebido, comparando com precedentes já aprovados...
+                    </div>
+                  )}
+
+                  {selected.analysis_status === "erro" && (
+                    <div className="text-xs text-red-400">
+                      Falha na análise: {selected.analysis_error ?? "erro não especificado"}
+                    </div>
+                  )}
+
+                  {selected.analysis_status === "concluido" && selected.laudo_risco && (
+                    <div>
+                      {selected.laudo_risco.resumo && (
+                        <p className="text-xs text-[#F5F1E8] mb-2">{selected.laudo_risco.resumo}</p>
+                      )}
+                      {(selected.laudo_risco.pontos_criticos ?? []).length > 0 && (
+                        <div className="space-y-1.5">
+                          {(selected.laudo_risco.pontos_criticos ?? []).map((p, i) => (
+                            <div key={i} className="flex items-start gap-2 text-[11px]">
+                              <span className={cn("shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded uppercase",
+                                p.severidade === "alto" ? "bg-red-500/20 text-red-400" :
+                                p.severidade === "medio" ? "bg-amber-500/20 text-amber-400" :
+                                "bg-[#243A66] text-[#9BAFC5]")}>
+                                {p.severidade}
+                              </span>
+                              <div>
+                                <span className="text-[#F5F1E8] font-medium">{p.clausula_original}:</span>{" "}
+                                <span className="text-[#9BAFC5]">{p.risco}</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div className="grid grid-cols-2 gap-4 mb-4">
                 <div>
                   <label className="block text-[10px] font-bold text-[#C9A84C] uppercase tracking-wider mb-1">Nome da Minuta</label>
@@ -506,17 +643,25 @@ export function ContractTemplatesClient() {
                       reviews.filter(r => r.reviewer_type === "compliance_socio" && r.decision === "aprovado").map(r => r.reviewer_name)
                     ));
                     const juridicoAprovou = reviews.some(r => r.reviewer_type === "juridico" && r.decision === "aprovado");
+                    // Trava dos R$50 mil (30/08/2026): acima do valor
+                    // declarado no upload, maioria de sócios sozinha não
+                    // fecha quórum, precisa do jurídico.
+                    const valorBloqueiaMaioria = (selected?.valor_operacao_estimado ?? 0) > 50000;
+                    const maioriaValida = sociosAprovados.length >= 2 && !valorBloqueiaMaioria;
                     return (
                       <div className="flex flex-wrap items-center gap-2 mb-3 p-3 rounded-lg bg-[#09081A] border border-[#9BAFC5]/10">
                         <span className="text-[10px] font-bold text-[#C9A84C] uppercase tracking-wider mr-1">Quórum</span>
-                        <span className={cn("text-[10px] font-bold px-2 py-0.5 rounded", sociosAprovados.length >= 2 ? "bg-emerald-500/20 text-emerald-400" : "bg-[#243A66] text-[#9BAFC5]")}>
+                        <span className={cn("text-[10px] font-bold px-2 py-0.5 rounded", maioriaValida ? "bg-emerald-500/20 text-emerald-400" : "bg-[#243A66] text-[#9BAFC5]")}>
                           {sociosAprovados.length}/3 sócios {sociosAprovados.length > 0 ? `(${sociosAprovados.join(", ")})` : ""}
                         </span>
                         <span className={cn("text-[10px] font-bold px-2 py-0.5 rounded", juridicoAprovou ? "bg-emerald-500/20 text-emerald-400" : "bg-[#243A66] text-[#9BAFC5]")}>
                           Jurídico {juridicoAprovou ? "✓ aprovou" : "pendente"}
                         </span>
                         <span className="text-[9px] text-[#9BAFC5]">
-                          {sociosAprovados.length >= 2 ? "Fechado por maioria de sócios" : juridicoAprovou && sociosAprovados.length > 0 ? "Fechado por jurídico + sócio" : "Falta jurídico + 1 sócio, ou 2 sócios"}
+                          {maioriaValida ? "Fechado por maioria de sócios"
+                            : juridicoAprovou && sociosAprovados.length > 0 ? "Fechado por jurídico + sócio"
+                            : valorBloqueiaMaioria && sociosAprovados.length >= 2 ? "Maioria atingida, mas valor > R$50 mil exige jurídico"
+                            : "Falta jurídico + 1 sócio, ou 2 sócios"}
                         </span>
                       </div>
                     );
@@ -543,6 +688,88 @@ export function ContractTemplatesClient() {
           )}
         </div>
       </div>
+
+      {/* Modal Analisar Contrato Recebido (Fast-Track, 30/08/2026): upload
+          de um contrato já recebido (WhatsApp/e-mail) para o Agente
+          Revisor de Riscos analisar e redigir a minuta saneada. Rota
+          assíncrona — fecha o modal na hora, o resultado chega pelo
+          polling da lista. */}
+      {showAnalyzeModal && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60" onClick={() => !analyzing && setShowAnalyzeModal(false)}>
+          <div className="w-full max-w-lg bg-[#09081A] border border-[#C9A84C]/20 rounded-xl flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="p-4 border-b border-[#C9A84C]/20 flex items-center justify-between flex-shrink-0">
+              <div className="text-sm font-bold text-[#F5F1E8] flex items-center gap-2"><FileText size={14} className="text-[#C9A84C]" /> Analisar Contrato Recebido</div>
+              <button onClick={() => setShowAnalyzeModal(false)} className="text-[#9BAFC5] hover:text-[#F5F1E8] text-xl">&times;</button>
+            </div>
+            <div className="p-4 space-y-3">
+              <p className="text-[11px] text-[#9BAFC5]">
+                Envie um contrato recebido por WhatsApp/e-mail. O Agente Revisor de Riscos aponta os pontos críticos e redige uma minuta adaptada, pronta para revisão. O quórum humano continua obrigatório.
+              </p>
+
+              <div>
+                <input ref={analyzeFileInputRef} type="file" accept=".txt,.docx,.pdf"
+                  onChange={(e) => setAnalyzeFile(e.target.files?.[0] ?? null)}
+                  className="hidden" id="analyze-file-input" />
+                <button onClick={() => analyzeFileInputRef.current?.click()}
+                  className="w-full flex items-center gap-2 px-3 py-2.5 bg-[#162744] text-[#F5F1E8] border border-[#9BAFC5]/20 rounded-lg text-xs font-medium hover:bg-[#243A66] transition">
+                  <Upload size={14} /> {analyzeFile ? analyzeFile.name : "Selecionar arquivo (.txt, .docx, .pdf)"}
+                </button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[10px] font-bold text-[#C9A84C] uppercase tracking-wider mb-1">Vertical</label>
+                  <select value={analyzeVertical} onChange={(e) => setAnalyzeVertical(e.target.value)}
+                    className="w-full bg-[#162744] border border-[#9BAFC5]/15 rounded-lg px-3 py-2 text-xs text-[#F5F1E8]">
+                    {Object.entries(VERTICAL_LABELS).map(([v, label]) => (
+                      <option key={v} value={v}>{label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-[#C9A84C] uppercase tracking-wider mb-1">Série V3C</label>
+                  <select value={analyzeSeries} onChange={(e) => setAnalyzeSeries(e.target.value)}
+                    className="w-full bg-[#162744] border border-[#9BAFC5]/15 rounded-lg px-3 py-2 text-xs text-[#F5F1E8]">
+                    {Object.entries(SERIES_LABELS).filter(([v]) => v !== "V3C-REG").map(([value, label]) => (
+                      <option key={value} value={value}>{label}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-[#C9A84C] uppercase tracking-wider mb-1">Nome da Minuta (opcional)</label>
+                <input value={analyzeTemplateName} onChange={(e) => setAnalyzeTemplateName(e.target.value)}
+                  placeholder="Se vazio, usa o nome do arquivo"
+                  className="w-full bg-[#162744] border border-[#9BAFC5]/15 rounded-lg px-3 py-2 text-xs text-[#F5F1E8] focus:border-[#C9A84C]/50 focus:outline-none" />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-[#C9A84C] uppercase tracking-wider mb-1">
+                  Valor da Operação Estimado (R$) <span className="text-red-400">*</span>
+                </label>
+                <input value={analyzeValor} onChange={(e) => setAnalyzeValor(e.target.value)}
+                  placeholder="Ex: 15000"
+                  className="w-full bg-[#162744] border border-[#9BAFC5]/15 rounded-lg px-3 py-2 text-xs text-[#F5F1E8] focus:border-[#C9A84C]/50 focus:outline-none" />
+                <p className="text-[9px] text-[#9BAFC5] mt-1">
+                  Trava temporária: acima de R$50.000, o quórum exige o jurídico (Dr. Athaydes), não permite fechar só com 2/3 sócios.
+                </p>
+              </div>
+
+              {analyzeError && <p className="text-xs text-red-400">{analyzeError}</p>}
+            </div>
+            <div className="p-4 border-t border-[#C9A84C]/20 flex justify-end gap-2">
+              <button onClick={() => setShowAnalyzeModal(false)} disabled={analyzing}
+                className="px-4 py-2 text-xs text-[#9BAFC5] hover:text-[#F5F1E8] transition">Cancelar</button>
+              <button onClick={handleAnalyzeUpload} disabled={analyzing || !analyzeFile}
+                className="flex items-center gap-2 px-4 py-2 bg-[#C9A84C] text-[#09081A] rounded-lg text-xs font-bold hover:bg-[#E8C97A] disabled:opacity-40 transition">
+                {analyzing ? <Loader2 size={14} className="animate-spin" /> : <FileText size={14} />}
+                {analyzing ? "Enviando..." : "Enviar para Análise"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal Gerar Contrato (19/08/2026): dispara /api/contracts/generate
           com origem "avulso": não depende de listing/bid/deal/credit_proposal/

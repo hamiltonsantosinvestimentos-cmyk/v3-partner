@@ -50,6 +50,19 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // Server-to-server (30/08/2026): /api/contracts/templates/{id}/analysis-callback,
+  // acionada pelo workflow n8n W17 (Agente Revisor de Riscos, Fast-Track de
+  // Contratos Simples). Mesmo problema de path já documentado acima
+  // (resend-notification): id dinâmico no meio, precisa de regex própria.
+  // A rota valida x-cron-secret de novo internamente, este bypass só evita
+  // o redirect 307 pro /login.
+  if (
+    /^\/api\/contracts\/templates\/[^/]+\/analysis-callback$/.test(pathname) &&
+    request.headers.get("x-cron-secret") === process.env.CRON_SECRET
+  ) {
+    return NextResponse.next();
+  }
+
   // Demo mode
   if (IS_DEMO) {
     const demoSession = request.cookies.get("v3_demo_session");
