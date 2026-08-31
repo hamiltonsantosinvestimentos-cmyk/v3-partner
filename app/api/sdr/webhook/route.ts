@@ -92,7 +92,7 @@ export async function POST(req: NextRequest) {
       // mensagem do WhatsApp é estável entre entregas, então um conflito aqui significa
       // "já processei essa exata mensagem", e paramos sem gerar uma segunda resposta.
       const waMessageId = data.id ?? null;
-      const { error: insertErr } = await supabase.from("sdr_conversas").insert({
+      const { data: conversaInserida, error: insertErr } = await supabase.from("sdr_conversas").insert({
         phone,
         canal: CANAL,
         role: "user",
@@ -100,7 +100,7 @@ export async function POST(req: NextRequest) {
         instance,
         wa_message_id: waMessageId,
         partner_id: partnerId,
-      });
+      }).select("created_at").single();
 
       if (insertErr) {
         if (insertErr.code === "23505") {
@@ -150,6 +150,7 @@ export async function POST(req: NextRequest) {
         instance,
         canal: CANAL,
         partnerId,
+        mensagemCreatedAt: conversaInserida?.created_at ?? null,
         enviarTexto: async (texto) => { await sendText(phone, texto, sessionIdParaEnvio); },
       }).catch(e =>
         console.error("[SDR Webhook] Erro ao processar mensagem (background):", e)

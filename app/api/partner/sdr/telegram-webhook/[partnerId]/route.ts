@@ -97,7 +97,7 @@ async function processarMensagem(
     if (resolvida) messageText = resolvida.label;
   }
 
-  const { error: insertErr } = await supabase.from("sdr_conversas").insert({
+  const { data: conversaInserida, error: insertErr } = await supabase.from("sdr_conversas").insert({
     phone: chatId,
     canal: CANAL,
     role: "user",
@@ -105,7 +105,7 @@ async function processarMensagem(
     instance,
     wa_message_id: String(updateId),
     partner_id: partnerId,
-  });
+  }).select("created_at").single();
 
   if (insertErr) {
     if (insertErr.code === "23505") {
@@ -158,6 +158,7 @@ async function processarMensagem(
     instance,
     canal: CANAL,
     partnerId,
+    mensagemCreatedAt: conversaInserida?.created_at ?? null,
     enviarTexto: (texto) => sendTelegramText(chatId, texto, botToken),
   }).catch(e =>
     console.error("[Partner Telegram Webhook] Erro ao processar mensagem (background):", e)
