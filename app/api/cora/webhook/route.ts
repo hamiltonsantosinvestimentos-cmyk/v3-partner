@@ -3,53 +3,10 @@ import { createClient as sc } from "@supabase/supabase-js";
 import { coraFetch } from "@/lib/cora";
 import { randomUUID } from "crypto";
 import { getPlanoValor } from "@/lib/plano-valor";
-import { buildModularTitle, LEGACY_DIRECT_TITLES } from "@/lib/credit-analysis-pricing";
-import { notifyPagamentoAnaliseConfirmado, notifyMesaCreditoPedidoPago } from "@/lib/email";
+import { reconcilePartnerLinkOrderPaid, reconcileDirectOrderPaid } from "@/lib/cora-order-reconcile";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
-}
-
-// Achado 31/08/2026: nenhuma notificação chegava à Mesa de Crédito quando um
-// pedido de credit_analysis era confirmado pago (só o partner e, em venda
-// direta com ref_partner_id, ADMIN/FINANCEIRO por causa da comissão). Avisa
-// agora ADMIN/GESTAO/MESA_OPERACIONAL, in-app (sino) + e-mail individual
-// (nunca inventar um endereço de setor que não existe de verdade).
-async function notificarMesaCreditoNovoPedido(
-  db: ReturnType<typeof svc>,
-  opts: { clientName: string; title: string; amountCents: number; origem: string; origemDetalhe: string | null }
-) {
-  const { data: mesa } = await db
-    .from("profiles")
-    .select("id, email")
-    .in("role", ["ADMIN", "GESTAO", "MESA_OPERACIONAL"]);
-  if (!mesa?.length) return;
-
-  await db.from("notifications").insert(
-    mesa.map((m: { id: string }) => ({
-      user_id: m.id,
-      type: "commission",
-      title: "Novo pedido de Análise de Crédito pago",
-      message: `${opts.clientName} pagou "${opts.title}" (${opts.origemDetalhe ? `${opts.origem} · ${opts.origemDetalhe}` : opts.origem}). Aguarda vínculo/análise em Pedidos de Partners.`,
-      action_url: "/mesa-credito/pedidos",
-      read: false,
-    }))
-  ).then(null, () => {});
-
-  await Promise.allSettled(
-    mesa
-      .filter((m: { email?: string | null }) => m.email)
-      .map((m: { email: string }) =>
-        notifyMesaCreditoPedidoPago({
-          mesaEmail: m.email,
-          clientName: opts.clientName,
-          title: opts.title,
-          amountCents: opts.amountCents,
-          origem: opts.origem,
-          origemDetalhe: opts.origemDetalhe,
-        })
-      )
-  );
 }
 
 async function gerarProximaCobranca(db: ReturnType<typeof svc>, partnerId: string, plano: string) {
@@ -269,80 +226,11 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (serviceOrder) {
-      const intakeToken = randomUUID().replace(/-/g, "") + randomUUID().replace(/-/g, "").slice(0, 8);
-      const link = serviceOrder.partner_service_links as { title?: string; service_type?: string; price_cents?: number } | null;
-
-      // Atualiza order como PAID e grava intake_token
-      await db.from("partner_service_orders").update({
-        status: "PAID",
-        paid_at: paidAt,
-        intake_token: intakeToken,
-        intake_sent_at: new Date().toISOString(),
-      }).eq("id", serviceOrder.id);
-
-      // Incrementa receita no link atomicamente
-      await db.rpc("increment_link_revenue", {
-        p_link_id: serviceOrder.link_id,
-        p_amount: link?.price_cents ?? 0,
-      }).then(null, () => {});
-
-      // Gera o token de intake na tabela correta por tipo de serviço.
-      // credit_analysis usa credit_consents (gate LGPD do Credit Engine, ver /api/credit-engine/intake/[token]).
-      // Os demais tipos seguem o padrão anterior via captacao_links.
-      if (link?.service_type === "credit_analysis") {
-        await db.from("credit_consents").insert({
-          intake_token: intakeToken,
-          subject_cpf_cnpj: serviceOrder.client_doc,
-          subject_name: serviceOrder.client_name,
-          subject_email: serviceOrder.client_email,
-        }).then(null, () => {});
-      } else {
-        await db.from("captacao_links").insert({
-          token: intakeToken,
-          partner_id: serviceOrder.partner_id,
-          partner_name: "V3 Partners",
-          active: true,
-          uses_count: 0,
-        }).then(null, () => {});
-      }
-
-      // Envia email ao cliente com link de intake (via lib/email.ts, gateado por
-      // Brand Guardian programático — nunca mais HTML solto + fetch direto ao Resend)
-      const intakePath = link?.service_type === "credit_analysis"
-        ? `/intake/credit/${intakeToken}`
-        : link?.service_type === "ma_intake"
-        ? `/intake/bp/${intakeToken}`
-        : `/c/${intakeToken}`;
-
-      await notifyPagamentoAnaliseConfirmado({
-        clientEmail: serviceOrder.client_email,
-        clientName: serviceOrder.client_name,
-        title: link?.title ?? "Serviço V3",
-        intakePath,
-      }).catch((e) => console.error("Email error (service order):", e));
-
-      // Notifica o partner sobre venda confirmada
-      await db.from("notifications").insert({
-        user_id:    serviceOrder.partner_id,
-        type:       "commission",
-        title:      "Venda confirmada!",
-        message:    `${serviceOrder.client_name} pagou "${link?.title ?? "serviço"}". Intake enviado por email.`,
-        action_url: "/configuracoes",
-        read:       false,
-      }).then(null, () => {});
-
-      // Achado 31/08/2026: avisa a Mesa de Crédito também via link de partner
-      // (antes só o partner era avisado, ninguém do setor sabia que tinha pedido novo)
-      if (link?.service_type === "credit_analysis") {
-        const partnerInfo = serviceOrder.partner as unknown as { full_name?: string } | null;
-        await notificarMesaCreditoNovoPedido(db, {
-          clientName: serviceOrder.client_name,
-          title: link?.title ?? "Análise de Crédito Empresarial",
-          amountCents: link?.price_cents ?? 0,
-          origem: "Via partner",
-          origemDetalhe: partnerInfo?.full_name ?? null,
-        }).catch((e) => console.error("Notificação Mesa de Crédito (via partner):", e));
-      }
+      await reconcilePartnerLinkOrderPaid(
+        db,
+        serviceOrder as unknown as Parameters<typeof reconcilePartnerLinkOrderPaid>[1],
+        paidAt
+      );
     }
 
     // 3b. Venda direta na landing page pública /analise, sem link de partner
@@ -359,76 +247,11 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (directOrder) {
-      const intakeToken = randomUUID().replace(/-/g, "") + randomUUID().replace(/-/g, "").slice(0, 8);
-      // cnpj_count só é NULL em pedido criado antes da migration de preço
-      // modular (20/08/2026) — nesse caso cai no dicionário legado de pacote
-      // fixo. Pedido novo sempre tem cnpj_count preenchido pela API de checkout.
-      const title = directOrder.cnpj_count != null
-        ? buildModularTitle({
-            cnpjCount: directOrder.cnpj_count,
-            cpfCount: directOrder.cpf_count ?? 0,
-            hasConsultancy: Boolean(directOrder.has_consultancy),
-          })
-        : LEGACY_DIRECT_TITLES[directOrder.service_type ?? ""] ?? "Análise de Crédito Empresarial";
-
-      await db.from("partner_service_orders").update({
-        status: "PAID",
-        paid_at: paidAt,
-        intake_token: intakeToken,
-        intake_sent_at: new Date().toISOString(),
-      }).eq("id", directOrder.id);
-
-      // Vendas diretas de crédito (com ou sem consultoria) sempre usam o gate
-      // LGPD do Credit Engine via credit_consents, igual ao fluxo por link de partner.
-      await db.from("credit_consents").insert({
-        intake_token: intakeToken,
-        subject_cpf_cnpj: directOrder.client_doc,
-        subject_name: directOrder.client_name,
-        subject_email: directOrder.client_email,
-      }).then(null, () => {});
-
-      await notifyPagamentoAnaliseConfirmado({
-        clientEmail: directOrder.client_email,
-        clientName: directOrder.client_name,
-        title,
-        intakePath: `/intake/credit/${intakeToken}`,
-      }).catch((e) => console.error("Email error (direct order):", e));
-
-      // Se veio atribuída a um partner via ?ref=, notifica ADMIN/GESTAO/FINANCEIRO
-      // para lançamento manual da comissão (nenhum % automático definido ainda).
-      const refPartnerInfo = directOrder.ref_partner as unknown as { full_name?: string } | null;
-      if (directOrder.ref_partner_id) {
-        const { data: staff } = await db
-          .from("profiles")
-          .select("id")
-          .in("role", ["ADMIN", "FINANCEIRO"]);
-        if (staff?.length) {
-          await db.from("notifications").insert(
-            staff.map((s: { id: string }) => ({
-              user_id: s.id,
-              type: "commission",
-              title: "Venda direta atribuída a partner",
-              message: `${directOrder.client_name} comprou "${title}" via link de indicação. Comissão pendente de lançamento manual em /financeiro.`,
-              action_url: "/financeiro",
-              read: false,
-            }))
-          ).then(null, () => {});
-        }
-      }
-
-      // Achado 31/08/2026: avisa a Mesa de Crédito (antes só ADMIN/FINANCEIRO
-      // era avisado, e só quando havia ref_partner_id — sem isso, ninguém do
-      // setor de Crédito ficava sabendo de venda direta nenhuma)
-      const CREDIT_SERVICE_TYPES = ["credit_analysis", "credit_analysis_consultoria"];
-      if (directOrder.cnpj_count != null || CREDIT_SERVICE_TYPES.includes(directOrder.service_type ?? "")) {
-        await notificarMesaCreditoNovoPedido(db, {
-          clientName: directOrder.client_name,
-          title,
-          amountCents: directOrder.amount_cents ?? 0,
-          origem: "Venda direta",
-          origemDetalhe: refPartnerInfo?.full_name ? `Ref: ${refPartnerInfo.full_name}` : null,
-        }).catch((e) => console.error("Notificação Mesa de Crédito (venda direta):", e));
-      }
+      await reconcileDirectOrderPaid(
+        db,
+        directOrder as unknown as Parameters<typeof reconcileDirectOrderPaid>[1],
+        paidAt
+      );
     }
 
     return NextResponse.json({ received: true });
