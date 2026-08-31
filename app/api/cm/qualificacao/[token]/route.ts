@@ -15,13 +15,24 @@ const DOCUMENT_TYPE_LABELS: Record<string, string> = {
   contrato_parceria: "Contrato de Parceria",
 };
 
-// Papéis que recebem repasse de comissão precisam de dados bancários/PIX e
-// RG completos (mesmo padrão desde 28/07, Bolsa de Ativos). Testemunha e
-// parte principal de um contrato fora da Bolsa de Ativos só precisam de
-// CPF/CNPJ (suficiente para o texto do contrato e autenticação ClickSign) —
-// exigir dados bancários de uma testemunha não faz sentido (achado
-// 11/08/2026, ao generalizar este fluxo para a Central de Contratos).
+// Papéis que recebem repasse de comissão precisam ADICIONALMENTE de dados
+// bancários/PIX (mesmo padrão desde 28/07, Bolsa de Ativos) — isso é dado
+// financeiro pro repasse, não faz parte da qualificação civil em si.
 const ROLES_QUE_RECEBEM_REPASSE = ["mandatario", "intermediario_finder_venda", "intermediario_finder_compra"];
+
+// Monta o endereço em prosa a partir das partes estruturadas, no mesmo
+// formato da cláusula de qualificação real de contrato (31/08/2026, pedido
+// explícito de João). Nunca deixa a Mesa/o indicado digitar o texto livre —
+// isso evita CEP colado errado, cidade sem estado, etc., e garante que os
+// 3 consumidores existentes (lib/qualification-roles.ts,
+// api/cm/qualifications/legal-text, api/contracts/generate) continuem
+// funcionando sem mudança nenhuma, porque endereco_completo/company_address
+// seguem sendo uma string pronta, só que agora sempre bem formada.
+function montarEndereco(parts: { rua?: string; numero?: string; bairro?: string; cidade?: string; estado?: string; cep?: string }): string | null {
+  const { rua, numero, bairro, cidade, estado, cep } = parts;
+  if (!rua?.trim() || !numero?.trim() || !bairro?.trim() || !cidade?.trim() || !estado?.trim() || !cep?.trim()) return null;
+  return `${rua.trim()}, ${numero.trim()}, Bairro ${bairro.trim()}, ${cidade.trim()} – ${estado.trim()}, CEP ${cep.trim()}`;
+}
 
 // GET /api/cm/qualificacao/[token] — contexto público para o envolvido preencher.
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ token: string }> }) {
@@ -76,40 +87,56 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
 
   const body = await req.json().catch(() => ({}));
   const {
-    cpf_cnpj, rg, endereco_completo, dados_bancarios, pix_key,
-    person_type, company_name, company_cnpj, company_address,
+    cpf_cnpj, rg, dados_bancarios, pix_key,
+    person_type, company_name, company_cnpj,
     nationality, marital_status, profession, birth_date, phone,
+    endereco_rua, endereco_numero, endereco_bairro, endereco_cidade, endereco_estado, endereco_cep,
+    company_rua, company_numero, company_bairro, company_cidade, company_estado, company_cep,
   } = body as {
     cpf_cnpj?: string;
     rg?: string;
-    endereco_completo?: string;
     dados_bancarios?: { banco?: string; agencia?: string; conta?: string; tipo_conta?: string };
     pix_key?: string;
-    // Campos PF/PJ (13/08/2026, Fase 2) -- ligados aqui pela primeira vez.
-    // As colunas já existiam desde a migration da Fase 1, mas nenhuma rota
-    // gravava nelas -- achado ao construir o endpoint de texto jurídico,
-    // que dependia desse dado existir de verdade.
     person_type?: "PF" | "PJ";
     company_name?: string;
     company_cnpj?: string;
-    company_address?: string;
     nationality?: string;
     marital_status?: string;
     profession?: string;
     birth_date?: string;
     phone?: string;
+    // Endereço estruturado (31/08/2026, pedido explícito de João, modelo de
+    // cláusula de qualificação civil real): substitui o campo de texto
+    // livre. montarEndereco() monta a string final antes de gravar.
+    endereco_rua?: string; endereco_numero?: string; endereco_bairro?: string;
+    endereco_cidade?: string; endereco_estado?: string; endereco_cep?: string;
+    company_rua?: string; company_numero?: string; company_bairro?: string;
+    company_cidade?: string; company_estado?: string; company_cep?: string;
   };
 
-  // Testemunha/parte principal fora da Bolsa de Ativos: só CPF/CNPJ é
-  // obrigatório. Quem recebe repasse continua exigindo RG + endereço
-  // (mesma regra de sempre).
-  const required = recebeRepasse ? { cpf_cnpj, rg, endereco_completo } : { cpf_cnpj };
+  const endereco_completo = montarEndereco({ rua: endereco_rua, numero: endereco_numero, bairro: endereco_bairro, cidade: endereco_cidade, estado: endereco_estado, cep: endereco_cep });
+  const company_address = montarEndereco({ rua: company_rua, numero: company_numero, bairro: company_bairro, cidade: company_cidade, estado: company_estado, cep: company_cep });
+
+  if (person_type && !["PF", "PJ"].includes(person_type)) {
+    return NextResponse.json({ error: "person_type inválido, use PF ou PJ." }, { status: 422 });
+  }
+
+  // Qualificação civil completa obrigatória pra QUALQUER papel (31/08/2026,
+  // pedido explícito de João: modelo de cláusula real exige RG, endereço,
+  // nacionalidade, estado civil, profissão, nascimento e telefone de todo
+  // signatário, não só de quem recebe repasse). Testemunha/Parte Principal
+  // deixam de ter caminho simplificado — essa era a regra desde 11/08,
+  // revogada aqui por decisão de negócio, não por engano.
+  const required: Record<string, unknown> = {
+    cpf_cnpj, rg, nationality, marital_status, profession, birth_date, phone,
+    endereco_rua, endereco_numero, endereco_bairro, endereco_cidade, endereco_estado, endereco_cep,
+  };
+  if (person_type === "PJ") {
+    Object.assign(required, { company_rua, company_numero, company_bairro, company_cidade, company_estado, company_cep });
+  }
   const missing = Object.entries(required).filter(([, v]) => !v || String(v).trim() === "").map(([k]) => k);
   if (missing.length > 0) {
     return NextResponse.json({ error: `Campos obrigatórios ausentes: ${missing.join(", ")}` }, { status: 422 });
-  }
-  if (person_type && !["PF", "PJ"].includes(person_type)) {
-    return NextResponse.json({ error: "person_type inválido, use PF ou PJ." }, { status: 422 });
   }
 
   // cpf_cnpj é sempre o documento PESSOAL de quem assina (mesmo em caso PJ,
@@ -142,12 +169,19 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
       cpf_cnpj,
       rg,
       endereco_completo,
+      endereco_rua, endereco_numero, endereco_bairro, endereco_cidade, endereco_estado, endereco_cep,
       dados_bancarios: dados_bancarios ?? null,
       pix_key: pix_key ?? null,
       person_type: person_type ?? null,
       company_name: person_type === "PJ" ? company_name!.trim() : null,
       company_cnpj: person_type === "PJ" ? company_cnpj!.trim() : null,
       company_address: person_type === "PJ" ? (company_address?.trim() || null) : null,
+      company_rua: person_type === "PJ" ? company_rua : null,
+      company_numero: person_type === "PJ" ? company_numero : null,
+      company_bairro: person_type === "PJ" ? company_bairro : null,
+      company_cidade: person_type === "PJ" ? company_cidade : null,
+      company_estado: person_type === "PJ" ? company_estado : null,
+      company_cep: person_type === "PJ" ? company_cep : null,
       nationality: nationality?.trim() || null,
       marital_status: marital_status?.trim() || null,
       profession: profession?.trim() || null,

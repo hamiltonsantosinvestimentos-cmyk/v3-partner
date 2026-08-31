@@ -13,7 +13,6 @@ export default function QualificacaoIntakePage() {
 
   const [cpfCnpj, setCpfCnpj] = useState("");
   const [rg, setRg] = useState("");
-  const [endereco, setEndereco] = useState("");
   const [banco, setBanco] = useState("");
   const [agencia, setAgencia] = useState("");
   const [conta, setConta] = useState("");
@@ -21,18 +20,32 @@ export default function QualificacaoIntakePage() {
   const [pixKey, setPixKey] = useState("");
   const [formError, setFormError] = useState("");
 
-  // Campos PF/PJ (13/08/2026, Fase 2): a migration da Fase 1 já tinha criado
-  // as colunas, mas nenhuma tela gravava nelas até agora -- achado ao
-  // construir o endpoint de texto jurídico, que precisa desse dado real.
   const [personType, setPersonType] = useState<"PF" | "PJ">("PF");
   const [companyName, setCompanyName] = useState("");
   const [companyCnpj, setCompanyCnpj] = useState("");
-  const [companyAddress, setCompanyAddress] = useState("");
   const [nationality, setNationality] = useState("");
   const [maritalStatus, setMaritalStatus] = useState("");
   const [profession, setProfession] = useState("");
   const [birthDate, setBirthDate] = useState("");
   const [phone, setPhone] = useState("");
+
+  // Endereço estruturado (31/08/2026, pedido explícito de João): substitui
+  // a textarea única de "Endereço completo" por Rua/Número/Bairro/Cidade/
+  // Estado/CEP, pra bater com o modelo de cláusula de qualificação civil
+  // real que ele mandou. Duplicado pro residencial (sempre) e pra sede (PJ).
+  const [enderecoRua, setEnderecoRua] = useState("");
+  const [enderecoNumero, setEnderecoNumero] = useState("");
+  const [enderecoBairro, setEnderecoBairro] = useState("");
+  const [enderecoCidade, setEnderecoCidade] = useState("");
+  const [enderecoEstado, setEnderecoEstado] = useState("");
+  const [enderecoCep, setEnderecoCep] = useState("");
+
+  const [companyRua, setCompanyRua] = useState("");
+  const [companyNumero, setCompanyNumero] = useState("");
+  const [companyBairro, setCompanyBairro] = useState("");
+  const [companyCidade, setCompanyCidade] = useState("");
+  const [companyEstado, setCompanyEstado] = useState("");
+  const [companyCep, setCompanyCep] = useState("");
 
   useEffect(() => {
     if (!token) return;
@@ -57,20 +70,24 @@ export default function QualificacaoIntakePage() {
   }, [token]);
 
   // Só quem recebe repasse de comissão (mandatário/intermediário finder)
-  // precisa de RG, endereço e dados bancários/PIX. Testemunha e parte
-  // principal de um contrato fora da Bolsa de Ativos só assinam, não
-  // recebem nada — exigir isso delas não faz sentido (achado 11/08/2026).
+  // precisa de dados bancários/PIX — isso é dado financeiro pro repasse,
+  // não faz parte da qualificação civil (que agora é sempre completa e
+  // obrigatória pra qualquer papel, pedido explícito de João em 31/08/2026).
   const recebeRepasse = ["mandatario", "intermediario_finder_venda", "intermediario_finder_compra"].includes(data?.role_in_document);
 
   const submit = async () => {
     setFormError("");
-    if (!cpfCnpj.trim() || (recebeRepasse && (!rg.trim() || !endereco.trim()))) {
-      setFormError(recebeRepasse ? `${personType === "PJ" ? "CPF do representante" : "CPF"}, RG e endereço completo são obrigatórios` : `${personType === "PJ" ? "CPF do representante" : "CPF"} é obrigatório`);
+    const enderecoCompleto = enderecoRua.trim() && enderecoNumero.trim() && enderecoBairro.trim() && enderecoCidade.trim() && enderecoEstado.trim() && enderecoCep.trim();
+    if (!cpfCnpj.trim() || !rg.trim() || !nationality.trim() || !maritalStatus.trim() || !profession.trim() || !birthDate.trim() || !phone.trim() || !enderecoCompleto) {
+      setFormError("Todos os campos de qualificação (CPF, RG, nascimento, nacionalidade, estado civil, profissão, telefone e endereço completo) são obrigatórios");
       return;
     }
-    if (personType === "PJ" && (!companyName.trim() || !companyCnpj.trim())) {
-      setFormError("Razão social e CNPJ da empresa são obrigatórios para pessoa jurídica");
-      return;
+    if (personType === "PJ") {
+      const enderecoEmpresaCompleto = companyRua.trim() && companyNumero.trim() && companyBairro.trim() && companyCidade.trim() && companyEstado.trim() && companyCep.trim();
+      if (!companyName.trim() || !companyCnpj.trim() || !enderecoEmpresaCompleto) {
+        setFormError("Razão social, CNPJ e endereço completo da sede são obrigatórios para pessoa jurídica");
+        return;
+      }
     }
     if (recebeRepasse && !pixKey.trim() && !banco.trim()) {
       setFormError("Informe ao menos dados bancários ou uma chave PIX");
@@ -83,19 +100,31 @@ export default function QualificacaoIntakePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           cpf_cnpj: cpfCnpj.trim(),
-          rg: rg.trim() || null,
-          endereco_completo: endereco.trim() || null,
+          rg: rg.trim(),
           dados_bancarios: banco.trim() ? { banco: banco.trim(), agencia: agencia.trim(), conta: conta.trim(), tipo_conta: tipoConta } : null,
           pix_key: pixKey.trim() || null,
           person_type: personType,
           company_name: personType === "PJ" ? companyName.trim() : null,
           company_cnpj: personType === "PJ" ? companyCnpj.trim() : null,
-          company_address: personType === "PJ" ? companyAddress.trim() || null : null,
-          nationality: nationality.trim() || null,
-          marital_status: maritalStatus.trim() || null,
-          profession: profession.trim() || null,
-          birth_date: birthDate || null,
-          phone: phone.trim() || null,
+          nationality: nationality.trim(),
+          marital_status: maritalStatus.trim(),
+          profession: profession.trim(),
+          birth_date: birthDate,
+          phone: phone.trim(),
+          endereco_rua: enderecoRua.trim(),
+          endereco_numero: enderecoNumero.trim(),
+          endereco_bairro: enderecoBairro.trim(),
+          endereco_cidade: enderecoCidade.trim(),
+          endereco_estado: enderecoEstado.trim(),
+          endereco_cep: enderecoCep.trim(),
+          ...(personType === "PJ" ? {
+            company_rua: companyRua.trim(),
+            company_numero: companyNumero.trim(),
+            company_bairro: companyBairro.trim(),
+            company_cidade: companyCidade.trim(),
+            company_estado: companyEstado.trim(),
+            company_cep: companyCep.trim(),
+          } : {}),
         }),
       });
       const json = await res.json();
@@ -170,7 +199,7 @@ export default function QualificacaoIntakePage() {
             </div>
 
             <p className="text-[12px] text-[#9BAFC5] leading-relaxed">
-              Complete seus dados de qualificação abaixo. Eles serão usados exclusivamente para a elaboração do documento e, quando aplicável, para eventual repasse de comissão.
+              Complete sua qualificação civil completa abaixo. Todos os campos são obrigatórios e serão usados para a elaboração do documento jurídico e, quando aplicável, para eventual repasse de comissão.
             </p>
 
             <div className="space-y-3">
@@ -201,71 +230,106 @@ export default function QualificacaoIntakePage() {
                     <input value={companyCnpj} onChange={(e) => setCompanyCnpj(e.target.value)}
                       className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-sm text-[#F5F1E8] mt-1" />
                   </div>
-                  <div>
-                    <label className="text-[9px] text-[#9BAFC5] uppercase">Endereço da Sede</label>
-                    <textarea value={companyAddress} onChange={(e) => setCompanyAddress(e.target.value)} rows={2}
-                      className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-sm text-[#F5F1E8] mt-1" />
+                  <p className="text-[9px] text-[#C9A84C] font-bold uppercase pt-1">Endereço da Sede *</p>
+                  <div className="grid grid-cols-3 gap-2">
+                    <input value={companyRua} onChange={(e) => setCompanyRua(e.target.value)} placeholder="Rua/Av."
+                      className="col-span-2 w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-sm text-[#F5F1E8]" />
+                    <input value={companyNumero} onChange={(e) => setCompanyNumero(e.target.value)} placeholder="Número"
+                      className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-sm text-[#F5F1E8]" />
+                    <input value={companyBairro} onChange={(e) => setCompanyBairro(e.target.value)} placeholder="Bairro"
+                      className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-sm text-[#F5F1E8]" />
+                    <input value={companyCidade} onChange={(e) => setCompanyCidade(e.target.value)} placeholder="Cidade"
+                      className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-sm text-[#F5F1E8]" />
+                    <input value={companyEstado} onChange={(e) => setCompanyEstado(e.target.value)} placeholder="Estado (UF)"
+                      className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-sm text-[#F5F1E8]" />
+                    <input value={companyCep} onChange={(e) => setCompanyCep(e.target.value)} placeholder="CEP" className="col-span-3 w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-sm text-[#F5F1E8]" />
                   </div>
                 </div>
               )}
 
-              <div>
-                <label className="text-[9px] text-[#9BAFC5] uppercase">{personType === "PJ" ? "CPF do Representante *" : "CPF *"}</label>
-                <input value={cpfCnpj} onChange={(e) => setCpfCnpj(e.target.value)}
-                  className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-sm text-[#F5F1E8] mt-1" />
-                {personType === "PJ" && <p className="text-[10px] text-[#9BAFC5]/70 mt-1">Documento pessoal de quem assina pela empresa, não o CNPJ.</p>}
-              </div>
+              <div className="pt-2 border-t border-[#9BAFC5]/10">
+                <p className="text-[10px] text-[#C9A84C] font-bold uppercase mb-2">{personType === "PJ" ? "Dados do sócio representante" : "Seus dados"}</p>
 
-              <div className="pt-2 border-t border-[#9BAFC5]/10 space-y-3">
-                <p className="text-[10px] text-[#C9A84C] font-bold uppercase">{personType === "PJ" ? "Dados do representante (opcional)" : "Dados complementares (opcional)"}</p>
-                <div className="grid grid-cols-2 gap-2">
-                  <input value={nationality} onChange={(e) => setNationality(e.target.value)} placeholder="Nacionalidade"
-                    className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-sm text-[#F5F1E8]" />
-                  <input value={maritalStatus} onChange={(e) => setMaritalStatus(e.target.value)} placeholder="Estado civil"
-                    className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-sm text-[#F5F1E8]" />
-                  <input value={profession} onChange={(e) => setProfession(e.target.value)} placeholder="Profissão"
-                    className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-sm text-[#F5F1E8]" />
-                  <input value={birthDate} onChange={(e) => setBirthDate(e.target.value)} type="date"
-                    className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-sm text-[#F5F1E8]" />
-                  <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Telefone"
-                    className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-sm text-[#F5F1E8] col-span-2" />
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-[9px] text-[#9BAFC5] uppercase">{personType === "PJ" ? "CPF do Representante *" : "CPF *"}</label>
+                    <input value={cpfCnpj} onChange={(e) => setCpfCnpj(e.target.value)}
+                      className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-sm text-[#F5F1E8] mt-1" />
+                  </div>
+
+                  <div>
+                    <label className="text-[9px] text-[#9BAFC5] uppercase">Carteira de Identidade (RG) *</label>
+                    <input value={rg} onChange={(e) => setRg(e.target.value)}
+                      className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-sm text-[#F5F1E8] mt-1" />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-[9px] text-[#9BAFC5] uppercase">Nacionalidade *</label>
+                      <input value={nationality} onChange={(e) => setNationality(e.target.value)}
+                        className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-sm text-[#F5F1E8] mt-1" />
+                    </div>
+                    <div>
+                      <label className="text-[9px] text-[#9BAFC5] uppercase">Estado Civil *</label>
+                      <input value={maritalStatus} onChange={(e) => setMaritalStatus(e.target.value)}
+                        className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-sm text-[#F5F1E8] mt-1" />
+                    </div>
+                    <div>
+                      <label className="text-[9px] text-[#9BAFC5] uppercase">Profissão *</label>
+                      <input value={profession} onChange={(e) => setProfession(e.target.value)}
+                        className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-sm text-[#F5F1E8] mt-1" />
+                    </div>
+                    <div>
+                      <label className="text-[9px] text-[#9BAFC5] uppercase">Data de Nascimento *</label>
+                      <input value={birthDate} onChange={(e) => setBirthDate(e.target.value)} type="date"
+                        className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-sm text-[#F5F1E8] mt-1" />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-[9px] text-[#9BAFC5] uppercase">Telefone com DDD *</label>
+                    <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="(00) 00000-0000"
+                      className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-sm text-[#F5F1E8] mt-1" />
+                  </div>
+
+                  <p className="text-[9px] text-[#C9A84C] font-bold uppercase pt-1">Endereço Residencial *</p>
+                  <div className="grid grid-cols-3 gap-2">
+                    <input value={enderecoRua} onChange={(e) => setEnderecoRua(e.target.value)} placeholder="Rua/Av."
+                      className="col-span-2 w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-sm text-[#F5F1E8]" />
+                    <input value={enderecoNumero} onChange={(e) => setEnderecoNumero(e.target.value)} placeholder="Número"
+                      className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-sm text-[#F5F1E8]" />
+                    <input value={enderecoBairro} onChange={(e) => setEnderecoBairro(e.target.value)} placeholder="Bairro"
+                      className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-sm text-[#F5F1E8]" />
+                    <input value={enderecoCidade} onChange={(e) => setEnderecoCidade(e.target.value)} placeholder="Cidade"
+                      className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-sm text-[#F5F1E8]" />
+                    <input value={enderecoEstado} onChange={(e) => setEnderecoEstado(e.target.value)} placeholder="Estado (UF)"
+                      className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-sm text-[#F5F1E8]" />
+                    <input value={enderecoCep} onChange={(e) => setEnderecoCep(e.target.value)} placeholder="CEP" className="col-span-3 w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-sm text-[#F5F1E8]" />
+                  </div>
                 </div>
               </div>
 
               {recebeRepasse && (
-                <>
-                  <div>
-                    <label className="text-[9px] text-[#9BAFC5] uppercase">RG *</label>
-                    <input value={rg} onChange={(e) => setRg(e.target.value)}
-                      className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-sm text-[#F5F1E8] mt-1" />
-                  </div>
-                  <div>
-                    <label className="text-[9px] text-[#9BAFC5] uppercase">Endereço completo *</label>
-                    <textarea value={endereco} onChange={(e) => setEndereco(e.target.value)} rows={2}
-                      className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-sm text-[#F5F1E8] mt-1" />
-                  </div>
+                <div className="pt-2 border-t border-[#9BAFC5]/10">
+                  <p className="text-[10px] text-[#C9A84C] font-bold uppercase mb-2">Dados para repasse (ao menos um)</p>
+                  <label className="text-[9px] text-[#9BAFC5] uppercase">Chave PIX</label>
+                  <input value={pixKey} onChange={(e) => setPixKey(e.target.value)}
+                    className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-sm text-[#F5F1E8] mt-1 mb-3" />
 
-                  <div className="pt-2 border-t border-[#9BAFC5]/10">
-                    <p className="text-[10px] text-[#C9A84C] font-bold uppercase mb-2">Dados para repasse (ao menos um)</p>
-                    <label className="text-[9px] text-[#9BAFC5] uppercase">Chave PIX</label>
-                    <input value={pixKey} onChange={(e) => setPixKey(e.target.value)}
-                      className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-sm text-[#F5F1E8] mt-1 mb-3" />
-
-                    <div className="grid grid-cols-2 gap-2">
-                      <input value={banco} onChange={(e) => setBanco(e.target.value)} placeholder="Banco"
-                        className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-sm text-[#F5F1E8]" />
-                      <select value={tipoConta} onChange={(e) => setTipoConta(e.target.value)}
-                        className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-sm text-[#F5F1E8]">
-                        <option value="corrente">Conta Corrente</option>
-                        <option value="poupanca">Poupança</option>
-                      </select>
-                      <input value={agencia} onChange={(e) => setAgencia(e.target.value)} placeholder="Agência"
-                        className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-sm text-[#F5F1E8]" />
-                      <input value={conta} onChange={(e) => setConta(e.target.value)} placeholder="Conta"
-                        className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-sm text-[#F5F1E8]" />
-                    </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <input value={banco} onChange={(e) => setBanco(e.target.value)} placeholder="Banco"
+                      className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-sm text-[#F5F1E8]" />
+                    <select value={tipoConta} onChange={(e) => setTipoConta(e.target.value)}
+                      className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-sm text-[#F5F1E8]">
+                      <option value="corrente">Conta Corrente</option>
+                      <option value="poupanca">Poupança</option>
+                    </select>
+                    <input value={agencia} onChange={(e) => setAgencia(e.target.value)} placeholder="Agência"
+                      className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-sm text-[#F5F1E8]" />
+                    <input value={conta} onChange={(e) => setConta(e.target.value)} placeholder="Conta"
+                      className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-sm text-[#F5F1E8]" />
                   </div>
-                </>
+                </div>
               )}
             </div>
 
