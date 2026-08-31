@@ -4,9 +4,52 @@ import { coraFetch } from "@/lib/cora";
 import { randomUUID } from "crypto";
 import { getPlanoValor } from "@/lib/plano-valor";
 import { buildModularTitle, LEGACY_DIRECT_TITLES } from "@/lib/credit-analysis-pricing";
+import { notifyPagamentoAnaliseConfirmado, notifyMesaCreditoPedidoPago } from "@/lib/email";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+}
+
+// Achado 31/08/2026: nenhuma notificação chegava à Mesa de Crédito quando um
+// pedido de credit_analysis era confirmado pago (só o partner e, em venda
+// direta com ref_partner_id, ADMIN/FINANCEIRO por causa da comissão). Avisa
+// agora ADMIN/GESTAO/MESA_OPERACIONAL, in-app (sino) + e-mail individual
+// (nunca inventar um endereço de setor que não existe de verdade).
+async function notificarMesaCreditoNovoPedido(
+  db: ReturnType<typeof svc>,
+  opts: { clientName: string; title: string; amountCents: number; origem: string; origemDetalhe: string | null }
+) {
+  const { data: mesa } = await db
+    .from("profiles")
+    .select("id, email")
+    .in("role", ["ADMIN", "GESTAO", "MESA_OPERACIONAL"]);
+  if (!mesa?.length) return;
+
+  await db.from("notifications").insert(
+    mesa.map((m: { id: string }) => ({
+      user_id: m.id,
+      type: "commission",
+      title: "Novo pedido de Análise de Crédito pago",
+      message: `${opts.clientName} pagou "${opts.title}" (${opts.origemDetalhe ? `${opts.origem} · ${opts.origemDetalhe}` : opts.origem}). Aguarda vínculo/análise em Pedidos de Partners.`,
+      action_url: "/mesa-credito/pedidos",
+      read: false,
+    }))
+  ).then(null, () => {});
+
+  await Promise.allSettled(
+    mesa
+      .filter((m: { email?: string | null }) => m.email)
+      .map((m: { email: string }) =>
+        notifyMesaCreditoPedidoPago({
+          mesaEmail: m.email,
+          clientName: opts.clientName,
+          title: opts.title,
+          amountCents: opts.amountCents,
+          origem: opts.origem,
+          origemDetalhe: opts.origemDetalhe,
+        })
+      )
+  );
 }
 
 async function gerarProximaCobranca(db: ReturnType<typeof svc>, partnerId: string, plano: string) {
@@ -220,7 +263,7 @@ export async function POST(req: NextRequest) {
     // 3. Pagamento de serviço vendido por partner (partner_service_orders)
     const { data: serviceOrder } = await db
       .from("partner_service_orders")
-      .select("id, partner_id, client_name, client_email, client_doc, link_id, partner_service_links(title, service_type, price_cents)")
+      .select("id, partner_id, client_name, client_email, client_doc, link_id, partner_service_links(title, service_type, price_cents), partner:profiles!partner_id(full_name)")
       .eq("cora_invoice_id", invoiceId)
       .eq("status", "PENDING")
       .single();
@@ -263,48 +306,20 @@ export async function POST(req: NextRequest) {
         }).then(null, () => {});
       }
 
-      // Envia email ao cliente com link de intake via Resend
-      try {
-        const intakePath = link?.service_type === "credit_analysis"
-          ? `/intake/credit/${intakeToken}`
-          : link?.service_type === "ma_intake"
-          ? `/intake/bp/${intakeToken}`
-          : `/c/${intakeToken}`;
+      // Envia email ao cliente com link de intake (via lib/email.ts, gateado por
+      // Brand Guardian programático — nunca mais HTML solto + fetch direto ao Resend)
+      const intakePath = link?.service_type === "credit_analysis"
+        ? `/intake/credit/${intakeToken}`
+        : link?.service_type === "ma_intake"
+        ? `/intake/bp/${intakeToken}`
+        : `/c/${intakeToken}`;
 
-        await fetch("https://api.resend.com/emails", {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            from: "V3 Partners <inteligencia@v3partners.com.br>",
-            to: [serviceOrder.client_email],
-            subject: `Pagamento confirmado — ${link?.title ?? "Serviço V3"}`,
-            html: `
-              <div style="background:#09081A;color:#F5F1E8;font-family:sans-serif;padding:40px;border-radius:8px;max-width:560px;margin:0 auto">
-                <div style="color:#C9A84C;font-size:11px;font-weight:700;letter-spacing:3px;text-transform:uppercase;margin-bottom:20px">V3 PARTNERS</div>
-                <h2 style="font-size:20px;margin-bottom:12px">Pagamento confirmado</h2>
-                <p style="color:#9BAFC5;font-size:13px;line-height:1.7;margin-bottom:24px">
-                  Olá, <strong style="color:#F5F1E8">${serviceOrder.client_name}</strong>.<br>
-                  Recebemos o pagamento de <strong style="color:#C9A84C">${link?.title ?? "seu serviço V3"}</strong>.
-                  Clique no botão abaixo para preencher seus dados e dar início ao processo.
-                </p>
-                <a href="https://app.v3partners.com.br${intakePath}"
-                   style="display:inline-block;background:#C9A84C;color:#09081A;font-weight:700;font-size:13px;padding:12px 28px;border-radius:6px;text-decoration:none">
-                  Preencher meus dados
-                </a>
-                <p style="color:#9BAFC5;font-size:11px;margin-top:24px;line-height:1.6">
-                  Nossa mesa entrará em contato em até 24h úteis após o preenchimento.<br>
-                  Dúvidas: <a href="mailto:financeiro@v3partners.com.br" style="color:#C9A84C">financeiro@v3partners.com.br</a>
-                </p>
-              </div>
-            `,
-          }),
-        });
-      } catch (e) {
-        console.error("Resend email error (service order):", e);
-      }
+      await notifyPagamentoAnaliseConfirmado({
+        clientEmail: serviceOrder.client_email,
+        clientName: serviceOrder.client_name,
+        title: link?.title ?? "Serviço V3",
+        intakePath,
+      }).catch((e) => console.error("Email error (service order):", e));
 
       // Notifica o partner sobre venda confirmada
       await db.from("notifications").insert({
@@ -315,6 +330,19 @@ export async function POST(req: NextRequest) {
         action_url: "/configuracoes",
         read:       false,
       }).then(null, () => {});
+
+      // Achado 31/08/2026: avisa a Mesa de Crédito também via link de partner
+      // (antes só o partner era avisado, ninguém do setor sabia que tinha pedido novo)
+      if (link?.service_type === "credit_analysis") {
+        const partnerInfo = serviceOrder.partner as unknown as { full_name?: string } | null;
+        await notificarMesaCreditoNovoPedido(db, {
+          clientName: serviceOrder.client_name,
+          title: link?.title ?? "Análise de Crédito Empresarial",
+          amountCents: link?.price_cents ?? 0,
+          origem: "Via partner",
+          origemDetalhe: partnerInfo?.full_name ?? null,
+        }).catch((e) => console.error("Notificação Mesa de Crédito (via partner):", e));
+      }
     }
 
     // 3b. Venda direta na landing page pública /analise, sem link de partner
@@ -324,7 +352,7 @@ export async function POST(req: NextRequest) {
     // trigger automático, decisão registrada na sessão que criou esta feature).
     const { data: directOrder } = await db
       .from("partner_service_orders")
-      .select("id, ref_partner_id, client_name, client_email, client_doc, service_type, amount_cents, cnpj_count, cpf_count, has_consultancy")
+      .select("id, ref_partner_id, client_name, client_email, client_doc, service_type, amount_cents, cnpj_count, cpf_count, has_consultancy, ref_partner:profiles!ref_partner_id(full_name)")
       .eq("cora_invoice_id", invoiceId)
       .eq("status", "PENDING")
       .eq("source", "direct")
@@ -359,44 +387,16 @@ export async function POST(req: NextRequest) {
         subject_email: directOrder.client_email,
       }).then(null, () => {});
 
-      try {
-        await fetch("https://api.resend.com/emails", {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            from: "V3 Partners <inteligencia@v3partners.com.br>",
-            to: [directOrder.client_email],
-            subject: `Pagamento confirmado: ${title}`,
-            html: `
-              <div style="background:#09081A;color:#F5F1E8;font-family:sans-serif;padding:40px;border-radius:8px;max-width:560px;margin:0 auto">
-                <div style="color:#C9A84C;font-size:11px;font-weight:700;letter-spacing:3px;text-transform:uppercase;margin-bottom:20px">V3 PARTNERS</div>
-                <h2 style="font-size:20px;margin-bottom:12px">Pagamento confirmado</h2>
-                <p style="color:#9BAFC5;font-size:13px;line-height:1.7;margin-bottom:24px">
-                  Olá, <strong style="color:#F5F1E8">${directOrder.client_name}</strong>.<br>
-                  Recebemos o pagamento de <strong style="color:#C9A84C">${title}</strong>.
-                  Clique no botão abaixo para preencher seus dados e dar início ao processo.
-                </p>
-                <a href="https://app.v3partners.com.br/intake/credit/${intakeToken}"
-                   style="display:inline-block;background:#C9A84C;color:#09081A;font-weight:700;font-size:13px;padding:12px 28px;border-radius:6px;text-decoration:none">
-                  Preencher meus dados
-                </a>
-                <p style="color:#9BAFC5;font-size:11px;margin-top:24px;line-height:1.6">
-                  Nossa mesa entrará em contato em até 24h úteis após o preenchimento.<br>
-                  Dúvidas: <a href="mailto:financeiro@v3partners.com.br" style="color:#C9A84C">financeiro@v3partners.com.br</a>
-                </p>
-              </div>
-            `,
-          }),
-        });
-      } catch (e) {
-        console.error("Resend email error (direct order):", e);
-      }
+      await notifyPagamentoAnaliseConfirmado({
+        clientEmail: directOrder.client_email,
+        clientName: directOrder.client_name,
+        title,
+        intakePath: `/intake/credit/${intakeToken}`,
+      }).catch((e) => console.error("Email error (direct order):", e));
 
       // Se veio atribuída a um partner via ?ref=, notifica ADMIN/GESTAO/FINANCEIRO
       // para lançamento manual da comissão (nenhum % automático definido ainda).
+      const refPartnerInfo = directOrder.ref_partner as unknown as { full_name?: string } | null;
       if (directOrder.ref_partner_id) {
         const { data: staff } = await db
           .from("profiles")
@@ -414,6 +414,20 @@ export async function POST(req: NextRequest) {
             }))
           ).then(null, () => {});
         }
+      }
+
+      // Achado 31/08/2026: avisa a Mesa de Crédito (antes só ADMIN/FINANCEIRO
+      // era avisado, e só quando havia ref_partner_id — sem isso, ninguém do
+      // setor de Crédito ficava sabendo de venda direta nenhuma)
+      const CREDIT_SERVICE_TYPES = ["credit_analysis", "credit_analysis_consultoria"];
+      if (directOrder.cnpj_count != null || CREDIT_SERVICE_TYPES.includes(directOrder.service_type ?? "")) {
+        await notificarMesaCreditoNovoPedido(db, {
+          clientName: directOrder.client_name,
+          title,
+          amountCents: directOrder.amount_cents ?? 0,
+          origem: "Venda direta",
+          origemDetalhe: refPartnerInfo?.full_name ? `Ref: ${refPartnerInfo.full_name}` : null,
+        }).catch((e) => console.error("Notificação Mesa de Crédito (venda direta):", e));
       }
     }
 

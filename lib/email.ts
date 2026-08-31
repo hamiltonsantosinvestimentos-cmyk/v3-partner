@@ -1490,3 +1490,75 @@ export function buildConvocacaoAlinhamento(opts: {
     cta: opts.meetingUrl ? { label: "Acessar Reunião", url: opts.meetingUrl } : undefined,
   });
 }
+
+// ── Análise de Crédito (venda direta/link de partner) — 31/08/2026 ─────────
+// Substitui os 2 blocos de HTML solto + fetch direto ao Resend que existiam
+// em app/api/cora/webhook/route.ts (achado real: pedido pago do Osnildo Moser
+// nunca recebeu o e-mail porque o webhook nunca completou, e quando reconciliado
+// manualmente o Brand Guardian apontou logo ausente, Gold abaixo de 12px e
+// DM Sans fora da pilha de fontes — os 3 resolvidos de graça ao reusar
+// template()/send() em vez de HTML duplicado). Ver decisão de eficiência
+// registrada na sessão: n8n descartado para este caso (soma um ponto de
+// falha novo exatamente onde o webhook já falhou), lib/email.ts (já gateado
+// por auditText/auditHtml) é o caminho mais eficiente e mais confiável.
+
+/** Cliente: pagamento de Análise de Crédito confirmado, link para preencher consentimento LGPD */
+export async function notifyPagamentoAnaliseConfirmado(opts: {
+  clientEmail: string;
+  clientName: string;
+  title: string;
+  intakePath: string;
+}): Promise<void> {
+  const body = `
+    <p style="color:#9BAFC5;font-size:14px;margin:0 0 24px;line-height:1.7;">
+      Olá, <strong style="color:#F5F1E8;">${opts.clientName}</strong>.<br>
+      Recebemos o pagamento de <strong style="color:#C9A84C;">${opts.title}</strong>.
+      Clique no botão abaixo para preencher seus dados e dar início ao processo.
+    </p>
+    <p style="color:#9BAFC5;font-size:12px;margin-top:20px;line-height:1.6;">
+      Nossa mesa entrará em contato em até 24h úteis após o preenchimento.<br>
+      Dúvidas: <a href="mailto:financeiro@v3partners.com.br" style="color:#E8C97A;">financeiro@v3partners.com.br</a>
+    </p>
+  `;
+  await send(
+    opts.clientEmail,
+    `Pagamento confirmado: ${opts.title}`,
+    template("Pagamento Confirmado", body, {
+      label: "Preencher meus dados",
+      url: `https://app.v3partners.com.br${opts.intakePath}`,
+    })
+  );
+}
+
+/** Mesa de Crédito (ADMIN/GESTAO/MESA_OPERACIONAL): novo pedido de Análise de Crédito pago,
+ *  aguardando vínculo/análise em /mesa-credito/pedidos. Fecha o gap achado em 31/08/2026:
+ *  nenhuma notificação chegava ao setor de origem quando uma venda de Análise era paga. */
+export async function notifyMesaCreditoPedidoPago(opts: {
+  mesaEmail: string;
+  clientName: string;
+  title: string;
+  amountCents: number;
+  origem: string;
+  origemDetalhe: string | null;
+}): Promise<void> {
+  const body = `
+    <p style="color:#9BAFC5;font-size:14px;margin:0 0 20px;">
+      Um novo pedido de Análise de Crédito foi pago e aguarda ação na Mesa.
+    </p>
+    ${row("Cliente", opts.clientName)}
+    ${row("Serviço", opts.title)}
+    ${row("Origem", opts.origemDetalhe ? `${opts.origem} · ${opts.origemDetalhe}` : opts.origem)}
+    ${highlight("Valor Pago", moeda(opts.amountCents / 100), "#C9A84C")}
+    <p style="color:#9BAFC5;font-size:12px;margin-top:16px;">
+      Acesse Pedidos de Partners para vincular a uma proposta, rodar a análise e entregar o relatório.
+    </p>
+  `;
+  await send(
+    opts.mesaEmail,
+    `Novo pedido de Análise pago — ${opts.clientName}`,
+    template("Novo Pedido de Análise de Crédito", body, {
+      label: "Ver Pedidos de Partners",
+      url: "https://app.v3partners.com.br/mesa-credito/pedidos",
+    })
+  );
+}
