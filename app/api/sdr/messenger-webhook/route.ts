@@ -138,7 +138,7 @@ async function processarEvento(event: MessengerEvent, entryId?: string) {
 
   // Idempotência: reaproveita a coluna wa_message_id (nome histórico — guarda
   // o id externo da mensagem no canal de origem, aqui o "mid" do Messenger).
-  const { error: insertErr } = await supabase.from("sdr_conversas").insert({
+  const { data: conversaInserida, error: insertErr } = await supabase.from("sdr_conversas").insert({
     phone: psid,
     canal: CANAL,
     role: "user",
@@ -146,7 +146,7 @@ async function processarEvento(event: MessengerEvent, entryId?: string) {
     instance,
     wa_message_id: message.mid ?? null,
     partner_id: partnerId,
-  });
+  }).select("created_at").single();
 
   if (insertErr) {
     if (insertErr.code === "23505") {
@@ -188,6 +188,7 @@ async function processarEvento(event: MessengerEvent, entryId?: string) {
     instance,
     canal: CANAL,
     partnerId,
+    mensagemCreatedAt: conversaInserida?.created_at ?? null,
     enviarTexto: (texto) => enviarTexto(psid, texto),
   }).catch(e =>
     console.error("[SDR Messenger Webhook] Erro ao processar mensagem (background):", e)

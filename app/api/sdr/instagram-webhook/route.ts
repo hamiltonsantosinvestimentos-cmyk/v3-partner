@@ -184,7 +184,7 @@ async function processarEvento(event: InstagramMessagingEvent, entryId?: string)
   // (phone, wa_message_id)) — apesar do nome, ela só guarda "id externo da
   // mensagem no canal de origem", igual phone guarda o IGSID aqui em vez de
   // um número de telefone. Ver comentário na migration 20260819_sdr_canal_instagram.sql.
-  const { error: insertErr } = await supabase.from("sdr_conversas").insert({
+  const { data: conversaInserida, error: insertErr } = await supabase.from("sdr_conversas").insert({
     phone: igsid,
     canal: CANAL,
     role: "user",
@@ -192,7 +192,7 @@ async function processarEvento(event: InstagramMessagingEvent, entryId?: string)
     instance,
     wa_message_id: message.mid ?? null,
     partner_id: partnerId,
-  });
+  }).select("created_at").single();
 
   if (insertErr) {
     if (insertErr.code === "23505") {
@@ -234,6 +234,7 @@ async function processarEvento(event: InstagramMessagingEvent, entryId?: string)
     instance,
     canal: CANAL,
     partnerId,
+    mensagemCreatedAt: conversaInserida?.created_at ?? null,
     enviarTexto: (texto) => enviarTexto(igsid, texto),
   }).catch(e =>
     console.error("[SDR Instagram Webhook] Erro ao processar mensagem (background):", e)

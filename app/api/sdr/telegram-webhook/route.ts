@@ -92,14 +92,14 @@ async function processarMensagem(updateId: number, message: NonNullable<Telegram
 
   // Idempotência: reaproveita a coluna wa_message_id (nome histórico) com o
   // update_id da Telegram — estável entre reentregas do mesmo update.
-  const { error: insertErr } = await supabase.from("sdr_conversas").insert({
+  const { data: conversaInserida, error: insertErr } = await supabase.from("sdr_conversas").insert({
     phone: chatId,
     canal: CANAL,
     role: "user",
     content: messageText,
     instance,
     wa_message_id: String(updateId),
-  });
+  }).select("created_at").single();
 
   if (insertErr) {
     if (insertErr.code === "23505") {
@@ -154,6 +154,7 @@ async function processarMensagem(updateId: number, message: NonNullable<Telegram
     mensagem: messageText,
     instance,
     canal: CANAL,
+    mensagemCreatedAt: conversaInserida?.created_at ?? null,
     enviarTexto: (texto) => sendTelegramText(chatId, texto),
   }).catch(e =>
     console.error("[SDR Telegram Webhook] Erro ao processar mensagem (background):", e)

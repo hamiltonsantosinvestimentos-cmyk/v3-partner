@@ -450,8 +450,11 @@ export async function processarMensagemSDRCore(params: {
   enviarTexto: (texto: string) => Promise<void>;
   /** null = bot interno da V3 (comportamento atual). Preenchido = instância white label desse partner. */
   partnerId?: string | null;
+  /** created_at (ISO) da linha em sdr_conversas que disparou esta execução — usado
+   * pelo anti-double-reply logo abaixo. Opcional só pra não quebrar chamadores antigos. */
+  mensagemCreatedAt?: string | null;
 }) {
-  const { phone, mensagem, instance, canal, enviarTexto, partnerId = null } = params;
+  const { phone, mensagem, instance, canal, enviarTexto, partnerId = null, mensagemCreatedAt = null } = params;
   try {
     // Busca as 40 mensagens mais RECENTES (desc + limit) e devolve pra ordem
     // cronológica depois — pegar ascendente direto travava a IA nas primeiras
@@ -489,6 +492,31 @@ export async function processarMensagemSDRCore(params: {
     // Delay humanizado: tempo de "leitura" antes de começar a responder (3-6s)
     const delayLeitura = 3000 + Math.floor(Math.random() * 3000);
     await new Promise((r) => setTimeout(r, delayLeitura));
+
+    // Anti-resposta-dupla: cada mensagem recebida dispara sua PRÓPRIA execução
+    // deste núcleo (um webhook por mensagem) — se o lead manda várias
+    // mensagens em sequência rápida, várias execuções corriam em paralelo e
+    // cada uma respondia por conta própria (2, às vezes 3 respostas
+    // seguidas pro mesmo lote de mensagens). Depois do delay de leitura acima,
+    // confere se já chegou uma mensagem do usuário MAIS NOVA que a que
+    // disparou esta execução — se sim, desiste: a execução disparada por essa
+    // mensagem mais nova vai ler o histórico completo (incluindo esta) e
+    // responder ao lote inteiro de uma vez só.
+    if (mensagemCreatedAt) {
+      let novaQuery = supabase
+        .from("sdr_conversas")
+        .select("id")
+        .eq("phone", phone)
+        .eq("canal", canal)
+        .eq("role", "user")
+        .gt("created_at", mensagemCreatedAt);
+      novaQuery = partnerId ? novaQuery.eq("partner_id", partnerId) : novaQuery.is("partner_id", null);
+      const { data: maisNova } = await novaQuery.limit(1).maybeSingle();
+      if (maisNova) {
+        console.log(`[SDR Agent] Mensagem mais nova de ${phone} (${canal}) chegou durante a espera — deixando a execução dela responder ao lote inteiro`);
+        return;
+      }
+    }
 
     const { default: Anthropic } = await import("@anthropic-ai/sdk");
     const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
