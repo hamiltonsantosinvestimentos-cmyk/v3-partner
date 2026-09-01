@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { Eye, EyeOff, Lock, Mail, ArrowRight } from "lucide-react";
 
 export default function LoginPage() {
@@ -177,6 +178,11 @@ export default function LoginPage() {
                   }}>
                   {showPassword ? <EyeOff style={{ width: 15, height: 15 }} /> : <Eye style={{ width: 15, height: 15 }} />}
                 </button>
+              </div>
+              <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8 }}>
+                <Link href="/esqueci-senha" style={{ fontSize: 12, color: "#7A8FA8", textDecoration: "none" }}>
+                  Esqueci minha senha
+                </Link>
               </div>
             </div>
 
