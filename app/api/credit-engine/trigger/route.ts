@@ -1,9 +1,50 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
+import { CREDIT_SOURCE_DEFAULTS } from "@/lib/credit-source-defaults";
+import { checktudoLogin, checktudoSCR, type ChecktudoDocType } from "@/lib/checktudo";
 
 function serviceClient() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+}
+
+// SCR do CheckTudo (BACEN) — 01/09/2026, decisão de João: fica como dado de
+// REFERÊNCIA na tela da proposta, nunca entra no cálculo do Tier/score da V3
+// (esse continua vindo só do que o n8n calcula). Roda direto no portal, nunca
+// no n8n, mesmo padrão já estabelecido para o CheckTudo em 27/08/2026 (n8n não
+// consegue injetar credencial com segurança num node httpRequest, confirmado
+// por teste real então). Best-effort: falha aqui nunca derruba a análise.
+async function buscarBacenScr(docType: ChecktudoDocType, docValue: string) {
+  const username = process.env.CHECKTUDO_USERNAME;
+  const password = process.env.CHECKTUDO_PASSWORD;
+  if (!username || !password) return null;
+
+  try {
+    const session = await checktudoLogin(username, password);
+    const raw = await checktudoSCR(session, docType, docValue);
+    const scr = (raw?.body as any)?.data?.scr ?? {};
+    const consolidado = scr.consolidado ?? {};
+    return {
+      score_pontuacao: scr.score?.pontuacao ?? null,
+      score_faixa: scr.score?.faixa ?? null,
+      credito_vencido_valor: consolidado.creditoVencido?.valor ?? null,
+      credito_vencido_operacoes: (consolidado.creditoVencido?.operacoes ?? []).map((o: any) => ({
+        descricao: o.DESCRICAO ?? null,
+        valor: o.VALOR ?? null,
+        qtd_meses: o.QTD_MESES ?? null,
+      })),
+      prejuizo_valor: consolidado.prejuizo?.valor ?? null,
+      prejuizo_operacoes: (consolidado.prejuizo?.operacoes ?? []).map((o: any) => ({
+        descricao: o.DESCRICAO ?? null,
+        valor: o.VALOR ?? null,
+        qtd_meses: o.QTD_MESES ?? null,
+      })),
+      consultado_em: new Date().toISOString(),
+    };
+  } catch (e) {
+    console.error("CheckTudo SCR (BACEN) falhou, seguindo sem esse dado:", e);
+    return null;
+  }
 }
 
 const ALLOWED_ROLES = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"] as const;
@@ -49,19 +90,7 @@ export async function POST(req: NextRequest) {
     .eq("cnpj", proposal.client_cpf_cnpj ?? "")
     .single();
 
-  const effectiveSourceConfig = sourceConfig ?? {
-    receita_federal: true,
-    cnj_datajud: true,
-    ceis: true,
-    registrato_bacen: false,
-    serasa: false,
-    serasa_modalidade: "simples",
-    serasa_cnpj: true,
-    serasa_cpf: false,
-    serasa_cpf_list: null,
-    spc: false,
-    escavador: false,
-  };
+  const effectiveSourceConfig = sourceConfig ?? CREDIT_SOURCE_DEFAULTS;
 
   const webhookRes = await fetch("https://n8n-514n.onrender.com/webhook/v3-credit-engine", {
     method: "POST",
@@ -94,6 +123,16 @@ export async function POST(req: NextRequest) {
   // para auditoria (o motor n8n ainda não ramifica por source_config, ver Fase 2 da spec).
   if (result?.profile_id) {
     await svc.from("credit_profiles").update({ source_config_snapshot: effectiveSourceConfig }).eq("id", result.profile_id).then(null, () => {});
+
+    // BACEN via CheckTudo (SCR), 01/09/2026: dado de referência, nunca entra no
+    // Tier/score da V3. Só roda se a fonte estiver ligada na config efetiva.
+    if (effectiveSourceConfig.registrato_bacen && rawDoc) {
+      const bacenData = await buscarBacenScr(subject_type === "PJ" ? "cnpj" : "cpf", rawDoc);
+      if (bacenData) {
+        await svc.from("credit_profiles").update({ bacen_scr_data: bacenData }).eq("id", result.profile_id).then(null, () => {});
+        result.bacen_scr = bacenData;
+      }
+    }
   }
 
   return NextResponse.json(result);

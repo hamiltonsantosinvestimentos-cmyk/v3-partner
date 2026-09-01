@@ -1,26 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
+import { CREDIT_SOURCE_DEFAULTS as DEFAULTS } from "@/lib/credit-source-defaults";
 
 function serviceClient() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 }
 
 const ALLOWED_ROLES = ["ADMIN", "MESA_OPERACIONAL"] as const; // GESTAO fora, decisão de João (20/07/2026)
-
-const DEFAULTS = {
-  receita_federal: true,
-  cnj_datajud: true,
-  ceis: true,
-  registrato_bacen: false,
-  serasa: false,
-  serasa_modalidade: "simples" as const,
-  serasa_cnpj: true,
-  serasa_cpf: false,
-  serasa_cpf_list: null as string[] | null,
-  spc: false,
-  escavador: false,
-};
 
 async function checkAuth() {
   const supabase = await createClient();

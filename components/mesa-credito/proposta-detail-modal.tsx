@@ -2264,7 +2264,14 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
   const [registratoLinkLoading, setRegistratoLinkLoading] = useState(false);
   const [registratoLink, setRegistratoLink] = useState("");
   const [registratoLinkCopied, setRegistratoLinkCopied] = useState(false);
-  const [creditResult, setCreditResult] = useState<{ tier: string; score_total: number; spread_min: number; spread_max: number; profile_id: string } | null>(null);
+  const [creditResult, setCreditResult] = useState<{
+    tier: string; score_total: number; spread_min: number; spread_max: number; profile_id: string;
+    bacen_scr?: {
+      score_pontuacao: string | null; score_faixa: string | null;
+      credito_vencido_valor: string | null; credito_vencido_operacoes: { descricao: string | null; valor: string | null; qtd_meses: string | null }[];
+      prejuizo_valor: string | null; prejuizo_operacoes: { descricao: string | null; valor: string | null; qtd_meses: string | null }[];
+    } | null;
+  } | null>(null);
   const [creditError, setCreditError] = useState<string>("");
 
   async function consultarEscavador() {
@@ -2311,6 +2318,7 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
         spread_min: json.spread_min,
         spread_max: json.spread_max,
         profile_id: json.profile_id,
+        bacen_scr: json.bacen_scr ?? null,
       });
       onProposalUpdate?.(proposal.id, { credit_profile_id: json.profile_id });
     } catch (e) {
@@ -3542,6 +3550,45 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
                   <p className="text-[10px] text-muted-foreground font-mono truncate">
                     Profile: {creditResult.profile_id}
                   </p>
+                  {creditResult.bacen_scr && (
+                    <div className="p-3 rounded-lg border border-border/50 bg-secondary/30 space-y-2">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                        BACEN · SCR (referência, não altera o Tier/score acima)
+                      </p>
+                      {creditResult.bacen_scr.score_pontuacao && (
+                        <p className="text-xs text-foreground">
+                          Score nativo SCR: <strong>{creditResult.bacen_scr.score_pontuacao}</strong>
+                          {creditResult.bacen_scr.score_faixa && ` (${creditResult.bacen_scr.score_faixa})`}
+                        </p>
+                      )}
+                      {creditResult.bacen_scr.credito_vencido_operacoes.length > 0 ? (
+                        <div>
+                          <p className="text-xs font-semibold text-amber-400">
+                            Crédito vencido: {creditResult.bacen_scr.credito_vencido_valor ?? "—"}
+                          </p>
+                          {creditResult.bacen_scr.credito_vencido_operacoes.map((op, i) => (
+                            <p key={i} className="text-[10px] text-muted-foreground pl-2">
+                              {op.descricao} — {op.valor} ({op.qtd_meses} meses em atraso)
+                            </p>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-emerald-400">Sem operações vencidas no SCR</p>
+                      )}
+                      {creditResult.bacen_scr.prejuizo_operacoes.length > 0 && (
+                        <div>
+                          <p className="text-xs font-semibold text-red-400">
+                            Prejuízo (&gt;180 dias): {creditResult.bacen_scr.prejuizo_valor ?? "—"}
+                          </p>
+                          {creditResult.bacen_scr.prejuizo_operacoes.map((op, i) => (
+                            <p key={i} className="text-[10px] text-muted-foreground pl-2">
+                              {op.descricao} — {op.valor} ({op.qtd_meses} meses)
+                            </p>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               ) : (
                 <p className="text-xs text-muted-foreground">
