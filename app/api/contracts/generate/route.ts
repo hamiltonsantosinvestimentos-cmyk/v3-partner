@@ -247,7 +247,7 @@ export async function POST(req: NextRequest) {
   if (qualification_batch_id) {
     const { data: qualifications } = await svc()
       .from("cm_party_qualifications")
-      .select("full_name, email, role_in_document, cpf_cnpj, rg, endereco_completo, person_type, company_name, company_cnpj, company_address, nationality, marital_status, profession, birth_date")
+      .select("full_name, email, phone, role_in_document, cpf_cnpj, rg, endereco_completo, person_type, party_nature, company_name, company_cnpj, company_address, company_legal_nature, representation, nationality, marital_status, profession, birth_date")
       .eq("batch_id", qualification_batch_id);
 
     if (qualifications && qualifications.length > 0) {

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { isValidCPF, isValidCNPJ } from "@/lib/validators/cpf-cnpj";
+import { REQUIRED_REPRESENTATIVE_TYPES, type PartyNature, type RepresentativeType, type CompanyLegalNature, type LegalQualificationRepresentation } from "@/lib/legal-qualification";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -20,18 +21,139 @@ const DOCUMENT_TYPE_LABELS: Record<string, string> = {
 // financeiro pro repasse, não faz parte da qualificação civil em si.
 const ROLES_QUE_RECEBEM_REPASSE = ["mandatario", "intermediario_finder_venda", "intermediario_finder_compra"];
 
+const VALID_NATURES: PartyNature[] = ["PF", "PF_PROCURACAO", "INCAPAZ_RELATIVO", "INCAPAZ_ABSOLUTO", "ESPOLIO", "PJ"];
+const VALID_REPRESENTATIVE_TYPES: RepresentativeType[] = ["procurador", "genitor", "curador", "tutor", "inventariante", "administrador", "representante_legal"];
+
+interface EnderecoParts {
+  rua?: string; numero?: string; bairro?: string; cidade?: string; estado?: string; cep?: string;
+}
+
 // Monta o endereço em prosa a partir das partes estruturadas, no mesmo
 // formato da cláusula de qualificação real de contrato (31/08/2026, pedido
 // explícito de João). Nunca deixa a Mesa/o indicado digitar o texto livre —
-// isso evita CEP colado errado, cidade sem estado, etc., e garante que os
-// 3 consumidores existentes (lib/qualification-roles.ts,
-// api/cm/qualifications/legal-text, api/contracts/generate) continuem
-// funcionando sem mudança nenhuma, porque endereco_completo/company_address
-// seguem sendo uma string pronta, só que agora sempre bem formada.
-function montarEndereco(parts: { rua?: string; numero?: string; bairro?: string; cidade?: string; estado?: string; cep?: string }): string | null {
+// isso evita CEP colado errado, cidade sem estado, etc. Reaproveitada
+// (01/09/2026) para montar também o endereço de qualquer representante na
+// cadeia, sem duplicar a lógica.
+function montarEndereco(parts: EnderecoParts): string | null {
   const { rua, numero, bairro, cidade, estado, cep } = parts;
   if (!rua?.trim() || !numero?.trim() || !bairro?.trim() || !cidade?.trim() || !estado?.trim() || !cep?.trim()) return null;
   return `${rua.trim()}, ${numero.trim()}, Bairro ${bairro.trim()}, ${cidade.trim()} – ${estado.trim()}, CEP ${cep.trim()}`;
+}
+
+function req(missing: string[], value: unknown, field: string) {
+  if (!value || String(value).trim() === "") missing.push(field);
+}
+
+// Campos próprios exigidos por natureza (01/09/2026, diretriz Dr. Athaydes:
+// cada template A1/B1/B2/B3/C1/D1 pede um subconjunto diferente, nunca o
+// conjunto uniforme de ontem). RG passa a ser "(se houver)" em todos os
+// templates que o citam -- opcional, revoga a obrigatoriedade de 31/08.
+function missingBaseFields(nature: PartyNature, b: Record<string, unknown>): string[] {
+  const missing: string[] = [];
+  switch (nature) {
+    case "PF":
+    case "PF_PROCURACAO":
+    case "INCAPAZ_RELATIVO":
+      req(missing, b.cpf_cnpj, "cpf_cnpj");
+      req(missing, b.nationality, "nationality");
+      req(missing, b.marital_status, "marital_status");
+      req(missing, b.profession, "profession");
+      req(missing, b.birth_date, "birth_date");
+      req(missing, b.phone, "phone");
+      req(missing, b.endereco_rua, "endereco_rua"); req(missing, b.endereco_numero, "endereco_numero");
+      req(missing, b.endereco_bairro, "endereco_bairro"); req(missing, b.endereco_cidade, "endereco_cidade");
+      req(missing, b.endereco_estado, "endereco_estado"); req(missing, b.endereco_cep, "endereco_cep");
+      break;
+    case "INCAPAZ_ABSOLUTO":
+      // Menor impúbere: template B3 só cita nome, nacionalidade, CPF e RG
+      // (se houver). Sem profissão/estado civil/endereço, por desenho.
+      req(missing, b.cpf_cnpj, "cpf_cnpj");
+      req(missing, b.nationality, "nationality");
+      req(missing, b.birth_date, "birth_date");
+      break;
+    case "ESPOLIO":
+      // full_name/cpf_cnpj aqui são os dados do FALECIDO (já vêm de
+      // qualification.full_name, cadastrado pela Mesa; cpf_cnpj é digitado).
+      req(missing, b.cpf_cnpj, "cpf_cnpj");
+      break;
+    case "PJ":
+      req(missing, b.company_name, "company_name");
+      req(missing, b.company_cnpj, "company_cnpj");
+      req(missing, b.company_rua, "company_rua"); req(missing, b.company_numero, "company_numero");
+      req(missing, b.company_bairro, "company_bairro"); req(missing, b.company_cidade, "company_cidade");
+      req(missing, b.company_estado, "company_estado"); req(missing, b.company_cep, "company_cep");
+      break;
+  }
+  return missing;
+}
+
+// Valida um representante (recursivo, se ele também for PJ e precisar de
+// representante próprio). Máximo 5 níveis de encadeamento -- suficiente
+// pra qualquer estrutura societária real, evita abuso/loop.
+function validateRepresentative(rep: any, allowedTypes: RepresentativeType[], depth = 0): string | null {
+  if (depth > 5) return "Cadeia de representação excede o limite permitido (5 níveis).";
+  if (!rep || typeof rep !== "object") return "Representante é obrigatório para esta natureza de parte.";
+  if (!VALID_REPRESENTATIVE_TYPES.includes(rep.representative_type)) {
+    return "Tipo de representante inválido.";
+  }
+  if (!allowedTypes.includes(rep.representative_type)) {
+    return `Para esta natureza de parte, o representante precisa ser: ${allowedTypes.join(" ou ")}.`;
+  }
+
+  const repNature: "PF" | "PJ" = rep.party_nature === "PJ" ? "PJ" : "PF";
+  if (repNature === "PF") {
+    const missing: string[] = [];
+    req(missing, rep.full_name, "full_name");
+    req(missing, rep.cpf_cnpj, "cpf_cnpj");
+    req(missing, rep.nationality, "nationality");
+    req(missing, rep.marital_status, "marital_status");
+    req(missing, rep.profession, "profession");
+    req(missing, rep.phone, "phone");
+    req(missing, rep.endereco_rua, "endereco_rua"); req(missing, rep.endereco_numero, "endereco_numero");
+    req(missing, rep.endereco_bairro, "endereco_bairro"); req(missing, rep.endereco_cidade, "endereco_cidade");
+    req(missing, rep.endereco_estado, "endereco_estado"); req(missing, rep.endereco_cep, "endereco_cep");
+    if (missing.length > 0) return `Campos obrigatórios ausentes no representante: ${missing.join(", ")}`;
+    if (!isValidCPF(rep.cpf_cnpj)) return "CPF do representante inválido.";
+  } else {
+    const missing: string[] = [];
+    req(missing, rep.company_name, "company_name");
+    req(missing, rep.company_cnpj, "company_cnpj");
+    req(missing, rep.company_rua, "company_rua"); req(missing, rep.company_numero, "company_numero");
+    req(missing, rep.company_bairro, "company_bairro"); req(missing, rep.company_cidade, "company_cidade");
+    req(missing, rep.company_estado, "company_estado"); req(missing, rep.company_cep, "company_cep");
+    if (missing.length > 0) return `Campos obrigatórios ausentes no representante (PJ): ${missing.join(", ")}`;
+    if (!isValidCNPJ(rep.company_cnpj)) return "CNPJ do representante inválido.";
+    // Encadeamento: uma PJ representante também precisa do próprio
+    // administrador/representante legal (nota de arquitetura do BRIEF:
+    // o representante final é sempre uma Pessoa Física).
+    const nestedError = validateRepresentative(rep.representation, ["administrador", "representante_legal"], depth + 1);
+    if (nestedError) return nestedError;
+  }
+  return null;
+}
+
+// Monta endereco_completo/company_address de um representante antes de
+// gravar (mesma regra do topo, aplicada recursivamente na cadeia).
+function assembleRepresentation(rep: any): LegalQualificationRepresentation {
+  const repNature: "PF" | "PJ" = rep.party_nature === "PJ" ? "PJ" : "PF";
+  return {
+    representative_type: rep.representative_type,
+    party_nature: repNature,
+    full_name: rep.full_name ?? null,
+    cpf_cnpj: rep.cpf_cnpj ?? null,
+    rg: rep.rg?.trim() || null,
+    email: rep.email ?? null,
+    nationality: rep.nationality ?? null,
+    marital_status: rep.marital_status ?? null,
+    profession: rep.profession ?? null,
+    phone: rep.phone ?? null,
+    endereco_completo: montarEndereco({ rua: rep.endereco_rua, numero: rep.endereco_numero, bairro: rep.endereco_bairro, cidade: rep.endereco_cidade, estado: rep.endereco_estado, cep: rep.endereco_cep }),
+    company_name: rep.company_name ?? null,
+    company_cnpj: rep.company_cnpj ?? null,
+    company_address: montarEndereco({ rua: rep.company_rua, numero: rep.company_numero, bairro: rep.company_bairro, cidade: rep.company_cidade, estado: rep.company_estado, cep: rep.company_cep }),
+    company_legal_nature: (rep.company_legal_nature as CompanyLegalNature) ?? null,
+    representation: rep.representation ? assembleRepresentation(rep.representation) : null,
+  };
 }
 
 // GET /api/cm/qualificacao/[token] — contexto público para o envolvido preencher.
@@ -62,13 +184,11 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tok
   });
 }
 
-// POST /api/cm/qualificacao/[token] — envolvido envia CPF/CNPJ, RG, endereço
-// e dados bancários/PIX. Ao completar 100% do lote, marca o batch como
-// "completo" e notifica a Mesa — a geração do instrumento jurídico
-// (NDA Quadripartite/FPA/Mandato/Contrato Final) continua manual a partir
-// daqui: os textos desses 4 documentos ainda não existem em contract_templates
-// (só "NDA (Comprador Bolsa de Ativos)" e "Anexo FPA/NCND" existem hoje) e
-// autoria de texto jurídico novo não é decisão que este código deve tomar.
+// POST /api/cm/qualificacao/[token] — envolvido envia a qualificação civil
+// completa (01/09/2026, diretriz Dr. Athaydes: 6 naturezas de parte, com
+// representação recursiva quando aplicável) e dados bancários/PIX quando
+// recebe repasse. Ao completar 100% do lote, marca o batch como "completo"
+// e notifica a Mesa.
 export async function POST(req: NextRequest, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
 
@@ -87,78 +207,70 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
 
   const body = await req.json().catch(() => ({}));
   const {
-    cpf_cnpj, rg, dados_bancarios, pix_key,
-    person_type, company_name, company_cnpj,
+    party_nature, cpf_cnpj, rg, dados_bancarios, pix_key,
+    company_name, company_cnpj, company_legal_nature,
     nationality, marital_status, profession, birth_date, phone,
     endereco_rua, endereco_numero, endereco_bairro, endereco_cidade, endereco_estado, endereco_cep,
     company_rua, company_numero, company_bairro, company_cidade, company_estado, company_cep,
+    representation,
   } = body as {
+    party_nature?: PartyNature;
     cpf_cnpj?: string;
     rg?: string;
     dados_bancarios?: { banco?: string; agencia?: string; conta?: string; tipo_conta?: string };
     pix_key?: string;
-    person_type?: "PF" | "PJ";
     company_name?: string;
     company_cnpj?: string;
+    company_legal_nature?: CompanyLegalNature;
     nationality?: string;
     marital_status?: string;
     profession?: string;
     birth_date?: string;
     phone?: string;
-    // Endereço estruturado (31/08/2026, pedido explícito de João, modelo de
-    // cláusula de qualificação civil real): substitui o campo de texto
-    // livre. montarEndereco() monta a string final antes de gravar.
     endereco_rua?: string; endereco_numero?: string; endereco_bairro?: string;
     endereco_cidade?: string; endereco_estado?: string; endereco_cep?: string;
     company_rua?: string; company_numero?: string; company_bairro?: string;
     company_cidade?: string; company_estado?: string; company_cep?: string;
+    representation?: any;
   };
+
+  const nature: PartyNature = VALID_NATURES.includes(party_nature as PartyNature) ? (party_nature as PartyNature) : "PF";
+  const personType: "PF" | "PJ" = nature === "PJ" ? "PJ" : "PF";
 
   const endereco_completo = montarEndereco({ rua: endereco_rua, numero: endereco_numero, bairro: endereco_bairro, cidade: endereco_cidade, estado: endereco_estado, cep: endereco_cep });
   const company_address = montarEndereco({ rua: company_rua, numero: company_numero, bairro: company_bairro, cidade: company_cidade, estado: company_estado, cep: company_cep });
 
-  if (person_type && !["PF", "PJ"].includes(person_type)) {
-    return NextResponse.json({ error: "person_type inválido, use PF ou PJ." }, { status: 422 });
-  }
-
-  // Qualificação civil completa obrigatória pra QUALQUER papel (31/08/2026,
-  // pedido explícito de João: modelo de cláusula real exige RG, endereço,
-  // nacionalidade, estado civil, profissão, nascimento e telefone de todo
-  // signatário, não só de quem recebe repasse). Testemunha/Parte Principal
-  // deixam de ter caminho simplificado — essa era a regra desde 11/08,
-  // revogada aqui por decisão de negócio, não por engano.
-  const required: Record<string, unknown> = {
-    cpf_cnpj, rg, nationality, marital_status, profession, birth_date, phone,
-    endereco_rua, endereco_numero, endereco_bairro, endereco_cidade, endereco_estado, endereco_cep,
-  };
-  if (person_type === "PJ") {
-    Object.assign(required, { company_rua, company_numero, company_bairro, company_cidade, company_estado, company_cep });
-  }
-  const missing = Object.entries(required).filter(([, v]) => !v || String(v).trim() === "").map(([k]) => k);
+  // Campos próprios da natureza (01/09/2026, diretriz Dr. Athaydes) — cada
+  // natureza exige um subconjunto diferente, ver missingBaseFields().
+  const missing = missingBaseFields(nature, { cpf_cnpj, nationality, marital_status, profession, birth_date, phone, endereco_rua, endereco_numero, endereco_bairro, endereco_cidade, endereco_estado, endereco_cep, company_name, company_cnpj, company_rua, company_numero, company_bairro, company_cidade, company_estado, company_cep });
   if (missing.length > 0) {
     return NextResponse.json({ error: `Campos obrigatórios ausentes: ${missing.join(", ")}` }, { status: 422 });
   }
 
-  // cpf_cnpj é sempre o documento PESSOAL de quem assina (mesmo em caso PJ,
-  // é o representante) -- comentário original da coluna, migration
-  // 20260813_qualificacoes_pf_pj_fpa.sql. Quando person_type é conhecido,
-  // valida estritamente como CPF. Fluxo antigo (sem seletor, pré-13/08)
-  // preserva o auto-detect por tamanho, para não quebrar link já enviado.
-  const docDigits = String(cpf_cnpj).replace(/\D/g, "");
-  const validDoc = person_type ? isValidCPF(cpf_cnpj!) : (docDigits.length > 11 ? isValidCNPJ(cpf_cnpj!) : isValidCPF(cpf_cnpj!));
-  if (!validDoc) {
-    return NextResponse.json({ error: person_type ? "CPF inválido, confira o número informado (documento pessoal de quem assina)." : "CPF/CNPJ inválido, confira o número informado." }, { status: 422 });
-  }
-  if (recebeRepasse && !pix_key && !dados_bancarios?.banco) {
-    return NextResponse.json({ error: "Informe ao menos dados bancários ou chave PIX para eventual repasse." }, { status: 422 });
-  }
-  if (person_type === "PJ") {
-    if (!company_name?.trim() || !company_cnpj?.trim()) {
-      return NextResponse.json({ error: "Razão social e CNPJ da empresa são obrigatórios para pessoa jurídica." }, { status: 422 });
+  // Validação de documento por natureza. cpf_cnpj não se aplica a PJ (o
+  // documento pessoal de quem assina mora dentro de `representation`,
+  // nunca no topo — o template D1 nunca cita CPF da própria empresa).
+  if (nature !== "PJ") {
+    if (!isValidCPF(cpf_cnpj!)) {
+      return NextResponse.json({ error: "CPF inválido, confira o número informado." }, { status: 422 });
     }
-    if (!isValidCNPJ(company_cnpj)) {
+  } else {
+    if (!isValidCNPJ(company_cnpj!)) {
       return NextResponse.json({ error: "CNPJ da empresa inválido, confira o número informado." }, { status: 422 });
     }
+  }
+
+  // Representação obrigatória para toda natureza exceto PF simples,
+  // recursiva quando o representante também é PJ (encadeamento até chegar
+  // numa Pessoa Física, nota de arquitetura do BRIEF de 01/09/2026).
+  const requiredRepTypes = REQUIRED_REPRESENTATIVE_TYPES[nature];
+  if (requiredRepTypes) {
+    const repError = validateRepresentative(representation, requiredRepTypes);
+    if (repError) return NextResponse.json({ error: repError }, { status: 422 });
+  }
+
+  if (recebeRepasse && !pix_key && !dados_bancarios?.banco) {
+    return NextResponse.json({ error: "Informe ao menos dados bancários ou chave PIX para eventual repasse." }, { status: 422 });
   }
 
   const db = svc();
@@ -166,27 +278,30 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   const { error: updateError } = await db
     .from("cm_party_qualifications")
     .update({
-      cpf_cnpj,
-      rg,
+      party_nature: nature,
+      person_type: personType,
+      cpf_cnpj: nature === "PJ" ? null : cpf_cnpj,
+      rg: rg?.trim() || null,
       endereco_completo,
       endereco_rua, endereco_numero, endereco_bairro, endereco_cidade, endereco_estado, endereco_cep,
       dados_bancarios: dados_bancarios ?? null,
       pix_key: pix_key ?? null,
-      person_type: person_type ?? null,
-      company_name: person_type === "PJ" ? company_name!.trim() : null,
-      company_cnpj: person_type === "PJ" ? company_cnpj!.trim() : null,
-      company_address: person_type === "PJ" ? (company_address?.trim() || null) : null,
-      company_rua: person_type === "PJ" ? company_rua : null,
-      company_numero: person_type === "PJ" ? company_numero : null,
-      company_bairro: person_type === "PJ" ? company_bairro : null,
-      company_cidade: person_type === "PJ" ? company_cidade : null,
-      company_estado: person_type === "PJ" ? company_estado : null,
-      company_cep: person_type === "PJ" ? company_cep : null,
+      company_name: nature === "PJ" ? company_name!.trim() : null,
+      company_cnpj: nature === "PJ" ? company_cnpj!.trim() : null,
+      company_address: nature === "PJ" ? company_address : null,
+      company_legal_nature: nature === "PJ" ? (company_legal_nature ?? "privado") : null,
+      company_rua: nature === "PJ" ? company_rua : null,
+      company_numero: nature === "PJ" ? company_numero : null,
+      company_bairro: nature === "PJ" ? company_bairro : null,
+      company_cidade: nature === "PJ" ? company_cidade : null,
+      company_estado: nature === "PJ" ? company_estado : null,
+      company_cep: nature === "PJ" ? company_cep : null,
       nationality: nationality?.trim() || null,
       marital_status: marital_status?.trim() || null,
       profession: profession?.trim() || null,
       birth_date: birth_date?.trim() || null,
       phone: phone?.trim() || null,
+      representation: requiredRepTypes ? assembleRepresentation(representation) : null,
       status: "preenchido",
       filled_at: new Date().toISOString(),
     })

@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { wrapContractInV3Html } from "@/lib/contract-render";
 import { ROLE_LABELS } from "@/lib/qualification-roles";
+import { buildLegalQualification, PARTY_NATURE_LABELS, type PartyNature } from "@/lib/legal-qualification";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -51,7 +52,7 @@ export async function GET(req: NextRequest) {
     .select(`
       id, full_name, email, role_in_document, status, filled_at,
       cpf_cnpj, rg, endereco_completo,
-      person_type, company_name, company_cnpj, company_address,
+      person_type, party_nature, company_name, company_cnpj, company_address, company_legal_nature, representation,
       nationality, marital_status, profession, birth_date, phone,
       cm_qualification_batches(id, side, document_type)
     `)
@@ -65,20 +66,18 @@ export async function GET(req: NextRequest) {
   }
 
   const roleLabel = ROLE_LABELS[party.role_in_document] ?? party.role_in_document;
-  const isPJ = party.person_type === "PJ";
+  const nature: PartyNature = (party.party_nature as PartyNature | null) ?? (party.person_type === "PJ" ? "PJ" : "PF");
+  const isPJ = nature === "PJ";
   const partyLabel = isPJ
     ? `${party.company_name ?? "[RAZÃO SOCIAL NÃO INFORMADA]"} (CNPJ ${party.company_cnpj ?? "[NÃO INFORMADO]"}), doravante representada por ${party.full_name}`
     : party.full_name;
 
-  const identBlock = isPJ
-    ? `<h2>IDENTIFICAÇÃO, PESSOA JURÍDICA</h2>
-<p><strong>Razão Social:</strong> ${party.company_name ?? "[NÃO INFORMADA]"}</p>
-<p><strong>CNPJ:</strong> ${party.company_cnpj ?? "[NÃO INFORMADO]"}</p>
-${party.company_address ? `<p><strong>Endereço da Sede:</strong> ${party.company_address}</p>` : ""}
-<p><strong>Representada por:</strong> ${party.full_name}${party.nationality ? `, ${party.nationality}` : ""}${party.marital_status ? `, ${party.marital_status}` : ""}${party.profession ? `, ${party.profession}` : ""}, portador(a) do CPF ${party.cpf_cnpj ?? "[NÃO INFORMADO]"}${party.rg ? `, RG ${party.rg}` : ""}${party.endereco_completo ? `, residente e domiciliado(a) em ${party.endereco_completo}` : ""}.</p>`
-    : `<h2>IDENTIFICAÇÃO, PESSOA FÍSICA</h2>
-<p><strong>Nome:</strong> ${party.full_name}</p>
-<p>${party.nationality ? `${party.nationality}, ` : ""}${party.marital_status ? `${party.marital_status}, ` : ""}${party.profession ? `${party.profession}, ` : ""}portador(a) do CPF/CNPJ ${party.cpf_cnpj ?? "[NÃO INFORMADO]"}${party.rg ? `, RG ${party.rg}` : ""}${party.birth_date ? `, nascido(a) em ${new Date(party.birth_date).toLocaleDateString("pt-BR")}` : ""}${party.endereco_completo ? `, residente e domiciliado(a) em ${party.endereco_completo}` : ""}.</p>`;
+  // Motor único (01/09/2026, diretriz Dr. Athaydes): monta a qualificação
+  // civil completa (PF/Procuração/Incapaz/Espólio/PJ, com representação
+  // recursiva quando houver) em lib/legal-qualification.ts. Este bloco só
+  // adiciona o título por natureza, a prosa em si nunca é duplicada aqui.
+  const identBlock = `<h2>IDENTIFICAÇÃO, ${PARTY_NATURE_LABELS[nature].toUpperCase()}</h2>
+<p>${buildLegalQualification(party)}</p>`;
 
   const body = `
 <div style="background:rgba(190,72,72,.12);border:1px solid rgba(190,72,72,.45);border-radius:6px;padding:12px 16px;margin-bottom:24px;text-align:center">
