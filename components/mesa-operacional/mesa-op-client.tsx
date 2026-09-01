@@ -20,6 +20,10 @@ import {
 } from "@/lib/constants";
 import { PropostaDetailModal, PIPELINE_STAGES, STAGE_REPROVADO, STAGE_DECLINADO, type ProposalFull, type MesaComment } from "@/components/mesa-credito/proposta-detail-modal";
 import { InstituicoesPanel } from "@/components/mesa-operacional/instituicoes-panel";
+import {
+  SLA_STAGES, SLA_STAGE_LABELS, DEFAULT_SLA, getSlaStatus, getTicketSlaStatus, parseLocalDate,
+  type SlaStage, type SlaConfig,
+} from "@/lib/mesa-operacional-sla";
 
 // Colunas do kanban = fluxo linear + os 2 estágios terminais (fora do avançar/retroceder sequencial)
 const KANBAN_COLUMNS = [...PIPELINE_STAGES, STAGE_REPROVADO, STAGE_DECLINADO];
@@ -109,30 +113,17 @@ const TICKET_PRIORITY_OPTIONS = [
 ];
 
 // ─── SLA por Fase ──────────────────────────────────────────────────────────
-const SLA_STAGES = ["RECEBIDO", "TRIAGEM", "ANALISE", "PENDENCIA", "AVALIACAO_IMOVEL", "APROVACAO", "CONTRATO_ASSINADO", "REGISTRO_IMOVEL", "LIBERADO"] as const;
-type SlaStage = typeof SLA_STAGES[number];
+// SLA_STAGES, SLA_STAGE_LABELS, DEFAULT_SLA, getSlaStatus, getTicketSlaStatus
+// e parseLocalDate vêm de lib/mesa-operacional-sla.ts (compartilhado com o
+// cron de alerta automático, que roda no servidor sem acesso a localStorage).
 
-type SlaConfig = Record<SlaStage, number>;
-
-const SLA_STAGE_LABELS: Record<SlaStage, string> = {
-  RECEBIDO: "Recebido",
-  TRIAGEM: "Triagem",
-  ANALISE: "Análise",
-  PENDENCIA: "Pendência",
-  AVALIACAO_IMOVEL: "Avaliação de Imóvel",
-  APROVACAO: "Aprovação",
-  CONTRATO_ASSINADO: "Contrato Assinado",
-  REGISTRO_IMOVEL: "Registro de Imóveis",
-  LIBERADO: "Recurso Liberado",
-};
-
-const DEFAULT_SLA: SlaConfig = {
-  RECEBIDO: 1, TRIAGEM: 2, ANALISE: 5, PENDENCIA: 3,
-  AVALIACAO_IMOVEL: 15, APROVACAO: 2, CONTRATO_ASSINADO: 5, REGISTRO_IMOVEL: 30, LIBERADO: 3,
-};
+// Config compartilhada entre toda a equipe (GET/PUT /api/mesa-operacional/sla-config)
+// — antes vivia só em localStorage, cada pessoa via um prazo/status diferente
+// pro mesmo pipeline. localStorage vira só um cache pra pintar a tela na hora
+// (evita flash com o default) até a config real do servidor chegar.
 const SLA_STORAGE_KEY = "v3_sla_config";
 
-function loadSlaConfig(): SlaConfig {
+function loadSlaConfigCache(): SlaConfig {
   if (typeof window === "undefined") return DEFAULT_SLA;
   try {
     const raw = localStorage.getItem(SLA_STORAGE_KEY);
@@ -142,8 +133,25 @@ function loadSlaConfig(): SlaConfig {
   } catch { return DEFAULT_SLA; }
 }
 
-function saveSlaConfig(cfg: SlaConfig) {
-  try { localStorage.setItem(SLA_STORAGE_KEY, JSON.stringify(cfg)); } catch {}
+async function loadSlaConfig(): Promise<SlaConfig> {
+  try {
+    const res = await fetch("/api/mesa-operacional/sla-config");
+    if (!res.ok) return loadSlaConfigCache();
+    const { config } = await res.json();
+    try { localStorage.setItem(SLA_STORAGE_KEY, JSON.stringify(config)); } catch { /* ignora */ }
+    return config as SlaConfig;
+  } catch {
+    return loadSlaConfigCache();
+  }
+}
+
+async function saveSlaConfig(cfg: SlaConfig) {
+  try { localStorage.setItem(SLA_STORAGE_KEY, JSON.stringify(cfg)); } catch { /* ignora */ }
+  await fetch("/api/mesa-operacional/sla-config", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(cfg),
+  });
 }
 
 /** Retorna sla_override do deal: valores são ISO date strings (ex: "2026-05-25") */
@@ -160,52 +168,6 @@ function getDealSla(proposal: ProposalCard): Partial<SlaConfig> {
   return getDealSlaOverride(proposal) as unknown as Partial<SlaConfig>;
 }
 
-interface SlaStatusResult {
-  status: "ok" | "warning" | "danger";
-  daysLeft: number;       // positivo = dias restantes, negativo = dias vencidos
-  targetDate: string | null; // ISO date se definido por calendário
-  // legado
-  daysElapsed: number;
-  slaLimit: number;
-}
-
-function getSlaStatus(proposal: ProposalCard, slaConfig: SlaConfig): SlaStatusResult | null {
-  // Estágios terminais não têm "próxima etapa" para contar prazo até lá
-  if (!proposal.stage || (TERMINAL_STAGES as readonly string[]).includes(proposal.stage)) return null;
-  const stage = proposal.stage as SlaStage;
-  if (!SLA_STAGES.includes(stage)) return null;
-
-  const override = getDealSlaOverride(proposal);
-  const targetDateStr = override[stage];
-
-  if (targetDateStr && typeof targetDateStr === "string" && targetDateStr.match(/^\d{4}-\d{2}-\d{2}/)) {
-    // SLA por calendário: compara data alvo vs hoje
-    const target = parseLocalDate(targetDateStr);
-    target.setHours(23, 59, 59, 999);
-    const now = Date.now();
-    const diffMs = target.getTime() - now;
-    const daysLeft = Math.ceil(diffMs / 86400000);
-    let status: "ok" | "warning" | "danger";
-    if (daysLeft < 0) status = "danger";
-    else if (daysLeft <= 1) status = "warning";
-    else status = "ok";
-    return { status, daysLeft, targetDate: targetDateStr, daysElapsed: -daysLeft, slaLimit: 0 };
-  }
-
-  // Fallback: SLA global em dias
-  const stageChangedAt = proposal.metadata?.stage_changed_at as string | undefined;
-  const referenceDate = stageChangedAt ?? proposal.created_at;
-  if (!referenceDate) return null;
-  const elapsed = (Date.now() - new Date(referenceDate).getTime()) / 86400000;
-  const limit = slaConfig[stage] ?? DEFAULT_SLA[stage];
-  const ratio = elapsed / limit;
-  let status: "ok" | "warning" | "danger";
-  if (ratio >= 1) status = "danger";
-  else if (ratio >= 0.7) status = "warning";
-  else status = "ok";
-  return { status, daysLeft: Math.ceil(limit - elapsed), targetDate: null, daysElapsed: Math.floor(elapsed), slaLimit: limit };
-}
-
 // ─── SLA da Etapa Modal (automático ao mudar de stage) ────────────────────
 /** Formata Date como YYYY-MM-DD no fuso local (evita UTC shift) */
 function toLocalDateString(date: Date) {
@@ -215,11 +177,7 @@ function toLocalDateString(date: Date) {
   return `${y}-${m}-${d}`;
 }
 
-/** Parseia "YYYY-MM-DD" como horário local (evita UTC shift) */
-function parseLocalDate(str: string): Date {
-  const [y, m, d] = str.split("-").map(Number);
-  return new Date(y, m - 1, d);
-}
+// parseLocalDate vem de lib/mesa-operacional-sla.ts (import no topo do arquivo)
 
 function StageSLAModal({ open, onClose, proposal, stage, globalSla, onConfirm }: {
   open: boolean; onClose: () => void;
@@ -793,17 +751,7 @@ function ResolveModal({ open, onClose, ticket, onConfirm }: {
 }
 
 // ─── Helper: semáforo de prazo do ticket (due_date) ───────────────────────
-// Verde = dentro do prazo · Amarelo = vence hoje · Vermelho = atrasado
-const TICKET_SLA_TERMINAL_STATUSES = ["COMPLETED", "CANCELLED"];
-function getTicketSlaStatus(ticket: Ticket): "ok" | "warning" | "danger" | null {
-  if (!ticket.due_date || TICKET_SLA_TERMINAL_STATUSES.includes(ticket.status)) return null;
-  const due = new Date(ticket.due_date);
-  const isToday = due.toDateString() === new Date().toDateString();
-  due.setHours(23, 59, 59, 999); // fim do dia do prazo
-  if (due.getTime() < Date.now()) return "danger";
-  if (isToday) return "warning";
-  return "ok";
-}
+// getTicketSlaStatus vem de lib/mesa-operacional-sla.ts (import no topo)
 const TICKET_SLA_COLORS = { ok: "#10B981", warning: "#F59E0B", danger: "#EF4444" } as const;
 const TICKET_SLA_TEXT_CLASS = { ok: "text-emerald-400", warning: "text-amber-400", danger: "text-red-400" } as const;
 
@@ -1899,10 +1847,11 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
   }
   const [selectedStage, setSelectedStage] = useState<string | null>(null);
 
-  // SLA
-  const [slaConfig, setSlaConfig] = useState<SlaConfig>(DEFAULT_SLA);
+  // SLA — pinta com o cache local na hora (evita flash com o default), depois
+  // busca a config real do servidor (compartilhada com o resto da equipe).
+  const [slaConfig, setSlaConfig] = useState<SlaConfig>(loadSlaConfigCache);
   const [slaModalOpen, setSlaModalOpen] = useState(false);
-  useEffect(() => { setSlaConfig(loadSlaConfig()); }, []);
+  useEffect(() => { loadSlaConfig().then(setSlaConfig); }, []);
 
   // Filtros de tickets
   const [ticketSearch, setTicketSearch] = useState("");
@@ -3028,7 +2977,7 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
         open={slaModalOpen}
         onClose={() => setSlaModalOpen(false)}
         config={slaConfig}
-        onSave={(cfg) => { setSlaConfig(cfg); saveSlaConfig(cfg); }}
+        onSave={(cfg) => { setSlaConfig(cfg); void saveSlaConfig(cfg); }}
       />
 
       <StageSLAModal
