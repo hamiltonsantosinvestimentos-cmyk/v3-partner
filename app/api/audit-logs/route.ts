@@ -37,7 +37,23 @@ export async function GET(req: NextRequest) {
 
   const { data, error } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ logs: data ?? [] });
+
+  // Resumo (contagem de acessos/ações) só quando filtrando por um usuário
+  // específico — usado na tela Usuários pra responder "quantos acessos e
+  // ações essa pessoa fez", sem depender do limite da lista paginada acima.
+  let summary: { totalActions: number; totalAccesses: number; lastAccessAt: string | null } | undefined;
+  if (userId) {
+    const { count: totalActions } = await svc
+      .from("audit_logs").select("*", { count: "exact", head: true }).eq("user_id", userId);
+    const { count: totalAccesses } = await svc
+      .from("audit_logs").select("*", { count: "exact", head: true }).eq("user_id", userId).eq("action", "LOGIN");
+    const { data: lastAccess } = await svc
+      .from("audit_logs").select("created_at").eq("user_id", userId).eq("action", "LOGIN")
+      .order("created_at", { ascending: false }).limit(1).maybeSingle();
+    summary = { totalActions: totalActions ?? 0, totalAccesses: totalAccesses ?? 0, lastAccessAt: lastAccess?.created_at ?? null };
+  }
+
+  return NextResponse.json({ logs: data ?? [], summary });
 }
 
 // POST — registrar uma ação de auditoria (uso interno via server-side)

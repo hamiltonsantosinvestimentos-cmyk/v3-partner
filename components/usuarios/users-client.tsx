@@ -289,6 +289,8 @@ export function UsersClient({ initialUsers }: UsersClientProps) {
   };
 
   const [editError, setEditError] = useState("");
+  // "Histórico da conta" — o que ACONTECEU com esse cadastro (ex: admin mudou
+  // o role dele). Filtra por entity_id = o próprio profile.
   const [auditLogs, setAuditLogs] = useState<{ action: string; user_name: string; created_at: string }[]>([]);
   const [loadingAudit, setLoadingAudit] = useState(false);
   const [showAudit, setShowAudit] = useState(false);
@@ -303,6 +305,28 @@ export function UsersClient({ initialUsers }: UsersClientProps) {
       }
     } finally {
       setLoadingAudit(false);
+    }
+  }
+
+  // "Atividade do usuário" — o que essa PESSOA fez na plataforma (acessos +
+  // ações em qualquer entidade). Filtra por user_id, diferente do histórico
+  // da conta acima.
+  const [activityLogs, setActivityLogs] = useState<{ action: string; entity: string; entity_id: string | null; created_at: string }[]>([]);
+  const [activitySummary, setActivitySummary] = useState<{ totalActions: number; totalAccesses: number; lastAccessAt: string | null } | null>(null);
+  const [loadingActivity, setLoadingActivity] = useState(false);
+  const [showActivity, setShowActivity] = useState(false);
+
+  async function fetchActivity(userId: string) {
+    setLoadingActivity(true);
+    try {
+      const res = await fetch(`/api/audit-logs?user_id=${userId}&limit=50`);
+      if (res.ok) {
+        const d = await res.json();
+        setActivityLogs(d.logs ?? []);
+        setActivitySummary(d.summary ?? null);
+      }
+    } finally {
+      setLoadingActivity(false);
     }
   }
 
@@ -716,7 +740,7 @@ export function UsersClient({ initialUsers }: UsersClientProps) {
                   placeholder="000.000.000-00 ou 00.000.000/0001-00"
                 />
               </div>
-              {/* Histórico de auditoria */}
+              {/* Histórico da conta (o que aconteceu COM esse cadastro) */}
               <div className="border-t border-border/40 pt-3">
                 <button
                   type="button"
@@ -724,7 +748,7 @@ export function UsersClient({ initialUsers }: UsersClientProps) {
                   className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
                 >
                   <History className="w-3.5 h-3.5" />
-                  {showAudit ? "Ocultar histórico" : "Ver histórico de ações"}
+                  {showAudit ? "Ocultar histórico da conta" : "Ver histórico da conta"}
                 </button>
                 {showAudit && (
                   <div className="mt-2 max-h-36 overflow-y-auto space-y-1">
@@ -739,6 +763,55 @@ export function UsersClient({ initialUsers }: UsersClientProps) {
                         <span className="text-muted-foreground ml-2 whitespace-nowrap">{new Date(log.created_at).toLocaleString("pt-BR")}</span>
                       </div>
                     ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Atividade do usuário (acessos + ações QUE ELE FEZ na plataforma) */}
+              <div className="border-t border-border/40 pt-3">
+                <button
+                  type="button"
+                  onClick={() => { setShowActivity(v => !v); if (!showActivity && editUser) fetchActivity(editUser.id); }}
+                  className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <Clock className="w-3.5 h-3.5" />
+                  {showActivity ? "Ocultar atividade do usuário" : "Ver acessos e ações do usuário"}
+                </button>
+                {showActivity && (
+                  <div className="mt-2 space-y-2">
+                    {loadingActivity && <p className="text-xs text-muted-foreground">Carregando...</p>}
+                    {!loadingActivity && activitySummary && (
+                      <div className="grid grid-cols-3 gap-2">
+                        <div className="rounded-lg bg-secondary/40 px-2.5 py-2 text-center">
+                          <p className="text-base font-bold text-foreground">{activitySummary.totalAccesses}</p>
+                          <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Acessos</p>
+                        </div>
+                        <div className="rounded-lg bg-secondary/40 px-2.5 py-2 text-center">
+                          <p className="text-base font-bold text-foreground">{activitySummary.totalActions}</p>
+                          <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Ações</p>
+                        </div>
+                        <div className="rounded-lg bg-secondary/40 px-2.5 py-2 text-center">
+                          <p className="text-[11px] font-bold text-foreground">
+                            {activitySummary.lastAccessAt ? new Date(activitySummary.lastAccessAt).toLocaleDateString("pt-BR") : "—"}
+                          </p>
+                          <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Último acesso</p>
+                        </div>
+                      </div>
+                    )}
+                    <div className="max-h-40 overflow-y-auto space-y-1">
+                      {!loadingActivity && activityLogs.length === 0 && (
+                        <p className="text-xs text-muted-foreground">Nenhum acesso ou ação registrado ainda.</p>
+                      )}
+                      {activityLogs.map((log, i) => (
+                        <div key={i} className="flex items-center justify-between text-[11px] bg-secondary/40 rounded px-2 py-1">
+                          <span className={`font-medium ${log.action === "LOGIN" ? "text-[#C9A84C]" : "text-foreground"}`}>
+                            {log.action === "LOGIN" ? "Acesso" : log.action.replace(/_/g, " ")}
+                          </span>
+                          <span className="text-muted-foreground ml-2 truncate">{log.entity !== "profiles" ? log.entity.replace(/_/g, " ") : ""}</span>
+                          <span className="text-muted-foreground ml-2 whitespace-nowrap">{new Date(log.created_at).toLocaleString("pt-BR")}</span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
