@@ -48,8 +48,14 @@ const VALID_SERIES = ["V3C-ORG", "V3C-MAN", "V3C-PAR", "V3C-CES", "V3C-NDA", "V3
 
 export async function POST(req: NextRequest) {
   const caller = await requireAdmin(req);
-  if (!caller || caller.role !== "ADMIN")
-    return NextResponse.json({ error: "Apenas ADMIN pode criar templates" }, { status: 403 });
+  // P0 hotfix (02/09/2026): Dr. Athaydes (Jurídico) tem role GESTAO, não
+  // ADMIN, e estava bloqueado de criar minuta nenhuma. Não existe role
+  // "JURIDICO" no sistema (confirmado antes de codar, nenhuma migration
+  // cria esse valor no enum) — GESTAO já é aceito nas rotas irmãs
+  // (analyze-upload, GET desta mesma rota), estendido aqui pelo mesmo
+  // motivo, em vez de inventar um conceito de role novo.
+  if (!caller || !["ADMIN", "GESTAO"].includes(caller.role))
+    return NextResponse.json({ error: "Apenas ADMIN ou GESTAO podem criar templates" }, { status: 403 });
 
   const { template_name, vertical, body_text_raw, variables_map, contract_series } = await req.json();
 

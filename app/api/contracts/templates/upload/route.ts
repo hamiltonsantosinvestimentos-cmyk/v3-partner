@@ -7,18 +7,21 @@ function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 }
 
-async function requireAdmin(req: NextRequest) {
+// P0 hotfix (02/09/2026): mesmo motivo do POST de app/api/contracts/templates/route.ts
+// — Dr. Athaydes (Jurídico) tem role GESTAO, não existe role "JURIDICO" no
+// sistema, GESTAO estendido aqui em vez de inventar role nova.
+async function requireWriter(req: NextRequest) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
   const { data: profile } = await svc().from("profiles").select("role").eq("id", user.id).single();
-  if (!profile || profile.role !== "ADMIN") return null;
+  if (!profile || !["ADMIN", "GESTAO"].includes(profile.role as string)) return null;
   return { userId: user.id };
 }
 
 export async function POST(req: NextRequest) {
-  const caller = await requireAdmin(req);
-  if (!caller) return NextResponse.json({ error: "Apenas ADMIN pode fazer upload" }, { status: 403 });
+  const caller = await requireWriter(req);
+  if (!caller) return NextResponse.json({ error: "Apenas ADMIN ou GESTAO podem fazer upload" }, { status: 403 });
 
   const formData = await req.formData();
   const file = formData.get("file") as File | null;

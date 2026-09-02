@@ -7,12 +7,17 @@ function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 }
 
-async function requireAdmin() {
+// P0 hotfix (02/09/2026): mesmo motivo das rotas irmãs (templates POST,
+// templates/upload POST) — Dr. Athaydes (Jurídico) tem role GESTAO, não
+// ADMIN, e estava bloqueado de salvar edição/enviar para revisão até em
+// minuta que ele próprio acabou de criar ou subir. Não existe role
+// "JURIDICO" no enum do sistema, GESTAO estendido aqui em vez disso.
+async function requireWriter() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
   const { data: profile } = await svc().from("profiles").select("role").eq("id", user.id).single();
-  if (!profile || profile.role !== "ADMIN") return null;
+  if (!profile || !["ADMIN", "GESTAO"].includes(profile.role as string)) return null;
   return user.id;
 }
 
@@ -20,8 +25,8 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const userId = await requireAdmin();
-  if (!userId) return NextResponse.json({ error: "Apenas ADMIN" }, { status: 403 });
+  const userId = await requireWriter();
+  if (!userId) return NextResponse.json({ error: "Apenas ADMIN ou GESTAO" }, { status: 403 });
 
   const { id } = await params;
   const body = await req.json();
@@ -78,11 +83,22 @@ export async function PATCH(
   return NextResponse.json({ template: data });
 }
 
+async function requireAdminOnly() {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+  const { data: profile } = await svc().from("profiles").select("role").eq("id", user.id).single();
+  if (!profile || profile.role !== "ADMIN") return null;
+  return user.id;
+}
+
 export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const userId = await requireAdmin();
+  // Desativar minuta permanece ADMIN-only, deliberado -- fora do escopo do
+  // hotfix (só pediram INSERT/UPDATE), e é uma ação destrutiva de maior risco.
+  const userId = await requireAdminOnly();
   if (!userId) return NextResponse.json({ error: "Apenas ADMIN" }, { status: 403 });
 
   const { id } = await params;
