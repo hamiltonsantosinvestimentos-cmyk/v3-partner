@@ -148,6 +148,26 @@ export interface CreditReportData {
     concentracaoBancaria: string | null;
   };
 
+  /**
+   * SCR do Banco Central via CheckTudo (querycode 3090), consulta automática
+   * plugada em 01/09/2026 — canal novo, distinto do Registrato manual em
+   * `bacen` acima (upload de PDF pelo titular). Achado 02/09/2026: o motor
+   * n8n nunca soube dessa consulta (roda fora do n8n, direto no portal), então
+   * `sources_free`/`sources_paid` nunca incluíam "registrato_bacen" mesmo
+   * quando a consulta rodou de verdade — o dossiê dizia "não disponível" com
+   * dado real disponível ao lado. Corrigido junto com este bloco.
+   */
+  bacenScr: {
+    consultado: boolean;
+    scorePontuacao: string | null;
+    scoreFaixa: string | null;
+    creditoVencidoValor: string | null;
+    creditoVencidoOperacoes: Array<{ descricao: string | null; valor: string | null; qtdMeses: string | null }>;
+    prejuizoValor: string | null;
+    prejuizoOperacoes: Array<{ descricao: string | null; valor: string | null; qtdMeses: string | null }>;
+    consultadoEm: string | null;
+  };
+
   ceis: {
     hasMatch: boolean;
     consultado: boolean;
@@ -263,7 +283,7 @@ export async function buildCreditReportData(creditProfileId: string): Promise<Cr
   const { data: profile } = await svc
     .from("credit_profiles")
     .select(
-      "id, subject_name, subject_cpf_cnpj, subject_type, created_at, sources_free, sources_paid, flags, raw_result, registrato_data, escavador_data, serasa_data, receita_data, score_identidade, score_credito, score_judicial, score_patrimonial, score_comportamental, score_setorial, score_total, tier, spread_min, spread_max"
+      "id, subject_name, subject_cpf_cnpj, subject_type, created_at, sources_free, sources_paid, flags, raw_result, registrato_data, escavador_data, serasa_data, receita_data, bacen_scr_data, score_identidade, score_credito, score_judicial, score_patrimonial, score_comportamental, score_setorial, score_total, tier, spread_min, spread_max"
     )
     .eq("id", creditProfileId)
     .single();
@@ -288,7 +308,11 @@ export async function buildCreditReportData(creditProfileId: string): Promise<Cr
 
   const sources: CreditReportSource[] = SOURCE_CATALOG.map((s) => ({
     ...s,
-    consulted: consultedKeys.has(s.key),
+    // registrato_bacen roda fora do n8n desde 01/09/2026 (CheckTudo, direto no
+    // portal), nunca aparece em sources_free/sources_paid (só o motor escreve
+    // lá). Conta como consultada também quando bacen_scr_data foi de fato
+    // preenchido, senão o dossiê acusava "não consultada" com dado real ao lado.
+    consulted: s.key === "registrato_bacen" ? (consultedKeys.has(s.key) || bacenScrConsultado) : consultedKeys.has(s.key),
   }));
 
   const rawResult = (profile.raw_result ?? {}) as Record<string, unknown>;
@@ -300,6 +324,8 @@ export async function buildCreditReportData(creditProfileId: string): Promise<Cr
   const rf = (profile.receita_data ?? null) as Record<string, any> | null;
   const ser = (profile.serasa_data ?? null) as Record<string, any> | null;
   const esc = (profile.escavador_data ?? null) as Record<string, any> | null;
+  const bacenScr = (profile.bacen_scr_data ?? null) as Record<string, any> | null;
+  const bacenScrConsultado = bacenScr !== null;
 
   const docDigits = String(profile.subject_cpf_cnpj ?? "").replace(/\D/g, "");
   const subjectType: "PF" | "PJ" =
@@ -381,7 +407,7 @@ export async function buildCreditReportData(creditProfileId: string): Promise<Cr
   if (!consultedKeys.has("escavador")) {
     alertas.push("Escavador não consultado. A cobertura judicial fica limitada aos tribunais do CNJ DataJud.");
   }
-  if (!registratoHasData) {
+  if (!registratoHasData && !bacenScrConsultado) {
     alertas.push("Registrato BACEN não disponível. Endividamento bancário e concentração não puderam ser avaliados.");
   }
   if (typeof rawResult.ceis_error === "string" && rawResult.ceis_error) {
@@ -524,6 +550,31 @@ export async function buildCreditReportData(creditProfileId: string): Promise<Cr
       atraso90: (registratoData.atraso_90 as number) ?? null,
       valorTotalAtraso: (registratoData.valor_total_atraso as string) ?? null,
       concentracaoBancaria: (registratoData.concentracao_bancaria as string) ?? null,
+    },
+
+    bacenScr: {
+      consultado: bacenScrConsultado,
+      scorePontuacao: (bacenScr?.score_pontuacao as string) ?? null,
+      scoreFaixa: (bacenScr?.score_faixa as string) ?? null,
+      creditoVencidoValor: (bacenScr?.credito_vencido_valor as string) ?? null,
+      creditoVencidoOperacoes: Array.isArray(bacenScr?.credito_vencido_operacoes)
+        ? (bacenScr!.credito_vencido_operacoes as Array<Record<string, any>>).map((o) => ({
+            descricao: o.descricao ?? null,
+            valor: o.valor ?? null,
+            qtdMeses: o.qtd_meses ?? null,
+          }))
+        : [],
+      prejuizoValor: (bacenScr?.prejuizo_valor as string) ?? null,
+      prejuizoOperacoes: Array.isArray(bacenScr?.prejuizo_operacoes)
+        ? (bacenScr!.prejuizo_operacoes as Array<Record<string, any>>).map((o) => ({
+            descricao: o.descricao ?? null,
+            valor: o.valor ?? null,
+            qtdMeses: o.qtd_meses ?? null,
+          }))
+        : [],
+      consultadoEm: bacenScr?.consultado_em
+        ? new Date(bacenScr.consultado_em as string).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })
+        : null,
     },
 
     // consultado precisa ser explícito: sem isso o dossiê afirmava "nenhuma sanção

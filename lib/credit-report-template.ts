@@ -481,9 +481,56 @@ export function buildExternalReportBodyHtml(data: CreditReportData): string {
         : `<div class="flag-box good"><strong>Nenhuma sanção localizada</strong>Não há registro no Cadastro de Empresas Inidôneas e Suspensas (CEIS) para este documento.</div>`
   }`;
 
-  // ----- BACEN -----
+  // ----- BACEN (SCR via CheckTudo, consulta automática desde 01/09/2026) -----
+  // Canal novo, distinto do Registrato manual abaixo (upload de PDF pelo
+  // titular). Prioridade: se a consulta automática rodou, mostra ela (mais
+  // recente e mais confiável que depender do titular enviar o PDF); senão
+  // cai no bloco legado; senão, mensagem única de "não disponível".
+  const bs = data.bacenScr;
+  const bacenScrOpsList = (ops: typeof bs.creditoVencidoOperacoes) =>
+    ops.length
+      ? `<ul style="margin:6px 0 0 18px;padding:0">${ops
+          .map(
+            (o) =>
+              `<li style="font-size:12px;color:var(--mu);margin-bottom:3px">${v(o.descricao, "Operação")} — ${v(o.valor)}${
+                o.qtdMeses ? ` (${esc(String(o.qtdMeses))} meses em atraso)` : ""
+              }</li>`
+          )
+          .join("")}</ul>`
+      : "";
+  const bacenScrBlock = bs.consultado
+    ? `<div class="keep"><h3 class="sec">Endividamento bancário (SCR · consulta automática)</h3>
+  <p class="note">Sistema de Informações de Crédito do Banco Central, consultado automaticamente na data de emissão${
+    bs.consultadoEm ? ` (${esc(bs.consultadoEm)})` : ""
+  }.</p>
+  ${
+    bs.scorePontuacao
+      ? `<div class="kv"><div><div class="kv-row"><span>Score SCR</span><span>${v(bs.scorePontuacao)}${
+          bs.scoreFaixa ? ` (${esc(bs.scoreFaixa)})` : ""
+        }</span></div></div></div>`
+      : ""
+  }
+  ${
+    bs.creditoVencidoOperacoes.length > 0
+      ? `<div class="hl hl-red"><strong>Crédito vencido no SCR: ${v(bs.creditoVencidoValor)}.</strong> Operação vencida há mais de 14 dias, conforme critério do Banco Central.${bacenScrOpsList(
+          bs.creditoVencidoOperacoes
+        )}</div>`
+      : `<div class="hl hl-green"><strong>Nenhum crédito vencido no SCR.</strong> Não há operação vencida há mais de 14 dias registrada no Banco Central.</div>`
+  }
+  ${
+    bs.prejuizoOperacoes.length > 0
+      ? `<div class="hl hl-red"><strong>Prejuízo registrado no SCR: ${v(bs.prejuizoValor)}.</strong> Operação em atraso há mais de 180 dias.${bacenScrOpsList(
+          bs.prejuizoOperacoes
+        )}</div>`
+      : ""
+  }</div>`
+    : null;
+
+  // ----- Registrato BACEN (upload manual pelo titular, canal legado) -----
   const bc = data.bacen;
-  const bacenBlock = bc.hasData
+  const bacenBlock = bacenScrBlock !== null
+    ? bacenScrBlock
+    : bc.hasData
     ? `<div class="keep"><h3 class="sec">Endividamento bancário (SCR · Registrato BACEN)</h3>
   <p class="note">Extrato oficial do Sistema de Informações de Crédito do Banco Central, apresentado pelo titular. Período ${v(bc.periodo)}${
         bc.emitidoEm ? ` · emitido em ${esc(bc.emitidoEm)}` : ""
@@ -537,7 +584,7 @@ export function buildExternalReportBodyHtml(data: CreditReportData): string {
       : ""
   }`
     : `<h3 class="sec">Endividamento bancário (SCR · Registrato BACEN)</h3>
-  <p class="note">Não disponível. O extrato do Registrato depende de autorização e envio pelo próprio titular, e não foi apresentado até a emissão deste dossiê.</p>`;
+  <p class="note">Não disponível. Nem a consulta automática ao SCR nem o extrato do Registrato enviado pelo titular estavam presentes até a emissão deste dossiê.</p>`;
 
   // ----- Fontes e cobertura -----
   const fontesBlock = `<h3 class="sec">Fontes consultadas e cobertura</h3>
