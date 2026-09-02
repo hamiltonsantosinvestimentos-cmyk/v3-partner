@@ -61,6 +61,16 @@ export function PedidoDetailModal({ order, onClose, onUpdated }: Props) {
   }
 
   async function handleGenerateReport() {
+    // Regenerar substitui o token público do relatório -- um link já enviado
+    // ao cliente (se o pedido já tinha sido marcado como entregue) para de
+    // funcionar. Confirma antes só nesse caso; na primeira geração ou depois
+    // de um erro anterior (relatório nunca chegou a existir), gera direto.
+    if (order.report_public_token && order.report_delivered_at) {
+      const ok = window.confirm(
+        "Isso gera um relatório novo e invalida o link já enviado ao cliente por email. Você vai precisar reenviar o novo link depois. Continuar?"
+      );
+      if (!ok) return;
+    }
     const json = await call("report", `/api/credit-engine/orders/${order.id}/generate-report`);
     if (json?.pdf_url) setReportUrl(json.pdf_url);
     if (json) onUpdated();
@@ -139,9 +149,11 @@ export function PedidoDetailModal({ order, onClose, onUpdated }: Props) {
                 done={hasReport}
                 label="Relatório gerado"
                 action={
-                  hasAnalysis && !hasReport ? (
-                    <Button size="sm" disabled={busy !== null} onClick={handleGenerateReport}>
-                      {busy === "report" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Gerar relatório"}
+                  hasAnalysis ? (
+                    <Button size="sm" variant={hasReport ? "outline" : "default"} disabled={busy !== null} onClick={handleGenerateReport}>
+                      {busy === "report"
+                        ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        : hasReport ? "Gerar novamente" : "Gerar relatório"}
                     </Button>
                   ) : undefined
                 }
