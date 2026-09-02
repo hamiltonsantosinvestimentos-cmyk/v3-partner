@@ -306,6 +306,14 @@ export async function buildCreditReportData(creditProfileId: string): Promise<Cr
   const sourcesPaid = (profile.sources_paid ?? []) as string[];
   const consultedKeys = new Set([...sourcesFree, ...sourcesPaid]);
 
+  // Precisa vir antes de `sources` (usa bacenScrConsultado no map abaixo).
+  // Bug real encontrado 02/09/2026 rodando local: declarar isso depois do
+  // `sources` compila limpo no tsc (não pega TDZ dentro de closure), mas
+  // quebra em runtime com "Cannot access 'bacenScrConsultado' before
+  // initialization" — só apareceu testando de verdade, nunca no tsc/build.
+  const bacenScr = (profile.bacen_scr_data ?? null) as Record<string, any> | null;
+  const bacenScrConsultado = bacenScr !== null;
+
   const sources: CreditReportSource[] = SOURCE_CATALOG.map((s) => ({
     ...s,
     // registrato_bacen roda fora do n8n desde 01/09/2026 (CheckTudo, direto no
@@ -324,8 +332,6 @@ export async function buildCreditReportData(creditProfileId: string): Promise<Cr
   const rf = (profile.receita_data ?? null) as Record<string, any> | null;
   const ser = (profile.serasa_data ?? null) as Record<string, any> | null;
   const esc = (profile.escavador_data ?? null) as Record<string, any> | null;
-  const bacenScr = (profile.bacen_scr_data ?? null) as Record<string, any> | null;
-  const bacenScrConsultado = bacenScr !== null;
 
   const docDigits = String(profile.subject_cpf_cnpj ?? "").replace(/\D/g, "");
   const subjectType: "PF" | "PJ" =

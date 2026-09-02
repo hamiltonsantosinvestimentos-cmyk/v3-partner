@@ -492,7 +492,7 @@ export function buildExternalReportBodyHtml(data: CreditReportData): string {
       ? `<ul style="margin:6px 0 0 18px;padding:0">${ops
           .map(
             (o) =>
-              `<li style="font-size:12px;color:var(--mu);margin-bottom:3px">${v(o.descricao, "Operação")} — ${v(o.valor)}${
+              `<li style="font-size:12px;color:var(--mu);margin-bottom:3px">${v(o.descricao, "Operação")}: ${v(o.valor)}${
                 o.qtdMeses ? ` (${esc(String(o.qtdMeses))} meses em atraso)` : ""
               }</li>`
           )
@@ -522,7 +522,7 @@ export function buildExternalReportBodyHtml(data: CreditReportData): string {
       ? `<div class="hl hl-red"><strong>Prejuízo registrado no SCR: ${v(bs.prejuizoValor)}.</strong> Operação em atraso há mais de 180 dias.${bacenScrOpsList(
           bs.prejuizoOperacoes
         )}</div>`
-      : ""
+      : `<div class="hl hl-green"><strong>Nenhum prejuízo registrado no SCR.</strong> Não há operação em atraso há mais de 180 dias.</div>`
   }</div>`
     : null;
 
