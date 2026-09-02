@@ -2,8 +2,9 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
-import { Plus, Save, Trash2, Loader2, FileText, Eye, ChevronDown, Upload, Send, CheckCircle2, XCircle, Scale, Users, X, FilePlus2 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { Plus, Save, Trash2, Loader2, FileText, Eye, ChevronDown, Upload, Send, CheckCircle2, XCircle, Scale, Users, X, FilePlus2, UserPlus, Copy, Share2 } from "lucide-react";
+import { cn, isValidEmail } from "@/lib/utils";
+import { ROLE_LABELS } from "@/lib/qualification-roles";
 
 interface RiscoLaudo {
   resumo?: string;
@@ -30,6 +31,21 @@ interface Template {
   valor_operacao_estimado?: number | null;
 }
 
+interface QualParty {
+  id: string;
+  full_name: string;
+  email: string;
+  role_in_document: string;
+  status: string;
+  qualification_token: string;
+}
+
+interface QualBatch {
+  id: string;
+  status: string;
+  cm_party_qualifications: QualParty[];
+}
+
 interface TemplateReview {
   id: string;
   reviewer_name: string;
@@ -51,6 +67,19 @@ const SERIES_LABELS: Record<string, string> = {
   "V3C-FOR": "V3C-FOR · Fornecedor",
   "V3C-FUN": "V3C-FUN · Fundo",
   "V3C-REG": "V3C-REG · Regularização de Contrato Manual",
+};
+
+// Qualificação Antecipada vinculada à Minuta (02/09/2026, P1): /api/cm/qualifications
+// exige document_type (um dos 6 valores fixos da rota) sempre que a origem não é
+// listing_id/demand_id -- template_id cai nessa exigência. Mapeamento pela série
+// V3C-* da própria minuta, único sinal confiável que já existe antes de qualquer
+// contrato ser gerado (contract_series é imutável desde a criação da minuta).
+// FPA não distingue venda/compra por série sozinha -- fallback honesto para
+// "contrato_final" nesse caso e em qualquer série sem correspondência direta.
+const SERIES_TO_DOCUMENT_TYPE: Record<string, string> = {
+  "V3C-NDA": "nda_quadripartite",
+  "V3C-MAN": "mandato",
+  "V3C-PAR": "contrato_parceria",
 };
 
 const APPROVAL_STATUS_MAP: Record<string, { label: string; color: string }> = {
@@ -125,6 +154,19 @@ export function ContractTemplatesClient() {
   const [reviewComment, setReviewComment] = useState("");
   const [submittingReview, setSubmittingReview] = useState(false);
   const [submittingForReview, setSubmittingForReview] = useState(false);
+
+  // Qualificação Antecipada vinculada à Minuta (02/09/2026, P1): BackOffice
+  // coleta KYC enquanto o jurídico ainda revisa o texto, sem esperar o
+  // primeiro contrato ser gerado. Single-use (decisão de negócio de João) --
+  // /api/contracts/generate consome automaticamente o lote mais recente
+  // ainda não consumido para esta minuta na primeira geração.
+  const [qualBatches, setQualBatches] = useState<QualBatch[]>([]);
+  const [showQualModal, setShowQualModal] = useState(false);
+  const [qualParties, setQualParties] = useState<{ full_name: string; email: string; role_in_document: string }[]>([
+    { full_name: "", email: "", role_in_document: "parte_principal" },
+  ]);
+  const [creatingQualification, setCreatingQualification] = useState(false);
+  const [copiedToken, setCopiedToken] = useState("");
 
   // Gerar Contrato a partir de minuta aprovada (19/08/2026, itens 1 e 3 dos
   // ajustes de governança pedidos por João): reaproveita a origem "avulso"
@@ -309,6 +351,14 @@ export function ContractTemplatesClient() {
     } catch { setReviews([]); }
   };
 
+  const loadTemplateQualifications = async (templateId: string) => {
+    try {
+      const res = await fetch(`/api/cm/qualifications?template_id=${templateId}`);
+      const json = await res.json();
+      setQualBatches(json.batches ?? []);
+    } catch { setQualBatches([]); }
+  };
+
   const selectTemplate = (t: Template) => {
     setSelected(t);
     setIsNew(false);
@@ -317,6 +367,57 @@ export function ContractTemplatesClient() {
     setFormBody(t.body_text_raw);
     setReviewComment("");
     loadReviews(t.id);
+    loadTemplateQualifications(t.id);
+  };
+
+  const openQualModal = () => {
+    setQualParties([{ full_name: "", email: "", role_in_document: "parte_principal" }]);
+    setShowQualModal(true);
+  };
+  const addQualPartyRow = () => setQualParties((prev) => [...prev, { full_name: "", email: "", role_in_document: "parte_principal" }]);
+  const removeQualPartyRow = (index: number) => setQualParties((prev) => prev.filter((_, i) => i !== index));
+  const updateQualPartyRow = (index: number, field: "full_name" | "email" | "role_in_document", value: string) => {
+    setQualParties((prev) => prev.map((row, i) => (i === index ? { ...row, [field]: value } : row)));
+  };
+
+  const submitTemplateQualification = async () => {
+    if (!selected) return;
+    const invalid = qualParties.some((p) => !p.full_name.trim() || !isValidEmail(p.email));
+    if (qualParties.length === 0 || invalid) {
+      alert("Preencha nome e e-mail válido para todos os envolvidos");
+      return;
+    }
+    setCreatingQualification(true);
+    try {
+      const documentType = SERIES_TO_DOCUMENT_TYPE[selected.contract_series ?? ""] ?? "contrato_final";
+      const res = await fetch("/api/cm/qualifications", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ template_id: selected.id, document_type: documentType, parties: qualParties }),
+      });
+      const json = await res.json();
+      if (res.ok) {
+        setShowQualModal(false);
+        loadTemplateQualifications(selected.id);
+      } else {
+        alert(json.error ?? "Erro ao gerar qualificação antecipada");
+      }
+    } catch { alert("Erro de conexão"); }
+    finally { setCreatingQualification(false); }
+  };
+
+  const qualificationLink = (token: string) =>
+    `${typeof window !== "undefined" ? window.location.origin : "https://app.v3partners.com.br"}/intake/qualificacao/${token}`;
+
+  const copyQualLink = (token: string) => {
+    navigator.clipboard.writeText(qualificationLink(token));
+    setCopiedToken(token);
+    setTimeout(() => setCopiedToken(""), 2000);
+  };
+
+  const whatsappQualLink = (party: QualParty, templateName: string) => {
+    const msg = `Olá ${party.full_name}, você foi cadastrado(a) como envolvido(a) na minuta "${templateName}" da V3 Partners. Complete seus dados de qualificação para prosseguirmos: ${qualificationLink(party.qualification_token)}`;
+    return `https://wa.me/?text=${encodeURIComponent(msg)}`;
   };
 
   const startNew = () => {
@@ -327,6 +428,7 @@ export function ContractTemplatesClient() {
     setFormSeries("V3C-PAR");
     setFormBody("");
     setReviews([]);
+    setQualBatches([]);
   };
 
   const handleSubmitForReview = async () => {
@@ -499,6 +601,12 @@ export function ContractTemplatesClient() {
                     {(APPROVAL_STATUS_MAP[selected.approval_status] ?? APPROVAL_STATUS_MAP.rascunho).label}
                   </span>
                   <div className="flex items-center gap-2">
+                    {["rascunho", "em_revisao"].includes(selected.approval_status) && (
+                      <button onClick={openQualModal}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-[#162744] text-[#9BAFC5] border border-[#9BAFC5]/20 rounded-lg text-xs font-bold hover:text-[#F5F1E8] hover:bg-[#243A66] transition">
+                        <UserPlus size={13} /> Gerar Link de Qualificação Antecipada
+                      </button>
+                    )}
                     {["rascunho", "reprovado"].includes(selected.approval_status) && (
                       <button onClick={handleSubmitForReview} disabled={submittingForReview}
                         className="flex items-center gap-1.5 px-3 py-1.5 bg-[#162744] text-[#C9A84C] border border-[#C9A84C]/30 rounded-lg text-xs font-bold hover:bg-[#C9A84C]/10 transition disabled:opacity-50">
@@ -511,6 +619,56 @@ export function ContractTemplatesClient() {
                         <FilePlus2 size={13} /> Gerar Contrato
                       </button>
                     )}
+                  </div>
+                </div>
+              )}
+
+              {selected && qualBatches.length > 0 && (
+                <div className="mb-4 bg-[#09081A] border border-[#9BAFC5]/10 rounded-lg p-4">
+                  <h3 className="text-xs font-bold text-[#F5F1E8] mb-3 flex items-center gap-2">
+                    <UserPlus size={13} className="text-[#C9A84C]" /> Qualificação Antecipada
+                  </h3>
+                  <div className="space-y-3">
+                    {qualBatches.map((batch) => (
+                      <div key={batch.id} className="bg-[#12112A] border border-[#9BAFC5]/10 rounded-lg p-3">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-[9px] font-bold text-[#C9A84C] uppercase">Lote de Qualificação</span>
+                          <span className={cn("text-[8px] font-bold uppercase px-1.5 py-0.5 rounded border",
+                            batch.status === "completo" ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" : "bg-[#243A66] text-[#9BAFC5] border-[#9BAFC5]/15"
+                          )}>
+                            {batch.cm_party_qualifications.filter((p) => p.status === "preenchido").length}/{batch.cm_party_qualifications.length} qualificados
+                          </span>
+                        </div>
+                        <div className="space-y-1.5">
+                          {batch.cm_party_qualifications.map((p) => (
+                            <div key={p.id} className="flex items-center justify-between gap-2 bg-[#162744] rounded px-2.5 py-1.5">
+                              <div className="min-w-0">
+                                <p className="text-xs text-[#F5F1E8] truncate">{p.full_name} <span className="text-[9px] text-[#9BAFC5]">· {ROLE_LABELS[p.role_in_document] ?? p.role_in_document}</span></p>
+                              </div>
+                              {p.status === "preenchido" ? (
+                                <span className="text-[9px] text-emerald-400 flex items-center gap-1 flex-shrink-0"><CheckCircle2 size={11} /> Qualificado</span>
+                              ) : (
+                                <div className="flex items-center gap-1.5 flex-shrink-0">
+                                  <button onClick={() => copyQualLink(p.qualification_token)}
+                                    className="flex items-center gap-1 text-[9px] font-semibold text-[#C9A84C] px-2 py-1 rounded border border-[#C9A84C]/40 bg-[#C9A84C]/10 hover:bg-[#C9A84C]/20 transition-colors">
+                                    <Copy size={10} /> {copiedToken === p.qualification_token ? "Copiado" : "Copiar link"}
+                                  </button>
+                                  <a href={whatsappQualLink(p, selected.template_name)} target="_blank" rel="noopener noreferrer"
+                                    className="flex items-center gap-1 text-[9px] font-semibold text-emerald-400 px-2 py-1 rounded border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 transition-colors">
+                                    <Share2 size={10} /> WhatsApp
+                                  </a>
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                        {batch.status === "completo" && !batch.cm_party_qualifications.some((p) => p.status !== "preenchido") && (
+                          <p className="mt-2 text-[9px] text-[#9BAFC5]">
+                            Lote completo. Os dados serão herdados automaticamente no primeiro contrato gerado a partir desta minuta (single-use: não reaproveitável em outro contrato).
+                          </p>
+                        )}
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}
@@ -823,6 +981,61 @@ export function ContractTemplatesClient() {
                 className="flex items-center gap-2 px-4 py-2 bg-[#C9A84C] text-[#09081A] rounded-lg text-xs font-bold hover:bg-[#E8C97A] disabled:opacity-40 transition">
                 {analyzing ? <Loader2 size={14} className="animate-spin" /> : <FileText size={14} />}
                 {analyzing ? "Enviando..." : "Enviar para Análise"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Qualificação Antecipada (02/09/2026, P1): dispara
+          /api/cm/qualifications com template_id, antes de qualquer contrato
+          existir. Single-use -- o primeiro contrato gerado a partir desta
+          minuta consome o lote automaticamente. */}
+      {showQualModal && selected && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60" onClick={() => setShowQualModal(false)}>
+          <div className="w-full max-w-lg max-h-[85vh] bg-[#09081A] border border-[#C9A84C]/20 rounded-xl flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="p-4 border-b border-[#C9A84C]/20 flex items-center justify-between flex-shrink-0">
+              <div>
+                <div className="text-sm font-bold text-[#F5F1E8]">Gerar Link de Qualificação Antecipada</div>
+                <div className="text-[10px] text-[#9BAFC5]">{selected.template_name}</div>
+              </div>
+              <button onClick={() => setShowQualModal(false)} className="text-[#9BAFC5] hover:text-[#F5F1E8] text-xl">&times;</button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+              <p className="text-[11px] text-[#9BAFC5] leading-relaxed">
+                Cada envolvido recebe um link individual para preencher seus próprios dados (CPF/CNPJ, RG, endereço) antes mesmo do contrato ser gerado. Quando a Mesa gerar o primeiro contrato a partir desta minuta, os dados são herdados automaticamente. Este lote é single-use: uma vez consumido por um contrato, o próximo contrato gerado por esta mesma minuta exige uma nova qualificação (evita misturar dados de clientes/deals diferentes).
+              </p>
+              <div className="space-y-2">
+                {qualParties.map((row, i) => (
+                  <div key={i} className="bg-[#12112A] border border-[#9BAFC5]/10 rounded-lg p-2 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[9px] text-[#9BAFC5] uppercase">Envolvido {i + 1}</span>
+                      {qualParties.length > 1 && (
+                        <button onClick={() => removeQualPartyRow(i)}><X size={12} className="text-red-400/70 hover:text-red-400" /></button>
+                      )}
+                    </div>
+                    <input value={row.full_name} onChange={(e) => updateQualPartyRow(i, "full_name", e.target.value)} placeholder="Nome completo *"
+                      className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]" />
+                    <input value={row.email} onChange={(e) => updateQualPartyRow(i, "email", e.target.value)} placeholder="E-mail *" type="email"
+                      className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]" />
+                    <select value={row.role_in_document} onChange={(e) => updateQualPartyRow(i, "role_in_document", e.target.value)}
+                      className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]">
+                      {Object.entries(ROLE_LABELS).map(([value, label]) => (
+                        <option key={value} value={value}>{label}</option>
+                      ))}
+                    </select>
+                  </div>
+                ))}
+              </div>
+              <button onClick={addQualPartyRow}
+                className="w-full flex items-center justify-center gap-1.5 px-3 py-2 bg-[#162744] border border-[#9BAFC5]/15 rounded text-[#9BAFC5] text-[10px] font-bold hover:text-[#F5F1E8] transition">
+                <Plus size={12} /> Adicionar Envolvido
+              </button>
+            </div>
+            <div className="p-4 border-t border-[#C9A84C]/20 flex-shrink-0">
+              <button onClick={submitTemplateQualification} disabled={creatingQualification}
+                className="w-full px-3 py-2.5 bg-[#C9A84C] text-[#09081A] rounded-lg text-xs font-bold hover:bg-[#E8C97A] transition disabled:opacity-50 flex items-center justify-center gap-2">
+                {creatingQualification ? <Loader2 size={14} className="animate-spin" /> : null} Enviar Links de Qualificação
               </button>
             </div>
           </div>

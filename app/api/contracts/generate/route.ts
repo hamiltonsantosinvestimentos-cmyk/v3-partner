@@ -244,11 +244,44 @@ export async function POST(req: NextRequest) {
   // deve escrever os 4 templates reais usando essas chaves.
   let qualificationParties: { role: string; name: string; doc: string | null; email: string }[] | null = null;
 
-  if (qualification_batch_id) {
+  // Qualificação Antecipada vinculada à Minuta (02/09/2026, P1): se a Mesa
+  // não passou qualification_batch_id explicitamente, procurar um lote
+  // completo e ainda não consumido para a MESMA minuta (template_id). Isso
+  // é o que faz o botão "Gerar Link de Qualificação Antecipada" (na tela da
+  // Minuta) surtir efeito automaticamente na primeira geração de contrato,
+  // sem a Mesa precisar selecionar o lote manualmente.
+  //
+  // Single-use, decisão de negócio de João (Opção A, confirmada
+  // explicitamente): minutas são reutilizáveis para múltiplas operações e
+  // clientes distintos neste modelo de negócio (M&A/Estruturação).
+  // Reaproveitar o mesmo lote em contratos diferentes vazaria CPF/RG/
+  // endereço de um cliente/deal para outro (risco real de LGPD e sigilo de
+  // parceiros) -- por isso o filtro `consumido_por_contract_id is null`
+  // abaixo, e por isso o lote é marcado como consumido logo após o insert
+  // do contrato ter sucesso (ver bloco depois do insert).
+  let effectiveQualificationBatchId: string | null = qualification_batch_id ?? null;
+  let autoDetectedBatch = false;
+  if (!effectiveQualificationBatchId) {
+    const { data: earlyBatch } = await svc()
+      .from("cm_qualification_batches")
+      .select("id")
+      .eq("template_id", template_id)
+      .eq("status", "completo")
+      .is("consumido_por_contract_id", null)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (earlyBatch?.id) {
+      effectiveQualificationBatchId = earlyBatch.id;
+      autoDetectedBatch = true;
+    }
+  }
+
+  if (effectiveQualificationBatchId) {
     const { data: qualifications } = await svc()
       .from("cm_party_qualifications")
       .select("full_name, email, phone, role_in_document, cpf_cnpj, rg, endereco_completo, person_type, party_nature, company_name, company_cnpj, company_address, company_legal_nature, representation, nationality, marital_status, profession, birth_date")
-      .eq("batch_id", qualification_batch_id);
+      .eq("batch_id", effectiveQualificationBatchId);
 
     if (qualifications && qualifications.length > 0) {
       qualificationParties = qualifications.map((q) => ({
@@ -426,7 +459,7 @@ export async function POST(req: NextRequest) {
       deal_id: deal_id ?? null,
       credit_proposal_id: credit_proposal_id ?? null,
       ticket_id: ticket_id ?? null,
-      qualification_batch_id: qualification_batch_id ?? null,
+      qualification_batch_id: effectiveQualificationBatchId,
       is_master_agreement: is_master_agreement === true,
       contract_title: contractTitle,
       rendered_html: renderedHtml,
@@ -445,9 +478,29 @@ export async function POST(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
+  // Single-use (02/09/2026, P1): consome o lote de qualificação antecipada
+  // agora que o contrato nasceu com os dados herdados. Best-effort -- uma
+  // falha aqui nunca desfaz o contrato já criado, só significa que o
+  // próximo contrato desta mesma minuta poderia (no pior caso) reencontrar
+  // este lote; o filtro por template_id+status+consumido_por_contract_id
+  // continua correto mesmo assim porque o UPDATE abaixo é a única gravação
+  // que zera essa janela, e é síncrona com o insert acima.
+  if (effectiveQualificationBatchId) {
+    try {
+      const { error: consumeError } = await svc()
+        .from("cm_qualification_batches")
+        .update({ consumido_por_contract_id: contract.id })
+        .eq("id", effectiveQualificationBatchId);
+      if (consumeError) console.error("[contracts/generate] falha ao marcar lote como consumido:", consumeError);
+    } catch (e) {
+      console.error("[contracts/generate] falha ao marcar lote como consumido:", e);
+    }
+  }
+
   return NextResponse.json({
     contract,
     preview_html: renderedHtml,
     variables_resolved: Object.keys(variables).length,
+    qualification_batch_auto_detected: autoDetectedBatch,
   }, { status: 201 });
 }

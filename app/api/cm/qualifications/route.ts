@@ -73,10 +73,11 @@ export async function GET(req: NextRequest) {
   const listingId = searchParams.get("listing_id");
   const operationContractId = searchParams.get("operation_contract_id");
   const demandId = searchParams.get("demand_id");
-  if (!listingId && !operationContractId && !demandId) {
-    return NextResponse.json({ error: "listing_id, operation_contract_id ou demand_id é obrigatório" }, { status: 422 });
+  const templateId = searchParams.get("template_id");
+  if (!listingId && !operationContractId && !demandId && !templateId) {
+    return NextResponse.json({ error: "listing_id, operation_contract_id, demand_id ou template_id é obrigatório" }, { status: 422 });
   }
-  if (caller.isPartner && operationContractId) {
+  if (caller.isPartner && (operationContractId || templateId)) {
     return NextResponse.json({ error: "Não autorizado" }, { status: 403 });
   }
   if (!(await assertPartnerOwnership(caller, { listingId, demandId }))) {
@@ -94,6 +95,8 @@ export async function GET(req: NextRequest) {
     ? query.eq("listing_id", listingId)
     : operationContractId
     ? query.eq("operation_contract_id", operationContractId)
+    : templateId
+    ? query.eq("template_id", templateId)
     : query.eq("demand_id", demandId!);
 
   const { data: batches, error } = await query;
@@ -112,10 +115,16 @@ export async function POST(req: NextRequest) {
   if (!caller) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
   const body = await req.json().catch(() => ({}));
-  const { listing_id, operation_contract_id, demand_id, match_deal_id, document_type, parties } = body as {
+  const { listing_id, operation_contract_id, demand_id, template_id, match_deal_id, document_type, parties } = body as {
     listing_id?: string;
     operation_contract_id?: string;
     demand_id?: string;
+    // Qualificação Antecipada (02/09/2026, P1): lote nasce vinculado à
+    // MINUTA, antes de qualquer contrato existir. Tratado como
+    // operation_contract_id pra fins de obrigatoriedade de document_type
+    // e disparo de e-mail (a Mesa já sabe que quer dispatch imediato,
+    // diferente da indicação rápida que aguarda triagem da Governança).
+    template_id?: string;
     match_deal_id?: string;
     document_type?: string;
     parties?: { full_name: string; email: string; role_in_document: string }[];
@@ -135,8 +144,8 @@ export async function POST(req: NextRequest) {
   if (!document_type && !demand_id && !listing_id) {
     return NextResponse.json({ error: "document_type é obrigatório fora do fluxo de indicação rápida (listing_id ou demand_id)" }, { status: 422 });
   }
-  if (!listing_id && !operation_contract_id && !demand_id) {
-    return NextResponse.json({ error: "Informe listing_id, operation_contract_id ou demand_id" }, { status: 422 });
+  if (!listing_id && !operation_contract_id && !demand_id && !template_id) {
+    return NextResponse.json({ error: "Informe listing_id, operation_contract_id, demand_id ou template_id" }, { status: 422 });
   }
   if (!Array.isArray(parties) || parties.length === 0) {
     return NextResponse.json({ error: "Informe ao menos um envolvido" }, { status: 422 });
@@ -150,7 +159,7 @@ export async function POST(req: NextRequest) {
   // Partner so pode indicar (nunca definir document_type, isso e exclusivo da Governanca), e
   // so no proprio card (listing_id/demand_id que ele originou, nunca operation_contract_id).
   if (caller.isPartner) {
-    if (!isQuickIndication || operation_contract_id) {
+    if (!isQuickIndication || operation_contract_id || template_id) {
       return NextResponse.json({ error: "Não autorizado" }, { status: 403 });
     }
     if (!(await assertPartnerOwnership(caller, { listingId: listing_id, demandId: demand_id }))) {
@@ -171,6 +180,7 @@ export async function POST(req: NextRequest) {
       listing_id: listing_id ?? null,
       operation_contract_id: operation_contract_id ?? null,
       demand_id: demand_id ?? null,
+      template_id: template_id ?? null,
       match_deal_id: match_deal_id ?? null,
       document_type: document_type ?? null,
       status: isQuickIndication ? "aguardando_triagem_governanca" : undefined,
