@@ -3,6 +3,15 @@ import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { CREDIT_SOURCE_DEFAULTS } from "@/lib/credit-source-defaults";
 import { checktudoLogin, checktudoSCR, type ChecktudoDocType } from "@/lib/checktudo";
+import { generateAndStoreCreditReportPdf } from "@/lib/credit-report-generate";
+
+// O node "Gerar Dossiê PDF" do n8n roda DENTRO do webhook chamado abaixo,
+// antes do CheckTudo/BACEN sequer começar (ele só roda depois que o webhook
+// retorna). Regeneração aqui garante que o PDF final salvo (o que a Mesa e o
+// cliente recebem) sempre tem o BACEN quando a fonte está ligada. Puppeteer
+// pode levar dezenas de segundos, então o duration precisa acompanhar o do
+// próprio gerador (mesmo valor de app/api/credit-engine/report/[profileId]).
+export const maxDuration = 300;
 
 function serviceClient() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -131,6 +140,20 @@ export async function POST(req: NextRequest) {
       if (bacenData) {
         await svc.from("credit_profiles").update({ bacen_scr_data: bacenData }).eq("id", result.profile_id).then(null, () => {});
         result.bacen_scr = bacenData;
+
+        // Achado 02/09/2026: o PDF que o n8n gerou (dentro do próprio webhook
+        // acima) já saiu sem o BACEN, porque essa consulta só termina agora.
+        // Regenera o dossiê pra o ponteiro salvo (report_pdf_path) virar o
+        // mais completo. Best-effort: falha aqui não derruba a resposta da
+        // análise, o Tier/score já estão gravados de qualquer forma.
+        const regenerated = await generateAndStoreCreditReportPdf(result.profile_id).catch((e) => {
+          console.error("Regeneração do dossiê pós-BACEN falhou:", e);
+          return null;
+        });
+        if (regenerated?.ok) {
+          result.pdf_url = regenerated.pdf_url;
+          result.pdf_path = regenerated.pdf_path;
+        }
       }
     }
   }
