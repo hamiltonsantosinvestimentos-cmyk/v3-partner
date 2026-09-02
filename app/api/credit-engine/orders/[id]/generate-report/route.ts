@@ -106,9 +106,15 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
 
   const reportToken = randomUUID().replace(/-/g, "") + randomUUID().replace(/-/g, "").slice(0, 8);
 
+  // report_delivered_at volta pra null sempre que um relatório é (re)gerado —
+  // o token muda a cada geração (ver reportToken acima), então um eventual
+  // link já enviado ao cliente com o token antigo para de funcionar (a busca
+  // em /relatorio-credito/[token] é por igualdade exata). Resetar aqui faz o
+  // passo "Entregue" da Mesa voltar a pendente, sinalizando que precisa
+  // reenviar o link novo — em vez de mostrar "Entregue" com um link morto.
   const { error: updateErr } = await svc
     .from("partner_service_orders")
-    .update({ report_public_token: reportToken, report_pdf_path: pdfPath })
+    .update({ report_public_token: reportToken, report_pdf_path: pdfPath, report_delivered_at: null })
     .eq("id", id);
   if (updateErr) return NextResponse.json({ error: updateErr.message }, { status: 500 });
 
