@@ -63,6 +63,17 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // Server-to-server (02/09/2026): /api/contracts/templates/{id}/draft-callback,
+  // acionada pelo workflow n8n W18 (Agente Estruturador de Contratos) e
+  // também pelo W19 (Pedir Ajuste ao Agente, quando origem=agente_ia_estruturador).
+  // Mesmo padrão de analysis-callback, id dinâmico no meio do path.
+  if (
+    /^\/api\/contracts\/templates\/[^/]+\/draft-callback$/.test(pathname) &&
+    request.headers.get("x-cron-secret") === process.env.CRON_SECRET
+  ) {
+    return NextResponse.next();
+  }
+
   // Demo mode
   if (IS_DEMO) {
     const demoSession = request.cookies.get("v3_demo_session");

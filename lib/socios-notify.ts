@@ -69,7 +69,12 @@ export async function notifySociosMinutaEmRevisao(params: {
 // null = evento do próprio agente; preenchido = voto/decisão humana.
 export async function logAgentAuditEvent(params: {
   templateId: string;
-  eventType: "analise_concluida" | "analise_erro" | "voto_registrado" | "minuta_aprovada" | "minuta_reprovada";
+  // estruturacao_concluida/erro (02/09/2026): Agente Estruturador de
+  // Contratos (Agente 1). ajuste_solicitado: "Pedir Ajuste ao Agente",
+  // compartilhado pelos dois agentes. CHECK constraint espelhado em
+  // contract_ai_agent_audit_log (migration 20260902b) -- se adicionar
+  // um valor novo aqui, adicionar lá também.
+  eventType: "analise_concluida" | "analise_erro" | "voto_registrado" | "minuta_aprovada" | "minuta_reprovada" | "estruturacao_concluida" | "estruturacao_erro" | "ajuste_solicitado";
   actorId?: string | null;
   actorName: string;
   detail?: Record<string, unknown> | null;

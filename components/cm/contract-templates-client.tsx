@@ -11,6 +11,12 @@ interface RiscoLaudo {
   pontos_criticos?: { clausula_original: string; severidade: "alto" | "medio" | "baixo"; risco: string }[];
 }
 
+interface BrechaIdentificada {
+  clausula: string;
+  risco: string;
+  sugestao: string;
+}
+
 interface Template {
   id: string;
   template_name: string;
@@ -23,12 +29,15 @@ interface Template {
   approval_status: "rascunho" | "em_revisao" | "aprovado" | "reprovado";
   review_round: number;
   contract_series?: string;
-  // Fast-Track de Contratos Simples (30/08/2026)
-  origem?: "manual" | "agente_ia";
+  // Fast-Track de Contratos Simples (30/08/2026) + Agente Estruturador de
+  // Contratos (02/09/2026)
+  origem?: "manual" | "agente_ia" | "agente_ia_estruturador";
   laudo_risco?: RiscoLaudo | null;
   analysis_status?: "processando" | "concluido" | "erro" | null;
   analysis_error?: string | null;
   valor_operacao_estimado?: number | null;
+  brechas_identificadas?: BrechaIdentificada[] | null;
+  observacoes_para_revisor?: string | null;
 }
 
 interface QualParty {
@@ -150,6 +159,27 @@ export function ContractTemplatesClient() {
   const [analyzing, setAnalyzing] = useState(false);
   const [analyzeError, setAnalyzeError] = useState<string | null>(null);
   const analyzeFileInputRef = React.useRef<HTMLInputElement>(null);
+
+  // Agente Estruturador de Contratos (02/09/2026, BRIEF aprovado por
+  // João): a Mesa descreve a intenção de negócio em texto livre, o agente
+  // redige a minuta completa. Diferente do Fast-Track: cai e permanece em
+  // "rascunho", nunca fast-track automático pra revisão jurídica.
+  const [showDraftModal, setShowDraftModal] = useState(false);
+  const [draftDescricao, setDraftDescricao] = useState("");
+  const [draftVertical, setDraftVertical] = useState("capital_markets");
+  const [draftSeries, setDraftSeries] = useState("V3C-NDA");
+  const [draftTemplateName, setDraftTemplateName] = useState("");
+  const [drafting, setDrafting] = useState(false);
+  const [draftError, setDraftError] = useState<string | null>(null);
+
+  // "Pedir Ajuste ao Agente" (02/09/2026): compartilhado pelos dois
+  // agentes (Estruturador e Revisor de Riscos), reenvia a minuta atual +
+  // a instrução pro mesmo agente que a gerou.
+  const [showRevisionModal, setShowRevisionModal] = useState(false);
+  const [revisionInstrucao, setRevisionInstrucao] = useState("");
+  const [requestingRevision, setRequestingRevision] = useState(false);
+  const [revisionError, setRevisionError] = useState<string | null>(null);
+
   const [reviews, setReviews] = useState<TemplateReview[]>([]);
   const [reviewComment, setReviewComment] = useState("");
   const [submittingReview, setSubmittingReview] = useState(false);
@@ -340,6 +370,65 @@ export function ContractTemplatesClient() {
     } finally {
       setAnalyzing(false);
       if (analyzeFileInputRef.current) analyzeFileInputRef.current.value = "";
+    }
+  };
+
+  const handleDraftSubmit = async () => {
+    if (!draftDescricao.trim() || draftDescricao.trim().length < 30) {
+      setDraftError("Descreva a intenção de negócio com pelo menos 30 caracteres");
+      return;
+    }
+    setDrafting(true);
+    setDraftError(null);
+    try {
+      const res = await fetch("/api/contracts/templates/draft", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          descricao_intencao: draftDescricao.trim(),
+          vertical: draftVertical,
+          contract_series: draftSeries,
+          template_name: draftTemplateName.trim() || undefined,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) { setDraftError(json.error ?? "Erro ao acionar o agente"); return; }
+      setShowDraftModal(false);
+      setDraftDescricao("");
+      setDraftTemplateName("");
+      await fetchTemplates();
+      const created = (await (await fetch(`/api/contracts/templates`)).json()).templates?.find((t: Template) => t.id === json.template_id);
+      if (created) selectTemplate(created);
+    } catch {
+      setDraftError("Erro de conexão");
+    } finally {
+      setDrafting(false);
+    }
+  };
+
+  const handleRequestRevision = async () => {
+    if (!selected) return;
+    if (!revisionInstrucao.trim() || revisionInstrucao.trim().length < 5) {
+      setRevisionError("Descreva o ajuste que precisa (mínimo 5 caracteres)");
+      return;
+    }
+    setRequestingRevision(true);
+    setRevisionError(null);
+    try {
+      const res = await fetch(`/api/contracts/templates/${selected.id}/request-revision`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ instrucao: revisionInstrucao.trim() }),
+      });
+      const json = await res.json();
+      if (!res.ok) { setRevisionError(json.error ?? "Erro ao pedir ajuste"); return; }
+      setShowRevisionModal(false);
+      setRevisionInstrucao("");
+      await fetchTemplates();
+    } catch {
+      setRevisionError("Erro de conexão");
+    } finally {
+      setRequestingRevision(false);
     }
   };
 
@@ -537,6 +626,10 @@ export function ContractTemplatesClient() {
           <p className="text-sm text-[#9BAFC5]">Biblioteca de minutas com injeção automática de variáveis</p>
         </div>
         <div className="flex items-center gap-2">
+          <button onClick={() => { setShowDraftModal(true); setDraftError(null); }}
+            className="flex items-center gap-2 px-4 py-2 bg-[#162744] text-[#C9A84C] border border-[#C9A84C]/30 rounded-lg text-sm font-bold hover:bg-[#C9A84C]/10 transition">
+            <Scale size={16} /> Estruturar Minuta com IA
+          </button>
           <button onClick={() => { setShowAnalyzeModal(true); setAnalyzeError(null); }}
             className="flex items-center gap-2 px-4 py-2 bg-[#162744] text-[#C9A84C] border border-[#C9A84C]/30 rounded-lg text-sm font-bold hover:bg-[#C9A84C]/10 transition">
             <FileText size={16} /> Analisar Contrato Recebido
@@ -724,6 +817,56 @@ export function ContractTemplatesClient() {
                       )}
                     </div>
                   )}
+                </div>
+              )}
+
+              {selected?.origem === "agente_ia_estruturador" && (
+                <div className="mb-4 p-3 rounded-lg bg-[#09081A] border border-blue-500/20">
+                  <div className="flex flex-wrap items-center gap-2 mb-2">
+                    <span className="text-[9px] font-bold px-2 py-0.5 rounded bg-blue-500/20 text-blue-400">Origem: Agente Estruturador de Contratos</span>
+                    <span className="text-[9px] font-bold px-2 py-0.5 rounded bg-[#243A66] text-[#9BAFC5]">Sempre cai em rascunho, revise antes de enviar pro jurídico</span>
+                  </div>
+
+                  {selected.analysis_status === "processando" && (
+                    <div className="flex items-center gap-2 text-xs text-[#9BAFC5]">
+                      <Loader2 size={14} className="animate-spin text-blue-400" />
+                      Agente Estruturador de Contratos redigindo a minuta a partir da intenção descrita...
+                    </div>
+                  )}
+
+                  {selected.analysis_status === "erro" && (
+                    <div className="text-xs text-red-400">
+                      Falha na estruturação: {selected.analysis_error ?? "erro não especificado"}
+                    </div>
+                  )}
+
+                  {selected.analysis_status === "concluido" && (
+                    <div className="space-y-2">
+                      {selected.observacoes_para_revisor && (
+                        <p className="text-xs text-[#F5F1E8]">{selected.observacoes_para_revisor}</p>
+                      )}
+                      {(selected.brechas_identificadas ?? []).length > 0 && (
+                        <div className="space-y-1.5">
+                          <span className="text-[9px] font-bold text-[#C9A84C] uppercase tracking-wider">Brechas identificadas e já fechadas na minuta</span>
+                          {(selected.brechas_identificadas ?? []).map((b, i) => (
+                            <div key={i} className="text-[11px]">
+                              <span className="text-[#F5F1E8] font-medium">{b.clausula}:</span>{" "}
+                              <span className="text-[#9BAFC5]">{b.risco}, sugestão: {b.sugestao}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {selected?.origem && ["agente_ia", "agente_ia_estruturador"].includes(selected.origem) && selected.analysis_status === "concluido" && (
+                <div className="mb-4">
+                  <button onClick={() => { setShowRevisionModal(true); setRevisionError(null); }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-[#162744] text-[#9BAFC5] border border-[#9BAFC5]/20 rounded-lg text-xs font-bold hover:text-[#F5F1E8] hover:bg-[#243A66] transition">
+                    <Scale size={13} /> Pedir Ajuste ao Agente
+                  </button>
                 </div>
               )}
 
@@ -981,6 +1124,109 @@ export function ContractTemplatesClient() {
                 className="flex items-center gap-2 px-4 py-2 bg-[#C9A84C] text-[#09081A] rounded-lg text-xs font-bold hover:bg-[#E8C97A] disabled:opacity-40 transition">
                 {analyzing ? <Loader2 size={14} className="animate-spin" /> : <FileText size={14} />}
                 {analyzing ? "Enviando..." : "Enviar para Análise"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Estruturar Minuta com IA (Agente Estruturador de Contratos,
+          02/09/2026): a Mesa descreve a intenção de negócio em texto
+          livre, o agente redige a minuta completa. Rota assíncrona --
+          fecha o modal na hora, o resultado chega pelo polling da lista.
+          Diferente do Fast-Track: cai e permanece em rascunho, nunca
+          fast-track automático pra revisão jurídica. */}
+      {showDraftModal && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60" onClick={() => !drafting && setShowDraftModal(false)}>
+          <div className="w-full max-w-lg bg-[#09081A] border border-[#C9A84C]/20 rounded-xl flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="p-4 border-b border-[#C9A84C]/20 flex items-center justify-between flex-shrink-0">
+              <div className="text-sm font-bold text-[#F5F1E8] flex items-center gap-2"><Scale size={14} className="text-[#C9A84C]" /> Estruturar Minuta com IA</div>
+              <button onClick={() => setShowDraftModal(false)} className="text-[#9BAFC5] hover:text-[#F5F1E8] text-xl">&times;</button>
+            </div>
+            <div className="p-4 space-y-3">
+              <p className="text-[11px] text-[#9BAFC5]">
+                Descreva a intenção de negócio (partes envolvidas, tipo de operação, pontos que precisam constar). O Agente Estruturador de Contratos redige a minuta completa a partir disso, comparando com minutas já aprovadas da mesma vertical. A minuta cai em rascunho, revise antes de mandar pro jurídico.
+              </p>
+
+              <div>
+                <label className="block text-[10px] font-bold text-[#C9A84C] uppercase tracking-wider mb-1">Intenção de Negócio</label>
+                <textarea value={draftDescricao} onChange={(e) => setDraftDescricao(e.target.value)}
+                  placeholder="Ex: NDA entre a V3 e um fundo de investimento americano, para troca de informações sobre uma operação de M&A no setor de agronegócio, com prazo de vigência de 3 anos e cláusula de não circunvenção..."
+                  className="w-full bg-[#162744] border border-[#9BAFC5]/15 rounded-lg px-3 py-2 text-xs text-[#F5F1E8] focus:border-[#C9A84C]/50 focus:outline-none min-h-[110px] resize-y" />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[10px] font-bold text-[#C9A84C] uppercase tracking-wider mb-1">Vertical</label>
+                  <select value={draftVertical} onChange={(e) => setDraftVertical(e.target.value)}
+                    className="w-full bg-[#162744] border border-[#9BAFC5]/15 rounded-lg px-3 py-2 text-xs text-[#F5F1E8]">
+                    {Object.entries(VERTICAL_LABELS).map(([v, label]) => (
+                      <option key={v} value={v}>{label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-[#C9A84C] uppercase tracking-wider mb-1">Série V3C</label>
+                  <select value={draftSeries} onChange={(e) => setDraftSeries(e.target.value)}
+                    className="w-full bg-[#162744] border border-[#9BAFC5]/15 rounded-lg px-3 py-2 text-xs text-[#F5F1E8]">
+                    {Object.entries(SERIES_LABELS).filter(([v]) => v !== "V3C-REG").map(([value, label]) => (
+                      <option key={value} value={value}>{label}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-[#C9A84C] uppercase tracking-wider mb-1">Nome da Minuta (opcional)</label>
+                <input value={draftTemplateName} onChange={(e) => setDraftTemplateName(e.target.value)}
+                  placeholder="Se vazio, o sistema sugere um nome"
+                  className="w-full bg-[#162744] border border-[#9BAFC5]/15 rounded-lg px-3 py-2 text-xs text-[#F5F1E8] focus:border-[#C9A84C]/50 focus:outline-none" />
+              </div>
+
+              {draftError && <p className="text-xs text-red-400">{draftError}</p>}
+            </div>
+            <div className="p-4 border-t border-[#C9A84C]/20 flex justify-end gap-2">
+              <button onClick={() => setShowDraftModal(false)} disabled={drafting}
+                className="px-4 py-2 text-xs text-[#9BAFC5] hover:text-[#F5F1E8] transition">Cancelar</button>
+              <button onClick={handleDraftSubmit} disabled={drafting || !draftDescricao.trim()}
+                className="flex items-center gap-2 px-4 py-2 bg-[#C9A84C] text-[#09081A] rounded-lg text-xs font-bold hover:bg-[#E8C97A] disabled:opacity-40 transition">
+                {drafting ? <Loader2 size={14} className="animate-spin" /> : <Scale size={14} />}
+                {drafting ? "Enviando..." : "Estruturar Minuta"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Pedir Ajuste ao Agente (02/09/2026): compartilhado pelos 2
+          agentes, reenvia a minuta atual + a instrução pro mesmo agente
+          que a gerou. Rota assíncrona, mesmo polling da lista. */}
+      {showRevisionModal && selected && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60" onClick={() => !requestingRevision && setShowRevisionModal(false)}>
+          <div className="w-full max-w-lg bg-[#09081A] border border-[#C9A84C]/20 rounded-xl flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="p-4 border-b border-[#C9A84C]/20 flex items-center justify-between flex-shrink-0">
+              <div>
+                <div className="text-sm font-bold text-[#F5F1E8] flex items-center gap-2"><Scale size={14} className="text-[#C9A84C]" /> Pedir Ajuste ao Agente</div>
+                <div className="text-[10px] text-[#9BAFC5]">{selected.template_name}</div>
+              </div>
+              <button onClick={() => setShowRevisionModal(false)} className="text-[#9BAFC5] hover:text-[#F5F1E8] text-xl">&times;</button>
+            </div>
+            <div className="p-4 space-y-3">
+              <p className="text-[11px] text-[#9BAFC5]">
+                Descreva o que precisa mudar (ex: "aumente a multa para R$300 mil", "adicione cláusula de não solicitação de funcionários"). O mesmo agente que gerou esta minuta produz uma nova versão com o ajuste, preservando o restante do texto.
+              </p>
+              <textarea value={revisionInstrucao} onChange={(e) => setRevisionInstrucao(e.target.value)}
+                placeholder="O que precisa mudar?"
+                className="w-full bg-[#162744] border border-[#9BAFC5]/15 rounded-lg px-3 py-2 text-xs text-[#F5F1E8] focus:border-[#C9A84C]/50 focus:outline-none min-h-[90px] resize-y" />
+              {revisionError && <p className="text-xs text-red-400">{revisionError}</p>}
+            </div>
+            <div className="p-4 border-t border-[#C9A84C]/20 flex justify-end gap-2">
+              <button onClick={() => setShowRevisionModal(false)} disabled={requestingRevision}
+                className="px-4 py-2 text-xs text-[#9BAFC5] hover:text-[#F5F1E8] transition">Cancelar</button>
+              <button onClick={handleRequestRevision} disabled={requestingRevision || !revisionInstrucao.trim()}
+                className="flex items-center gap-2 px-4 py-2 bg-[#C9A84C] text-[#09081A] rounded-lg text-xs font-bold hover:bg-[#E8C97A] disabled:opacity-40 transition">
+                {requestingRevision ? <Loader2 size={14} className="animate-spin" /> : <Scale size={14} />}
+                {requestingRevision ? "Enviando..." : "Pedir Ajuste"}
               </button>
             </div>
           </div>
