@@ -29,8 +29,11 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: false,
   },
-  // Externaliza chromium/puppeteer do bundle webpack — necessário para Vercel serverless
-  serverExternalPackages: ["@sparticuz/chromium-min", "puppeteer-core", "pdf-lib"],
+  // Externaliza chromium/puppeteer do bundle webpack — necessário para Vercel serverless.
+  // pdf-parse e @napi-rs/canvas adicionados em 03/09/2026 (P0 real, "DOMMatrix
+  // is not defined" ao vivo em produção): sem isso o binário nativo do canvas
+  // que pdf-parse/pdfjs-dist precisam nem é incluído no bundle serverless.
+  serverExternalPackages: ["@sparticuz/chromium-min", "puppeteer-core", "pdf-lib", "pdf-parse", "@napi-rs/canvas"],
   images: {
     imageSizes: [16, 32, 48, 64, 96, 100, 128, 256, 384],
     remotePatterns: [

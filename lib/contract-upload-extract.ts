@@ -27,6 +27,17 @@ export async function extractContractText(buffer: Buffer, mimeType: string, file
   }
 
   if (mimeType === "application/pdf" || fileName.endsWith(".pdf")) {
+    // P0 real, achado ao vivo com João e Dr. Athaydes testando o Fast-Track
+    // em produção (03/09/2026): "DOMMatrix is not defined". pdf-parse v2
+    // usa pdfjs-dist + @napi-rs/canvas por baixo, que dependem do worker
+    // deles ser carregado ANTES de PDFParse ser instanciado em ambiente
+    // Node/serverless (confirmado na doc oficial do pacote antes de codar,
+    // via pdf-parse/docs/troubleshooting.md). Sem isso, pdfjs-dist tenta
+    // usar DOMMatrix do browser, que não existe no runtime da Vercel.
+    // Companheiro deste fix: next.config.ts precisa listar "pdf-parse" e
+    // "@napi-rs/canvas" em serverExternalPackages, senão o binário nativo
+    // do canvas nem chega a ser incluído no bundle serverless.
+    await import("pdf-parse/worker");
     const { PDFParse } = await import("pdf-parse");
     const parser = new PDFParse({ data: new Uint8Array(buffer) });
     const textResult = await parser.getText();
