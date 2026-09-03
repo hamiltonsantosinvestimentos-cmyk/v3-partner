@@ -86,6 +86,7 @@ interface QualParty {
   id: string;
   full_name: string;
   email: string;
+  phone?: string | null;
   role_in_document: string;
   status: string;
   qualification_token: string;
@@ -110,8 +111,8 @@ export function ContractsPanelClient() {
   const [sendingToSignature, setSendingToSignature] = useState(false);
   const [qualBatches, setQualBatches] = useState<QualBatch[]>([]);
   const [showQualModal, setShowQualModal] = useState(false);
-  const [qualParties, setQualParties] = useState<{ full_name: string; email: string; role_in_document: string }[]>([
-    { full_name: "", email: "", role_in_document: "parte_principal" },
+  const [qualParties, setQualParties] = useState<{ full_name: string; email: string; phone: string; role_in_document: string }[]>([
+    { full_name: "", email: "", phone: "", role_in_document: "parte_principal" },
   ]);
   const [creatingQualification, setCreatingQualification] = useState(false);
   const [copiedToken, setCopiedToken] = useState("");
@@ -317,9 +318,9 @@ export function ContractsPanelClient() {
     } catch { setQualBatches([]); }
   };
 
-  const addQualPartyRow = () => setQualParties((prev) => [...prev, { full_name: "", email: "", role_in_document: "parte_principal" }]);
+  const addQualPartyRow = () => setQualParties((prev) => [...prev, { full_name: "", email: "", phone: "", role_in_document: "parte_principal" }]);
   const removeQualPartyRow = (index: number) => setQualParties((prev) => prev.filter((_, i) => i !== index));
-  const updateQualPartyRow = (index: number, field: "full_name" | "email" | "role_in_document", value: string) => {
+  const updateQualPartyRow = (index: number, field: "full_name" | "email" | "phone" | "role_in_document", value: string) => {
     setQualParties((prev) => prev.map((row, i) => (i === index ? { ...row, [field]: value } : row)));
   };
 
@@ -340,7 +341,7 @@ export function ContractsPanelClient() {
       const json = await res.json();
       if (res.ok) {
         setShowQualModal(false);
-        setQualParties([{ full_name: "", email: "", role_in_document: "parte_principal" }]);
+        setQualParties([{ full_name: "", email: "", phone: "", role_in_document: "parte_principal" }]);
         loadQualifications(selected.id);
       } else {
         alert(json.error ?? "Erro ao gerar qualificação");
@@ -358,14 +359,29 @@ export function ContractsPanelClient() {
     setTimeout(() => setCopiedToken(""), 2000);
   };
 
-  // Link geral "compartilhar via WhatsApp" — abre o WhatsApp Web/App do
-  // próprio operador com a mensagem pronta, ele escolhe o contato e envia.
-  // Mesmo padrão já em produção em Indicações (indicacoes-dashboard-client.tsx),
-  // sem depender de nenhuma integração de envio automatizado (achado
-  // 11/08/2026: não existe credencial WhatsApp provisionada no sistema).
+  // Link "compartilhar via WhatsApp" — abre o WhatsApp Web/App do próprio
+  // operador com a mensagem pronta. Mesmo padrão já em produção em
+  // Indicações (indicacoes-dashboard-client.tsx), sem depender de nenhuma
+  // integração de envio automatizado (achado 11/08/2026: não existe
+  // credencial WhatsApp provisionada no sistema).
+  //
+  // Direcionamento por número (03/09/2026, achado ao vivo com João e Dr.
+  // Athaydes): quando a Mesa digita o WhatsApp da parte na criação do lote,
+  // o link já abre direto na conversa com essa pessoa (wa.me/55<numero>),
+  // em vez de exigir que o operador escolha o contato manualmente a cada
+  // vez. Sem o número, cai de volta no picker manual de sempre.
+  const sanitizePhoneForWhatsapp = (phone: string): string => {
+    const digits = phone.replace(/\D/g, "");
+    if (!digits) return "";
+    // 10 ou 11 dígitos = DDD + número sem código do país, assume Brasil (55).
+    if (digits.length === 10 || digits.length === 11) return `55${digits}`;
+    return digits;
+  };
+
   const whatsappQualLink = (party: QualParty, contractTitle: string) => {
     const msg = `Olá ${party.full_name}, você foi cadastrado(a) como envolvido(a) no contrato "${contractTitle}" da V3 Partners. Complete seus dados de qualificação para prosseguirmos: ${qualificationLink(party.qualification_token)}`;
-    return `https://wa.me/?text=${encodeURIComponent(msg)}`;
+    const targetPhone = party.phone ? sanitizePhoneForWhatsapp(party.phone) : "";
+    return `https://wa.me/${targetPhone}?text=${encodeURIComponent(msg)}`;
   };
 
   const statusInfo = (s: string) => STATUS_MAP[s] ?? STATUS_MAP.rascunho;
@@ -822,6 +838,8 @@ export function ContractsPanelClient() {
                     <input value={row.full_name} onChange={(e) => updateQualPartyRow(i, "full_name", e.target.value)} placeholder="Nome completo *"
                       className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]" />
                     <input value={row.email} onChange={(e) => updateQualPartyRow(i, "email", e.target.value)} placeholder="E-mail *" type="email"
+                      className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]" />
+                    <input value={row.phone} onChange={(e) => updateQualPartyRow(i, "phone", e.target.value)} placeholder="WhatsApp (opcional, ex: 21999998888)" type="tel"
                       className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]" />
                     <select value={row.role_in_document} onChange={(e) => updateQualPartyRow(i, "role_in_document", e.target.value)}
                       className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]">

@@ -44,6 +44,7 @@ interface QualParty {
   id: string;
   full_name: string;
   email: string;
+  phone?: string | null;
   role_in_document: string;
   status: string;
   qualification_token: string;
@@ -192,8 +193,8 @@ export function ContractTemplatesClient() {
   // ainda não consumido para esta minuta na primeira geração.
   const [qualBatches, setQualBatches] = useState<QualBatch[]>([]);
   const [showQualModal, setShowQualModal] = useState(false);
-  const [qualParties, setQualParties] = useState<{ full_name: string; email: string; role_in_document: string }[]>([
-    { full_name: "", email: "", role_in_document: "parte_principal" },
+  const [qualParties, setQualParties] = useState<{ full_name: string; email: string; phone: string; role_in_document: string }[]>([
+    { full_name: "", email: "", phone: "", role_in_document: "parte_principal" },
   ]);
   const [creatingQualification, setCreatingQualification] = useState(false);
   const [copiedToken, setCopiedToken] = useState("");
@@ -460,12 +461,12 @@ export function ContractTemplatesClient() {
   };
 
   const openQualModal = () => {
-    setQualParties([{ full_name: "", email: "", role_in_document: "parte_principal" }]);
+    setQualParties([{ full_name: "", email: "", phone: "", role_in_document: "parte_principal" }]);
     setShowQualModal(true);
   };
-  const addQualPartyRow = () => setQualParties((prev) => [...prev, { full_name: "", email: "", role_in_document: "parte_principal" }]);
+  const addQualPartyRow = () => setQualParties((prev) => [...prev, { full_name: "", email: "", phone: "", role_in_document: "parte_principal" }]);
   const removeQualPartyRow = (index: number) => setQualParties((prev) => prev.filter((_, i) => i !== index));
-  const updateQualPartyRow = (index: number, field: "full_name" | "email" | "role_in_document", value: string) => {
+  const updateQualPartyRow = (index: number, field: "full_name" | "email" | "phone" | "role_in_document", value: string) => {
     setQualParties((prev) => prev.map((row, i) => (i === index ? { ...row, [field]: value } : row)));
   };
 
@@ -504,9 +505,21 @@ export function ContractTemplatesClient() {
     setTimeout(() => setCopiedToken(""), 2000);
   };
 
+  // Direcionamento por número (03/09/2026, achado ao vivo com João e Dr.
+  // Athaydes): quando a Mesa digita o WhatsApp da parte na criação do lote,
+  // o link já abre direto na conversa com essa pessoa, mesmo helper de
+  // contracts-panel-client.tsx.
+  const sanitizePhoneForWhatsapp = (phone: string): string => {
+    const digits = phone.replace(/\D/g, "");
+    if (!digits) return "";
+    if (digits.length === 10 || digits.length === 11) return `55${digits}`;
+    return digits;
+  };
+
   const whatsappQualLink = (party: QualParty, templateName: string) => {
     const msg = `Olá ${party.full_name}, você foi cadastrado(a) como envolvido(a) na minuta "${templateName}" da V3 Partners. Complete seus dados de qualificação para prosseguirmos: ${qualificationLink(party.qualification_token)}`;
-    return `https://wa.me/?text=${encodeURIComponent(msg)}`;
+    const targetPhone = party.phone ? sanitizePhoneForWhatsapp(party.phone) : "";
+    return `https://wa.me/${targetPhone}?text=${encodeURIComponent(msg)}`;
   };
 
   const startNew = () => {
@@ -1263,6 +1276,8 @@ export function ContractTemplatesClient() {
                     <input value={row.full_name} onChange={(e) => updateQualPartyRow(i, "full_name", e.target.value)} placeholder="Nome completo *"
                       className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]" />
                     <input value={row.email} onChange={(e) => updateQualPartyRow(i, "email", e.target.value)} placeholder="E-mail *" type="email"
+                      className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]" />
+                    <input value={row.phone} onChange={(e) => updateQualPartyRow(i, "phone", e.target.value)} placeholder="WhatsApp (opcional, ex: 21999998888)" type="tel"
                       className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]" />
                     <select value={row.role_in_document} onChange={(e) => updateQualPartyRow(i, "role_in_document", e.target.value)}
                       className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]">

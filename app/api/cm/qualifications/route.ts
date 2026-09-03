@@ -91,7 +91,7 @@ export async function GET(req: NextRequest) {
   // (achado 11/08/2026, ao trazer este fluxo para a Central de Contratos).
   let query = svc()
     .from("cm_qualification_batches")
-    .select("*, cm_party_qualifications(id, full_name, email, role_in_document, status, filled_at, qualification_token)")
+    .select("*, cm_party_qualifications(id, full_name, email, phone, role_in_document, status, filled_at, qualification_token)")
     .order("created_at", { ascending: false });
   query = listingId
     ? query.eq("listing_id", listingId)
@@ -129,7 +129,12 @@ export async function POST(req: NextRequest) {
     template_id?: string;
     match_deal_id?: string;
     document_type?: string;
-    parties?: { full_name: string; email: string; role_in_document: string }[];
+    // WhatsApp da parte (03/09/2026, achado ao vivo com João e Dr. Athaydes):
+    // opcional, digitado pela Mesa no momento da criação, pra gerar o link de
+    // WhatsApp já direcionado ao número certo em vez do picker manual
+    // genérico (wa.me/?text=). Nunca obrigatório, e-mail continua a via
+    // oficial (é o que dispara o link real de qualificação).
+    parties?: { full_name: string; email: string; role_in_document: string; phone?: string }[];
   };
 
   // document_type so e obrigatorio quando o lote ja nasce sabendo o instrumento (fluxo antigo,
@@ -198,6 +203,7 @@ export async function POST(req: NextRequest) {
     batch_id: batch.id,
     full_name: p.full_name.trim(),
     email: p.email.trim(),
+    phone: p.phone?.trim() || null,
     role_in_document: p.role_in_document,
     qualification_token: randomUUID().replace(/-/g, ""),
   }));
@@ -205,7 +211,7 @@ export async function POST(req: NextRequest) {
   const { data: inserted, error: insertError } = await db
     .from("cm_party_qualifications")
     .insert(rows)
-    .select("id, full_name, email, qualification_token");
+    .select("id, full_name, email, phone, qualification_token");
 
   if (insertError || !inserted) {
     await db.from("cm_qualification_batches").delete().eq("id", batch.id);
