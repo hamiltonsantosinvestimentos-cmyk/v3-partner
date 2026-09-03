@@ -4,17 +4,19 @@ import { createClient as sc } from "@supabase/supabase-js";
 import { randomUUID } from "crypto";
 import { isValidEmail } from "@/lib/utils";
 import { auditText, auditHtml } from "@/lib/brand-guardian-gate";
+import { ROLE_LABELS } from "@/lib/qualification-roles";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 }
 
 const ALLOWED_ROLES = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"];
-const ROLES_IN_DOCUMENT = [
-  "parte_principal", "intermediario_finder_venda", "intermediario_finder_compra", "mandatario", "testemunha",
-  // Papeis granulares da indicacao rapida (13/08/2026) -- ver 20260813_qualificacoes_pf_pj_fpa.sql
-  "finder_originacao_venda", "finder_originacao_compra", "intermediario_venda", "intermediario_compra",
-];
+// Fonte única com o dropdown da UI (lib/qualification-roles.ts), 03/09/2026:
+// esta lista vivia duplicada aqui, achado ao vivo com João e Dr. Athaydes
+// testando "Gerar Contrato" real -- os papéis do NCNDA Mestre (Estruturador,
+// Head da Mesa, Partner, Mandatário 1/2, Intermediário 1/2) foram
+// adicionados só em ROLE_LABELS antes, nunca em duas listas de novo.
+const ROLES_IN_DOCUMENT = Object.keys(ROLE_LABELS);
 const DOCUMENT_TYPES = ["nda_quadripartite", "fpa_venda", "fpa_compra", "mandato", "contrato_final", "contrato_parceria"];
 
 const DOCUMENT_TYPE_LABELS: Record<string, string> = {

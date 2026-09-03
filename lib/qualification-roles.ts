@@ -17,6 +17,22 @@ export const ROLE_LABELS: Record<string, string> = {
   finder_originacao_compra: "Finder/Originação Compra",
   intermediario_venda: "Intermediário Venda",
   intermediario_compra: "Intermediário Compra",
+  // Papéis do NCNDA Mestre e instrumentos com múltiplas partes numeradas do
+  // mesmo tipo (03/09/2026, achado ao vivo com João e Dr. Athaydes testando
+  // "Gerar Contrato" real: o dropdown não cobria o desenho de partes do
+  // próprio modelo do Dr. Luis). Cada papel numerado precisa de um
+  // role_in_document distinto porque o motor de variáveis resolve
+  // {{<role_in_document>_nome}}/_cpf_cnpj/_rg/_endereco/_email por papel
+  // (app/api/contracts/generate/route.ts) -- "mandatário 1" e "mandatário
+  // 2" nunca podem compartilhar o mesmo papel, ou a segunda pessoa
+  // sobrescreveria a primeira no corpo do contrato.
+  estruturador: "Estruturador",
+  head_mesa: "Head da Mesa",
+  partner: "Partner",
+  mandatario_1: "Mandatário 1",
+  mandatario_2: "Mandatário 2",
+  intermediario_1: "Intermediário 1",
+  intermediario_2: "Intermediário 2",
 };
 
 export interface QualificationPartyForProse {
