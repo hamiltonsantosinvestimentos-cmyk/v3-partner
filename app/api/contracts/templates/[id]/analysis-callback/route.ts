@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as sc } from "@supabase/supabase-js";
-import { notifySociosMinutaEmRevisao, logAgentAuditEvent } from "@/lib/socios-notify";
+import { notifySociosRiscoContrato, logAgentAuditEvent } from "@/lib/socios-notify";
 
 // POST /api/contracts/templates/[id]/analysis-callback — server-to-server
 // apenas (n8n, workflow "W17 — Analisar Contrato Recebido"). Fecha o ciclo
@@ -84,17 +84,21 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     detail: { laudo_risco: laudo_risco ?? null },
   });
 
-  // Notificação Proativa (BRIEF 2, item 1): dispara pros 3 sócios assim que
-  // a minuta entra em em_revisao. Best-effort — falha aqui nunca desfaz a
-  // gravação acima, a minuta já está em em_revisao de qualquer forma.
+  // E-mail de Alerta de Risco (02/09/2026, pedido explícito de João:
+  // proteção jurídica da V3 e mitigação de armadilhas contratuais).
+  // Substitui o aviso genérico de "aguardando seu voto" (usado pelo fluxo
+  // manual/Agente Estruturador) por um e-mail que lista os pontos críticos
+  // reais encontrados e já aponta a minuta saneada. Best-effort — falha
+  // aqui nunca desfaz a gravação acima, a minuta já está em em_revisao de
+  // qualquer forma.
   try {
-    await notifySociosMinutaEmRevisao({
+    await notifySociosRiscoContrato({
       templateId: id,
       templateName: template.template_name as string,
-      origem: "agente_ia",
+      laudoRisco: laudo_risco ?? null,
     });
   } catch (e) {
-    console.error(`[analysis-callback] falha ao notificar sócios pra minuta ${id}:`, e);
+    console.error(`[analysis-callback] falha ao notificar sócios sobre risco na minuta ${id}:`, e);
   }
 
   return NextResponse.json({ ok: true, analysis_status: "concluido", approval_status: "em_revisao" });

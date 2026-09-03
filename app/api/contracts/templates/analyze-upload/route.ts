@@ -110,6 +110,23 @@ export async function POST(req: NextRequest) {
     const templateId = template.id as string;
     const storagePath = `contratos-recebidos/${templateId}${ext}`;
 
+    // Alinhamento com o Agente Estruturador (02/09/2026, mesmo achado
+    // anti-alucinação aplicado aqui a pedido de João): a diretriz de
+    // "comparar contra o padrão institucional da V3" não tinha como o
+    // agente cumprir sozinho sem receber exemplo nenhum de minuta real.
+    // Busca até 3 minutas já aprovadas da MESMA vertical pra servir de
+    // referência real no prompt; se não houver nenhuma, o agente é
+    // avisado explicitamente disso, nunca finge ter uma referência
+    // inexistente.
+    const { data: referenceTemplates } = await db
+      .from("contract_templates")
+      .select("template_name, body_text_raw")
+      .eq("vertical", vertical)
+      .eq("approval_status", "aprovado")
+      .eq("is_active", true)
+      .order("updated_at", { ascending: false })
+      .limit(3);
+
     const { error: uploadErr } = await db.storage.from("documents").upload(storagePath, buffer, { upsert: true });
     if (uploadErr) {
       await db.from("contract_templates").update({
@@ -148,6 +165,10 @@ export async function POST(req: NextRequest) {
           file_name: file.name,
           vertical,
           valor_operacao_estimado: valorOperacaoEstimado,
+          reference_templates: (referenceTemplates ?? []).map((t) => ({
+            template_name: t.template_name,
+            body_text_raw: (t.body_text_raw as string).slice(0, 12000),
+          })),
         }),
       });
     } catch (e) {
