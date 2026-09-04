@@ -98,6 +98,7 @@ interface QualBatch {
   status: string;
   created_at: string;
   completed_at: string | null;
+  consumido_por_contract_id?: string | null;
   cm_party_qualifications: QualParty[];
 }
 
@@ -140,6 +141,54 @@ export function ContractsPanelClient() {
     setQualParties((prev) => [...prev, { full_name: partner.full_name, email: partner.email, phone: "", role_in_document: "partner" }]);
     setSelectedPartnerId("");
     setShowPartnerPicker(false);
+  };
+
+  // Adicionar Envolvido a um lote JÁ EXISTENTE (04/09/2026, P0 real, mesmo
+  // fix de contract-templates-client.tsx): nunca mais cria lote novo
+  // separado quando já existe um em andamento pra este contrato.
+  const [addingToBatchId, setAddingToBatchId] = useState<string | null>(null);
+  const [addPartyForm, setAddPartyForm] = useState({ full_name: "", email: "", phone: "", role_in_document: "parte_principal" });
+  const [addPartySubmitting, setAddPartySubmitting] = useState(false);
+  const [addPartnerPickerFor, setAddPartnerPickerFor] = useState<string | null>(null);
+  const [addPartnerPickerId, setAddPartnerPickerId] = useState("");
+
+  const submitAddParty = async (batchId: string) => {
+    if (!addPartyForm.full_name.trim() || !addPartyForm.email.trim()) return;
+    setAddPartySubmitting(true);
+    try {
+      const res = await fetch(`/api/cm/qualifications/${batchId}/add-party`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(addPartyForm),
+      });
+      const json = await res.json();
+      if (res.ok) {
+        setAddPartyForm({ full_name: "", email: "", phone: "", role_in_document: "parte_principal" });
+        setAddingToBatchId(null);
+        if (selected) await loadQualifications(selected.id);
+      } else alert(json.error ?? "Erro ao adicionar envolvido");
+    } catch { alert("Erro de conexão"); }
+    finally { setAddPartySubmitting(false); }
+  };
+
+  const submitAddPartnerToBatch = async (batchId: string) => {
+    const partner = partnersList.find((p) => p.id === addPartnerPickerId);
+    if (!partner) return;
+    setAddPartySubmitting(true);
+    try {
+      const res = await fetch(`/api/cm/qualifications/${batchId}/add-party`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ full_name: partner.full_name, email: partner.email, phone: "", role_in_document: "partner" }),
+      });
+      const json = await res.json();
+      if (res.ok) {
+        setAddPartnerPickerId("");
+        setAddPartnerPickerFor(null);
+        if (selected) await loadQualifications(selected.id);
+      } else alert(json.error ?? "Erro ao adicionar partner");
+    } catch { alert("Erro de conexão"); }
+    finally { setAddPartySubmitting(false); }
   };
   const [showEdit, setShowEdit] = useState(false);
   const [editBody, setEditBody] = useState("");
@@ -755,6 +804,60 @@ export function ContractsPanelClient() {
                             </div>
                           ))}
                         </div>
+
+                        {!batch.consumido_por_contract_id && (
+                          <div className="mt-2 pt-2 border-t border-[#9BAFC5]/10">
+                            {addingToBatchId === batch.id ? (
+                              <div className="space-y-1.5">
+                                <input value={addPartyForm.full_name} onChange={(e) => setAddPartyForm((f) => ({ ...f, full_name: e.target.value }))} placeholder="Nome completo *"
+                                  className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]" />
+                                <input value={addPartyForm.email} onChange={(e) => setAddPartyForm((f) => ({ ...f, email: e.target.value }))} placeholder="E-mail *" type="email"
+                                  className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]" />
+                                <input value={addPartyForm.phone} onChange={(e) => setAddPartyForm((f) => ({ ...f, phone: e.target.value }))} placeholder="WhatsApp (opcional)" type="tel"
+                                  className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]" />
+                                <select value={addPartyForm.role_in_document} onChange={(e) => setAddPartyForm((f) => ({ ...f, role_in_document: e.target.value }))}
+                                  className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]">
+                                  {Object.entries(ROLE_LABELS).map(([value, label]) => (
+                                    <option key={value} value={value}>{label}</option>
+                                  ))}
+                                </select>
+                                <div className="flex gap-2">
+                                  <button onClick={() => submitAddParty(batch.id)} disabled={addPartySubmitting}
+                                    className="flex-1 px-3 py-1.5 bg-[#C9A84C] text-[#09081A] rounded text-[10px] font-bold hover:bg-[#E8C97A] transition disabled:opacity-40">
+                                    {addPartySubmitting ? "Adicionando..." : "Adicionar ao Lote"}
+                                  </button>
+                                  <button onClick={() => setAddingToBatchId(null)} className="px-3 py-1.5 bg-[#162744] text-[#9BAFC5] rounded text-[10px] font-bold">Cancelar</button>
+                                </div>
+                              </div>
+                            ) : addPartnerPickerFor === batch.id ? (
+                              <div className="flex gap-2">
+                                <select value={addPartnerPickerId} onChange={(e) => setAddPartnerPickerId(e.target.value)}
+                                  className="flex-1 bg-[#09081A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]">
+                                  <option value="">{partnersList.length === 0 ? "Carregando..." : "Selecione um partner"}</option>
+                                  {partnersList.map((p) => (
+                                    <option key={p.id} value={p.id}>{p.full_name} · {p.role}</option>
+                                  ))}
+                                </select>
+                                <button onClick={() => submitAddPartnerToBatch(batch.id)} disabled={!addPartnerPickerId || addPartySubmitting}
+                                  className="px-3 py-1.5 bg-[#C9A84C] text-[#09081A] rounded text-[10px] font-bold hover:bg-[#E8C97A] transition disabled:opacity-40">
+                                  Adicionar
+                                </button>
+                                <button onClick={() => setAddPartnerPickerFor(null)} className="px-2 py-1.5 bg-[#162744] text-[#9BAFC5] rounded text-[10px] font-bold">×</button>
+                              </div>
+                            ) : (
+                              <div className="flex gap-2">
+                                <button onClick={() => { setAddingToBatchId(batch.id); setAddPartyForm({ full_name: "", email: "", phone: "", role_in_document: "parte_principal" }); }}
+                                  className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 bg-[#12112A] border border-[#9BAFC5]/15 rounded text-[#9BAFC5] text-[10px] font-bold hover:text-[#F5F1E8] transition">
+                                  <Plus size={11} /> Adicionar Envolvido
+                                </button>
+                                <button onClick={() => { setAddPartnerPickerFor(batch.id); loadPartnersList(); }}
+                                  className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 bg-[#12112A] border border-[#C9A84C]/30 rounded text-[#C9A84C] text-[10px] font-bold hover:bg-[#C9A84C]/10 transition">
+                                  <UserPlus size={11} /> Adicionar Partner
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -894,6 +997,11 @@ export function ContractsPanelClient() {
               <p className="text-[11px] text-[#9BAFC5] leading-relaxed">
                 Cada envolvido recebe um link individual para preencher seus próprios dados (CPF/CNPJ e, se necessário, dados de repasse). Evita erro humano de digitar dado de terceiro na mão.
               </p>
+              {qualBatches.some((b) => !b.consumido_por_contract_id) && (
+                <p className="text-[11px] text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded-lg p-2.5 leading-relaxed">
+                  Já existe um lote em andamento pra este contrato (veja "Qualificação de Partes" acima). Criar um lote novo aqui gera um SEGUNDO lote separado. Prefira usar "Adicionar Envolvido"/"Adicionar Partner" direto no lote já existente.
+                </p>
+              )}
               <div className="space-y-2">
                 {qualParties.map((row, i) => (
                   <div key={i} className="bg-[#12112A] border border-[#9BAFC5]/10 rounded-lg p-2 space-y-1.5">

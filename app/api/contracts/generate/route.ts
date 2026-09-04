@@ -346,7 +346,29 @@ export async function POST(req: NextRequest) {
       // vez de variável por chave de role, reaproveitado de
       // app/api/cm/qualifications/legal-text/route.ts (identBlock), mesma
       // regra PF/PJ. Só populado quando o template usa esse placeholder.
-      variables.party_qualifications_block = qualifications.map(renderPartyQualificationProse).join("<br/>");
+      const partyProseLines = qualifications.map(renderPartyQualificationProse);
+
+      // P0 real achado 04/09/2026: o Head da mesa entrava em
+      // qualificationParties (bloco de assinatura, linha 336 acima), mas
+      // NUNCA no texto de qualificação da minuta (party_qualifications_block)
+      // — o contrato saía com o Head assinando sem nenhuma qualificação
+      // civil dele no corpo do documento. Formato simplificado (nome,
+      // nacionalidade/estado civil/profissão, CPF, e-mail), igual ao já
+      // usado pra João Lemos Netto no preâmbulo fixo da NCNDA — nunca o
+      // formato completo de renderPartyQualificationProse/
+      // buildLegalQualification, que exige RG/endereço que `profiles` (onde
+      // o Head preenche os próprios dados em /perfil) não coleta hoje.
+      if (typeof variables.head_email === "string" && typeof variables.head_full_name === "string") {
+        const headQualificacao = typeof variables.head_qualificacao === "string" && variables.head_qualificacao.trim()
+          ? variables.head_qualificacao
+          : "[qualificação não preenchida em /perfil]";
+        const headCpfText = typeof variables.head_cpf === "string" ? variables.head_cpf : "[CPF não preenchido em /perfil]";
+        partyProseLines.push(
+          `${(typeof variables.head_role_label === "string" ? variables.head_role_label : "HEAD DA MESA").toUpperCase()}: ${variables.head_full_name}, ${headQualificacao}, CPF ${headCpfText}, e-mail ${variables.head_email}`
+        );
+      }
+
+      variables.party_qualifications_block = partyProseLines.join("<br/>");
       variables.official_emails_protocol = Array.from(new Set([
         "joao.lemos@v3partners.com.br",
         typeof variables.head_email === "string" ? variables.head_email : null,
