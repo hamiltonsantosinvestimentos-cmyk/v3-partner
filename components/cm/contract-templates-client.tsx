@@ -358,16 +358,33 @@ export function ContractTemplatesClient() {
   // mão mesmo quando a minuta já tinha lote de Qualificação Antecipada
   // completo — a Mesa ficava travada tendo que digitar uma parte
   // redundante que já estava qualificada de verdade via link. Quando já
-  // existe qualificação real (lote ativo, com ao menos 1 parte
-  // preenchida), o backend resolve as partes sozinho via
-  // effectiveQualificationBatchId (auto-detect em generate/route.ts) —
-  // nem precisa, nem deve, mandar avulso_parties nesse caso.
-  const hasQualificationData = qualBatches.some(
-    (b) => !b.consumido_por_contract_id && b.cm_party_qualifications.some((p) => p.status === "preenchido")
-  );
+  // existe qualificação real, o backend resolve as partes sozinho via
+  // effectiveQualificationBatchId (auto-detect em generate/route.ts) — nem
+  // precisa, nem deve, mandar avulso_parties nesse caso.
+  //
+  // P0 companheiro achado no mesmo dia: o auto-detect do backend só
+  // considera lote com status EXATAMENTE "completo" (nunca "coletando").
+  // A primeira versão deste fix checava só "alguma parte preenchida", sem
+  // olhar o status do lote — quando alguém usa "Adicionar Envolvido" pra
+  // incluir mais uma pessoa num lote já completo, ele volta pra
+  // "coletando" (correto), mas a tela achava que ainda podia pular os
+  // Indicadores, mandava nada pro backend, e o contrato quebrava com erro
+  // de banco (chk_operation_contracts_vinculo) sem nenhuma explicação
+  // clara. Agora a tela distingue completo (pode gerar sozinho) de
+  // incompleto (bloqueia com aviso, nunca deixa cair no erro de banco).
+  const activeQualBatch = qualBatches.find((b) => !b.consumido_por_contract_id);
+  const hasQualificationData = activeQualBatch?.status === "completo"
+    && activeQualBatch.cm_party_qualifications.some((p) => p.status === "preenchido");
+  const hasIncompleteQualBatch = !!activeQualBatch && activeQualBatch.status !== "completo";
 
   const handleGenerateContract = async () => {
     if (!selected) return;
+
+    if (hasIncompleteQualBatch && activeQualBatch) {
+      const pendentes = activeQualBatch.cm_party_qualifications.filter((p) => p.status !== "preenchido").map((p) => p.full_name);
+      setGenError(`Lote de Qualificação Antecipada ainda não está completo (falta: ${pendentes.join(", ")}). Complete a qualificação, ou remova essa(s) parte(s) do lote se não devem entrar neste contrato, antes de gerar.`);
+      return;
+    }
 
     if (requiresCounterparty && !hasQualificationData) {
       const invalid = genParties.some((p) => !p.name.trim() || !p.email.trim());
@@ -1576,6 +1593,11 @@ export function ContractTemplatesClient() {
             ) : (
               <>
                 <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                  {hasIncompleteQualBatch && activeQualBatch && (
+                    <p className="text-[11px] text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded-lg p-2.5 leading-relaxed">
+                      Lote de Qualificação Antecipada ainda não está completo: {activeQualBatch.cm_party_qualifications.filter((p) => p.status !== "preenchido").map((p) => p.full_name).join(", ")} ainda não preencheu. Complete a qualificação (ou remova essa parte do lote, se não deve entrar neste contrato) antes de gerar.
+                    </p>
+                  )}
                   {requiresCounterparty && hasQualificationData ? (
                     <p className="text-[11px] text-emerald-400 leading-relaxed bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-2.5">
                       As partes já foram qualificadas via "Qualificação Antecipada" (veja o Lote de Qualificação acima). Não é preciso preencher indicador nenhum aqui: o contrato usa automaticamente os dados já coletados.
@@ -1697,7 +1719,7 @@ export function ContractTemplatesClient() {
                   {genError && <p className="text-[11px] text-red-400">{genError}</p>}
                 </div>
                 <div className="p-4 border-t border-[#C9A84C]/20 flex-shrink-0">
-                  <button onClick={handleGenerateContract} disabled={generating}
+                  <button onClick={handleGenerateContract} disabled={generating || hasIncompleteQualBatch}
                     className="w-full px-3 py-2.5 bg-[#C9A84C] text-[#09081A] rounded-lg text-xs font-bold hover:bg-[#E8C97A] transition disabled:opacity-50 flex items-center justify-center gap-2">
                     {generating ? <Loader2 size={14} className="animate-spin" /> : <FilePlus2 size={14} />} Gerar Contrato
                   </button>
