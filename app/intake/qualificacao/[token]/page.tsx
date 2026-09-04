@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { Loader2, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { Loader2, AlertTriangle, CheckCircle2, Upload, ShieldCheck, X } from "lucide-react";
 import {
   type PartyNature, type RepresentativeType, type CompanyLegalNature,
   PARTY_NATURE_LABELS, REPRESENTATIVE_TYPE_LABELS, REQUIRED_REPRESENTATIVE_TYPES,
@@ -10,6 +10,133 @@ import {
 
 const INPUT_CLS = "w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-sm text-[#F5F1E8] mt-1";
 const LABEL_CLS = "text-[9px] text-[#9BAFC5] uppercase";
+
+// Reaproveitamento de KYC (04/09/2026): estado de um slot de documento
+// (identificação com foto ou contrato social) -- vale tanto para a parte
+// principal quanto para qualquer nível da cadeia de representação.
+type DocKind = "identificacao_foto" | "contrato_social";
+const DOC_KIND_LABELS: Record<DocKind, string> = {
+  identificacao_foto: "Documento de Identificação com Foto (RG/CNH/Passaporte)",
+  contrato_social: "Contrato Social / Estatuto",
+};
+
+interface DocSlotState {
+  status: "idle" | "checking" | "valid_reuse" | "uploading" | "uploaded" | "error";
+  documentId?: string;
+  filename?: string;
+  validUntil?: string;
+  error?: string;
+}
+
+function emptyDocSlot(): DocSlotState {
+  return { status: "idle" };
+}
+
+/** Widget reaproveitável de anexo de KYC. Ao CPF/CNPJ mudar, checa silenciosamente se
+ *  a V3 já tem um documento válido (< 12 meses) daquele número -- se tiver, esconde o
+ *  upload e mostra o badge de reaproveitamento; se não, pede o arquivo e sobe na hora. */
+function KycDocSlot({ token, kind, documentNumber, value, onChange }: {
+  token: string;
+  kind: DocKind;
+  documentNumber: string;
+  value: DocSlotState;
+  onChange: (v: DocSlotState) => void;
+}) {
+  useEffect(() => {
+    const digits = documentNumber.replace(/\D/g, "");
+    const expectedLen = kind === "identificacao_foto" ? 11 : 14;
+    if (digits.length !== expectedLen) {
+      if (value.status !== "idle" && value.status !== "uploading" && value.status !== "uploaded") onChange(emptyDocSlot());
+      return;
+    }
+    if (value.status === "uploaded" || value.status === "uploading") return;
+
+    onChange({ status: "checking" });
+    const controller = new AbortController();
+    fetch(`/api/cm/kyc/check?token=${token}&document=${digits}`, { signal: controller.signal })
+      .then((res) => res.json())
+      .then((json) => {
+        if (json.valid && json.document_kind === kind) {
+          onChange({ status: "valid_reuse", validUntil: json.valid_until });
+        } else {
+          onChange(emptyDocSlot());
+        }
+      })
+      .catch(() => onChange(emptyDocSlot()));
+    return () => controller.abort();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [documentNumber, kind, token]);
+
+  const upload = async (file: File) => {
+    onChange({ status: "uploading" });
+    const fd = new FormData();
+    fd.append("file", file);
+    fd.append("document_kind", kind);
+    fd.append("document_number", documentNumber.replace(/\D/g, ""));
+    try {
+      const res = await fetch(`/api/cm/qualificacao/${token}/documents`, { method: "POST", body: fd });
+      const json = await res.json();
+      if (res.ok) {
+        onChange({ status: "uploaded", documentId: json.document.id, filename: json.document.original_filename });
+      } else {
+        onChange({ status: "error", error: json.error ?? "Falha no upload" });
+      }
+    } catch {
+      onChange({ status: "error", error: "Erro de conexão no upload" });
+    }
+  };
+
+  const remove = async () => {
+    if (value.documentId) {
+      await fetch(`/api/cm/qualificacao/${token}/documents/${value.documentId}`, { method: "DELETE" }).catch(() => {});
+    }
+    onChange(emptyDocSlot());
+  };
+
+  return (
+    <div>
+      <p className="text-[9px] text-[#C9A84C] font-bold uppercase pt-1 mb-1">{DOC_KIND_LABELS[kind]} *</p>
+
+      {value.status === "checking" && (
+        <div className="flex items-center gap-2 text-[11px] text-[#9BAFC5] bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2">
+          <Loader2 size={14} className="animate-spin" /> Verificando se já temos este documento...
+        </div>
+      )}
+
+      {value.status === "valid_reuse" && (
+        <div className="flex items-center gap-2 text-[11px] text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 rounded px-3 py-2">
+          <ShieldCheck size={14} />
+          Documentação KYC já validada e ativa na base da V³ Partners
+          {value.validUntil ? ` (válida até ${new Date(value.validUntil).toLocaleDateString("pt-BR")})` : ""}.
+        </div>
+      )}
+
+      {(value.status === "idle" || value.status === "error") && (
+        <label className="flex items-center gap-2 text-[12px] text-[#9BAFC5] bg-[#12112A] border border-dashed border-[#9BAFC5]/25 rounded px-3 py-3 cursor-pointer hover:border-[#C9A84C]/50 transition">
+          <Upload size={14} />
+          Selecionar arquivo (JPG, PNG ou PDF, até 15MB)
+          <input type="file" accept="image/jpeg,image/png,application/pdf" className="hidden"
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) upload(f); }} />
+        </label>
+      )}
+
+      {value.status === "uploading" && (
+        <div className="flex items-center gap-2 text-[11px] text-[#9BAFC5] bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2">
+          <Loader2 size={14} className="animate-spin" /> Enviando arquivo...
+        </div>
+      )}
+
+      {value.status === "uploaded" && (
+        <div className="flex items-center justify-between gap-2 text-[11px] text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 rounded px-3 py-2">
+          <span className="flex items-center gap-2 truncate"><CheckCircle2 size={14} /> {value.filename}</span>
+          <button type="button" onClick={remove} className="text-[#9BAFC5] hover:text-red-400 shrink-0"><X size={14} /></button>
+        </div>
+      )}
+
+      {value.status === "error" && <p className="text-[10px] text-red-400 mt-1">{value.error}</p>}
+    </div>
+  );
+}
 
 // Estado do representante, recursivo (01/09/2026, diretriz Dr. Athaydes):
 // uma PJ pode ser representada por outra PJ, encadeado até chegar numa
@@ -21,6 +148,9 @@ interface RepresentativeState {
   endereco_rua: string; endereco_numero: string; endereco_complemento: string; endereco_bairro: string; endereco_cidade: string; endereco_estado: string; endereco_cep: string;
   company_name: string; company_cnpj: string; company_legal_nature: CompanyLegalNature;
   company_rua: string; company_numero: string; company_complemento: string; company_bairro: string; company_cidade: string; company_estado: string; company_cep: string;
+  // Reaproveitamento de KYC (04/09/2026): cada nível da cadeia tem seu próprio
+  // slot de documento -- identificacao_foto se PF, contrato_social se PJ.
+  documents: { identificacao_foto: DocSlotState; contrato_social: DocSlotState };
   representation: RepresentativeState | null;
 }
 
@@ -31,6 +161,7 @@ function emptyRepresentative(): RepresentativeState {
     endereco_rua: "", endereco_numero: "", endereco_complemento: "", endereco_bairro: "", endereco_cidade: "", endereco_estado: "", endereco_cep: "",
     company_name: "", company_cnpj: "", company_legal_nature: "privado",
     company_rua: "", company_numero: "", company_complemento: "", company_bairro: "", company_cidade: "", company_estado: "", company_cep: "",
+    documents: { identificacao_foto: emptyDocSlot(), contrato_social: emptyDocSlot() },
     representation: null,
   };
 }
@@ -62,7 +193,8 @@ function EnderecoFields({ prefixLabel, rua, numero, complemento, bairro, cidade,
 // Pessoa Jurídica, renderiza embaixo (indentado) o representante DELE,
 // restrito a administrador/representante legal -- e assim por diante, até
 // a cadeia terminar numa Pessoa Física (nota de arquitetura do BRIEF).
-function RepresentativeForm({ allowedTypes, depth, value, onChange }: {
+function RepresentativeForm({ token, allowedTypes, depth, value, onChange }: {
+  token: string;
   allowedTypes: RepresentativeType[];
   depth: number;
   value: RepresentativeState;
@@ -120,6 +252,9 @@ function RepresentativeForm({ allowedTypes, depth, value, onChange }: {
           </div>
           <EnderecoFields prefixLabel="Endereço Residencial" rua={value.endereco_rua} numero={value.endereco_numero} complemento={value.endereco_complemento} bairro={value.endereco_bairro} cidade={value.endereco_cidade} estado={value.endereco_estado} cep={value.endereco_cep}
             onChange={(f, v) => set(`endereco_${f}` as keyof RepresentativeState, v as any)} />
+          <KycDocSlot token={token} kind="identificacao_foto" documentNumber={value.cpf_cnpj}
+            value={value.documents.identificacao_foto}
+            onChange={(v) => set("documents", { ...value.documents, identificacao_foto: v })} />
         </>
       ) : (
         <>
@@ -133,12 +268,16 @@ function RepresentativeForm({ allowedTypes, depth, value, onChange }: {
           </div>
           <EnderecoFields prefixLabel="Endereço da Sede" rua={value.company_rua} numero={value.company_numero} complemento={value.company_complemento} bairro={value.company_bairro} cidade={value.company_cidade} estado={value.company_estado} cep={value.company_cep}
             onChange={(f, v) => set(`company_${f}` as keyof RepresentativeState, v as any)} />
+          <KycDocSlot token={token} kind="contrato_social" documentNumber={value.company_cnpj}
+            value={value.documents.contrato_social}
+            onChange={(v) => set("documents", { ...value.documents, contrato_social: v })} />
 
           {/* Encadeamento: esta PJ representante também precisa do próprio
               administrador/representante legal, recursivamente. */}
           <div className="pt-2 border-t border-[#9BAFC5]/10">
             <p className="text-[10px] text-[#C9A84C] font-bold uppercase mb-2">Quem representa esta empresa</p>
             <RepresentativeForm
+              token={token}
               allowedTypes={["administrador", "representante_legal"]}
               depth={depth + 1}
               value={value.representation ?? emptyRepresentative()}
@@ -195,6 +334,12 @@ export default function QualificacaoIntakePage() {
 
   const [representation, setRepresentation] = useState<RepresentativeState>(emptyRepresentative());
 
+  // Reaproveitamento de KYC (04/09/2026): slots da PARTE PRINCIPAL -- ID com
+  // foto se PF, contrato social se PJ. Slots de qualquer representante vivem
+  // dentro do próprio RepresentativeState (documents), já fiados acima.
+  const [idDocSlot, setIdDocSlot] = useState<DocSlotState>(emptyDocSlot());
+  const [contratoSocialSlot, setContratoSocialSlot] = useState<DocSlotState>(emptyDocSlot());
+
   useEffect(() => {
     if (!token) return;
     fetch(`/api/cm/qualificacao/${token}`)
@@ -209,6 +354,30 @@ export default function QualificacaoIntakePage() {
 
   const recebeRepasse = ["mandatario", "intermediario_finder_venda", "intermediario_finder_compra"].includes(data?.role_in_document);
   const representativeTypesRequired = REQUIRED_REPRESENTATIVE_TYPES[partyNature];
+
+  // Reaproveitamento de KYC (04/09/2026): converte o estado de UI do slot de
+  // documento no formato aceito pelo backend (reaproveitar ou referenciar o
+  // upload recém-feito), e faz o mesmo recursivamente em toda a cadeia de
+  // representação antes de enviar.
+  const toDocRef = (slot: DocSlotState): { reuse: true } | { document_id: string } | null => {
+    if (slot.status === "valid_reuse") return { reuse: true };
+    if (slot.status === "uploaded" && slot.documentId) return { document_id: slot.documentId };
+    return null;
+  };
+  const docReady = (slot: DocSlotState) => slot.status === "valid_reuse" || slot.status === "uploaded";
+  const representationDocsReady = (rep: RepresentativeState | null): boolean => {
+    if (!rep) return false;
+    if (rep.party_nature === "PJ") return docReady(rep.documents.contrato_social) && representationDocsReady(rep.representation);
+    return docReady(rep.documents.identificacao_foto);
+  };
+  const serializeRepresentation = (rep: RepresentativeState | null): any => {
+    if (!rep) return null;
+    return {
+      ...rep,
+      documents: { identificacao_foto: toDocRef(rep.documents.identificacao_foto), contrato_social: toDocRef(rep.documents.contrato_social) },
+      representation: serializeRepresentation(rep.representation),
+    };
+  };
 
   const submit = async () => {
     setFormError("");
@@ -234,6 +403,18 @@ export default function QualificacaoIntakePage() {
     }
     if (representativeTypesRequired && !representation.representative_type) {
       setFormError(`Selecione o tipo de representante (${representativeTypesRequired.map((t) => REPRESENTATIVE_TYPE_LABELS[t]).join(" ou ")})`);
+      return;
+    }
+    if (["PF", "PF_PROCURACAO", "INCAPAZ_RELATIVO"].includes(partyNature) && !docReady(idDocSlot)) {
+      setFormError("Anexe o documento de identificação com foto (ou aguarde a checagem de reaproveitamento terminar)");
+      return;
+    }
+    if (partyNature === "PJ" && !docReady(contratoSocialSlot)) {
+      setFormError("Anexe o contrato social da empresa (ou aguarde a checagem de reaproveitamento terminar)");
+      return;
+    }
+    if (representativeTypesRequired && !representationDocsReady(representation)) {
+      setFormError("Anexe o(s) documento(s) obrigatório(s) do representante (identificação com foto ou contrato social)");
       return;
     }
     if (recebeRepasse && !pixKey.trim() && !banco.trim()) {
@@ -268,7 +449,8 @@ export default function QualificacaoIntakePage() {
           company_complemento: partyNature === "PJ" ? (companyComplemento.trim() || null) : null,
           company_bairro: partyNature === "PJ" ? companyBairro.trim() : null, company_cidade: partyNature === "PJ" ? companyCidade.trim() : null,
           company_estado: partyNature === "PJ" ? companyEstado.trim() : null, company_cep: partyNature === "PJ" ? companyCep.trim() : null,
-          representation: representativeTypesRequired ? representation : null,
+          documents: { identificacao_foto: toDocRef(idDocSlot), contrato_social: toDocRef(contratoSocialSlot) },
+          representation: representativeTypesRequired ? serializeRepresentation(representation) : null,
         }),
       });
       const json = await res.json();
@@ -377,6 +559,7 @@ export default function QualificacaoIntakePage() {
                       const setters: Record<string, (v: string) => void> = { rua: setCompanyRua, numero: setCompanyNumero, complemento: setCompanyComplemento, bairro: setCompanyBairro, cidade: setCompanyCidade, estado: setCompanyEstado, cep: setCompanyCep };
                       setters[f](v);
                     }} />
+                  <KycDocSlot token={token} kind="contrato_social" documentNumber={companyCnpj} value={contratoSocialSlot} onChange={setContratoSocialSlot} />
                 </div>
               )}
 
@@ -425,13 +608,17 @@ export default function QualificacaoIntakePage() {
                     <label className={LABEL_CLS}>Data de Nascimento *</label>
                     <input value={birthDate} onChange={(e) => setBirthDate(e.target.value)} type="date" className={INPUT_CLS} />
                   </div>
+
+                  {["PF", "PF_PROCURACAO", "INCAPAZ_RELATIVO"].includes(partyNature) && (
+                    <KycDocSlot token={token} kind="identificacao_foto" documentNumber={cpfCnpj} value={idDocSlot} onChange={setIdDocSlot} />
+                  )}
                 </div>
               )}
 
               {representativeTypesRequired && (
                 <div className="pt-3 border-t border-[#9BAFC5]/10">
                   <p className="text-[10px] text-[#C9A84C] font-bold uppercase mb-2">Representante Legal</p>
-                  <RepresentativeForm allowedTypes={representativeTypesRequired} depth={0} value={representation} onChange={setRepresentation} />
+                  <RepresentativeForm token={token} allowedTypes={representativeTypesRequired} depth={0} value={representation} onChange={setRepresentation} />
                 </div>
               )}
 

@@ -35,6 +35,11 @@ export interface LegalQualificationRepresentation {
   company_cnpj?: string | null;
   company_address?: string | null;
   company_legal_nature?: CompanyLegalNature | null;
+  // Reaproveitamento de KYC (04/09/2026): resolvido via resolveClient() a
+  // partir do cpf_cnpj (PF) ou company_cnpj (PJ) DESTE nível da cadeia --
+  // cada representante tem sua própria identidade/estoque de documentos,
+  // independente do v3_client_id da parte principal no topo.
+  v3_client_id?: string | null;
   // Recursivo: presente quando este representante também é PJ e precisa
   // do próprio representante (encadeamento PJ → PJ → ... → PF).
   representation?: LegalQualificationRepresentation | null;

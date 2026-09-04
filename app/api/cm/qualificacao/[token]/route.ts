@@ -1,10 +1,51 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient as sc } from "@supabase/supabase-js";
+import { createClient as sc, type SupabaseClient } from "@supabase/supabase-js";
 import { isValidCPF, isValidCNPJ } from "@/lib/validators/cpf-cnpj";
 import { REQUIRED_REPRESENTATIVE_TYPES, type PartyNature, type RepresentativeType, type CompanyLegalNature, type LegalQualificationRepresentation } from "@/lib/legal-qualification";
+import { resolveClient } from "@/lib/v3-clients";
+import { findValidKycDocument, KYC_DOCUMENT_KIND_LABELS, type KycDocumentKind } from "@/lib/kyc-documents";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+}
+
+// Reaproveitamento de KYC (04/09/2026): naturezas cuja PARTE PRINCIPAL fornece o
+// próprio documento de identificação -- INCAPAZ_ABSOLUTO/ESPOLIO não (quem assina
+// de fato é o representante, cujo documento é exigido separadamente na cadeia
+// de representação, nunca no topo).
+const NATURES_REQUIRE_OWN_ID_DOC: PartyNature[] = ["PF", "PF_PROCURACAO", "INCAPAZ_RELATIVO"];
+
+type DocRef = { reuse: true } | { document_id: string } | null | undefined;
+
+/** Confirma que o documento (reaproveitado ou recém-enviado nesta própria qualificação)
+ *  é válido para o v3_client_id/kind exigidos. Nunca confia no client sem reconferir no
+ *  banco -- um document_id só é aceito se pertencer a ESTA qualificação e a este mesmo
+ *  v3_client_id, e um "reuse" só é aceito se o banco confirmar validade (< 12 meses) agora. */
+async function resolveDocumentSlot(
+  db: SupabaseClient,
+  qualificationId: string,
+  v3ClientId: string | null,
+  kind: KycDocumentKind,
+  ref: DocRef
+): Promise<string | null> {
+  const label = KYC_DOCUMENT_KIND_LABELS[kind];
+  if (!v3ClientId) return `Não foi possível validar o CPF/CNPJ para conferir o(a) ${label}.`;
+  if (!ref) return `${label} é obrigatório.`;
+
+  if ("reuse" in ref && ref.reuse) {
+    const existing = await findValidKycDocument(db, v3ClientId, kind);
+    return existing ? null : `Não há ${label} válido (menos de 12 meses) em nome deste CPF/CNPJ para reaproveitar -- envie um novo.`;
+  }
+  if ("document_id" in ref && ref.document_id) {
+    const { data: doc } = await db
+      .from("cm_party_qualification_documents")
+      .select("id, v3_client_id, document_kind, uploaded_by_qualification_id")
+      .eq("id", ref.document_id)
+      .maybeSingle();
+    const belongsHere = doc && doc.uploaded_by_qualification_id === qualificationId && doc.document_kind === kind && doc.v3_client_id === v3ClientId;
+    return belongsHere ? null : `${label} inválido ou não pertence a esta qualificação.`;
+  }
+  return `${label} é obrigatório.`;
 }
 
 const DOCUMENT_TYPE_LABELS: Record<string, string> = {
@@ -92,7 +133,10 @@ function missingBaseFields(nature: PartyNature, b: Record<string, unknown>): str
 // Valida um representante (recursivo, se ele também for PJ e precisar de
 // representante próprio). Máximo 5 níveis de encadeamento -- suficiente
 // pra qualquer estrutura societária real, evita abuso/loop.
-function validateRepresentative(rep: any, allowedTypes: RepresentativeType[], depth = 0): string | null {
+// Reaproveitamento de KYC (04/09/2026): cada nível PF exige identificacao_foto
+// (reaproveitada ou nova), cada nível PJ exige contrato_social -- validado
+// contra o banco (nunca confia no client), db async por isso.
+async function validateRepresentative(db: SupabaseClient, qualificationId: string, rep: any, allowedTypes: RepresentativeType[], depth = 0): Promise<string | null> {
   if (depth > 5) return "Cadeia de representação excede o limite permitido (5 níveis).";
   if (!rep || typeof rep !== "object") return "Representante é obrigatório para esta natureza de parte.";
   if (!VALID_REPRESENTATIVE_TYPES.includes(rep.representative_type)) {
@@ -116,6 +160,10 @@ function validateRepresentative(rep: any, allowedTypes: RepresentativeType[], de
     req(missing, rep.endereco_estado, "endereco_estado"); req(missing, rep.endereco_cep, "endereco_cep");
     if (missing.length > 0) return `Campos obrigatórios ausentes no representante: ${missing.join(", ")}`;
     if (!isValidCPF(rep.cpf_cnpj)) return "CPF do representante inválido.";
+
+    const repClientId = await resolveClient(rep.cpf_cnpj, { vertical: "central_contratos", db });
+    const docError = await resolveDocumentSlot(db, qualificationId, repClientId, "identificacao_foto", rep.documents?.identificacao_foto);
+    if (docError) return `Representante: ${docError}`;
   } else {
     const missing: string[] = [];
     req(missing, rep.company_name, "company_name");
@@ -125,10 +173,15 @@ function validateRepresentative(rep: any, allowedTypes: RepresentativeType[], de
     req(missing, rep.company_estado, "company_estado"); req(missing, rep.company_cep, "company_cep");
     if (missing.length > 0) return `Campos obrigatórios ausentes no representante (PJ): ${missing.join(", ")}`;
     if (!isValidCNPJ(rep.company_cnpj)) return "CNPJ do representante inválido.";
+
+    const repClientId = await resolveClient(rep.company_cnpj, { vertical: "central_contratos", db });
+    const docError = await resolveDocumentSlot(db, qualificationId, repClientId, "contrato_social", rep.documents?.contrato_social);
+    if (docError) return `Representante (empresa): ${docError}`;
+
     // Encadeamento: uma PJ representante também precisa do próprio
     // administrador/representante legal (nota de arquitetura do BRIEF:
     // o representante final é sempre uma Pessoa Física).
-    const nestedError = validateRepresentative(rep.representation, ["administrador", "representante_legal"], depth + 1);
+    const nestedError = await validateRepresentative(db, qualificationId, rep.representation, ["administrador", "representante_legal"], depth + 1);
     if (nestedError) return nestedError;
   }
   return null;
@@ -136,8 +189,13 @@ function validateRepresentative(rep: any, allowedTypes: RepresentativeType[], de
 
 // Monta endereco_completo/company_address de um representante antes de
 // gravar (mesma regra do topo, aplicada recursivamente na cadeia).
-function assembleRepresentation(rep: any): LegalQualificationRepresentation {
+// Reaproveitamento de KYC (04/09/2026): resolve e grava v3_client_id de CADA
+// nível da cadeia (cada representante tem identidade/estoque de documentos
+// próprio, independente da parte principal no topo) -- já validado contra o
+// mesmo v3_client_id em validateRepresentative(), aqui só persiste.
+async function assembleRepresentation(db: SupabaseClient, rep: any): Promise<LegalQualificationRepresentation> {
   const repNature: "PF" | "PJ" = rep.party_nature === "PJ" ? "PJ" : "PF";
+  const v3ClientId = await resolveClient(repNature === "PJ" ? rep.company_cnpj : rep.cpf_cnpj, { vertical: "central_contratos", db });
   return {
     representative_type: rep.representative_type,
     party_nature: repNature,
@@ -154,7 +212,8 @@ function assembleRepresentation(rep: any): LegalQualificationRepresentation {
     company_cnpj: rep.company_cnpj ?? null,
     company_address: montarEndereco({ rua: rep.company_rua, numero: rep.company_numero, complemento: rep.company_complemento, bairro: rep.company_bairro, cidade: rep.company_cidade, estado: rep.company_estado, cep: rep.company_cep }),
     company_legal_nature: (rep.company_legal_nature as CompanyLegalNature) ?? null,
-    representation: rep.representation ? assembleRepresentation(rep.representation) : null,
+    v3_client_id: v3ClientId,
+    representation: rep.representation ? await assembleRepresentation(db, rep.representation) : null,
   };
 }
 
@@ -214,7 +273,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
     nationality, marital_status, profession, birth_date, phone,
     endereco_rua, endereco_numero, endereco_complemento, endereco_bairro, endereco_cidade, endereco_estado, endereco_cep,
     company_rua, company_numero, company_complemento, company_bairro, company_cidade, company_estado, company_cep,
-    representation,
+    representation, documents,
   } = body as {
     party_nature?: PartyNature;
     cpf_cnpj?: string;
@@ -234,10 +293,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
     company_rua?: string; company_numero?: string; company_complemento?: string; company_bairro?: string;
     company_cidade?: string; company_estado?: string; company_cep?: string;
     representation?: any;
+    // Reaproveitamento de KYC (04/09/2026): { identificacao_foto?: DocRef, contrato_social?: DocRef }
+    documents?: { identificacao_foto?: DocRef; contrato_social?: DocRef };
   };
 
   const nature: PartyNature = VALID_NATURES.includes(party_nature as PartyNature) ? (party_nature as PartyNature) : "PF";
   const personType: "PF" | "PJ" = nature === "PJ" ? "PJ" : "PF";
+  const db = svc();
 
   const endereco_completo = montarEndereco({ rua: endereco_rua, numero: endereco_numero, complemento: endereco_complemento, bairro: endereco_bairro, cidade: endereco_cidade, estado: endereco_estado, cep: endereco_cep });
   const company_address = montarEndereco({ rua: company_rua, numero: company_numero, complemento: company_complemento, bairro: company_bairro, cidade: company_cidade, estado: company_estado, cep: company_cep });
@@ -262,20 +324,36 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
     }
   }
 
+  // Reaproveitamento de KYC (04/09/2026): resolve a identidade Client 360 da
+  // PARTE PRINCIPAL (CPF se não-PJ, CNPJ da empresa se PJ) e exige o
+  // documento correspondente -- reaproveitado de operação anterior (< 12
+  // meses) ou recém-enviado nesta própria qualificação. INCAPAZ_ABSOLUTO e
+  // ESPOLIO não fornecem documento próprio aqui (quem assina de fato é o
+  // representante, validado abaixo).
+  const topDocumentNumber = nature === "PJ" ? company_cnpj : cpf_cnpj;
+  const v3ClientId = await resolveClient(topDocumentNumber, { vertical: "central_contratos", db });
+
+  if (NATURES_REQUIRE_OWN_ID_DOC.includes(nature)) {
+    const docError = await resolveDocumentSlot(db, qualification.id, v3ClientId, "identificacao_foto", documents?.identificacao_foto);
+    if (docError) return NextResponse.json({ error: docError }, { status: 422 });
+  }
+  if (nature === "PJ") {
+    const docError = await resolveDocumentSlot(db, qualification.id, v3ClientId, "contrato_social", documents?.contrato_social);
+    if (docError) return NextResponse.json({ error: docError }, { status: 422 });
+  }
+
   // Representação obrigatória para toda natureza exceto PF simples,
   // recursiva quando o representante também é PJ (encadeamento até chegar
   // numa Pessoa Física, nota de arquitetura do BRIEF de 01/09/2026).
   const requiredRepTypes = REQUIRED_REPRESENTATIVE_TYPES[nature];
   if (requiredRepTypes) {
-    const repError = validateRepresentative(representation, requiredRepTypes);
+    const repError = await validateRepresentative(db, qualification.id, representation, requiredRepTypes);
     if (repError) return NextResponse.json({ error: repError }, { status: 422 });
   }
 
   if (recebeRepasse && !pix_key && !dados_bancarios?.banco) {
     return NextResponse.json({ error: "Informe ao menos dados bancários ou chave PIX para eventual repasse." }, { status: 422 });
   }
-
-  const db = svc();
 
   const { error: updateError } = await db
     .from("cm_party_qualifications")
@@ -304,7 +382,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
       profession: profession?.trim() || null,
       birth_date: birth_date?.trim() || null,
       phone: phone?.trim() || null,
-      representation: requiredRepTypes ? assembleRepresentation(representation) : null,
+      v3_client_id: v3ClientId,
+      representation: requiredRepTypes ? await assembleRepresentation(db, representation) : null,
       status: "preenchido",
       filled_at: new Date().toISOString(),
     })
@@ -346,7 +425,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
     if (batch?.operation_contract_id) {
       const { data: allQualifications } = await db
         .from("cm_party_qualifications")
-        .select("full_name, email, role_in_document, cpf_cnpj")
+        .select("id, full_name, email, role_in_document, cpf_cnpj")
         .eq("batch_id", qualification.batch_id);
 
       const { data: contract } = await db
@@ -366,14 +445,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
       // Assinatura" nunca avisa quem ficou de fora. Corrigido para
       // MESCLAR: preserva toda parte existente cujo e-mail não é de
       // ninguém deste lote, e só então acrescenta/atualiza as deste lote.
-      const existingParties = (contract?.parties as Array<{ role: string; name: string; doc?: string | null; email?: string }> | null) ?? [];
+      const existingParties = (contract?.parties as Array<{ role: string; name: string; doc?: string | null; email?: string; qualification_id?: string | null }> | null) ?? [];
       const batchEmails = new Set((allQualifications ?? []).map((q) => q.email.toLowerCase()));
       const preservedParties = existingParties.filter((p) => !p.email || !batchEmails.has(p.email.toLowerCase()));
+      // qualification_id (04/09/2026): aditivo -- permite ao painel "clicar no nome
+      // para ver a ficha completa" (GET /api/cm/qualifications/party/[id]) buscar
+      // os dados civis + documentos KYC a partir da lista final de partes do contrato.
       const novasPartes = (allQualifications ?? []).map((q) => ({
         role: q.role_in_document,
         name: q.full_name,
         doc: q.cpf_cnpj ?? null,
         email: q.email,
+        qualification_id: q.id,
       }));
 
       await db.from("operation_contracts").update({
