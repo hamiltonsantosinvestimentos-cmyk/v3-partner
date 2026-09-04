@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
+import { gerarComissaoConsultaEntregue } from "@/lib/consulta-commissions";
 
 function serviceClient() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -77,5 +78,20 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     .eq("id", id);
   if (updateErr) return NextResponse.json({ error: updateErr.message }, { status: 500 });
 
-  return NextResponse.json({ success: true, report_url: reportUrl });
+  // ── Gatilho: relatório entregue → comissão do partner pela consulta ──
+  // Valor fixo configurado em Configurações → Comissões. Idempotente e best
+  // effort: uma falha aqui não invalida a entrega já concluída.
+  let commission: Awaited<ReturnType<typeof gerarComissaoConsultaEntregue>> | null = null;
+  try {
+    commission = await gerarComissaoConsultaEntregue(id, user.id ?? null);
+  } catch (e) {
+    console.error("[credit-engine deliver] falha ao gerar comissão da consulta:", e instanceof Error ? e.message : e);
+  }
+
+  return NextResponse.json({
+    success: true,
+    report_url: reportUrl,
+    commission_generated: commission?.status === "created",
+    commission_value: commission?.value ?? null,
+  });
 }

@@ -506,6 +506,81 @@ function CommissionTaxEditor() {
   );
 }
 
+function ConsultaPartnerPayoutEditor() {
+  const [value, setValue] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [err, setErr] = useState("");
+
+  useEffect(() => {
+    fetch("/api/settings/consulta-partner-payout")
+      .then(r => r.json())
+      .then(d => setValue(d.payout_reais != null ? String(d.payout_reais) : "0"))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  async function handleSave(e: React.FormEvent) {
+    e.preventDefault();
+    setErr("");
+    const n = Number(String(value).replace(",", "."));
+    if (Number.isNaN(n) || n < 0) { setErr("Informe um valor válido em R$."); return; }
+    setSaving(true);
+    const res = await fetch("/api/settings/consulta-partner-payout", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ payout_reais: n }),
+    });
+    const data = await res.json();
+    if (!res.ok) { setErr(data.error ?? "Erro ao salvar."); setSaving(false); return; }
+    setValue(String(data.payout_reais));
+    setSaved(true); setSaving(false);
+    setTimeout(() => setSaved(false), 3000);
+  }
+
+  const inputCls = "w-full h-10 px-3 text-sm rounded-lg border bg-[#0A1628] border-[#243A66] text-[#F0ECE4] placeholder:text-[#3A5070] focus:outline-none focus:ring-1 focus:ring-[#C9A84C]/50";
+
+  return (
+    <div className="p-6 rounded-2xl border border-[#1E3050] bg-[#0A1628]/60 space-y-4">
+      <h2 className="text-sm font-bold text-[#F0ECE4] flex items-center gap-2">
+        <CreditCard className="w-4 h-4 text-[#C9A84C]" /> Comissão do partner nas consultas
+      </h2>
+      <p className="text-xs text-[#7A8FA8]">
+        Valor <strong className="text-[#F0ECE4]">fixo</strong> direcionado ao partner a cada consulta / Análise de Crédito
+        entregue ao cliente no painel <strong className="text-[#F0ECE4]">Mesa Operacional › Pedidos de Partners</strong>.
+        A comissão é registrada automaticamente na entrega do relatório, com status
+        <strong className="text-[#F0ECE4]"> Aguardando autorização</strong>. Use <strong className="text-[#F0ECE4]">0</strong> para não direcionar nada.
+      </p>
+      <form onSubmit={handleSave} className="space-y-3">
+        <div>
+          <label className="block text-xs font-semibold text-[#7A8FA8] mb-1.5">Valor por consulta (R$)</label>
+          <div className="flex items-center gap-2 max-w-[220px]">
+            <span className="text-sm font-bold text-[#C9A84C]">R$</span>
+            <input
+              type="number" min="0" step="0.01"
+              value={loading ? "" : value}
+              onChange={e => setValue(e.target.value)}
+              placeholder={loading ? "Carregando..." : "0,00"}
+              disabled={loading || saving}
+              className={inputCls}
+            />
+          </div>
+          <p className="text-[10px] text-[#3A5070] mt-1">
+            Aplica-se às consultas entregues a partir do salvamento. Consultas já entregues mantêm a comissão gerada na época.
+          </p>
+        </div>
+        {err && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{err}</p>}
+        <button type="submit" disabled={saving || loading}
+          className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-[#C9A84C] hover:bg-[#E8C97A] text-[#09081A] text-sm font-bold transition-colors disabled:opacity-60">
+          {saving ? <RefreshCw className="w-4 h-4 animate-spin" /> : saved ? <Check className="w-4 h-4" /> : null}
+          {saving ? "Salvando..." : saved ? "Salvo!" : "Salvar valor"}
+        </button>
+      </form>
+    </div>
+  );
+}
+
 export function ConfiguracoesClient({ profile, initialLinks, systemStats }: Props) {
   const tabs = ([
     { key: "captacao"    as Tab, label: "Links de Captação", icon: <Link2 className="w-4 h-4" />,   show: IS_PARTNER(profile.role) },
@@ -758,6 +833,7 @@ export function ConfiguracoesClient({ profile, initialLinks, systemStats }: Prop
             </div>
           </div>
           <CommissionTaxEditor />
+          <ConsultaPartnerPayoutEditor />
         </div>
       )}
 
