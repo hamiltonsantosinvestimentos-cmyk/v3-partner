@@ -354,10 +354,22 @@ export function ContractTemplatesClient() {
       .finally(() => setLoadingLoiCandidates(false));
   }, [showGenerateModal, isLoiSeries, genLoiSide]);
 
+  // P0 real achado 04/09/2026: o modal exigia preencher "Indicadores" na
+  // mão mesmo quando a minuta já tinha lote de Qualificação Antecipada
+  // completo — a Mesa ficava travada tendo que digitar uma parte
+  // redundante que já estava qualificada de verdade via link. Quando já
+  // existe qualificação real (lote ativo, com ao menos 1 parte
+  // preenchida), o backend resolve as partes sozinho via
+  // effectiveQualificationBatchId (auto-detect em generate/route.ts) —
+  // nem precisa, nem deve, mandar avulso_parties nesse caso.
+  const hasQualificationData = qualBatches.some(
+    (b) => !b.consumido_por_contract_id && b.cm_party_qualifications.some((p) => p.status === "preenchido")
+  );
+
   const handleGenerateContract = async () => {
     if (!selected) return;
 
-    if (requiresCounterparty) {
+    if (requiresCounterparty && !hasQualificationData) {
       const invalid = genParties.some((p) => !p.name.trim() || !p.email.trim());
       if (genParties.length === 0 || invalid) {
         setGenError("Preencha nome e e-mail de todos os indicadores.");
@@ -391,7 +403,7 @@ export function ContractTemplatesClient() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           template_id: selected.id,
-          ...(requiresCounterparty ? {
+          ...(requiresCounterparty && !hasQualificationData ? {
             avulso_parties: genParties.map((p) => ({ name: p.name.trim(), email: p.email.trim(), doc: p.doc.trim() || undefined, role: p.role })),
           } : {}),
           extra_data: extraDataPayload,
@@ -1564,7 +1576,11 @@ export function ContractTemplatesClient() {
             ) : (
               <>
                 <div className="flex-1 overflow-y-auto p-4 space-y-3">
-                  {requiresCounterparty ? (
+                  {requiresCounterparty && hasQualificationData ? (
+                    <p className="text-[11px] text-emerald-400 leading-relaxed bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-2.5">
+                      As partes já foram qualificadas via "Qualificação Antecipada" (veja o Lote de Qualificação acima). Não é preciso preencher indicador nenhum aqui: o contrato usa automaticamente os dados já coletados.
+                    </p>
+                  ) : requiresCounterparty ? (
                     <>
                       <p className="text-[11px] text-[#9BAFC5] leading-relaxed">
                         Cada indicador/parceiro do grupo entra como signatário do contrato, junto com a V3 Partners. Nome e e-mail são obrigatórios (a ClickSign exige e-mail válido para enviar o link de assinatura).
