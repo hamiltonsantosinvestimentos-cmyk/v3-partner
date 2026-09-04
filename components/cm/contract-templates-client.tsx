@@ -67,6 +67,7 @@ interface TemplateReview {
   comment: string | null;
   body_edited: boolean;
   created_at: string;
+  review_round: number;
 }
 
 const SERIES_LABELS: Record<string, string> = {
@@ -1054,10 +1055,14 @@ export function ContractTemplatesClient() {
                       mostra o placar em tempo real sem precisar contar
                       linha por linha do histórico abaixo. */}
                   {(() => {
+                    // 04/09/2026: filtra pela rodada atual. Um voto de rodada
+                    // anterior (texto já editado desde então) não conta pro
+                    // quórum de agora — mesma correção do P0 de review_round.
+                    const currentRoundReviews = reviews.filter(r => r.review_round === selected?.review_round);
                     const sociosAprovados = Array.from(new Set(
-                      reviews.filter(r => r.reviewer_type === "compliance_socio" && r.decision === "aprovado").map(r => r.reviewer_name)
+                      currentRoundReviews.filter(r => r.reviewer_type === "compliance_socio" && r.decision === "aprovado").map(r => r.reviewer_name)
                     ));
-                    const juridicoAprovou = reviews.some(r => r.reviewer_type === "juridico" && r.decision === "aprovado");
+                    const juridicoAprovou = currentRoundReviews.some(r => r.reviewer_type === "juridico" && r.decision === "aprovado");
                     // Trava dos R$50 mil (30/08/2026): acima do valor
                     // declarado no upload, maioria de sócios sozinha não
                     // fecha quórum, precisa do jurídico.
@@ -1081,21 +1086,25 @@ export function ContractTemplatesClient() {
                       </div>
                     );
                   })()}
-                  <span className="text-[10px] font-bold text-[#C9A84C] uppercase tracking-wider">Histórico de Revisão</span>
+                  <span className="text-[10px] font-bold text-[#C9A84C] uppercase tracking-wider">Histórico de Revisão · Rodada atual: {selected?.review_round}</span>
                   <div className="mt-2 space-y-2">
-                    {reviews.map((r) => (
-                      <div key={r.id} className="bg-[#162744] rounded-lg px-3 py-2">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs text-[#F5F1E8] font-medium">
-                            {r.reviewer_name} <span className="text-[9px] text-[#9BAFC5]">({r.reviewer_type === "juridico" ? "Jurídico" : "Compliance/Sócio"})</span>
-                            {" "}{r.decision === "aprovado" ? <span className="text-emerald-400">aprovou</span> : <span className="text-red-400">reprovou</span>}
-                            {r.body_edited && <span className="text-[9px] text-[#9BAFC5]"> · editou o texto</span>}
-                          </span>
-                          <span className="text-[9px] text-[#9BAFC5]">{new Date(r.created_at).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" })}</span>
+                    {reviews.map((r) => {
+                      const isCurrentRound = r.review_round === selected?.review_round;
+                      return (
+                        <div key={r.id} className={cn("rounded-lg px-3 py-2", isCurrentRound ? "bg-[#162744]" : "bg-[#162744]/40 opacity-60")}>
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs text-[#F5F1E8] font-medium">
+                              {r.reviewer_name} <span className="text-[9px] text-[#9BAFC5]">({r.reviewer_type === "juridico" ? "Jurídico" : "Compliance/Sócio"})</span>
+                              {" "}{r.decision === "aprovado" ? <span className="text-emerald-400">aprovou</span> : <span className="text-red-400">reprovou</span>}
+                              {r.body_edited && <span className="text-[9px] text-[#9BAFC5]"> · editou o texto</span>}
+                              {!isCurrentRound && <span className="text-[9px] text-amber-400"> · rodada {r.review_round}, superada por edição de texto</span>}
+                            </span>
+                            <span className="text-[9px] text-[#9BAFC5]">{new Date(r.created_at).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" })}</span>
+                          </div>
+                          {r.comment && <p className="text-[11px] text-[#9BAFC5] mt-1">{r.comment}</p>}
                         </div>
-                        {r.comment && <p className="text-[11px] text-[#9BAFC5] mt-1">{r.comment}</p>}
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               )}

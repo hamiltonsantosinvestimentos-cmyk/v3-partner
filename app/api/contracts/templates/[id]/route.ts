@@ -30,22 +30,41 @@ export async function PATCH(
 
   const { id } = await params;
   const body = await req.json();
-  const { template_name, body_text_raw, is_active, submit_for_review } = body;
+  const { template_name, body_text_raw, is_active, submit_for_review, force_revalidation } = body;
 
-  const { data: current } = await svc().from("contract_templates").select("template_name, version, approval_status, review_round").eq("id", id).single();
+  const { data: current } = await svc().from("contract_templates").select("template_name, body_text_raw, version, approval_status, review_round").eq("id", id).single();
   if (!current) return NextResponse.json({ error: "Minuta não encontrada" }, { status: 404 });
 
   const updates: Record<string, any> = {};
   if (template_name !== undefined) updates.template_name = template_name;
   if (is_active !== undefined) updates.is_active = is_active;
-  if (body_text_raw !== undefined) {
+
+  const bodyChanged = body_text_raw !== undefined && body_text_raw !== current.body_text_raw;
+  if (bodyChanged) {
     updates.body_text_raw = body_text_raw;
     const vars = (body_text_raw.match(/\{\{([^}]+)\}\}/g) || []).map((v: string) => v.replace(/\{\{|\}\}/g, "").trim());
     updates.variables_map = vars.map((v: string) => ({ key: v, label: v.replace(/_/g, " "), source: "auto" }));
     updates.version = (current.version ?? 0) + 1;
-    // Editar o texto de uma minuta já aprovada invalida a aprovação — o
-    // jurídico aprovou UM texto específico, não qualquer versão futura dele.
-    if (current.approval_status === "aprovado") updates.approval_status = "rascunho";
+  }
+
+  // P0 real achado 04/09/2026: editar o corpo de uma minuta já aprovada
+  // resetava approval_status pra rascunho, mas nunca avançava review_round.
+  // Os votos antigos (contract_template_reviews) ficavam presos na mesma
+  // rodada, e como o quórum em [id]/review/route.ts conta votos POR RODADA,
+  // qualquer voto novo nessa mesma rodada reaproveitaria silenciosamente
+  // aprovações dadas sobre o texto ERRADO (achado ao vivo: minuta corrigida
+  // continuava mostrando "aprovado por Dr. Luis e Robson" na tela mesmo já
+  // em rascunho). Toda edição real de corpo agora sempre abre rodada nova.
+  // `force_revalidation` (novo): exige nova rodada mesmo sem mudar o texto
+  // agora — usado pra corrigir minutas que já ficaram presas nesse estado
+  // antes deste fix, e pra qualquer caso futuro em que o jurídico precise
+  // reavaliar sem uma edição de texto ter disparado isso automaticamente.
+  let nextRound = current.review_round ?? 1;
+  let roundBumped = false;
+  if (bodyChanged || force_revalidation === true) {
+    if (current.approval_status === "aprovado" || force_revalidation === true) updates.approval_status = "rascunho";
+    nextRound += 1;
+    roundBumped = true;
   }
 
   // "Enviar para Revisão Jurídica": autor (ADMIN) pede revisão explicitamente.
@@ -54,8 +73,16 @@ export async function PATCH(
     if (!["rascunho", "reprovado"].includes(updates.approval_status ?? current.approval_status))
       return NextResponse.json({ error: `Minuta não pode ser enviada para revisão no status atual (${current.approval_status})` }, { status: 409 });
     updates.approval_status = "em_revisao";
-    updates.review_round = (current.review_round ?? 1) + (current.approval_status === "reprovado" ? 1 : 0);
+    // Reprovação seguida de reenvio sem edição de corpo também abre rodada
+    // nova (comportamento original). Se o corpo já mudou nesta mesma
+    // chamada, a rodada já foi avançada acima — não soma duas vezes.
+    if (current.approval_status === "reprovado" && !roundBumped) {
+      nextRound += 1;
+      roundBumped = true;
+    }
   }
+
+  if (roundBumped) updates.review_round = nextRound;
 
   const { data, error } = await svc()
     .from("contract_templates")
