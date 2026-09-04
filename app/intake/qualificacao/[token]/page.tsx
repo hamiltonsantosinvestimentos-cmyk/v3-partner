@@ -18,9 +18,9 @@ interface RepresentativeState {
   representative_type: RepresentativeType | "";
   party_nature: "PF" | "PJ";
   full_name: string; cpf_cnpj: string; rg: string; nationality: string; marital_status: string; profession: string; phone: string;
-  endereco_rua: string; endereco_numero: string; endereco_bairro: string; endereco_cidade: string; endereco_estado: string; endereco_cep: string;
+  endereco_rua: string; endereco_numero: string; endereco_complemento: string; endereco_bairro: string; endereco_cidade: string; endereco_estado: string; endereco_cep: string;
   company_name: string; company_cnpj: string; company_legal_nature: CompanyLegalNature;
-  company_rua: string; company_numero: string; company_bairro: string; company_cidade: string; company_estado: string; company_cep: string;
+  company_rua: string; company_numero: string; company_complemento: string; company_bairro: string; company_cidade: string; company_estado: string; company_cep: string;
   representation: RepresentativeState | null;
 }
 
@@ -28,17 +28,19 @@ function emptyRepresentative(): RepresentativeState {
   return {
     representative_type: "", party_nature: "PF",
     full_name: "", cpf_cnpj: "", rg: "", nationality: "", marital_status: "", profession: "", phone: "",
-    endereco_rua: "", endereco_numero: "", endereco_bairro: "", endereco_cidade: "", endereco_estado: "", endereco_cep: "",
+    endereco_rua: "", endereco_numero: "", endereco_complemento: "", endereco_bairro: "", endereco_cidade: "", endereco_estado: "", endereco_cep: "",
     company_name: "", company_cnpj: "", company_legal_nature: "privado",
-    company_rua: "", company_numero: "", company_bairro: "", company_cidade: "", company_estado: "", company_cep: "",
+    company_rua: "", company_numero: "", company_complemento: "", company_bairro: "", company_cidade: "", company_estado: "", company_cep: "",
     representation: null,
   };
 }
 
-function EnderecoFields({ prefixLabel, rua, numero, bairro, cidade, estado, cep, onChange }: {
+// Complemento (04/09/2026, achado real ao revisar um preenchimento):
+// opcional, sem asterisco, nunca bloqueia o envio se ausente.
+function EnderecoFields({ prefixLabel, rua, numero, complemento, bairro, cidade, estado, cep, onChange }: {
   prefixLabel: string;
-  rua: string; numero: string; bairro: string; cidade: string; estado: string; cep: string;
-  onChange: (field: "rua" | "numero" | "bairro" | "cidade" | "estado" | "cep", value: string) => void;
+  rua: string; numero: string; complemento: string; bairro: string; cidade: string; estado: string; cep: string;
+  onChange: (field: "rua" | "numero" | "complemento" | "bairro" | "cidade" | "estado" | "cep", value: string) => void;
 }) {
   return (
     <div>
@@ -46,6 +48,7 @@ function EnderecoFields({ prefixLabel, rua, numero, bairro, cidade, estado, cep,
       <div className="grid grid-cols-3 gap-2">
         <input value={rua} onChange={(e) => onChange("rua", e.target.value)} placeholder="Rua/Av." className="col-span-2 w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-sm text-[#F5F1E8]" />
         <input value={numero} onChange={(e) => onChange("numero", e.target.value)} placeholder="Número" className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-sm text-[#F5F1E8]" />
+        <input value={complemento} onChange={(e) => onChange("complemento", e.target.value)} placeholder="Complemento (apto/sala/bloco, opcional)" className="col-span-3 w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-sm text-[#F5F1E8]" />
         <input value={bairro} onChange={(e) => onChange("bairro", e.target.value)} placeholder="Bairro" className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-sm text-[#F5F1E8]" />
         <input value={cidade} onChange={(e) => onChange("cidade", e.target.value)} placeholder="Cidade" className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-sm text-[#F5F1E8]" />
         <input value={estado} onChange={(e) => onChange("estado", e.target.value)} placeholder="Estado (UF)" className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-sm text-[#F5F1E8]" />
@@ -115,7 +118,7 @@ function RepresentativeForm({ allowedTypes, depth, value, onChange }: {
             <div><label className={LABEL_CLS}>Profissão *</label><input value={value.profession} onChange={(e) => set("profession", e.target.value)} className={INPUT_CLS} /></div>
             <div><label className={LABEL_CLS}>Telefone com DDD *</label><input value={value.phone} onChange={(e) => set("phone", e.target.value)} className={INPUT_CLS} /></div>
           </div>
-          <EnderecoFields prefixLabel="Endereço Residencial" rua={value.endereco_rua} numero={value.endereco_numero} bairro={value.endereco_bairro} cidade={value.endereco_cidade} estado={value.endereco_estado} cep={value.endereco_cep}
+          <EnderecoFields prefixLabel="Endereço Residencial" rua={value.endereco_rua} numero={value.endereco_numero} complemento={value.endereco_complemento} bairro={value.endereco_bairro} cidade={value.endereco_cidade} estado={value.endereco_estado} cep={value.endereco_cep}
             onChange={(f, v) => set(`endereco_${f}` as keyof RepresentativeState, v as any)} />
         </>
       ) : (
@@ -128,7 +131,7 @@ function RepresentativeForm({ allowedTypes, depth, value, onChange }: {
             <label className={LABEL_CLS}>CNPJ *</label>
             <input value={value.company_cnpj} onChange={(e) => set("company_cnpj", e.target.value)} className={INPUT_CLS} />
           </div>
-          <EnderecoFields prefixLabel="Endereço da Sede" rua={value.company_rua} numero={value.company_numero} bairro={value.company_bairro} cidade={value.company_cidade} estado={value.company_estado} cep={value.company_cep}
+          <EnderecoFields prefixLabel="Endereço da Sede" rua={value.company_rua} numero={value.company_numero} complemento={value.company_complemento} bairro={value.company_bairro} cidade={value.company_cidade} estado={value.company_estado} cep={value.company_cep}
             onChange={(f, v) => set(`company_${f}` as keyof RepresentativeState, v as any)} />
 
           {/* Encadeamento: esta PJ representante também precisa do próprio
@@ -176,6 +179,7 @@ export default function QualificacaoIntakePage() {
 
   const [enderecoRua, setEnderecoRua] = useState("");
   const [enderecoNumero, setEnderecoNumero] = useState("");
+  const [enderecoComplemento, setEnderecoComplemento] = useState("");
   const [enderecoBairro, setEnderecoBairro] = useState("");
   const [enderecoCidade, setEnderecoCidade] = useState("");
   const [enderecoEstado, setEnderecoEstado] = useState("");
@@ -183,6 +187,7 @@ export default function QualificacaoIntakePage() {
 
   const [companyRua, setCompanyRua] = useState("");
   const [companyNumero, setCompanyNumero] = useState("");
+  const [companyComplemento, setCompanyComplemento] = useState("");
   const [companyBairro, setCompanyBairro] = useState("");
   const [companyCidade, setCompanyCidade] = useState("");
   const [companyEstado, setCompanyEstado] = useState("");
@@ -256,9 +261,11 @@ export default function QualificacaoIntakePage() {
           birth_date: birthDate || null,
           phone: phone.trim() || null,
           endereco_rua: enderecoRua.trim() || null, endereco_numero: enderecoNumero.trim() || null,
+          endereco_complemento: enderecoComplemento.trim() || null,
           endereco_bairro: enderecoBairro.trim() || null, endereco_cidade: enderecoCidade.trim() || null,
           endereco_estado: enderecoEstado.trim() || null, endereco_cep: enderecoCep.trim() || null,
           company_rua: partyNature === "PJ" ? companyRua.trim() : null, company_numero: partyNature === "PJ" ? companyNumero.trim() : null,
+          company_complemento: partyNature === "PJ" ? (companyComplemento.trim() || null) : null,
           company_bairro: partyNature === "PJ" ? companyBairro.trim() : null, company_cidade: partyNature === "PJ" ? companyCidade.trim() : null,
           company_estado: partyNature === "PJ" ? companyEstado.trim() : null, company_cep: partyNature === "PJ" ? companyCep.trim() : null,
           representation: representativeTypesRequired ? representation : null,
@@ -365,9 +372,9 @@ export default function QualificacaoIntakePage() {
                       <option value="misto">Economia Mista</option>
                     </select>
                   </div>
-                  <EnderecoFields prefixLabel="Endereço da Sede" rua={companyRua} numero={companyNumero} bairro={companyBairro} cidade={companyCidade} estado={companyEstado} cep={companyCep}
+                  <EnderecoFields prefixLabel="Endereço da Sede" rua={companyRua} numero={companyNumero} complemento={companyComplemento} bairro={companyBairro} cidade={companyCidade} estado={companyEstado} cep={companyCep}
                     onChange={(f, v) => {
-                      const setters: Record<string, (v: string) => void> = { rua: setCompanyRua, numero: setCompanyNumero, bairro: setCompanyBairro, cidade: setCompanyCidade, estado: setCompanyEstado, cep: setCompanyCep };
+                      const setters: Record<string, (v: string) => void> = { rua: setCompanyRua, numero: setCompanyNumero, complemento: setCompanyComplemento, bairro: setCompanyBairro, cidade: setCompanyCidade, estado: setCompanyEstado, cep: setCompanyCep };
                       setters[f](v);
                     }} />
                 </div>
@@ -406,9 +413,9 @@ export default function QualificacaoIntakePage() {
                         <label className={LABEL_CLS}>Telefone com DDD *</label>
                         <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="(00) 00000-0000" className={INPUT_CLS} />
                       </div>
-                      <EnderecoFields prefixLabel="Endereço Residencial" rua={enderecoRua} numero={enderecoNumero} bairro={enderecoBairro} cidade={enderecoCidade} estado={enderecoEstado} cep={enderecoCep}
+                      <EnderecoFields prefixLabel="Endereço Residencial" rua={enderecoRua} numero={enderecoNumero} complemento={enderecoComplemento} bairro={enderecoBairro} cidade={enderecoCidade} estado={enderecoEstado} cep={enderecoCep}
                         onChange={(f, v) => {
-                          const setters: Record<string, (v: string) => void> = { rua: setEnderecoRua, numero: setEnderecoNumero, bairro: setEnderecoBairro, cidade: setEnderecoCidade, estado: setEnderecoEstado, cep: setEnderecoCep };
+                          const setters: Record<string, (v: string) => void> = { rua: setEnderecoRua, numero: setEnderecoNumero, complemento: setEnderecoComplemento, bairro: setEnderecoBairro, cidade: setEnderecoCidade, estado: setEnderecoEstado, cep: setEnderecoCep };
                           setters[f](v);
                         }} />
                     </>

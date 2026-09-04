@@ -201,6 +201,30 @@ export function ContractTemplatesClient() {
     { full_name: "", email: "", phone: "", role_in_document: "parte_principal" },
   ]);
   const [creatingQualification, setCreatingQualification] = useState(false);
+
+  // "Adicionar Partner" (04/09/2026, pedido explícito de João): em vez de
+  // digitar nome/e-mail à mão (risco de erro, como o caso Iuri/Ícaro
+  // trocados), escolhe de uma lista dos partners já cadastrados no
+  // sistema (/api/partners, mesmo endpoint já usado em seletores internos)
+  // e adiciona como envolvido com papel "partner" pré-preenchido.
+  const [partnersList, setPartnersList] = useState<{ id: string; full_name: string; email: string; role: string }[]>([]);
+  const [showPartnerPicker, setShowPartnerPicker] = useState(false);
+  const [selectedPartnerId, setSelectedPartnerId] = useState("");
+  const loadPartnersList = async () => {
+    if (partnersList.length > 0) return;
+    try {
+      const res = await fetch("/api/partners");
+      const json = await res.json();
+      setPartnersList(json.partners ?? []);
+    } catch { setPartnersList([]); }
+  };
+  const addPartnerAsQualParty = () => {
+    const partner = partnersList.find((p) => p.id === selectedPartnerId);
+    if (!partner) return;
+    setQualParties((prev) => [...prev, { full_name: partner.full_name, email: partner.email, phone: "", role_in_document: "partner" }]);
+    setSelectedPartnerId("");
+    setShowPartnerPicker(false);
+  };
   const [copiedToken, setCopiedToken] = useState("");
 
   // Gerar Contrato a partir de minuta aprovada (19/08/2026, itens 1 e 3 dos
@@ -493,6 +517,22 @@ export function ContractTemplatesClient() {
     } catch { setQualBatches([]); }
   };
 
+  // "Reabrir para Correção" (04/09/2026): reseta a MESMA qualificação pra
+  // pendente sem gerar link novo — a pessoa reabre o link que já recebeu.
+  const [reopeningId, setReopeningId] = useState<string | null>(null);
+  const reopenQualification = async (partyId: string) => {
+    if (!selected) return;
+    if (!confirm("Reabrir esta qualificação para correção? A pessoa vai poder reenviar os dados pelo mesmo link.")) return;
+    setReopeningId(partyId);
+    try {
+      const res = await fetch(`/api/cm/qualifications/${partyId}/reopen`, { method: "POST" });
+      const json = await res.json();
+      if (res.ok) await loadTemplateQualifications(selected.id);
+      else alert(json.error ?? "Erro ao reabrir qualificação");
+    } catch { alert("Erro de conexão"); }
+    finally { setReopeningId(null); }
+  };
+
   const selectTemplate = (t: Template) => {
     setSelected(t);
     setIsNew(false);
@@ -506,6 +546,9 @@ export function ContractTemplatesClient() {
 
   const openQualModal = () => {
     setQualParties([{ full_name: "", email: "", phone: "", role_in_document: "parte_principal" }]);
+    setShowPartnerPicker(false);
+    setSelectedPartnerId("");
+    loadPartnersList();
     setShowQualModal(true);
   };
   const addQualPartyRow = () => setQualParties((prev) => [...prev, { full_name: "", email: "", phone: "", role_in_document: "parte_principal" }]);
@@ -796,7 +839,13 @@ export function ContractTemplatesClient() {
                                 <p className="text-xs text-[#F5F1E8] truncate">{p.full_name} <span className="text-[9px] text-[#9BAFC5]">· {ROLE_LABELS[p.role_in_document] ?? p.role_in_document}</span></p>
                               </div>
                               {p.status === "preenchido" ? (
-                                <span className="text-[9px] text-emerald-400 flex items-center gap-1 flex-shrink-0"><CheckCircle2 size={11} /> Qualificado</span>
+                                <div className="flex items-center gap-1.5 flex-shrink-0">
+                                  <span className="text-[9px] text-emerald-400 flex items-center gap-1"><CheckCircle2 size={11} /> Qualificado</span>
+                                  <button onClick={() => reopenQualification(p.id)} disabled={reopeningId === p.id}
+                                    className="text-[9px] font-semibold text-amber-400 px-2 py-1 rounded border border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 transition-colors disabled:opacity-50">
+                                    {reopeningId === p.id ? "Reabrindo..." : "Corrigir"}
+                                  </button>
+                                </div>
                               ) : (
                                 <div className="flex items-center gap-1.5 flex-shrink-0">
                                   <button onClick={() => copyQualLink(p.qualification_token)}
@@ -1340,10 +1389,33 @@ export function ContractTemplatesClient() {
                   </div>
                 ))}
               </div>
-              <button onClick={addQualPartyRow}
-                className="w-full flex items-center justify-center gap-1.5 px-3 py-2 bg-[#162744] border border-[#9BAFC5]/15 rounded text-[#9BAFC5] text-[10px] font-bold hover:text-[#F5F1E8] transition">
-                <Plus size={12} /> Adicionar Envolvido
-              </button>
+              <div className="flex gap-2">
+                <button onClick={addQualPartyRow}
+                  className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-[#162744] border border-[#9BAFC5]/15 rounded text-[#9BAFC5] text-[10px] font-bold hover:text-[#F5F1E8] transition">
+                  <Plus size={12} /> Adicionar Envolvido
+                </button>
+                <button onClick={() => setShowPartnerPicker((v) => !v)}
+                  className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-[#162744] border border-[#C9A84C]/30 rounded text-[#C9A84C] text-[10px] font-bold hover:bg-[#C9A84C]/10 transition">
+                  <UserPlus size={12} /> Adicionar Partner
+                </button>
+              </div>
+              {showPartnerPicker && (
+                <div className="bg-[#12112A] border border-[#C9A84C]/20 rounded-lg p-2 flex gap-2">
+                  <select value={selectedPartnerId} onChange={(e) => setSelectedPartnerId(e.target.value)}
+                    className="flex-1 bg-[#09081A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]">
+                    <option value="">
+                      {partnersList.length === 0 ? "Carregando partners..." : "Selecione um partner"}
+                    </option>
+                    {partnersList.map((p) => (
+                      <option key={p.id} value={p.id}>{p.full_name} · {p.role}</option>
+                    ))}
+                  </select>
+                  <button onClick={addPartnerAsQualParty} disabled={!selectedPartnerId}
+                    className="px-3 py-1.5 bg-[#C9A84C] text-[#09081A] rounded text-[10px] font-bold hover:bg-[#E8C97A] transition disabled:opacity-40">
+                    Adicionar
+                  </button>
+                </div>
+              )}
             </div>
             <div className="p-4 border-t border-[#C9A84C]/20 flex-shrink-0">
               <button onClick={submitTemplateQualification} disabled={creatingQualification}

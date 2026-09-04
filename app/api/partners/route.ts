@@ -22,7 +22,7 @@ export async function GET() {
 
   const { data, error } = await svc
     .from("profiles")
-    .select("id, full_name, role")
+    .select("id, full_name, email, role")
     .in("role", ["STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE"])
     .order("full_name");
 

@@ -90,11 +90,14 @@ interface QualParty {
   role_in_document: string;
   status: string;
   qualification_token: string;
+  filled_at?: string | null;
 }
 
 interface QualBatch {
   id: string;
   status: string;
+  created_at: string;
+  completed_at: string | null;
   cm_party_qualifications: QualParty[];
 }
 
@@ -116,6 +119,28 @@ export function ContractsPanelClient() {
   ]);
   const [creatingQualification, setCreatingQualification] = useState(false);
   const [copiedToken, setCopiedToken] = useState("");
+
+  // "Adicionar Partner" (04/09/2026): escolhe de uma lista dos partners já
+  // cadastrados (/api/partners) em vez de digitar nome/e-mail à mão, adiciona
+  // como envolvido com papel "partner" pré-preenchido.
+  const [partnersList, setPartnersList] = useState<{ id: string; full_name: string; email: string; role: string }[]>([]);
+  const [showPartnerPicker, setShowPartnerPicker] = useState(false);
+  const [selectedPartnerId, setSelectedPartnerId] = useState("");
+  const loadPartnersList = async () => {
+    if (partnersList.length > 0) return;
+    try {
+      const res = await fetch("/api/partners");
+      const json = await res.json();
+      setPartnersList(json.partners ?? []);
+    } catch { setPartnersList([]); }
+  };
+  const addPartnerAsQualParty = () => {
+    const partner = partnersList.find((p) => p.id === selectedPartnerId);
+    if (!partner) return;
+    setQualParties((prev) => [...prev, { full_name: partner.full_name, email: partner.email, phone: "", role_in_document: "partner" }]);
+    setSelectedPartnerId("");
+    setShowPartnerPicker(false);
+  };
   const [showEdit, setShowEdit] = useState(false);
   const [editBody, setEditBody] = useState("");
   const [editReason, setEditReason] = useState("");
@@ -318,6 +343,22 @@ export function ContractsPanelClient() {
     } catch { setQualBatches([]); }
   };
 
+  // "Reabrir para Correção" (04/09/2026): reseta a MESMA qualificação pra
+  // pendente sem gerar link novo — a pessoa reabre o link que já recebeu.
+  const [reopeningId, setReopeningId] = useState<string | null>(null);
+  const reopenQualification = async (partyId: string) => {
+    if (!selected) return;
+    if (!confirm("Reabrir esta qualificação para correção? A pessoa vai poder reenviar os dados pelo mesmo link.")) return;
+    setReopeningId(partyId);
+    try {
+      const res = await fetch(`/api/cm/qualifications/${partyId}/reopen`, { method: "POST" });
+      const json = await res.json();
+      if (res.ok) await loadQualifications(selected.id);
+      else alert(json.error ?? "Erro ao reabrir qualificação");
+    } catch { alert("Erro de conexão"); }
+    finally { setReopeningId(null); }
+  };
+
   const addQualPartyRow = () => setQualParties((prev) => [...prev, { full_name: "", email: "", phone: "", role_in_document: "parte_principal" }]);
   const removeQualPartyRow = (index: number) => setQualParties((prev) => prev.filter((_, i) => i !== index));
   const updateQualPartyRow = (index: number, field: "full_name" | "email" | "phone" | "role_in_document", value: string) => {
@@ -400,12 +441,33 @@ export function ContractsPanelClient() {
       // "sistema" (19/08/2026): eventos automáticos como fechamento de
       // envelope ClickSign, disparados pela sincronização de assinatura,
       // não por uma pessoa comentando: título e ícone distintos.
-      title: n.note_type === "sistema" ? n.author_name : `${n.author_name} — ${n.note_type === "comentario" ? "comentou" : n.note_type}`,
+      title: n.note_type === "sistema" ? n.author_name : `${n.author_name} · ${n.note_type === "comentario" ? "comentou" : n.note_type}`,
       detail: n.content,
       icon: n.note_type === "sistema"
         ? <Shield size={14} className="text-[#C9A84C]" />
         : <MessageSquare size={14} className="text-[#9BAFC5]" />,
     })),
+    // Andamento do cadastro/qualificação (04/09/2026, pedido explícito de
+    // João: "um local para validar o andamento do cadastro e o envio do
+    // documento para assinatura, ex timeline"). O envio pra assinatura já
+    // aparece acima via notes "sistema" (ClickSign); o que faltava era o
+    // cadastro/qualificação das partes, que só existia no painel separado
+    // "Qualificação de Partes", nunca cronológico junto do resto.
+    ...qualBatches.flatMap((batch) => [
+      { type: "qual_batch" as const, date: batch.created_at, title: "Lote de qualificação criado", detail: `${batch.cm_party_qualifications.length} envolvido(s) convidado(s)`, icon: <UserPlus size={14} className="text-[#C9A84C]" /> },
+      ...batch.cm_party_qualifications
+        .filter((p) => p.status === "preenchido" && p.filled_at)
+        .map((p) => ({
+          type: "qual_filled" as const,
+          date: p.filled_at as string,
+          title: `${p.full_name} preencheu qualificação`,
+          detail: ROLE_LABELS[p.role_in_document] ?? p.role_in_document,
+          icon: <CheckCircle2 size={14} className="text-emerald-400" />,
+        })),
+      ...(batch.status === "completo" && batch.completed_at
+        ? [{ type: "qual_completo" as const, date: batch.completed_at, title: "Lote de qualificação completo", detail: "Todos os envolvidos preencheram os dados", icon: <Shield size={14} className="text-[#C9A84C]" /> }]
+        : []),
+    ]),
     { type: "creation" as const, date: selected.created_at, title: "Contrato gerado", detail: null, icon: <FileText size={14} className="text-[#C9A84C]" /> },
   ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()) : [];
 
@@ -636,7 +698,7 @@ export function ContractsPanelClient() {
 
                   {selected.status_signature === "rascunho" && (
                     <button
-                      onClick={() => setShowQualModal(true)}
+                      onClick={() => { setShowPartnerPicker(false); setSelectedPartnerId(""); loadPartnersList(); setShowQualModal(true); }}
                       className="flex items-center gap-1.5 px-3 py-1.5 bg-[#162744] text-[#9BAFC5] rounded-lg text-xs font-bold hover:text-[#F5F1E8] hover:bg-[#243A66] transition"
                     >
                       <UserPlus size={13} /> Gerar Link de Qualificação
@@ -668,10 +730,16 @@ export function ContractsPanelClient() {
                           {batch.cm_party_qualifications.map((p) => (
                             <div key={p.id} className="flex items-center justify-between gap-2 bg-[#09081A] rounded px-2.5 py-1.5">
                               <div className="min-w-0">
-                                <p className="text-xs text-[#F5F1E8] truncate">{p.full_name} <span className="text-[9px] text-[#9BAFC5]">— {ROLE_LABELS[p.role_in_document] ?? p.role_in_document}</span></p>
+                                <p className="text-xs text-[#F5F1E8] truncate">{p.full_name} <span className="text-[9px] text-[#9BAFC5]">· {ROLE_LABELS[p.role_in_document] ?? p.role_in_document}</span></p>
                               </div>
                               {p.status === "preenchido" ? (
-                                <span className="text-[9px] text-emerald-400 flex items-center gap-1 flex-shrink-0"><CheckCircle2 size={11} /> Qualificado</span>
+                                <div className="flex items-center gap-1.5 flex-shrink-0">
+                                  <span className="text-[9px] text-emerald-400 flex items-center gap-1"><CheckCircle2 size={11} /> Qualificado</span>
+                                  <button onClick={() => reopenQualification(p.id)} disabled={reopeningId === p.id}
+                                    className="text-[9px] font-semibold text-amber-400 px-2 py-1 rounded border border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 transition-colors disabled:opacity-50">
+                                    {reopeningId === p.id ? "Reabrindo..." : "Corrigir"}
+                                  </button>
+                                </div>
                               ) : (
                                 <div className="flex items-center gap-1.5 flex-shrink-0">
                                   <button onClick={() => copyQualLink(p.qualification_token)}
@@ -850,10 +918,33 @@ export function ContractsPanelClient() {
                   </div>
                 ))}
               </div>
-              <button onClick={addQualPartyRow}
-                className="w-full flex items-center justify-center gap-1.5 px-3 py-2 bg-[#162744] border border-[#9BAFC5]/15 rounded text-[#9BAFC5] text-[10px] font-bold hover:text-[#F5F1E8] transition">
-                <Plus size={12} /> Adicionar Envolvido
-              </button>
+              <div className="flex gap-2">
+                <button onClick={addQualPartyRow}
+                  className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-[#162744] border border-[#9BAFC5]/15 rounded text-[#9BAFC5] text-[10px] font-bold hover:text-[#F5F1E8] transition">
+                  <Plus size={12} /> Adicionar Envolvido
+                </button>
+                <button onClick={() => setShowPartnerPicker((v) => !v)}
+                  className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-[#162744] border border-[#C9A84C]/30 rounded text-[#C9A84C] text-[10px] font-bold hover:bg-[#C9A84C]/10 transition">
+                  <UserPlus size={12} /> Adicionar Partner
+                </button>
+              </div>
+              {showPartnerPicker && (
+                <div className="bg-[#09081A] border border-[#C9A84C]/20 rounded-lg p-2 flex gap-2">
+                  <select value={selectedPartnerId} onChange={(e) => setSelectedPartnerId(e.target.value)}
+                    className="flex-1 bg-[#12112A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]">
+                    <option value="">
+                      {partnersList.length === 0 ? "Carregando partners..." : "Selecione um partner"}
+                    </option>
+                    {partnersList.map((p) => (
+                      <option key={p.id} value={p.id}>{p.full_name} · {p.role}</option>
+                    ))}
+                  </select>
+                  <button onClick={addPartnerAsQualParty} disabled={!selectedPartnerId}
+                    className="px-3 py-1.5 bg-[#C9A84C] text-[#09081A] rounded text-[10px] font-bold hover:bg-[#E8C97A] transition disabled:opacity-40">
+                    Adicionar
+                  </button>
+                </div>
+              )}
             </div>
             <div className="p-4 border-t border-[#C9A84C]/20 flex-shrink-0">
               <button onClick={submitQualification} disabled={creatingQualification}

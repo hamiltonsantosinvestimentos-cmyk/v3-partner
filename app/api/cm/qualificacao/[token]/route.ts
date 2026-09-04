@@ -25,7 +25,7 @@ const VALID_NATURES: PartyNature[] = ["PF", "PF_PROCURACAO", "INCAPAZ_RELATIVO",
 const VALID_REPRESENTATIVE_TYPES: RepresentativeType[] = ["procurador", "genitor", "curador", "tutor", "inventariante", "administrador", "representante_legal"];
 
 interface EnderecoParts {
-  rua?: string; numero?: string; bairro?: string; cidade?: string; estado?: string; cep?: string;
+  rua?: string; numero?: string; complemento?: string; bairro?: string; cidade?: string; estado?: string; cep?: string;
 }
 
 // Monta o endereço em prosa a partir das partes estruturadas, no mesmo
@@ -33,11 +33,13 @@ interface EnderecoParts {
 // explícito de João). Nunca deixa a Mesa/o indicado digitar o texto livre —
 // isso evita CEP colado errado, cidade sem estado, etc. Reaproveitada
 // (01/09/2026) para montar também o endereço de qualquer representante na
-// cadeia, sem duplicar a lógica.
+// cadeia, sem duplicar a lógica. Complemento (04/09/2026, achado real ao
+// revisar um preenchimento): opcional, nunca bloqueia o endereço se ausente.
 function montarEndereco(parts: EnderecoParts): string | null {
-  const { rua, numero, bairro, cidade, estado, cep } = parts;
+  const { rua, numero, complemento, bairro, cidade, estado, cep } = parts;
   if (!rua?.trim() || !numero?.trim() || !bairro?.trim() || !cidade?.trim() || !estado?.trim() || !cep?.trim()) return null;
-  return `${rua.trim()}, ${numero.trim()}, Bairro ${bairro.trim()}, ${cidade.trim()} – ${estado.trim()}, CEP ${cep.trim()}`;
+  const complementoTrim = complemento?.trim();
+  return `${rua.trim()}, ${numero.trim()}${complementoTrim ? `, ${complementoTrim}` : ""}, Bairro ${bairro.trim()}, ${cidade.trim()}, ${estado.trim()}, CEP ${cep.trim()}`;
 }
 
 function req(missing: string[], value: unknown, field: string) {
@@ -147,10 +149,10 @@ function assembleRepresentation(rep: any): LegalQualificationRepresentation {
     marital_status: rep.marital_status ?? null,
     profession: rep.profession ?? null,
     phone: rep.phone ?? null,
-    endereco_completo: montarEndereco({ rua: rep.endereco_rua, numero: rep.endereco_numero, bairro: rep.endereco_bairro, cidade: rep.endereco_cidade, estado: rep.endereco_estado, cep: rep.endereco_cep }),
+    endereco_completo: montarEndereco({ rua: rep.endereco_rua, numero: rep.endereco_numero, complemento: rep.endereco_complemento, bairro: rep.endereco_bairro, cidade: rep.endereco_cidade, estado: rep.endereco_estado, cep: rep.endereco_cep }),
     company_name: rep.company_name ?? null,
     company_cnpj: rep.company_cnpj ?? null,
-    company_address: montarEndereco({ rua: rep.company_rua, numero: rep.company_numero, bairro: rep.company_bairro, cidade: rep.company_cidade, estado: rep.company_estado, cep: rep.company_cep }),
+    company_address: montarEndereco({ rua: rep.company_rua, numero: rep.company_numero, complemento: rep.company_complemento, bairro: rep.company_bairro, cidade: rep.company_cidade, estado: rep.company_estado, cep: rep.company_cep }),
     company_legal_nature: (rep.company_legal_nature as CompanyLegalNature) ?? null,
     representation: rep.representation ? assembleRepresentation(rep.representation) : null,
   };
@@ -210,8 +212,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
     party_nature, cpf_cnpj, rg, dados_bancarios, pix_key,
     company_name, company_cnpj, company_legal_nature,
     nationality, marital_status, profession, birth_date, phone,
-    endereco_rua, endereco_numero, endereco_bairro, endereco_cidade, endereco_estado, endereco_cep,
-    company_rua, company_numero, company_bairro, company_cidade, company_estado, company_cep,
+    endereco_rua, endereco_numero, endereco_complemento, endereco_bairro, endereco_cidade, endereco_estado, endereco_cep,
+    company_rua, company_numero, company_complemento, company_bairro, company_cidade, company_estado, company_cep,
     representation,
   } = body as {
     party_nature?: PartyNature;
@@ -227,9 +229,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
     profession?: string;
     birth_date?: string;
     phone?: string;
-    endereco_rua?: string; endereco_numero?: string; endereco_bairro?: string;
+    endereco_rua?: string; endereco_numero?: string; endereco_complemento?: string; endereco_bairro?: string;
     endereco_cidade?: string; endereco_estado?: string; endereco_cep?: string;
-    company_rua?: string; company_numero?: string; company_bairro?: string;
+    company_rua?: string; company_numero?: string; company_complemento?: string; company_bairro?: string;
     company_cidade?: string; company_estado?: string; company_cep?: string;
     representation?: any;
   };
@@ -237,8 +239,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   const nature: PartyNature = VALID_NATURES.includes(party_nature as PartyNature) ? (party_nature as PartyNature) : "PF";
   const personType: "PF" | "PJ" = nature === "PJ" ? "PJ" : "PF";
 
-  const endereco_completo = montarEndereco({ rua: endereco_rua, numero: endereco_numero, bairro: endereco_bairro, cidade: endereco_cidade, estado: endereco_estado, cep: endereco_cep });
-  const company_address = montarEndereco({ rua: company_rua, numero: company_numero, bairro: company_bairro, cidade: company_cidade, estado: company_estado, cep: company_cep });
+  const endereco_completo = montarEndereco({ rua: endereco_rua, numero: endereco_numero, complemento: endereco_complemento, bairro: endereco_bairro, cidade: endereco_cidade, estado: endereco_estado, cep: endereco_cep });
+  const company_address = montarEndereco({ rua: company_rua, numero: company_numero, complemento: company_complemento, bairro: company_bairro, cidade: company_cidade, estado: company_estado, cep: company_cep });
 
   // Campos próprios da natureza (01/09/2026, diretriz Dr. Athaydes) — cada
   // natureza exige um subconjunto diferente, ver missingBaseFields().
@@ -283,7 +285,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
       cpf_cnpj: nature === "PJ" ? null : cpf_cnpj,
       rg: rg?.trim() || null,
       endereco_completo,
-      endereco_rua, endereco_numero, endereco_bairro, endereco_cidade, endereco_estado, endereco_cep,
+      endereco_rua, endereco_numero, endereco_complemento: endereco_complemento?.trim() || null, endereco_bairro, endereco_cidade, endereco_estado, endereco_cep,
       dados_bancarios: dados_bancarios ?? null,
       pix_key: pix_key ?? null,
       company_name: nature === "PJ" ? company_name!.trim() : null,
@@ -292,6 +294,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
       company_legal_nature: nature === "PJ" ? (company_legal_nature ?? "privado") : null,
       company_rua: nature === "PJ" ? company_rua : null,
       company_numero: nature === "PJ" ? company_numero : null,
+      company_complemento: nature === "PJ" ? (company_complemento?.trim() || null) : null,
       company_bairro: nature === "PJ" ? company_bairro : null,
       company_cidade: nature === "PJ" ? company_cidade : null,
       company_estado: nature === "PJ" ? company_estado : null,
