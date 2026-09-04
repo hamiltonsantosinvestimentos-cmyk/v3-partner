@@ -2992,6 +2992,59 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
                 </div>
               )}
             </div>
+
+            {/* ── SEÇÃO HOME EQUITY ── */}
+            <div style={{ marginTop: 40 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
+                <div style={{ flex: 1, height: 1, background: "rgba(201,168,76,0.1)" }} />
+                <span style={{ fontSize: 11, fontWeight: 700, color: "#C9A84C", letterSpacing: "0.12em", textTransform: "uppercase" }}>
+                  Link de Captação · Home Equity
+                </span>
+                <div style={{ flex: 1, height: 1, background: "rgba(201,168,76,0.1)" }} />
+              </div>
+
+              <div style={{ marginBottom: 24, padding: "20px 24px", borderRadius: 12, border: "1px solid rgba(201,168,76,0.2)", background: "rgba(201,168,76,0.04)" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                  <Home style={{ width: 18, height: 18, color: "#C9A84C" }} />
+                  <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: "#F0ECE4" }}>Simulador Home Equity — link direto</h2>
+                </div>
+                <p style={{ margin: 0, fontSize: 13, color: "#7A8FA8", maxWidth: 560, lineHeight: 1.5 }}>
+                  Link fixo (com a sua identificação de partner) para uma página pública com a marca V3, só a modalidade
+                  Home Equity/CGI (imóvel em garantia). O cliente simula taxa e parcelas na hora e, ao final, chama você direto no WhatsApp.
+                </p>
+              </div>
+
+              {/* How it works */}
+              <div style={{ display: "flex", gap: 12, marginBottom: 24, flexWrap: "wrap" }}>
+                {[
+                  { num: "1", title: "Copie o link", desc: "Já vem com a sua identificação — não precisa gerar" },
+                  { num: "2", title: "Envie ao cliente", desc: "Compartilhe via WhatsApp, e-mail ou SMS" },
+                  { num: "3", title: "Cliente simula", desc: "Vê taxa, parcelas e prazo com a marca V3" },
+                  { num: "4", title: "Cliente te chama", desc: "Botão de WhatsApp no final da página, já falando com você" },
+                ].map((step) => (
+                  <div key={step.num} style={{ flex: "1 1 180px", padding: "14px 16px", borderRadius: 10, border: "1px solid #122036", background: "rgba(255,255,255,0.02)" }}>
+                    <div style={{ width: 24, height: 24, borderRadius: "50%", background: "rgba(201,168,76,0.15)", border: "1px solid rgba(201,168,76,0.3)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 800, color: "#C9A84C", marginBottom: 8 }}>{step.num}</div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: "#F0ECE4", marginBottom: 3 }}>{step.title}</div>
+                    <div style={{ fontSize: 12, color: "#7A8FA8" }}>{step.desc}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Link fixo do partner */}
+              <div style={{ padding: "16px 20px", borderRadius: 12, border: "1px solid rgba(201,168,76,0.2)", background: "rgba(201,168,76,0.03)", display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+                <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#10B981", flexShrink: 0 }} />
+                <div style={{ fontSize: 11, color: "#7A8FA8", fontFamily: "monospace", background: "#0D1B2A", padding: "6px 12px", borderRadius: 6, border: "1px solid #122036", flex: 1, minWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {`${typeof window !== "undefined" ? window.location.origin : "https://app.v3partners.com.br"}/simulador-home-equity-v3?ref=${userId}`}
+                </div>
+                <button
+                  onClick={handleCopyHomeEquityLink}
+                  style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: 8, border: `1px solid ${copiedHomeEquity ? "rgba(16,185,129,0.4)" : "rgba(201,168,76,0.3)"}`, background: copiedHomeEquity ? "rgba(16,185,129,0.1)" : "rgba(201,168,76,0.08)", color: copiedHomeEquity ? "#10B981" : "#C9A84C", cursor: "pointer", fontSize: 12, fontWeight: 600, flexShrink: 0 }}
+                >
+                  {copiedHomeEquity ? <Check style={{ width: 13, height: 13 }} /> : <Copy style={{ width: 13, height: 13 }} />}
+                  {copiedHomeEquity ? "Copiado!" : "Copiar"}
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>
