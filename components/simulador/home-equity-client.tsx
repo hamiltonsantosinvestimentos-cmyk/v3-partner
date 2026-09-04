@@ -9,27 +9,30 @@ import {
 import { cn } from "@/lib/utils";
 
 // ─── Constantes ──────────────────────────────────────────────────────────────
-const LTV_MAX = 0.60;           // 60% máximo
-const TAXA_BASE_MENSAL = 0.0089; // 0,89% a.m.
-const IPCA_ANUAL_REF = 0.0483;  // 4,83% a.a. (projeção 2026)
+// Exportadas: também usadas pelo simulador público (/simulador-home-equity-v3,
+// components/simulador/home-equity-publico-client.tsx) — nunca duplicar a
+// fórmula/taxa em outro lugar, sempre importar daqui.
+export const LTV_MAX = 0.60;           // 60% máximo
+export const TAXA_BASE_MENSAL = 0.0089; // 0,89% a.m.
+export const IPCA_ANUAL_REF = 0.0483;  // 4,83% a.a. (projeção 2026)
 const IPCA_MENSAL_REF = Math.pow(1 + IPCA_ANUAL_REF, 1 / 12) - 1;
-const PRAZO_MIN = 12;
-const PRAZO_MAX = 240;
-const VALOR_IMOVEL_MIN = 150_000;
+export const PRAZO_MIN = 12;
+export const PRAZO_MAX = 240;
+export const VALOR_IMOVEL_MIN = 150_000;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-function fmtBRL(v: number) {
+export function fmtBRL(v: number) {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 2 });
 }
-function fmtPct(v: number, dec = 2) {
+export function fmtPct(v: number, dec = 2) {
   return `${(v * 100).toFixed(dec)}%`;
 }
-function fmtN(v: number) {
+export function fmtN(v: number) {
   return v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 // ─── Cálculo SAC ─────────────────────────────────────────────────────────────
-function calcSAC(pv: number, taxaMensal: number, n: number) {
+export function calcSAC(pv: number, taxaMensal: number, n: number) {
   const amort = pv / n;
   const rows = [];
   let saldo = pv;
@@ -45,7 +48,7 @@ function calcSAC(pv: number, taxaMensal: number, n: number) {
 }
 
 // ─── Cálculo PRICE ───────────────────────────────────────────────────────────
-function calcPRICE(pv: number, taxaMensal: number, n: number) {
+export function calcPRICE(pv: number, taxaMensal: number, n: number) {
   const pmt = (pv * taxaMensal * Math.pow(1 + taxaMensal, n)) / (Math.pow(1 + taxaMensal, n) - 1);
   const rows = [];
   let saldo = pv;
@@ -61,7 +64,7 @@ function calcPRICE(pv: number, taxaMensal: number, n: number) {
 }
 
 // ─── CET anual aproximado ────────────────────────────────────────────────────
-function calcCET(pv: number, parcela: number, n: number) {
+export function calcCET(pv: number, parcela: number, n: number) {
   // Newton-Raphson para encontrar taxa interna
   let r = 0.01;
   for (let iter = 0; iter < 100; iter++) {
