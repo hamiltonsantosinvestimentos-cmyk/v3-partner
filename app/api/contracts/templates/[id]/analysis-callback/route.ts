@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as sc } from "@supabase/supabase-js";
-import { notifySociosRiscoContrato, logAgentAuditEvent } from "@/lib/socios-notify";
+import { notifySociosMinutaEmRevisao, logAgentAuditEvent } from "@/lib/socios-notify";
 
 // POST /api/contracts/templates/[id]/analysis-callback — server-to-server
 // apenas (n8n, workflow "W17 — Analisar Contrato Recebido"). Fecha o ciclo
@@ -84,21 +84,24 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     detail: { laudo_risco: laudo_risco ?? null },
   });
 
-  // E-mail de Alerta de Risco (02/09/2026, pedido explícito de João:
-  // proteção jurídica da V3 e mitigação de armadilhas contratuais).
-  // Substitui o aviso genérico de "aguardando seu voto" (usado pelo fluxo
-  // manual/Agente Estruturador) por um e-mail que lista os pontos críticos
-  // reais encontrados e já aponta a minuta saneada. Best-effort — falha
-  // aqui nunca desfaz a gravação acima, a minuta já está em em_revisao de
-  // qualquer forma.
+  // Notificação aos sócios (04/09/2026, reversão de decisão anterior):
+  // o e-mail/WhatsApp de risco detalhado (02/09) listava cada cláusula
+  // crítica com severidade, poluindo a caixa de entrada da diretoria a
+  // cada NDA de prateleira analisado. Volta a usar o aviso genérico e
+  // limpo (mesmo usado pelo fluxo manual/Agente Estruturador): "minuta
+  // pronta para revisão, acesse o link". O laudo completo (pontos_criticos,
+  // severidade, desvio_precedente) continua 100% visível dentro do portal
+  // (contract-templates-client.tsx), nunca dependeu do e-mail para isso.
+  // Best-effort — falha aqui nunca desfaz a gravação acima, a minuta já
+  // está em em_revisao de qualquer forma.
   try {
-    await notifySociosRiscoContrato({
+    await notifySociosMinutaEmRevisao({
       templateId: id,
       templateName: template.template_name as string,
-      laudoRisco: laudo_risco ?? null,
+      origem: "agente_ia",
     });
   } catch (e) {
-    console.error(`[analysis-callback] falha ao notificar sócios sobre risco na minuta ${id}:`, e);
+    console.error(`[analysis-callback] falha ao notificar sócios sobre minuta em revisão ${id}:`, e);
   }
 
   return NextResponse.json({ ok: true, analysis_status: "concluido", approval_status: "em_revisao" });
