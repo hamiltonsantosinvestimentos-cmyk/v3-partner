@@ -2,12 +2,18 @@
 
 import { useState, useEffect } from "react";
 import { Plus, Copy, Check, Link2, ToggleLeft, ToggleRight, Loader2, TrendingUp, DollarSign, MousePointerClick } from "lucide-react";
+import { UNIT_PRICE_CENTS } from "@/lib/credit-analysis-pricing";
 
 const GO = "#C9A84C", GL = "#E8C97A", CR = "#F5F1E8", MU = "#9BAFC5";
 const N2 = "#13223A", N3 = "#162744", N4 = "#243A66";
 
+// Preço sugerido ao criar o link — só um pré-preenchimento (o partner edita
+// livremente). credit_analysis usa a MESMA constante do checkout direto
+// (/analise-v2, modular desde 20/08/2026: R$197 por CNPJ/CPF analisado) para
+// nunca mais divergir do preço oficial de 1 análise — antes ficava hardcoded
+// em 49700 (R$497), preço do pacote fixo legado substituído nessa migração.
 const SERVICE_OPTIONS = [
-  { value: "credit_analysis", label: "Análise de Crédito Empresarial", price: 49700 },
+  { value: "credit_analysis", label: "Análise de Crédito Empresarial", price: UNIT_PRICE_CENTS },
   { value: "ma_intake",       label: "Intake M&A — Venda de Empresa", price: 0 },
   { value: "due_diligence",   label: "Due Diligence",                 price: 99700 },
   { value: "captacao",        label: "Formulário de Interesse (gratuito)", price: 0 },
@@ -37,7 +43,7 @@ export function PartnerLinksPanel() {
   const [showModal, setShowModal] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
   const [toggling, setToggling] = useState<string | null>(null);
-  const [form, setForm] = useState({ title: "", service_type: "credit_analysis", description: "", price_cents: "49700" });
+  const [form, setForm] = useState({ title: "", service_type: "credit_analysis", description: "", price_cents: String(UNIT_PRICE_CENTS) });
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState("");
 
@@ -70,7 +76,7 @@ export function PartnerLinksPanel() {
       const d = await r.json() as { ok?: boolean; error?: string };
       if (d.error) { setCreateError(d.error); return; }
       setShowModal(false);
-      setForm({ title: "", service_type: "credit_analysis", description: "", price_cents: "49700" });
+      setForm({ title: "", service_type: "credit_analysis", description: "", price_cents: String(UNIT_PRICE_CENTS) });
       await load();
     } catch {
       setCreateError("Erro de rede. Tente novamente.");
