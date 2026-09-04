@@ -77,6 +77,25 @@ const DESK_CONFIG: Record<DeskOrigin, { roleLabel: string; fullName: string; loo
   },
 };
 
+// Mapa setor (contract_templates.vertical) -> Head fixo (04/09/2026, pedido
+// explícito de João: minuta/lote de Qualificação Antecipada de qualquer
+// setor deve preencher o Head automaticamente, mesmo padrão que já existia
+// só para o fluxo de credit_proposal_id/Mesa de Crédito). Decisão de João:
+// fixo por setor, sem dropdown manual. "clientes" e "institucional" ficam
+// deliberadamente SEM Head automático (decisão explícita) — continuam
+// exigindo seleção manual (Adicionar Partner/Envolvido).
+// "credito" aqui sempre resolve CREDITO_ESTRUTURADO (Hamilton): este mapa
+// não tem visibilidade de escopo internacional/estruturado (isso só existe
+// hoje via regras_linhas_credito.escopo, ligado a credit_proposal_id, que
+// continua tendo precedência quando presente — ver generate/route.ts).
+export const VERTICAL_TO_DESK_ORIGIN: Record<string, DeskOrigin | null> = {
+  capital_markets: "BOLSA_ATIVOS",
+  ma: "MESA_MA",
+  credito: "CREDITO_ESTRUTURADO",
+  clientes: null,
+  institucional: null,
+};
+
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 }

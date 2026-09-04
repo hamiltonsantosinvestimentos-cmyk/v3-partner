@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { resolveContractVariables, wrapContractInV3Html } from "@/lib/contract-render";
 import type { V3Series } from "@/lib/v3-codes";
-import { resolveDeskHead } from "@/lib/ncnda-desk-head";
+import { resolveDeskHead, VERTICAL_TO_DESK_ORIGIN } from "@/lib/ncnda-desk-head";
 import { renderPartyQualificationProse } from "@/lib/qualification-roles";
 
 function svc() {
@@ -75,6 +75,34 @@ export async function POST(req: NextRequest) {
     data_geracao_extenso: new Date().toLocaleDateString("pt-BR", { day: "numeric", month: "long", year: "numeric" }),
     ...(extra_data ?? {}),
   };
+
+  // Head automático por setor (04/09/2026, pedido explícito de João: "o Head
+  // da operação precisa ser preenchido automaticamente", achado ao vivo na
+  // NCNDA Mestre de Bolsa de Ativos). Generaliza o mesmo mecanismo que já
+  // existia só para credit_proposal_id (Mesa de Crédito) para qualquer
+  // minuta cujo vertical tenha Head fixo mapeado (ver
+  // VERTICAL_TO_DESK_ORIGIN em lib/ncnda-desk-head.ts — "clientes" e
+  // "institucional" ficam de fora, decisão explícita). Roda ANTES do bloco
+  // credit_proposal_id abaixo, que sobrescreve com resolução mais precisa
+  // (escopo nacional/internacional) quando presente.
+  const verticalDeskOrigin = VERTICAL_TO_DESK_ORIGIN[template.vertical as string];
+  if (verticalDeskOrigin) {
+    const head = await resolveDeskHead(verticalDeskOrigin);
+    if (head.cpf) {
+      Object.assign(variables, {
+        head_role_label: head.roleLabel,
+        head_full_name: head.fullName,
+        head_qualificacao: head.qualificacao,
+        head_cpf: head.cpf,
+        head_email: head.email,
+      });
+    }
+    // CPF ausente (Head não preencheu /perfil ainda): não bloqueia aqui,
+    // silenciosamente deixa sem head_* — mesmo padrão de tolerância que o
+    // resto do motor já usa pra variável opcional ausente. O bloco
+    // credit_proposal_id abaixo é quem bloqueia com 422 explícito quando o
+    // Head É estritamente obrigatório (aquele fluxo sempre precisa dele).
+  }
 
   if (listing_id) {
     const { data: listing } = await svc()
