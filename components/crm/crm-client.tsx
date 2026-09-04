@@ -2383,6 +2383,23 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
                                   {proposalDocCounts[lead.creditProposalId] ?? 0} documento{(proposalDocCounts[lead.creditProposalId] ?? 0) !== 1 ? "s" : ""}
                                 </div>
                               )}
+                              {/* Copiar link do Simulador Home Equity */}
+                              <button
+                                onClick={(e) => { e.stopPropagation(); handleCopyHomeEquityLink(); }}
+                                title="Copiar link do Simulador Home Equity (com sua identificação) para enviar ao lead"
+                                style={{
+                                  width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 4,
+                                  background: copiedHomeEquity ? "rgba(201,168,76,0.2)" : "rgba(201,168,76,0.1)",
+                                  border: `1px solid ${copiedHomeEquity ? "rgba(201,168,76,0.5)" : "rgba(201,168,76,0.25)"}`,
+                                  borderRadius: 6, padding: "4px 8px", color: "#C9A84C", cursor: "pointer",
+                                  fontSize: 11, fontWeight: 600, marginBottom: 6,
+                                }}
+                              >
+                                {copiedHomeEquity
+                                  ? <><Check className="w-3 h-3" /> Copiado!</>
+                                  : <><Home className="w-3 h-3" /> Link Home Equity</>
+                                }
+                              </button>
                               {/* Mover para */}
                               <select
                                 value=""
