@@ -33,6 +33,7 @@ import {
   CalendarPlus,
   Share2,
   Paperclip,
+  Home,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -678,6 +679,9 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
   const [copiedPropostaId, setCopiedPropostaId] = useState<string | null>(null);
   const [propostaLinkMsg, setPropostaLinkMsg] = useState<string | null>(null);
 
+  // ── Simulador Home Equity share (link público, ?ref=<partner>) ─────────────
+  const [copiedHomeEquity, setCopiedHomeEquity] = useState(false);
+
   // ── Feature 4: Kanban view ────────────────────────────────────────────────
   const [crmView, setCrmView] = useState<"list" | "kanban">(() => {
     if (typeof window !== "undefined") {
@@ -824,6 +828,14 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
     }).catch(() => {
       setPropostaLinkMsg("Erro ao copiar. Tente novamente.");
       setTimeout(() => setPropostaLinkMsg(null), 3000);
+    });
+  }
+
+  function handleCopyHomeEquityLink() {
+    const url = `${window.location.origin}/simulador-home-equity-v3?ref=${userId}`;
+    navigator.clipboard.writeText(url).then(() => {
+      setCopiedHomeEquity(true);
+      setTimeout(() => setCopiedHomeEquity(false), 2000);
     });
   }
 
@@ -2180,6 +2192,28 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
                             {copiedPropostaId === lead.id
                               ? <Check className="w-3 h-3" />
                               : <Share2 className="w-3 h-3" />
+                            }
+                          </button>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleCopyHomeEquityLink(); }}
+                            title="Copiar link do Simulador Home Equity (com sua identificação) para enviar ao lead"
+                            style={{
+                              background: copiedHomeEquity ? "rgba(201,168,76,0.2)" : "rgba(201,168,76,0.1)",
+                              border: `1px solid ${copiedHomeEquity ? "rgba(201,168,76,0.5)" : "rgba(201,168,76,0.25)"}`,
+                              borderRadius: 6,
+                              padding: "4px 8px",
+                              color: "#C9A84C",
+                              cursor: "pointer",
+                              fontSize: 12,
+                              fontWeight: 600,
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 4,
+                            }}
+                          >
+                            {copiedHomeEquity
+                              ? <Check className="w-3 h-3" />
+                              : <Home className="w-3 h-3" />
                             }
                           </button>
                           {(lead.status === "proposta" || lead.status === "negociacao") && lead.creditLine !== "M&A" && (lead.metadata as Record<string, unknown>)?.form_type !== "ma" && (
