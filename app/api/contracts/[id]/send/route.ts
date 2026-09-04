@@ -25,6 +25,11 @@ async function requireRole(req: NextRequest) {
 // (só qualification_batch_id, que aponta pro lote).
 function resolveDocumentType(contractTitle: string, vertical: string): SendToClickSignInput["documentType"] {
   const title = contractTitle.toLowerCase();
+  // 03/09/2026: faltava branch pra "Carta de Intenção" (documentType "loi",
+  // já suportado pela API v3 do ClickSign, ver lib/clicksign.ts). Sem isso,
+  // toda LOI (a de matching já existente e a nova unilateral pra terceiros)
+  // caía no fallback "contrato_final" por engano.
+  if (title.includes("carta de intenção") || title.includes("carta de intencao")) return "loi";
   if (title.includes("nda")) return "nda_quadripartite";
   if (title.includes("fpa venda") || title.includes("fpa_venda")) return "fpa_venda";
   if (title.includes("fpa compra") || title.includes("fpa_compra")) return "fpa_compra";

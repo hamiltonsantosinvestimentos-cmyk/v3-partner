@@ -389,6 +389,14 @@ export async function POST(req: NextRequest) {
   ] : headParty.length > 0 ? [
     ...headParty,
     { role: "v3_partners", name: "V3 Partners Soluções Ltda", doc: "14.219.287/0001-50" },
+  ] : template.requires_counterparty_signature === false ? [
+    // Documento unilateral (03/09/2026): Carta de Intenção de Compra V3 para
+    // Terceiros e futuros templates equivalentes. O destinatário só recebe a
+    // manifestação (nome/documento entram como variável de texto no corpo,
+    // nunca como "parte"), quem assina de verdade é só a V3, via João Lemos
+    // Netto, com e-mail real para poder ser enviado ao ClickSign como
+    // envelope de signatário único.
+    { role: "v3_partners", name: "João Lemos Netto", doc: "14.219.287/0001-50", email: "joao.lemos@v3partners.com.br" },
   ] : []);
 
   const renderedBody = resolveContractVariables(template.body_text_raw, variables);

@@ -29,6 +29,9 @@ interface Template {
   approval_status: "rascunho" | "em_revisao" | "aprovado" | "reprovado";
   review_round: number;
   contract_series?: string;
+  // Documento unilateral (03/09/2026): Carta de Intenção de Compra V3 para
+  // Terceiros e futuros equivalentes — só V3 assina, sem contraparte/parte.
+  requires_counterparty_signature?: boolean;
   // Fast-Track de Contratos Simples (30/08/2026) + Agente Estruturador de
   // Contratos (02/09/2026)
   origem?: "manual" | "agente_ia" | "agente_ia_estruturador";
@@ -226,13 +229,32 @@ export function ContractTemplatesClient() {
   const [loiCandidates, setLoiCandidates] = useState<{ id: string; contract_code: string; contract_title: string; valor_operacao: number | null }[]>([]);
   const [loadingLoiCandidates, setLoadingLoiCandidates] = useState(false);
 
+  // Variáveis Manuais (03/09/2026): seção genérica no modal "Gerar Contrato"
+  // pra qualquer template com requires_counterparty_signature=false (ex:
+  // Carta de Intenção de Compra V3 para Terceiros) — um input de texto por
+  // chave marcada "source":"manual" em variables_map, sem hardcode por
+  // template. "vigencia_prazo" tem tratamento especial (toggle dias/
+  // indeterminado) em vez de textbox cru, ver renderização abaixo.
+  const [genExtraData, setGenExtraData] = useState<Record<string, string>>({});
+  const [genVigenciaModo, setGenVigenciaModo] = useState<"dias" | "indeterminado">("dias");
+  const [genVigenciaDias, setGenVigenciaDias] = useState("");
+
+  const requiresCounterparty = selected?.requires_counterparty_signature !== false;
+  const manualVars = ((selected?.variables_map ?? []) as { key: string; label: string; source?: string }[])
+    .filter((v) => v.source === "manual" && v.key !== "vigencia_prazo");
+  const hasVigenciaVar = ((selected?.variables_map ?? []) as { key: string; source?: string }[])
+    .some((v) => v.key === "vigencia_prazo" && v.source === "manual");
+
   const openGenerateModal = () => {
     setGenParties([{ name: "", email: "", doc: "", role: "indicador" }]);
     setGenCommission("");
     setGenValorOperacao("");
-    setGenLoiSide("venda");
+    setGenLoiSide(selected?.requires_counterparty_signature === false ? "compra" : "venda");
     setGenLoiMatchedId("");
     setGenLoiJustification("");
+    setGenExtraData({});
+    setGenVigenciaModo("dias");
+    setGenVigenciaDias("");
     setGenResult(null);
     setGenError(null);
     setShowGenerateModal(true);
@@ -256,9 +278,21 @@ export function ContractTemplatesClient() {
 
   const handleGenerateContract = async () => {
     if (!selected) return;
-    const invalid = genParties.some((p) => !p.name.trim() || !p.email.trim());
-    if (genParties.length === 0 || invalid) {
-      setGenError("Preencha nome e e-mail de todos os indicadores.");
+
+    if (requiresCounterparty) {
+      const invalid = genParties.some((p) => !p.name.trim() || !p.email.trim());
+      if (genParties.length === 0 || invalid) {
+        setGenError("Preencha nome e e-mail de todos os indicadores.");
+        return;
+      }
+    }
+    const missingManual = manualVars.filter((v) => !genExtraData[v.key]?.trim());
+    if (missingManual.length > 0) {
+      setGenError(`Preencha: ${missingManual.map((v) => v.label).join(", ")}.`);
+      return;
+    }
+    if (hasVigenciaVar && genVigenciaModo === "dias" && !genVigenciaDias.trim()) {
+      setGenError("Informe o número de dias de vigência (ou selecione \"Prazo indeterminado\").");
       return;
     }
     if (isLoiSeries && !genValorOperacao.trim()) {
@@ -268,12 +302,21 @@ export function ContractTemplatesClient() {
     setGenerating(true);
     setGenError(null);
     try {
+      const extraDataPayload: Record<string, string> = { ...genExtraData };
+      if (hasVigenciaVar) {
+        extraDataPayload.vigencia_prazo = genVigenciaModo === "indeterminado"
+          ? "prazo indeterminado"
+          : `${genVigenciaDias.trim()} dias`;
+      }
       const res = await fetch("/api/contracts/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           template_id: selected.id,
-          avulso_parties: genParties.map((p) => ({ name: p.name.trim(), email: p.email.trim(), doc: p.doc.trim() || undefined, role: p.role })),
+          ...(requiresCounterparty ? {
+            avulso_parties: genParties.map((p) => ({ name: p.name.trim(), email: p.email.trim(), doc: p.doc.trim() || undefined, role: p.role })),
+          } : {}),
+          extra_data: extraDataPayload,
           commission_percent: genCommission ? Number(genCommission) : undefined,
           ...(isLoiSeries ? {
             valor_operacao: Number(genValorOperacao),
@@ -1328,31 +1371,69 @@ export function ContractTemplatesClient() {
             ) : (
               <>
                 <div className="flex-1 overflow-y-auto p-4 space-y-3">
-                  <p className="text-[11px] text-[#9BAFC5] leading-relaxed">
-                    Cada indicador/parceiro do grupo entra como signatário do contrato, junto com a V3 Partners. Nome e e-mail são obrigatórios (a ClickSign exige e-mail válido para enviar o link de assinatura).
-                  </p>
-                  <div className="space-y-2">
-                    {genParties.map((row, i) => (
-                      <div key={i} className="bg-[#12112A] border border-[#9BAFC5]/10 rounded-lg p-2 space-y-1.5">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[9px] text-[#9BAFC5] uppercase">Indicador {i + 1}</span>
-                          {genParties.length > 1 && (
-                            <button onClick={() => removeGenPartyRow(i)}><X size={12} className="text-red-400/70 hover:text-red-400" /></button>
-                          )}
-                        </div>
-                        <input value={row.name} onChange={(e) => updateGenPartyRow(i, "name", e.target.value)} placeholder="Nome completo *"
-                          className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]" />
-                        <input value={row.email} onChange={(e) => updateGenPartyRow(i, "email", e.target.value)} placeholder="E-mail *" type="email"
-                          className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]" />
-                        <input value={row.doc} onChange={(e) => updateGenPartyRow(i, "doc", e.target.value)} placeholder="CPF/CNPJ (opcional)"
-                          className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]" />
+                  {requiresCounterparty ? (
+                    <>
+                      <p className="text-[11px] text-[#9BAFC5] leading-relaxed">
+                        Cada indicador/parceiro do grupo entra como signatário do contrato, junto com a V3 Partners. Nome e e-mail são obrigatórios (a ClickSign exige e-mail válido para enviar o link de assinatura).
+                      </p>
+                      <div className="space-y-2">
+                        {genParties.map((row, i) => (
+                          <div key={i} className="bg-[#12112A] border border-[#9BAFC5]/10 rounded-lg p-2 space-y-1.5">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[9px] text-[#9BAFC5] uppercase">Indicador {i + 1}</span>
+                              {genParties.length > 1 && (
+                                <button onClick={() => removeGenPartyRow(i)}><X size={12} className="text-red-400/70 hover:text-red-400" /></button>
+                              )}
+                            </div>
+                            <input value={row.name} onChange={(e) => updateGenPartyRow(i, "name", e.target.value)} placeholder="Nome completo *"
+                              className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]" />
+                            <input value={row.email} onChange={(e) => updateGenPartyRow(i, "email", e.target.value)} placeholder="E-mail *" type="email"
+                              className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]" />
+                            <input value={row.doc} onChange={(e) => updateGenPartyRow(i, "doc", e.target.value)} placeholder="CPF/CNPJ (opcional)"
+                              className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]" />
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
-                  <button onClick={addGenPartyRow}
-                    className="w-full flex items-center justify-center gap-1.5 px-3 py-2 bg-[#162744] border border-[#9BAFC5]/15 rounded text-[#9BAFC5] text-[10px] font-bold hover:text-[#F5F1E8] transition">
-                    <Plus size={12} /> Adicionar Indicador
-                  </button>
+                      <button onClick={addGenPartyRow}
+                        className="w-full flex items-center justify-center gap-1.5 px-3 py-2 bg-[#162744] border border-[#9BAFC5]/15 rounded text-[#9BAFC5] text-[10px] font-bold hover:text-[#F5F1E8] transition">
+                        <Plus size={12} /> Adicionar Indicador
+                      </button>
+                    </>
+                  ) : (
+                    <p className="text-[11px] text-[#9BAFC5] leading-relaxed bg-[#12112A] border border-[#9BAFC5]/10 rounded-lg p-2.5">
+                      Documento unilateral: só a V3 Partners (João Lemos Netto) assina. O destinatário aparece no texto da carta, não como signatário.
+                    </p>
+                  )}
+
+                  {manualVars.length > 0 && (
+                    <div className="border border-[#9BAFC5]/15 rounded-lg p-3 space-y-2 bg-[#09081A]">
+                      <div className="text-[10px] font-bold text-[#C9A84C] uppercase tracking-wider">Variáveis do Documento</div>
+                      {manualVars.map((v) => (
+                        <div key={v.key}>
+                          <label className="block text-[9px] font-bold text-[#9BAFC5] uppercase tracking-wider mb-1">{v.label} *</label>
+                          <input value={genExtraData[v.key] ?? ""} onChange={(e) => setGenExtraData((prev) => ({ ...prev, [v.key]: e.target.value }))}
+                            className="w-full bg-[#162744] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]" />
+                        </div>
+                      ))}
+                      {hasVigenciaVar && (
+                        <div>
+                          <label className="block text-[9px] font-bold text-[#9BAFC5] uppercase tracking-wider mb-1">Vigência *</label>
+                          <div className="flex gap-2">
+                            <select value={genVigenciaModo} onChange={(e) => setGenVigenciaModo(e.target.value as "dias" | "indeterminado")}
+                              className="bg-[#162744] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]">
+                              <option value="dias">Nº de dias</option>
+                              <option value="indeterminado">Prazo indeterminado</option>
+                            </select>
+                            {genVigenciaModo === "dias" && (
+                              <input value={genVigenciaDias} onChange={(e) => setGenVigenciaDias(e.target.value)} placeholder="Ex: 30"
+                                className="flex-1 bg-[#162744] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]" />
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   <div>
                     <label className="block text-[10px] font-bold text-[#C9A84C] uppercase tracking-wider mb-1">Comissão Total % (opcional)</label>
                     <input value={genCommission} onChange={(e) => setGenCommission(e.target.value)} placeholder="Ex: 5"

@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
   if (!caller || !["ADMIN", "GESTAO"].includes(caller.role))
     return NextResponse.json({ error: "Apenas ADMIN ou GESTAO podem criar templates" }, { status: 403 });
 
-  const { template_name, vertical, body_text_raw, variables_map, contract_series } = await req.json();
+  const { template_name, vertical, body_text_raw, variables_map, contract_series, requires_counterparty_signature } = await req.json();
 
   if (!template_name || !vertical || !body_text_raw)
     return NextResponse.json({ error: "template_name, vertical e body_text_raw obrigatórios" }, { status: 422 });
@@ -74,6 +74,10 @@ export async function POST(req: NextRequest) {
       body_text_raw,
       contract_series,
       variables_map: variables_map ?? vars.map((v: string) => ({ key: v, label: v.replace(/_/g, " "), source: "auto" })),
+      // 03/09/2026: documento unilateral (Carta de Intenção V3 para
+      // Terceiros e futuros equivalentes) — só V3 assina, destinatário não é
+      // parte. Omitido = true, preserva o comportamento de toda minuta atual.
+      requires_counterparty_signature: requires_counterparty_signature === false ? false : true,
       created_by: caller.userId,
     })
     .select()
