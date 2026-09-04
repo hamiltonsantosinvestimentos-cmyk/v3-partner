@@ -67,7 +67,6 @@ const NAV_SECTIONS: NavSection[] = [
           { href: "/mesa-credito/nivel-1", label: "N1 — Crédito Varejo", roles: ["ADMIN", "GESTAO", "STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE", "MESA_OPERACIONAL"] },
           { href: "/mesa-credito/nivel-2", label: "N2 — Crédito Estruturado", roles: ["ADMIN", "GESTAO", "STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE", "MESA_OPERACIONAL"] },
           { href: "/mesa-credito/nivel-3", label: "N3 — High Ticket", roles: ["ADMIN", "GESTAO", "PARTNER_PRO", "ENTERPRISE"] },
-          { href: "/mesa-credito/pedidos", label: "Pedidos de Partners", roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL"] },
           { href: "/mesa-credito/fontes", label: "Configuração de Fontes", roles: ["ADMIN", "MESA_OPERACIONAL"] },
         ],
       },
@@ -95,7 +94,14 @@ const NAV_SECTIONS: NavSection[] = [
       },
       { href: "/propostas", label: "Propostas", icon: "FileCheck2", roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL"] },
       { href: "/ma/oportunidades", label: "Deal Discovery", icon: "Radar", roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL"] },
-      { href: "/mesa-operacional", label: "Mesa Operacional", icon: "Headphones", roles: ["ADMIN", "MESA_OPERACIONAL", "GESTAO"] },
+      {
+        href: "/mesa-operacional", label: "Mesa Operacional", icon: "Headphones",
+        roles: ["ADMIN", "MESA_OPERACIONAL", "GESTAO"],
+        children: [
+          { href: "/mesa-operacional", label: "Painel", roles: ["ADMIN", "MESA_OPERACIONAL", "GESTAO"] },
+          { href: "/mesa-operacional/pedidos", label: "Pedidos de Partners", roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL"] },
+        ],
+      },
       { href: "/mesa-consorcio-op", label: "Mesa Consórcio", icon: "Settings2", roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL"] },
       { href: "/mesa-trafego", label: "Mesa de Tráfego", icon: "Megaphone", roles: ["ADMIN", "GESTAO"] },
       {

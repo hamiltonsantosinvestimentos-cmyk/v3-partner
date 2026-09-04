@@ -172,6 +172,16 @@ export function PedidoDetailModal({ order, onClose, onUpdated }: Props) {
             </div>
           </div>
 
+          <div className="rounded-xl border border-border/50 bg-secondary/30 p-3 text-[11px] text-muted-foreground">
+            {order.partner_commission_id ? (
+              <span className="text-[#E8C97A]">Comissão do partner já gerada por esta consulta (aguardando autorização na aba Comissões).</span>
+            ) : (order.partner_id || order.ref_partner_id) ? (
+              <>Ao entregar o relatório, a comissão fixa do partner por esta consulta é registrada automaticamente com status <strong className="text-foreground">Aguardando autorização</strong>. Valor configurado no topo da tela.</>
+            ) : (
+              <>Pedido sem partner vinculado — nenhuma comissão de consulta será gerada na entrega.</>
+            )}
+          </div>
+
           {reportUrl && (
             <a href={reportUrl} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-xs text-[#C9A84C] hover:underline">
               <ExternalLink className="w-3.5 h-3.5" /> Baixar PDF gerado

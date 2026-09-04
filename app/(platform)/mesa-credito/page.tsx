@@ -244,7 +244,7 @@ export default async function MesaCreditoPage() {
               </div>
             </div>
           )}
-          <Link href={["ADMIN", "GESTAO", "MESA_OPERACIONAL"].includes(role) ? "/mesa-credito/pedidos" : "#"}>
+          <Link href={["ADMIN", "GESTAO", "MESA_OPERACIONAL"].includes(role) ? "/mesa-operacional/pedidos" : "#"}>
             <Card className="h-full hover:border-teal-400 transition-all duration-200 cursor-pointer group">
               <CardContent className="p-5 space-y-4">
                 <div className="flex items-start justify-between">
