@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
-import { Plus, Save, Trash2, Loader2, FileText, Eye, ChevronDown, Upload, Send, CheckCircle2, XCircle, Scale, Users, X, FilePlus2, UserPlus, Copy, Share2 } from "lucide-react";
+import { Plus, Save, Trash2, Loader2, FileText, Eye, ChevronDown, Upload, Send, CheckCircle2, XCircle, Scale, Users, X, FilePlus2, UserPlus, Copy, Share2, RotateCcw } from "lucide-react";
 import { cn, isValidEmail } from "@/lib/utils";
 import { ROLE_LABELS } from "@/lib/qualification-roles";
 
@@ -524,6 +524,25 @@ export function ContractTemplatesClient() {
     }
   };
 
+  // Reprocessar (04-05/09/2026): destrava uma análise que falhou (ex: JSON
+  // truncado por max_tokens baixo) sem precisar reenviar o arquivo do zero
+  // -- reaproveita o body_text_raw original, já salvo no upload. Só
+  // disponível para origem=agente_ia (Agente Revisor de Riscos, W17).
+  const [retryingAnalysisId, setRetryingAnalysisId] = useState<string | null>(null);
+  const handleRetryAnalysis = async (templateId: string) => {
+    setRetryingAnalysisId(templateId);
+    try {
+      const res = await fetch(`/api/contracts/templates/${templateId}/retry-analysis`, { method: "POST" });
+      const json = await res.json();
+      if (!res.ok) { alert(json.error ?? "Erro ao reprocessar"); return; }
+      await fetchTemplates();
+    } catch {
+      alert("Erro de conexão ao reprocessar");
+    } finally {
+      setRetryingAnalysisId(null);
+    }
+  };
+
   const handleDraftSubmit = async () => {
     if (!draftDescricao.trim() || draftDescricao.trim().length < 30) {
       setDraftError("Descreva a intenção de negócio com pelo menos 30 caracteres");
@@ -1029,8 +1048,18 @@ export function ContractTemplatesClient() {
                   )}
 
                   {selected.analysis_status === "erro" && (
-                    <div className="text-xs text-red-400">
-                      Falha na análise: {selected.analysis_error ?? "erro não especificado"}
+                    <div>
+                      <div className="text-xs text-red-400 mb-2">
+                        Falha na análise: {selected.analysis_error ?? "erro não especificado"}
+                      </div>
+                      <button
+                        onClick={() => handleRetryAnalysis(selected.id)}
+                        disabled={retryingAnalysisId === selected.id}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-[#162744] text-[#F5F1E8] rounded-lg text-xs font-bold hover:bg-[#243A66] transition disabled:opacity-50"
+                      >
+                        {retryingAnalysisId === selected.id ? <Loader2 size={13} className="animate-spin" /> : <RotateCcw size={13} />}
+                        Reprocessar
+                      </button>
                     </div>
                   )}
 
