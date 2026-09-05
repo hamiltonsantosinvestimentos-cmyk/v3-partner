@@ -17,7 +17,7 @@ const ALLOWED_ROLES = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"];
 // Head da Mesa, Partner, Mandatário 1/2, Intermediário 1/2) foram
 // adicionados só em ROLE_LABELS antes, nunca em duas listas de novo.
 const ROLES_IN_DOCUMENT = Object.keys(ROLE_LABELS);
-const DOCUMENT_TYPES = ["nda_quadripartite", "fpa_venda", "fpa_compra", "mandato", "contrato_final", "contrato_parceria"];
+const DOCUMENT_TYPES = ["nda_quadripartite", "fpa_venda", "fpa_compra", "mandato", "contrato_final", "contrato_parceria", "ncnda_ma"];
 
 const DOCUMENT_TYPE_LABELS: Record<string, string> = {
   nda_quadripartite: "NDA Quadripartite",
@@ -26,6 +26,10 @@ const DOCUMENT_TYPE_LABELS: Record<string, string> = {
   mandato: "Mandato",
   contrato_final: "Contrato Final",
   contrato_parceria: "Contrato de Parceria",
+  // 05/09/2026: NCNDA solicitado pela Mesa M&A (botão "Solicitar NCNDA" no
+  // deal), distinto de nda_quadripartite (Bolsa de Ativos/Crédito) para
+  // rotulagem e futura filtragem, embora reaproveite o mesmo texto legal.
+  ncnda_ma: "NCNDA Mesa M&A",
 };
 
 const PARTNER_ROLES = ["PARTNER", "PARTNER_PRO", "STARTER", "ENTERPRISE"];

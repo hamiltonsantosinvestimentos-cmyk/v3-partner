@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
   FileText,
@@ -15,6 +16,8 @@ import {
   RefreshCw,
   Loader2,
   FileSignature,
+  Copy,
+  MessageCircle,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -94,6 +97,8 @@ interface ContratoPanelProps {
   deal: {
     id: string;
     target_company: string;
+    buyer_name?: string | null;
+    seller_name?: string | null;
     asset_data?: {
       contato?: {
         nome?: string;
@@ -106,12 +111,135 @@ interface ContratoPanelProps {
   isDemo?: boolean;
 }
 
+// 05/09/2026 (BRIEF NCNDA Mesa M&A): NDA deixa de passar por
+// /api/ma/clicksign-send (sem governança, sem deal_id em operation_contracts,
+// ver achado do BRIEF) e passa a usar a Central de Contratos: gera o
+// contrato real (POST /api/contracts/generate, deal_id gravado) e a
+// esteira de qualificação de partes já em produção (Bolsa de Ativos/
+// Crédito). Mandato continua no fluxo antigo, fora de escopo desta troca.
+interface NcndaQualification {
+  id: string;
+  full_name: string;
+  email: string;
+  status: string;
+  qualification_token: string;
+}
+interface NcndaBatch {
+  id: string;
+  status: string;
+  cm_party_qualifications?: NcndaQualification[];
+}
+interface NcndaContract {
+  id: string;
+  contract_code: string;
+  status_signature: string;
+}
+
 export function ContratoPanel({ deal, dealCode, isDemo = false }: ContratoPanelProps) {
   const [selectedTipo, setSelectedTipo] = useState<DocType | null>(null);
   const [states, setStates] = useState<Record<DocType, ContratoState>>({
     nda: { ...INITIAL_STATE },
     mandato: { ...INITIAL_STATE },
   });
+
+  const [ncndaTemplateId, setNcndaTemplateId] = useState<string | null | undefined>(undefined);
+  const [ncndaContract, setNcndaContract] = useState<NcndaContract | null>(null);
+  const [ncndaBatch, setNcndaBatch] = useState<NcndaBatch | null>(null);
+  const [ncndaForm, setNcndaForm] = useState({
+    full_name: deal.buyer_name || deal.seller_name || deal.asset_data?.contato?.nome || "",
+    email: deal.asset_data?.contato?.email || "",
+    phone: "",
+  });
+  const [ncndaSubmitting, setNcndaSubmitting] = useState(false);
+  const [ncndaError, setNcndaError] = useState<string | null>(null);
+  const [ncndaCopied, setNcndaCopied] = useState(false);
+
+  useEffect(() => {
+    async function loadNcndaState() {
+      try {
+        const tplRes = await fetch("/api/contracts/templates?vertical=ma");
+        const tplData = await tplRes.json();
+        const template = (tplData.templates ?? [])[0];
+        setNcndaTemplateId(template?.id ?? null);
+
+        const listRes = await fetch("/api/contracts/list?vertical=ma");
+        const listData = await listRes.json();
+        const existing = (listData.contracts ?? [])
+          .filter((c: any) => c.deal_id === deal.id)
+          .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
+        if (!existing) return;
+        setNcndaContract({ id: existing.id, contract_code: existing.contract_code, status_signature: existing.status_signature });
+
+        const qRes = await fetch(`/api/cm/qualifications?operation_contract_id=${existing.id}`);
+        const qData = await qRes.json();
+        const batch = (qData.batches ?? [])[0];
+        if (batch) setNcndaBatch(batch);
+      } catch {
+        // best-effort — painel cai no estado "sem contrato" (mostra o formulário)
+      }
+    }
+    loadNcndaState();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deal.id]);
+
+  async function handleSolicitarNcnda() {
+    if (!ncndaTemplateId) {
+      setNcndaError("Nenhum template de NCNDA aprovado para a Mesa M&A foi encontrado.");
+      return;
+    }
+    if (!ncndaForm.full_name.trim() || !ncndaForm.email.trim()) {
+      setNcndaError("Informe nome e e-mail da contraparte.");
+      return;
+    }
+    setNcndaSubmitting(true);
+    setNcndaError(null);
+    try {
+      const genRes = await fetch("/api/contracts/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ template_id: ncndaTemplateId, deal_id: deal.id }),
+      });
+      const genData = await genRes.json();
+      if (!genRes.ok) {
+        setNcndaError(genData.error ?? "Falha ao gerar o contrato.");
+        return;
+      }
+      setNcndaContract({ id: genData.contract.id, contract_code: genData.contract.contract_code, status_signature: genData.contract.status_signature });
+
+      const qualRes = await fetch("/api/cm/qualifications", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          operation_contract_id: genData.contract.id,
+          document_type: "ncnda_ma",
+          parties: [{ full_name: ncndaForm.full_name.trim(), email: ncndaForm.email.trim(), phone: ncndaForm.phone.trim() || undefined, role_in_document: "parte_principal" }],
+        }),
+      });
+      const qualData = await qualRes.json();
+      if (!qualRes.ok) {
+        setNcndaError(qualData.error ?? "Contrato gerado, mas falha ao criar o link de qualificação.");
+        return;
+      }
+      setNcndaBatch({ id: qualData.batch_id, status: "coletando", cm_party_qualifications: qualData.qualifications });
+    } catch {
+      setNcndaError("Falha de rede ao solicitar o NCNDA. Tente novamente.");
+    } finally {
+      setNcndaSubmitting(false);
+    }
+  }
+
+  const ncndaQualificationLink = ncndaBatch?.cm_party_qualifications?.[0]?.qualification_token
+    ? `https://app.v3partners.com.br/intake/qualificacao/${ncndaBatch.cm_party_qualifications[0].qualification_token}`
+    : null;
+
+  function ncndaStatusLabel(): { label: string; badgeClass: string; icon: React.ReactNode } {
+    if (!ncndaContract) return STATUS_CONFIG.IDLE;
+    if (ncndaContract.status_signature === "assinado") return STATUS_CONFIG.SIGNED;
+    if (ncndaContract.status_signature === "cancelado") return STATUS_CONFIG.EXPIRED;
+    if (ncndaContract.status_signature === "enviado") return { label: "Aguardando assinatura", badgeClass: STATUS_CONFIG.PENDING.badgeClass, icon: STATUS_CONFIG.PENDING.icon };
+    if (!ncndaBatch || ncndaBatch.status !== "completo") return { label: "Aguardando qualificação da contraparte", badgeClass: STATUS_CONFIG.PENDING.badgeClass, icon: STATUS_CONFIG.PENDING.icon };
+    return { label: "Qualificado, pronto para envio", badgeClass: STATUS_CONFIG.PENDING.badgeClass, icon: STATUS_CONFIG.PENDING.icon };
+  }
 
   const selected = CONTRATOS.find((c) => c.tipo === selectedTipo);
   const currentState = selectedTipo ? states[selectedTipo] : null;
@@ -190,7 +318,7 @@ export function ContratoPanel({ deal, dealCode, isDemo = false }: ContratoPanelP
   }
 
   const allSigned =
-    states.nda.status === "SIGNED" && states.mandato.status === "SIGNED";
+    ncndaContract?.status_signature === "assinado" && states.mandato.status === "SIGNED";
 
   return (
     <div className="space-y-5">
@@ -209,8 +337,7 @@ export function ContratoPanel({ deal, dealCode, isDemo = false }: ContratoPanelP
         </CardHeader>
         <CardContent className="space-y-3">
           {CONTRATOS.map((c) => {
-            const st = states[c.tipo];
-            const statusCfg = STATUS_CONFIG[st.status];
+            const statusCfg = c.tipo === "nda" ? ncndaStatusLabel() : STATUS_CONFIG[states[c.tipo].status];
             const isActive = selectedTipo === c.tipo;
 
             return (
@@ -274,6 +401,117 @@ export function ContratoPanel({ deal, dealCode, isDemo = false }: ContratoPanelP
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
+            {selectedTipo === "nda" ? (
+              // 05/09/2026 (BRIEF NCNDA Mesa M&A): substitui o envio direto via
+              // ClickSign pela Central de Contratos (gera operation_contracts
+              // com deal_id + esteira de qualificação), única forma de
+              // "garantir que o contrato esteja na governança Client 360"
+              // (pedido literal de João).
+              <>
+                {!ncndaContract && (
+                  <div className="space-y-3">
+                    <p className="text-[#7A8FA8] text-xs leading-relaxed">
+                      Gera o NCNDA vinculado a este deal ({dealCode}) na Central de Contratos e cria o link de qualificação para a contraparte preencher CPF/CNPJ e dados civis.
+                    </p>
+                    <div className="grid gap-2.5">
+                      <Input
+                        placeholder="Nome completo da contraparte"
+                        value={ncndaForm.full_name}
+                        onChange={(e) => setNcndaForm((p) => ({ ...p, full_name: e.target.value }))}
+                        className="bg-[#111F35] border-[#243A66] text-[#F0ECE4] text-sm"
+                      />
+                      <Input
+                        placeholder="E-mail"
+                        type="email"
+                        value={ncndaForm.email}
+                        onChange={(e) => setNcndaForm((p) => ({ ...p, email: e.target.value }))}
+                        className="bg-[#111F35] border-[#243A66] text-[#F0ECE4] text-sm"
+                      />
+                      <Input
+                        placeholder="Telefone (opcional)"
+                        value={ncndaForm.phone}
+                        onChange={(e) => setNcndaForm((p) => ({ ...p, phone: e.target.value }))}
+                        className="bg-[#111F35] border-[#243A66] text-[#F0ECE4] text-sm"
+                      />
+                    </div>
+                    {ncndaError && <p className="text-red-400 text-xs">{ncndaError}</p>}
+                    {ncndaTemplateId === null && (
+                      <p className="text-amber-400 text-xs">Nenhum template de NCNDA aprovado para a Mesa M&A. Peça ao Jurídico para aprovar a minuta em Central de Contratos {'>'} Minutas.</p>
+                    )}
+                    <Button
+                      onClick={handleSolicitarNcnda}
+                      disabled={ncndaSubmitting || ncndaTemplateId === null}
+                      className="w-full bg-[#C9A84C] hover:bg-[#E8C97A] text-[#09081A] font-semibold text-sm gap-2"
+                    >
+                      {ncndaSubmitting ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Solicitando...
+                        </>
+                      ) : (
+                        <>
+                          <Send className="w-4 h-4" />
+                          Solicitar NCNDA
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                )}
+
+                {ncndaContract && (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between rounded-lg bg-[#111F35] border border-[#243A66] px-4 py-3">
+                      <div>
+                        <p className="text-[9px] font-bold uppercase tracking-widest text-[#C9A84C]">Contrato</p>
+                        <p className="text-[#F0ECE4] text-sm font-medium mt-0.5">{ncndaContract.contract_code}</p>
+                        <p className="text-[#7A8FA8] text-xs mt-0.5">{deal.target_company}</p>
+                      </div>
+                      <Link href="/juridico/contratos">
+                        <Button variant="outline" size="sm" className="border-[#C9A84C] text-[#C9A84C] hover:bg-[#C9A84C]/10 text-xs gap-1.5">
+                          <ExternalLink className="w-3.5 h-3.5" />
+                          Ver na Central de Contratos
+                        </Button>
+                      </Link>
+                    </div>
+
+                    {ncndaQualificationLink ? (
+                      <div className="rounded-lg bg-[#111F35] border border-[#243A66] px-4 py-3 space-y-2">
+                        <p className="text-[9px] font-bold uppercase tracking-widest text-[#C9A84C]">Link de Qualificação</p>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[#7A8FA8] text-xs font-mono truncate flex-1">{ncndaQualificationLink}</span>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="border-[#243A66] text-[#7A8FA8] hover:text-[#F0ECE4] text-xs gap-1 shrink-0"
+                            onClick={() => {
+                              navigator.clipboard.writeText(ncndaQualificationLink);
+                              setNcndaCopied(true);
+                              setTimeout(() => setNcndaCopied(false), 2000);
+                            }}
+                          >
+                            <Copy className="w-3 h-3" />
+                            {ncndaCopied ? "Copiado" : "Copiar"}
+                          </Button>
+                          <a
+                            href={`https://wa.me/?text=${encodeURIComponent(`Olá, segue o link para qualificação do NCNDA (${dealCode}) da V3 Partners: ${ncndaQualificationLink}`)}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            <Button variant="outline" size="sm" className="border-[#243A66] text-[#7A8FA8] hover:text-[#F0ECE4] text-xs gap-1 shrink-0">
+                              <MessageCircle className="w-3 h-3" />
+                              WhatsApp
+                            </Button>
+                          </a>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-[#7A8FA8] text-xs">Nenhum lote de qualificação encontrado para este contrato.</p>
+                    )}
+                  </div>
+                )}
+              </>
+            ) : (
+            <>
             {/* Preview */}
             <div className="flex items-center justify-between rounded-lg bg-[#111F35] border border-[#243A66] px-4 py-3">
               <div>
@@ -281,9 +519,7 @@ export function ContratoPanel({ deal, dealCode, isDemo = false }: ContratoPanelP
                   Documento
                 </p>
                 <p className="text-[#F0ECE4] text-sm font-medium mt-0.5">
-                  {selectedTipo === "nda"
-                    ? `NDA-${dealCode}-...`
-                    : `MND-${dealCode}-...`}
+                  {`MND-${dealCode}-...`}
                 </p>
                 <p className="text-[#7A8FA8] text-xs mt-0.5">
                   {deal.target_company}
@@ -415,6 +651,8 @@ export function ContratoPanel({ deal, dealCode, isDemo = false }: ContratoPanelP
                 </div>
               )}
             </div>
+            </>
+            )}
           </CardContent>
         </Card>
       )}

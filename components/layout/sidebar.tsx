@@ -78,9 +78,14 @@ const NAV_SECTIONS: NavSection[] = [
       { href: "/mesa-ma", label: "Mesa M&A", icon: "Handshake", roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL"] },
       {
         href: "/juridico/contratos", label: "Central de Contratos", icon: "FileText",
-        roles: ["ADMIN", "GESTAO"],
+        // 05/09/2026 (BRIEF NCNDA Mesa M&A): MESA_OPERACIONAL adicionado só
+        // em "Contratos e Minutas" (leitura escopada a vertical='ma' pela
+        // API, ver app/api/contracts/list/route.ts), nunca em "Contratos
+        // Assinados" — acesso mínimo pro pedido literal de João
+        // ("visualizar o pedido"), não paridade com Jurídico/Diretoria.
+        roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL"],
         children: [
-          { href: "/juridico/contratos", label: "Contratos e Minutas", roles: ["ADMIN", "GESTAO"] },
+          { href: "/juridico/contratos", label: "Contratos e Minutas", roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL"] },
           { href: "/juridico/contratos/assinados", label: "Contratos Assinados", roles: ["ADMIN", "GESTAO"] },
         ],
       },

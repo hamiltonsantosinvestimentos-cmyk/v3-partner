@@ -6,12 +6,17 @@ function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 }
 
+// 05/09/2026 (BRIEF NCNDA Mesa M&A): MESA_OPERACIONAL adicionado, mas
+// escopado (ver abaixo) — só enxerga contratos vertical='ma', nunca a lista
+// completa de Crédito/Bolsa de Ativos/Parceria que ADMIN/GESTAO vêem.
+// Aprovar, revisar minuta e enviar para assinatura continuam exclusivos de
+// ADMIN/GESTAO (decisão explícita do BRIEF, princípio de menor privilégio).
 async function requireRole(req: NextRequest) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
   const { data: profile } = await svc().from("profiles").select("role").eq("id", user.id).single();
-  if (!profile || !["ADMIN", "GESTAO"].includes(profile.role as string)) return null;
+  if (!profile || !["ADMIN", "GESTAO", "MESA_OPERACIONAL"].includes(profile.role as string)) return null;
   return { userId: user.id, role: profile.role as string };
 }
 
@@ -20,7 +25,10 @@ export async function GET(req: NextRequest) {
   if (!caller) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
   const url = new URL(req.url);
-  const vertical = url.searchParams.get("vertical");
+  // MESA_OPERACIONAL nunca escolhe a vertical via query string — travado no
+  // servidor em 'ma', mesmo padrão de "lado travado pelo tipo de âncora,
+  // nunca aceito do client" já usado em app/api/cm/qualifications/route.ts.
+  const vertical = caller.role === "MESA_OPERACIONAL" ? "ma" : url.searchParams.get("vertical");
   const status = url.searchParams.get("status");
   const search = url.searchParams.get("q");
   const ticketId = url.searchParams.get("ticket_id");
