@@ -55,6 +55,7 @@ const DOCUMENT_TYPE_LABELS: Record<string, string> = {
   mandato: "Mandato",
   contrato_final: "Contrato Final",
   contrato_parceria: "Contrato de Parceria",
+  ncnda_ma: "NCNDA Mesa M&A",
 };
 
 // Papéis que recebem repasse de comissão precisam ADICIONALMENTE de dados
@@ -430,7 +431,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
 
       const { data: contract } = await db
         .from("operation_contracts")
-        .select("parties")
+        .select("parties, deal_id")
         .eq("id", batch.operation_contract_id)
         .single();
 
@@ -462,6 +463,29 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
       await db.from("operation_contracts").update({
         parties: [...preservedParties, ...novasPartes],
       }).eq("id", batch.operation_contract_id);
+
+      // Client 360 (05/09/2026, BRIEF NCNDA Mesa M&A): fecha a ponte com
+      // ma_deal_clients assim que a qualificação de um NCNDA de M&A
+      // completa, não só estruturalmente (deal_id já resolvido em
+      // operation_contracts desde 07/08) mas com o dado real presente.
+      // Best-effort -- nunca desfaz a atualização de parties acima nem
+      // bloqueia a resposta ao envolvido se falhar.
+      if (batch.document_type === "ncnda_ma" && contract?.deal_id) {
+        for (const q of allQualifications ?? []) {
+          if (q.role_in_document === "v3_partners" || !q.cpf_cnpj) continue;
+          try {
+            const v3ClientId = await resolveClient(q.cpf_cnpj, { legalName: q.full_name, vertical: "ma", db });
+            if (v3ClientId) {
+              await db.from("ma_deal_clients").upsert(
+                { deal_id: contract.deal_id, v3_client_id: v3ClientId, role: null, status: "prospecto", created_by: batch.created_by ?? null },
+                { onConflict: "deal_id,v3_client_id", ignoreDuplicates: true }
+              );
+            }
+          } catch (e) {
+            console.error("[qualificacao/token] falha ao vincular Client 360 (ma_deal_clients):", e);
+          }
+        }
+      }
     }
   }
 
