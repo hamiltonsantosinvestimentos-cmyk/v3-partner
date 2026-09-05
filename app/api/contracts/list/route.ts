@@ -7,10 +7,19 @@ function svc() {
 }
 
 // 05/09/2026 (BRIEF NCNDA Mesa M&A): MESA_OPERACIONAL adicionado, mas
-// escopado (ver abaixo) — só enxerga contratos vertical='ma', nunca a lista
-// completa de Crédito/Bolsa de Ativos/Parceria que ADMIN/GESTAO vêem.
-// Aprovar, revisar minuta e enviar para assinatura continuam exclusivos de
-// ADMIN/GESTAO (decisão explícita do BRIEF, princípio de menor privilégio).
+// escopado (ver abaixo) — só enxerga as verticais em que de fato atua como
+// analista (ver MESA_OPERACIONAL_VERTICALS), nunca a lista completa de
+// Crédito/Parceria/Institucional que ADMIN/GESTAO vêem. Aprovar, revisar
+// minuta e enviar para assinatura continuam exclusivos de ADMIN/GESTAO
+// (decisão explícita do BRIEF, princípio de menor privilégio).
+//
+// 05/09/2026, mesmo dia: 'capital_markets' (Bolsa de Ativos) adicionado ao
+// lado de 'ma' — pedido direto de João, Taisa Pedroso (MESA_OPERACIONAL)
+// atua nas duas mesas como analista, não só M&A. Lista de verticais
+// pensada para crescer junto com quem realmente acumula mesas, nunca
+// hardcoded para uma pessoa específica.
+const MESA_OPERACIONAL_VERTICALS = ["ma", "capital_markets"];
+
 async function requireRole(req: NextRequest) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -25,10 +34,17 @@ export async function GET(req: NextRequest) {
   if (!caller) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
   const url = new URL(req.url);
-  // MESA_OPERACIONAL nunca escolhe a vertical via query string — travado no
-  // servidor em 'ma', mesmo padrão de "lado travado pelo tipo de âncora,
-  // nunca aceito do client" já usado em app/api/cm/qualifications/route.ts.
-  const vertical = caller.role === "MESA_OPERACIONAL" ? "ma" : url.searchParams.get("vertical");
+  const requestedVertical = url.searchParams.get("vertical");
+  // MESA_OPERACIONAL nunca escolhe uma vertical fora do próprio escopo via
+  // query string — se pedir uma das suas (ma/capital_markets), filtra só
+  // nela; sem pedido ou pedido inválido, mostra as duas juntas, nunca a
+  // lista completa que ADMIN/GESTAO vê. Mesmo padrão de "lado travado pelo
+  // tipo de âncora, nunca aceito do client" já usado em
+  // app/api/cm/qualifications/route.ts.
+  const vertical: string | string[] | null =
+    caller.role === "MESA_OPERACIONAL"
+      ? (requestedVertical && MESA_OPERACIONAL_VERTICALS.includes(requestedVertical) ? requestedVertical : MESA_OPERACIONAL_VERTICALS)
+      : requestedVertical;
   const status = url.searchParams.get("status");
   const search = url.searchParams.get("q");
   const ticketId = url.searchParams.get("ticket_id");
@@ -38,7 +54,8 @@ export async function GET(req: NextRequest) {
     .select("*")
     .order("created_at", { ascending: false });
 
-  if (vertical) query = query.eq("vertical", vertical);
+  if (Array.isArray(vertical)) query = query.in("vertical", vertical);
+  else if (vertical) query = query.eq("vertical", vertical);
   if (status) query = query.eq("status_signature", status);
   if (search) query = query.ilike("contract_title", `%${search}%`);
   if (ticketId) query = query.eq("ticket_id", ticketId);
