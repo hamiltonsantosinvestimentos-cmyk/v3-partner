@@ -74,9 +74,10 @@ async function notifyMentioned(params: {
   }
 }
 
-/** GET /api/cm/deal-notes?listing_id=X OU ?demand_id=X — lista notas do ativo ou timeline do comprador
- *  (generalizada em 19/08/2026, ver BRIEF 3b: mesma tabela, mesmo padrao ja usado em
- *  cm_qualification_batches para listing_id/demand_id). */
+/** GET /api/cm/deal-notes?listing_id=X OU ?demand_id=X OU ?deal_id=X — lista notas do ativo,
+ *  timeline do comprador, ou notas internas de um deal da Mesa M&A (generalizada em 05/09/2026,
+ *  BRIEF Notas Internas Mesa M&A, terceira aplicação do mesmo padrão de âncora exclusiva já
+ *  usado em 19/08/2026 para listing_id/demand_id, e em cm_qualification_batches). */
 export async function GET(req: NextRequest) {
   const caller = await getCaller(req);
   if (!caller) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
@@ -84,29 +85,31 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const listingId = searchParams.get("listing_id");
   const demandId = searchParams.get("demand_id");
-  if (!listingId && !demandId) return NextResponse.json({ error: "listing_id ou demand_id obrigatório" }, { status: 422 });
+  const dealId = searchParams.get("deal_id");
+  if (!listingId && !demandId && !dealId) return NextResponse.json({ error: "listing_id, demand_id ou deal_id obrigatório" }, { status: 422 });
 
   let query = svc()
     .from("cm_deal_notes")
     .select("*, profiles!cm_deal_notes_author_id_fkey(full_name)")
     .order("created_at", { ascending: false });
-  query = listingId ? query.eq("listing_id", listingId) : query.eq("demand_id", demandId!);
+  query = listingId ? query.eq("listing_id", listingId) : demandId ? query.eq("demand_id", demandId) : query.eq("deal_id", dealId!);
 
   const { data, error } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ notes: data ?? [] });
 }
 
-/** POST /api/cm/deal-notes — cria nota (ativo ou comprador) e dispara notificacao (in-app + email)
- *  para usuarios mencionados. Exatamente um de listing_id/demand_id, nunca os dois nem nenhum
- *  (mesmo CHECK do banco, validado aqui antes pra dar erro claro). */
+/** POST /api/cm/deal-notes — cria nota (ativo, comprador, ou deal de M&A) e dispara notificacao
+ *  (in-app + email) para usuarios mencionados. Exatamente um de listing_id/demand_id/deal_id,
+ *  nunca mais de um nem nenhum (mesmo CHECK do banco, validado aqui antes pra dar erro claro). */
 export async function POST(req: NextRequest) {
   const caller = await getCaller(req);
   if (!caller) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
-  const { listing_id, demand_id, content, mentioned_user_ids } = await req.json();
-  if ((!listing_id && !demand_id) || (listing_id && demand_id) || !content || !content.trim()) {
-    return NextResponse.json({ error: "Exatamente um de listing_id/demand_id, e content, são obrigatórios" }, { status: 422 });
+  const { listing_id, demand_id, deal_id, content, mentioned_user_ids } = await req.json();
+  const anchorsFilled = [listing_id, demand_id, deal_id].filter(Boolean).length;
+  if (anchorsFilled !== 1 || !content || !content.trim()) {
+    return NextResponse.json({ error: "Exatamente um de listing_id/demand_id/deal_id, e content, são obrigatórios" }, { status: 422 });
   }
 
   let subjectLabel: string;
@@ -117,11 +120,16 @@ export async function POST(req: NextRequest) {
     if (!listing) return NextResponse.json({ error: "Ativo não encontrado" }, { status: 404 });
     subjectLabel = `ativo ${listing.anonymous_id}`;
     actionUrl = `/bolsa/mesa?listing=${listing_id}`;
-  } else {
+  } else if (demand_id) {
     const { data: demand } = await svc().from("investor_demands").select("nome_contato").eq("id", demand_id).single();
     if (!demand) return NextResponse.json({ error: "Comprador não encontrado" }, { status: 404 });
     subjectLabel = `comprador ${demand.nome_contato}`;
     actionUrl = `/bolsa/mesa?tab=buydemands`;
+  } else {
+    const { data: deal } = await svc().from("ma_deals").select("target_company").eq("id", deal_id).single();
+    if (!deal) return NextResponse.json({ error: "Deal não encontrado" }, { status: 404 });
+    subjectLabel = `deal ${deal.target_company}`;
+    actionUrl = `/mesa-ma?deal=${deal_id}`;
   }
 
   const mentionedIds: string[] = Array.isArray(mentioned_user_ids) ? mentioned_user_ids.filter(Boolean) : [];
@@ -131,6 +139,7 @@ export async function POST(req: NextRequest) {
     .insert({
       listing_id: listing_id ?? null,
       demand_id: demand_id ?? null,
+      deal_id: deal_id ?? null,
       author_id: caller.userId,
       content: content.trim(),
       mentioned_user_ids: mentionedIds,

@@ -7,7 +7,7 @@ import {
   Paperclip, Trash2, ExternalLink, Upload, Copy, CheckCheck,
   MessageSquare, Send, Zap, FileImage, FileSignature,
   ArrowLeftRight, Pencil, Check, Loader2, DatabaseZap, Clock, TrendingUp, Bot,
-  Link2, AlertCircle, CheckCircle2, ClipboardCheck, Handshake, User,
+  Link2, AlertCircle, CheckCircle2, ClipboardCheck, Handshake, User, StickyNote,
 } from "lucide-react";
 import { ExportButton } from "@/components/financeiro/export-button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -244,11 +244,19 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
   const [cards, setCards] = useState<MaCard[]>(initialDeals);
   const [operators, setOperators] = useState<MesaOperator[]>([]);
   const [selectedCard, setSelectedCard] = useState<MaCard | null>(null);
-  const [detailTab, setDetailTab] = useState<"detalhes" | "forja" | "criativos" | "contrato" | "matches" | "negociacao" | "clientes" | "analytics" | "qa" | "doc-requests" | "timeline" | "business-plan" | "chat-ia">("detalhes");
+  const [detailTab, setDetailTab] = useState<"detalhes" | "forja" | "criativos" | "contrato" | "matches" | "negociacao" | "clientes" | "analytics" | "qa" | "doc-requests" | "timeline" | "business-plan" | "chat-ia" | "notas">("detalhes");
   const [showNewCard, setShowNewCard] = useState(false);
   const [showFullForm, setShowFullForm] = useState(false);
   const [showNewOp, setShowNewOp] = useState(false);
   const [maStages] = useState<MaStage[]>(MA_STAGES_DEFAULT);
+  // Notas internas (05/09/2026, BRIEF Notas Internas Mesa M&A): mesmo padrão
+  // já em produção em mesa-capitais-client.tsx (cm_deal_notes/deal-notes),
+  // só que ancorado em deal_id em vez de listing_id/demand_id.
+  const [dealNotes, setDealNotes] = useState<any[]>([]);
+  const [mesaUsers, setMesaUsers] = useState<{ id: string; full_name: string }[]>([]);
+  const [noteContent, setNoteContent] = useState("");
+  const [noteMentionedIds, setNoteMentionedIds] = useState<string[]>([]);
+  const [submittingNote, setSubmittingNote] = useState(false);
   // Edit state
   const [editingCard, setEditingCard] = useState(false);
   const [editData, setEditData] = useState({ sector: "", value: "", probability: "", notes: "", assigned_to: "" });
@@ -485,9 +493,30 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
     }
   };
 
+  // Notas internas (05/09/2026): lista de gestores/operadores para @menção,
+  // mesmo endpoint já usado na Bolsa de Ativos, carregada uma vez.
+  useEffect(() => {
+    fetch("/api/cm/mesa-users")
+      .then((res) => res.json())
+      .then((json) => setMesaUsers(json.users ?? []))
+      .catch(() => setMesaUsers([]));
+  }, []);
+
+  useEffect(() => {
+    if (detailTab !== "notas" || !selectedCard) return;
+    fetch(`/api/cm/deal-notes?deal_id=${selectedCard.id}`)
+      .then((res) => res.json())
+      .then((json) => setDealNotes(json.notes ?? []))
+      .catch(() => setDealNotes([]));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [detailTab, selectedCard?.id]);
+
   useEffect(() => {
     if (!selectedCard) { setCardDocs([]); setDetailTab("detalhes"); setEditingCard(false); return; }
     setUploadLinkUrl(null);
+    setDealNotes([]);
+    setNoteContent("");
+    setNoteMentionedIds([]);
     // Busca contagem de notificações não lidas para o badge da aba Timeline
     fetch(`/api/ma/timeline?deal_id=${selectedCard.id}&count_only=true`)
       .then(r => r.json())
@@ -1070,6 +1099,7 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
                   { id: "clientes" as const, label: "Clientes", icon: <User size={12} /> },
                   { id: "criativos" as const, label: "Criativos", icon: <FileImage size={12} /> },
                   { id: "contrato" as const, label: "NDA / Mandato", icon: <FileSignature size={12} /> },
+                  { id: "notas" as const, label: "Notas", icon: <StickyNote size={12} /> },
                   { id: "doc-requests" as const, label: "Docs", icon: <FileText size={12} /> },
                   { id: "timeline" as const, label: "Timeline", icon: <Clock size={12} /> },
                   { id: "chat-ia" as const, label: "Chat IA", icon: <Bot size={12} /> },
@@ -1533,6 +1563,98 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
                         </button>
                       )}
                     </div>
+                  </div>
+                </div>
+              );
+            }
+
+            if (detailTab === "notas") {
+              return (
+                <div className="mt-2 space-y-4">
+                  <div>
+                    <div className="text-[10px] text-[#C9A84C] font-bold uppercase tracking-wider mb-2">Bloco de Anotações do Deal</div>
+                    <div className="bg-[#0F1E35] border border-[#122036] rounded-lg p-3 space-y-3">
+                      <textarea
+                        value={noteContent}
+                        onChange={(e) => setNoteContent(e.target.value)}
+                        placeholder="Escreva uma nota... use @ para marcar um gestor ou operador"
+                        rows={3}
+                        className="w-full bg-[#091221] border border-[#122036] rounded px-3 py-2 text-[11px] text-[#E8EDF5] placeholder:text-[#7A8FA8] focus:outline-none focus:border-[#C9A84C]/40 resize-none"
+                      />
+                      <div>
+                        <div className="text-[9px] text-[#7A8FA8] uppercase tracking-wider mb-1.5">Marcar na Mesa</div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {mesaUsers.map((u) => (
+                            <button
+                              key={u.id}
+                              type="button"
+                              onClick={() => {
+                                if (noteMentionedIds.includes(u.id)) {
+                                  setNoteMentionedIds((prev) => prev.filter((id) => id !== u.id));
+                                  setNoteContent((prev) => prev.replace(`@${u.full_name} `, ""));
+                                } else {
+                                  setNoteMentionedIds((prev) => [...prev, u.id]);
+                                  setNoteContent((prev) => `${prev}${prev && !prev.endsWith(" ") ? " " : ""}@${u.full_name} `);
+                                }
+                              }}
+                              className={`px-2 py-1 rounded text-[9px] font-bold transition border ${
+                                noteMentionedIds.includes(u.id)
+                                  ? "bg-[#C9A84C]/20 border-[#C9A84C]/40 text-[#E8C97A]"
+                                  : "bg-[#091221] border-[#122036] text-[#7A8FA8] hover:text-[#E8EDF5]"
+                              }`}
+                            >
+                              @{u.full_name}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <button
+                        onClick={async () => {
+                          if (!noteContent.trim() || !selectedCard) return;
+                          setSubmittingNote(true);
+                          try {
+                            const res = await fetch("/api/cm/deal-notes", {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ deal_id: selectedCard.id, content: noteContent.trim(), mentioned_user_ids: noteMentionedIds }),
+                            });
+                            const json = await res.json();
+                            if (res.ok) {
+                              setDealNotes((prev) => [json.note, ...prev]);
+                              setNoteContent("");
+                              setNoteMentionedIds([]);
+                            } else {
+                              alert(json.error ?? "Erro ao salvar nota");
+                            }
+                          } catch { alert("Erro de conexão"); }
+                          finally { setSubmittingNote(false); }
+                        }}
+                        disabled={submittingNote || !noteContent.trim()}
+                        className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-[#C9A84C]/15 border border-[#C9A84C]/40 rounded text-[#C9A84C] text-[10px] font-bold hover:bg-[#C9A84C]/25 transition-colors disabled:opacity-50"
+                      >
+                        {submittingNote ? <Loader2 size={14} className="animate-spin" /> : null}
+                        Publicar Nota
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="text-[10px] text-[#7A8FA8] font-bold uppercase tracking-wider mb-2">Histórico</div>
+                    {dealNotes.length === 0 ? (
+                      <p className="text-[10px] text-[#5A7490] italic">Nenhuma nota registrada para este deal ainda.</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {dealNotes.map((n) => (
+                          <div key={n.id} className="bg-[#0F1E35] border border-[#122036] rounded-lg p-3">
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-[10px] font-bold text-[#E8EDF5]">{n.profiles?.full_name ?? "Usuário"}</span>
+                              <span className="text-[9px] text-[#7A8FA8]">{new Date(n.created_at).toLocaleString("pt-BR")}</span>
+                            </div>
+                            <p className="text-[11px] text-[#9BAFC5] whitespace-pre-wrap">{n.content}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
               );
