@@ -21,7 +21,7 @@ export async function GET() {
   if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
   const isAdmin = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"].includes(profile?.role ?? "");
-  let query = supabase.from("crm_leads").select("*").order("created_at", { ascending: false });
+  let query = supabase.from("crm_leads").select("*").is("deleted_at", null).order("created_at", { ascending: false });
   if (!isAdmin) query = query.eq("partner_id", user.id);
 
   const { data, error } = await query;
@@ -90,17 +90,11 @@ export async function PATCH(req: NextRequest) {
   return NextResponse.json({ ok: true });
 }
 
-// DELETE — somente ADMIN
-export async function DELETE(req: NextRequest) {
-  const { user, profile } = await getAuthedUser();
-  if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
-  if (profile?.role !== "ADMIN") return NextResponse.json({ error: "Apenas administradores podem excluir leads" }, { status: 403 });
-
-  const { searchParams } = new URL(req.url);
-  const id = searchParams.get("id");
-  if (!id) return NextResponse.json({ error: "ID obrigatório" }, { status: 400 });
-
-  const { error } = await serviceClient().from("crm_leads").delete().eq("id", id);
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ ok: true });
+// DELETE — descontinuado: exclusão de lead agora passa por soft delete +
+// governança em POST /api/crm/{id}/delete (ver lib/governance-delete.ts).
+export async function DELETE() {
+  return NextResponse.json(
+    { error: "Use POST /api/crm/{id}/delete — exclusão direta foi descontinuada (soft delete + governança)" },
+    { status: 410 }
+  );
 }

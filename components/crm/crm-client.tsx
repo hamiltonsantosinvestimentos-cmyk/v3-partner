@@ -667,6 +667,65 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
   const [aiSuggestions, setAiSuggestions] = useState<Record<string, string>>({});
   const [aiLoading, setAiLoading] = useState<Record<string, boolean>>({});
 
+  // Lixeira (ADMIN) — governança de exclusão, mesmo padrão da Mesa M&A
+  const [showLixeira, setShowLixeira] = useState(false);
+  const [lixeiraItems, setLixeiraItems] = useState<Record<string, unknown>[]>([]);
+  const [lixeiraLoading, setLixeiraLoading] = useState(false);
+
+  const loadLixeira = async () => {
+    setLixeiraLoading(true);
+    try {
+      const res = await fetch("/api/crm/lixeira");
+      const json = await res.json();
+      setLixeiraItems(json.items ?? []);
+    } catch { setLixeiraItems([]); }
+    finally { setLixeiraLoading(false); }
+  };
+
+  const restoreFromLixeira = async (itemId: string) => {
+    try {
+      const res = await fetch("/api/crm/lixeira", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ item_type: "lead", item_id: itemId }),
+      });
+      if (res.ok) {
+        setLixeiraItems((prev) => prev.filter((i) => i.id !== itemId));
+        refreshLeads();
+      }
+    } catch { /* silent */ }
+  };
+
+  const handleDeleteLead = async (lead: CRMLead) => {
+    const reason = window.prompt(
+      isAdmin
+        ? "Motivo da exclusão (obrigatório):"
+        : "Motivo da solicitação de exclusão (obrigatório, será enviado por email à governança):"
+    );
+    if (!reason || reason.trim().length < 5) {
+      if (reason !== null) alert("Motivo obrigatório: mínimo 5 caracteres");
+      return;
+    }
+    try {
+      const res = await fetch(`/api/crm/${lead.id}/delete`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: reason.trim() }),
+      });
+      const json = await res.json();
+      if (res.ok) {
+        if (json.mode === "deleted") {
+          alert("Lead excluído. Disponível na Lixeira por 30 dias.");
+          setLeads((prev) => prev.filter((l) => l.id !== lead.id));
+        } else {
+          alert("Solicitação enviada por email à governança. O lead continua ativo até a decisão do ADMIN.");
+        }
+      } else {
+        alert(json.error ?? "Erro ao processar exclusão");
+      }
+    } catch { alert("Erro de conexão"); }
+  };
+
   // ── Feature 3: CSV Import ─────────────────────────────────────────────────
   const [showImport, setShowImport] = useState(false);
   const [importStep, setImportStep] = useState<1 | 2 | 3>(1);
@@ -1567,8 +1626,67 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
               <Plus className="w-4 h-4 mr-2" />
               Novo Lead
             </Button>
+            {userRole === "ADMIN" && (
+              <button
+                onClick={() => { setShowLixeira(true); loadLixeira(); }}
+                style={{
+                  display: "flex", alignItems: "center", gap: 6,
+                  padding: "8px 14px", borderRadius: 8,
+                  border: "1px solid rgba(122,143,168,0.4)", background: "transparent",
+                  color: "#7A8FA8", cursor: "pointer", fontSize: 13, fontWeight: 600,
+                }}
+              >
+                <Trash2 style={{ width: 14, height: 14 }} /> Lixeira
+              </button>
+            )}
           </div>
         </div>
+
+        {/* Modal Lixeira */}
+        {showLixeira && (
+          <div
+            style={{ position: "fixed", inset: 0, zIndex: 130, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.6)" }}
+            onClick={() => setShowLixeira(false)}
+          >
+            <div
+              style={{ width: "100%", maxWidth: 520, maxHeight: "80vh", background: "#09081A", border: "1px solid rgba(201,168,76,0.2)", borderRadius: 12, display: "flex", flexDirection: "column" }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div style={{ padding: 16, borderBottom: "1px solid rgba(201,168,76,0.2)", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: "#E8EDF5" }}>Lixeira · Leads Excluídos (30 dias)</div>
+                <button onClick={() => setShowLixeira(false)} style={{ color: "#7A8FA8", background: "none", border: "none", fontSize: 20, cursor: "pointer" }}>&times;</button>
+              </div>
+              <div style={{ flex: 1, overflowY: "auto", padding: 16, display: "flex", flexDirection: "column", gap: 8 }}>
+                {lixeiraLoading ? (
+                  <div style={{ textAlign: "center", padding: "32px 0", color: "#C9A84C" }}>Carregando...</div>
+                ) : lixeiraItems.length === 0 ? (
+                  <div style={{ textAlign: "center", fontSize: 12, color: "#7A8FA8", padding: "32px 0" }}>Lixeira vazia</div>
+                ) : (
+                  lixeiraItems.map((item) => (
+                    <div key={item.id as string} style={{ background: "#0d1526", border: "1px solid #122036", borderRadius: 8, padding: 12 }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                        <div>
+                          <div style={{ fontSize: 12, fontWeight: 700, color: "#E8EDF5" }}>
+                            {String(item.name ?? "")} <span style={{ color: "#7A8FA8", fontWeight: 400 }}>({String(item.code ?? "")})</span>
+                          </div>
+                          <div style={{ fontSize: 10, color: "#7A8FA8" }}>excluído por {(item.profiles as { full_name?: string } | undefined)?.full_name ?? "N/D"}</div>
+                          <div style={{ fontSize: 10, color: "#F87171", marginTop: 4 }}>{String(item.deletion_reason ?? "")}</div>
+                          <div style={{ fontSize: 9, color: "rgba(122,143,168,0.7)", marginTop: 4 }}>{String(item.days_remaining ?? 0)} dias restantes na lixeira</div>
+                        </div>
+                        <button
+                          onClick={() => restoreFromLixeira(item.id as string)}
+                          style={{ flexShrink: 0, padding: "6px 12px", background: "rgba(16,185,129,0.1)", border: "1px solid rgba(16,185,129,0.2)", borderRadius: 6, color: "#34D399", fontSize: 10, fontWeight: 700, cursor: "pointer" }}
+                        >
+                          Restaurar
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Tabs */}
         <div style={{ display: "flex", gap: 4, marginTop: 16, flexWrap: "wrap" }}>
@@ -1830,10 +1948,7 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
-                                if (!confirm(`Excluir lead "${lead.name}"? Esta ação não pode ser desfeita.`)) return;
-                                fetch(`/api/crm?id=${lead.id}`, { method: "DELETE" })
-                                  .then(() => setLeads(prev => prev.filter(x => x.id !== lead.id)))
-                                  .catch(() => alert("Erro ao excluir lead."));
+                                handleDeleteLead(lead);
                               }}
                               style={{
                                 marginTop: 8,
@@ -2285,12 +2400,7 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
                           )}
                           {isAdmin && (
                             <button
-                              onClick={() => {
-                                if (!confirm(`Excluir lead "${lead.name}"? Esta ação não pode ser desfeita.`)) return;
-                                fetch(`/api/crm?id=${lead.id}`, { method: "DELETE" })
-                                  .then(() => setLeads(prev => prev.filter(x => x.id !== lead.id)))
-                                  .catch(() => alert("Erro ao excluir lead."));
-                              }}
+                              onClick={() => handleDeleteLead(lead)}
                               style={{
                                 background: "rgba(239,68,68,0.1)",
                                 border: "1px solid rgba(239,68,68,0.25)",

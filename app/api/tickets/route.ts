@@ -64,6 +64,7 @@ export async function GET(req: NextRequest) {
       requester:profiles!operational_tickets_requester_id_fkey(id, full_name),
       assignee:profiles!operational_tickets_assigned_to_fkey(id, full_name)
     `)
+    .is("deleted_at", null)
     .order("created_at", { ascending: false });
 
   if (!isAdmin) {
@@ -216,22 +217,11 @@ export async function PATCH(req: NextRequest) {
   return NextResponse.json({ ok: true, ticket: data });
 }
 
-// DELETE — somente ADMIN
-export async function DELETE(req: NextRequest) {
-  const { user, profile } = await getAuthedUser();
-  if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
-  if (profile?.role !== "ADMIN") {
-    return NextResponse.json({ error: "Apenas administradores podem excluir tickets" }, { status: 403 });
-  }
-
-  const { searchParams } = new URL(req.url);
-  const id = searchParams.get("id");
-  if (!id) return NextResponse.json({ error: "ID obrigatório" }, { status: 400 });
-
-  const { error } = await serviceClient().from("operational_tickets").delete().eq("id", id);
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-
-  logAudit({ userId: user.id!, userName: profile?.full_name, action: "DELETE", entity: "operational_tickets", entityId: id });
-
-  return NextResponse.json({ ok: true });
+// DELETE — descontinuado: exclusão de ticket agora passa por soft delete +
+// governança em POST /api/tickets/{id}/delete (ver lib/governance-delete.ts).
+export async function DELETE() {
+  return NextResponse.json(
+    { error: "Use POST /api/tickets/{id}/delete — exclusão direta foi descontinuada (soft delete + governança)" },
+    { status: 410 }
+  );
 }
