@@ -9,7 +9,7 @@ import {
   CheckCircle2, XCircle, Loader2, ShieldCheck,
 } from "lucide-react";
 import {
-  LTV_MAX, TAXA_BASE_MENSAL, IPCA_ANUAL_REF, PRAZO_MIN, VALOR_IMOVEL_MIN,
+  LTV_MAX, TAXA_BASE_MENSAL, IPCA_ANUAL_REF, VALOR_IMOVEL_MIN,
   fmtBRL, fmtPct, calcSAC, calcCET,
 } from "./home-equity-client";
 
@@ -41,15 +41,18 @@ const ESTADOS_BR = [
 type Step =
   | "welcome" | "objetivo" | "urgencia" | "perfil-imovel" | "prazo"
   | "valor-imovel" | "valor-credito" | "tipo-pessoa" | "averbado" | "status-imovel"
-  | "banco-financiamento" | "valor-financiamento" | "dados-pessoais" | "consentimento"
+  | "banco-financiamento" | "valor-financiamento" | "dados-pessoais"
   | "resultado";
 
 // Passos "canônicos" só pra estimar a barra de progresso (a jornada real
 // pula banco-financiamento/valor-financiamento se o imóvel estiver quitado).
+// Termos de Uso, Política de Privacidade e a autorização SCR/Bacen ficam
+// TODOS dentro do passo "dados-pessoais" (mesma página do formulário) — não
+// são um passo separado, por pedido explícito do Hamilton em 2026-09-04.
 const PROGRESS_STEPS: Step[] = [
   "welcome", "objetivo", "urgencia", "perfil-imovel", "prazo", "valor-imovel",
   "valor-credito", "tipo-pessoa", "averbado", "status-imovel", "dados-pessoais",
-  "consentimento", "resultado",
+  "resultado",
 ];
 
 interface FormState {
@@ -60,7 +63,7 @@ interface FormState {
   nome: string; cpf: string; ocupacao: string; renda: number; nascimento: string;
   telefone: string; email: string; cep: string; estado: string; cidade: string;
   bairro: string; rua: string; numero: string; complemento: string;
-  consentimento: boolean;
+  aceiteTermos: boolean; aceiteScr: boolean;
 }
 
 const INITIAL_FORM: FormState = {
@@ -71,7 +74,7 @@ const INITIAL_FORM: FormState = {
   nome: "", cpf: "", ocupacao: "", renda: 0, nascimento: "",
   telefone: "", email: "", cep: "", estado: "", cidade: "",
   bairro: "", rua: "", numero: "", complemento: "",
-  consentimento: false,
+  aceiteTermos: false, aceiteScr: false,
 };
 
 function parseCurrency(raw: string): number {
@@ -221,7 +224,7 @@ export function HomeEquityPublicoClient() {
   }, [ref]);
 
   const [step, setStep] = useState<Step>("welcome");
-  const [history, setHistory] = useState<Step[]>([]);
+  const [, setHistory] = useState<Step[]>([]);
   const [form, setForm] = useState<FormState>(INITIAL_FORM);
   const set = <K extends keyof FormState>(k: K, v: FormState[K]) => setForm((f) => ({ ...f, [k]: v }));
 
@@ -491,14 +494,16 @@ export function HomeEquityPublicoClient() {
           </StepCard>
         )}
 
-        {/* ── Dados pessoais ── */}
+        {/* ── Dados pessoais + Termos + Privacidade + SCR/Bacen (mesma página) ── */}
         {step === "dados-pessoais" && (
-          <StepCard stepNum={PROGRESS_STEPS.indexOf("dados-pessoais")} totalSteps={PROGRESS_STEPS.length - 2}
+          <StepCard stepNum={PROGRESS_STEPS.indexOf("dados-pessoais")} totalSteps={PROGRESS_STEPS.length - 1}
             title="Agora precisamos" titleHighlight="dos seus dados"
-            subtitle="Preencha todos os dados para gerarmos o resultado da sua simulação."
+            subtitle="Preencha todos os dados e as autorizações abaixo para gerarmos o resultado da sua simulação."
             onBack={goBack}
-            onNext={() => goTo("consentimento")}
-            nextDisabled={!dadosPessoaisValid}
+            onNext={finalizarSimulacao}
+            nextLabel="Autorizar e ver resultado"
+            nextDisabled={!dadosPessoaisValid || !form.aceiteTermos || !form.aceiteScr}
+            nextLoading={submitting}
             wide>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="sm:col-span-2"><Field label="Nome completo">
@@ -530,33 +535,37 @@ export function HomeEquityPublicoClient() {
                 <input value={form.complemento} onChange={(e) => set("complemento", e.target.value)} className={inputCls} style={inputStyle} />
               </Field></div>
             </div>
-          </StepCard>
-        )}
 
-        {/* ── Consentimento SCR/Bacen ── */}
-        {step === "consentimento" && (
-          <StepCard stepNum={PROGRESS_STEPS.indexOf("consentimento")} totalSteps={PROGRESS_STEPS.length - 2}
-            title="Autorização para" titleHighlight="consulta de crédito"
-            onBack={goBack}
-            onNext={finalizarSimulacao}
-            nextLabel="Autorizar e ver resultado"
-            nextDisabled={!form.consentimento}
-            nextLoading={submitting}
-            wide>
-            <div className="flex items-center gap-2 rounded-lg px-3 py-2" style={{ background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.3)" }}>
-              <ShieldCheck className="w-4 h-4 shrink-0" style={{ color: "#F59E0B" }} />
-              <p className="text-[11px] font-semibold" style={{ color: "#F59E0B" }}>RASCUNHO — texto pendente de revisão jurídica da V3 Partners</p>
+            {/* ── Autorizações ── */}
+            <div className="pt-2 border-t space-y-3" style={{ borderColor: "rgba(255,255,255,0.06)" }}>
+              <p className="text-[11px] font-bold uppercase tracking-widest text-left" style={{ color: GOLD }}>Autorizações</p>
+
+              <label className="flex items-start gap-2.5 cursor-pointer">
+                <input type="checkbox" checked={form.aceiteTermos} onChange={(e) => set("aceiteTermos", e.target.checked)} className="mt-0.5 w-4 h-4 accent-[#C9A84C]" />
+                <span className="text-xs text-left" style={{ color: "#D8CCA8" }}>
+                  Li e concordo com os{" "}
+                  <a href="/termos-uso" target="_blank" rel="noreferrer" className="underline" style={{ color: GOLD }}>Termos de Uso</a>
+                  {" "}e a{" "}
+                  <a href="/politica-privacidade" target="_blank" rel="noreferrer" className="underline" style={{ color: GOLD }}>Política de Privacidade</a>
+                  {" "}da V3 Partners.
+                </span>
+              </label>
+
+              <div className="flex items-center gap-2 rounded-lg px-3 py-2" style={{ background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.3)" }}>
+                <ShieldCheck className="w-4 h-4 shrink-0" style={{ color: "#F59E0B" }} />
+                <p className="text-[11px] font-semibold text-left" style={{ color: "#F59E0B" }}>RASCUNHO — texto abaixo pendente de revisão jurídica da V3 Partners</p>
+              </div>
+              <div className="max-h-40 overflow-y-auto rounded-xl border p-3 text-[11px] leading-relaxed space-y-2 text-left" style={{ background: NAVY, borderColor: "rgba(255,255,255,0.08)", color: MUTED }}>
+                <p>Ao marcar a opção abaixo, autorizo a <strong style={{ color: "white" }}>V3 Partners Soluções Ltda</strong> (CNPJ 14.219.287/0001-50) a consultar meus dados cadastrais e de crédito — incluindo o Sistema de Informações de Crédito (SCR) do Banco Central do Brasil — junto a bureaus de crédito e instituições financeiras envolvidas na análise, exclusivamente para fins de avaliação de crédito e estruturação da operação solicitada nesta simulação.</p>
+                <p>Esta autorização: (i) é voluntária e pode ser revogada a qualquer momento mediante solicitação por escrito; (ii) tem como única finalidade a análise de crédito desta operação; (iii) respeita a Lei Geral de Proteção de Dados (Lei nº 13.709/2018 — LGPD) e as normas do Banco Central do Brasil aplicáveis ao SCR; (iv) não implica qualquer garantia de aprovação de crédito.</p>
+                <p>Meus dados serão tratados com sigilo pela V3 Partners e não serão usados para outra finalidade sem novo consentimento.</p>
+              </div>
+              <label className="flex items-start gap-2.5 cursor-pointer">
+                <input type="checkbox" checked={form.aceiteScr} onChange={(e) => set("aceiteScr", e.target.checked)} className="mt-0.5 w-4 h-4 accent-[#C9A84C]" />
+                <span className="text-xs text-left" style={{ color: "#D8CCA8" }}>Li e autorizo a consulta de crédito e ao SCR/Bacen nos termos acima.</span>
+              </label>
+              {submitError && <p className="text-xs text-red-400 text-left">{submitError}</p>}
             </div>
-            <div className="max-h-56 overflow-y-auto rounded-xl border p-4 text-xs leading-relaxed space-y-2 text-left" style={{ background: NAVY, borderColor: "rgba(255,255,255,0.08)", color: MUTED }}>
-              <p>Ao marcar a opção abaixo, autorizo a <strong style={{ color: "white" }}>V3 Partners Soluções Ltda</strong> (CNPJ 14.219.287/0001-50) a consultar meus dados cadastrais e de crédito — incluindo o Sistema de Informações de Crédito (SCR) do Banco Central do Brasil — junto a bureaus de crédito e instituições financeiras envolvidas na análise, exclusivamente para fins de avaliação de crédito e estruturação da operação solicitada nesta simulação.</p>
-              <p>Esta autorização: (i) é voluntária e pode ser revogada a qualquer momento mediante solicitação por escrito; (ii) tem como única finalidade a análise de crédito desta operação; (iii) respeita a Lei Geral de Proteção de Dados (Lei nº 13.709/2018 — LGPD) e as normas do Banco Central do Brasil aplicáveis ao SCR; (iv) não implica qualquer garantia de aprovação de crédito.</p>
-              <p>Meus dados serão tratados com sigilo pela V3 Partners e não serão usados para outra finalidade sem novo consentimento.</p>
-            </div>
-            <label className="flex items-start gap-2.5 cursor-pointer">
-              <input type="checkbox" checked={form.consentimento} onChange={(e) => set("consentimento", e.target.checked)} className="mt-0.5 w-4 h-4 accent-[#C9A84C]" />
-              <span className="text-xs text-left" style={{ color: "#D8CCA8" }}>Li e autorizo a consulta de crédito e ao SCR/Bacen nos termos acima.</span>
-            </label>
-            {submitError && <p className="text-xs text-red-400 text-left">{submitError}</p>}
           </StepCard>
         )}
 
