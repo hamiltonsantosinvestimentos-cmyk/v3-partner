@@ -1627,17 +1627,47 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
     finally { setLixeiraLoading(false); }
   };
 
-  const restoreFromLixeira = async (itemId: string) => {
+  const restoreFromLixeira = async (itemId: string, itemType: string) => {
     try {
       const res = await fetch("/api/credit-proposals/lixeira", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ item_type: "proposta", item_id: itemId }),
+        body: JSON.stringify({ item_type: itemType, item_id: itemId }),
       });
       if (res.ok) {
         setLixeiraItems((prev) => prev.filter((i) => i.id !== itemId));
       } else {
-        alert("Erro ao restaurar proposta");
+        alert("Erro ao restaurar registro");
+      }
+    } catch { alert("Erro de conexão"); }
+  };
+
+  const handleDeleteTicket = async (ticket: Ticket) => {
+    const reason = window.prompt(
+      currentUser?.role === "ADMIN"
+        ? "Motivo da exclusão (obrigatório):"
+        : "Motivo da solicitação de exclusão (obrigatório, será enviado por email à governança):"
+    );
+    if (!reason || reason.trim().length < 5) {
+      if (reason !== null) alert("Motivo obrigatório: mínimo 5 caracteres");
+      return;
+    }
+    try {
+      const res = await fetch(`/api/tickets/${ticket.id}/delete`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: reason.trim() }),
+      });
+      const json = await res.json();
+      if (res.ok) {
+        if (json.mode === "deleted") {
+          alert("Ticket excluído. Disponível na Lixeira por 30 dias.");
+          setTickets((prev) => prev.filter((t) => t.id !== ticket.id));
+        } else {
+          alert("Solicitação enviada por email à governança. O ticket continua ativo até a decisão do ADMIN.");
+        }
+      } else {
+        alert(json.error ?? "Erro ao processar exclusão");
       }
     } catch { alert("Erro de conexão"); }
   };
@@ -2214,7 +2244,7 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
         <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60" onClick={() => setShowLixeira(false)}>
           <div className="w-full max-w-lg max-h-[80vh] bg-[#09081A] border border-[#C9A84C]/20 rounded-xl flex flex-col" onClick={(e) => e.stopPropagation()}>
             <div className="p-4 border-b border-[#C9A84C]/20 flex items-center justify-between flex-shrink-0">
-              <div className="text-sm font-bold text-foreground">Lixeira · Propostas Excluídas (30 dias)</div>
+              <div className="text-sm font-bold text-foreground">Lixeira · Propostas e Tickets Excluídos (30 dias)</div>
               <button onClick={() => setShowLixeira(false)} className="text-muted-foreground hover:text-foreground text-xl">&times;</button>
             </div>
             <div className="flex-1 overflow-y-auto p-4 space-y-2">
@@ -2227,12 +2257,14 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
                   <div key={item.id} className="bg-secondary/40 border border-border rounded-lg p-3">
                     <div className="flex items-center justify-between">
                       <div>
-                        <div className="text-xs font-bold text-foreground">{item.client_name} <span className="text-muted-foreground font-normal">({item.code})</span></div>
+                        <div className="text-xs font-bold text-foreground">
+                          {item.item_type === "ticket" ? item.title : item.client_name} <span className="text-muted-foreground font-normal">({item.code})</span>
+                        </div>
                         <div className="text-[10px] text-muted-foreground">excluído por {item.profiles?.full_name ?? "N/D"}</div>
                         <div className="text-[10px] text-red-400 mt-1">{item.deletion_reason}</div>
                         <div className="text-[9px] text-muted-foreground/70 mt-1">{item.days_remaining} dias restantes na lixeira</div>
                       </div>
-                      <button onClick={() => restoreFromLixeira(item.id)}
+                      <button onClick={() => restoreFromLixeira(item.id, item.item_type)}
                         className="flex-shrink-0 px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/20 rounded text-emerald-400 text-[10px] font-bold hover:bg-emerald-500/20 transition">
                         Restaurar
                       </button>
@@ -2796,11 +2828,7 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
                           )}
                           {currentUser?.role === "ADMIN" && (
                             <button
-                              onClick={async () => {
-                                if (!confirm("Excluir este ticket permanentemente?")) return;
-                                await fetch(`/api/tickets?id=${ticket.id}`, { method: "DELETE" });
-                                setTickets(prev => prev.filter(t => t.id !== ticket.id));
-                              }}
+                              onClick={() => handleDeleteTicket(ticket)}
                               className="text-xs text-red-400 hover:text-red-300"
                             >
                               Excluir
