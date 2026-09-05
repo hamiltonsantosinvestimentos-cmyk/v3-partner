@@ -543,6 +543,24 @@ export function ContractTemplatesClient() {
     }
   };
 
+  // Reprocessar (05/09/2026): mesmo botão do Agente Revisor de Riscos, agora
+  // para o Agente Estruturador (W18). Reaproveita descricao_intencao extraída
+  // de volta do body_text_raw (nunca sobrescrito em caso de erro).
+  const [retryingStructuringId, setRetryingStructuringId] = useState<string | null>(null);
+  const handleRetryStructuring = async (templateId: string) => {
+    setRetryingStructuringId(templateId);
+    try {
+      const res = await fetch(`/api/contracts/templates/${templateId}/retry-structuring`, { method: "POST" });
+      const json = await res.json();
+      if (!res.ok) { alert(json.error ?? "Erro ao reprocessar"); return; }
+      await fetchTemplates();
+    } catch {
+      alert("Erro de conexão ao reprocessar");
+    } finally {
+      setRetryingStructuringId(null);
+    }
+  };
+
   const handleDraftSubmit = async () => {
     if (!draftDescricao.trim() || draftDescricao.trim().length < 30) {
       setDraftError("Descreva a intenção de negócio com pelo menos 30 caracteres");
@@ -1106,8 +1124,18 @@ export function ContractTemplatesClient() {
                   )}
 
                   {selected.analysis_status === "erro" && (
-                    <div className="text-xs text-red-400">
-                      Falha na estruturação: {selected.analysis_error ?? "erro não especificado"}
+                    <div>
+                      <div className="text-xs text-red-400 mb-2">
+                        Falha na estruturação: {selected.analysis_error ?? "erro não especificado"}
+                      </div>
+                      <button
+                        onClick={() => handleRetryStructuring(selected.id)}
+                        disabled={retryingStructuringId === selected.id}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-[#162744] text-[#F5F1E8] rounded-lg text-xs font-bold hover:bg-[#243A66] transition disabled:opacity-50"
+                      >
+                        {retryingStructuringId === selected.id ? <Loader2 size={13} className="animate-spin" /> : <RotateCcw size={13} />}
+                        Reprocessar
+                      </button>
                     </div>
                   )}
 
