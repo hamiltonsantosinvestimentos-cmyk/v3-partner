@@ -184,6 +184,10 @@ const NAV_SECTIONS: NavSection[] = [
   {
     label: "SISTEMA",
     items: [
+      // 05/09/2026 (BRIEF Painel de Governança da Diretoria): Fase 1 do
+      // Portal dos Sócios já planejado (v3-governance-flow.md), ADMIN
+      // apenas — relatório gerencial sob demanda, filtrado por mesa.
+      { href: "/socios", label: "Painel da Diretoria", icon: "ShieldCheck", roles: ["ADMIN"] },
       { href: "/admin-dashboard",  label: "Painel Admin",    icon: "LayoutDashboard", roles: ["ADMIN"] },
       { href: "/admin-cadastros", label: "Cadastros",      icon: "UserPlus", roles: ["ADMIN"] },
       { href: "/admin-marketplace", label: "Marketplace Admin", icon: "ShoppingBag", roles: ["ADMIN", "GESTAO"] },
