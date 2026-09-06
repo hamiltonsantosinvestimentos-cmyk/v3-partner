@@ -18,6 +18,7 @@ import {
   FileSignature,
   Copy,
   MessageCircle,
+  Upload,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -154,7 +155,16 @@ export function ContratoPanel({ deal, dealCode, isDemo = false }: ContratoPanelP
   const [ncndaError, setNcndaError] = useState<string | null>(null);
   const [ncndaCopied, setNcndaCopied] = useState(false);
 
+  // 06/09/2026 (BRIEF Link de Captacao pos-NCNDA): link publico de upload de
+  // documentos da empresa, reaproveitando deal_upload_tokens/api/ma/upload-links
+  // (mesmo mecanismo que ja existia solto na aba FORJA). So aparece quando o
+  // NCNDA esta assinado — ver ncndaStatusLabel() abaixo.
+  const [uploadLink, setUploadLink] = useState<string | null>(null);
+  const [uploadLinkLoading, setUploadLinkLoading] = useState(false);
+  const [uploadLinkCopied, setUploadLinkCopied] = useState(false);
+
   useEffect(() => {
+    setUploadLink(null);
     async function loadNcndaState() {
       try {
         const tplRes = await fetch("/api/contracts/templates?vertical=ma");
@@ -174,6 +184,16 @@ export function ContratoPanel({ deal, dealCode, isDemo = false }: ContratoPanelP
         const qData = await qRes.json();
         const batch = (qData.batches ?? [])[0];
         if (batch) setNcndaBatch(batch);
+
+        // Se o NCNDA ja estiver assinado e ja existir um link de upload ativo
+        // gerado antes (pela aba FORJA legado ou por esta mesma tela), mostra
+        // direto sem exigir clique — mesmo padrao do link de qualificacao.
+        if (existing.status_signature === "assinado") {
+          const ulRes = await fetch(`/api/ma/upload-links?deal_id=${deal.id}`);
+          const ulData = await ulRes.json();
+          const active = (ulData.tokens ?? []).find((t: any) => t.status === "active" && new Date(t.expires_at) > new Date());
+          if (active) setUploadLink(active.upload_url);
+        }
       } catch {
         // best-effort — painel cai no estado "sem contrato" (mostra o formulário)
       }
@@ -181,6 +201,24 @@ export function ContratoPanel({ deal, dealCode, isDemo = false }: ContratoPanelP
     loadNcndaState();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deal.id]);
+
+  async function handleGerarUploadLink() {
+    if (uploadLinkLoading) return;
+    setUploadLinkLoading(true);
+    try {
+      const r = await fetch("/api/ma/upload-links", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ deal_id: deal.id, label: "Pós-NCNDA" }),
+      });
+      const data = await r.json();
+      if (data.upload_url) setUploadLink(data.upload_url);
+    } catch {
+      // link não é crítico para o fluxo do NCNDA — falha silenciosa, botão continua disponível
+    } finally {
+      setUploadLinkLoading(false);
+    }
+  }
 
   async function handleSolicitarNcnda() {
     if (!ncndaTemplateId) {
@@ -506,6 +544,60 @@ export function ContratoPanel({ deal, dealCode, isDemo = false }: ContratoPanelP
                       </div>
                     ) : (
                       <p className="text-[#7A8FA8] text-xs">Nenhum lote de qualificação encontrado para este contrato.</p>
+                    )}
+
+                    {/* 06/09/2026 (BRIEF Link de Captacao pos-NCNDA): só aparece com
+                        o NCNDA assinado — trava de governança pedida por João, nunca
+                        permite captar documento antes da confidencialidade formalizada. */}
+                    {ncndaContract.status_signature === "assinado" && (
+                      <div className="rounded-lg bg-[#111F35] border border-[#243A66] px-4 py-3 space-y-2">
+                        <p className="text-[9px] font-bold uppercase tracking-widest text-[#C9A84C] flex items-center gap-1.5">
+                          <Upload className="w-3 h-3" />
+                          Link de Captação de Documentos
+                        </p>
+                        <p className="text-[#7A8FA8] text-[11px] leading-relaxed">
+                          Envie à empresa para receber documentos societários, financeiros e de due diligence, sem exigir login.
+                        </p>
+                        {uploadLink ? (
+                          <div className="flex items-center gap-2">
+                            <span className="text-[#7A8FA8] text-xs font-mono truncate flex-1">{uploadLink}</span>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="border-[#243A66] text-[#7A8FA8] hover:text-[#F0ECE4] text-xs gap-1 shrink-0"
+                              onClick={() => {
+                                navigator.clipboard.writeText(uploadLink);
+                                setUploadLinkCopied(true);
+                                setTimeout(() => setUploadLinkCopied(false), 2000);
+                              }}
+                            >
+                              <Copy className="w-3 h-3" />
+                              {uploadLinkCopied ? "Copiado" : "Copiar"}
+                            </Button>
+                            <a
+                              href={`https://wa.me/?text=${encodeURIComponent(`Olá, segue o link para envio de documentos da empresa referente ao processo (${dealCode}) da V3 Partners: ${uploadLink}`)}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                            >
+                              <Button variant="outline" size="sm" className="border-[#243A66] text-[#7A8FA8] hover:text-[#F0ECE4] text-xs gap-1 shrink-0">
+                                <MessageCircle className="w-3 h-3" />
+                                WhatsApp
+                              </Button>
+                            </a>
+                          </div>
+                        ) : (
+                          <Button
+                            onClick={handleGerarUploadLink}
+                            disabled={uploadLinkLoading}
+                            variant="outline"
+                            size="sm"
+                            className="border-[#C9A84C]/40 text-[#C9A84C] hover:bg-[#C9A84C]/10 text-xs gap-1.5"
+                          >
+                            {uploadLinkLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+                            {uploadLinkLoading ? "Gerando..." : "Gerar Link"}
+                          </Button>
+                        )}
+                      </div>
                     )}
                   </div>
                 )}

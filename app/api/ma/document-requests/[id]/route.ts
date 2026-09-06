@@ -4,6 +4,7 @@ import { createClient as sc } from "@supabase/supabase-js";
 import type { DocRequestItem } from "@/lib/ma/document-request-mapper";
 import { DOC_TIPO_LABEL } from "@/lib/ma/document-request-mapper";
 import { auditText, auditHtml } from "@/lib/brand-guardian-gate";
+import { getOrCreateDealUploadToken, buildUploadUrl } from "@/lib/ma/upload-link";
 
 export const maxDuration = 300;
 
@@ -118,6 +119,32 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
       return NextResponse.json({ error: "RESEND_API_KEY não configurada" }, { status: 500 });
     }
 
+    // 06/09/2026 (BRIEF Link de Captacao pos-NCNDA, ajuste "go" de João):
+    // trava de governança, o email desta aba passa a embutir o link real de
+    // captação de documentos — por isso não pode ser enviado antes do NCNDA
+    // estar assinado, mesma trava já aplicada ao bloco equivalente no card
+    // do NCNDA em contrato-panel.tsx.
+    const { data: ncndaContract } = await svc
+      .from("operation_contracts")
+      .select("status_signature")
+      .eq("deal_id", request.deal_id)
+      .eq("vertical", "ma")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (!ncndaContract || ncndaContract.status_signature !== "assinado") {
+      return NextResponse.json({
+        error: "O NCNDA deste deal ainda não foi assinado pela contraparte. O link de captação de documentos só pode ser enviado depois da confidencialidade formalizada.",
+      }, { status: 422 });
+    }
+
+    const uploadTokenResult = await getOrCreateDealUploadToken(svc, request.deal_id, user.id, { label: "Aba Docs" });
+    if ("error" in uploadTokenResult) {
+      return NextResponse.json({ error: uploadTokenResult.error }, { status: 500 });
+    }
+    const uploadUrl = buildUploadUrl(uploadTokenResult.token);
+
     // Resolve email do partner
     const deal = request.ma_deals as Record<string, unknown>;
     const partnerUserId = deal?.created_by ?? deal?.assigned_to;
@@ -153,6 +180,7 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
       deadline: request.deadline ?? deadline ?? undefined,
       notes: notes ?? request.notes ?? undefined,
       mesaName: profile?.full_name ?? "Mesa V3",
+      uploadUrl,
     });
 
     const docReqIdHtmlGate = auditHtml(emailHtml);
@@ -211,8 +239,9 @@ function buildResendEmail(params: {
   deadline?: string;
   notes?: string;
   mesaName: string;
+  uploadUrl: string;
 }) {
-  const { partnerName, dealCode, dealSector, items, deadline, notes, mesaName } = params;
+  const { partnerName, dealCode, dealSector, items, deadline, notes, mesaName, uploadUrl } = params;
   const alta  = items.filter(i => i.priority === "ALTA");
   const media = items.filter(i => i.priority === "MEDIA");
 
@@ -258,7 +287,8 @@ function buildResendEmail(params: {
         </table>` : ""}
         ${deadline ? `<div style="background:rgba(201,168,76,0.08);border:1px solid rgba(201,168,76,0.2);border-radius:6px;padding:10px 14px;margin-bottom:16px;font-size:11px;color:#F0ECE4;">Prazo: <strong>${new Date(deadline).toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" })}</strong></div>` : ""}
         ${notes ? `<div style="background:#162744;border:1px solid #243A66;border-radius:6px;padding:10px 14px;margin-bottom:16px;"><p style="margin:0 0 4px;font-size:9px;color:#7A8FA8;text-transform:uppercase;letter-spacing:1px;">Observação</p><p style="margin:0;font-size:11px;color:#F0ECE4;">${notes}</p></div>` : ""}
-        <a href="https://app.v3partners.com.br/ma" style="display:inline-block;background:#C9A84C;color:#09081A;font-weight:700;font-size:12px;padding:12px 28px;border-radius:6px;text-decoration:none;margin-bottom:20px;">Enviar Documentos</a>
+        <a href="${uploadUrl}" style="display:inline-block;background:#C9A84C;color:#09081A;font-weight:700;font-size:12px;padding:12px 28px;border-radius:6px;text-decoration:none;margin-bottom:8px;">Enviar Documentos</a>
+        <p style="margin:0 0 20px;font-size:10px;color:#7A8FA8;">Link direto, sem necessidade de login.</p>
         <hr style="border:none;border-top:1px solid #243A66;margin:0 0 14px;"/>
         <p style="margin:0;font-size:10px;color:#7A8FA8;">Enviado por <strong style="color:#F0ECE4;">${mesaName}</strong> · <a href="https://v3partners.com.br" style="color:#C9A84C;text-decoration:none;">v3partners.com.br</a></p>
       </td></tr>

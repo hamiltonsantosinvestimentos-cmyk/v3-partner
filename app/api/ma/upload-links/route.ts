@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
+import { getOrCreateDealUploadToken, buildUploadUrl } from "@/lib/ma/upload-link";
 
 export const maxDuration = 30;
 
@@ -45,34 +46,22 @@ export async function POST(req: NextRequest) {
 
   if (!deal) return NextResponse.json({ error: "Deal não encontrado" }, { status: 404 });
 
-  const expiresAt = new Date();
-  expiresAt.setDate(expiresAt.getDate() + expires_days);
-
-  const { data: tokenRow, error } = await svc()
-    .from("deal_upload_tokens")
-    .insert({
-      deal_id,
-      label:       label ?? null,
-      expires_at:  expiresAt.toISOString(),
-      max_uses,
-      created_by:  user.id,
-    })
-    .select("id, token, expires_at")
-    .single();
-
-  if (error || !tokenRow) {
-    return NextResponse.json({ error: "Erro ao criar token de upload" }, { status: 500 });
+  // 06/09/2026 (BRIEF Link de Captacao pos-NCNDA): reaproveita token ativo e
+  // nao expirado existente para o mesmo deal em vez de criar um novo a cada
+  // clique, mesmo padrao de dedupe ja usado em /api/cm/intake/generate e
+  // /api/credit-engine/intake/generate.
+  const result = await getOrCreateDealUploadToken(svc(), deal_id, user.id, { label, expiresDays: expires_days, maxUses: max_uses });
+  if ("error" in result) {
+    return NextResponse.json({ error: result.error }, { status: 500 });
   }
-
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.v3partners.com.br";
-  const uploadUrl = `${baseUrl}/upload/${tokenRow.token}`;
 
   return NextResponse.json({
     ok:         true,
-    token:      tokenRow.token,
-    upload_url: uploadUrl,
-    expires_at: tokenRow.expires_at,
+    token:      result.token,
+    upload_url: buildUploadUrl(result.token),
+    expires_at: result.expires_at,
     deal_code:  deal.v3_code ?? deal.code,
+    reused:     result.reused,
   });
 }
 
@@ -94,10 +83,9 @@ export async function GET(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.v3partners.com.br";
   const tokens = (data ?? []).map(t => ({
     ...t,
-    upload_url: `${baseUrl}/upload/${t.token}`,
+    upload_url: buildUploadUrl(t.token as string),
   }));
 
   return NextResponse.json({ tokens });
