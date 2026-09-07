@@ -1,17 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
-import { sendToClickSign, type SendToClickSignInput } from "@/lib/clicksign";
+import { getProvider, type SendEnvelopeInput } from "@/lib/esignature";
 
 export const maxDuration = 300;
 
 export async function POST(request: NextRequest) {
-  let body: SendToClickSignInput;
+  let body: SendEnvelopeInput;
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: "Body inválido" }, { status: 400 });
   }
 
-  const result = await sendToClickSign(body);
+  const result = await getProvider({ dealId: body.dealId, documentType: body.documentType }).send(body);
 
   if (!result.ok) {
     return NextResponse.json({ error: result.error }, { status: result.status });

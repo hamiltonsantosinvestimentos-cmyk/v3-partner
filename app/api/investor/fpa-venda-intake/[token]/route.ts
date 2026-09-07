@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { resolveContractVariables, wrapContractInV3Html } from "@/lib/contract-render";
-import { sendToClickSign } from "@/lib/clicksign";
+import { getProvider } from "@/lib/esignature";
 import { notifyDealTimeline } from "@/lib/ma-negociacao-notify";
 
 export const maxDuration = 300;
@@ -174,7 +174,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
 
   const documentUrl = `${process.env.NEXT_PUBLIC_APP_URL ?? "https://app.v3partners.com.br"}/api/cm/annex-sign/${signingToken}?format=html`;
 
-  const clicksignRes = await sendToClickSign({
+  const clicksignRes = await getProvider({ contractId: contract.id, dealId: dealCode, vertical: "ma", documentType: "fpa_venda" }).send({
     dealId: dealCode,
     documentType: "fpa_venda",
     documentUrl,

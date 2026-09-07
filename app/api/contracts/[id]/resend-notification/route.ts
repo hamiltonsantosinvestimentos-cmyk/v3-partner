@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as sc } from "@supabase/supabase-js";
-import { notifyClickSignEnvelope } from "@/lib/clicksign";
+import { getProvider } from "@/lib/esignature";
 import { auditText } from "@/lib/brand-guardian-gate";
 
 // POST /api/contracts/[id]/resend-notification: reenvio de lembrete de
@@ -88,7 +88,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
   }
 
-  const result = await notifyClickSignEnvelope(
+  const result = await getProvider({ contractId: id }).notifyReminder(
     contract.external_envelope_id,
     pendingSignatory?.name ?? "",
     documentLabel,

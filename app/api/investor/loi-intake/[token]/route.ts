@@ -3,7 +3,7 @@ import { createClient as sc } from "@supabase/supabase-js";
 import { isValidCPF, isValidCNPJ } from "@/lib/validators/cpf-cnpj";
 import { resolveContractVariables, wrapContractInV3Html } from "@/lib/contract-render";
 import { valorEmReaisPorExtenso } from "@/lib/utils/valor-extenso";
-import { sendToClickSign } from "@/lib/clicksign";
+import { getProvider } from "@/lib/esignature";
 import { auditHtml, auditText } from "@/lib/brand-guardian-gate";
 import { notifyDealTimeline } from "@/lib/ma-negociacao-notify";
 
@@ -223,7 +223,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   // gate de auth do proxy.ts, e esta rota é pública/server-to-server.
   const documentUrl = `${process.env.NEXT_PUBLIC_APP_URL ?? "https://app.v3partners.com.br"}/api/cm/annex-sign/${signingToken}?format=html`;
 
-  const clicksignRes = await sendToClickSign({
+  const clicksignRes = await getProvider({ contractId: contract.id, dealId: dealCode, vertical: "ma", documentType: "loi" }).send({
     dealId: dealCode,
     documentType: "loi",
     documentUrl,

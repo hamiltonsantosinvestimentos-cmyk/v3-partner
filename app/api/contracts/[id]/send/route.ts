@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { randomUUID } from "crypto";
-import { sendToClickSign, type SendToClickSignInput } from "@/lib/clicksign";
+import { getProvider, type SendEnvelopeInput } from "@/lib/esignature";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -23,7 +23,7 @@ async function requireRole(req: NextRequest) {
 // dentro de capital_markets: usa-se contract_title para decidir, já que
 // document_type do lote de qualificação não é persistido em operation_contracts
 // (só qualification_batch_id, que aponta pro lote).
-function resolveDocumentType(contractTitle: string, vertical: string): SendToClickSignInput["documentType"] {
+function resolveDocumentType(contractTitle: string, vertical: string): SendEnvelopeInput["documentType"] {
   const title = contractTitle.toLowerCase();
   // 03/09/2026: faltava branch pra "Carta de Intenção" (documentType "loi",
   // já suportado pela API v3 do ClickSign, ver lib/clicksign.ts). Sem isso,
@@ -147,7 +147,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     documentContentBase64 = `data:application/pdf;base64,${buffer.toString("base64")}`;
   }
 
-  const result = await sendToClickSign({
+  const result = await getProvider({ contractId: id, vertical: contract.vertical }).send({
     dealId: id,
     documentType: resolveDocumentType(contract.contract_title, contract.vertical),
     documentUrl,

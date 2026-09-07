@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
-import { cancelClickSignDocument } from "@/lib/clicksign";
+import { getProvider } from "@/lib/esignature";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -76,7 +76,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (hadPendingEnvelope) {
     if (contract.external_document_id) {
       cancelResult.attempted = true;
-      const result = await cancelClickSignDocument(contract.external_envelope_id!, contract.external_document_id);
+      const result = await getProvider({ contractId: id }).cancel(contract.external_envelope_id!, contract.external_document_id);
       cancelResult.ok = result.ok;
       if (!result.ok) cancelResult.error = result.error;
     }

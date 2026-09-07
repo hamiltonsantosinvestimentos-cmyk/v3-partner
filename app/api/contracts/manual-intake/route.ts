@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { createHash, randomUUID } from "crypto";
 import { resolveContractVariables, wrapContractInV3Html } from "@/lib/contract-render";
-import { htmlToPdfBase64 } from "@/lib/clicksign";
+import { htmlToPdfBase64 } from "@/lib/esignature";
 import { mergeAndStampManualContract } from "@/lib/contract-watermark";
 import type { V3Series } from "@/lib/v3-codes";
 

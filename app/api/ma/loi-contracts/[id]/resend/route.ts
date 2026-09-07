@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
-import { notifyClickSignEnvelope } from "@/lib/clicksign";
+import { getProvider } from "@/lib/esignature";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -46,7 +46,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   const parties = (contract.parties as Array<{ role: string; name: string; email: string }> | null) ?? [];
   const signatario = parties.find(p => ["comprador", "vendedor", "participante", "comissionado_compra"].includes(p.role));
 
-  const result = await notifyClickSignEnvelope(contract.external_envelope_id, signatario?.name ?? "", "Carta de Intenção de Compra");
+  const result = await getProvider({ contractId: id, vertical: "ma" }).notifyReminder(contract.external_envelope_id, signatario?.name ?? "", "Carta de Intenção de Compra");
   if (!result.ok) {
     return NextResponse.json({ error: `Falha ao reenviar notificação: ${result.error}` }, { status: 502 });
   }
