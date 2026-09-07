@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as sc } from "@supabase/supabase-js";
-import { getEnvelopeStatusV3 } from "@/lib/clicksign";
+import { getProvider } from "@/lib/esignature";
 
 // GET /api/cron/clicksign-sync: sincronização real de status de assinatura
 // (19/08/2026, item 2 dos ajustes de governança pedidos por João).
@@ -65,7 +65,7 @@ export async function GET(req: NextRequest) {
   const errors: Array<{ contract_id: string; error: string }> = [];
 
   for (const contract of contracts) {
-    const statusRes = await getEnvelopeStatusV3(contract.external_envelope_id);
+    const statusRes = await getProvider({ contractId: contract.id }).syncStatus(contract.external_envelope_id);
 
     if (!statusRes.ok) {
       errors.push({ contract_id: contract.id, error: statusRes.error });
