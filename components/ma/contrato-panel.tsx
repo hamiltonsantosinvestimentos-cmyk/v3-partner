@@ -167,15 +167,25 @@ export function ContratoPanel({ deal, dealCode, isDemo = false }: ContratoPanelP
     setUploadLink(null);
     async function loadNcndaState() {
       try {
+        // 07/09/2026 (P0 achado ao testar o BRIEF Link de Captacao pos-NCNDA):
+        // vertical="ma" hoje tem 5 templates aprovados (LOI, Naval, FPA Compra/
+        // Venda, NCNDA), [0] pegava o primeiro em ordem alfabetica de
+        // template_name ("Carta de Intencao..." antes de "NCNDA...") — toda
+        // "Solicitar NCNDA" gerava uma Carta de Intencao de Compra por engano.
+        // Nunca disparou em producao porque nenhum deal tinha usado o botao
+        // ainda desde o lancamento em 05/09/2026. Filtra pela serie certa.
         const tplRes = await fetch("/api/contracts/templates?vertical=ma");
         const tplData = await tplRes.json();
-        const template = (tplData.templates ?? [])[0];
+        const template = (tplData.templates ?? []).find((t: any) => t.contract_series === "V3C-NDA");
         setNcndaTemplateId(template?.id ?? null);
 
+        // Mesmo achado acima: um deal pode ter mais de um contrato vertical="ma"
+        // (LOI, FPA, NCNDA...), filtra pelo prefixo da serie para nunca mostrar
+        // um contrato errado como se fosse o NCNDA.
         const listRes = await fetch("/api/contracts/list?vertical=ma");
         const listData = await listRes.json();
         const existing = (listData.contracts ?? [])
-          .filter((c: any) => c.deal_id === deal.id)
+          .filter((c: any) => c.deal_id === deal.id && (c.contract_code as string)?.startsWith("V3C-NDA"))
           .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
         if (!existing) return;
         setNcndaContract({ id: existing.id, contract_code: existing.contract_code, status_signature: existing.status_signature });
