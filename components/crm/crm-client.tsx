@@ -3401,6 +3401,103 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
                   );
                 }
 
+                // ── Simulador Home Equity público (/simulador-home-equity-v3) ──
+                if (m.form_type === "home_equity_simulador_publico") {
+                  const brl = (v: unknown) =>
+                    v == null || v === "" ? null : `R$ ${Number(v).toLocaleString("pt-BR", { maximumFractionDigits: 0 })}`;
+                  const endereco = [fmt(m.rua), fmt(m.numero), fmt(m.complemento), fmt(m.bairro)].filter(Boolean).join(", ");
+                  const row = (label: string, value: unknown) =>
+                    fmt(value) ? (
+                      <div>
+                        <span style={{ fontSize: 10, color: "#7A8FA8" }}>{label}: </span>
+                        <span style={{ fontSize: 12, color: "#E8EDF5" }}>{fmt(value)}</span>
+                      </div>
+                    ) : null;
+                  return (
+                    <div style={{ marginTop: 16, padding: "14px 16px", borderRadius: 10, background: "rgba(17,31,53,0.5)", border: "1px solid rgba(201,168,76,0.2)" }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: "#C9A84C", marginBottom: 12, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                        Simulação Home Equity — Formulário Público
+                      </div>
+
+                      {/* Objetivo */}
+                      <div style={{ marginBottom: 12 }}>
+                        <div style={{ fontSize: 10, color: "#7A8FA8", marginBottom: 6, fontWeight: 700, textTransform: "uppercase" }}>Objetivo</div>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                          {row("Finalidade", m.objetivo)}
+                          {row("Urgência", m.urgencia)}
+                        </div>
+                      </div>
+
+                      {/* Crédito pretendido */}
+                      <div style={{ marginBottom: 12, paddingTop: 10, borderTop: "1px solid rgba(36,58,102,0.6)" }}>
+                        <div style={{ fontSize: 10, color: "#7A8FA8", marginBottom: 8, fontWeight: 700, textTransform: "uppercase" }}>Crédito Pretendido</div>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
+                          {brl(m.valor_credito) && (
+                            <div style={{ background: "rgba(201,168,76,0.06)", border: "1px solid rgba(201,168,76,0.15)", borderRadius: 8, padding: "8px 10px" }}>
+                              <div style={{ fontSize: 10, color: "#7A8FA8", marginBottom: 2 }}>Valor do crédito</div>
+                              <div style={{ fontSize: 12, color: "#E8C97A", fontWeight: 600 }}>{brl(m.valor_credito)}</div>
+                            </div>
+                          )}
+                          {fmt(m.prazo_meses) && (
+                            <div style={{ background: "rgba(201,168,76,0.06)", border: "1px solid rgba(201,168,76,0.15)", borderRadius: 8, padding: "8px 10px" }}>
+                              <div style={{ fontSize: 10, color: "#7A8FA8", marginBottom: 2 }}>Prazo</div>
+                              <div style={{ fontSize: 12, color: "#E8C97A", fontWeight: 600 }}>{fmt(m.prazo_meses)} meses</div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Imóvel em garantia */}
+                      <div style={{ marginBottom: 12, paddingTop: 10, borderTop: "1px solid rgba(36,58,102,0.6)" }}>
+                        <div style={{ fontSize: 10, color: "#7A8FA8", marginBottom: 6, fontWeight: 700, textTransform: "uppercase" }}>Imóvel em Garantia</div>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                          {row("Perfil", m.perfil_imovel)}
+                          {row("Situação", m.status_imovel)}
+                          {row("Valor estimado", brl(m.valor_imovel))}
+                          {row("Averbado", m.averbado === true ? "Sim" : m.averbado === false ? "Não" : null)}
+                          {row("Banco do financiamento", m.banco_financiamento)}
+                          {row("Saldo devedor", brl(m.valor_financiamento))}
+                        </div>
+                      </div>
+
+                      {/* Perfil do cliente */}
+                      <div style={{ marginBottom: 12, paddingTop: 10, borderTop: "1px solid rgba(36,58,102,0.6)" }}>
+                        <div style={{ fontSize: 10, color: "#7A8FA8", marginBottom: 6, fontWeight: 700, textTransform: "uppercase" }}>Perfil do Cliente</div>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                          {row("Ocupação", m.ocupacao)}
+                          {row("Renda mensal", brl(m.renda_mensal))}
+                          {row("Nascimento", m.nascimento)}
+                        </div>
+                      </div>
+
+                      {/* Endereço */}
+                      {(endereco || fmt(m.cep) || fmt(selectedLead.city)) && (
+                        <div style={{ marginBottom: 12, paddingTop: 10, borderTop: "1px solid rgba(36,58,102,0.6)" }}>
+                          <div style={{ fontSize: 10, color: "#7A8FA8", marginBottom: 6, fontWeight: 700, textTransform: "uppercase" }}>Endereço</div>
+                          {endereco && <div style={{ fontSize: 12, color: "#E8EDF5" }}>{endereco}</div>}
+                          {(fmt(selectedLead.city) || fmt(selectedLead.state)) && (
+                            <div style={{ fontSize: 12, color: "#E8EDF5" }}>{[fmt(selectedLead.city), fmt(selectedLead.state)].filter(Boolean).join(", ")}</div>
+                          )}
+                          {fmt(m.cep) && <div style={{ fontSize: 12, color: "#E8EDF5" }}>CEP: {fmt(m.cep)}</div>}
+                        </div>
+                      )}
+
+                      {/* Consentimento */}
+                      <div style={{ paddingTop: 10, borderTop: "1px solid rgba(36,58,102,0.6)" }}>
+                        <div style={{ fontSize: 11, color: m.consentimento_scr ? "#10B981" : "#EF4444" }}>
+                          {m.consentimento_scr ? "✓ Consulta SCR/Bacen autorizada" : "✗ Sem autorização SCR"}
+                          {fmt(m.consentimento_versao) ? ` (${fmt(m.consentimento_versao)})` : ""}
+                        </div>
+                        {fmt(m.submitted_at) && (
+                          <div style={{ fontSize: 10, color: "#7A8FA8", marginTop: 2 }}>
+                            Enviado em {new Date(String(m.submitted_at)).toLocaleString("pt-BR")}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                }
+
                 // ── Formulário genérico CRM (crédito, consórcio, etc.) ──
                 const hasAddress = fmt(m.enderecoRua) || fmt(m.cep) || fmt(m.city);
                 const hasFinanceiro = fmt(m.renda) || fmt(m.faturamento) || fmt(m.estadoCivil) || fmt(m.restricao);
