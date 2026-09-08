@@ -60,6 +60,18 @@ export function PartnerQuizClient() {
   const searchParams = useSearchParams();
   const ref = searchParams.get("ref") ?? "";
 
+  // Captura de origem do tráfego (anúncios Meta/Google etc.) — só o que vier na URL.
+  const tracking = (() => {
+    const keys = ["utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content", "fbclid", "gclid"];
+    const t: Record<string, string> = {};
+    for (const k of keys) {
+      const v = searchParams.get(k);
+      if (v) t[k] = v.slice(0, 200);
+    }
+    if (typeof document !== "undefined" && document.referrer) t.referrer = document.referrer.slice(0, 300);
+    return Object.keys(t).length ? t : null;
+  })();
+
   const [partner, setPartner] = useState<{ full_name: string | null; whatsapp: string | null } | null>(null);
   useEffect(() => {
     if (!ref) return;
@@ -123,6 +135,7 @@ export function PartnerQuizClient() {
           nome: form.nome, email: form.email, telefone: form.telefone,
           estado: form.estado, cidade: form.cidade,
           instagram: form.instagram || null, linkedin: form.linkedin || null,
+          tracking,
           consentimento: true,
         }),
       });

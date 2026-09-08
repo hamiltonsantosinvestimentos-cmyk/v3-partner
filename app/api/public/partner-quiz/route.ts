@@ -40,6 +40,7 @@ const schema = z.object({
   cidade: z.string().min(1),
   instagram: z.string().optional().nullable(),
   linkedin: z.string().optional().nullable(),
+  tracking: z.record(z.string(), z.string().max(300)).nullable().optional(),
   consentimento: z.literal(true),
 });
 
@@ -98,7 +99,10 @@ export async function POST(req: NextRequest) {
     `Experiência B2B: ${LABEL.experiencia_b2b[d.experiencia_b2b]}. Rede: ${LABEL.rede[d.rede]} decisores, porte ${LABEL.porte_rede[d.porte_rede]}. ` +
     `Renda mensal: R$ ${d.renda_mensal.toLocaleString("pt-BR")}. Disponibilidade: ${LABEL.disponibilidade[d.disponibilidade]}. ` +
     `Intenção de investir: ${LABEL.intencao_investir[d.intencao_investir]}. Começar: ${LABEL.prazo_comeco[d.prazo_comeco]}.` +
-    (d.instagram ? ` Instagram: ${d.instagram}.` : "") + (d.linkedin ? ` LinkedIn: ${d.linkedin}.` : "");
+    (d.instagram ? ` Instagram: ${d.instagram}.` : "") + (d.linkedin ? ` LinkedIn: ${d.linkedin}.` : "") +
+    (d.tracking?.utm_source || d.tracking?.utm_campaign
+      ? ` Origem: ${[d.tracking?.utm_source, d.tracking?.utm_medium, d.tracking?.utm_campaign].filter(Boolean).join(" / ")}.`
+      : "");
 
   const { data: lead, error } = await db.from("prospeccao_leads").insert({
     nome: d.nome.trim(),
@@ -126,6 +130,7 @@ export async function POST(req: NextRequest) {
       tier: s.tier,
       plano_sugerido: s.plano_sugerido,
       ref_partner_id: d.ref ?? null,
+      tracking: d.tracking ?? null,
       consentimento: true,
       submitted_at: new Date().toISOString(),
     },
