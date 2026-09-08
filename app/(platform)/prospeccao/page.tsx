@@ -26,7 +26,7 @@ export default async function ProspeccaoPage() {
           📊 Dashboard
         </Link>
       </div>
-      <ProspeccaoClient role={(profile as { role: string }).role} />
+      <ProspeccaoClient role={(profile as { role: string }).role} userId={user.id} />
     </div>
   );
 }
