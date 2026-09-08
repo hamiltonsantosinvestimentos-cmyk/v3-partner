@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { z } from "zod";
+import { sendText } from "@/lib/whatsapp/openwa-client";
+import { notifySimuladorHomeEquityRecebido } from "@/lib/email";
 
 // Recebe a qualificação completa do Simulador Home Equity público
 // (/simulador-home-equity-v3) e cria um lead "Digital" no CRM — mesmo
@@ -139,6 +141,26 @@ export async function POST(req: NextRequest) {
   if (error || !lead) {
     return NextResponse.json({ error: error?.message ?? "Falha ao registrar simulação" }, { status: 500 });
   }
+
+  // Confirmação imediata pro cliente nos dois canais cadastrados (WhatsApp + e-mail).
+  // Nunca reverte nem falha a requisição: o lead já está gravado; se um canal cair,
+  // o outro segue. Enviado pelo número/remetente oficial da V3 (sessão global OpenWA).
+  const primeiroNome = d.nome.trim().split(/\s+/)[0] || d.nome.trim();
+  const msgWhats =
+    `Olá, ${primeiroNome}! 👋\n\n` +
+    `Recebemos sua solicitação para estruturarmos a sua operação de Home Equity. ` +
+    `Nossa equipe já está analisando e entrará em contato em instantes.\n\n` +
+    `Protocolo: ${lead.code}\n— V3 Partners`;
+  await Promise.allSettled([
+    sendText(d.telefone, msgWhats).catch(() => false),
+    notifySimuladorHomeEquityRecebido({
+      clientEmail: d.email,
+      clientName: d.nome.trim(),
+      valorCredito: d.valorCredito,
+      prazoMeses: d.prazoMeses,
+      leadCode: lead.code,
+    }).catch(() => {}),
+  ]);
 
   // Espelha em prospeccao_leads pra visibilidade de ADMIN/SDR/CLOSER — mesmo
   // padrão de app/api/captacao/submit. Fire-and-forget.
