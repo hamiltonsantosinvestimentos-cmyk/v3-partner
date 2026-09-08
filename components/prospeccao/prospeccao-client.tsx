@@ -491,13 +491,28 @@ function DetalheModal({
                   </div>
                 ))}
                 {(Boolean(m.instagram) || Boolean(m.linkedin)) && (
-                  <div className="flex gap-3 px-4 py-2.5">
+                  <div className="flex gap-3 px-4 py-2.5 border-b border-white/5">
                     <span className="text-[11px] font-semibold shrink-0 w-36" style={{ color: MUTED }}>Social</span>
                     <span className="text-[12px] text-white break-words">
                       {[m.instagram, m.linkedin].filter(Boolean).join(" · ")}
                     </span>
                   </div>
                 )}
+                {Boolean(m.tracking) && typeof m.tracking === "object" && (() => {
+                  const tk = m.tracking as Record<string, string>;
+                  const keys = Object.keys(tk);
+                  if (!keys.length) return null;
+                  return (
+                    <div className="flex gap-3 px-4 py-2.5">
+                      <span className="text-[11px] font-semibold shrink-0 w-36" style={{ color: MUTED }}>Origem (tráfego)</span>
+                      <span className="text-[12px] text-white break-words">
+                        {["utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term"]
+                          .filter((k) => tk[k]).map((k) => `${k.replace("utm_", "")}: ${tk[k]}`).join(" · ")
+                          || keys.join(", ")}
+                      </span>
+                    </div>
+                  );
+                })()}
               </div>
             );
           })()}
