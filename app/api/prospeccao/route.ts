@@ -34,6 +34,7 @@ export async function GET() {
       etapa, motivo_perda, notas,
       link_token, link_gerado_em,
       convertido_em, comissao_gerada,
+      score, plano_sugerido, metadata,
       created_at, updated_at, created_by,
       indicado_por_partner:profiles!prospeccao_leads_indicado_por_partner_id_fkey(id, full_name),
       responsavel:profiles!prospeccao_leads_responsavel_id_fkey(id, full_name)

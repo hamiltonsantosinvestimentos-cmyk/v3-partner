@@ -1054,6 +1054,79 @@ export async function notifyNovoLeadParceiro(opts: {
   );
 }
 
+/** Equipe V3: lead qualificado do quiz "Seja Partner" (/seja-partner) */
+export async function notifyLeadQuizPartner(opts: {
+  nome: string;
+  email: string;
+  telefone: string;
+  cidade: string;
+  estado: string;
+  tier: "A" | "B" | "C";
+  score: number;
+  planoSugerido: string;
+  resumo: string;
+  indicadoPor?: string | null;
+}): Promise<void> {
+  const adminEmail = process.env.ADMIN_EMAIL || "operacional@v3partners.com.br";
+  const tierMap: Record<string, { label: string; color: string; emoji: string }> = {
+    A: { label: "Faixa A — quente", color: "#10B981", emoji: "🔥" },
+    B: { label: "Faixa B — morno", color: "#F59E0B", emoji: "🌡️" },
+    C: { label: "Faixa C — frio / nurture", color: "#7A8FA8", emoji: "❄️" },
+  };
+  const t = tierMap[opts.tier] ?? tierMap.C;
+  const body = `
+    <p style="color:#9BAFC5;font-size:14px;margin:0 0 20px;">
+      Um candidato concluiu o quiz <strong style="color:#F5F1E8;">Seja Partner</strong> e já está na aba Prospecção.
+    </p>
+    ${row("Nome", opts.nome)}
+    ${row("E-mail", opts.email)}
+    ${row("Telefone / WhatsApp", opts.telefone)}
+    ${row("Cidade / UF", `${opts.cidade} · ${opts.estado}`)}
+    ${opts.indicadoPor ? row("Indicado por", opts.indicadoPor) : ""}
+    ${row("Plano sugerido", opts.planoSugerido)}
+    <div style="margin-top:16px;padding:14px 18px;background:#13223A;border-radius:8px;border-left:3px solid ${t.color};">
+      <p style="margin:0 0 4px;font-size:11px;color:#9BAFC5;">Qualificação</p>
+      <p style="margin:0;font-size:20px;font-weight:800;color:${t.color};">${t.emoji} ${t.label} · score ${opts.score}</p>
+    </div>
+    <p style="color:#9BAFC5;font-size:12px;margin-top:16px;line-height:1.6;">${opts.resumo}</p>
+  `;
+  await send(
+    adminEmail,
+    `${t.emoji} Quiz Seja Partner — ${opts.nome} (faixa ${opts.tier})`,
+    template("Novo candidato a Partner", body, {
+      label: "Ver na Prospecção",
+      url: "https://app.v3partners.com.br/prospeccao",
+    })
+  );
+}
+
+/** Candidato: confirmação de que o quiz "Seja Partner" foi recebido */
+export async function notifyQuizPartnerCandidato(opts: {
+  candidatoEmail: string;
+  candidatoNome: string;
+  planoSugerido: string;
+}): Promise<void> {
+  const primeiroNome = opts.candidatoNome.trim().split(/\s+/)[0] || opts.candidatoNome.trim();
+  const body = `
+    <p style="color:#F5F1E8;font-size:14px;margin:0 0 20px;">
+      Olá, <strong>${primeiroNome}</strong>!<br><br>
+      Recebemos seu interesse em se tornar Partner da V3. Nossa equipe já vai
+      entrar em contato com você pelo <strong style="color:#E8C97A;">WhatsApp</strong>
+      para conversar sobre os próximos passos.
+    </p>
+    ${row("Plano sugerido pelo seu perfil", opts.planoSugerido)}
+    <p style="color:#9BAFC5;font-size:13px;margin-top:20px;">
+      Não é preciso fazer mais nada agora — o próximo passo é uma conversa rápida
+      com um especialista da V3.
+    </p>
+  `;
+  await send(
+    opts.candidatoEmail,
+    "Recebemos seu interesse — Seja Partner V3",
+    template("Interesse recebido", body)
+  );
+}
+
 /** Fornecedor: novo lead recebido pelo marketplace */
 export async function notifyMarketplaceLead(opts: {
   supplierEmail: string;
