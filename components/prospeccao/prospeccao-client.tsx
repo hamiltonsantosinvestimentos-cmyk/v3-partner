@@ -8,10 +8,32 @@ import {
   Crown, Users, Target, TrendingUp, PhoneCall, Send, Clock,
 } from "lucide-react";
 
+import {
+  OBJETIVO, OCUPACAO, EXPERIENCIA_B2B, REDE, PORTE_REDE, DISPONIBILIDADE,
+  INTENCAO_INVESTIR, PRAZO_COMECO, PLANO_LABEL, type QuizOption,
+} from "@/lib/quiz-partner";
+
 const GOLD = "#C9A84C";
 const NAVY_CARD = "#162744";
 const NAVY_BASE = "#111F35";
 const MUTED = "#7A8FA8";
+
+// Mapa valor→label das perguntas do quiz "Seja Partner", pra render no detalhe.
+const QUIZ_LABELS: Record<string, { titulo: string; opts: QuizOption[] }> = {
+  objetivo: { titulo: "Objetivo", opts: OBJETIVO },
+  ocupacao: { titulo: "Ocupação atual", opts: OCUPACAO },
+  experiencia_b2b: { titulo: "Experiência B2B", opts: EXPERIENCIA_B2B },
+  rede: { titulo: "Rede de decisores", opts: REDE },
+  porte_rede: { titulo: "Porte da rede", opts: PORTE_REDE },
+  disponibilidade: { titulo: "Disponibilidade", opts: DISPONIBILIDADE },
+  intencao_investir: { titulo: "Intenção de investir", opts: INTENCAO_INVESTIR },
+  prazo_comeco: { titulo: "Quando quer começar", opts: PRAZO_COMECO },
+};
+function quizLabel(key: string, value: unknown): string {
+  const entry = QUIZ_LABELS[key];
+  if (!entry) return String(value ?? "—");
+  return entry.opts.find((o) => o.value === value)?.label ?? String(value ?? "—");
+}
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -37,6 +59,9 @@ interface Prospect {
   comissao_gerada: boolean;
   created_at: string;
   crm_lead_id?: string | null;
+  score?: number | null;
+  plano_sugerido?: string | null;
+  metadata?: Record<string, unknown> | null;
   indicado_por_partner?: { id: string; full_name: string } | null;
   responsavel?: { id: string; full_name: string } | null;
 }
@@ -59,6 +84,8 @@ const ORIGENS = [
   { value: "instagram",          label: "Instagram" },
   { value: "indicacao",          label: "Indicação" },
   { value: "indicacao_partner",  label: "Indicação Partner" },
+  { value: "quiz_partner",       label: "Quiz Seja Partner" },
+  { value: "landing_parceiro",   label: "Landing Parceiro" },
   { value: "youtube",            label: "YouTube" },
   { value: "google",             label: "Google" },
   { value: "evento",             label: "Evento" },
@@ -79,6 +106,7 @@ function origemLabel(o: string) {
 function origemColor(o: string) {
   const map: Record<string, string> = {
     linkedin: "#0A66C2", instagram: "#E1306C", indicacao: GOLD, indicacao_partner: GOLD,
+    quiz_partner: "#34D399", landing_parceiro: "#60A5FA",
     youtube: "#FF0000", google: "#4285F4", evento: "#A78BFA", outro: MUTED,
   };
   return map[o] ?? MUTED;
@@ -429,6 +457,50 @@ function DetalheModal({
               </div>
             ))}
           </div>
+
+          {prospect.metadata?.form_type === "quiz_partner" && (() => {
+            const m = prospect.metadata as Record<string, unknown>;
+            const tier = String(m.tier ?? "");
+            const tierColor = tier === "A" ? "#34D399" : tier === "B" ? "#F59E0B" : "#7A8FA8";
+            const tierLabel = tier === "A" ? "Faixa A — quente" : tier === "B" ? "Faixa B — morno" : "Faixa C — frio";
+            const plano = prospect.plano_sugerido ? (PLANO_LABEL[prospect.plano_sugerido] ?? prospect.plano_sugerido) : null;
+            return (
+              <div className="rounded-xl border overflow-hidden" style={{ background: NAVY_CARD, borderColor: `${tierColor}40` }}>
+                <div className="px-4 py-3 flex items-center justify-between" style={{ background: `${tierColor}15` }}>
+                  <span className="text-[11px] font-bold uppercase tracking-widest" style={{ color: tierColor }}>
+                    Quiz Seja Partner · {tierLabel}
+                  </span>
+                  <span className="text-[11px] font-bold" style={{ color: tierColor }}>
+                    score {String(prospect.score ?? m.score_total ?? "—")}
+                  </span>
+                </div>
+                <div className="px-4 py-2.5 border-b border-white/5 flex gap-3">
+                  <span className="text-[11px] font-semibold shrink-0 w-36" style={{ color: MUTED }}>Plano sugerido</span>
+                  <span className="text-[12px] font-bold" style={{ color: GOLD }}>{plano ?? "—"}</span>
+                </div>
+                <div className="px-4 py-2.5 border-b border-white/5 flex gap-3">
+                  <span className="text-[11px] font-semibold shrink-0 w-36" style={{ color: MUTED }}>Renda mensal</span>
+                  <span className="text-[12px] text-white">
+                    {typeof m.renda_mensal === "number" ? `R$ ${m.renda_mensal.toLocaleString("pt-BR")}` : "—"}
+                  </span>
+                </div>
+                {Object.keys(QUIZ_LABELS).map((key, i, arr) => (
+                  <div key={key} className={`flex gap-3 px-4 py-2.5 ${i < arr.length - 1 ? "border-b border-white/5" : ""}`}>
+                    <span className="text-[11px] font-semibold shrink-0 w-36" style={{ color: MUTED }}>{QUIZ_LABELS[key].titulo}</span>
+                    <span className="text-[12px] text-white break-words">{quizLabel(key, m[key])}</span>
+                  </div>
+                ))}
+                {(Boolean(m.instagram) || Boolean(m.linkedin)) && (
+                  <div className="flex gap-3 px-4 py-2.5">
+                    <span className="text-[11px] font-semibold shrink-0 w-36" style={{ color: MUTED }}>Social</span>
+                    <span className="text-[12px] text-white break-words">
+                      {[m.instagram, m.linkedin].filter(Boolean).join(" · ")}
+                    </span>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
 
           {prospect.link_token && (
             <div className="rounded-xl border border-emerald-500/20 px-4 py-2.5 flex items-center gap-2" style={{ background: "#34D39910" }}>
