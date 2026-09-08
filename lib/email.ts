@@ -283,6 +283,38 @@ export async function notifyContratoCliente(opts: {
   );
 }
 
+/** Cliente: confirmação de que a solicitação do Simulador Home Equity público foi recebida */
+export async function notifySimuladorHomeEquityRecebido(opts: {
+  clientEmail: string;
+  clientName: string;
+  valorCredito: number;
+  prazoMeses: number;
+  leadCode: string;
+}): Promise<void> {
+  const primeiroNome = opts.clientName.trim().split(/\s+/)[0] || opts.clientName.trim();
+  const body = `
+    <p style="color:#F5F1E8;font-size:14px;margin:0 0 20px;">
+      Olá, <strong>${primeiroNome}</strong>!<br><br>
+      Recebemos sua solicitação para estruturarmos a sua operação de
+      <strong style="color:#E8C97A;">Home Equity</strong>. Nossa equipe já está
+      analisando os dados e entrará em contato em instantes.
+    </p>
+    ${row("Protocolo", opts.leadCode)}
+    ${row("Prazo simulado", `${opts.prazoMeses} meses`)}
+    ${highlight("Crédito pretendido", moeda(opts.valorCredito), "#C9A84C")}
+    <p style="color:#9BAFC5;font-size:13px;margin-top:20px;">
+      Não é preciso fazer mais nada agora — o atendimento a partir daqui é
+      personalizado. Você também recebeu esta confirmação por WhatsApp no número
+      cadastrado.
+    </p>
+  `;
+  await send(
+    opts.clientEmail,
+    `Recebemos sua solicitação — V3 Partners · ${opts.leadCode}`,
+    template("Solicitação recebida", body)
+  );
+}
+
 /** V3 Rep: contrato enviado para assinatura */
 export async function notifyContratoV3Rep(opts: {
   repEmail: string;
