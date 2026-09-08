@@ -149,8 +149,27 @@ export async function POST(req: NextRequest) {
     `Nossa equipe já vai te chamar aqui pelo WhatsApp para conversar sobre os próximos passos.\n\n` +
     `Plano sugerido pelo seu perfil: ${PLANO_LABEL[s.plano_sugerido]}.\n— V3 Partners`;
 
+  // Alerta interno no WhatsApp assim que o lead entra. Número configurável por
+  // env (QUIZ_LEAD_ALERT_WHATSAPP, aceita 1+ números separados por vírgula);
+  // fallback pro número do time.
+  const origemTxt =
+    d.tracking?.utm_source || d.tracking?.utm_campaign
+      ? `\nOrigem: ${[d.tracking?.utm_source, d.tracking?.utm_medium, d.tracking?.utm_campaign].filter(Boolean).join(" / ")}`
+      : "";
+  const msgAlerta =
+    `🟢 Novo lead — Quiz Seja Partner\n\n` +
+    `${d.nome.trim()}\n` +
+    `📱 ${d.telefone}\n` +
+    `📍 ${d.cidade}/${d.estado.toUpperCase()}\n` +
+    `Faixa ${s.tier} · score ${s.total} · plano ${PLANO_LABEL[s.plano_sugerido]}` +
+    origemTxt +
+    `\n\nVer: app.v3partners.com.br/prospeccao`;
+  const alertNumbers = (process.env.QUIZ_LEAD_ALERT_WHATSAPP || "51997466001")
+    .split(",").map((n) => n.trim()).filter(Boolean);
+
   await Promise.allSettled([
     sendText(d.telefone, msgWhats).catch(() => false),
+    ...alertNumbers.map((n) => sendText(n, msgAlerta).catch(() => false)),
     notifyQuizPartnerCandidato({
       candidatoEmail: d.email,
       candidatoNome: d.nome.trim(),
