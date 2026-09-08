@@ -97,6 +97,22 @@ function maskPhone(v: string) {
 function maskCEP(v: string) {
   return v.replace(/\D/g, "").slice(0, 8).replace(/(\d{5})(\d{1,3})/, "$1-$2");
 }
+// Data de nascimento digitada (DD/MM/AAAA) em vez de date picker — mais rápido no mobile.
+function maskDateBR(v: string) {
+  const d = v.replace(/\D/g, "").slice(0, 8);
+  if (d.length <= 2) return d;
+  if (d.length <= 4) return `${d.slice(0, 2)}/${d.slice(2)}`;
+  return `${d.slice(0, 2)}/${d.slice(2, 4)}/${d.slice(4)}`;
+}
+// "31/12/1991" -> "1991-12-31" (mesmo formato ISO que o date picker gravava); vazio se incompleta/ inválida.
+function brDateToISO(v: string): string {
+  const m = v.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (!m) return "";
+  const [, dd, mm, yyyy] = m;
+  const dt = new Date(`${yyyy}-${mm}-${dd}T00:00:00`);
+  if (Number.isNaN(dt.getTime()) || dt.getMonth() + 1 !== Number(mm) || dt.getDate() !== Number(dd)) return "";
+  return `${yyyy}-${mm}-${dd}`;
+}
 
 // ─── Progress bar fixa no topo ──────────────────────────────────────────────
 function TopProgress({ pct }: { pct: number }) {
@@ -243,6 +259,31 @@ export function HomeEquityPublicoClient() {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [leadCode, setLeadCode] = useState<string | null>(null);
+  const [cepLoading, setCepLoading] = useState(false);
+
+  // Busca endereço no ViaCEP quando o CEP fica completo (8 dígitos). Só prefill —
+  // os campos seguem editáveis, e falha de rede não trava o formulário.
+  async function buscarCep(cepDigits: string) {
+    if (cepDigits.length !== 8) return;
+    setCepLoading(true);
+    try {
+      const r = await fetch(`https://viacep.com.br/ws/${cepDigits}/json/`);
+      const d = await r.json();
+      if (!d?.erro) {
+        setForm((f) => ({
+          ...f,
+          rua: d.logradouro || f.rua,
+          bairro: d.bairro || f.bairro,
+          cidade: d.localidade || f.cidade,
+          estado: d.uf || f.estado,
+        }));
+      }
+    } catch {
+      /* silêncio — a pessoa preenche o endereço na mão */
+    } finally {
+      setCepLoading(false);
+    }
+  }
 
   function goTo(next: Step) {
     setHistory((h) => [...h, step]);
@@ -294,7 +335,7 @@ export function HomeEquityPublicoClient() {
           bancoFinanciamento: form.bancoFinanciamento || null,
           valorFinanciamento: form.valorFinanciamento || null,
           nome: form.nome, cpf: form.cpf, ocupacao: form.ocupacao, renda: form.renda,
-          nascimento: form.nascimento || null, telefone: form.telefone, email: form.email,
+          nascimento: brDateToISO(form.nascimento) || null, telefone: form.telefone, email: form.email,
           cep: form.cep || null, estado: form.estado, cidade: form.cidade,
           bairro: form.bairro || null, rua: form.rua || null, numero: form.numero || null,
           complemento: form.complemento || null, consentimentoScr: true,
@@ -529,10 +570,20 @@ export function HomeEquityPublicoClient() {
                 </select>
               </Field>
               <LabeledCurrencyInput label="Renda mensal" value={form.renda} onChange={(v) => set("renda", v)} />
-              <Field label="Data de nascimento"><input type="date" value={form.nascimento} onChange={(e) => set("nascimento", e.target.value)} className={inputCls} style={inputStyle} /></Field>
+              <Field label="Data de nascimento"><input inputMode="numeric" maxLength={10} value={form.nascimento} onChange={(e) => set("nascimento", maskDateBR(e.target.value))} placeholder="DD/MM/AAAA" className={inputCls} style={inputStyle} /></Field>
               <Field label="Telefone / WhatsApp"><input value={form.telefone} onChange={(e) => set("telefone", maskPhone(e.target.value))} placeholder="(00) 00000-0000" className={inputCls} style={inputStyle} /></Field>
               <Field label="E-mail"><input type="email" value={form.email} onChange={(e) => set("email", e.target.value)} placeholder="seu@email.com" className={inputCls} style={inputStyle} /></Field>
-              <Field label="CEP"><input value={form.cep} onChange={(e) => set("cep", maskCEP(e.target.value))} placeholder="00000-000" className={inputCls} style={inputStyle} /></Field>
+              <Field label={cepLoading ? "CEP · buscando endereço…" : "CEP"}>
+                <input
+                  value={form.cep}
+                  onChange={(e) => {
+                    const masked = maskCEP(e.target.value);
+                    set("cep", masked);
+                    const digits = masked.replace(/\D/g, "");
+                    if (digits.length === 8) buscarCep(digits);
+                  }}
+                  inputMode="numeric" placeholder="00000-000" className={inputCls} style={inputStyle} />
+              </Field>
               <Field label="Estado">
                 <select value={form.estado} onChange={(e) => set("estado", e.target.value)} className={inputCls} style={inputStyle}>
                   <option value="">UF</option>
