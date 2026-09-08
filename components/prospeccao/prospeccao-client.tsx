@@ -957,8 +957,9 @@ function LinkModal({ prospect, onClose }: { prospect: Prospect; onClose: () => v
 
 // ─── Componente principal ──────────────────────────────────────────────────────
 
-export function ProspeccaoClient({ role }: { role: string }) {
+export function ProspeccaoClient({ role, userId }: { role: string; userId: string }) {
   const [prospects, setProspects] = useState<Prospect[]>([]);
+  const [quizLinkCopiado, setQuizLinkCopiado] = useState(false);
   const [equipe, setEquipe] = useState<Equipe[]>([]);
   const [partners, setPartners] = useState<Partner[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1056,6 +1057,21 @@ export function ProspeccaoClient({ role }: { role: string }) {
           <p className="text-xs mt-0.5" style={{ color: MUTED }}>Pipeline de captação de novos partners</p>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => {
+              const url = `${window.location.origin}/seja-partner?ref=${userId}`;
+              navigator.clipboard.writeText(url).then(() => {
+                setQuizLinkCopiado(true);
+                setTimeout(() => setQuizLinkCopiado(false), 2000);
+              });
+            }}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold border border-white/10 hover:border-white/20 transition-colors"
+            style={{ color: quizLinkCopiado ? "#34D399" : GOLD }}
+            title="Link do quiz de qualificação /seja-partner (com seu ?ref= para atribuição)"
+          >
+            {quizLinkCopiado ? <Check className="w-4 h-4" /> : <Target className="w-4 h-4" />}
+            {quizLinkCopiado ? "Link copiado!" : "Link do Quiz"}
+          </button>
           <button
             onClick={() => setShowLinkGeral(true)}
             className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold border border-white/10 hover:border-white/20 transition-colors"
