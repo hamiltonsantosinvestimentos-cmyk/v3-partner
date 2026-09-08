@@ -77,8 +77,13 @@ const INITIAL_FORM: FormState = {
   aceiteTermos: false, aceiteScr: false,
 };
 
-function parseCurrency(raw: string): number {
-  return Math.round((parseFloat(raw.replace(/\./g, "").replace(",", ".")) || 0) * 100) / 100;
+// Máscara BRL dígito a dígito: o que a pessoa digita são centavos, e o campo
+// mostra sempre "1.234,56" formatado — nada de número cru na tela.
+function fmtCentavos(cents: number): string {
+  return (cents / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function digitsToCentavos(raw: string): number {
+  return parseInt(raw.replace(/\D/g, ""), 10) || 0;
 }
 function maskCPF(v: string) {
   const d = v.replace(/\D/g, "").slice(0, 11);
@@ -117,15 +122,22 @@ const inputStyle = { background: NAVY, borderColor: "rgba(201,168,76,0.25)" } as
 function LabeledCurrencyInput({
   label, value, onChange, autoFocus, helper,
 }: { label: string; value: number; onChange: (v: number) => void; autoFocus?: boolean; helper?: string }) {
-  const [raw, setRaw] = useState(value > 0 ? value.toLocaleString("pt-BR") : "");
+  // Campo 100% controlado por `value` (em reais): o texto exibido é sempre a
+  // máscara BRL do valor atual, sem estado local que possa dessincronizar.
+  const display = value > 0 ? fmtCentavos(Math.round(value * 100)) : "";
+
+  function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
+    onChange(digitsToCentavos(e.target.value) / 100);
+  }
+
   return (
     <Field label={label}>
       <div className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl border" style={inputStyle}>
         <span className="text-sm font-semibold" style={{ color: MUTED }}>R$</span>
         <input
           type="text" inputMode="numeric" autoFocus={autoFocus}
-          value={raw}
-          onChange={(e) => { setRaw(e.target.value); onChange(parseCurrency(e.target.value)); }}
+          value={display}
+          onChange={handleChange}
           placeholder="0,00"
           className="flex-1 bg-transparent text-lg font-bold text-white outline-none"
         />
