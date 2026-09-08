@@ -59,37 +59,35 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   const hadPendingEnvelope = contract.status_signature === "enviado_assinatura" && !!contract.external_envelope_id;
 
-  // Snapshot do texto anterior ANTES de sobrescrever — nunca perder versão.
-  if (contract.rendered_html) {
-    await db.from("operation_contract_versions").insert({
-      contract_id: id,
-      rendered_html: contract.rendered_html,
-      edited_by: caller.userId,
-      edited_by_name: caller.name,
-      reason: reason?.trim() || null,
-    });
-  }
-
   let cancelResult: { attempted: boolean; ok: boolean; error?: string } = { attempted: false, ok: false };
 
-  const updates: Record<string, any> = { rendered_html };
-  if (hadPendingEnvelope) {
-    if (contract.external_document_id) {
-      cancelResult.attempted = true;
-      const result = await getProvider({ contractId: id }).cancel(contract.external_envelope_id!, contract.external_document_id);
-      cancelResult.ok = result.ok;
-      if (!result.ok) cancelResult.error = result.error;
-    }
-    // Contrato volta pra rascunho pra poder ser reenviado pela rota /send
-    // normal, que gera envelope (e document_id) novo, independente do
-    // cancelamento automático ter dado certo ou não.
-    updates.status_signature = "rascunho";
-    updates.external_envelope_id = null;
-    updates.external_document_id = null;
-    updates.sent_to_signature_at = null;
+  // Cancelamento no provedor real (ClickSign/CertOne) é uma chamada de rede
+  // externa: não pode entrar na transação de banco abaixo, por isso
+  // acontece ANTES, na aplicação, como sempre foi.
+  if (hadPendingEnvelope && contract.external_document_id) {
+    cancelResult.attempted = true;
+    const result = await getProvider({ contractId: id }).cancel(contract.external_envelope_id!, contract.external_document_id);
+    cancelResult.ok = result.ok;
+    if (!result.ok) cancelResult.error = result.error;
   }
 
-  const { error } = await db.from("operation_contracts").update(updates).eq("id", id);
+  // Escrita atômica (08/09/2026, achado de governança de dados): antes esta
+  // rota fazia o snapshot em operation_contract_versions e depois um UPDATE
+  // separado (2 chamadas HTTP independentes ao banco), risco real de estado
+  // inconsistente se a função serverless morresse entre as duas. A RPC
+  // cancel_and_edit_contract() faz o snapshot e a transição
+  // enviado_assinatura -> rascunho dentro da MESMA transação de banco,
+  // atômica por construção do Postgres, independente do resultado do
+  // cancelamento acima (o reset para rascunho sempre acontece, mesmo
+  // padrão de antes: não trava a edição por falha externa da API de
+  // assinatura).
+  const { error } = await db.rpc("cancel_and_edit_contract", {
+    p_contract_id: id,
+    p_rendered_html: rendered_html,
+    p_reason: reason?.trim() || null,
+    p_editor_id: caller.userId,
+    p_editor_name: caller.name,
+  });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   if (reason?.trim()) {

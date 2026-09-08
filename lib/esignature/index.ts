@@ -8,19 +8,27 @@
 // desde esta extração.
 import type { ESignatureProvider, EsignatureContext } from "./types";
 import { clickSignProvider } from "./clicksign-provider";
+import { certOneProvider } from "./certone-provider";
 
 export function getProvider(context: EsignatureContext = {}): ESignatureProvider {
-  // Fase 1: o contexto ainda não influencia a escolha (sempre ClickSign).
-  // Um override explícito para um provedor não implementado falha alto e
-  // claro, em vez de cair em silêncio no ClickSign por padrão.
+  // Fase 2 (08/09/2026): o provider CertOne já existe e pode ser chamado
+  // via override explícito (context.provider === "certone"), útil para o
+  // primeiro teste manual assim que houver API key de homologação. O
+  // roteamento automático por vertical/contrato (ler
+  // operation_contracts.esignature_provider ou uma config por vertical)
+  // ainda NÃO acontece aqui — isso é a Fase 3 (switch no painel). Sem
+  // override, o comportamento é idêntico ao de antes: sempre ClickSign,
+  // nenhum contrato real muda.
+  if (context.provider === "certone") return certOneProvider;
   if (context.provider && context.provider !== "clicksign") {
-    throw new Error(`Provedor de assinatura "${context.provider}" ainda não implementado (Fase 2 pendente, ver BRIEF ClickSign vs CertOne).`);
+    throw new Error(`Provedor de assinatura "${context.provider}" desconhecido.`);
   }
   return clickSignProvider;
 }
 
 export { htmlToPdfBase64 } from "./clicksign-provider";
 export { clickSignProvider } from "./clicksign-provider";
+export { certOneProvider } from "./certone-provider";
 export type {
   ESignatureProvider,
   EsignatureContext,
