@@ -69,10 +69,14 @@ export default async function PlatformLayout({
     // Checar o role ANTES do redirect evita loop infinito dashboard <-> contrato-parceria
     // para quem nunca terá app_metadata.contract_signed=true (ex: GESTAO, ADMIN, MESA_OPERACIONAL).
     const ROLES_INTERNOS = ["ADMIN", "SDR", "CLOSER", "GESTAO", "MESA_OPERACIONAL", "FINANCEIRO", "FORNECEDOR"];
-    const isRoleInterno = ROLES_INTERNOS.includes((profileData as { role?: string }).role ?? "");
+    const roleAtual = (profileData as { role?: string }).role ?? "";
+    const isRoleInterno = ROLES_INTERNOS.includes(roleAtual);
+    // Partner HE: o contrato de parceria é enviado para assinatura à parte
+    // (fora da plataforma) — não bloqueia o primeiro acesso.
+    const contratoDiferido = roleAtual === "PARTNER_HE";
 
     // Força assinatura do contrato de parceria (não aplicável a roles internos)
-    if (!isRoleInterno && !user.app_metadata?.contract_signed) {
+    if (!isRoleInterno && !contratoDiferido && !user.app_metadata?.contract_signed) {
       redirect("/contrato-parceria");
     }
 

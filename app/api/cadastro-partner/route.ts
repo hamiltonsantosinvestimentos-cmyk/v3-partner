@@ -100,7 +100,12 @@ export async function POST(req: NextRequest) {
     const email       = formData.get("email") as string;
     const telefone    = formData.get("telefone") as string;
     const planoRecorrenciaRaw = formData.get("plano_recorrencia") as string | null;
-    const planoRecorrencia = planoRecorrenciaRaw === "ANUAL_CARTAO" ? "ANUAL_CARTAO" : "ANUAL_PIX_BOLETO";
+    // Partner HE é mensal (R$ 97/mês). Os outros planos são anuidade paga à vista
+    // (12x o mensal, 10% off no Pix/boleto) ou 12x no cartão.
+    const isMensal = plano === "PARTNER_HE";
+    const planoRecorrencia = isMensal
+      ? "MENSAL"
+      : planoRecorrenciaRaw === "ANUAL_CARTAO" ? "ANUAL_CARTAO" : "ANUAL_PIX_BOLETO";
 
     // Validações básicas
     if (!plano || !tipoPessoa || !email || !telefone) {
@@ -217,9 +222,11 @@ export async function POST(req: NextRequest) {
     // "grandfathered" quando ele é MENOR que o preço mensal vigente, então
     // esse valor anual (bem maior) nunca é interpretado como mensalidade
     // recorrente.
-    const valorFinal = planoRecorrencia === "ANUAL_CARTAO"
-      ? Math.round((PLANO_VALOR[plano] ?? 29700) * 12)
-      : Math.round((PLANO_VALOR[plano] ?? 29700) * 12 * DESCONTO_ANUAL_PIX_BOLETO);
+    const valorFinal = isMensal
+      ? Math.round(PLANO_VALOR[plano] ?? 9700)
+      : planoRecorrencia === "ANUAL_CARTAO"
+        ? Math.round((PLANO_VALOR[plano] ?? 29700) * 12)
+        : Math.round((PLANO_VALOR[plano] ?? 29700) * 12 * DESCONTO_ANUAL_PIX_BOLETO);
 
     // Cartão recorrente (InfinitePay) é configurado manualmente pelo admin na
     // aprovação — não gera cobrança Cora nesse caso.
@@ -255,6 +262,7 @@ export async function POST(req: NextRequest) {
         : "V3 Partner";
       const vencimento = new Date(Date.now() + 3 * 86400000).toLocaleDateString("pt-BR");
 
+      const valorTituloEmail = isMensal ? "PRIMEIRA MENSALIDADE (R$ 97/mês)" : "VALOR DA ANUIDADE (12 MESES, 10% OFF)";
       const cadastroSubjectGate = auditText(`Bem-vindo à V3 Partners: conclua seu pagamento de ${valorFmt}`);
       const cadastroHtmlGate = auditHtml(`
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #09081A; color: #F0ECE4; padding: 32px; border-radius: 16px;">
@@ -263,7 +271,7 @@ export async function POST(req: NextRequest) {
             <p style="color: #7A8FA8; margin-bottom: 24px;">Olá <strong style="color:#F0ECE4">${nome}</strong>, seu cadastro no plano <strong style="color:#C9A84C">${planoLabel}</strong> foi recebido com sucesso.</p>
 
             <div style="background: #111F35; border: 1px solid #243A66; border-radius: 12px; padding: 20px; margin-bottom: 24px;">
-              <p style="margin: 0 0 8px; color: #7A8FA8; font-size: 12px;">VALOR DA ANUIDADE (12 MESES, 10% OFF)</p>
+              <p style="margin: 0 0 8px; color: #7A8FA8; font-size: 12px;">${valorTituloEmail}</p>
               <p style="margin: 0 0 16px; color: #C9A84C; font-size: 28px; font-weight: bold;">${valorFmt}</p>
               <p style="margin: 0; color: #7A8FA8; font-size: 12px;">Vencimento: <strong style="color:#F0ECE4">${vencimento}</strong></p>
             </div>

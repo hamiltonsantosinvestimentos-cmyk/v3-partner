@@ -20,7 +20,10 @@ export default async function ContratoParceriaPage() {
     .single();
 
   // Roles internos não assinam contrato — vai direto pro dashboard
-  const ROLES_INTERNOS = ["ADMIN", "SDR", "CLOSER", "GESTAO", "MESA_OPERACIONAL", "FINANCEIRO", "FORNECEDOR"];
+  // PARTNER_HE incluído: o contrato desse plano é enviado para assinatura à
+  // parte, então esta tela não se aplica a ele (evita loop e assinatura do
+  // contrato errado).
+  const ROLES_INTERNOS = ["ADMIN", "SDR", "CLOSER", "GESTAO", "MESA_OPERACIONAL", "FINANCEIRO", "FORNECEDOR", "PARTNER_HE"];
   if (profile?.role && ROLES_INTERNOS.includes(profile.role)) redirect("/dashboard");
 
   const role = profile?.role as string | undefined;
