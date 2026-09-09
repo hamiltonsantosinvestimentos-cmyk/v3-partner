@@ -50,6 +50,7 @@ export function getStoredRefPartnerId(): string | null {
 
 interface StoredProp {
   code: string;
+  dealType?: "credit" | "ma";
   capturedAt: number;
 }
 
@@ -57,13 +58,22 @@ interface StoredProp {
 // pra distinguir de ?ref= (identifica o partner, não a proposta). Mesmo TTL e
 // storage local do ref -- se o pedido acabar sendo pago fora da mesma aba/sessão
 // que abriu o link, cai no fluxo manual de vínculo em "Pedidos de Partners".
+//
+// deal_type (09/09/2026): distingue Deal de M&A (ma_deals) de proposta de
+// Crédito (credit_desk_proposals) -- gerado pelo botão "Link Análise" na
+// Mesa M&A. Ausente = Crédito, mesmo comportamento de sempre.
 export function capturePropFromUrl(): void {
   if (typeof window === "undefined") return;
   const params = new URLSearchParams(window.location.search);
   const prop = params.get("prop");
   if (!prop) return;
+  const dealType = params.get("deal_type");
 
-  const payload: StoredProp = { code: prop, capturedAt: Date.now() };
+  const payload: StoredProp = {
+    code: prop,
+    dealType: dealType === "ma" ? "ma" : undefined,
+    capturedAt: Date.now(),
+  };
   try {
     window.localStorage.setItem(PROP_STORAGE_KEY, JSON.stringify(payload));
   } catch {
@@ -85,6 +95,18 @@ export function getStoredPropCode(): string | null {
     return parsed.code || null;
   } catch {
     return null;
+  }
+}
+
+export function getStoredPropDealType(): "credit" | "ma" {
+  if (typeof window === "undefined") return "credit";
+  try {
+    const raw = window.localStorage.getItem(PROP_STORAGE_KEY);
+    if (!raw) return "credit";
+    const parsed = JSON.parse(raw) as StoredProp;
+    return parsed.dealType === "ma" ? "ma" : "credit";
+  } catch {
+    return "credit";
   }
 }
 

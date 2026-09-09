@@ -35,17 +35,30 @@ interface ServiceLink {
   total_uses: number;
   total_paid_cents: number;
   created_at: string;
+  credit_desk_proposal_id?: string | null;
+  ma_deal_id?: string | null;
+  credit_desk_proposals?: { code: string; client_name: string } | null;
+  ma_deals?: { code: string; target_company: string | null; title: string } | null;
 }
 
+interface DealOption { id: string; code: string; label: string }
+
+// Vínculo a Deal (09/09/2026) — o link de Análise de Crédito criado aqui pode
+// ficar preso a um Deal específico do próprio partner (Crédito ou M&A), pra
+// deixar de existir a lacuna de "link só identifica o partner, nunca o
+// negócio". Espelha o botão "Link Análise" que a Mesa já usa em
+// proposta-detail-modal.tsx/mesa-ma-client.tsx, só que self-service.
 export function PartnerLinksPanel() {
   const [links, setLinks] = useState<ServiceLink[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
   const [toggling, setToggling] = useState<string | null>(null);
-  const [form, setForm] = useState({ title: "", service_type: "credit_analysis", description: "", price_cents: String(UNIT_PRICE_CENTS) });
+  const [form, setForm] = useState({ title: "", service_type: "credit_analysis", description: "", price_cents: String(UNIT_PRICE_CENTS), deal_type: "" as "" | "credit" | "ma", deal_id: "" });
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState("");
+  const [myDeals, setMyDeals] = useState<{ credit: DealOption[]; ma: DealOption[] } | null>(null);
+  const [loadingDeals, setLoadingDeals] = useState(false);
 
   const BASE_URL = typeof window !== "undefined" ? window.location.origin : "https://app.v3partners.com.br";
 
@@ -60,6 +73,20 @@ export function PartnerLinksPanel() {
     }
   }
 
+  async function loadMyDeals() {
+    if (myDeals) return; // já carregado — não busca de novo a cada abertura do modal
+    setLoadingDeals(true);
+    try {
+      const r = await fetch("/api/partner/my-deals");
+      const d = await r.json() as { credit?: DealOption[]; ma?: DealOption[] };
+      setMyDeals({ credit: d.credit ?? [], ma: d.ma ?? [] });
+    } catch {
+      setMyDeals({ credit: [], ma: [] });
+    } finally {
+      setLoadingDeals(false);
+    }
+  }
+
   useEffect(() => { load(); }, []);
 
   async function handleCreate(e: React.FormEvent) {
@@ -71,12 +98,17 @@ export function PartnerLinksPanel() {
       const r = await fetch("/api/partner/service-links", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, price_cents: Math.round(Number(form.price_cents) || 0) }),
+        body: JSON.stringify({
+          ...form,
+          price_cents: Math.round(Number(form.price_cents) || 0),
+          deal_type: form.deal_type || null,
+          deal_id: form.deal_id || null,
+        }),
       });
       const d = await r.json() as { ok?: boolean; error?: string };
       if (d.error) { setCreateError(d.error); return; }
       setShowModal(false);
-      setForm({ title: "", service_type: "credit_analysis", description: "", price_cents: String(UNIT_PRICE_CENTS) });
+      setForm({ title: "", service_type: "credit_analysis", description: "", price_cents: String(UNIT_PRICE_CENTS), deal_type: "", deal_id: "" });
       await load();
     } catch {
       setCreateError("Erro de rede. Tente novamente.");
@@ -147,7 +179,7 @@ export function PartnerLinksPanel() {
       {/* Header */}
       <div style={s.hdr}>
         <div style={s.title}>Meus Links de Serviço</div>
-        <button style={s.addBtn} onClick={() => setShowModal(true)}>
+        <button style={s.addBtn} onClick={() => { setShowModal(true); loadMyDeals(); }}>
           <Plus size={14} /> Criar Link
         </button>
       </div>
@@ -177,6 +209,14 @@ export function PartnerLinksPanel() {
                 {link.total_uses} acessos
                 {link.total_paid_cents > 0 && <><span style={{ margin: "0 8px", color: N4 }}>·</span><span style={{ color: "#4ade80" }}>{fmt(link.total_paid_cents)} gerados</span></>}
               </div>
+              {(link.credit_desk_proposals || link.ma_deals) && (
+                <div style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 10, color: GL, background: "rgba(201,168,76,0.1)", border: `1px solid ${GO}55`, borderRadius: 4, padding: "2px 7px", marginBottom: 6 }}>
+                  <Link2 size={9} />
+                  {link.credit_desk_proposals
+                    ? `${link.credit_desk_proposals.code} · ${link.credit_desk_proposals.client_name}`
+                    : `${link.ma_deals?.code} · ${link.ma_deals?.target_company ?? link.ma_deals?.title}`}
+                </div>
+              )}
               <div style={{ fontSize: 10, color: N4, fontFamily: "monospace", wordBreak: "break-all" }}>
                 {BASE_URL}/checkout/{link.token}
               </div>
@@ -211,11 +251,57 @@ export function PartnerLinksPanel() {
                 <select style={s.inp} value={form.service_type}
                   onChange={e => {
                     const opt = SERVICE_OPTIONS.find(o => o.value === e.target.value);
-                    setForm(p => ({ ...p, service_type: e.target.value, price_cents: String(opt?.price ?? 0) }));
+                    const clearsDeal = e.target.value !== "credit_analysis";
+                    setForm(p => ({
+                      ...p,
+                      service_type: e.target.value,
+                      price_cents: String(opt?.price ?? 0),
+                      deal_type: clearsDeal ? "" : p.deal_type,
+                      deal_id: clearsDeal ? "" : p.deal_id,
+                    }));
                   }}>
                   {SERVICE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </select>
               </div>
+              {form.service_type === "credit_analysis" && (
+                <div style={{ marginBottom: 16 }}>
+                  <label style={s.lbl}>Vincular a um Deal (opcional)</label>
+                  {loadingDeals ? (
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, color: MU, fontSize: 12, padding: "9px 0" }}>
+                      <Loader2 size={14} className="animate-spin" /> Carregando seus deals...
+                    </div>
+                  ) : (
+                    <select
+                      style={s.inp}
+                      value={form.deal_type ? `${form.deal_type}:${form.deal_id}` : ""}
+                      onChange={e => {
+                        const v = e.target.value;
+                        if (!v) { setForm(p => ({ ...p, deal_type: "", deal_id: "" })); return; }
+                        const [dt, id] = v.split(":");
+                        setForm(p => ({ ...p, deal_type: dt as "credit" | "ma", deal_id: id }));
+                      }}
+                    >
+                      <option value="">Nenhum — link genérico (só identifica você)</option>
+                      {(myDeals?.credit.length ?? 0) > 0 && (
+                        <optgroup label="Propostas de Crédito">
+                          {myDeals!.credit.map(d => <option key={d.id} value={`credit:${d.id}`}>{d.label}</option>)}
+                        </optgroup>
+                      )}
+                      {(myDeals?.ma.length ?? 0) > 0 && (
+                        <optgroup label="Deals de M&A">
+                          {myDeals!.ma.map(d => <option key={d.id} value={`ma:${d.id}`}>{d.label}</option>)}
+                        </optgroup>
+                      )}
+                      {myDeals && myDeals.credit.length === 0 && myDeals.ma.length === 0 && (
+                        <option value="" disabled>Nenhum deal seu disponível ainda</option>
+                      )}
+                    </select>
+                  )}
+                  <p style={{ fontSize: 10, color: MU, marginTop: 5, lineHeight: 1.5 }}>
+                    Vincule este link a um Deal seu para o pagamento já nascer associado à operação — sem isso, o link só identifica você como originador.
+                  </p>
+                </div>
+              )}
               <div style={{ marginBottom: 16 }}>
                 <label style={s.lbl}>Título personalizado</label>
                 <input style={s.inp} value={form.title} onChange={e => setForm(p => ({ ...p, title: e.target.value }))} placeholder="ex: Análise de Crédito — Sua Empresa" required />

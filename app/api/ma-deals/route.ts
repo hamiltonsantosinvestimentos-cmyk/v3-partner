@@ -23,6 +23,15 @@ const ADMIN_ROLES = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"] as const;
 
 const ORIGIN_VERTICALS = ["MA", "Credito", "Consorcios"] as const;
 
+// Gate obrigatório de Análise de Crédito (09/09/2026) — estende pra M&A o
+// mesmo mecanismo já em produção pra Mesa de Crédito desde 26/08/2026
+// (app/api/credit-proposals/route.ts). Ordem do funil linear principal
+// (espelha o mapeamento PIPELINE_TO_DB em mesa-ma-client.tsx) -- usada só
+// pra distinguir avanço de retrocesso. CLOSED_WON/CLOSED_LOST ficam fora de
+// propósito: são saídas do funil, não posições nele. Ponto de corte
+// confirmado com João: Qualificação → Viabilidade (QUALIFICATION → IOI).
+const PIPELINE_STAGE_ORDER = ["PROSPECTING", "QUALIFICATION", "IOI", "PROPOSAL", "NEGOTIATION", "DUE_DILIGENCE", "CLOSING"];
+
 const createSchema = z.object({
   company:                z.string().min(1, "Nome da empresa obrigatório").max(200),
   title:                  z.string().max(300).optional(),
@@ -296,6 +305,23 @@ export async function PATCH(req: NextRequest) {
   const svc = serviceClient();
   const isAdmin = ADMIN_ROLES.includes(profile?.role as typeof ADMIN_ROLES[number]);
 
+  // Autorizar avanço sem a Análise de Crédito paga (gate abaixo) é decisão
+  // exclusiva de ADMIN -- nem GESTAO nem MESA_OPERACIONAL, apesar de estarem
+  // em ADMIN_ROLES pro resto deste endpoint. Mesmo critério de
+  // app/api/credit-proposals/route.ts (26/08/2026). ma_deals não tem coluna
+  // "metadata" -- asset_data é o campo jsonb livre equivalente aqui.
+  if (fields.asset_data && typeof fields.asset_data === "object" && "analise_gate_override" in fields.asset_data) {
+    if (profile?.role !== "ADMIN") {
+      return NextResponse.json({ error: "Somente um usuário ADMIN pode autorizar o avanço sem a Análise de Crédito paga" }, { status: 403 });
+    }
+    // Autoria vem do servidor, nunca do que o cliente mandou.
+    (fields.asset_data as Record<string, unknown>).analise_gate_override = {
+      by: user.id,
+      by_name: profile.full_name,
+      at: new Date().toISOString(),
+    };
+  }
+
   if (!isAdmin) {
     const { data: existing } = await svc.from("ma_deals").select("assigned_to, created_by, originator_profile_id").eq("id", id).single();
     if (!existing || (existing.assigned_to !== user.id && existing.created_by !== user.id)) {
@@ -311,6 +337,39 @@ export async function PATCH(req: NextRequest) {
         error: "GOVERNANCE_VIOLATION: Deal sem originador associado. Associe um originador antes de alterar dados ou estágio.",
         code: "MISSING_ORIGINATOR",
       }, { status: 422 });
+    }
+  }
+
+  // Gate Análise de Crédito (09/09/2026): avançar de Qualificação para
+  // Viabilidade (ou além) exige a Análise de Crédito do cliente paga
+  // (partner_service_orders vinculado via ma_deal_id) OU autorização
+  // explícita de um ADMIN (asset_data.analise_gate_override, ver guard
+  // acima). Mesmo mecanismo do gate de Crédito (26/08/2026), só troca a
+  // tabela vinculada e o ponto de corte no funil. Só barra avanço de
+  // verdade -- retroceder estágio nunca é bloqueado.
+  if (fields.stage) {
+    const { data: current } = await svc.from("ma_deals").select("stage, asset_data").eq("id", id).single();
+    if (current && current.stage !== fields.stage) {
+      const currentIdx = PIPELINE_STAGE_ORDER.indexOf(current.stage as string);
+      const targetIdx = PIPELINE_STAGE_ORDER.indexOf(fields.stage);
+      const existingAssetData = (current.asset_data as Record<string, unknown>) ?? {};
+      const overriddenNow = fields.asset_data && typeof fields.asset_data === "object" && "analise_gate_override" in fields.asset_data;
+      const isAdvancePastQualificacao = currentIdx !== -1 && targetIdx !== -1 && targetIdx > currentIdx && targetIdx >= PIPELINE_STAGE_ORDER.indexOf("IOI");
+      if (isAdvancePastQualificacao && !existingAssetData.analise_gate_override && !overriddenNow) {
+        const { data: paidOrder } = await svc
+          .from("partner_service_orders")
+          .select("id")
+          .eq("ma_deal_id", id)
+          .eq("status", "PAID")
+          .limit(1)
+          .maybeSingle();
+        if (!paidOrder) {
+          return NextResponse.json(
+            { error: "Avanço bloqueado: a Análise de Crédito do cliente ainda está pendente de pagamento. Gere o link no deal ou peça autorização a um ADMIN." },
+            { status: 422 }
+          );
+        }
+      }
     }
   }
 
