@@ -2336,7 +2336,10 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
 
       {/* ── NEW CARD MODAL ─────────────────────────────────────── */}
       <Dialog open={showNewCard} onOpenChange={setShowNewCard}>
-        <DialogContent className="bg-[#091221] border border-[#122036] text-[#E8EDF5] max-w-md">
+        <DialogContent
+          className="bg-[#091221] border border-[#122036] text-[#E8EDF5] max-w-md"
+          onPointerDownOutside={(e) => e.preventDefault()}
+        >
           <DialogHeader>
             <DialogTitle className="text-[#E8EDF5]">Nova Operação M&A</DialogTitle>
           </DialogHeader>
@@ -2460,7 +2463,10 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
 
       {/* ── FULL DEAL FORM MODAL ────────────────────────────────── */}
       <Dialog open={showFullForm} onOpenChange={setShowFullForm}>
-        <DialogContent className="bg-[#091221] border border-[#122036] text-[#E8EDF5] max-w-3xl max-h-[95vh] overflow-y-auto">
+        <DialogContent
+          className="bg-[#091221] border border-[#122036] text-[#E8EDF5] max-w-3xl max-h-[95vh] overflow-y-auto"
+          onPointerDownOutside={(e) => e.preventDefault()}
+        >
           <DialogHeader>
             <DialogTitle className="text-[#E8EDF5]">Novo Deal M&A — Formulário Completo</DialogTitle>
           </DialogHeader>

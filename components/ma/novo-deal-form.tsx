@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -8,13 +8,14 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { maskCurrencyBRLInput, parseCurrencyBRLInput } from "@/lib/utils";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
   Building2, MapPin, FileText, TrendingUp, Scale, Users, Paperclip, Send,
   ChevronRight, ChevronLeft, CheckCircle, AlertCircle, Loader2, X, Upload,
-  AtSign, Briefcase, Globe,
+  AtSign, Briefcase, Globe, Save, History,
 } from "lucide-react";
 
 // ── Schema ────────────────────────────────────────────────────────────────────
@@ -92,8 +93,8 @@ const SETORES = [
 ];
 
 const TIPOS_DEAL = [
-  "Venda Total (100%)", "Venda Parcial", "Joint Venture",
-  "Captação de Capital", "Fusão", "Aquisição Estratégica",
+  "Aquisição Estratégica", "Captação de Capital", "Fusão",
+  "Joint Venture", "Venda Parcial", "Venda Total (100%)",
 ];
 
 const TIPOS_DOCUMENTO = [
@@ -131,10 +132,6 @@ const MAX_FILES = 10;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function parseMoney(val: string): number {
-  return parseFloat(val.replace(/\./g, "").replace(",", ".")) || 0;
-}
-
 function generateCode(): string {
   const y = new Date().getFullYear().toString().slice(-2);
   const n = Math.floor(Math.random() * 90000) + 10000;
@@ -145,6 +142,61 @@ function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+// ── Rascunho local (autosave) ────────────────────────────────────────────────
+// Escopo deliberado: só sobrevive neste navegador (localStorage), nunca troca
+// de dispositivo. Decisão de João em 09/09/2026 — resolve o pedido real
+// ("perder tudo ao clicar fora / trocar de janela") sem precisar de migration
+// nem rota nova. Arquivos anexados (Step 6) não são persistidos — File/Blob
+// não serializa em JSON, e o browser não devolve o handle do arquivo depois
+// de recarregar a página, só o nome/tamanho.
+
+const DRAFT_VERSION = 1;
+
+interface DealDraft {
+  version: number;
+  step: number;
+  values: FormData;
+  savedAt: string;
+}
+
+function draftKey(userId: string): string {
+  return `v3:ma-novo-deal-draft:${userId}`;
+}
+
+function loadDraft(userId: string): DealDraft | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(draftKey(userId));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as DealDraft;
+    if (parsed.version !== DRAFT_VERSION || !parsed.values) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function saveDraft(userId: string, step: number, values: FormData): string {
+  const savedAt = new Date().toISOString();
+  if (typeof window !== "undefined") {
+    try {
+      window.localStorage.setItem(
+        draftKey(userId),
+        JSON.stringify({ version: DRAFT_VERSION, step, values, savedAt } satisfies DealDraft)
+      );
+    } catch {
+      // localStorage indisponível (modo privado, cota cheia) — autosave vira no-op,
+      // nunca deve quebrar o formulário por isso.
+    }
+  }
+  return savedAt;
+}
+
+function clearDraft(userId: string): void {
+  if (typeof window === "undefined") return;
+  try { window.localStorage.removeItem(draftKey(userId)); } catch { /* no-op */ }
 }
 
 // ── Subcomponentes ────────────────────────────────────────────────────────────
@@ -170,19 +222,33 @@ function Textarea({ error, ...props }: React.TextareaHTMLAttributes<HTMLTextArea
   );
 }
 
-function MoneyInput({ label, name, register, placeholder = "0,00" }: {
-  label: string; name: string; register: ReturnType<typeof useForm<FormData>>["register"]; placeholder?: string;
+function MoneyInput({ label, name, watch, setValue, placeholder = "0,00", error }: {
+  label: string;
+  name: keyof FormData;
+  watch: ReturnType<typeof useForm<FormData>>["watch"];
+  setValue: ReturnType<typeof useForm<FormData>>["setValue"];
+  placeholder?: string;
+  error?: string;
 }) {
+  // Mascara monetaria BRL em tempo real (milhar/milhao/bilhao via toLocaleString
+  // pt-BR — agrupamento de milhar e automatico, nao precisa de lógica dedicada
+  // por faixa). Campo controlado (watch/setValue) em vez de register porque a
+  // mascara precisa interceptar o onChange antes do valor entrar no form state.
+  const raw = watch(name);
+  const value = typeof raw === "string" ? raw : "";
   return (
     <FieldGroup label={label}>
       <div className="relative">
         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-[#C9A84C]">R$</span>
         <input
-          {...register(name as keyof FormData)}
+          value={value}
+          onChange={e => setValue(name, maskCurrencyBRLInput(e.target.value) as FormData[typeof name], { shouldValidate: true })}
+          inputMode="decimal"
           placeholder={placeholder}
-          className="w-full h-9 rounded-lg border border-[#243A66] bg-[#162744] pl-9 pr-3 text-sm text-[#F0ECE4] placeholder:text-[#7A8FA8] focus:outline-none focus:ring-2 focus:ring-[#C9A84C]/50 transition"
+          className={`w-full h-9 rounded-lg border bg-[#162744] pl-9 pr-3 text-sm text-[#F0ECE4] placeholder:text-[#7A8FA8] focus:outline-none focus:ring-2 focus:ring-[#C9A84C]/50 transition ${error ? "border-red-500/60" : "border-[#243A66]"}`}
         />
       </div>
+      {error && <p className="text-xs text-red-400 mt-1">{error}</p>}
     </FieldGroup>
   );
 }
@@ -236,12 +302,67 @@ export function NovoDealForm({ isDemo, userId, onSuccess, onCancel }: NovoDealFo
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const { register, handleSubmit, watch, setValue, trigger, formState: { errors } } = useForm<FormData>({
+  const { register, handleSubmit, watch, setValue, trigger, reset, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: { tem_processos: "nao", tem_pendencias: "nao", tipo_participante: "Vendedor" },
   });
 
   const temProcessos = watch("tem_processos");
+
+  // ── Rascunho local (autosave) ──
+  const [pendingDraft, setPendingDraft] = useState<DealDraft | null>(null);
+  const [draftChecked, setDraftChecked] = useState(false);
+  const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
+  const [manualSaveFlash, setManualSaveFlash] = useState(false);
+
+  // Ao montar: existe rascunho salvo neste navegador para este usuário? Mostra
+  // banner de decisão antes de deixar o autosave começar a sobrescrever.
+  useEffect(() => {
+    if (isDemo) { setDraftChecked(true); return; }
+    const existing = loadDraft(userId);
+    if (existing) setPendingDraft(existing);
+    setDraftChecked(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function applyDraft() {
+    if (!pendingDraft) return;
+    reset(pendingDraft.values);
+    setStep(pendingDraft.step);
+    setLastSavedAt(pendingDraft.savedAt);
+    setPendingDraft(null);
+  }
+
+  function discardDraft() {
+    clearDraft(userId);
+    setPendingDraft(null);
+  }
+
+  // Assina mudanças do form (sem re-render a cada tecla) e grava no
+  // localStorage com debounce de 800ms. Só liga depois do banner de rascunho
+  // existente ser resolvido — senão sobrescreve o rascunho antigo antes do
+  // usuário decidir "Continuar" ou "Começar do zero".
+  useEffect(() => {
+    if (isDemo || !draftChecked || pendingDraft) return;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const subscription = watch((values) => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        setLastSavedAt(saveDraft(userId, step, values as FormData));
+      }, 800);
+    });
+    return () => {
+      subscription.unsubscribe();
+      if (timer) clearTimeout(timer);
+    };
+  }, [isDemo, draftChecked, pendingDraft, userId, step, watch]);
+
+  const saveDraftNow = useCallback(() => {
+    if (isDemo) return;
+    setLastSavedAt(saveDraft(userId, step, watch()));
+    setManualSaveFlash(true);
+    setTimeout(() => setManualSaveFlash(false), 2500);
+  }, [isDemo, userId, step, watch]);
 
   // ── Validação por step ──
   const STEP_FIELDS: Record<number, (keyof FormData)[]> = {
@@ -390,7 +511,7 @@ export function NovoDealForm({ isDemo, userId, onSuccess, onCancel }: NovoDealFo
       target_company: data.target_company,
       sector:         data.sector,
       location:       data.location,
-      deal_value:     parseMoney(data.deal_value),
+      deal_value:     parseCurrencyBRLInput(data.deal_value),
       stage:          "PROSPECTING" as const,
       status:         "PENDING" as const,
       probability_percent: 10,
@@ -415,7 +536,7 @@ export function NovoDealForm({ isDemo, userId, onSuccess, onCancel }: NovoDealFo
           company:             data.target_company,
           title:               `${data.deal_type} — ${data.target_company}`,
           sector:              data.sector,
-          value:               parseMoney(data.deal_value),
+          value:               parseCurrencyBRLInput(data.deal_value),
           notes:               data.info_adicionais ?? "",
           tipo_participante:   data.tipo_participante,
           location:            data.location,
@@ -433,6 +554,10 @@ export function NovoDealForm({ isDemo, userId, onSuccess, onCancel }: NovoDealFo
       // Código real emitido pelo servidor. É este que o usuário vê e que vai
       // para contrato, pasta de deal e VDR.
       const issuedCode = ((json.card as Record<string, unknown>).code as string) ?? "";
+
+      // Deal já existe no banco a partir daqui — o rascunho local perde
+      // sentido (reaplicá-lo depois criaria um deal duplicado).
+      clearDraft(userId);
 
       // Upload dos arquivos do step 6
       if (uploadedFiles.length > 0) {
@@ -634,45 +759,39 @@ export function NovoDealForm({ isDemo, userId, onSuccess, onCancel }: NovoDealFo
           <div>
             <p className="text-[10px] font-bold tracking-widest uppercase text-[#C9A84C] mb-3">Receita Bruta (R$)</p>
             <div className="grid grid-cols-3 gap-3">
-              <MoneyInput label="2023" name="receita_2023" register={register} />
-              <MoneyInput label="2024" name="receita_2024" register={register} />
-              <MoneyInput label="2025" name="receita_2025" register={register} />
+              <MoneyInput label="2023" name="receita_2023" watch={watch} setValue={setValue} />
+              <MoneyInput label="2024" name="receita_2024" watch={watch} setValue={setValue} />
+              <MoneyInput label="2025" name="receita_2025" watch={watch} setValue={setValue} />
             </div>
           </div>
 
           <div>
             <p className="text-[10px] font-bold tracking-widest uppercase text-[#C9A84C] mb-3">EBITDA (R$)</p>
             <div className="grid grid-cols-3 gap-3">
-              <MoneyInput label="2023" name="ebitda_2023" register={register} />
-              <MoneyInput label="2024" name="ebitda_2024" register={register} />
-              <MoneyInput label="2025" name="ebitda_2025" register={register} />
+              <MoneyInput label="2023" name="ebitda_2023" watch={watch} setValue={setValue} />
+              <MoneyInput label="2024" name="ebitda_2024" watch={watch} setValue={setValue} />
+              <MoneyInput label="2025" name="ebitda_2025" watch={watch} setValue={setValue} />
             </div>
           </div>
 
           <div>
             <p className="text-[10px] font-bold tracking-widest uppercase text-[#C9A84C] mb-3">Lucro Líquido (R$)</p>
             <div className="grid grid-cols-3 gap-3">
-              <MoneyInput label="2023" name="lucro_2023" register={register} />
-              <MoneyInput label="2024" name="lucro_2024" register={register} />
-              <MoneyInput label="2025" name="lucro_2025" register={register} />
+              <MoneyInput label="2023" name="lucro_2023" watch={watch} setValue={setValue} />
+              <MoneyInput label="2024" name="lucro_2024" watch={watch} setValue={setValue} />
+              <MoneyInput label="2025" name="lucro_2025" watch={watch} setValue={setValue} />
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4 pt-2 border-t border-[#243A66]">
-            <MoneyInput label="Dívida Total Atual (R$)" name="divida_total" register={register} />
-            <div>
-              <FieldGroup label="Valor Pretendido pelo Ativo (R$) *">
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-[#C9A84C]">R$</span>
-                  <input
-                    {...register("deal_value")}
-                    placeholder="0,00"
-                    className="w-full h-9 rounded-lg border border-[#243A66] bg-[#162744] pl-9 pr-3 text-sm text-[#F0ECE4] placeholder:text-[#7A8FA8] focus:outline-none focus:ring-2 focus:ring-[#C9A84C]/50 transition"
-                  />
-                </div>
-                {errors.deal_value && <p className="text-xs text-red-400 mt-1">{errors.deal_value.message}</p>}
-              </FieldGroup>
-            </div>
+            <MoneyInput label="Dívida Total Atual (R$)" name="divida_total" watch={watch} setValue={setValue} />
+            <MoneyInput
+              label="Valor Pretendido pelo Ativo (R$) *"
+              name="deal_value"
+              watch={watch}
+              setValue={setValue}
+              error={errors.deal_value?.message}
+            />
           </div>
         </div>
       );
@@ -911,6 +1030,34 @@ export function NovoDealForm({ isDemo, userId, onSuccess, onCancel }: NovoDealFo
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="max-w-3xl mx-auto">
 
+      {/* Rascunho encontrado neste navegador */}
+      {pendingDraft && (
+        <div className="flex items-center gap-3 p-3 mb-4 bg-[#C9A84C]/10 border border-[#C9A84C]/30 rounded-lg">
+          <History className="w-4 h-4 text-[#C9A84C] flex-shrink-0" />
+          <p className="text-xs text-[#F0ECE4] flex-1">
+            Encontramos um rascunho salvo neste navegador (
+            {new Date(pendingDraft.savedAt).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+            ). Documentos anexados no Step 6 não são salvos no rascunho e precisam ser adicionados de novo.
+          </p>
+          <div className="flex gap-2 flex-shrink-0">
+            <button
+              type="button"
+              onClick={discardDraft}
+              className="text-[10px] font-semibold px-2.5 py-1.5 rounded-lg border border-[#243A66] text-[#7A8FA8] hover:text-[#F0ECE4] transition"
+            >
+              Começar do zero
+            </button>
+            <button
+              type="button"
+              onClick={applyDraft}
+              className="text-[10px] font-bold px-2.5 py-1.5 rounded-lg bg-[#C9A84C] text-[#09081A] hover:bg-[#E8C97A] transition"
+            >
+              Continuar rascunho
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Step indicator */}
       <StepIndicator current={step} />
 
@@ -946,6 +1093,25 @@ export function NovoDealForm({ isDemo, userId, onSuccess, onCancel }: NovoDealFo
           <ChevronLeft className="w-4 h-4 mr-1" />
           {step === 1 ? "Cancelar" : "Anterior"}
         </Button>
+
+        {!isDemo && (
+          <div className="flex flex-col items-center gap-1">
+            <button
+              type="button"
+              onClick={saveDraftNow}
+              className="flex items-center gap-1.5 text-[10px] font-semibold text-[#7A8FA8] hover:text-[#C9A84C] transition"
+            >
+              <Save className="w-3.5 h-3.5" />
+              Salvar Rascunho
+            </button>
+            {manualSaveFlash && lastSavedAt && (
+              <span className="flex items-center gap-1 text-[9px] text-[#C9A84C]">
+                <CheckCircle className="w-3 h-3" />
+                Salvo às {new Date(lastSavedAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+              </span>
+            )}
+          </div>
+        )}
 
         {step < 6 ? (
           <Button
