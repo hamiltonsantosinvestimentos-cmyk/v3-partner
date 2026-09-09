@@ -10,7 +10,7 @@ import {
 
 import {
   OBJETIVO, OCUPACAO, EXPERIENCIA_B2B, REDE, PORTE_REDE, DISPONIBILIDADE,
-  INTENCAO_INVESTIR, PRAZO_COMECO, PLANO_LABEL, type QuizOption,
+  PRAZO_COMECO, PLANO_LABEL, type QuizOption,
 } from "@/lib/quiz-partner";
 
 const GOLD = "#C9A84C";
@@ -26,7 +26,6 @@ const QUIZ_LABELS: Record<string, { titulo: string; opts: QuizOption[] }> = {
   rede: { titulo: "Rede de decisores", opts: REDE },
   porte_rede: { titulo: "Porte da rede", opts: PORTE_REDE },
   disponibilidade: { titulo: "Disponibilidade", opts: DISPONIBILIDADE },
-  intencao_investir: { titulo: "Intenção de investir", opts: INTENCAO_INVESTIR },
   prazo_comeco: { titulo: "Quando quer começar", opts: PRAZO_COMECO },
 };
 function quizLabel(key: string, value: unknown): string {

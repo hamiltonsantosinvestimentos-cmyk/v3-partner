@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import Image from "next/image";
 import {
   Handshake, ArrowRight, RotateCcw, MessageCircle, TrendingUp, Briefcase, Users,
-  Network, Building2, Wallet, Clock3, HandCoins, CalendarClock, CheckCircle2,
+  Network, Building2, Wallet, Clock3, CalendarClock, CheckCircle2,
   Search, Rocket, Store, GraduationCap, UserRound, MoreHorizontal, Trophy,
 } from "lucide-react";
 import {
@@ -14,16 +14,16 @@ import {
 } from "./wizard-ui";
 import {
   OBJETIVO, OCUPACAO, EXPERIENCIA_B2B, REDE, PORTE_REDE, DISPONIBILIDADE,
-  INTENCAO_INVESTIR, PRAZO_COMECO, type QuizOption,
+  PRAZO_COMECO, type QuizOption,
 } from "@/lib/quiz-partner";
 
 type Step =
   | "welcome" | "objetivo" | "ocupacao" | "experiencia" | "rede" | "porte"
-  | "renda" | "disponibilidade" | "intencao" | "prazo" | "dados" | "resultado";
+  | "renda" | "disponibilidade" | "prazo" | "dados" | "resultado";
 
 const PROGRESS_STEPS: Step[] = [
   "welcome", "objetivo", "ocupacao", "experiencia", "rede", "porte",
-  "renda", "disponibilidade", "intencao", "prazo", "dados", "resultado",
+  "renda", "disponibilidade", "prazo", "dados", "resultado",
 ];
 const TOTAL = PROGRESS_STEPS.length - 2; // passos de pergunta (objetivo..dados)
 
@@ -36,7 +36,6 @@ const ICONS: Record<string, Record<string, Icon>> = {
   rede: { ate_10: Users, "10_50": Users, "50_200": Network, "200_mais": Network },
   porte_rede: { ate_1m: Building2, "1_10m": Building2, "10_50m": Building2, "50m_mais": Building2, nao_sei: Search },
   disponibilidade: { ate_5h: Clock3, "5_15h": Clock3, "15_30h": CalendarClock, full_time: Rocket },
-  intencao_investir: { sim_sem_hesitar: CheckCircle2, sim_se_fechar: HandCoins, talvez: Search, nao_agora: MoreHorizontal },
   prazo_comeco: { agora: Rocket, "30_dias": CalendarClock, "90_dias": CalendarClock, pesquisando: Search },
 };
 
@@ -46,13 +45,13 @@ function opts(key: string, list: QuizOption[]) {
 
 interface FormState {
   objetivo: string; ocupacao: string; experiencia_b2b: string; rede: string; porte_rede: string;
-  renda_mensal: number; disponibilidade: string; intencao_investir: string; prazo_comeco: string;
+  renda_mensal: number; disponibilidade: string; prazo_comeco: string;
   nome: string; email: string; telefone: string; estado: string; cidade: string;
   instagram: string; linkedin: string; consentimento: boolean;
 }
 const INITIAL: FormState = {
   objetivo: "", ocupacao: "", experiencia_b2b: "", rede: "", porte_rede: "",
-  renda_mensal: 0, disponibilidade: "", intencao_investir: "", prazo_comeco: "",
+  renda_mensal: 0, disponibilidade: "", prazo_comeco: "",
   nome: "", email: "", telefone: "", estado: "", cidade: "", instagram: "", linkedin: "", consentimento: false,
 };
 
@@ -130,7 +129,7 @@ export function PartnerQuizClient() {
           ref: ref || null,
           objetivo: form.objetivo, ocupacao: form.ocupacao, experiencia_b2b: form.experiencia_b2b,
           rede: form.rede, porte_rede: form.porte_rede, renda_mensal: form.renda_mensal,
-          disponibilidade: form.disponibilidade, intencao_investir: form.intencao_investir,
+          disponibilidade: form.disponibilidade,
           prazo_comeco: form.prazo_comeco,
           nome: form.nome, email: form.email, telefone: form.telefone,
           estado: form.estado, cidade: form.cidade,
@@ -175,7 +174,7 @@ export function PartnerQuizClient() {
                   A parceria V3 faz <span style={{ color: GOLD }}>sentido pra você?</span>
                 </h1>
                 <p className="text-sm max-w-sm mx-auto" style={{ color: MUTED }}>
-                  10 perguntas rápidas. No fim você vê o plano ideal para o seu perfil e um especialista fala com você no WhatsApp.
+                  Poucas perguntas rápidas. No fim você vê o plano ideal para o seu perfil e um especialista fala com você no WhatsApp.
                 </p>
                 {partnerName && <p className="text-xs pt-1" style={{ color: GOLD }}>Convite de {partnerName} — Partner V3</p>}
               </div>
@@ -238,26 +237,19 @@ export function PartnerQuizClient() {
         {step === "disponibilidade" && (
           <StepCard stepNum={7} totalSteps={TOTAL} title="Quanto tempo" titleHighlight="por semana você tem?"
             subtitle="Tempo que consegue dedicar à operação como Partner." onBack={goBack}>
-            <ChoiceGrid columns={2} selected={form.disponibilidade} onSelect={(v) => { set("disponibilidade", v); goTo("intencao"); }} options={opts("disponibilidade", DISPONIBILIDADE)} />
-          </StepCard>
-        )}
-
-        {step === "intencao" && (
-          <StepCard stepNum={8} totalSteps={TOTAL} title="Se hoje você fosse comprar uma" titleHighlight="franquia com retorno garantido em contrato,"
-            subtitle="…você investiria?" onBack={goBack}>
-            <ChoiceGrid columns={1} selected={form.intencao_investir} onSelect={(v) => { set("intencao_investir", v); goTo("prazo"); }} options={opts("intencao_investir", INTENCAO_INVESTIR)} />
+            <ChoiceGrid columns={2} selected={form.disponibilidade} onSelect={(v) => { set("disponibilidade", v); goTo("prazo"); }} options={opts("disponibilidade", DISPONIBILIDADE)} />
           </StepCard>
         )}
 
         {step === "prazo" && (
-          <StepCard stepNum={9} totalSteps={TOTAL} title="Quando você" titleHighlight="quer começar?"
+          <StepCard stepNum={8} totalSteps={TOTAL} title="Quando você" titleHighlight="quer começar?"
             subtitle="Seu momento para entrar na operação." onBack={goBack}>
             <ChoiceGrid columns={2} selected={form.prazo_comeco} onSelect={(v) => { set("prazo_comeco", v); goTo("dados"); }} options={opts("prazo_comeco", PRAZO_COMECO)} />
           </StepCard>
         )}
 
         {step === "dados" && (
-          <StepCard stepNum={10} totalSteps={TOTAL} title="Como a gente" titleHighlight="fala com você?"
+          <StepCard stepNum={9} totalSteps={TOTAL} title="Como a gente" titleHighlight="fala com você?"
             subtitle="Um especialista da V3 vai te chamar no WhatsApp."
             onBack={goBack} onNext={finalizar} nextLabel="Ver resultado" nextLoading={submitting}
             nextDisabled={!dadosValid || !form.consentimento} wide>

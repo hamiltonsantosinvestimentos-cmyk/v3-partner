@@ -50,13 +50,6 @@ export const DISPONIBILIDADE: QuizOption[] = [
   { value: "full_time", label: "Full-time" },
 ];
 
-export const INTENCAO_INVESTIR: QuizOption[] = [
-  { value: "sim_sem_hesitar", label: "Sim, sem hesitar" },
-  { value: "sim_se_fechar", label: "Sim, se os números fecharem" },
-  { value: "talvez", label: "Talvez — precisaria analisar melhor" },
-  { value: "nao_agora", label: "Não neste momento" },
-];
-
 export const PRAZO_COMECO: QuizOption[] = [
   { value: "agora", label: "Agora" },
   { value: "30_dias", label: "Em 30 dias" },
@@ -64,13 +57,12 @@ export const PRAZO_COMECO: QuizOption[] = [
   { value: "pesquisando", label: "Só pesquisando" },
 ];
 
-// ─── Score (0–110) ─────────────────────────────────────────────────────────
+// ─── Score (0–95) ──────────────────────────────────────────────────────────
 const W = {
   rede:              { ate_10: 0, "10_50": 10, "50_200": 20, "200_mais": 30 } as Record<string, number>,
   porte_rede:        { ate_1m: 0, "1_10m": 8, "10_50m": 15, "50m_mais": 20, nao_sei: 5 } as Record<string, number>,
   experiencia_b2b:   { nenhuma: 0, menos_1: 5, "1_3": 10, "3_mais": 15, atuo_credito_ma: 20 } as Record<string, number>,
   disponibilidade:   { ate_5h: 0, "5_15h": 5, "15_30h": 10, full_time: 15 } as Record<string, number>,
-  intencao_investir: { nao_agora: 0, talvez: 4, sim_se_fechar: 10, sim_sem_hesitar: 15 } as Record<string, number>,
   prazo_comeco:      { pesquisando: 0, "90_dias": 2, "30_dias": 6, agora: 10 } as Record<string, number>,
 };
 
@@ -82,7 +74,6 @@ export type QuizAnswers = {
   porte_rede: string;
   renda_mensal: number;
   disponibilidade: string;
-  intencao_investir: string;
   prazo_comeco: string;
 };
 
@@ -96,21 +87,18 @@ export type QuizScore = {
 
 export function scoreQuizPartner(a: QuizAnswers): QuizScore {
   const breakdown = {
-    rede:              W.rede[a.rede] ?? 0,
-    porte_rede:        W.porte_rede[a.porte_rede] ?? 0,
-    experiencia_b2b:   W.experiencia_b2b[a.experiencia_b2b] ?? 0,
-    disponibilidade:   W.disponibilidade[a.disponibilidade] ?? 0,
-    intencao_investir: W.intencao_investir[a.intencao_investir] ?? 0,
-    prazo_comeco:      W.prazo_comeco[a.prazo_comeco] ?? 0,
+    rede:            W.rede[a.rede] ?? 0,
+    porte_rede:      W.porte_rede[a.porte_rede] ?? 0,
+    experiencia_b2b: W.experiencia_b2b[a.experiencia_b2b] ?? 0,
+    disponibilidade: W.disponibilidade[a.disponibilidade] ?? 0,
+    prazo_comeco:    W.prazo_comeco[a.prazo_comeco] ?? 0,
   };
   const total = Object.values(breakdown).reduce((s, n) => s + n, 0);
 
-  // Regra dura: sem intenção de investir + só pesquisando → sempre C
-  const forcaC = a.intencao_investir === "nao_agora" && a.prazo_comeco === "pesquisando";
+  // Regra dura: "só pesquisando" nunca é faixa A
   let tier: QuizScore["tier"];
-  if (forcaC) tier = "C";
-  else if (total >= 70) tier = "A";
-  else if (total >= 40) tier = "B";
+  if (total >= 60 && a.prazo_comeco !== "pesquisando") tier = "A";
+  else if (total >= 35) tier = "B";
   else tier = "C";
 
   const etapa = tier === "A" ? "interessado" : tier === "B" ? "contatado" : "prospect";
