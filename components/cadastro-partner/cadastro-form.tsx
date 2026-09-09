@@ -242,12 +242,15 @@ function StepBar({ step, total }: { step: Step; total: number }) {
 }
 
 // ─── Main Form ────────────────────────────────────────────────────────────────
-export function CadastroPartnerForm() {
+// forcePlano: quando definido (ex: página /cadastro-partner-he), o plano já vem
+// travado e o passo de escolha de plano vira só um resumo — o link é exclusivo
+// daquele plano.
+export function CadastroPartnerForm({ forcePlano }: { forcePlano?: Plano }) {
   const searchParams = useSearchParams();
   const referredByPartnerId = searchParams.get("ref");
 
   const [step, setStep] = useState<Step>(1);
-  const [plano, setPlano] = useState<Plano | null>(null);
+  const [plano, setPlano] = useState<Plano | null>(forcePlano ?? null);
   const [planoRecorrencia, setPlanoRecorrencia] = useState<PlanoRecorrencia>("ANUAL_PIX_BOLETO");
   const [tipoPessoa, setTipoPessoa] = useState<TipoPessoa | null>(null);
 
@@ -582,12 +585,47 @@ export function CadastroPartnerForm() {
           {/* ─── Step 1: Plano ─── */}
           {step === 1 && (
             <div className="space-y-5 animate-fade-in">
+              {forcePlano ? (
+                (() => {
+                  const p = PLANOS.find((pl) => pl.id === forcePlano);
+                  if (!p) return null;
+                  return (
+                    <>
+                      <div>
+                        <h2 className="text-xl font-bold text-[#F0ECE4]">Plano {p.nome}</h2>
+                        <p className="text-sm text-[#7A8FA8] mt-1">Este link é exclusivo do plano {p.nome}.</p>
+                      </div>
+                      <div className="rounded-xl border-2 border-[#C9A84C] bg-[#C9A84C]/10 p-5">
+                        <div className="flex items-start justify-between mb-3">
+                          <div style={{ color: p.cor }}>{p.icone}</div>
+                          <CheckCircle2 className="w-5 h-5 text-[#C9A84C]" />
+                        </div>
+                        <h3 className="font-bold text-[#F0ECE4] text-base">{p.nome}</h3>
+                        <p className="text-xs text-[#7A8FA8] mt-1 mb-3">{p.descricao}</p>
+                        <div className="flex items-baseline gap-1 mb-3">
+                          <span className="text-2xl font-bold text-[#C9A84C]">{p.preco}</span>
+                          <span className="text-xs text-[#7A8FA8]">{p.mensal ? "/mês" : p.periodo}</span>
+                        </div>
+                        <div className="space-y-1.5">
+                          {p.beneficios.map((b, i) => (
+                            <div key={i} className="flex items-center gap-2 text-xs text-[#7A8FA8]">
+                              <CheckCircle2 className="w-3 h-3 text-[#C9A84C] flex-shrink-0" />
+                              {b}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </>
+                  );
+                })()
+              ) : (
+              <>
               <div>
                 <h2 className="text-xl font-bold text-[#F0ECE4]">Escolha seu plano</h2>
                 <p className="text-sm text-[#7A8FA8] mt-1">Selecione o plano que melhor se adapta ao seu perfil</p>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-                {PLANOS.map((p) => (
+                {PLANOS.filter((p) => p.id !== "PARTNER_HE").map((p) => (
                   <button
                     key={p.id}
                     onClick={() => setPlano(p.id)}
@@ -667,6 +705,8 @@ export function CadastroPartnerForm() {
                   </p>
                 </div>
               </div>
+              </>
+              )}
 
               {/* Forma de pagamento */}
               <div className="pt-2">
