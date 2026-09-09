@@ -95,6 +95,30 @@ export default async function ProspeccaoDashboardPage() {
     evolucao7dias.push({ date: dateStr, novos });
   }
 
+  // ── Funil do Quiz Seja Partner (progresso passo a passo) ──────────────────────
+  const QUIZ_STEPS: { key: string; label: string }[] = [
+    { key: "welcome", label: "Abriu o quiz" },
+    { key: "objetivo", label: "Objetivo" },
+    { key: "ocupacao", label: "Ocupação" },
+    { key: "experiencia", label: "Experiência B2B" },
+    { key: "rede", label: "Rede" },
+    { key: "porte", label: "Porte da rede" },
+    { key: "renda", label: "Renda" },
+    { key: "disponibilidade", label: "Disponibilidade" },
+    { key: "prazo", label: "Quando começar" },
+    { key: "dados", label: "Dados de contato" },
+    { key: "resultado", label: "Concluiu ✓" },
+  ];
+  const { data: qpRows } = await db
+    .from("quiz_progress")
+    .select("session_id, step")
+    .eq("quiz", "seja_partner");
+  const stepSessions: Record<string, Set<string>> = {};
+  for (const r of (qpRows ?? []) as { session_id: string; step: string }[]) {
+    (stepSessions[r.step] ??= new Set()).add(r.session_id);
+  }
+  const quizFunil = QUIZ_STEPS.map(s => ({ ...s, count: stepSessions[s.key]?.size ?? 0 }));
+
   // ── Meu funil pessoal ─────────────────────────────────────────────────────────
   let meusFunil: { etapa: string; count: number }[] | undefined = undefined;
   if (isPersonal) {
@@ -113,6 +137,7 @@ export default async function ProspeccaoDashboardPage() {
     origens,
     evolucao7dias,
     meusFunil,
+    quizFunil,
   };
 
   return (

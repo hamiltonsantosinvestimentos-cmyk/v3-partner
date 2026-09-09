@@ -25,6 +25,7 @@ interface DashData {
   origens: { origem: string; count: number }[];
   evolucao7dias: { date: string; novos: number }[];
   meusFunil?: { etapa: string; count: number }[];
+  quizFunil?: { key: string; label: string; count: number }[];
 }
 
 interface Props {
@@ -116,6 +117,49 @@ function KpiCard({
         <p className="text-[11px] font-semibold" style={{ color: MUTED }}>{label}</p>
         {sub && <p className="text-[10px] mt-0.5" style={{ color: MUTED }}>{sub}</p>}
       </div>
+    </div>
+  );
+}
+
+function QuizFunilPanel({ steps }: { steps: { key: string; label: string; count: number }[] }) {
+  const start = steps[0]?.count ?? 0;
+  const fim = steps[steps.length - 1]?.count ?? 0;
+  const concl = start > 0 ? Math.round((fim / start) * 100) : 0;
+  return (
+    <div className="rounded-2xl border border-white/5 p-5" style={{ background: NAVY_CARD }}>
+      <div className="flex items-center justify-between mb-4">
+        <p className="text-xs font-bold uppercase tracking-widest" style={{ color: GOLD }}>
+          Funil do Quiz — Seja Partner
+        </p>
+        <p className="text-xs" style={{ color: MUTED }}>
+          conclusão <span style={{ color: concl >= 30 ? "#34D399" : concl >= 15 ? "#F59E0B" : "#EF4444", fontWeight: 700 }}>{concl}%</span>
+        </p>
+      </div>
+      {start === 0 ? (
+        <p className="text-sm" style={{ color: MUTED }}>Sem dados de progresso ainda. Começa a registrar assim que alguém abrir o quiz.</p>
+      ) : (
+        <div className="space-y-1.5">
+          {steps.map((s, i) => {
+            const pct = start > 0 ? Math.round((s.count / start) * 100) : 0;
+            const dropRel = i > 0 && steps[i - 1].count > 0
+              ? Math.round(((steps[i - 1].count - s.count) / steps[i - 1].count) * 100)
+              : 0;
+            return (
+              <div key={s.key} className="flex items-center gap-3">
+                <span className="text-[11px] w-32 shrink-0 text-right" style={{ color: MUTED }}>{s.label}</span>
+                <div className="flex-1 h-5 rounded-md overflow-hidden" style={{ background: `${GOLD}12` }}>
+                  <div className="h-full rounded-md transition-all duration-500"
+                    style={{ width: `${Math.max(2, pct)}%`, background: `linear-gradient(90deg, ${GOLD}, ${GOLD}99)` }} />
+                </div>
+                <span className="text-xs font-bold w-10 shrink-0" style={{ color: CREAM }}>{s.count}</span>
+                <span className="text-[10px] w-16 shrink-0" style={{ color: MUTED }}>
+                  {pct}%{dropRel >= 20 ? <span style={{ color: "#EF4444" }}> −{dropRel}%</span> : null}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -440,6 +484,9 @@ export function ProspeccaoDashboardClient({ data, role, userName }: Props) {
 
       {/* ── Funil Visual ─────────────────────────────────────────────────────── */}
       <FunilVisual funil={data.funil} />
+
+      {/* ── Funil do Quiz Seja Partner (progresso passo a passo) ─────────────── */}
+      {data.quizFunil && data.quizFunil.length > 0 && <QuizFunilPanel steps={data.quizFunil} />}
 
       {/* ── Funil pessoal (SDR/CLOSER) ───────────────────────────────────────── */}
       {data.meusFunil && (
