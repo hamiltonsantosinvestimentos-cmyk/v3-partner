@@ -63,6 +63,7 @@ function getTrialStatus(profile: Profile) {
 const PLANO_LABEL: Record<string, string> = {
   STARTER: "Starter",
   PARTNER: "Partner",
+  PARTNER_HE: "Partner HE",
   PARTNER_PRO: "Partner PRO",
   ENTERPRISE: "Enterprise",
 };
@@ -70,6 +71,7 @@ const PLANO_LABEL: Record<string, string> = {
 const COMISSAO_PCT: Record<string, string> = {
   STARTER: "20%",
   PARTNER: "30%",
+  PARTNER_HE: "50%",
   PARTNER_PRO: "50%",
   ENTERPRISE: "Negociável",
 };
