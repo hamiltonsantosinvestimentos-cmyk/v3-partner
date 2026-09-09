@@ -8,6 +8,7 @@ import { createNotification, notifyByRoles } from "@/lib/notify";
 import { issueCreditCode } from "@/lib/v3-codes";
 import { resolveClient } from "@/lib/v3-clients";
 import { gerarComissoesCreditoLiberado } from "@/lib/credit-commissions";
+import { PARTNER_HE_CREDIT_LINES } from "@/lib/constants";
 
 function serviceClient() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -156,6 +157,20 @@ export async function POST(req: NextRequest) {
     }
     const d = parsed.data;
 
+    // Trava do papel PARTNER_HE — só pode originar as 4 linhas da família Home
+    // Equity, independente do que o client mandar (não confia na UI).
+    if (profile?.role === "PARTNER_HE") {
+      const normLinha = (x: string) =>
+        x.normalize("NFD").replace(/\p{Diacritic}/gu, "").trim().toLowerCase().replace(/\s+/g, " ");
+      const permitidas = PARTNER_HE_CREDIT_LINES.map(normLinha);
+      if (!permitidas.includes(normLinha(d.credit_line))) {
+        return NextResponse.json(
+          { error: "Seu acesso só permite propostas de Home Equity, HomeCash, Antecipação de Contratos e Crédito no Aval/Recebíveis." },
+          { status: 403 },
+        );
+      }
+    }
+
     // Valida valor mínimo N3
     if (d.current_level === "NIVEL_3" && d.requested_value < 5_000_000) {
       return NextResponse.json(
@@ -288,7 +303,7 @@ export async function POST(req: NextRequest) {
   }
 }
 
-const PARTNER_ROLES = ["STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE"] as const;
+const PARTNER_ROLES = ["STARTER", "PARTNER", "PARTNER_PRO", "PARTNER_HE", "ENTERPRISE"] as const;
 // Campos que um partner pode editar nas próprias propostas
 const PARTNER_ALLOWED_FIELDS = new Set(["title", "client_name", "client_cpf_cnpj", "requested_value", "metadata"]);
 

@@ -7,7 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatCurrency, formatDate } from "@/lib/utils";
-import { STATUS_LABELS, STATUS_COLORS, type OperationStatus } from "@/lib/constants";
+import { STATUS_LABELS, STATUS_COLORS, PARTNER_HE_CREDIT_LINES, type OperationStatus } from "@/lib/constants";
 import { NovaPropostaModal } from "./nova-proposta-modal";
 import { PropostaDetailModal, type ProposalFull } from "./proposta-detail-modal";
 import {
@@ -159,7 +159,7 @@ export function CreditDeskClient({ proposals: initial, level, currentUser }: Cre
   const cfg = CONFIG[level];
   const isAdmin = ["MESA_OPERACIONAL", "ADMIN", "GESTAO"].includes(currentUser?.role ?? "");
   const canChangeStage = isAdmin;
-  const canEditValorSolicitado = isAdmin || currentUser?.role === "PARTNER" || currentUser?.role === "PARTNER_PRO";
+  const canEditValorSolicitado = isAdmin || currentUser?.role === "PARTNER" || currentUser?.role === "PARTNER_PRO" || currentUser?.role === "PARTNER_HE";
   const partnerName = currentUser?.full_name ?? "Partner";
   const partnerId   = currentUser?.id ?? "";
 
@@ -422,7 +422,8 @@ export function CreditDeskClient({ proposals: initial, level, currentUser }: Cre
       </Card>
 
       <NovaPropostaModal open={newOpen} onClose={() => setNewOpen(false)} level={level}
-        partnerName={partnerName} partnerId={partnerId} onSubmit={handleNewProposal} />
+        partnerName={partnerName} partnerId={partnerId} onSubmit={handleNewProposal}
+        restrictLines={currentUser?.role === "PARTNER_HE" ? PARTNER_HE_CREDIT_LINES : undefined} />
 
       <PropostaDetailModal
         open={!!detailProposal} onClose={() => setDetailProposal(null)}

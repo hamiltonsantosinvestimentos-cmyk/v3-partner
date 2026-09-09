@@ -6,7 +6,7 @@ import Image from "next/image";
 import {
   User, Building2, CheckCircle2, ChevronRight, ChevronLeft,
   Upload, X, Star, Zap, Shield, ArrowRight, Phone,
-  MapPin, FileText, Loader2,
+  MapPin, FileText, Loader2, Home,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -26,15 +26,38 @@ function fmtCEP(v: string) {
   return v.replace(/\D/g, "").replace(/(\d{5})(\d{3})/, "$1-$2");
 }
 
-type Plano = "STARTER" | "PARTNER" | "PARTNER_PRO" | "ENTERPRISE";
+type Plano = "STARTER" | "PARTNER" | "PARTNER_PRO" | "PARTNER_HE" | "ENTERPRISE";
 type TipoPessoa = "PF" | "PJ";
 type Step = 1 | 2 | 3 | 4 | 5;
 type PlanoRecorrencia = "ANUAL_PIX_BOLETO" | "ANUAL_CARTAO";
 
 const PLANOS = [
   {
+    id: "PARTNER_HE" as Plano,
+    nome: "Partner HE",
+    mensal: true,
+    preco: "R$ 97,00",
+    periodo: "/mês",
+    precoAnual: "R$ 97,00",
+    precoAnualDesconto: "R$ 97,00",
+    precoParcelaDesconto: "R$ 97,00",
+    cor: "#A3E635",
+    icone: <Home className="w-6 h-6" />,
+    comissao: "50%",
+    descricao: "Acesso enxuto focado em Home Equity: origine as 4 linhas da família HE na Mesa de Crédito.",
+    beneficios: [
+      "Mesa de Crédito — Home Equity, HomeCash, Antecipação de Contratos e Crédito no Aval/Recebíveis",
+      "50% de comissionamento por operação liberada",
+      "CRM e Links de Serviço",
+      "Consórcio e Cartas Contempladas",
+      "V3 IA Partner",
+      "Ranking e Metas",
+    ],
+  },
+  {
     id: "PARTNER" as Plano,
     nome: "V3 Partner",
+    mensal: false,
     preco: "R$ 908,08",
     periodo: "/mês",
     precoAnual: "R$ 10.896,96",
@@ -56,6 +79,7 @@ const PLANOS = [
   {
     id: "PARTNER_PRO" as Plano,
     nome: "V3 Partner PRO",
+    mensal: false,
     preco: "R$ 1.324,75",
     periodo: "/mês",
     precoAnual: "R$ 15.897,00",
@@ -78,6 +102,7 @@ const PLANOS = [
   {
     id: "ENTERPRISE" as Plano,
     nome: "V3 Enterprise",
+    mensal: false,
     preco: "R$ 4.158,08",
     periodo: "/mês",
     precoAnual: "R$ 49.896,96",
@@ -217,12 +242,15 @@ function StepBar({ step, total }: { step: Step; total: number }) {
 }
 
 // ─── Main Form ────────────────────────────────────────────────────────────────
-export function CadastroPartnerForm() {
+// forcePlano: quando definido (ex: página /cadastro-partner-he), o plano já vem
+// travado e o passo de escolha de plano vira só um resumo — o link é exclusivo
+// daquele plano.
+export function CadastroPartnerForm({ forcePlano }: { forcePlano?: Plano }) {
   const searchParams = useSearchParams();
   const referredByPartnerId = searchParams.get("ref");
 
   const [step, setStep] = useState<Step>(1);
-  const [plano, setPlano] = useState<Plano | null>(null);
+  const [plano, setPlano] = useState<Plano | null>(forcePlano ?? null);
   const [planoRecorrencia, setPlanoRecorrencia] = useState<PlanoRecorrencia>("ANUAL_PIX_BOLETO");
   const [tipoPessoa, setTipoPessoa] = useState<TipoPessoa | null>(null);
 
@@ -393,7 +421,7 @@ export function CadastroPartnerForm() {
             </div>
             <h1 className="text-2xl font-bold text-[#F0ECE4]">Cadastro Recebido!</h1>
             <p className="text-[#7A8FA8] text-sm">
-              Para ativar seu acesso ao plano <strong className="text-[#C9A84C]">{plano === "PARTNER_PRO" ? "V3 Partner PRO" : "V3 Partner"}</strong>, realize o pagamento da anuidade:
+              Para ativar seu acesso ao plano <strong className="text-[#C9A84C]">{PLANOS.find((p) => p.id === plano)?.nome ?? "V3 Partner"}</strong>, realize o pagamento {PLANOS.find((p) => p.id === plano)?.mensal ? "da primeira mensalidade" : "da anuidade"}:
             </p>
           </div>
 
@@ -402,7 +430,7 @@ export function CadastroPartnerForm() {
             {/* Valor */}
             <div className="px-6 py-4 border-b border-[#243A66] flex items-center justify-between">
               <div>
-                <p className="text-xs text-[#7A8FA8]">{planoRecorrencia === "ANUAL_PIX_BOLETO" ? "Valor da anuidade (12 meses, 10% off)" : "Valor anual — 12x no cartão"}</p>
+                <p className="text-xs text-[#7A8FA8]">{PLANOS.find((p) => p.id === plano)?.mensal ? "Primeira mensalidade (R$ 97/mês)" : planoRecorrencia === "ANUAL_PIX_BOLETO" ? "Valor da anuidade (12 meses, 10% off)" : "Valor anual — 12x no cartão"}</p>
                 <p className="text-2xl font-bold text-[#C9A84C]">{valorFmt}</p>
               </div>
               <div className="text-right">
@@ -557,12 +585,47 @@ export function CadastroPartnerForm() {
           {/* ─── Step 1: Plano ─── */}
           {step === 1 && (
             <div className="space-y-5 animate-fade-in">
+              {forcePlano ? (
+                (() => {
+                  const p = PLANOS.find((pl) => pl.id === forcePlano);
+                  if (!p) return null;
+                  return (
+                    <>
+                      <div>
+                        <h2 className="text-xl font-bold text-[#F0ECE4]">Plano {p.nome}</h2>
+                        <p className="text-sm text-[#7A8FA8] mt-1">Este link é exclusivo do plano {p.nome}.</p>
+                      </div>
+                      <div className="rounded-xl border-2 border-[#C9A84C] bg-[#C9A84C]/10 p-5">
+                        <div className="flex items-start justify-between mb-3">
+                          <div style={{ color: p.cor }}>{p.icone}</div>
+                          <CheckCircle2 className="w-5 h-5 text-[#C9A84C]" />
+                        </div>
+                        <h3 className="font-bold text-[#F0ECE4] text-base">{p.nome}</h3>
+                        <p className="text-xs text-[#7A8FA8] mt-1 mb-3">{p.descricao}</p>
+                        <div className="flex items-baseline gap-1 mb-3">
+                          <span className="text-2xl font-bold text-[#C9A84C]">{p.preco}</span>
+                          <span className="text-xs text-[#7A8FA8]">{p.mensal ? "/mês" : p.periodo}</span>
+                        </div>
+                        <div className="space-y-1.5">
+                          {p.beneficios.map((b, i) => (
+                            <div key={i} className="flex items-center gap-2 text-xs text-[#7A8FA8]">
+                              <CheckCircle2 className="w-3 h-3 text-[#C9A84C] flex-shrink-0" />
+                              {b}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </>
+                  );
+                })()
+              ) : (
+              <>
               <div>
                 <h2 className="text-xl font-bold text-[#F0ECE4]">Escolha seu plano</h2>
                 <p className="text-sm text-[#7A8FA8] mt-1">Selecione o plano que melhor se adapta ao seu perfil</p>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-                {PLANOS.map((p) => (
+                {PLANOS.filter((p) => p.id !== "PARTNER_HE").map((p) => (
                   <button
                     key={p.id}
                     onClick={() => setPlano(p.id)}
@@ -585,7 +648,15 @@ export function CadastroPartnerForm() {
                     <h3 className="font-bold text-[#F0ECE4] text-base">{p.nome}</h3>
                     <p className="text-xs text-[#7A8FA8] mt-1 mb-3">{p.descricao}</p>
                     <div className="mb-3">
-                      {planoRecorrencia === "ANUAL_CARTAO" ? (
+                      {p.mensal ? (
+                        <>
+                          <div className="flex items-baseline gap-1">
+                            <span className="text-2xl font-bold text-[#C9A84C]">{p.preco}</span>
+                            <span className="text-xs text-[#7A8FA8]">/mês</span>
+                          </div>
+                          <p className="text-[11px] text-[#7A8FA8] mt-0.5">cobrança mensal via Pix ou Boleto</p>
+                        </>
+                      ) : planoRecorrencia === "ANUAL_CARTAO" ? (
                         <>
                           <div className="flex items-baseline gap-1">
                             <span className="text-2xl font-bold text-[#C9A84C]">{p.precoAnual}</span>
@@ -634,10 +705,18 @@ export function CadastroPartnerForm() {
                   </p>
                 </div>
               </div>
+              </>
+              )}
 
-              {/* Forma de pagamento da anuidade */}
+              {/* Forma de pagamento */}
               <div className="pt-2">
                 <h3 className="text-sm font-bold text-[#F0ECE4]">Forma de pagamento</h3>
+                {PLANOS.find((pl) => pl.id === plano)?.mensal ? (
+                  <p className="text-xs text-[#7A8FA8] mt-1">
+                    Plano mensal de <strong className="text-[#F0ECE4]">R$ 97,00/mês</strong> via Pix ou Boleto. A primeira mensalidade é gerada agora; as seguintes vencem todo mês, sem fidelidade.
+                  </p>
+                ) : (
+                <>
                 <p className="text-xs text-[#7A8FA8] mt-1 mb-3">Como prefere pagar os 12 meses do plano</p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {(() => {
@@ -684,6 +763,8 @@ export function CadastroPartnerForm() {
                     );
                   })()}
                 </div>
+                </>
+                )}
               </div>
             </div>
           )}
@@ -920,7 +1001,9 @@ export function CadastroPartnerForm() {
                 {[
                   ["Plano", PLANOS.find((p) => p.id === plano)
                     ? `${PLANOS.find((p) => p.id === plano)!.nome} — ${
-                        planoRecorrencia === "ANUAL_PIX_BOLETO"
+                        PLANOS.find((p) => p.id === plano)!.mensal
+                          ? `${PLANOS.find((p) => p.id === plano)!.preco}/mês`
+                          : planoRecorrencia === "ANUAL_PIX_BOLETO"
                           ? `${PLANOS.find((p) => p.id === plano)!.precoAnualDesconto}/ano à vista`
                           : `${PLANOS.find((p) => p.id === plano)!.preco}${PLANOS.find((p) => p.id === plano)!.periodo} em até 12x no cartão`
                       }`

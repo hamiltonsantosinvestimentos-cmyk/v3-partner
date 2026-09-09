@@ -60,7 +60,7 @@ async function gerarProximaCobranca(db: ReturnType<typeof svc>, partnerId: strin
           fine: { type: "PERCENTAGE", value: 2 },
         },
         payment_forms: ["BANK_SLIP", "PIX"],
-        services: [{ name: `V3 Partners — Mensalidade ${plano === "PARTNER_PRO" ? "Partner PRO" : "Partner"}${temDesconto ? ` (${descontoPercent}% desc. indicação)` : ""}`, amount: valor }],
+        services: [{ name: `V3 Partners — Mensalidade ${plano === "PARTNER_PRO" ? "Partner PRO" : plano === "PARTNER_HE" ? "Partner HE" : "Partner"}${temDesconto ? ` (${descontoPercent}% desc. indicação)` : ""}`, amount: valor }],
         notifications: { formats: ["EMAIL"], by_email: { should_notify: true } },
       }),
       idempotencyKey: randomUUID(),

@@ -9185,6 +9185,7 @@ export type Database = {
         | "ADMIN"
         | "PARTNER"
         | "PARTNER_PRO"
+        | "PARTNER_HE"
         | "MESA_OPERACIONAL"
         | "GESTAO"
         | "FINANCEIRO"
@@ -9429,6 +9430,7 @@ export const Constants = {
         "ADMIN",
         "PARTNER",
         "PARTNER_PRO",
+        "PARTNER_HE",
         "MESA_OPERACIONAL",
         "GESTAO",
         "FINANCEIRO",

@@ -20,7 +20,7 @@ export default async function MetasPage() {
     .eq("id", user.id)
     .single();
 
-  const allowedRoles = ["ADMIN", "GESTAO", "PARTNER", "PARTNER_PRO", "FINANCEIRO"];
+  const allowedRoles = ["ADMIN", "GESTAO", "PARTNER", "PARTNER_PRO", "PARTNER_HE", "FINANCEIRO"];
   if (!allowedRoles.includes(profile?.role ?? "")) redirect("/unauthorized");
 
   const svc = serviceClient();
@@ -31,7 +31,7 @@ export default async function MetasPage() {
 
   // Para ADMIN/GESTAO: todos os partners. Para parceiros: apenas si mesmo.
   const partnerIds = isAdmin
-    ? (await svc.from("profiles").select("id, full_name").in("role", ["PARTNER", "PARTNER_PRO"])).data ?? []
+    ? (await svc.from("profiles").select("id, full_name").in("role", ["PARTNER", "PARTNER_PRO", "PARTNER_HE"])).data ?? []
     : [{ id: user.id, full_name: profile?.full_name ?? "Você" }];
 
   const ids = partnerIds.map((p) => p.id);

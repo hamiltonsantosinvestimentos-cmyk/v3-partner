@@ -3,6 +3,7 @@ export const USER_ROLES = {
   STARTER: "STARTER",
   PARTNER: "PARTNER",
   PARTNER_PRO: "PARTNER_PRO",
+  PARTNER_HE: "PARTNER_HE",
   ENTERPRISE: "ENTERPRISE",
   MESA_OPERACIONAL: "MESA_OPERACIONAL",
   GESTAO: "GESTAO",
@@ -13,6 +14,17 @@ export const USER_ROLES = {
   INSTITUICAO: "INSTITUICAO",
 } as const;
 
+// Papel PARTNER_HE ("Partner HE") — parceiro de plano enxuto (R$ 97/mês) que só
+// origina as 4 linhas da família Home Equity na Mesa de Crédito. Comissão de 50%.
+// A trava das linhas vale no modal de nova proposta E no POST /api/credit-proposals.
+// Os nomes abaixo são EXATOS como estão em portfolio_linhas.nome.
+export const PARTNER_HE_CREDIT_LINES = [
+  "HOME EQUITY",
+  "HOMECASH",
+  "CRÉDITO NO AVAL/ RECEBIVEIS",
+  "ANTECIPAÇÃO DE CONTRATOS (CONTRATOS PUBLICOS)",
+] as const;
+
 export type UserRole = keyof typeof USER_ROLES;
 
 // Comissionamento do licenciado por plano contratado — % sobre a comissão
@@ -22,6 +34,7 @@ export const PLAN_COMMISSION_PCT: Partial<Record<UserRole, number>> = {
   STARTER: 20,
   PARTNER: 30,
   PARTNER_PRO: 50,
+  PARTNER_HE: 50,
 };
 
 export const ROLE_LABELS: Record<UserRole, string> = {
@@ -29,6 +42,7 @@ export const ROLE_LABELS: Record<UserRole, string> = {
   STARTER: "V3 Starter",
   PARTNER: "V3 Partner",
   PARTNER_PRO: "V3 Partner PRO",
+  PARTNER_HE: "Partner HE",
   ENTERPRISE: "V3 Enterprise",
   MESA_OPERACIONAL: "Mesa Operacional",
   GESTAO: "Gestão",
@@ -44,6 +58,7 @@ export const ROLE_COLORS: Record<UserRole, string> = {
   STARTER: "bg-cyan-500/20 text-cyan-400 border-cyan-500/30",
   PARTNER: "bg-blue-500/20 text-blue-400 border-blue-500/30",
   PARTNER_PRO: "bg-violet-500/20 text-violet-400 border-violet-500/30",
+  PARTNER_HE: "bg-lime-500/20 text-lime-400 border-lime-500/30",
   ENTERPRISE: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30",
   MESA_OPERACIONAL: "bg-purple-500/20 text-purple-400 border-purple-500/30",
   GESTAO: "bg-amber-500/20 text-amber-400 border-amber-500/30",

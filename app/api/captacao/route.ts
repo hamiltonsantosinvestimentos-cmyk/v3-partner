@@ -35,7 +35,7 @@ export async function POST() {
   const { data: profile } = await supabase
     .from("profiles").select("id, full_name, role").eq("id", user.id).single();
 
-  if (!["PARTNER", "PARTNER_PRO", "ADMIN"].includes(profile?.role ?? "")) {
+  if (!["PARTNER", "PARTNER_PRO", "PARTNER_HE", "ADMIN"].includes(profile?.role ?? "")) {
     return NextResponse.json({ error: "Apenas Partners podem gerar links de captação" }, { status: 403 });
   }
 

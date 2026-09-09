@@ -133,7 +133,7 @@ export async function POST(req: NextRequest) {
   } else if (filtro === "BASE") {
     query = query.eq("role", "PARTNER");
   } else {
-    query = query.in("role", ["PARTNER", "PARTNER_PRO"]);
+    query = query.in("role", ["PARTNER", "PARTNER_PRO", "PARTNER_HE"]);
   }
 
   const { data: partners, error: dbErr } = await query;

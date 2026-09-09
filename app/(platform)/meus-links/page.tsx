@@ -20,7 +20,7 @@ export default async function MeusLinksPage() {
     .eq("id", user.id)
     .single();
 
-  const ALLOWED = ["ADMIN", "GESTAO", "PARTNER", "PARTNER_PRO", "MESA_OPERACIONAL"];
+  const ALLOWED = ["ADMIN", "GESTAO", "PARTNER", "PARTNER_PRO", "PARTNER_HE", "MESA_OPERACIONAL"];
   if (!ALLOWED.includes(profile?.role ?? "")) redirect("/unauthorized");
 
   return (
