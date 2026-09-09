@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Image from "next/image";
 import {
@@ -60,7 +60,7 @@ export function PartnerQuizClient() {
   const ref = searchParams.get("ref") ?? "";
 
   // Captura de origem do tráfego (anúncios Meta/Google etc.) — só o que vier na URL.
-  const tracking = (() => {
+  const tracking = useMemo(() => {
     const keys = ["utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content", "fbclid", "gclid"];
     const t: Record<string, string> = {};
     for (const k of keys) {
@@ -69,7 +69,7 @@ export function PartnerQuizClient() {
     }
     if (typeof document !== "undefined" && document.referrer) t.referrer = document.referrer.slice(0, 300);
     return Object.keys(t).length ? t : null;
-  })();
+  }, [searchParams]);
 
   const [partner, setPartner] = useState<{ full_name: string | null; whatsapp: string | null } | null>(null);
   useEffect(() => {
@@ -82,6 +82,30 @@ export function PartnerQuizClient() {
 
   const [step, setStep] = useState<Step>("welcome");
   const [, setHistory] = useState<Step[]>([]);
+
+  // ── Rastreio de funil: reporta cada passo alcançado (1x por sessão) ──
+  const sessionIdRef = useRef<string>("");
+  const reportedRef = useRef<Set<string>>(new Set());
+  if (!sessionIdRef.current && typeof crypto !== "undefined") {
+    sessionIdRef.current = (crypto.randomUUID?.() ?? String(Date.now()) + Math.random().toString(36).slice(2));
+  }
+  useEffect(() => {
+    const sid = sessionIdRef.current;
+    if (!sid || reportedRef.current.has(step)) return;
+    reportedRef.current.add(step);
+    const idx = PROGRESS_STEPS.indexOf(step);
+    try {
+      fetch("/api/public/quiz-progress", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        keepalive: true,
+        body: JSON.stringify({
+          session_id: sid, quiz: "seja_partner", step, step_index: idx < 0 ? 99 : idx,
+          ref: ref || null, utm: tracking,
+        }),
+      }).catch(() => {});
+    } catch { /* ignora */ }
+  }, [step, ref, tracking]);
   const [form, setForm] = useState<FormState>(INITIAL);
   const set = <K extends keyof FormState>(k: K, v: FormState[K]) => setForm((f) => ({ ...f, [k]: v }));
 
