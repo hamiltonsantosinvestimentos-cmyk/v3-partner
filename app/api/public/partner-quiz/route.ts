@@ -5,7 +5,7 @@ import { sendText } from "@/lib/whatsapp/openwa-client";
 import { notifyLeadQuizPartner, notifyQuizPartnerCandidato } from "@/lib/email";
 import {
   scoreQuizPartner, PLANO_LABEL,
-  OBJETIVO, OCUPACAO, EXPERIENCIA_B2B, REDE, PORTE_REDE, DISPONIBILIDADE, INTENCAO_INVESTIR, PRAZO_COMECO,
+  OBJETIVO, OCUPACAO, EXPERIENCIA_B2B, REDE, PORTE_REDE, DISPONIBILIDADE, PRAZO_COMECO,
   type QuizAnswers,
 } from "@/lib/quiz-partner";
 
@@ -31,7 +31,6 @@ const schema = z.object({
   porte_rede: z.enum(vals(PORTE_REDE)),
   renda_mensal: z.number().nonnegative(),
   disponibilidade: z.enum(vals(DISPONIBILIDADE)),
-  intencao_investir: z.enum(vals(INTENCAO_INVESTIR)),
   prazo_comeco: z.enum(vals(PRAZO_COMECO)),
   nome: z.string().min(3),
   email: z.string().email(),
@@ -53,7 +52,6 @@ const LABEL: Record<string, Record<string, string>> = {
   rede: Object.fromEntries(REDE.map((o) => [o.value, o.label])),
   porte_rede: Object.fromEntries(PORTE_REDE.map((o) => [o.value, o.label])),
   disponibilidade: Object.fromEntries(DISPONIBILIDADE.map((o) => [o.value, o.label])),
-  intencao_investir: Object.fromEntries(INTENCAO_INVESTIR.map((o) => [o.value, o.label])),
   prazo_comeco: Object.fromEntries(PRAZO_COMECO.map((o) => [o.value, o.label])),
 };
 
@@ -88,7 +86,6 @@ export async function POST(req: NextRequest) {
     porte_rede: d.porte_rede,
     renda_mensal: d.renda_mensal,
     disponibilidade: d.disponibilidade,
-    intencao_investir: d.intencao_investir,
     prazo_comeco: d.prazo_comeco,
   };
   const s = scoreQuizPartner(answers);
@@ -98,7 +95,7 @@ export async function POST(req: NextRequest) {
     `Objetivo: ${LABEL.objetivo[d.objetivo]}. Ocupação: ${LABEL.ocupacao[d.ocupacao]}. ` +
     `Experiência B2B: ${LABEL.experiencia_b2b[d.experiencia_b2b]}. Rede: ${LABEL.rede[d.rede]} decisores, porte ${LABEL.porte_rede[d.porte_rede]}. ` +
     `Renda mensal: R$ ${d.renda_mensal.toLocaleString("pt-BR")}. Disponibilidade: ${LABEL.disponibilidade[d.disponibilidade]}. ` +
-    `Intenção de investir: ${LABEL.intencao_investir[d.intencao_investir]}. Começar: ${LABEL.prazo_comeco[d.prazo_comeco]}.` +
+    `Começar: ${LABEL.prazo_comeco[d.prazo_comeco]}.` +
     (d.instagram ? ` Instagram: ${d.instagram}.` : "") + (d.linkedin ? ` LinkedIn: ${d.linkedin}.` : "") +
     (d.tracking?.utm_source || d.tracking?.utm_campaign
       ? ` Origem: ${[d.tracking?.utm_source, d.tracking?.utm_medium, d.tracking?.utm_campaign].filter(Boolean).join(" / ")}.`
