@@ -6,7 +6,7 @@ import Image from "next/image";
 import {
   User, Building2, CheckCircle2, ChevronRight, ChevronLeft,
   Upload, X, Star, Zap, Shield, ArrowRight, Phone,
-  MapPin, FileText, Loader2,
+  MapPin, FileText, Loader2, Home,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -26,12 +26,33 @@ function fmtCEP(v: string) {
   return v.replace(/\D/g, "").replace(/(\d{5})(\d{3})/, "$1-$2");
 }
 
-type Plano = "STARTER" | "PARTNER" | "PARTNER_PRO" | "ENTERPRISE";
+type Plano = "STARTER" | "PARTNER" | "PARTNER_PRO" | "PARTNER_HE" | "ENTERPRISE";
 type TipoPessoa = "PF" | "PJ";
 type Step = 1 | 2 | 3 | 4 | 5;
 type PlanoRecorrencia = "ANUAL_PIX_BOLETO" | "ANUAL_CARTAO";
 
 const PLANOS = [
+  {
+    id: "PARTNER_HE" as Plano,
+    nome: "Partner HE",
+    preco: "R$ 97,00",
+    periodo: "/mês",
+    precoAnual: "R$ 1.164,00",
+    precoAnualDesconto: "R$ 1.047,60",
+    precoParcelaDesconto: "R$ 87,30",
+    cor: "#A3E635",
+    icone: <Home className="w-6 h-6" />,
+    comissao: "50%",
+    descricao: "Acesso enxuto focado em Home Equity: origine as 4 linhas da família HE na Mesa de Crédito.",
+    beneficios: [
+      "Mesa de Crédito — Home Equity, HomeCash, Antecipação de Contratos e Crédito no Aval/Recebíveis",
+      "50% de comissionamento por operação liberada",
+      "CRM e Links de Serviço",
+      "Consórcio e Cartas Contempladas",
+      "V3 IA Partner",
+      "Ranking e Metas",
+    ],
+  },
   {
     id: "PARTNER" as Plano,
     nome: "V3 Partner",
@@ -393,7 +414,7 @@ export function CadastroPartnerForm() {
             </div>
             <h1 className="text-2xl font-bold text-[#F0ECE4]">Cadastro Recebido!</h1>
             <p className="text-[#7A8FA8] text-sm">
-              Para ativar seu acesso ao plano <strong className="text-[#C9A84C]">{plano === "PARTNER_PRO" ? "V3 Partner PRO" : "V3 Partner"}</strong>, realize o pagamento da anuidade:
+              Para ativar seu acesso ao plano <strong className="text-[#C9A84C]">{PLANOS.find((p) => p.id === plano)?.nome ?? "V3 Partner"}</strong>, realize o pagamento da anuidade:
             </p>
           </div>
 

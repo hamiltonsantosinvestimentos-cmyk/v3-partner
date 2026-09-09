@@ -295,9 +295,14 @@ interface NovaPropostaModalProps {
   partnerName: string;
   partnerId: string;
   onSubmit: (proposal: Record<string, unknown>) => Promise<string>;
+  // Quando definido, restringe as linhas de crédito selecionáveis a esta lista
+  // (nome exato de portfolio_linhas.nome). Usado pelo papel PARTNER_HE, que só
+  // pode originar as 4 linhas da família Home Equity. A trava real é no
+  // POST /api/credit-proposals — aqui é só a UI.
+  restrictLines?: readonly string[];
 }
 
-export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId, onSubmit }: NovaPropostaModalProps) {
+export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId, onSubmit, restrictLines }: NovaPropostaModalProps) {
   const [tab, setTab] = useState<Tab>("cliente");
   const [clientType, setClientType] = useState<"PF" | "PJ">("PF");
   const [submitted, setSubmitted] = useState(false);
@@ -375,9 +380,22 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
   const [cepLoadingIdx, setCepLoadingIdx] = useState<number | null>(null);
 
   // Usa linhas do portfolio pelo nivel se cadastradas, senão cai no hardcoded
-  const lines = (portfolioLinesByNivel[level] ?? []).length > 0
+  const linesBase = (portfolioLinesByNivel[level] ?? []).length > 0
     ? portfolioLinesByNivel[level]
     : (LEVEL_LINES[level] ?? []);
+  // restrictLines (ex: PARTNER_HE) filtra as linhas selecionáveis. Match sem
+  // diferenciar caixa/acento pra não depender da grafia exata da tabela.
+  const norm = (x: string) =>
+    x.normalize("NFD").replace(/\p{Diacritic}/gu, "").trim().toLowerCase().replace(/\s+/g, " ");
+  const lines = restrictLines && restrictLines.length > 0
+    ? linesBase.filter((l) => restrictLines.some((r) => norm(r) === norm(l)))
+    : linesBase;
+
+  // Garante que a linha selecionada é sempre uma das disponíveis (importante
+  // com restrictLines e depois que o portfólio carrega do banco).
+  useEffect(() => {
+    if (lines.length > 0 && !lines.includes(creditLine)) setCreditLine(lines[0]);
+  }, [lines, creditLine]);
   // Usa checklist do portfólio se disponível, senão cai no hardcoded
   const checklist = portfolioDocs[creditLine.toLowerCase()]?.[clientType] ?? (CHECKLISTS[creditLine]?.[clientType]) ?? DEFAULT_CHECKLIST[clientType];
 

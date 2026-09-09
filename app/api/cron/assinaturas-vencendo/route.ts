@@ -156,7 +156,7 @@ export async function GET(req: NextRequest) {
   const { data: allActivePartners } = await svc()
     .from("profiles")
     .select("id, full_name, email, role, cpf, cnpj, trial_expires_at, created_at")
-    .in("role", ["STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE"])
+    .in("role", ["STARTER", "PARTNER", "PARTNER_PRO", "PARTNER_HE", "ENTERPRISE"])
     .eq("is_active", true);
 
   const partnersComVencimento = (allActivePartners ?? []) as Partner[];

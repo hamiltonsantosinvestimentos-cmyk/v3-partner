@@ -49,6 +49,7 @@ async function gerarCobrancaCora(params: {
       services: [{ name: `V3 Partners — Adesão ${
         params.plano === "ENTERPRISE" ? "Enterprise"
         : params.plano === "PARTNER_PRO" ? "Partner PRO"
+        : params.plano === "PARTNER_HE" ? "Partner HE"
         : params.plano === "STARTER" ? "Starter"
         : "Partner"
       }`, amount: valor }],
@@ -105,7 +106,7 @@ export async function POST(req: NextRequest) {
     if (!plano || !tipoPessoa || !email || !telefone) {
       return NextResponse.json({ error: "Campos obrigatórios faltando" }, { status: 400 });
     }
-    if (!["STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE"].includes(plano)) {
+    if (!["STARTER", "PARTNER", "PARTNER_PRO", "PARTNER_HE", "ENTERPRISE"].includes(plano)) {
       return NextResponse.json({ error: "Plano inválido" }, { status: 400 });
     }
     if (!["PF", "PJ"].includes(tipoPessoa)) {
@@ -249,6 +250,7 @@ export async function POST(req: NextRequest) {
       const valorFmt = (valorFinal / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
       const planoLabel = plano === "ENTERPRISE" ? "V3 Enterprise"
         : plano === "PARTNER_PRO" ? "V3 Partner PRO"
+        : plano === "PARTNER_HE" ? "Partner HE"
         : plano === "STARTER" ? "V3 Starter"
         : "V3 Partner";
       const vencimento = new Date(Date.now() + 3 * 86400000).toLocaleDateString("pt-BR");

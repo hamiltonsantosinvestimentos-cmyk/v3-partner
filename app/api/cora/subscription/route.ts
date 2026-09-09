@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
     .single();
 
   const p = profile as { role: string; full_name: string; cpf?: string; cnpj?: string; email?: string } | null;
-  if (!p || !["STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE"].includes(p.role)) {
+  if (!p || !["STARTER", "PARTNER", "PARTNER_PRO", "PARTNER_HE", "ENTERPRISE"].includes(p.role)) {
     return NextResponse.json({ error: "Apenas partners podem gerar cobranças de assinatura" }, { status: 403 });
   }
 
@@ -89,7 +89,7 @@ export async function POST(req: NextRequest) {
           fine: { type: "PERCENTAGE", value: 2 },
         },
         payment_forms: ["BANK_SLIP", "PIX"],
-        services: [{ name: `V3 Partners — Mensalidade ${p.role === "PARTNER_PRO" ? "Partner PRO" : "Partner"}`, amount: valor }],
+        services: [{ name: `V3 Partners — Mensalidade ${p.role === "PARTNER_PRO" ? "Partner PRO" : p.role === "PARTNER_HE" ? "Partner HE" : "Partner"}`, amount: valor }],
         notifications: { formats: ["EMAIL"], by_email: { should_notify: true } },
       }),
       idempotencyKey: randomUUID(),

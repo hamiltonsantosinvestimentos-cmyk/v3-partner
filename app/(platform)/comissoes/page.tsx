@@ -16,7 +16,7 @@ export default async function ComissoesPage() {
     let session: { id: string; email: string; full_name: string; role: string };
     try { session = JSON.parse(sessionCookie.value); } catch { redirect("/login"); }
 
-    if (!["ADMIN", "PARTNER", "PARTNER_PRO", "FINANCEIRO", "GESTAO"].includes(session.role)) redirect("/unauthorized");
+    if (!["ADMIN", "PARTNER", "PARTNER_PRO", "PARTNER_HE", "FINANCEIRO", "GESTAO"].includes(session.role)) redirect("/unauthorized");
 
     return (
       <ComissoesPartnerClient
@@ -53,7 +53,7 @@ export default async function ComissoesPage() {
   if (!user) redirect("/login");
 
   const { data: profile } = await supabase.from("profiles").select("*").eq("id", user.id).single();
-  if (!profile || !["ADMIN", "PARTNER", "PARTNER_PRO", "FINANCEIRO", "GESTAO"].includes(profile.role)) redirect("/unauthorized");
+  if (!profile || !["ADMIN", "PARTNER", "PARTNER_PRO", "PARTNER_HE", "FINANCEIRO", "GESTAO"].includes(profile.role)) redirect("/unauthorized");
 
   const svc = sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
   const isAdmin = ["ADMIN", "GESTAO", "FINANCEIRO"].includes(profile.role);
@@ -89,7 +89,7 @@ export default async function ComissoesPage() {
     const { data: partnerRows } = await svc
       .from("profiles")
       .select("id, full_name, email, role")
-      .in("role", ["PARTNER", "PARTNER_PRO"])
+      .in("role", ["PARTNER", "PARTNER_PRO", "PARTNER_HE"])
       .eq("is_active", true)
       .order("full_name");
     partners = partnerRows ?? [];

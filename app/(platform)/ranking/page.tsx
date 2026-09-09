@@ -80,14 +80,14 @@ export default async function RankingPage({
   if (!user) redirect("/login");
 
   const { data: profile } = await supabase.from("profiles").select("id, full_name, role").eq("id", user.id).single();
-  if (!["ADMIN", "GESTAO", "PARTNER", "PARTNER_PRO", "FINANCEIRO", "MESA_OPERACIONAL"].includes(profile?.role ?? "")) redirect("/unauthorized");
+  if (!["ADMIN", "GESTAO", "PARTNER", "PARTNER_PRO", "PARTNER_HE", "FINANCEIRO", "MESA_OPERACIONAL"].includes(profile?.role ?? "")) redirect("/unauthorized");
 
   const svc = sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 
   // Busca todos os partners
   const { data: partners } = await svc
     .from("profiles").select("id, full_name, role")
-    .in("role", ["PARTNER", "PARTNER_PRO"]);
+    .in("role", ["PARTNER", "PARTNER_PRO", "PARTNER_HE"]);
 
   // Busca dados de todos os módulos filtrados pelo período
   const [

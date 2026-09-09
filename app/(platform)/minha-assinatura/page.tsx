@@ -16,7 +16,7 @@ export default async function MinhaAssinaturaPage() {
     .eq("id", user.id)
     .single();
 
-  if (!["PARTNER", "PARTNER_PRO"].includes(profile?.role ?? "")) redirect("/unauthorized");
+  if (!["PARTNER", "PARTNER_PRO", "PARTNER_HE"].includes(profile?.role ?? "")) redirect("/unauthorized");
 
   const svc = sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 

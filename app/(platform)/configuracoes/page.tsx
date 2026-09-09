@@ -28,7 +28,7 @@ export default async function ConfiguracoesPage() {
     active: boolean; uses_count: number; created_at: string;
   }> = [];
 
-  if (["PARTNER", "PARTNER_PRO", "ADMIN", "GESTAO"].includes(role)) {
+  if (["PARTNER", "PARTNER_PRO", "PARTNER_HE", "ADMIN", "GESTAO"].includes(role)) {
     const { data: links } = await svc
       .from("captacao_links")
       .select("id, token, partner_name, active, uses_count, created_at")
@@ -42,7 +42,7 @@ export default async function ConfiguracoesPage() {
   if (["ADMIN", "GESTAO"].includes(role)) {
     const [usersRes, partnersRes, leadsRes] = await Promise.allSettled([
       svc.from("profiles").select("*", { count: "exact", head: true }),
-      svc.from("profiles").select("*", { count: "exact", head: true }).in("role", ["PARTNER", "PARTNER_PRO"]),
+      svc.from("profiles").select("*", { count: "exact", head: true }).in("role", ["PARTNER", "PARTNER_PRO", "PARTNER_HE"]),
       svc.from("captacao_leads").select("*", { count: "exact", head: true }),
     ]);
     systemStats = {
