@@ -40,7 +40,7 @@ export async function POST(req: NextRequest, { params }: Params) {
 
   const { data: link, error: linkErr } = await db
     .from("partner_service_links")
-    .select("id, title, service_type, price_cents, active, partner_id")
+    .select("id, title, service_type, price_cents, active, partner_id, credit_desk_proposal_id, ma_deal_id")
     .eq("token", token)
     .single();
 
@@ -124,6 +124,12 @@ export async function POST(req: NextRequest, { params }: Params) {
       boleto_barcode: coraData.payment_options?.bank_slip?.digitable ?? null,
       boleto_pdf:     coraData.payment_options?.bank_slip?.url ?? null,
       intake_token:   intakeToken,
+      // Vínculo herdado do link (09/09/2026) — se o partner escolheu um Deal
+      // no dropdown ao criar o link, todo pedido gerado a partir dele já
+      // nasce vinculado, sem passo manual. Mesmo papel de
+      // credit_desk_proposal_id no checkout direto (/api/checkout/direct).
+      credit_desk_proposal_id: link.credit_desk_proposal_id ?? null,
+      ma_deal_id:     link.ma_deal_id ?? null,
     })
     .select()
     .single();

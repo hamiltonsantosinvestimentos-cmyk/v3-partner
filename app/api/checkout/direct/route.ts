@@ -25,6 +25,7 @@ export async function POST(req: NextRequest) {
     client_doc?: string;
     ref_partner_id?: string | null;
     prop_code?: string | null;
+    deal_type?: "credit" | "ma" | null;
     profile_type?: string | null;
     company_structure?: string | null;
   };
@@ -54,17 +55,39 @@ export async function POST(req: NextRequest) {
   // na Mesa de Crédito): valida contra uma proposta real e, se achar, já grava
   // credit_desk_proposal_id na criação do pedido -- o pedido nasce vinculado,
   // sem precisar do fluxo manual de "Pedidos de Partners" depois.
+  //
+  // Extensão pra Mesa M&A (09/09/2026): mesmo link, mesmo query param
+  // ?prop=<code>, mas com &deal_type=ma explicitado pelo botão "Link Análise"
+  // do modal de deal em mesa-ma-client.tsx -- nunca inferido por prefixo do
+  // código, porque V3-MA/V3-CR/V3-CRI são só convenção, não garantia. Sem
+  // deal_type (todo link antigo já em circulação), o comportamento é
+  // idêntico ao de sempre: procura só em credit_desk_proposals.
   let creditDeskProposalId: string | null = null;
+  let maDealId: string | null = null;
   let proposalPartnerId: string | null = null;
   if (body.prop_code) {
-    const { data: prop } = await db
-      .from("credit_desk_proposals")
-      .select("id, partner_id")
-      .eq("code", body.prop_code.trim().toUpperCase())
-      .single();
-    if (prop) {
-      creditDeskProposalId = prop.id;
-      proposalPartnerId = prop.partner_id ?? null;
+    const code = body.prop_code.trim().toUpperCase();
+    if (body.deal_type === "ma") {
+      const { data: deal } = await db
+        .from("ma_deals")
+        .select("id, created_by")
+        .eq("code", code)
+        .is("deleted_at", null)
+        .single();
+      if (deal) {
+        maDealId = deal.id;
+        proposalPartnerId = deal.created_by ?? null;
+      }
+    } else {
+      const { data: prop } = await db
+        .from("credit_desk_proposals")
+        .select("id, partner_id")
+        .eq("code", code)
+        .single();
+      if (prop) {
+        creditDeskProposalId = prop.id;
+        proposalPartnerId = prop.partner_id ?? null;
+      }
     }
   }
 
@@ -136,6 +159,7 @@ export async function POST(req: NextRequest) {
       company_structure: companyStructure,
       ref_partner_id: refPartnerId,
       credit_desk_proposal_id: creditDeskProposalId,
+      ma_deal_id: maDealId,
       client_name: body.client_name.trim(),
       client_email: body.client_email.trim(),
       client_doc: docDigits,

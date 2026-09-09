@@ -29,6 +29,9 @@ export async function GET() {
     .select(`
       id, token, title, service_type, description, price_cents,
       active, total_uses, total_paid_cents, created_at,
+      credit_desk_proposal_id, ma_deal_id,
+      credit_desk_proposals(code, client_name),
+      ma_deals(code, target_company, title),
       partner_service_orders(count)
     `)
     .order("created_at", { ascending: false });
@@ -59,6 +62,8 @@ export async function POST(req: NextRequest) {
     service_type?: string;
     description?: string;
     price_cents?: number;
+    deal_type?: "credit" | "ma" | null;
+    deal_id?: string | null;
   };
 
   if (!body.title?.trim()) return NextResponse.json({ error: "Título obrigatório" }, { status: 400 });
@@ -68,8 +73,34 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Tipo de serviço inválido" }, { status: 400 });
   }
 
-  const token = randomBytes(20).toString("hex");
   const db = svc();
+  const isAdmin = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"].includes(p?.role ?? "");
+
+  // Vínculo a Deal (09/09/2026) — opcional, só faz sentido pra Análise de
+  // Crédito. Confirma que o deal existe e pertence a quem está criando o
+  // link (ADMIN/GESTAO/MESA_OPERACIONAL podem vincular em nome de qualquer
+  // partner) antes de gravar — nunca confia no id que o client mandou sem
+  // checar posse, mesmo padrão de authorization check do resto do projeto.
+  let creditDeskProposalId: string | null = null;
+  let maDealId: string | null = null;
+  if (body.deal_type && body.deal_id) {
+    if (body.deal_type === "credit") {
+      const q = db.from("credit_desk_proposals").select("id, partner_id").eq("id", body.deal_id).single();
+      const { data: prop } = await q;
+      if (!prop || (!isAdmin && prop.partner_id !== user.id)) {
+        return NextResponse.json({ error: "Proposta de Crédito não encontrada ou não pertence a você" }, { status: 404 });
+      }
+      creditDeskProposalId = prop.id;
+    } else if (body.deal_type === "ma") {
+      const { data: deal } = await db.from("ma_deals").select("id, created_by").eq("id", body.deal_id).is("deleted_at", null).single();
+      if (!deal || (!isAdmin && deal.created_by !== user.id)) {
+        return NextResponse.json({ error: "Deal de M&A não encontrado ou não pertence a você" }, { status: 404 });
+      }
+      maDealId = deal.id;
+    }
+  }
+
+  const token = randomBytes(20).toString("hex");
 
   const { data, error } = await db
     .from("partner_service_links")
@@ -81,6 +112,8 @@ export async function POST(req: NextRequest) {
       description:  body.description?.trim() ?? null,
       price_cents:  Math.max(0, Math.round(body.price_cents ?? 0)),
       active:       true,
+      credit_desk_proposal_id: creditDeskProposalId,
+      ma_deal_id:   maDealId,
     })
     .select()
     .single();

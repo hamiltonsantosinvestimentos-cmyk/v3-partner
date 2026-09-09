@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
 import Image from "next/image";
 import { Copy, Check, AlertCircle, AlertTriangle, Loader2, CreditCard, QrCode, FileText, Minus, Plus } from "lucide-react";
-import { getStoredRefPartnerId, getStoredPropCode } from "@/lib/ref-tracking";
+import { getStoredRefPartnerId, getStoredPropCode, getStoredPropDealType } from "@/lib/ref-tracking";
 import { trackEvent } from "@/lib/analytics";
 import { UNIT_PRICE_CENTS, clampSelection, calcTotalCents, buildModularTitle, legacyPlanoToSelection, getMinCounts, fmtBRL, type ModularSelection, type ProfileType, type CompanyStructure } from "@/lib/credit-analysis-pricing";
 
@@ -135,6 +135,7 @@ export function DirectCheckoutClient() {
     try {
       const refPartnerId = getStoredRefPartnerId();
       const propCode = searchParams.get("prop") ?? getStoredPropCode();
+      const dealType = searchParams.get("deal_type") === "ma" ? "ma" : getStoredPropDealType();
       const r = await fetch("/api/checkout/direct", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -145,6 +146,7 @@ export function DirectCheckoutClient() {
           has_consultancy: selection.hasConsultancy,
           ref_partner_id: refPartnerId,
           prop_code: propCode,
+          deal_type: dealType,
           profile_type: profileType,
           company_structure: companyStructure,
         }),

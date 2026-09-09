@@ -7,7 +7,7 @@ import {
   Paperclip, Trash2, ExternalLink, Upload, Copy, CheckCheck,
   MessageSquare, Send, Zap, FileImage, FileSignature,
   ArrowLeftRight, Pencil, Check, Loader2, DatabaseZap, Clock, TrendingUp, Bot,
-  Link2, AlertCircle, CheckCircle2, ClipboardCheck, Handshake, User, StickyNote,
+  Link2, AlertCircle, AlertTriangle, CheckCircle2, ClipboardCheck, Handshake, User, StickyNote,
 } from "lucide-react";
 import { ExportButton } from "@/components/financeiro/export-button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -160,6 +160,68 @@ function nextStage(current: string, stages: MaStage[]): string | null {
   return stages[idx + 1].id;
 }
 
+// ── AnaliseCreditoLinkButtonMA ── link de venda da Análise de Crédito
+// vinculado a este Deal de M&A (09/09/2026). Espelha AnaliseCreditoLinkButton
+// em components/mesa-credito/proposta-detail-modal.tsx (26/08/2026): o
+// pedido nasce vinculado ao deal assim que o checkout é criado
+// (?prop=<code>&deal_type=ma em /analise-v2, ver app/api/checkout/direct),
+// então o badge de status aqui só reflete isso, sem passo manual de vínculo.
+type AnaliseOrderStatus = { status: string; paid_at: string | null } | null;
+
+function AnaliseCreditoLinkButtonMA({ dealId, dealCode, partnerId, hideBadge }: { dealId: string; dealCode: string; partnerId?: string; hideBadge?: boolean }) {
+  const [copied, setCopied] = useState(false);
+  const [order, setOrder] = useState<AnaliseOrderStatus | "loading">("loading");
+
+  useEffect(() => {
+    let cancelled = false;
+    setOrder("loading");
+    fetch(`/api/ma-deals/analise-status?deal_id=${dealId}`)
+      .then(r => r.json())
+      .then(d => { if (!cancelled) setOrder((d.order as AnaliseOrderStatus) ?? null); })
+      .catch(() => { if (!cancelled) setOrder(null); });
+    return () => { cancelled = true; };
+  }, [dealId]);
+
+  function handleCopy() {
+    const params = new URLSearchParams({ prop: dealCode, deal_type: "ma" });
+    if (partnerId) params.set("ref", partnerId);
+    const url = `https://app.v3partners.com.br/analise-v2?${params.toString()}#configurador`;
+    navigator.clipboard.writeText(url).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }
+
+  const badge = order === "loading" || !order
+    ? null
+    : order.status === "PAID"
+    ? { label: `Pago${order.paid_at ? " " + formatDate(order.paid_at) : ""}`, cls: "text-emerald-400" }
+    : { label: "Aguardando pagamento", cls: "text-amber-400" };
+
+  return (
+    <div className="flex items-center gap-1.5">
+      {badge && !hideBadge && <span className={`text-[10px] font-semibold ${badge.cls}`}>{badge.label}</span>}
+      <button
+        onClick={handleCopy}
+        title="Copiar link de Análise de Crédito vinculado a este Deal"
+        className="flex items-center gap-1.5 h-8 px-2.5 rounded-lg bg-[#243A66]/50 border border-[#243A66] text-[#7A8FA8] hover:bg-[#243A66] hover:text-[#F0ECE4] transition-colors text-xs font-semibold"
+      >
+        {copied ? (
+          <>
+            <CheckCheck className="w-3.5 h-3.5 text-emerald-400" />
+            <span className="text-emerald-400">Copiado!</span>
+          </>
+        ) : (
+          <>
+            <Link2 className="w-3.5 h-3.5" />
+            Link Análise
+          </>
+        )}
+      </button>
+    </div>
+  );
+}
+
 // ─── Kanban Card ──────────────────────────────────────────────────────────────
 function KanbanCardItem({
   card, stages, onClick, onOpenForja,
@@ -262,6 +324,58 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
   const [editData, setEditData] = useState({ sector: "", value: "", probability: "", notes: "", assigned_to: "" });
   const [editSaving, setEditSaving] = useState(false);
   const [editSuccess, setEditSuccess] = useState(false);
+
+  // ── Gate Análise de Crédito (09/09/2026) ─────────────────────────────────
+  // Espelha o gate já em produção na Mesa de Crédito (26/08/2026). Status do
+  // pedido vinculado a este Deal (?prop=<code>&deal_type=ma em /analise-v2)
+  // -- alimenta a tarja na aba Detalhes e o bloqueio do botão Avançar. O
+  // bloqueio de verdade é sempre no backend (app/api/ma-deals/route.ts).
+  const [analiseOrder, setAnaliseOrder] = useState<{ status: string; paid_at: string | null } | null | "loading">("loading");
+  const [autorizandoAvanco, setAutorizandoAvanco] = useState(false);
+  const [erroAutorizarAvanco, setErroAutorizarAvanco] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!selectedCard?.id) { setAnaliseOrder(null); return; }
+    let cancelled = false;
+    setAnaliseOrder("loading");
+    fetch(`/api/ma-deals/analise-status?deal_id=${selectedCard.id}`)
+      .then(r => r.json())
+      .then(d => { if (!cancelled) setAnaliseOrder(d.order ?? null); })
+      .catch(() => { if (!cancelled) setAnaliseOrder(null); });
+    return () => { cancelled = true; };
+  }, [selectedCard?.id]);
+
+  const analiseOverride = (selectedCard?.asset_data as Record<string, unknown> | undefined)?.analise_gate_override as
+    { by_name?: string; at?: string } | undefined;
+  const analisePaid = analiseOrder !== "loading" && analiseOrder?.status === "PAID";
+  const analiseGateOpen = analisePaid || !!analiseOverride;
+
+  async function handleAutorizarAvancoMA() {
+    if (!selectedCard) return;
+    setAutorizandoAvanco(true);
+    setErroAutorizarAvanco(null);
+    try {
+      // ma_deals não tem coluna "metadata" -- asset_data é replace integral
+      // no backend (nunca merge), então precisa mandar o objeto completo
+      // com a chave nova, senão apagaria o resto do asset_data do deal.
+      const newAssetData = { ...(selectedCard.asset_data ?? {}), analise_gate_override: true };
+      const res = await fetch("/api/ma-deals", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: selectedCard.id, asset_data: newAssetData }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error ?? "Erro ao autorizar avanço");
+      const updated = json as { deal?: { asset_data?: Record<string, unknown> } };
+      const finalAssetData = updated.deal?.asset_data ?? newAssetData;
+      setSelectedCard(prev => prev ? { ...prev, asset_data: finalAssetData } : prev);
+      setCards(prev => prev.map(c => c.id === selectedCard.id ? { ...c, asset_data: finalAssetData } : c));
+    } catch (e) {
+      setErroAutorizarAvanco(e instanceof Error ? e.message : "Erro ao autorizar avanço");
+    } finally {
+      setAutorizandoAvanco(false);
+    }
+  }
 
   // Partners disponíveis para atribuição
   const [partners, setPartners] = useState<{ id: string; name: string; role: string }[]>([]);
@@ -582,19 +696,38 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
   const avgProb = cards.length ? Math.round(cards.reduce((a, c) => a + c.probability, 0) / cards.length) : 0;
   const lastStageId = maStages[maStages.length - 1]?.id ?? "closing";
 
-  const handleMoveStage = (card: MaCard, targetStageId: string) => {
+  // 09/09/2026: async + checa res.ok e reverte o otimismo em caso de falha
+  // (ex: 422 do gate de Análise de Crédito) -- mesmo bug e mesmo fix já
+  // aplicados em credit-desk-client.tsx/nivel1-client.tsx (08/08/2026): sem
+  // isso, um bloqueio real do backend aparecia como avanço bem-sucedido na
+  // tela, split-brain entre UI e banco.
+  const handleMoveStage = async (card: MaCard, targetStageId: string) => {
     if (targetStageId === card.stage) return;
+    const prevStageId = card.stage;
+    const prevProb = card.probability;
     const newProb = STAGE_DEFAULT_PROBABILITY[targetStageId] ?? card.probability;
     setCards(prev => prev.map(c => c.id === card.id ? { ...c, stage: targetStageId, probability: newProb } : c));
     setSelectedCard(prev => prev ? { ...prev, stage: targetStageId, probability: newProb } : null);
 
     const dbStage = PIPELINE_TO_DB[targetStageId];
-    if (dbStage) {
-      fetch("/api/ma-deals", {
+    if (!dbStage) return;
+
+    try {
+      const res = await fetch("/api/ma-deals", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: card.id, stage: dbStage, probability_percent: newProb }),
-      }).catch(() => {});
+      });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        setCards(prev => prev.map(c => c.id === card.id ? { ...c, stage: prevStageId, probability: prevProb } : c));
+        setSelectedCard(prev => prev ? { ...prev, stage: prevStageId, probability: prevProb } : null);
+        alert(json.error ?? "Não foi possível mover o deal de fase.");
+      }
+    } catch {
+      setCards(prev => prev.map(c => c.id === card.id ? { ...c, stage: prevStageId, probability: prevProb } : c));
+      setSelectedCard(prev => prev ? { ...prev, stage: prevStageId, probability: prevProb } : null);
+      alert("Erro de rede ao mover o deal de fase.");
     }
   };
 
@@ -2211,6 +2344,55 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
                   </div>
                 </div>
 
+                {/* ── Tarja Gate Análise de Crédito (09/09/2026) ── espelha a tarja já
+                    em produção na Mesa de Crédito (26/08/2026). Avançar de Qualificação
+                    em diante exige a Análise de Crédito do cliente paga, ou autorização
+                    explícita de ADMIN — o bloqueio de verdade é no backend, isto aqui só
+                    deixa o estado óbvio antes de tentar. */}
+                {analiseOrder !== "loading" && (
+                  analiseGateOpen ? (
+                    <div className="rounded-xl border-2 border-emerald-500/50 bg-emerald-500/10 px-4 py-3 flex items-center gap-3 flex-wrap">
+                      <CheckCircle2 className="w-6 h-6 text-emerald-400 flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-bold text-emerald-300">
+                          {analisePaid ? "Análise de Crédito paga" : "Avanço autorizado sem Análise de Crédito"}
+                          {analisePaid && typeof analiseOrder === "object" && analiseOrder?.paid_at ? ` em ${formatDate(analiseOrder.paid_at)}` : ""}
+                        </p>
+                        <p className="text-[10px] text-emerald-400/80 mt-0.5">
+                          {analisePaid
+                            ? "Liberado para avançar de fase."
+                            : `Autorizado por ${analiseOverride?.by_name ?? "ADMIN"}${analiseOverride?.at ? ` em ${formatDate(analiseOverride.at)}` : ""} — a Análise de Crédito do cliente segue pendente de pagamento.`}
+                        </p>
+                      </div>
+                      <AnaliseCreditoLinkButtonMA dealId={selectedCard.id} dealCode={selectedCard.code} partnerId={selectedCard.assigned_to_id} hideBadge />
+                    </div>
+                  ) : (
+                    <div className="rounded-xl border-2 border-amber-500/50 bg-amber-500/10 px-4 py-3 flex items-center gap-3 flex-wrap">
+                      <AlertTriangle className="w-6 h-6 text-amber-400 flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-bold text-amber-300">Análise de Crédito do cliente pendente</p>
+                        <p className="text-[10px] text-amber-400/80 mt-0.5">
+                          Obrigatória para avançar de Qualificação em diante. Gere o link, envie pro cliente e aguarde o pagamento — ou peça autorização a um ADMIN.
+                        </p>
+                        {erroAutorizarAvanco && <p className="text-[10px] text-red-400 mt-1">{erroAutorizarAvanco}</p>}
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        {userRole === "ADMIN" && (
+                          <button
+                            onClick={handleAutorizarAvancoMA}
+                            disabled={autorizandoAvanco}
+                            className="flex items-center gap-1.5 h-8 px-2.5 rounded-lg bg-amber-500/20 border border-amber-500/50 text-amber-300 hover:bg-amber-500/30 transition-colors text-[11px] font-bold disabled:opacity-50"
+                          >
+                            {autorizandoAvanco ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+                            Autorizar avanço sem Análise
+                          </button>
+                        )}
+                        <AnaliseCreditoLinkButtonMA dealId={selectedCard.id} dealCode={selectedCard.code} partnerId={selectedCard.assigned_to_id} hideBadge />
+                      </div>
+                    </div>
+                  )
+                )}
+
                 {/* ── Mover Fase ── */}
                 <div className="rounded-xl border border-[#122036] bg-[#0F1E35] p-3 space-y-2.5">
                   <p className="text-[10px] font-bold tracking-widest uppercase text-[#7A8FA8]">Mover Fase</p>
@@ -2228,6 +2410,12 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
                       const idx = maStages.findIndex(s => s.id === selectedCard.stage);
                       const prev = idx > 0 ? maStages[idx - 1] : null;
                       const next = idx < maStages.length - 1 ? maStages[idx + 1] : null;
+                      // Espelha o gate do backend (app/api/ma-deals/route.ts): avançar
+                      // pra Viabilidade (IOI) ou além exige Análise de Crédito paga
+                      // ou autorização de ADMIN. Só desabilita o botão pra não deixar
+                      // clicar num avanço que o servidor vai recusar.
+                      const viabilidadeIdx = maStages.findIndex(s => s.id === "viabilidade");
+                      const advanceBlockedByAnalise = !!next && viabilidadeIdx !== -1 && idx + 1 >= viabilidadeIdx && !analiseGateOpen;
                       return (
                         <>
                           <button
@@ -2237,13 +2425,18 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
                           >
                             <ChevronLeft size={12} /> Voltar
                           </button>
-                          <button
-                            onClick={() => next && handleMoveStage(selectedCard, next.id)}
-                            disabled={!next}
-                            className="flex-1 flex items-center justify-center gap-1.5 rounded-lg bg-[#C9A84C]/15 border border-[#C9A84C]/40 text-[#C9A84C] text-xs py-2 hover:bg-[#C9A84C]/25 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                          <div
+                            className="flex-1"
+                            title={advanceBlockedByAnalise ? "Bloqueado: Análise de Crédito do cliente pendente de pagamento (peça autorização a um ADMIN se necessário)" : undefined}
                           >
-                            Avançar <ChevronRight size={12} />
-                          </button>
+                            <button
+                              onClick={() => next && handleMoveStage(selectedCard, next.id)}
+                              disabled={!next || advanceBlockedByAnalise}
+                              className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-[#C9A84C]/15 border border-[#C9A84C]/40 text-[#C9A84C] text-xs py-2 hover:bg-[#C9A84C]/25 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                            >
+                              Avançar <ChevronRight size={12} />
+                            </button>
+                          </div>
                         </>
                       );
                     })()}
