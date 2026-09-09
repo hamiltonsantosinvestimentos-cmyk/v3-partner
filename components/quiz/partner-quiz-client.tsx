@@ -4,28 +4,36 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Image from "next/image";
 import {
-  Handshake, ArrowRight, RotateCcw, MessageCircle, TrendingUp, Briefcase, Users,
+  ArrowRight, RotateCcw, MessageCircle, TrendingUp, Briefcase, Users,
   Network, Building2, Wallet, Clock3, CalendarClock, CheckCircle2,
   Search, Rocket, Store, GraduationCap, UserRound, MoreHorizontal, Trophy,
 } from "lucide-react";
 import {
   GOLD, GOLD_LIGHT, NAVY, NAVY_CARD, NAVY_BASE, MUTED, ESTADOS_BR,
-  inputCls, inputStyle, maskPhone, TopProgress, Field, StepCard, ChoiceGrid, LabeledCurrencyInput,
+  inputCls, inputStyle, maskPhone, TopProgress, Field, StepCard, ChoiceGrid,
 } from "./wizard-ui";
 import {
   OBJETIVO, OCUPACAO, EXPERIENCIA_B2B, REDE, PORTE_REDE, DISPONIBILIDADE,
-  PRAZO_COMECO, type QuizOption,
+  PRAZO_COMECO, RENDA_FAIXA, RENDA_FAIXA_VALOR, scoreQuizPartner, PLANO_LABEL,
+  type QuizOption,
 } from "@/lib/quiz-partner";
 
 type Step =
-  | "welcome" | "objetivo" | "ocupacao" | "experiencia" | "rede" | "porte"
-  | "renda" | "disponibilidade" | "prazo" | "dados" | "resultado";
+  | "objetivo" | "ocupacao" | "experiencia" | "rede" | "porte"
+  | "renda" | "disponibilidade" | "prazo" | "previa" | "dados" | "concluido";
 
+// Ordem usada pela barra de progresso e pelo beacon de funil.
 const PROGRESS_STEPS: Step[] = [
-  "welcome", "objetivo", "ocupacao", "experiencia", "rede", "porte",
-  "renda", "disponibilidade", "prazo", "dados", "resultado",
+  "objetivo", "ocupacao", "experiencia", "rede", "porte",
+  "renda", "disponibilidade", "prazo", "previa", "dados", "concluido",
 ];
-const TOTAL = PROGRESS_STEPS.length - 2; // passos de pergunta (objetivo..dados)
+// Passos numerados ("Passo X de N") — pergunta 1 (objetivo) até os dados.
+const NUMBERED: Step[] = [
+  "objetivo", "ocupacao", "experiencia", "rede", "porte",
+  "renda", "disponibilidade", "prazo", "dados",
+];
+const TOTAL = NUMBERED.length;
+const stepNumOf = (s: Step) => NUMBERED.indexOf(s) + 1;
 
 type Icon = React.ComponentType<{ className?: string; style?: React.CSSProperties }>;
 
@@ -35,6 +43,7 @@ const ICONS: Record<string, Record<string, Icon>> = {
   experiencia_b2b: { nenhuma: MoreHorizontal, menos_1: Clock3, "1_3": CalendarClock, "3_mais": Trophy, atuo_credito_ma: TrendingUp },
   rede: { ate_10: Users, "10_50": Users, "50_200": Network, "200_mais": Network },
   porte_rede: { ate_1m: Building2, "1_10m": Building2, "10_50m": Building2, "50m_mais": Building2, nao_sei: Search },
+  renda_faixa: { ate_2k: Wallet, "2_5k": Wallet, "5_15k": Wallet, "15_30k": Wallet, "30k_mais": Wallet },
   disponibilidade: { ate_5h: Clock3, "5_15h": Clock3, "15_30h": CalendarClock, full_time: Rocket },
   prazo_comeco: { agora: Rocket, "30_dias": CalendarClock, "90_dias": CalendarClock, pesquisando: Search },
 };
@@ -45,14 +54,14 @@ function opts(key: string, list: QuizOption[]) {
 
 interface FormState {
   objetivo: string; ocupacao: string; experiencia_b2b: string; rede: string; porte_rede: string;
-  renda_mensal: number; disponibilidade: string; prazo_comeco: string;
+  renda_faixa: string; disponibilidade: string; prazo_comeco: string;
   nome: string; email: string; telefone: string; estado: string; cidade: string;
-  instagram: string; linkedin: string; consentimento: boolean;
+  consentimento: boolean;
 }
 const INITIAL: FormState = {
   objetivo: "", ocupacao: "", experiencia_b2b: "", rede: "", porte_rede: "",
-  renda_mensal: 0, disponibilidade: "", prazo_comeco: "",
-  nome: "", email: "", telefone: "", estado: "", cidade: "", instagram: "", linkedin: "", consentimento: false,
+  renda_faixa: "", disponibilidade: "", prazo_comeco: "",
+  nome: "", email: "", telefone: "", estado: "", cidade: "", consentimento: false,
 };
 
 export function PartnerQuizClient() {
@@ -80,7 +89,7 @@ export function PartnerQuizClient() {
       .catch(() => {});
   }, [ref]);
 
-  const [step, setStep] = useState<Step>("welcome");
+  const [step, setStep] = useState<Step>("objetivo");
   const [, setHistory] = useState<Step[]>([]);
 
   // ── Rastreio de funil: reporta cada passo alcançado (1x por sessão) ──
@@ -122,11 +131,11 @@ export function PartnerQuizClient() {
     });
   }
   function reiniciar() {
-    setForm(INITIAL); setHistory([]); setStep("welcome"); setResultado(null); setSubmitError(null);
+    setForm(INITIAL); setHistory([]); setStep("objetivo"); setResultado(null); setSubmitError(null);
   }
 
   const idx = PROGRESS_STEPS.indexOf(step);
-  const progressPct = idx >= 0 ? (idx / (PROGRESS_STEPS.length - 1)) * 100 : 100;
+  const progressPct = idx >= 0 ? ((idx + 1) / PROGRESS_STEPS.length) * 100 : 100;
 
   const partnerName = partner?.full_name ?? null;
   const waLink = partner?.whatsapp
@@ -135,11 +144,23 @@ export function PartnerQuizClient() {
       )}`
     : null;
 
+  // Prévia do resultado calculada no cliente (o servidor recalcula de forma
+  // autoritativa no envio — ver app/api/public/partner-quiz).
+  const previa = useMemo(() => {
+    if (!form.objetivo || !form.prazo_comeco) return null;
+    const s = scoreQuizPartner({
+      objetivo: form.objetivo, ocupacao: form.ocupacao, experiencia_b2b: form.experiencia_b2b,
+      rede: form.rede, porte_rede: form.porte_rede,
+      renda_mensal: RENDA_FAIXA_VALOR[form.renda_faixa] ?? 0,
+      disponibilidade: form.disponibilidade, prazo_comeco: form.prazo_comeco,
+    });
+    return { tier: s.tier, planoLabel: PLANO_LABEL[s.plano_sugerido] };
+  }, [form]);
+
   const dadosValid = Boolean(
     form.nome.trim().length >= 3 &&
-    form.email.includes("@") &&
     form.telefone.replace(/\D/g, "").length >= 10 &&
-    form.estado && form.cidade.trim(),
+    (form.email === "" || form.email.includes("@")),
   );
 
   async function finalizar() {
@@ -152,12 +173,13 @@ export function PartnerQuizClient() {
         body: JSON.stringify({
           ref: ref || null,
           objetivo: form.objetivo, ocupacao: form.ocupacao, experiencia_b2b: form.experiencia_b2b,
-          rede: form.rede, porte_rede: form.porte_rede, renda_mensal: form.renda_mensal,
+          rede: form.rede, porte_rede: form.porte_rede,
+          renda_mensal: RENDA_FAIXA_VALOR[form.renda_faixa] ?? 0,
+          renda_faixa: form.renda_faixa,
           disponibilidade: form.disponibilidade,
           prazo_comeco: form.prazo_comeco,
-          nome: form.nome, email: form.email, telefone: form.telefone,
-          estado: form.estado, cidade: form.cidade,
-          instagram: form.instagram || null, linkedin: form.linkedin || null,
+          nome: form.nome, email: form.email || null, telefone: form.telefone,
+          estado: form.estado || null, cidade: form.cidade || null,
           tracking,
           consentimento: true,
         }),
@@ -165,13 +187,15 @@ export function PartnerQuizClient() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Falha ao enviar o quiz");
       setResultado({ tier: json.tier, planoLabel: json.planoLabel });
-      goTo("resultado");
+      goTo("concluido");
     } catch (e) {
       setSubmitError((e as Error).message);
     } finally {
       setSubmitting(false);
     }
   }
+
+  const showHeaderStrip = step !== "concluido";
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: NAVY }}>
@@ -184,114 +208,122 @@ export function PartnerQuizClient() {
         <span className="text-sm font-bold text-white">V3 Partners</span>
       </div>
 
-      <div className="flex-1 flex items-center justify-center px-4 py-10">
-        {/* ── Boas-vindas ── */}
-        {step === "welcome" && (
-          <div className="w-full max-w-md mx-auto animate-fade-in">
-            <div className="rounded-2xl border p-7 sm:p-8 space-y-6 text-center" style={{ background: NAVY_CARD, borderColor: "rgba(255,255,255,0.06)" }}>
-              <div className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto" style={{ background: `${GOLD}20` }}>
-                <Handshake className="w-7 h-7" style={{ color: GOLD }} />
-              </div>
-              <div className="space-y-2">
-                <p className="text-xs font-bold uppercase tracking-widest" style={{ color: GOLD }}>Seja Partner V3</p>
-                <h1 className="text-2xl sm:text-3xl font-bold text-white leading-tight">
-                  A parceria V3 faz <span style={{ color: GOLD }}>sentido pra você?</span>
-                </h1>
-                <p className="text-sm max-w-sm mx-auto" style={{ color: MUTED }}>
-                  Poucas perguntas rápidas. No fim você vê o plano ideal para o seu perfil e um especialista fala com você no WhatsApp.
-                </p>
-                {partnerName && <p className="text-xs pt-1" style={{ color: GOLD }}>Convite de {partnerName} — Partner V3</p>}
-              </div>
-              <button onClick={() => goTo("objetivo")}
-                className="w-full py-3.5 rounded-xl font-bold text-sm text-black flex items-center justify-center gap-2 hover:opacity-90 transition-opacity"
-                style={{ background: GOLD }}>
-                Começar <ArrowRight className="w-4 h-4" />
-              </button>
-            </div>
-            <div className="flex items-start gap-2.5 rounded-xl border px-4 py-3 mt-4" style={{ background: `${GOLD}0d`, borderColor: `${GOLD}30` }}>
-              <Clock3 className="w-4 h-4 shrink-0 mt-0.5" style={{ color: GOLD }} />
-              <p className="text-xs" style={{ color: "#D8CCA8" }}>Leva menos de 2 minutos. Responda com sinceridade para uma recomendação precisa.</p>
-            </div>
-          </div>
-        )}
+      {showHeaderStrip && (
+        <div className="px-6 py-2.5 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-center border-b border-white/5" style={{ background: NAVY_BASE }}>
+          <span className="text-[11px] font-bold uppercase tracking-widest" style={{ color: GOLD }}>Seja Partner V3</span>
+          <span className="text-[11px] flex items-center gap-1" style={{ color: MUTED }}>
+            <Clock3 className="w-3 h-3" /> Leva 2 minutos · resultado na hora
+          </span>
+          {partnerName && <span className="text-[11px]" style={{ color: GOLD }}>Convite de {partnerName}</span>}
+        </div>
+      )}
 
+      <div className="flex-1 flex items-center justify-center px-4 py-10">
         {step === "objetivo" && (
-          <StepCard stepNum={1} totalSteps={TOTAL} title="Qual seu" titleHighlight="objetivo com a parceria?"
-            subtitle="O que você quer alcançar sendo Partner da V3." onBack={goBack}>
+          <StepCard stepNum={stepNumOf(step)} totalSteps={TOTAL} title="Qual seu" titleHighlight="objetivo com a parceria?"
+            subtitle="Comece por aqui — o que você quer alcançar sendo Partner da V3.">
             <ChoiceGrid columns={2} selected={form.objetivo} onSelect={(v) => { set("objetivo", v); goTo("ocupacao"); }} options={opts("objetivo", OBJETIVO)} />
           </StepCard>
         )}
 
         {step === "ocupacao" && (
-          <StepCard stepNum={2} totalSteps={TOTAL} title="O que você" titleHighlight="faz hoje?"
+          <StepCard stepNum={stepNumOf(step)} totalSteps={TOTAL} title="O que você" titleHighlight="faz hoje?"
             subtitle="Sua ocupação principal no momento." onBack={goBack}>
             <ChoiceGrid columns={2} selected={form.ocupacao} onSelect={(v) => { set("ocupacao", v); goTo("experiencia"); }} options={opts("ocupacao", OCUPACAO)} />
           </StepCard>
         )}
 
         {step === "experiencia" && (
-          <StepCard stepNum={3} totalSteps={TOTAL} title="Sua experiência com" titleHighlight="vendas B2B / originação"
+          <StepCard stepNum={stepNumOf(step)} totalSteps={TOTAL} title="Sua experiência com" titleHighlight="vendas B2B / originação"
             subtitle="Prospecção e relacionamento com empresas e decisores." onBack={goBack}>
             <ChoiceGrid columns={2} selected={form.experiencia_b2b} onSelect={(v) => { set("experiencia_b2b", v); goTo("rede"); }} options={opts("experiencia_b2b", EXPERIENCIA_B2B)} />
           </StepCard>
         )}
 
         {step === "rede" && (
-          <StepCard stepNum={4} totalSteps={TOTAL} title="Quantos" titleHighlight="donos de empresa / decisores"
+          <StepCard stepNum={stepNumOf(step)} totalSteps={TOTAL} title="Quantos" titleHighlight="donos de empresa / decisores"
             subtitle="Pessoas com poder de decisão que você consegue acessar hoje." onBack={goBack}>
             <ChoiceGrid columns={2} selected={form.rede} onSelect={(v) => { set("rede", v); goTo("porte"); }} options={opts("rede", REDE)} />
           </StepCard>
         )}
 
         {step === "porte" && (
-          <StepCard stepNum={5} totalSteps={TOTAL} title="Qual o" titleHighlight="porte dessas empresas?"
+          <StepCard stepNum={stepNumOf(step)} totalSteps={TOTAL} title="Qual o" titleHighlight="porte dessas empresas?"
             subtitle="Faturamento médio anual das empresas da sua rede." onBack={goBack}>
             <ChoiceGrid columns={2} selected={form.porte_rede} onSelect={(v) => { set("porte_rede", v); goTo("renda"); }} options={opts("porte_rede", PORTE_REDE)} />
           </StepCard>
         )}
 
         {step === "renda" && (
-          <StepCard stepNum={6} totalSteps={TOTAL} title="Sua" titleHighlight="renda mensal atual"
-            subtitle="Fica só entre você e a V3 — ajuda a recomendar o plano certo."
-            onBack={goBack} onNext={() => goTo("disponibilidade")} nextDisabled={form.renda_mensal <= 0}>
-            <LabeledCurrencyInput label="Renda mensal aproximada" value={form.renda_mensal} onChange={(v) => set("renda_mensal", v)} autoFocus />
+          <StepCard stepNum={stepNumOf(step)} totalSteps={TOTAL} title="Sua" titleHighlight="renda mensal atual"
+            subtitle="Fica só entre você e a V3 — ajuda a recomendar o plano certo." onBack={goBack}>
+            <ChoiceGrid columns={2} selected={form.renda_faixa} onSelect={(v) => { set("renda_faixa", v); goTo("disponibilidade"); }} options={opts("renda_faixa", RENDA_FAIXA)} />
           </StepCard>
         )}
 
         {step === "disponibilidade" && (
-          <StepCard stepNum={7} totalSteps={TOTAL} title="Quanto tempo" titleHighlight="por semana você tem?"
+          <StepCard stepNum={stepNumOf(step)} totalSteps={TOTAL} title="Quanto tempo" titleHighlight="por semana você tem?"
             subtitle="Tempo que consegue dedicar à operação como Partner." onBack={goBack}>
             <ChoiceGrid columns={2} selected={form.disponibilidade} onSelect={(v) => { set("disponibilidade", v); goTo("prazo"); }} options={opts("disponibilidade", DISPONIBILIDADE)} />
           </StepCard>
         )}
 
         {step === "prazo" && (
-          <StepCard stepNum={8} totalSteps={TOTAL} title="Quando você" titleHighlight="quer começar?"
+          <StepCard stepNum={stepNumOf(step)} totalSteps={TOTAL} title="Quando você" titleHighlight="quer começar?"
             subtitle="Seu momento para entrar na operação." onBack={goBack}>
-            <ChoiceGrid columns={2} selected={form.prazo_comeco} onSelect={(v) => { set("prazo_comeco", v); goTo("dados"); }} options={opts("prazo_comeco", PRAZO_COMECO)} />
+            <ChoiceGrid columns={2} selected={form.prazo_comeco} onSelect={(v) => { set("prazo_comeco", v); goTo("previa"); }} options={opts("prazo_comeco", PRAZO_COMECO)} />
           </StepCard>
         )}
 
+        {/* ── Prévia do resultado (antes de pedir contato) ── */}
+        {step === "previa" && (
+          <div className="w-full max-w-md mx-auto space-y-4 animate-fade-in">
+            <div className="rounded-2xl border p-6 sm:p-7 space-y-5 text-center" style={{ background: NAVY_CARD, borderColor: "rgba(255,255,255,0.06)" }}>
+              <div className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto" style={{ background: `${GOLD}20` }}>
+                <CheckCircle2 className="w-7 h-7" style={{ color: GOLD }} />
+              </div>
+              <div className="space-y-1">
+                <p className="text-[11px] font-bold uppercase tracking-widest" style={{ color: GOLD }}>Seu perfil combina com</p>
+                <p className="text-2xl font-extrabold" style={{ color: GOLD_LIGHT }}>{previa?.planoLabel ?? "V3 Partner"}</p>
+              </div>
+              <p className="text-sm" style={{ color: MUTED }}>
+                Falta só um passo: deixe seu contato para um especialista da V3 te explicar como esse plano
+                funciona na prática e quanto você pode faturar como Partner.
+              </p>
+              <button onClick={() => goTo("dados")}
+                className="w-full py-3.5 rounded-xl font-bold text-sm text-black flex items-center justify-center gap-2 hover:opacity-90 transition-opacity"
+                style={{ background: GOLD }}>
+                Falar com um especialista <ArrowRight className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="flex justify-center">
+              <button onClick={goBack} className="px-5 py-2 rounded-full text-xs font-semibold" style={{ background: NAVY_CARD, color: MUTED }}>
+                Voltar
+              </button>
+            </div>
+          </div>
+        )}
+
         {step === "dados" && (
-          <StepCard stepNum={9} totalSteps={TOTAL} title="Como a gente" titleHighlight="fala com você?"
-            subtitle="Um especialista da V3 vai te chamar no WhatsApp."
-            onBack={goBack} onNext={finalizar} nextLabel="Ver resultado" nextLoading={submitting}
+          <StepCard stepNum={stepNumOf(step)} totalSteps={TOTAL} title="Como a gente" titleHighlight="fala com você?"
+            subtitle="Só o essencial — o especialista te chama no WhatsApp."
+            onBack={goBack} onNext={finalizar} nextLabel="Ver meu plano" nextLoading={submitting}
             nextDisabled={!dadosValid || !form.consentimento} wide>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="sm:col-span-2"><Field label="Nome completo">
                 <input value={form.nome} onChange={(e) => set("nome", e.target.value)} placeholder="Seu nome completo" autoFocus className={inputCls} style={inputStyle} />
               </Field></div>
-              <Field label="E-mail"><input type="email" value={form.email} onChange={(e) => set("email", e.target.value)} placeholder="seu@email.com" className={inputCls} style={inputStyle} /></Field>
-              <Field label="Telefone / WhatsApp"><input value={form.telefone} onChange={(e) => set("telefone", maskPhone(e.target.value))} placeholder="(00) 00000-0000" className={inputCls} style={inputStyle} /></Field>
-              <Field label="Estado">
+              <div className="sm:col-span-2"><Field label="Telefone / WhatsApp">
+                <input value={form.telefone} onChange={(e) => set("telefone", maskPhone(e.target.value))} placeholder="(00) 00000-0000" className={inputCls} style={inputStyle} />
+              </Field></div>
+              <Field label="E-mail (opcional)"><input type="email" value={form.email} onChange={(e) => set("email", e.target.value)} placeholder="seu@email.com" className={inputCls} style={inputStyle} /></Field>
+              <Field label="Estado (opcional)">
                 <select value={form.estado} onChange={(e) => set("estado", e.target.value)} className={inputCls} style={inputStyle}>
                   <option value="">UF</option>
                   {ESTADOS_BR.map((s) => <option key={s} value={s}>{s}</option>)}
                 </select>
               </Field>
-              <Field label="Cidade"><input value={form.cidade} onChange={(e) => set("cidade", e.target.value)} className={inputCls} style={inputStyle} /></Field>
-              <Field label="Instagram (opcional)"><input value={form.instagram} onChange={(e) => set("instagram", e.target.value)} placeholder="@seuperfil" className={inputCls} style={inputStyle} /></Field>
-              <Field label="LinkedIn (opcional)"><input value={form.linkedin} onChange={(e) => set("linkedin", e.target.value)} placeholder="URL do perfil" className={inputCls} style={inputStyle} /></Field>
+              <div className="sm:col-span-2"><Field label="Cidade (opcional)"><input value={form.cidade} onChange={(e) => set("cidade", e.target.value)} className={inputCls} style={inputStyle} /></Field></div>
             </div>
 
             <label className="flex items-start gap-2.5 cursor-pointer pt-2 border-t" style={{ borderColor: "rgba(255,255,255,0.06)" }}>
@@ -305,8 +337,8 @@ export function PartnerQuizClient() {
           </StepCard>
         )}
 
-        {/* ── Resultado ── */}
-        {step === "resultado" && resultado && (
+        {/* ── Confirmação ── */}
+        {step === "concluido" && resultado && (
           <div className="w-full max-w-md mx-auto space-y-4 animate-fade-in">
             <div className="rounded-2xl border p-6 sm:p-7 space-y-5 text-center" style={{ background: NAVY_CARD, borderColor: "rgba(255,255,255,0.06)" }}>
               <div className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto" style={{ background: `${GOLD}20` }}>

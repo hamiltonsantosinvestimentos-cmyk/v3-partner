@@ -57,6 +57,25 @@ export const PRAZO_COMECO: QuizOption[] = [
   { value: "pesquisando", label: "Só pesquisando" },
 ];
 
+// Renda mensal em faixas (botão) em vez de digitar valor — menos atrito e menos
+// receio de privacidade. Cada faixa vira um número (piso da faixa) para o score
+// continuar funcionando sem mudar `scoreQuizPartner`.
+export const RENDA_FAIXA: QuizOption[] = [
+  { value: "ate_2k", label: "Até R$ 2 mil" },
+  { value: "2_5k", label: "R$ 2 a 5 mil" },
+  { value: "5_15k", label: "R$ 5 a 15 mil" },
+  { value: "15_30k", label: "R$ 15 a 30 mil" },
+  { value: "30k_mais", label: "R$ 30 mil+" },
+];
+
+export const RENDA_FAIXA_VALOR: Record<string, number> = {
+  ate_2k: 0,
+  "2_5k": 2000,
+  "5_15k": 5000,
+  "15_30k": 15000,
+  "30k_mais": 30000,
+};
+
 // ─── Score (0–95) ──────────────────────────────────────────────────────────
 const W = {
   rede:              { ate_10: 0, "10_50": 10, "50_200": 20, "200_mais": 30 } as Record<string, number>,
