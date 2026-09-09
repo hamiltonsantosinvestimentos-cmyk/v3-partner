@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils";
 
 interface Registration {
   id: string;
-  plano: "STARTER" | "PARTNER" | "PARTNER_PRO" | "ENTERPRISE";
+  plano: "STARTER" | "PARTNER" | "PARTNER_PRO" | "PARTNER_HE" | "ENTERPRISE";
   tipo_pessoa: "PF" | "PJ";
   email: string;
   telefone: string;
@@ -170,6 +170,7 @@ function ModalDetalhe({
                 {reg.plano === "STARTER" ? "V3 Starter — R$ 297/mês"
                   : reg.plano === "PARTNER" ? "V3 Partner — R$ 497/mês"
                   : reg.plano === "PARTNER_PRO" ? "V3 Partner PRO — R$ 897/mês"
+                  : reg.plano === "PARTNER_HE" ? "Partner HE — R$ 97/mês"
                   : "V3 Enterprise — R$ 2.500+/mês"}
               </p>
               <p className="text-[11px] text-muted-foreground mt-0.5">
@@ -597,9 +598,11 @@ export function AdminCadastrosClient({
                   <StatusBadge status={reg.status} />
                   <span className={cn(
                     "text-[9px] font-bold px-1.5 py-0.5 rounded",
-                    reg.plano === "PARTNER_PRO" ? "bg-[#E8C97A]/20 text-[#E8C97A]" : "bg-[#C9A84C]/20 text-[#C9A84C]"
+                    reg.plano === "PARTNER_PRO" ? "bg-[#E8C97A]/20 text-[#E8C97A]"
+                      : reg.plano === "PARTNER_HE" ? "bg-[#A3E635]/20 text-[#A3E635]"
+                      : "bg-[#C9A84C]/20 text-[#C9A84C]"
                   )}>
-                    {reg.plano === "PARTNER_PRO" ? "PRO" : "PARTNER"}
+                    {reg.plano === "PARTNER_PRO" ? "PRO" : reg.plano === "PARTNER_HE" ? "HE" : "PARTNER"}
                   </span>
                   <PagamentoBadge status={reg.cora_invoice_status} />
                 </div>

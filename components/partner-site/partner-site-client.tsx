@@ -171,6 +171,7 @@ function roleBadge(role: string) {
   const map: Record<string, { label: string; color: string; bg: string; border: string }> = {
     STARTER:     { label: "Partner Starter",    color: "#60A5FA", bg: "rgba(96,165,250,0.08)",  border: "rgba(96,165,250,0.25)" },
     PARTNER:     { label: "Partner",             color: G,         bg: "rgba(201,168,76,0.08)",  border: "rgba(201,168,76,0.25)" },
+    PARTNER_HE:  { label: "Partner HE",          color: "#A3E635", bg: "rgba(163,230,53,0.1)",   border: "rgba(163,230,53,0.3)" },
     PARTNER_PRO: { label: "Partner PRO",         color: G,         bg: "rgba(201,168,76,0.12)",  border: "rgba(201,168,76,0.4)" },
     ENTERPRISE:  { label: "Partner Enterprise",  color: "#A78BFA", bg: "rgba(167,139,250,0.08)", border: "rgba(167,139,250,0.25)" },
   };
