@@ -87,6 +87,68 @@ export function maskCpfCnpjInput(value: string): string {
   return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}/${d.slice(8, 12)}-${d.slice(12)}`;
 }
 
+// Validacao real de digito verificador (10/09/2026). Achado real: nenhuma validacao de
+// checksum existia em lugar nenhum do sistema, so mascara de formatacao -- um CPF invalido
+// (091.004.234-34) foi salvo sem aviso no cadastro de um cedente real da Bolsa de Ativos,
+// e so foi descoberto quando a propria Checktudo recusou a consulta. Helper unico, pensado
+// pra ser reaproveitado por qualquer formulario do portal que capture CPF/CNPJ, nao so o
+// intake que originou o achado.
+
+/** Confere o digito verificador real de um CPF (algoritmo padrao, modulo 11). Rejeita
+ *  sequencias repetidas (000.000.000-00, 111.111.111-11, etc.), que passam no calculo mas
+ *  nunca sao CPF valido de verdade. */
+export function isValidCPF(value: string): boolean {
+  const cpf = value.replace(/\D/g, "");
+  if (cpf.length !== 11 || /^(\d)\1{10}$/.test(cpf)) return false;
+
+  const digits = cpf.split("").map(Number);
+  const checkDigit = (slice: number[]) => {
+    let sum = 0;
+    let factor = slice.length + 1;
+    for (const d of slice) sum += d * factor--;
+    const rest = (sum * 10) % 11;
+    return rest === 10 ? 0 : rest;
+  };
+
+  if (checkDigit(digits.slice(0, 9)) !== digits[9]) return false;
+  if (checkDigit(digits.slice(0, 10)) !== digits[10]) return false;
+  return true;
+}
+
+/** Confere o digito verificador real de um CNPJ (algoritmo padrao, modulo 11, pesos
+ *  6..2/9..2). Rejeita sequencias repetidas pelo mesmo motivo do CPF. */
+export function isValidCNPJ(value: string): boolean {
+  const cnpj = value.replace(/\D/g, "");
+  if (cnpj.length !== 14 || /^(\d)\1{13}$/.test(cnpj)) return false;
+
+  const checkDigit = (base: string) => {
+    const weights = base.length === 12
+      ? [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]
+      : [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+    let sum = 0;
+    for (let i = 0; i < base.length; i++) sum += Number(base[i]) * weights[i];
+    const rest = sum % 11;
+    return rest < 2 ? 0 : 11 - rest;
+  };
+
+  const base = cnpj.slice(0, 12);
+  const d1 = checkDigit(base);
+  if (d1 !== Number(cnpj[12])) return false;
+  const d2 = checkDigit(base + d1);
+  if (d2 !== Number(cnpj[13])) return false;
+  return true;
+}
+
+/** Entrypoint unico pra campo hibrido CPF/CNPJ -- detecta pelo numero de digitos e valida
+ *  o checksum real, nunca so o tamanho. Usar sempre que um formulario aceitar os dois
+ *  tipos de documento no mesmo campo (mesmo padrao de deteccao de maskCpfCnpjInput). */
+export function isValidCpfCnpj(value: string): boolean {
+  const digits = value.replace(/\D/g, "");
+  if (digits.length === 11) return isValidCPF(digits);
+  if (digits.length === 14) return isValidCNPJ(digits);
+  return false;
+}
+
 /** Mascara monetaria em Reais em tempo real (estilo maquineta: digita da direita pra esquerda). Ex: "1234567" digitado vira "12.345,67". */
 export function maskCurrencyBRLInput(value: string): string {
   const digits = value.replace(/\D/g, "");

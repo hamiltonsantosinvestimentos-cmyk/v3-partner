@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { CheckCircle2, ChevronRight, ChevronLeft, Loader2, Shield } from "lucide-react";
-import { maskCpfCnpjInput, maskPhoneInput, isValidEmail, maskCurrencyBRLInput, parseCurrencyBRLInput, formatCurrencyBRLFromNumber } from "@/lib/utils";
+import { maskCpfCnpjInput, maskPhoneInput, isValidEmail, isValidCpfCnpj, maskCurrencyBRLInput, parseCurrencyBRLInput, formatCurrencyBRLFromNumber } from "@/lib/utils";
 import { UFS, fetchMunicipios } from "@/lib/br-locations";
 
 const STEPS = [
@@ -78,7 +78,12 @@ export function IntakeWizard({ token, prefill, anonymousId }: IntakeWizardProps)
   const canAdvance = () => {
     if (step === 0) return form.seller_name.trim() && isValidEmail(form.contato_email);
     if (step === 1) return form.nda_accepted;
-    if (step === 2) return true;
+    // 10/09/2026: CPF/CNPJ passa a ser exigido e validado por digito verificador real, nao
+    // so por formato -- fecha o gap real que deixou um documento invalido (091.004.234-34)
+    // ser salvo sem aviso num cedente real da Bolsa de Ativos, so descoberto quando a
+    // Checktudo recusou a consulta. O campo ja tinha "*" de obrigatorio na label, nunca
+    // era de fato exigido.
+    if (step === 2) return isValidCpfCnpj(form.seller_cpf_cnpj);
     if (step === 3) return form.asset_type && form.ente_devedor;
     if (step === 4) return form.valor_face;
     return true;
@@ -197,6 +202,9 @@ export function IntakeWizard({ token, prefill, anonymousId }: IntakeWizardProps)
               <div>
                 <label className={labelClass}>CPF / CNPJ *</label>
                 <input className={inputClass} value={form.seller_cpf_cnpj} onChange={(e) => upd("seller_cpf_cnpj", maskCpfCnpjInput(e.target.value))} placeholder="000.000.000-00" />
+                {form.seller_cpf_cnpj && !isValidCpfCnpj(form.seller_cpf_cnpj) && (
+                  <p className="text-[10px] text-red-400 mt-1">CPF/CNPJ inválido (dígito verificador não confere)</p>
+                )}
               </div>
               <div>
                 <label className={labelClass}>Telefone (com DDD)</label>
