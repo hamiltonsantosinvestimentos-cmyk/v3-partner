@@ -11,12 +11,12 @@ const securityHeaders = [
     key: "Content-Security-Policy",
     value: [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://fonts.googleapis.com https://cdn.jsdelivr.net",
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://fonts.googleapis.com https://cdn.jsdelivr.net https://connect.facebook.net",
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com",
       "img-src 'self' data: blob: https://avatars.githubusercontent.com https://lh3.googleusercontent.com https://img.youtube.com https://i.ytimg.com https://sbmuashewklfhdyyuezr.supabase.co https://feosfhqlofkfuwdsyeaq.supabase.co https://*.fbcdn.net https://www.facebook.com https://*.cdninstagram.com",
       "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com",
-      "connect-src 'self' https://sbmuashewklfhdyyuezr.supabase.co wss://sbmuashewklfhdyyuezr.supabase.co https://feosfhqlofkfuwdsyeaq.supabase.co wss://feosfhqlofkfuwdsyeaq.supabase.co https://api.anthropic.com https://brasilapi.com.br https://receitaws.com.br https://publica.cnj.jus.br https://viacep.com.br https://n8n-514n.onrender.com",
+      "connect-src 'self' https://sbmuashewklfhdyyuezr.supabase.co wss://sbmuashewklfhdyyuezr.supabase.co https://feosfhqlofkfuwdsyeaq.supabase.co wss://feosfhqlofkfuwdsyeaq.supabase.co https://api.anthropic.com https://brasilapi.com.br https://receitaws.com.br https://publica.cnj.jus.br https://viacep.com.br https://n8n-514n.onrender.com https://www.facebook.com https://connect.facebook.net",
       "frame-ancestors 'none'",
       "base-uri 'self'",
       "form-action 'self'",
@@ -73,26 +73,13 @@ const nextConfig: NextConfig = {
         return h;
       });
 
-    // Landing pública de captação — libera o Meta Pixel (connect.facebook.net
-    // para o script, www.facebook.com/tr para o beacon). img-src já permite
-    // www.facebook.com e *.fbcdn.net. Escopo restrito a /seja-partner: nunca
-    // vale na área logada.
-    const pixelLandingHeaders = securityHeaders.map(h => {
-      if (h.key !== "Content-Security-Policy") return h;
-      return {
-        ...h,
-        value: h.value
-          .replace("script-src 'self'", "script-src 'self' https://connect.facebook.net")
-          .replace("connect-src 'self'", "connect-src 'self' https://www.facebook.com https://connect.facebook.net"),
-      };
-    });
+    // O Meta Pixel (connect.facebook.net p/ o script, www.facebook.com/tr p/ o
+    // beacon) está liberado direto no securityHeaders acima — headers por rota
+    // não conseguem afrouxar o CSP porque o catch-all "/(.*)" reaplica o CSP
+    // restrito depois. O <MetaPixel/> só é injetado em /seja-partner, então na
+    // prática só essa página usa esses domínios.
 
     return [
-      // Landing de captação com Meta Pixel
-      {
-        source: "/seja-partner",
-        headers: pixelLandingHeaders,
-      },
       // Rotas de conteúdo em iframe — sem X-Frame-Options DENY, frame-ancestors self
       {
         source: "/api/prompts/content",
