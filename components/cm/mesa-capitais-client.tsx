@@ -3472,18 +3472,42 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
                   </div>
                 )}
 
-                {/* Timeline de 5 estágios (esqueleto visual da Fase 0, sem cálculo de estágio real) */}
-                <div className="flex items-center bg-[#12112A] border border-[#9BAFC5]/10 rounded-lg px-3 py-2.5 overflow-x-auto">
-                  {["Intake & Triagem", "Varredura de APIs", "Cruzamento IA", "Validação Humana", "Dossiê & Closing"].map((label, i, arr) => (
-                    <div key={label} className="flex items-center flex-shrink-0">
-                      <div className="flex flex-col items-center gap-1 px-2">
-                        <div className="w-5 h-5 rounded-full border border-[#9BAFC5]/30 flex items-center justify-center text-[9px] text-[#9BAFC5] font-bold">{i + 1}</div>
-                        <div className="text-[8px] text-[#9BAFC5] uppercase tracking-wide whitespace-nowrap">{label}</div>
-                      </div>
-                      {i < arr.length - 1 && <div className="w-6 h-px bg-[#9BAFC5]/20 mx-1" />}
+                {/* Timeline de 5 estágios -- Fase 5 (10/09/2026): estágio real derivado do
+                    estado das Fases 0-4, nunca mais um esqueleto puramente visual. Não é
+                    campo novo no banco, é função pura do que já está carregado na tela. */}
+                {(() => {
+                  const stageIndex = dossierFinalizedAt ? 4
+                    : dossierSignoffs.length > 0 ? 3
+                    : dossierText ? 2
+                    : checktudoRecords.length > 0 ? 1
+                    : 0;
+                  const labels = ["Intake & Triagem", "Varredura de APIs", "Cruzamento IA", "Validação Humana", "Dossiê & Closing"];
+                  return (
+                    <div className="flex items-center bg-[#12112A] border border-[#9BAFC5]/10 rounded-lg px-3 py-2.5 overflow-x-auto">
+                      {labels.map((label, i, arr) => {
+                        const done = i < stageIndex;
+                        const current = i === stageIndex;
+                        return (
+                          <div key={label} className="flex items-center flex-shrink-0">
+                            <div className="flex flex-col items-center gap-1 px-2">
+                              <div
+                                className={`w-5 h-5 rounded-full border flex items-center justify-center text-[9px] font-bold ${
+                                  done ? "border-emerald-400 bg-emerald-400/15 text-emerald-400"
+                                  : current ? "border-[#C9A84C] bg-[#C9A84C]/15 text-[#C9A84C]"
+                                  : "border-[#9BAFC5]/30 text-[#9BAFC5]"
+                                }`}
+                              >
+                                {done ? <CheckCircle2 size={11} /> : i + 1}
+                              </div>
+                              <div className={`text-[8px] uppercase tracking-wide whitespace-nowrap ${current ? "text-[#C9A84C] font-bold" : "text-[#9BAFC5]"}`}>{label}</div>
+                            </div>
+                            {i < arr.length - 1 && <div className={`w-6 h-px mx-1 ${done ? "bg-emerald-400/40" : "bg-[#9BAFC5]/20"}`} />}
+                          </div>
+                        );
+                      })}
                     </div>
-                  ))}
-                </div>
+                  );
+                })()}
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
                   {/* Coluna 1: Partes & Compliance */}
