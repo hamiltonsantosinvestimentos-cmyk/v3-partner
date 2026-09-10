@@ -235,6 +235,7 @@ export function PerfilClient({ initialProfile }: { initialProfile: ProfileData }
     STARTER:          { label: "V3 Starter",     color: "#22D3EE", desc: "R$ 297/mês", commission: "20% de comissionamento" },
     PARTNER:          { label: "V3 Partner",     color: "#C9A84C", desc: "R$ 908,08/mês", commission: "35% de comissionamento" },
     PARTNER_PRO:      { label: "V3 Partner PRO", color: "#E8C97A", desc: "R$ 1.324,75/mês", commission: "50% + co-branding" },
+    PARTNER_HE:       { label: "Partner HE",     color: "#84CC16", desc: "R$ 97/mês", commission: "50% de comissionamento" },
     ENTERPRISE:       { label: "V3 Enterprise",  color: "#FBBF24", desc: "R$ 4.158,08/mês", commission: "55% de comissionamento" },
     ADMIN:            { label: "Administrador",  color: "#A855F7", desc: "Acesso total", commission: "—" },
     GESTAO:           { label: "Gestão",         color: "#60A5FA", desc: "Acesso total exceto Usuários", commission: "—" },
