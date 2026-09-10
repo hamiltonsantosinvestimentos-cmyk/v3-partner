@@ -107,6 +107,20 @@ async function checktudoQuery(
   if (!res.ok || status?.cod !== 200) {
     throw new Error(`Checktudo querycode ${querycode} HTTP ${res.status}: ${JSON.stringify(json).slice(0, 300)}`);
   }
+
+  // Achado real em produção (10/09/2026): status.cod é só o envelope de transporte -- a
+  // Checktudo devolve 200 mesmo quando a consulta em si falhou (ex: instabilidade momentânea
+  // do lado deles), com o erro de verdade em body.error. Sem essa checagem, uma falha
+  // transitória vira silenciosamente um registro "bem-sucedido" com risk_flags todo nulo,
+  // indistinguível de "documento sem pendência" -- mesmo padrão do incidente Serasa
+  // (03/08/2026), só que num ponto do código que nunca tinha sido exercitado com chamada
+  // real até agora. Nunca inserir linha em cm_compliance_checktudo_records a partir de uma
+  // resposta com body.error presente.
+  const body = json.body as { error?: { type?: string; msg?: string } } | undefined;
+  if (body?.error) {
+    throw new Error(`Checktudo querycode ${querycode} falhou (${body.error.type ?? "erro"}): ${body.error.msg ?? "sem detalhe"}`);
+  }
+
   return json;
 }
 
