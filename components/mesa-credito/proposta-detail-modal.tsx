@@ -210,6 +210,12 @@ interface PropostaDetailModalProps {
    *  -- libera o botão "Autorizar avanço sem Análise" no gate de Análise de
    *  Crédito. Mesmo critério exigido pelo backend em /api/credit-proposals. */
   isAdmin?: boolean;
+  /** 10/09/2026: mostra o bloco "Docs/Checklist OK" na aba Documentos
+   *  (usado no painel da Mesa Operacional). Só aparece quando true. */
+  showDocsChecklistConfirm?: boolean;
+  /** Habilita o botão de confirmar/desfazer o checklist de documentos.
+   *  Backend exige ADMIN/GESTAO/MESA_OPERACIONAL. */
+  canConfirmDocsChecklist?: boolean;
 }
 
 // ── CopyClientLinkButton ── botão para copiar link de acompanhamento ──────────
@@ -349,6 +355,87 @@ function AnaliseCreditoLinkButton({ proposalId, proposalCode, partnerId, hideBad
           </>
         )}
       </button>
+    </div>
+  );
+}
+
+// ── DocsChecklistConfirm ── Mesa Operacional confirma docs/checklist OK ───────
+function DocsChecklistConfirm({
+  proposal, canConfirm, onProposalUpdate,
+}: {
+  proposal: ProposalFull;
+  canConfirm: boolean;
+  onProposalUpdate?: (id: string, updates: Partial<ProposalFull>) => void;
+}) {
+  const [busy, setBusy] = React.useState(false);
+  const [err, setErr] = React.useState<string | null>(null);
+
+  const meta = (proposal.metadata ?? {}) as Record<string, unknown>;
+  const confirmedAt = meta.docs_checklist_confirmed_at as string | null | undefined;
+  const confirmedBy = meta.docs_checklist_confirmed_by_name as string | null | undefined;
+
+  async function call(undo: boolean) {
+    setBusy(true);
+    setErr(null);
+    try {
+      const res = await fetch(`/api/credit-proposals/${proposal.id}/confirm-docs-checklist`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ undo }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Falha ao registrar a confirmação");
+      onProposalUpdate?.(proposal.id, { metadata: json.proposal?.metadata ?? proposal.metadata });
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (confirmedAt) {
+    const dt = new Date(confirmedAt).toLocaleString("pt-BR", {
+      day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit",
+    });
+    return (
+      <div className="p-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 space-y-1.5">
+        <p className="text-xs font-semibold text-emerald-400 flex items-center gap-1.5">
+          <CheckCircle2 className="w-4 h-4" /> Checklist de documentos confirmado
+        </p>
+        <p className="text-[11px] text-emerald-300/80 flex items-center gap-1.5">
+          <Clock className="w-3 h-3" /> {dt}{confirmedBy ? ` · por ${confirmedBy}` : ""}
+        </p>
+        {canConfirm && (
+          <button
+            onClick={() => call(true)}
+            disabled={busy}
+            className="text-[10px] text-muted-foreground hover:text-white underline disabled:opacity-50"
+          >
+            {busy ? "Desfazendo…" : "Desfazer confirmação"}
+          </button>
+        )}
+        {err && <p className="text-[10px] text-red-400">{err}</p>}
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-4 rounded-xl border border-[#C9A84C]/20 bg-[#12112A] space-y-2">
+      <p className="text-xs font-semibold text-[#C9A84C] flex items-center gap-1.5">
+        <ShieldCheck className="w-3.5 h-3.5" /> Conferência de documentos
+      </p>
+      <p className="text-[10px] text-muted-foreground">
+        Confirme que os documentos e o checklist desta proposta foram conferidos e estão OK.
+      </p>
+      <button
+        onClick={() => call(false)}
+        disabled={!canConfirm || busy}
+        className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-md bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-[11px] font-semibold hover:bg-emerald-500/25 transition disabled:opacity-40"
+      >
+        {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+        Confirmar Docs/Checklist OK
+      </button>
+      {err && <p className="text-[10px] text-red-400">{err}</p>}
     </div>
   );
 }
@@ -801,7 +888,7 @@ function TimelineOperacao({ proposal }: { proposal: ProposalFull }) {
   );
 }
 
-export function PropostaDetailModal({ open, onClose, proposal, onStageChange, onProposalUpdate, canChangeStage, canEditValorSolicitado, canCompileDocuments, canEditInstituicao, pendingCrmReview, onConfirmSendToMesa, canGenerateContract, isAdmin }: PropostaDetailModalProps) {
+export function PropostaDetailModal({ open, onClose, proposal, onStageChange, onProposalUpdate, canChangeStage, canEditValorSolicitado, canCompileDocuments, canEditInstituicao, pendingCrmReview, onConfirmSendToMesa, canGenerateContract, isAdmin, showDocsChecklistConfirm, canConfirmDocsChecklist }: PropostaDetailModalProps) {
   // ── Gate Análise de Crédito (26/08/2026) ─────────────────────────────────
   // Status do pedido de Análise vinculado a esta proposta (?prop=<code> em
   // /analise-v2) -- alimenta a tarja grande na aba Detalhes e o bloqueio do
@@ -4098,6 +4185,15 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
               </div>
             );
           })()}
+
+          {/* ── Confirmação de Docs/Checklist (Mesa Operacional) ── */}
+          {modalTab === "documentos" && showDocsChecklistConfirm && (
+            <DocsChecklistConfirm
+              proposal={proposal}
+              canConfirm={!!canConfirmDocsChecklist}
+              onProposalUpdate={onProposalUpdate}
+            />
+          )}
 
           {/* ── Upload livre de documentos (partner e admin) ── */}
           {modalTab === "documentos" && (
