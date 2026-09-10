@@ -262,6 +262,13 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
   const [checktudoRecords, setChecktudoRecords] = useState<any[]>([]);
   const [checktudoScanning, setChecktudoScanning] = useState(false);
   const [checktudoError, setChecktudoError] = useState<string | null>(null);
+  // Fase 3 do Cockpit de Compliance (10/09/2026): intermediários qualificados
+  // (cm_party_qualifications via cm_qualification_batches) + status de
+  // antecedentes checados (cross-referência por CPF/CNPJ contra
+  // cm_due_diligence_records, mesmo dado que o gate no backend usa).
+  const [complianceIntermediaries, setComplianceIntermediaries] = useState<{ id: string; full_name: string; role_in_document: string; cpf_cnpj: string | null; checked: boolean }[]>([]);
+  const [complianceIntermediariesLoading, setComplianceIntermediariesLoading] = useState(false);
+  const [expandedComplianceIntermediaryId, setExpandedComplianceIntermediaryId] = useState<string | null>(null);
   const [intakeUrl, setIntakeUrl] = useState<string | null>(null);
   const [generatingLink, setGeneratingLink] = useState(false);
   const [dealRoomUrl, setDealRoomUrl] = useState<string | null>(null);
@@ -502,6 +509,18 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
       setChecktudoRecords([]);
       setChecktudoError(null);
       loadChecktudoRecords(selectedListing.id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeDetailTab, selectedListing?.id]);
+
+  // Fase 3 do Cockpit de Compliance (10/09/2026): carrega intermediários
+  // qualificados + cruza com antecedentes já checados, mesmo critério do
+  // gate real no backend (app/api/contracts/generate).
+  useEffect(() => {
+    if (activeDetailTab === "compliance" && selectedListing?.id) {
+      setComplianceIntermediaries([]);
+      setExpandedComplianceIntermediaryId(null);
+      loadComplianceIntermediaries(selectedListing.id);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeDetailTab, selectedListing?.id]);
@@ -829,6 +848,38 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
       const json = await res.json();
       if (res.ok) setChecktudoRecords(json.records ?? []);
     } catch { /* silencioso, botão de varredura mostra erro próprio */ }
+  };
+
+  const COMPLIANCE_INTERMEDIARY_ROLES = ["mandatario", "intermediario_finder_venda", "intermediario_finder_compra"];
+
+  // Fase 3 (10/09/2026): mesmo par de fontes que o gate real no backend usa
+  // (cm_party_qualifications + cm_due_diligence_records, cruzados por
+  // CPF/CNPJ) -- a UI nunca decide sozinha, só reflete o mesmo critério.
+  const loadComplianceIntermediaries = async (listingId: string) => {
+    setComplianceIntermediariesLoading(true);
+    try {
+      const [qualRes, ddRes] = await Promise.all([
+        fetch(`/api/cm/qualifications?listing_id=${listingId}`),
+        fetch(`/api/cm/listings/${listingId}/due-diligence/escavador`),
+      ]);
+      const qualJson = await qualRes.json();
+      const ddJson = await ddRes.json();
+      const parties = (qualJson.batches ?? []).flatMap((b: any) => b.cm_party_qualifications ?? []);
+      const checkedDocs = new Set(
+        ((ddJson.records ?? []) as { query_value: string }[]).map((r) => r.query_value.replace(/\D/g, ""))
+      );
+      const list = parties
+        .filter((p: any) => COMPLIANCE_INTERMEDIARY_ROLES.includes(p.role_in_document))
+        .map((p: any) => ({
+          id: p.id,
+          full_name: p.full_name,
+          role_in_document: p.role_in_document,
+          cpf_cnpj: p.cpf_cnpj ?? null,
+          checked: p.cpf_cnpj ? checkedDocs.has(String(p.cpf_cnpj).replace(/\D/g, "")) : false,
+        }));
+      setComplianceIntermediaries(list);
+    } catch { /* silencioso, card mostra estado vazio */ }
+    finally { setComplianceIntermediariesLoading(false); }
   };
 
   const runChecktudoScan = async (listingId: string, documentType: "cpf" | "cnpj", documentValue: string) => {
@@ -3384,6 +3435,58 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
                           ))}
                         </div>
                       )}
+
+                      {/* Fase 3 do Cockpit de Compliance (10/09/2026): intermediários
+                          qualificados (mandatário/finder) + antecedentes, mesmo dado que
+                          o gate real de geração de NDA/FPA usa no backend. */}
+                      <div className="space-y-2 pt-2 border-t border-[#9BAFC5]/10">
+                        <div className="text-[9px] text-[#C9A84C] font-bold uppercase tracking-wider">Intermediários</div>
+                        {complianceIntermediariesLoading ? (
+                          <div className="flex items-center gap-2 text-[10px] text-[#9BAFC5]"><Loader2 size={12} className="animate-spin" /> Carregando...</div>
+                        ) : complianceIntermediaries.length === 0 ? (
+                          <p className="text-[10px] text-[#9BAFC5]">Nenhum intermediário qualificado ainda.</p>
+                        ) : (
+                          complianceIntermediaries.map((p) => (
+                            <div key={p.id} className="bg-[#162744] border border-[#9BAFC5]/10 rounded-lg px-3 py-2">
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="min-w-0">
+                                  <div className="text-[10px] text-[#F5F1E8] font-bold truncate">{p.full_name}</div>
+                                  <div className="text-[8px] text-[#9BAFC5]">{p.role_in_document} {p.cpf_cnpj ? `· ${p.cpf_cnpj}` : "(sem CPF/CNPJ)"}</div>
+                                </div>
+                                <span className={`text-[8px] font-bold uppercase px-1.5 py-0.5 rounded flex-shrink-0 ${p.checked ? "bg-emerald-500/15 text-emerald-400" : "bg-amber-500/15 text-amber-400"}`}>
+                                  {p.checked ? "Checado" : "Pendente"}
+                                </span>
+                              </div>
+                              {p.cpf_cnpj && (
+                                <button
+                                  onClick={() => {
+                                    const closing = expandedComplianceIntermediaryId === p.id;
+                                    setExpandedComplianceIntermediaryId(closing ? null : p.id);
+                                    // Recarrega o badge Checado/Pendente ao fechar -- a checagem
+                                    // pode ter sido feita dentro do painel embutido, que não
+                                    // notifica o pai diretamente.
+                                    if (closing) loadComplianceIntermediaries(selectedListing.id);
+                                  }}
+                                  className="mt-1.5 text-[9px] text-[#C9A84C] font-bold hover:underline"
+                                >
+                                  {expandedComplianceIntermediaryId === p.id ? "Ocultar" : "Checar Antecedentes"}
+                                </button>
+                              )}
+                              {expandedComplianceIntermediaryId === p.id && p.cpf_cnpj && (
+                                <div className="mt-2 -mx-3 -mb-2 border-t border-[#9BAFC5]/10">
+                                  <DueDiligencePanel
+                                    listingId={selectedListing.id}
+                                    anonymousId={selectedListing.anonymous_id}
+                                    sellerCpfCnpj={p.cpf_cnpj}
+                                    onClose={() => {}}
+                                    embedded
+                                  />
+                                </div>
+                              )}
+                            </div>
+                          ))
+                        )}
+                      </div>
                     </div>
                   </div>
 

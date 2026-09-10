@@ -70,6 +70,54 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // Gate Cockpit de Compliance Fase 3 (10/09/2026): NDA/FPA da Bolsa de
+  // Ativos não pode ser gerado enquanto houver intermediário qualificado
+  // (cm_party_qualifications, role_in_document mandatario/intermediario_*)
+  // sem antecedentes checados (cm_due_diligence_records, query_value =
+  // CPF/CNPJ da parte). Mesmo espírito do gate de Plano de Negócios do
+  // Credit Engine: nunca bloqueia intake/qualificação, só a geração do
+  // contrato em si. Listing sem nenhum intermediário qualificado passa
+  // direto -- o gate existe pra parte qualificada não checada, nunca para
+  // "ausência" de intermediário.
+  const FPA_NCND_SERIES: V3Series[] = ["V3C-NDA", "V3C-FPA"];
+  if (template.vertical === "capital_markets" && listing_id && FPA_NCND_SERIES.includes(template.contract_series as V3Series)) {
+    const INTERMEDIARY_ROLES = ["mandatario", "intermediario_finder_venda", "intermediario_finder_compra"];
+    const { data: batches } = await svc()
+      .from("cm_qualification_batches")
+      .select("id")
+      .eq("listing_id", listing_id);
+    const batchIds = (batches ?? []).map((b) => b.id);
+
+    if (batchIds.length > 0) {
+      const { data: intermediaries } = await svc()
+        .from("cm_party_qualifications")
+        .select("id, full_name, cpf_cnpj, role_in_document")
+        .in("batch_id", batchIds)
+        .in("role_in_document", INTERMEDIARY_ROLES);
+
+      const qualified = (intermediaries ?? []).filter((p) => p.cpf_cnpj?.trim());
+      if (qualified.length > 0) {
+        const docs = qualified.map((p) => p.cpf_cnpj!.replace(/\D/g, ""));
+        const { data: checks } = await svc()
+          .from("cm_due_diligence_records")
+          .select("query_value")
+          .eq("listing_id", listing_id)
+          .in("query_value", docs);
+        const checkedDocs = new Set((checks ?? []).map((c) => c.query_value.replace(/\D/g, "")));
+
+        const unchecked = qualified.filter((p) => !checkedDocs.has(p.cpf_cnpj!.replace(/\D/g, "")));
+        if (unchecked.length > 0) {
+          return NextResponse.json(
+            {
+              error: `Antecedentes pendentes para ${unchecked.length} intermediário(s) antes de gerar ${template.contract_series}: ${unchecked.map((p) => p.full_name).join(", ")}. Confira "Checar Antecedentes" na aba Due Diligence & Compliance do ativo.`,
+            },
+            { status: 422 }
+          );
+        }
+      }
+    }
+  }
+
   const variables: Record<string, any> = {
     data_geracao: new Date().toLocaleDateString("pt-BR"),
     data_geracao_extenso: new Date().toLocaleDateString("pt-BR", { day: "numeric", month: "long", year: "numeric" }),

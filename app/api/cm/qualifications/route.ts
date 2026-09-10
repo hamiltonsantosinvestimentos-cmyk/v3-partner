@@ -95,7 +95,7 @@ export async function GET(req: NextRequest) {
   // (achado 11/08/2026, ao trazer este fluxo para a Central de Contratos).
   let query = svc()
     .from("cm_qualification_batches")
-    .select("*, cm_party_qualifications(id, full_name, email, phone, role_in_document, status, filled_at, qualification_token)")
+    .select("*, cm_party_qualifications(id, full_name, email, phone, role_in_document, status, filled_at, qualification_token, cpf_cnpj)")
     .order("created_at", { ascending: false });
   query = listingId
     ? query.eq("listing_id", listingId)
