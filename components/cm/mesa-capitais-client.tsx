@@ -268,6 +268,16 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
   // cm_due_diligence_records, mesmo dado que o gate no backend usa).
   const [complianceIntermediaries, setComplianceIntermediaries] = useState<{ id: string; full_name: string; role_in_document: string; cpf_cnpj: string | null; checked: boolean }[]>([]);
   const [complianceIntermediariesLoading, setComplianceIntermediariesLoading] = useState(false);
+  // Fase 4 do Cockpit de Compliance (10/09/2026): parecer sintetizado por IA
+  // + quórum de assinatura (1 Sócio ADMIN + Dr. Athaydes) + Dossiê de Risco PDF.
+  const [dossierText, setDossierText] = useState<string | null>(null);
+  const [dossierGeneratedAt, setDossierGeneratedAt] = useState<string | null>(null);
+  const [dossierSignoffs, setDossierSignoffs] = useState<{ signer_name: string; signer_role: string; signed_at: string }[]>([]);
+  const [dossierFinalizedAt, setDossierFinalizedAt] = useState<string | null>(null);
+  const [dossierPdfUrl, setDossierPdfUrl] = useState<string | null>(null);
+  const [compilingDossier, setCompilingDossier] = useState(false);
+  const [signingDossier, setSigningDossier] = useState(false);
+  const [dossierError, setDossierError] = useState<string | null>(null);
   const [expandedComplianceIntermediaryId, setExpandedComplianceIntermediaryId] = useState<string | null>(null);
   const [intakeUrl, setIntakeUrl] = useState<string | null>(null);
   const [generatingLink, setGeneratingLink] = useState(false);
@@ -521,6 +531,20 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
       setComplianceIntermediaries([]);
       setExpandedComplianceIntermediaryId(null);
       loadComplianceIntermediaries(selectedListing.id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeDetailTab, selectedListing?.id]);
+
+  // Fase 4 (10/09/2026): carrega parecer + quórum + PDF já existentes ao abrir a aba.
+  useEffect(() => {
+    if (activeDetailTab === "compliance" && selectedListing?.id) {
+      setDossierText(null);
+      setDossierGeneratedAt(null);
+      setDossierSignoffs([]);
+      setDossierFinalizedAt(null);
+      setDossierPdfUrl(null);
+      setDossierError(null);
+      loadDossierSignoffStatus(selectedListing.id);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeDetailTab, selectedListing?.id]);
@@ -880,6 +904,69 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
       setComplianceIntermediaries(list);
     } catch { /* silencioso, card mostra estado vazio */ }
     finally { setComplianceIntermediariesLoading(false); }
+  };
+
+  // Fase 4 (10/09/2026): status do quórum + parecer, mesma rota serve os dois.
+  const loadDossierSignoffStatus = async (listingId: string) => {
+    try {
+      const res = await fetch(`/api/cm/listings/${listingId}/compliance-dossier/signoff`);
+      const json = await res.json();
+      if (res.ok) {
+        setDossierSignoffs(json.signoffs ?? []);
+        setDossierFinalizedAt(json.finalized_at ?? null);
+        setDossierText(json.risk_dossier_text ?? null);
+        setDossierGeneratedAt(json.risk_dossier_generated_at ?? null);
+        if (json.pdf_path) loadDossierPdfUrl(listingId);
+      }
+    } catch { /* silencioso */ }
+  };
+
+  const loadDossierPdfUrl = async (listingId: string) => {
+    try {
+      const res = await fetch(`/api/cm/listings/${listingId}/compliance-dossier/pdf`);
+      const json = await res.json();
+      if (res.ok) setDossierPdfUrl(json.pdf_url ?? null);
+    } catch { /* silencioso */ }
+  };
+
+  const compileDossier = async (listingId: string) => {
+    setCompilingDossier(true);
+    setDossierError(null);
+    try {
+      const res = await fetch(`/api/cm/listings/${listingId}/compliance-dossier/compile`, { method: "POST" });
+      const json = await res.json();
+      if (res.ok) {
+        setDossierText(json.risk_dossier_text);
+        setDossierGeneratedAt(json.risk_dossier_generated_at);
+      } else {
+        setDossierError(json.error ?? "Erro ao compilar dossiê");
+      }
+    } catch {
+      setDossierError("Erro de conexão");
+    } finally {
+      setCompilingDossier(false);
+    }
+  };
+
+  const signDossier = async (listingId: string) => {
+    setSigningDossier(true);
+    setDossierError(null);
+    try {
+      const res = await fetch(`/api/cm/listings/${listingId}/compliance-dossier/signoff`, { method: "POST" });
+      const json = await res.json();
+      if (res.ok) {
+        loadDossierSignoffStatus(listingId);
+        if (json.quorum_closed && json.pdf_error) {
+          setDossierError(`Quórum fechado, mas o PDF falhou: ${json.pdf_error}`);
+        }
+      } else {
+        setDossierError(json.error ?? "Erro ao assinar");
+      }
+    } catch {
+      setDossierError("Erro de conexão");
+    } finally {
+      setSigningDossier(false);
+    }
   };
 
   const runChecktudoScan = async (listingId: string, documentType: "cpf" | "cnpj", documentValue: string) => {
@@ -3526,20 +3613,79 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
                     </div>
                   </div>
 
-                  {/* Coluna 3: Tese & Parecer IA (Fase 4, ainda não implementada) */}
+                  {/* Coluna 3: Tese & Parecer IA (Fase 4, 10/09/2026) */}
                   <div className="bg-[#12112A] border border-[#9BAFC5]/10 rounded-lg overflow-hidden flex flex-col">
                     <div className="px-3 py-2 border-b border-[#9BAFC5]/10 bg-[#162744] flex items-center justify-between">
                       <div className="text-[10px] text-[#C9A84C] font-bold uppercase tracking-wider">Tese &amp; Parecer IA</div>
-                      <span className="text-[8px] font-bold text-[#9BAFC5] uppercase bg-[#9BAFC5]/10 px-1.5 py-0.5 rounded">Fase 4</span>
+                      {dossierFinalizedAt && <CheckCircle2 size={13} className="text-emerald-400" />}
                     </div>
-                    <div className="p-4 flex-1 flex items-center justify-center text-center">
-                      <div>
-                        <FileText size={28} className="mx-auto mb-2 text-[#9BAFC5]/40" />
-                        <p className="text-[11px] text-[#9BAFC5]">
-                          Síntese de IA, semáforo de risco e Dossiê de Risco em PDF entram na Fase 4 do
-                          BRIEF, após a integração com a Checktudo e o quórum de assinatura já aprovado
-                          (1 Sócio ADMIN + Dr. Luis Athaydes).
-                        </p>
+                    <div className="p-3 flex-1 space-y-3 overflow-y-auto">
+                      <button
+                        onClick={() => compileDossier(selectedListing.id)}
+                        disabled={compilingDossier || !!dossierFinalizedAt}
+                        className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-[#C9A84C]/10 border border-[#C9A84C]/20 rounded text-[#C9A84C] text-[10px] font-bold hover:bg-[#C9A84C]/20 transition disabled:opacity-50"
+                      >
+                        {compilingDossier ? <Loader2 size={13} className="animate-spin" /> : <Bot size={13} />}
+                        {dossierText ? "Recompilar Tese & Dossiê" : "Compilar Tese & Dossiê"}
+                      </button>
+
+                      {dossierError && (
+                        <div className="flex items-start gap-2 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
+                          <AlertTriangle size={13} className="text-red-400 flex-shrink-0 mt-0.5" />
+                          <div className="text-[10px] text-red-300">{dossierError}</div>
+                        </div>
+                      )}
+
+                      {dossierText ? (
+                        <div className="bg-[#162744] border border-[#9BAFC5]/10 rounded-lg px-3 py-2 max-h-48 overflow-y-auto">
+                          <div className="text-[8px] text-[#9BAFC5] mb-1">
+                            Gerado em {dossierGeneratedAt ? new Date(dossierGeneratedAt).toLocaleString("pt-BR") : "n/d"}
+                          </div>
+                          <p className="text-[10px] text-[#F5F1E8] whitespace-pre-wrap leading-relaxed">{dossierText}</p>
+                        </div>
+                      ) : (
+                        <p className="text-[10px] text-[#9BAFC5]">Nenhum parecer compilado ainda.</p>
+                      )}
+
+                      {/* Quórum de fechamento: 1 Sócio ADMIN + Dr. Luis Athaydes */}
+                      <div className="space-y-2 pt-2 border-t border-[#9BAFC5]/10">
+                        <div className="text-[9px] text-[#C9A84C] font-bold uppercase tracking-wider">Quórum de Fechamento</div>
+                        <div className="text-[9px] text-[#9BAFC5]">
+                          {dossierSignoffs.find((s) => s.signer_role === "socio_admin")
+                            ? `✓ Sócio: ${dossierSignoffs.find((s) => s.signer_role === "socio_admin")!.signer_name}`
+                            : "○ Sócio ADMIN: pendente"}
+                        </div>
+                        <div className="text-[9px] text-[#9BAFC5]">
+                          {dossierSignoffs.find((s) => s.signer_role === "juridico")
+                            ? `✓ Jurídico: ${dossierSignoffs.find((s) => s.signer_role === "juridico")!.signer_name}`
+                            : "○ Jurídico (Dr. Athaydes): pendente"}
+                        </div>
+                        {dossierFinalizedAt ? (
+                          <div className="flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-3 py-2">
+                            <CheckCircle2 size={13} className="text-emerald-400 flex-shrink-0" />
+                            <div className="text-[10px] text-emerald-300">Fechado em {new Date(dossierFinalizedAt).toLocaleDateString("pt-BR")}</div>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => signDossier(selectedListing.id)}
+                            disabled={signingDossier || !dossierText}
+                            title={!dossierText ? "Compile o parecer antes de assinar" : undefined}
+                            className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-[#162744] border border-[#9BAFC5]/15 rounded text-[#F5F1E8] text-[10px] font-bold hover:border-[#C9A84C]/30 transition disabled:opacity-40"
+                          >
+                            {signingDossier ? <Loader2 size={13} className="animate-spin" /> : <Shield size={13} />}
+                            Assinar Dossiê
+                          </button>
+                        )}
+                        {dossierPdfUrl && (
+                          <a
+                            href={dossierPdfUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-[#C9A84C]/10 border border-[#C9A84C]/20 rounded text-[#C9A84C] text-[10px] font-bold hover:bg-[#C9A84C]/20 transition"
+                          >
+                            <FileText size={13} /> Abrir Dossiê de Risco (PDF)
+                          </a>
+                        )}
                       </div>
                     </div>
                   </div>
