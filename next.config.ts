@@ -73,7 +73,26 @@ const nextConfig: NextConfig = {
         return h;
       });
 
+    // Landing pública de captação — libera o Meta Pixel (connect.facebook.net
+    // para o script, www.facebook.com/tr para o beacon). img-src já permite
+    // www.facebook.com e *.fbcdn.net. Escopo restrito a /seja-partner: nunca
+    // vale na área logada.
+    const pixelLandingHeaders = securityHeaders.map(h => {
+      if (h.key !== "Content-Security-Policy") return h;
+      return {
+        ...h,
+        value: h.value
+          .replace("script-src 'self'", "script-src 'self' https://connect.facebook.net")
+          .replace("connect-src 'self'", "connect-src 'self' https://www.facebook.com https://connect.facebook.net"),
+      };
+    });
+
     return [
+      // Landing de captação com Meta Pixel
+      {
+        source: "/seja-partner",
+        headers: pixelLandingHeaders,
+      },
       // Rotas de conteúdo em iframe — sem X-Frame-Options DENY, frame-ancestors self
       {
         source: "/api/prompts/content",

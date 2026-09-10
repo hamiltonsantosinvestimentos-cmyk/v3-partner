@@ -12,6 +12,7 @@ import {
   GOLD, GOLD_LIGHT, NAVY, NAVY_CARD, NAVY_BASE, MUTED, ESTADOS_BR,
   inputCls, inputStyle, maskPhone, TopProgress, Field, StepCard, ChoiceGrid,
 } from "./wizard-ui";
+import { trackPixel } from "./meta-pixel";
 import {
   OBJETIVO, OCUPACAO, EXPERIENCIA_B2B, REDE, PORTE_REDE, DISPONIBILIDADE,
   PRAZO_COMECO, RENDA_FAIXA, RENDA_FAIXA_VALOR, scoreQuizPartner, PLANO_LABEL,
@@ -19,12 +20,12 @@ import {
 } from "@/lib/quiz-partner";
 
 type Step =
-  | "objetivo" | "ocupacao" | "experiencia" | "rede" | "porte"
+  | "intro" | "objetivo" | "ocupacao" | "experiencia" | "rede" | "porte"
   | "renda" | "disponibilidade" | "prazo" | "previa" | "dados" | "concluido";
 
 // Ordem usada pela barra de progresso e pelo beacon de funil.
 const PROGRESS_STEPS: Step[] = [
-  "objetivo", "ocupacao", "experiencia", "rede", "porte",
+  "intro", "objetivo", "ocupacao", "experiencia", "rede", "porte",
   "renda", "disponibilidade", "prazo", "previa", "dados", "concluido",
 ];
 // Passos numerados ("Passo X de N") — pergunta 1 (objetivo) até os dados.
@@ -89,7 +90,7 @@ export function PartnerQuizClient() {
       .catch(() => {});
   }, [ref]);
 
-  const [step, setStep] = useState<Step>("objetivo");
+  const [step, setStep] = useState<Step>("intro");
   const [, setHistory] = useState<Step[]>([]);
 
   // ── Rastreio de funil: reporta cada passo alcançado (1x por sessão) ──
@@ -131,11 +132,11 @@ export function PartnerQuizClient() {
     });
   }
   function reiniciar() {
-    setForm(INITIAL); setHistory([]); setStep("objetivo"); setResultado(null); setSubmitError(null);
+    setForm(INITIAL); setHistory([]); setStep("intro"); setResultado(null); setSubmitError(null);
   }
 
   const idx = PROGRESS_STEPS.indexOf(step);
-  const progressPct = idx >= 0 ? ((idx + 1) / PROGRESS_STEPS.length) * 100 : 100;
+  const progressPct = step === "intro" ? 0 : idx >= 0 ? ((idx + 1) / PROGRESS_STEPS.length) * 100 : 100;
 
   const partnerName = partner?.full_name ?? null;
   const waLink = partner?.whatsapp
@@ -186,6 +187,7 @@ export function PartnerQuizClient() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Falha ao enviar o quiz");
+      trackPixel("Lead", { content_name: "quiz_seja_partner", tier: json.tier, currency: "BRL", value: 0 });
       setResultado({ tier: json.tier, planoLabel: json.planoLabel });
       goTo("concluido");
     } catch (e) {
@@ -195,7 +197,7 @@ export function PartnerQuizClient() {
     }
   }
 
-  const showHeaderStrip = step !== "concluido";
+  const showHeaderStrip = step !== "concluido" && step !== "intro";
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: NAVY }}>
@@ -219,6 +221,49 @@ export function PartnerQuizClient() {
       )}
 
       <div className="flex-1 flex items-center justify-center px-4 py-10">
+        {/* ── Abertura de venda ── */}
+        {step === "intro" && (
+          <div className="w-full max-w-lg mx-auto animate-fade-in">
+            <div className="rounded-2xl border p-7 sm:p-9 space-y-6" style={{ background: NAVY_CARD, borderColor: "rgba(255,255,255,0.06)" }}>
+              <div className="space-y-3">
+                <p className="text-xs font-bold uppercase tracking-widest" style={{ color: GOLD }}>Seja Partner V3</p>
+                <h1 className="text-2xl sm:text-3xl font-bold text-white leading-tight">
+                  Ganhe comissão originando <span style={{ color: GOLD }}>crédito, M&amp;A e estruturação financeira</span>
+                </h1>
+                <p className="text-sm leading-relaxed" style={{ color: MUTED }}>
+                  A V3 Partners é uma boutique institucional multiproduto. Você leva os clientes,
+                  a V3 estrutura a operação — e você recebe a comissão de cada negócio fechado.
+                </p>
+              </div>
+
+              <ul className="space-y-2.5">
+                {[
+                  "Crédito com garantia, Home Equity, M&A, câmbio, consórcio e mais",
+                  "Comissão de 20% a 50% por operação, conforme o seu plano",
+                  "Mesa de operações, IA e materiais de venda prontos pra você",
+                  "Rede de parceiros em todo o Brasil",
+                ].map((b) => (
+                  <li key={b} className="flex items-start gap-2.5 text-sm text-white">
+                    <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" style={{ color: GOLD }} />
+                    <span>{b}</span>
+                  </li>
+                ))}
+              </ul>
+
+              {partnerName && <p className="text-xs" style={{ color: GOLD }}>Convite de {partnerName} — Partner V3</p>}
+
+              <button onClick={() => goTo("objetivo")}
+                className="w-full py-3.5 rounded-xl font-bold text-sm text-black flex items-center justify-center gap-2 hover:opacity-90 transition-opacity"
+                style={{ background: GOLD }}>
+                Descobrir meu plano ideal <ArrowRight className="w-4 h-4" />
+              </button>
+              <p className="text-xs text-center flex items-center justify-center gap-1.5" style={{ color: MUTED }}>
+                <Clock3 className="w-3 h-3" /> Leva 2 minutos · você vê o resultado na hora
+              </p>
+            </div>
+          </div>
+        )}
+
         {step === "objetivo" && (
           <StepCard stepNum={stepNumOf(step)} totalSteps={TOTAL} title="Qual seu" titleHighlight="objetivo com a parceria?"
             subtitle="Comece por aqui — o que você quer alcançar sendo Partner da V3.">
