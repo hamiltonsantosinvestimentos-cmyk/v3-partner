@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as sc } from "@supabase/supabase-js";
+import { isValidCpfCnpj } from "@/lib/utils";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -85,6 +86,17 @@ export async function POST(
   if (!seller_name || !valor_face || !asset_type) {
     return NextResponse.json({
       error: "Campos obrigatórios: nome do cedente, tipo de ativo e valor de face",
+    }, { status: 422 });
+  }
+
+  // 10/09/2026: nunca confiar so na validacao do client -- o formulario ja tinha "CPF/CNPJ *"
+  // como obrigatorio na label, mas a rota aceitava qualquer sequencia de digitos sem checar o
+  // digito verificador. Foi assim que um CPF invalido (091.004.234-34) entrou num cedente
+  // real, so descoberto quando a Checktudo recusou a consulta na Fase 2 do Cockpit de
+  // Compliance.
+  if (!seller_cpf_cnpj || !isValidCpfCnpj(seller_cpf_cnpj)) {
+    return NextResponse.json({
+      error: "CPF/CNPJ do cedente inválido ou ausente (dígito verificador não confere)",
     }, { status: 422 });
   }
 
