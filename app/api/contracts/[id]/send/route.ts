@@ -147,7 +147,8 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     documentContentBase64 = `data:application/pdf;base64,${buffer.toString("base64")}`;
   }
 
-  const result = await getProvider({ contractId: id, vertical: contract.vertical }).send({
+  const provider = await getProvider({ contractId: id, vertical: contract.vertical });
+  const result = await provider.send({
     dealId: id,
     documentType: resolveDocumentType(contract.contract_title, contract.vertical),
     documentUrl,
@@ -180,6 +181,11 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     external_envelope_id: result.envelopeId,
     external_document_id: result.documentId,
     sent_to_signature_at: new Date().toISOString(),
+    // Fase 3 (10/09/2026): congela o provedor usado neste envio na mesma
+    // UPDATE atômica que grava o envelope -- se a chamada externa acima
+    // falhar, nada é gravado (return antes disso); ações futuras neste
+    // contrato usam sempre este valor, nunca a config atual da vertical.
+    esignature_provider: provider.name,
   }).eq("id", id);
 
   return NextResponse.json({ ok: true, envelope_id: result.envelopeId, signatarios: signatories.length });

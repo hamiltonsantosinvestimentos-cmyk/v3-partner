@@ -156,7 +156,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
 
   const documentUrl = `${process.env.NEXT_PUBLIC_APP_URL ?? "https://app.v3partners.com.br"}/api/cm/annex-sign/${signingToken}?format=html`;
 
-  const clicksignRes = await getProvider({ contractId: contract.id, dealId: dealCode, vertical: "ma", documentType: "contrato_venda" }).send({
+  const provider = await getProvider({ contractId: contract.id, dealId: dealCode, vertical: "ma", documentType: "contrato_venda" });
+  const clicksignRes = await provider.send({
     dealId: dealCode,
     documentType: "contrato_venda",
     documentUrl,
@@ -173,6 +174,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   await db.from("operation_contracts").update({
     status_signature: "enviado_assinatura",
     external_envelope_id: clicksignRes.envelopeId,
+    esignature_provider: provider.name,
   }).eq("id", contract.id);
 
   await notifyDealTimeline({

@@ -47,7 +47,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   const { data: contract } = await db
     .from("operation_contracts")
-    .select("id, rendered_html, status_signature, external_envelope_id, external_document_id")
+    .select("id, rendered_html, status_signature, external_envelope_id, external_document_id, esignature_provider")
     .eq("id", id)
     .single();
 
@@ -66,7 +66,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   // acontece ANTES, na aplicação, como sempre foi.
   if (hadPendingEnvelope && contract.external_document_id) {
     cancelResult.attempted = true;
-    const result = await getProvider({ contractId: id }).cancel(contract.external_envelope_id!, contract.external_document_id);
+    // Fase 3 (10/09/2026): usa sempre o provedor congelado no envio original
+    // (esignature_provider), nunca a config atual da vertical -- o envelope
+    // real vive no provedor que criou ele, não no que está configurado hoje.
+    const result = await (await getProvider({ contractId: id, provider: contract.esignature_provider ?? undefined })).cancel(contract.external_envelope_id!, contract.external_document_id);
     cancelResult.ok = result.ok;
     if (!result.ok) cancelResult.error = result.error;
   }

@@ -223,7 +223,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   // gate de auth do proxy.ts, e esta rota é pública/server-to-server.
   const documentUrl = `${process.env.NEXT_PUBLIC_APP_URL ?? "https://app.v3partners.com.br"}/api/cm/annex-sign/${signingToken}?format=html`;
 
-  const clicksignRes = await getProvider({ contractId: contract.id, dealId: dealCode, vertical: "ma", documentType: "loi" }).send({
+  const provider = await getProvider({ contractId: contract.id, dealId: dealCode, vertical: "ma", documentType: "loi" });
+  const clicksignRes = await provider.send({
     dealId: dealCode,
     documentType: "loi",
     documentUrl,
@@ -246,6 +247,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   await db.from("operation_contracts").update({
     status_signature: "enviado_assinatura",
     external_envelope_id: clicksignRes.envelopeId,
+    // Fase 3 (10/09/2026): congela o provedor usado neste envio -- ações
+    // futuras neste contrato (cancelar, reenviar, sincronizar status) usam
+    // sempre este valor, nunca a config atual da vertical.
+    esignature_provider: provider.name,
   }).eq("id", contract.id);
 
   // Notifica o mandatário de venda para acompanhamento da operação. Falha

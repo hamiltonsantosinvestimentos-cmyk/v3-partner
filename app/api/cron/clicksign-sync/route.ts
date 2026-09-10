@@ -40,6 +40,7 @@ interface PendingContract {
   external_envelope_id: string;
   parties: Array<{ role: string; name: string }> | null;
   deal_id: string | null;
+  esignature_provider: "clicksign" | "certone" | null;
 }
 
 export async function GET(req: NextRequest) {
@@ -52,7 +53,7 @@ export async function GET(req: NextRequest) {
 
   const { data: pending, error: fetchErr } = await db
     .from("operation_contracts")
-    .select("id, contract_code, contract_title, external_envelope_id, parties, deal_id")
+    .select("id, contract_code, contract_title, external_envelope_id, parties, deal_id, esignature_provider")
     .eq("status_signature", "enviado_assinatura")
     .not("external_envelope_id", "is", null);
 
@@ -65,7 +66,7 @@ export async function GET(req: NextRequest) {
   const errors: Array<{ contract_id: string; error: string }> = [];
 
   for (const contract of contracts) {
-    const statusRes = await getProvider({ contractId: contract.id }).syncStatus(contract.external_envelope_id);
+    const statusRes = await (await getProvider({ contractId: contract.id, provider: contract.esignature_provider ?? undefined })).syncStatus(contract.external_envelope_id);
 
     if (!statusRes.ok) {
       errors.push({ contract_id: contract.id, error: statusRes.error });

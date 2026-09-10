@@ -42,7 +42,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const db = svc();
   const { data: contract } = await db
     .from("operation_contracts")
-    .select("id, contract_code, contract_title, status_signature, external_envelope_id, parties, signature_message, signature_subject")
+    .select("id, contract_code, contract_title, status_signature, external_envelope_id, parties, signature_message, signature_subject, esignature_provider")
     .eq("id", id)
     .single();
 
@@ -88,7 +88,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
   }
 
-  const result = await getProvider({ contractId: id }).notifyReminder(
+  const result = await (await getProvider({ contractId: id, provider: contract.esignature_provider ?? undefined })).notifyReminder(
     contract.external_envelope_id,
     pendingSignatory?.name ?? "",
     documentLabel,

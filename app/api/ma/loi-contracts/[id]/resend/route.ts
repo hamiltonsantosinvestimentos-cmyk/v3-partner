@@ -28,7 +28,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
 
   const { data: contract } = await db
     .from("operation_contracts")
-    .select("id, status_signature, external_envelope_id, parties")
+    .select("id, status_signature, external_envelope_id, parties, esignature_provider")
     .eq("id", id)
     .eq("vertical", "ma")
     .single();
@@ -46,7 +46,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   const parties = (contract.parties as Array<{ role: string; name: string; email: string }> | null) ?? [];
   const signatario = parties.find(p => ["comprador", "vendedor", "participante", "comissionado_compra"].includes(p.role));
 
-  const result = await getProvider({ contractId: id, vertical: "ma" }).notifyReminder(contract.external_envelope_id, signatario?.name ?? "", "Carta de Intenção de Compra");
+  const result = await (await getProvider({ contractId: id, provider: contract.esignature_provider ?? undefined, vertical: "ma" })).notifyReminder(contract.external_envelope_id, signatario?.name ?? "", "Carta de Intenção de Compra");
   if (!result.ok) {
     return NextResponse.json({ error: `Falha ao reenviar notificação: ${result.error}` }, { status: 502 });
   }

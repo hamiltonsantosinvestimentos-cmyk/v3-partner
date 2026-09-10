@@ -11,7 +11,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Body inválido" }, { status: 400 });
   }
 
-  const result = await getProvider({ dealId: body.dealId, documentType: body.documentType }).send(body);
+  const result = await (await getProvider({ dealId: body.dealId, documentType: body.documentType, vertical: "ma" })).send(body);
 
   if (!result.ok) {
     return NextResponse.json({ error: result.error }, { status: result.status });
