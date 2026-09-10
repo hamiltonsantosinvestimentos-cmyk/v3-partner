@@ -97,7 +97,8 @@ export default async function ProspeccaoDashboardPage() {
 
   // ── Funil do Quiz Seja Partner (progresso passo a passo) ──────────────────────
   const QUIZ_STEPS: { key: string; label: string }[] = [
-    { key: "objetivo", label: "Abriu o quiz" },
+    { key: "intro", label: "Abriu a página" },
+    { key: "objetivo", label: "Começou o quiz" },
     { key: "ocupacao", label: "Ocupação" },
     { key: "experiencia", label: "Experiência B2B" },
     { key: "rede", label: "Rede" },

@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { Metadata } from "next";
 import { PartnerQuizClient } from "@/components/quiz/partner-quiz-client";
+import { MetaPixel } from "@/components/quiz/meta-pixel";
 
 // Página PÚBLICA (fora do layout autenticado) — quiz de qualificação para quem
 // quer se tornar Partner V3. Mesmo padrão do Simulador Home Equity: link que
@@ -14,8 +15,11 @@ export const metadata: Metadata = {
 
 export default function SejaPartnerPage() {
   return (
-    <Suspense fallback={null}>
-      <PartnerQuizClient />
-    </Suspense>
+    <>
+      <MetaPixel />
+      <Suspense fallback={null}>
+        <PartnerQuizClient />
+      </Suspense>
+    </>
   );
 }
