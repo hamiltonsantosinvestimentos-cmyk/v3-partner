@@ -102,6 +102,10 @@ export async function GET(req: NextRequest) {
   let query = svc()
     .from("cm_qualification_batches")
     .select("*, cm_party_qualifications(id, full_name, email, phone, role_in_document, status, filled_at, qualification_token, cpf_cnpj), consumido_contrato:consumido_por_contract_id(contract_code)")
+    // Exclusão individual (11/09/2026): filtra envolvido soft-deletado do
+    // array embutido -- sintaxe de filtro em recurso aninhado do PostgREST,
+    // nunca exclui o lote em si, só quem foi excluído dele.
+    .is("cm_party_qualifications.deleted_at", null)
     .order("created_at", { ascending: false });
   query = listingId
     ? query.eq("listing_id", listingId)

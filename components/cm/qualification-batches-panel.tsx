@@ -8,7 +8,7 @@
 // nunca refatorando aquele componente já em produção (decisão registrada
 // no BRIEF: risco desnecessário pra esta fase).
 import { useState, useEffect, useCallback } from "react";
-import { UserPlus, Copy, Share2, CheckCircle2, FileText, Loader2, X } from "lucide-react";
+import { UserPlus, Copy, Share2, CheckCircle2, FileText, Loader2, X, Trash2 } from "lucide-react";
 import { ROLE_LABELS } from "@/lib/qualification-roles";
 
 interface QualParty {
@@ -22,6 +22,7 @@ interface QualParty {
 interface QualBatch {
   id: string;
   status: string;
+  consumido_por_contract_id?: string | null;
   cm_party_qualifications: QualParty[];
 }
 
@@ -61,6 +62,22 @@ export function QualificationBatchesPanel({ listingId, demandId, cardLabel }: Pr
     navigator.clipboard.writeText(qualificationLink(token));
     setCopiedToken(token);
     setTimeout(() => setCopiedToken(""), 2000);
+  };
+
+  // Exclusão individual (11/09/2026, pedido de João, mesmo padrão de
+  // contract-templates-client.tsx): dado errado/obsoleto num lote de
+  // indicação -- soft delete, sem precisar apagar o lote inteiro.
+  const [deletingPartyId, setDeletingPartyId] = useState<string | null>(null);
+  const deleteParty = async (party: QualParty) => {
+    if (!confirm(`Excluir "${party.full_name}" desta indicação? A pessoa continua com o link antigo, mas ele deixa de valer.`)) return;
+    setDeletingPartyId(party.id);
+    try {
+      const res = await fetch(`/api/cm/qualifications/party/${party.id}`, { method: "DELETE" });
+      const json = await res.json();
+      if (res.ok) await load();
+      else alert(json.error ?? "Erro ao excluir envolvido");
+    } catch { alert("Erro de conexão"); }
+    finally { setDeletingPartyId(null); }
   };
 
   const whatsappQualLink = (party: QualParty) => {
@@ -129,6 +146,13 @@ export function QualificationBatchesPanel({ listingId, demandId, cardLabel }: Pr
                           <Share2 size={10} /> WhatsApp
                         </a>
                       </>
+                    )}
+                    {!batch.consumido_por_contract_id && (
+                      <button onClick={() => deleteParty(p)} disabled={deletingPartyId === p.id}
+                        title="Excluir este envolvido"
+                        className="text-[9px] font-semibold text-red-400 px-2 py-1 rounded border border-red-500/30 bg-red-500/10 hover:bg-red-500/20 transition-colors disabled:opacity-50">
+                        {deletingPartyId === p.id ? <Loader2 size={10} className="animate-spin" /> : <Trash2 size={10} />}
+                      </button>
                     )}
                   </div>
                 </div>

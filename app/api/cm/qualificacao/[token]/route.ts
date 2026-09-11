@@ -392,12 +392,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
 
   if (updateError) return NextResponse.json({ error: updateError.message }, { status: 500 });
 
+  // Exclusão individual (11/09/2026): envolvido soft-deletado nunca conta
+  // pra "todos preencheram" -- senão um lote com 1 excluído ficaria
+  // permanentemente incompleto mesmo com todo mundo ativo já qualificado.
   const { data: siblings } = await db
     .from("cm_party_qualifications")
     .select("status")
-    .eq("batch_id", qualification.batch_id);
+    .eq("batch_id", qualification.batch_id)
+    .is("deleted_at", null);
 
-  const allFilled = (siblings ?? []).every((s) => s.status === "preenchido");
+  const allFilled = (siblings ?? []).length > 0 && (siblings ?? []).every((s) => s.status === "preenchido");
 
   if (allFilled) {
     const { data: batch } = await db

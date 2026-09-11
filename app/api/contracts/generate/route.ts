@@ -93,7 +93,8 @@ export async function POST(req: NextRequest) {
         .from("cm_party_qualifications")
         .select("id, full_name, cpf_cnpj, role_in_document")
         .in("batch_id", batchIds)
-        .in("role_in_document", INTERMEDIARY_ROLES);
+        .in("role_in_document", INTERMEDIARY_ROLES)
+        .is("deleted_at", null);
 
       const qualified = (intermediaries ?? []).filter((p) => p.cpf_cnpj?.trim());
       if (qualified.length > 0) {
@@ -354,10 +355,14 @@ export async function POST(req: NextRequest) {
   }
 
   if (effectiveQualificationBatchId) {
+    // Exclusão individual (11/09/2026): envolvido soft-deletado nunca vira
+    // signatário nem entra na prosa jurídica de um contrato gerado depois
+    // da exclusão.
     const { data: qualifications } = await svc()
       .from("cm_party_qualifications")
       .select("full_name, email, phone, role_in_document, cpf_cnpj, rg, endereco_completo, person_type, party_nature, company_name, company_cnpj, company_address, company_legal_nature, representation, nationality, marital_status, profession, birth_date")
-      .eq("batch_id", effectiveQualificationBatchId);
+      .eq("batch_id", effectiveQualificationBatchId)
+      .is("deleted_at", null);
 
     if (qualifications && qualifications.length > 0) {
       qualificationParties = qualifications.map((q) => ({
