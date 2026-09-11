@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
+import { notifyUser } from "@/lib/contract-notify";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -47,7 +48,7 @@ export async function POST(req: NextRequest) {
 
   const { data: contract } = await svc()
     .from("operation_contracts")
-    .select("id, status_signature, loi_matching_status")
+    .select("id, contract_code, contract_title, status_signature, loi_matching_status, created_by")
     .eq("id", contract_id)
     .single();
 
@@ -84,6 +85,57 @@ export async function POST(req: NextRequest) {
 
   const approvedCount = (allApprovals ?? []).filter((a: any) => a.decision === "aprovado").length;
   const quorumMet = approvedCount >= quorumNecessario;
+  const contractLabel = contract.contract_code ?? contract.contract_title;
+  const contractLink = `https://app.v3partners.com.br/juridico/contratos?contract_id=${contract_id}`;
+
+  // Gap 4 do Fluxograma de Notificações (11/09/2026): antes disso nenhuma
+  // notificação saía daqui, mesmo padrão de silêncio da revisão de minuta.
+  if (decision === "reprovado") {
+    if (contract.created_by && contract.created_by !== user.id) {
+      await notifyUser({
+        userId: contract.created_by,
+        title: `Contrato reprovado: ${contractLabel}`,
+        message: `${profile?.full_name ?? "Um sócio"} reprovou o contrato ${contractLabel}.${comment ? ` Motivo: ${comment}` : ""}`,
+        type: "contrato_reprovado",
+        actionUrl: contractLink,
+      });
+    }
+  } else if (quorumMet) {
+    if (contract.created_by && contract.created_by !== user.id) {
+      await notifyUser({
+        userId: contract.created_by,
+        title: `Contrato aprovado: ${contractLabel}`,
+        message: `O contrato ${contractLabel} atingiu quórum de aprovação (${approvedCount}/${quorumNecessario}). Já pode ser enviado para assinatura.`,
+        type: "contrato_aprovado",
+        actionUrl: contractLink,
+      });
+    }
+  } else {
+    // Ainda falta quórum: avisa os sócios que ainda não votaram (nunca
+    // quem já votou) que um voto novo chegou.
+    const jaVotaram = new Set((allApprovals ?? []).map((a: any) => a.approver_id));
+    const pendentes = SOCIOS.filter((sid) => sid !== user.id && !jaVotaram.has(sid));
+    await Promise.all(
+      pendentes.map((uid) =>
+        notifyUser({
+          userId: uid,
+          title: `Voto pendente: ${contractLabel}`,
+          message: `${profile?.full_name ?? "Um sócio"} aprovou o contrato ${contractLabel}. Ainda falta seu voto (${approvedCount}/${quorumNecessario}).`,
+          type: "contrato_voto_pendente",
+          actionUrl: contractLink,
+        })
+      )
+    );
+    if (contract.created_by && contract.created_by !== user.id) {
+      await notifyUser({
+        userId: contract.created_by,
+        title: `Voto registrado: ${contractLabel}`,
+        message: `${profile?.full_name ?? "Um sócio"} aprovou o contrato ${contractLabel} (${approvedCount}/${quorumNecessario}). Ainda aguardando quórum.`,
+        type: "contrato_voto_registrado",
+        actionUrl: contractLink,
+      });
+    }
+  }
 
   return NextResponse.json({
     approval,

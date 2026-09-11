@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 
 import { logAgentAuditEvent } from "@/lib/socios-notify";
+import { notifyUser, JURIDICO_ID, SOCIOS_IDS } from "@/lib/contract-notify";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -57,7 +58,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const { data: template } = await db
     .from("contract_templates")
-    .select("id, approval_status, review_round, body_text_raw, version, valor_operacao_estimado, origem")
+    .select("id, template_name, approval_status, review_round, body_text_raw, version, valor_operacao_estimado, origem, created_by")
     .eq("id", id)
     .single();
 
@@ -93,8 +94,24 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     body_edited: !!bodyEdited,
   }, { onConflict: "template_id,review_round,reviewer_id" });
 
+  const reviewLink = `https://app.v3partners.com.br/juridico/contratos?tab=minutas&template_id=${id}`;
+
   if (decision === "reprovado") {
     await db.from("contract_templates").update({ approval_status: "reprovado" }).eq("id", id);
+
+    // Gap 3 do Fluxograma de Notificações (11/09/2026): antes disso quem
+    // submeteu a minuta nunca sabia que ela tinha sido reprovada, só
+    // descobrindo ao reabrir a tela manualmente.
+    if (template.created_by && template.created_by !== reviewer.userId) {
+      await notifyUser({
+        userId: template.created_by,
+        title: `Minuta reprovada: ${template.template_name}`,
+        message: `${reviewer.name} reprovou a minuta "${template.template_name}". Motivo: ${comment.trim()}`,
+        type: "minuta_reprovada",
+        actionUrl: reviewLink,
+      });
+    }
+
     if (template.origem === "agente_ia") {
       await logAgentAuditEvent({
         templateId: id,
@@ -159,6 +176,53 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   if (quorumMet) {
     await db.from("contract_templates").update({ approval_status: "aprovado" }).eq("id", id);
+  }
+
+  // Gaps 2 e 3 do Fluxograma de Notificações (11/09/2026): antes disso
+  // nenhuma notificação saía daqui, nem pra quem submeteu (não sabia que
+  // já podia gerar o contrato, ou que faltava mais alguém votar), nem pro
+  // outro grupo ainda pendente (o jurídico não sabia que um sócio já
+  // aprovou e falta só ele, ou vice-versa).
+  if (quorumMet) {
+    if (template.created_by && template.created_by !== reviewer.userId) {
+      await notifyUser({
+        userId: template.created_by,
+        title: `Minuta aprovada: ${template.template_name}`,
+        message: `A minuta "${template.template_name}" atingiu quórum de aprovação. Já pode gerar o contrato.`,
+        type: "minuta_aprovada",
+        actionUrl: reviewLink,
+      });
+    }
+  } else {
+    // Quórum ainda não fechou: avisa quem falta votar nesta rodada (nunca
+    // quem já votou), e também quem submeteu, pra acompanhar o andamento.
+    const jaVotaram = new Set((roundReviews ?? []).map((r) => r.reviewer_id));
+    const pendentes = [
+      ...(jaVotaram.has(JURIDICO_ID) ? [] : [JURIDICO_ID]),
+      ...SOCIOS_IDS.filter((sid) => !jaVotaram.has(sid)),
+    ].filter((uid) => uid !== reviewer.userId);
+
+    await Promise.all(
+      pendentes.map((uid) =>
+        notifyUser({
+          userId: uid,
+          title: `Voto pendente: ${template.template_name}`,
+          message: `${reviewer.name} aprovou a minuta "${template.template_name}". Ainda falta seu voto para fechar o quórum.`,
+          type: "minuta_voto_pendente",
+          actionUrl: reviewLink,
+        })
+      )
+    );
+
+    if (template.created_by && template.created_by !== reviewer.userId) {
+      await notifyUser({
+        userId: template.created_by,
+        title: `Voto registrado: ${template.template_name}`,
+        message: `${reviewer.name} aprovou a minuta "${template.template_name}" (${approvedSocios.length}/3 sócios, jurídico: ${hasJuridico ? "sim" : "não"}). Ainda aguardando quórum.`,
+        type: "minuta_voto_registrado",
+        actionUrl: reviewLink,
+      });
+    }
   }
 
   // Auditoria dedicada (BRIEF 2, item 3): só grava para minutas geradas
