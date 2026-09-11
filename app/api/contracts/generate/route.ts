@@ -357,6 +357,32 @@ export async function POST(req: NextRequest) {
   // do contrato ter sucesso (ver bloco depois do insert).
   let effectiveQualificationBatchId: string | null = qualification_batch_id ?? null;
   let autoDetectedBatch = false;
+
+  // Múltiplos Lotes em Paralelo (11/09/2026): a tela agora manda
+  // qualification_batch_id explícito com mais frequência (seletor novo
+  // quando 2+ lotes ficam prontos ao mesmo tempo). Antes desta validação a
+  // rota confiava cegamente no ID recebido -- nunca conferia se o lote é
+  // desta minuta, está completo ou já foi consumido. Isso quebraria a
+  // proteção single-use (LGPD, decisão de João 02/09) se algum client
+  // mandasse um batch id velho/errado.
+  if (effectiveQualificationBatchId) {
+    const { data: explicitBatch } = await svc()
+      .from("cm_qualification_batches")
+      .select("id, template_id, status, consumido_por_contract_id")
+      .eq("id", effectiveQualificationBatchId)
+      .maybeSingle();
+
+    if (!explicitBatch || explicitBatch.template_id !== template_id) {
+      return NextResponse.json({ error: "Lote de qualificação não encontrado para esta minuta." }, { status: 422 });
+    }
+    if (explicitBatch.consumido_por_contract_id) {
+      return NextResponse.json({ error: "Este lote de qualificação já foi usado em outro contrato (single-use)." }, { status: 409 });
+    }
+    if (explicitBatch.status !== "completo") {
+      return NextResponse.json({ error: "Este lote de qualificação ainda não está completo." }, { status: 422 });
+    }
+  }
+
   if (!effectiveQualificationBatchId) {
     const { data: earlyBatch } = await svc()
       .from("cm_qualification_batches")
