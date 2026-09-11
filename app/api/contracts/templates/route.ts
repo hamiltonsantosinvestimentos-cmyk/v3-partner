@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
+import { validateVerticalBlocks, extractPlainVariables } from "@/lib/contract-render";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -64,7 +65,12 @@ export async function POST(req: NextRequest) {
   if (!contract_series || !VALID_SERIES.includes(contract_series))
     return NextResponse.json({ error: `contract_series obrigatório, um de: ${VALID_SERIES.join(", ")}` }, { status: 422 });
 
-  const vars = (body_text_raw.match(/\{\{([^}]+)\}\}/g) || []).map((v: string) => v.replace(/\{\{|\}\}/g, "").trim());
+  // NDA Multi-Vertical (11/09/2026): tag {{v:X}}...{{/v}} malformada nunca
+  // pode virar texto literal quebrado dentro de um contrato gerado depois.
+  const blocksCheck = validateVerticalBlocks(body_text_raw);
+  if (!blocksCheck.valid) return NextResponse.json({ error: blocksCheck.error }, { status: 422 });
+
+  const vars = extractPlainVariables(body_text_raw);
 
   const { data, error } = await svc()
     .from("contract_templates")

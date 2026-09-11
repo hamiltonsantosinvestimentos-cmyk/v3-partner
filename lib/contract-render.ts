@@ -1,3 +1,64 @@
+import { CONCRETE_VERTICALS } from "@/lib/contract-verticals";
+
+// NDA Multi-Vertical (11/09/2026, pedido de João): uma minuta "multi_vertical"
+// tem trechos que só entram no contrato final conforme a vertical ESCOLHIDA
+// NA HORA DE GERAR (nunca a vertical fixa do template, que nesse caso é só
+// o rótulo genérico "multi_vertical"). Sintaxe no corpo da minuta, digitada
+// no mesmo textarea de sempre: {{v:credito}}texto só do crédito{{/v}}.
+// Texto fora de qualquer tag é comum a todas as verticais.
+//
+// SEMPRE rodar ANTES de resolveContractVariables() -- essa função trata
+// qualquer {{...}} como variável, e substituiria {{v:credito}}/{{/v}} por
+// "[v:credito]"/"[/v]" achando que são placeholders desconhecidos, corrompendo
+// a tag antes dela ser resolvida.
+export function resolveVerticalBlocks(template: string, vertical: string): string {
+  return template.replace(/\{\{v:([a-z_]+)\}\}([\s\S]*?)\{\{\/v\}\}/g, (_match, v: string, inner: string) =>
+    v === vertical ? inner : ""
+  );
+}
+
+// Validação ao SALVAR a minuta (nunca ao gerar contrato -- por então já é
+// tarde demais, o texto malformado iria pro documento assinado). Tag aberta
+// sem fechar, fechamento solto, aninhamento (não suportado) ou vertical
+// desconhecida em {{v:X}} tudo vira 422 explícito, mesmo espírito dos outros
+// gates deste arquivo/rota (nunca deixar erro de formatação virar texto
+// literal quebrado dentro do documento gerado).
+export function validateVerticalBlocks(template: string): { valid: true } | { valid: false; error: string } {
+  const tokenRe = /\{\{v:([a-z_]+)\}\}|\{\{\/v\}\}/g;
+  let openTag: string | null = null;
+  let match: RegExpExecArray | null;
+  while ((match = tokenRe.exec(template))) {
+    const isOpen = match[1] !== undefined;
+    if (isOpen) {
+      if (openTag) {
+        return { valid: false, error: `Tag {{v:${match[1]}}} aberta antes de fechar {{v:${openTag}}} com {{/v}} (aninhamento de {{v:...}} não é suportado).` };
+      }
+      if (!CONCRETE_VERTICALS.includes(match[1])) {
+        return { valid: false, error: `Vertical desconhecida em {{v:${match[1]}}}. Use uma de: ${CONCRETE_VERTICALS.join(", ")}.` };
+      }
+      openTag = match[1];
+    } else {
+      if (!openTag) return { valid: false, error: "{{/v}} encontrado sem nenhuma {{v:...}} aberta antes." };
+      openTag = null;
+    }
+  }
+  if (openTag) return { valid: false, error: `{{v:${openTag}}} nunca foi fechada com {{/v}}.` };
+  return { valid: true };
+}
+
+// Extrai as chaves {{variavel}} de um corpo de minuta, ignorando as tags de
+// bloco por vertical ({{v:X}}/{{/v}}) -- essas não são variáveis de
+// substituição, são estrutura de texto condicional (ver
+// resolveVerticalBlocks acima). Fonte única usada tanto no detectedVars da
+// tela (contract-templates-client.tsx) quanto no variables_map salvo pelas
+// rotas de template, pra nunca mostrar "v:credito"/"/v" como se fossem
+// variável de verdade.
+export function extractPlainVariables(text: string): string[] {
+  return (text.match(/\{\{([^}]+)\}\}/g) || [])
+    .map((v) => v.replace(/\{\{|\}\}/g, "").trim())
+    .filter((v) => v !== "/v" && !v.startsWith("v:"));
+}
+
 export function resolveContractVariables(template: string, data: Record<string, any>): string {
   return template.replace(/\{\{([^}]+)\}\}/g, (match, key) => {
     const trimmed = key.trim();
