@@ -57,6 +57,7 @@ interface QualBatch {
   id: string;
   status: string;
   consumido_por_contract_id?: string | null;
+  consumido_contrato?: { contract_code: string | null } | null;
   cm_party_qualifications: QualParty[];
 }
 
@@ -376,6 +377,14 @@ export function ContractTemplatesClient() {
   const hasQualificationData = activeQualBatch?.status === "completo"
     && activeQualBatch.cm_party_qualifications.some((p) => p.status === "preenchido");
   const hasIncompleteQualBatch = !!activeQualBatch && activeQualBatch.status !== "completo";
+  // P1 real (11/09/2026): João tentou gerar contrato de novo numa minuta
+  // cujo único lote já tinha sido consumido, e a tela ainda mostrava os
+  // envolvidos com check verde "Qualificado" -- o erro genérico de
+  // "preencha os indicadores" pareceu bug/desconfiguração. Aponta o
+  // contrato real que já consumiu o lote (single-use é desenho
+  // deliberado, decisão de João em 02/09: evita CPF/RG de um cliente
+  // vazar pro próximo contrato gerado da mesma minuta).
+  const mostRecentConsumedBatch = qualBatches.find((b) => !!b.consumido_por_contract_id);
 
   const handleGenerateContract = async () => {
     if (!selected) return;
@@ -389,7 +398,12 @@ export function ContractTemplatesClient() {
     if (requiresCounterparty && !hasQualificationData) {
       const invalid = genParties.some((p) => !p.name.trim() || !p.email.trim());
       if (genParties.length === 0 || invalid) {
-        setGenError("Preencha nome e e-mail de todos os indicadores.");
+        if (!activeQualBatch && mostRecentConsumedBatch) {
+          const codigo = mostRecentConsumedBatch.consumido_contrato?.contract_code ?? "outro contrato já gerado";
+          setGenError(`A Qualificação Antecipada mostrada acima já foi usada no contrato ${codigo} (single-use por desenho: evita CPF/RG de um cliente vazar para o próximo contrato gerado desta minuta). Clique em "Gerar Link de Qualificação Antecipada" para criar um lote novo para esta operação, ou preencha os Indicadores manualmente abaixo.`);
+        } else {
+          setGenError("Preencha nome e e-mail de todos os indicadores.");
+        }
         return;
       }
     }
@@ -955,11 +969,18 @@ export function ContractTemplatesClient() {
                       <div key={batch.id} className="bg-[#12112A] border border-[#9BAFC5]/10 rounded-lg p-3">
                         <div className="flex items-center justify-between mb-2">
                           <span className="text-[9px] font-bold text-[#C9A84C] uppercase">Lote de Qualificação</span>
-                          <span className={cn("text-[8px] font-bold uppercase px-1.5 py-0.5 rounded border",
-                            batch.status === "completo" ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" : "bg-[#243A66] text-[#9BAFC5] border-[#9BAFC5]/15"
-                          )}>
-                            {batch.cm_party_qualifications.filter((p) => p.status === "preenchido").length}/{batch.cm_party_qualifications.length} qualificados
-                          </span>
+                          <div className="flex items-center gap-1.5">
+                            {batch.consumido_por_contract_id && (
+                              <span className="text-[8px] font-bold uppercase px-1.5 py-0.5 rounded border bg-[#243A66] text-amber-400 border-amber-500/30">
+                                Usado em {batch.consumido_contrato?.contract_code ?? "outro contrato"}
+                              </span>
+                            )}
+                            <span className={cn("text-[8px] font-bold uppercase px-1.5 py-0.5 rounded border",
+                              batch.status === "completo" ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" : "bg-[#243A66] text-[#9BAFC5] border-[#9BAFC5]/15"
+                            )}>
+                              {batch.cm_party_qualifications.filter((p) => p.status === "preenchido").length}/{batch.cm_party_qualifications.length} qualificados
+                            </span>
+                          </div>
                         </div>
                         <div className="space-y-1.5">
                           {batch.cm_party_qualifications.map((p) => (
@@ -992,7 +1013,9 @@ export function ContractTemplatesClient() {
                         </div>
                         {batch.status === "completo" && !batch.cm_party_qualifications.some((p) => p.status !== "preenchido") && (
                           <p className="mt-2 text-[9px] text-[#9BAFC5]">
-                            Lote completo. Os dados serão herdados automaticamente no primeiro contrato gerado a partir desta minuta (single-use: não reaproveitável em outro contrato).
+                            {batch.consumido_por_contract_id
+                              ? `Lote já consumido pelo contrato ${batch.consumido_contrato?.contract_code ?? "gerado"} (single-use, não reaproveitável). Para outra operação/cliente com esta minuta, clique em "Gerar Link de Qualificação Antecipada" para criar um lote novo.`
+                              : "Lote completo. Os dados serão herdados automaticamente no próximo contrato gerado a partir desta minuta (single-use: não reaproveitável em outro contrato depois disso)."}
                           </p>
                         )}
 
