@@ -98,3 +98,67 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 
   return NextResponse.json({ qualification, documents, representation_chain: representationChain, filled: true });
 }
+
+/** DELETE /api/cm/qualifications/party/[id] — exclusão individual de um
+ *  envolvido de qualificação antecipada (11/09/2026, pedido de João:
+ *  dado errado/obsoleto num lote — ex: intermediário duplicado, parte que
+ *  não deveria ter entrado nessa minuta — sem precisar apagar o lote
+ *  inteiro). Soft delete: nunca some do banco, só sai de toda leitura
+ *  ativa. Bloqueado se o lote já foi consumido por um contrato real
+ *  (single-use por desenho, mesma trava de 11/09/2026 em generate/route.ts
+ *  -- alterar retroativamente um lote já usado não protege nada e só
+ *  confunde auditoria). Recalcula o status do lote: como só remove
+ *  (nunca adiciona), uma remoção nunca torna um lote completo em
+ *  incompleto -- só pode fazer um lote "coletando" virar "completo" se
+ *  o envolvido removido era o único ainda pendente. */
+export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const caller = await getCaller();
+  if (!caller) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+
+  const { id } = await params;
+  const db = svc();
+
+  const { data: party, error } = await db
+    .from("cm_party_qualifications")
+    .select("id, full_name, batch_id, deleted_at")
+    .eq("id", id)
+    .single();
+
+  if (error || !party) return NextResponse.json({ error: "Envolvido não encontrado" }, { status: 404 });
+  if (party.deleted_at) return NextResponse.json({ error: "Este envolvido já foi excluído" }, { status: 409 });
+
+  const { data: batch } = await db
+    .from("cm_qualification_batches")
+    .select("id, status, consumido_por_contract_id, consumido_contrato:consumido_por_contract_id(contract_code)")
+    .eq("id", party.batch_id)
+    .single();
+
+  if (batch?.consumido_por_contract_id) {
+    const codigo = (batch as unknown as { consumido_contrato?: { contract_code: string | null } | null }).consumido_contrato?.contract_code ?? "outro contrato já gerado";
+    return NextResponse.json(
+      { error: `Este lote já foi usado no contrato ${codigo}. Não é possível excluir envolvidos de um lote já consumido.` },
+      { status: 409 }
+    );
+  }
+
+  const { error: deleteError } = await db
+    .from("cm_party_qualifications")
+    .update({ deleted_at: new Date().toISOString(), deleted_by: caller.userId })
+    .eq("id", id);
+
+  if (deleteError) return NextResponse.json({ error: deleteError.message }, { status: 500 });
+
+  if (batch && batch.status === "coletando") {
+    const { data: siblings } = await db
+      .from("cm_party_qualifications")
+      .select("status")
+      .eq("batch_id", batch.id)
+      .is("deleted_at", null);
+
+    if ((siblings ?? []).length > 0 && (siblings ?? []).every((s) => s.status === "preenchido")) {
+      await db.from("cm_qualification_batches").update({ status: "completo", completed_at: new Date().toISOString() }).eq("id", batch.id);
+    }
+  }
+
+  return NextResponse.json({ ok: true, deleted_party: party.full_name });
+}

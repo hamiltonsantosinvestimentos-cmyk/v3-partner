@@ -666,6 +666,25 @@ export function ContractTemplatesClient() {
     finally { setReopeningId(null); }
   };
 
+  // Exclusão individual de envolvido (11/09/2026, pedido de João: dado
+  // errado/obsoleto num lote, ex: intermediário que não deveria estar
+  // nessa minuta -- sem precisar apagar o lote inteiro). Soft delete via
+  // DELETE /api/cm/qualifications/party/[id]; a rota já bloqueia lote
+  // consumido por contrato real.
+  const [deletingPartyId, setDeletingPartyId] = useState<string | null>(null);
+  const deletePartyQualification = async (party: QualParty) => {
+    if (!selected) return;
+    if (!confirm(`Excluir "${party.full_name}" desta qualificação? A pessoa continua com o link antigo, mas ele deixa de valer -- não entra no próximo contrato gerado desta minuta.`)) return;
+    setDeletingPartyId(party.id);
+    try {
+      const res = await fetch(`/api/cm/qualifications/party/${party.id}`, { method: "DELETE" });
+      const json = await res.json();
+      if (res.ok) await loadTemplateQualifications(selected.id);
+      else alert(json.error ?? "Erro ao excluir envolvido");
+    } catch { alert("Erro de conexão"); }
+    finally { setDeletingPartyId(null); }
+  };
+
   const selectTemplate = (t: Template) => {
     setSelected(t);
     setIsNew(false);
@@ -995,6 +1014,13 @@ export function ContractTemplatesClient() {
                                     className="text-[9px] font-semibold text-amber-400 px-2 py-1 rounded border border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 transition-colors disabled:opacity-50">
                                     {reopeningId === p.id ? "Reabrindo..." : "Corrigir"}
                                   </button>
+                                  {!batch.consumido_por_contract_id && (
+                                    <button onClick={() => deletePartyQualification(p)} disabled={deletingPartyId === p.id}
+                                      title="Excluir este envolvido"
+                                      className="text-[9px] font-semibold text-red-400 px-2 py-1 rounded border border-red-500/30 bg-red-500/10 hover:bg-red-500/20 transition-colors disabled:opacity-50">
+                                      {deletingPartyId === p.id ? <Loader2 size={10} className="animate-spin" /> : <Trash2 size={10} />}
+                                    </button>
+                                  )}
                                 </div>
                               ) : (
                                 <div className="flex items-center gap-1.5 flex-shrink-0">
@@ -1006,6 +1032,13 @@ export function ContractTemplatesClient() {
                                     className="flex items-center gap-1 text-[9px] font-semibold text-emerald-400 px-2 py-1 rounded border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 transition-colors">
                                     <Share2 size={10} /> WhatsApp
                                   </a>
+                                  {!batch.consumido_por_contract_id && (
+                                    <button onClick={() => deletePartyQualification(p)} disabled={deletingPartyId === p.id}
+                                      title="Excluir este envolvido"
+                                      className="text-[9px] font-semibold text-red-400 px-2 py-1 rounded border border-red-500/30 bg-red-500/10 hover:bg-red-500/20 transition-colors disabled:opacity-50">
+                                      {deletingPartyId === p.id ? <Loader2 size={10} className="animate-spin" /> : <Trash2 size={10} />}
+                                    </button>
+                                  )}
                                 </div>
                               )}
                             </div>
