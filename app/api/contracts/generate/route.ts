@@ -375,13 +375,28 @@ export async function POST(req: NextRequest) {
         variables[`${q.role_in_document}_email`] = q.email;
       }
 
-      qualificationParties.push({ role: "v3_partners", name: "V3 Partners Soluções Ltda", doc: "14.219.287/0001-50", email: "" });
+      // P0 real achado 11/09/2026, testando o envio pra assinatura do NCNDA
+      // da Infiniti: quando o template resolve head_mesa (linha abaixo),
+      // este bloco também empurrava um segundo "V3 Partners" SEM e-mail --
+      // duas entradas pra mesma parte, uma real (head_mesa) e uma rótulo
+      // vazio. O gate de integridade de send/route.ts (11/08/2026, P0
+      // daquela sessão) trata qualquer parte com nome e sem e-mail como
+      // dado corrompido e BLOQUEIA o envio inteiro por causa dela --
+      // mesma classe de bug do "duplica menção no texto" corrigido mais
+      // cedo hoje (head_declared_in_body), agora no array de signatários.
+      // head_mesa já É a V3 Partners (representada pelo Head real, com
+      // e-mail de verdade), então só entra o rótulo vazio quando NÃO há
+      // head resolvido pra este vertical (ex: "clientes"/"institucional").
+      const willPushHeadMesa = typeof variables.head_email === "string" && typeof variables.head_full_name === "string";
+      if (!willPushHeadMesa) {
+        qualificationParties.push({ role: "v3_partners", name: "V3 Partners Soluções Ltda", doc: "14.219.287/0001-50", email: "" });
+      }
 
       // NCNDA Mestre / credit_proposal_id: Head da mesa também é signatário
       // fixo quando o template resolveu head_*, mesmo com lote de
       // qualificação presente. variables.head_* já foi setado acima
       // (bloco credit_proposal_id roda antes deste).
-      if (typeof variables.head_email === "string" && typeof variables.head_full_name === "string") {
+      if (willPushHeadMesa) {
         qualificationParties.push({
           role: "head_mesa",
           name: variables.head_full_name,
@@ -495,8 +510,15 @@ export async function POST(req: NextRequest) {
     { role: "v3_partners", name: "João Lemos Netto", doc: "14.219.287/0001-50", email: "joao.lemos@v3partners.com.br" },
     ...(partnerParty ? [partnerParty] : []),
   ] : headParty.length > 0 ? [
+    // P0 real 11/09/2026 (mesma causa do fix acima em qualificationParties):
+    // headParty já representa a V3 com e-mail real do Head -- o
+    // "V3 Partners Soluções Ltda" sem e-mail que existia aqui era
+    // redundante e batia no gate de integridade de send/route.ts (parte
+    // com nome e sem e-mail = bloqueio total do envio). O comentário
+    // acima (linha ~501) presumia que isso "nunca chegava em signers de
+    // verdade" -- presunção errada, o gate de 11/08 trata como dado
+    // corrompido, não filtra em silêncio.
     ...headParty,
-    { role: "v3_partners", name: "V3 Partners Soluções Ltda", doc: "14.219.287/0001-50" },
   ] : template.requires_counterparty_signature === false ? [
     // Documento unilateral (03/09/2026): Carta de Intenção de Compra V3 para
     // Terceiros e futuros templates equivalentes. O destinatário só recebe a
