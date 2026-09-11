@@ -913,7 +913,17 @@ export function ContractTemplatesClient() {
                     {(APPROVAL_STATUS_MAP[selected.approval_status] ?? APPROVAL_STATUS_MAP.rascunho).label}
                   </span>
                   <div className="flex items-center gap-2">
-                    {["rascunho", "em_revisao"].includes(selected.approval_status) && (
+                    {/* 10/09/2026, P0 real reportado por João: minutas são
+                        reutilizáveis para múltiplas operações/clientes (ver
+                        session-decisions 02/09), mas este botão só existia
+                        para rascunho/em_revisao -- numa minuta já aprovada
+                        (status obrigatório pra gerar contrato) não havia
+                        como abrir uma nova Qualificação Antecipada pro
+                        próximo cliente depois que o primeiro lote já tinha
+                        sido consumido por um contrato. Backend
+                        (/api/cm/qualifications) nunca teve essa restrição,
+                        era só a tela escondendo o botão. */}
+                    {["rascunho", "em_revisao", "aprovado"].includes(selected.approval_status) && (
                       <button onClick={openQualModal}
                         className="flex items-center gap-1.5 px-3 py-1.5 bg-[#162744] text-[#9BAFC5] border border-[#9BAFC5]/20 rounded-lg text-xs font-bold hover:text-[#F5F1E8] hover:bg-[#243A66] transition">
                         <UserPlus size={13} /> Gerar Link de Qualificação Antecipada

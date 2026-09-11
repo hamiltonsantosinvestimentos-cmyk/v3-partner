@@ -52,6 +52,7 @@ export async function GET(req: NextRequest) {
   let query = svc()
     .from("operation_contracts")
     .select("*")
+    .is("deleted_at", null)
     .order("created_at", { ascending: false });
 
   if (Array.isArray(vertical)) query = query.in("vertical", vertical);
