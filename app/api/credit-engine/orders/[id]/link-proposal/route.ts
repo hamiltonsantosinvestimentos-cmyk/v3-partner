@@ -24,6 +24,12 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
   }
 
+  // consent_id: quando presente, cria a proposta pra um DOCUMENTO ADICIONAL
+  // (sócio/garantidor CPF, ou 2º+ CNPJ do grupo) em vez do documento
+  // principal do pedido — ver migration 20260911_credit_consents_multi_doc.
+  const body = await req.json().catch(() => ({})) as { consent_id?: string };
+  const consentId = body.consent_id ?? null;
+
   const svc = serviceClient();
 
   const { data: order, error: orderErr } = await svc
@@ -43,19 +49,44 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   if (order.status !== "PAID") {
     return NextResponse.json({ error: "Pedido ainda não foi pago" }, { status: 422 });
   }
-  if (order.credit_desk_proposal_id) {
-    return NextResponse.json({ error: "Pedido já está vinculado a uma proposta" }, { status: 409 });
-  }
 
-  // client_doc já vem do pedido; se o cliente já preencheu o consentimento, usar o CPF/CNPJ confirmado lá.
   let clientCpfCnpj = order.client_doc;
-  if (order.intake_token) {
-    const { data: consent } = await svc
+  let clientLabel = order.client_name;
+  let additionalConsent: { id: string } | null = null;
+
+  if (consentId) {
+    // Documento adicional: exige consentimento já preenchido pelo cliente
+    // (subject_cpf_cnpj vem sempre do consentimento nesse caso, nunca do pedido).
+    const { data: consent, error: consentErr } = await svc
       .from("credit_consents")
-      .select("subject_cpf_cnpj")
-      .eq("intake_token", order.intake_token)
+      .select("id, subject_cpf_cnpj, subject_name, document_label, status, credit_desk_proposal_id, partner_service_order_id")
+      .eq("id", consentId)
       .single();
-    if (consent?.subject_cpf_cnpj) clientCpfCnpj = consent.subject_cpf_cnpj;
+    if (consentErr || !consent || consent.partner_service_order_id !== order.id) {
+      return NextResponse.json({ error: "Documento não encontrado neste pedido" }, { status: 404 });
+    }
+    if (consent.credit_desk_proposal_id) {
+      return NextResponse.json({ error: "Este documento já está vinculado a uma proposta" }, { status: 409 });
+    }
+    if (consent.status !== "consented") {
+      return NextResponse.json({ error: "Cliente ainda não preencheu o consentimento deste documento" }, { status: 422 });
+    }
+    clientCpfCnpj = consent.subject_cpf_cnpj;
+    clientLabel = consent.document_label ? `${order.client_name} (${consent.document_label})` : order.client_name;
+    additionalConsent = { id: consent.id };
+  } else {
+    if (order.credit_desk_proposal_id) {
+      return NextResponse.json({ error: "Pedido já está vinculado a uma proposta" }, { status: 409 });
+    }
+    // client_doc já vem do pedido; se o cliente já preencheu o consentimento, usar o CPF/CNPJ confirmado lá.
+    if (order.intake_token) {
+      const { data: consent } = await svc
+        .from("credit_consents")
+        .select("subject_cpf_cnpj")
+        .eq("intake_token", order.intake_token)
+        .single();
+      if (consent?.subject_cpf_cnpj) clientCpfCnpj = consent.subject_cpf_cnpj;
+    }
   }
 
   // Governanca de Numeracao V3, Fase 3 (10/08/2026): serie CR/CRI, sucedendo
@@ -72,14 +103,14 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   }
 
   // Client 360, Fase A (10/08/2026): best-effort, nunca bloqueia a criacao.
-  const v3ClientId = await resolveClient(clientCpfCnpj, { legalName: order.client_name, vertical: "credito" }).catch(() => null);
+  const v3ClientId = await resolveClient(clientCpfCnpj, { legalName: clientLabel, vertical: "credito" }).catch(() => null);
 
   const { data: proposal, error: propErr } = await svc
     .from("credit_desk_proposals")
     .insert({
       code,
-      title: `Análise de Crédito · ${order.client_name}`,
-      client_name: order.client_name,
+      title: `Análise de Crédito · ${clientLabel}`,
+      client_name: clientLabel,
       client_cpf_cnpj: clientCpfCnpj,
       v3_client_id: v3ClientId,
       credit_line: "ANALISE_AVULSA",
@@ -95,6 +126,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
         client_email: order.client_email,
         order_source: order.source,
         ref_partner_id: order.ref_partner_id,
+        ...(additionalConsent ? { credit_consent_id: additionalConsent.id, additional_document: true } : {}),
       },
     })
     .select()
@@ -104,12 +136,21 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: propErr?.message ?? "Falha ao criar proposta" }, { status: 500 });
   }
 
-  const { error: updateErr } = await svc
-    .from("partner_service_orders")
-    .update({ credit_desk_proposal_id: proposal.id })
-    .eq("id", order.id);
-
-  if (updateErr) return NextResponse.json({ error: updateErr.message }, { status: 500 });
+  // Documento adicional: a proposta fica amarrada no consentimento dele, não
+  // no pedido (o pedido só guarda a proposta do documento PRINCIPAL).
+  if (additionalConsent) {
+    const { error: consentUpdateErr } = await svc
+      .from("credit_consents")
+      .update({ credit_desk_proposal_id: proposal.id })
+      .eq("id", additionalConsent.id);
+    if (consentUpdateErr) return NextResponse.json({ error: consentUpdateErr.message }, { status: 500 });
+  } else {
+    const { error: updateErr } = await svc
+      .from("partner_service_orders")
+      .update({ credit_desk_proposal_id: proposal.id })
+      .eq("id", order.id);
+    if (updateErr) return NextResponse.json({ error: updateErr.message }, { status: 500 });
+  }
 
   return NextResponse.json({ success: true, proposal });
 }
