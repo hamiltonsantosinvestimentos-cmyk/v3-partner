@@ -35,6 +35,20 @@ export interface EsignatureContext {
 export interface EsignatureSignatory {
   name: string;
   email: string;
+  /**
+   * CPF/CNPJ da parte, quando disponível (mesmo campo `doc` de
+   * operation_contracts.parties). Não usado pela ClickSign. A CertOne EXIGE
+   * um CPF válido por signatário (`flowActions[].user.identifier`,
+   * confirmado ao vivo em 11/09/2026 -- a API valida de verdade, rejeita
+   * CNPJ e qualquer string que não seja CPF real). Decisão de João
+   * (11/09/2026): quando a parte é PJ, o CPF a usar é o do representante
+   * legal -- já é o padrão real hoje para sócios V3 (parties.doc já guarda
+   * o CPF pessoal de quem assina, não o CNPJ da V3), mas contrapartes PJ
+   * externas cadastradas só com CNPJ (ex: MEI que assina pelo CNPJ) não têm
+   * hoje um CPF individual separado capturado -- certone-provider.ts falha
+   * explicitamente nesse caso, nunca tenta adivinhar.
+   */
+  document?: string | null;
 }
 
 export interface SendEnvelopeInput {

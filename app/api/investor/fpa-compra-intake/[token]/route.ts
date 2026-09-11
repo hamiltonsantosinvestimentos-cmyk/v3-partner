@@ -182,7 +182,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
     documentType: "fpa_compra",
     documentUrl,
     documentLabel: contractTitle,
-    signatories: participantes.map(p => ({ name: p.nome, email: p.email })),
+    signatories: participantes.map(p => ({ name: p.nome, email: p.email, document: p.cpf_cnpj })),
     watcherEmail: "deal@v3partners.com.br",
   });
 

@@ -162,7 +162,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
     documentType: "contrato_venda",
     documentUrl,
     documentLabel: contractTitle,
-    signatories: [{ name: nome_representante, email }],
+    signatories: [{ name: nome_representante, email, document: cnpj_estaleiro }],
     watcherEmail: "deal@v3partners.com.br",
   });
 

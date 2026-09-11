@@ -45,31 +45,44 @@ function headers(): Record<string, string> {
   return { "X-Api-Key": apiKey, "Content-Type": "application/json", Accept: "application/json" };
 }
 
-// POST /api/uploads/bytes: upload via JSON (content_base64), mais simples
-// que multipart/form-data a partir de uma serverless function. Formato do
-// documento: a CertOne acredita que precisa ser PDF (mesma exigência da
-// ClickSign hoje), ainda vai confirmar se aceita HTML direto — por isso
-// este provider assume PDF e reaproveita htmlToPdfBase64 (provider-
-// agnóstico, ver clicksign-provider.ts) exatamente como o provider
-// ClickSign já faz, sem duplicar a lógica de conversão.
+// POST /api/uploads/bytes: upload via JSON, mais simples que multipart/
+// form-data a partir de uma serverless function. CONFIRMADO ao vivo em
+// 11/09/2026 (nunca testado antes desta data, os comentários "ASSUMIDO"
+// anteriores estavam errados em 2 pontos, corrigidos aqui):
+//   1. O campo do payload é `Bytes` (maiúsculo), não `contentBase64` --
+//      erro real antes do fix: 400 "The Bytes field is required."
+//   2. Formato do documento confirmado por João (11/09/2026, resposta real
+//      da CertOne): PDF, não aceita HTML. Continua reaproveitando
+//      htmlToPdfBase64 (provider-agnóstico, ver clicksign-provider.ts),
+//      que já estava certo desde a Fase 2.
+// Resposta real confirmada: {"id", "size", "digest"} -- "id" já estava
+// certo no código anterior, mantido.
 async function uploadDocument(contentBase64WithPrefix: string, fileName: string): Promise<string> {
   const base64 = contentBase64WithPrefix.replace(/^data:.*;base64,/, "");
   const res = await fetch(`${BASE_URL}/api/uploads/bytes`, {
     method: "POST",
     headers: headers(),
-    body: JSON.stringify({ fileName, contentBase64: base64 }),
+    body: JSON.stringify({ fileName, Bytes: base64 }),
   });
   if (!res.ok) {
     const err = await res.text();
     throw new Error(`CertOne uploadDocument: ${err}`);
   }
   const data = await res.json();
-  // ASSUMIDO: UploadModel não foi expandido no Swagger lido em 07/09; o
-  // padrão do resto da API (Documents.DocumentModel, etc.) usa "id" como
-  // chave primária, então assumo o mesmo aqui até o primeiro teste real.
-  const fileId: string | undefined = data?.id ?? data?.fileId;
+  const fileId: string | undefined = data?.id;
   if (!fileId) throw new Error(`CertOne uploadDocument: resposta sem id reconhecível: ${JSON.stringify(data)}`);
   return fileId;
+}
+
+// CPF puro (só dígitos), ou null se o valor não tem o formato de CPF (11
+// dígitos). Nunca tenta validar dígito verificador aqui -- quem valida de
+// verdade é a própria API da CertOne (confirmado: ela rejeita CPF
+// inválido com "CPF is invalid"), este helper só filtra o caso óbvio de
+// CNPJ (14 dígitos) ou string vazia antes de tentar.
+function extractCpfDigits(document: string | null | undefined): string | null {
+  if (!document) return null;
+  const digits = document.replace(/\D/g, "");
+  return digits.length === 11 ? digits : null;
 }
 
 export async function sendToCertOne(input: SendEnvelopeInput): Promise<SendEnvelopeResult> {
@@ -105,13 +118,29 @@ export async function sendToCertOne(input: SendEnvelopeInput): Promise<SendEnvel
 
     const fileId = await uploadDocument(contentBase64, `${documentLabel}.pdf`);
 
-    // FlowActions.FlowActionCreateModel por signatário: type "Signer"
-    // confirmado no Swagger (FlowActionType: Signer | Approver | SignRule).
-    // "title" fica de fora nesta fase (SendEnvelopeInput não carrega role
-    // ainda, ver comentário no topo do arquivo).
+    // FlowActions.FlowActionCreateModel por signatário. CONFIRMADO ao vivo
+    // em 11/09/2026 (achado real, não estava em nenhuma doc pública nem
+    // nas 10 respostas de 08/09): `user.identifier` é OBRIGATÓRIO e
+    // validado de verdade como CPF pela própria API ("CPF is invalid"
+    // quando errado) -- a CertOne não aceita signatário sem CPF, diferente
+    // da ClickSign (has_documentation:false, nunca exigiu documento).
+    // Decisão de João (11/09/2026): quando a parte é PJ, usa o CPF do
+    // representante legal -- já é o padrão real hoje em operation_contracts
+    // .parties para sócios V3 (o campo `doc` já guarda CPF pessoal de quem
+    // assina, não o CNPJ). Contraparte PJ cadastrada só com CNPJ (sem
+    // representante individualizado nos dados) não tem CPF disponível: a
+    // falta explícita aqui, uma por uma, em vez de inventar ou pular.
+    const semCpf = signatories.filter((s) => !extractCpfDigits(s.document));
+    if (semCpf.length > 0) {
+      return {
+        ok: false,
+        error: `CertOne exige CPF válido de cada signatário (campo "document" ausente ou não é CPF): ${semCpf.map((s) => s.email).join(", ")}. Se a parte é PJ, cadastre o CPF do representante legal antes de enviar por CertOne.`,
+        status: 422,
+      };
+    }
     const flowActions = signatories.map((s) => ({
       type: "Signer",
-      user: { name: s.name, email: s.email },
+      user: { identifier: extractCpfDigits(s.document), name: s.name, email: s.email },
     }));
 
     const observers = watcherEmail ? [{ user: { email: watcherEmail } }] : undefined;
@@ -121,7 +150,10 @@ export async function sendToCertOne(input: SendEnvelopeInput): Promise<SendEnvel
       headers: headers(),
       body: JSON.stringify({
         name: documentLabel,
-        files: [{ id: fileId }],
+        // CONFIRMADO ao vivo em 11/09/2026: files[0] exige name/displayName/
+        // contentType, não só id (400 antes do fix, "The Name field is
+        // required" etc.) -- ASSUMIDO anterior estava incompleto.
+        files: [{ id: fileId, name: `${documentLabel}.pdf`, displayName: `${documentLabel}.pdf`, contentType: "application/pdf" }],
         flowActions,
         ...(observers ? { observers } : {}),
         // Corpo do e-mail customizado (confirmado 08/09/2026 com a
@@ -135,13 +167,16 @@ export async function sendToCertOne(input: SendEnvelopeInput): Promise<SendEnvel
       return { ok: false, error: `CertOne createDocument: ${err}`, status: 502 };
     }
     const createData = await createRes.json();
-    // ASSUMIDO: Documents.CreateDocumentResult não foi expandido no Swagger
-    // lido; "cria um ou vários documentos" sugere um array. Leitura
-    // defensiva até o primeiro teste real confirmar a forma exata.
+    // CONFIRMADO ao vivo em 11/09/2026: a resposta é um ARRAY na raiz,
+    // [{uploadId, documentId, attachments}] -- nenhuma das formas
+    // ASSUMIDAS anteriores (objeto com .id/.documentId/.data[0].id/
+    // .documents[0].id) batia com isso, o parsing antigo nunca teria
+    // encontrado o documentId de verdade. Mantida leitura defensiva com as
+    // formas antigas só como fallback, nunca confiar só nelas.
     const documentId: string | undefined =
-      createData?.id ?? createData?.documentId ?? createData?.data?.[0]?.id ?? createData?.documents?.[0]?.id;
+      createData?.[0]?.documentId ?? createData?.id ?? createData?.documentId ?? createData?.data?.[0]?.id ?? createData?.documents?.[0]?.id;
     if (!documentId) {
-      return { ok: false, error: `CertOne createDocument: resposta sem id reconhecível: ${JSON.stringify(createData)}`, status: 502 };
+      return { ok: false, error: `CertOne createDocument: resposta sem documentId reconhecível: ${JSON.stringify(createData)}`, status: 502 };
     }
 
     // E-mail de assinatura sai sozinho neste ponto (confirmado 08/09/2026:

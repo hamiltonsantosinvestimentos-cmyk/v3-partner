@@ -229,7 +229,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
     documentType: "loi",
     documentUrl,
     documentLabel: contractTitle,
-    signatories: [{ name: nome_completo_socio, email }],
+    signatories: [{ name: nome_completo_socio, email, document: cpf }],
     // Fase 2 do ciclo ClickSign (14/08/2026): registra o Observador de
     // Assinatura na mesma caixa que lib/clicksign-archive.ts lê via IMAP,
     // fecha o arquivamento automático do PDF quando o envelope fechar.

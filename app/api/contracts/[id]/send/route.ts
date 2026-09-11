@@ -84,7 +84,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     }
   }
 
-  const parties = (contract.parties as Array<{ role: string; name: string | null; email?: string | null }> | null) ?? [];
+  const parties = (contract.parties as Array<{ role: string; name: string | null; email?: string | null; doc?: string | null }> | null) ?? [];
 
   // Gate de integridade (11/08/2026, P0 real): antes deste gate, um bug na
   // esteira de qualificação sobrescrevia `parties` e derrubava a contraparte
@@ -103,9 +103,12 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     }, { status: 422 });
   }
 
+  // document: repassa o CPF/CNPJ já cadastrado em `parties` (mesmo campo
+  // `doc`) -- a ClickSign ignora este campo, a CertOne exige CPF válido
+  // aqui (ver lib/esignature/certone-provider.ts, achado real de 11/09/2026).
   const signatories = parties
     .filter((p) => p.email?.trim())
-    .map((p) => ({ name: p.name ?? "", email: p.email! }));
+    .map((p) => ({ name: p.name ?? "", email: p.email!, document: p.doc ?? null }));
 
   const nonWitnessSignatories = parties.filter((p) => p.role !== "testemunha" && p.email?.trim());
   if (nonWitnessSignatories.length === 0) {
