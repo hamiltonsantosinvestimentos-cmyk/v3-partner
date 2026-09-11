@@ -190,54 +190,118 @@ async function sendToClickSignV3(input: SendEnvelopeInput): Promise<SendEnvelope
   try {
     const documentLabel = overrideLabel ?? `Carta de Intenção, Deal ${dealId}`;
 
-    let contentBase64: string;
-    if (input.documentContentBase64) {
-      contentBase64 = input.documentContentBase64;
-    } else {
-      const documentUrl =
-        overrideUrl ??
-        `${process.env.NEXT_PUBLIC_APP_URL ?? "https://app.v3partners.com.br"}/api/ma/gerar-contrato?dealId=${dealId}&tipo=${documentType}&lang=pt-br`;
-      const htmlRes = await fetch(documentUrl);
-      if (!htmlRes.ok) {
-        return { ok: false, error: `Falha ao buscar o conteúdo do documento em ${documentUrl}: HTTP ${htmlRes.status}`, status: 502 };
+    // Assinatura Posicionada (11/09/2026): quando o chamador manda o .docx
+    // pronto + a lista de partes na mesma ordem das tags, usamos Modelo →
+    // Documento-a-partir-do-Modelo em vez de upload direto de PDF. Mecânica
+    // confirmada ao vivo nesta sessão contra a API real (Modelo 201,
+    // Documento-de-Modelo 201, Requisito rubricate 201 com rubric_field
+    // ecoado). Qualquer falha neste caminho cai no erro normal de baixo,
+    // nunca tenta silenciosamente o caminho PDF como fallback (silencioso
+    // aqui esconderia posicionamento quebrado atrás de um envio "normal").
+    const usePositioned = !!(input.documentDocxBase64 && input.positionedParties?.length);
+    let documentId: string;
+    let envelopeId: string;
+
+    if (usePositioned) {
+      const templateRes = await fetch(`${baseUrl}/api/v3/templates`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          data: {
+            type: "templates",
+            attributes: {
+              name: `${documentLabel} (auto)`,
+              content_base64: `data:application/vnd.openxmlformats-officedocument.wordprocessingml.document;base64,${input.documentDocxBase64}`,
+            },
+          },
+        }),
+      });
+      if (!templateRes.ok) {
+        const err = await templateRes.text();
+        return { ok: false, error: `ClickSign createTemplate (assinatura posicionada): ${err}`, status: 502 };
       }
-      const html = await htmlRes.text();
-      contentBase64 = await htmlToPdfBase64(html);
-    }
+      const templateData = await templateRes.json();
+      const templateId: string = templateData.data?.id;
 
-    const envelopeRes = await fetch(`${baseUrl}/api/v3/envelopes`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({
-        data: {
-          type: "envelopes",
-          attributes: { name: documentLabel, locale: "pt-BR", auto_close: true, remind_interval: 3 },
-        },
-      }),
-    });
-    if (!envelopeRes.ok) {
-      const err = await envelopeRes.text();
-      return { ok: false, error: `ClickSign createEnvelope: ${err}`, status: 502 };
-    }
-    const envelopeData = await envelopeRes.json();
-    const envelopeId: string = envelopeData.data?.id;
+      const envelopeRes = await fetch(`${baseUrl}/api/v3/envelopes`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          data: {
+            type: "envelopes",
+            attributes: { name: documentLabel, locale: "pt-BR", auto_close: true, remind_interval: 3 },
+          },
+        }),
+      });
+      if (!envelopeRes.ok) {
+        const err = await envelopeRes.text();
+        return { ok: false, error: `ClickSign createEnvelope: ${err}`, status: 502 };
+      }
+      envelopeId = (await envelopeRes.json()).data?.id;
 
-    const docRes = await fetch(`${baseUrl}/api/v3/envelopes/${envelopeId}/documents`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({
-        data: {
-          type: "documents",
-          attributes: { filename: `${documentLabel}.pdf`, content_base64: contentBase64 },
-        },
-      }),
-    });
-    if (!docRes.ok) {
-      const err = await docRes.text();
-      return { ok: false, error: `ClickSign uploadDocument: ${err}`, status: 502 };
+      const docRes = await fetch(`${baseUrl}/api/v3/envelopes/${envelopeId}/documents`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          data: {
+            type: "documents",
+            attributes: { filename: `${documentLabel}.docx`, template: { key: templateId, data: {} } },
+          },
+        }),
+      });
+      if (!docRes.ok) {
+        const err = await docRes.text();
+        return { ok: false, error: `ClickSign createDocumentFromTemplate (assinatura posicionada): ${err}`, status: 502 };
+      }
+      documentId = (await docRes.json()).data?.id;
+    } else {
+      let contentBase64: string;
+      if (input.documentContentBase64) {
+        contentBase64 = input.documentContentBase64;
+      } else {
+        const documentUrl =
+          overrideUrl ??
+          `${process.env.NEXT_PUBLIC_APP_URL ?? "https://app.v3partners.com.br"}/api/ma/gerar-contrato?dealId=${dealId}&tipo=${documentType}&lang=pt-br`;
+        const htmlRes = await fetch(documentUrl);
+        if (!htmlRes.ok) {
+          return { ok: false, error: `Falha ao buscar o conteúdo do documento em ${documentUrl}: HTTP ${htmlRes.status}`, status: 502 };
+        }
+        const html = await htmlRes.text();
+        contentBase64 = await htmlToPdfBase64(html);
+      }
+
+      const envelopeRes = await fetch(`${baseUrl}/api/v3/envelopes`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          data: {
+            type: "envelopes",
+            attributes: { name: documentLabel, locale: "pt-BR", auto_close: true, remind_interval: 3 },
+          },
+        }),
+      });
+      if (!envelopeRes.ok) {
+        const err = await envelopeRes.text();
+        return { ok: false, error: `ClickSign createEnvelope: ${err}`, status: 502 };
+      }
+      envelopeId = (await envelopeRes.json()).data?.id;
+
+      const docRes = await fetch(`${baseUrl}/api/v3/envelopes/${envelopeId}/documents`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          data: {
+            type: "documents",
+            attributes: { filename: `${documentLabel}.pdf`, content_base64: contentBase64 },
+          },
+        }),
+      });
+      if (!docRes.ok) {
+        const err = await docRes.text();
+        return { ok: false, error: `ClickSign uploadDocument: ${err}`, status: 502 };
+      }
+      documentId = (await docRes.json()).data?.id;
     }
-    const docData = await docRes.json();
-    const documentId: string = docData.data?.id;
 
     // Observador de Assinatura: best-effort, nunca falha o envio inteiro.
     if (input.watcherEmail) {
@@ -314,6 +378,38 @@ async function sendToClickSignV3(input: SendEnvelopeInput): Promise<SendEnvelope
       if (!authRes.ok) {
         const err = await authRes.text();
         return { ok: false, error: `ClickSign createRequirement (autenticação, ${signatory.email}): ${err}`, status: 502 };
+      }
+
+      // Assinatura Posicionada: rubricate/manuscript ligando este
+      // signatário à tag {{~position_sign_N}} correspondente no .docx. A
+      // posição N é o índice (1-based) do e-mail dele dentro de
+      // positionedParties -- precisa ser EXATAMENTE a mesma ordem usada por
+      // renderContractDocx() pra gerar as tags, quem garante isso é o
+      // chamador (ver contract-docx-render.ts). Se o e-mail não for achado
+      // (positionedParties incompleto/divergente), pula silenciosamente
+      // este signatário específico em vez de falhar o envio inteiro -- ele
+      // ainda assina normalmente via "agree/sign" acima, só não ganha a
+      // marca visual posicionada.
+      if (usePositioned) {
+        const tagIndex = input.positionedParties!.findIndex((p) => p.email.toLowerCase() === signatory.email.toLowerCase());
+        if (tagIndex >= 0) {
+          const rubricRes = await fetch(`${baseUrl}/api/v3/envelopes/${envelopeId}/requirements`, {
+            method: "POST",
+            headers,
+            body: JSON.stringify({
+              data: {
+                type: "requirements",
+                attributes: { action: "rubricate", kind: "manuscript", rubric_field: `position_sign_${tagIndex + 1}` },
+                relationships: requirementRelationships,
+              },
+            }),
+          });
+          if (!rubricRes.ok) {
+            console.error(`[esignature/clicksign] falha ao criar rubricate posicionado (${signatory.email}, tag ${tagIndex + 1}):`, await rubricRes.text());
+          }
+        } else {
+          console.error(`[esignature/clicksign] positionedParties não tem e-mail correspondente a ${signatory.email}, assinatura posicionada pulada pra este signatário`);
+        }
       }
     }
 

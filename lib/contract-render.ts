@@ -19,28 +19,35 @@ export interface ContractParty {
 // Bloco de assinatura estilo manuscrito: uma linha por parte, com nome e
 // CPF/CNPJ embaixo, igual a um contrato físico impresso. Reaproveita CSS
 // (.parties/.party/.line) que já existia mas nunca era populado por nenhum
-// HTML real. Não depende do ClickSign posicionar nada — o PDF que sobe pra
-// assinatura é gerado por nós (htmlToPdfBase64), então a posição da "área de
-// assinatura" de cada parte já vem definida no próprio documento.
+// HTML real. Continua sendo o caminho usado pelo PDF direto (htmlToPdfBase64)
+// -- ainda é o fallback quando o .docx posicionado (abaixo) falha ou não se
+// aplica. PRECISA receber `parties` preenchido em toda chamada de
+// wrapContractInV3Html que gera documento destinado a assinatura — bug real
+// encontrado e corrigido em 12/08/2026: 6 rotas chamavam wrapContractInV3Html
+// sem o 3o argumento, e o PDF que o ClickSign buscava saía sem este bloco.
 //
-// Pesquisa fechada 12/08/2026 (ciclo ClickSign, item "posicionamento de
-// assinatura"): a API v3 (envelopes) não tem NENHUM mecanismo programático
-// de posicionamento de assinatura, nem tag de texto (não existe
-// "{{~position_sign_ID}}" ou equivalente na documentação oficial,
-// confirmado por múltiplas buscas independentes na doc e na central de
-// ajuda), nem parâmetro de coordenada no payload de requirements/documents.
-// O posicionamento de campos ("Posicionar assinatura ou rubrica") é
-// exclusivamente manual, feito pelo remetente na interface web do ClickSign
-// no momento do envio, ajuda.clicksign.com/posicionar-assinatura-rubrica.
-// Como esta integração ativa o envelope via API (nunca passa pela tela de
-// envio manual), esse recurso simplesmente não se aplica aqui. Este bloco
-// renderizado por nós é a única forma real de dar à assinatura uma
-// referência visual no documento, e por isso PRECISA receber `parties`
-// preenchido em toda chamada de wrapContractInV3Html que gera documento
-// destinado a assinatura — bug real encontrado e corrigido em 12/08/2026:
-// 6 rotas chamavam wrapContractInV3Html sem o 3o argumento, mesmo já tendo
-// o array de partes pronto ali perto (para o INSERT em operation_contracts),
-// e o PDF que o ClickSign efetivamente buscava saía sem este bloco.
+// CORREÇÃO de 11/09/2026 (BRIEF "Assinatura Posicionada"): a pesquisa de
+// 12/08/2026 abaixo (mantida riscada, não apagada, pra não repetir o erro)
+// concluiu que a API v3 não tinha NENHUM mecanismo de posicionamento. Isso
+// estava incompleto -- não errado sobre o upload direto de PDF (esse de fato
+// não tem posicionamento), mas a pesquisa não achou a API de Modelos/.docx
+// (POST /api/v3/templates + tag {{~position_sign_ID}} no arquivo + requisito
+// rubricate/manuscript com rubric_field), confirmada ao vivo em 11/09/2026
+// contra a doc oficial (developers.clicksign.com/docs/copy-of-23-automação-
+// com-modelos) e testada de ponta a ponta contra produção real (Modelo →
+// Documento-do-Modelo → Signatário → Requisito rubricate aceito, e o texto
+// acentuado íntegro conferido byte a byte no .docx convertido baixado de
+// volta). Ver lib/contract-docx-render.ts e o branch `usePositioned` em
+// lib/esignature/clicksign-provider.ts -- esse é o caminho novo (padrão),
+// este bloco de linha/PDF é o fallback caso a geração do .docx falhe.
+//
+// Pesquisa original de 12/08/2026 (incompleta, ver correção acima): a API v3
+// (envelopes) não tem NENHUM mecanismo programático de posicionamento de
+// assinatura via upload direto de PDF, nem parâmetro de coordenada no
+// payload de requirements/documents nesse caminho. O posicionamento manual
+// ("Posicionar assinatura ou rubrica") na tela web do ClickSign também não
+// se aplica aqui (esta integração ativa o envelope via API, nunca passa pela
+// tela de envio manual).
 function renderPartiesBlock(parties?: ContractParty[]): string {
   if (!parties || parties.length === 0) return "";
   const cards = parties

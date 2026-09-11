@@ -55,6 +55,17 @@ export interface SendEnvelopeInput {
   signatureMessage?: string;
   signatureSubject?: string;
   documentContentBase64?: string;
+  /**
+   * Assinatura Posicionada (BRIEF 11/09/2026): quando presente junto com
+   * `positionedParties`, o provedor usa o caminho de Modelo/.docx (tag
+   * {{~position_sign_N}} + requisito rubricate) em vez do upload direto de
+   * PDF. `positionedParties` precisa estar na MESMA ordem usada para gerar
+   * o .docx (renderContractDocx) -- a posição N na lista é o que liga cada
+   * signatório à sua tag. Só implementado no ClickSign por enquanto; outro
+   * provedor sem suporte ignora os dois campos e cai no caminho normal.
+   */
+  documentDocxBase64?: string;
+  positionedParties?: Array<{ name: string; email: string }>;
 }
 
 export type SendEnvelopeResult =

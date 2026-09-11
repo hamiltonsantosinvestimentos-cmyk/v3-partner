@@ -3,6 +3,8 @@ import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { randomUUID } from "crypto";
 import { getProvider, type SendEnvelopeInput } from "@/lib/esignature";
+import { renderContractDocx } from "@/lib/contract-docx-render";
+import type { ContractParty } from "@/lib/contract-render";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -52,7 +54,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
 
   const { data: contract } = await db
     .from("operation_contracts")
-    .select("id, vertical, contract_title, contract_code, status_signature, parties, signing_token, signature_message, signature_subject, is_master_agreement, stamped_document_path, loi_matching_status, loi_override_justification")
+    .select("id, vertical, contract_title, contract_code, status_signature, parties, signing_token, signature_message, signature_subject, is_master_agreement, stamped_document_path, loi_matching_status, loi_override_justification, rendered_html")
     .eq("id", id)
     .single();
 
@@ -147,12 +149,34 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     documentContentBase64 = `data:application/pdf;base64,${buffer.toString("base64")}`;
   }
 
+  // Assinatura Posicionada (BRIEF 11/09/2026, padrão em todos os mandatos):
+  // gera o .docx a partir do MESMO rendered_html que já geramos hoje (fonte
+  // única, nunca diverge do que /api/contracts/html serve pro caminho PDF).
+  // Só se aplica ao caminho normal — regularização manual (is_master_agreement)
+  // envia um PDF já pronto do Storage, sem rendered_html de contrato real por
+  // trás, fica de fora deste caminho por desenho, não por omissão.
+  let documentDocxBase64: string | undefined;
+  let positionedParties: Array<{ name: string; email: string }> | undefined;
+  if (!contract.is_master_agreement && contract.rendered_html) {
+    try {
+      const docxBuffer = await renderContractDocx(contract.rendered_html, parties as ContractParty[]);
+      documentDocxBase64 = docxBuffer.toString("base64");
+      positionedParties = signatories;
+    } catch (docxErr) {
+      // Nunca bloqueia o envio por falha na geração do .docx -- cai no
+      // caminho PDF normal de hoje, registrado pra investigar depois.
+      console.error(`[contracts/send] falha ao gerar .docx posicionado pro contrato ${id}, caindo no caminho PDF normal:`, docxErr);
+    }
+  }
+
   const provider = await getProvider({ contractId: id, vertical: contract.vertical });
   const result = await provider.send({
     dealId: id,
     documentType: resolveDocumentType(contract.contract_title, contract.vertical),
     documentUrl,
     documentContentBase64,
+    documentDocxBase64,
+    positionedParties,
     documentLabel,
     signatories,
     // 14/08/2026: apontado para deal@v3partners.com.br (era
