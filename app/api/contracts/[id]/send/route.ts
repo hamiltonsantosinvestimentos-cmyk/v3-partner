@@ -3,8 +3,9 @@ import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { randomUUID } from "crypto";
 import { getProvider, type SendEnvelopeInput } from "@/lib/esignature";
-import { renderContractDocx } from "@/lib/contract-docx-render";
-import type { ContractParty } from "@/lib/contract-render";
+// renderContractDocx/ContractParty: import removido junto com a desativação
+// da Assinatura Posicionada (ver comentário abaixo, 11/09/2026). Religar
+// quando a causa raiz do position_sign_fields vazio for corrigida.
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -149,25 +150,24 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     documentContentBase64 = `data:application/pdf;base64,${buffer.toString("base64")}`;
   }
 
-  // Assinatura Posicionada (BRIEF 11/09/2026, padrão em todos os mandatos):
-  // gera o .docx a partir do MESMO rendered_html que já geramos hoje (fonte
-  // única, nunca diverge do que /api/contracts/html serve pro caminho PDF).
-  // Só se aplica ao caminho normal — regularização manual (is_master_agreement)
-  // envia um PDF já pronto do Storage, sem rendered_html de contrato real por
-  // trás, fica de fora deste caminho por desenho, não por omissão.
-  let documentDocxBase64: string | undefined;
-  let positionedParties: Array<{ name: string; email: string }> | undefined;
-  if (!contract.is_master_agreement && contract.rendered_html) {
-    try {
-      const docxBuffer = await renderContractDocx(contract.rendered_html, parties as ContractParty[]);
-      documentDocxBase64 = docxBuffer.toString("base64");
-      positionedParties = signatories;
-    } catch (docxErr) {
-      // Nunca bloqueia o envio por falha na geração do .docx -- cai no
-      // caminho PDF normal de hoje, registrado pra investigar depois.
-      console.error(`[contracts/send] falha ao gerar .docx posicionado pro contrato ${id}, caindo no caminho PDF normal:`, docxErr);
-    }
-  }
+  // Assinatura Posicionada (BRIEF 11/09/2026): DESATIVADA em 11/09/2026,
+  // mesmo dia, achado em teste real com signatário real (joao.lemos@,
+  // envelope ae678347-cee8-4bc4-955a-73b689f5b6ed, cancelado). A API aceita
+  // o .docx e o requisito rubricate sem erro, mas o próprio metadata do
+  // documento na ClickSign (`position_sign_fields: []`) confirma que a tag
+  // {{~position_sign_ID}} gerada por lib/contract-docx-render.ts NUNCA foi
+  // reconhecida de verdade -- a tela de assinatura real do signatário
+  // travou em "carregamento demorando mais que o esperado" e nunca
+  // terminou. Causa raiz ainda não identificada (candidatos: o TextRun
+  // precisa ser texto puro sem w:color/w:sz, ou a tag precisa ser um
+  // Quick Part/campo do Word em vez de texto literal, ou outra diferença
+  // de baixo nível entre o XML gerado pela lib `docx` e o que a ClickSign
+  // espera). NÃO reativar sem repetir o teste ponta a ponta com signatário
+  // real e confirmar `position_sign_fields` não-vazio no documento antes
+  // da ativação do envelope. Caminho PDF normal (abaixo) nunca foi tocado,
+  // continua sendo o único caminho real até este bug ser corrigido.
+  const documentDocxBase64: string | undefined = undefined;
+  const positionedParties: Array<{ name: string; email: string }> | undefined = undefined;
 
   const provider = await getProvider({ contractId: id, vertical: contract.vertical });
   const result = await provider.send({
