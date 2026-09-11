@@ -224,9 +224,8 @@ export function PartnerQuizClient() {
 
               <ul className="space-y-2.5">
                 {[
-                  "Crédito com garantia, Home Equity, M&A, câmbio, consórcio e mais",
+                  "Presença em 24 estados do Brasil",
                   "Mesa de operações, IA e materiais de venda prontos pra você",
-                  "Rede de parceiros em todo o Brasil",
                 ].map((b) => (
                   <li key={b} className="flex items-start gap-2.5 text-sm text-white">
                     <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" style={{ color: GOLD }} />
@@ -236,6 +235,10 @@ export function PartnerQuizClient() {
               </ul>
 
               {partnerName && <p className="text-xs" style={{ color: GOLD }}>Convite de {partnerName} — Partner V3</p>}
+
+              <p className="text-xs text-center" style={{ color: MUTED }}>
+                Responda algumas perguntas rápidas e te direcionamos pro cadastro certo.
+              </p>
 
               <button onClick={() => goTo("objetivo")}
                 className="w-full py-3.5 rounded-xl font-bold text-sm text-black flex items-center justify-center gap-2 hover:opacity-90 transition-opacity"
