@@ -37,6 +37,8 @@ export interface KycDocumentRow {
   file_size_bytes: number | null;
   uploaded_by_qualification_id: string | null;
   uploaded_at: string;
+  // Compliance (11/09/2026, pedido de Robson Lino): IP de quem enviou.
+  uploaded_ip: string | null;
 }
 
 /** Data-limite (ISO) a partir da qual um documento enviado hoje deixaria de ser válido. */

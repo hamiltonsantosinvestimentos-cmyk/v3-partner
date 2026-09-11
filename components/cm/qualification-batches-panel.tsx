@@ -8,9 +8,10 @@
 // nunca refatorando aquele componente já em produção (decisão registrada
 // no BRIEF: risco desnecessário pra esta fase).
 import { useState, useEffect, useCallback } from "react";
-import { UserPlus, Copy, Share2, CheckCircle2, FileText, Loader2, X, Trash2, Pencil, Save } from "lucide-react";
+import { UserPlus, Copy, Share2, CheckCircle2, FileText, Loader2, X, Trash2, Pencil, Save, Eye } from "lucide-react";
 import { ROLE_LABELS } from "@/lib/qualification-roles";
 import { isValidEmail } from "@/lib/utils";
+import { PartyQualificationCardModal } from "./party-qualification-card";
 
 interface QualParty {
   id: string;
@@ -108,6 +109,10 @@ export function QualificationBatchesPanel({ listingId, demandId, cardLabel }: Pr
     finally { setEditPartySubmitting(false); }
   };
 
+  // Ver Ficha (11/09/2026, pedido de João): abre o card de qualificação
+  // direto daqui, sem esperar o contrato ser gerado.
+  const [openPartyId, setOpenPartyId] = useState<string | null>(null);
+
   const whatsappQualLink = (party: QualParty) => {
     const msg = `Olá ${party.full_name}, você foi indicado(a) como envolvido(a) em ${cardLabel} da V3 Partners. Complete seus dados de qualificação para prosseguirmos: ${qualificationLink(party.qualification_token)}`;
     return `https://wa.me/?text=${encodeURIComponent(msg)}`;
@@ -201,6 +206,10 @@ export function QualificationBatchesPanel({ listingId, demandId, cardLabel }: Pr
                         </a>
                       </>
                     )}
+                    <button onClick={() => setOpenPartyId(p.id)} title="Ver ficha de qualificação"
+                      className="text-[9px] font-semibold text-[#C9A84C] px-2 py-1 rounded border border-[#C9A84C]/40 bg-[#C9A84C]/10 hover:bg-[#C9A84C]/20 transition-colors">
+                      <Eye size={10} />
+                    </button>
                     {!batch.consumido_por_contract_id && (
                       <>
                         <button onClick={() => startEditParty(p)}
@@ -237,6 +246,8 @@ export function QualificationBatchesPanel({ listingId, demandId, cardLabel }: Pr
           </div>
         </div>
       )}
+
+      <PartyQualificationCardModal qualificationId={openPartyId} onClose={() => setOpenPartyId(null)} />
     </div>
   );
 }

@@ -387,6 +387,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
       representation: requiredRepTypes ? await assembleRepresentation(db, representation) : null,
       status: "preenchido",
       filled_at: new Date().toISOString(),
+      // Compliance (11/09/2026, pedido de Robson Lino): IP de quem
+      // efetivamente preencheu, pra auditoria/antifraude.
+      filled_ip: req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? req.headers.get("x-real-ip") ?? null,
     })
     .eq("id", qualification.id);
 

@@ -29,6 +29,8 @@ interface DocumentCard {
   uploaded_at: string;
   valid_until: string;
   download_url: string | null;
+  // Compliance (11/09/2026, pedido de Robson Lino): IP de quem enviou.
+  uploaded_ip: string | null;
 }
 
 // Para um v3_client_id, resolve os documentos válidos (0-2, um por kind) com URL
@@ -47,6 +49,7 @@ async function loadDocumentsForClient(db: SupabaseClient, v3ClientId: string, vi
       uploaded_at: doc.uploaded_at,
       valid_until: kycValidUntil(doc.uploaded_at),
       download_url: signed?.signedUrl ?? null,
+      uploaded_ip: doc.uploaded_ip ?? null,
     });
     await db.from("cm_party_qualification_document_views").insert({
       document_id: doc.id,
