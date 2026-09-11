@@ -7,6 +7,7 @@ import { cn, isValidEmail } from "@/lib/utils";
 import { ROLE_LABELS } from "@/lib/qualification-roles";
 import { VERTICAL_LABELS, CONCRETE_VERTICALS } from "@/lib/contract-verticals";
 import { extractPlainVariables } from "@/lib/contract-render";
+import { PartyQualificationCardModal } from "./party-qualification-card";
 
 interface RiscoLaudo {
   resumo?: string;
@@ -712,6 +713,11 @@ export function ContractTemplatesClient() {
   // consumido por contrato real.
   const [deletingPartyId, setDeletingPartyId] = useState<string | null>(null);
 
+  // Ver Ficha (11/09/2026, pedido de João: abrir o card de qualificação
+  // direto daqui, sem esperar o contrato ser gerado -- reaproveita o
+  // mesmo card de contracts-panel-client.tsx).
+  const [openPartyId, setOpenPartyId] = useState<string | null>(null);
+
   // Editar dado administrativo (11/09/2026, pedido de João): corrige nome/
   // e-mail/telefone/papel que a própria Mesa digitou na criação -- nunca
   // CPF/RG/endereço (autodeclarado pela parte via link, permanece só via
@@ -1105,6 +1111,10 @@ export function ContractTemplatesClient() {
                               {p.status === "preenchido" ? (
                                 <div className="flex items-center gap-1.5 flex-shrink-0">
                                   <span className="text-[9px] text-emerald-400 flex items-center gap-1"><CheckCircle2 size={11} /> Qualificado</span>
+                                  <button onClick={() => setOpenPartyId(p.id)} title="Ver ficha de qualificação"
+                                    className="text-[9px] font-semibold text-[#C9A84C] px-2 py-1 rounded border border-[#C9A84C]/40 bg-[#C9A84C]/10 hover:bg-[#C9A84C]/20 transition-colors">
+                                    <Eye size={10} />
+                                  </button>
                                   <button onClick={() => reopenQualification(p.id)} disabled={reopeningId === p.id}
                                     className="text-[9px] font-semibold text-amber-400 px-2 py-1 rounded border border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 transition-colors disabled:opacity-50">
                                     {reopeningId === p.id ? "Reabrindo..." : "Corrigir"}
@@ -1134,6 +1144,10 @@ export function ContractTemplatesClient() {
                                     className="flex items-center gap-1 text-[9px] font-semibold text-emerald-400 px-2 py-1 rounded border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 transition-colors">
                                     <Share2 size={10} /> WhatsApp
                                   </a>
+                                  <button onClick={() => setOpenPartyId(p.id)} title="Ver ficha de qualificação"
+                                    className="text-[9px] font-semibold text-[#C9A84C] px-2 py-1 rounded border border-[#C9A84C]/40 bg-[#C9A84C]/10 hover:bg-[#C9A84C]/20 transition-colors">
+                                    <Eye size={10} />
+                                  </button>
                                   {!batch.consumido_por_contract_id && (
                                     <>
                                       <button onClick={() => startEditParty(p)}
@@ -2003,6 +2017,8 @@ export function ContractTemplatesClient() {
           </div>
         </div>
       )}
+
+      <PartyQualificationCardModal qualificationId={openPartyId} onClose={() => setOpenPartyId(null)} />
     </div>
   );
 }

@@ -106,6 +106,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
       mime_type: file.type,
       file_size_bytes: file.size,
       uploaded_by_qualification_id: qualification!.id,
+      // Compliance (11/09/2026, pedido de Robson Lino): IP de quem
+      // efetivamente enviou o documento, pra auditoria/antifraude.
+      uploaded_ip: req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? req.headers.get("x-real-ip") ?? null,
     })
     .select("id, document_kind, owner_label, original_filename, uploaded_at")
     .single();
