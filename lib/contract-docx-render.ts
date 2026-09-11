@@ -147,10 +147,22 @@ function renderPartiesBlockDocx(parties?: ContractParty[]): (Paragraph)[] {
         // Tag de posicionamento (BRIEF "Assinatura Posicionada"): a ClickSign
         // localiza este texto literal no .docx convertido e desenha a área
         // de assinatura manuscrita exatamente aqui, vinculada ao requisito
-        // rubricate/manuscript com o mesmo rubric_field. Confirmado ao vivo
-        // nesta sessão (Modelo criado, Documento a partir do Modelo,
-        // Requisito aceito com o campo ecoado de volta).
-        children: [new TextRun({ text: `{{~position_sign_${i + 1}}}`, color: "FFFFFF", size: 2 })],
+        // rubricate/manuscript com o mesmo rubric_field.
+        //
+        // CAUSA RAIZ do bug real de 11/09/2026 (rev.123, feature desativada
+        // no mesmo dia após travar a tela de um signatário real): a versão
+        // original desta linha tinha `color: "FFFFFF", size: 2` (tentativa
+        // de deixar a tag invisível caso não fosse reconhecida). Isso
+        // quebrava o reconhecimento -- confirmado isolando 4 variantes
+        // contra a API real e checando `metadata.position_sign_fields` do
+        // documento (não só o 201 da chamada, que não garante reconhecimento
+        // nenhum): TextRun com `color`/`size` sempre dava campo vazio ([]);
+        // TextRun sem nenhuma formatação de rPr sempre reconhecia a tag
+        // corretamente. Nunca mais aplicar cor/tamanho custom neste TextRun
+        // específico -- a ClickSign, ao reconhecer a tag de verdade,
+        // substitui o texto por uma área de assinatura real na tela, não
+        // precisa (e não deve) ser escondido por nós.
+        children: [new TextRun(`{{~position_sign_${i + 1}}}`)],
       }),
       new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 20 }, children: [new TextRun({ text: p.name, bold: true, color: CREAM })] })
     );

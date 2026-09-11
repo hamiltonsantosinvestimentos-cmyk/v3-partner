@@ -3,9 +3,8 @@ import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { randomUUID } from "crypto";
 import { getProvider, type SendEnvelopeInput } from "@/lib/esignature";
-// renderContractDocx/ContractParty: import removido junto com a desativação
-// da Assinatura Posicionada (ver comentário abaixo, 11/09/2026). Religar
-// quando a causa raiz do position_sign_fields vazio for corrigida.
+import { renderContractDocx } from "@/lib/contract-docx-render";
+import type { ContractParty } from "@/lib/contract-render";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -150,24 +149,28 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     documentContentBase64 = `data:application/pdf;base64,${buffer.toString("base64")}`;
   }
 
-  // Assinatura Posicionada (BRIEF 11/09/2026): DESATIVADA em 11/09/2026,
-  // mesmo dia, achado em teste real com signatário real (joao.lemos@,
-  // envelope ae678347-cee8-4bc4-955a-73b689f5b6ed, cancelado). A API aceita
-  // o .docx e o requisito rubricate sem erro, mas o próprio metadata do
-  // documento na ClickSign (`position_sign_fields: []`) confirma que a tag
-  // {{~position_sign_ID}} gerada por lib/contract-docx-render.ts NUNCA foi
-  // reconhecida de verdade -- a tela de assinatura real do signatário
-  // travou em "carregamento demorando mais que o esperado" e nunca
-  // terminou. Causa raiz ainda não identificada (candidatos: o TextRun
-  // precisa ser texto puro sem w:color/w:sz, ou a tag precisa ser um
-  // Quick Part/campo do Word em vez de texto literal, ou outra diferença
-  // de baixo nível entre o XML gerado pela lib `docx` e o que a ClickSign
-  // espera). NÃO reativar sem repetir o teste ponta a ponta com signatário
-  // real e confirmar `position_sign_fields` não-vazio no documento antes
-  // da ativação do envelope. Caminho PDF normal (abaixo) nunca foi tocado,
-  // continua sendo o único caminho real até este bug ser corrigido.
-  const documentDocxBase64: string | undefined = undefined;
-  const positionedParties: Array<{ name: string; email: string }> | undefined = undefined;
+  // Assinatura Posicionada (BRIEF 11/09/2026): RELIGADA em 11/09/2026, mesmo
+  // dia. Causa raiz do bug (rev.123) isolada e corrigida em
+  // lib/contract-docx-render.ts: o TextRun da tag tinha `color`/`size`
+  // customizados (tentativa de deixá-la invisível), o que quebrava o
+  // reconhecimento da ClickSign. Confirmado isolando 4 variantes contra a
+  // API real, checando `metadata.position_sign_fields` do documento (o
+  // sinal real -- 201 na chamada não garante reconhecimento nenhum, foi
+  // exatamente esse o gap que deixou o bug original passar): TextRun com
+  // rPr customizado sempre dava campo vazio, TextRun puro sempre reconhecia.
+  // Fix aplicado, tag agora sem formatação. Religar só depois de confirmar
+  // de novo `position_sign_fields` não-vazio antes de qualquer ativação real.
+  let documentDocxBase64: string | undefined;
+  let positionedParties: Array<{ name: string; email: string }> | undefined;
+  if (!contract.is_master_agreement && contract.rendered_html) {
+    try {
+      const docxBuffer = await renderContractDocx(contract.rendered_html, parties as ContractParty[]);
+      documentDocxBase64 = docxBuffer.toString("base64");
+      positionedParties = signatories;
+    } catch (docxErr) {
+      console.error(`[contracts/send] falha ao gerar .docx posicionado pro contrato ${id}, caindo no caminho PDF normal:`, docxErr);
+    }
+  }
 
   const provider = await getProvider({ contractId: id, vertical: contract.vertical });
   const result = await provider.send({
