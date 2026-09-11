@@ -31,8 +31,24 @@ export const ROLE_LABELS: Record<string, string> = {
   partner: "Partner",
   mandatario_1: "Mandatário 1",
   mandatario_2: "Mandatário 2",
+  // Ampliado de 2 para 10 (11/09/2026, pedido de João: operações reais do
+  // NCNDA Mestre têm mais de 2 intermediários simultâneos). O motor de
+  // prosa (party_qualifications_block) já é dinâmico por parte, não por
+  // slot fixo -- o cap de 2 era só deste dicionário + do CHECK constraint
+  // do banco, nunca do template em si (nenhuma das 3 minutas reais que
+  // usam papel numerado referencia {{intermediario_N_nome}} direto no
+  // corpo, todas usam o bloco automático). Ver migration
+  // 20260911c_qualificacoes_intermediarios_ate_10.sql.
   intermediario_1: "Intermediário 1",
   intermediario_2: "Intermediário 2",
+  intermediario_3: "Intermediário 3",
+  intermediario_4: "Intermediário 4",
+  intermediario_5: "Intermediário 5",
+  intermediario_6: "Intermediário 6",
+  intermediario_7: "Intermediário 7",
+  intermediario_8: "Intermediário 8",
+  intermediario_9: "Intermediário 9",
+  intermediario_10: "Intermediário 10",
 };
 
 export interface QualificationPartyForProse {
