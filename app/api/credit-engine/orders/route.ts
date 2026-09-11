@@ -107,6 +107,8 @@ export async function GET(req: NextRequest) {
       partner_id: row.partner_id,
       ref_partner_id: row.ref_partner_id,
       created_at: row.created_at,
+      cnpj_count: row.cnpj_count,
+      cpf_count: row.cpf_count,
     };
   });
 

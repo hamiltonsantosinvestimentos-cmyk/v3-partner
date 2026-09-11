@@ -28,6 +28,8 @@ export interface PartnerOrder {
   partner_id: string | null;
   ref_partner_id: string | null;
   created_at: string;
+  cnpj_count?: number | null;
+  cpf_count?: number | null;
 }
 
 function ConsentBadge({ status }: { status: string }) {
@@ -166,11 +168,57 @@ interface Props {
   canManagePayout?: boolean;
 }
 
+// Tabela reutilizada pelas 2 abas (via partner / direto no site) — mesmas
+// colunas, mesma linha clicável, só o array de pedidos muda.
+function OrdersTable({ orders, onSelect }: { orders: PartnerOrder[]; onSelect: (o: PartnerOrder) => void }) {
+  if (orders.length === 0) {
+    return (
+      <div className="rounded-xl border border-border/50 bg-card p-8 text-center text-sm text-muted-foreground">
+        Nenhum pedido aqui ainda.
+      </div>
+    );
+  }
+  return (
+    <div className="rounded-xl border border-border/50 bg-card overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b border-border/50">
+            {["Cliente", "Origem", "Valor Pago", "Consentimento", "Etapa", "Comissão", "Pago em"].map((h) => (
+              <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {orders.map((o) => (
+            <tr
+              key={o.id}
+              className="border-b border-border/30 cursor-pointer transition-colors hover:bg-secondary/50"
+              onClick={() => onSelect(o)}
+            >
+              <td className="px-4 py-3 font-medium text-foreground max-w-48 truncate">{o.client_name}</td>
+              <td className="px-4 py-3"><OriginBadge order={o} /></td>
+              <td className="px-4 py-3 text-right font-semibold text-white">{formatCurrency(o.amount_cents / 100)}</td>
+              <td className="px-4 py-3"><ConsentBadge status={o.consent_status} /></td>
+              <td className="px-4 py-3"><StageBadge order={o} /></td>
+              <td className="px-4 py-3"><CommissionBadge order={o} /></td>
+              <td className="px-4 py-3 text-xs text-muted-foreground">{o.paid_at ? formatDate(o.paid_at) : "—"}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 export function PedidosPartnersClient({ canManagePayout = false }: Props) {
   const [orders, setOrders] = useState<PartnerOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<PartnerOrder | null>(null);
+  // Pedidos "direct" (cadastro direto no site, sem partner) ficam numa aba
+  // separada de "Pedidos de Partners" — não é o mesmo fluxo/dono, mesmo que
+  // as duas tabelas venham do mesmo endpoint (decisão 11/09/2026).
+  const [tab, setTab] = useState<"partner" | "direct">("partner");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -179,15 +227,30 @@ export function PedidosPartnersClient({ canManagePayout = false }: Props) {
       const res = await fetch("/api/credit-engine/orders");
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Falha ao carregar pedidos");
-      setOrders(json.orders ?? []);
+      const fresh = (json.orders ?? []) as PartnerOrder[];
+      setOrders(fresh);
+      return fresh;
     } catch (e) {
       setError((e as Error).message);
+      return null;
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  // Recarrega a lista sem fechar o modal — o pedido de documento adicional
+  // envolve vários passos em sequência (gerar link, vincular, analisar,
+  // relatório...), fechar o modal a cada um forçaria reabrir toda hora.
+  const refreshSelected = useCallback(async () => {
+    const fresh = await load();
+    if (!fresh) return;
+    setSelected((cur) => (cur ? fresh.find((o) => o.id === cur.id) ?? null : null));
+  }, [load]);
+
+  const partnerOrders = orders.filter((o) => o.source !== "direct");
+  const directOrders = orders.filter((o) => o.source === "direct");
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -197,7 +260,7 @@ export function PedidosPartnersClient({ canManagePayout = false }: Props) {
           Pedidos de Partners
         </h1>
         <p className="text-muted-foreground text-sm mt-1">
-          Análises de crédito vendidas por partners: vincular proposta, rodar análise e entregar o relatório
+          Análises de crédito: vincular proposta, rodar análise e entregar o relatório
         </p>
       </div>
 
@@ -213,48 +276,42 @@ export function PedidosPartnersClient({ canManagePayout = false }: Props) {
         <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-4 text-sm text-red-400">{error}</div>
       )}
 
-      {!loading && !error && orders.length === 0 && (
-        <div className="rounded-xl border border-border/50 bg-card p-8 text-center text-sm text-muted-foreground">
-          Nenhum pedido pago de Análise de Crédito ainda.
-        </div>
-      )}
+      {!loading && !error && (
+        <>
+          <div className="flex items-center gap-1 border-b border-border/50">
+            <button
+              onClick={() => setTab("partner")}
+              className={`px-4 py-2.5 text-sm font-semibold border-b-2 -mb-px transition-colors ${
+                tab === "partner" ? "border-teal-400 text-white" : "border-transparent text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              Via Partner ({partnerOrders.length})
+            </button>
+            <button
+              onClick={() => setTab("direct")}
+              className={`px-4 py-2.5 text-sm font-semibold border-b-2 -mb-px transition-colors ${
+                tab === "direct" ? "border-teal-400 text-white" : "border-transparent text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              Diretos (Site) ({directOrders.length})
+            </button>
+          </div>
 
-      {!loading && !error && orders.length > 0 && (
-        <div className="rounded-xl border border-border/50 bg-card overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border/50">
-                {["Cliente", "Origem", "Valor Pago", "Consentimento", "Etapa", "Comissão", "Pago em"].map((h) => (
-                  <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {orders.map((o) => (
-                <tr
-                  key={o.id}
-                  className="border-b border-border/30 cursor-pointer transition-colors hover:bg-secondary/50"
-                  onClick={() => setSelected(o)}
-                >
-                  <td className="px-4 py-3 font-medium text-foreground max-w-48 truncate">{o.client_name}</td>
-                  <td className="px-4 py-3"><OriginBadge order={o} /></td>
-                  <td className="px-4 py-3 text-right font-semibold text-white">{formatCurrency(o.amount_cents / 100)}</td>
-                  <td className="px-4 py-3"><ConsentBadge status={o.consent_status} /></td>
-                  <td className="px-4 py-3"><StageBadge order={o} /></td>
-                  <td className="px-4 py-3"><CommissionBadge order={o} /></td>
-                  <td className="px-4 py-3 text-xs text-muted-foreground">{o.paid_at ? formatDate(o.paid_at) : "—"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+          {tab === "direct" && (
+            <p className="text-xs text-muted-foreground -mt-2">
+              Clientes que compraram análise sozinhos em /analise-v2, sem partner envolvido na venda. Fluxo de operação é o mesmo, só a origem muda.
+            </p>
+          )}
+
+          <OrdersTable orders={tab === "partner" ? partnerOrders : directOrders} onSelect={setSelected} />
+        </>
       )}
 
       {selected && (
         <PedidoDetailModal
           order={selected}
           onClose={() => setSelected(null)}
-          onUpdated={() => { load(); setSelected(null); }}
+          onUpdated={refreshSelected}
         />
       )}
     </div>

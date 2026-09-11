@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { X, Loader2, CheckCircle2, Circle, ExternalLink } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { X, Loader2, CheckCircle2, Circle, ExternalLink, Plus, Copy, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import type { PartnerOrder } from "./pedidos-partners-client";
@@ -20,6 +20,231 @@ function StepRow({ done, label, action }: { done: boolean; label: string; action
         <span className={`text-sm ${done ? "text-foreground" : "text-muted-foreground"}`}>{label}</span>
       </div>
       {action}
+    </div>
+  );
+}
+
+// ─── Documentos adicionais (sócio/garantidor CPF, 2º+ CNPJ do grupo) ───────
+// Cada um tem seu próprio consentimento LGPD → proposta → análise →
+// relatório, independente do documento principal do pedido (que segue no
+// fluxo de StepRow acima, sem mudança). Ver migration
+// 20260911_credit_consents_multi_doc e decisão com Hamilton, 11/09/2026.
+interface OrderDocument {
+  id: string;
+  doc: string;
+  label: string | null;
+  consent_status: string;
+  intake_token: string | null;
+  registrato_uploaded: boolean;
+  credit_desk_proposal_id: string | null;
+  credit_profile_id: string | null;
+  report_public_token: string | null;
+  report_delivered_at: string | null;
+}
+
+function DocRow({ orderId, doc, onUpdated }: { orderId: string; doc: OrderDocument; onUpdated: () => void }) {
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  async function call(action: string, url: string, body?: Record<string, unknown>) {
+    setBusy(action);
+    setError(null);
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: body ? { "Content-Type": "application/json" } : undefined,
+        body: body ? JSON.stringify(body) : undefined,
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Falha na operação");
+      onUpdated();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  function copyLink() {
+    if (!doc.intake_token) return;
+    const url = `${window.location.origin}/intake/credit/${doc.intake_token}`;
+    navigator.clipboard.writeText(url).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }
+
+  const consented = doc.consent_status === "consented";
+  const hasProposal = Boolean(doc.credit_desk_proposal_id);
+  const hasAnalysis = Boolean(doc.credit_profile_id);
+  const hasReport = Boolean(doc.report_public_token);
+
+  return (
+    <div className="rounded-lg border border-border/40 bg-secondary/20 p-3 space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-xs font-semibold text-foreground truncate">{doc.label ?? "Documento adicional"}</p>
+          <p className="text-[11px] text-muted-foreground">{doc.doc}</p>
+        </div>
+        <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-full flex-shrink-0 ${
+          consented ? "bg-emerald-500/10 text-emerald-400" : "bg-amber-500/10 text-amber-400"
+        }`}>
+          {consented ? "Consentido" : "Pendente"}
+        </span>
+      </div>
+
+      {!consented && (
+        <Button size="sm" variant="outline" className="w-full" onClick={copyLink}>
+          {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+          {copied ? "Link copiado" : "Copiar link de consentimento"}
+        </Button>
+      )}
+
+      {consented && !hasProposal && (
+        <Button size="sm" className="w-full" disabled={busy !== null} onClick={() => call("link", `/api/credit-engine/orders/${orderId}/link-proposal`, { consent_id: doc.id })}>
+          {busy === "link" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Vincular proposta"}
+        </Button>
+      )}
+
+      {hasProposal && !hasAnalysis && (
+        <Button size="sm" className="w-full" disabled={busy !== null} onClick={() => call("analyze", "/api/credit-engine/trigger", { proposal_id: doc.credit_desk_proposal_id })}>
+          {busy === "analyze" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Rodar análise"}
+        </Button>
+      )}
+
+      {hasAnalysis && (
+        <Button size="sm" variant={hasReport ? "outline" : "default"} className="w-full" disabled={busy !== null} onClick={() => call("report", `/api/credit-engine/orders/${orderId}/documents/${doc.id}/generate-report`)}>
+          {busy === "report" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : hasReport ? "Gerar relatório novamente" : "Gerar relatório"}
+        </Button>
+      )}
+
+      {hasReport && (
+        <a href={`/relatorio-credito/${doc.report_public_token}`} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 text-[11px] text-[#C9A84C] hover:underline">
+          <ExternalLink className="w-3 h-3" /> Ver link público do relatório
+        </a>
+      )}
+
+      {error && <p className="text-[11px] text-red-400">{error}</p>}
+    </div>
+  );
+}
+
+function AdditionalDocuments({ order, onUpdated }: { order: PartnerOrder; onUpdated: () => void }) {
+  const [docs, setDocs] = useState<OrderDocument[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [docType, setDocType] = useState<"CPF" | "CNPJ">("CPF");
+  const [docValue, setDocValue] = useState("");
+  const [label, setLabel] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/credit-engine/orders/${order.id}/documents`);
+      const json = await res.json();
+      if (res.ok) setDocs(json.documents ?? []);
+    } finally {
+      setLoading(false);
+    }
+  }, [order.id]);
+
+  useEffect(() => { load(); }, [load]);
+
+  async function handleAdd() {
+    setError(null);
+    const digits = docValue.replace(/\D/g, "");
+    const expected = docType === "CPF" ? 11 : 14;
+    if (digits.length !== expected) {
+      setError(`${docType} precisa ter ${expected} dígitos`);
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/credit-engine/orders/${order.id}/documents`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ doc_type: docType, doc_value: digits, label: label.trim() || undefined }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Falha ao gerar link");
+      setDocValue("");
+      setLabel("");
+      setShowForm(false);
+      load();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const totalExpected = (order.cnpj_count ?? 1) + (order.cpf_count ?? 0);
+
+  return (
+    <div className="rounded-xl border border-border/50 bg-card p-4 space-y-3">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm font-semibold text-foreground">Documentos adicionais da operação</p>
+          <p className="text-[11px] text-muted-foreground">
+            Sócios/garantidores (CPF) ou empresas extras (CNPJ) contratados junto com o documento principal.
+            {totalExpected > 1 && ` Total contratado: ${totalExpected} documentos.`}
+          </p>
+        </div>
+        {!showForm && (
+          <Button size="sm" variant="outline" onClick={() => setShowForm(true)}>
+            <Plus className="w-3.5 h-3.5" /> Adicionar
+          </Button>
+        )}
+      </div>
+
+      {showForm && (
+        <div className="rounded-lg border border-border/40 bg-secondary/20 p-3 space-y-2">
+          <div className="flex gap-2">
+            <select
+              value={docType}
+              onChange={(e) => setDocType(e.target.value as "CPF" | "CNPJ")}
+              className="h-9 px-2 text-xs bg-secondary border border-border rounded-lg text-foreground"
+            >
+              <option value="CPF">CPF (sócio/garantidor)</option>
+              <option value="CNPJ">CNPJ (empresa adicional)</option>
+            </select>
+            <input
+              value={docValue}
+              onChange={(e) => setDocValue(e.target.value)}
+              placeholder={docType === "CPF" ? "000.000.000-00" : "00.000.000/0000-00"}
+              className="flex-1 h-9 px-3 text-xs bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
+            />
+          </div>
+          <input
+            value={label}
+            onChange={(e) => setLabel(e.target.value)}
+            placeholder="Rótulo (ex: Sócio 1 - João Silva)"
+            className="w-full h-9 px-3 text-xs bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
+          />
+          {error && <p className="text-[11px] text-red-400">{error}</p>}
+          <div className="flex gap-2">
+            <Button size="sm" disabled={saving} onClick={handleAdd}>
+              {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Gerar link de consentimento"}
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => { setShowForm(false); setError(null); }}>Cancelar</Button>
+          </div>
+        </div>
+      )}
+
+      {loading ? (
+        <p className="text-xs text-muted-foreground">Carregando…</p>
+      ) : docs.length === 0 ? (
+        <p className="text-xs text-muted-foreground">Nenhum documento adicional cadastrado ainda.</p>
+      ) : (
+        <div className="space-y-2">
+          {docs.map((d) => (
+            <DocRow key={d.id} orderId={order.id} doc={d} onUpdated={() => { load(); onUpdated(); }} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -171,6 +396,10 @@ export function PedidoDetailModal({ order, onClose, onUpdated }: Props) {
               />
             </div>
           </div>
+
+          {(order.cnpj_count ?? 1) + (order.cpf_count ?? 0) > 1 && (
+            <AdditionalDocuments order={order} onUpdated={onUpdated} />
+          )}
 
           <div className="rounded-xl border border-border/50 bg-secondary/30 p-3 text-[11px] text-muted-foreground">
             {order.partner_commission_id ? (

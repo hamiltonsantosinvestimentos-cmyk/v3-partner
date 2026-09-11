@@ -30,12 +30,25 @@ export default async function RelatorioCreditoPage({ params }: PageProps) {
     .eq("report_public_token", token)
     .single();
 
-  if (!order?.credit_desk_proposal_id) notFound();
+  // Token pode ser do documento PRINCIPAL do pedido (partner_service_orders,
+  // caso de sempre) ou de um documento ADICIONAL (sócio/garantidor CPF, 2º+
+  // CNPJ — credit_consents, ver migration 20260911_credit_consents_multi_doc).
+  let creditDeskProposalId = order?.credit_desk_proposal_id ?? null;
+  if (!creditDeskProposalId) {
+    const { data: consent } = await svc
+      .from("credit_consents")
+      .select("credit_desk_proposal_id")
+      .eq("report_public_token", token)
+      .single();
+    creditDeskProposalId = consent?.credit_desk_proposal_id ?? null;
+  }
+
+  if (!creditDeskProposalId) notFound();
 
   const { data: proposal } = await svc
     .from("credit_desk_proposals")
     .select("credit_profile_id")
-    .eq("id", order.credit_desk_proposal_id)
+    .eq("id", creditDeskProposalId)
     .single();
 
   if (!proposal?.credit_profile_id) notFound();
