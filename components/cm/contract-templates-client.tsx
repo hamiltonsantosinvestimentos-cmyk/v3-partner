@@ -325,6 +325,10 @@ export function ContractTemplatesClient() {
   const [genVertical, setGenVertical] = useState("");
   const isMultiVerticalTemplate = selected?.vertical === "multi_vertical";
 
+  // Múltiplos Lotes em Paralelo (11/09/2026): qual dos lotes prontos-e-não-
+  // usados a Mesa escolheu pra esta geração, só relevante quando há 2+.
+  const [selectedQualBatchId, setSelectedQualBatchId] = useState("");
+
   const requiresCounterparty = selected?.requires_counterparty_signature !== false;
   const manualVars = ((selected?.variables_map ?? []) as { key: string; label: string; source?: string }[])
     .filter((v) => v.source === "manual" && v.key !== "vigencia_prazo");
@@ -342,6 +346,7 @@ export function ContractTemplatesClient() {
     setGenVigenciaModo("dias");
     setGenVigenciaDias("");
     setGenVertical("");
+    setSelectedQualBatchId("");
     setGenResult(null);
     setGenError(null);
     setShowGenerateModal(true);
@@ -381,36 +386,52 @@ export function ContractTemplatesClient() {
   // de banco (chk_operation_contracts_vinculo) sem nenhuma explicação
   // clara. Agora a tela distingue completo (pode gerar sozinho) de
   // incompleto (bloqueia com aviso, nunca deixa cair no erro de banco).
-  const activeQualBatch = qualBatches.find((b) => !b.consumido_por_contract_id);
-  const hasQualificationData = activeQualBatch?.status === "completo"
-    && activeQualBatch.cm_party_qualifications.some((p) => p.status === "preenchido");
-  const hasIncompleteQualBatch = !!activeQualBatch && activeQualBatch.status !== "completo";
+  // Múltiplos Lotes em Paralelo (11/09/2026, pedido de João: "vamos pedir
+  // 4/5 NDAs enquanto aguarda a qualificação chegar"). A versão anterior só
+  // olhava 1 lote por vez (o mais recente criado), então um lote novo ainda
+  // pendente bloqueava a geração mesmo com um lote MAIS ANTIGO já completo
+  // e pronto -- forçava a Mesa a mexer no lote errado pra destravar. Agora:
+  // lote pendente nunca bloqueia (só informa), e quando há 2+ lotes prontos
+  // ao mesmo tempo, a Mesa escolhe explicitamente qual contraparte está
+  // gerando agora (seletor abaixo), nunca precisa apagar nada.
+  const completedUnconsumedBatches = qualBatches.filter(
+    (b) => !b.consumido_por_contract_id && b.status === "completo" && b.cm_party_qualifications.some((p) => p.status === "preenchido")
+  );
+  const pendingUnconsumedBatches = qualBatches.filter((b) => !b.consumido_por_contract_id && b.status !== "completo");
+  const effectiveQualBatch = completedUnconsumedBatches.length === 1
+    ? completedUnconsumedBatches[0]
+    : completedUnconsumedBatches.find((b) => b.id === selectedQualBatchId);
+  const needsQualBatchPicker = completedUnconsumedBatches.length > 1;
+  const hasQualificationData = !!effectiveQualBatch;
   // P1 real (11/09/2026): João tentou gerar contrato de novo numa minuta
   // cujo único lote já tinha sido consumido, e a tela ainda mostrava os
   // envolvidos com check verde "Qualificado" -- o erro genérico de
   // "preencha os indicadores" pareceu bug/desconfiguração. Aponta o
   // contrato real que já consumiu o lote (single-use é desenho
   // deliberado, decisão de João em 02/09: evita CPF/RG de um cliente
-  // vazar pro próximo contrato gerado da mesma minuta).
+  // vazar pro próximo contrato gerado da mesma minuta). Só relevante como
+  // dica quando não há nenhum lote vivo (pronto ou pendente) sobrando.
   const mostRecentConsumedBatch = qualBatches.find((b) => !!b.consumido_por_contract_id);
 
   const handleGenerateContract = async () => {
     if (!selected) return;
 
-    if (hasIncompleteQualBatch && activeQualBatch) {
-      const pendentes = activeQualBatch.cm_party_qualifications.filter((p) => p.status !== "preenchido").map((p) => p.full_name);
-      setGenError(`Lote de Qualificação Antecipada ainda não está completo (falta: ${pendentes.join(", ")}). Complete a qualificação, ou remova essa(s) parte(s) do lote se não devem entrar neste contrato, antes de gerar.`);
+    // Lote pendente de OUTRA contraparte nunca bloqueia mais -- só é
+    // informativo (banner abaixo). Só o seletor bloqueia, e só quando há
+    // ambiguidade real (2+ lotes prontos ao mesmo tempo).
+    if (needsQualBatchPicker && !effectiveQualBatch) {
+      setGenError("2 ou mais lotes de qualificação estão prontos para esta minuta: escolha qual contraparte você está gerando agora.");
       return;
     }
 
     if (requiresCounterparty && !hasQualificationData) {
       const invalid = genParties.some((p) => !p.name.trim() || !p.email.trim());
       if (genParties.length === 0 || invalid) {
-        if (!activeQualBatch && mostRecentConsumedBatch) {
+        if (completedUnconsumedBatches.length === 0 && pendingUnconsumedBatches.length === 0 && mostRecentConsumedBatch) {
           const codigo = mostRecentConsumedBatch.consumido_contrato?.contract_code ?? "outro contrato já gerado";
           setGenError(`A Qualificação Antecipada mostrada acima já foi usada no contrato ${codigo} (single-use por desenho: evita CPF/RG de um cliente vazar para o próximo contrato gerado desta minuta). Clique em "Gerar Link de Qualificação Antecipada" para criar um lote novo para esta operação, ou preencha os Indicadores manualmente abaixo.`);
         } else {
-          setGenError("Preencha nome e e-mail de todos os indicadores.");
+          setGenError("Preencha nome e e-mail de todos os indicadores (ou aguarde algum lote de qualificação em andamento completar).");
         }
         return;
       }
@@ -451,6 +472,11 @@ export function ContractTemplatesClient() {
           } : {}),
           extra_data: extraDataPayload,
           commission_percent: genCommission ? Number(genCommission) : undefined,
+          // Múltiplos Lotes em Paralelo (11/09/2026): sempre manda o lote
+          // explícito quando um foi usado, nunca deixa o backend adivinhar
+          // "o mais recente" -- com 2+ lotes prontos ao mesmo tempo isso
+          // poderia consumir o lote da contraparte errada.
+          ...(effectiveQualBatch ? { qualification_batch_id: effectiveQualBatch.id } : {}),
           ...(isMultiVerticalTemplate ? { vertical: genVertical } : {}),
           ...(isLoiSeries ? {
             valor_operacao: Number(genValorOperacao),
@@ -1747,14 +1773,37 @@ export function ContractTemplatesClient() {
                       <p className="mt-1 text-[9px] text-[#9BAFC5]">Esta minuta é Multi-Vertical: os trechos {"{{v:...}}"} do corpo e o Head automático que assina são resolvidos de acordo com a vertical escolhida aqui.</p>
                     </div>
                   )}
-                  {hasIncompleteQualBatch && activeQualBatch && (
-                    <p className="text-[11px] text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded-lg p-2.5 leading-relaxed">
-                      Lote de Qualificação Antecipada ainda não está completo: {activeQualBatch.cm_party_qualifications.filter((p) => p.status !== "preenchido").map((p) => p.full_name).join(", ")} ainda não preencheu. Complete a qualificação (ou remova essa parte do lote, se não deve entrar neste contrato) antes de gerar.
+                  {/* Múltiplos Lotes em Paralelo (11/09/2026): pendente de
+                      OUTRA contraparte é só informativo, nunca bloqueia --
+                      Mesa pode gerar este contrato normalmente enquanto
+                      espera o link de intake de outra operação voltar. */}
+                  {pendingUnconsumedBatches.length > 0 && (
+                    <p className="text-[11px] text-[#9BAFC5] bg-[#162744] border border-[#9BAFC5]/15 rounded-lg p-2.5 leading-relaxed">
+                      {pendingUnconsumedBatches.length === 1 ? "Também aguardando qualificação: " : `${pendingUnconsumedBatches.length} lotes também aguardando qualificação: `}
+                      {pendingUnconsumedBatches.map((b) => b.cm_party_qualifications.filter((p) => p.status !== "preenchido").map((p) => p.full_name).join(", ")).join(" · ")}
+                      . Não impede gerar este contrato agora.
                     </p>
+                  )}
+                  {needsQualBatchPicker && (
+                    <div className="bg-[#162744] border border-[#C9A84C]/30 rounded-lg p-2.5">
+                      <label className="block text-[10px] font-bold text-[#C9A84C] uppercase tracking-wider mb-1.5">
+                        {completedUnconsumedBatches.length} lotes de qualificação prontos -- qual contraparte é esta operação?
+                      </label>
+                      <div className="space-y-1">
+                        {completedUnconsumedBatches.map((b) => (
+                          <label key={b.id} className="flex items-center gap-2 text-xs text-[#F5F1E8] cursor-pointer">
+                            <input type="radio" name="qualBatchPicker" checked={selectedQualBatchId === b.id} onChange={() => setSelectedQualBatchId(b.id)} />
+                            {b.cm_party_qualifications.map((p) => p.full_name).join(", ")}
+                          </label>
+                        ))}
+                      </div>
+                    </div>
                   )}
                   {requiresCounterparty && hasQualificationData ? (
                     <p className="text-[11px] text-emerald-400 leading-relaxed bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-2.5">
-                      As partes já foram qualificadas via "Qualificação Antecipada" (veja o Lote de Qualificação acima). Não é preciso preencher indicador nenhum aqui: o contrato usa automaticamente os dados já coletados.
+                      {needsQualBatchPicker
+                        ? "Lote escolhido acima já está qualificado. Não é preciso preencher indicador nenhum aqui: o contrato usa automaticamente os dados já coletados."
+                        : "As partes já foram qualificadas via \"Qualificação Antecipada\" (veja o Lote de Qualificação acima). Não é preciso preencher indicador nenhum aqui: o contrato usa automaticamente os dados já coletados."}
                     </p>
                   ) : requiresCounterparty ? (
                     <>
@@ -1873,7 +1922,7 @@ export function ContractTemplatesClient() {
                   {genError && <p className="text-[11px] text-red-400">{genError}</p>}
                 </div>
                 <div className="p-4 border-t border-[#C9A84C]/20 flex-shrink-0">
-                  <button onClick={handleGenerateContract} disabled={generating || hasIncompleteQualBatch}
+                  <button onClick={handleGenerateContract} disabled={generating || (needsQualBatchPicker && !effectiveQualBatch)}
                     className="w-full px-3 py-2.5 bg-[#C9A84C] text-[#09081A] rounded-lg text-xs font-bold hover:bg-[#E8C97A] transition disabled:opacity-50 flex items-center justify-center gap-2">
                     {generating ? <Loader2 size={14} className="animate-spin" /> : <FilePlus2 size={14} />} Gerar Contrato
                   </button>
