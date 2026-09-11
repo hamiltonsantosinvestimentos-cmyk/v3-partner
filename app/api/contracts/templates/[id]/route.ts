@@ -54,6 +54,19 @@ export async function PATCH(
   }
 
   const bodyChanged = body_text_raw !== undefined && body_text_raw !== current.body_text_raw;
+
+  // Botão "Editar minuta reprovada" (11/09/2026, pedido de João): minuta
+  // aprovada passa a ficar travada de vez para edição de corpo, nunca mais
+  // silenciosamente reaberta (comportamento antigo, achado nesta mesma
+  // investigação). rascunho/em_revisao/reprovado seguem editáveis como
+  // sempre. force_revalidation (sem mudar o texto) continua liberado mesmo
+  // aprovada, é ação administrativa distinta de editar o corpo.
+  if (bodyChanged && current.approval_status === "aprovado") {
+    return NextResponse.json({
+      error: "Minuta aprovada não pode ter o corpo alterado. Desative esta minuta e crie uma nova, ou use a revalidação (sem mudar o texto) para reabrir revisão.",
+    }, { status: 422 });
+  }
+
   if (bodyChanged) {
     // NDA Multi-Vertical (11/09/2026): tag {{v:X}}...{{/v}} malformada nunca
     // pode virar texto literal quebrado dentro de um contrato gerado depois.

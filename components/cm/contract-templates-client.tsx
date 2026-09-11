@@ -847,6 +847,36 @@ export function ContractTemplatesClient() {
     setQualBatches([]);
   };
 
+  // Botão dedicado "Corrigir e Reenviar" (11/09/2026, pedido de João: "botão
+  // de editar uma minuta reprovada"). Já era tecnicamente possível editar o
+  // corpo de uma minuta reprovada com o botão genérico "Salvar Alterações" +
+  // "Enviar para Revisão Jurídica" separado, mas nada deixava esse fluxo
+  // explícito. Uma ação só: salva a correção (PATCH normal) e, se salvou,
+  // já reenvia para revisão jurídica no mesmo clique.
+  const handleFixAndResubmit = async () => {
+    if (!selected || !formName || !formBody) return;
+    setSubmittingForReview(true);
+    try {
+      const saveRes = await fetch(`/api/contracts/templates/${selected.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ template_name: formName, body_text_raw: formBody, vertical: formVertical }),
+      });
+      const saveJson = await saveRes.json();
+      if (!saveRes.ok) { alert(saveJson.error); return; }
+
+      const submitRes = await fetch(`/api/contracts/templates/${selected.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ submit_for_review: true }),
+      });
+      const submitJson = await submitRes.json();
+      if (submitRes.ok) { fetchTemplates(); selectTemplate(submitJson.template); }
+      else alert(submitJson.error);
+    } catch { alert("Erro de conexão"); }
+    finally { setSubmittingForReview(false); }
+  };
+
   const handleSubmitForReview = async () => {
     if (!selected) return;
     setSubmittingForReview(true);
@@ -1037,7 +1067,11 @@ export function ContractTemplatesClient() {
                         <UserPlus size={13} /> Gerar Link de Qualificação Antecipada
                       </button>
                     )}
-                    {["rascunho", "reprovado"].includes(selected.approval_status) && (
+                    {/* Reprovada usa o botão dedicado "Corrigir e Reenviar" lá
+                        embaixo, junto do editor de corpo (ver handleFixAndResubmit).
+                        Este aqui fica só para rascunho, que nunca foi reprovado
+                        e não precisa do motivo de reprovação por perto. */}
+                    {selected.approval_status === "rascunho" && (
                       <button onClick={handleSubmitForReview} disabled={submittingForReview}
                         className="flex items-center gap-1.5 px-3 py-1.5 bg-[#162744] text-[#C9A84C] border border-[#C9A84C]/30 rounded-lg text-xs font-bold hover:bg-[#C9A84C]/10 transition disabled:opacity-50">
                         {submittingForReview ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />} Enviar para Revisão Jurídica
@@ -1359,6 +1393,25 @@ export function ContractTemplatesClient() {
                 </div>
               )}
 
+              {/* Banner de reprovação (11/09/2026): motivo do revisor fica
+                  visível junto do editor, não só escondido no histórico lá
+                  embaixo. Pega o comentário do voto "reprovado" mais recente
+                  da rodada atual. */}
+              {selected?.approval_status === "reprovado" && (() => {
+                const lastRejection = [...reviews].reverse().find((r) => r.decision === "reprovado" && r.review_round === selected.review_round);
+                return (
+                  <div className="mb-4 bg-red-500/10 border border-red-500/25 rounded-lg p-3">
+                    <div className="flex items-center gap-2 text-[11px] font-bold text-red-400 mb-1">
+                      <XCircle size={13} /> Minuta reprovada{lastRejection ? ` por ${lastRejection.reviewer_name}` : ""}
+                    </div>
+                    <p className="text-[11px] text-[#F5F1E8]">
+                      {lastRejection?.comment ?? "Motivo não registrado."}
+                    </p>
+                    <p className="mt-1.5 text-[10px] text-[#9BAFC5]">Corrija o corpo abaixo e use "Corrigir e Reenviar para Revisão".</p>
+                  </div>
+                );
+              })()}
+
               <div className="grid grid-cols-2 gap-4 mb-4">
                 <div>
                   <label className="block text-[10px] font-bold text-[#C9A84C] uppercase tracking-wider mb-1">Nome da Minuta</label>
@@ -1430,8 +1483,21 @@ export function ContractTemplatesClient() {
                 </div>
               )}
 
+              {/* Trava de edição pós-aprovação (11/09/2026, pedido de João:
+                  "não permitir alterar depois de aprovação"). Nome/vertical
+                  seguem editáveis acima (dado administrativo), só o corpo
+                  jurídico da minuta fica somente leitura. */}
+              {selected?.approval_status === "aprovado" && (
+                <div className="mb-2 flex items-center gap-2 bg-[#C9A84C]/10 border border-[#C9A84C]/25 rounded-lg px-3 py-2 text-[11px] text-[#C9A84C]">
+                  <CheckCircle2 size={13} /> Minuta aprovada: o corpo não pode mais ser alterado. Desative e crie uma nova minuta caso precise de outro texto.
+                </div>
+              )}
               <textarea value={formBody} onChange={(e) => setFormBody(e.target.value)}
-                className="w-full bg-[#162744] border border-[#9BAFC5]/15 rounded-lg px-4 py-3 text-sm text-[#F5F1E8] focus:border-[#C9A84C]/50 focus:outline-none font-mono min-h-[350px] resize-y"
+                readOnly={selected?.approval_status === "aprovado"}
+                className={cn(
+                  "w-full bg-[#162744] border border-[#9BAFC5]/15 rounded-lg px-4 py-3 text-sm text-[#F5F1E8] focus:border-[#C9A84C]/50 focus:outline-none font-mono min-h-[350px] resize-y",
+                  selected?.approval_status === "aprovado" && "opacity-60 cursor-not-allowed"
+                )}
                 placeholder="Digite o texto da minuta usando {{variáveis}} entre chaves..." />
 
               {detectedVars.length > 0 && (
@@ -1453,11 +1519,23 @@ export function ContractTemplatesClient() {
                     </button>
                   )}
                 </div>
-                <button onClick={handleSave} disabled={saving || !formName || !formBody}
-                  className="flex items-center gap-2 px-6 py-2.5 bg-[#C9A84C] text-[#09081A] rounded-lg text-sm font-bold hover:bg-[#E8C97A] disabled:opacity-40 transition">
-                  {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-                  {isNew ? "Criar Minuta" : "Salvar Alterações"}
-                </button>
+                {selected?.approval_status === "reprovado" ? (
+                  <button onClick={handleFixAndResubmit} disabled={submittingForReview || !formName || !formBody}
+                    className="flex items-center gap-2 px-6 py-2.5 bg-[#C9A84C] text-[#09081A] rounded-lg text-sm font-bold hover:bg-[#E8C97A] disabled:opacity-40 transition">
+                    {submittingForReview ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+                    Corrigir e Reenviar para Revisão
+                  </button>
+                ) : (
+                  // Corpo é readOnly quando aprovado (ver banner acima), então
+                  // este botão nunca envia body_text_raw alterado nesse
+                  // estado -- só cobre nome/vertical, que continuam
+                  // administrativos e livres mesmo pós-aprovação.
+                  <button onClick={handleSave} disabled={saving || !formName || !formBody}
+                    className="flex items-center gap-2 px-6 py-2.5 bg-[#C9A84C] text-[#09081A] rounded-lg text-sm font-bold hover:bg-[#E8C97A] disabled:opacity-40 transition">
+                    {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                    {isNew ? "Criar Minuta" : selected?.approval_status === "aprovado" ? "Salvar Nome/Vertical" : "Salvar Alterações"}
+                  </button>
+                )}
               </div>
 
               {selected?.approval_status === "em_revisao" && (
