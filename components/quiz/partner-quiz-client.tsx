@@ -13,6 +13,7 @@ import {
   inputCls, inputStyle, maskPhone, TopProgress, Field, StepCard, ChoiceGrid,
 } from "./wizard-ui";
 import { trackPixel } from "./meta-pixel";
+import { BrazilMap } from "./brazil-map";
 import {
   OBJETIVO, OCUPACAO, EXPERIENCIA_B2B, REDE, PORTE_REDE, DISPONIBILIDADE,
   PRAZO_COMECO, RENDA_FAIXA, RENDA_FAIXA_VALOR,
@@ -211,6 +212,7 @@ export function PartnerQuizClient() {
         {step === "intro" && (
           <div className="w-full max-w-lg mx-auto animate-fade-in">
             <div className="rounded-2xl border p-7 sm:p-9 space-y-6" style={{ background: NAVY_CARD, borderColor: "rgba(255,255,255,0.06)" }}>
+              <BrazilMap size={168} />
               <div className="space-y-3">
                 <p className="text-xs font-bold uppercase tracking-widest" style={{ color: GOLD }}>Seja Partner V3</p>
                 <h1 className="text-2xl sm:text-3xl font-bold text-white leading-tight">
@@ -224,9 +226,8 @@ export function PartnerQuizClient() {
 
               <ul className="space-y-2.5">
                 {[
-                  "Crédito com garantia, Home Equity, M&A, câmbio, consórcio e mais",
+                  "Presença em 24 estados do Brasil",
                   "Mesa de operações, IA e materiais de venda prontos pra você",
-                  "Rede de parceiros em todo o Brasil",
                 ].map((b) => (
                   <li key={b} className="flex items-start gap-2.5 text-sm text-white">
                     <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" style={{ color: GOLD }} />
@@ -236,6 +237,10 @@ export function PartnerQuizClient() {
               </ul>
 
               {partnerName && <p className="text-xs" style={{ color: GOLD }}>Convite de {partnerName} — Partner V3</p>}
+
+              <p className="text-xs text-center" style={{ color: MUTED }}>
+                Responda algumas perguntas rápidas e te direcionamos pro cadastro certo.
+              </p>
 
               <button onClick={() => goTo("objetivo")}
                 className="w-full py-3.5 rounded-xl font-bold text-sm text-black flex items-center justify-center gap-2 hover:opacity-90 transition-opacity"
