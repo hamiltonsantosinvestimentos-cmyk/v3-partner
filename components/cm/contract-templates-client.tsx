@@ -5,6 +5,8 @@ import { useSearchParams } from "next/navigation";
 import { Plus, Save, Trash2, Loader2, FileText, Eye, ChevronDown, Upload, Send, CheckCircle2, XCircle, Scale, Users, X, FilePlus2, UserPlus, Copy, Share2, RotateCcw } from "lucide-react";
 import { cn, isValidEmail } from "@/lib/utils";
 import { ROLE_LABELS } from "@/lib/qualification-roles";
+import { VERTICAL_LABELS, CONCRETE_VERTICALS } from "@/lib/contract-verticals";
+import { extractPlainVariables } from "@/lib/contract-render";
 
 interface RiscoLaudo {
   resumo?: string;
@@ -105,16 +107,9 @@ const APPROVAL_STATUS_MAP: Record<string, { label: string; color: string }> = {
   reprovado: { label: "Reprovada", color: "bg-red-500/20 text-red-400" },
 };
 
-const VERTICAL_LABELS: Record<string, string> = {
-  capital_markets: "Bolsa de Ativos",
-  credito: "Mesa de Crédito",
-  ma: "M&A",
-  institucional: "Institucional",
-  clientes: "Clientes / Partners",
-  talent_pool: "Talent Pool",
-  colaboradores: "Colaboradores",
-};
-
+// VERTICAL_LABELS/CONCRETE_VERTICALS movidos para lib/contract-verticals.ts
+// (11/09/2026, NDA Multi-Vertical) -- fonte única com as rotas server, que
+// também precisam validar a mesma lista.
 const VERTICAL_COLORS: Record<string, string> = {
   capital_markets: "bg-[#C9A84C] text-[#09081A]",
   credito: "bg-emerald-500 text-white",
@@ -123,6 +118,7 @@ const VERTICAL_COLORS: Record<string, string> = {
   clientes: "bg-orange-500 text-white",
   talent_pool: "bg-cyan-500 text-[#09081A]",
   colaboradores: "bg-pink-500 text-white",
+  multi_vertical: "bg-[#243A66] text-[#C9A84C] border border-[#C9A84C]/40",
 };
 
 const SAMPLE_VARS = `Variáveis disponíveis (use entre {{chaves}}):
@@ -133,7 +129,11 @@ FINANCEIRO: {{valor_face}}, {{valor_atualizado}}, {{desagio_pretendido}}, {{praz
 OFERTA: {{valor_oferta}}, {{desagio_oferecido}}, {{tipo_pagamento}}
 COMISSAO: {{comissao_total}}, {{comissao_v3}}, {{comissao_partner}}, {{comissao_intermediario}}
 M&A: {{nome_ativo}}, {{valor_deal}}, {{setor}}, {{v3_code}}
-SISTEMA: {{data_geracao}}, {{data_geracao_extenso}}`;
+SISTEMA: {{data_geracao}}, {{data_geracao_extenso}}
+
+MULTI-VERTICAL (só minutas com vertical = "Multi-Vertical"):
+{{v:credito}}texto só do crédito{{/v}} -- vertical escolhida ao gerar o contrato,
+texto fora das tags vale pra todas`;
 
 export function ContractTemplatesClient() {
   const searchParams = useSearchParams();
@@ -318,6 +318,13 @@ export function ContractTemplatesClient() {
   const [genVigenciaModo, setGenVigenciaModo] = useState<"dias" | "indeterminado">("dias");
   const [genVigenciaDias, setGenVigenciaDias] = useState("");
 
+  // NDA Multi-Vertical (11/09/2026): minuta "multi_vertical" não tem
+  // vertical fixa -- a Mesa escolhe aqui qual vertical se aplica a ESTA
+  // operação, e o backend resolve os trechos {{v:X}}...{{/v}} e o Head
+  // automático com base nessa escolha, nunca no vertical do template.
+  const [genVertical, setGenVertical] = useState("");
+  const isMultiVerticalTemplate = selected?.vertical === "multi_vertical";
+
   const requiresCounterparty = selected?.requires_counterparty_signature !== false;
   const manualVars = ((selected?.variables_map ?? []) as { key: string; label: string; source?: string }[])
     .filter((v) => v.source === "manual" && v.key !== "vigencia_prazo");
@@ -334,6 +341,7 @@ export function ContractTemplatesClient() {
     setGenExtraData({});
     setGenVigenciaModo("dias");
     setGenVigenciaDias("");
+    setGenVertical("");
     setGenResult(null);
     setGenError(null);
     setShowGenerateModal(true);
@@ -420,6 +428,10 @@ export function ContractTemplatesClient() {
       setGenError("Valor da Operação é obrigatório para Carta de Intenção (trava de LOI casada).");
       return;
     }
+    if (isMultiVerticalTemplate && !genVertical) {
+      setGenError("Esta minuta é Multi-Vertical: escolha a vertical desta operação antes de gerar.");
+      return;
+    }
     setGenerating(true);
     setGenError(null);
     try {
@@ -439,6 +451,7 @@ export function ContractTemplatesClient() {
           } : {}),
           extra_data: extraDataPayload,
           commission_percent: genCommission ? Number(genCommission) : undefined,
+          ...(isMultiVerticalTemplate ? { vertical: genVertical } : {}),
           ...(isLoiSeries ? {
             valor_operacao: Number(genValorOperacao),
             loi_side: genLoiSide,
@@ -852,7 +865,7 @@ export function ContractTemplatesClient() {
         const res = await fetch(`/api/contracts/templates/${selected.id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ template_name: formName, body_text_raw: formBody }),
+          body: JSON.stringify({ template_name: formName, body_text_raw: formBody, vertical: formVertical }),
         });
         if (res.ok) fetchTemplates();
         else { const j = await res.json(); alert(j.error); }
@@ -868,7 +881,7 @@ export function ContractTemplatesClient() {
     fetchTemplates();
   };
 
-  const detectedVars = (formBody.match(/\{\{([^}]+)\}\}/g) || []).map(v => v.replace(/\{\{|\}\}/g, "").trim());
+  const detectedVars = extractPlainVariables(formBody);
 
   return (
     <div className="min-h-screen p-6">
@@ -893,7 +906,7 @@ export function ContractTemplatesClient() {
       </div>
 
       <div className="flex gap-2 mb-4">
-        {["", "capital_markets", "credito", "ma", "institucional", "clientes", "talent_pool", "colaboradores"].map((v) => (
+        {["", "capital_markets", "credito", "ma", "institucional", "clientes", "talent_pool", "colaboradores", "multi_vertical"].map((v) => (
           <button key={v} onClick={() => setFilterVertical(v)}
             className={cn("px-3 py-1.5 rounded-md text-xs font-medium transition",
               filterVertical === v ? "bg-[#C9A84C] text-[#09081A]" : "bg-[#162744] text-[#9BAFC5] hover:text-[#F5F1E8]"
@@ -1244,17 +1257,22 @@ export function ContractTemplatesClient() {
                 </div>
                 <div>
                   <label className="block text-[10px] font-bold text-[#C9A84C] uppercase tracking-wider mb-1">Vertical</label>
+                  {/* Destravado em 11/09/2026 -- o backend (PATCH) nunca
+                      aceitava "vertical", então isso ficava disabled fora da
+                      criação sem nenhum ganho real; agora troca a qualquer
+                      momento, inclusive pra "Multi-Vertical" quando a Mesa
+                      decide consolidar minutas duplicadas numa só. */}
                   <select value={formVertical} onChange={(e) => setFormVertical(e.target.value)}
-                    disabled={!isNew}
-                    className="w-full bg-[#162744] border border-[#9BAFC5]/15 rounded-lg px-4 py-2.5 text-sm text-[#F5F1E8] disabled:opacity-50">
-                    <option value="capital_markets">Bolsa de Ativos</option>
-                    <option value="credito">Mesa de Crédito</option>
-                    <option value="ma">M&A</option>
-                    <option value="institucional">Institucional</option>
-                    <option value="clientes">Clientes / Partners</option>
-                    <option value="talent_pool">Talent Pool</option>
-                    <option value="colaboradores">Colaboradores</option>
+                    className="w-full bg-[#162744] border border-[#9BAFC5]/15 rounded-lg px-4 py-2.5 text-sm text-[#F5F1E8]">
+                    {Object.entries(VERTICAL_LABELS).map(([value, label]) => (
+                      <option key={value} value={value}>{label}</option>
+                    ))}
                   </select>
+                  {formVertical === "multi_vertical" && (
+                    <p className="mt-1 text-[9px] text-[#9BAFC5]">
+                      Use <code className="text-[#C9A84C]">{"{{v:credito}}"}</code>texto só do crédito<code className="text-[#C9A84C]">{"{{/v}}"}</code> no corpo pra marcar trechos exclusivos de uma vertical ({CONCRETE_VERTICALS.join(", ")}). Texto fora das tags vale pra todas. A vertical real é escolhida ao gerar o contrato.
+                    </p>
+                  )}
                 </div>
                 {isNew && (
                   <div className="col-span-2">
@@ -1716,6 +1734,19 @@ export function ContractTemplatesClient() {
             ) : (
               <>
                 <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                  {isMultiVerticalTemplate && (
+                    <div>
+                      <label className="block text-[10px] font-bold text-[#C9A84C] uppercase tracking-wider mb-1">Vertical desta Operação *</label>
+                      <select value={genVertical} onChange={(e) => setGenVertical(e.target.value)}
+                        className="w-full bg-[#162744] border border-[#9BAFC5]/15 rounded-lg px-3 py-2 text-xs text-[#F5F1E8]">
+                        <option value="">Selecione...</option>
+                        {CONCRETE_VERTICALS.map((v) => (
+                          <option key={v} value={v}>{VERTICAL_LABELS[v]}</option>
+                        ))}
+                      </select>
+                      <p className="mt-1 text-[9px] text-[#9BAFC5]">Esta minuta é Multi-Vertical: os trechos {"{{v:...}}"} do corpo e o Head automático que assina são resolvidos de acordo com a vertical escolhida aqui.</p>
+                    </div>
+                  )}
                   {hasIncompleteQualBatch && activeQualBatch && (
                     <p className="text-[11px] text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded-lg p-2.5 leading-relaxed">
                       Lote de Qualificação Antecipada ainda não está completo: {activeQualBatch.cm_party_qualifications.filter((p) => p.status !== "preenchido").map((p) => p.full_name).join(", ")} ainda não preencheu. Complete a qualificação (ou remova essa parte do lote, se não deve entrar neste contrato) antes de gerar.

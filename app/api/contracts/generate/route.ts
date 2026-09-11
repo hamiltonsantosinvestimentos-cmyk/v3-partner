@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
-import { resolveContractVariables, wrapContractInV3Html } from "@/lib/contract-render";
+import { resolveContractVariables, resolveVerticalBlocks, wrapContractInV3Html } from "@/lib/contract-render";
 import type { V3Series } from "@/lib/v3-codes";
 import { resolveDeskHead, VERTICAL_TO_DESK_ORIGIN } from "@/lib/ncnda-desk-head";
 import { renderPartyQualificationProse } from "@/lib/qualification-roles";
+import { CONCRETE_VERTICALS } from "@/lib/contract-verticals";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -28,7 +29,7 @@ export async function POST(req: NextRequest) {
   const caller = await requireRole(req);
   if (!caller) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
-  const { template_id, listing_id, bid_id, deal_id, credit_proposal_id, ticket_id, qualification_batch_id, commission_percent, extra_data, avulso_parties, is_master_agreement, valor_operacao, loi_side, loi_matched_contract_id, loi_override_justification } = await req.json();
+  const { template_id, listing_id, bid_id, deal_id, credit_proposal_id, ticket_id, qualification_batch_id, commission_percent, extra_data, avulso_parties, is_master_agreement, valor_operacao, loi_side, loi_matched_contract_id, loi_override_justification, vertical } = await req.json();
 
   if (!template_id) return NextResponse.json({ error: "template_id obrigatório" }, { status: 422 });
 
@@ -60,6 +61,24 @@ export async function POST(req: NextRequest) {
 
   if (!template) return NextResponse.json({ error: "Template não encontrado ou inativo" }, { status: 404 });
 
+  // NDA Multi-Vertical (11/09/2026): minuta "multi_vertical" não tem
+  // vertical fixa -- quem gera o contrato escolhe qual vertical se aplica
+  // A ESTA operação específica. effectiveVertical substitui todo uso de
+  // template.vertical daqui pra baixo (resolução de bloco condicional,
+  // Head automático da mesa, e o valor real gravado em
+  // operation_contracts.vertical). Minuta comum (vertical fixa) segue
+  // idêntica a antes, effectiveVertical === template.vertical sempre.
+  let effectiveVertical: string = template.vertical;
+  if (template.vertical === "multi_vertical") {
+    if (typeof vertical !== "string" || !CONCRETE_VERTICALS.includes(vertical)) {
+      return NextResponse.json(
+        { error: `Esta minuta é multi-vertical (trechos variam por operação): informe "vertical" com uma das opções: ${CONCRETE_VERTICALS.join(", ")}.` },
+        { status: 422 }
+      );
+    }
+    effectiveVertical = vertical;
+  }
+
   // Gate de revisão jurídica (11/08/2026): minuta só gera contrato depois de
   // aprovada pelo jurídico + compliance/sócio diretor. approval_status
   // grandfathered para 'aprovado' nas minutas já existentes antes desta data.
@@ -80,7 +99,7 @@ export async function POST(req: NextRequest) {
   // direto -- o gate existe pra parte qualificada não checada, nunca para
   // "ausência" de intermediário.
   const FPA_NCND_SERIES: V3Series[] = ["V3C-NDA", "V3C-FPA"];
-  if (template.vertical === "capital_markets" && listing_id && FPA_NCND_SERIES.includes(template.contract_series as V3Series)) {
+  if (effectiveVertical === "capital_markets" && listing_id && FPA_NCND_SERIES.includes(template.contract_series as V3Series)) {
     const INTERMEDIARY_ROLES = ["mandatario", "intermediario_finder_venda", "intermediario_finder_compra"];
     const { data: batches } = await svc()
       .from("cm_qualification_batches")
@@ -134,7 +153,7 @@ export async function POST(req: NextRequest) {
   // "institucional" ficam de fora, decisão explícita). Roda ANTES do bloco
   // credit_proposal_id abaixo, que sobrescreve com resolução mais precisa
   // (escopo nacional/internacional) quando presente.
-  const verticalDeskOrigin = VERTICAL_TO_DESK_ORIGIN[template.vertical as string];
+  const verticalDeskOrigin = VERTICAL_TO_DESK_ORIGIN[effectiveVertical];
   if (verticalDeskOrigin) {
     const head = await resolveDeskHead(verticalDeskOrigin);
     if (head.cpf) {
@@ -534,7 +553,12 @@ export async function POST(req: NextRequest) {
     { role: "v3_partners", name: "João Lemos Netto", doc: "14.219.287/0001-50", email: "joao.lemos@v3partners.com.br" },
   ] : []);
 
-  const renderedBody = resolveContractVariables(template.body_text_raw, variables);
+  // NDA Multi-Vertical: resolve {{v:X}}...{{/v}} ANTES de resolveContractVariables
+  // (que trataria as tags como variável desconhecida e corromperia o texto).
+  // Em minuta comum (não multi_vertical) o corpo não tem essas tags, então
+  // isso é um no-op idêntico ao comportamento de antes.
+  const bodyAfterVerticalBlocks = resolveVerticalBlocks(template.body_text_raw, effectiveVertical);
+  const renderedBody = resolveContractVariables(bodyAfterVerticalBlocks, variables);
   const contractTitle = resolveContractVariables(template.template_name, variables);
   const renderedHtml = wrapContractInV3Html(contractTitle, renderedBody, resolvedParties);
 
@@ -596,7 +620,7 @@ export async function POST(req: NextRequest) {
     .insert({
       template_id,
       contract_code: contractCode,
-      vertical: template.vertical,
+      vertical: effectiveVertical,
       listing_id: listing_id ?? null,
       bid_id: bid_id ?? null,
       deal_id: deal_id ?? null,

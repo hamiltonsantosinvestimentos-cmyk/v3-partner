@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { notifySociosMinutaEmRevisao } from "@/lib/socios-notify";
+import { validateVerticalBlocks, extractPlainVariables } from "@/lib/contract-render";
+import { VERTICAL_LABELS } from "@/lib/contract-verticals";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -30,7 +32,7 @@ export async function PATCH(
 
   const { id } = await params;
   const body = await req.json();
-  const { template_name, body_text_raw, is_active, submit_for_review, force_revalidation } = body;
+  const { template_name, body_text_raw, is_active, submit_for_review, force_revalidation, vertical } = body;
 
   const { data: current } = await svc().from("contract_templates").select("template_name, body_text_raw, version, approval_status, review_round").eq("id", id).single();
   if (!current) return NextResponse.json({ error: "Minuta não encontrada" }, { status: 404 });
@@ -39,10 +41,27 @@ export async function PATCH(
   if (template_name !== undefined) updates.template_name = template_name;
   if (is_active !== undefined) updates.is_active = is_active;
 
+  // Correção de bug real (11/09/2026): esta rota nunca aceitava "vertical",
+  // então uma minuta ficava presa na vertical escolhida na criação pra
+  // sempre -- o próprio campo na tela existia, mas ficava disabled fora do
+  // modo "Nova Minuta" porque o backend nunca teria aplicado a mudança
+  // mesmo que o front deixasse editar.
+  if (vertical !== undefined) {
+    if (!Object.keys(VERTICAL_LABELS).includes(vertical)) {
+      return NextResponse.json({ error: `Vertical inválida. Use uma de: ${Object.keys(VERTICAL_LABELS).join(", ")}.` }, { status: 422 });
+    }
+    updates.vertical = vertical;
+  }
+
   const bodyChanged = body_text_raw !== undefined && body_text_raw !== current.body_text_raw;
   if (bodyChanged) {
+    // NDA Multi-Vertical (11/09/2026): tag {{v:X}}...{{/v}} malformada nunca
+    // pode virar texto literal quebrado dentro de um contrato gerado depois.
+    const blocksCheck = validateVerticalBlocks(body_text_raw);
+    if (!blocksCheck.valid) return NextResponse.json({ error: blocksCheck.error }, { status: 422 });
+
     updates.body_text_raw = body_text_raw;
-    const vars = (body_text_raw.match(/\{\{([^}]+)\}\}/g) || []).map((v: string) => v.replace(/\{\{|\}\}/g, "").trim());
+    const vars = extractPlainVariables(body_text_raw);
     updates.variables_map = vars.map((v: string) => ({ key: v, label: v.replace(/_/g, " "), source: "auto" }));
     updates.version = (current.version ?? 0) + 1;
   }
