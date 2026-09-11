@@ -64,6 +64,14 @@ export type DeleteRouteConfig = {
   labelColumn: string;
   reviewUrl: string;
   requestRoles: string[];
+  // Guarda opcional (10/09/2026, Central de Contratos): bloqueia exclusão
+  // conforme o estado do registro -- ex: contrato só pode ser apagado em
+  // rascunho, nunca já enviado/assinado via provedor de assinatura externo.
+  // guardColumns busca colunas extras no mesmo select só pra avaliar o
+  // guard; guard devolve mensagem de erro (bloqueia, 422) ou null (libera).
+  // Opcional e sem efeito nos callers existentes (ma_deals, crm_leads etc.).
+  guardColumns?: string[];
+  guard?: (item: Record<string, unknown>) => string | null;
 };
 
 // POST: ADMIN exclui direto (soft delete + email de aviso). Demais roles em
@@ -84,10 +92,17 @@ export function buildDeleteHandlers(config: DeleteRouteConfig) {
     }
 
     const db = svc();
-    const labelSelect: string = `id, ${config.labelColumn}`;
+    const labelSelect: string = config.guardColumns?.length
+      ? `id, ${config.labelColumn}, ${config.guardColumns.join(", ")}`
+      : `id, ${config.labelColumn}`;
     const { data: item } = await db.from(config.table).select(labelSelect).eq("id", id).single();
     if (!item) return NextResponse.json({ error: "Registro não encontrado" }, { status: 404 });
-    const label = String((item as unknown as Record<string, unknown>)[config.labelColumn] ?? id);
+    const record = item as unknown as Record<string, unknown>;
+    if (config.guard) {
+      const guardError = config.guard(record);
+      if (guardError) return NextResponse.json({ error: guardError }, { status: 422 });
+    }
+    const label = String(record[config.labelColumn] ?? id);
 
     if (caller.role === "ADMIN") {
       const { data, error } = await db.from(config.table).update({

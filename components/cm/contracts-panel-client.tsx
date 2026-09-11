@@ -104,7 +104,7 @@ interface QualBatch {
   cm_party_qualifications: QualParty[];
 }
 
-export function ContractsPanelClient() {
+export function ContractsPanelClient({ role }: { role: string }) {
   const [contracts, setContracts] = useState<Contract[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Contract | null>(null);
@@ -248,6 +248,76 @@ export function ContractsPanelClient() {
       const json = await res.json();
       setContractLinks(json.links ?? []);
     } catch { setContractLinks([]); }
+  };
+
+  // Exclusão + Lixeira (10/09/2026): mesmo padrão de soft delete 30 dias já
+  // em produção em Crédito/CRM/M&A/Consórcio (lib/governance-delete.ts).
+  // Só ADMIN vê a Lixeira; ADMIN exclui direto, GESTAO/MESA_OPERACIONAL só
+  // solicitam (email à governança). Guard no backend já impede excluir
+  // contrato fora de "rascunho" -- o botão aqui só aparece nesse status pra
+  // nunca depender só do 422 pra explicar isso ao usuário.
+  const [deletingContract, setDeletingContract] = useState(false);
+  const [showLixeira, setShowLixeira] = useState(false);
+  const [lixeiraItems, setLixeiraItems] = useState<any[]>([]);
+  const [lixeiraLoading, setLixeiraLoading] = useState(false);
+
+  const handleDeleteContract = async (contractId: string) => {
+    const reason = window.prompt(
+      role === "ADMIN"
+        ? "Motivo da exclusão (obrigatório):"
+        : "Motivo da solicitação de exclusão (obrigatório, será enviado por email à governança):"
+    );
+    if (!reason || reason.trim().length < 5) {
+      if (reason !== null) alert("Motivo obrigatório: mínimo 5 caracteres");
+      return;
+    }
+    setDeletingContract(true);
+    try {
+      const res = await fetch(`/api/contracts/${contractId}/delete`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: reason.trim() }),
+      });
+      const json = await res.json();
+      if (res.ok) {
+        if (json.mode === "deleted") {
+          alert("Contrato excluído. Disponível na Lixeira por 30 dias.");
+          setContracts((prev) => prev.filter((c) => c.id !== contractId));
+          setSelected(null);
+        } else {
+          alert("Solicitação enviada por email à governança. O contrato continua ativo até a decisão do ADMIN.");
+        }
+      } else {
+        alert(json.error ?? "Erro ao processar exclusão");
+      }
+    } catch { alert("Erro de conexão"); }
+    finally { setDeletingContract(false); }
+  };
+
+  const loadLixeira = async () => {
+    setLixeiraLoading(true);
+    try {
+      const res = await fetch("/api/contracts/lixeira");
+      const json = await res.json();
+      setLixeiraItems(json.items ?? []);
+    } catch { setLixeiraItems([]); }
+    finally { setLixeiraLoading(false); }
+  };
+
+  const restoreFromLixeira = async (itemType: string, itemId: string) => {
+    try {
+      const res = await fetch("/api/contracts/lixeira", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ item_type: itemType, item_id: itemId }),
+      });
+      if (res.ok) {
+        setLixeiraItems((prev) => prev.filter((i) => i.id !== itemId));
+        fetchContracts();
+      } else {
+        alert("Erro ao restaurar contrato");
+      }
+    } catch { alert("Erro de conexão"); }
   };
 
   const addRegPartyRow = () => setRegParties((prev) => [...prev, { name: "", email: "", doc: "", role: "contraparte" }]);
@@ -557,12 +627,56 @@ export function ContractsPanelClient() {
             className="flex items-center gap-1.5 px-3 py-2 bg-[#162744] text-[#C9A84C] border border-[#C9A84C]/30 rounded-lg text-xs font-bold hover:bg-[#C9A84C]/10 transition">
             <Upload size={14} /> Regularizar Contrato Manual
           </button>
+          {role === "ADMIN" && (
+            <button onClick={() => { setShowLixeira(true); loadLixeira(); }}
+              className="flex items-center gap-1.5 px-3 py-2 bg-[#162744] text-[#9BAFC5] border border-[#9BAFC5]/20 rounded-lg text-xs font-bold hover:text-[#F5F1E8] hover:bg-[#243A66] transition">
+              <XCircle size={14} /> Lixeira
+            </button>
+          )}
           <div className="flex items-center gap-2 text-xs text-[#9BAFC5]">
             <Shield size={14} className="text-[#C9A84C]" />
             <span>Quórum: 2/3 sócios</span>
           </div>
         </div>
       </div>
+
+      {/* Modal Lixeira (10/09/2026) */}
+      {showLixeira && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60" onClick={() => setShowLixeira(false)}>
+          <div className="w-full max-w-lg max-h-[80vh] bg-[#09081A] border border-[#C9A84C]/20 rounded-xl flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="p-4 border-b border-[#C9A84C]/20 flex items-center justify-between flex-shrink-0">
+              <div className="text-sm font-bold text-[#F5F1E8]">Lixeira · Contratos (30 dias)</div>
+              <button onClick={() => setShowLixeira(false)} className="text-[#9BAFC5] hover:text-[#F5F1E8] text-xl">&times;</button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 space-y-2">
+              {lixeiraLoading ? (
+                <div className="flex justify-center py-8"><Loader2 size={20} className="animate-spin text-[#C9A84C]" /></div>
+              ) : lixeiraItems.length === 0 ? (
+                <div className="text-center text-xs text-[#9BAFC5] py-8">Lixeira vazia</div>
+              ) : (
+                lixeiraItems.map((item: any) => (
+                  <div key={item.id} className="bg-[#12112A] border border-[#9BAFC5]/10 rounded-lg p-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="text-xs font-bold text-[#F5F1E8]">
+                          {item.contract_title} <span className="text-[#9BAFC5] font-normal">({item.contract_code ?? "sem código"})</span>
+                        </div>
+                        <div className="text-[10px] text-[#9BAFC5]">excluído por {item.profiles?.full_name ?? "N/D"}</div>
+                        <div className="text-[10px] text-red-400 mt-1">{item.deletion_reason}</div>
+                        <div className="text-[9px] text-[#9BAFC5]/70 mt-1">{item.days_remaining} dias restantes na lixeira</div>
+                      </div>
+                      <button onClick={() => restoreFromLixeira(item.item_type, item.id)}
+                        className="flex-shrink-0 px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/20 rounded text-emerald-400 text-[10px] font-bold hover:bg-emerald-500/20 transition">
+                        Restaurar
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Filtros */}
       <div className="flex flex-wrap items-center gap-3 mb-5">
@@ -778,6 +892,19 @@ export function ContractsPanelClient() {
                       className="flex items-center gap-1.5 px-3 py-1.5 bg-[#162744] text-[#9BAFC5] rounded-lg text-xs font-bold hover:text-[#F5F1E8] hover:bg-[#243A66] transition"
                     >
                       <UserPlus size={13} /> Gerar Link de Qualificação
+                    </button>
+                  )}
+
+                  {/* Excluir (10/09/2026): só em rascunho -- mesmo guard já
+                      aplicado no backend, ver /api/contracts/[id]/delete.
+                      Contrato enviado/assinado nunca aparece aqui. */}
+                  {selected.status_signature === "rascunho" && (
+                    <button
+                      onClick={() => handleDeleteContract(selected.id)}
+                      disabled={deletingContract}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-red-500/10 text-red-400 border border-red-500/20 rounded-lg text-xs font-bold hover:bg-red-500/20 transition disabled:opacity-50 ml-auto"
+                    >
+                      {deletingContract ? <Loader2 size={13} className="animate-spin" /> : <XCircle size={13} />} {role === "ADMIN" ? "Excluir" : "Solicitar Exclusão"}
                     </button>
                   )}
                 </div>

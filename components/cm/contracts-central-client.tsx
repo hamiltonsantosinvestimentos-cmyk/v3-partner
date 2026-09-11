@@ -45,7 +45,7 @@ function ContractsCentralInner({ role }: { role: string }) {
         ))}
       </div>
 
-      {tab === "painel" && <ContractsPanelClient />}
+      {tab === "painel" && <ContractsPanelClient role={role} />}
       {tab === "minutas" && <ContractTemplatesClient />}
       {tab === "config" && canConfig && <EsignatureConfigClient />}
     </div>
