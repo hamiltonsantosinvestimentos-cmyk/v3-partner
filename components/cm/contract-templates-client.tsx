@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
-import { Plus, Save, Trash2, Loader2, FileText, Eye, ChevronDown, Upload, Send, CheckCircle2, XCircle, Scale, Users, X, FilePlus2, UserPlus, Copy, Share2, RotateCcw } from "lucide-react";
+import { Plus, Save, Trash2, Loader2, FileText, Eye, ChevronDown, Upload, Send, CheckCircle2, XCircle, Scale, Users, X, FilePlus2, UserPlus, Copy, Share2, RotateCcw, Pencil } from "lucide-react";
 import { cn, isValidEmail } from "@/lib/utils";
 import { ROLE_LABELS } from "@/lib/qualification-roles";
 import { VERTICAL_LABELS, CONCRETE_VERTICALS } from "@/lib/contract-verticals";
@@ -711,6 +711,36 @@ export function ContractTemplatesClient() {
   // DELETE /api/cm/qualifications/party/[id]; a rota já bloqueia lote
   // consumido por contrato real.
   const [deletingPartyId, setDeletingPartyId] = useState<string | null>(null);
+
+  // Editar dado administrativo (11/09/2026, pedido de João): corrige nome/
+  // e-mail/telefone/papel que a própria Mesa digitou na criação -- nunca
+  // CPF/RG/endereço (autodeclarado pela parte via link, permanece só via
+  // "Reabrir para Correção").
+  const [editingPartyId, setEditingPartyId] = useState<string | null>(null);
+  const [editPartyForm, setEditPartyForm] = useState({ full_name: "", email: "", phone: "", role_in_document: "" });
+  const [editPartySubmitting, setEditPartySubmitting] = useState(false);
+  const startEditParty = (party: QualParty) => {
+    setEditingPartyId(party.id);
+    setEditPartyForm({ full_name: party.full_name, email: party.email, phone: party.phone ?? "", role_in_document: party.role_in_document });
+  };
+  const submitEditParty = async (partyId: string) => {
+    if (!selected || !editPartyForm.full_name.trim() || !isValidEmail(editPartyForm.email)) return;
+    setEditPartySubmitting(true);
+    try {
+      const res = await fetch(`/api/cm/qualifications/party/${partyId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(editPartyForm),
+      });
+      const json = await res.json();
+      if (res.ok) {
+        setEditingPartyId(null);
+        await loadTemplateQualifications(selected.id);
+      } else alert(json.error ?? "Erro ao editar envolvido");
+    } catch { alert("Erro de conexão"); }
+    finally { setEditPartySubmitting(false); }
+  };
+
   const deletePartyQualification = async (party: QualParty) => {
     if (!selected) return;
     if (!confirm(`Excluir "${party.full_name}" desta qualificação? A pessoa continua com o link antigo, mas ele deixa de valer -- não entra no próximo contrato gerado desta minuta.`)) return;
@@ -1042,6 +1072,32 @@ export function ContractTemplatesClient() {
                         </div>
                         <div className="space-y-1.5">
                           {batch.cm_party_qualifications.map((p) => (
+                            editingPartyId === p.id ? (
+                              <div key={p.id} className="bg-[#162744] rounded px-2.5 py-2 space-y-1.5">
+                                <input value={editPartyForm.full_name} onChange={(e) => setEditPartyForm((f) => ({ ...f, full_name: e.target.value }))} placeholder="Nome completo *"
+                                  className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]" />
+                                <input value={editPartyForm.email} onChange={(e) => setEditPartyForm((f) => ({ ...f, email: e.target.value }))} placeholder="E-mail *" type="email"
+                                  className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]" />
+                                <input value={editPartyForm.phone} onChange={(e) => setEditPartyForm((f) => ({ ...f, phone: e.target.value }))} placeholder="WhatsApp (opcional)" type="tel"
+                                  className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]" />
+                                <select value={editPartyForm.role_in_document} onChange={(e) => setEditPartyForm((f) => ({ ...f, role_in_document: e.target.value }))}
+                                  className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]">
+                                  {Object.entries(ROLE_LABELS).map(([value, label]) => (
+                                    <option key={value} value={value}>{label}</option>
+                                  ))}
+                                </select>
+                                <div className="flex gap-2">
+                                  <button onClick={() => submitEditParty(p.id)} disabled={editPartySubmitting}
+                                    className="flex-1 flex items-center justify-center gap-1 text-[9px] font-bold text-[#09081A] bg-[#C9A84C] px-2 py-1.5 rounded hover:bg-[#E8C97A] transition-colors disabled:opacity-50">
+                                    {editPartySubmitting ? <Loader2 size={10} className="animate-spin" /> : <Save size={10} />} Salvar
+                                  </button>
+                                  <button onClick={() => setEditingPartyId(null)} disabled={editPartySubmitting}
+                                    className="flex-1 text-[9px] font-semibold text-[#9BAFC5] px-2 py-1.5 rounded border border-[#9BAFC5]/20 hover:text-[#F5F1E8] transition-colors">
+                                    Cancelar
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
                             <div key={p.id} className="flex items-center justify-between gap-2 bg-[#162744] rounded px-2.5 py-1.5">
                               <div className="min-w-0">
                                 <p className="text-xs text-[#F5F1E8] truncate">{p.full_name} <span className="text-[9px] text-[#9BAFC5]">· {ROLE_LABELS[p.role_in_document] ?? p.role_in_document}</span></p>
@@ -1054,11 +1110,18 @@ export function ContractTemplatesClient() {
                                     {reopeningId === p.id ? "Reabrindo..." : "Corrigir"}
                                   </button>
                                   {!batch.consumido_por_contract_id && (
-                                    <button onClick={() => deletePartyQualification(p)} disabled={deletingPartyId === p.id}
-                                      title="Excluir este envolvido"
-                                      className="text-[9px] font-semibold text-red-400 px-2 py-1 rounded border border-red-500/30 bg-red-500/10 hover:bg-red-500/20 transition-colors disabled:opacity-50">
-                                      {deletingPartyId === p.id ? <Loader2 size={10} className="animate-spin" /> : <Trash2 size={10} />}
-                                    </button>
+                                    <>
+                                      <button onClick={() => startEditParty(p)}
+                                        title="Editar nome/e-mail/telefone/papel"
+                                        className="text-[9px] font-semibold text-[#9BAFC5] px-2 py-1 rounded border border-[#9BAFC5]/20 hover:text-[#F5F1E8] hover:border-[#9BAFC5]/40 transition-colors">
+                                        <Pencil size={10} />
+                                      </button>
+                                      <button onClick={() => deletePartyQualification(p)} disabled={deletingPartyId === p.id}
+                                        title="Excluir este envolvido"
+                                        className="text-[9px] font-semibold text-red-400 px-2 py-1 rounded border border-red-500/30 bg-red-500/10 hover:bg-red-500/20 transition-colors disabled:opacity-50">
+                                        {deletingPartyId === p.id ? <Loader2 size={10} className="animate-spin" /> : <Trash2 size={10} />}
+                                      </button>
+                                    </>
                                   )}
                                 </div>
                               ) : (
@@ -1072,15 +1135,23 @@ export function ContractTemplatesClient() {
                                     <Share2 size={10} /> WhatsApp
                                   </a>
                                   {!batch.consumido_por_contract_id && (
-                                    <button onClick={() => deletePartyQualification(p)} disabled={deletingPartyId === p.id}
-                                      title="Excluir este envolvido"
-                                      className="text-[9px] font-semibold text-red-400 px-2 py-1 rounded border border-red-500/30 bg-red-500/10 hover:bg-red-500/20 transition-colors disabled:opacity-50">
-                                      {deletingPartyId === p.id ? <Loader2 size={10} className="animate-spin" /> : <Trash2 size={10} />}
-                                    </button>
+                                    <>
+                                      <button onClick={() => startEditParty(p)}
+                                        title="Editar nome/e-mail/telefone/papel"
+                                        className="text-[9px] font-semibold text-[#9BAFC5] px-2 py-1 rounded border border-[#9BAFC5]/20 hover:text-[#F5F1E8] hover:border-[#9BAFC5]/40 transition-colors">
+                                        <Pencil size={10} />
+                                      </button>
+                                      <button onClick={() => deletePartyQualification(p)} disabled={deletingPartyId === p.id}
+                                        title="Excluir este envolvido"
+                                        className="text-[9px] font-semibold text-red-400 px-2 py-1 rounded border border-red-500/30 bg-red-500/10 hover:bg-red-500/20 transition-colors disabled:opacity-50">
+                                        {deletingPartyId === p.id ? <Loader2 size={10} className="animate-spin" /> : <Trash2 size={10} />}
+                                      </button>
+                                    </>
                                   )}
                                 </div>
                               )}
                             </div>
+                            )
                           ))}
                         </div>
                         {batch.status === "completo" && !batch.cm_party_qualifications.some((p) => p.status !== "preenchido") && (

@@ -8,12 +8,15 @@
 // nunca refatorando aquele componente já em produção (decisão registrada
 // no BRIEF: risco desnecessário pra esta fase).
 import { useState, useEffect, useCallback } from "react";
-import { UserPlus, Copy, Share2, CheckCircle2, FileText, Loader2, X, Trash2 } from "lucide-react";
+import { UserPlus, Copy, Share2, CheckCircle2, FileText, Loader2, X, Trash2, Pencil, Save } from "lucide-react";
 import { ROLE_LABELS } from "@/lib/qualification-roles";
+import { isValidEmail } from "@/lib/utils";
 
 interface QualParty {
   id: string;
   full_name: string;
+  email: string;
+  phone?: string | null;
   role_in_document: string;
   status: string;
   qualification_token: string;
@@ -80,6 +83,31 @@ export function QualificationBatchesPanel({ listingId, demandId, cardLabel }: Pr
     finally { setDeletingPartyId(null); }
   };
 
+  // Editar dado administrativo (11/09/2026, pedido de João): mesmo padrão
+  // de contract-templates-client.tsx.
+  const [editingPartyId, setEditingPartyId] = useState<string | null>(null);
+  const [editPartyForm, setEditPartyForm] = useState({ full_name: "", email: "", phone: "", role_in_document: "" });
+  const [editPartySubmitting, setEditPartySubmitting] = useState(false);
+  const startEditParty = (party: QualParty) => {
+    setEditingPartyId(party.id);
+    setEditPartyForm({ full_name: party.full_name, email: party.email ?? "", phone: party.phone ?? "", role_in_document: party.role_in_document });
+  };
+  const submitEditParty = async (partyId: string) => {
+    if (!editPartyForm.full_name.trim() || !isValidEmail(editPartyForm.email)) return;
+    setEditPartySubmitting(true);
+    try {
+      const res = await fetch(`/api/cm/qualifications/party/${partyId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(editPartyForm),
+      });
+      const json = await res.json();
+      if (res.ok) { setEditingPartyId(null); await load(); }
+      else alert(json.error ?? "Erro ao editar envolvido");
+    } catch { alert("Erro de conexão"); }
+    finally { setEditPartySubmitting(false); }
+  };
+
   const whatsappQualLink = (party: QualParty) => {
     const msg = `Olá ${party.full_name}, você foi indicado(a) como envolvido(a) em ${cardLabel} da V3 Partners. Complete seus dados de qualificação para prosseguirmos: ${qualificationLink(party.qualification_token)}`;
     return `https://wa.me/?text=${encodeURIComponent(msg)}`;
@@ -120,6 +148,32 @@ export function QualificationBatchesPanel({ listingId, demandId, cardLabel }: Pr
           {batches.map((batch) => (
             <div key={batch.id} className="space-y-1.5">
               {batch.cm_party_qualifications.map((p) => (
+                editingPartyId === p.id ? (
+                  <div key={p.id} className="bg-[#09081A] rounded px-2.5 py-2 space-y-1.5">
+                    <input value={editPartyForm.full_name} onChange={(e) => setEditPartyForm((f) => ({ ...f, full_name: e.target.value }))} placeholder="Nome completo *"
+                      className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]" />
+                    <input value={editPartyForm.email} onChange={(e) => setEditPartyForm((f) => ({ ...f, email: e.target.value }))} placeholder="E-mail *" type="email"
+                      className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]" />
+                    <input value={editPartyForm.phone} onChange={(e) => setEditPartyForm((f) => ({ ...f, phone: e.target.value }))} placeholder="WhatsApp (opcional)" type="tel"
+                      className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]" />
+                    <select value={editPartyForm.role_in_document} onChange={(e) => setEditPartyForm((f) => ({ ...f, role_in_document: e.target.value }))}
+                      className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]">
+                      {Object.entries(ROLE_LABELS).map(([value, label]) => (
+                        <option key={value} value={value}>{label}</option>
+                      ))}
+                    </select>
+                    <div className="flex gap-2">
+                      <button onClick={() => submitEditParty(p.id)} disabled={editPartySubmitting}
+                        className="flex-1 flex items-center justify-center gap-1 text-[9px] font-bold text-[#09081A] bg-[#C9A84C] px-2 py-1.5 rounded hover:bg-[#E8C97A] transition-colors disabled:opacity-50">
+                        {editPartySubmitting ? <Loader2 size={10} className="animate-spin" /> : <Save size={10} />} Salvar
+                      </button>
+                      <button onClick={() => setEditingPartyId(null)} disabled={editPartySubmitting}
+                        className="flex-1 text-[9px] font-semibold text-[#9BAFC5] px-2 py-1.5 rounded border border-[#9BAFC5]/20 hover:text-[#F5F1E8] transition-colors">
+                        Cancelar
+                      </button>
+                    </div>
+                  </div>
+                ) : (
                 <div key={p.id} className="flex items-center justify-between gap-2 bg-[#09081A] rounded px-2.5 py-1.5">
                   <div className="min-w-0">
                     <p className="text-xs text-[#F5F1E8] truncate">
@@ -148,14 +202,22 @@ export function QualificationBatchesPanel({ listingId, demandId, cardLabel }: Pr
                       </>
                     )}
                     {!batch.consumido_por_contract_id && (
-                      <button onClick={() => deleteParty(p)} disabled={deletingPartyId === p.id}
-                        title="Excluir este envolvido"
-                        className="text-[9px] font-semibold text-red-400 px-2 py-1 rounded border border-red-500/30 bg-red-500/10 hover:bg-red-500/20 transition-colors disabled:opacity-50">
-                        {deletingPartyId === p.id ? <Loader2 size={10} className="animate-spin" /> : <Trash2 size={10} />}
-                      </button>
+                      <>
+                        <button onClick={() => startEditParty(p)}
+                          title="Editar nome/e-mail/telefone/papel"
+                          className="text-[9px] font-semibold text-[#9BAFC5] px-2 py-1 rounded border border-[#9BAFC5]/20 hover:text-[#F5F1E8] hover:border-[#9BAFC5]/40 transition-colors">
+                          <Pencil size={10} />
+                        </button>
+                        <button onClick={() => deleteParty(p)} disabled={deletingPartyId === p.id}
+                          title="Excluir este envolvido"
+                          className="text-[9px] font-semibold text-red-400 px-2 py-1 rounded border border-red-500/30 bg-red-500/10 hover:bg-red-500/20 transition-colors disabled:opacity-50">
+                          {deletingPartyId === p.id ? <Loader2 size={10} className="animate-spin" /> : <Trash2 size={10} />}
+                        </button>
+                      </>
                     )}
                   </div>
                 </div>
+                )
               ))}
             </div>
           ))}

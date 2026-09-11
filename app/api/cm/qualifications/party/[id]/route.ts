@@ -3,6 +3,8 @@ import { createClient } from "@/lib/supabase/server";
 import { createClient as sc, type SupabaseClient } from "@supabase/supabase-js";
 import { findValidKycDocument, kycValidUntil, type KycDocumentKind } from "@/lib/kyc-documents";
 import type { LegalQualificationRepresentation } from "@/lib/legal-qualification";
+import { isValidEmail } from "@/lib/utils";
+import { ROLE_LABELS } from "@/lib/qualification-roles";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -161,4 +163,81 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   }
 
   return NextResponse.json({ ok: true, deleted_party: party.full_name });
+}
+
+/** PATCH /api/cm/qualifications/party/[id] — corrige só o dado
+ *  ADMINISTRATIVO que a própria Mesa digitou na criação do envolvido (nome,
+ *  e-mail, telefone, papel), 11/09/2026, pedido de João: "falta um botão
+ *  de editar para corrigir qualificações erradas".
+ *
+ *  Deliberadamente NÃO edita CPF/RG/endereço/dados de PJ/representação --
+ *  esses são autodeclarados pela própria parte via link público
+ *  (/intake/qualificacao/[token]) e continuam só corrigíveis por "Reabrir
+ *  para Correção" (POST .../reopen), pra preservar o rastro de quem
+ *  atestou o quê. Editar esses campos direto pela Mesa apagaria essa
+ *  distinção sem nenhum ganho real -- decisão confirmada com João antes de
+ *  codar (não é limitação técnica, é escolha de governança). */
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const caller = await getCaller();
+  if (!caller) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+
+  const { id } = await params;
+  const body = await req.json().catch(() => ({}));
+  const { full_name, email, phone, role_in_document } = body as {
+    full_name?: string; email?: string; phone?: string; role_in_document?: string;
+  };
+
+  if (full_name !== undefined && !full_name.trim()) {
+    return NextResponse.json({ error: "Nome não pode ficar vazio" }, { status: 422 });
+  }
+  if (email !== undefined && !isValidEmail(email)) {
+    return NextResponse.json({ error: "E-mail inválido" }, { status: 422 });
+  }
+  if (role_in_document !== undefined && !Object.keys(ROLE_LABELS).includes(role_in_document)) {
+    return NextResponse.json({ error: "Papel no documento inválido" }, { status: 422 });
+  }
+
+  const db = svc();
+  const { data: party, error: findError } = await db
+    .from("cm_party_qualifications")
+    .select("id, batch_id, deleted_at")
+    .eq("id", id)
+    .single();
+
+  if (findError || !party) return NextResponse.json({ error: "Envolvido não encontrado" }, { status: 404 });
+  if (party.deleted_at) return NextResponse.json({ error: "Este envolvido foi excluído, não pode ser editado" }, { status: 409 });
+
+  const { data: batch } = await db
+    .from("cm_qualification_batches")
+    .select("consumido_por_contract_id, consumido_contrato:consumido_por_contract_id(contract_code)")
+    .eq("id", party.batch_id)
+    .single();
+
+  if (batch?.consumido_por_contract_id) {
+    const codigo = (batch as unknown as { consumido_contrato?: { contract_code: string | null } | null }).consumido_contrato?.contract_code ?? "outro contrato já gerado";
+    return NextResponse.json(
+      { error: `Este lote já foi usado no contrato ${codigo}. Não é possível editar envolvidos de um lote já consumido.` },
+      { status: 409 }
+    );
+  }
+
+  const updates: Record<string, any> = {};
+  if (full_name !== undefined) updates.full_name = full_name.trim();
+  if (email !== undefined) updates.email = email.trim();
+  if (phone !== undefined) updates.phone = phone.trim() || null;
+  if (role_in_document !== undefined) updates.role_in_document = role_in_document;
+
+  if (Object.keys(updates).length === 0) {
+    return NextResponse.json({ error: "Nada para atualizar" }, { status: 422 });
+  }
+
+  const { data: updated, error: updateError } = await db
+    .from("cm_party_qualifications")
+    .update(updates)
+    .eq("id", id)
+    .select("id, full_name, email, phone, role_in_document")
+    .single();
+
+  if (updateError) return NextResponse.json({ error: updateError.message }, { status: 500 });
+  return NextResponse.json({ qualification: updated });
 }
