@@ -406,7 +406,17 @@ export async function POST(req: NextRequest) {
       // formato completo de renderPartyQualificationProse/
       // buildLegalQualification, que exige RG/endereço que `profiles` (onde
       // o Head preenche os próprios dados em /perfil) não coleta hoje.
-      if (typeof variables.head_email === "string" && typeof variables.head_full_name === "string") {
+      //
+      // P0 real achado 11/09/2026, testando o NCNDA real da Infiniti: 3
+      // minutas aprovadas (NCNDA V3 PARTNERS - Mesa M&A, NCNDA Mestre de
+      // Crédito, NCNDA V3 PARTNERS MODELO DR LUIS) já têm cláusula
+      // "ESTRUTURADORA" própria e fixa no corpo, nomeando V3/Head — a
+      // injeção abaixo duplicava a menção (João aparecia 2x na
+      // qualificação). template.head_declared_in_body (migration
+      // 20260911) deixa a minuta declarar isso; quando true, pula só a
+      // frase redundante aqui, nunca o signatário real (que continua
+      // vindo de qualificationParties/head_mesa, linha 336 acima).
+      if (!template.head_declared_in_body && typeof variables.head_email === "string" && typeof variables.head_full_name === "string") {
         const headQualificacao = typeof variables.head_qualificacao === "string" && variables.head_qualificacao.trim()
           ? variables.head_qualificacao
           : "[qualificação não preenchida em /perfil]";
