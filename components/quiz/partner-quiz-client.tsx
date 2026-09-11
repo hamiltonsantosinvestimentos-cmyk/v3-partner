@@ -9,13 +9,13 @@ import {
   Search, Rocket, Store, GraduationCap, UserRound, MoreHorizontal, Trophy,
 } from "lucide-react";
 import {
-  GOLD, GOLD_LIGHT, NAVY, NAVY_CARD, NAVY_BASE, MUTED, ESTADOS_BR,
+  GOLD, GOLD_LIGHT, NAVY, NAVY_CARD, NAVY_BASE, MUTED,
   inputCls, inputStyle, maskPhone, TopProgress, Field, StepCard, ChoiceGrid,
 } from "./wizard-ui";
 import { trackPixel } from "./meta-pixel";
 import {
   OBJETIVO, OCUPACAO, EXPERIENCIA_B2B, REDE, PORTE_REDE, DISPONIBILIDADE,
-  PRAZO_COMECO, RENDA_FAIXA, RENDA_FAIXA_VALOR, scoreQuizPartner, PLANO_LABEL,
+  PRAZO_COMECO, RENDA_FAIXA, RENDA_FAIXA_VALOR,
   type QuizOption,
 } from "@/lib/quiz-partner";
 
@@ -56,13 +56,13 @@ function opts(key: string, list: QuizOption[]) {
 interface FormState {
   objetivo: string; ocupacao: string; experiencia_b2b: string; rede: string; porte_rede: string;
   renda_faixa: string; disponibilidade: string; prazo_comeco: string;
-  nome: string; email: string; telefone: string; estado: string; cidade: string;
+  nome: string; email: string; telefone: string;
   consentimento: boolean;
 }
 const INITIAL: FormState = {
   objetivo: "", ocupacao: "", experiencia_b2b: "", rede: "", porte_rede: "",
   renda_faixa: "", disponibilidade: "", prazo_comeco: "",
-  nome: "", email: "", telefone: "", estado: "", cidade: "", consentimento: false,
+  nome: "", email: "", telefone: "", consentimento: false,
 };
 
 export function PartnerQuizClient() {
@@ -121,7 +121,7 @@ export function PartnerQuizClient() {
 
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [resultado, setResultado] = useState<{ tier: "A" | "B" | "C"; planoLabel: string } | null>(null);
+  const [enviado, setEnviado] = useState(false);
 
   function goTo(next: Step) { setHistory((h) => [...h, step]); setStep(next); }
   function goBack() {
@@ -132,7 +132,7 @@ export function PartnerQuizClient() {
     });
   }
   function reiniciar() {
-    setForm(INITIAL); setHistory([]); setStep("intro"); setResultado(null); setSubmitError(null);
+    setForm(INITIAL); setHistory([]); setStep("intro"); setEnviado(false); setSubmitError(null);
   }
 
   const idx = PROGRESS_STEPS.indexOf(step);
@@ -144,19 +144,6 @@ export function PartnerQuizClient() {
         `Olá! Acabei de fazer o quiz para me tornar Partner da V3 e quero conversar sobre os próximos passos.`,
       )}`
     : null;
-
-  // Prévia do resultado calculada no cliente (o servidor recalcula de forma
-  // autoritativa no envio — ver app/api/public/partner-quiz).
-  const previa = useMemo(() => {
-    if (!form.objetivo || !form.prazo_comeco) return null;
-    const s = scoreQuizPartner({
-      objetivo: form.objetivo, ocupacao: form.ocupacao, experiencia_b2b: form.experiencia_b2b,
-      rede: form.rede, porte_rede: form.porte_rede,
-      renda_mensal: RENDA_FAIXA_VALOR[form.renda_faixa] ?? 0,
-      disponibilidade: form.disponibilidade, prazo_comeco: form.prazo_comeco,
-    });
-    return { tier: s.tier, planoLabel: PLANO_LABEL[s.plano_sugerido] };
-  }, [form]);
 
   const dadosValid = Boolean(
     form.nome.trim().length >= 3 &&
@@ -180,7 +167,6 @@ export function PartnerQuizClient() {
           disponibilidade: form.disponibilidade,
           prazo_comeco: form.prazo_comeco,
           nome: form.nome, email: form.email || null, telefone: form.telefone,
-          estado: form.estado || null, cidade: form.cidade || null,
           tracking,
           consentimento: true,
         }),
@@ -188,7 +174,7 @@ export function PartnerQuizClient() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Falha ao enviar o quiz");
       trackPixel("Lead", { content_name: "quiz_seja_partner", tier: json.tier, currency: "BRL", value: 0 });
-      setResultado({ tier: json.tier, planoLabel: json.planoLabel });
+      setEnviado(true);
       goTo("concluido");
     } catch (e) {
       setSubmitError((e as Error).message);
@@ -214,7 +200,7 @@ export function PartnerQuizClient() {
         <div className="px-6 py-2.5 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-center border-b border-white/5" style={{ background: NAVY_BASE }}>
           <span className="text-[11px] font-bold uppercase tracking-widest" style={{ color: GOLD }}>Seja Partner V3</span>
           <span className="text-[11px] flex items-center gap-1" style={{ color: MUTED }}>
-            <Clock3 className="w-3 h-3" /> Leva 2 minutos · resultado na hora
+            <Clock3 className="w-3 h-3" /> Leva 2 minutos · sem compromisso
           </span>
           {partnerName && <span className="text-[11px]" style={{ color: GOLD }}>Convite de {partnerName}</span>}
         </div>
@@ -228,18 +214,17 @@ export function PartnerQuizClient() {
               <div className="space-y-3">
                 <p className="text-xs font-bold uppercase tracking-widest" style={{ color: GOLD }}>Seja Partner V3</p>
                 <h1 className="text-2xl sm:text-3xl font-bold text-white leading-tight">
-                  Ganhe comissão originando <span style={{ color: GOLD }}>crédito, M&amp;A e estruturação financeira</span>
+                  Ganhe até <span style={{ color: GOLD }}>R$ 500 mil</span> em uma única operação
                 </h1>
                 <p className="text-sm leading-relaxed" style={{ color: MUTED }}>
                   A V3 Partners é uma boutique institucional multiproduto. Você leva os clientes,
-                  a V3 estrutura a operação — e você recebe a comissão de cada negócio fechado.
+                  a V3 estrutura a operação.
                 </p>
               </div>
 
               <ul className="space-y-2.5">
                 {[
                   "Crédito com garantia, Home Equity, M&A, câmbio, consórcio e mais",
-                  "Comissão de 20% a 50% por operação, conforme o seu plano",
                   "Mesa de operações, IA e materiais de venda prontos pra você",
                   "Rede de parceiros em todo o Brasil",
                 ].map((b) => (
@@ -255,10 +240,10 @@ export function PartnerQuizClient() {
               <button onClick={() => goTo("objetivo")}
                 className="w-full py-3.5 rounded-xl font-bold text-sm text-black flex items-center justify-center gap-2 hover:opacity-90 transition-opacity"
                 style={{ background: GOLD }}>
-                Descobrir meu plano ideal <ArrowRight className="w-4 h-4" />
+                Ver se eu me qualifico <ArrowRight className="w-4 h-4" />
               </button>
               <p className="text-xs text-center flex items-center justify-center gap-1.5" style={{ color: MUTED }}>
-                <Clock3 className="w-3 h-3" /> Leva 2 minutos · você vê o resultado na hora
+                <Clock3 className="w-3 h-3" /> Leva 2 minutos · sem compromisso
               </p>
             </div>
           </div>
@@ -320,7 +305,7 @@ export function PartnerQuizClient() {
           </StepCard>
         )}
 
-        {/* ── Prévia do resultado (antes de pedir contato) ── */}
+        {/* ── Prévia (antes de pedir contato) — reforça o gancho, não revela plano/faixa ── */}
         {step === "previa" && (
           <div className="w-full max-w-md mx-auto space-y-4 animate-fade-in">
             <div className="rounded-2xl border p-6 sm:p-7 space-y-5 text-center" style={{ background: NAVY_CARD, borderColor: "rgba(255,255,255,0.06)" }}>
@@ -328,12 +313,12 @@ export function PartnerQuizClient() {
                 <CheckCircle2 className="w-7 h-7" style={{ color: GOLD }} />
               </div>
               <div className="space-y-1">
-                <p className="text-[11px] font-bold uppercase tracking-widest" style={{ color: GOLD }}>Seu perfil combina com</p>
-                <p className="text-2xl font-extrabold" style={{ color: GOLD_LIGHT }}>{previa?.planoLabel ?? "V3 Partner"}</p>
+                <p className="text-[11px] font-bold uppercase tracking-widest" style={{ color: GOLD }}>Perfil pré-qualificado</p>
+                <p className="text-2xl font-extrabold" style={{ color: GOLD_LIGHT }}>Você tem o perfil de Partner V3</p>
               </div>
               <p className="text-sm" style={{ color: MUTED }}>
-                Falta só um passo: deixe seu contato para um especialista da V3 te explicar como esse plano
-                funciona na prática e quanto você pode faturar como Partner.
+                Com esse perfil, você pode originar operações e ganhar até <strong style={{ color: GOLD }}>R$ 500 mil</strong> numa
+                única operação. Falta só um passo: deixe seu contato para um especialista da V3 te explicar os próximos passos.
               </p>
               <button onClick={() => goTo("dados")}
                 className="w-full py-3.5 rounded-xl font-bold text-sm text-black flex items-center justify-center gap-2 hover:opacity-90 transition-opacity"
@@ -352,23 +337,14 @@ export function PartnerQuizClient() {
         {step === "dados" && (
           <StepCard stepNum={stepNumOf(step)} totalSteps={TOTAL} title="Como a gente" titleHighlight="fala com você?"
             subtitle="Só o essencial — o especialista te chama no WhatsApp."
-            onBack={goBack} onNext={finalizar} nextLabel="Ver meu plano" nextLoading={submitting}
+            onBack={goBack} onNext={finalizar} nextLabel="Quero ser Partner V3" nextLoading={submitting}
             nextDisabled={!dadosValid || !form.consentimento} wide>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="sm:col-span-2"><Field label="Nome completo">
                 <input value={form.nome} onChange={(e) => set("nome", e.target.value)} placeholder="Seu nome completo" autoFocus className={inputCls} style={inputStyle} />
               </Field></div>
-              <div className="sm:col-span-2"><Field label="Telefone / WhatsApp">
-                <input value={form.telefone} onChange={(e) => set("telefone", maskPhone(e.target.value))} placeholder="(00) 00000-0000" className={inputCls} style={inputStyle} />
-              </Field></div>
+              <Field label="Telefone / WhatsApp"><input value={form.telefone} onChange={(e) => set("telefone", maskPhone(e.target.value))} placeholder="(00) 00000-0000" className={inputCls} style={inputStyle} /></Field>
               <Field label="E-mail (opcional)"><input type="email" value={form.email} onChange={(e) => set("email", e.target.value)} placeholder="seu@email.com" className={inputCls} style={inputStyle} /></Field>
-              <Field label="Estado (opcional)">
-                <select value={form.estado} onChange={(e) => set("estado", e.target.value)} className={inputCls} style={inputStyle}>
-                  <option value="">UF</option>
-                  {ESTADOS_BR.map((s) => <option key={s} value={s}>{s}</option>)}
-                </select>
-              </Field>
-              <div className="sm:col-span-2"><Field label="Cidade (opcional)"><input value={form.cidade} onChange={(e) => set("cidade", e.target.value)} className={inputCls} style={inputStyle} /></Field></div>
             </div>
 
             <label className="flex items-start gap-2.5 cursor-pointer pt-2 border-t" style={{ borderColor: "rgba(255,255,255,0.06)" }}>
@@ -383,20 +359,20 @@ export function PartnerQuizClient() {
         )}
 
         {/* ── Confirmação ── */}
-        {step === "concluido" && resultado && (
+        {step === "concluido" && enviado && (
           <div className="w-full max-w-md mx-auto space-y-4 animate-fade-in">
             <div className="rounded-2xl border p-6 sm:p-7 space-y-5 text-center" style={{ background: NAVY_CARD, borderColor: "rgba(255,255,255,0.06)" }}>
               <div className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto" style={{ background: `${GOLD}20` }}>
                 <CheckCircle2 className="w-7 h-7" style={{ color: GOLD }} />
               </div>
               <div className="space-y-1">
-                <p className="text-[11px] font-bold uppercase tracking-widest" style={{ color: GOLD }}>Recebemos seu perfil</p>
-                <h2 className="text-xl sm:text-2xl font-bold text-white">Plano ideal para você</h2>
+                <p className="text-[11px] font-bold uppercase tracking-widest" style={{ color: GOLD }}>Cadastro recebido</p>
+                <h2 className="text-xl sm:text-2xl font-bold text-white">Você está pré-qualificado</h2>
               </div>
 
               <div className="rounded-xl p-5 border" style={{ background: `${GOLD}12`, borderColor: `${GOLD}40` }}>
-                <p className="text-[10px] uppercase tracking-wide" style={{ color: MUTED }}>Recomendação</p>
-                <p className="text-2xl font-extrabold" style={{ color: GOLD_LIGHT }}>{resultado.planoLabel}</p>
+                <p className="text-[10px] uppercase tracking-wide" style={{ color: MUTED }}>Seu potencial como Partner</p>
+                <p className="text-2xl font-extrabold" style={{ color: GOLD_LIGHT }}>Até R$ 500 mil por operação</p>
               </div>
 
               <p className="text-sm" style={{ color: MUTED }}>

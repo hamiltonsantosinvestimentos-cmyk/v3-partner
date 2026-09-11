@@ -106,7 +106,7 @@ export default async function ProspeccaoDashboardPage() {
     { key: "renda", label: "Renda" },
     { key: "disponibilidade", label: "Disponibilidade" },
     { key: "prazo", label: "Quando começar" },
-    { key: "previa", label: "Viu o plano sugerido" },
+    { key: "previa", label: "Viu a prévia" },
     { key: "dados", label: "Dados de contato" },
     { key: "concluido", label: "Concluiu ✓" },
   ];
