@@ -13,6 +13,7 @@ import {
   inputCls, inputStyle, maskPhone, TopProgress, Field, StepCard, ChoiceGrid,
 } from "./wizard-ui";
 import { trackPixel } from "./meta-pixel";
+import { BrazilMap } from "./brazil-map";
 import {
   OBJETIVO, OCUPACAO, EXPERIENCIA_B2B, REDE, PORTE_REDE, DISPONIBILIDADE,
   PRAZO_COMECO, RENDA_FAIXA, RENDA_FAIXA_VALOR,
@@ -211,6 +212,7 @@ export function PartnerQuizClient() {
         {step === "intro" && (
           <div className="w-full max-w-lg mx-auto animate-fade-in">
             <div className="rounded-2xl border p-7 sm:p-9 space-y-6" style={{ background: NAVY_CARD, borderColor: "rgba(255,255,255,0.06)" }}>
+              <BrazilMap size={168} />
               <div className="space-y-3">
                 <p className="text-xs font-bold uppercase tracking-widest" style={{ color: GOLD }}>Seja Partner V3</p>
                 <h1 className="text-2xl sm:text-3xl font-bold text-white leading-tight">
