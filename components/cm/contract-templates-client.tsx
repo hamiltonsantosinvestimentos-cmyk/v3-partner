@@ -823,15 +823,17 @@ export function ContractTemplatesClient() {
   h2{font-size:20px;color:#C9A84C;text-transform:uppercase;letter-spacing:.03em;margin:36px 0 14px}
   p{margin:0 0 18px}
   strong{color:#F5F1E8}
+  .hint{font-size:10px;color:#9BAFC5}
 </style>
 </head>
 <body>
 <div class="toolbar">
   <div class="left">
     <span class="status">${esc(statusLabel)}</span>
+    <span class="hint">Aperte Esc a qualquer momento para sair da tela cheia</span>
   </div>
   <div class="actions">
-    <button id="fs-toggle">Tela Cheia do Navegador</button>
+    <button id="fs-toggle">Sair da Tela Cheia</button>
     <button class="close" onclick="window.close()">Fechar Janela</button>
   </div>
 </div>
@@ -849,6 +851,11 @@ export function ContractTemplatesClient() {
     else document.documentElement.requestFullscreen().catch(function(){});
   };
   document.addEventListener("fullscreenchange", syncFsLabel);
+  // Tenta abrir já em tela cheia de verdade (Fullscreen API). Best-effort:
+  // alguns navegadores recusam pedido de fullscreen numa janela recem-aberta
+  // sem um clique novo dentro dela -- nesse caso o botao acima cobre o
+  // caso, o Esc/Fechar sempre funcionam independente do resultado aqui.
+  try { document.documentElement.requestFullscreen().catch(function(){}); } catch (e) {}
   syncFsLabel();
 </script>
 </body>
