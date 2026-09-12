@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
-import { Plus, Save, Trash2, Loader2, FileText, Eye, ChevronDown, Upload, Send, CheckCircle2, XCircle, Scale, Users, X, FilePlus2, UserPlus, Copy, Share2, RotateCcw, Pencil } from "lucide-react";
+import { Plus, Save, Trash2, Loader2, FileText, Eye, ChevronDown, Upload, Send, CheckCircle2, XCircle, Scale, Users, X, FilePlus2, UserPlus, Copy, Share2, RotateCcw, Pencil, Maximize2, Minimize2 } from "lucide-react";
 import { cn, isValidEmail } from "@/lib/utils";
 import { ROLE_LABELS } from "@/lib/qualification-roles";
 import { VERTICAL_LABELS, CONCRETE_VERTICALS } from "@/lib/contract-verticals";
@@ -147,6 +147,12 @@ export function ContractTemplatesClient() {
   const [selected, setSelected] = useState<Template | null>(null);
   const [isNew, setIsNew] = useState(false);
   const [filterVertical, setFilterVertical] = useState(initialVertical);
+  // Tela Cheia do editor (11/09/2026, pedido de João): a janela de leitura
+  // da minuta ficava presa nos 8/12 da grid + textarea pequena, dificultando
+  // a leitura do Dr. Athaydes (jurídico) na hora de revisar/aprovar. Expande
+  // o mesmo painel (sem duplicar HTML) para ocupar a viewport inteira e
+  // aumenta a fonte do corpo enquanto estiver expandido.
+  const [editorFullscreen, setEditorFullscreen] = useState(false);
 
   const [formName, setFormName] = useState("");
   const [formVertical, setFormVertical] = useState("capital_markets");
@@ -509,6 +515,10 @@ export function ContractTemplatesClient() {
   }, [filterVertical]);
 
   useEffect(() => { fetchTemplates(); }, [fetchTemplates]);
+
+  // Sai da Tela Cheia ao trocar de minuta selecionada na lista, pra nunca
+  // deixar o painel expandido "grudado" mostrando o texto errado.
+  useEffect(() => { setEditorFullscreen(false); }, [selected?.id, isNew]);
 
   // Deep-link (BRIEF 2, 30/08/2026, notificação proativa item 1): auto
   // seleciona a minuta quando a URL vem com ?template_id=, mesmo link que
@@ -1038,19 +1048,31 @@ export function ContractTemplatesClient() {
         </div>
 
         {/* Editor */}
-        <div className="col-span-8">
+        <div className={cn("col-span-8", editorFullscreen && "col-span-12")}>
           {!isNew && !selected ? (
             <div className="flex items-center justify-center h-64 text-[#9BAFC5] text-sm">
               Selecione uma minuta ou clique em "Nova Minuta"
             </div>
           ) : (
-            <div className="bg-[#12112A] border border-[#9BAFC5]/10 rounded-lg p-6">
+            <div className={cn(
+              "bg-[#12112A] border border-[#9BAFC5]/10 rounded-lg p-6",
+              // Tela Cheia (11/09/2026): mesmo painel, sem duplicar HTML,
+              // só sai do fluxo da grid e ocupa a viewport inteira com
+              // scroll próprio -- pedido de João pra leitura do jurídico.
+              editorFullscreen && "fixed inset-0 z-[110] m-0 rounded-none overflow-y-auto p-6 md:p-10"
+            )}>
               {selected && (
                 <div className="flex items-center justify-between mb-4 pb-4 border-b border-[#9BAFC5]/10">
                   <span className={cn("text-[10px] font-bold px-2.5 py-1 rounded", (APPROVAL_STATUS_MAP[selected.approval_status] ?? APPROVAL_STATUS_MAP.rascunho).color)}>
                     {(APPROVAL_STATUS_MAP[selected.approval_status] ?? APPROVAL_STATUS_MAP.rascunho).label}
                   </span>
                   <div className="flex items-center gap-2">
+                    <button onClick={() => setEditorFullscreen((v) => !v)}
+                      title={editorFullscreen ? "Sair da Tela Cheia" : "Tela Cheia (leitura ampliada)"}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-[#162744] text-[#9BAFC5] border border-[#9BAFC5]/20 rounded-lg text-xs font-bold hover:text-[#F5F1E8] hover:bg-[#243A66] transition">
+                      {editorFullscreen ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
+                      {editorFullscreen ? "Sair da Tela Cheia" : "Tela Cheia"}
+                    </button>
                     {/* 10/09/2026, P0 real reportado por João: minutas são
                         reutilizáveis para múltiplas operações/clientes (ver
                         session-decisions 02/09), mas este botão só existia
@@ -1495,7 +1517,8 @@ export function ContractTemplatesClient() {
               <textarea value={formBody} onChange={(e) => setFormBody(e.target.value)}
                 readOnly={selected?.approval_status === "aprovado"}
                 className={cn(
-                  "w-full bg-[#162744] border border-[#9BAFC5]/15 rounded-lg px-4 py-3 text-sm text-[#F5F1E8] focus:border-[#C9A84C]/50 focus:outline-none font-mono min-h-[350px] resize-y",
+                  "w-full bg-[#162744] border border-[#9BAFC5]/15 rounded-lg px-4 py-3 text-[#F5F1E8] focus:border-[#C9A84C]/50 focus:outline-none font-mono resize-y leading-relaxed",
+                  editorFullscreen ? "text-base min-h-[calc(100vh-260px)]" : "text-sm min-h-[350px]",
                   selected?.approval_status === "aprovado" && "opacity-60 cursor-not-allowed"
                 )}
                 placeholder="Digite o texto da minuta usando {{variáveis}} entre chaves..." />
