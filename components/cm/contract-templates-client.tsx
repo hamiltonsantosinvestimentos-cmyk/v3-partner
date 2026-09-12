@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
-import { Plus, Save, Trash2, Loader2, FileText, Eye, ChevronDown, Upload, Send, CheckCircle2, XCircle, Scale, Users, X, FilePlus2, UserPlus, Copy, Share2, RotateCcw, Pencil, Maximize2, Minimize2 } from "lucide-react";
+import { Plus, Save, Trash2, Loader2, FileText, Eye, ChevronDown, Upload, Send, CheckCircle2, XCircle, Scale, Users, X, FilePlus2, UserPlus, Copy, Share2, RotateCcw, Pencil, Maximize2 } from "lucide-react";
 import { cn, isValidEmail } from "@/lib/utils";
 import { ROLE_LABELS } from "@/lib/qualification-roles";
 import { VERTICAL_LABELS, CONCRETE_VERTICALS } from "@/lib/contract-verticals";
@@ -147,12 +147,6 @@ export function ContractTemplatesClient() {
   const [selected, setSelected] = useState<Template | null>(null);
   const [isNew, setIsNew] = useState(false);
   const [filterVertical, setFilterVertical] = useState(initialVertical);
-  // Tela Cheia do editor (11/09/2026, pedido de João): a janela de leitura
-  // da minuta ficava presa nos 8/12 da grid + textarea pequena, dificultando
-  // a leitura do Dr. Athaydes (jurídico) na hora de revisar/aprovar. Expande
-  // o mesmo painel (sem duplicar HTML) para ocupar a viewport inteira e
-  // aumenta a fonte do corpo enquanto estiver expandido.
-  const [editorFullscreen, setEditorFullscreen] = useState(false);
 
   const [formName, setFormName] = useState("");
   const [formVertical, setFormVertical] = useState("capital_markets");
@@ -516,10 +510,6 @@ export function ContractTemplatesClient() {
 
   useEffect(() => { fetchTemplates(); }, [fetchTemplates]);
 
-  // Sai da Tela Cheia ao trocar de minuta selecionada na lista, pra nunca
-  // deixar o painel expandido "grudado" mostrando o texto errado.
-  useEffect(() => { setEditorFullscreen(false); }, [selected?.id, isNew]);
-
   // Deep-link (BRIEF 2, 30/08/2026, notificação proativa item 1): auto
   // seleciona a minuta quando a URL vem com ?template_id=, mesmo link que
   // o e-mail/WhatsApp de notificação aos sócios manda. Só roda uma vez
@@ -779,6 +769,65 @@ export function ContractTemplatesClient() {
     setReviewComment("");
     loadReviews(t.id);
     loadTemplateQualifications(t.id);
+  };
+
+  // Tela Cheia de leitura (11/09/2026, pedido de João): a janela pequena
+  // dentro da grid do editor dificultava a leitura do Dr. Athaydes
+  // (jurídico) na hora de revisar/aprovar. João pediu especificamente uma
+  // JANELA NOVA em tela cheia, não só um painel maior dentro da mesma aba
+  // -- window.open com as dimensões da tela (mesmo padrão já usado em
+  // relatórios/certificados no repo) + tentativa de ativar a Fullscreen
+  // API real do navegador nessa nova janela, com um botão manual de
+  // reforço caso o navegador bloqueie o auto-request.
+  const openFullscreenReader = () => {
+    if (!selected) return;
+    const win = window.open(
+      "",
+      "_blank",
+      `width=${window.screen.width},height=${window.screen.height},left=0,top=0`
+    );
+    if (!win) {
+      alert("O navegador bloqueou a nova janela. Libere pop-ups para app.v3partners.com.br e clique em Tela Cheia de novo.");
+      return;
+    }
+    const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const statusLabel = (APPROVAL_STATUS_MAP[selected.approval_status] ?? APPROVAL_STATUS_MAP.rascunho).label;
+    win.document.open();
+    win.document.write(`<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>${esc(selected.template_name)} · Leitura · V3 Partners</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0;background:#09081A;color:#F5F1E8;font-family:'DM Sans',sans-serif}
+  body{font-size:19px;line-height:1.9}
+  .toolbar{position:sticky;top:0;z-index:10;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 32px;background:#12112A;border-bottom:1px solid rgba(155,175,197,.15)}
+  .toolbar .status{font-size:10px;font-weight:700;padding:4px 10px;border-radius:6px;background:rgba(201,168,76,.15);color:#C9A84C;text-transform:uppercase;letter-spacing:.05em}
+  .toolbar button{display:flex;align-items:center;gap:6px;padding:9px 18px;border-radius:8px;border:1px solid rgba(201,168,76,.35);background:rgba(201,168,76,.12);color:#C9A84C;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer}
+  .toolbar button:hover{background:rgba(201,168,76,.22)}
+  .wrap{max-width:900px;margin:0 auto;padding:48px 32px 120px}
+  h1{font-size:27px;color:#C9A84C;margin:0 0 28px;padding-bottom:20px;border-bottom:2px solid #C9A84C}
+  h2{font-size:20px;color:#C9A84C;text-transform:uppercase;letter-spacing:.03em;margin:36px 0 14px}
+  p{margin:0 0 18px}
+  strong{color:#F5F1E8}
+</style>
+</head>
+<body>
+<div class="toolbar">
+  <span class="status">${esc(statusLabel)}</span>
+  <button onclick="document.documentElement.requestFullscreen().catch(function(){})">Tela Cheia do Navegador (F11 também funciona)</button>
+</div>
+<div class="wrap">
+  <h1>${esc(selected.template_name)}</h1>
+  ${selected.body_text_raw}
+</div>
+<script>try{document.documentElement.requestFullscreen().catch(function(){});}catch(e){}</script>
+</body>
+</html>`);
+    win.document.close();
+    win.focus();
   };
 
   const openQualModal = () => {
@@ -1048,30 +1097,23 @@ export function ContractTemplatesClient() {
         </div>
 
         {/* Editor */}
-        <div className={cn("col-span-8", editorFullscreen && "col-span-12")}>
+        <div className="col-span-8">
           {!isNew && !selected ? (
             <div className="flex items-center justify-center h-64 text-[#9BAFC5] text-sm">
               Selecione uma minuta ou clique em "Nova Minuta"
             </div>
           ) : (
-            <div className={cn(
-              "bg-[#12112A] border border-[#9BAFC5]/10 rounded-lg p-6",
-              // Tela Cheia (11/09/2026): mesmo painel, sem duplicar HTML,
-              // só sai do fluxo da grid e ocupa a viewport inteira com
-              // scroll próprio -- pedido de João pra leitura do jurídico.
-              editorFullscreen && "fixed inset-0 z-[110] m-0 rounded-none overflow-y-auto p-6 md:p-10"
-            )}>
+            <div className="bg-[#12112A] border border-[#9BAFC5]/10 rounded-lg p-6">
               {selected && (
                 <div className="flex items-center justify-between mb-4 pb-4 border-b border-[#9BAFC5]/10">
                   <span className={cn("text-[10px] font-bold px-2.5 py-1 rounded", (APPROVAL_STATUS_MAP[selected.approval_status] ?? APPROVAL_STATUS_MAP.rascunho).color)}>
                     {(APPROVAL_STATUS_MAP[selected.approval_status] ?? APPROVAL_STATUS_MAP.rascunho).label}
                   </span>
                   <div className="flex items-center gap-2">
-                    <button onClick={() => setEditorFullscreen((v) => !v)}
-                      title={editorFullscreen ? "Sair da Tela Cheia" : "Tela Cheia (leitura ampliada)"}
+                    <button onClick={openFullscreenReader}
+                      title="Abrir a minuta numa janela grande, em tela cheia, para leitura"
                       className="flex items-center gap-1.5 px-3 py-1.5 bg-[#162744] text-[#9BAFC5] border border-[#9BAFC5]/20 rounded-lg text-xs font-bold hover:text-[#F5F1E8] hover:bg-[#243A66] transition">
-                      {editorFullscreen ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
-                      {editorFullscreen ? "Sair da Tela Cheia" : "Tela Cheia"}
+                      <Maximize2 size={13} /> Tela Cheia
                     </button>
                     {/* 10/09/2026, P0 real reportado por João: minutas são
                         reutilizáveis para múltiplas operações/clientes (ver
@@ -1517,8 +1559,7 @@ export function ContractTemplatesClient() {
               <textarea value={formBody} onChange={(e) => setFormBody(e.target.value)}
                 readOnly={selected?.approval_status === "aprovado"}
                 className={cn(
-                  "w-full bg-[#162744] border border-[#9BAFC5]/15 rounded-lg px-4 py-3 text-[#F5F1E8] focus:border-[#C9A84C]/50 focus:outline-none font-mono resize-y leading-relaxed",
-                  editorFullscreen ? "text-base min-h-[calc(100vh-260px)]" : "text-sm min-h-[350px]",
+                  "w-full bg-[#162744] border border-[#9BAFC5]/15 rounded-lg px-4 py-3 text-sm text-[#F5F1E8] focus:border-[#C9A84C]/50 focus:outline-none font-mono min-h-[350px] resize-y",
                   selected?.approval_status === "aprovado" && "opacity-60 cursor-not-allowed"
                 )}
                 placeholder="Digite o texto da minuta usando {{variáveis}} entre chaves..." />
