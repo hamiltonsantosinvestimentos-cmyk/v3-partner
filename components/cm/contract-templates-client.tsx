@@ -776,9 +776,16 @@ export function ContractTemplatesClient() {
   // (jurídico) na hora de revisar/aprovar. João pediu especificamente uma
   // JANELA NOVA em tela cheia, não só um painel maior dentro da mesma aba
   // -- window.open com as dimensões da tela (mesmo padrão já usado em
-  // relatórios/certificados no repo) + tentativa de ativar a Fullscreen
-  // API real do navegador nessa nova janela, com um botão manual de
-  // reforço caso o navegador bloqueie o auto-request.
+  // relatórios/certificados no repo).
+  //
+  // P0 corrigido no mesmo dia: a primeira versão disparava
+  // requestFullscreen() SOZINHA ao abrir. Em Fullscreen API real o Chrome
+  // esconde a barra de título inteira (inclusive o X de fechar), e sem
+  // saber que Esc sai do modo, João ficou com a janela "travada". Agora
+  // NUNCA entra em tela cheia sozinho -- só quando a pessoa clica no botão
+  // -- e a barra de ferramentas (que é conteúdo da página, não do
+  // navegador) continua visível mesmo em tela cheia, com um botão de
+  // Fechar sempre presente como saída garantida.
   const openFullscreenReader = () => {
     if (!selected) return;
     const win = window.open(
@@ -804,9 +811,13 @@ export function ContractTemplatesClient() {
   html,body{margin:0;background:#09081A;color:#F5F1E8;font-family:'DM Sans',sans-serif}
   body{font-size:19px;line-height:1.9}
   .toolbar{position:sticky;top:0;z-index:10;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 32px;background:#12112A;border-bottom:1px solid rgba(155,175,197,.15)}
+  .toolbar .left{display:flex;align-items:center;gap:12px}
   .toolbar .status{font-size:10px;font-weight:700;padding:4px 10px;border-radius:6px;background:rgba(201,168,76,.15);color:#C9A84C;text-transform:uppercase;letter-spacing:.05em}
+  .toolbar .actions{display:flex;align-items:center;gap:8px}
   .toolbar button{display:flex;align-items:center;gap:6px;padding:9px 18px;border-radius:8px;border:1px solid rgba(201,168,76,.35);background:rgba(201,168,76,.12);color:#C9A84C;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer}
   .toolbar button:hover{background:rgba(201,168,76,.22)}
+  .toolbar button.close{border-color:rgba(239,68,68,.4);background:rgba(239,68,68,.12);color:#f87171}
+  .toolbar button.close:hover{background:rgba(239,68,68,.22)}
   .wrap{max-width:900px;margin:0 auto;padding:48px 32px 120px}
   h1{font-size:27px;color:#C9A84C;margin:0 0 28px;padding-bottom:20px;border-bottom:2px solid #C9A84C}
   h2{font-size:20px;color:#C9A84C;text-transform:uppercase;letter-spacing:.03em;margin:36px 0 14px}
@@ -816,14 +827,30 @@ export function ContractTemplatesClient() {
 </head>
 <body>
 <div class="toolbar">
-  <span class="status">${esc(statusLabel)}</span>
-  <button onclick="document.documentElement.requestFullscreen().catch(function(){})">Tela Cheia do Navegador (F11 também funciona)</button>
+  <div class="left">
+    <span class="status">${esc(statusLabel)}</span>
+  </div>
+  <div class="actions">
+    <button id="fs-toggle">Tela Cheia do Navegador</button>
+    <button class="close" onclick="window.close()">Fechar Janela</button>
+  </div>
 </div>
 <div class="wrap">
   <h1>${esc(selected.template_name)}</h1>
   ${selected.body_text_raw}
 </div>
-<script>try{document.documentElement.requestFullscreen().catch(function(){});}catch(e){}</script>
+<script>
+  var fsBtn = document.getElementById("fs-toggle");
+  function syncFsLabel() {
+    fsBtn.textContent = document.fullscreenElement ? "Sair da Tela Cheia (ou aperte Esc)" : "Tela Cheia do Navegador";
+  }
+  fsBtn.onclick = function () {
+    if (document.fullscreenElement) document.exitFullscreen().catch(function(){});
+    else document.documentElement.requestFullscreen().catch(function(){});
+  };
+  document.addEventListener("fullscreenchange", syncFsLabel);
+  syncFsLabel();
+</script>
 </body>
 </html>`);
     win.document.close();
