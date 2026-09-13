@@ -4,6 +4,7 @@ import { coraFetch } from "@/lib/cora";
 import { randomUUID } from "crypto";
 import { auditText, auditHtml } from "@/lib/brand-guardian-gate";
 import { PLANO_VALOR } from "@/lib/plano-valor";
+import { notifyNovoCadastroPartner } from "@/lib/socios-notify";
 
 // Único plano de pagamento hoje: valor anual (12x o mensal) com 10% de desconto,
 // pago à vista via Pix ou Boleto na aprovação. Fidelidade de 12 meses.
@@ -210,6 +211,19 @@ export async function POST(req: NextRequest) {
     const documento = tipoPessoa === "PF"
       ? (formData.get("cpf") as string ?? "")
       : (formData.get("cnpj") as string ?? "");
+
+    // Alerta pro Hamilton (WhatsApp + e-mail) assim que o cadastro entra na
+    // aba Cadastros — pedido dele, 13/09/2026. Best-effort (nunca bloqueia o
+    // retorno pro candidato a partner se falhar), mas AWAIT de propósito: em
+    // função serverless, um fetch disparado sem await pode ser encerrado
+    // junto com a função assim que a resposta é enviada, e o alerta nunca
+    // sai de verdade (mesmo problema já documentado em
+    // credit-engine/intake/[token]/route.ts).
+    try {
+      await notifyNovoCadastroPartner({ nome, plano, tipoPessoa: tipoPessoa as "PF" | "PJ", email, telefone });
+    } catch (e) {
+      console.error("[cadastro-partner] falha ao notificar novo cadastro:", e);
+    }
 
     // Pix/Boleto: cobrança única dos 12 meses à vista, com 10% de desconto,
     // gerada agora na Cora. Cartão: 12x sem juros do valor anual cheio (sem
