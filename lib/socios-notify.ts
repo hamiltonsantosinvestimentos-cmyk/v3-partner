@@ -91,6 +91,67 @@ export async function notifySociosMinutaEmRevisao(params: {
   });
 }
 
+// Alerta de novo cadastro de partner (pedido do Hamilton, 13/09/2026): antes
+// disso, um cadastro novo em partner_registrations só aparecia pra quem
+// entrasse manualmente na aba Cadastros — ninguém era avisado na hora. Só
+// notifica o Hamilton (WhatsApp + e-mail), não os outros sócios — é isso que
+// foi pedido, diferente de notifySociosMinutaEmRevisao acima.
+const HAMILTON_WHATSAPP = "51997466001";
+const HAMILTON_EMAIL = "hamilton@v3partners.com.br";
+
+const PLANO_LABEL_CADASTRO: Record<string, string> = {
+  STARTER: "V3 Starter",
+  PARTNER: "V3 Partner",
+  PARTNER_PRO: "V3 Partner PRO",
+  PARTNER_HE: "Partner HE",
+  ENTERPRISE: "V3 Enterprise",
+};
+
+export async function notifyNovoCadastroPartner(params: {
+  nome: string;
+  plano: string;
+  tipoPessoa: "PF" | "PJ";
+  email: string;
+  telefone: string;
+}): Promise<void> {
+  const { nome, plano, tipoPessoa, email, telefone } = params;
+  const planoLabel = PLANO_LABEL_CADASTRO[plano] ?? plano;
+  const link = "https://app.v3partners.com.br/admin-cadastros";
+
+  const subjectGate = auditText(`Novo cadastro de partner: ${nome} (${planoLabel})`);
+  const htmlGate = auditHtml(
+    `<p>Olá, Hamilton,</p>
+     <p>Um novo cadastro de partner acabou de entrar na aba Cadastros:</p>
+     <ul>
+       <li><strong>Nome:</strong> ${nome}</li>
+       <li><strong>Plano:</strong> ${planoLabel}</li>
+       <li><strong>Tipo:</strong> ${tipoPessoa === "PF" ? "Pessoa Física" : "Pessoa Jurídica"}</li>
+       <li><strong>E-mail:</strong> ${email}</li>
+       <li><strong>Telefone:</strong> ${telefone}</li>
+     </ul>
+     <p>Acesse para aprovar: <a href="${link}">${link}</a></p>
+     <p>V3 Partners</p>`
+  );
+  const whatsappMsg = auditText(
+    `Novo cadastro de partner: ${nome} (${planoLabel}, ${tipoPessoa}). Tel: ${telefone}. Acesse: ${link}`
+  );
+
+  if (process.env.RESEND_API_KEY) {
+    const { Resend } = await import("resend");
+    const resend = new Resend(process.env.RESEND_API_KEY);
+    await resend.emails.send({
+      from: "V3 Partners <noreply@v3partners.com.br>",
+      to: HAMILTON_EMAIL,
+      subject: subjectGate.corrected,
+      html: htmlGate.corrected,
+    }).catch((e) => console.error("[socios-notify] falha e-mail novo cadastro:", e));
+  }
+
+  await sendWhatsApp(HAMILTON_WHATSAPP, whatsappMsg.corrected).catch((e) =>
+    console.error("[socios-notify] falha whatsapp novo cadastro:", e)
+  );
+}
+
 // Registro na auditoria dedicada (contract_ai_agent_audit_log). actor_id
 // null = evento do próprio agente; preenchido = voto/decisão humana.
 export async function logAgentAuditEvent(params: {
