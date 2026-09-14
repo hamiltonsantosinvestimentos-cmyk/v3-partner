@@ -589,6 +589,7 @@ function AutomacaoTab() {
   const [loading, setLoading] = useState(true);
   const [salvando, setSalvando] = useState(false);
   const [salvo, setSalvo] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/partner/sdr/automacao")
@@ -601,14 +602,26 @@ function AutomacaoTab() {
   async function salvar() {
     setSalvando(true);
     setSalvo(false);
+    setErro(null);
     try {
       const res = await fetch("/api/partner/sdr/automacao", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(form),
       });
-      if (res.ok) { setSalvo(true); setTimeout(() => setSalvo(false), 3000); }
-    } catch { /* silencioso */ }
+      // Achado 15/09/2026: um erro aqui (ex: falha no banco) ficava
+      // completamente silencioso -- o botão só parava de girar sem avisar
+      // nada, então parecia que tinha salvo quando não tinha salvo nada.
+      if (res.ok) {
+        setSalvo(true);
+        setTimeout(() => setSalvo(false), 3000);
+      } else {
+        const d = await res.json().catch(() => ({}));
+        setErro(d.error ?? "Não foi possível salvar. Tente de novo.");
+      }
+    } catch {
+      setErro("Falha de rede ao salvar. Tente de novo.");
+    }
     setSalvando(false);
   }
 
@@ -664,14 +677,17 @@ function AutomacaoTab() {
         </div>
       </div>
 
-      <button
-        onClick={salvar}
-        disabled={salvando}
-        className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#C9A84C] text-[#09081A] text-sm font-bold disabled:opacity-60"
-      >
-        {salvando ? <Loader2 className="w-4 h-4 animate-spin" /> : salvo ? <CheckCircle2 className="w-4 h-4" /> : null}
-        {salvo ? "Salvo!" : salvando ? "Salvando..." : "Salvar"}
-      </button>
+      <div className="flex items-center gap-3">
+        <button
+          onClick={salvar}
+          disabled={salvando}
+          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#C9A84C] text-[#09081A] text-sm font-bold disabled:opacity-60"
+        >
+          {salvando ? <Loader2 className="w-4 h-4 animate-spin" /> : salvo ? <CheckCircle2 className="w-4 h-4" /> : null}
+          {salvo ? "Salvo!" : salvando ? "Salvando..." : "Salvar"}
+        </button>
+        {erro && <p className="text-xs text-red-400">{erro}</p>}
+      </div>
     </div>
   );
 }

@@ -57,16 +57,33 @@ export async function PUT(req: NextRequest) {
     ia_ativa_telegram?: boolean;
   };
 
-  const updates: Record<string, unknown> = { partner_id: auth.user.id, id: auth.user.id, updated_at: new Date().toISOString(), updated_by: auth.user.id };
-  if (body.agente_nome !== undefined) updates.agente_nome = body.agente_nome.trim() || "Assistente";
-  if (body.empresa_contexto !== undefined) updates.empresa_contexto = body.empresa_contexto;
-  if (body.regras_comunicacao !== undefined) updates.regras_comunicacao = body.regras_comunicacao;
-  if (body.ia_ativa_whatsapp !== undefined) updates.ia_ativa_whatsapp = body.ia_ativa_whatsapp;
-  if (body.ia_ativa_instagram !== undefined) updates.ia_ativa_instagram = body.ia_ativa_instagram;
-  if (body.ia_ativa_messenger !== undefined) updates.ia_ativa_messenger = body.ia_ativa_messenger;
-  if (body.ia_ativa_telegram !== undefined) updates.ia_ativa_telegram = body.ia_ativa_telegram;
+  const fields: Record<string, unknown> = { updated_at: new Date().toISOString(), updated_by: auth.user.id };
+  if (body.agente_nome !== undefined) fields.agente_nome = body.agente_nome.trim() || "Assistente";
+  if (body.empresa_contexto !== undefined) fields.empresa_contexto = body.empresa_contexto;
+  if (body.regras_comunicacao !== undefined) fields.regras_comunicacao = body.regras_comunicacao;
+  if (body.ia_ativa_whatsapp !== undefined) fields.ia_ativa_whatsapp = body.ia_ativa_whatsapp;
+  if (body.ia_ativa_instagram !== undefined) fields.ia_ativa_instagram = body.ia_ativa_instagram;
+  if (body.ia_ativa_messenger !== undefined) fields.ia_ativa_messenger = body.ia_ativa_messenger;
+  if (body.ia_ativa_telegram !== undefined) fields.ia_ativa_telegram = body.ia_ativa_telegram;
 
-  const { error } = await svc().from("sdr_flow_config").upsert(updates, { onConflict: "partner_id" });
+  // Achado 15/09/2026: sdr_flow_config.partner_id tem índice único PARCIAL
+  // (só WHERE partner_id IS NOT NULL — ver migration
+  // 20260823_sdr_whitelabel_partner.sql). upsert(..., {onConflict:
+  // "partner_id"}) gera "ON CONFLICT (partner_id)" sem repetir esse WHERE, e
+  // Postgres recusa com 42P10 ("no unique or exclusion constraint matching")
+  // -- ou seja, TODO partner que tentasse salvar a aba Automação (nome do
+  // agente, contexto, regras, os 4 toggles de IA por canal) caía nesse erro,
+  // silenciosamente engolido pelo frontend. select+update/insert manual
+  // aqui não depende de índice nenhum pra funcionar (a migration
+  // 20260915_fix_sdr_flow_config_partner_unique corrige o índice em si, mas
+  // este código já funciona sem ela).
+  const db = svc();
+  const { data: existing } = await db.from("sdr_flow_config").select("partner_id").eq("partner_id", auth.user.id).maybeSingle();
+
+  const { error } = existing
+    ? await db.from("sdr_flow_config").update(fields).eq("partner_id", auth.user.id)
+    : await db.from("sdr_flow_config").insert({ id: auth.user.id, partner_id: auth.user.id, ...fields });
+
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   return NextResponse.json({ ok: true });
