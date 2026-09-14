@@ -94,6 +94,19 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // Server-to-server (14/09/2026): /api/contracts/templates/{id}/revision-callback,
+  // acionada pelo workflow n8n W19 (Pedir Ajuste ao Agente / ajuste automático
+  // ao reprovar) quando origem NÃO é agente_ia/agente_ia_estruturador. P0
+  // real achado testando ao vivo: esqueci este bypass na primeira versão da
+  // rota e o proxy devolvia 405 pro n8n antes da rota nem rodar (mesmo
+  // problema já documentado acima pras 2 rotas irmãs). Mesmo padrão exato.
+  if (
+    /^\/api\/contracts\/templates\/[^/]+\/revision-callback$/.test(pathname) &&
+    request.headers.get("x-cron-secret") === process.env.CRON_SECRET
+  ) {
+    return NextResponse.next();
+  }
+
   // Demo mode
   if (IS_DEMO) {
     const demoSession = request.cookies.get("v3_demo_session");
