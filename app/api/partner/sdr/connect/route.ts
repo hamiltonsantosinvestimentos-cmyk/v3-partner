@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
-import { createSession, getSessionStatus, getSessionQr, startSession } from "@/lib/whatsapp/openwa-client";
+import { createSession, getSessionStatus, getSessionQr, startSession, ensureSessionWebhook } from "@/lib/whatsapp/openwa-client";
 
 const PARTNER_ROLES = ["STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE"] as const;
 
@@ -93,6 +93,10 @@ export async function POST() {
           status: "aguardando_qr", updated_at: new Date().toISOString(),
         }).eq("partner_id", auth.user.id);
       }
+      // Sessões criadas antes do fix de 14/09/2026 (ou já conectadas antes
+      // dele) podem estar sem webhook registrado no gateway — garante aqui
+      // toda vez que o partner reabre a aba Canais, não só na criação.
+      await ensureSessionWebhook(conexao.openwa_session_id);
     } catch (e) {
       // Best-effort: se a checagem/restart falhar, ainda devolve o sessionId
       // salvo -- o polling do GET vai continuar mostrando "desconectado" e o
