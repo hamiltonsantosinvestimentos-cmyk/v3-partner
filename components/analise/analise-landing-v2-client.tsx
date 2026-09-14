@@ -105,8 +105,31 @@ export function AnaliseLandingV2Client() {
     capturePropFromUrl();
     captureUtmFromUrl();
     const params = new URLSearchParams(window.location.search);
+    const propCode = params.get("prop");
     setRef(params.get("ref"));
-    setProp(params.get("prop"));
+    setProp(propCode);
+
+    // Rastreio de abertura do link (2026-09-14): só para link ligado a uma
+    // proposta/deal específico (?prop=), nunca para ?ref= solto. Guard de
+    // sessionStorage evita reenviar a cada F5 na mesma aba -- a dedupe real
+    // de notificação (1x por prop_code) é feita no servidor de qualquer forma.
+    if (propCode) {
+      const guardKey = `v3_tracked_open_${propCode}`;
+      if (!sessionStorage.getItem(guardKey)) {
+        fetch("/api/analise/track-open", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            prop_code: propCode,
+            deal_type: params.get("deal_type") === "ma" ? "ma" : "credit",
+            utm_source: params.get("utm_source"),
+            utm_campaign: params.get("utm_campaign"),
+            utm_medium: params.get("utm_medium"),
+          }),
+        }).catch(() => {});
+        try { sessionStorage.setItem(guardKey, "1"); } catch { /* modo privado, etc */ }
+      }
+    }
   }, []);
 
   const min = useMemo(() => getMinCounts(profileType, companyStructure), [profileType, companyStructure]);

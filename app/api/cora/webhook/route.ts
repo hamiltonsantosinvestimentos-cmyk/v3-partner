@@ -240,7 +240,7 @@ export async function POST(req: NextRequest) {
     // trigger automático, decisão registrada na sessão que criou esta feature).
     const { data: directOrder } = await db
       .from("partner_service_orders")
-      .select("id, ref_partner_id, client_name, client_email, client_doc, service_type, amount_cents, cnpj_count, cpf_count, has_consultancy, ref_partner:profiles!ref_partner_id(full_name)")
+      .select("id, ref_partner_id, client_name, client_email, client_doc, service_type, amount_cents, cnpj_count, cpf_count, has_consultancy, ma_deal_id, ref_partner:profiles!ref_partner_id(full_name, email)")
       .eq("cora_invoice_id", invoiceId)
       .eq("status", "PENDING")
       .eq("source", "direct")
