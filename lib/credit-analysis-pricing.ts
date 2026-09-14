@@ -62,18 +62,22 @@ export function fmtBRL(cents: number): string {
 // Título usado no invoice da Cora, no email de confirmação e na listagem
 // da Mesa (Credit Engine). Ex.: "Análise de Crédito Empresarial (2 CNPJ +
 // 1 CPF) + Consultoria Estratégica V3".
-// dealType (14/09/2026, default 'credit' pra nunca quebrar chamador
-// existente): o mesmo checkout modular passou a atender M&A também
-// (?prop=&deal_type=ma), mas o título sempre dizia "Análise de Crédito
-// Empresarial", inclusive pro cliente pagando um Deal de M&A e em toda
-// notificação/e-mail derivada. Achado ao testar a notificação de Mesa
-// para M&A ao vivo.
-export function buildModularTitle(sel: ModularSelection, dealType: "credit" | "ma" = "credit"): string {
+// Correção 14/09/2026: cheguei a adicionar um parâmetro dealType aqui pra
+// trocar o nome do produto pra "Análise M&A" quando vinculado a um Deal de
+// M&A (?prop=&deal_type=ma). Estava errado -- confirmado em
+// AnaliseCreditoLinkButtonMA (mesa-ma-client.tsx) e no comentário de
+// app/api/ma-deals/analise-status: o produto vendido é sempre "Análise de
+// Crédito Empresarial" (mesmo relatório Registrato/Serasa/judicial), só a
+// ATRIBUIÇÃO muda (vinculado a um Deal de M&A em vez de uma proposta de
+// Crédito, geralmente pra due diligence do alvo/contraparte). Revertido: o
+// título do produto nunca varia por dealType. A distinção correta
+// (roteamento pra Mesa certa, rótulo de contexto) fica só nas notificações
+// em lib/cora-order-reconcile.ts, nunca no nome do produto em si.
+export function buildModularTitle(sel: ModularSelection): string {
   const parts: string[] = [];
   if (sel.cnpjCount > 0) parts.push(`${sel.cnpjCount} CNPJ`);
   if (sel.cpfCount > 0) parts.push(`${sel.cpfCount} CPF`);
-  const produto = dealType === "ma" ? "Análise M&A" : "Análise de Crédito Empresarial";
-  const base = `${produto} (${parts.join(" + ")})`;
+  const base = `Análise de Crédito Empresarial (${parts.join(" + ")})`;
   return sel.hasConsultancy ? `${base} + Consultoria Estratégica V3` : base;
 }
 

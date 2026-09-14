@@ -37,11 +37,16 @@ function mesaActionUrl(dealType: "credit" | "ma", maDealId?: string | null): str
 }
 
 /** Avisa ADMIN/GESTAO/MESA_OPERACIONAL (in-app + e-mail individual, nunca
- *  endereço de setor inventado) que um pedido de Análise foi pago.
- *  Generalizada em 14/09/2026 (dealType/maDealId) -- antes rotulava todo
- *  pedido pago como "Análise de Crédito" mesmo quando vinha de um Deal de
- *  M&A, porque o gatilho (cnpj_count preenchido) é o mesmo nos dois fluxos
- *  desde a precificação modular (20/08/2026). Renomeada de
+ *  endereço de setor inventado) que um pedido de Análise de Crédito foi
+ *  pago. Generalizada em 14/09/2026 (dealType/maDealId): o produto é sempre
+ *  "Análise de Crédito" (confirmado em AnaliseCreditoLinkButtonMA e no
+ *  comentário de app/api/ma-deals/analise-status -- nunca existiu um
+ *  produto "Análise M&A" separado), mas o ROTEAMENTO estava errado: todo
+ *  pedido pago, vindo de proposta de Crédito ou de Deal de M&A, sempre
+ *  mandava a Mesa pra /mesa-credito/pedidos, porque o gatilho (cnpj_count
+ *  preenchido) é o mesmo nos dois fluxos desde a precificação modular
+ *  (20/08/2026). Corrigido: rota certa por dealType, mensagem indica
+ *  "vinculado a Deal M&A" quando for o caso. Renomeada de
  *  notificarMesaCreditoNovoPedido. */
 export async function notificarMesaNovoPedidoPago(
   db: SupabaseClient,
@@ -52,8 +57,8 @@ export async function notificarMesaNovoPedidoPago(
   }
 ) {
   const dealType = opts.dealType ?? "credit";
-  const label = dealType === "ma" ? "Análise M&A" : "Análise de Crédito";
   const actionUrl = mesaActionUrl(dealType, opts.maDealId);
+  const contexto = dealType === "ma" ? " · vinculado a Deal M&A" : "";
 
   const { data: mesa } = await db
     .from("profiles")
@@ -65,8 +70,8 @@ export async function notificarMesaNovoPedidoPago(
     mesa.map((m: { id: string }) => ({
       user_id: m.id,
       type: "commission",
-      title: `Novo pedido de ${label} pago`,
-      message: `${opts.clientName} pagou "${opts.title}" (${opts.origemDetalhe ? `${opts.origem} · ${opts.origemDetalhe}` : opts.origem}). Aguarda vínculo/análise.`,
+      title: "Novo pedido de Análise de Crédito pago",
+      message: `${opts.clientName} pagou "${opts.title}" (${opts.origemDetalhe ? `${opts.origem} · ${opts.origemDetalhe}` : opts.origem}${contexto}). Aguarda vínculo/análise.`,
       action_url: actionUrl,
       read: false,
     }))
@@ -103,13 +108,13 @@ export async function notificarMesaLinkAberto(
   if (!mesa?.length) return;
 
   const actionUrl = mesaActionUrl(opts.dealType, opts.maDealId);
-  const label = opts.dealType === "ma" ? "Análise M&A" : "Análise de Crédito";
+  const contexto = opts.dealType === "ma" ? " (vinculado a Deal M&A)" : "";
 
   await db.from("notifications").insert(
     mesa.map((m: { id: string }) => ({
       user_id: m.id,
       type: "commission",
-      title: `Link de ${label} aberto`,
+      title: `Link de Análise de Crédito aberto${contexto}`,
       message: `Código ${opts.propCode}${opts.partnerName ? ` (partner ${opts.partnerName})` : ""} foi aberto pelo destinatário.`,
       action_url: actionUrl,
       read: false,
@@ -145,13 +150,13 @@ export async function notificarMesaNovoPedidoTentativa(
   if (!mesa?.length) return;
 
   const actionUrl = mesaActionUrl(opts.dealType, opts.maDealId);
-  const label = opts.dealType === "ma" ? "Análise M&A" : "Análise de Crédito";
+  const contexto = opts.dealType === "ma" ? " (Deal M&A)" : "";
 
   await db.from("notifications").insert(
     mesa.map((m: { id: string }) => ({
       user_id: m.id,
       type: "commission",
-      title: `Cliente iniciou pagamento (${label})`,
+      title: `Cliente iniciou pagamento${contexto}`,
       message: `${opts.clientName} começou o pagamento de "${opts.title}" (${fmtBRLCents(opts.amountCents)})${opts.partnerName ? ` · Partner: ${opts.partnerName}` : ""}.`,
       action_url: actionUrl,
       read: false,
@@ -290,7 +295,7 @@ export async function reconcileDirectOrderPaid(
         cnpjCount: directOrder.cnpj_count,
         cpfCount: directOrder.cpf_count ?? 0,
         hasConsultancy: Boolean(directOrder.has_consultancy),
-      }, dealType)
+      })
     : LEGACY_DIRECT_TITLES[directOrder.service_type ?? ""] ?? "Análise de Crédito Empresarial";
 
   await db.from("partner_service_orders").update({

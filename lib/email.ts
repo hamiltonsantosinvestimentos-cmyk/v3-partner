@@ -1682,9 +1682,15 @@ export async function notifyMesaPedidoPago(opts: {
 // pra saber entrando no modal certo na Mesa. Ver app/api/analise/track-open,
 // app/api/checkout/direct e lib/cora-order-reconcile.ts.
 
+// Correção 14/09/2026: o produto vendido é sempre "Análise de Crédito",
+// vinculado a uma proposta de Crédito OU a um Deal de M&A (geralmente due
+// diligence do alvo/contraparte) -- nunca um produto "Análise M&A" à parte
+// (confirmado em AnaliseCreditoLinkButtonMA, mesa-ma-client.tsx, e no
+// comentário de app/api/ma-deals/analise-status). O rótulo nunca varia por
+// dealType; só a rota (DEAL_TYPE_URL) e o roteamento de notificação mudam.
 const DEAL_TYPE_LABEL: Record<"credit" | "ma", string> = {
   credit: "Análise de Crédito",
-  ma: "Análise M&A",
+  ma: "Análise de Crédito",
 };
 const DEAL_TYPE_URL: Record<"credit" | "ma", string> = {
   credit: "https://app.v3partners.com.br/mesa-credito/nivel-1",

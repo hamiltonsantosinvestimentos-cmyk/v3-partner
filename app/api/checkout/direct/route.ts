@@ -47,11 +47,10 @@ export async function POST(req: NextRequest) {
     hasConsultancy: Boolean(body.has_consultancy),
   }, min);
   const priceCents = calcTotalCents(selection);
-  // Rótulo do produto (Cora, notificações, e-mails) já correto por vertical
-  // aqui na frente -- achado em 14/09/2026 testando a notificação de Mesa
-  // pra M&A: buildModularTitle sempre dizia "Análise de Crédito Empresarial",
-  // inclusive na fatura que o cliente de um Deal de M&A via.
-  const title = buildModularTitle(selection, body.deal_type === "ma" ? "ma" : "credit");
+  // Produto vendido é sempre "Análise de Crédito", inclusive quando o link
+  // está vinculado a um Deal de M&A (ver correção 14/09/2026 em
+  // credit-analysis-pricing.ts) -- nunca varia por dealType.
+  const title = buildModularTitle(selection);
 
   if (!body.client_name?.trim()) return NextResponse.json({ error: "Nome obrigatório" }, { status: 400 });
   if (!body.client_email?.trim()) return NextResponse.json({ error: "Email obrigatório" }, { status: 400 });
