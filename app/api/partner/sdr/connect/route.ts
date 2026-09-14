@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
-import { createSession, getSessionStatus, getSessionQr } from "@/lib/whatsapp/openwa-client";
+import { createSession, getSessionStatus, getSessionQr, startSession } from "@/lib/whatsapp/openwa-client";
 
 const PARTNER_ROLES = ["STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE"] as const;
 
@@ -60,9 +60,10 @@ export async function GET() {
   }
 }
 
-// POST — provisiona a sessão OpenWA do partner (uma vez só; se já existe, é
-// no-op). A V3 continua sendo a única dona da OPENWA_API_KEY — o partner
-// nunca vê essa chave, só o QR da própria sessão criada aqui.
+// POST — provisiona a sessão OpenWA do partner. Se já existe uma sessão
+// salva, reaproveita (e reinicia, se estiver morta no gateway — ver bloco
+// abaixo) em vez de criar uma nova. A V3 continua sendo a única dona da
+// OPENWA_API_KEY — o partner nunca vê essa chave, só o QR da própria sessão.
 export async function POST() {
   const auth = await authGuard();
   if (!auth) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
@@ -77,7 +78,27 @@ export async function POST() {
   if (!conexao?.addon_ativo) {
     return NextResponse.json({ error: "Add-on não contratado" }, { status: 403 });
   }
+  // Achado 14/09/2026: sessão já existente mas "morta" no gateway
+  // (disconnected/failed/criada e nunca iniciada — ex.: crash ou restart do
+  // openwa-gateway) ficava travada pra sempre, porque este endpoint só
+  // devolvia o sessionId salvo sem checar se a engine ainda estava viva. O
+  // botão "Gerar QR Code" na aba Canais nunca fazia nada de novo nesse caso.
   if (conexao.openwa_session_id) {
+    try {
+      const session = await getSessionStatus(conexao.openwa_session_id);
+      const viva = ["initializing", "qr_ready", "authenticating", "ready"].includes(session.status);
+      if (!viva) {
+        await startSession(conexao.openwa_session_id);
+        await db.from("partner_sdr_connections").update({
+          status: "aguardando_qr", updated_at: new Date().toISOString(),
+        }).eq("partner_id", auth.user.id);
+      }
+    } catch (e) {
+      // Best-effort: se a checagem/restart falhar, ainda devolve o sessionId
+      // salvo -- o polling do GET vai continuar mostrando "desconectado" e o
+      // partner pode tentar de novo, em vez de a criação inteira falhar aqui.
+      console.error("[partner/sdr/connect] falha ao verificar/reiniciar sessão existente:", e);
+    }
     return NextResponse.json({ ok: true, sessionId: conexao.openwa_session_id });
   }
 

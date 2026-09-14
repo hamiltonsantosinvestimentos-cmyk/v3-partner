@@ -41,13 +41,23 @@ export async function createSession(name: string): Promise<string> {
   const sessionId = data.id ?? data.sessionId;
   if (!sessionId) throw new Error("OpenWA: resposta de criação de sessão sem id");
 
+  await startSession(sessionId);
+  return sessionId;
+}
+
+// (Re)inicia uma sessão já existente — necessário tanto pra criação (acima)
+// quanto pro caso de uma sessão que ficou "disconnected"/engine não carregado
+// (crash do gateway, restart do processo, etc.). Achado 14/09/2026: o QR
+// nunca reaparecia pro partner porque connect/route.ts, quando já existia
+// um openwa_session_id salvo, só devolvia esse id de volta sem nunca chamar
+// /start de novo — uma sessão morta ficava morta pra sempre, sem forma de o
+// partner tentar de novo pela UI.
+export async function startSession(sessionId: string): Promise<void> {
   const startRes = await fetch(`${BASE_URL}/api/sessions/${sessionId}/start`, {
     method: "POST",
     headers: headers(),
   });
-  if (!startRes.ok) throw new Error(`OpenWA: sessão criada mas falha ao iniciar (${startRes.status})`);
-
-  return sessionId;
+  if (!startRes.ok) throw new Error(`OpenWA: falha ao iniciar sessão (${startRes.status})`);
 }
 
 // Números BR sem DDI vêm com 10 dígitos (DDD + fixo) ou 11 (DDD + 9 + celular) — sem o 55
