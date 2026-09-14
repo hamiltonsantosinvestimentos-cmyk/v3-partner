@@ -15,7 +15,7 @@
 import { randomUUID } from "crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { buildModularTitle, LEGACY_DIRECT_TITLES } from "@/lib/credit-analysis-pricing";
-import { notifyPagamentoAnaliseConfirmado, notifyMesaCreditoPedidoPago } from "@/lib/email";
+import { notifyPagamentoAnaliseConfirmado, notifyMesaCreditoPedidoPago, notifyPartnerAnalisePaga } from "@/lib/email";
 
 const CREDIT_SERVICE_TYPES = ["credit_analysis", "credit_analysis_consultoria"];
 
@@ -154,7 +154,8 @@ export interface DirectOrderRow {
   cnpj_count: number | null;
   cpf_count: number | null;
   has_consultancy: boolean | null;
-  ref_partner: { full_name?: string } | null;
+  ma_deal_id?: string | null;
+  ref_partner: { full_name?: string; email?: string } | null;
 }
 
 /** Pedido pago da venda direta pública (/analise-v2, source='direct'). */
@@ -209,6 +210,31 @@ export async function reconcileDirectOrderPaid(
           read: false,
         }))
       ).then(null, () => {});
+    }
+
+    // Aviso ao partner dono do link (2026-09-14): antes só a Mesa/Financeiro
+    // sabia -- quem mandou o link (?prop=/?ref=) nunca era avisado que o
+    // próprio cliente tinha pagado. Espelha o aviso já existente pro fluxo
+    // de link próprio de venda (reconcilePartnerLinkOrderPaid acima).
+    const dealType: "credit" | "ma" = directOrder.ma_deal_id ? "ma" : "credit";
+    await db.from("notifications").insert({
+      user_id: directOrder.ref_partner_id,
+      type: "commission",
+      title: "Venda confirmada!",
+      message: `${directOrder.client_name} pagou "${title}" pelo seu link. Comissão pendente de lançamento manual.`,
+      action_url: dealType === "ma" ? "/mesa-ma" : "/mesa-credito/nivel-1",
+      read: false,
+    }).then(null, () => {});
+
+    if (directOrder.ref_partner?.email) {
+      await notifyPartnerAnalisePaga({
+        partnerEmail: directOrder.ref_partner.email,
+        partnerName: directOrder.ref_partner.full_name ?? "Partner",
+        clientName: directOrder.client_name,
+        title,
+        amountCents: directOrder.amount_cents ?? 0,
+        dealType,
+      }).catch((e) => console.error("Email error (venda paga partner):", e));
     }
   }
 

@@ -84,7 +84,7 @@ export async function GET(req: NextRequest) {
   // 2. Vendas diretas (/analise-v2, source='direct'), PENDING com fatura já criada.
   const { data: directOrders, error: directErr } = await db
     .from("partner_service_orders")
-    .select("id, ref_partner_id, client_name, client_email, client_doc, service_type, amount_cents, cnpj_count, cpf_count, has_consultancy, cora_invoice_id, ref_partner:profiles!ref_partner_id(full_name)")
+    .select("id, ref_partner_id, client_name, client_email, client_doc, service_type, amount_cents, cnpj_count, cpf_count, has_consultancy, ma_deal_id, cora_invoice_id, ref_partner:profiles!ref_partner_id(full_name, email)")
     .eq("status", "PENDING")
     .eq("source", "direct")
     .not("cora_invoice_id", "is", null);

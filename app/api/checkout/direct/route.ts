@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { coraFetch } from "@/lib/cora";
 import { randomUUID } from "crypto";
-import { clampSelection, calcTotalCents, buildModularTitle, getMinCounts, type ProfileType, type CompanyStructure } from "@/lib/credit-analysis-pricing";
+import { clampSelection, calcTotalCents, buildModularTitle, getMinCounts, fmtBRL, type ProfileType, type CompanyStructure } from "@/lib/credit-analysis-pricing";
+import { notifyPartnerAnaliseTentativa } from "@/lib/email";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -175,6 +176,35 @@ export async function POST(req: NextRequest) {
     .single();
 
   if (orderErr) return NextResponse.json({ error: orderErr.message }, { status: 500 });
+
+  // Tentativa de pagamento (2026-09-14): avisa o partner dono do link
+  // (?prop=/?ref=) assim que o checkout é submetido e a fatura Cora nasce --
+  // hoje só dava pra saber entrando no modal certo na Mesa. Só dispara
+  // quando dá pra resolver um partner de verdade; nunca bloqueia a resposta
+  // do checkout se a notificação falhar.
+  if (refPartnerId) {
+    const { data: partner } = await db.from("profiles").select("full_name, email").eq("id", refPartnerId).single();
+    if (partner?.email) {
+      const dealType: "credit" | "ma" = body.deal_type === "ma" ? "ma" : "credit";
+      await db.from("notifications").insert({
+        user_id: refPartnerId,
+        type: "commission",
+        title: "Cliente iniciou pagamento pelo seu link",
+        message: `${body.client_name.trim()} começou o pagamento de "${title}" (${fmtBRL(priceCents)}).`,
+        action_url: dealType === "ma" ? "/mesa-ma" : "/mesa-credito/nivel-1",
+        read: false,
+      }).then(null, () => {});
+
+      notifyPartnerAnaliseTentativa({
+        partnerEmail: partner.email,
+        partnerName: partner.full_name ?? "Partner",
+        clientName: body.client_name.trim(),
+        title,
+        amountCents: priceCents,
+        dealType,
+      }).catch((e) => console.error("Email error (tentativa análise):", e));
+    }
+  }
 
   return NextResponse.json({
     order_id: order.id,

@@ -1667,3 +1667,100 @@ export async function notifyMesaCreditoPedidoPago(opts: {
     })
   );
 }
+
+// ── Rastreio de Link de Análise (2026-09-14) ────────────────────────────────
+// Fecha o gap: partner que manda o link de uma proposta/deal específico
+// (?prop=<code>, botão "Link Análise") não tinha nenhum retorno automático
+// sobre abertura, tentativa de pagamento ou pagamento confirmado -- só dava
+// pra saber entrando no modal certo na Mesa. Ver app/api/analise/track-open,
+// app/api/checkout/direct e lib/cora-order-reconcile.ts.
+
+const DEAL_TYPE_LABEL: Record<"credit" | "ma", string> = {
+  credit: "Análise de Crédito",
+  ma: "Análise M&A",
+};
+const DEAL_TYPE_URL: Record<"credit" | "ma", string> = {
+  credit: "https://app.v3partners.com.br/mesa-credito/nivel-1",
+  ma: "https://app.v3partners.com.br/mesa-ma",
+};
+
+/** Partner: seu link de Análise (?prop=<code>) foi aberto pelo destinatário. */
+export async function notifyPartnerLinkAberto(opts: {
+  partnerEmail: string;
+  partnerName: string;
+  propCode: string;
+  dealType: "credit" | "ma";
+}): Promise<void> {
+  const body = `
+    <p style="color:#9BAFC5;font-size:14px;margin:0 0 20px;line-height:1.7;">
+      Olá, <strong style="color:#F5F1E8;">${opts.partnerName}</strong>.<br>
+      O link de <strong style="color:#C9A84C;">${DEAL_TYPE_LABEL[opts.dealType]}</strong> que você enviou
+      (código <strong style="color:#F5F1E8;">${opts.propCode}</strong>) acabou de ser aberto pelo destinatário.
+    </p>
+    <p style="color:#9BAFC5;font-size:12px;margin-top:16px;">
+      Ainda não é pagamento -- é só o primeiro sinal de que o link foi acessado.
+    </p>
+  `;
+  await send(
+    opts.partnerEmail,
+    `Link aberto: ${opts.propCode}`,
+    template("Seu Link de Análise Foi Aberto", body, { label: "Ver Pipeline", url: DEAL_TYPE_URL[opts.dealType] })
+  );
+}
+
+/** Partner: cliente do seu link iniciou o checkout (fatura Cora gerada, ainda não pago). */
+export async function notifyPartnerAnaliseTentativa(opts: {
+  partnerEmail: string;
+  partnerName: string;
+  clientName: string;
+  title: string;
+  amountCents: number;
+  dealType: "credit" | "ma";
+}): Promise<void> {
+  const body = `
+    <p style="color:#9BAFC5;font-size:14px;margin:0 0 20px;line-height:1.7;">
+      Olá, <strong style="color:#F5F1E8;">${opts.partnerName}</strong>.<br>
+      <strong style="color:#F5F1E8;">${opts.clientName}</strong> começou o pagamento de
+      <strong style="color:#C9A84C;">${opts.title}</strong> pelo seu link.
+    </p>
+    ${highlight("Valor", moeda(opts.amountCents / 100), "#C9A84C")}
+    <p style="color:#9BAFC5;font-size:12px;margin-top:16px;">
+      Ainda aguardando confirmação de pagamento -- você recebe outro aviso quando for pago.
+    </p>
+  `;
+  await send(
+    opts.partnerEmail,
+    `Cliente iniciou pagamento: ${opts.clientName}`,
+    template("Tentativa de Pagamento Registrada", body, { label: "Ver Pipeline", url: DEAL_TYPE_URL[opts.dealType] })
+  );
+}
+
+/** Partner: pagamento do link específico dele (proposta/deal) confirmado --
+ *  espelha a notificação que reconcilePartnerLinkOrderPaid já manda pro
+ *  fluxo de link próprio de venda (partner_service_links), agora estendida
+ *  pro fluxo de link de proposta/deal (?prop=). */
+export async function notifyPartnerAnalisePaga(opts: {
+  partnerEmail: string;
+  partnerName: string;
+  clientName: string;
+  title: string;
+  amountCents: number;
+  dealType: "credit" | "ma";
+}): Promise<void> {
+  const body = `
+    <p style="color:#9BAFC5;font-size:14px;margin:0 0 20px;line-height:1.7;">
+      Olá, <strong style="color:#F5F1E8;">${opts.partnerName}</strong>.<br>
+      <strong style="color:#F5F1E8;">${opts.clientName}</strong> pagou
+      <strong style="color:#C9A84C;">${opts.title}</strong> pelo seu link.
+    </p>
+    ${highlight("Valor Pago", moeda(opts.amountCents / 100), "#C9A84C")}
+    <p style="color:#9BAFC5;font-size:12px;margin-top:16px;">
+      Comissão pendente de lançamento manual em Financeiro.
+    </p>
+  `;
+  await send(
+    opts.partnerEmail,
+    `Venda confirmada: ${opts.clientName}`,
+    template("Pagamento Confirmado", body, { label: "Ver Pipeline", url: DEAL_TYPE_URL[opts.dealType] })
+  );
+}
