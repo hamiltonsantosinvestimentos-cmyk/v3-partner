@@ -284,12 +284,13 @@ export async function reconcileDirectOrderPaid(
   paidAt: string
 ) {
   const intakeToken = randomUUID().replace(/-/g, "") + randomUUID().replace(/-/g, "").slice(0, 8);
+  const dealType: "credit" | "ma" = directOrder.ma_deal_id ? "ma" : "credit";
   const title = directOrder.cnpj_count != null
     ? buildModularTitle({
         cnpjCount: directOrder.cnpj_count,
         cpfCount: directOrder.cpf_count ?? 0,
         hasConsultancy: Boolean(directOrder.has_consultancy),
-      })
+      }, dealType)
     : LEGACY_DIRECT_TITLES[directOrder.service_type ?? ""] ?? "Análise de Crédito Empresarial";
 
   await db.from("partner_service_orders").update({
@@ -335,7 +336,6 @@ export async function reconcileDirectOrderPaid(
     // sabia -- quem mandou o link (?prop=/?ref=) nunca era avisado que o
     // próprio cliente tinha pagado. Espelha o aviso já existente pro fluxo
     // de link próprio de venda (reconcilePartnerLinkOrderPaid acima).
-    const dealType: "credit" | "ma" = directOrder.ma_deal_id ? "ma" : "credit";
     await db.from("notifications").insert({
       user_id: directOrder.ref_partner_id,
       type: "commission",
@@ -358,7 +358,6 @@ export async function reconcileDirectOrderPaid(
   }
 
   if (directOrder.cnpj_count != null || CREDIT_SERVICE_TYPES.includes(directOrder.service_type ?? "")) {
-    const dealType: "credit" | "ma" = directOrder.ma_deal_id ? "ma" : "credit";
     await notificarMesaNovoPedidoPago(db, {
       clientName: directOrder.client_name,
       title,

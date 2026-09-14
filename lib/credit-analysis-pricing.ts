@@ -62,11 +62,18 @@ export function fmtBRL(cents: number): string {
 // Título usado no invoice da Cora, no email de confirmação e na listagem
 // da Mesa (Credit Engine). Ex.: "Análise de Crédito Empresarial (2 CNPJ +
 // 1 CPF) + Consultoria Estratégica V3".
-export function buildModularTitle(sel: ModularSelection): string {
+// dealType (14/09/2026, default 'credit' pra nunca quebrar chamador
+// existente): o mesmo checkout modular passou a atender M&A também
+// (?prop=&deal_type=ma), mas o título sempre dizia "Análise de Crédito
+// Empresarial", inclusive pro cliente pagando um Deal de M&A e em toda
+// notificação/e-mail derivada. Achado ao testar a notificação de Mesa
+// para M&A ao vivo.
+export function buildModularTitle(sel: ModularSelection, dealType: "credit" | "ma" = "credit"): string {
   const parts: string[] = [];
   if (sel.cnpjCount > 0) parts.push(`${sel.cnpjCount} CNPJ`);
   if (sel.cpfCount > 0) parts.push(`${sel.cpfCount} CPF`);
-  const base = `Análise de Crédito Empresarial (${parts.join(" + ")})`;
+  const produto = dealType === "ma" ? "Análise M&A" : "Análise de Crédito Empresarial";
+  const base = `${produto} (${parts.join(" + ")})`;
   return sel.hasConsultancy ? `${base} + Consultoria Estratégica V3` : base;
 }
 
