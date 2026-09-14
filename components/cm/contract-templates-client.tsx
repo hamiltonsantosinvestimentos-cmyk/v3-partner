@@ -833,11 +833,21 @@ export function ContractTemplatesClient() {
       if (p.cpf_cnpj) qualVars[`${p.role_in_document}_cpf_cnpj`] = p.cpf_cnpj;
       qualVars[`${p.role_in_document}_email`] = p.email;
     }
+    // anyResolved conta SUBSTITUIÇÕES DE VERDADE no texto, não só se há dado
+    // preenchido -- bug achado testando ao vivo contra a própria minuta Rio
+    // Pardo: ela não tem nenhuma {{variável}} no corpo (nomes digitados
+    // fixos), então "qualVars" tinha dado mas nada era de fato inserido no
+    // texto. Com Object.keys(qualVars).length a nota mentia "os dados foram
+    // inseridos automaticamente no texto abaixo" quando na verdade só o
+    // quadro acima tinha o dado.
+    let resolvedCount = 0;
     const resolvedBody = selected.body_text_raw.replace(/\{\{([^}]+)\}\}/g, (match, key) => {
       const k = key.trim();
-      return k in qualVars ? esc(qualVars[k]) : match;
+      if (!(k in qualVars)) return match;
+      resolvedCount++;
+      return esc(qualVars[k]);
     });
-    const anyResolved = Object.keys(qualVars).length > 0;
+    const anyResolved = resolvedCount > 0;
 
     const qualTableRows = allParties.map((p) => `<tr>
       <td>${esc(ROLE_LABELS[p.role_in_document] ?? p.role_in_document)}</td>
