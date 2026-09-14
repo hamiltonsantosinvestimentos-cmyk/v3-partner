@@ -1635,35 +1635,42 @@ export async function notifyPagamentoAnaliseConfirmado(opts: {
   );
 }
 
-/** Mesa de Crédito (ADMIN/GESTAO/MESA_OPERACIONAL): novo pedido de Análise de Crédito pago,
- *  aguardando vínculo/análise em /mesa-credito/pedidos. Fecha o gap achado em 31/08/2026:
- *  nenhuma notificação chegava ao setor de origem quando uma venda de Análise era paga. */
-export async function notifyMesaCreditoPedidoPago(opts: {
+/** Mesa (ADMIN/GESTAO/MESA_OPERACIONAL): novo pedido de Análise pago,
+ *  aguardando vínculo/análise em /mesa-credito/pedidos (Crédito) ou ação na
+ *  Mesa M&A. Fecha o gap achado em 31/08/2026: nenhuma notificação chegava
+ *  ao setor de origem quando uma venda de Análise era paga.
+ *  Generalizada em 14/09/2026 (dealType) -- antes rotulava todo pedido pago
+ *  como "Análise de Crédito" mesmo quando vinha de um Deal de M&A, porque o
+ *  gatilho (cnpj_count preenchido) é o mesmo nos dois fluxos desde a
+ *  precificação modular (20/08/2026). Renomeada de notifyMesaCreditoPedidoPago. */
+export async function notifyMesaPedidoPago(opts: {
   mesaEmail: string;
   clientName: string;
   title: string;
   amountCents: number;
   origem: string;
   origemDetalhe: string | null;
+  dealType: "credit" | "ma";
 }): Promise<void> {
+  const label = DEAL_TYPE_LABEL[opts.dealType];
   const body = `
     <p style="color:#9BAFC5;font-size:14px;margin:0 0 20px;">
-      Um novo pedido de Análise de Crédito foi pago e aguarda ação na Mesa.
+      Um novo pedido de ${label} foi pago e aguarda ação na Mesa.
     </p>
     ${row("Cliente", opts.clientName)}
     ${row("Serviço", opts.title)}
     ${row("Origem", opts.origemDetalhe ? `${opts.origem} · ${opts.origemDetalhe}` : opts.origem)}
     ${highlight("Valor Pago", moeda(opts.amountCents / 100), "#C9A84C")}
     <p style="color:#9BAFC5;font-size:12px;margin-top:16px;">
-      Acesse Pedidos de Partners para vincular a uma proposta, rodar a análise e entregar o relatório.
+      ${opts.dealType === "ma" ? "Acesse a Mesa M&A para dar sequência ao deal." : "Acesse Pedidos de Partners para vincular a uma proposta, rodar a análise e entregar o relatório."}
     </p>
   `;
   await send(
     opts.mesaEmail,
-    `Novo pedido de Análise pago — ${opts.clientName}`,
-    template("Novo Pedido de Análise de Crédito", body, {
-      label: "Ver Pedidos de Partners",
-      url: "https://app.v3partners.com.br/mesa-credito/pedidos",
+    `Novo pedido de ${label} pago: ${opts.clientName}`,
+    template(`Novo Pedido de ${label}`, body, {
+      label: opts.dealType === "ma" ? "Ver Mesa M&A" : "Ver Pedidos de Partners",
+      url: opts.dealType === "ma" ? "https://app.v3partners.com.br/mesa-ma" : "https://app.v3partners.com.br/mesa-credito/pedidos",
     })
   );
 }
@@ -1762,5 +1769,60 @@ export async function notifyPartnerAnalisePaga(opts: {
     opts.partnerEmail,
     `Venda confirmada: ${opts.clientName}`,
     template("Pagamento Confirmado", body, { label: "Ver Pipeline", url: DEAL_TYPE_URL[opts.dealType] })
+  );
+}
+
+/** Mesa (ADMIN/GESTAO/MESA_OPERACIONAL): link de Análise de uma proposta/deal
+ *  foi aberto (14/09/2026, pedido de João: fechar a mesma visibilidade que o
+ *  partner já recebe). Só dispara na 1ª abertura por código, mesmo dedupe
+ *  usado para o partner. */
+export async function notifyMesaAnaliseLinkAberto(opts: {
+  mesaEmail: string;
+  propCode: string;
+  dealType: "credit" | "ma";
+  partnerName: string | null;
+}): Promise<void> {
+  const label = DEAL_TYPE_LABEL[opts.dealType];
+  const body = `
+    <p style="color:#9BAFC5;font-size:14px;margin:0 0 20px;line-height:1.7;">
+      O link de <strong style="color:#C9A84C;">${label}</strong> (código
+      <strong style="color:#F5F1E8;">${opts.propCode}</strong>)${opts.partnerName ? `, do partner <strong style="color:#F5F1E8;">${opts.partnerName}</strong>,` : ""}
+      acabou de ser aberto pelo destinatário.
+    </p>
+    <p style="color:#9BAFC5;font-size:12px;margin-top:16px;">
+      Ainda não é pagamento, é só o primeiro sinal de que o link foi acessado.
+    </p>
+  `;
+  await send(
+    opts.mesaEmail,
+    `Link de ${label} aberto: ${opts.propCode}`,
+    template("Link de Análise Aberto", body, { label: "Ver Pipeline", url: DEAL_TYPE_URL[opts.dealType] })
+  );
+}
+
+/** Mesa (ADMIN/GESTAO/MESA_OPERACIONAL): cliente de um link de Análise
+ *  iniciou o checkout, ainda não pago (14/09/2026, mesmo pedido acima). */
+export async function notifyMesaAnaliseTentativa(opts: {
+  mesaEmail: string;
+  clientName: string;
+  title: string;
+  amountCents: number;
+  dealType: "credit" | "ma";
+  partnerName: string | null;
+}): Promise<void> {
+  const label = DEAL_TYPE_LABEL[opts.dealType];
+  const body = `
+    <p style="color:#9BAFC5;font-size:14px;margin:0 0 20px;">
+      Um cliente iniciou o pagamento de um link de ${label}, ainda aguardando confirmação.
+    </p>
+    ${row("Cliente", opts.clientName)}
+    ${row("Serviço", opts.title)}
+    ${opts.partnerName ? row("Partner", opts.partnerName) : ""}
+    ${highlight("Valor", moeda(opts.amountCents / 100), "#C9A84C")}
+  `;
+  await send(
+    opts.mesaEmail,
+    `Cliente iniciou pagamento: ${opts.clientName}`,
+    template("Tentativa de Pagamento Registrada", body, { label: "Ver Pipeline", url: DEAL_TYPE_URL[opts.dealType] })
   );
 }

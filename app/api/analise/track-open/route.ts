@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { notifyPartnerLinkAberto } from "@/lib/email";
+import { notificarMesaLinkAberto } from "@/lib/cora-order-reconcile";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -60,15 +61,19 @@ export async function POST(req: NextRequest) {
       utm_medium: body.utm_medium ?? null,
     });
 
-    if (isFirstOpen && partnerId) {
-      const { data: partner } = await db.from("profiles").select("full_name, email").eq("id", partnerId).single();
+    if (isFirstOpen) {
+      const partner = partnerId
+        ? (await db.from("profiles").select("full_name, email").eq("id", partnerId).single()).data
+        : null;
+
+      // Partner dono do link (quando resolvido)
       if (partner?.email) {
         await db.from("notifications").insert({
           user_id: partnerId,
           type: "commission",
           title: "Seu link de Análise foi aberto",
           message: `O link de Análise de Crédito/M&A que você enviou (código ${propCode}) acabou de ser aberto pelo destinatário.`,
-          action_url: dealType === "ma" ? "/mesa-ma" : "/mesa-credito/nivel-1",
+          action_url: dealType === "ma" ? `/mesa-ma?deal=${maDealId}` : "/mesa-credito/nivel-1",
           read: false,
         }).then(null, () => {});
 
@@ -78,6 +83,17 @@ export async function POST(req: NextRequest) {
           propCode,
           dealType,
         }).catch((e) => console.error("Email error (link aberto):", e));
+      }
+
+      // Mesa (14/09/2026): mesma visibilidade proativa que o partner recebe,
+      // pedido explícito de João -- antes só o partner era avisado, a Mesa
+      // continuava só no pull (entrando no modal certo). Dispara sempre que
+      // o código bateu com uma proposta/deal real, independente de ter
+      // partner resolvido ou não.
+      if (creditDeskProposalId || maDealId) {
+        await notificarMesaLinkAberto(db, { propCode, dealType, maDealId, partnerName: partner?.full_name ?? null }).catch((e) =>
+          console.error("Notificação Mesa (link aberto):", e)
+        );
       }
     }
 
