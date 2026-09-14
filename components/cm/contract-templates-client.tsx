@@ -54,6 +54,10 @@ interface QualParty {
   role_in_document: string;
   status: string;
   qualification_token: string;
+  // CPF/CNPJ (14/09/2026, pedido do Dr. Athaydes): a API já devolvia esse
+  // campo (app/api/cm/qualifications/route.ts), só faltava no tipo e na
+  // tela -- por isso só aparecia clicando em "Ver ficha".
+  cpf_cnpj?: string | null;
 }
 
 interface QualBatch {
@@ -786,6 +790,25 @@ export function ContractTemplatesClient() {
   // -- e a barra de ferramentas (que é conteúdo da página, não do
   // navegador) continua visível mesmo em tela cheia, com um botão de
   // Fechar sempre presente como saída garantida.
+  // Quadro de Qualificação + prévia resolvida (14/09/2026, pedido do Dr.
+  // Athaydes via João): ler a minuta sem a qualificação preenchida "parece
+  // incompleto". Duas coisas, decididas com João (AskUserQuestion):
+  //
+  // 1) Sempre que houver lote(s) de Qualificação Antecipada não consumidos
+  //    pra esta minuta, um quadro com papel/nome/CPF-CNPJ/status entra na
+  //    janela de leitura -- funciona pra QUALQUER minuta, inclusive as
+  //    importadas em texto livre sem nenhuma {{variável}} (caso real
+  //    achado: minuta "Rio Pardo", variables_map vazio, nomes já digitados
+  //    fixos no corpo -- não dá pra "resolver variável" que não existe).
+  // 2) Convenção de variável por papel JÁ EXISTIA e já é usada de verdade
+  //    em app/api/contracts/generate/route.ts na hora de gerar o contrato:
+  //    {{<role_in_document>_nome}} / _cpf_cnpj / _email. Pra minuta que usa
+  //    essa convenção, a prévia aqui resolve só essas tags (nunca as
+  //    demais, tipo {{valor_operacao}}, que dependem de dado que só existe
+  //    na hora de gerar o contrato de verdade, não da minuta em si) --
+  //    substituição pontual, não o resolveContractVariables() genérico
+  //    (que trocaria toda tag desconhecida por "[chave]", dando a falsa
+  //    impressão de prévia completa quando só uma parte foi resolvida).
   const openFullscreenReader = () => {
     if (!selected) return;
     const win = window.open(
@@ -799,6 +822,30 @@ export function ContractTemplatesClient() {
     }
     const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     const statusLabel = (APPROVAL_STATUS_MAP[selected.approval_status] ?? APPROVAL_STATUS_MAP.rascunho).label;
+
+    const relevantBatches = qualBatches.filter((b) => !b.consumido_por_contract_id);
+    const allParties = relevantBatches.flatMap((b) => b.cm_party_qualifications);
+
+    const qualVars: Record<string, string> = {};
+    for (const p of allParties) {
+      if (p.status !== "preenchido") continue;
+      qualVars[`${p.role_in_document}_nome`] = p.full_name;
+      if (p.cpf_cnpj) qualVars[`${p.role_in_document}_cpf_cnpj`] = p.cpf_cnpj;
+      qualVars[`${p.role_in_document}_email`] = p.email;
+    }
+    const resolvedBody = selected.body_text_raw.replace(/\{\{([^}]+)\}\}/g, (match, key) => {
+      const k = key.trim();
+      return k in qualVars ? esc(qualVars[k]) : match;
+    });
+    const anyResolved = Object.keys(qualVars).length > 0;
+
+    const qualTableRows = allParties.map((p) => `<tr>
+      <td>${esc(ROLE_LABELS[p.role_in_document] ?? p.role_in_document)}</td>
+      <td>${esc(p.full_name)}</td>
+      <td>${p.cpf_cnpj ? esc(p.cpf_cnpj) : "<span class=\"pend\">Pendente</span>"}</td>
+      <td>${p.status === "preenchido" ? "<span class=\"ok\">Preenchido</span>" : "<span class=\"pend\">Pendente</span>"}</td>
+    </tr>`).join("");
+
     win.document.open();
     win.document.write(`<!DOCTYPE html>
 <html lang="pt-BR">
@@ -824,6 +871,14 @@ export function ContractTemplatesClient() {
   p{margin:0 0 18px}
   strong{color:#F5F1E8}
   .hint{font-size:10px;color:#9BAFC5}
+  .qualbox{max-width:900px;margin:24px auto 0;padding:0 32px}
+  .qualbox h2{margin-top:0}
+  .qualbox table{width:100%;border-collapse:collapse;font-size:14px;background:#12112A;border:1px solid rgba(155,175,197,.15);border-radius:8px;overflow:hidden}
+  .qualbox th{text-align:left;background:#162744;color:#C9A84C;font-size:10px;text-transform:uppercase;letter-spacing:.04em;padding:10px 14px}
+  .qualbox td{padding:10px 14px;border-top:1px solid rgba(155,175,197,.1)}
+  .qualbox .ok{color:#34d399;font-weight:700}
+  .qualbox .pend{color:#fbbf24;font-weight:700}
+  .qualbox .note{font-size:12px;color:#9BAFC5;margin-top:10px}
 </style>
 </head>
 <body>
@@ -837,9 +892,17 @@ export function ContractTemplatesClient() {
     <button class="close" onclick="window.close()">Fechar Janela</button>
   </div>
 </div>
+${allParties.length > 0 ? `<div class="qualbox">
+  <h2>Qualificação das Partes</h2>
+  <table>
+    <thead><tr><th>Papel</th><th>Nome</th><th>CPF/CNPJ</th><th>Status</th></tr></thead>
+    <tbody>${qualTableRows}</tbody>
+  </table>
+  <p class="note">${anyResolved ? "Os dados já preenchidos foram inseridos automaticamente no texto abaixo, onde a minuta usa a variável do papel correspondente." : "Esta minuta não usa variáveis por papel ({{" + "papel_nome" + "}}) — os dados acima ainda não aparecem dentro do texto, mas já estão confirmados aqui."}</p>
+</div>` : ""}
 <div class="wrap">
   <h1>${esc(selected.template_name)}</h1>
-  ${selected.body_text_raw}
+  ${resolvedBody}
 </div>
 <script>
   var fsBtn = document.getElementById("fs-toggle");
@@ -1238,7 +1301,7 @@ export function ContractTemplatesClient() {
                             ) : (
                             <div key={p.id} className="flex items-center justify-between gap-2 bg-[#162744] rounded px-2.5 py-1.5">
                               <div className="min-w-0">
-                                <p className="text-xs text-[#F5F1E8] truncate">{p.full_name} <span className="text-[9px] text-[#9BAFC5]">· {ROLE_LABELS[p.role_in_document] ?? p.role_in_document}</span></p>
+                                <p className="text-xs text-[#F5F1E8] truncate">{p.full_name} <span className="text-[9px] text-[#9BAFC5]">· {ROLE_LABELS[p.role_in_document] ?? p.role_in_document}{p.cpf_cnpj ? ` · CPF/CNPJ ${p.cpf_cnpj}` : ""}</span></p>
                               </div>
                               {p.status === "preenchido" ? (
                                 <div className="flex items-center gap-1.5 flex-shrink-0">
