@@ -15,16 +15,46 @@
 import { randomUUID } from "crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { buildModularTitle, LEGACY_DIRECT_TITLES } from "@/lib/credit-analysis-pricing";
-import { notifyPagamentoAnaliseConfirmado, notifyMesaCreditoPedidoPago, notifyPartnerAnalisePaga } from "@/lib/email";
+import {
+  notifyPagamentoAnaliseConfirmado,
+  notifyMesaPedidoPago,
+  notifyPartnerAnalisePaga,
+  notifyMesaAnaliseLinkAberto,
+  notifyMesaAnaliseTentativa,
+} from "@/lib/email";
 
 const CREDIT_SERVICE_TYPES = ["credit_analysis", "credit_analysis_consultoria"];
 
+// action_url pro deal de M&A: quando presente, casa com o padrão que
+// GET /api/ma/timeline já lê (LIKE "/mesa-ma?deal=<id>%") -- as notificações
+// de link de Análise passam a aparecer na aba Timeline nativa do deal, não
+// só no sino. Crédito não tem equivalente hoje (Linha do Tempo da Operação
+// em proposta-detail-modal.tsx só lê metadata.stage_history, não a tabela
+// notifications), então cai no pipeline genérico mesmo.
+function mesaActionUrl(dealType: "credit" | "ma", maDealId?: string | null): string {
+  if (dealType === "ma") return maDealId ? `/mesa-ma?deal=${maDealId}` : "/mesa-ma";
+  return "/mesa-credito/pedidos";
+}
+
 /** Avisa ADMIN/GESTAO/MESA_OPERACIONAL (in-app + e-mail individual, nunca
- *  endereço de setor inventado) que um pedido de Análise de Crédito foi pago. */
-export async function notificarMesaCreditoNovoPedido(
+ *  endereço de setor inventado) que um pedido de Análise foi pago.
+ *  Generalizada em 14/09/2026 (dealType/maDealId) -- antes rotulava todo
+ *  pedido pago como "Análise de Crédito" mesmo quando vinha de um Deal de
+ *  M&A, porque o gatilho (cnpj_count preenchido) é o mesmo nos dois fluxos
+ *  desde a precificação modular (20/08/2026). Renomeada de
+ *  notificarMesaCreditoNovoPedido. */
+export async function notificarMesaNovoPedidoPago(
   db: SupabaseClient,
-  opts: { clientName: string; title: string; amountCents: number; origem: string; origemDetalhe: string | null }
+  opts: {
+    clientName: string; title: string; amountCents: number;
+    origem: string; origemDetalhe: string | null;
+    dealType?: "credit" | "ma"; maDealId?: string | null;
+  }
 ) {
+  const dealType = opts.dealType ?? "credit";
+  const label = dealType === "ma" ? "Análise M&A" : "Análise de Crédito";
+  const actionUrl = mesaActionUrl(dealType, opts.maDealId);
+
   const { data: mesa } = await db
     .from("profiles")
     .select("id, email")
@@ -35,9 +65,9 @@ export async function notificarMesaCreditoNovoPedido(
     mesa.map((m: { id: string }) => ({
       user_id: m.id,
       type: "commission",
-      title: "Novo pedido de Análise de Crédito pago",
-      message: `${opts.clientName} pagou "${opts.title}" (${opts.origemDetalhe ? `${opts.origem} · ${opts.origemDetalhe}` : opts.origem}). Aguarda vínculo/análise em Pedidos de Partners.`,
-      action_url: "/mesa-credito/pedidos",
+      title: `Novo pedido de ${label} pago`,
+      message: `${opts.clientName} pagou "${opts.title}" (${opts.origemDetalhe ? `${opts.origem} · ${opts.origemDetalhe}` : opts.origem}). Aguarda vínculo/análise.`,
+      action_url: actionUrl,
       read: false,
     }))
   ).then(null, () => {});
@@ -46,16 +76,104 @@ export async function notificarMesaCreditoNovoPedido(
     mesa
       .filter((m: { email?: string | null }) => m.email)
       .map((m: { email: string }) =>
-        notifyMesaCreditoPedidoPago({
+        notifyMesaPedidoPago({
           mesaEmail: m.email,
           clientName: opts.clientName,
           title: opts.title,
           amountCents: opts.amountCents,
           origem: opts.origem,
           origemDetalhe: opts.origemDetalhe,
+          dealType,
         })
       )
   );
+}
+
+/** Avisa a Mesa (in-app + e-mail) que o link de Análise de uma proposta/deal
+ *  foi aberto pelo destinatário. Chamada só na 1ª abertura por código (dedupe
+ *  feito por quem chama, ver app/api/analise/track-open). */
+export async function notificarMesaLinkAberto(
+  db: SupabaseClient,
+  opts: { propCode: string; dealType: "credit" | "ma"; maDealId?: string | null; partnerName: string | null }
+) {
+  const { data: mesa } = await db
+    .from("profiles")
+    .select("id, email")
+    .in("role", ["ADMIN", "GESTAO", "MESA_OPERACIONAL"]);
+  if (!mesa?.length) return;
+
+  const actionUrl = mesaActionUrl(opts.dealType, opts.maDealId);
+  const label = opts.dealType === "ma" ? "Análise M&A" : "Análise de Crédito";
+
+  await db.from("notifications").insert(
+    mesa.map((m: { id: string }) => ({
+      user_id: m.id,
+      type: "commission",
+      title: `Link de ${label} aberto`,
+      message: `Código ${opts.propCode}${opts.partnerName ? ` (partner ${opts.partnerName})` : ""} foi aberto pelo destinatário.`,
+      action_url: actionUrl,
+      read: false,
+    }))
+  ).then(null, () => {});
+
+  await Promise.allSettled(
+    mesa.filter((m: { email?: string | null }) => m.email).map((m: { email: string }) =>
+      notifyMesaAnaliseLinkAberto({
+        mesaEmail: m.email,
+        propCode: opts.propCode,
+        dealType: opts.dealType,
+        partnerName: opts.partnerName,
+      })
+    )
+  );
+}
+
+/** Avisa a Mesa (in-app + e-mail) que o cliente de um link de Análise
+ *  iniciou o checkout (ordem PENDING criada), ainda sem confirmação de
+ *  pagamento. */
+export async function notificarMesaNovoPedidoTentativa(
+  db: SupabaseClient,
+  opts: {
+    clientName: string; title: string; amountCents: number;
+    dealType: "credit" | "ma"; maDealId?: string | null; partnerName: string | null;
+  }
+) {
+  const { data: mesa } = await db
+    .from("profiles")
+    .select("id, email")
+    .in("role", ["ADMIN", "GESTAO", "MESA_OPERACIONAL"]);
+  if (!mesa?.length) return;
+
+  const actionUrl = mesaActionUrl(opts.dealType, opts.maDealId);
+  const label = opts.dealType === "ma" ? "Análise M&A" : "Análise de Crédito";
+
+  await db.from("notifications").insert(
+    mesa.map((m: { id: string }) => ({
+      user_id: m.id,
+      type: "commission",
+      title: `Cliente iniciou pagamento (${label})`,
+      message: `${opts.clientName} começou o pagamento de "${opts.title}" (${fmtBRLCents(opts.amountCents)})${opts.partnerName ? ` · Partner: ${opts.partnerName}` : ""}.`,
+      action_url: actionUrl,
+      read: false,
+    }))
+  ).then(null, () => {});
+
+  await Promise.allSettled(
+    mesa.filter((m: { email?: string | null }) => m.email).map((m: { email: string }) =>
+      notifyMesaAnaliseTentativa({
+        mesaEmail: m.email,
+        clientName: opts.clientName,
+        title: opts.title,
+        amountCents: opts.amountCents,
+        dealType: opts.dealType,
+        partnerName: opts.partnerName,
+      })
+    )
+  );
+}
+
+function fmtBRLCents(cents: number): string {
+  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(cents / 100);
 }
 
 export interface PartnerLinkOrderRow {
@@ -133,12 +251,13 @@ export async function reconcilePartnerLinkOrderPaid(
   }).then(null, () => {});
 
   if (link?.service_type === "credit_analysis") {
-    await notificarMesaCreditoNovoPedido(db, {
+    await notificarMesaNovoPedidoPago(db, {
       clientName: serviceOrder.client_name,
       title: link?.title ?? "Análise de Crédito Empresarial",
       amountCents: link?.price_cents ?? 0,
       origem: "Via partner",
       origemDetalhe: serviceOrder.partner?.full_name ?? null,
+      dealType: "credit",
     }).catch((e) => console.error("Notificação Mesa de Crédito (via partner):", e));
   }
 }
@@ -222,7 +341,7 @@ export async function reconcileDirectOrderPaid(
       type: "commission",
       title: "Venda confirmada!",
       message: `${directOrder.client_name} pagou "${title}" pelo seu link. Comissão pendente de lançamento manual.`,
-      action_url: dealType === "ma" ? "/mesa-ma" : "/mesa-credito/nivel-1",
+      action_url: dealType === "ma" ? `/mesa-ma?deal=${directOrder.ma_deal_id}` : "/mesa-credito/nivel-1",
       read: false,
     }).then(null, () => {});
 
@@ -239,12 +358,15 @@ export async function reconcileDirectOrderPaid(
   }
 
   if (directOrder.cnpj_count != null || CREDIT_SERVICE_TYPES.includes(directOrder.service_type ?? "")) {
-    await notificarMesaCreditoNovoPedido(db, {
+    const dealType: "credit" | "ma" = directOrder.ma_deal_id ? "ma" : "credit";
+    await notificarMesaNovoPedidoPago(db, {
       clientName: directOrder.client_name,
       title,
       amountCents: directOrder.amount_cents ?? 0,
       origem: "Venda direta",
       origemDetalhe: directOrder.ref_partner?.full_name ? `Ref: ${directOrder.ref_partner.full_name}` : null,
-    }).catch((e) => console.error("Notificação Mesa de Crédito (venda direta):", e));
+      dealType,
+      maDealId: directOrder.ma_deal_id,
+    }).catch((e) => console.error("Notificação Mesa (venda direta):", e));
   }
 }

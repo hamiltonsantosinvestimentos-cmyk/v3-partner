@@ -4,6 +4,7 @@ import { coraFetch } from "@/lib/cora";
 import { randomUUID } from "crypto";
 import { clampSelection, calcTotalCents, buildModularTitle, getMinCounts, fmtBRL, type ProfileType, type CompanyStructure } from "@/lib/credit-analysis-pricing";
 import { notifyPartnerAnaliseTentativa } from "@/lib/email";
+import { notificarMesaNovoPedidoTentativa } from "@/lib/cora-order-reconcile";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -178,20 +179,24 @@ export async function POST(req: NextRequest) {
   if (orderErr) return NextResponse.json({ error: orderErr.message }, { status: 500 });
 
   // Tentativa de pagamento (2026-09-14): avisa o partner dono do link
-  // (?prop=/?ref=) assim que o checkout é submetido e a fatura Cora nasce --
-  // hoje só dava pra saber entrando no modal certo na Mesa. Só dispara
-  // quando dá pra resolver um partner de verdade; nunca bloqueia a resposta
-  // do checkout se a notificação falhar.
+  // (?prop=/?ref=) e a Mesa assim que o checkout é submetido e a fatura Cora
+  // nasce -- hoje só dava pra saber entrando no modal certo na Mesa. Nunca
+  // bloqueia a resposta do checkout se a notificação falhar. dealType vem
+  // de maDealId resolvido de verdade (não do body cru) -- mais confiável
+  // pra decidir rótulo/rota do que confiar no que o client mandou.
+  const dealType: "credit" | "ma" = maDealId ? "ma" : "credit";
+  let partnerNameForMesa: string | null = null;
+
   if (refPartnerId) {
     const { data: partner } = await db.from("profiles").select("full_name, email").eq("id", refPartnerId).single();
+    partnerNameForMesa = partner?.full_name ?? null;
     if (partner?.email) {
-      const dealType: "credit" | "ma" = body.deal_type === "ma" ? "ma" : "credit";
       await db.from("notifications").insert({
         user_id: refPartnerId,
         type: "commission",
         title: "Cliente iniciou pagamento pelo seu link",
         message: `${body.client_name.trim()} começou o pagamento de "${title}" (${fmtBRL(priceCents)}).`,
-        action_url: dealType === "ma" ? "/mesa-ma" : "/mesa-credito/nivel-1",
+        action_url: dealType === "ma" ? `/mesa-ma?deal=${maDealId}` : "/mesa-credito/nivel-1",
         read: false,
       }).then(null, () => {});
 
@@ -204,6 +209,20 @@ export async function POST(req: NextRequest) {
         dealType,
       }).catch((e) => console.error("Email error (tentativa análise):", e));
     }
+  }
+
+  // Mesa (14/09/2026): mesma visibilidade proativa que o partner recebe --
+  // dispara sempre que o pedido está ligado a uma proposta/deal real
+  // (?prop=), com ou sem partner resolvido.
+  if (creditDeskProposalId || maDealId) {
+    notificarMesaNovoPedidoTentativa(db, {
+      clientName: body.client_name.trim(),
+      title,
+      amountCents: priceCents,
+      dealType,
+      maDealId,
+      partnerName: partnerNameForMesa,
+    }).catch((e) => console.error("Notificação Mesa (tentativa análise):", e));
   }
 
   return NextResponse.json({
