@@ -58,6 +58,18 @@ interface QualParty {
   // campo (app/api/cm/qualifications/route.ts), só faltava no tipo e na
   // tela -- por isso só aparecia clicando em "Ver ficha".
   cpf_cnpj?: string | null;
+  // Checagem automática de CNPJ + QSA (14/09/2026, pedido de João: "CNPJ
+  // ativo, sócio informado é o diretor ou foi trocado" antes de aprovar).
+  // Roda sozinha no momento em que a parte PJ termina a qualificação (ver
+  // app/api/cm/qualificacao/[token]/route.ts) -- nunca disparada daqui.
+  party_nature?: string | null;
+  company_name?: string | null;
+  cnpj_situacao_cadastral?: string | null;
+  cnpj_razao_social?: string | null;
+  cnpj_socios?: { nome: string; qualificacao: string }[] | null;
+  cnpj_socio_informado_confere?: boolean | null;
+  cnpj_checado_em?: string | null;
+  cnpj_check_error?: string | null;
 }
 
 interface QualBatch {
@@ -849,12 +861,34 @@ export function ContractTemplatesClient() {
     });
     const anyResolved = resolvedCount > 0;
 
-    const qualTableRows = allParties.map((p) => `<tr>
+    // Checagem de CNPJ/QSA (14/09/2026): coluna extra só quando pelo menos
+    // uma parte é PJ, senão fica vazia à toa pra qualquer minuta que só
+    // tenha PF. Documento em si (RG/contrato social) segue acessível só
+    // pelo "Ver ficha" na aba principal -- essa janela não gera link direto
+    // pro arquivo de propósito: um link cru aqui não registraria a
+    // visualização na trilha de auditoria de KYC (cm_party_qualification_
+    // document_views), diferente do fluxo normal, que sempre loga quem viu.
+    const hasAnyPJ = allParties.some((p) => p.party_nature === "PJ");
+    const qualTableRows = allParties.map((p) => {
+      let cnpjCell = "";
+      if (p.party_nature === "PJ") {
+        if (p.cnpj_situacao_cadastral) {
+          const ativa = p.cnpj_situacao_cadastral.toUpperCase().includes("ATIVA");
+          cnpjCell = `<span class="${ativa ? "ok" : "err"}">CNPJ ${esc(p.cnpj_situacao_cadastral)}</span><br/><span class="${p.cnpj_socio_informado_confere ? "ok" : "pend"}">${p.cnpj_socio_informado_confere ? "Sócio confere no QSA" : "Não encontrado no QSA"}</span>`;
+        } else if (p.cnpj_check_error) {
+          cnpjCell = `<span class="pend">Não verificado: ${esc(p.cnpj_check_error)}</span>`;
+        } else {
+          cnpjCell = `<span class="pend">Verificação pendente</span>`;
+        }
+      }
+      return `<tr>
       <td>${esc(ROLE_LABELS[p.role_in_document] ?? p.role_in_document)}</td>
       <td>${esc(p.full_name)}</td>
       <td>${p.cpf_cnpj ? esc(p.cpf_cnpj) : "<span class=\"pend\">Pendente</span>"}</td>
       <td>${p.status === "preenchido" ? "<span class=\"ok\">Preenchido</span>" : "<span class=\"pend\">Pendente</span>"}</td>
-    </tr>`).join("");
+      ${hasAnyPJ ? `<td>${cnpjCell}</td>` : ""}
+    </tr>`;
+    }).join("");
 
     win.document.open();
     win.document.write(`<!DOCTYPE html>
@@ -888,6 +922,7 @@ export function ContractTemplatesClient() {
   .qualbox td{padding:10px 14px;border-top:1px solid rgba(155,175,197,.1)}
   .qualbox .ok{color:#34d399;font-weight:700}
   .qualbox .pend{color:#fbbf24;font-weight:700}
+  .qualbox .err{color:#f87171;font-weight:700}
   .qualbox .note{font-size:12px;color:#9BAFC5;margin-top:10px}
 </style>
 </head>
@@ -905,7 +940,7 @@ export function ContractTemplatesClient() {
 ${allParties.length > 0 ? `<div class="qualbox">
   <h2>Qualificação das Partes</h2>
   <table>
-    <thead><tr><th>Papel</th><th>Nome</th><th>CPF/CNPJ</th><th>Status</th></tr></thead>
+    <thead><tr><th>Papel</th><th>Nome</th><th>CPF/CNPJ</th><th>Status</th>${hasAnyPJ ? "<th>Checagem Receita Federal (CNPJ/QSA)</th>" : ""}</tr></thead>
     <tbody>${qualTableRows}</tbody>
   </table>
   <p class="note">${anyResolved ? "Os dados já preenchidos foram inseridos automaticamente no texto abaixo, onde a minuta usa a variável do papel correspondente." : "Esta minuta não usa variáveis por papel ({{" + "papel_nome" + "}}) — os dados acima ainda não aparecem dentro do texto, mas já estão confirmados aqui."}</p>
@@ -1312,6 +1347,25 @@ ${allParties.length > 0 ? `<div class="qualbox">
                             <div key={p.id} className="flex items-center justify-between gap-2 bg-[#162744] rounded px-2.5 py-1.5">
                               <div className="min-w-0">
                                 <p className="text-xs text-[#F5F1E8] truncate">{p.full_name} <span className="text-[9px] text-[#9BAFC5]">· {ROLE_LABELS[p.role_in_document] ?? p.role_in_document}{p.cpf_cnpj ? ` · CPF/CNPJ ${p.cpf_cnpj}` : ""}</span></p>
+                                {p.party_nature === "PJ" && (
+                                  <p className="text-[9px] mt-0.5">
+                                    {p.cnpj_situacao_cadastral ? (
+                                      <>
+                                        <span className={cn("font-bold", p.cnpj_situacao_cadastral.toUpperCase().includes("ATIVA") ? "text-emerald-400" : "text-red-400")}>
+                                          CNPJ {p.cnpj_situacao_cadastral}
+                                        </span>
+                                        {" · "}
+                                        <span className={cn("font-bold", p.cnpj_socio_informado_confere ? "text-emerald-400" : "text-amber-400")}>
+                                          {p.cnpj_socio_informado_confere ? "Sócio confere no QSA" : "Não encontrado no QSA, confirme"}
+                                        </span>
+                                      </>
+                                    ) : p.cnpj_check_error ? (
+                                      <span className="text-amber-400">CNPJ não verificado: {p.cnpj_check_error}</span>
+                                    ) : p.status === "preenchido" ? (
+                                      <span className="text-[#9BAFC5]">Verificação de CNPJ pendente</span>
+                                    ) : null}
+                                  </p>
+                                )}
                               </div>
                               {p.status === "preenchido" ? (
                                 <div className="flex items-center gap-1.5 flex-shrink-0">

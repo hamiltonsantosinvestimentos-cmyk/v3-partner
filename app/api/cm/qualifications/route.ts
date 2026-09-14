@@ -101,7 +101,7 @@ export async function GET(req: NextRequest) {
   // explicar o motivo real em vez de repetir o erro de validação cru.
   let query = svc()
     .from("cm_qualification_batches")
-    .select("*, cm_party_qualifications(id, full_name, email, phone, role_in_document, status, filled_at, qualification_token, cpf_cnpj), consumido_contrato:consumido_por_contract_id(contract_code)")
+    .select("*, cm_party_qualifications(id, full_name, email, phone, role_in_document, status, filled_at, qualification_token, cpf_cnpj, party_nature, company_name, cnpj_situacao_cadastral, cnpj_razao_social, cnpj_socios, cnpj_socio_informado_confere, cnpj_checado_em, cnpj_check_error), consumido_contrato:consumido_por_contract_id(contract_code)")
     // Exclusão individual (11/09/2026): filtra envolvido soft-deletado do
     // array embutido -- sintaxe de filtro em recurso aninhado do PostgREST,
     // nunca exclui o lote em si, só quem foi excluído dele.

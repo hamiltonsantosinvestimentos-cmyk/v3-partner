@@ -4,6 +4,7 @@ import { isValidCPF, isValidCNPJ } from "@/lib/validators/cpf-cnpj";
 import { REQUIRED_REPRESENTATIVE_TYPES, type PartyNature, type RepresentativeType, type CompanyLegalNature, type LegalQualificationRepresentation } from "@/lib/legal-qualification";
 import { resolveClient } from "@/lib/v3-clients";
 import { findValidKycDocument, KYC_DOCUMENT_KIND_LABELS, type KycDocumentKind } from "@/lib/kyc-documents";
+import { lookupCnpj, nameMatchesSocios } from "@/lib/cnpj-lookup";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -256,7 +257,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
 
   const { data: qualification } = await svc()
     .from("cm_party_qualifications")
-    .select("id, batch_id, status, role_in_document")
+    .select("id, batch_id, status, role_in_document, full_name")
     .eq("qualification_token", token)
     .single();
 
@@ -394,6 +395,31 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
     .eq("id", qualification.id);
 
   if (updateError) return NextResponse.json({ error: updateError.message }, { status: 500 });
+
+  // Checagem automática de CNPJ + quadro societário (14/09/2026, pedido de
+  // João): "verificar se o CNPJ está ativo, se o sócio informado é o
+  // diretor ou se foi trocado" antes de aprovar/enviar pra assinatura.
+  // Best-effort -- nunca desfaz o preenchimento já salvo acima se a
+  // consulta à Receita Federal falhar ou demorar; o revisor sempre vê
+  // "não verificado" nesse caso, nunca um resultado inventado.
+  if (nature === "PJ" && company_cnpj) {
+    const lookup = await lookupCnpj(company_cnpj);
+    if (lookup.ok) {
+      await db.from("cm_party_qualifications").update({
+        cnpj_situacao_cadastral: lookup.data.situacao_cadastral,
+        cnpj_razao_social: lookup.data.razao_social,
+        cnpj_socios: lookup.data.socios,
+        cnpj_socio_informado_confere: qualification.full_name ? nameMatchesSocios(qualification.full_name, lookup.data.socios) : null,
+        cnpj_checado_em: new Date().toISOString(),
+        cnpj_check_error: null,
+      }).eq("id", qualification.id);
+    } else {
+      await db.from("cm_party_qualifications").update({
+        cnpj_check_error: lookup.error,
+        cnpj_checado_em: new Date().toISOString(),
+      }).eq("id", qualification.id);
+    }
+  }
 
   // Exclusão individual (11/09/2026): envolvido soft-deletado nunca conta
   // pra "todos preencheram" -- senão um lote com 1 excluído ficaria
