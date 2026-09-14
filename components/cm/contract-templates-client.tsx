@@ -1564,6 +1564,30 @@ ${allParties.length > 0 ? `<div class="qualbox">
                 </div>
               )}
 
+              {/* Ajuste automático ao reprovar (14/09/2026): minuta de
+                  qualquer origem fora das duas de IA (a maioria das reais,
+                  ver lib/contract-revision-agent.ts) não tinha os blocos
+                  acima, que são exclusivos de agente_ia/agente_ia_estruturador
+                  -- sem isso o revisor reprovava e não via nenhum sinal de
+                  que a IA estava corrigindo em segundo plano. */}
+              {selected?.origem && !["agente_ia", "agente_ia_estruturador"].includes(selected.origem) && (
+                <>
+                  {selected.analysis_status === "processando" && (
+                    <div className="mb-4 p-3 rounded-lg bg-[#09081A] border border-blue-500/20 flex items-center gap-2 text-xs text-[#9BAFC5]">
+                      <Loader2 size={14} className="animate-spin text-blue-400" />
+                      Ajuste automático em andamento: a IA está corrigindo a minuta com base no comentário da reprovação...
+                    </div>
+                  )}
+                  {selected.analysis_status === "erro" && (
+                    <div className="mb-4 p-3 rounded-lg bg-[#09081A] border border-red-500/20">
+                      <div className="text-xs text-red-400">
+                        Ajuste automático falhou: {selected.analysis_error ?? "erro não especificado"}. Use "Corrigir e Reenviar para Revisão" manualmente.
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+
               {/* Banner de reprovação (11/09/2026): motivo do revisor fica
                   visível junto do editor, não só escondido no histórico lá
                   embaixo. Pega o comentário do voto "reprovado" mais recente

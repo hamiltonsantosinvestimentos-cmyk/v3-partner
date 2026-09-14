@@ -4,6 +4,7 @@ import { createClient as sc } from "@supabase/supabase-js";
 
 import { logAgentAuditEvent } from "@/lib/socios-notify";
 import { notifyUser, JURIDICO_ID, SOCIOS_IDS } from "@/lib/contract-notify";
+import { triggerContractRevisionAgent } from "@/lib/contract-revision-agent";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -58,7 +59,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const { data: template } = await db
     .from("contract_templates")
-    .select("id, template_name, approval_status, review_round, body_text_raw, version, valor_operacao_estimado, origem, created_by")
+    .select("id, template_name, approval_status, review_round, body_text_raw, version, valor_operacao_estimado, origem, created_by, vertical, contract_series")
     .eq("id", id)
     .single();
 
@@ -110,6 +111,34 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         type: "minuta_reprovada",
         actionUrl: reviewLink,
       });
+    }
+
+    // Ajuste automático (14/09/2026, pedido de João/Dr. Athaydes): a
+    // recomendação do revisor vira instrução pra IA na hora, em vez de
+    // esperar alguém copiar o comentário e clicar em "Pedir Ajuste ao
+    // Agente" manualmente -- achado real: a minuta Rio Pardo levou 2
+    // rodadas de reprovação pelo MESMO motivo porque ninguém aplicou a
+    // correção que o Dr. Luis já tinha pedido na primeira.
+    //
+    // Restrito a origem != agente_ia/agente_ia_estruturador de propósito:
+    // essas duas usam draft-callback/analysis-callback, que nunca avançam
+    // review_round (correto pra elas, que sempre nascem em rodada nova) --
+    // disparar o ajuste automático nelas depois de um voto de reprovação
+    // reintroduziria o bug já corrigido uma vez de voto antigo contando pro
+    // texto novo (ver revision-callback/route.ts). Fica pra quando/se essas
+    // duas origens precisarem do mesmo tratamento.
+    //
+    // Best-effort: falha aqui nunca desfaz o registro do voto de reprovação
+    // acima, só fica sem o ajuste automático (o fluxo manual de "Corrigir e
+    // Reenviar" continua funcionando como sempre).
+    if (template.origem !== "agente_ia" && template.origem !== "agente_ia_estruturador") {
+      const revisionResult = await triggerContractRevisionAgent(db, template, comment.trim(), {
+        actorId: reviewer.userId,
+        actorName: reviewer.name,
+      });
+      if (!revisionResult.ok) {
+        console.error(`[review] ajuste automático não disparou para minuta ${id}:`, revisionResult.error);
+      }
     }
 
     if (template.origem === "agente_ia") {

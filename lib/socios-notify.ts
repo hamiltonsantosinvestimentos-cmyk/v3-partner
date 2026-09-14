@@ -158,10 +158,14 @@ export async function logAgentAuditEvent(params: {
   templateId: string;
   // estruturacao_concluida/erro (02/09/2026): Agente Estruturador de
   // Contratos (Agente 1). ajuste_solicitado: "Pedir Ajuste ao Agente",
-  // compartilhado pelos dois agentes. CHECK constraint espelhado em
-  // contract_ai_agent_audit_log (migration 20260902b) -- se adicionar
-  // um valor novo aqui, adicionar lá também.
-  eventType: "analise_concluida" | "analise_erro" | "voto_registrado" | "minuta_aprovada" | "minuta_reprovada" | "estruturacao_concluida" | "estruturacao_erro" | "ajuste_solicitado";
+  // compartilhado pelos dois agentes. ajuste_aplicado/ajuste_erro
+  // (14/09/2026): fecham o ciclo de ajuste_solicitado quando o revisor
+  // reprova com comentário (gatilho automático, generalizado pra qualquer
+  // origem, ver lib/contract-revision-agent.ts). CHECK constraint
+  // espelhado em contract_ai_agent_audit_log (migration 20260902b,
+  // estendida em 20260914b) -- se adicionar um valor novo aqui, adicionar
+  // lá também.
+  eventType: "analise_concluida" | "analise_erro" | "voto_registrado" | "minuta_aprovada" | "minuta_reprovada" | "estruturacao_concluida" | "estruturacao_erro" | "ajuste_solicitado" | "ajuste_aplicado" | "ajuste_erro";
   actorId?: string | null;
   actorName: string;
   detail?: Record<string, unknown> | null;
