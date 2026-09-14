@@ -100,9 +100,9 @@ export async function POST(request: Request) {
     supabase.from("notifications").insert({
       user_id: authData.user.id,
       title: "Bem-vindo à V3 Partners!",
-      message: `Olá ${nome}! Seu acesso foi criado. Assine o contrato de parceria para começar.`,
+      message: `Olá ${nome}! Seu acesso foi criado. O contrato de parceria será enviado em breve pelo nosso jurídico.`,
       type: "ONBOARDING",
-      action_url: "/contrato-parceria",
+      action_url: "/dashboard",
       read: false,
     }).then(
       () => {},
@@ -167,14 +167,8 @@ export async function POST(request: Request) {
       </div>
       <div style="background:#C9A84C10;border:1px solid #C9A84C35;border-radius:8px;padding:14px;margin-bottom:16px;">
         <p style="font-size:13px;color:#C9A84C;margin:0;line-height:1.5;">
-          <strong>Próximo passo:</strong> Assine o contrato de parceria para liberar todas as funcionalidades.
+          <strong>Próximo passo:</strong> nosso time jurídico vai te enviar o contrato de parceria em breve, para assinatura fora da plataforma. Você já pode acessar tudo enquanto isso.
         </p>
-      </div>
-      <div style="text-align:center;">
-        <a href="${APP_URL}/contrato-parceria"
-           style="display:inline-block;border:1px solid #C9A84C;color:#C9A84C;font-size:13px;font-weight:600;padding:10px 28px;border-radius:10px;text-decoration:none;">
-          Assinar Contrato de Parceria
-        </a>
       </div>
     </div>
     <p style="font-size:11px;color:#3A5070;text-align:center;margin:0;">

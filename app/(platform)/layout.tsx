@@ -65,18 +65,19 @@ export default async function PlatformLayout({
 
     if (profileError || !profileData) redirect("/login");
 
-    // Roles internos não assinam contrato de parceria — mesma lista de app/contrato-parceria/page.tsx.
+    // Roles internos não passam pelo aviso de contrato — mesma lista de app/contrato-parceria/page.tsx.
     // Checar o role ANTES do redirect evita loop infinito dashboard <-> contrato-parceria
     // para quem nunca terá app_metadata.contract_signed=true (ex: GESTAO, ADMIN, MESA_OPERACIONAL).
     const ROLES_INTERNOS = ["ADMIN", "SDR", "CLOSER", "GESTAO", "MESA_OPERACIONAL", "FINANCEIRO", "FORNECEDOR"];
     const roleAtual = (profileData as { role?: string }).role ?? "";
     const isRoleInterno = ROLES_INTERNOS.includes(roleAtual);
-    // Partner HE: o contrato de parceria é enviado para assinatura à parte
-    // (fora da plataforma) — não bloqueia o primeiro acesso.
-    const contratoDiferido = roleAtual === "PARTNER_HE";
 
-    // Força assinatura do contrato de parceria (não aplicável a roles internos)
-    if (!isRoleInterno && !contratoDiferido && !user.app_metadata?.contract_signed) {
+    // Primeiro acesso do partner: mostra só um aviso ("o contrato vem do
+    // jurídico em seguida"), não exige mais assinatura dentro da plataforma
+    // (decisão do Hamilton, 15/09/2026 — antes só Partner HE tinha esse
+    // tratamento, agora vale pra todos os planos). contract_signed continua
+    // sendo a flag usada, só que agora marca "já viu o aviso".
+    if (!isRoleInterno && !user.app_metadata?.contract_signed) {
       redirect("/contrato-parceria");
     }
 
