@@ -820,9 +820,15 @@ export function ContractsPanelClient({ role }: { role: string }) {
                       {selected.parties.map((p: any, i: number) => (
                         <div key={i} className="text-xs">
                           <span className="text-[#9BAFC5]">{p.role === "cedente" ? "Cedente" : p.role === "v3_partners" ? "V3 Partners" : p.role}</span>
-                          <button onClick={() => openPartyCard(p.qualification_id)} className="block text-[#F5F1E8] font-medium hover:text-[#C9A84C] hover:underline transition-colors text-left">
-                            {p.name}
-                          </button>
+                          <div className="flex items-center gap-1.5">
+                            <button onClick={() => openPartyCard(p.qualification_id)} className="text-[#F5F1E8] font-medium hover:text-[#C9A84C] hover:underline transition-colors text-left">
+                              {p.name}
+                            </button>
+                            <button onClick={() => openPartyCard(p.qualification_id)} title="Ver ficha e documentos KYC"
+                              className="text-[#C9A84C] hover:text-[#E8C97A] transition-colors flex-shrink-0">
+                              <Eye size={11} />
+                            </button>
+                          </div>
                           {p.doc && <p className="text-[10px] text-[#9BAFC5]">{p.doc}</p>}
                         </div>
                       ))}
@@ -921,9 +927,13 @@ export function ContractsPanelClient({ role }: { role: string }) {
                         <div className="space-y-1.5">
                           {batch.cm_party_qualifications.map((p) => (
                             <div key={p.id} className="flex items-center justify-between gap-2 bg-[#09081A] rounded px-2.5 py-1.5">
-                              <div className="min-w-0">
+                              <div className="min-w-0 flex items-center gap-1.5">
                                 <button onClick={() => openPartyCard(p.id)} className="text-xs text-[#F5F1E8] truncate hover:text-[#C9A84C] hover:underline transition-colors text-left">
                                   {p.full_name} <span className="text-[9px] text-[#9BAFC5]">· {ROLE_LABELS[p.role_in_document] ?? p.role_in_document}</span>
+                                </button>
+                                <button onClick={() => openPartyCard(p.id)} title="Ver ficha e documentos KYC"
+                                  className="text-[9px] font-semibold text-[#C9A84C] px-1.5 py-0.5 rounded border border-[#C9A84C]/40 bg-[#C9A84C]/10 hover:bg-[#C9A84C]/20 transition-colors flex-shrink-0">
+                                  <Eye size={10} />
                                 </button>
                               </div>
                               {p.status === "preenchido" ? (
