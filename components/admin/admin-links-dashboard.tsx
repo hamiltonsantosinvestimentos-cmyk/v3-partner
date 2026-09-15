@@ -28,6 +28,14 @@ function fmt(cents: number) {
 function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString("pt-BR");
 }
+// Correção 14/09/2026, achada testando ao vivo: Math.ceil() de uma diferença
+// negativa pequena (expirado há menos de 24h) vira -0/0, e "-0 >= 0" é true
+// em JS -- um link recém-expirado contava como "ativo" nos KPIs. isExpired()
+// usa comparação de data direta pra essa decisão; daysUntil() só formata a
+// contagem regressiva de quem ainda não expirou.
+function isExpired(iso: string): boolean {
+  return new Date(iso).getTime() < Date.now();
+}
 function daysUntil(iso: string): number {
   return Math.ceil((new Date(iso).getTime() - Date.now()) / 86400000);
 }
@@ -42,8 +50,8 @@ const SERVICE_LABEL: Record<string, string> = {
 function StatusCell({ link }: { link: AdminLink }) {
   if (!link.active) return <span style={{ color: MU, fontSize: 11, fontWeight: 700 }}>Inativo</span>;
   if (!link.expires_at) return <span style={{ color: "#4ade80", fontSize: 11, fontWeight: 700 }}>Ativo · sem prazo</span>;
+  if (isExpired(link.expires_at)) return <span style={{ color: "#f87171", fontSize: 11, fontWeight: 700 }}>Expirado</span>;
   const days = daysUntil(link.expires_at);
-  if (days < 0) return <span style={{ color: "#f87171", fontSize: 11, fontWeight: 700 }}>Expirado</span>;
   const soon = days <= 3;
   return (
     <span style={{ color: soon ? "#f87171" : "#4ade80", fontSize: 11, fontWeight: 700 }}>
@@ -66,8 +74,8 @@ export function AdminLinksDashboard() {
   if (error) return <div style={{ color: "#f87171", fontSize: 13 }}>{error}</div>;
   if (!links) return <div style={{ textAlign: "center", padding: 40 }}><Loader2 size={24} color={GO} className="animate-spin" /></div>;
 
-  const ativos = links.filter(l => l.active && (!l.expires_at || daysUntil(l.expires_at) >= 0));
-  const expirandoEm3d = links.filter(l => l.active && l.expires_at && daysUntil(l.expires_at) >= 0 && daysUntil(l.expires_at) <= 3);
+  const ativos = links.filter(l => l.active && (!l.expires_at || !isExpired(l.expires_at)));
+  const expirandoEm3d = links.filter(l => l.active && l.expires_at && !isExpired(l.expires_at) && daysUntil(l.expires_at) <= 3);
   const receitaTotal = links.reduce((a, l) => a + l.total_paid_cents, 0);
 
   const kpi = { background: N2, border: `1px solid ${N4}`, borderRadius: 10, padding: "16px 20px" };

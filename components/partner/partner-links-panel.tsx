@@ -9,16 +9,25 @@ import { UNIT_PRICE_CENTS } from "@/lib/credit-analysis-pricing";
 // e pro botão "Renovar".
 const DEFAULT_EXPIRES_DAYS = 10;
 
+// Correção 14/09/2026, achada testando ao vivo: Math.ceil() de uma diferença
+// negativa pequena (link expirado há menos de 24h) arredonda pra -0/0, e
+// "-0 < 0" é false em JS -- um link expirado há 1h aparecia "Expira hoje"
+// em vez de "Expirado". isExpired() usa comparação de data direta, nunca
+// arredondamento, pra decidir expirado ou não; daysUntil() só serve pra
+// exibir a contagem regressiva de quem ainda não expirou.
+function isExpired(iso: string): boolean {
+  return new Date(iso).getTime() < Date.now();
+}
 function daysUntil(iso: string): number {
   return Math.ceil((new Date(iso).getTime() - Date.now()) / (24 * 60 * 60 * 1000));
 }
 
 function ExpirationBadge({ expiresAt }: { expiresAt: string | null }) {
   if (!expiresAt) return null;
-  const days = daysUntil(expiresAt);
-  if (days < 0) {
+  if (isExpired(expiresAt)) {
     return <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", padding: "3px 8px", borderRadius: 4, background: "rgba(248,113,113,0.1)", color: "#f87171", border: "1px solid rgba(248,113,113,0.3)" }}>Expirado</span>;
   }
+  const days = daysUntil(expiresAt);
   const soon = days <= 3;
   return (
     <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", padding: "3px 8px", borderRadius: 4, background: soon ? "rgba(248,113,113,0.1)" : "rgba(201,168,76,0.1)", color: soon ? "#f87171" : "#E8C97A", border: `1px solid ${soon ? "rgba(248,113,113,0.3)" : "rgba(201,168,76,0.35)"}` }}>

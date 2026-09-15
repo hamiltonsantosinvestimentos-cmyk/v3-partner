@@ -34,8 +34,11 @@ export function LinkServicoStatusBadge({ dealType, dealId }: { dealType: "credit
 
   if (link === "loading" || !link) return null;
 
-  const daysLeft = link.expires_at ? Math.ceil((new Date(link.expires_at).getTime() - Date.now()) / 86400000) : null;
-  const expired = daysLeft !== null && daysLeft < 0;
+  // Correção 14/09/2026: comparação de data direta pra "expirado" -- Math.ceil()
+  // de uma diferença negativa pequena (expirado há menos de 24h) vira -0/0, que
+  // não é < 0 em JS, e o badge mostraria "expira em 0d" pra um link já morto.
+  const expired = link.expires_at ? new Date(link.expires_at).getTime() < Date.now() : false;
+  const daysLeft = link.expires_at && !expired ? Math.ceil((new Date(link.expires_at).getTime() - Date.now()) / 86400000) : null;
   const status = expired ? "Expirado" : !link.active ? "Inativo" : daysLeft !== null ? `Ativo · expira em ${daysLeft}d` : "Ativo";
   const color = expired || !link.active ? "#f87171" : daysLeft !== null && daysLeft <= 3 ? "#f87171" : "#4ade80";
 
