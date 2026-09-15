@@ -42,6 +42,7 @@ const BusinessPlanContainer = dynamic(
 import { NovoDealForm } from "@/components/ma/novo-deal-form";
 import { DealFormEditorClient } from "@/components/ma/deal-form-editor-client";
 import { BuysideDemandPanel } from "@/components/ma/buyside-demand-panel";
+import { LinkServicoStatusBadge } from "@/components/partner/link-servico-status-badge";
 const DealIaChat = dynamic(
   () => import("@/components/ma/deal-ia-chat").then(m => m.DealIaChat),
   { ssr: false }
@@ -1208,6 +1209,7 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
                     : "bg-[#C9A84C]/15 text-[#C9A84C]"
                 }`}>{selectedCard.tipo_participante}</span>
               )}
+              {selectedCard && <LinkServicoStatusBadge dealType="ma" dealId={selectedCard.id} />}
             </DialogTitle>
           </DialogHeader>
 

@@ -15,6 +15,7 @@ import { STATUS_LABELS, STATUS_COLORS, PLAN_COMMISSION_PCT, ROLE_LABELS, type Op
 import { uploadCreditDocument } from "@/lib/credit-documents/upload";
 import { CHECKLISTS, DEFAULT_CHECKLIST } from "./nova-proposta-modal";
 import { RecomendacaoLinha } from "./recomendacao-linha";
+import { LinkServicoStatusBadge } from "@/components/partner/link-servico-status-badge";
 
 export type MesaComment = {
   id: string;
@@ -2831,6 +2832,7 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
               <Badge className={STATUS_COLORS[proposal.status as OperationStatus]}>
                 {STATUS_LABELS[proposal.status as OperationStatus] ?? proposal.status}
               </Badge>
+              <LinkServicoStatusBadge dealType="credit" dealId={proposal.id} />
             </div>
             <h2 className="text-base font-bold text-white">{proposal.title}</h2>
           </div>

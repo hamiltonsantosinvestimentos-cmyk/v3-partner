@@ -191,6 +191,7 @@ const NAV_SECTIONS: NavSection[] = [
       { href: "/admin-dashboard",  label: "Painel Admin",    icon: "LayoutDashboard", roles: ["ADMIN"] },
       { href: "/admin-cadastros", label: "Cadastros",      icon: "UserPlus", roles: ["ADMIN"] },
       { href: "/admin-marketplace", label: "Marketplace Admin", icon: "ShoppingBag", roles: ["ADMIN", "GESTAO"] },
+      { href: "/admin-links", label: "Dashboard de Links", icon: "Link2", roles: ["ADMIN", "GESTAO"] },
       { href: "/admin-sdr-addon", label: "Add-on Atendimento IA", icon: "MessageSquare", roles: ["ADMIN", "GESTAO"] },
       { href: "/usuarios",       label: "Usuários",       icon: "Users",    roles: ["ADMIN"] },
       { href: "/configuracoes",  label: "Configurações",  icon: "Settings2", roles: ["ADMIN", "STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE", "GESTAO", "MESA_OPERACIONAL", "FINANCEIRO"] },

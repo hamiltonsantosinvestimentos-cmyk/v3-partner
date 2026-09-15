@@ -28,11 +28,12 @@ export async function GET() {
     .from("partner_service_links")
     .select(`
       id, token, title, service_type, description, price_cents,
-      active, total_uses, total_paid_cents, created_at,
+      active, total_uses, total_paid_cents, created_at, expires_at,
       credit_desk_proposal_id, ma_deal_id,
       credit_desk_proposals(code, client_name),
       ma_deals(code, target_company, title),
-      partner_service_orders(count)
+      partner_service_orders(count),
+      partner:profiles!partner_id(full_name)
     `)
     .order("created_at", { ascending: false });
 
@@ -64,6 +65,7 @@ export async function POST(req: NextRequest) {
     price_cents?: number;
     deal_type?: "credit" | "ma" | null;
     deal_id?: string | null;
+    expires_in_days?: number | null;
   };
 
   if (!body.title?.trim()) return NextResponse.json({ error: "Título obrigatório" }, { status: 400 });
@@ -102,6 +104,14 @@ export async function POST(req: NextRequest) {
 
   const token = randomBytes(20).toString("hex");
 
+  // Expiração (14/09/2026): dias escolhidos pelo partner no formulário,
+  // default 10 sugerido na UI. 0/ausente/negativo = sem expiração, mesmo
+  // comportamento de todo link criado antes desta migration.
+  const expiresInDays = Number(body.expires_in_days);
+  const expiresAt = Number.isFinite(expiresInDays) && expiresInDays > 0
+    ? new Date(Date.now() + expiresInDays * 24 * 60 * 60 * 1000).toISOString()
+    : null;
+
   const { data, error } = await db
     .from("partner_service_links")
     .insert({
@@ -114,6 +124,7 @@ export async function POST(req: NextRequest) {
       active:       true,
       credit_desk_proposal_id: creditDeskProposalId,
       ma_deal_id:   maDealId,
+      expires_at:   expiresAt,
     })
     .select()
     .single();
@@ -122,19 +133,28 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ ok: true, link: data });
 }
 
-// PATCH — ativa/desativa link
+// PATCH — ativa/desativa link, ou renova o prazo de expiração
+// (renew_days, 14/09/2026: evita o partner ter que recriar o link do zero
+// e perder o histórico de pedidos quando ele expira ou está prestes a).
 export async function PATCH(req: NextRequest) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
-  const body = await req.json() as { id?: string; active?: boolean };
+  const body = await req.json() as { id?: string; active?: boolean; renew_days?: number };
   if (!body.id) return NextResponse.json({ error: "ID obrigatório" }, { status: 400 });
+
+  const update: { active?: boolean; expires_at?: string | null } = {};
+  if (typeof body.active === "boolean") update.active = body.active;
+  if (body.renew_days && body.renew_days > 0) {
+    update.expires_at = new Date(Date.now() + body.renew_days * 24 * 60 * 60 * 1000).toISOString();
+  }
+  if (Object.keys(update).length === 0) return NextResponse.json({ error: "Nada para atualizar" }, { status: 400 });
 
   const db = svc();
   const { error } = await db
     .from("partner_service_links")
-    .update({ active: body.active })
+    .update(update)
     .eq("id", body.id)
     .eq("partner_id", user.id);
 

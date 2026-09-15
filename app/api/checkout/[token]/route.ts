@@ -16,12 +16,15 @@ export async function GET(_req: NextRequest, { params }: Params) {
 
   const { data, error } = await db
     .from("partner_service_links")
-    .select("id, title, service_type, description, price_cents, active, partner_id, profiles(full_name)")
+    .select("id, title, service_type, description, price_cents, active, expires_at, partner_id, profiles(full_name)")
     .eq("token", token)
     .single();
 
   if (error || !data) return NextResponse.json({ error: "Link inválido" }, { status: 404 });
   if (!data.active) return NextResponse.json({ error: "Este link foi desativado" }, { status: 410 });
+  if (data.expires_at && new Date(data.expires_at) < new Date()) {
+    return NextResponse.json({ error: "Este link expirou" }, { status: 410 });
+  }
 
   const profiles = data.profiles as { full_name?: string } | null;
   return NextResponse.json({
@@ -40,12 +43,15 @@ export async function POST(req: NextRequest, { params }: Params) {
 
   const { data: link, error: linkErr } = await db
     .from("partner_service_links")
-    .select("id, title, service_type, price_cents, active, partner_id, credit_desk_proposal_id, ma_deal_id")
+    .select("id, title, service_type, price_cents, active, expires_at, partner_id, credit_desk_proposal_id, ma_deal_id")
     .eq("token", token)
     .single();
 
   if (linkErr || !link) return NextResponse.json({ error: "Link inválido" }, { status: 404 });
   if (!link.active) return NextResponse.json({ error: "Link desativado" }, { status: 410 });
+  if (link.expires_at && new Date(link.expires_at) < new Date()) {
+    return NextResponse.json({ error: "Este link expirou" }, { status: 410 });
+  }
 
   const body = await req.json() as {
     client_name?: string;
