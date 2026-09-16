@@ -123,16 +123,29 @@ export function InvestorCompliancePanel() {
   async function handlePdf(checkId: string) {
     setError(null);
     setLoadingPdf(true);
+    // Achado real em produção (16/09/2026): window.open() depois de um await é
+    // tratado como popup não iniciado pelo usuário e bloqueado silenciosamente
+    // pelo Chrome, mesmo com o PDF gerado e salvo com sucesso no Storage. Abrir
+    // a aba em branco de forma síncrona, ainda dentro do gesto de clique, e só
+    // então apontar o location para o PDF quando a resposta chegar.
+    const newTab = window.open("", "_blank");
     try {
       const res = await fetch(`/api/ma/investor-compliance/${checkId}/pdf`, { method: "POST" });
       const data = await res.json();
       if (!res.ok) {
         setError(data.error ?? "Falha ao gerar PDF");
+        newTab?.close();
         return;
       }
-      if (data.pdf_url) window.open(data.pdf_url, "_blank");
+      if (data.pdf_url && newTab) {
+        newTab.location.href = data.pdf_url;
+      } else if (data.pdf_url) {
+        // Fallback se o navegador bloqueou mesmo a abertura síncrona.
+        setError(`PDF gerado. Abra manualmente: ${data.pdf_url}`);
+      }
       loadHistory();
     } catch (e) {
+      newTab?.close();
       setError(e instanceof Error ? e.message : "Erro inesperado");
     } finally {
       setLoadingPdf(false);
