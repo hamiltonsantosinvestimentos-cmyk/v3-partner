@@ -42,6 +42,7 @@ const BusinessPlanContainer = dynamic(
 import { NovoDealForm } from "@/components/ma/novo-deal-form";
 import { DealFormEditorClient } from "@/components/ma/deal-form-editor-client";
 import { BuysideDemandPanel } from "@/components/ma/buyside-demand-panel";
+import { InvestorCompliancePanel } from "@/components/mesa-ma/investor-compliance-panel";
 import { LinkServicoStatusBadge } from "@/components/partner/link-servico-status-badge";
 const DealIaChat = dynamic(
   () => import("@/components/ma/deal-ia-chat").then(m => m.DealIaChat),
@@ -303,7 +304,7 @@ function KanbanCardItem({
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 export function MesaMaClient({ userRole, initialDeals = [], userId = "", userName = "" }: { userRole: string; initialDeals?: MaCard[]; userId?: string; userName?: string }) {
-  const [activeTab, setActiveTab] = useState<"kanban" | "conexoes" | "operadores" | "buyside">("kanban");
+  const [activeTab, setActiveTab] = useState<"kanban" | "conexoes" | "operadores" | "buyside" | "compliance">("kanban");
   const [cards, setCards] = useState<MaCard[]>(initialDeals);
   const [operators, setOperators] = useState<MesaOperator[]>([]);
   const [selectedCard, setSelectedCard] = useState<MaCard | null>(null);
@@ -886,6 +887,9 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
     { id: "conexoes" as const, label: "Conexões / Match" },
     { id: "buyside" as const, label: "Buy-Side" },
     { id: "operadores" as const, label: "Operadores" },
+    // Compliance de possíveis investidores: dado judicial/financeiro de terceiro,
+    // gate restrito, mesmo padrão já usado em /api/ma/investor-compliance/*.
+    ...(["ADMIN", "GESTAO"].includes(userRole) ? [{ id: "compliance" as const, label: "Compliance" }] : []),
   ];
 
   return (
@@ -1135,6 +1139,11 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
         {/* ── BUY-SIDE TAB ───────────────────────────────────── */}
         {activeTab === "buyside" && (
           <BuysideDemandPanel />
+        )}
+
+        {/* ── COMPLIANCE TAB ─────────────────────────────────── */}
+        {activeTab === "compliance" && ["ADMIN", "GESTAO"].includes(userRole) && (
+          <InvestorCompliancePanel />
         )}
 
         {/* ── OPERADORES TAB ─────────────────────────────────── */}
