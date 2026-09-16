@@ -76,7 +76,13 @@ const SYSTEM_PROMPT = `Você está apoiando a Mesa M&A da V3 Partners numa due d
 sobre um possível investidor. Use a ferramenta de busca para localizar o perfil de LinkedIn
 e outras redes sociais públicas associadas ao nome informado. Nunca invente URL ou dado:
 cite só o que a busca realmente retornou. Se não achar nada com confiança razoável, diga
-isso explicitamente. Responda em português, em até 6 linhas, citando as URLs encontradas.`;
+isso explicitamente. Responda em português, em até 8 linhas.
+
+Formato de saída obrigatório: texto corrido em PARÁGRAFOS, sem nenhuma sintaxe Markdown
+(nunca usar #, ##, **, tabelas em | |, ou listas com - ou *). O resultado vai direto para
+um PDF institucional que renderiza o texto puro, então qualquer marcação aparece como
+símbolo cru na página. Se precisar listar mais de um perfil, separe por ponto e vírgula
+dentro do próprio parágrafo (ex: "LinkedIn: url1; outro perfil: url2").`;
 
 async function runSocialSearch(entityName: string): Promise<{ text: string; sources: string[] }> {
   const { default: Anthropic } = await import("@anthropic-ai/sdk");
