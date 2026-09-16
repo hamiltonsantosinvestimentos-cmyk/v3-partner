@@ -248,7 +248,7 @@ export function InvestorCompliancePanel() {
             <div className="rounded-lg border border-[#122036] bg-[#0d1526] p-4">
               <p className="text-[10px] font-bold uppercase tracking-wide text-[#C9A84C] mb-2">Processos Judiciais</p>
               <p className="text-xs text-[#7A8FA8] mb-2">
-                {result.escavador_result?.total_processos ?? 0} processos localizados (Escavador)
+                {Math.max(result.escavador_result?.total_processos ?? 0, result.escavador_result?.processos?.length ?? 0)} processos localizados (Escavador)
               </p>
               {(result.escavador_result?.processos ?? []).slice(0, 5).map((p, i) => (
                 <div key={i} className="text-[11px] text-[#7A8FA8] border-t border-[#122036] pt-2 mt-2">

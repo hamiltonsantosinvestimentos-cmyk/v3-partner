@@ -172,7 +172,17 @@ export async function POST(req: NextRequest) {
 
   // Score
   const dossieFlags = (checktudoDossie as { risk_flags?: Record<string, unknown> } | null)?.risk_flags;
-  const escavadorTotal = (escavadorResult as { total_processos?: number } | null)?.total_processos ?? 0;
+  // Achado real em produção (16/09/2026): a API do Escavador pode devolver
+  // total_processos=0 no campo raiz mesmo com o array `processos` populado
+  // (mesma classe de inconsistência campo-a-campo já documentada para Serasa
+  // em 03/08/2026 e Checktudo em 10/09/2026). Nunca confiar só no contador da
+  // API: usar o maior entre o contador declarado e a contagem real do array
+  // retornado, senão o score sai inflado silenciosamente.
+  const escavadorProcessos = (escavadorResult as { processos?: unknown[] } | null)?.processos ?? [];
+  const escavadorTotal = Math.max(
+    (escavadorResult as { total_processos?: number } | null)?.total_processos ?? 0,
+    escavadorProcessos.length
+  );
   const dossieTotal = (dossieFlags?.lawsuit_total_count as number) ?? 0;
   const processCount = Math.max(escavadorTotal, dossieTotal);
 

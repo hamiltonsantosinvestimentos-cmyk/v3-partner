@@ -101,7 +101,12 @@ function buildReportData(row: CheckRow): InvestorComplianceReportData {
     verdict: row.verdict,
     escavador: {
       consultado: !!row.escavador_result || !!errFor("escavador"),
-      totalProcessos: esc?.total_processos ?? null,
+      // Mesmo achado de 16/09/2026: total_processos da API pode vir 0 com o
+      // array populado. Nunca exibir contagem menor que o que foi de fato listado.
+      totalProcessos:
+        esc?.total_processos !== undefined || esc?.processos
+          ? Math.max(esc?.total_processos ?? 0, esc?.processos?.length ?? 0)
+          : null,
       processos: (esc?.processos ?? []).map((p) => ({
         numeroCnj: p.numero_cnj,
         poloAtivo: p.polo_ativo,
