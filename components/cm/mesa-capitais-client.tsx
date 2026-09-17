@@ -111,13 +111,15 @@ const BULK_PUBLISH_CHAIN: Record<string, string[]> = {
 const STATUS_COLUMNS = [
   { key: "reuniao_validada,formulario_preenchido", label: "Intake", color: "border-blue-500", icon: Clock },
   { key: "nda_assinado,em_analise", label: "NDA / Análise", color: "border-orange-500", icon: Shield },
-  { key: "aprovado_head", label: "Aguarda Head", color: "border-[#C9A84C]", icon: Gavel },
+  { key: "aprovado_head,aprovado_com_restricoes", label: "Aguarda Head", color: "border-[#C9A84C]", icon: Gavel },
   { key: "ativo_vitrine,proposta_recebida", label: "Na Vitrine", color: "border-emerald-500", icon: BarChart3 },
   { key: "em_escrow_due_diligence", label: "Escrow / DD", color: "border-purple-500", icon: DollarSign },
   // Coluna "Cancelado" testada em 27/07 e removida a pedido de Joao: ativo cancelado
   // deve ir para a Lixeira (deleted_at), nao ficar visivel num board separado. O botao
   // "Cancelar" na aba Governanca agora chama handleDeleteAsset em vez de setar
   // listing_status="cancelado" (status morto, sem coluna nenhuma no board).
+  // "reprovado" (17/09/2026) segue o mesmo criterio: decisao terminal de due diligence,
+  // sai do board igual a cancelado, sem coluna propria. Fica visivel na Ficha/aba Notas.
 ];
 
 // Cadeia de avanco "de um passo" ja usada nos botoes de Transicao de Status do painel
@@ -136,7 +138,7 @@ const STATUS_QUICK_TRANSITIONS = [
 // Espelha headOnlyStatuses de app/api/cm/listings/[id]/status/route.ts -- a autoridade
 // real fica sempre no servidor (a rota rejeita com 403 mesmo se este espelho divergir).
 // Isso so evita oferecer, no menu/drag, um atalho que o backend ja vai recusar.
-const HEAD_ONLY_STATUSES = ["aprovado_head", "ativo_vitrine", "em_escrow_due_diligence", "liquidado"];
+const HEAD_ONLY_STATUSES = ["aprovado_head", "aprovado_com_restricoes", "ativo_vitrine", "em_escrow_due_diligence", "liquidado"];
 
 function nextQuickTransition(status: string, role: string): { to: string; label: string } | null {
   const t = STATUS_QUICK_TRANSITIONS.find((x) => x.from === status);
@@ -303,6 +305,8 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
   const [noteContent, setNoteContent] = useState("");
   const [noteMentionedIds, setNoteMentionedIds] = useState<string[]>([]);
   const [submittingNote, setSubmittingNote] = useState(false);
+  const [decidingListing, setDecidingListing] = useState(false);
+  const [generatingNda, setGeneratingNda] = useState(false);
   const [intermediaries, setIntermediaries] = useState<any[]>([]);
   const [slaSummary, setSlaSummary] = useState<Record<string, { hours_pending: number; pending_count: number }>>({});
   const [slaContracts, setSlaContracts] = useState<any[]>([]);
@@ -1187,6 +1191,86 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
     } catch {
       setBoardError("Erro de conexão ao tentar mudar o status.");
       setTimeout(() => setBoardError(null), 6000);
+    }
+  };
+
+  // Decisao de Due Diligence (17/09/2026, BRIEF aprovado por Joao): a Mesa
+  // aprova, aprova com restricao (texto obrigatorio) ou reprova (justificativa
+  // obrigatoria) direto da aba Notas, no mesmo lugar onde ja comenta o ativo.
+  // Reaproveita PATCH /status + transition_cm_listing_status(), nunca inventa
+  // caminho novo -- so pede o texto via prompt (mesmo padrao ja usado em
+  // handleDeleteAsset) quando a transicao exige reason.
+  const handleListingDecision = async (listingId: string, newStatus: "aprovado_head" | "aprovado_com_restricoes" | "reprovado") => {
+    let reason: string | undefined;
+    if (newStatus === "aprovado_com_restricoes" || newStatus === "reprovado") {
+      const promptLabel = newStatus === "reprovado"
+        ? "Justificativa da reprovação (obrigatório):"
+        : "Texto da restrição (obrigatório, fica visível no histórico do ativo):";
+      const input = window.prompt(promptLabel);
+      if (!input || input.trim().length < 5) {
+        if (input !== null) alert("Texto obrigatório: mínimo 5 caracteres");
+        return;
+      }
+      reason = input.trim();
+    } else if (newStatus === "aprovado_head") {
+      if (!confirm("Confirma aprovação do ativo para publicação na Vitrine?")) return;
+    }
+
+    setDecidingListing(true);
+    try {
+      const res = await fetch(`/api/cm/listings/${listingId}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ new_status: newStatus, reason }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        alert(json.error ?? "Transição rejeitada pelo servidor.");
+        return;
+      }
+      await fetchAll();
+      setSelectedListing((prev) => prev ? { ...prev, listing_status: newStatus } : prev);
+    } catch {
+      alert("Erro de conexão ao registrar a decisão.");
+    } finally {
+      setDecidingListing(false);
+    }
+  };
+
+  // Gerar NCNDA (17/09/2026): nao e feature nova -- /api/contracts/generate ja
+  // aceita vertical=capital_markets + listing_id, com o gate de antecedentes de
+  // intermediarios ja embutido. So faltava o botao. Minuta resolvida por serie
+  // (V3C-NDA) + aprovada, nunca hardcoded por id (a minuta pode ser substituida
+  // pelo juridico sem quebrar este botao). "Mandato" nao tem minuta aprovada
+  // nem rascunho para capital_markets ainda -- fica pendente do juridico.
+  const handleGenerateNcnda = async (listingId: string) => {
+    setGeneratingNda(true);
+    try {
+      const tplRes = await fetch("/api/contracts/templates?vertical=capital_markets");
+      const tplJson = await tplRes.json();
+      const template = (tplJson.templates ?? []).find(
+        (t: any) => t.contract_series === "V3C-NDA" && t.approval_status === "aprovado"
+      );
+      if (!template) {
+        alert("Nenhuma minuta de NCNDA aprovada para Bolsa de Ativos. Verifique a Revisão Jurídica em Central de Contratos.");
+        return;
+      }
+      const res = await fetch("/api/contracts/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ template_id: template.id, listing_id: listingId }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        alert(json.error ?? "Erro ao gerar NCNDA.");
+        return;
+      }
+      alert(`NCNDA gerado: ${json.contract?.contract_code ?? ""}. Confira na aba Governança.`);
+      loadSlaContracts(listingId);
+    } catch {
+      alert("Erro de conexão ao gerar NCNDA.");
+    } finally {
+      setGeneratingNda(false);
     }
   };
 
@@ -3422,6 +3506,57 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
                   ))}
                 </div>
               )}
+            </div>
+
+            {/* Decisao de Due Diligence (17/09/2026) -- so aparece quando a analise
+                esta realmente em curso, mesmo criterio ja usado no resto do modulo
+                pra nao oferecer um botao que o backend vai recusar. */}
+            {selectedListing.listing_status === "em_analise" && (
+              <div className="px-4 mt-4">
+                <div className="text-[10px] text-[#C9A84C] font-bold uppercase tracking-wider mb-2">Decisão da Mesa</div>
+                <div className="bg-[#12112A] border border-[#9BAFC5]/10 rounded-lg p-3 flex flex-wrap gap-2">
+                  {["ADMIN", "GESTAO"].includes(userRole) && (
+                    <>
+                      <button
+                        onClick={() => handleListingDecision(selectedListing.id, "aprovado_head")}
+                        disabled={decidingListing}
+                        className="flex items-center gap-1.5 px-3 py-2 bg-emerald-500/10 border border-emerald-500/20 rounded text-emerald-400 text-[10px] font-bold hover:bg-emerald-500/20 transition disabled:opacity-50"
+                      >
+                        Aprovar
+                      </button>
+                      <button
+                        onClick={() => handleListingDecision(selectedListing.id, "aprovado_com_restricoes")}
+                        disabled={decidingListing}
+                        className="flex items-center gap-1.5 px-3 py-2 bg-[#C9A84C]/10 border border-[#C9A84C]/20 rounded text-[#C9A84C] text-[10px] font-bold hover:bg-[#C9A84C]/20 transition disabled:opacity-50"
+                      >
+                        Aprovar com Restrições
+                      </button>
+                    </>
+                  )}
+                  <button
+                    onClick={() => handleListingDecision(selectedListing.id, "reprovado")}
+                    disabled={decidingListing}
+                    className="flex items-center gap-1.5 px-3 py-2 bg-red-500/10 border border-red-500/20 rounded text-red-400 text-[10px] font-bold hover:bg-red-500/20 transition disabled:opacity-50"
+                  >
+                    Reprovar
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Documentos (17/09/2026): NCNDA ja tem minuta aprovada pra Bolsa de
+                Ativos -- Mandato ainda nao (pendente do juridico), por isso so um
+                botao aqui hoje. */}
+            <div className="px-4 mt-4 mb-2">
+              <div className="text-[10px] text-[#9BAFC5] font-bold uppercase tracking-wider mb-2">Documentos</div>
+              <button
+                onClick={() => handleGenerateNcnda(selectedListing.id)}
+                disabled={generatingNda}
+                className="flex items-center gap-1.5 px-3 py-2 bg-[#162744] border border-[#9BAFC5]/15 rounded text-[#F5F1E8] text-[10px] font-bold hover:border-[#C9A84C]/30 transition disabled:opacity-50"
+              >
+                {generatingNda ? <Loader2 size={12} className="animate-spin" /> : null} Gerar NCNDA
+              </button>
+              <p className="text-[9px] text-[#9BAFC5]/60 mt-1">Mandato: minuta ainda não aprovada pelo jurídico para esta vertical.</p>
             </div>
             </>)}
 

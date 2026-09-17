@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Loader2, FileText, X, Download, RefreshCw, Package, Link2, Check, UserPlus, Upload } from "lucide-react";
+import { Loader2, FileText, X, Download, RefreshCw, Package, Link2, Check, UserPlus, Upload, Plus } from "lucide-react";
 import { QuickIndicateModal } from "@/components/cm/quick-indicate-modal";
 import { QualificationBatchesPanel } from "@/components/cm/qualification-batches-panel";
 
@@ -55,6 +55,8 @@ const STATUS_META: Record<string, { label: string; dot: string; text: string; bg
   nda_assinado: { label: "NDA Assinado", dot: "#E8935A", text: "#E8935A", bg: "rgba(232,147,90,0.12)", border: "rgba(232,147,90,0.3)" },
   em_analise: { label: "Em Análise", dot: "#E8935A", text: "#E8935A", bg: "rgba(232,147,90,0.12)", border: "rgba(232,147,90,0.3)" },
   aprovado_head: { label: "Aprovado pela Diretoria", dot: "#C9A84C", text: "#C9A84C", bg: "rgba(201,168,76,0.12)", border: "rgba(201,168,76,0.3)" },
+  aprovado_com_restricoes: { label: "Aprovado com Restrições", dot: "#C9A84C", text: "#C9A84C", bg: "rgba(201,168,76,0.12)", border: "rgba(201,168,76,0.3)" },
+  reprovado: { label: "Reprovado", dot: "#F87171", text: "#F87171", bg: "rgba(248,113,113,0.12)", border: "rgba(248,113,113,0.3)" },
   ativo_vitrine: { label: "Ativo na Vitrine", dot: "#C9A84C", text: "#C9A84C", bg: "rgba(201,168,76,0.12)", border: "rgba(201,168,76,0.3)" },
   proposta_recebida: { label: "Proposta Recebida", dot: "#C9A84C", text: "#C9A84C", bg: "rgba(201,168,76,0.12)", border: "rgba(201,168,76,0.3)" },
   em_escrow_due_diligence: { label: "Escrow / Due Diligence", dot: "#4ADE80", text: "#4ADE80", bg: "rgba(74,222,128,0.12)", border: "rgba(74,222,128,0.3)" },
@@ -99,6 +101,29 @@ export function SellSideListingsPanel({ mode = "mine", title, subtitle }: SellSi
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [indicateListing, setIndicateListing] = useState<Listing | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [creatingAsset, setCreatingAsset] = useState(false);
+
+  // Botao "Novo Ativo" (17/09/2026, acesso leve do partner): dispara o mesmo
+  // link de intake que a Mesa ja usa -- nunca grava direto em
+  // cm_asset_listings, so cai no wizard publico ja existente pra classificar
+  // e enviar. originator_profile_id e sempre resolvido no servidor pro
+  // proprio partner, nunca aceito daqui.
+  const createNewAsset = async () => {
+    setCreatingAsset(true);
+    try {
+      const res = await fetch("/api/cm/intake/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Erro ao gerar link de cadastro");
+      window.location.href = json.url;
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Erro ao gerar link de cadastro");
+      setCreatingAsset(false);
+    }
+  };
 
   const copyLink = (l: Listing) => {
     if (!l.cm_intake_token) return;
@@ -174,12 +199,23 @@ export function SellSideListingsPanel({ mode = "mine", title, subtitle }: SellSi
           <p className="text-sm font-bold text-[#F5F1E8]">{title ?? "Ativos na Bolsa de Capitais"}</p>
           <p className="text-xs text-[#9BAFC5]">{subtitle ?? "Ativos cadastrados, com status e documentos"}</p>
         </div>
-        <button
-          onClick={fetchListings}
-          className="flex items-center gap-1.5 rounded-lg border border-[#243A66] text-[#9BAFC5] text-xs font-semibold px-3 py-2 hover:text-[#F5F1E8] hover:border-[#9BAFC5]/40 transition-colors"
-        >
-          <RefreshCw size={13} /> Atualizar
-        </button>
+        <div className="flex items-center gap-2">
+          {mode === "mine" && (
+            <button
+              onClick={createNewAsset}
+              disabled={creatingAsset}
+              className="flex items-center gap-1.5 rounded-lg bg-[#C9A84C] text-[#09081A] text-xs font-bold px-3 py-2 hover:bg-[#E8C97A] transition-colors disabled:opacity-50"
+            >
+              {creatingAsset ? <Loader2 size={13} className="animate-spin" /> : <Plus size={13} />} Novo Ativo
+            </button>
+          )}
+          <button
+            onClick={fetchListings}
+            className="flex items-center gap-1.5 rounded-lg border border-[#243A66] text-[#9BAFC5] text-xs font-semibold px-3 py-2 hover:text-[#F5F1E8] hover:border-[#9BAFC5]/40 transition-colors"
+          >
+            <RefreshCw size={13} /> Atualizar
+          </button>
+        </div>
       </div>
 
       {loading ? (

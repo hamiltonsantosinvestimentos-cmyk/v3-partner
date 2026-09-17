@@ -8,6 +8,7 @@ function svc() {
 }
 
 const ADMIN_ROLES = ["ADMIN", "GESTAO"];
+const MESA_ROLES = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"];
 
 const STATUS_LABELS: Record<string, string> = {
   reuniao_validada: "Reunião Validada",
@@ -15,6 +16,8 @@ const STATUS_LABELS: Record<string, string> = {
   nda_assinado: "NDA Assinado",
   em_analise: "Em Análise",
   aprovado_head: "Aprovado pela Diretoria",
+  aprovado_com_restricoes: "Aprovado com Restrições",
+  reprovado: "Reprovado",
   ativo_vitrine: "Ativo na Vitrine",
   proposta_recebida: "Proposta Recebida",
   em_escrow_due_diligence: "Em Escrow / Due Diligence",
@@ -22,6 +25,11 @@ const STATUS_LABELS: Record<string, string> = {
   cancelado: "Cancelado",
   expirado: "Expirado",
 };
+
+// Transicoes que exigem justificativa (17/09/2026): restricao ou reprovacao
+// sem motivo escrito nao passa nem daqui nem de transition_cm_listing_status()
+// no banco -- validado nos dois lugares de proposito (defesa em profundidade).
+const REASON_REQUIRED_STATUSES = ["aprovado_com_restricoes", "reprovado"];
 
 async function getCallerRole(req: NextRequest) {
   const supabase = await createClient();
@@ -44,9 +52,25 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     return NextResponse.json({ error: "Campo obrigatório: new_status" }, { status: 422 });
   }
 
-  const headOnlyStatuses = ["aprovado_head", "ativo_vitrine", "em_escrow_due_diligence", "liquidado"];
+  // Reprovar fica aberto a qualquer role da Mesa (ADMIN/GESTAO/MESA_OPERACIONAL)
+  // -- decisao de Joao (17/09/2026): rejeitar tem risco menor que aprovar,
+  // nao precisa da mesma autoridade de Head. Aprovar (com ou sem restricao)
+  // continua exigindo ADMIN/GESTAO, igual a aprovado_head.
+  if (new_status === "reprovado" && !MESA_ROLES.includes(caller.role)) {
+    return NextResponse.json({ error: "Apenas ADMIN/GESTAO/MESA_OPERACIONAL pode reprovar" }, { status: 403 });
+  }
+
+  const headOnlyStatuses = ["aprovado_head", "aprovado_com_restricoes", "ativo_vitrine", "em_escrow_due_diligence", "liquidado"];
   if (headOnlyStatuses.includes(new_status) && !ADMIN_ROLES.includes(caller.role)) {
     return NextResponse.json({ error: "Apenas ADMIN/GESTAO pode aprovar esta transição" }, { status: 403 });
+  }
+
+  if (REASON_REQUIRED_STATUSES.includes(new_status) && (!reason || !reason.trim())) {
+    return NextResponse.json({
+      error: new_status === "reprovado"
+        ? "Justificativa obrigatória para reprovar o ativo"
+        : "Texto da restrição é obrigatório para aprovar com restrições",
+    }, { status: 422 });
   }
 
   if (nda_signed_at || nda_document_url) {
@@ -63,7 +87,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }).eq("id", id);
   }
 
-  if (head_approved_by || new_status === "aprovado_head") {
+  if (head_approved_by || new_status === "aprovado_head" || new_status === "aprovado_com_restricoes") {
     await svc().from("cm_asset_listings").update({
       head_approved_by: head_approved_by ?? caller.userId,
       head_approved_at: new Date().toISOString(),

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
-import { issueV3Code, resolveSectorCode } from "@/lib/v3-codes";
+import { issueV3Code, resolveSectorCode, resolveEsferaCode } from "@/lib/v3-codes";
 import { resolveClient } from "@/lib/v3-clients";
 
 function svc() {
@@ -128,21 +128,25 @@ export async function POST(req: NextRequest) {
     }, { status: 422 });
   }
 
-  // Governanca de Numeracao V3, Fase 2 (10/08/2026): anonymous_id passa a ser
-  // emitido por issueV3Code(), sucedendo generate_cm_anonymous_id() -- exatamente
-  // o alvo ja registrado em v3_code_series (BA/PR -> cm_asset_listings.anonymous_id)
-  // desde a Fase 1a (05/08). Listagens antigas no formato CM-OT-FED-NNNN /
-  // CM-PR-FED-NNNN permanecem intocadas; so listagens novas usam o formato V3.
-  const ESFERA_CODE: Record<string, string> = { federal: "FED", estadual: "EST", municipal: "MUN" };
+  // Governanca de Numeracao V3, Fase 2 (10/08/2026) + fix de classificacao
+  // (17/09/2026): anonymous_id emitido por issueV3Code(), sucedendo
+  // generate_cm_anonymous_id() -- alvo registrado em v3_code_series desde a
+  // Fase 1a (05/08). Direito Creditorio ganhou serie propria (DC, mesma logica
+  // de PR) em 17/09/2026: a serie BA tem segment_class='setor' e recusa
+  // FED/EST/MUN como classe, entao nao dava pra classificar Direito Creditorio
+  // por esfera dentro de BA -- so criando serie nova (achado real ao ler o
+  // corpo de next_v3_code antes de assumir). Listagens antigas no formato
+  // CM-OT-FED-NNNN / CM-DC-FED-NNNN / CM-PR-FED-NNNN permanecem intocadas.
   let anonId: string;
   try {
-    if (asset_type === "precatorio") {
-      const esferaCode = ESFERA_CODE[(esfera ?? "Federal").toLowerCase()] ?? "FED";
-      anonId = await issueV3Code("PR", esferaCode);
+    if (asset_type === "precatorio" || asset_type === "direito_creditorio") {
+      const esferaCode = resolveEsferaCode(esfera);
+      const series = asset_type === "precatorio" ? "PR" : "DC";
+      anonId = await issueV3Code(series, esferaCode);
     } else {
-      // Bolsa de Ativos nao tem campo de setor economico proprio na listagem
-      // hoje -- resolveSectorCode(null) cai no fallback GRL, intencional e
-      // auditavel (ver comentario da funcao em lib/v3-codes.ts).
+      // IPI/ICMS/Outros nao tem esfera judicial nem setor economico proprio
+      // na listagem hoje -- resolveSectorCode(null) cai no fallback GRL,
+      // intencional e auditavel (ver comentario da funcao em lib/v3-codes.ts).
       const sectorCode = await resolveSectorCode(null);
       anonId = await issueV3Code("BA", sectorCode);
     }

@@ -69,6 +69,8 @@ export const CM_STATUS_LABELS: Record<string, string> = {
   nda_assinado: "NDA Assinado",
   em_analise: "Em Análise",
   aprovado_head: "Aprovado pela Diretoria",
+  aprovado_com_restricoes: "Aprovado com Restrições",
+  reprovado: "Reprovado",
   ativo_vitrine: "Ativo na Vitrine",
   proposta_recebida: "Proposta Recebida",
   em_escrow_due_diligence: "Escrow / Due Diligence",

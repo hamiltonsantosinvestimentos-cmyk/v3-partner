@@ -33,6 +33,11 @@ export function IntakeWizard({ token, prefill, anonymousId }: IntakeWizardProps)
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState("");
+  // Fix 17/09/2026: o anonymous_id definitivo so existe depois do POST (a
+  // classificacao escolhida nesta tela e o que decide a serie/esfera do
+  // codigo real, emitido no servidor). O prop anonymousId e so o placeholder
+  // pre-classificacao, nunca deve aparecer na tela de confirmacao.
+  const [finalAnonymousId, setFinalAnonymousId] = useState("");
   const [municipios, setMunicipios] = useState<string[]>([]);
   const [loadingMunicipios, setLoadingMunicipios] = useState(false);
 
@@ -105,6 +110,7 @@ export function IntakeWizard({ token, prefill, anonymousId }: IntakeWizardProps)
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Erro ao enviar");
+      setFinalAnonymousId(data.anonymous_id || anonymousId);
       setSubmitted(true);
     } catch (err: any) {
       setError(err.message);
@@ -123,7 +129,7 @@ export function IntakeWizard({ token, prefill, anonymousId }: IntakeWizardProps)
         <p className="text-[#9BAFC5] max-w-md">
           Seus dados foram recebidos pela equipe V3 Partners. Entraremos em contato para dar andamento à análise do seu ativo.
         </p>
-        <p className="text-xs text-[#9BAFC5]/60 mt-8">Referência: {anonymousId}</p>
+        <p className="text-xs text-[#9BAFC5]/60 mt-8">Referência: {finalAnonymousId}</p>
       </div>
     );
   }
