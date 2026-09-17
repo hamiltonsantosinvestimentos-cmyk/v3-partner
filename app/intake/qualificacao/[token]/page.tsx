@@ -93,9 +93,26 @@ function KycDocSlot({ token, kind, documentNumber, value, onChange }: {
     onChange(emptyDocSlot());
   };
 
+  // P0 real (17/09/2026, partner travado tentando anexar antes de digitar o
+  // CPF/CNPJ): o upload SEMPRE exigiu documentNumber válido pra vincular o
+  // arquivo (documents/route.ts), mas a tela deixava clicar em "Selecionar
+  // arquivo" mesmo com o campo vazio, e o erro devolvido ("CPF inválido")
+  // parece dizer que o CPF do usuário está errado, quando na verdade ele só
+  // ainda não foi digitado (o campo fica bem acima na tela, longe do upload).
+  const digitsNow = documentNumber.replace(/\D/g, "");
+  const expectedLenNow = kind === "identificacao_foto" ? 11 : 14;
+  const documentNumberReady = digitsNow.length === expectedLenNow;
+
   return (
     <div>
       <p className="text-[9px] text-[#C9A84C] font-bold uppercase pt-1 mb-1">{DOC_KIND_LABELS[kind]} *</p>
+
+      {(value.status === "idle" || value.status === "error") && !documentNumberReady && (
+        <div className="flex items-center gap-2 text-[11px] text-[#9BAFC5] bg-[#12112A] border border-dashed border-[#9BAFC5]/15 rounded px-3 py-3">
+          <AlertTriangle size={14} className="text-[#C9A84C] shrink-0" />
+          Preencha o {kind === "identificacao_foto" ? "CPF" : "CNPJ"} acima antes de anexar este documento.
+        </div>
+      )}
 
       {value.status === "checking" && (
         <div className="flex items-center gap-2 text-[11px] text-[#9BAFC5] bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2">
@@ -111,7 +128,7 @@ function KycDocSlot({ token, kind, documentNumber, value, onChange }: {
         </div>
       )}
 
-      {(value.status === "idle" || value.status === "error") && (
+      {(value.status === "idle" || value.status === "error") && documentNumberReady && (
         <label className="flex items-center gap-2 text-[12px] text-[#9BAFC5] bg-[#12112A] border border-dashed border-[#9BAFC5]/25 rounded px-3 py-3 cursor-pointer hover:border-[#C9A84C]/50 transition">
           <Upload size={14} />
           Selecionar arquivo (JPG, PNG ou PDF, até 15MB)
