@@ -34,8 +34,10 @@ export type V3Series =
   | "MA"        // M&A e Cross-Border
   | "CR"        // Crédito nacional
   | "CRI"       // Crédito internacional (modalidade, derivada do dicionário)
-  | "BA"        // Bolsa de Ativos
+  | "BA"        // Bolsa de Ativos (setor — ipi/icms/outros sem esfera judicial)
   | "PR"        // Precatórios (usa esfera, não setor)
+  | "DC"        // Direito Creditório (usa esfera, não setor — mesma lógica de PR, série própria
+                // desde 17/09/2026: BA tem segment_class='setor' e recusa FED/EST/MUN como classe)
   | "CS"        // Consórcios
   | "V3C-ORG"   // Contrato de originação
   | "V3C-MAN"   // Contrato de mandato
@@ -95,6 +97,17 @@ export async function issueV3Code(
   }
 
   return data;
+}
+
+/**
+ * Traduz esfera (Federal/Estadual/Municipal, texto livre vindo de formulário)
+ * para o código FED/EST/MUN exigido pelas séries com segment_class='esfera'
+ * (PR e DC). Default FED quando ausente — mesmo critério já usado para
+ * precatório desde a Fase 2 da Governança de Numeração (10/08/2026).
+ */
+export function resolveEsferaCode(esfera: string | null | undefined): V3Esfera {
+  const map: Record<string, V3Esfera> = { federal: "FED", estadual: "EST", municipal: "MUN" };
+  return map[(esfera ?? "Federal").toLowerCase()] ?? "FED";
 }
 
 /**

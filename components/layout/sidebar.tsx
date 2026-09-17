@@ -90,8 +90,14 @@ const NAV_SECTIONS: NavSection[] = [
         ],
       },
       {
+        // Achado real 17/09/2026: Joao testou como partner (Monica Xavier,
+        // PARTNER_PRO) e nao achou nenhum link pra Bolsa de Ativos. Causa:
+        // o item PAI so listava roles internas, e o sidebar filtra visibilidade
+        // pelo pai (section.items.filter(item => item.roles.includes(role))) --
+        // o filho "Vitrine" ja tinha roles de partner, mas nunca renderizava
+        // porque o pai escondia o grupo inteiro antes disso.
         href: "/bolsa", label: "Bolsa de Ativos", icon: "Gavel",
-        roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL"],
+        roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL", "STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE"],
         children: [
           { href: "/bolsa", label: "Vitrine", roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL", "STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE"] },
           { href: "/bolsa/mesa", label: "Mesa de Capitais", roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL"] },

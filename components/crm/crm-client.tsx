@@ -34,6 +34,8 @@ import {
   Share2,
   Paperclip,
   Home,
+  Gavel,
+  Loader2,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -539,6 +541,10 @@ const CONVERT_OPTIONS = [
   { id: "high_ticket",        label: "High Ticket",         desc: "CRI, CRA, CPR, Fundos",               color: "#A855F7", bg: "rgba(168,85,247,0.1)", icon: Zap },
   { id: "ma",                 label: "M&A",                 desc: "Fusões e Aquisições",                 color: "#6366F1", bg: "rgba(99,102,241,0.1)", icon: Building2 },
   { id: "consorcio",          label: "Consórcio",           desc: "Imóvel e Veículos",                   color: "#10B981", bg: "rgba(16,185,129,0.1)", icon: Trophy },
+  // Bolsa de Ativos (17/09/2026): Joao testou como partner e nao achou NENHUM
+  // caminho pra cadastrar compra/venda de ativo -- nem sidebar (bug corrigido
+  // a parte, "Bolsa de Ativos" pai tava restrito a role interna) nem CRM.
+  { id: "bolsa_ativos",       label: "Bolsa de Ativos",     desc: "Precatórios e Direitos Creditórios",  color: "#0EA5E9", bg: "rgba(14,165,233,0.1)", icon: Gavel },
 ];
 
 // Linhas de crédito por produto (igual ao nova-proposta-modal)
@@ -617,6 +623,9 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
   const [showCreditoForm, setShowCreditoForm] = useState(false);
   const [creditoFormLevel, setCreditoFormLevel] = useState<"NIVEL_1" | "NIVEL_2" | "NIVEL_3">("NIVEL_1");
   const [showMaForm, setShowMaForm] = useState(false);
+  const [showBolsaForm, setShowBolsaForm] = useState(false);
+  const [bolsaLinkResult, setBolsaLinkResult] = useState<{ url: string; kind: "venda" | "compra" } | null>(null);
+  const [generatingBolsaLink, setGeneratingBolsaLink] = useState<"venda" | "compra" | null>(null);
   const [maDealSuccessMsg, setMaDealSuccessMsg] = useState<string | null>(null);
 
   // Captacao links state
@@ -1194,6 +1203,32 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
     setShowConvert(null);
     setSelectedConvert("");
     setSelectedCreditLine("");
+  }
+
+  // Bolsa de Ativos via CRM (17/09/2026): diferente de credito/M&A, o dado do
+  // ativo (classificacao, valor de face, esfera) nao existe ainda quando o
+  // operador so tem um lead na mao -- precisa ser preenchido por quem tem o
+  // ativo/mandato de busca de verdade. Por isso este fluxo gera o mesmo link
+  // de intake publico que "Novo Ativo" (Meus Ativos) e "Copiar link de
+  // intake" (Mesa) ja usam, em vez de abrir um formulario completo aqui.
+  async function handleGenerateBolsaLink(kind: "venda" | "compra") {
+    setGeneratingBolsaLink(kind);
+    try {
+      const endpoint = kind === "venda" ? "/api/cm/intake/generate" : "/api/cm/intake/buy/generate";
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Erro ao gerar link de cadastro");
+      setBolsaLinkResult({ url: json.url, kind });
+    } catch (err) {
+      setMesaError(err instanceof Error ? err.message : "Erro ao gerar link de cadastro");
+      setTimeout(() => setMesaError(null), 8000);
+    } finally {
+      setGeneratingBolsaLink(null);
+    }
   }
 
   async function handleReagendar(leadId: string, novaData: string) {
@@ -4031,6 +4066,10 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
                     } else if (opt.id === "ma") {
                       setShowNewLead(false);
                       setTimeout(() => setShowMaForm(true), 80);
+                    } else if (opt.id === "bolsa_ativos") {
+                      setShowNewLead(false);
+                      setBolsaLinkResult(null);
+                      setTimeout(() => setShowBolsaForm(true), 80);
                     } else {
                       setNewLead((p) => ({ ...p, productInterest: opt.id, creditLine: "" }));
                     }
@@ -4048,7 +4087,7 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
                     <span style={{ fontSize: 13, fontWeight: 700, color: "#E8EDF5" }}>{opt.label}</span>
                   </div>
                   <div style={{ fontSize: 11, color: "#7A8FA8" }}>{opt.desc}</div>
-                  {(opt.id === "credito_varejo" || opt.id === "credito_estruturado" || opt.id === "high_ticket" || opt.id === "ma") && (
+                  {(opt.id === "credito_varejo" || opt.id === "credito_estruturado" || opt.id === "high_ticket" || opt.id === "ma" || opt.id === "bolsa_ativos") && (
                     <div style={{ marginTop: 6, fontSize: 10, color: opt.color, fontWeight: 600 }}>
                       → Abre formulário especializado
                     </div>
@@ -4360,6 +4399,103 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
               }}
               onCancel={() => setShowMaForm(false)}
             />
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL: Bolsa de Ativos — gera link de intake (Compra ou Venda) ── */}
+      {showBolsaForm && (
+        <div
+          style={{
+            position: "fixed", inset: 0, zIndex: 50, background: "rgba(0,0,0,0.7)",
+            display: "flex", alignItems: "center", justifyContent: "center", padding: 16,
+          }}
+          onClick={(e) => { if (e.target === e.currentTarget) setShowBolsaForm(false); }}
+        >
+          <div style={{
+            background: "#09081A", border: "1px solid #1E3A5F", borderRadius: 16,
+            padding: 32, width: "100%", maxWidth: 480,
+          }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+              <span style={{ fontSize: 16, fontWeight: 700, color: "#E8EDF5" }}>Bolsa de Ativos</span>
+              <Button variant="ghost" size="sm" onClick={() => setShowBolsaForm(false)}>Fechar</Button>
+            </div>
+
+            {!bolsaLinkResult ? (
+              <>
+                <p style={{ fontSize: 12, color: "#7A8FA8", marginBottom: 20 }}>
+                  Precatórios e Direitos Creditórios são cadastrados pelo próprio cedente ou
+                  comprador via link — escolha o tipo de operação e envie o link gerado para o cliente.
+                </p>
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  <button
+                    onClick={() => handleGenerateBolsaLink("venda")}
+                    disabled={!!generatingBolsaLink}
+                    style={{
+                      display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                      background: "rgba(14,165,233,0.1)", border: "1px solid rgba(14,165,233,0.3)",
+                      color: "#0EA5E9", borderRadius: 10, padding: "12px", fontSize: 13, fontWeight: 700,
+                      cursor: "pointer", opacity: generatingBolsaLink ? 0.5 : 1,
+                    }}
+                  >
+                    {generatingBolsaLink === "venda" ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                    Venda de Ativo (Cedente)
+                  </button>
+                  <button
+                    onClick={() => handleGenerateBolsaLink("compra")}
+                    disabled={!!generatingBolsaLink}
+                    style={{
+                      display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                      background: "#0F1E35", border: "1px solid rgba(14,165,233,0.3)",
+                      color: "#E8EDF5", borderRadius: 10, padding: "12px", fontSize: 13, fontWeight: 700,
+                      cursor: "pointer", opacity: generatingBolsaLink ? 0.5 : 1,
+                    }}
+                  >
+                    {generatingBolsaLink === "compra" ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                    Compra de Ativo (Mandato de Busca)
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <p style={{ fontSize: 12, color: "#7A8FA8", marginBottom: 12 }}>
+                  Link gerado ({bolsaLinkResult.kind === "venda" ? "venda" : "compra"} de ativo). Copie e envie para o cliente:
+                </p>
+                <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+                  <input
+                    readOnly
+                    value={bolsaLinkResult.url}
+                    style={{
+                      flex: 1, background: "#0F1E35", border: "1px solid #1E3A5F", borderRadius: 8,
+                      padding: "8px 10px", fontSize: 11, color: "#E8EDF5",
+                    }}
+                  />
+                  <Button variant="outline" size="sm" onClick={() => navigator.clipboard.writeText(bolsaLinkResult.url)}>
+                    <Copy className="w-3.5 h-3.5" />
+                  </Button>
+                </div>
+                <a
+                  href={`https://wa.me/?text=${encodeURIComponent(`Olá! Segue o link para cadastro na Bolsa de Ativos V3 Partners: ${bolsaLinkResult.url}`)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                    background: "rgba(16,185,129,0.1)", border: "1px solid rgba(16,185,129,0.3)",
+                    color: "#10B981", borderRadius: 10, padding: "10px", fontSize: 13, fontWeight: 700,
+                    textDecoration: "none", marginBottom: 10,
+                  }}
+                >
+                  <Share2 className="w-4 h-4" /> Enviar por WhatsApp
+                </a>
+                <Button
+                  variant="ghost"
+                  className="w-full"
+                  onClick={() => { setShowBolsaForm(false); setBolsaLinkResult(null); }}
+                >
+                  Concluir
+                </Button>
+              </>
+            )}
           </div>
         </div>
       )}

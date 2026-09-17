@@ -7,7 +7,11 @@ function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 }
 
-const ALLOWED_ROLES = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"];
+const INTERNAL_ROLES = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"];
+// CRM (17/09/2026, mesmo BRIEF do fix de /api/cm/intake/generate): partner
+// usa o CRM pra converter os proprios leads em Bolsa de Ativos tambem, entao
+// esta rota precisa aceitar partner do mesmo jeito, sempre auto-atribuindo.
+const PARTNER_ROLES = ["PARTNER", "PARTNER_PRO", "STARTER", "ENTERPRISE"];
 
 export async function POST(req: NextRequest) {
   const supabase = await createClient();
@@ -15,21 +19,27 @@ export async function POST(req: NextRequest) {
   if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
   const { data: profile } = await svc().from("profiles").select("role").eq("id", user.id).single();
-  if (!profile || !ALLOWED_ROLES.includes(profile.role as string))
+  const role = profile?.role as string | undefined;
+  const isInternal = !!role && INTERNAL_ROLES.includes(role);
+  const isPartner = !!role && PARTNER_ROLES.includes(role);
+  if (!isInternal && !isPartner)
     return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
 
   const token = randomUUID().replace(/-/g, "");
 
   // Partner dono do lead, atribuido no momento da geracao (BRIEF 18/08/2026) -- nunca
   // confiado sem checar, mesmo criterio ja usado no POST publico deste mesmo intake:
-  // um id invalido nunca bloqueia a geracao do link, so fica sem atribuicao.
+  // um id invalido nunca bloqueia a geracao do link, so fica sem atribuicao. Partner
+  // so cria link atribuido a SI MESMO -- nunca aceito do body (17/09/2026).
   const body = await req.json().catch(() => ({} as Record<string, unknown>));
   const rawPartnerId = typeof body.origin_partner_id === "string" ? body.origin_partner_id : null;
   const rawReferralId = typeof body.origin_referral_id === "string" ? body.origin_referral_id : null;
 
   let originPartnerId: string | null = null;
   let originReferralId: string | null = null;
-  if (rawPartnerId) {
+  if (isPartner) {
+    originPartnerId = user.id;
+  } else if (rawPartnerId) {
     const { data } = await svc().from("profiles").select("id").eq("id", rawPartnerId).maybeSingle();
     if (data) originPartnerId = data.id;
   } else if (rawReferralId) {

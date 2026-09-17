@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { isValidCpfCnpj } from "@/lib/utils";
+import { issueV3Code, resolveSectorCode, resolveEsferaCode } from "@/lib/v3-codes";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -60,7 +61,7 @@ export async function POST(
 
   const { data: listing } = await svc()
     .from("cm_asset_listings")
-    .select("id, intake_locked")
+    .select("id, intake_locked, created_by")
     .eq("cm_intake_token", token)
     .single();
 
@@ -100,10 +101,27 @@ export async function POST(
     }, { status: 422 });
   }
 
-  const { data: anonId } = await svc().rpc("generate_cm_anonymous_id", {
-    p_asset_type: asset_type,
-    p_esfera: esfera ?? "Federal",
-  });
+  // Fix 17/09/2026: este era o unico ponto do sistema ainda emitindo numero
+  // pela funcao LEGADA generate_cm_anonymous_id() -- violacao ativa de
+  // v3-numbering-governance.md, nunca migrado quando a Fase 2 (10/08) tocou
+  // o resto do sistema. O placeholder gravado em /api/cm/intake/generate
+  // (antes de existir classificacao) nunca usa um codigo real de serie --
+  // so aqui, com o tipo e a esfera que o proprio cedente/partner escolheu,
+  // e que o codigo definitivo e emitido.
+  let anonId: string;
+  try {
+    if (asset_type === "precatorio" || asset_type === "direito_creditorio") {
+      const esferaCode = resolveEsferaCode(esfera);
+      const series = asset_type === "precatorio" ? "PR" : "DC";
+      anonId = await issueV3Code(series, esferaCode);
+    } else {
+      const sectorCode = await resolveSectorCode(null);
+      anonId = await issueV3Code("BA", sectorCode);
+    }
+  } catch (codeErr) {
+    const msg = codeErr instanceof Error ? codeErr.message : String(codeErr);
+    return NextResponse.json({ error: `Falha ao emitir código do ativo: ${msg}` }, { status: 500 });
+  }
 
   const { error } = await svc()
     .from("cm_asset_listings")
@@ -146,8 +164,22 @@ export async function POST(
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
+  // Governanca Documental Universal (achado 17/09/2026): listagem submetida via
+  // link de intake nunca chamava create_deal_folder -- so a criacao direta pela
+  // Mesa (POST /api/cm/listings) tinha pasta MPS. Best-effort, nunca bloqueia a
+  // resposta ao cedente/partner. p_user_id usa quem gerou o link (created_by),
+  // ja que o formulario publico nao tem sessao autenticada.
+  const { error: folderError } = await svc().rpc("create_deal_folder", {
+    p_vertical: "BolsaDeAtivos",
+    p_deal_code: anonId,
+    p_client_name: seller_name,
+    p_user_id: listing.created_by,
+  });
+  if (folderError) console.error("[cm/intake/[token] POST] falha ao criar pasta MPS", folderError.message);
+
   return NextResponse.json({
     success: true,
+    anonymous_id: anonId,
     message: "Formulário enviado com sucesso. A equipe V3 Partners entrará em contato.",
   });
 }
