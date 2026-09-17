@@ -279,6 +279,22 @@ export function PedidoDetailModal({ order, onClose, onUpdated }: Props) {
     if (json) onUpdated();
   }
 
+  // Confirmação manual de pagamento — pra quando o webhook da Cora falha ou
+  // atrasa (Pix fora do fluxo, comprovante confirmado por fora). Sem
+  // status=PAID nada abaixo libera (Vincular exige pago). Dispara o mesmo
+  // reconciliamento do webhook (token de intake, email ao cliente, avisos) --
+  // ver app/api/credit-engine/orders/[id]/mark-paid/route.ts.
+  async function handleMarkPaid(paid: boolean) {
+    const ok = window.confirm(
+      paid
+        ? "Confirma que o pagamento deste pedido foi recebido? Isso libera o vínculo com a proposta e dispara o mesmo email de confirmação enviado ao cliente na confirmação automática."
+        : "Marcar como NÃO PAGO de novo? Isso só corrige o status -- não desfaz email/consentimento já gerados se o pedido já tinha sido confirmado antes."
+    );
+    if (!ok) return;
+    const json = await call("mark-paid", `/api/credit-engine/orders/${order.id}/mark-paid`, { paid });
+    if (json) onUpdated();
+  }
+
   async function handleTriggerAnalysis() {
     if (!order.credit_desk_proposal_id) return;
     const json = await call("analyze", "/api/credit-engine/trigger", { proposal_id: order.credit_desk_proposal_id });
@@ -337,6 +353,25 @@ export function PedidoDetailModal({ order, onClose, onUpdated }: Props) {
               </p>
             </div>
             <div><p className="text-[10px] text-muted-foreground uppercase tracking-wider">Pago em</p><p className="text-foreground font-medium">{order.paid_at ? formatDate(order.paid_at) : "—"}</p></div>
+          </div>
+
+          <div className="rounded-xl border border-border/50 bg-card p-4 flex items-center justify-between gap-3 flex-wrap">
+            <div>
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Pagamento</p>
+              {order.status === "PAID" ? (
+                <p className="text-sm font-semibold text-emerald-400">Pago</p>
+              ) : (
+                <p className="text-sm font-semibold text-amber-400">Aguardando pagamento</p>
+              )}
+            </div>
+            <Button
+              size="sm"
+              variant={order.status === "PAID" ? "outline" : "default"}
+              disabled={busy !== null}
+              onClick={() => handleMarkPaid(order.status !== "PAID")}
+            >
+              {busy === "mark-paid" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : order.status === "PAID" ? "Marcar como não pago" : "Marcar como pago"}
+            </Button>
           </div>
 
           {order.consent_status !== "consented" && (
