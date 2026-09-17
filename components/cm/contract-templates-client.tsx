@@ -1247,11 +1247,11 @@ ${allParties.length > 0 ? `<div class="qualbox">
           ) : (
             <div className="bg-[#12112A] border border-[#9BAFC5]/10 rounded-lg p-6">
               {selected && (
-                <div className="flex items-center justify-between mb-4 pb-4 border-b border-[#9BAFC5]/10">
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-4 pb-4 border-b border-[#9BAFC5]/10">
                   <span className={cn("text-[10px] font-bold px-2.5 py-1 rounded", (APPROVAL_STATUS_MAP[selected.approval_status] ?? APPROVAL_STATUS_MAP.rascunho).color)}>
                     {(APPROVAL_STATUS_MAP[selected.approval_status] ?? APPROVAL_STATUS_MAP.rascunho).label}
                   </span>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <button onClick={openFullscreenReader}
                       title="Abrir a minuta numa janela grande, em tela cheia, para leitura"
                       className="flex items-center gap-1.5 px-3 py-1.5 bg-[#162744] text-[#9BAFC5] border border-[#9BAFC5]/20 rounded-lg text-xs font-bold hover:text-[#F5F1E8] hover:bg-[#243A66] transition">
@@ -1759,7 +1759,7 @@ ${allParties.length > 0 ? `<div class="qualbox">
                 </div>
               )}
 
-              <div className="flex items-center justify-between mt-4">
+              <div className="flex flex-wrap items-center justify-between gap-2 mt-4">
                 <div>
                   {selected && (
                     <button onClick={() => handleDelete(selected.id)}

@@ -837,7 +837,15 @@ export function ContractsPanelClient({ role }: { role: string }) {
                 )}
 
                 {/* Ações */}
-                <div className="mt-4 pt-3 border-t border-[#9BAFC5]/10 flex items-center gap-2">
+                {/* Achado real reportado por João (17/09/2026), confirmado medindo o
+                    DOM: com flex nowrap sem quebra, a fileira de botões (Visualizar,
+                    Editar, Aprovar, Reprovar, Enviar p/ Assinatura, Gerar Link de
+                    Qualificação, Excluir) ultrapassava a largura real do card (~504px)
+                    sem quebrar linha nem ter rolagem horizontal. O botão Excluir (com
+                    ml-auto, empurrado pro fim da fileira) ficava tecnicamente presente
+                    no DOM mas desenhado longe da área do card, nunca notado pelo
+                    usuário. flex-wrap resolve sem precisar de scroll horizontal. */}
+                <div className="mt-4 pt-3 border-t border-[#9BAFC5]/10 flex flex-wrap items-center gap-2">
                   <button
                     onClick={() => setShowPreview(!showPreview)}
                     className="flex items-center gap-1.5 px-3 py-1.5 bg-[#162744] text-[#F5F1E8] rounded-lg text-xs hover:bg-[#243A66] transition"
