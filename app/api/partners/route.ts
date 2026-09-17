@@ -20,10 +20,14 @@ export async function GET() {
     return NextResponse.json({ error: "Acesso restrito" }, { status: 403 });
   }
 
+  // GESTAO/ADMIN incluidos (17/09/2026, pedido de Joao): socios/staff que
+  // tambem atuam como indicador de captacao (ex: Rafael Campos, Auditor de
+  // Tokenizacao) precisam aparecer aqui pra virar parte de qualificacao/NCNDA,
+  // sem precisar rebaixar o role deles pra PARTNER e perder o acesso amplo.
   const { data, error } = await svc
     .from("profiles")
     .select("id, full_name, email, role")
-    .in("role", ["STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE"])
+    .in("role", ["STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE", "GESTAO", "ADMIN"])
     .order("full_name");
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
