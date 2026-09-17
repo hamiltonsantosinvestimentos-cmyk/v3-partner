@@ -37,7 +37,7 @@ export async function GET(req: NextRequest) {
 
   const { data: order } = await svc
     .from("partner_service_orders")
-    .select("id, status, amount_cents, client_name, client_email, created_at, paid_at")
+    .select("id, status, amount_cents, client_name, client_email, created_at, paid_at, report_public_token, report_delivered_at")
     .eq("credit_desk_proposal_id", proposalId)
     .order("created_at", { ascending: false })
     .limit(1)

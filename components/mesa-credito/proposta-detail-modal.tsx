@@ -896,7 +896,7 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
   // botão Avançar. O bloqueio de verdade é enforced no backend
   // (app/api/credit-proposals/route.ts); isto aqui é só a UI refletindo o
   // mesmo critério pra não deixar o usuário clicar num botão que vai falhar.
-  const [analiseOrder, setAnaliseOrder] = useState<{ status: string; paid_at: string | null } | null | "loading">("loading");
+  const [analiseOrder, setAnaliseOrder] = useState<{ status: string; paid_at: string | null; report_public_token: string | null; report_delivered_at: string | null } | null | "loading">("loading");
   const [autorizandoAvanco, setAutorizandoAvanco] = useState(false);
   const [erroAutorizarAvanco, setErroAutorizarAvanco] = useState<string | null>(null);
 
@@ -2835,6 +2835,7 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
               <LinkServicoStatusBadge dealType="credit" dealId={proposal.id} />
             </div>
             <h2 className="text-base font-bold text-white">{proposal.title}</h2>
+            <p className="text-xs text-muted-foreground">{proposal.client_name}</p>
           </div>
           <div className="flex items-center gap-1.5 ml-4 flex-shrink-0">
             {canChangeStage && (
@@ -4195,6 +4196,26 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
               canConfirm={!!canConfirmDocsChecklist}
               onProposalUpdate={onProposalUpdate}
             />
+          )}
+
+          {/* ── Relatório do Partner (Análise de Crédito) — consulta (17/09/2026) ── */}
+          {modalTab === "documentos" && analiseOrder !== "loading" && analiseOrder?.report_public_token && (
+            <div className="p-4 rounded-xl border border-[#C9A84C]/20 bg-[#12112A] space-y-2">
+              <p className="text-xs font-semibold text-[#C9A84C] flex items-center gap-1.5">
+                <FileText className="w-3.5 h-3.5" /> Relatório do Partner
+              </p>
+              <p className="text-[10px] text-muted-foreground">
+                Relatório de Análise de Crédito gerado pra esta proposta{analiseOrder.report_delivered_at ? ` — entregue ao cliente em ${formatDate(analiseOrder.report_delivered_at)}` : " (ainda não entregue ao cliente)"}.
+              </p>
+              <a
+                href={`/relatorio-credito/${analiseOrder.report_public_token}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#C9A84C]/10 border border-[#C9A84C]/30 text-[#C9A84C] hover:bg-[#C9A84C]/20 transition-colors text-xs font-semibold"
+              >
+                <ExternalLink className="w-3.5 h-3.5" /> Ver relatório
+              </a>
+            </div>
           )}
 
           {/* ── Upload livre de documentos (partner e admin) ── */}
