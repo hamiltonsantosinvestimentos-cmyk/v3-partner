@@ -356,7 +356,16 @@ export function PedidoDetailModal({ order, onClose, onUpdated }: Props) {
                     <Button size="sm" disabled={busy !== null} onClick={handleLinkProposal}>
                       {busy === "link" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Vincular"}
                     </Button>
-                  ) : undefined
+                  ) : (
+                    <a
+                      href={`/mesa-operacional?proposalId=${order.credit_desk_proposal_id}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center gap-1.5 text-xs text-[#C9A84C] hover:underline"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" /> Ver na Mesa Operacional
+                    </a>
+                  )
                 }
               />
               <StepRow

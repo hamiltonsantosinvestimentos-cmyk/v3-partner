@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useCallback, useEffect, useRef } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   Headphones, Plus, ChevronRight, User, Building2,
   Clock, CheckCircle2, AlertCircle, Link2,
@@ -1807,6 +1808,22 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
 
   const [ticketDetail, setTicketDetail] = useState<Ticket | null>(null);
   const [detailProposal, setDetailProposal] = useState<ProposalCard | null>(null);
+
+  // Deep-link vindo da aba "Pedidos de Partners" (?proposalId=) — abre direto
+  // o modal da proposta vinculada, já com código e nome do cliente visíveis
+  // no cabeçalho (17/09/2026, pedido do Hamilton).
+  const searchParams = useSearchParams();
+  const deepLinkAppliedRef = useRef(false);
+  useEffect(() => {
+    if (deepLinkAppliedRef.current) return;
+    const proposalId = searchParams.get("proposalId");
+    if (!proposalId) return;
+    const match = proposals.find((p) => p.id === proposalId);
+    if (match) {
+      deepLinkAppliedRef.current = true;
+      setDetailProposal(match);
+    }
+  }, [searchParams, proposals]);
   const [editProposal, setEditProposal] = useState<ProposalCard | null>(null);
   const [stageSlaTarget, setStageSlaTarget] = useState<{ proposal: ProposalCard; stage: SlaStage } | null>(null);
   const [search, setSearch] = useState("");
