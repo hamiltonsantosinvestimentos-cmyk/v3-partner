@@ -140,6 +140,16 @@ const STATUS_QUICK_TRANSITIONS = [
 // Isso so evita oferecer, no menu/drag, um atalho que o backend ja vai recusar.
 const HEAD_ONLY_STATUSES = ["aprovado_head", "aprovado_com_restricoes", "ativo_vitrine", "em_escrow_due_diligence", "liquidado"];
 
+// Achado 17/09/2026, ao adicionar o botao "Gerar NCNDA": nem app/(platform)/bolsa/mesa
+// nem app/(platform)/marketplace/mesa-capitais fazem redirect por role no server (so
+// resolvem userRole e passam como prop, sem bloquear PARTNER/PARTNER_PRO/STARTER/
+// ENTERPRISE que acesse a URL direto). A API por baixo (/api/contracts/generate,
+// /api/cm/listings/[id]/status) ja rejeita esses roles no servidor, mas o botao nao
+// pode nem aparecer pra quem nao e Mesa -- Joao pediu explicitamente ("liberado pela
+// mesa, nao pelo partner") para o Gerar NCNDA. Mesma trava aplicada a Reprovar, que
+// tinha o mesmo buraco.
+const MESA_ROLES = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"];
+
 function nextQuickTransition(status: string, role: string): { to: string; label: string } | null {
   const t = STATUS_QUICK_TRANSITIONS.find((x) => x.from === status);
   if (!t) return null;
@@ -3533,20 +3543,24 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
                       </button>
                     </>
                   )}
-                  <button
-                    onClick={() => handleListingDecision(selectedListing.id, "reprovado")}
-                    disabled={decidingListing}
-                    className="flex items-center gap-1.5 px-3 py-2 bg-red-500/10 border border-red-500/20 rounded text-red-400 text-[10px] font-bold hover:bg-red-500/20 transition disabled:opacity-50"
-                  >
-                    Reprovar
-                  </button>
+                  {MESA_ROLES.includes(userRole) && (
+                    <button
+                      onClick={() => handleListingDecision(selectedListing.id, "reprovado")}
+                      disabled={decidingListing}
+                      className="flex items-center gap-1.5 px-3 py-2 bg-red-500/10 border border-red-500/20 rounded text-red-400 text-[10px] font-bold hover:bg-red-500/20 transition disabled:opacity-50"
+                    >
+                      Reprovar
+                    </button>
+                  )}
                 </div>
               </div>
             )}
 
             {/* Documentos (17/09/2026): NCNDA ja tem minuta aprovada pra Bolsa de
                 Ativos -- Mandato ainda nao (pendente do juridico), por isso so um
-                botao aqui hoje. */}
+                botao aqui hoje. Liberado so pra Mesa (ADMIN/GESTAO/MESA_OPERACIONAL) --
+                pedido explicito de Joao, o botao nao pode nem renderizar pra Partner. */}
+            {MESA_ROLES.includes(userRole) && (
             <div className="px-4 mt-4 mb-2">
               <div className="text-[10px] text-[#9BAFC5] font-bold uppercase tracking-wider mb-2">Documentos</div>
               <button
@@ -3558,6 +3572,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
               </button>
               <p className="text-[9px] text-[#9BAFC5]/60 mt-1">Mandato: minuta ainda não aprovada pelo jurídico para esta vertical.</p>
             </div>
+            )}
             </>)}
 
             {/* ══ ABA: FORJA JURÍDICO ══ */}
