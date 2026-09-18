@@ -8,6 +8,28 @@ on:
   workflow_dispatch:
 
 jobs:
+  # Gate de acesso (18/09/2026): falha o CI se alguma pagina interna do
+  # sidebar (roles sem PARTNER/PARTNER_PRO/PARTNER_HE/STARTER/ENTERPRISE)
+  # ficar sem requireRole() no servidor. Ver scripts/audit-page-role-gates.js
+  # e o achado real que motivou isso (12 paginas expostas so pelo link
+  # escondido no sidebar, incluindo pipeline inteiro de M&A vazando sem
+  # nenhum gate). Job separado e leve: nao precisa de Playwright nem
+  # segredos, so Node puro lendo arquivos do proprio repo.
+  access-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Auditar gate de acesso das paginas internas
+        run: npm run audit:access
+
   playwright:
     runs-on: ubuntu-latest
     timeout-minutes: 15
