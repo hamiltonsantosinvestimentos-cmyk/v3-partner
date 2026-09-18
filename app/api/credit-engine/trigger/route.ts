@@ -99,7 +99,25 @@ export async function POST(req: NextRequest) {
     .eq("cnpj", proposal.client_cpf_cnpj ?? "")
     .single();
 
-  const effectiveSourceConfig = sourceConfig ?? CREDIT_SOURCE_DEFAULTS;
+  const baseSourceConfig = sourceConfig ?? CREDIT_SOURCE_DEFAULTS;
+
+  // Pedidos de Partners de PF: o Serasa só roda no n8n quando serasa_cpf está
+  // ligado E o CPF consta em serasa_cpf_list. O painel de fontes não permite
+  // ligar isso (toggle travado) e o default é desligado, então toda análise de
+  // CPF saía "Serasa não consultada", mesmo regenerando. Libera aqui, por
+  // análise, só para o CPF do próprio pedido (formatado e só dígitos, pois não
+  // vemos qual formato o node do n8n compara), respeitando serasa desligado.
+  const cpfFormatado = rawDoc.length === 11
+    ? rawDoc.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4")
+    : null;
+  const effectiveSourceConfig =
+    subject_type === "PF" && baseSourceConfig.serasa && cpfFormatado
+      ? {
+          ...baseSourceConfig,
+          serasa_cpf: true,
+          serasa_cpf_list: Array.from(new Set([...(baseSourceConfig.serasa_cpf_list ?? []), rawDoc, cpfFormatado])),
+        }
+      : baseSourceConfig;
 
   const webhookRes = await fetch("https://n8n-514n.onrender.com/webhook/v3-credit-engine", {
     method: "POST",
