@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
+import { DEMAND_PIPELINE_STATUSES } from "@/lib/cm-demand-stages";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -57,7 +58,11 @@ export async function GET(req: NextRequest) {
   // aceito de query param do cliente (evitaria um partner ver a demanda de outro).
   if (caller.isPartner) query = query.eq("origin_partner_id", caller.userId);
 
-  if (status !== "all") query = query.eq("status", status);
+  // Fase 5 (19/09/2026): "pipeline" = todas as etapas intermediarias do funil de compra
+  // (entre o formulario preenchido e a negociacao), "all" = tudo, qualquer outro valor
+  // e o status exato (default "ativo" preserva o comportamento anterior do painel).
+  if (status === "pipeline") query = query.in("status", [...DEMAND_PIPELINE_STATUSES]);
+  else if (status !== "all") query = query.eq("status", status);
 
   const { data: demands, error } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

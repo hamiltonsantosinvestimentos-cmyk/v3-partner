@@ -155,6 +155,23 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       p_user_id: caller.userId,
     });
 
+    // Fase 5, 5.3 (19/09/2026): Etapa 6 do lado compra. Quando a oferta veio de uma demanda
+    // estruturada (cm_bids.demand_id), aceitar move a demanda ativo -> em_negociacao.
+    // Best-effort: o aceite do lado venda ja foi confirmado acima e nunca pode ser
+    // desfeito por a demanda estar fora de "ativo" (ex.: cancelada no meio do caminho).
+    // Hoje nenhum fluxo grava demand_id ainda, entao isto so age quando esse vinculo existir.
+    if (bid.demand_id) {
+      const { data: demandMoved } = await svc().rpc("transition_cm_demand_status", {
+        p_demand_id: bid.demand_id,
+        p_new_status: "em_negociacao",
+        p_reason: `Oferta aceita${matchDealId ? ` (${matchDealId})` : ""}, negociação iniciada.`,
+        p_user_id: caller.userId,
+      });
+      if (!demandMoved) {
+        console.warn(`[cm/bids] demanda ${bid.demand_id} não avançou para em_negociacao (fora de "ativo"?)`);
+      }
+    }
+
     const token = randomUUID().replace(/-/g, "");
     const { data: drAccess } = await svc().from("cm_deal_room_access").insert({
       listing_id: listing.id,

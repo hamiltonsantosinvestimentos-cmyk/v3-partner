@@ -1,9 +1,26 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Loader2, FileText, X, Download, RefreshCw, Repeat, ShoppingCart, IdCard, Target, ShieldCheck, Link2, Check, UserPlus, ClipboardCheck, History, Send } from "lucide-react";
+import { Loader2, FileText, X, Download, RefreshCw, Repeat, ShoppingCart, IdCard, Target, ShieldCheck, Link2, Check, UserPlus, ClipboardCheck, History, Send, GitBranch } from "lucide-react";
 import { QuickIndicateModal } from "@/components/cm/quick-indicate-modal";
 import { QualificationBatchesPanel } from "@/components/cm/qualification-batches-panel";
+import {
+  DEMAND_STATUS_LABELS,
+  DEMAND_STATUS_STAGE,
+  DEMAND_NEXT_ACTIONS,
+  DEMAND_DECLINE_REASONS,
+  DEMAND_KYC_REQUIRED_FOR,
+  type DemandAction,
+} from "@/lib/cm-demand-stages";
+
+// Abas de listagem (Fase 5, 5.3): "ativo" e o comportamento historico do painel (quem ja
+// concorre no match); as demais mostram o funil que antes ficava invisivel.
+const VIEWS: { value: string; label: string }[] = [
+  { value: "ativo", label: "Ativos no Match" },
+  { value: "pipeline", label: "Em Qualificação" },
+  { value: "pendente", label: "Aguardando Formulário" },
+  { value: "all", label: "Todas" },
+];
 
 type BuyDemand = {
   id: string;
@@ -136,6 +153,11 @@ export function BuySideDemandsPanel({ mode = "mesa", title, subtitle }: BuySideD
   const [newNote, setNewNote] = useState("");
   const [savingNote, setSavingNote] = useState(false);
   const [approvingKyc, setApprovingKyc] = useState(false);
+  const [view, setView] = useState("ativo");
+  const [pendingAction, setPendingAction] = useState<DemandAction | null>(null);
+  const [actionReason, setActionReason] = useState("");
+  const [actionCategory, setActionCategory] = useState("");
+  const [movingStage, setMovingStage] = useState(false);
 
   const copyLink = (d: BuyDemand) => {
     const url = `${window.location.origin}/intake/buy/${d.intake_token}`;
@@ -147,7 +169,7 @@ export function BuySideDemandsPanel({ mode = "mesa", title, subtitle }: BuySideD
   const fetchDemands = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/cm/investor-demands?status=ativo");
+      const res = await fetch(`/api/cm/investor-demands?status=${view}`);
       const json = await res.json();
       setDemands(json.demands ?? []);
     } catch {
@@ -155,12 +177,15 @@ export function BuySideDemandsPanel({ mode = "mesa", title, subtitle }: BuySideD
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [view]);
 
   useEffect(() => { fetchDemands(); }, [fetchDemands]);
 
   const openDetail = async (demand: BuyDemand) => {
     setDetailDemand(demand);
+    setPendingAction(null);
+    setActionReason("");
+    setActionCategory("");
     setDocsLoading(true);
     setTimelineLoading(true);
     try {
@@ -226,6 +251,44 @@ export function BuySideDemandsPanel({ mode = "mesa", title, subtitle }: BuySideD
     }
   };
 
+  // Fase 5, 5.3: a Mesa move a demanda de etapa. Acoes que exigem motivo abrem um mini
+  // formulario inline (nunca window.prompt), as demais executam direto. A autoridade
+  // final e a rota + a funcao do banco; aqui so montamos a chamada e refletimos o retorno.
+  const startStageAction = (a: DemandAction) => {
+    if (a.needsReason || a.needsCategory) {
+      setPendingAction(a);
+      setActionReason("");
+      setActionCategory("");
+    } else {
+      void runStageAction(a, "", "");
+    }
+  };
+
+  const runStageAction = async (a: DemandAction, reason: string, category: string) => {
+    if (!detailDemand) return;
+    setMovingStage(true);
+    try {
+      const res = await fetch(`/api/cm/investor-demands/${detailDemand.id}/status`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ new_status: a.to, reason: reason || undefined, reason_category: category || undefined }),
+      });
+      const json = await res.json();
+      if (res.ok) {
+        setDetailDemand((prev) => (prev ? { ...prev, status: a.to } : prev));
+        setTimeline((prev) => [{ id: `local-${Date.now()}`, content: `Etapa da demanda alterada para "${DEMAND_STATUS_LABELS[a.to] ?? a.to}".`, is_system: true, created_at: new Date().toISOString(), profiles: null }, ...prev]);
+        setPendingAction(null);
+        fetchDemands();
+      } else {
+        alert(json.error ?? "Erro ao mover a demanda de etapa");
+      }
+    } catch {
+      alert("Erro de conexão");
+    } finally {
+      setMovingStage(false);
+    }
+  };
+
   const statusHeader = detailDemand ? PIPELINE_STATUS[detailDemand.pipeline_status] : null;
 
   return (
@@ -243,6 +306,22 @@ export function BuySideDemandsPanel({ mode = "mesa", title, subtitle }: BuySideD
         </button>
       </div>
 
+      <div className="flex flex-wrap gap-1.5">
+        {VIEWS.map((v) => (
+          <button
+            key={v.value}
+            onClick={() => setView(v.value)}
+            className={`rounded-full border px-3 py-1.5 text-[10px] font-bold transition-colors ${
+              view === v.value
+                ? "border-[#C9A84C]/50 bg-[#C9A84C]/10 text-[#E8C97A]"
+                : "border-[#243A66] text-[#9BAFC5] hover:text-[#F5F1E8] hover:border-[#9BAFC5]/40"
+            }`}
+          >
+            {v.label}
+          </button>
+        ))}
+      </div>
+
       {loading ? (
         <div className="flex items-center justify-center py-16">
           <Loader2 size={20} className="text-[#9BAFC5] animate-spin" />
@@ -250,7 +329,7 @@ export function BuySideDemandsPanel({ mode = "mesa", title, subtitle }: BuySideD
       ) : demands.length === 0 ? (
         <div className="text-center py-16 rounded-xl border border-dashed border-[#243A66]">
           <ShoppingCart size={24} className="text-[#5A7490] mx-auto mb-3 opacity-40" />
-          <p className="text-[#5A7490] text-sm">Nenhuma demanda de compra ativa.</p>
+          <p className="text-[#5A7490] text-sm">Nenhuma demanda de compra nesta visão.</p>
           <p className="text-[#5A7490] text-xs mt-1">Gere um link em "Link Comprador" no header desta tela.</p>
         </div>
       ) : (
@@ -308,6 +387,9 @@ export function BuySideDemandsPanel({ mode = "mesa", title, subtitle }: BuySideD
                   </td>
                   <td className="px-3 py-3">
                     <StatusChip status={d.pipeline_status} />
+                    <div className="text-[9px] font-bold text-[#E8C97A] mt-1">
+                      Etapa {DEMAND_STATUS_STAGE[d.status] ?? "?"} · {DEMAND_STATUS_LABELS[d.status] ?? d.status}
+                    </div>
                     {d.match_count > 0 && (
                       <div className="text-[9px] text-[#9BAFC5] mt-1">{d.match_count} match(es)</div>
                     )}
@@ -345,8 +427,8 @@ export function BuySideDemandsPanel({ mode = "mesa", title, subtitle }: BuySideD
 
       {/* Card de detalhe: identificacao + mandato de busca + NDA + documentos, tudo num so lugar */}
       {detailDemand && statusHeader && (
-        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60 p-4" onClick={() => setDetailDemand(null)}>
-          <div className="w-full max-w-2xl max-h-[85vh] bg-[#09081A] border border-[#C9A84C]/20 rounded-xl flex flex-col" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-2xl max-h-[85vh] bg-[#09081A] border border-[#C9A84C]/20 rounded-xl flex flex-col">
             <div className="p-4 border-b flex items-center justify-between flex-shrink-0" style={{ borderColor: statusHeader.border }}>
               <div>
                 <div className="text-sm font-bold text-[#F5F1E8]">{detailDemand.nome_contato}</div>
@@ -374,6 +456,84 @@ export function BuySideDemandsPanel({ mode = "mesa", title, subtitle }: BuySideD
             </div>
 
             <div className="flex-1 overflow-y-auto p-4 space-y-5">
+              {/* Etapa da Demanda (Fase 5, 5.3): pipeline de 7 etapas do lado comprador. A Mesa
+                  avanca por aqui; o banco (transition_cm_demand_status) valida cada passo. */}
+              <div>
+                <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-[#E8C97A] mb-2.5">
+                  <GitBranch size={12} /> Etapa da Demanda
+                </div>
+                <div className="bg-[#12112A] border border-[#243A66] rounded-lg p-3 space-y-3">
+                  <div className="text-xs text-[#F5F1E8]">
+                    <span className="font-bold text-[#E8C97A]">Etapa {DEMAND_STATUS_STAGE[detailDemand.status] ?? "?"} de 7</span>
+                    {" · "}{DEMAND_STATUS_LABELS[detailDemand.status] ?? detailDemand.status}
+                  </div>
+                  {mode === "mesa" && (DEMAND_NEXT_ACTIONS[detailDemand.status] ?? []).length > 0 && !pendingAction && (
+                    <div className="flex flex-wrap gap-2">
+                      {(DEMAND_NEXT_ACTIONS[detailDemand.status] ?? []).map((a) => {
+                        const blockedKyc = DEMAND_KYC_REQUIRED_FOR.includes(a.to) && !detailDemand.kyc_approved_at;
+                        const blockedNda = a.to === "nda_assinado" && !detailDemand.nda_accepted_at;
+                        const blocked = blockedKyc || blockedNda;
+                        return (
+                          <button
+                            key={a.to}
+                            onClick={() => startStageAction(a)}
+                            disabled={movingStage || blocked}
+                            title={blockedKyc ? "Aprove o KYC do comprador antes" : blockedNda ? "NDA ainda não aceito pelo comprador" : undefined}
+                            className={`rounded-lg border px-3 py-1.5 text-[10px] font-bold transition-colors disabled:opacity-30 disabled:cursor-not-allowed ${
+                              a.danger
+                                ? "border-[#E8935A]/40 text-[#E8935A] hover:bg-[#E8935A]/10"
+                                : "border-[#C9A84C]/40 bg-[#C9A84C]/10 text-[#E8C97A] hover:bg-[#C9A84C]/20"
+                            }`}
+                          >
+                            {a.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {pendingAction && (
+                    <div className="space-y-2 border border-[#243A66] rounded-lg p-3">
+                      <div className="text-[10px] font-bold text-[#F5F1E8]">{pendingAction.label}</div>
+                      {pendingAction.needsCategory && (
+                        <select
+                          value={actionCategory}
+                          onChange={(e) => setActionCategory(e.target.value)}
+                          className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded-lg px-3 py-2 text-xs text-[#F5F1E8] focus:border-[#C9A84C]/40 focus:outline-none"
+                        >
+                          <option value="">Selecione o motivo</option>
+                          {[...DEMAND_DECLINE_REASONS].sort((x, y) => x.label.localeCompare(y.label, "pt-BR")).map((r) => (
+                            <option key={r.value} value={r.value}>{r.label}</option>
+                          ))}
+                        </select>
+                      )}
+                      <textarea
+                        value={actionReason}
+                        onChange={(e) => setActionReason(e.target.value)}
+                        rows={2}
+                        placeholder={pendingAction.to === "aprovado_com_restricoes" ? "Descreva a restrição" : "Justificativa"}
+                        className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded-lg px-3 py-2 text-xs text-[#F5F1E8] placeholder:text-[#9BAFC5]/40 focus:border-[#C9A84C]/40 focus:outline-none"
+                      />
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => runStageAction(pendingAction, actionReason.trim(), actionCategory)}
+                          disabled={movingStage || !actionReason.trim() || (!!pendingAction.needsCategory && !actionCategory)}
+                          className="flex items-center gap-1.5 rounded-lg bg-[#C9A84C] text-[#09081A] px-3 py-1.5 text-[10px] font-bold disabled:opacity-30 disabled:cursor-not-allowed"
+                        >
+                          {movingStage && <Loader2 size={11} className="animate-spin" />} Confirmar
+                        </button>
+                        <button
+                          onClick={() => setPendingAction(null)}
+                          disabled={movingStage}
+                          className="rounded-lg border border-[#243A66] text-[#9BAFC5] px-3 py-1.5 text-[10px] font-semibold"
+                        >
+                          Voltar
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
               {/* Identificacao */}
               <div>
                 <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-[#E8C97A] mb-2.5">
