@@ -421,9 +421,11 @@ export function SellSideListingsPanel({ mode = "mine", title, subtitle }: SellSi
         />
       )}
 
+      {/* Bug real reportado por Joao (19/09/2026): clicar fora do card fechava o
+          modal e descartava os dados digitados. Fechar so via botao X explicito. */}
       {showPreQualify && (
-        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60" onClick={() => setShowPreQualify(false)}>
-          <div className="w-full max-w-sm bg-[#09081A] border border-[#C9A84C]/20 rounded-xl flex flex-col" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60">
+          <div className="w-full max-w-sm bg-[#09081A] border border-[#C9A84C]/20 rounded-xl flex flex-col">
             <div className="p-4 border-b border-[#C9A84C]/20 flex items-center justify-between">
               <div>
                 <div className="text-sm font-bold text-[#F5F1E8]">Pré-Qualificação do Ativo</div>

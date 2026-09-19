@@ -2204,9 +2204,13 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
       {/* Modal Pre-Qualificacao (19/09/2026, pedido de Joao): passo obrigatorio antes do link de
           intake do lado vendedor nascer -- distancia real ate o cedente/mandatario + ciencia da
           cadeia de intermediarios, com gate de qualidade no servidor (ver /api/cm/intake/generate). */}
+      {/* Bug real reportado por Joao (19/09/2026): clicar fora do card fechava
+          o modal e descartava tudo que ja tinha sido digitado. Fechar so via
+          botao X explicito daqui pra frente -- nunca no backdrop, em nenhum
+          modal com formulario de dados. */}
       {showPreQualifyModal && (
-        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60" onClick={() => setShowPreQualifyModal(false)}>
-          <div className="w-full max-w-sm bg-[#09081A] border border-[#C9A84C]/20 rounded-xl flex flex-col" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60">
+          <div className="w-full max-w-sm bg-[#09081A] border border-[#C9A84C]/20 rounded-xl flex flex-col">
             <div className="p-4 border-b border-[#C9A84C]/20 flex items-center justify-between">
               <div>
                 <div className="text-sm font-bold text-[#F5F1E8]">Pré-Qualificação do Ativo</div>
@@ -2276,9 +2280,10 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
           real (profiles, via /api/cm/partners-list) ou partner leve sem conta (cm_referral_partners,
           via createReferralPartner ja compartilhado com o resto do arquivo). Pre-qualificacao
           (19/09/2026) segue o mesmo gate do lado vendedor, aplicada ao mandatario da compra. */}
+      {/* Mesmo fix do modal de pre-qualificacao acima: nunca fechar no backdrop. */}
       {showBuyLinkPartnerModal && (
-        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60" onClick={() => setShowBuyLinkPartnerModal(false)}>
-          <div className="w-full max-w-sm bg-[#09081A] border border-[#C9A84C]/20 rounded-xl flex flex-col" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60">
+          <div className="w-full max-w-sm bg-[#09081A] border border-[#C9A84C]/20 rounded-xl flex flex-col">
             <div className="p-4 border-b border-[#C9A84C]/20 flex items-center justify-between">
               <div>
                 <div className="text-sm font-bold text-[#F5F1E8]">Gerar Link Comprador</div>

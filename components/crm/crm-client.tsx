@@ -4418,13 +4418,14 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
       )}
 
       {/* ── MODAL: Bolsa de Ativos — gera link de intake (Compra ou Venda) ── */}
+      {/* Bug real reportado por Joao (19/09/2026): clicar fora do card fechava o
+          modal e descartava os dados digitados. Fechar so via botao "Fechar" explicito. */}
       {showBolsaForm && (
         <div
           style={{
             position: "fixed", inset: 0, zIndex: 50, background: "rgba(0,0,0,0.7)",
             display: "flex", alignItems: "center", justifyContent: "center", padding: 16,
           }}
-          onClick={(e) => { if (e.target === e.currentTarget) { setShowBolsaForm(false); setBolsaKind(null); } }}
         >
           <div style={{
             background: "#09081A", border: "1px solid #1E3A5F", borderRadius: 16,
