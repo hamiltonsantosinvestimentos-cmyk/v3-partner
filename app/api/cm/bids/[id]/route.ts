@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { randomUUID } from "crypto";
+import { BID_DECLINE_REASON_VALUES } from "@/lib/cm-decline-reasons";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -39,14 +40,23 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   const { id } = await params;
   const body = await req.json();
-  const { action, commission_percent, reason } = body;
+  const { action, commission_percent, reason, decline_reason_category } = body;
 
   if (!action || !["aceitar", "recusar", "contra_proposta"].includes(action)) {
     return NextResponse.json({ error: "action obrigatório: aceitar, recusar ou contra_proposta" }, { status: 422 });
   }
 
+  // Fase 5 (19/09/2026, pedido de Joao): recusar exige motivo estruturado --
+  // "preço fora de mercado" nunca reprova o ativo, so a proposta especifica,
+  // ver reversao automatica pra ativo_vitrine logo abaixo.
+  if (action === "recusar" && !BID_DECLINE_REASON_VALUES.includes(decline_reason_category)) {
+    return NextResponse.json({
+      error: `Categoria de motivo inválida ou ausente. Use uma de: ${BID_DECLINE_REASON_VALUES.join(", ")}`,
+    }, { status: 422 });
+  }
+
   const { data: bid } = await svc().from("cm_bids")
-    .select("*, cm_asset_listings(id, valor_face, anonymous_id)")
+    .select("*, cm_asset_listings(id, valor_face, anonymous_id, listing_status)")
     .eq("id", id).single();
 
   if (!bid) return NextResponse.json({ error: "Bid não encontrado" }, { status: 404 });
@@ -60,8 +70,35 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     status: newStatus,
     reviewed_by: caller.userId,
     reviewed_at: new Date().toISOString(),
+    decline_reason_category: action === "recusar" ? decline_reason_category : null,
+    reason: action === "recusar" ? (reason ?? null) : null,
     notes: reason ? `${bid.notes ?? ""}\n[Head] ${reason}`.trim() : bid.notes,
   }).eq("id", id);
+
+  // Fase 5 (19/09/2026): recusar a ultima proposta pendente de um ativo
+  // devolve ele pra vitrine sozinho, nunca reprova nem exclui -- o ativo ja
+  // passou por todos os gates de aprovacao pra chegar ate aqui, so essa
+  // oferta especifica nao fechou.
+  if (action === "recusar") {
+    const listing = bid.cm_asset_listings as any;
+    if (listing?.listing_status === "proposta_recebida") {
+      const { count: pendingCount } = await svc()
+        .from("cm_bids")
+        .select("id", { count: "exact", head: true })
+        .eq("listing_id", listing.id)
+        .eq("status", "pendente");
+
+      if (!pendingCount || pendingCount === 0) {
+        await svc().rpc("transition_cm_listing_status", {
+          p_listing_id: listing.id,
+          p_new_status: "ativo_vitrine",
+          p_reason: `Proposta recusada (${decline_reason_category}), ativo volta à Vitrine`,
+          p_reason_category: decline_reason_category,
+          p_user_id: caller.userId,
+        });
+      }
+    }
+  }
 
   let commission = null;
 

@@ -179,6 +179,28 @@ export async function POST(
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
+  // Fase 5 (19/09/2026, pedido de Joao): Etapa 2 (Reuniao) passa a disparar
+  // automaticamente assim que o intake fecha, nao mais so depois da
+  // qualificacao terminar (movido de app/api/cm/qualificacao/[token]/route.ts).
+  // Best-effort -- nunca desfaz o envio ja confirmado ao cedente/parceiro se
+  // a transicao ou a notificacao falharem.
+  const { data: meetingTransition } = await svc().rpc("transition_cm_listing_status", {
+    p_listing_id: listing.id,
+    p_new_status: "reuniao_agendada",
+    p_reason: "Intake concluído, agendamento automático da reunião inicial.",
+    p_user_id: listing.created_by,
+  });
+  if (meetingTransition && listing.created_by) {
+    await svc().from("notifications").insert({
+      user_id: listing.created_by,
+      title: `Ativo ${anonId}: agende a reunião inicial`,
+      message: `O intake foi concluído. Agende a reunião de apresentação com o Head: https://calendar.google.com/calendar/u/0/appointments/schedules/AcZssZ1T51okURKuhE_zw_MiCC68TkFZHk8tgNaJQauB9ha6LymoTSSovxkijrv3BfDYW1VipSAXokAi`,
+      type: "reuniao_agendada",
+      action_url: "/bolsa/mesa",
+      read: false,
+    });
+  }
+
   // Governanca Documental Universal (achado 17/09/2026): listagem submetida via
   // link de intake nunca chamava create_deal_folder -- so a criacao direta pela
   // Mesa (POST /api/cm/listings) tinha pasta MPS. Best-effort, nunca bloqueia a

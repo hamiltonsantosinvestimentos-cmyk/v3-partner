@@ -8,7 +8,7 @@ import {
   ArrowRight, RefreshCw, Shield, Bot, Upload, Mic,
   Link2, Copy, Plus, FileText, UserPlus, ClipboardCheck,
   ToggleLeft, ToggleRight, Save, Download, ExternalLink, Trash2, X,
-  FileSignature,
+  FileSignature, CalendarClock, XCircle,
 } from "lucide-react";
 import { cn, maskCpfCnpjInput, maskPhoneInput, isValidEmail, maskCurrencyBRLInput, parseCurrencyBRLInput, formatCurrencyBRLFromNumber, maskCurrencyInput, CM_CURRENCY_SYMBOL, type CmCurrency } from "@/lib/utils";
 import { AssetAssistant } from "./asset-assistant";
@@ -21,6 +21,7 @@ import { KanbanCard } from "./kanban-card";
 import { CmSearchFilterBar, EMPTY_CM_FILTERS, CM_STATUS_LABELS, CM_VALOR_FACE_BUCKETS, type CmListingFilters } from "./filter-drawer";
 import { ForjaJuridicoPanel } from "./forja-juridico-panel";
 import { CM_DOCUMENT_CHECKLISTS, type CmAssetType } from "@/lib/cm-checklists";
+import { ASSET_DECLINE_REASONS, BID_DECLINE_REASONS } from "@/lib/cm-decline-reasons";
 import { createClient as createBrowserSupabaseClient } from "@/lib/supabase/client";
 
 interface Listing {
@@ -109,18 +110,20 @@ const BULK_PUBLISH_CHAIN: Record<string, string[]> = {
   aprovado_head: ["ativo_vitrine"],
 };
 
+// Kanban Unificado, 7 etapas (Fase 5, 19/09/2026, "go" de Joao). A coluna
+// Reprovado/Cancelado volta ao board -- tinha sido removida em 27/07 a
+// pedido de Joao (decisao revertida explicitamente nesta fase). Cores
+// seguem o padrao definido no BRIEF: azul/laranja/dourado/roxo/esmeralda/
+// azul-petroleo/verde, com vermelho pro terminal de perda.
 const STATUS_COLUMNS = [
-  { key: "reuniao_validada,formulario_preenchido", label: "Intake", color: "border-blue-500", icon: Clock },
-  { key: "nda_assinado,em_analise", label: "NDA / Análise", color: "border-orange-500", icon: Shield },
-  { key: "aprovado_head,aprovado_com_restricoes", label: "Aguarda Head", color: "border-[#C9A84C]", icon: Gavel },
-  { key: "ativo_vitrine,proposta_recebida", label: "Na Vitrine", color: "border-emerald-500", icon: BarChart3 },
-  { key: "em_escrow_due_diligence", label: "Escrow / DD", color: "border-purple-500", icon: DollarSign },
-  // Coluna "Cancelado" testada em 27/07 e removida a pedido de Joao: ativo cancelado
-  // deve ir para a Lixeira (deleted_at), nao ficar visivel num board separado. O botao
-  // "Cancelar" na aba Governanca agora chama handleDeleteAsset em vez de setar
-  // listing_status="cancelado" (status morto, sem coluna nenhuma no board).
-  // "reprovado" (17/09/2026) segue o mesmo criterio: decisao terminal de due diligence,
-  // sai do board igual a cancelado, sem coluna propria. Fica visivel na Ficha/aba Notas.
+  { key: "reuniao_validada,formulario_preenchido", label: "1. Intake", color: "border-blue-500", icon: Clock },
+  { key: "reuniao_agendada", label: "2. Reunião", color: "border-orange-500", icon: CalendarClock },
+  { key: "em_qualificacao,nda_assinado", label: "3. Qualificação", color: "border-[#C9A84C]", icon: Shield },
+  { key: "em_analise,aprovado_head,aprovado_com_restricoes", label: "4. Análise", color: "border-purple-500", icon: Gavel },
+  { key: "ativo_vitrine,proposta_recebida", label: "5. Match", color: "border-emerald-500", icon: BarChart3 },
+  { key: "em_escrow_due_diligence", label: "6. DD", color: "border-teal-500", icon: DollarSign },
+  { key: "liquidado", label: "7. Ganho", color: "border-green-500", icon: CheckCircle2 },
+  { key: "reprovado,cancelado,expirado", label: "Reprovado/Cancelado", color: "border-red-500", icon: XCircle },
 ];
 
 // Cadeia de avanco "de um passo" ja usada nos botoes de Transicao de Status do painel
@@ -128,9 +131,12 @@ const STATUS_COLUMNS = [
 // menu de 3 pontos do card, drag-and-drop, e painel de detalhe). Nao cobre
 // proposta_recebida/em_escrow_due_diligence/liquidado de proposito -- essas transicoes
 // acontecem via aceite de bid (handleBidAction) e fluxo de escrow, nao por um clique solto.
+// Fase 5 (19/09/2026): formulario_preenchido -> reuniao_agendada saiu daqui de proposito,
+// virou automatica (dispara no POST de conclusao do intake, ver app/api/cm/intake/[token]).
 const STATUS_QUICK_TRANSITIONS = [
   { from: "reuniao_validada", to: "formulario_preenchido", label: "Formulário OK" },
-  { from: "formulario_preenchido", to: "nda_assinado", label: "NDA Assinado" },
+  { from: "reuniao_agendada", to: "em_qualificacao", label: "Reunião Realizada" },
+  { from: "em_qualificacao", to: "nda_assinado", label: "NDA Assinado" },
   { from: "nda_assinado", to: "em_analise", label: "Iniciar Análise" },
   { from: "em_analise", to: "aprovado_head", label: "Aprovar (Head)" },
   { from: "aprovado_head", to: "ativo_vitrine", label: "Publicar Vitrine" },
@@ -330,6 +336,14 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
   const [noteMentionedIds, setNoteMentionedIds] = useState<string[]>([]);
   const [submittingNote, setSubmittingNote] = useState(false);
   const [decidingListing, setDecidingListing] = useState(false);
+  // Fase 5 (19/09/2026): modal de motivo estruturado, substitui window.prompt().
+  const [showDeclineModal, setShowDeclineModal] = useState<{ listingId: string; newStatus: "aprovado_com_restricoes" | "reprovado" } | null>(null);
+  const [declineCategory, setDeclineCategory] = useState("");
+  const [declineText, setDeclineText] = useState("");
+  // Fase 5: recusa de proposta (bid), motivo estruturado equivalente do lado da oferta.
+  const [showBidDeclineModal, setShowBidDeclineModal] = useState<string | null>(null);
+  const [bidDeclineCategory, setBidDeclineCategory] = useState("");
+  const [bidDeclineText, setBidDeclineText] = useState("");
   const [generatingNda, setGeneratingNda] = useState(false);
   const [intermediaries, setIntermediaries] = useState<any[]>([]);
   const [slaSummary, setSlaSummary] = useState<Record<string, { hours_pending: number; pending_count: number }>>({});
@@ -1224,28 +1238,30 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
   // Reaproveita PATCH /status + transition_cm_listing_status(), nunca inventa
   // caminho novo -- so pede o texto via prompt (mesmo padrao ja usado em
   // handleDeleteAsset) quando a transicao exige reason.
-  const handleListingDecision = async (listingId: string, newStatus: "aprovado_head" | "aprovado_com_restricoes" | "reprovado") => {
-    let reason: string | undefined;
+  // Fase 5 (19/09/2026, pedido de Joao): motivo estruturado substitui o
+  // window.prompt() de texto livre -- reprovar exige categoria fixa (ver
+  // lib/cm-decline-reasons.ts), pra alimentar o relatorio de gargalos.
+  // "Aprovar com restrições" continua so texto livre, nao e uma reprovacao.
+  const handleListingDecision = (listingId: string, newStatus: "aprovado_head" | "aprovado_com_restricoes" | "reprovado") => {
     if (newStatus === "aprovado_com_restricoes" || newStatus === "reprovado") {
-      const promptLabel = newStatus === "reprovado"
-        ? "Justificativa da reprovação (obrigatório):"
-        : "Texto da restrição (obrigatório, fica visível no histórico do ativo):";
-      const input = window.prompt(promptLabel);
-      if (!input || input.trim().length < 5) {
-        if (input !== null) alert("Texto obrigatório: mínimo 5 caracteres");
-        return;
-      }
-      reason = input.trim();
-    } else if (newStatus === "aprovado_head") {
-      if (!confirm("Confirma aprovação do ativo para publicação na Vitrine?")) return;
+      setShowDeclineModal({ listingId, newStatus });
+      setDeclineCategory("");
+      setDeclineText("");
+      return;
     }
+    if (newStatus === "aprovado_head") {
+      if (!confirm("Confirma aprovação do ativo para publicação na Vitrine?")) return;
+      void submitListingDecision(listingId, newStatus);
+    }
+  };
 
+  const submitListingDecision = async (listingId: string, newStatus: "aprovado_head" | "aprovado_com_restricoes" | "reprovado", reason?: string, reasonCategory?: string) => {
     setDecidingListing(true);
     try {
       const res = await fetch(`/api/cm/listings/${listingId}/status`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ new_status: newStatus, reason }),
+        body: JSON.stringify({ new_status: newStatus, reason, reason_category: reasonCategory }),
       });
       const json = await res.json();
       if (!res.ok) {
@@ -1254,6 +1270,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
       }
       await fetchAll();
       setSelectedListing((prev) => prev ? { ...prev, listing_status: newStatus } : prev);
+      setShowDeclineModal(null);
     } catch {
       alert("Erro de conexão ao registrar a decisão.");
     } finally {
@@ -1367,18 +1384,26 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
     fetchAll();
   };
 
-  const handleBidAction = async (bidId: string, action: string, commissionPercent = 7) => {
+  // Fase 5 (19/09/2026): recusar exige motivo estruturado (decline_reason_category),
+  // nunca mais um clique direto sem justificativa. O backend reverte o ativo pra
+  // ativo_vitrine sozinho quando essa era a ultima proposta pendente.
+  const handleBidAction = async (bidId: string, action: string, commissionPercent = 7, declineReasonCategory?: string, declineReasonText?: string) => {
     setActionLoading(bidId);
     try {
       const res = await fetch(`/api/cm/bids/${bidId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action, commission_percent: commissionPercent }),
+        body: JSON.stringify({ action, commission_percent: commissionPercent, decline_reason_category: declineReasonCategory, reason: declineReasonText }),
       });
       const json = await res.json();
       if (!res.ok) { alert(json.error ?? "Erro"); return; }
       if (action === "aceitar" && json.match_deal_id) {
         alert(`Bid aceito. Operação: ${json.match_deal_id}${json.deal_room_url ? `\nDeal Room: ${json.deal_room_url}` : ""}`);
+      }
+      if (action === "recusar") {
+        setShowBidDeclineModal(null);
+        setBidDeclineCategory("");
+        setBidDeclineText("");
       }
       fetchAll();
     } catch { alert("Erro de conexão"); }
@@ -2379,6 +2404,90 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
         </div>
       )}
 
+      {/* Motivo estruturado de declinio do ATIVO (Fase 5, 19/09/2026): substitui
+          window.prompt(). Reprovar exige categoria fixa, aprovar com restricoes
+          continua so texto livre. Nunca fecha no backdrop (mesmo fix ja aplicado
+          nos outros modais desta sessao). */}
+      {showDeclineModal && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60">
+          <div className="w-full max-w-sm bg-[#09081A] border border-[#C9A84C]/20 rounded-xl flex flex-col">
+            <div className="p-4 border-b border-[#C9A84C]/20 flex items-center justify-between">
+              <div className="text-sm font-bold text-[#F5F1E8]">
+                {showDeclineModal.newStatus === "reprovado" ? "Reprovar Ativo" : "Aprovar com Restrições"}
+              </div>
+              <button onClick={() => setShowDeclineModal(null)} className="text-[#9BAFC5] hover:text-[#F5F1E8] text-xl">&times;</button>
+            </div>
+            <div className="p-4 space-y-3">
+              {showDeclineModal.newStatus === "reprovado" && (
+                <div>
+                  <label className="text-[9px] text-[#9BAFC5] uppercase">Categoria do Motivo *</label>
+                  <select value={declineCategory} onChange={(e) => setDeclineCategory(e.target.value)}
+                    className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#F5F1E8] mt-1 focus:border-[#C9A84C]/50 focus:outline-none">
+                    <option value="">Selecione</option>
+                    {ASSET_DECLINE_REASONS.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
+                  </select>
+                </div>
+              )}
+              <div>
+                <label className="text-[9px] text-[#9BAFC5] uppercase">
+                  {showDeclineModal.newStatus === "reprovado" ? "Detalhamento *" : "Texto da restrição *"}
+                </label>
+                <textarea value={declineText} onChange={(e) => setDeclineText(e.target.value)}
+                  className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#F5F1E8] mt-1 min-h-[80px] focus:border-[#C9A84C]/50 focus:outline-none" />
+              </div>
+              <button
+                onClick={() => submitListingDecision(showDeclineModal.listingId, showDeclineModal.newStatus, declineText.trim(), showDeclineModal.newStatus === "reprovado" ? declineCategory : undefined)}
+                disabled={decidingListing || declineText.trim().length < 5 || (showDeclineModal.newStatus === "reprovado" && !declineCategory)}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-red-500/15 border border-red-500/30 text-red-400 rounded-lg text-sm font-bold hover:bg-red-500/25 transition disabled:opacity-50"
+              >
+                {decidingListing ? <Loader2 size={16} className="animate-spin" /> : null}
+                Confirmar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Motivo estruturado de recusa de PROPOSTA (Fase 5, 19/09/2026): nunca
+          reprova o ativo, so a oferta. Ao recusar a ultima proposta pendente, o
+          ativo volta sozinho pra ativo_vitrine (logica no backend). */}
+      {showBidDeclineModal && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60">
+          <div className="w-full max-w-sm bg-[#09081A] border border-[#C9A84C]/20 rounded-xl flex flex-col">
+            <div className="p-4 border-b border-[#C9A84C]/20 flex items-center justify-between">
+              <div>
+                <div className="text-sm font-bold text-[#F5F1E8]">Recusar Proposta</div>
+                <div className="text-[10px] text-[#9BAFC5]">O ativo continua na Vitrine, só esta oferta é recusada.</div>
+              </div>
+              <button onClick={() => setShowBidDeclineModal(null)} className="text-[#9BAFC5] hover:text-[#F5F1E8] text-xl">&times;</button>
+            </div>
+            <div className="p-4 space-y-3">
+              <div>
+                <label className="text-[9px] text-[#9BAFC5] uppercase">Categoria do Motivo *</label>
+                <select value={bidDeclineCategory} onChange={(e) => setBidDeclineCategory(e.target.value)}
+                  className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#F5F1E8] mt-1 focus:border-[#C9A84C]/50 focus:outline-none">
+                  <option value="">Selecione</option>
+                  {BID_DECLINE_REASONS.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-[9px] text-[#9BAFC5] uppercase">Detalhamento (opcional)</label>
+                <textarea value={bidDeclineText} onChange={(e) => setBidDeclineText(e.target.value)}
+                  className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#F5F1E8] mt-1 min-h-[60px] focus:border-[#C9A84C]/50 focus:outline-none" />
+              </div>
+              <button
+                onClick={() => handleBidAction(showBidDeclineModal, "recusar", undefined, bidDeclineCategory, bidDeclineText.trim())}
+                disabled={actionLoading === showBidDeclineModal || !bidDeclineCategory}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-red-500/15 border border-red-500/30 text-red-400 rounded-lg text-sm font-bold hover:bg-red-500/25 transition disabled:opacity-50"
+              >
+                {actionLoading === showBidDeclineModal ? <Loader2 size={16} className="animate-spin" /> : null}
+                Confirmar Recusa
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Modal Cadastro Manual de Comprador — sem depender do link publico (correcao Mesa Operacional 2026-07-15) */}
       {showManualBuyerForm && (
         <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60" onClick={() => setShowManualBuyerForm(false)}>
@@ -2692,7 +2801,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
                     Aceitar
                   </button>
                   <button
-                    onClick={() => handleBidAction(b.id, "recusar")}
+                    onClick={() => { setShowBidDeclineModal(b.id); setBidDeclineCategory(""); setBidDeclineText(""); }}
                     disabled={actionLoading === b.id}
                     className="px-3 py-2 border border-red-500/30 text-red-400 rounded-md text-xs font-bold hover:bg-red-500/10 disabled:opacity-50"
                   >

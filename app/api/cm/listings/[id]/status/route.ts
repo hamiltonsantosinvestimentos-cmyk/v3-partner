@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { createNotification } from "@/lib/notify";
+import { ASSET_DECLINE_REASON_VALUES } from "@/lib/cm-decline-reasons";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -13,6 +14,8 @@ const MESA_ROLES = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"];
 const STATUS_LABELS: Record<string, string> = {
   reuniao_validada: "Reunião Validada",
   formulario_preenchido: "Formulário Preenchido",
+  reuniao_agendada: "Reunião Agendada",
+  em_qualificacao: "Em Qualificação",
   nda_assinado: "NDA Assinado",
   em_analise: "Em Análise",
   aprovado_head: "Aprovado pela Diretoria",
@@ -46,10 +49,18 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   const { id } = await params;
   const body = await req.json();
-  const { new_status, reason, nda_signed_at, nda_document_url, head_approved_by } = body;
+  const { new_status, reason, reason_category, nda_signed_at, nda_document_url, head_approved_by } = body;
 
   if (!new_status) {
     return NextResponse.json({ error: "Campo obrigatório: new_status" }, { status: 422 });
+  }
+
+  // Motivo estruturado (Fase 5, 19/09/2026): reprovar sem categoria fixa nao
+  // passa nem daqui nem do banco -- validado nos dois lugares de proposito.
+  if (new_status === "reprovado" && !ASSET_DECLINE_REASON_VALUES.includes(reason_category)) {
+    return NextResponse.json({
+      error: `Categoria de motivo inválida ou ausente. Use uma de: ${ASSET_DECLINE_REASON_VALUES.join(", ")}`,
+    }, { status: 422 });
   }
 
   // Reprovar fica aberto a qualquer role da Mesa (ADMIN/GESTAO/MESA_OPERACIONAL)
@@ -99,6 +110,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     p_new_status: new_status,
     p_reason: reason ?? null,
     p_user_id: caller.userId,
+    p_reason_category: reason_category ?? null,
   });
 
   if (!result) {

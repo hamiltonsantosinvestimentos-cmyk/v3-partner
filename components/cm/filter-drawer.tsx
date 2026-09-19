@@ -66,6 +66,8 @@ export const CM_ESFERA_LABELS: Record<string, string> = {
 export const CM_STATUS_LABELS: Record<string, string> = {
   reuniao_validada: "Reunião Validada",
   formulario_preenchido: "Formulário Preenchido",
+  reuniao_agendada: "Reunião Agendada",
+  em_qualificacao: "Em Qualificação",
   nda_assinado: "NDA Assinado",
   em_analise: "Em Análise",
   aprovado_head: "Aprovado pela Diretoria",
