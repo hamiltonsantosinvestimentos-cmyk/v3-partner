@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState } from "react";
-import { CheckCircle2, ChevronRight, ChevronLeft, Loader2, Shield } from "lucide-react";
+import React, { useState, useEffect, useRef } from "react";
+import { CheckCircle2, ChevronRight, ChevronLeft, Loader2, Shield, Save } from "lucide-react";
 import { maskCpfCnpjInput, maskPhoneInput, isValidEmail, isValidCpfCnpj, maskCurrencyBRLInput, parseCurrencyBRLInput, formatCurrencyBRLFromNumber } from "@/lib/utils";
 import { UFS, fetchMunicipios } from "@/lib/br-locations";
 import { fetchCep, buildEnderecoFromCep, formatCepMask } from "@/lib/viacep";
@@ -94,6 +94,56 @@ export function IntakeWizard({ token, prefill, anonymousId }: IntakeWizardProps)
   const [cepLoading, setCepLoading] = useState(false);
   const [cepError, setCepError] = useState("");
 
+  // Rascunho automatico (19/09/2026, pedido de Joao): formulario publico de 7
+  // passos, longo o suficiente pra ser interrompido no meio (tab fechada sem
+  // querer, sessao expirada, celular travou). Padrao ja estabelecido em
+  // 09/09/2026 pra formularios longos deste sistema (localStorage por passo +
+  // botao "Salvar Rascunho"), nunca aplicado aqui ate agora. Chave por token
+  // -- cada link de intake e um cedente/parceiro diferente, nunca cruza dado
+  // entre eles no mesmo navegador.
+  const draftKey = `v3-intake-cm-draft-${token}`;
+  const restoredRef = useRef(false);
+  const [draftRestoredAt, setDraftRestoredAt] = useState<string | null>(null);
+  const [draftSavedAt, setDraftSavedAt] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (restoredRef.current) return;
+    restoredRef.current = true;
+    try {
+      const raw = localStorage.getItem(draftKey);
+      if (!raw) return;
+      const draft = JSON.parse(raw);
+      if (draft.form) setForm((p) => ({ ...p, ...draft.form }));
+      if (Array.isArray(draft.intermediarios)) setIntermediarios(draft.intermediarios);
+      if (typeof draft.step === "number") setStep(draft.step);
+      if (draft.savedAt) setDraftRestoredAt(draft.savedAt);
+    } catch {
+      // Rascunho corrompido ou localStorage indisponivel (aba anonima,
+      // storage bloqueado) -- nunca quebra o formulario, so ignora e segue
+      // do zero, mesmo criterio de qualquer leitura de storage do navegador.
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const saveDraft = (silent = false) => {
+    try {
+      const savedAt = new Date().toISOString();
+      localStorage.setItem(draftKey, JSON.stringify({ form, intermediarios, step, savedAt }));
+      if (!silent) setDraftSavedAt(savedAt);
+    } catch {
+      // Storage indisponivel -- o botao de salvar rascunho vira um no-op
+      // silencioso nesse caso, nunca um erro pro cedente/parceiro.
+    }
+  };
+
+  // Autosave silencioso a cada mudanca real de passo (nao a cada tecla, pra
+  // nao gravar centenas de vezes por segundo enquanto a pessoa digita).
+  useEffect(() => {
+    if (!restoredRef.current) return;
+    saveDraft(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step]);
+
   const upd = (field: string, value: any) => setForm((p) => ({ ...p, [field]: value }));
 
   const addIntermediario = () => setIntermediarios((prev) => [...prev, { nome: "", email: "", whatsapp: "" }]);
@@ -169,6 +219,7 @@ export function IntakeWizard({ token, prefill, anonymousId }: IntakeWizardProps)
       if (!res.ok) throw new Error(data.error || "Erro ao enviar");
       setFinalAnonymousId(data.anonymous_id || anonymousId);
       setSubmitted(true);
+      try { localStorage.removeItem(draftKey); } catch { /* nunca bloqueia a confirmacao de envio */ }
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -197,6 +248,12 @@ export function IntakeWizard({ token, prefill, anonymousId }: IntakeWizardProps)
 
   return (
     <div>
+      {draftRestoredAt && (
+        <div className="mb-4 p-3 bg-[#C9A84C]/10 border border-[#C9A84C]/30 rounded-lg text-xs text-[#C9A84C] flex items-center gap-2">
+          <Save size={14} /> Rascunho recuperado de {new Date(draftRestoredAt).toLocaleString("pt-BR")}. Continue de onde parou.
+        </div>
+      )}
+
       {/* Stepper */}
       <div className="flex items-center justify-center gap-2 mb-10 flex-wrap">
         {STEPS.map((s, i) => (
@@ -510,7 +567,7 @@ export function IntakeWizard({ token, prefill, anonymousId }: IntakeWizardProps)
       )}
 
       {/* Navigation */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
         <button
           onClick={() => setStep((s) => s - 1)}
           disabled={step === 0}
@@ -518,6 +575,18 @@ export function IntakeWizard({ token, prefill, anonymousId }: IntakeWizardProps)
         >
           <ChevronLeft size={16} /> Voltar
         </button>
+
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => saveDraft(false)}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-bold text-[#9BAFC5] border border-[#9BAFC5]/20 hover:text-[#F5F1E8] hover:border-[#9BAFC5]/40 transition"
+          >
+            <Save size={14} /> Salvar Rascunho
+          </button>
+          {draftSavedAt && (
+            <span className="text-[10px] text-emerald-400">Salvo às {new Date(draftSavedAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</span>
+          )}
+        </div>
 
         {step < STEPS.length - 1 ? (
           <button
