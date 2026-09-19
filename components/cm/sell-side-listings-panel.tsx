@@ -102,6 +102,15 @@ export function SellSideListingsPanel({ mode = "mine", title, subtitle }: SellSi
   const [indicateListing, setIndicateListing] = useState<Listing | null>(null);
   const [uploading, setUploading] = useState(false);
   const [creatingAsset, setCreatingAsset] = useState(false);
+  // Pre-qualificacao da originacao (19/09/2026, pedido de Joao, corrigido apos
+  // regressao P0: este botao enviava {} pro backend e agora e bloqueado pelo
+  // gate de qualidade em /api/cm/intake/generate). O proprio partner declara
+  // o cedente antes do link nascer -- mesmo mecanismo da Mesa.
+  const [showPreQualify, setShowPreQualify] = useState(false);
+  const [pqSellerName, setPqSellerName] = useState("");
+  const [pqAssetType, setPqAssetType] = useState("");
+  const [pqDistancia, setPqDistancia] = useState("");
+  const [pqCiencia, setPqCiencia] = useState("");
 
   // Botao "Novo Ativo" (17/09/2026, acesso leve do partner): dispara o mesmo
   // link de intake que a Mesa ja usa -- nunca grava direto em
@@ -114,7 +123,12 @@ export function SellSideListingsPanel({ mode = "mine", title, subtitle }: SellSi
       const res = await fetch("/api/cm/intake/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
+        body: JSON.stringify({
+          seller_name: pqSellerName.trim(),
+          asset_type: pqAssetType,
+          distancia_cedente: pqDistancia,
+          ciencia_cadeia: pqCiencia,
+        }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Erro ao gerar link de cadastro");
@@ -202,7 +216,7 @@ export function SellSideListingsPanel({ mode = "mine", title, subtitle }: SellSi
         <div className="flex items-center gap-2">
           {mode === "mine" && (
             <button
-              onClick={createNewAsset}
+              onClick={() => setShowPreQualify(true)}
               disabled={creatingAsset}
               className="flex items-center gap-1.5 rounded-lg bg-[#C9A84C] text-[#09081A] text-xs font-bold px-3 py-2 hover:bg-[#E8C97A] transition-colors disabled:opacity-50"
             >
@@ -405,6 +419,71 @@ export function SellSideListingsPanel({ mode = "mine", title, subtitle }: SellSi
           anchorLabel={indicateListing.anonymous_id}
           onClose={() => setIndicateListing(null)}
         />
+      )}
+
+      {showPreQualify && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60" onClick={() => setShowPreQualify(false)}>
+          <div className="w-full max-w-sm bg-[#09081A] border border-[#C9A84C]/20 rounded-xl flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="p-4 border-b border-[#C9A84C]/20 flex items-center justify-between">
+              <div>
+                <div className="text-sm font-bold text-[#F5F1E8]">Pré-Qualificação do Ativo</div>
+                <div className="text-[10px] text-[#9BAFC5]">Responda antes de gerar o link de cadastro.</div>
+              </div>
+              <button onClick={() => setShowPreQualify(false)} className="text-[#9BAFC5] hover:text-[#F5F1E8] text-xl">&times;</button>
+            </div>
+            <div className="p-4 space-y-3">
+              <div>
+                <label className="text-[9px] text-[#9BAFC5] uppercase">Nome do Cedente *</label>
+                <input value={pqSellerName} onChange={(e) => setPqSellerName(e.target.value)}
+                  className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#F5F1E8] mt-1 focus:border-[#C9A84C]/50 focus:outline-none" />
+              </div>
+              <div>
+                <label className="text-[9px] text-[#9BAFC5] uppercase">Tipo de Ativo *</label>
+                <select value={pqAssetType} onChange={(e) => setPqAssetType(e.target.value)}
+                  className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#F5F1E8] mt-1 focus:border-[#C9A84C]/50 focus:outline-none">
+                  <option value="">Selecione a classe do ativo</option>
+                  <option value="precatorio">Precatório</option>
+                  <option value="direito_creditorio">Direito Creditório</option>
+                  <option value="ipi">IPI</option>
+                  <option value="icms">ICMS</option>
+                  <option value="outros">Outros</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-[9px] text-[#9BAFC5] uppercase">Distância até o Cedente/Mandatário *</label>
+                <select value={pqDistancia} onChange={(e) => setPqDistancia(e.target.value)}
+                  className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#F5F1E8] mt-1 focus:border-[#C9A84C]/50 focus:outline-none">
+                  <option value="">Selecione</option>
+                  <option value="direto">Direto, falo pessoalmente com o cedente/mandatário</option>
+                  <option value="um_intermediario">1 intermediário entre mim e ele</option>
+                  <option value="dois_mais">2 ou mais intermediários</option>
+                  <option value="nao_sei">Não sei dizer</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-[9px] text-[#9BAFC5] uppercase">Ciência da Cadeia de Intermediários *</label>
+                <select value={pqCiencia} onChange={(e) => setPqCiencia(e.target.value)}
+                  className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#F5F1E8] mt-1 focus:border-[#C9A84C]/50 focus:outline-none">
+                  <option value="">Selecione</option>
+                  <option value="sim_todos">Sim, conheço todos os envolvidos</option>
+                  <option value="sim_parcial">Sim, mas não conheço todos</option>
+                  <option value="nao_tenho">Não tenho ciência</option>
+                </select>
+              </div>
+              {(pqDistancia === "nao_sei" || pqCiencia === "nao_tenho") && (
+                <p className="text-[10px] text-red-400">Ativo sem qualidade suficiente para avançar ao estudo preliminar. Mapeie a distância até o cedente e a cadeia de intermediários antes de prosseguir.</p>
+              )}
+              <button
+                onClick={createNewAsset}
+                disabled={creatingAsset || !pqSellerName.trim() || !pqAssetType || !pqDistancia || !pqCiencia || pqDistancia === "nao_sei" || pqCiencia === "nao_tenho"}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-[#C9A84C] text-[#09081A] rounded-lg text-sm font-bold hover:bg-[#E8C97A] transition disabled:opacity-50"
+              >
+                {creatingAsset ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
+                Confirmar e Gerar Link
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

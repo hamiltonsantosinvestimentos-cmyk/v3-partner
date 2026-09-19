@@ -626,6 +626,15 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
   const [showBolsaForm, setShowBolsaForm] = useState(false);
   const [bolsaLinkResult, setBolsaLinkResult] = useState<{ url: string; kind: "venda" | "compra" } | null>(null);
   const [generatingBolsaLink, setGeneratingBolsaLink] = useState<"venda" | "compra" | null>(null);
+  // Pre-qualificacao da originacao (19/09/2026, pedido de Joao, corrigido 19/09
+  // apos regressao P0: este fluxo enviava {} pro backend e agora e bloqueado
+  // pelo gate de qualidade, precisa coletar os mesmos campos que a Mesa coleta).
+  const [bolsaKind, setBolsaKind] = useState<"venda" | "compra" | null>(null);
+  const [bolsaSellerName, setBolsaSellerName] = useState("");
+  const [bolsaAssetType, setBolsaAssetType] = useState("");
+  const [bolsaNomeContato, setBolsaNomeContato] = useState("");
+  const [bolsaDistancia, setBolsaDistancia] = useState("");
+  const [bolsaCiencia, setBolsaCiencia] = useState("");
   const [maDealSuccessMsg, setMaDealSuccessMsg] = useState<string | null>(null);
 
   // Captacao links state
@@ -1215,10 +1224,13 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
     setGeneratingBolsaLink(kind);
     try {
       const endpoint = kind === "venda" ? "/api/cm/intake/generate" : "/api/cm/intake/buy/generate";
+      const payload = kind === "venda"
+        ? { seller_name: bolsaSellerName.trim(), asset_type: bolsaAssetType, distancia_cedente: bolsaDistancia, ciencia_cadeia: bolsaCiencia }
+        : { nome_contato: bolsaNomeContato.trim(), distancia_cedente: bolsaDistancia, ciencia_cadeia: bolsaCiencia };
       const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
+        body: JSON.stringify(payload),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Erro ao gerar link de cadastro");
@@ -4410,7 +4422,7 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
             position: "fixed", inset: 0, zIndex: 50, background: "rgba(0,0,0,0.7)",
             display: "flex", alignItems: "center", justifyContent: "center", padding: 16,
           }}
-          onClick={(e) => { if (e.target === e.currentTarget) setShowBolsaForm(false); }}
+          onClick={(e) => { if (e.target === e.currentTarget) { setShowBolsaForm(false); setBolsaKind(null); } }}
         >
           <div style={{
             background: "#09081A", border: "1px solid #1E3A5F", borderRadius: 16,
@@ -4418,45 +4430,10 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
           }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
               <span style={{ fontSize: 16, fontWeight: 700, color: "#E8EDF5" }}>Bolsa de Ativos</span>
-              <Button variant="ghost" size="sm" onClick={() => setShowBolsaForm(false)}>Fechar</Button>
+              <Button variant="ghost" size="sm" onClick={() => { setShowBolsaForm(false); setBolsaKind(null); }}>Fechar</Button>
             </div>
 
-            {!bolsaLinkResult ? (
-              <>
-                <p style={{ fontSize: 12, color: "#7A8FA8", marginBottom: 20 }}>
-                  Precatórios e Direitos Creditórios são cadastrados pelo próprio cedente ou
-                  comprador via link — escolha o tipo de operação e envie o link gerado para o cliente.
-                </p>
-                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                  <button
-                    onClick={() => handleGenerateBolsaLink("venda")}
-                    disabled={!!generatingBolsaLink}
-                    style={{
-                      display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-                      background: "rgba(14,165,233,0.1)", border: "1px solid rgba(14,165,233,0.3)",
-                      color: "#0EA5E9", borderRadius: 10, padding: "12px", fontSize: 13, fontWeight: 700,
-                      cursor: "pointer", opacity: generatingBolsaLink ? 0.5 : 1,
-                    }}
-                  >
-                    {generatingBolsaLink === "venda" ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                    Venda de Ativo (Cedente)
-                  </button>
-                  <button
-                    onClick={() => handleGenerateBolsaLink("compra")}
-                    disabled={!!generatingBolsaLink}
-                    style={{
-                      display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-                      background: "#0F1E35", border: "1px solid rgba(14,165,233,0.3)",
-                      color: "#E8EDF5", borderRadius: 10, padding: "12px", fontSize: 13, fontWeight: 700,
-                      cursor: "pointer", opacity: generatingBolsaLink ? 0.5 : 1,
-                    }}
-                  >
-                    {generatingBolsaLink === "compra" ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                    Compra de Ativo (Mandato de Busca)
-                  </button>
-                </div>
-              </>
-            ) : (
+            {bolsaLinkResult ? (
               <>
                 <p style={{ fontSize: 12, color: "#7A8FA8", marginBottom: 12 }}>
                   Link gerado ({bolsaLinkResult.kind === "venda" ? "venda" : "compra"} de ativo). Copie e envie para o cliente:
@@ -4490,10 +4467,120 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
                 <Button
                   variant="ghost"
                   className="w-full"
-                  onClick={() => { setShowBolsaForm(false); setBolsaLinkResult(null); }}
+                  onClick={() => {
+                    setShowBolsaForm(false); setBolsaLinkResult(null); setBolsaKind(null);
+                    setBolsaSellerName(""); setBolsaAssetType(""); setBolsaNomeContato(""); setBolsaDistancia(""); setBolsaCiencia("");
+                  }}
                 >
                   Concluir
                 </Button>
+              </>
+            ) : !bolsaKind ? (
+              <>
+                <p style={{ fontSize: 12, color: "#7A8FA8", marginBottom: 20 }}>
+                  Precatórios e Direitos Creditórios são cadastrados pelo próprio cedente ou
+                  comprador via link. Escolha o tipo de operação, responda a pré-qualificação
+                  e envie o link gerado para o cliente.
+                </p>
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  <button
+                    onClick={() => setBolsaKind("venda")}
+                    style={{
+                      display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                      background: "rgba(14,165,233,0.1)", border: "1px solid rgba(14,165,233,0.3)",
+                      color: "#0EA5E9", borderRadius: 10, padding: "12px", fontSize: 13, fontWeight: 700,
+                      cursor: "pointer",
+                    }}
+                  >
+                    Venda de Ativo (Cedente)
+                  </button>
+                  <button
+                    onClick={() => setBolsaKind("compra")}
+                    style={{
+                      display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                      background: "#0F1E35", border: "1px solid rgba(14,165,233,0.3)",
+                      color: "#E8EDF5", borderRadius: 10, padding: "12px", fontSize: 13, fontWeight: 700,
+                      cursor: "pointer",
+                    }}
+                  >
+                    Compra de Ativo (Mandato de Busca)
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <p style={{ fontSize: 12, color: "#7A8FA8", marginBottom: 16 }}>
+                  Pré-qualificação obrigatória antes de gerar o link ({bolsaKind === "venda" ? "Venda de Ativo" : "Compra de Ativo"}).
+                </p>
+                <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 16 }}>
+                  {bolsaKind === "venda" ? (
+                    <>
+                      <div>
+                        <label style={{ fontSize: 9, color: "#7A8FA8", textTransform: "uppercase" }}>Nome do Cedente *</label>
+                        <input value={bolsaSellerName} onChange={(e) => setBolsaSellerName(e.target.value)}
+                          style={{ width: "100%", background: "#0F1E35", border: "1px solid #1E3A5F", borderRadius: 8, padding: "8px 10px", fontSize: 12, color: "#E8EDF5", marginTop: 4 }} />
+                      </div>
+                      <div>
+                        <label style={{ fontSize: 9, color: "#7A8FA8", textTransform: "uppercase" }}>Tipo de Ativo *</label>
+                        <select value={bolsaAssetType} onChange={(e) => setBolsaAssetType(e.target.value)}
+                          style={{ width: "100%", background: "#0F1E35", border: "1px solid #1E3A5F", borderRadius: 8, padding: "8px 10px", fontSize: 12, color: "#E8EDF5", marginTop: 4 }}>
+                          <option value="">Selecione a classe do ativo</option>
+                          <option value="precatorio">Precatório</option>
+                          <option value="direito_creditorio">Direito Creditório</option>
+                          <option value="ipi">IPI</option>
+                          <option value="icms">ICMS</option>
+                          <option value="outros">Outros</option>
+                        </select>
+                      </div>
+                    </>
+                  ) : (
+                    <div>
+                      <label style={{ fontSize: 9, color: "#7A8FA8", textTransform: "uppercase" }}>Nome do Mandatário da Compra *</label>
+                      <input value={bolsaNomeContato} onChange={(e) => setBolsaNomeContato(e.target.value)}
+                        style={{ width: "100%", background: "#0F1E35", border: "1px solid #1E3A5F", borderRadius: 8, padding: "8px 10px", fontSize: 12, color: "#E8EDF5", marginTop: 4 }} />
+                    </div>
+                  )}
+                  <div>
+                    <label style={{ fontSize: 9, color: "#7A8FA8", textTransform: "uppercase" }}>Distância até o {bolsaKind === "venda" ? "Cedente/Mandatário" : "Mandatário da Compra"} *</label>
+                    <select value={bolsaDistancia} onChange={(e) => setBolsaDistancia(e.target.value)}
+                      style={{ width: "100%", background: "#0F1E35", border: "1px solid #1E3A5F", borderRadius: 8, padding: "8px 10px", fontSize: 12, color: "#E8EDF5", marginTop: 4 }}>
+                      <option value="">Selecione</option>
+                      <option value="direto">Direto, falo pessoalmente com ele</option>
+                      <option value="um_intermediario">1 intermediário entre mim e ele</option>
+                      <option value="dois_mais">2 ou mais intermediários</option>
+                      <option value="nao_sei">Não sei dizer</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 9, color: "#7A8FA8", textTransform: "uppercase" }}>Ciência da Cadeia de Intermediários *</label>
+                    <select value={bolsaCiencia} onChange={(e) => setBolsaCiencia(e.target.value)}
+                      style={{ width: "100%", background: "#0F1E35", border: "1px solid #1E3A5F", borderRadius: 8, padding: "8px 10px", fontSize: 12, color: "#E8EDF5", marginTop: 4 }}>
+                      <option value="">Selecione</option>
+                      <option value="sim_todos">Sim, conheço todos os envolvidos</option>
+                      <option value="sim_parcial">Sim, mas não conheço todos</option>
+                      <option value="nao_tenho">Não tenho ciência</option>
+                    </select>
+                  </div>
+                  {(bolsaDistancia === "nao_sei" || bolsaCiencia === "nao_tenho") && (
+                    <p style={{ fontSize: 10, color: "#EF4444" }}>Sem qualidade suficiente para avançar ao estudo preliminar. Mapeie a distância e a cadeia de intermediários antes de prosseguir.</p>
+                  )}
+                </div>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <Button variant="ghost" onClick={() => setBolsaKind(null)}>Voltar</Button>
+                  <button
+                    onClick={() => handleGenerateBolsaLink(bolsaKind)}
+                    disabled={!!generatingBolsaLink || (bolsaKind === "venda" ? (!bolsaSellerName.trim() || !bolsaAssetType) : !bolsaNomeContato.trim()) || !bolsaDistancia || !bolsaCiencia || bolsaDistancia === "nao_sei" || bolsaCiencia === "nao_tenho"}
+                    style={{
+                      flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                      background: "rgba(14,165,233,0.1)", border: "1px solid rgba(14,165,233,0.3)",
+                      color: "#0EA5E9", borderRadius: 10, padding: "10px", fontSize: 13, fontWeight: 700,
+                      cursor: "pointer", opacity: generatingBolsaLink ? 0.5 : 1,
+                    }}
+                  >
+                    {generatingBolsaLink ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                    Gerar Link
+                  </button>
+                </div>
               </>
             )}
           </div>
