@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
         .from("demand_matches")
         .select(`
           id, score, match_reasons,
-          investor_demands(nome_contato, email, origin_partner_id),
+          investor_demands(nome_contato, apelido, email, origin_partner_id),
           cm_asset_listings:listing_id(anonymous_id, asset_type, valor_face, desagio_pretendido, originator_profile_id)
         `)
         .not("listing_id", "is", null)
@@ -87,11 +87,17 @@ export async function POST(req: NextRequest) {
         for (const m of matches as any[]) {
           const listing = m.cm_asset_listings;
           const demand = m.investor_demands;
+          // Fase 5 (19/09/2026), achado no BRIEF: esta notificacao ia pro
+          // partner que originou o ATIVO (lado venda) e ate agora citava
+          // demand.nome_contato, o nome real do comprador -- quebra o
+          // duplo-cego. Nunca nao vazou de verdade so porque o pipeline de
+          // compra (5.3) ainda nao existe e nome_contato fica "Pendente".
+          // Troca pro apelido/codinome da demanda, nunca o nome real.
           if (listing?.originator_profile_id) {
             void createNotification({
               user_id: listing.originator_profile_id,
               title: `Novo match para ${listing.anonymous_id}`,
-              message: `Comprador ${demand?.nome_contato ?? "identificado"} (score ${m.score}/100) pro ativo que você originou.`,
+              message: `Comprador qualificado (${demand?.apelido ?? "identificado internamente"}, score ${m.score}/100) pro ativo que você originou.`,
               type: "marketplace",
               action_url: "/meus-ativos",
             });
@@ -125,3 +131,9 @@ export async function POST(req: NextRequest) {
       : "Nenhum novo match encontrado.",
   });
 }
+
+// Fase 5, sub-entrega 5.2 (19/09/2026): agendamento em cron, achado no BRIEF
+// que o motor so rodava por chamada manual ate hoje. Vercel Cron so envia
+// GET (nunca POST), mesmo padrao ja usado nos outros crons deste projeto
+// (app/api/cron/*) -- a logica e identica, so o metodo HTTP muda.
+export const GET = POST;

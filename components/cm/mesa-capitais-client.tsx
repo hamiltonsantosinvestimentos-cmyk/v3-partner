@@ -8,12 +8,13 @@ import {
   ArrowRight, RefreshCw, Shield, Bot, Upload, Mic,
   Link2, Copy, Plus, FileText, UserPlus, ClipboardCheck,
   ToggleLeft, ToggleRight, Save, Download, ExternalLink, Trash2, X,
-  FileSignature, CalendarClock, XCircle,
+  FileSignature, CalendarClock, XCircle, Flame,
 } from "lucide-react";
 import { cn, maskCpfCnpjInput, maskPhoneInput, isValidEmail, maskCurrencyBRLInput, parseCurrencyBRLInput, formatCurrencyBRLFromNumber, maskCurrencyInput, CM_CURRENCY_SYMBOL, type CmCurrency } from "@/lib/utils";
 import { AssetAssistant } from "./asset-assistant";
 import { DueDiligencePanel } from "./due-diligence-panel";
 import { CommissionCalculatorPanel } from "./commission-calculator-panel";
+import { MatchHeatmapPanel } from "./match-heatmap-panel";
 import { BuySideDemandsPanel } from "./buy-side-demands-panel";
 import { NdaAuthorizationQueuePanel } from "./nda-authorization-queue-panel";
 import { QuickIndicateModal } from "./quick-indicate-modal";
@@ -270,6 +271,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
   const [dueDiligenceListing, setDueDiligenceListing] = useState<{ id: string; anonymous_id: string; seller_cpf_cnpj: string | null } | null>(null);
   const [indicateListing, setIndicateListing] = useState<{ id: string; anonymous_id: string } | null>(null);
   const [showCommissionCalc, setShowCommissionCalc] = useState(false);
+  const [showMatchHeatmap, setShowMatchHeatmap] = useState(false);
   const [uploadingDoc, setUploadingDoc] = useState<string | null>(null);
   const [uploadingGallery, setUploadingGallery] = useState(false);
   const [generatingNarrative, setGeneratingNarrative] = useState(false);
@@ -1895,6 +1897,12 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
             className="flex items-center gap-2 px-4 py-2 border border-[#C9A84C]/30 text-[#C9A84C] rounded-lg text-sm font-medium hover:bg-[#C9A84C]/10 transition"
           >
             <DollarSign size={16} /> Calculadora Rápida
+          </button>
+          <button
+            onClick={() => setShowMatchHeatmap(true)}
+            className="flex items-center gap-2 px-4 py-2 border border-[#C9A84C]/30 text-[#C9A84C] rounded-lg text-sm font-medium hover:bg-[#C9A84C]/10 transition"
+          >
+            <Flame size={16} /> Mapa de Calor
           </button>
           <button
             onClick={() => setShowManualForm(true)}
@@ -4494,6 +4502,11 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
       {/* Calculadora Rápida — Comissionamento & Lâmina de Fechamento */}
       {showCommissionCalc && (
         <CommissionCalculatorPanel onClose={() => setShowCommissionCalc(false)} />
+      )}
+
+      {/* Mapa de Calor de Match (Fase 5, sub-entrega 5.2, 19/09/2026) */}
+      {showMatchHeatmap && (
+        <MatchHeatmapPanel onClose={() => setShowMatchHeatmap(false)} />
       )}
     </div>
   );
