@@ -351,6 +351,11 @@ export default function QualificacaoIntakePage() {
 
   const [representation, setRepresentation] = useState<RepresentativeState>(emptyRepresentative());
 
+  // Sprint 1, Fase 4.2 (19/09/2026, "go" de Joao Lemos): mecanismo tecnico de
+  // consentimento LGPD, com texto padrao ate validacao formal de Dr. Athaydes/
+  // Robson -- nunca apresentado como parecer juridico final.
+  const [lgpdAccepted, setLgpdAccepted] = useState(false);
+
   // Reaproveitamento de KYC (04/09/2026): slots da PARTE PRINCIPAL -- ID com
   // foto se PF, contrato social se PJ. Slots de qualquer representante vivem
   // dentro do próprio RepresentativeState (documents), já fiados acima.
@@ -438,6 +443,10 @@ export default function QualificacaoIntakePage() {
       setFormError("Informe ao menos dados bancários ou uma chave PIX");
       return;
     }
+    if (!lgpdAccepted) {
+      setFormError("É necessário aceitar o termo de consentimento LGPD para continuar");
+      return;
+    }
 
     setSubmitting(true);
     try {
@@ -468,6 +477,7 @@ export default function QualificacaoIntakePage() {
           company_estado: partyNature === "PJ" ? companyEstado.trim() : null, company_cep: partyNature === "PJ" ? companyCep.trim() : null,
           documents: { identificacao_foto: toDocRef(idDocSlot), contrato_social: toDocRef(contratoSocialSlot) },
           representation: representativeTypesRequired ? serializeRepresentation(representation) : null,
+          lgpd_accepted: lgpdAccepted,
         }),
       });
       const json = await res.json();
@@ -655,6 +665,29 @@ export default function QualificacaoIntakePage() {
                   </div>
                 </div>
               )}
+            </div>
+
+            {/* Sprint 1, Fase 4.2 (19/09/2026): consentimento LGPD, texto padrao
+                ate validacao formal de Dr. Athaydes/Robson. Gate obrigatorio
+                antes do envio, que por sua vez e o que libera a assinatura do
+                NCNDA/documento seguinte. */}
+            <div className="pt-3 border-t border-[#9BAFC5]/10">
+              <label className="flex items-start gap-3 cursor-pointer">
+                <input type="checkbox" checked={lgpdAccepted} onChange={(e) => setLgpdAccepted(e.target.checked)}
+                  className="mt-0.5 w-4 h-4 accent-[#C9A84C] shrink-0" />
+                <span className="text-[11px] text-[#9BAFC5] leading-relaxed">
+                  Declaro estar ciente de que os dados pessoais fornecidos neste formulário
+                  (identificação, documentos, endereço e, quando aplicável, dados bancários)
+                  serão tratados pela V3 Partners Soluções Ltda exclusivamente para fins de
+                  qualificação civil das partes na operação identificada acima, incluindo
+                  verificação de identidade e elaboração do respectivo documento contratual,
+                  em conformidade com a Lei Geral de Proteção de Dados (Lei nº 13.709/2018).
+                  Os dados serão mantidos pelo prazo necessário à operação e eventuais
+                  obrigações legais, e poderão ser compartilhados com prestadores de serviço
+                  envolvidos nesta finalidade. <span className="text-[#9BAFC5]/50">(Texto padrão,
+                  pendente de validação formal pelo departamento jurídico.)</span>
+                </span>
+              </label>
             </div>
 
             {formError && <p className="text-[11px] text-red-400">{formError}</p>}

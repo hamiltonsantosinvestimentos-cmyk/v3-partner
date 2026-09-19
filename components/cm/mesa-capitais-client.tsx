@@ -8,6 +8,7 @@ import {
   ArrowRight, RefreshCw, Shield, Bot, Upload, Mic,
   Link2, Copy, Plus, FileText, UserPlus, ClipboardCheck,
   ToggleLeft, ToggleRight, Save, Download, ExternalLink, Trash2, X,
+  FileSignature,
 } from "lucide-react";
 import { cn, maskCpfCnpjInput, maskPhoneInput, isValidEmail, maskCurrencyBRLInput, parseCurrencyBRLInput, formatCurrencyBRLFromNumber, maskCurrencyInput, CM_CURRENCY_SYMBOL, type CmCurrency } from "@/lib/utils";
 import { AssetAssistant } from "./asset-assistant";
@@ -267,6 +268,8 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
   const [uploadingGallery, setUploadingGallery] = useState(false);
   const [generatingNarrative, setGeneratingNarrative] = useState(false);
   const [selectedListing, setSelectedListing] = useState<Listing | null>(null);
+  const [teaserCegoLoading, setTeaserCegoLoading] = useState(false);
+  const [teaserCegoResult, setTeaserCegoResult] = useState<{ html: string; whatsapp_url: string; whatsapp_text: string } | null>(null);
   const [activeDetailTab, setActiveDetailTab] = useState<"geral" | "documentos" | "orderbook" | "governanca" | "notas" | "forja" | "compliance">("geral");
   const [listingDocs, setListingDocs] = useState<any[]>([]);
   const [docsLoading, setDocsLoading] = useState(false);
@@ -3418,12 +3421,8 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
               </div>
             </div>
 
-            {/* Ações Comerciais (18/09/2026, Sprint 1 Fase 4, item 4.6): liga a
-                minuta "Carta de Intenção de Aquisição para a V3 Partners" (Central
-                de Contratos, id fixo desta minuta única pós-consolidação PF/PJ) ao
-                card do ativo, mesmo mecanismo de pré-seleção via ?template_id= já
-                usado pelo link de notificação aos sócios. */}
-            <div className="px-4 mt-4">
+            {/* Ações Comerciais (18/09/2026, Sprint 1 Fase 4, itens 4.6 e 4.7). */}
+            <div className="px-4 mt-4 space-y-2">
               <a
                 href="/juridico/contratos?template_id=08e028f0-5bd7-4239-8b0e-288e94fbf2ec"
                 target="_blank"
@@ -3432,6 +3431,47 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
               >
                 <FileSignature size={14} /> Solicitar Carta de Intenção
               </a>
+
+              <button
+                onClick={async () => {
+                  setTeaserCegoLoading(true);
+                  setTeaserCegoResult(null);
+                  try {
+                    const res = await fetch(`/api/cm/listings/${selectedListing.id}/gerar-teaser-cego`, { method: "POST" });
+                    const json = await res.json();
+                    if (!res.ok) { alert(json.error ?? "Falha ao gerar teaser cego"); return; }
+                    setTeaserCegoResult(json);
+                    const blob = new Blob([json.html], { type: "text/html" });
+                    window.open(URL.createObjectURL(blob), "_blank");
+                  } catch {
+                    alert("Erro de conexão ao gerar teaser cego");
+                  } finally {
+                    setTeaserCegoLoading(false);
+                  }
+                }}
+                disabled={teaserCegoLoading}
+                className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-[#C9A84C]/10 border border-[#C9A84C]/30 rounded text-[#C9A84C] text-xs font-bold hover:bg-[#C9A84C]/20 transition disabled:opacity-50"
+              >
+                {teaserCegoLoading ? <Loader2 size={14} className="animate-spin" /> : <FileSignature size={14} />}
+                Gerar Teaser Cego
+              </button>
+
+              {teaserCegoResult && (
+                <div className="bg-[#162744] border border-[#243A66] rounded-lg p-3">
+                  <p className="text-[9px] font-bold text-[#C9A84C] uppercase tracking-wider mb-2">Divulgação WhatsApp (link manual)</p>
+                  <p className="text-[10px] text-[#9BAFC5] mb-2 leading-relaxed">{teaserCegoResult.whatsapp_text}</p>
+                  <div className="flex gap-2">
+                    <a href={teaserCegoResult.whatsapp_url} target="_blank" rel="noopener noreferrer"
+                      className="flex-1 text-center px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/30 rounded text-emerald-400 text-[10px] font-bold hover:bg-emerald-500/20 transition">
+                      Abrir WhatsApp
+                    </a>
+                    <button onClick={() => { navigator.clipboard.writeText(teaserCegoResult.whatsapp_text); alert("Texto copiado!"); }}
+                      className="flex-1 px-3 py-1.5 bg-[#09081A] border border-[#9BAFC5]/15 rounded text-[#9BAFC5] text-[10px] font-bold hover:text-[#F5F1E8] transition">
+                      Copiar Texto
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Zona de Risco: Exclusão */}

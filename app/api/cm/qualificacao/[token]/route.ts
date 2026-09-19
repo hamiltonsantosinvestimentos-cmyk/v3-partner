@@ -275,7 +275,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
     nationality, marital_status, profession, birth_date, phone,
     endereco_rua, endereco_numero, endereco_complemento, endereco_bairro, endereco_cidade, endereco_estado, endereco_cep,
     company_rua, company_numero, company_complemento, company_bairro, company_cidade, company_estado, company_cep,
-    representation, documents,
+    representation, documents, lgpd_accepted,
   } = body as {
     party_nature?: PartyNature;
     cpf_cnpj?: string;
@@ -297,7 +297,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
     representation?: any;
     // Reaproveitamento de KYC (04/09/2026): { identificacao_foto?: DocRef, contrato_social?: DocRef }
     documents?: { identificacao_foto?: DocRef; contrato_social?: DocRef };
+    // Sprint 1, Fase 4.2 (19/09/2026): aceite do termo LGPD, obrigatorio antes
+    // de qualquer outro dado ser gravado -- gate no servidor, nunca so no client.
+    lgpd_accepted?: boolean;
   };
+
+  if (lgpd_accepted !== true) {
+    return NextResponse.json({ error: "É necessário aceitar o termo de consentimento LGPD para continuar." }, { status: 422 });
+  }
 
   const nature: PartyNature = VALID_NATURES.includes(party_nature as PartyNature) ? (party_nature as PartyNature) : "PF";
   const personType: "PF" | "PJ" = nature === "PJ" ? "PJ" : "PF";
@@ -391,6 +398,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
       // Compliance (11/09/2026, pedido de Robson Lino): IP de quem
       // efetivamente preencheu, pra auditoria/antifraude.
       filled_ip: req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? req.headers.get("x-real-ip") ?? null,
+      // Sprint 1, Fase 4.2 (19/09/2026): mesmo padrao de filled_ip, registrado
+      // so quando o aceite (ja validado como obrigatorio acima) acontece.
+      lgpd_accepted_at: new Date().toISOString(),
+      lgpd_accepted_ip: req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? req.headers.get("x-real-ip") ?? null,
     })
     .eq("id", qualification.id);
 
