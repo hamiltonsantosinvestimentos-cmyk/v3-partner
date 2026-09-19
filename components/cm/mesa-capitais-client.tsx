@@ -3418,6 +3418,22 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
               </div>
             </div>
 
+            {/* Ações Comerciais (18/09/2026, Sprint 1 Fase 4, item 4.6): liga a
+                minuta "Carta de Intenção de Aquisição para a V3 Partners" (Central
+                de Contratos, id fixo desta minuta única pós-consolidação PF/PJ) ao
+                card do ativo, mesmo mecanismo de pré-seleção via ?template_id= já
+                usado pelo link de notificação aos sócios. */}
+            <div className="px-4 mt-4">
+              <a
+                href="/juridico/contratos?template_id=08e028f0-5bd7-4239-8b0e-288e94fbf2ec"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-[#C9A84C]/10 border border-[#C9A84C]/30 rounded text-[#C9A84C] text-xs font-bold hover:bg-[#C9A84C]/20 transition"
+              >
+                <FileSignature size={14} /> Solicitar Carta de Intenção
+              </a>
+            </div>
+
             {/* Zona de Risco: Exclusão */}
             <div className="px-4 mt-4">
               <div className="text-[10px] text-red-400 font-bold uppercase tracking-wider mb-2">Zona de Risco</div>

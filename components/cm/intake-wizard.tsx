@@ -4,14 +4,30 @@ import React, { useState } from "react";
 import { CheckCircle2, ChevronRight, ChevronLeft, Loader2, Shield } from "lucide-react";
 import { maskCpfCnpjInput, maskPhoneInput, isValidEmail, isValidCpfCnpj, maskCurrencyBRLInput, parseCurrencyBRLInput, formatCurrencyBRLFromNumber } from "@/lib/utils";
 import { UFS, fetchMunicipios } from "@/lib/br-locations";
+import { fetchCep, buildEnderecoFromCep, formatCepMask } from "@/lib/viacep";
+import { Plus, Trash2 } from "lucide-react";
 
 const STEPS = [
   { label: "Identificação Inicial", key: "identificacao_inicial" },
   { label: "NDA", key: "nda" },
   { label: "Identificação Completa", key: "identificacao_completa" },
+  { label: "Intermediários", key: "intermediarios" },
   { label: "Ativo", key: "ativo" },
   { label: "Financeiro", key: "financeiro" },
   { label: "Documentos", key: "documentos" },
+];
+
+interface Intermediario {
+  nome: string;
+  email: string;
+  whatsapp: string;
+}
+
+const CHECKLIST_ITEMS = [
+  { key: "checklist_contato_direto", label: "Tenho contato direto com o cedente/detentor do ativo, não é uma indicação de terceiros sem confirmação." },
+  { key: "checklist_ativo_livre_onus", label: "Pelo meu conhecimento, o ativo está livre de ônus, gravames, penhoras ou cessões anteriores." },
+  { key: "checklist_regularidade_fiscal", label: "O cedente não possui, pelo meu conhecimento, pendências fiscais que impeçam a transferência." },
+  { key: "checklist_intermediarios_cientes", label: "Todos os intermediários listados abaixo estão cientes de que serão contatados pela V3 Partners para qualificação." },
 ];
 
 const ASSET_TYPES = [
@@ -63,9 +79,46 @@ export function IntakeWizard({ token, prefill, anonymousId }: IntakeWizardProps)
     tranche_valor_minimo: prefill.tranche_valor_minimo ? formatCurrencyBRLFromNumber(Number(prefill.tranche_valor_minimo)) : "",
     observacoes: "",
     nda_accepted: false,
+    cep: "",
+    numero: "",
+    complemento: "",
+    checklist_contato_direto: false,
+    checklist_ativo_livre_onus: false,
+    checklist_regularidade_fiscal: false,
+    checklist_intermediarios_cientes: false,
   });
 
+  const [intermediarios, setIntermediarios] = useState<Intermediario[]>([]);
+  const [cepLoading, setCepLoading] = useState(false);
+  const [cepError, setCepError] = useState("");
+
   const upd = (field: string, value: any) => setForm((p) => ({ ...p, [field]: value }));
+
+  const addIntermediario = () => setIntermediarios((prev) => [...prev, { nome: "", email: "", whatsapp: "" }]);
+  const updIntermediario = (i: number, field: keyof Intermediario, value: string) =>
+    setIntermediarios((prev) => prev.map((it, idx) => (idx === i ? { ...it, [field]: value } : it)));
+  const removeIntermediario = (i: number) => setIntermediarios((prev) => prev.filter((_, idx) => idx !== i));
+
+  const handleCepBlur = async () => {
+    const digits = form.cep.replace(/\D/g, "");
+    if (digits.length !== 8) return;
+    setCepLoading(true);
+    setCepError("");
+    try {
+      const result = await fetchCep(digits);
+      if (!result) {
+        setCepError("CEP não encontrado, preencha o endereço manualmente abaixo.");
+        return;
+      }
+      upd("endereco", buildEnderecoFromCep(result, form.numero, form.complemento));
+      upd("_cep_logradouro", result.logradouro);
+      upd("_cep_bairro", result.bairro);
+      upd("_cep_cidade", result.localidade);
+      upd("_cep_uf", result.uf);
+    } finally {
+      setCepLoading(false);
+    }
+  };
 
   const selectUf = async (uf: string) => {
     upd("uf_ente_devedor", uf);
@@ -89,8 +142,9 @@ export function IntakeWizard({ token, prefill, anonymousId }: IntakeWizardProps)
     // Checktudo recusou a consulta. O campo ja tinha "*" de obrigatorio na label, nunca
     // era de fato exigido.
     if (step === 2) return isValidCpfCnpj(form.seller_cpf_cnpj);
-    if (step === 3) return form.asset_type && form.ente_devedor;
-    if (step === 4) return form.valor_face;
+    if (step === 3) return CHECKLIST_ITEMS.every((c) => (form as any)[c.key]);
+    if (step === 4) return form.asset_type && form.ente_devedor;
+    if (step === 5) return form.valor_face;
     return true;
   };
 
@@ -106,6 +160,7 @@ export function IntakeWizard({ token, prefill, anonymousId }: IntakeWizardProps)
           valor_face: parseCurrencyBRLInput(form.valor_face),
           valor_atualizado: form.valor_atualizado ? parseCurrencyBRLInput(form.valor_atualizado) : "",
           tranche_valor_minimo: form.tranche_valor_minimo ? parseCurrencyBRLInput(form.tranche_valor_minimo) : "",
+          intermediarios: intermediarios.filter((i) => i.nome.trim() || i.email.trim() || i.whatsapp.trim()),
         }),
       });
       const data = await res.json();
@@ -239,15 +294,98 @@ export function IntakeWizard({ token, prefill, anonymousId }: IntakeWizardProps)
                 <label className={labelClass}>Identidade / Órgão Expedidor</label>
                 <input className={inputClass} value={(form as any).identidade_orgao ?? ""} onChange={(e) => upd("identidade_orgao", e.target.value)} placeholder="Ex: 12.345.678-9 SSP/RJ" />
               </div>
+              <div>
+                <label className={labelClass}>CEP</label>
+                <input
+                  className={inputClass}
+                  value={form.cep}
+                  onChange={(e) => upd("cep", formatCepMask(e.target.value))}
+                  onBlur={handleCepBlur}
+                  placeholder="00000-000"
+                  maxLength={9}
+                />
+                {cepLoading && <p className="text-[10px] text-[#9BAFC5] mt-1">Buscando endereço...</p>}
+                {cepError && <p className="text-[10px] text-amber-400 mt-1">{cepError}</p>}
+              </div>
+              <div>
+                <label className={labelClass}>Número</label>
+                <input
+                  className={inputClass}
+                  value={form.numero}
+                  onChange={(e) => {
+                    upd("numero", e.target.value);
+                    const logradouro = (form as any)._cep_logradouro;
+                    if (logradouro) {
+                      upd("endereco", buildEnderecoFromCep({
+                        cep: form.cep, logradouro,
+                        bairro: (form as any)._cep_bairro ?? "",
+                        localidade: (form as any)._cep_cidade ?? "",
+                        uf: (form as any)._cep_uf ?? "",
+                      }, e.target.value, form.complemento));
+                    }
+                  }}
+                  placeholder="Nº"
+                />
+              </div>
               <div className="sm:col-span-2">
                 <label className={labelClass}>Endereço completo</label>
-                <input className={inputClass} value={(form as any).endereco ?? ""} onChange={(e) => upd("endereco", e.target.value)} placeholder="Rua, número, complemento, bairro, cidade, UF, CEP" />
+                <input className={inputClass} value={(form as any).endereco ?? ""} onChange={(e) => upd("endereco", e.target.value)} placeholder="Preenchido automaticamente pelo CEP, ou digite manualmente" />
               </div>
             </div>
           </div>
         )}
 
         {step === 3 && (
+          <div>
+            <h3 className="text-lg font-bold text-[#F5F1E8] mb-1">Intermediários e Checklist Inicial</h3>
+            <p className="text-xs text-[#9BAFC5] mb-6">Declare quem mais participa desta operação do seu lado. A V3 Partners enviará um link próprio de qualificação para cada um deles.</p>
+
+            <div className="mb-6">
+              <label className={labelClass}>Intermediários envolvidos (opcional)</label>
+              {intermediarios.length === 0 && (
+                <p className="text-xs text-[#9BAFC5]/60 mb-3">Nenhum intermediário adicionado ainda.</p>
+              )}
+              <div className="space-y-3">
+                {intermediarios.map((it, i) => (
+                  <div key={i} className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_1fr_auto] gap-2 items-start bg-[#162744] border border-[#9BAFC5]/10 rounded-lg p-3">
+                    <input className={inputClass} value={it.nome} onChange={(e) => updIntermediario(i, "nome", e.target.value)} placeholder="Nome completo" />
+                    <input type="email" className={inputClass} value={it.email} onChange={(e) => updIntermediario(i, "email", e.target.value)} placeholder="E-mail" />
+                    <input className={inputClass} value={it.whatsapp} onChange={(e) => updIntermediario(i, "whatsapp", maskPhoneInput(e.target.value))} placeholder="WhatsApp (21) 99999-0000" />
+                    <button type="button" onClick={() => removeIntermediario(i)} className="p-2.5 text-red-400 hover:bg-red-500/10 rounded-lg transition self-center">
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <button type="button" onClick={addIntermediario} className="mt-3 flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold text-[#C9A84C] border border-[#C9A84C]/30 hover:bg-[#C9A84C]/10 transition">
+                <Plus size={14} /> Adicionar Intermediário
+              </button>
+              {intermediarios.length >= 3 && (
+                <p className="text-[10px] text-amber-400 mt-3">Cadeias longas de intermediários reduzem o ganho por cota de cada participante e podem exigir aprovação adicional da Diretoria antes de seguir.</p>
+              )}
+            </div>
+
+            <div>
+              <label className={labelClass}>Checklist Inicial *</label>
+              <div className="space-y-3 mt-2">
+                {CHECKLIST_ITEMS.map((c) => (
+                  <div key={c.key} className="flex items-start gap-3">
+                    <input
+                      type="checkbox"
+                      id={c.key}
+                      checked={!!(form as any)[c.key]}
+                      onChange={(e) => upd(c.key, e.target.checked)}
+                      className="w-5 h-5 accent-[#C9A84C] mt-0.5 flex-shrink-0"
+                    />
+                    <label htmlFor={c.key} className="text-sm text-[#F5F1E8]">{c.label}</label>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {step === 4 && (
           <div>
             <h3 className="text-lg font-bold text-[#F5F1E8] mb-1">Dados do Ativo</h3>
             <p className="text-xs text-[#9BAFC5] mb-6">Classificação e detalhes do direito creditório</p>
@@ -305,7 +443,7 @@ export function IntakeWizard({ token, prefill, anonymousId }: IntakeWizardProps)
           </div>
         )}
 
-        {step === 4 && (
+        {step === 5 && (
           <div>
             <h3 className="text-lg font-bold text-[#F5F1E8] mb-1">Dados Financeiros</h3>
             <p className="text-xs text-[#9BAFC5] mb-6">Valores e condições pretendidas</p>
@@ -340,7 +478,7 @@ export function IntakeWizard({ token, prefill, anonymousId }: IntakeWizardProps)
           </div>
         )}
 
-        {step === 5 && (
+        {step === 6 && (
           <div>
             <h3 className="text-lg font-bold text-[#F5F1E8] mb-1">Documentos</h3>
             <p className="text-xs text-[#9BAFC5] mb-6">Após o envio, a equipe V3 Partners solicitará os documentos necessários por email</p>

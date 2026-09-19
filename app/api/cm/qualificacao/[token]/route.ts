@@ -441,10 +441,19 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
       .single();
 
     if (batch?.created_by) {
+      // Sprint 1, Fase 4 (18/09/2026): link fixo de agendamento (Google
+      // Calendar Appointment Schedule, 45min, dias úteis) anexado à
+      // notificação quando o lote é da Bolsa de Ativos. A Mesa encaminha o
+      // link ao grupo recém-qualificado para a reunião de apresentação ao
+      // Head, mesmo padrão manual (wa.me/e-mail) já usado no resto do
+      // sistema — nunca disparo automático direto aos externos.
+      const agendaLink = batch.listing_id
+        ? "\n\nAgende a reunião de apresentação com o Head: https://calendar.google.com/calendar/u/0/appointments/schedules/AcZssZ1T51okURKuhE_zw_MiCC68TkFZHk8tgNaJQauB9ha6LymoTSSovxkijrv3BfDYW1VipSAXokAi"
+        : "";
       await db.from("notifications").insert({
         user_id: batch.created_by,
         title: "Qualificação de partes completa",
-        message: `Todos os envolvidos preencheram os dados de qualificação para ${DOCUMENT_TYPE_LABELS[batch.document_type] ?? batch.document_type}. Pronto para gerar o documento.`,
+        message: `Todos os envolvidos preencheram os dados de qualificação para ${DOCUMENT_TYPE_LABELS[batch.document_type] ?? batch.document_type}. Pronto para gerar o documento.${agendaLink}`,
         type: "qualificacao_completa",
         action_url: batch.listing_id ? `/bolsa/mesa` : "/juridico/contratos",
         read: false,

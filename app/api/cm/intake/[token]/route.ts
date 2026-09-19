@@ -82,6 +82,9 @@ export async function POST(
     allows_tranching, tranche_valor_minimo, nda_accepted,
     contato_nome, contato_email, contato_telefone,
     nacionalidade, profissao, estado_civil, identidade_orgao, endereco,
+    intermediarios,
+    checklist_contato_direto, checklist_ativo_livre_onus,
+    checklist_regularidade_fiscal, checklist_intermediarios_cientes,
   } = body;
 
   if (!seller_name || !valor_face || !asset_type) {
@@ -158,6 +161,18 @@ export async function POST(
         nda_accepted: nda_accepted ?? false,
         nda_accepted_at: nda_accepted ? new Date().toISOString() : null,
         submitted_at: new Date().toISOString(),
+        // Sprint 1, Fase 4 (18/09/2026): grid de intermediarios declarados pelo
+        // Partner e checklist orientativo. Sem migration -- intake_data ja e
+        // jsonb flexivel, mesmo padrao dos demais campos deste bloco. A Mesa
+        // usa isso pra gerar o link de qualificacao de cada intermediario
+        // (nao a Mesa preenchendo dados por telefone/WhatsApp).
+        intermediarios: Array.isArray(intermediarios) ? intermediarios : [],
+        checklist: {
+          contato_direto: checklist_contato_direto ?? false,
+          ativo_livre_onus: checklist_ativo_livre_onus ?? false,
+          regularidade_fiscal: checklist_regularidade_fiscal ?? false,
+          intermediarios_cientes: checklist_intermediarios_cientes ?? false,
+        },
       },
     })
     .eq("id", listing.id);
