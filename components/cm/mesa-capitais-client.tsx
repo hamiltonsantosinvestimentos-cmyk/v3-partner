@@ -306,6 +306,17 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
   const [generatingBuyLink, setGeneratingBuyLink] = useState(false);
   const [showBuyLinkPartnerModal, setShowBuyLinkPartnerModal] = useState(false);
   const [buyLinkPartnerValue, setBuyLinkPartnerValue] = useState<string>("");
+  const [buyLinkNomeContato, setBuyLinkNomeContato] = useState("");
+  const [buyLinkDistancia, setBuyLinkDistancia] = useState("");
+  const [buyLinkCiencia, setBuyLinkCiencia] = useState("");
+  // Pre-qualificacao da originacao (19/09/2026, pedido de Joao): "Novo Ativo"
+  // deixa de gerar link em 1 clique -- abre este modal primeiro, e o link so
+  // nasce depois do gate de qualidade responder ok no servidor.
+  const [showPreQualifyModal, setShowPreQualifyModal] = useState(false);
+  const [preQualifySellerName, setPreQualifySellerName] = useState("");
+  const [preQualifyAssetType, setPreQualifyAssetType] = useState("");
+  const [preQualifyDistancia, setPreQualifyDistancia] = useState("");
+  const [preQualifyCiencia, setPreQualifyCiencia] = useState("");
   const [checklists, setChecklists] = useState<any[]>([]);
   const [kycDocs, setKycDocs] = useState<any[]>([]);
   const [kycPartyType, setKycPartyType] = useState<"comprador" | "vendedor">("vendedor");
@@ -1378,10 +1389,18 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
     setGeneratingLink(true);
     setIntakeUrl(null);
     try {
+      const payload = listingId
+        ? { listing_id: listingId }
+        : {
+            seller_name: preQualifySellerName.trim(),
+            asset_type: preQualifyAssetType,
+            distancia_cedente: preQualifyDistancia,
+            ciencia_cadeia: preQualifyCiencia,
+          };
       const res = await fetch("/api/cm/intake/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(listingId ? { listing_id: listingId } : {}),
+        body: JSON.stringify(payload),
       });
       const json = await res.json();
       if (res.ok) {
@@ -1390,6 +1409,8 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
           await openListingDetail(json.listing);
           setIntakeUrl(json.url);
           setListings((prev) => [json.listing, ...prev]);
+          setShowPreQualifyModal(false);
+          setPreQualifySellerName(""); setPreQualifyAssetType(""); setPreQualifyDistancia(""); setPreQualifyCiencia("");
         } else {
           setIntakeUrl(json.url);
         }
@@ -1754,6 +1775,9 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
         body: JSON.stringify({
           origin_partner_id: buyLinkPartnerValue.startsWith("ref:") ? null : (buyLinkPartnerValue || null),
           origin_referral_id: buyLinkPartnerValue.startsWith("ref:") ? buyLinkPartnerValue.slice(4) : null,
+          nome_contato: buyLinkNomeContato.trim(),
+          distancia_cedente: buyLinkDistancia,
+          ciencia_cadeia: buyLinkCiencia,
         }),
       });
       const json = await res.json();
@@ -1763,6 +1787,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
         alert("Link do comprador copiado!");
         setShowBuyLinkPartnerModal(false);
         setBuyLinkPartnerValue("");
+        setBuyLinkNomeContato(""); setBuyLinkDistancia(""); setBuyLinkCiencia("");
       } else alert(json.error ?? "Erro ao gerar link");
     } catch { alert("Erro de conexão"); }
     finally { setGeneratingBuyLink(false); }
@@ -1834,7 +1859,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
         </div>
         <div className="flex flex-wrap gap-2 sm:justify-end">
           <button
-            onClick={() => generateIntakeLink()} disabled={generatingLink}
+            onClick={() => setShowPreQualifyModal(true)} disabled={generatingLink}
             className="flex items-center gap-2 px-4 py-2 border border-[#C9A84C]/30 text-[#C9A84C] rounded-lg text-sm font-medium hover:bg-[#C9A84C]/10 transition disabled:opacity-50"
           >
             {generatingLink ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
@@ -2176,21 +2201,119 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
         </div>
       )}
 
+      {/* Modal Pre-Qualificacao (19/09/2026, pedido de Joao): passo obrigatorio antes do link de
+          intake do lado vendedor nascer -- distancia real ate o cedente/mandatario + ciencia da
+          cadeia de intermediarios, com gate de qualidade no servidor (ver /api/cm/intake/generate). */}
+      {showPreQualifyModal && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60" onClick={() => setShowPreQualifyModal(false)}>
+          <div className="w-full max-w-sm bg-[#09081A] border border-[#C9A84C]/20 rounded-xl flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="p-4 border-b border-[#C9A84C]/20 flex items-center justify-between">
+              <div>
+                <div className="text-sm font-bold text-[#F5F1E8]">Pré-Qualificação do Ativo</div>
+                <div className="text-[10px] text-[#9BAFC5]">Responda antes de gerar o link para o parceiro preencher.</div>
+              </div>
+              <button onClick={() => setShowPreQualifyModal(false)} className="text-[#9BAFC5] hover:text-[#F5F1E8] text-xl">&times;</button>
+            </div>
+            <div className="p-4 space-y-3">
+              <div>
+                <label className="text-[9px] text-[#9BAFC5] uppercase">Nome do Cedente *</label>
+                <input value={preQualifySellerName} onChange={(e) => setPreQualifySellerName(e.target.value)}
+                  className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#F5F1E8] mt-1 focus:border-[#C9A84C]/50 focus:outline-none" />
+              </div>
+              <div>
+                <label className="text-[9px] text-[#9BAFC5] uppercase">Tipo de Ativo *</label>
+                <select value={preQualifyAssetType} onChange={(e) => setPreQualifyAssetType(e.target.value)}
+                  className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#F5F1E8] mt-1 focus:border-[#C9A84C]/50 focus:outline-none">
+                  <option value="">Selecione a classe do ativo</option>
+                  <option value="precatorio">Precatório</option>
+                  <option value="direito_creditorio">Direito Creditório</option>
+                  <option value="ipi">IPI</option>
+                  <option value="icms">ICMS</option>
+                  <option value="outros">Outros</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-[9px] text-[#9BAFC5] uppercase">Distância até o Cedente/Mandatário *</label>
+                <select value={preQualifyDistancia} onChange={(e) => setPreQualifyDistancia(e.target.value)}
+                  className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#F5F1E8] mt-1 focus:border-[#C9A84C]/50 focus:outline-none">
+                  <option value="">Selecione</option>
+                  <option value="direto">Direto, falo pessoalmente com o cedente/mandatário</option>
+                  <option value="um_intermediario">1 intermediário entre mim e ele</option>
+                  <option value="dois_mais">2 ou mais intermediários</option>
+                  <option value="nao_sei">Não sei dizer</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-[9px] text-[#9BAFC5] uppercase">Ciência da Cadeia de Intermediários *</label>
+                <select value={preQualifyCiencia} onChange={(e) => setPreQualifyCiencia(e.target.value)}
+                  className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#F5F1E8] mt-1 focus:border-[#C9A84C]/50 focus:outline-none">
+                  <option value="">Selecione</option>
+                  <option value="sim_todos">Sim, conheço todos os envolvidos</option>
+                  <option value="sim_parcial">Sim, mas não conheço todos</option>
+                  <option value="nao_tenho">Não tenho ciência</option>
+                </select>
+              </div>
+              {(preQualifyDistancia === "nao_sei" || preQualifyCiencia === "nao_tenho") && (
+                <p className="text-[10px] text-red-400">Ativo sem qualidade suficiente para avançar ao estudo preliminar. Mapeie a distância até o cedente e a cadeia de intermediários antes de prosseguir.</p>
+              )}
+              <button
+                onClick={() => generateIntakeLink()}
+                disabled={generatingLink || !preQualifySellerName.trim() || !preQualifyAssetType || !preQualifyDistancia || !preQualifyCiencia || preQualifyDistancia === "nao_sei" || preQualifyCiencia === "nao_tenho"}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-[#C9A84C] text-[#09081A] rounded-lg text-sm font-bold hover:bg-[#D4B96A] transition disabled:opacity-50"
+              >
+                {generatingLink ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
+                Confirmar e Gerar Link
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Modal Link Comprador — atribuicao de partner de origem antes de gerar (BRIEF 18/08/2026),
           mesmo padrao "listar + cadastrar" ja usado no Partner de Origem do lado vendedor: partner
           real (profiles, via /api/cm/partners-list) ou partner leve sem conta (cm_referral_partners,
-          via createReferralPartner ja compartilhado com o resto do arquivo). */}
+          via createReferralPartner ja compartilhado com o resto do arquivo). Pre-qualificacao
+          (19/09/2026) segue o mesmo gate do lado vendedor, aplicada ao mandatario da compra. */}
       {showBuyLinkPartnerModal && (
         <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60" onClick={() => setShowBuyLinkPartnerModal(false)}>
           <div className="w-full max-w-sm bg-[#09081A] border border-[#C9A84C]/20 rounded-xl flex flex-col" onClick={(e) => e.stopPropagation()}>
             <div className="p-4 border-b border-[#C9A84C]/20 flex items-center justify-between">
               <div>
                 <div className="text-sm font-bold text-[#F5F1E8]">Gerar Link Comprador</div>
-                <div className="text-[10px] text-[#9BAFC5]">Quem trouxe este lead? Opcional, mas fica registrado desde a criação.</div>
+                <div className="text-[10px] text-[#9BAFC5]">Responda a pré-qualificação antes de gerar o link. Partner de origem é opcional.</div>
               </div>
               <button onClick={() => setShowBuyLinkPartnerModal(false)} className="text-[#9BAFC5] hover:text-[#F5F1E8] text-xl">&times;</button>
             </div>
             <div className="p-4 space-y-3">
+              <div>
+                <label className="text-[9px] text-[#9BAFC5] uppercase">Nome do Mandatário da Compra *</label>
+                <input value={buyLinkNomeContato} onChange={(e) => setBuyLinkNomeContato(e.target.value)}
+                  className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#F5F1E8] mt-1 focus:border-[#C9A84C]/50 focus:outline-none" />
+              </div>
+              <div>
+                <label className="text-[9px] text-[#9BAFC5] uppercase">Distância até o Mandatário da Compra *</label>
+                <select value={buyLinkDistancia} onChange={(e) => setBuyLinkDistancia(e.target.value)}
+                  className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#F5F1E8] mt-1 focus:border-[#C9A84C]/50 focus:outline-none">
+                  <option value="">Selecione</option>
+                  <option value="direto">Direto, falo pessoalmente com o mandatário</option>
+                  <option value="um_intermediario">1 intermediário entre mim e ele</option>
+                  <option value="dois_mais">2 ou mais intermediários</option>
+                  <option value="nao_sei">Não sei dizer</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-[9px] text-[#9BAFC5] uppercase">Ciência da Cadeia de Intermediários *</label>
+                <select value={buyLinkCiencia} onChange={(e) => setBuyLinkCiencia(e.target.value)}
+                  className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#F5F1E8] mt-1 focus:border-[#C9A84C]/50 focus:outline-none">
+                  <option value="">Selecione</option>
+                  <option value="sim_todos">Sim, conheço todos os envolvidos</option>
+                  <option value="sim_parcial">Sim, mas não conheço todos</option>
+                  <option value="nao_tenho">Não tenho ciência</option>
+                </select>
+              </div>
+              {(buyLinkDistancia === "nao_sei" || buyLinkCiencia === "nao_tenho") && (
+                <p className="text-[10px] text-red-400">Demanda sem qualidade suficiente para avançar ao estudo preliminar. Mapeie a distância até o mandatário e a cadeia de intermediários antes de prosseguir.</p>
+              )}
               <div>
                 <label className="text-[9px] text-[#9BAFC5] uppercase">Partner Dono do Lead</label>
                 <select
@@ -2235,7 +2358,8 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
                 )}
               </div>
               <button
-                onClick={generateBuyLink} disabled={generatingBuyLink}
+                onClick={generateBuyLink}
+                disabled={generatingBuyLink || !buyLinkNomeContato.trim() || !buyLinkDistancia || !buyLinkCiencia || buyLinkDistancia === "nao_sei" || buyLinkCiencia === "nao_tenho"}
                 className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-[#C9A84C] text-[#09081A] rounded-lg text-sm font-bold hover:bg-[#D4B96A] transition disabled:opacity-50"
               >
                 {generatingBuyLink ? <Loader2 size={16} className="animate-spin" /> : <Link2 size={16} />}
