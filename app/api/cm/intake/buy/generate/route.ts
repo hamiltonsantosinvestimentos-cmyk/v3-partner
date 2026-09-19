@@ -35,14 +35,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
 
   const body = await req.json().catch(() => ({} as Record<string, unknown>));
-  const nomeContato = typeof body.nome_contato === "string" ? body.nome_contato.trim() : "";
+  const apelido = typeof body.apelido === "string" ? body.apelido.trim() : "";
   const distanciaCedente = typeof body.distancia_cedente === "string" ? body.distancia_cedente : "";
   const cienciaCadeia = typeof body.ciencia_cadeia === "string" ? body.ciencia_cadeia : "";
 
   // Pre-qualificacao obrigatoria (19/09/2026): sem isso o link nunca chega a
   // ser gerado. Nao valida no client sozinho -- o gate real e aqui.
-  if (!nomeContato) {
-    return NextResponse.json({ error: "Informe o nome do mandatário da compra antes de gerar o link." }, { status: 422 });
+  // Correcao no mesmo dia: NUNCA exigir o nome real do mandatario aqui --
+  // quebra o duplo-cego, a identidade so pode ser revelada apos reuniao +
+  // NCNDA. Apelido da demanda substitui, nome_contato segue "Pendente".
+  if (!apelido) {
+    return NextResponse.json({ error: "Informe o apelido da demanda antes de gerar o link." }, { status: 422 });
   }
   if (!distanciaCedente || !VALID_DISTANCIA.includes(distanciaCedente)) {
     return NextResponse.json({ error: "Informe a distância até o mandatário da compra." }, { status: 422 });
@@ -80,7 +83,8 @@ export async function POST(req: NextRequest) {
   const { data: demand, error } = await svc()
     .from("investor_demands")
     .insert({
-      nome_contato: nomeContato,
+      nome_contato: "Pendente",
+      apelido,
       email: "pendente@pendente.com",
       setores: ["precatorio"],
       ufs: ["RJ"],

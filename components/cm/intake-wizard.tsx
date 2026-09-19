@@ -30,12 +30,14 @@ const CHECKLIST_ITEMS = [
   { key: "checklist_intermediarios_cientes", label: "Todos os intermediários listados abaixo estão cientes de que serão contatados pela V3 Partners para qualificação." },
 ];
 
+// Padrao V3 (19/09/2026, pedido de Joao): dropdowns sempre em ordem
+// alfabetica, desktop e mobile, para facilitar a visualizacao.
 const ASSET_TYPES = [
-  { value: "precatorio", label: "Precatório" },
   { value: "direito_creditorio", label: "Direito Creditório" },
-  { value: "ipi", label: "IPI" },
   { value: "icms", label: "ICMS" },
+  { value: "ipi", label: "IPI" },
   { value: "outros", label: "Outros" },
+  { value: "precatorio", label: "Precatório" },
 ];
 
 interface IntakeWizardProps {

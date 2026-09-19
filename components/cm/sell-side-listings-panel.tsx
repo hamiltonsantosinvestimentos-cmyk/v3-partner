@@ -107,7 +107,7 @@ export function SellSideListingsPanel({ mode = "mine", title, subtitle }: SellSi
   // gate de qualidade em /api/cm/intake/generate). O proprio partner declara
   // o cedente antes do link nascer -- mesmo mecanismo da Mesa.
   const [showPreQualify, setShowPreQualify] = useState(false);
-  const [pqSellerName, setPqSellerName] = useState("");
+  const [pqApelido, setPqApelido] = useState("");
   const [pqAssetType, setPqAssetType] = useState("");
   const [pqDistancia, setPqDistancia] = useState("");
   const [pqCiencia, setPqCiencia] = useState("");
@@ -124,7 +124,7 @@ export function SellSideListingsPanel({ mode = "mine", title, subtitle }: SellSi
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          seller_name: pqSellerName.trim(),
+          apelido: pqApelido.trim(),
           asset_type: pqAssetType,
           distancia_cedente: pqDistancia,
           ciencia_cadeia: pqCiencia,
@@ -433,20 +433,22 @@ export function SellSideListingsPanel({ mode = "mine", title, subtitle }: SellSi
             </div>
             <div className="p-4 space-y-3">
               <div>
-                <label className="text-[9px] text-[#9BAFC5] uppercase">Nome do Cedente *</label>
-                <input value={pqSellerName} onChange={(e) => setPqSellerName(e.target.value)}
+                <label className="text-[9px] text-[#9BAFC5] uppercase">Apelido do Ativo *</label>
+                <input value={pqApelido} onChange={(e) => setPqApelido(e.target.value)}
+                  placeholder="Codinome do ativo, nunca o nome real do cedente"
                   className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#F5F1E8] mt-1 focus:border-[#C9A84C]/50 focus:outline-none" />
+                <p className="text-[9px] text-[#9BAFC5]/70 mt-1">Duplo-cego: o nome real só é revelado após reunião e NCNDA.</p>
               </div>
               <div>
                 <label className="text-[9px] text-[#9BAFC5] uppercase">Tipo de Ativo *</label>
                 <select value={pqAssetType} onChange={(e) => setPqAssetType(e.target.value)}
                   className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#F5F1E8] mt-1 focus:border-[#C9A84C]/50 focus:outline-none">
                   <option value="">Selecione a classe do ativo</option>
-                  <option value="precatorio">Precatório</option>
                   <option value="direito_creditorio">Direito Creditório</option>
-                  <option value="ipi">IPI</option>
                   <option value="icms">ICMS</option>
+                  <option value="ipi">IPI</option>
                   <option value="outros">Outros</option>
+                  <option value="precatorio">Precatório</option>
                 </select>
               </div>
               <div>
@@ -475,7 +477,7 @@ export function SellSideListingsPanel({ mode = "mine", title, subtitle }: SellSi
               )}
               <button
                 onClick={createNewAsset}
-                disabled={creatingAsset || !pqSellerName.trim() || !pqAssetType || !pqDistancia || !pqCiencia || pqDistancia === "nao_sei" || pqCiencia === "nao_tenho"}
+                disabled={creatingAsset || !pqApelido.trim() || !pqAssetType || !pqDistancia || !pqCiencia || pqDistancia === "nao_sei" || pqCiencia === "nao_tenho"}
                 className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-[#C9A84C] text-[#09081A] rounded-lg text-sm font-bold hover:bg-[#E8C97A] transition disabled:opacity-50"
               >
                 {creatingAsset ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}

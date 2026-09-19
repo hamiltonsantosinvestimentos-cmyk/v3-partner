@@ -306,14 +306,14 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
   const [generatingBuyLink, setGeneratingBuyLink] = useState(false);
   const [showBuyLinkPartnerModal, setShowBuyLinkPartnerModal] = useState(false);
   const [buyLinkPartnerValue, setBuyLinkPartnerValue] = useState<string>("");
-  const [buyLinkNomeContato, setBuyLinkNomeContato] = useState("");
+  const [buyLinkApelido, setBuyLinkApelido] = useState("");
   const [buyLinkDistancia, setBuyLinkDistancia] = useState("");
   const [buyLinkCiencia, setBuyLinkCiencia] = useState("");
   // Pre-qualificacao da originacao (19/09/2026, pedido de Joao): "Novo Ativo"
   // deixa de gerar link em 1 clique -- abre este modal primeiro, e o link so
   // nasce depois do gate de qualidade responder ok no servidor.
   const [showPreQualifyModal, setShowPreQualifyModal] = useState(false);
-  const [preQualifySellerName, setPreQualifySellerName] = useState("");
+  const [preQualifyApelido, setPreQualifyApelido] = useState("");
   const [preQualifyAssetType, setPreQualifyAssetType] = useState("");
   const [preQualifyDistancia, setPreQualifyDistancia] = useState("");
   const [preQualifyCiencia, setPreQualifyCiencia] = useState("");
@@ -1392,7 +1392,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
       const payload = listingId
         ? { listing_id: listingId }
         : {
-            seller_name: preQualifySellerName.trim(),
+            apelido: preQualifyApelido.trim(),
             asset_type: preQualifyAssetType,
             distancia_cedente: preQualifyDistancia,
             ciencia_cadeia: preQualifyCiencia,
@@ -1410,7 +1410,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
           setIntakeUrl(json.url);
           setListings((prev) => [json.listing, ...prev]);
           setShowPreQualifyModal(false);
-          setPreQualifySellerName(""); setPreQualifyAssetType(""); setPreQualifyDistancia(""); setPreQualifyCiencia("");
+          setPreQualifyApelido(""); setPreQualifyAssetType(""); setPreQualifyDistancia(""); setPreQualifyCiencia("");
         } else {
           setIntakeUrl(json.url);
         }
@@ -1775,7 +1775,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
         body: JSON.stringify({
           origin_partner_id: buyLinkPartnerValue.startsWith("ref:") ? null : (buyLinkPartnerValue || null),
           origin_referral_id: buyLinkPartnerValue.startsWith("ref:") ? buyLinkPartnerValue.slice(4) : null,
-          nome_contato: buyLinkNomeContato.trim(),
+          apelido: buyLinkApelido.trim(),
           distancia_cedente: buyLinkDistancia,
           ciencia_cadeia: buyLinkCiencia,
         }),
@@ -1787,7 +1787,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
         alert("Link do comprador copiado!");
         setShowBuyLinkPartnerModal(false);
         setBuyLinkPartnerValue("");
-        setBuyLinkNomeContato(""); setBuyLinkDistancia(""); setBuyLinkCiencia("");
+        setBuyLinkApelido(""); setBuyLinkDistancia(""); setBuyLinkCiencia("");
       } else alert(json.error ?? "Erro ao gerar link");
     } catch { alert("Erro de conexão"); }
     finally { setGeneratingBuyLink(false); }
@@ -2023,12 +2023,12 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
                     onChange={(e) => setManualForm((f) => ({ ...f, asset_type: e.target.value as CmAssetType }))}
                     className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#F5F1E8] mt-1">
                     <option value="">Selecione a classe do ativo</option>
-                    <option value="precatorio">Precatório</option>
                     <option value="direito_creditorio">Direito Creditório</option>
-                    <option value="ipi">IPI</option>
                     <option value="icms">ICMS</option>
                     <option value="imovel">Imóvel / Ativo Alternativo</option>
+                    <option value="ipi">IPI</option>
                     <option value="outros">Outros</option>
+                    <option value="precatorio">Precatório</option>
                   </select>
                 </div>
                 <div>
@@ -2216,20 +2216,22 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
             </div>
             <div className="p-4 space-y-3">
               <div>
-                <label className="text-[9px] text-[#9BAFC5] uppercase">Nome do Cedente *</label>
-                <input value={preQualifySellerName} onChange={(e) => setPreQualifySellerName(e.target.value)}
+                <label className="text-[9px] text-[#9BAFC5] uppercase">Apelido do Ativo *</label>
+                <input value={preQualifyApelido} onChange={(e) => setPreQualifyApelido(e.target.value)}
+                  placeholder="Codinome do ativo, nunca o nome real do cedente"
                   className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#F5F1E8] mt-1 focus:border-[#C9A84C]/50 focus:outline-none" />
+                <p className="text-[9px] text-[#9BAFC5]/70 mt-1">Duplo-cego: o nome real só é revelado após reunião e NCNDA.</p>
               </div>
               <div>
                 <label className="text-[9px] text-[#9BAFC5] uppercase">Tipo de Ativo *</label>
                 <select value={preQualifyAssetType} onChange={(e) => setPreQualifyAssetType(e.target.value)}
                   className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#F5F1E8] mt-1 focus:border-[#C9A84C]/50 focus:outline-none">
                   <option value="">Selecione a classe do ativo</option>
-                  <option value="precatorio">Precatório</option>
                   <option value="direito_creditorio">Direito Creditório</option>
-                  <option value="ipi">IPI</option>
                   <option value="icms">ICMS</option>
+                  <option value="ipi">IPI</option>
                   <option value="outros">Outros</option>
+                  <option value="precatorio">Precatório</option>
                 </select>
               </div>
               <div>
@@ -2258,7 +2260,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
               )}
               <button
                 onClick={() => generateIntakeLink()}
-                disabled={generatingLink || !preQualifySellerName.trim() || !preQualifyAssetType || !preQualifyDistancia || !preQualifyCiencia || preQualifyDistancia === "nao_sei" || preQualifyCiencia === "nao_tenho"}
+                disabled={generatingLink || !preQualifyApelido.trim() || !preQualifyAssetType || !preQualifyDistancia || !preQualifyCiencia || preQualifyDistancia === "nao_sei" || preQualifyCiencia === "nao_tenho"}
                 className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-[#C9A84C] text-[#09081A] rounded-lg text-sm font-bold hover:bg-[#D4B96A] transition disabled:opacity-50"
               >
                 {generatingLink ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
@@ -2286,9 +2288,11 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
             </div>
             <div className="p-4 space-y-3">
               <div>
-                <label className="text-[9px] text-[#9BAFC5] uppercase">Nome do Mandatário da Compra *</label>
-                <input value={buyLinkNomeContato} onChange={(e) => setBuyLinkNomeContato(e.target.value)}
+                <label className="text-[9px] text-[#9BAFC5] uppercase">Apelido da Demanda *</label>
+                <input value={buyLinkApelido} onChange={(e) => setBuyLinkApelido(e.target.value)}
+                  placeholder="Codinome da demanda, nunca o nome real do mandatário"
                   className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#F5F1E8] mt-1 focus:border-[#C9A84C]/50 focus:outline-none" />
+                <p className="text-[9px] text-[#9BAFC5]/70 mt-1">Duplo-cego: o nome real só é revelado após reunião e NCNDA.</p>
               </div>
               <div>
                 <label className="text-[9px] text-[#9BAFC5] uppercase">Distância até o Mandatário da Compra *</label>
@@ -2359,7 +2363,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
               </div>
               <button
                 onClick={generateBuyLink}
-                disabled={generatingBuyLink || !buyLinkNomeContato.trim() || !buyLinkDistancia || !buyLinkCiencia || buyLinkDistancia === "nao_sei" || buyLinkCiencia === "nao_tenho"}
+                disabled={generatingBuyLink || !buyLinkApelido.trim() || !buyLinkDistancia || !buyLinkCiencia || buyLinkDistancia === "nao_sei" || buyLinkCiencia === "nao_tenho"}
                 className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-[#C9A84C] text-[#09081A] rounded-lg text-sm font-bold hover:bg-[#D4B96A] transition disabled:opacity-50"
               >
                 {generatingBuyLink ? <Loader2 size={16} className="animate-spin" /> : <Link2 size={16} />}

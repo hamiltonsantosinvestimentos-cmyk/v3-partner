@@ -44,11 +44,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
 
   const body = await req.json();
-  const { listing_id, originator_profile_id, originator_referral_id, seller_name, asset_type, distancia_cedente, ciencia_cadeia } = body as {
+  const { listing_id, originator_profile_id, originator_referral_id, apelido, asset_type, distancia_cedente, ciencia_cadeia } = body as {
     listing_id?: string;
     originator_profile_id?: string;
     originator_referral_id?: string;
-    seller_name?: string;
+    apelido?: string;
     asset_type?: string;
     distancia_cedente?: string;
     ciencia_cadeia?: string;
@@ -97,8 +97,13 @@ export async function POST(req: NextRequest) {
 
   // Pre-qualificacao obrigatoria (19/09/2026): sem isso o link nunca chega a
   // ser gerado. Nao valida no client sozinho -- o gate real e aqui.
-  if (!seller_name?.trim()) {
-    return NextResponse.json({ error: "Informe o nome do cedente antes de gerar o link." }, { status: 422 });
+  // Correcao no mesmo dia: NUNCA exigir o nome real do cedente aqui -- quebra
+  // o protocolo de duplo-cego da V3, a identidade so pode ser revelada apos
+  // reuniao + NCNDA, e quem origina pode nem conhece-la ainda (pode estar 2+
+  // intermediarios distante). Apelido do ativo substitui, seller_name segue
+  // opcional e vira "Pendente" ate ser de fato revelado.
+  if (!apelido?.trim()) {
+    return NextResponse.json({ error: "Informe o apelido do ativo antes de gerar o link." }, { status: 422 });
   }
   if (!asset_type || !VALID_ASSET_TYPES.includes(asset_type)) {
     return NextResponse.json({ error: "Selecione o tipo de ativo antes de gerar o link." }, { status: 422 });
@@ -142,7 +147,8 @@ export async function POST(req: NextRequest) {
       originator_profile_id: resolvedOriginator,
       originator_referral_id: resolvedReferral,
       asset_type,
-      seller_name: seller_name.trim(),
+      seller_name: "Pendente",
+      apelido: apelido.trim(),
       valor_face: 0,
       listing_status: "reuniao_validada",
       meeting_validated_at: new Date().toISOString(),

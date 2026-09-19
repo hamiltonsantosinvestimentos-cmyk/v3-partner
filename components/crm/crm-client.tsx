@@ -630,9 +630,11 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
   // apos regressao P0: este fluxo enviava {} pro backend e agora e bloqueado
   // pelo gate de qualidade, precisa coletar os mesmos campos que a Mesa coleta).
   const [bolsaKind, setBolsaKind] = useState<"venda" | "compra" | null>(null);
-  const [bolsaSellerName, setBolsaSellerName] = useState("");
+  // Correcao 19/09 no mesmo dia: apelido do ativo/demanda substitui nome real
+  // do cedente/mandatario -- exigir a identidade real aqui quebra o duplo-cego,
+  // que so pode ser revelado apos reuniao + NCNDA assinado.
+  const [bolsaApelido, setBolsaApelido] = useState("");
   const [bolsaAssetType, setBolsaAssetType] = useState("");
-  const [bolsaNomeContato, setBolsaNomeContato] = useState("");
   const [bolsaDistancia, setBolsaDistancia] = useState("");
   const [bolsaCiencia, setBolsaCiencia] = useState("");
   const [maDealSuccessMsg, setMaDealSuccessMsg] = useState<string | null>(null);
@@ -1225,8 +1227,8 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
     try {
       const endpoint = kind === "venda" ? "/api/cm/intake/generate" : "/api/cm/intake/buy/generate";
       const payload = kind === "venda"
-        ? { seller_name: bolsaSellerName.trim(), asset_type: bolsaAssetType, distancia_cedente: bolsaDistancia, ciencia_cadeia: bolsaCiencia }
-        : { nome_contato: bolsaNomeContato.trim(), distancia_cedente: bolsaDistancia, ciencia_cadeia: bolsaCiencia };
+        ? { apelido: bolsaApelido.trim(), asset_type: bolsaAssetType, distancia_cedente: bolsaDistancia, ciencia_cadeia: bolsaCiencia }
+        : { apelido: bolsaApelido.trim(), distancia_cedente: bolsaDistancia, ciencia_cadeia: bolsaCiencia };
       const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -4469,7 +4471,7 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
                   className="w-full"
                   onClick={() => {
                     setShowBolsaForm(false); setBolsaLinkResult(null); setBolsaKind(null);
-                    setBolsaSellerName(""); setBolsaAssetType(""); setBolsaNomeContato(""); setBolsaDistancia(""); setBolsaCiencia("");
+                    setBolsaApelido(""); setBolsaAssetType(""); setBolsaDistancia(""); setBolsaCiencia("");
                   }}
                 >
                   Concluir
@@ -4513,31 +4515,25 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
                   Pré-qualificação obrigatória antes de gerar o link ({bolsaKind === "venda" ? "Venda de Ativo" : "Compra de Ativo"}).
                 </p>
                 <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 16 }}>
-                  {bolsaKind === "venda" ? (
-                    <>
-                      <div>
-                        <label style={{ fontSize: 9, color: "#7A8FA8", textTransform: "uppercase" }}>Nome do Cedente *</label>
-                        <input value={bolsaSellerName} onChange={(e) => setBolsaSellerName(e.target.value)}
-                          style={{ width: "100%", background: "#0F1E35", border: "1px solid #1E3A5F", borderRadius: 8, padding: "8px 10px", fontSize: 12, color: "#E8EDF5", marginTop: 4 }} />
-                      </div>
-                      <div>
-                        <label style={{ fontSize: 9, color: "#7A8FA8", textTransform: "uppercase" }}>Tipo de Ativo *</label>
-                        <select value={bolsaAssetType} onChange={(e) => setBolsaAssetType(e.target.value)}
-                          style={{ width: "100%", background: "#0F1E35", border: "1px solid #1E3A5F", borderRadius: 8, padding: "8px 10px", fontSize: 12, color: "#E8EDF5", marginTop: 4 }}>
-                          <option value="">Selecione a classe do ativo</option>
-                          <option value="precatorio">Precatório</option>
-                          <option value="direito_creditorio">Direito Creditório</option>
-                          <option value="ipi">IPI</option>
-                          <option value="icms">ICMS</option>
-                          <option value="outros">Outros</option>
-                        </select>
-                      </div>
-                    </>
-                  ) : (
+                  <div>
+                    <label style={{ fontSize: 9, color: "#7A8FA8", textTransform: "uppercase" }}>{bolsaKind === "venda" ? "Apelido do Ativo" : "Apelido da Demanda"} *</label>
+                    <input value={bolsaApelido} onChange={(e) => setBolsaApelido(e.target.value)}
+                      placeholder={bolsaKind === "venda" ? "Codinome do ativo, nunca o nome real do cedente" : "Codinome da demanda, nunca o nome real do mandatário"}
+                      style={{ width: "100%", background: "#0F1E35", border: "1px solid #1E3A5F", borderRadius: 8, padding: "8px 10px", fontSize: 12, color: "#E8EDF5", marginTop: 4 }} />
+                    <p style={{ fontSize: 9, color: "#7A8FA8", opacity: 0.7, marginTop: 4 }}>Duplo-cego: o nome real só é revelado após reunião e NCNDA.</p>
+                  </div>
+                  {bolsaKind === "venda" && (
                     <div>
-                      <label style={{ fontSize: 9, color: "#7A8FA8", textTransform: "uppercase" }}>Nome do Mandatário da Compra *</label>
-                      <input value={bolsaNomeContato} onChange={(e) => setBolsaNomeContato(e.target.value)}
-                        style={{ width: "100%", background: "#0F1E35", border: "1px solid #1E3A5F", borderRadius: 8, padding: "8px 10px", fontSize: 12, color: "#E8EDF5", marginTop: 4 }} />
+                      <label style={{ fontSize: 9, color: "#7A8FA8", textTransform: "uppercase" }}>Tipo de Ativo *</label>
+                      <select value={bolsaAssetType} onChange={(e) => setBolsaAssetType(e.target.value)}
+                        style={{ width: "100%", background: "#0F1E35", border: "1px solid #1E3A5F", borderRadius: 8, padding: "8px 10px", fontSize: 12, color: "#E8EDF5", marginTop: 4 }}>
+                        <option value="">Selecione a classe do ativo</option>
+                        <option value="direito_creditorio">Direito Creditório</option>
+                        <option value="icms">ICMS</option>
+                        <option value="ipi">IPI</option>
+                        <option value="outros">Outros</option>
+                        <option value="precatorio">Precatório</option>
+                      </select>
                     </div>
                   )}
                   <div>
@@ -4569,7 +4565,7 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
                   <Button variant="ghost" onClick={() => setBolsaKind(null)}>Voltar</Button>
                   <button
                     onClick={() => handleGenerateBolsaLink(bolsaKind)}
-                    disabled={!!generatingBolsaLink || (bolsaKind === "venda" ? (!bolsaSellerName.trim() || !bolsaAssetType) : !bolsaNomeContato.trim()) || !bolsaDistancia || !bolsaCiencia || bolsaDistancia === "nao_sei" || bolsaCiencia === "nao_tenho"}
+                    disabled={!!generatingBolsaLink || !bolsaApelido.trim() || (bolsaKind === "venda" && !bolsaAssetType) || !bolsaDistancia || !bolsaCiencia || bolsaDistancia === "nao_sei" || bolsaCiencia === "nao_tenho"}
                     style={{
                       flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
                       background: "rgba(14,165,233,0.1)", border: "1px solid rgba(14,165,233,0.3)",
