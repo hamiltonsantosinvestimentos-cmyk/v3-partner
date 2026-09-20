@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { auditText, auditHtml } from "@/lib/brand-guardian-gate";
 import { notifyByRoles } from "@/lib/notify";
+import { getCmFlag, FLAG_MEETING_AUTOTRIGGER } from "@/lib/cm-flags";
+import { notifyMeetingLink } from "@/lib/cm-meeting";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -156,42 +158,60 @@ export async function POST(
       if (!filled) {
         console.error(`[cm/intake/buy] demanda ${demand.id}: transicao para formulario_preenchido recusada`);
       } else {
-        const { data: meeting } = await svc().rpc("transition_cm_demand_status", {
-          p_demand_id: demand.id,
-          p_new_status: "reuniao_agendada",
-          p_reason: "Intake concluído, agendamento automático da reunião inicial.",
-          p_user_id: demand.created_by ?? null,
-        });
-        if (meeting) {
-          const label = demand.apelido || nome_contato;
-          const isPartnerCreator = !!demand.created_by && demand.created_by === demand.origin_partner_id;
-          if (demand.created_by) {
-            await svc().from("notifications").insert({
-              user_id: demand.created_by,
+        const label = demand.apelido || nome_contato;
+        const isPartnerCreator = !!demand.created_by && demand.created_by === demand.origin_partner_id;
+        const creatorUrl = isPartnerCreator ? "/meus-compradores" : "/bolsa/mesa";
+
+        // 20/09/2026 (pedido de Joao): o agendamento automatico so roda com a chave
+        // meeting_autotrigger LIGADA (desligada por padrao). Desligada, a demanda espera em
+        // "Formulario preenchido" e o analista agenda pelo botao "Agendar reuniao".
+        let scheduled = false;
+        if (await getCmFlag(FLAG_MEETING_AUTOTRIGGER)) {
+          const { data: meeting } = await svc().rpc("transition_cm_demand_status", {
+            p_demand_id: demand.id,
+            p_new_status: "reuniao_agendada",
+            p_reason: "Intake concluído, agendamento automático da reunião inicial.",
+            p_user_id: demand.created_by ?? null,
+          });
+          scheduled = !!meeting;
+          if (scheduled) {
+            await notifyMeetingLink({
+              userId: demand.created_by,
               title: `Demanda ${label}: agende a reunião inicial`,
-              message: `O comprador concluiu o formulário. Agende a reunião de apresentação com o Head: https://calendar.google.com/calendar/u/0/appointments/schedules/AcZssZ1T51okURKuhE_zw_MiCC68TkFZHk8tgNaJQauB9ha6LymoTSSovxkijrv3BfDYW1VipSAXokAi`,
-              type: "reuniao_agendada",
-              action_url: isPartnerCreator ? "/meus-compradores" : "/bolsa/mesa",
-              read: false,
+              intro: "O comprador concluiu o formulário.",
+              actionUrl: creatorUrl,
             });
           }
-          // Sem este aviso a demanda ficaria parada na fila sem ninguem da Mesa saber
-          // (ela deixou de entrar direto no match). Se quem criou o link ja e da Mesa,
-          // ele acabou de ser avisado acima, entao so a Mesa inteira quando o criador
-          // for partner ou desconhecido.
-          let creatorIsMesa = false;
-          if (demand.created_by) {
-            const { data: creator } = await svc().from("profiles").select("role").eq("id", demand.created_by).maybeSingle();
-            creatorIsMesa = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"].includes((creator?.role as string) ?? "");
-          }
-          if (!creatorIsMesa) {
-            await notifyByRoles(["ADMIN", "GESTAO", "MESA_OPERACIONAL"], {
-              title: `Nova demanda de compra: ${label}`,
-              message: "Formulário concluído. Aguardando reunião inicial e qualificação pela Mesa.",
-              type: "marketplace",
-              action_url: "/bolsa/mesa",
-            });
-          }
+        } else if (demand.created_by) {
+          // Sem o gatilho automatico, avisa quem criou o link que o formulario chegou.
+          const { error: nErr } = await svc().from("notifications").insert({
+            user_id: demand.created_by,
+            title: `Demanda ${label}: formulário concluído`,
+            message: "O comprador concluiu o formulário. Use o botão Agendar reunião na demanda para marcar a reunião inicial com o Head.",
+            type: "marketplace",
+            action_url: creatorUrl,
+            read: false,
+          });
+          if (nErr) console.error("[cm/intake/buy] falha ao avisar o criador:", nErr.message);
+        }
+
+        // Sem este aviso a demanda ficaria parada na fila sem ninguem da Mesa saber (ela
+        // deixou de entrar direto no match). Se quem criou o link ja e da Mesa, ele acabou
+        // de ser avisado acima; so a Mesa inteira quando o criador for partner ou desconhecido.
+        let creatorIsMesa = false;
+        if (demand.created_by) {
+          const { data: creator } = await svc().from("profiles").select("role").eq("id", demand.created_by).maybeSingle();
+          creatorIsMesa = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"].includes((creator?.role as string) ?? "");
+        }
+        if (!creatorIsMesa) {
+          await notifyByRoles(["ADMIN", "GESTAO", "MESA_OPERACIONAL"], {
+            title: `Nova demanda de compra: ${label}`,
+            message: scheduled
+              ? "Formulário concluído. Aguardando reunião inicial e qualificação pela Mesa."
+              : "Formulário concluído. Agende a reunião inicial pelo botão Agendar reunião na demanda.",
+            type: "marketplace",
+            action_url: "/bolsa/mesa",
+          });
         }
       }
     } catch (transErr) {

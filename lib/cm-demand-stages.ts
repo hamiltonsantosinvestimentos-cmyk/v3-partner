@@ -89,7 +89,9 @@ const REJECT: DemandAction = { to: "reprovado", label: "Reprovar", needsReason: 
 export const DEMAND_NEXT_ACTIONS: Record<string, DemandAction[]> = {
   pendente: [CANCEL],
   reuniao_validada: [CANCEL],
-  formulario_preenchido: [{ to: "reuniao_agendada", label: "Marcar reunião agendada" }, REJECT, CANCEL],
+  // Botao manual de agendamento (20/09/2026): envia o link da agenda do Head a quem criou o
+  // link do comprador. O gatilho automatico so roda com a chave meeting_autotrigger ligada.
+  formulario_preenchido: [{ to: "reuniao_agendada", label: "Agendar reunião (envia o link)" }, REJECT, CANCEL],
   reuniao_agendada: [{ to: "em_qualificacao", label: "Reunião realizada: iniciar qualificação" }, REJECT, CANCEL],
   em_qualificacao: [{ to: "nda_assinado", label: "Registrar NDA assinado" }, REJECT, CANCEL],
   nda_assinado: [{ to: "em_analise", label: "Iniciar análise da Mesa" }, REJECT, CANCEL],
@@ -101,8 +103,10 @@ export const DEMAND_NEXT_ACTIONS: Record<string, DemandAction[]> = {
   ],
   aprovado_head: [{ to: "ativo", label: "Liberar para o Match", headOnly: true }, CANCEL],
   aprovado_com_restricoes: [{ to: "ativo", label: "Liberar para o Match", headOnly: true }, CANCEL],
-  ativo: [CANCEL],
-  em_negociacao: [CANCEL],
+  // Etapa 7 do comprador (20/09/2026): ganho = mandato concluido (so Head, o mesmo criterio
+  // de aprovar/liberar); perda = encerrado sem match, com motivo escrito (alimenta KPI/gargalos).
+  ativo: [{ to: "expirado", label: "Encerrar sem match", needsReason: true, danger: true }, CANCEL],
+  em_negociacao: [{ to: "concluido", label: "Concluir mandato", headOnly: true }, CANCEL],
   concluido: [],
   reprovado: [],
   cancelado: [],

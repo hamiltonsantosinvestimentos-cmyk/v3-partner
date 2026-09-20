@@ -103,6 +103,19 @@ const PIPELINE_STATUS: Record<BuyDemand["pipeline_status"], { label: string; dot
   documentacao_completa: { label: "Documentação Completa", dot: "#4ADE80", text: "#4ADE80", bg: "rgba(74,222,128,0.12)", border: "rgba(74,222,128,0.3)" },
 };
 
+// Colunas do Kanban de compra: mesma numeracao e cores do Kanban de venda da Mesa
+// (STATUS_COLUMNS em mesa-capitais-client.tsx), 7 etapas mais a coluna de perda.
+const KANBAN_COLUMNS: { label: string; statuses: string[]; border: string }[] = [
+  { label: "1. Intake", statuses: ["pendente", "reuniao_validada", "formulario_preenchido"], border: "border-blue-500" },
+  { label: "2. Reunião", statuses: ["reuniao_agendada"], border: "border-orange-500" },
+  { label: "3. Qualificação", statuses: ["em_qualificacao", "nda_assinado"], border: "border-[#C9A84C]" },
+  { label: "4. Análise", statuses: ["em_analise", "aprovado_head", "aprovado_com_restricoes"], border: "border-purple-500" },
+  { label: "5. Match", statuses: ["ativo"], border: "border-emerald-500" },
+  { label: "6. Negociação", statuses: ["em_negociacao"], border: "border-teal-500" },
+  { label: "7. Concluído", statuses: ["concluido"], border: "border-green-500" },
+  { label: "Reprovado/Cancelado", statuses: ["reprovado", "cancelado", "expirado"], border: "border-red-500" },
+];
+
 // Ate o comprador preencher o formulario, nome_contato e o placeholder "Pendente" (o nome real
 // nunca e coletado na pre-qualificacao, Blind Wall). Mostra o apelido quando existir; para as
 // demandas antigas, sem apelido, a data de geracao do link e o unico diferenciador que sobra.
@@ -164,6 +177,11 @@ export function BuySideDemandsPanel({ mode = "mesa", title, subtitle }: BuySideD
   const [savingNote, setSavingNote] = useState(false);
   const [approvingKyc, setApprovingKyc] = useState(false);
   const [view, setView] = useState("ativo");
+  // Kanban de compra (20/09/2026, pedido de Joao): visao padrao. Kanban de compra e venda ficam
+  // em abas separadas da Mesa (aba Pipeline = venda, aba Demandas de Compra = esta). "Lista" e
+  // a tabela anterior, com as visoes por status.
+  const [layout, setLayout] = useState<"kanban" | "lista">("kanban");
+  const [meetingLink, setMeetingLink] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<DemandAction | null>(null);
   const [actionReason, setActionReason] = useState("");
   const [actionCategory, setActionCategory] = useState("");
@@ -179,7 +197,8 @@ export function BuySideDemandsPanel({ mode = "mesa", title, subtitle }: BuySideD
   const fetchDemands = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/cm/investor-demands?status=${view}`);
+      // O Kanban mostra todas as etapas (inclusive a coluna de perda); a lista respeita a aba.
+      const res = await fetch(`/api/cm/investor-demands?status=${layout === "kanban" ? "all" : view}`);
       const json = await res.json();
       setDemands(json.demands ?? []);
     } catch {
@@ -187,7 +206,7 @@ export function BuySideDemandsPanel({ mode = "mesa", title, subtitle }: BuySideD
     } finally {
       setLoading(false);
     }
-  }, [view]);
+  }, [view, layout]);
 
   useEffect(() => { fetchDemands(); }, [fetchDemands]);
 
@@ -196,6 +215,7 @@ export function BuySideDemandsPanel({ mode = "mesa", title, subtitle }: BuySideD
     setPendingAction(null);
     setActionReason("");
     setActionCategory("");
+    setMeetingLink(null);
     setDocsLoading(true);
     setTimelineLoading(true);
     try {
@@ -288,6 +308,11 @@ export function BuySideDemandsPanel({ mode = "mesa", title, subtitle }: BuySideD
         setDetailDemand((prev) => (prev ? { ...prev, status: a.to } : prev));
         setTimeline((prev) => [{ id: `local-${Date.now()}`, content: `Etapa da demanda alterada para "${DEMAND_STATUS_LABELS[a.to] ?? a.to}".`, is_system: true, created_at: new Date().toISOString(), profiles: null }, ...prev]);
         setPendingAction(null);
+        if (json.meeting_url) {
+          // Botao "Agendar reuniao": a rota devolve o link da agenda do Head. Copia e mostra no bloco.
+          try { await navigator.clipboard.writeText(json.meeting_url); } catch { /* sem permissao de clipboard */ }
+          setMeetingLink(json.meeting_url);
+        }
         fetchDemands();
       } else {
         alert(json.error ?? "Erro ao mover a demanda de etapa");
@@ -308,15 +333,30 @@ export function BuySideDemandsPanel({ mode = "mesa", title, subtitle }: BuySideD
           <p className="text-sm font-bold text-[#F5F1E8]">{title ?? "Demandas de Compra (Buy-Side)"}</p>
           <p className="text-xs text-[#9BAFC5]">{subtitle ?? "Compradores cadastrados via link de intake, com ou sem match já executado"}</p>
         </div>
-        <button
-          onClick={fetchDemands}
-          className="flex items-center gap-1.5 rounded-lg border border-[#243A66] text-[#9BAFC5] text-xs font-semibold px-3 py-2 hover:text-[#F5F1E8] hover:border-[#9BAFC5]/40 transition-colors"
-        >
-          <RefreshCw size={13} /> Atualizar
-        </button>
+        <div className="flex items-center gap-2">
+          <div className="flex rounded-lg border border-[#243A66] overflow-hidden">
+            {(["kanban", "lista"] as const).map((l) => (
+              <button
+                key={l}
+                onClick={() => setLayout(l)}
+                className={`px-3 py-2 text-xs font-semibold transition-colors ${
+                  layout === l ? "bg-[#C9A84C]/10 text-[#E8C97A]" : "text-[#9BAFC5] hover:text-[#F5F1E8]"
+                }`}
+              >
+                {l === "kanban" ? "Kanban" : "Lista"}
+              </button>
+            ))}
+          </div>
+          <button
+            onClick={fetchDemands}
+            className="flex items-center gap-1.5 rounded-lg border border-[#243A66] text-[#9BAFC5] text-xs font-semibold px-3 py-2 hover:text-[#F5F1E8] hover:border-[#9BAFC5]/40 transition-colors"
+          >
+            <RefreshCw size={13} /> Atualizar
+          </button>
+        </div>
       </div>
 
-      <div className="flex flex-wrap gap-1.5">
+      <div className={`flex flex-wrap gap-1.5 ${layout === "kanban" ? "hidden" : ""}`}>
         {VIEWS.map((v) => (
           <button
             key={v.value}
@@ -335,6 +375,51 @@ export function BuySideDemandsPanel({ mode = "mesa", title, subtitle }: BuySideD
       {loading ? (
         <div className="flex items-center justify-center py-16">
           <Loader2 size={20} className="text-[#9BAFC5] animate-spin" />
+        </div>
+      ) : layout === "kanban" ? (
+        <div className="flex gap-2 overflow-x-auto pb-2">
+          {KANBAN_COLUMNS.map((col) => {
+            const cards = demands.filter((d) => col.statuses.includes(d.status));
+            return (
+              <div key={col.label} className="flex-1 min-w-[200px] max-w-[260px] rounded-xl bg-[#12112A] border border-[#243A66]">
+                <div className={`px-3 py-2 border-t-2 ${col.border} rounded-t-xl flex items-center justify-between`}>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-[#F5F1E8]">{col.label}</span>
+                  <span className="text-[10px] font-bold text-[#E8C97A]">{cards.length}</span>
+                </div>
+                <div className="p-2 space-y-2 max-h-[60vh] overflow-y-auto">
+                  {cards.length === 0 ? (
+                    <p className="text-[10px] text-[#5A7490] text-center py-4">Nenhuma demanda</p>
+                  ) : (
+                    cards.map((d) => {
+                      const n = displayName(d);
+                      return (
+                        <button
+                          key={d.id}
+                          onClick={() => openDetail(d)}
+                          className="w-full text-left rounded-lg bg-[#162744] border border-[#243A66] p-2.5 hover:border-[#C9A84C]/40 transition-colors"
+                        >
+                          <div className="text-xs font-semibold text-[#F5F1E8] truncate">{n.title}</div>
+                          {n.sub && <div className="text-[9px] text-[#9BAFC5] truncate">{n.sub}</div>}
+                          <div className="text-[9px] font-bold text-[#E8C97A] mt-1">{DEMAND_STATUS_LABELS[d.status] ?? d.status}</div>
+                          {(d.ticket_min > 0 || d.ticket_max > 0) && (
+                            <div className="text-[10px] font-bold text-[#C9A84C] mt-1">{formatM(d.ticket_min)} a {formatM(d.ticket_max)}</div>
+                          )}
+                          <div className="flex flex-wrap gap-1 mt-1.5">
+                            {(d.asset_types_preferidos ?? []).map((t) => (
+                              <span key={t} className="text-[8px] font-bold px-1.5 py-0.5 rounded-full bg-[#C9A84C]/10 text-[#E8C97A]">{ASSET_LABEL[t] ?? t}</span>
+                            ))}
+                            {d.match_count > 0 && (
+                              <span className="text-[8px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400">{d.match_count} match(es)</span>
+                            )}
+                          </div>
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            );
+          })}
         </div>
       ) : demands.length === 0 ? (
         <div className="text-center py-16 rounded-xl border border-dashed border-[#243A66]">
@@ -477,6 +562,12 @@ export function BuySideDemandsPanel({ mode = "mesa", title, subtitle }: BuySideD
                     <span className="font-bold text-[#E8C97A]">Etapa {DEMAND_STATUS_STAGE[detailDemand.status] ?? "?"} de 7</span>
                     {" · "}{DEMAND_STATUS_LABELS[detailDemand.status] ?? detailDemand.status}
                   </div>
+                  {meetingLink && (
+                    <div className="text-[10px] text-[#9BAFC5]">
+                      Link da agenda do Head copiado.{" "}
+                      <a href={meetingLink} target="_blank" rel="noreferrer" className="text-[#E8C97A] underline">Abrir agenda</a>
+                    </div>
+                  )}
                   {mode === "mesa" && (DEMAND_NEXT_ACTIONS[detailDemand.status] ?? []).length > 0 && !pendingAction && (
                     <div className="flex flex-wrap gap-2">
                       {(DEMAND_NEXT_ACTIONS[detailDemand.status] ?? []).map((a) => {

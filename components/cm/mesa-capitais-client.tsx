@@ -132,10 +132,13 @@ const STATUS_COLUMNS = [
 // menu de 3 pontos do card, drag-and-drop, e painel de detalhe). Nao cobre
 // proposta_recebida/em_escrow_due_diligence/liquidado de proposito -- essas transicoes
 // acontecem via aceite de bid (handleBidAction) e fluxo de escrow, nao por um clique solto.
-// Fase 5 (19/09/2026): formulario_preenchido -> reuniao_agendada saiu daqui de proposito,
-// virou automatica (dispara no POST de conclusao do intake, ver app/api/cm/intake/[token]).
+// Fase 5 (19/09/2026): formulario_preenchido -> reuniao_agendada saiu daqui quando virou
+// automatica (POST de conclusao do intake). 20/09/2026 (pedido de Joao): voltou como botao
+// MANUAL "Agendar Reuniao", porque o gatilho automatico agora so roda com a chave
+// meeting_autotrigger ligada (cm_feature_flags, desligada ate a homologacao).
 const STATUS_QUICK_TRANSITIONS = [
   { from: "reuniao_validada", to: "formulario_preenchido", label: "Formulário OK" },
+  { from: "formulario_preenchido", to: "reuniao_agendada", label: "Agendar Reunião" },
   { from: "reuniao_agendada", to: "em_qualificacao", label: "Reunião Realizada" },
   { from: "em_qualificacao", to: "nda_assinado", label: "NDA Assinado" },
   { from: "nda_assinado", to: "em_analise", label: "Iniciar Análise" },
@@ -1205,7 +1208,17 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
         body: JSON.stringify({ new_status: newStatus }),
       });
       const json = await res.json();
-      if (res.ok) { alert("Status atualizado"); fetchAll(); setSelectedListing(null); }
+      if (res.ok) {
+        if (json.meeting_url) {
+          // Botao manual "Agendar Reuniao": a rota devolve o link da agenda do Head. Copia pra
+          // area de transferencia (window.open depois de await e bloqueado pelo Chrome).
+          try { await navigator.clipboard.writeText(json.meeting_url); } catch { /* sem permissao de clipboard */ }
+          alert(`Reunião liberada. Link da agenda do Head copiado:\n${json.meeting_url}`);
+        } else {
+          alert("Status atualizado");
+        }
+        fetchAll(); setSelectedListing(null);
+      }
       else alert(json.error ?? "Erro ao transicionar status");
     } catch { alert("Erro de conexão"); }
   };
@@ -1226,6 +1239,11 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
         setBoardError(json.error ?? "Transição rejeitada pelo servidor.");
         setTimeout(() => setBoardError(null), 6000);
         return;
+      }
+      const okJson = await res.json().catch(() => ({}));
+      if (okJson.meeting_url) {
+        try { await navigator.clipboard.writeText(okJson.meeting_url); } catch { /* sem permissao de clipboard */ }
+        alert(`Reunião liberada. Link da agenda do Head copiado:\n${okJson.meeting_url}`);
       }
       fetchAll();
     } catch {

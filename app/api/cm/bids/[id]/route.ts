@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { randomUUID } from "crypto";
-import { BID_DECLINE_REASON_VALUES } from "@/lib/cm-decline-reasons";
+import { BID_DECLINE_REASON_VALUES, BID_DECLINE_REASONS } from "@/lib/cm-decline-reasons";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -80,6 +80,20 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   // passou por todos os gates de aprovacao pra chegar ate aqui, so essa
   // oferta especifica nao fechou.
   if (action === "recusar") {
+    // KPI e gargalos (20/09/2026, pedido de Joao): a recusa referencia a demanda de compra
+    // envolvida, pra o relatorio cruzar os dois lados (por que a proposta nao fechou, por
+    // demanda). So a CATEGORIA vai pra timeline da demanda (visivel ao partner de origem),
+    // nunca o texto livre do motivo: fica na oferta, interno (Blind Wall). `await` obrigatorio.
+    if (bid.demand_id) {
+      const categoryLabel = BID_DECLINE_REASONS.find((r) => r.value === decline_reason_category)?.label ?? decline_reason_category;
+      const { error: noteErr } = await svc().from("cm_deal_notes").insert({
+        demand_id: bid.demand_id,
+        content: `Proposta recusada pela Mesa. Motivo: ${categoryLabel}.`,
+        is_system: true,
+      });
+      if (noteErr) console.error("[cm/bids] falha ao registrar recusa na timeline da demanda:", noteErr.message);
+    }
+
     const listing = bid.cm_asset_listings as any;
     if (listing?.listing_status === "proposta_recebida") {
       const { count: pendingCount } = await svc()

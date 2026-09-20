@@ -50,10 +50,33 @@ export async function POST(req: NextRequest) {
   if (!caller) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
   const body = await req.json();
-  const { listing_id, bid_value, desagio_oferecido, tir_pretendida, payment_type, payment_details, notes, buyer_profile_id } = body;
+  const { listing_id, bid_value, desagio_oferecido, tir_pretendida, payment_type, payment_details, notes, buyer_profile_id, demand_id } = body;
 
   if (!listing_id || !bid_value) {
     return NextResponse.json({ error: "Campos obrigatórios: listing_id, bid_value" }, { status: 422 });
+  }
+
+  // Vinculo oferta -> demanda de compra (Fase 5, 5.3, 20/09/2026, pedido de Joao). E o que
+  // faz "aceitar oferta" mover a demanda para em_negociacao e "ativo liquidado" concluir o
+  // mandato (app/api/cm/bids/[id], app/api/cm/listings/[id]/status). Opcional: oferta manual
+  // sem demanda por tras continua valida. Validado no servidor, nunca confiado ao cliente:
+  // a demanda precisa estar ATIVA no match e pertencer a quem oferta (ou ser a Mesa).
+  let linkedDemandId: string | null = null;
+  if (demand_id) {
+    const { data: demandRow } = await svc()
+      .from("investor_demands")
+      .select("id, status, origin_partner_id, created_by")
+      .eq("id", demand_id)
+      .maybeSingle();
+    if (!demandRow) return NextResponse.json({ error: "Demanda de compra não encontrada" }, { status: 422 });
+    if (demandRow.status !== "ativo") {
+      return NextResponse.json({ error: "A demanda de compra precisa estar ativa no match para receber uma proposta" }, { status: 422 });
+    }
+    const isMesa = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"].includes(caller.role);
+    if (!isMesa && demandRow.origin_partner_id !== caller.userId && demandRow.created_by !== caller.userId) {
+      return NextResponse.json({ error: "Esta demanda de compra não pertence a você" }, { status: 403 });
+    }
+    linkedDemandId = demandRow.id;
   }
 
   const { data: listing } = await svc()
@@ -72,6 +95,7 @@ export async function POST(req: NextRequest) {
     .from("cm_bids")
     .insert({
       listing_id,
+      demand_id: linkedDemandId,
       buyer_profile_id: buyer_profile_id ?? null,
       bid_value: Number(bid_value),
       desagio_oferecido: desagio_oferecido ? Number(desagio_oferecido) : null,
@@ -154,6 +178,18 @@ export async function POST(req: NextRequest) {
         p_bid_id: bid!.id,
         p_type: "pre_fechamento",
       });
+
+      // Mesmo gancho do aceite manual (app/api/cm/bids/[id]): oferta vinculada a uma demanda
+      // move a demanda ativo -> em_negociacao. Best-effort.
+      if (linkedDemandId) {
+        const { data: demandMoved } = await svc().rpc("transition_cm_demand_status", {
+          p_demand_id: linkedDemandId,
+          p_new_status: "em_negociacao",
+          p_reason: "Oferta aceita automaticamente (piso atingido), negociação iniciada.",
+          p_user_id: caller.userId,
+        });
+        if (!demandMoved) console.warn(`[cm/bids] demanda ${linkedDemandId} não avançou para em_negociacao no auto-aceite`);
+      }
 
       autoAccepted = true;
     }

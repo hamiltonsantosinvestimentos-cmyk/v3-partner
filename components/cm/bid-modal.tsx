@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { X, Loader2, Send } from "lucide-react";
 import { maskCurrencyInput, parseCurrencyBRLInput, CM_CURRENCY_SYMBOL, type CmCurrency } from "@/lib/utils";
 
@@ -27,6 +27,28 @@ export function BidModal({ listing, onClose, onSuccess }: BidModalProps) {
   const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  // Demandas de compra ATIVAS de quem oferta (a API ja filtra por origem para partner; a Mesa
+  // ve todas). Vincular a proposta a uma delas e o que liga oferta e demanda (cm_bids.demand_id).
+  const [myDemands, setMyDemands] = useState<{ id: string; label: string }[]>([]);
+  const [demandId, setDemandId] = useState("");
+
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/cm/investor-demands?status=ativo")
+      .then((r) => (r.ok ? r.json() : { demands: [] }))
+      .then((j) => {
+        if (!alive) return;
+        const list = ((j.demands ?? []) as { id: string; apelido: string | null; nome_contato: string; empresa: string | null }[])
+          .map((d) => ({
+            id: d.id,
+            label: d.nome_contato !== "Pendente" ? `${d.nome_contato}${d.empresa ? ` (${d.empresa})` : ""}` : (d.apelido ?? "Demanda sem identificação"),
+          }))
+          .sort((a, b) => a.label.localeCompare(b.label, "pt-BR"));
+        setMyDemands(list);
+      })
+      .catch(() => { /* sem demandas: o campo simplesmente nao aparece */ });
+    return () => { alive = false; };
+  }, []);
 
   const handleDesagioChange = (val: string) => {
     setDesagio(val);
@@ -52,6 +74,7 @@ export function BidModal({ listing, onClose, onSuccess }: BidModalProps) {
           tir_pretendida: tirPretendida ? Number(tirPretendida) : null,
           payment_type: paymentType,
           notes: notes || null,
+          demand_id: demandId || undefined,
         }),
       });
       const json = await res.json();
@@ -134,6 +157,22 @@ export function BidModal({ listing, onClose, onSuccess }: BidModalProps) {
               <option value="escrow">Escrow</option>
             </select>
           </div>
+          {myDemands.length > 0 && (
+            <div>
+              <label className="block text-[10px] text-[#C9A84C] font-bold uppercase tracking-wider mb-1">Demanda de compra (opcional)</label>
+              <select
+                value={demandId}
+                onChange={(e) => setDemandId(e.target.value)}
+                className="w-full bg-[#162744] border border-[#9BAFC5]/15 rounded-md px-3 py-2 text-sm text-[#F5F1E8]"
+              >
+                <option value="">Sem vínculo com demanda</option>
+                {myDemands.map((d) => (
+                  <option key={d.id} value={d.id}>{d.label}</option>
+                ))}
+              </select>
+              <p className="text-[9px] text-[#9BAFC5] mt-1">Vincular a proposta a uma demanda ativa faz a demanda avançar para Negociação quando a proposta for aceita.</p>
+            </div>
+          )}
           <div>
             <label className="block text-[10px] text-[#C9A84C] font-bold uppercase tracking-wider mb-1">Observações</label>
             <textarea

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { createNotification } from "@/lib/notify";
+import { CM_MEETING_URL, notifyMeetingLink } from "@/lib/cm-meeting";
 import { ASSET_DECLINE_REASON_VALUES } from "@/lib/cm-decline-reasons";
 
 function svc() {
@@ -120,8 +121,42 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   }
 
   const { data: listing } = await svc().from("cm_asset_listings")
-    .select("id, anonymous_id, listing_status, nda_signed_at, head_approved_at, originator_profile_id")
+    .select("id, anonymous_id, listing_status, nda_signed_at, head_approved_at, originator_profile_id, created_by")
     .eq("id", id).single();
+
+  // Botao manual "Agendar Reuniao" (20/09/2026, pedido de Joao): alem de mover a etapa,
+  // entrega o link da agenda do Head (na resposta e por notificacao). O gatilho automatico
+  // so roda com a chave meeting_autotrigger ligada (ver app/api/cm/intake/[token]).
+  let meetingUrl: string | undefined;
+  if (new_status === "reuniao_agendada" && listing) {
+    meetingUrl = CM_MEETING_URL;
+    await notifyMeetingLink({
+      userId: listing.created_by ?? listing.originator_profile_id ?? caller.userId,
+      title: `Ativo ${listing.anonymous_id}: agende a reunião inicial`,
+      intro: "A Mesa liberou o agendamento.",
+      actionUrl: "/bolsa/mesa",
+    });
+  }
+
+  // Etapa 7 (20/09/2026): ativo liquidado conclui o mandato de compra vinculado a oferta
+  // aceita (cm_bids.demand_id). Best-effort: o fechamento do ativo nunca depende disto.
+  if (new_status === "liquidado" && listing) {
+    const { data: acceptedBids } = await svc()
+      .from("cm_bids")
+      .select("demand_id")
+      .eq("listing_id", id)
+      .eq("status", "aceita")
+      .not("demand_id", "is", null);
+    const demandIds = [...new Set((acceptedBids ?? []).map((b) => b.demand_id as string))];
+    for (const demandId of demandIds) {
+      await svc().rpc("transition_cm_demand_status", {
+        p_demand_id: demandId,
+        p_new_status: "concluido",
+        p_reason: `Ativo ${listing.anonymous_id} liquidado, mandato concluído.`,
+        p_user_id: caller.userId,
+      });
+    }
+  }
 
   // Notifica o Partner originador (push real + in-app) -- achado 13/08/2026: a infra ja
   // existia (lib/push.ts, VAPID configurado) mas nunca era chamada em nenhuma transicao de
@@ -137,7 +172,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     });
   }
 
-  return NextResponse.json({ success: true, listing });
+  return NextResponse.json({ success: true, listing, meeting_url: meetingUrl });
 }
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {

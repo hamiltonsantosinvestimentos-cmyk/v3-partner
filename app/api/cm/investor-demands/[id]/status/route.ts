@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { createNotification } from "@/lib/notify";
+import { CM_MEETING_URL, notifyMeetingLink } from "@/lib/cm-meeting";
 import {
   DEMAND_STATUS_LABELS,
   DEMAND_NEXT_ACTIONS,
@@ -46,7 +47,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const { data: demand } = await db
     .from("investor_demands")
-    .select("id, status, nome_contato, apelido, origin_partner_id, kyc_approved_at, nda_accepted_at")
+    .select("id, status, nome_contato, apelido, origin_partner_id, created_by, kyc_approved_at, nda_accepted_at")
     .eq("id", id)
     .maybeSingle();
   if (!demand) return NextResponse.json({ error: "Demanda não encontrada" }, { status: 404 });
@@ -69,7 +70,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
   if (action.needsReason && !reason) {
     return NextResponse.json({
-      error: newStatus === "reprovado" ? "Justificativa obrigatória para reprovar a demanda" : "Texto da restrição é obrigatório para aprovar com restrições",
+      error: newStatus === "reprovado"
+        ? "Justificativa obrigatória para reprovar a demanda"
+        : newStatus === "expirado"
+        ? "Informe o motivo do encerramento sem match"
+        : "Texto da restrição é obrigatório para aprovar com restrições",
     }, { status: 422 });
   }
 
@@ -132,5 +137,20 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     });
   }
 
-  return NextResponse.json({ success: true, status: newStatus, label });
+  // Botao manual "Agendar reuniao" (20/09/2026): alem de mover a etapa, entrega o link da
+  // agenda do Head. Vai na resposta (a tela mostra o link na hora) e por notificacao a quem
+  // criou o link do comprador, ou a quem clicou se a demanda nao tem criador registrado.
+  let meetingUrl: string | undefined;
+  if (newStatus === "reuniao_agendada") {
+    meetingUrl = CM_MEETING_URL;
+    const nome = demand.apelido || (demand.nome_contato !== "Pendente" ? demand.nome_contato : "sem identificação");
+    await notifyMeetingLink({
+      userId: demand.created_by ?? user.id,
+      title: `Demanda ${nome}: agende a reunião inicial`,
+      intro: "A Mesa liberou o agendamento.",
+      actionUrl: demand.created_by && demand.created_by === demand.origin_partner_id ? "/meus-compradores" : "/bolsa/mesa",
+    });
+  }
+
+  return NextResponse.json({ success: true, status: newStatus, label, meeting_url: meetingUrl });
 }

@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getCmFlag, FLAG_MEETING_AUTOTRIGGER } from "@/lib/cm-flags";
+import { notifyMeetingLink } from "@/lib/cm-meeting";
 import { createClient as sc } from "@supabase/supabase-js";
 import { isValidCpfCnpj } from "@/lib/utils";
 import { issueV3Code, resolveSectorCode, resolveEsferaCode } from "@/lib/v3-codes";
@@ -184,21 +186,26 @@ export async function POST(
   // qualificacao terminar (movido de app/api/cm/qualificacao/[token]/route.ts).
   // Best-effort -- nunca desfaz o envio ja confirmado ao cedente/parceiro se
   // a transicao ou a notificacao falharem.
-  const { data: meetingTransition } = await svc().rpc("transition_cm_listing_status", {
-    p_listing_id: listing.id,
-    p_new_status: "reuniao_agendada",
-    p_reason: "Intake concluído, agendamento automático da reunião inicial.",
-    p_user_id: listing.created_by,
-  });
-  if (meetingTransition && listing.created_by) {
-    await svc().from("notifications").insert({
-      user_id: listing.created_by,
-      title: `Ativo ${anonId}: agende a reunião inicial`,
-      message: `O intake foi concluído. Agende a reunião de apresentação com o Head: https://calendar.google.com/calendar/u/0/appointments/schedules/AcZssZ1T51okURKuhE_zw_MiCC68TkFZHk8tgNaJQauB9ha6LymoTSSovxkijrv3BfDYW1VipSAXokAi`,
-      type: "reuniao_agendada",
-      action_url: "/bolsa/mesa",
-      read: false,
+  // 20/09/2026 (pedido de Joao): o gatilho automatico so roda com a chave
+  // meeting_autotrigger LIGADA (cm_feature_flags, desligada por padrao). Enquanto a base e
+  // os testes sao saneados, o analista agenda pelo botao "Agendar Reuniao" (Mesa) e o ativo
+  // espera em "Formulario preenchido". Ligar a chave depois da homologacao restaura o
+  // comportamento automatico sem novo deploy.
+  if (await getCmFlag(FLAG_MEETING_AUTOTRIGGER)) {
+    const { data: meetingTransition } = await svc().rpc("transition_cm_listing_status", {
+      p_listing_id: listing.id,
+      p_new_status: "reuniao_agendada",
+      p_reason: "Intake concluído, agendamento automático da reunião inicial.",
+      p_user_id: listing.created_by,
     });
+    if (meetingTransition) {
+      await notifyMeetingLink({
+        userId: listing.created_by,
+        title: `Ativo ${anonId}: agende a reunião inicial`,
+        intro: "O intake foi concluído.",
+        actionUrl: "/bolsa/mesa",
+      });
+    }
   }
 
   // Governanca Documental Universal (achado 17/09/2026): listagem submetida via

@@ -83,9 +83,11 @@ test.describe("Buy-Side Intake — recorrência + partner de origem", () => {
     expect(after?.origin_partner_id).toBe(admin!.id);
     expect(after?.intake_locked).toBe(true);
     // Fase 5, 5.3 (19/09/2026): o intake NAO ativa mais o comprador no match. Ele anda
-    // pendente > formulario_preenchido > reuniao_agendada e so vira "ativo" depois da
-    // aprovacao da Mesa (POST /api/cm/investor-demands/[id]/status).
-    expect(after?.status).toBe("reuniao_agendada");
+    // pendente > formulario_preenchido e so vira "ativo" depois da aprovacao da Mesa
+    // (POST /api/cm/investor-demands/[id]/status). 20/09/2026: o agendamento automatico da
+    // reuniao (-> reuniao_agendada) so acontece com a chave meeting_autotrigger ligada
+    // (cm_feature_flags, desligada por padrao); desligada, o analista agenda pelo botao.
+    expect(after?.status).toBe("formulario_preenchido");
   });
 
   test("origin_partner_id inválido (não existe em profiles) nunca bloqueia o cadastro, só fica sem atribuição", async ({ request }) => {
