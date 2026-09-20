@@ -30,7 +30,9 @@ export async function GET(req: NextRequest) {
 
   if (view === "head") {
     const [listings, bids, matches, commissions, escrows] = await Promise.all([
-      db.from("cm_asset_listings").select("id, anonymous_id, asset_type, valor_face, listing_status, risk_score, created_at"),
+      // Excluidos (soft delete) fora dos KPIs: em 20/09/2026 total_ativos vinha 80 (56 na Lixeira)
+      // e volume_pipeline R$ 52,35 bi, contra 24 e R$ 43,10 bi reais.
+      db.from("cm_asset_listings").select("id, anonymous_id, asset_type, valor_face, listing_status, risk_score, created_at").is("deleted_at", null),
       db.from("cm_bids").select("id, listing_id, bid_value, desagio_oferecido, status, created_at").eq("status", "pendente"),
       db.from("demand_matches").select("id, score, listing_id, status").not("listing_id", "is", null).eq("status", "novo"),
       db.from("cm_commission_splits").select("id, commission_total_value, split_buy_value, split_platform_value, split_sell_value, status"),
@@ -66,6 +68,7 @@ export async function GET(req: NextRequest) {
       .from("cm_asset_listings")
       .select("id, anonymous_id, asset_type, valor_face, listing_status, risk_score, created_at, cm_bids(count)")
       .eq("created_by", caller.userId)
+      .is("deleted_at", null)
       .order("created_at", { ascending: false });
 
     return NextResponse.json({

@@ -23,6 +23,9 @@ export async function GET(req: NextRequest) {
     .from("cm_asset_listings")
     .select("id, anonymous_id, apelido, valor_face, asset_type, nda_document_url, nda_authorization_reason, nda_authorization_requested_at, requested_by:nda_authorization_requested_by(id, full_name)")
     .eq("nda_authorization_status", "pending_director")
+    // Ativo excluido (soft delete, esta na Lixeira) nao pode continuar na fila de aprovacao:
+    // achado em producao em 20/09/2026, CM-PR-FED-0011 excluido continuava aqui.
+    .is("deleted_at", null)
     .order("nda_authorization_requested_at", { ascending: true });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

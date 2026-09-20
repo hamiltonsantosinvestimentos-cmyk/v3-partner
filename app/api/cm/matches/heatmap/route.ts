@@ -28,6 +28,7 @@ export async function GET(_req: NextRequest) {
     .from("cm_asset_listings")
     .select("id, anonymous_id, apelido, asset_type, valor_face")
     .eq("listing_status", "ativo_vitrine")
+    .is("deleted_at", null)
     .order("created_at", { ascending: false })
     .limit(50);
 
