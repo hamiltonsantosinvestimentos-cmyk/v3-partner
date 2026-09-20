@@ -26,6 +26,7 @@ type BuyDemand = {
   id: string;
   intake_token: string;
   nome_contato: string;
+  apelido: string | null;
   empresa: string | null;
   cpf: string | null;
   cnpj: string | null;
@@ -101,6 +102,15 @@ const PIPELINE_STATUS: Record<BuyDemand["pipeline_status"], { label: string; dot
   documentos_pendentes: { label: "Documentos Pendentes", dot: "#E8935A", text: "#E8935A", bg: "rgba(232,147,90,0.12)", border: "rgba(232,147,90,0.3)" },
   documentacao_completa: { label: "Documentação Completa", dot: "#4ADE80", text: "#4ADE80", bg: "rgba(74,222,128,0.12)", border: "rgba(74,222,128,0.3)" },
 };
+
+// Ate o comprador preencher o formulario, nome_contato e o placeholder "Pendente" (o nome real
+// nunca e coletado na pre-qualificacao, Blind Wall). Mostra o apelido quando existir; para as
+// demandas antigas, sem apelido, a data de geracao do link e o unico diferenciador que sobra.
+function displayName(d: BuyDemand): { title: string; sub: string | null } {
+  if (d.nome_contato !== "Pendente") return { title: d.nome_contato, sub: d.empresa };
+  if (d.apelido) return { title: d.apelido, sub: "Aguardando o comprador preencher o formulário" };
+  return { title: "Comprador sem identificação", sub: `Link gerado em ${new Date(d.created_at).toLocaleDateString("pt-BR")}` };
+}
 
 function formatM(v: number) {
   if (!v) return "R$ 0";
@@ -354,8 +364,8 @@ export function BuySideDemandsPanel({ mode = "mesa", title, subtitle }: BuySideD
                   className="border-b border-[#162744] last:border-0 hover:bg-[#162744]/40 cursor-pointer transition-colors"
                 >
                   <td className="px-3 py-3">
-                    <div className="text-[#F5F1E8] font-semibold">{d.nome_contato}</div>
-                    {d.empresa && <div className="text-[#9BAFC5] text-[10px]">{d.empresa}</div>}
+                    <div className="text-[#F5F1E8] font-semibold">{displayName(d).title}</div>
+                    {displayName(d).sub && <div className="text-[#9BAFC5] text-[10px]">{displayName(d).sub}</div>}
                   </td>
                   {mode === "mesa" && (
                     <td className="px-3 py-3 text-[#9BAFC5]">
@@ -431,8 +441,8 @@ export function BuySideDemandsPanel({ mode = "mesa", title, subtitle }: BuySideD
           <div className="w-full max-w-2xl max-h-[85vh] bg-[#09081A] border border-[#C9A84C]/20 rounded-xl flex flex-col">
             <div className="p-4 border-b flex items-center justify-between flex-shrink-0" style={{ borderColor: statusHeader.border }}>
               <div>
-                <div className="text-sm font-bold text-[#F5F1E8]">{detailDemand.nome_contato}</div>
-                {detailDemand.empresa && <div className="text-[10px] text-[#9BAFC5]">{detailDemand.empresa}</div>}
+                <div className="text-sm font-bold text-[#F5F1E8]">{displayName(detailDemand).title}</div>
+                {displayName(detailDemand).sub && <div className="text-[10px] text-[#9BAFC5]">{displayName(detailDemand).sub}</div>}
                 <div className="mt-1.5"><StatusChip status={detailDemand.pipeline_status} /></div>
               </div>
               <div className="flex items-center gap-2 flex-shrink-0">

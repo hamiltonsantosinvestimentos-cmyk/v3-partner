@@ -111,15 +111,19 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const label = DEMAND_STATUS_LABELS[newStatus] ?? newStatus;
 
   // Timeline: so a etapa, nunca o texto do motivo (ver cabecalho, Blind Wall).
-  void db.from("cm_deal_notes").insert({
+  // ATENCAO: o query builder do supabase-js e "preguicoso", so envia a requisicao quando e
+  // aguardado. Um `void db.from(...).insert(...)` NUNCA grava nada (achado no teste em
+  // producao de 19/09/2026: 8 transicoes pela rota, 0 notas de timeline). Sempre `await`.
+  const { error: noteError } = await db.from("cm_deal_notes").insert({
     demand_id: id,
     content: `Etapa da demanda alterada para "${label}".`,
     is_system: true,
   });
+  if (noteError) console.error("[cm/investor-demands/status] falha ao gravar nota de timeline:", noteError.message);
 
   if (demand.origin_partner_id) {
     const nome = demand.apelido || (demand.nome_contato !== "Pendente" ? demand.nome_contato : "sua demanda");
-    void createNotification({
+    await createNotification({
       user_id: demand.origin_partner_id,
       title: `Demanda ${nome}: ${label}`,
       message: `A demanda de compra que você originou mudou para "${label}".`,
