@@ -59,5 +59,18 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
 
   const { error } = await svc().from("instituicoes").delete().eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // Anexos (apresentação e SCR/autorização) ficam no Storage, fora do banco:
+  // sem isso ficariam órfãos, e o SCR tem dado de cliente. Best-effort.
+  try {
+    const storage = svc().storage.from("instituicoes-anexos");
+    for (const tipo of ["apresentacao", "scr_autorizacao"]) {
+      const { data: files } = await storage.list(`${id}/${tipo}`, { limit: 100 });
+      const paths = (files ?? []).filter((f) => f.id).map((f) => `${id}/${tipo}/${f.name}`);
+      if (paths.length) await storage.remove(paths);
+    }
+  } catch (e) {
+    console.error("Falha ao limpar anexos da instituição excluída:", e);
+  }
   return NextResponse.json({ ok: true });
 }
