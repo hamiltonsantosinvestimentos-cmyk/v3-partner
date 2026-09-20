@@ -16,7 +16,7 @@ caso como legado e estudo de caso.
 
 **Por que saiu do CI.** O CI roda contra o banco de produção e o app notifica de verdade. Cada
 execução gerava cerca de 42 notificações do tipo `negociacao_falha` ("... rejeitada no cadastro
-público") para a equipe da Mesa, com push. Desde 25/07/2026 isso acumulou milhares de
+público") para a equipe da Mesa (avisos dentro do sistema; esta suíte não gerava push nem e-mail). Desde 25/07/2026 isso acumulou milhares de
 notificações de teste nas caixas dos usuários. Decisão de João em 20/09/2026: sem notificações.
 
 **Para reexecutar manualmente.** Copie o arquivo de volta para `tests/e2e/` e rode
