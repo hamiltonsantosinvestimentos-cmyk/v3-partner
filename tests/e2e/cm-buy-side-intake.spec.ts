@@ -26,7 +26,15 @@ test.afterAll(async () => {
   if (createdDemandIds.length === 0) return;
   const db = svc();
   await db.from("investor_demand_documents").delete().in("demand_id", createdDemandIds);
+  // Fase 5, 5.3 (19/09/2026): o intake agora anda a demanda pela maquina de estados e grava
+  // auditoria/timeline com FK pra investor_demands. Sem limpar antes, o delete abaixo falhava
+  // inteiro (FK) e as fixtures vazavam pra producao, algumas ainda "ativo".
+  await db.from("cm_status_transitions").delete().in("demand_id", createdDemandIds);
+  await db.from("cm_deal_notes").delete().in("demand_id", createdDemandIds);
   await db.from("investor_demands").delete().in("id", createdDemandIds);
+  // O intake tambem notifica o criador do link (e a Mesa se o criador nao for da Mesa). Este
+  // suite roda contra o banco real: nunca deixar alerta de teste na caixa de gente de verdade.
+  await db.from("notifications").delete().like("title", "%QA PLAYWRIGHT%");
 });
 
 test.describe("Buy-Side Intake — recorrência + partner de origem", () => {
@@ -43,6 +51,9 @@ test.describe("Buy-Side Intake — recorrência + partner de origem", () => {
         nome_contato: "Pendente", email: "pendente@pendente.com",
         setores: ["precatorio"], ufs: ["RJ"], ticket_min: 0, ticket_max: 0,
         tipos_operacao: ["compra"], origem: "intake_buy", status: "pendente", intake_token: token,
+        // created_by da Mesa: sem isso o intake notifica a Mesa INTEIRA (com push) a cada execucao
+        // do CI, que roda contra producao (incidente de 20/09/2026, 21 notificacoes reais).
+        created_by: admin!.id,
       })
       .select("id").single();
     expect(insertError).toBeNull();
@@ -71,12 +82,17 @@ test.describe("Buy-Side Intake — recorrência + partner de origem", () => {
     expect(after?.recurrence_months).toBe(12);
     expect(after?.origin_partner_id).toBe(admin!.id);
     expect(after?.intake_locked).toBe(true);
-    expect(after?.status).toBe("ativo");
+    // Fase 5, 5.3 (19/09/2026): o intake NAO ativa mais o comprador no match. Ele anda
+    // pendente > formulario_preenchido > reuniao_agendada e so vira "ativo" depois da
+    // aprovacao da Mesa (POST /api/cm/investor-demands/[id]/status).
+    expect(after?.status).toBe("reuniao_agendada");
   });
 
   test("origin_partner_id inválido (não existe em profiles) nunca bloqueia o cadastro, só fica sem atribuição", async ({ request }) => {
     const db = svc();
     const token = randomUUID().replace(/-/g, "");
+
+    const { data: admin } = await db.from("profiles").select("id").eq("role", "ADMIN").limit(1).single();
 
     const { data: demand } = await db
       .from("investor_demands")
@@ -84,6 +100,7 @@ test.describe("Buy-Side Intake — recorrência + partner de origem", () => {
         nome_contato: "Pendente", email: "pendente@pendente.com",
         setores: ["precatorio"], ufs: ["RJ"], ticket_min: 0, ticket_max: 0,
         tipos_operacao: ["compra"], origem: "intake_buy", status: "pendente", intake_token: token,
+        created_by: admin!.id, // ver comentario no primeiro teste deste arquivo
       })
       .select("id").single();
     createdDemandIds.push(demand!.id);
