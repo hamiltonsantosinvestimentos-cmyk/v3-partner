@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { auditText, auditHtml } from "@/lib/brand-guardian-gate";
+import { notifyByRoles } from "@/lib/notify";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -45,7 +46,7 @@ export async function POST(
 
   const { data: demand } = await svc()
     .from("investor_demands")
-    .select("id, intake_locked, origin_partner_id")
+    .select("id, status, intake_locked, origin_partner_id, created_by, apelido")
     .eq("intake_token", token)
     .single();
 
@@ -118,7 +119,10 @@ export async function POST(
       tipos_operacao: ["compra"],
       criterios: criterios ?? null,
       origem: "intake_buy",
-      status: "ativo",
+      // Fase 5, 5.3 (19/09/2026): o status NAO e mais gravado aqui. Ate 19/09 este update
+      // fazia status = "ativo", o que jogava o comprador direto no motor de match sem
+      // nenhuma validacao da Mesa. Agora o status anda pela maquina de estados
+      // (transition_cm_demand_status) logo abaixo, e so vira "ativo" depois da aprovacao.
       alerta_ativo: true,
       nda_accepted: nda_accepted ?? false,
       nda_accepted_at: nda_accepted ? new Date().toISOString() : null,
@@ -134,6 +138,66 @@ export async function POST(
     .eq("id", demand.id);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // Etapa 1 -> Etapa 2 (Fase 5, 5.3): formulario preenchido e reuniao inicial agendada.
+  // Espelho do lado venda (app/api/cm/intake/[token]/route.ts). So age quando a demanda
+  // ainda esta na entrada do funil (pendente): uma demanda que ja esta em outro estado
+  // (ex.: cadastrada pela Mesa como "ativo") nunca e rebaixada por reenvio de formulario.
+  // Best-effort -- nunca desfaz o envio ja confirmado ao comprador se a transicao ou a
+  // notificacao falharem (a Mesa ainda ve a demanda na aba "Aguardando Formulario").
+  if (demand.status === "pendente" || demand.status === "reuniao_validada") {
+    try {
+      const { data: filled } = await svc().rpc("transition_cm_demand_status", {
+        p_demand_id: demand.id,
+        p_new_status: "formulario_preenchido",
+        p_reason: "Formulário de compra concluído pelo comprador.",
+        p_user_id: demand.created_by ?? null,
+      });
+      if (!filled) {
+        console.error(`[cm/intake/buy] demanda ${demand.id}: transicao para formulario_preenchido recusada`);
+      } else {
+        const { data: meeting } = await svc().rpc("transition_cm_demand_status", {
+          p_demand_id: demand.id,
+          p_new_status: "reuniao_agendada",
+          p_reason: "Intake concluído, agendamento automático da reunião inicial.",
+          p_user_id: demand.created_by ?? null,
+        });
+        if (meeting) {
+          const label = demand.apelido || nome_contato;
+          const isPartnerCreator = !!demand.created_by && demand.created_by === demand.origin_partner_id;
+          if (demand.created_by) {
+            await svc().from("notifications").insert({
+              user_id: demand.created_by,
+              title: `Demanda ${label}: agende a reunião inicial`,
+              message: `O comprador concluiu o formulário. Agende a reunião de apresentação com o Head: https://calendar.google.com/calendar/u/0/appointments/schedules/AcZssZ1T51okURKuhE_zw_MiCC68TkFZHk8tgNaJQauB9ha6LymoTSSovxkijrv3BfDYW1VipSAXokAi`,
+              type: "reuniao_agendada",
+              action_url: isPartnerCreator ? "/meus-compradores" : "/bolsa/mesa",
+              read: false,
+            });
+          }
+          // Sem este aviso a demanda ficaria parada na fila sem ninguem da Mesa saber
+          // (ela deixou de entrar direto no match). Se quem criou o link ja e da Mesa,
+          // ele acabou de ser avisado acima, entao so a Mesa inteira quando o criador
+          // for partner ou desconhecido.
+          let creatorIsMesa = false;
+          if (demand.created_by) {
+            const { data: creator } = await svc().from("profiles").select("role").eq("id", demand.created_by).maybeSingle();
+            creatorIsMesa = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"].includes((creator?.role as string) ?? "");
+          }
+          if (!creatorIsMesa) {
+            await notifyByRoles(["ADMIN", "GESTAO", "MESA_OPERACIONAL"], {
+              title: `Nova demanda de compra: ${label}`,
+              message: "Formulário concluído. Aguardando reunião inicial e qualificação pela Mesa.",
+              type: "marketplace",
+              action_url: "/bolsa/mesa",
+            });
+          }
+        }
+      }
+    } catch (transErr) {
+      console.error("[cm/intake/buy] falha ao mover a demanda pelo pipeline:", transErr);
+    }
+  }
 
   // E-mail de confirmacao ao comprador -- ate 12/08/2026 esse envio simplesmente nao
   // existia, o unico sinal de "recebido" era a tela de confirmacao no navegador, que
@@ -155,7 +219,7 @@ export async function POST(
           <tr><td><strong>Tipo de ativo</strong></td><td>${tiposLabel}</td></tr>
           <tr><td><strong>Ticket</strong></td><td>R$ ${Number(ticket_min || 0).toLocaleString("pt-BR")} a R$ ${Number(ticket_max || 0).toLocaleString("pt-BR")}</td></tr>
         </table>
-        <p>A equipe V3 Partners entrará em contato quando ativos compatíveis com seu perfil estiverem disponíveis na vitrine.</p>
+        <p>A equipe V3 Partners entrará em contato para agendar a reunião inicial e dar sequência à qualificação do seu cadastro.</p>
         <p style="margin-top:24px;color:#888;font-size:12px">V3 Partners Soluções Ltda — CNPJ 14.219.287/0001-50</p>
       `);
       if (htmlGate.blocking.length > 0) {
@@ -175,6 +239,6 @@ export async function POST(
 
   return NextResponse.json({
     success: true,
-    message: "Cadastro de interesse recebido. A equipe V3 Partners entrará em contato quando ativos compatíveis estiverem disponíveis.",
+    message: "Cadastro de interesse recebido. A equipe V3 Partners entrará em contato para agendar a reunião inicial e dar sequência à qualificação do seu cadastro.",
   });
 }

@@ -209,7 +209,7 @@ export function BuyIntakeWizard({ token, prefill, originPartnerId, lockedFollowU
         </div>
         <h2 className="text-2xl font-bold text-[#F5F1E8] mb-3">Cadastro recebido</h2>
         <p className="text-[#9BAFC5] max-w-md">
-          Seu interesse foi registrado. A equipe V3 Partners entrará em contato quando ativos compatíveis com seu perfil estiverem disponíveis na vitrine.
+          Seu interesse foi registrado. A equipe V3 Partners entrará em contato para agendar a reunião inicial e dar sequência à qualificação do seu cadastro.
         </p>
         <p className="text-xs text-[#9BAFC5]/60 mt-8">Alertas automáticos ativados para seu perfil.</p>
       </div>
@@ -468,7 +468,7 @@ export function BuyIntakeWizard({ token, prefill, originPartnerId, lockedFollowU
             <Search className="w-12 h-12 text-[#C9A84C] mx-auto mb-4" />
             <h3 className="text-lg font-bold text-[#F5F1E8] mb-2">Confirmar envio</h3>
             <p className="text-sm text-[#9BAFC5] max-w-md mx-auto mb-6">
-              Ao enviar, seu perfil de comprador será ativado no motor de matchmaking da V3 Partners. Você receberá alertas automáticos por email quando ativos compatíveis forem publicados na vitrine.
+              Ao enviar, seu cadastro segue para a reunião inicial e a qualificação pela equipe V3 Partners. Depois da aprovação, seu perfil passa a concorrer no matchmaking e você recebe alertas por email quando ativos compatíveis forem publicados na vitrine.
             </p>
             <div className="bg-[#162744] rounded-lg p-4 text-left max-w-sm mx-auto text-xs text-[#9BAFC5] space-y-1">
               <div>Nome: <span className="text-[#F5F1E8]">{form.nome_contato}</span></div>
