@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
-import { CREDIT_SOURCE_DEFAULTS } from "@/lib/credit-source-defaults";
-import { checktudoLogin, checktudoSCR, type ChecktudoDocType } from "@/lib/checktudo";
+import { resolveEffectiveSourceConfig } from "@/lib/credit-source-config";
+import { buscarBacenScr } from "@/lib/credit-bacen";
 import { generateAndStoreCreditReportPdf } from "@/lib/credit-report-generate";
 
 // O node "Gerar Dossiê PDF" do n8n roda DENTRO do webhook chamado abaixo,
@@ -17,44 +17,8 @@ function serviceClient() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 }
 
-// SCR do CheckTudo (BACEN) — 01/09/2026, decisão de João: fica como dado de
-// REFERÊNCIA na tela da proposta, nunca entra no cálculo do Tier/score da V3
-// (esse continua vindo só do que o n8n calcula). Roda direto no portal, nunca
-// no n8n, mesmo padrão já estabelecido para o CheckTudo em 27/08/2026 (n8n não
-// consegue injetar credencial com segurança num node httpRequest, confirmado
-// por teste real então). Best-effort: falha aqui nunca derruba a análise.
-async function buscarBacenScr(docType: ChecktudoDocType, docValue: string) {
-  const username = process.env.CHECKTUDO_USERNAME;
-  const password = process.env.CHECKTUDO_PASSWORD;
-  if (!username || !password) return null;
-
-  try {
-    const session = await checktudoLogin(username, password);
-    const raw = await checktudoSCR(session, docType, docValue);
-    const scr = (raw?.body as any)?.data?.scr ?? {};
-    const consolidado = scr.consolidado ?? {};
-    return {
-      score_pontuacao: scr.score?.pontuacao ?? null,
-      score_faixa: scr.score?.faixa ?? null,
-      credito_vencido_valor: consolidado.creditoVencido?.valor ?? null,
-      credito_vencido_operacoes: (consolidado.creditoVencido?.operacoes ?? []).map((o: any) => ({
-        descricao: o.DESCRICAO ?? null,
-        valor: o.VALOR ?? null,
-        qtd_meses: o.QTD_MESES ?? null,
-      })),
-      prejuizo_valor: consolidado.prejuizo?.valor ?? null,
-      prejuizo_operacoes: (consolidado.prejuizo?.operacoes ?? []).map((o: any) => ({
-        descricao: o.DESCRICAO ?? null,
-        valor: o.VALOR ?? null,
-        qtd_meses: o.QTD_MESES ?? null,
-      })),
-      consultado_em: new Date().toISOString(),
-    };
-  } catch (e) {
-    console.error("CheckTudo SCR (BACEN) falhou, seguindo sem esse dado:", e);
-    return null;
-  }
-}
+// A consulta BACEN/SCR (CheckTudo) vive em lib/credit-bacen.ts, compartilhada com o botão
+// "Reanalisar" (lib/credit-reanalysis.ts).
 
 const ALLOWED_ROLES = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"] as const;
 
@@ -88,36 +52,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Proposta não encontrada" }, { status: 404 });
   }
 
-  const rawDoc = (proposal.client_cpf_cnpj ?? "").replace(/\D/g, "");
-  const subject_type = rawDoc.length === 14 ? "PJ" : "PF";
-
-  // Painel de Configuração de Fontes: usa a config salva pelo CNPJ do titular,
-  // ou os defaults (fontes gratuitas ligadas, pagas desligadas) se nunca configurado.
-  const { data: sourceConfig } = await svc
-    .from("credit_source_configs")
-    .select("receita_federal, cnj_datajud, ceis, registrato_bacen, serasa, serasa_modalidade, serasa_cnpj, serasa_cpf, serasa_cpf_list, spc, escavador")
-    .eq("cnpj", proposal.client_cpf_cnpj ?? "")
-    .single();
-
-  const baseSourceConfig = sourceConfig ?? CREDIT_SOURCE_DEFAULTS;
-
-  // Pedidos de Partners de PF: o Serasa só roda no n8n quando serasa_cpf está
-  // ligado E o CPF consta em serasa_cpf_list. O painel de fontes não permite
-  // ligar isso (toggle travado) e o default é desligado, então toda análise de
-  // CPF saía "Serasa não consultada", mesmo regenerando. Libera aqui, por
-  // análise, só para o CPF do próprio pedido (formatado e só dígitos, pois não
-  // vemos qual formato o node do n8n compara), respeitando serasa desligado.
-  const cpfFormatado = rawDoc.length === 11
-    ? rawDoc.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4")
-    : null;
-  const effectiveSourceConfig =
-    subject_type === "PF" && baseSourceConfig.serasa && cpfFormatado
-      ? {
-          ...baseSourceConfig,
-          serasa_cpf: true,
-          serasa_cpf_list: Array.from(new Set([...(baseSourceConfig.serasa_cpf_list ?? []), rawDoc, cpfFormatado])),
-        }
-      : baseSourceConfig;
+  // Fontes a consultar: config salva do titular (ou defaults) + liberação do Serasa para CPF.
+  // Regra compartilhada com o botão "Reanalisar" (lib/credit-source-config.ts).
+  const { rawDoc, subject_type, effectiveSourceConfig } = await resolveEffectiveSourceConfig(svc, proposal.client_cpf_cnpj);
 
   const webhookRes = await fetch("https://n8n-514n.onrender.com/webhook/v3-credit-engine", {
     method: "POST",
