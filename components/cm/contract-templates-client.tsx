@@ -1321,7 +1321,7 @@ ${allParties.length > 0 ? `<div class="qualbox">
                           </div>
                         </div>
                         <div className="space-y-1.5">
-                          {batch.cm_party_qualifications.map((p) => (
+                          {sortQualificationParties(batch.cm_party_qualifications).map((p) => (
                             editingPartyId === p.id ? (
                               <div key={p.id} className="bg-[#162744] rounded px-2.5 py-2 space-y-1.5">
                                 <input value={editPartyForm.full_name} onChange={(e) => setEditPartyForm((f) => ({ ...f, full_name: e.target.value }))} placeholder="Nome completo *"
@@ -2209,7 +2209,7 @@ ${allParties.length > 0 ? `<div class="qualbox">
                         {completedUnconsumedBatches.map((b) => (
                           <label key={b.id} className="flex items-center gap-2 text-xs text-[#F5F1E8] cursor-pointer">
                             <input type="radio" name="qualBatchPicker" checked={selectedQualBatchId === b.id} onChange={() => setSelectedQualBatchId(b.id)} />
-                            {b.cm_party_qualifications.map((p) => p.full_name).join(", ")}
+                            {sortQualificationParties(b.cm_party_qualifications).map((p) => p.full_name).join(", ")}
                           </label>
                         ))}
                       </div>

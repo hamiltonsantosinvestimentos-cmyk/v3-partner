@@ -8,7 +8,7 @@ import {
   Upload, Link2, Crown, Download, ShieldCheck,
 } from "lucide-react";
 import { cn, isValidEmail } from "@/lib/utils";
-import { ROLE_LABELS } from "@/lib/qualification-roles";
+import { ROLE_LABELS, sortQualificationParties } from "@/lib/qualification-roles";
 import { PartyQualificationCardModal } from "./party-qualification-card";
 
 interface Approval {
@@ -933,7 +933,7 @@ export function ContractsPanelClient({ role }: { role: string }) {
                           </span>
                         </div>
                         <div className="space-y-1.5">
-                          {batch.cm_party_qualifications.map((p) => (
+                          {sortQualificationParties(batch.cm_party_qualifications).map((p) => (
                             <div key={p.id} className="flex items-center justify-between gap-2 bg-[#09081A] rounded px-2.5 py-1.5">
                               <div className="min-w-0 flex items-center gap-1.5">
                                 <button onClick={() => openPartyCard(p.id)} className="text-xs text-[#F5F1E8] truncate hover:text-[#C9A84C] hover:underline transition-colors text-left">

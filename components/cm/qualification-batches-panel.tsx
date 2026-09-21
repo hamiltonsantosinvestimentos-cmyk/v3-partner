@@ -9,7 +9,7 @@
 // no BRIEF: risco desnecessário pra esta fase).
 import { useState, useEffect, useCallback } from "react";
 import { UserPlus, Copy, Share2, CheckCircle2, FileText, Loader2, X, Trash2, Pencil, Save, Eye } from "lucide-react";
-import { ROLE_LABELS } from "@/lib/qualification-roles";
+import { ROLE_LABELS, sortQualificationParties } from "@/lib/qualification-roles";
 import { isValidEmail } from "@/lib/utils";
 import { PartyQualificationCardModal } from "./party-qualification-card";
 
@@ -152,7 +152,7 @@ export function QualificationBatchesPanel({ listingId, demandId, cardLabel }: Pr
         <div className="space-y-3">
           {batches.map((batch) => (
             <div key={batch.id} className="space-y-1.5">
-              {batch.cm_party_qualifications.map((p) => (
+              {sortQualificationParties(batch.cm_party_qualifications).map((p) => (
                 editingPartyId === p.id ? (
                   <div key={p.id} className="bg-[#09081A] rounded px-2.5 py-2 space-y-1.5">
                     <input value={editPartyForm.full_name} onChange={(e) => setEditPartyForm((f) => ({ ...f, full_name: e.target.value }))} placeholder="Nome completo *"
