@@ -6,6 +6,7 @@ import {
   Copy, Check, User, MapPin, Phone, Building2, Search,
   Loader2, Trash2, Pencil, RefreshCw, AlertCircle, ExternalLink,
   Crown, Users, Target, TrendingUp, PhoneCall, Send, Clock,
+  CalendarClock, PackageCheck, PackageX,
 } from "lucide-react";
 
 import {
@@ -68,12 +69,14 @@ interface Prospect {
 interface Equipe { id: string; full_name: string; role: string; }
 interface Partner { id: string; full_name: string; email: string; }
 
-type Etapa = "prospect" | "contatado" | "interessado" | "trial" | "convertido" | "perdido";
+type Etapa = "prospect" | "contatado" | "interessado" | "agenda_reuniao" | "proposta_retorno" | "trial" | "convertido" | "perdido";
 
 const ETAPAS: { id: Etapa; label: string; color: string; bg: string }[] = [
   { id: "prospect",    label: "Prospect",    color: "#7A8FA8", bg: "#7A8FA820" },
   { id: "contatado",   label: "Contatado",   color: "#60A5FA", bg: "#60A5FA20" },
   { id: "interessado", label: "Interessado", color: "#F59E0B", bg: "#F59E0B20" },
+  { id: "agenda_reuniao",   label: "Agenda de Reunião",   color: "#2DD4BF", bg: "#2DD4BF20" },
+  { id: "proposta_retorno", label: "Proposta e Retorno", color: "#FB923C", bg: "#FB923C20" },
   { id: "trial",       label: "Em Trial",    color: "#A78BFA", bg: "#A78BFA20" },
   { id: "convertido",  label: "Convertido",  color: "#34D399", bg: "#34D39920" },
 ];
@@ -109,6 +112,188 @@ function origemColor(o: string) {
     youtube: "#FF0000", google: "#4285F4", evento: "#A78BFA", outro: MUTED,
   };
   return map[o] ?? MUTED;
+}
+
+// ─── Agenda de reunião / Proposta e retorno (guardados em metadata) ──────────
+
+const TZ = "America/Sao_Paulo";
+
+function reuniaoEm(p: Prospect): string | null {
+  const v = p.metadata?.reuniao_em;
+  return typeof v === "string" ? v : null;
+}
+function materialInfo(p: Prospect): { enviado: boolean; em: string | null; descricao: string | null } {
+  const m = p.metadata ?? {};
+  return {
+    enviado: m.material_enviado === true,
+    em: typeof m.material_enviado_em === "string" ? m.material_enviado_em : null,
+    descricao: typeof m.material_descricao === "string" ? m.material_descricao : null,
+  };
+}
+function fmtDiaHora(iso: string) {
+  const d = new Date(iso);
+  const dia = d.toLocaleDateString("pt-BR", { timeZone: TZ, weekday: "short", day: "2-digit", month: "2-digit" });
+  const hora = d.toLocaleTimeString("pt-BR", { timeZone: TZ, hour: "2-digit", minute: "2-digit" });
+  return `${dia} às ${hora}`;
+}
+function fmtDiaCurto(iso: string) {
+  return new Date(iso).toLocaleDateString("pt-BR", { timeZone: TZ, day: "2-digit", month: "2-digit" });
+}
+/** ISO → valor de <input type="datetime-local"> no fuso de Brasília. */
+function isoParaInputLocal(iso: string | null): string {
+  if (!iso) return "";
+  const parts = new Intl.DateTimeFormat("sv-SE", {
+    timeZone: TZ, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+  }).format(new Date(iso));
+  return parts.replace(" ", "T");
+}
+/** Valor de <input type="datetime-local"> (horário de Brasília, UTC-3 sem horário de verão) → ISO. */
+function inputLocalParaIso(v: string): string | null {
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(v)) return null;
+  const d = new Date(`${v}:00-03:00`);
+  return Number.isNaN(d.getTime()) ? null : d.toISOString();
+}
+function statusReuniao(iso: string): { label: string; color: string } {
+  const diffMs = new Date(iso).getTime() - Date.now();
+  if (diffMs < 0) return { label: "Passou — registrar retorno", color: "#F87171" };
+  const dia = (d: Date) => d.toLocaleDateString("pt-BR", { timeZone: TZ });
+  if (dia(new Date(iso)) === dia(new Date())) return { label: "Hoje", color: "#34D399" };
+  return { label: "Agendada", color: "#2DD4BF" };
+}
+
+function AgendaModal({
+  prospect, onSave, onClose,
+}: {
+  prospect: Prospect;
+  onSave: (reuniaoEmIso: string) => Promise<void>;
+  onClose: () => void;
+}) {
+  const [valor, setValor] = useState(isoParaInputLocal(reuniaoEm(prospect)));
+  const [salvando, setSalvando] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+  const iso = inputLocalParaIso(valor);
+
+  const salvar = async () => {
+    if (!iso) { setErro("Informe o dia e o horário da reunião."); return; }
+    setSalvando(true); setErro(null);
+    try { await onSave(iso); }
+    catch (e) { setErro((e as Error).message); setSalvando(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4" style={{ background: "#00000090" }} onClick={onClose}>
+      <div className="w-full max-w-sm rounded-2xl border border-white/10 p-5 space-y-4" style={{ background: "#0F1E35" }} onClick={e => e.stopPropagation()}>
+        <div className="flex items-start justify-between">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: "#2DD4BF" }}>Agenda de Reunião</p>
+            <h3 className="text-sm font-bold text-white">{prospect.nome}</h3>
+          </div>
+          <button onClick={onClose} className="text-muted-foreground hover:text-white"><X className="w-4 h-4" /></button>
+        </div>
+        <div className="space-y-1.5">
+          <label className="text-[11px] font-semibold" style={{ color: MUTED }}>Dia e horário da reunião (horário de Brasília)</label>
+          <input
+            type="datetime-local"
+            value={valor}
+            onChange={e => setValor(e.target.value)}
+            className="w-full rounded-xl px-3 py-2 text-sm text-white border border-white/10 focus:border-teal-400/50 focus:outline-none"
+            style={{ background: NAVY_CARD, colorScheme: "dark" }}
+          />
+          {iso && <p className="text-[11px]" style={{ color: "#2DD4BF" }}>{fmtDiaHora(iso)}</p>}
+        </div>
+        {erro && <p className="text-[11px] text-red-400">{erro}</p>}
+        <div className="flex gap-2">
+          <button onClick={onClose} className="flex-1 py-2 rounded-xl text-sm font-semibold border border-white/10 text-white hover:border-white/20">Cancelar</button>
+          <button
+            onClick={salvar}
+            disabled={salvando || !iso}
+            className="flex-1 py-2 rounded-xl text-sm font-bold text-black flex items-center justify-center gap-1.5 disabled:opacity-40"
+            style={{ background: "#2DD4BF" }}
+          >
+            {salvando && <Loader2 className="w-3.5 h-3.5 animate-spin" />} Salvar agenda
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PropostaModal({
+  prospect, onSave, onClose,
+}: {
+  prospect: Prospect;
+  onSave: (v: { enviado: boolean; descricao: string }) => Promise<void>;
+  onClose: () => void;
+}) {
+  const atual = materialInfo(prospect);
+  const [enviado, setEnviado] = useState(atual.enviado);
+  const [descricao, setDescricao] = useState(atual.descricao ?? "");
+  const [salvando, setSalvando] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+
+  const salvar = async () => {
+    setSalvando(true); setErro(null);
+    try { await onSave({ enviado, descricao }); }
+    catch (e) { setErro((e as Error).message); setSalvando(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4" style={{ background: "#00000090" }} onClick={onClose}>
+      <div className="w-full max-w-sm rounded-2xl border border-white/10 p-5 space-y-4" style={{ background: "#0F1E35" }} onClick={e => e.stopPropagation()}>
+        <div className="flex items-start justify-between">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: "#FB923C" }}>Proposta e Retorno</p>
+            <h3 className="text-sm font-bold text-white">{prospect.nome}</h3>
+          </div>
+          <button onClick={onClose} className="text-muted-foreground hover:text-white"><X className="w-4 h-4" /></button>
+        </div>
+        <div className="space-y-1.5">
+          <label className="text-[11px] font-semibold" style={{ color: MUTED }}>Foi enviado material / proposta ao lead?</label>
+          <div className="flex gap-2">
+            {[{ v: true, label: "Enviado", Icon: PackageCheck, color: "#34D399" }, { v: false, label: "Não enviado", Icon: PackageX, color: "#F59E0B" }].map(o => (
+              <button
+                key={String(o.v)}
+                type="button"
+                onClick={() => setEnviado(o.v)}
+                className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-semibold border transition-all"
+                style={{
+                  borderColor: enviado === o.v ? o.color : "rgba(255,255,255,0.08)",
+                  background: enviado === o.v ? `${o.color}20` : "transparent",
+                  color: enviado === o.v ? o.color : MUTED,
+                }}
+              >
+                <o.Icon className="w-3.5 h-3.5" /> {o.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="space-y-1.5">
+          <label className="text-[11px] font-semibold" style={{ color: MUTED }}>O que foi enviado (opcional)</label>
+          <textarea
+            value={descricao}
+            onChange={e => setDescricao(e.target.value)}
+            rows={2}
+            maxLength={500}
+            placeholder="Ex.: apresentação institucional + proposta do plano Partner Pro"
+            className="w-full rounded-xl px-3 py-2 text-sm text-white border border-white/10 focus:border-orange-400/50 focus:outline-none resize-none"
+            style={{ background: NAVY_CARD }}
+          />
+        </div>
+        {erro && <p className="text-[11px] text-red-400">{erro}</p>}
+        <div className="flex gap-2">
+          <button onClick={onClose} className="flex-1 py-2 rounded-xl text-sm font-semibold border border-white/10 text-white hover:border-white/20">Cancelar</button>
+          <button
+            onClick={salvar}
+            disabled={salvando}
+            className="flex-1 py-2 rounded-xl text-sm font-bold text-black flex items-center justify-center gap-1.5 disabled:opacity-40"
+            style={{ background: "#FB923C" }}
+          >
+            {salvando && <Loader2 className="w-3.5 h-3.5 animate-spin" />} Salvar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 // ─── Modal de criação/edição ───────────────────────────────────────────────────
@@ -420,6 +605,12 @@ function DetalheModal({
     { label: "Indicado por (nome livre)", value: prospect.indicado_por_nome },
     { label: "Lead no CRM", value: prospect.crm_lead_id ? "Sim — clique em Ver no CRM" : undefined },
     { label: "Responsável", value: prospect.responsavel_nome },
+    { label: "Reunião agendada", value: reuniaoEm(prospect) ? fmtDiaHora(reuniaoEm(prospect)!) : null },
+    { label: "Material / proposta", value: (prospect.etapa === "proposta_retorno" || materialInfo(prospect).enviado)
+        ? (materialInfo(prospect).enviado
+            ? `Enviado${materialInfo(prospect).em ? ` em ${fmtDiaCurto(materialInfo(prospect).em!)}` : ""}${materialInfo(prospect).descricao ? ` — ${materialInfo(prospect).descricao}` : ""}`
+            : "Ainda não enviado")
+        : null },
     { label: "Notas", value: prospect.notas },
     { label: "Motivo de perda", value: prospect.motivo_perda },
     { label: "Link gerado em", value: prospect.link_gerado_em ? fmtDate(prospect.link_gerado_em) : null },
@@ -662,10 +853,12 @@ function DetalheModal({
 // ─── Card do Kanban ──────────────────────────────────────────────────────────
 
 function ProspectCard({
-  prospect, onMove, onEdit, onLink, onDelete, onDetalhe, isAdmin,
+  prospect, onMove, onEdit, onLink, onDelete, onDetalhe, onAgenda, onProposta, isAdmin,
 }: {
   prospect: Prospect;
   onMove: (id: string, etapa: Etapa) => void;
+  onAgenda: (p: Prospect) => void;
+  onProposta: (p: Prospect) => void;
   onEdit: (p: Prospect) => void;
   onLink: (p: Prospect) => void;
   onDelete: (id: string) => void;
@@ -755,6 +948,55 @@ function ProspectCard({
           </a>
         )}
       </div>
+
+      {/* Agenda de reunião: dia e horário marcados */}
+      {prospect.etapa === "agenda_reuniao" && (() => {
+        const iso = reuniaoEm(prospect);
+        const st = iso ? statusReuniao(iso) : null;
+        return (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onAgenda(prospect); }}
+            title="Alterar dia e horário"
+            className="w-full text-left rounded-lg border px-2.5 py-1.5 transition-colors hover:bg-white/5"
+            style={{ borderColor: `${st?.color ?? "#2DD4BF"}50`, background: `${st?.color ?? "#2DD4BF"}12` }}
+          >
+            <span className="flex items-center gap-1.5 text-[11px] font-bold" style={{ color: st?.color ?? "#2DD4BF" }}>
+              <CalendarClock className="w-3.5 h-3.5 shrink-0" />
+              {iso ? fmtDiaHora(iso) : "Sem dia/horário — definir"}
+            </span>
+            {st && <span className="block text-[9px] font-semibold mt-0.5 uppercase tracking-wide" style={{ color: st.color }}>{st.label}</span>}
+          </button>
+        );
+      })()}
+
+      {/* Proposta e retorno: material foi enviado ao lead? */}
+      {prospect.etapa === "proposta_retorno" && (() => {
+        const m = materialInfo(prospect);
+        const cor = m.enviado ? "#34D399" : "#F59E0B";
+        return (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onProposta(prospect); }}
+            title="Alterar situação do material"
+            className="w-full text-left rounded-lg border px-2.5 py-1.5 transition-colors hover:bg-white/5"
+            style={{ borderColor: `${cor}50`, background: `${cor}12` }}
+          >
+            <span className="flex items-center gap-1.5 text-[11px] font-bold" style={{ color: cor }}>
+              {m.enviado ? <PackageCheck className="w-3.5 h-3.5 shrink-0" /> : <PackageX className="w-3.5 h-3.5 shrink-0" />}
+              {m.enviado ? `Material enviado${m.em ? ` · ${fmtDiaCurto(m.em)}` : ""}` : "Material NÃO enviado"}
+            </span>
+            {m.descricao && <span className="block text-[10px] mt-0.5 leading-snug" style={{ color: MUTED }}>{m.descricao}</span>}
+          </button>
+        );
+      })()}
+
+      {/* Reunião já marcada, mostrada também na etapa seguinte */}
+      {prospect.etapa === "proposta_retorno" && reuniaoEm(prospect) && (
+        <p className="text-[10px] flex items-center gap-1" style={{ color: MUTED }}>
+          <CalendarClock className="w-3 h-3" /> Reunião: {fmtDiaHora(reuniaoEm(prospect)!)}
+        </p>
+      )}
 
       {/* Responsável */}
       {prospect.responsavel_nome && (
@@ -986,6 +1228,9 @@ export function ProspeccaoClient({ role, userId }: { role: string; userId: strin
   const [linking, setLinking] = useState<Prospect | null>(null);
   const [showLinkGeral, setShowLinkGeral] = useState(false);
   const [detalhe, setDetalhe] = useState<Prospect | null>(null);
+  // Mover para "Agenda de Reunião" exige dia/horário; para "Proposta e Retorno" pergunta se o material foi enviado
+  const [agendando, setAgendando] = useState<{ prospect: Prospect; mover: boolean } | null>(null);
+  const [propondo, setPropondo] = useState<{ prospect: Prospect; mover: boolean } | null>(null);
   const isAdmin = role === "ADMIN";
 
   const load = () => {
@@ -1026,15 +1271,41 @@ export function ProspeccaoClient({ role, userId }: { role: string; userId: strin
     load();
   };
 
-  const handleMove = async (id: string, etapa: Etapa) => {
-    setProspects(ps => ps.map(p => p.id === id ? { ...p, etapa } : p));
-    await fetch(`/api/prospeccao/${id}`, {
+  const handleMove = async (id: string, etapa: Etapa, metadata_patch?: Record<string, unknown>) => {
+    const res = await fetch(`/api/prospeccao/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ etapa }),
+      body: JSON.stringify({ etapa, ...(metadata_patch ? { metadata_patch } : {}) }),
     });
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}));
+      throw new Error(j.error ?? "Erro ao mover o prospect");
+    }
     load();
   };
+
+  // Só atualiza os dados de agenda/proposta (sem mudar de etapa)
+  const handleMeta = async (id: string, metadata_patch: Record<string, unknown>) => {
+    const res = await fetch(`/api/prospeccao/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ metadata_patch }),
+    });
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}));
+      throw new Error(j.error ?? "Erro ao salvar");
+    }
+    load();
+  };
+
+  // Pedido de mover vindo do card/coluna: as etapas com dados extras abrem o modal antes
+  const requestMove = (id: string, etapa: Etapa) => {
+    const p = prospects.find(x => x.id === id);
+    if (p && etapa === "agenda_reuniao") { setAgendando({ prospect: p, mover: true }); return; }
+    if (p && etapa === "proposta_retorno") { setPropondo({ prospect: p, mover: true }); return; }
+    handleMove(id, etapa).catch(e => alert((e as Error).message));
+  };
+
 
   const handleDelete = async (id: string) => {
     if (!confirm("Excluir este prospect?")) return;
@@ -1198,7 +1469,9 @@ export function ProspeccaoClient({ role, userId }: { role: string; userId: strin
                     <ProspectCard
                       key={p.id}
                       prospect={p}
-                      onMove={handleMove}
+                      onMove={requestMove}
+                      onAgenda={p => setAgendando({ prospect: p, mover: false })}
+                      onProposta={p => setPropondo({ prospect: p, mover: false })}
                       onEdit={p => { setEditing(p); setShowModal(true); }}
                       onLink={setLinking}
                       onDelete={handleDelete}
@@ -1239,7 +1512,7 @@ export function ProspeccaoClient({ role, userId }: { role: string; userId: strin
                     <p className="text-[10px] mt-1" style={{ color: MUTED }}>{p.motivo_perda}</p>
                   )}
                   <button
-                    onClick={() => handleMove(p.id, "prospect")}
+                    onClick={() => requestMove(p.id, "prospect")}
                     className="mt-1.5 text-[10px] px-2 py-0.5 rounded-full border border-white/10 hover:border-white/20 transition-colors"
                     style={{ color: MUTED }}
                   >
@@ -1272,6 +1545,31 @@ export function ProspeccaoClient({ role, userId }: { role: string; userId: strin
 
       {showLinkGeral && (
         <LinkGeralModal onClose={() => setShowLinkGeral(false)} />
+      )}
+
+      {agendando && (
+        <AgendaModal
+          prospect={agendando.prospect}
+          onClose={() => setAgendando(null)}
+          onSave={async (iso) => {
+            if (agendando.mover) await handleMove(agendando.prospect.id, "agenda_reuniao", { reuniao_em: iso });
+            else await handleMeta(agendando.prospect.id, { reuniao_em: iso });
+            setAgendando(null);
+          }}
+        />
+      )}
+
+      {propondo && (
+        <PropostaModal
+          prospect={propondo.prospect}
+          onClose={() => setPropondo(null)}
+          onSave={async ({ enviado, descricao }) => {
+            const meta = { material_enviado: enviado, material_descricao: descricao };
+            if (propondo.mover) await handleMove(propondo.prospect.id, "proposta_retorno", meta);
+            else await handleMeta(propondo.prospect.id, meta);
+            setPropondo(null);
+          }}
+        />
       )}
 
       {detalhe && (
