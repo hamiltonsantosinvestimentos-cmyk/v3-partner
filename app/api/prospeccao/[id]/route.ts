@@ -16,7 +16,20 @@ async function getUser() {
   return profile as { id: string; role: string; full_name: string } | null;
 }
 
-const ETAPAS = ["prospect", "contatado", "interessado", "trial", "convertido", "perdido"];
+const ETAPAS = ["prospect", "contatado", "interessado", "agenda_reuniao", "proposta_retorno", "trial", "convertido", "perdido"];
+
+// Agenda de reunião e proposta/retorno ficam em prospeccao_leads.metadata (jsonb, já existente),
+// sem coluna nova. Só estas chaves podem ser gravadas por aqui: o resto do metadata (respostas
+// do quiz, score, tracking) nunca é sobrescrito por um PATCH do Kanban.
+//   reuniao_em: ISO 8601 (dia + horário da reunião)
+//   material_enviado: boolean (proposta/material foi enviado ao lead?)
+//   material_enviado_em: ISO 8601 (quando foi enviado; preenchido aqui)
+//   material_descricao: texto livre (o que foi enviado)
+function fmtReuniao(iso: string) {
+  return new Date(iso).toLocaleString("pt-BR", {
+    timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit",
+  });
+}
 
 async function processarRecompensaIndicacao(db: ReturnType<typeof svc>, leadId: string) {
   try {
@@ -85,7 +98,7 @@ export async function PATCH(
   // Busca lead atual para histórico
   const { data: atual } = await db
     .from("prospeccao_leads")
-    .select("etapa, nome")
+    .select("etapa, nome, metadata")
     .eq("id", id)
     .single();
 
@@ -101,17 +114,64 @@ export async function PATCH(
     if (c in body) updates[c] = body[c] ?? null;
   }
 
+  // Agenda de reunião / proposta e retorno → metadata (merge só das chaves permitidas)
+  const metaAtual = ((atual as { metadata?: Record<string, unknown> | null } | null)?.metadata ?? {}) as Record<string, unknown>;
+  const metaPatch = (body.metadata_patch ?? null) as Record<string, unknown> | null;
+  const metaNova: Record<string, unknown> = { ...metaAtual };
+  let metaMudou = false;
+  if (metaPatch && typeof metaPatch === "object") {
+    if ("reuniao_em" in metaPatch) {
+      const v = metaPatch.reuniao_em;
+      if (v === null || v === "") {
+        delete metaNova.reuniao_em;
+      } else if (typeof v === "string" && !Number.isNaN(new Date(v).getTime())) {
+        metaNova.reuniao_em = new Date(v).toISOString();
+      } else {
+        return NextResponse.json({ error: "Data/horário da reunião inválidos" }, { status: 400 });
+      }
+      metaMudou = true;
+    }
+    if ("material_enviado" in metaPatch) {
+      const enviado = metaPatch.material_enviado === true;
+      metaNova.material_enviado = enviado;
+      if (enviado) {
+        if (!metaAtual.material_enviado || !metaAtual.material_enviado_em) metaNova.material_enviado_em = new Date().toISOString();
+      } else {
+        delete metaNova.material_enviado_em;
+      }
+      metaMudou = true;
+    }
+    if ("material_descricao" in metaPatch) {
+      const d = typeof metaPatch.material_descricao === "string" ? metaPatch.material_descricao.trim().slice(0, 500) : "";
+      if (d) metaNova.material_descricao = d; else delete metaNova.material_descricao;
+      metaMudou = true;
+    }
+  }
+  if (metaMudou) updates.metadata = metaNova;
+
   // Mudança de etapa
   if (body.etapa && ETAPAS.includes(body.etapa) && body.etapa !== (atual as { etapa: string } | null)?.etapa) {
+    // Etapa "Agenda de Reunião" só faz sentido com dia e horário marcados
+    if (body.etapa === "agenda_reuniao" && !metaNova.reuniao_em) {
+      return NextResponse.json({ error: "Informe o dia e o horário da reunião para mover para Agenda de Reunião" }, { status: 400 });
+    }
     updates.etapa = body.etapa;
     if (body.etapa === "convertido") updates.convertido_em = new Date().toISOString();
+    if (body.etapa === "proposta_retorno" && metaNova.material_enviado === undefined) {
+      metaNova.material_enviado = false; // a etapa sempre mostra "enviado ou não"
+      updates.metadata = metaNova;
+    }
+
+    let notaHistorico: string | null = body.nota_historico ?? null;
+    if (body.etapa === "agenda_reuniao") notaHistorico = `Reunião agendada para ${fmtReuniao(metaNova.reuniao_em as string)}`;
+    if (body.etapa === "proposta_retorno") notaHistorico = metaNova.material_enviado === true ? "Proposta/material enviado ao lead" : "Proposta/material ainda não enviado ao lead";
 
     // Histórico
     await db.from("prospeccao_historico").insert({
       lead_id: id,
       etapa_anterior: (atual as { etapa: string } | null)?.etapa ?? null,
       etapa_nova: body.etapa,
-      nota: body.nota_historico ?? null,
+      nota: notaHistorico,
       created_by: me.id,
     });
 
