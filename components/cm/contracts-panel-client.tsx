@@ -5,7 +5,7 @@ import {
   FileText, Search, Filter, Clock, CheckCircle2, XCircle,
   Send, Eye, MessageSquare, Loader2, ChevronDown, User,
   AlertTriangle, Shield, UserPlus, Plus, X, Copy, Share2, Pencil,
-  Upload, Link2, Crown, Download, ShieldCheck,
+  Upload, Link2, Crown, Download, ShieldCheck, RefreshCw,
 } from "lucide-react";
 import { cn, isValidEmail } from "@/lib/utils";
 import { ROLE_LABELS, sortQualificationParties } from "@/lib/qualification-roles";
@@ -113,6 +113,10 @@ export function ContractsPanelClient({ role }: { role: string }) {
   const [showPreview, setShowPreview] = useState(false);
   const [noteText, setNoteText] = useState("");
   const [submittingNote, setSubmittingNote] = useState(false);
+  // Atualizar status das assinaturas (21/09/2026): consulta o ClickSign pelo servidor e
+  // preenche a timeline do contrato com as assinaturas que o webhook não registrou.
+  const [refreshingSignatures, setRefreshingSignatures] = useState(false);
+  const [signatureRefreshMsg, setSignatureRefreshMsg] = useState<string | null>(null);
   const [sendingToSignature, setSendingToSignature] = useState(false);
   const [qualBatches, setQualBatches] = useState<QualBatch[]>([]);
   const [showQualModal, setShowQualModal] = useState(false);
@@ -392,6 +396,29 @@ export function ContractsPanelClient({ role }: { role: string }) {
   }, [filterVertical, filterStatus, searchQuery]);
 
   useEffect(() => { fetchContracts(); }, [fetchContracts]);
+
+  const handleRefreshSignatures = async () => {
+    if (!selected) return;
+    setRefreshingSignatures(true);
+    setSignatureRefreshMsg(null);
+    try {
+      const res = await fetch(`/api/contracts/${selected.id}/refresh-signature-status`, { method: "POST" });
+      const json = await res.json();
+      if (res.ok) {
+        const faltam: string[] = json.pendentes ?? [];
+        setSignatureRefreshMsg(
+          `${json.assinaram} de ${json.total} assinaram.${faltam.length > 0 ? ` Faltam: ${faltam.join(", ")}.` : ""}${json.contrato_marcado_como_assinado ? " Contrato marcado como assinado." : ""}`
+        );
+        fetchContracts();
+      } else {
+        setSignatureRefreshMsg(json.error ?? "Não foi possível consultar o ClickSign.");
+      }
+    } catch {
+      setSignatureRefreshMsg("Erro de conexão ao consultar o ClickSign.");
+    } finally {
+      setRefreshingSignatures(false);
+    }
+  };
 
   const handleAddNote = async () => {
     if (!selected || !noteText.trim()) return;
@@ -1093,9 +1120,20 @@ export function ContractsPanelClient({ role }: { role: string }) {
 
               {/* Timeline */}
               <div className="bg-[#12112A] border border-[#9BAFC5]/10 rounded-lg p-5">
-                <h3 className="text-sm font-bold text-[#F5F1E8] mb-4 flex items-center gap-2">
-                  <Clock size={14} className="text-[#C9A84C]" /> Timeline de Alterações
-                </h3>
+                <div className="flex items-center justify-between gap-3 mb-4">
+                  <h3 className="text-sm font-bold text-[#F5F1E8] flex items-center gap-2">
+                    <Clock size={14} className="text-[#C9A84C]" /> Timeline de Alterações
+                  </h3>
+                  {selected.status_signature === "enviado_assinatura" && (
+                    <button onClick={handleRefreshSignatures} disabled={refreshingSignatures}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-[#C9A84C]/20 text-[#C9A84C] rounded-lg text-xs font-bold hover:bg-[#C9A84C]/30 transition disabled:opacity-50">
+                      {refreshingSignatures ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />} Atualizar status das assinaturas
+                    </button>
+                  )}
+                </div>
+                {signatureRefreshMsg && (
+                  <p className="text-[11px] text-[#F5F1E8] bg-[#162744] border border-[#C9A84C]/30 rounded-lg p-2.5 mb-3">{signatureRefreshMsg}</p>
+                )}
 
                 {timelineItems.length === 0 ? (
                   <p className="text-xs text-[#9BAFC5]">Nenhuma atividade registrada</p>

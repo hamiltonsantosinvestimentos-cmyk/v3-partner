@@ -475,6 +475,52 @@ export async function getEnvelopeStatusV3(envelopeId: string): Promise<EnvelopeS
   }
 }
 
+export type ClickSignSignEventsResult =
+  | { ok: true; envelopeStatus: string; finishedAt: string | null; events: Array<{ name: string; email: string; signedAt: string | null }> }
+  | { ok: false; error: string; status: number };
+
+// Assinaturas individuais de um envelope (21/09/2026). O recurso "signatário" da API v3
+// não traz o estado de assinatura; ele vem dos EVENTOS do envelope. A lista de eventos é
+// paginada (o envelope de teste tinha 24 e a primeira página devolvia 20), por isso o
+// filtro filter[name]=sign e o seguimento de links.next. Confirmado contra o ClickSign de
+// produção real: attributes.data.signer.{email,name} e attributes.created.
+export async function listClickSignSignEvents(envelopeId: string): Promise<ClickSignSignEventsResult> {
+  const accessToken = process.env.CLICKSIGN_ACCESS_TOKEN;
+  const baseUrl = process.env.CLICKSIGN_BASE_URL ?? "https://sandbox.clicksign.com";
+  if (!accessToken) return { ok: false, error: "CLICKSIGN_ACCESS_TOKEN não configurado", status: 500 };
+  const headers = { Accept: "application/json", Authorization: accessToken };
+
+  try {
+    const envRes = await fetch(`${baseUrl}/api/v3/envelopes/${envelopeId}`, { headers });
+    if (!envRes.ok) return { ok: false, error: `ClickSign getEnvelope: ${await envRes.text()}`, status: envRes.status };
+    const envData = await envRes.json();
+    const envelopeStatus: string = envData.data?.attributes?.status ?? "desconhecido";
+
+    const events: Array<{ name: string; email: string; signedAt: string | null }> = [];
+    let url: string | null = `${baseUrl}/api/v3/envelopes/${envelopeId}/events?filter[name]=sign`;
+    for (let page = 0; url && page < 10; page++) {
+      const res = await fetch(url, { headers });
+      if (!res.ok) return { ok: false, error: `ClickSign listEvents: ${await res.text()}`, status: res.status };
+      const body = await res.json();
+      const data: Array<{ attributes?: { created?: string; data?: { signer?: { email?: string; name?: string } } } }> = body.data ?? [];
+      for (const ev of data) {
+        const signer = ev.attributes?.data?.signer;
+        if (signer?.email) events.push({ name: signer.name ?? signer.email, email: signer.email, signedAt: ev.attributes?.created ?? null });
+      }
+      const next: unknown = body.links?.next;
+      url = data.length > 0 && typeof next === "string" && next !== url ? next : null;
+    }
+    events.sort((a, b) => (a.signedAt ?? "").localeCompare(b.signedAt ?? ""));
+
+    let finishedAt: string | null = null;
+    if (envelopeStatus === "closed" || envelopeStatus === "auto_closed") finishedAt = envData.data?.attributes?.modified ?? null;
+
+    return { ok: true, envelopeStatus, finishedAt, events };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Erro desconhecido", status: 500 };
+  }
+}
+
 // Cancela um documento AINDA EM ABERTO (status running) dentro de um
 // envelope v3. O cancelamento é no nível do DOCUMENTO, não do envelope —
 // não existe endpoint de cancelamento de envelope na API v3.
