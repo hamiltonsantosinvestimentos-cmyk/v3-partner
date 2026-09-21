@@ -5,6 +5,7 @@ import { randomUUID } from "crypto";
 import { getProvider, type SendEnvelopeInput } from "@/lib/esignature";
 import { renderContractDocx } from "@/lib/contract-docx-render";
 import type { ContractParty } from "@/lib/contract-render";
+import { buildEnvelopeLabel } from "@/lib/contract-envelope-label";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -151,9 +152,15 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   // dá uma chave de correlação confiável pra identificar o contrato quando
   // o PDF assinado retornar por e-mail via Observador de Assinatura, sem
   // depender do formato de e-mail da própria ClickSign, que não controlamos.
-  const documentLabel = contract.contract_code
-    ? `${contract.contract_code} · ${contract.contract_title}`
-    : contract.contract_title;
+  // 21/09/2026 (decisão de João): o envelope leva número do contrato, tipo, setor e partner
+  // ("V3C-NDA-2026-0036 · NCNDA · Bolsa de Ativos · Partner Fulano"), nunca o nome interno da
+  // minuta. O código continua PRIMEIRO: é a chave de correlação do arquivamento acima.
+  const documentLabel = buildEnvelopeLabel({
+    contract_code: contract.contract_code,
+    contract_title: contract.contract_title,
+    vertical: contract.vertical,
+    parties,
+  });
 
   // Regularização de contrato manual (19/08/2026): o PDF já está pronto no
   // Storage (capa Termo + original mesclados e estampados, ver

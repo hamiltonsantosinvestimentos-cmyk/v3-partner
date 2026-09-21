@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { getProvider } from "@/lib/esignature";
 import { auditText } from "@/lib/brand-guardian-gate";
+import { buildEnvelopeLabel } from "@/lib/contract-envelope-label";
 
 // POST /api/contracts/[id]/resend-notification: reenvio de lembrete de
 // assinatura pendente para contratos da Central de Contratos enviados via
@@ -42,7 +43,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const db = svc();
   const { data: contract } = await db
     .from("operation_contracts")
-    .select("id, contract_code, contract_title, status_signature, external_envelope_id, parties, signature_message, signature_subject, esignature_provider")
+    .select("id, vertical, contract_code, contract_title, status_signature, external_envelope_id, parties, signature_message, signature_subject, esignature_provider")
     .eq("id", id)
     .single();
 
@@ -60,9 +61,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const parties = (contract.parties as Array<{ role: string; name: string }> | null) ?? [];
   const pendingSignatory = parties.find((p) => p.role !== "v3_partners" && p.role !== "testemunha") ?? parties[0];
 
-  const documentLabel = contract.contract_code
-    ? `${contract.contract_code} · ${contract.contract_title}`
-    : contract.contract_title;
+  const documentLabel = buildEnvelopeLabel({
+    contract_code: contract.contract_code,
+    contract_title: contract.contract_title,
+    vertical: contract.vertical,
+    parties: contract.parties as Array<{ role?: string | null; name?: string | null }> | null,
+  });
 
   // custom_message/custom_subject no payload sempre vencem; na ausência,
   // cai no signature_message/signature_subject já gravados no contrato
