@@ -141,7 +141,7 @@ tbody td strong { color: var(--cr); }
 }
 `;
 
-const LOGO_URL = "https://app.v3partners.com.br/v3-logo-flat-gold-alpha.png";
+export const LOGO_URL = "https://app.v3partners.com.br/v3-logo-flat-gold-alpha.png";
 
 /**
  * Opções de PDF do dossiê. Fonte única, usada pela rota do portal e por qualquer
