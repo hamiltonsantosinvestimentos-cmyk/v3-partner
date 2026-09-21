@@ -4,6 +4,7 @@ import { createClient as sc } from "@supabase/supabase-js";
 import { randomUUID } from "crypto";
 import { buildCreditReportData, REPORT_VALIDITY_DAYS } from "@/lib/credit-report-data";
 import { buildExternalReportFullHtml, creditReportPdfOptions } from "@/lib/credit-report-template";
+import { gerarPdfUnificado, resolverPartesDoPedido } from "@/lib/credit-unified-pdf";
 
 export const maxDuration = 300;
 export const dynamic = "force-dynamic";
@@ -76,6 +77,16 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: "Análise ainda não foi rodada para esta proposta" }, { status: 409 });
   }
 
+  // Pedido com empresa + sócios/garantidores analisados: o relatório do cliente é UM só, com todos
+  // (a página pública /relatorio-credito/[token] também mostra o conjunto). Sem sócios analisados,
+  // segue o dossiê único de sempre.
+  let pdfPath: string;
+  const partesPedido = await resolverPartesDoPedido(svc, id);
+  if (partesPedido.ok && partesPedido.partes.length > 1) {
+    const unificado = await gerarPdfUnificado(svc, id);
+    if (!unificado.ok) return NextResponse.json({ error: unificado.error }, { status: unificado.status });
+    pdfPath = unificado.pdf_path;
+  } else {
   const reportData = await buildCreditReportData(proposal.credit_profile_id);
   if (!reportData) {
     return NextResponse.json({ error: "Não foi possível montar os dados do relatório" }, { status: 500 });
@@ -97,12 +108,13 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     if (browser) await browser.close();
   }
 
-  const pdfPath = `partner-orders/${id}/relatorio-${Date.now()}.pdf`;
+  pdfPath = `partner-orders/${id}/relatorio-${Date.now()}.pdf`;
   const { error: uploadErr } = await svc.storage.from(BUCKET).upload(pdfPath, pdfBuffer, {
     contentType: "application/pdf",
     upsert: true,
   });
   if (uploadErr) return NextResponse.json({ error: `Falha ao salvar PDF: ${uploadErr.message}` }, { status: 500 });
+  }
 
   const reportToken = randomUUID().replace(/-/g, "") + randomUUID().replace(/-/g, "").slice(0, 8);
 

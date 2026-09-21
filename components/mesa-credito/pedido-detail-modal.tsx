@@ -432,7 +432,7 @@ export function PedidoDetailModal({ order, onClose, onUpdated }: Props) {
               )}
               <StepRow
                 done={hasReport}
-                label="Relatório gerado"
+                label={((order.cnpj_count ?? 0) + (order.cpf_count ?? 0)) > 1 ? "Relatório gerado (empresa + sócios)" : "Relatório gerado"}
                 action={
                   hasAnalysis ? (
                     <Button size="sm" variant={hasReport ? "outline" : "default"} disabled={busy !== null} onClick={handleGenerateReport}>

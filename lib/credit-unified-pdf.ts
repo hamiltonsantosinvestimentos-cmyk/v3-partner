@@ -47,7 +47,7 @@ export type ResultadoUnificado =
     }
   | { ok: false; status: number; error: string };
 
-interface PerfilRow {
+export interface PerfilRow {
   id: string;
   subject_name: string | null;
   subject_cpf_cnpj: string | null;
@@ -83,37 +83,11 @@ async function baixar(db: SupabaseClient, path: string): Promise<Uint8Array | nu
   return new Uint8Array(await data.arrayBuffer());
 }
 
-function capaHtml(opts: {
-  cliente: string;
-  documentoCliente: string;
-  partes: ParteUnificada[];
-  emitidoEm: string;
-}): string {
-  const linhas = opts.partes
-    .map((p, i) => {
-      const tierCor = p.tier === "A" || p.tier === "B" ? "#7FD1A8" : p.tier === "C" ? "#E8C97A" : "#E58A8A";
-      const fonte = (ok: boolean, nome: string) =>
-        `<span class="fonte ${ok ? "ok" : "falta"}">${ok ? "✓" : "—"} ${nome}</span>`;
-      return `<tr>
-  <td class="n">${i + 1}</td>
-  <td><div class="papel">${esc(p.papel)}</div><div class="nome">${esc(p.nome)}</div></td>
-  <td class="doc">${esc(fmtDoc(p.documento))}<div class="nat">${p.tipo === "PJ" ? "Pessoa Jurídica" : "Pessoa Física"}</div></td>
-  <td class="cls"><span class="tier" style="color:${tierCor};border-color:${tierCor}">${esc(p.tier ?? "—")}</span><div class="sc">${p.score ?? "—"} pts</div></td>
-  <td>${fonte(p.serasa, "Serasa")}<br>${fonte(p.bacen, "BACEN")}</td>
-  <td class="pg">${p.pagina_inicial}</td>
-</tr>`;
-    })
-    .join("\n");
+export type ResumoParte = Omit<ParteUnificada, "pagina_inicial" | "paginas" | "regenerado"> & Partial<Pick<ParteUnificada, "pagina_inicial" | "paginas" | "regenerado">>;
 
-  const tiers = opts.partes.filter((p) => p.score != null);
-  const pior = tiers.length ? tiers.reduce((a, b) => ((a.score as number) <= (b.score as number) ? a : b)) : null;
-
-  return `<!DOCTYPE html>
-<html lang="pt-BR"><head><meta charset="UTF-8"><title>Dossiê Unificado</title>
-<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<style>${CREDIT_REPORT_STYLE}
-.cover { padding: 0 48px 40px; }
+/** CSS da capa/resumo consolidado. Usar junto com CREDIT_REPORT_STYLE (PDF e página pública). */
+export const CAPA_CSS = `
+.cover { padding: 0 48px 40px; max-width: 916px; margin: 0 auto; }
 .cover .report-header { padding-top: 56px; }
 .cover .cliente { margin: 34px 0 6px; font-size: 26px; font-weight: 800; color: var(--cr); }
 .cover .cliente-doc { font-size: 13px; color: var(--mu); margin-bottom: 26px; }
@@ -136,9 +110,42 @@ table.partes .cls { white-space: nowrap; }
 .fonte { font-size: 11px; } .fonte.ok { color:#7FD1A8; } .fonte.falta { color: var(--mu); }
 table.partes .pg { text-align:center; font-weight:700; color: var(--gl); width: 44px; }
 .nota { margin-top: 22px; font-size: 10.5px; color: var(--mu); line-height:1.6; }
-</style></head>
-<body>
-<div class="gold-stripe"></div>
+`;
+
+/**
+ * Corpo da capa/resumo consolidado (empresa + sócios). Compartilhado entre o PDF unificado (com a
+ * coluna "Pág.") e a página pública do relatório do cliente (sem ela).
+ */
+export function capaBodyHtml(opts: {
+  cliente: string;
+  documentoCliente: string;
+  partes: ResumoParte[];
+  emitidoEm: string;
+  /** Mostra a coluna com a página onde cada dossiê começa (só faz sentido no PDF). */
+  mostrarPagina: boolean;
+  /** Como o texto chama o material: "arquivo" (PDF) ou "relatório" (página). */
+  rotulo: "arquivo" | "relatório";
+}): string {
+  const linhas = opts.partes
+    .map((p, i) => {
+      const tierCor = p.tier === "A" || p.tier === "B" ? "#7FD1A8" : p.tier === "C" ? "#E8C97A" : "#E58A8A";
+      const fonte = (ok: boolean, nome: string) =>
+        `<span class="fonte ${ok ? "ok" : "falta"}">${ok ? "✓" : "—"} ${nome}</span>`;
+      return `<tr>
+  <td class="n">${i + 1}</td>
+  <td><div class="papel">${esc(p.papel)}</div><div class="nome">${esc(p.nome)}</div></td>
+  <td class="doc">${esc(fmtDoc(p.documento))}<div class="nat">${p.tipo === "PJ" ? "Pessoa Jurídica" : "Pessoa Física"}</div></td>
+  <td class="cls"><span class="tier" style="color:${tierCor};border-color:${tierCor}">${esc(p.tier ?? "—")}</span><div class="sc">${p.score ?? "—"} pts</div></td>
+  <td>${fonte(p.serasa, "Serasa")}<br>${fonte(p.bacen, "BACEN")}</td>
+  ${opts.mostrarPagina ? `<td class="pg">${p.pagina_inicial ?? ""}</td>` : ""}
+</tr>`;
+    })
+    .join("\n");
+
+  const comScore = opts.partes.filter((p) => p.score != null);
+  const pior = comScore.length ? comScore.reduce((a, b) => ((a.score as number) <= (b.score as number) ? a : b)) : null;
+
+  return `<div class="gold-stripe"></div>
 <div class="cover">
   <div class="report-header">
     <div>
@@ -159,19 +166,51 @@ table.partes .pg { text-align:center; font-weight:700; color: var(--gl); width: 
   </div>
 
   <table class="partes">
-    <thead><tr><th></th><th>Parte</th><th>Documento</th><th>Classificação</th><th>Fontes pagas</th><th>Pág.</th></tr></thead>
+    <thead><tr><th></th><th>Parte</th><th>Documento</th><th>Classificação</th><th>Fontes pagas</th>${opts.mostrarPagina ? "<th>Pág.</th>" : ""}</tr></thead>
     <tbody>
 ${linhas}
     </tbody>
   </table>
 
-  <div class="nota">Este arquivo reúne, em sequência, o dossiê de cada parte listada acima. Cada dossiê mantém seu próprio protocolo, data de emissão, fontes consultadas e validade. A classificação de cada parte é calculada individualmente, sem média entre elas.</div>
-</div>
+  <div class="nota">Este ${opts.rotulo} reúne, em sequência, o dossiê de cada parte listada acima. Cada dossiê mantém seu próprio protocolo, data de emissão, fontes consultadas e validade. A classificação de cada parte é calculada individualmente, sem média entre elas.</div>
+</div>`;
+}
+
+function capaHtml(opts: Parameters<typeof capaBodyHtml>[0]): string {
+  return `<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="UTF-8"><title>Dossiê Unificado</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>${CREDIT_REPORT_STYLE}${CAPA_CSS}</style></head>
+<body>
+${capaBodyHtml(opts)}
 </body></html>`;
 }
 
-/** Gera (ou reaproveita) o dossiê de cada parte do pedido e junta tudo num PDF único com capa. */
-export async function gerarPdfUnificado(db: SupabaseClient, orderId: string): Promise<ResultadoUnificado> {
+export interface ParteDoPedido {
+  profileId: string;
+  /** Papel na tabela: vazio para a parte principal (definido pelo tipo); "Sócio / garantidor" etc. para as demais. */
+  papel: string;
+  /** Nome digitado pela Mesa no documento adicional (quando não é o rótulo padrão). */
+  nomeRotulo: string | null;
+  perfil: PerfilRow;
+}
+
+export type PartesDoPedido =
+  | {
+      ok: true;
+      order: { id: string; client_name: string | null; client_doc: string | null };
+      partes: ParteDoPedido[];
+      ausentes: ParteAusente[];
+    }
+  | { ok: false; status: number; error: string };
+
+/**
+ * Partes analisadas de um pedido, na ordem do documento: a análise principal (empresa) primeiro,
+ * depois os documentos adicionais (CNPJs do grupo antes das pessoas físicas). Documentos adicionais
+ * sem análise pronta vão em `ausentes`, com o motivo.
+ */
+export async function resolverPartesDoPedido(db: SupabaseClient, orderId: string): Promise<PartesDoPedido> {
   const { data: order } = await db
     .from("partner_service_orders")
     .select("id, client_name, client_doc, credit_desk_proposal_id")
@@ -232,11 +271,42 @@ export async function gerarPdfUnificado(db: SupabaseClient, orderId: string): Pr
     .in("id", ordem.map((o) => o.profileId));
   const perfilMap = new Map((perfis ?? []).map((p) => [p.id, p as PerfilRow]));
 
-  // Dossiê de cada parte (reaproveita o salvo se atual; senão gera de novo, um por vez)
-  const pdfs: { bytes: Uint8Array; paginas: number; regenerado: boolean }[] = [];
+  const partes: ParteDoPedido[] = [];
   for (const o of ordem) {
     const perfil = perfilMap.get(o.profileId);
     if (!perfil) return { ok: false, status: 404, error: "Perfil de crédito de uma das partes não foi encontrado" };
+    partes.push({ ...o, perfil });
+  }
+  return { ok: true, order: { id: order.id, client_name: order.client_name, client_doc: order.client_doc }, partes, ausentes };
+}
+
+/** Linha de resumo de uma parte (papel, nome, documento, classificação, fontes), sem dados de página. */
+export function resumoDaParte(parte: ParteDoPedido, indice: number): ResumoParte {
+  const p = parte.perfil;
+  const tipo: "PF" | "PJ" = p.subject_type === "PJ" ? "PJ" : "PF";
+  return {
+    papel: indice === 0 ? (tipo === "PJ" ? "Empresa" : "Titular") : parte.papel,
+    nome: parte.nomeRotulo ?? p.subject_name ?? "—",
+    documento: p.subject_cpf_cnpj ?? "",
+    tipo,
+    tier: p.tier,
+    score: p.score_total,
+    serasa: !!p.serasa_data && !p.serasa_data.error,
+    bacen: !!p.bacen_scr_data,
+  };
+}
+
+/** Gera (ou reaproveita) o dossiê de cada parte do pedido e junta tudo num PDF único com capa. */
+export async function gerarPdfUnificado(db: SupabaseClient, orderId: string): Promise<ResultadoUnificado> {
+  const resolvido = await resolverPartesDoPedido(db, orderId);
+  if (!resolvido.ok) return resolvido;
+  const { order, ausentes } = resolvido;
+  const ordem = resolvido.partes;
+
+  // Dossiê de cada parte (reaproveita o salvo se atual; senão gera de novo, um por vez)
+  const pdfs: { bytes: Uint8Array; paginas: number; regenerado: boolean }[] = [];
+  for (const o of ordem) {
+    const perfil = o.perfil;
     let bytes: Uint8Array | null = null;
     let regenerado = false;
     if (isFresh(perfil)) bytes = await baixar(db, perfil.report_pdf_path as string);
@@ -254,17 +324,8 @@ export async function gerarPdfUnificado(db: SupabaseClient, orderId: string): Pr
   const montarPartes = (paginasCapa: number): ParteUnificada[] => {
     let inicio = paginasCapa + 1;
     return ordem.map((o, i) => {
-      const p = perfilMap.get(o.profileId) as PerfilRow;
-      const tipo: "PF" | "PJ" = p.subject_type === "PJ" ? "PJ" : "PF";
       const parte: ParteUnificada = {
-        papel: i === 0 ? (tipo === "PJ" ? "Empresa" : "Titular") : o.papel,
-        nome: o.nomeRotulo ?? p.subject_name ?? "—",
-        documento: p.subject_cpf_cnpj ?? "",
-        tipo,
-        tier: p.tier,
-        score: p.score_total,
-        serasa: !!p.serasa_data && !p.serasa_data.error,
-        bacen: !!p.bacen_scr_data,
+        ...(resumoDaParte(o, i) as ParteUnificada),
         pagina_inicial: inicio,
         paginas: pdfs[i].paginas,
         regenerado: pdfs[i].regenerado,
@@ -285,7 +346,7 @@ export async function gerarPdfUnificado(db: SupabaseClient, orderId: string): Pr
     const renderCapa = async () => {
       const page = await browser!.newPage();
       await page.setContent(
-        capaHtml({ cliente: order.client_name ?? partes[0].nome, documentoCliente: order.client_doc ?? partes[0].documento, partes, emitidoEm }),
+        capaHtml({ cliente: order.client_name ?? partes[0].nome, documentoCliente: order.client_doc ?? partes[0].documento, partes, emitidoEm, mostrarPagina: true, rotulo: "arquivo" }),
         { waitUntil: "load", timeout: 60000 }
       );
       const buf = await page.pdf({ format: "A4", printBackground: true, margin: { top: "0", right: "0", bottom: "0", left: "0" } });
