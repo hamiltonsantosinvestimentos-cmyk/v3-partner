@@ -517,7 +517,9 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      variables.party_qualifications_block = partyProseLines.join("<br/>");
+      // Uma linha em branco entre as partes (21/09/2026): com "<br/>" simples as 8
+      // qualificações saíam coladas num único bloco ("embolado" na impressão).
+      variables.party_qualifications_block = partyProseLines.join("<br/><br/>");
       variables.official_emails_protocol = Array.from(new Set([
         "joao.lemos@v3partners.com.br",
         typeof variables.head_email === "string" ? variables.head_email : null,

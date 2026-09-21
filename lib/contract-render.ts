@@ -172,6 +172,11 @@ p{margin-bottom:12px}
 .party .name{font-weight:700;color:#F5F1E8;font-size:12px}
 .party .doc{font-size:10px;color:#9BAFC5}
 .footer{text-align:center;margin-top:48px;font-size:10px;color:#9BAFC5}
+h2{break-after:avoid;page-break-after:avoid}
+p{orphans:3;widows:3}
+.parties{break-inside:avoid;page-break-inside:avoid}
+.party{break-inside:avoid;page-break-inside:avoid}
+.footer{break-inside:avoid;page-break-inside:avoid}
 @media print{@page{size:A4;margin:13mm 14mm}body{background:#09081A!important;-webkit-print-color-adjust:exact!important}.header img{height:15mm!important}}
 </style>
 </head>
