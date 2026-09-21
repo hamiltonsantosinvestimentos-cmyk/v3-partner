@@ -3,6 +3,7 @@ import { createClient as sc, type SupabaseClient } from "@supabase/supabase-js";
 import { createHmac, timingSafeEqual } from "crypto";
 import { auditHtml, auditText } from "@/lib/brand-guardian-gate";
 import { notifyDealTimeline } from "@/lib/ma-negociacao-notify";
+import { recordSignatureNote, applyEnvelopeClosed, isSafeProviderId } from "@/lib/contract-signature-timeline";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -133,11 +134,13 @@ interface ClickSignWebhookPayload {
   event?: {
     name: "sign" | "close" | "auto_close" | "cancel" | string;
     data?: Record<string, unknown>;
+    occurred_at?: string;
   };
   document?: {
     key: string;
     status: "running" | "closed" | "canceled" | string;
     filename?: string;
+    finished_at?: string | null;
   };
   // Formato v3 (envelopes) — não confirmado por assinatura real ainda, só
   // por leitura da doc (data.type "envelopes", relationships.envelope). O
@@ -228,7 +231,13 @@ export async function POST(request: NextRequest) {
       });
       return NextResponse.json({ ok: true, demo: true });
     }
-    return handleV1Event(event.name, document.key);
+    const signer = (event.data as { signer?: { email?: string; name?: string } } | undefined)?.signer;
+    return handleV1Event(event.name, document.key, {
+      signerEmail: signer?.email,
+      signerName: signer?.name,
+      occurredAt: event.occurred_at,
+      finishedAt: document.finished_at,
+    });
   }
 
   // Formato v3 (envelopes) — usado pela Carta de Intenção. Extração do
@@ -246,7 +255,14 @@ export async function POST(request: NextRequest) {
   return NextResponse.json({ ok: true, skipped: true, reason: "payload não reconhecido" });
 }
 
-async function handleV1Event(eventName: string, externalId: string) {
+interface WebhookEventExtra {
+  signerEmail?: string;
+  signerName?: string;
+  occurredAt?: string;
+  finishedAt?: string | null;
+}
+
+async function handleV1Event(eventName: string, externalId: string, extra?: WebhookEventExtra) {
 
   // ─── PRODUÇÃO — Atualiza Supabase ─────────────────────────────────────────
   try {
@@ -258,20 +274,35 @@ async function handleV1Event(eventName: string, externalId: string) {
     const [{ data: dealRows }, { data: proposalRows }, { data: contractRows }] = await Promise.all([
       db.from("ma_deals").select("id, stage").eq("clicksign_envelope_id", externalId).limit(1),
       db.from("commercial_proposals").select("id").eq("clicksign_key", externalId).limit(1),
-      db.from("operation_contracts").select("id, status_signature, template_id, deal_id, deal_room_invite_id").eq("external_envelope_id", externalId).limit(1),
+      // 21/09/2026: o document.key que o ClickSign manda no webhook é o id do DOCUMENTO
+      // (external_document_id), não o do envelope. Procurar só por external_envelope_id
+      // nunca achava o contrato: nem assinatura nem fechamento chegavam ao portal.
+      isSafeProviderId(externalId)
+        ? db.from("operation_contracts").select("id, status_signature, template_id, deal_id, deal_room_invite_id, parties").or(`external_envelope_id.eq.${externalId},external_document_id.eq.${externalId}`).limit(1)
+        : Promise.resolve({ data: [] as never[] }),
     ]);
 
     const isSigned = eventName === "close" || eventName === "auto_close";
 
     // Atualiza contrato (ex: Carta de Intenção) se encontrado
-    const contract = contractRows?.[0] as { id: string; status_signature: string; template_id: string | null; deal_id: string | null; deal_room_invite_id: string | null } | undefined;
+    const contract = contractRows?.[0] as { id: string; status_signature: string; template_id: string | null; deal_id: string | null; deal_room_invite_id: string | null; parties: Array<{ email?: string | null; name?: string | null }> | null } | undefined;
     if (contract) {
       const wasAlreadySigned = contract.status_signature === "assinado";
+
+      // Assinatura individual (21/09/2026): cada evento "sign" vira uma nota na
+      // linha do tempo do contrato, com a data real e "n de N". Idempotente.
+      if (eventName === "sign" && extra?.signerEmail) {
+        await recordSignatureNote(
+          db,
+          { id: contract.id, parties: contract.parties },
+          { name: extra.signerName ?? extra.signerEmail, email: extra.signerEmail, signedAt: extra.occurredAt ?? null },
+        );
+      }
+
       if (isSigned && !wasAlreadySigned) {
-        await db.from("operation_contracts").update({
-          status_signature: "assinado",
-          signed_at: new Date().toISOString(),
-        }).eq("id", contract.id);
+        // Envelope fechado: marca como assinado e registra o fechamento na linha do
+        // tempo (mesma função usada pela rota "Atualizar status das assinaturas").
+        await applyEnvelopeClosed(db, { id: contract.id, status_signature: contract.status_signature }, extra?.finishedAt ?? new Date().toISOString());
 
         // Etapa 3 da esteira: assinatura da Carta de Intenção ("compra firme")
         // dispara automaticamente a FPA Venda para o grupo do Rafael.
