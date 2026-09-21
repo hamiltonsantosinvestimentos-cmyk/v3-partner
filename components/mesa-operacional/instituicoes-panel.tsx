@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import {
   Building2, Plus, ChevronDown, ChevronUp, Search, Loader2, Trash2, Edit2,
   Phone, Mail, Link2, Eye, EyeOff, User, X, Briefcase, Landmark,
-  Paperclip, Upload, FileText, ShieldCheck, ExternalLink,
+  Paperclip, Upload, FileText, ShieldCheck, ExternalLink, Download,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { createClient as createBrowserSupabaseClient } from "@/lib/supabase/client";
@@ -447,13 +447,16 @@ function LinhaRow({ linha, onEdit, onDelete }: { linha: LinhaInstituicao; onEdit
 
 // ─── Anexos da instituição ──────────────────────────────────────────────────
 type TipoAnexo = "apresentacao" | "scr_autorizacao";
-interface Anexo { name: string; path: string; size: number | null; uploaded_at: string | null; url: string | null }
+interface Anexo {
+  name: string; path: string; size: number | null; uploaded_at: string | null;
+  url: string | null; download_url: string | null;
+}
 
 const ANEXO_MAX_BYTES = 25 * 1024 * 1024;
 const ANEXO_ACCEPT = ".pdf,.png,.jpg,.jpeg,.doc,.docx,.ppt,.pptx";
 const ANEXOS_CONFIG: { tipo: TipoAnexo; titulo: string; ajuda: string; Icon: typeof FileText }[] = [
-  { tipo: "apresentacao", titulo: "Apresentação da instituição", ajuda: "PDF, PowerPoint ou Word", Icon: FileText },
-  { tipo: "scr_autorizacao", titulo: "SCR / Autorização", ajuda: "Documento com dado de cliente: acesso restrito à Mesa", Icon: ShieldCheck },
+  { tipo: "apresentacao", titulo: "Apresentação da instituição", ajuda: "PDF, PowerPoint ou Word. Pode anexar vários arquivos.", Icon: FileText },
+  { tipo: "scr_autorizacao", titulo: "SCR / Autorização", ajuda: "Dado de cliente: acesso restrito à Mesa. Pode anexar vários arquivos.", Icon: ShieldCheck },
 ];
 
 function fmtBytes(n: number | null) {
@@ -462,7 +465,7 @@ function fmtBytes(n: number | null) {
 }
 
 function AnexosInstituicao({ instituicaoId, canManage }: { instituicaoId: string; canManage: boolean }) {
-  const [anexos, setAnexos] = useState<Record<TipoAnexo, Anexo | null> | null>(null);
+  const [anexos, setAnexos] = useState<Record<TipoAnexo, Anexo[]> | null>(null);
   const [busy, setBusy] = useState<TipoAnexo | null>(null);
   const [erro, setErro] = useState<string | null>(null);
 
@@ -474,45 +477,44 @@ function AnexosInstituicao({ instituicaoId, canManage }: { instituicaoId: string
       setAnexos(j.anexos);
     } catch (e) {
       setErro((e as Error).message);
-      setAnexos({ apresentacao: null, scr_autorizacao: null });
+      setAnexos({ apresentacao: [], scr_autorizacao: [] });
     }
   }, [instituicaoId]);
 
   useEffect(() => { load(); }, [load]);
 
-  async function enviar(tipo: TipoAnexo, file: File) {
-    setErro(null);
-    if (file.size > ANEXO_MAX_BYTES) { setErro("Arquivo muito grande (máximo 25 MB)."); return; }
-    setBusy(tipo);
-    try {
-      const prep = await fetch(`/api/instituicoes/${instituicaoId}/anexos`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tipo, file_name: file.name }),
-      });
-      const pj = await prep.json();
-      if (!prep.ok) throw new Error(pj.error ?? "Erro ao preparar o envio");
+  async function enviarUm(tipo: TipoAnexo, file: File) {
+    if (file.size > ANEXO_MAX_BYTES) throw new Error(`"${file.name}": arquivo muito grande (máximo 25 MB).`);
+    const prep = await fetch(`/api/instituicoes/${instituicaoId}/anexos`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tipo, file_name: file.name }),
+    });
+    const pj = await prep.json();
+    if (!prep.ok) throw new Error(`"${file.name}": ${pj.error ?? "erro ao preparar o envio"}`);
 
-      const { error } = await createBrowserSupabaseClient().storage.from(pj.bucket).uploadToSignedUrl(pj.storagePath, pj.token, file);
-      if (error) throw new Error(`Falha ao enviar o arquivo: ${error.message}`);
-
-      await fetch(`/api/instituicoes/${instituicaoId}/anexos`, {
-        method: "PUT", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tipo, manter: pj.storagePath }),
-      });
-      await load();
-    } catch (e) {
-      setErro((e as Error).message);
-    } finally {
-      setBusy(null);
-    }
+    const { error } = await createBrowserSupabaseClient().storage.from(pj.bucket).uploadToSignedUrl(pj.storagePath, pj.token, file);
+    if (error) throw new Error(`"${file.name}": falha ao enviar (${error.message})`);
   }
 
-  async function remover(tipo: TipoAnexo, nome: string) {
-    if (!confirm(`Remover o anexo "${nome}"?`)) return;
+  async function enviar(tipo: TipoAnexo, files: File[]) {
+    setErro(null);
+    setBusy(tipo);
+    const falhas: string[] = [];
+    for (const file of files) {
+      try { await enviarUm(tipo, file); }
+      catch (e) { falhas.push((e as Error).message); }
+    }
+    if (falhas.length) setErro(falhas.join(" "));
+    await load();
+    setBusy(null);
+  }
+
+  async function remover(tipo: TipoAnexo, a: Anexo) {
+    if (!confirm(`Remover o anexo "${a.name}"?`)) return;
     setErro(null);
     setBusy(tipo);
     try {
-      const r = await fetch(`/api/instituicoes/${instituicaoId}/anexos?tipo=${tipo}`, { method: "DELETE" });
+      const r = await fetch(`/api/instituicoes/${instituicaoId}/anexos?tipo=${tipo}&path=${encodeURIComponent(a.path)}`, { method: "DELETE" });
       if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? "Erro ao remover");
       await load();
     } catch (e) {
@@ -529,7 +531,7 @@ function AnexosInstituicao({ instituicaoId, canManage }: { instituicaoId: string
       </p>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {ANEXOS_CONFIG.map(({ tipo, titulo, ajuda, Icon }) => {
-          const a = anexos?.[tipo] ?? null;
+          const lista = anexos?.[tipo] ?? [];
           const ocupado = busy === tipo;
           return (
             <div key={tipo} className="bg-[#111F35] border border-[#243A66] rounded-xl p-3.5">
@@ -537,29 +539,38 @@ function AnexosInstituicao({ instituicaoId, canManage }: { instituicaoId: string
               <p className="text-[10px] text-muted-foreground/70 mb-2">{ajuda}</p>
               {anexos === null ? (
                 <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" />
-              ) : a ? (
-                <div className="flex items-center gap-2">
-                  <Icon className="w-4 h-4 text-[#C9A84C] flex-shrink-0" />
-                  <div className="min-w-0 flex-1">
-                    {a.url ? (
-                      <a href={a.url} target="_blank" rel="noopener noreferrer" className="text-xs text-[#7DD3FC] hover:underline flex items-center gap-1 break-all">
-                        {a.name} <ExternalLink className="w-3 h-3 flex-shrink-0" />
-                      </a>
-                    ) : (
-                      <span className="text-xs text-foreground break-all">{a.name}</span>
-                    )}
-                    <p className="text-[10px] text-muted-foreground">
-                      {fmtBytes(a.size)}{a.uploaded_at ? ` · ${new Date(a.uploaded_at).toLocaleDateString("pt-BR")}` : ""}
-                    </p>
-                  </div>
-                  {canManage && (
-                    <button onClick={() => remover(tipo, a.name)} disabled={ocupado} title="Remover anexo" className="w-7 h-7 rounded-lg border border-red-500/20 text-red-400 hover:bg-red-500/10 flex items-center justify-center flex-shrink-0 disabled:opacity-50">
-                      <Trash2 className="w-3 h-3" />
-                    </button>
-                  )}
-                </div>
-              ) : (
+              ) : lista.length === 0 ? (
                 <p className="text-xs text-muted-foreground italic mb-1">Nenhum arquivo anexado</p>
+              ) : (
+                <ul className="space-y-2">
+                  {lista.map((a) => (
+                    <li key={a.path} className="flex items-center gap-2">
+                      <Icon className="w-4 h-4 text-[#C9A84C] flex-shrink-0" />
+                      <div className="min-w-0 flex-1">
+                        {a.url ? (
+                          <a href={a.url} target="_blank" rel="noopener noreferrer" className="text-xs text-[#7DD3FC] hover:underline flex items-center gap-1 break-all">
+                            {a.name} <ExternalLink className="w-3 h-3 flex-shrink-0" />
+                          </a>
+                        ) : (
+                          <span className="text-xs text-foreground break-all">{a.name}</span>
+                        )}
+                        <p className="text-[10px] text-muted-foreground">
+                          {fmtBytes(a.size)}{a.uploaded_at ? ` · ${new Date(a.uploaded_at).toLocaleDateString("pt-BR")}` : ""}
+                        </p>
+                      </div>
+                      {a.download_url && (
+                        <a href={a.download_url} download={a.name} title="Baixar arquivo" className="w-7 h-7 rounded-lg border border-[#243A66] text-muted-foreground hover:text-[#C9A84C] hover:border-[#C9A84C]/40 flex items-center justify-center flex-shrink-0 transition-colors">
+                          <Download className="w-3 h-3" />
+                        </a>
+                      )}
+                      {canManage && (
+                        <button onClick={() => remover(tipo, a)} disabled={ocupado} title="Remover anexo" className="w-7 h-7 rounded-lg border border-red-500/20 text-red-400 hover:bg-red-500/10 flex items-center justify-center flex-shrink-0 disabled:opacity-50">
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      )}
+                    </li>
+                  ))}
+                </ul>
               )}
               {canManage && anexos !== null && (
                 <label className={cn(
@@ -567,16 +578,17 @@ function AnexosInstituicao({ instituicaoId, canManage }: { instituicaoId: string
                   ocupado ? "opacity-60 cursor-wait" : "cursor-pointer hover:bg-[#C9A84C]/20"
                 )}>
                   {ocupado ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
-                  {ocupado ? "Enviando…" : a ? "Substituir arquivo" : "Anexar arquivo"}
+                  {ocupado ? "Enviando…" : lista.length ? "Anexar mais arquivos" : "Anexar arquivos"}
                   <input
                     type="file"
+                    multiple
                     accept={ANEXO_ACCEPT}
                     className="hidden"
                     disabled={ocupado}
                     onChange={(e) => {
-                      const f = e.target.files?.[0];
+                      const files = Array.from(e.target.files ?? []);
                       e.target.value = "";
-                      if (f) enviar(tipo, f);
+                      if (files.length) enviar(tipo, files);
                     }}
                   />
                 </label>
