@@ -1307,13 +1307,14 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
   const handleGenerateNcnda = async (listingId: string) => {
     setGeneratingNda(true);
     try {
-      const tplRes = await fetch("/api/contracts/templates?vertical=capital_markets");
+      // Minuta resolvida no servidor (lib/cm-ncnda.ts), a mesma do NCNDA do comprador. O
+      // .find() por serie que existia aqui escolhia entre 2 minutas aprovadas da Bolsa por
+      // acidente de ordem alfabetica (20/09/2026).
+      const tplRes = await fetch("/api/cm/ncnda-template");
       const tplJson = await tplRes.json();
-      const template = (tplJson.templates ?? []).find(
-        (t: any) => t.contract_series === "V3C-NDA" && t.approval_status === "aprovado"
-      );
-      if (!template) {
-        alert("Nenhuma minuta de NCNDA aprovada para Bolsa de Ativos. Verifique a Revisão Jurídica em Central de Contratos.");
+      const template = tplJson.template;
+      if (!tplRes.ok || !template) {
+        alert(tplJson.error ?? "Nenhuma minuta de NCNDA aprovada para Bolsa de Ativos. Verifique a Revisão Jurídica em Central de Contratos.");
         return;
       }
       const res = await fetch("/api/contracts/generate", {

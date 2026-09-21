@@ -47,7 +47,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const { data: demand } = await db
     .from("investor_demands")
-    .select("id, status, nome_contato, apelido, origin_partner_id, created_by, kyc_approved_at, nda_accepted_at")
+    .select("id, status, nome_contato, apelido, origin_partner_id, created_by, kyc_approved_at")
     .eq("id", id)
     .maybeSingle();
   if (!demand) return NextResponse.json({ error: "Demanda não encontrada" }, { status: 404 });
@@ -78,8 +78,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }, { status: 422 });
   }
 
-  if (newStatus === "nda_assinado" && !demand.nda_accepted_at) {
-    return NextResponse.json({ error: "NDA ainda não aceito por este comprador. Não é possível avançar." }, { status: 422 });
+  // Etapa 3 (20/09/2026): o checkbox do intake e so o aceite leve de LGPD e nao abre mais esta
+  // porta. Exige o NCNDA assinado de verdade (lote de qualificacao -> contrato -> assinatura).
+  // O banco reaplica o mesmo criterio (demand_has_signed_ncnda) em transition_cm_demand_status.
+  if (newStatus === "nda_assinado") {
+    const { data: signed } = await db.rpc("demand_has_signed_ncnda", { p_demand_id: id });
+    if (!signed) {
+      return NextResponse.json({
+        error: "NCNDA do comprador ainda não foi assinado. Qualifique as partes, gere o NCNDA e aguarde a assinatura antes de avançar.",
+      }, { status: 422 });
+    }
   }
   if (DEMAND_KYC_REQUIRED_FOR.includes(newStatus) && !demand.kyc_approved_at) {
     return NextResponse.json({
@@ -109,7 +117,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       await db.from("investor_demands").update({ head_approved_by: null, head_approved_at: null }).eq("id", id);
     }
     return NextResponse.json({
-      error: "Transição inválida. Verifique os gates obrigatórios (NDA aceito, aprovação do Head, motivo).",
+      error: "Transição inválida. Verifique os gates obrigatórios (NCNDA assinado, aprovação do Head, motivo).",
     }, { status: 422 });
   }
 
