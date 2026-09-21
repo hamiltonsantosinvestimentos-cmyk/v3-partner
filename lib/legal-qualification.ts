@@ -90,6 +90,19 @@ const REPRESENTATIVE_ROLE_PHRASE: Record<RepresentativeType, string> = {
 
 /** A1: Pessoa Natural/Física padrão. */
 /**
+ * Limpa texto livre digitado no formulário de qualificação antes de entrar
+ * na prosa jurídica: tira espaços das pontas, vírgula/ponto e vírgula soltos
+ * no fim e espaços duplos. Achado real 21/09/2026 (NCNDA V3C-NDA-2026-0036):
+ * um nome gravado com vírgula no fim ("... SANTOS,") saía como ",," na
+ * qualificação e como nome inválido no signatário. Não mexe em maiúsculas,
+ * acentos nem em ponto final ("Jr." continua "Jr."). Vazio devolve null.
+ */
+export function cleanPartyText(value: string | null | undefined): string | null {
+  const t = (value ?? "").replace(/\s+/g, " ").replace(/[\s,;]+$/g, "").trim();
+  return t || null;
+}
+
+/**
  * Formata CPF (11 dígitos) ou CNPJ (14 dígitos) no padrão brasileiro,
  * qualquer que seja a forma como foi digitado (só dígitos, com ponto, com
  * espaço). Achado real 21/09/2026 (NCNDA V3C-NDA-2026-0036): 5 dos 8 CPFs do
@@ -109,28 +122,28 @@ export function formatDocumentNumber(value: string | null | undefined): string |
 }
 
 function pfBase(p: { full_name?: string | null; nationality?: string | null; profession?: string | null; marital_status?: string | null; cpf_cnpj?: string | null; rg?: string | null; email?: string | null; phone?: string | null; endereco_completo?: string | null }): string {
-  return `${p.full_name ?? NAO_INFORMADO}, ${p.nationality ?? NAO_INFORMADO}, ${p.profession ?? NAO_INFORMADO}, ${p.marital_status ?? NAO_INFORMADO}, CPF ${formatDocumentNumber(p.cpf_cnpj) ?? NAO_INFORMADO}${frag(", Identidade ", p.rg)}${frag(", e-mail ", p.email)}${frag(", ", p.phone)}, residente e domiciliado(a) na ${p.endereco_completo ?? NAO_INFORMADO}`;
+  return `${cleanPartyText(p.full_name) ?? NAO_INFORMADO}, ${p.nationality ?? NAO_INFORMADO}, ${p.profession ?? NAO_INFORMADO}, ${p.marital_status ?? NAO_INFORMADO}, CPF ${formatDocumentNumber(p.cpf_cnpj) ?? NAO_INFORMADO}${frag(", Identidade ", p.rg)}${frag(", e-mail ", p.email)}${frag(", ", p.phone)}, residente e domiciliado(a) na ${p.endereco_completo ?? NAO_INFORMADO}`;
 }
 
 /** B2: Pessoa Relativamente Incapaz -- mesma base de A1, com a cláusula de incapacidade logo após o nome. */
 function incapazRelativoBase(p: LegalQualificationParty): string {
-  return `${p.full_name ?? NAO_INFORMADO}, relativamente incapaz, ${p.nationality ?? NAO_INFORMADO}, ${p.profession ?? NAO_INFORMADO}, ${p.marital_status ?? NAO_INFORMADO}, CPF ${formatDocumentNumber(p.cpf_cnpj) ?? NAO_INFORMADO}${frag(", Identidade ", p.rg)}${frag(", e-mail ", p.email)}${frag(", ", p.phone)}, residente e domiciliado(a) na ${p.endereco_completo ?? NAO_INFORMADO}`;
+  return `${cleanPartyText(p.full_name) ?? NAO_INFORMADO}, relativamente incapaz, ${p.nationality ?? NAO_INFORMADO}, ${p.profession ?? NAO_INFORMADO}, ${p.marital_status ?? NAO_INFORMADO}, CPF ${formatDocumentNumber(p.cpf_cnpj) ?? NAO_INFORMADO}${frag(", Identidade ", p.rg)}${frag(", e-mail ", p.email)}${frag(", ", p.phone)}, residente e domiciliado(a) na ${p.endereco_completo ?? NAO_INFORMADO}`;
 }
 
 /** B3: Pessoa Totalmente Incapaz (menor impúbere) -- só nome, nacionalidade, CPF e RG se houver. Sem profissão/estado civil/endereço, por desenho (menor). */
 function incapazAbsolutoBase(p: LegalQualificationParty): string {
-  return `${p.full_name ?? NAO_INFORMADO}, menor impúbere, totalmente incapaz, ${p.nationality ?? NAO_INFORMADO}, CPF ${formatDocumentNumber(p.cpf_cnpj) ?? NAO_INFORMADO}${frag(", Identidade ", p.rg)}`;
+  return `${cleanPartyText(p.full_name) ?? NAO_INFORMADO}, menor impúbere, totalmente incapaz, ${p.nationality ?? NAO_INFORMADO}, CPF ${formatDocumentNumber(p.cpf_cnpj) ?? NAO_INFORMADO}${frag(", Identidade ", p.rg)}`;
 }
 
 /** C1: Espólio -- full_name/cpf_cnpj aqui são os dados do FALECIDO. */
 function espolioBase(p: LegalQualificationParty): string {
-  return `ESPÓLIO DE ${p.full_name ?? NAO_INFORMADO}, CPF ${formatDocumentNumber(p.cpf_cnpj) ?? NAO_INFORMADO}`;
+  return `ESPÓLIO DE ${cleanPartyText(p.full_name) ?? NAO_INFORMADO}, CPF ${formatDocumentNumber(p.cpf_cnpj) ?? NAO_INFORMADO}`;
 }
 
 /** D1: Pessoa Jurídica. */
 function pjBase(p: { company_name?: string | null; company_legal_nature?: CompanyLegalNature | null; company_cnpj?: string | null; email?: string | null; phone?: string | null; company_address?: string | null }): string {
   const legalNature = p.company_legal_nature ?? "privado";
-  return `${p.company_name ?? NAO_INFORMADO}, pessoa jurídica de direito ${legalNature}, CNPJ ${formatDocumentNumber(p.company_cnpj) ?? NAO_INFORMADO}${frag(", e-mail ", p.email)}${frag(", ", p.phone)}, com sede na ${p.company_address ?? NAO_INFORMADO}`;
+  return `${cleanPartyText(p.company_name) ?? NAO_INFORMADO}, pessoa jurídica de direito ${legalNature}, CNPJ ${formatDocumentNumber(p.company_cnpj) ?? NAO_INFORMADO}${frag(", e-mail ", p.email)}${frag(", ", p.phone)}, com sede na ${p.company_address ?? NAO_INFORMADO}`;
 }
 
 /**

@@ -4,7 +4,7 @@ import { createClient as sc } from "@supabase/supabase-js";
 import { resolveContractVariables, resolveVerticalBlocks, wrapContractInV3Html } from "@/lib/contract-render";
 import type { V3Series } from "@/lib/v3-codes";
 import { resolveDeskHead, VERTICAL_TO_DESK_ORIGIN } from "@/lib/ncnda-desk-head";
-import { formatDocumentNumber } from "@/lib/legal-qualification";
+import { formatDocumentNumber, cleanPartyText } from "@/lib/legal-qualification";
 import {
   renderPartyQualificationProse,
   sortQualificationParties,
@@ -428,14 +428,14 @@ export async function POST(req: NextRequest) {
       const displayLabels = buildPartyDisplayLabels(qualifications.map((q) => q.role_in_document));
       qualificationParties = qualifications.map((q) => ({
         role: q.role_in_document,
-        name: q.full_name,
+        name: cleanPartyText(q.full_name) ?? q.full_name,
         doc: formatDocumentNumber(q.cpf_cnpj),
         email: q.email,
         ...(displayLabels[q.role_in_document] ? { display_label: displayLabels[q.role_in_document] } : {}),
       }));
 
       for (const q of qualifications) {
-        variables[`${q.role_in_document}_nome`] = q.full_name;
+        variables[`${q.role_in_document}_nome`] = cleanPartyText(q.full_name) ?? q.full_name;
         variables[`${q.role_in_document}_cpf_cnpj`] = formatDocumentNumber(q.cpf_cnpj) ?? "[CPF/CNPJ]";
         variables[`${q.role_in_document}_rg`] = q.rg ?? "[RG]";
         variables[`${q.role_in_document}_endereco`] = q.endereco_completo ?? "[Endereço]";
