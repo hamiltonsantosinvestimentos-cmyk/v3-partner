@@ -5,6 +5,7 @@ import { X, Loader2, CheckCircle2, Circle, ExternalLink, Plus, Copy, Check } fro
 import { Button } from "@/components/ui/button";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import type { PartnerOrder } from "./pedidos-partners-client";
+import { ReanalisarPendentes } from "./reanalisar-pendentes";
 
 interface Props {
   order: PartnerOrder;
@@ -117,6 +118,10 @@ function DocRow({ orderId, doc, onUpdated }: { orderId: string; doc: OrderDocume
         <Button size="sm" variant={hasReport ? "outline" : "default"} className="w-full" disabled={busy !== null} onClick={() => call("report", `/api/credit-engine/orders/${orderId}/documents/${doc.id}/generate-report`)}>
           {busy === "report" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : hasReport ? "Gerar relatório novamente" : "Gerar relatório"}
         </Button>
+      )}
+
+      {hasAnalysis && doc.credit_desk_proposal_id && (
+        <ReanalisarPendentes proposalId={doc.credit_desk_proposal_id} onUpdated={onUpdated} jaGerouRelatorio={hasReport} />
       )}
 
       {hasReport && (
@@ -414,6 +419,11 @@ export function PedidoDetailModal({ order, onClose, onUpdated }: Props) {
                   ) : undefined
                 }
               />
+              {hasAnalysis && order.credit_desk_proposal_id && (
+                <div className="py-3 border-b border-border/30">
+                  <ReanalisarPendentes proposalId={order.credit_desk_proposal_id} onUpdated={onUpdated} jaGerouRelatorio={hasReport} />
+                </div>
+              )}
               <StepRow
                 done={hasReport}
                 label="Relatório gerado"
