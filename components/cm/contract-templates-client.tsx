@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import { Plus, Save, Trash2, Loader2, FileText, Eye, ChevronDown, Upload, Send, CheckCircle2, XCircle, Scale, Users, X, FilePlus2, UserPlus, Copy, Share2, RotateCcw, Pencil, Maximize2 } from "lucide-react";
 import { cn, isValidEmail } from "@/lib/utils";
-import { ROLE_LABELS } from "@/lib/qualification-roles";
+import { ROLE_LABELS, sortQualificationParties } from "@/lib/qualification-roles";
 import { VERTICAL_LABELS, CONCRETE_VERTICALS } from "@/lib/contract-verticals";
 import { extractPlainVariables } from "@/lib/contract-render";
 import { PartyQualificationCardModal } from "./party-qualification-card";
@@ -836,7 +836,10 @@ export function ContractTemplatesClient() {
     const statusLabel = (APPROVAL_STATUS_MAP[selected.approval_status] ?? APPROVAL_STATUS_MAP.rascunho).label;
 
     const relevantBatches = qualBatches.filter((b) => !b.consumido_por_contract_id);
-    const allParties = relevantBatches.flatMap((b) => b.cm_party_qualifications);
+    // Ordem canônica (21/09/2026, BRIEF NCNDA): o quadro de leitura mostra o
+    // rótulo de ORIGEM do papel (visão de auditoria, mapeia direto ao
+    // formulário); só o texto do instrumento renumera os intermediários.
+    const allParties = sortQualificationParties(relevantBatches.flatMap((b) => b.cm_party_qualifications));
 
     const qualVars: Record<string, string> = {};
     for (const p of allParties) {
