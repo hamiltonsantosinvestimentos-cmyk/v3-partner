@@ -23,7 +23,7 @@ function serviceClient() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 }
 
-async function launchBrowser() {
+export async function launchBrowser() {
   if (process.env.NODE_ENV === "production") {
     const chromium = (await import("@sparticuz/chromium-min")).default;
     const puppeteer = (await import("puppeteer-core")).default;

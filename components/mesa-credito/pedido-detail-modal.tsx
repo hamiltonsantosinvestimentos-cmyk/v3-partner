@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import type { PartnerOrder } from "./pedidos-partners-client";
 import { ReanalisarPendentes } from "./reanalisar-pendentes";
+import { PdfUnificado } from "./pdf-unificado";
 
 interface Props {
   order: PartnerOrder;
@@ -424,9 +425,14 @@ export function PedidoDetailModal({ order, onClose, onUpdated }: Props) {
                   <ReanalisarPendentes proposalId={order.credit_desk_proposal_id} onUpdated={onUpdated} jaGerouRelatorio={hasReport} />
                 </div>
               )}
+              {hasAnalysis && (
+                <div className="py-3 border-b border-border/30">
+                  <PdfUnificado orderId={order.id} temSocios={((order.cnpj_count ?? 0) + (order.cpf_count ?? 0)) > 1} />
+                </div>
+              )}
               <StepRow
                 done={hasReport}
-                label="Relatório gerado"
+                label={((order.cnpj_count ?? 0) + (order.cpf_count ?? 0)) > 1 ? "Relatório gerado (empresa + sócios)" : "Relatório gerado"}
                 action={
                   hasAnalysis ? (
                     <Button size="sm" variant={hasReport ? "outline" : "default"} disabled={busy !== null} onClick={handleGenerateReport}>
