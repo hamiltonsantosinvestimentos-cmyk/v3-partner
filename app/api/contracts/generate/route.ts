@@ -4,7 +4,14 @@ import { createClient as sc } from "@supabase/supabase-js";
 import { resolveContractVariables, resolveVerticalBlocks, wrapContractInV3Html } from "@/lib/contract-render";
 import type { V3Series } from "@/lib/v3-codes";
 import { resolveDeskHead, VERTICAL_TO_DESK_ORIGIN } from "@/lib/ncnda-desk-head";
-import { renderPartyQualificationProse } from "@/lib/qualification-roles";
+import { formatDocumentNumber, cleanPartyText } from "@/lib/legal-qualification";
+import {
+  renderPartyQualificationProse,
+  sortQualificationParties,
+  sortPartiesByRole,
+  buildPartyDisplayLabels,
+  dedupePartiesByEmail,
+} from "@/lib/qualification-roles";
 import { CONCRETE_VERTICALS } from "@/lib/contract-verticals";
 
 function svc() {
@@ -338,7 +345,7 @@ export async function POST(req: NextRequest) {
   // {{<role_in_document>_endereco}}, {{<role_in_document>_email}} — ex:
   // {{mandatario_nome}}, {{intermediario_finder_venda_cpf_cnpj}}. Dr. Luis
   // deve escrever os 4 templates reais usando essas chaves.
-  let qualificationParties: { role: string; name: string; doc: string | null; email: string }[] | null = null;
+  let qualificationParties: { role: string; name: string; doc: string | null; email: string; display_label?: string }[] | null = null;
 
   // Qualificação Antecipada vinculada à Minuta (02/09/2026, P1): se a Mesa
   // não passou qualification_batch_id explicitamente, procurar um lote
@@ -403,23 +410,33 @@ export async function POST(req: NextRequest) {
     // Exclusão individual (11/09/2026): envolvido soft-deletado nunca vira
     // signatário nem entra na prosa jurídica de um contrato gerado depois
     // da exclusão.
-    const { data: qualifications } = await svc()
+    const { data: qualificationsRaw } = await svc()
       .from("cm_party_qualifications")
-      .select("full_name, email, phone, role_in_document, cpf_cnpj, rg, endereco_completo, person_type, party_nature, company_name, company_cnpj, company_address, company_legal_nature, representation, nationality, marital_status, profession, birth_date")
+      .select("full_name, email, phone, role_in_document, cpf_cnpj, rg, endereco_completo, person_type, party_nature, company_name, company_cnpj, company_address, company_legal_nature, representation, nationality, marital_status, profession, birth_date, created_at")
       .eq("batch_id", effectiveQualificationBatchId)
       .is("deleted_at", null);
 
+    // Ordem canônica e determinística (21/09/2026, BRIEF NCNDA, D2). Esta
+    // leitura não tinha ORDER BY: prosa e bloco de assinaturas saíam na ordem
+    // física do Postgres. Estruturador, Head, Partner, Mandatário, depois
+    // Intermediários por número (lib/qualification-roles.ts).
+    const qualifications = qualificationsRaw ? sortQualificationParties(qualificationsRaw) : qualificationsRaw;
+
     if (qualifications && qualifications.length > 0) {
+      // D2b: intermediários renumerados de 1 a N só na EXIBIÇÃO. role e as
+      // variáveis {{<role>_nome}} continuam com a chave original de origem.
+      const displayLabels = buildPartyDisplayLabels(qualifications.map((q) => q.role_in_document));
       qualificationParties = qualifications.map((q) => ({
         role: q.role_in_document,
-        name: q.full_name,
-        doc: q.cpf_cnpj,
+        name: cleanPartyText(q.full_name) ?? q.full_name,
+        doc: formatDocumentNumber(q.cpf_cnpj),
         email: q.email,
+        ...(displayLabels[q.role_in_document] ? { display_label: displayLabels[q.role_in_document] } : {}),
       }));
 
       for (const q of qualifications) {
-        variables[`${q.role_in_document}_nome`] = q.full_name;
-        variables[`${q.role_in_document}_cpf_cnpj`] = q.cpf_cnpj ?? "[CPF/CNPJ]";
+        variables[`${q.role_in_document}_nome`] = cleanPartyText(q.full_name) ?? q.full_name;
+        variables[`${q.role_in_document}_cpf_cnpj`] = formatDocumentNumber(q.cpf_cnpj) ?? "[CPF/CNPJ]";
         variables[`${q.role_in_document}_rg`] = q.rg ?? "[RG]";
         variables[`${q.role_in_document}_endereco`] = q.endereco_completo ?? "[Endereço]";
         variables[`${q.role_in_document}_email`] = q.email;
@@ -450,16 +467,25 @@ export async function POST(req: NextRequest) {
         qualificationParties.push({
           role: "head_mesa",
           name: variables.head_full_name,
-          doc: typeof variables.head_cpf === "string" ? variables.head_cpf : null,
+          doc: typeof variables.head_cpf === "string" ? formatDocumentNumber(variables.head_cpf) : null,
           email: variables.head_email,
         });
       }
+
+      // Achado real 21/09/2026 (V3C-NDA-2026-0036): quando o Head da Mesa
+      // também está qualificado NO LOTE (papel head_mesa), o bloco acima o
+      // empurrava uma segunda vez a partir do perfil, e o contrato saía com
+      // dois signatários head_mesa de mesmo e-mail (bloco de assinatura
+      // repetido e envelope com signatário duplicado). Desduplica por e-mail
+      // (a entrada do lote, mais completa, vem primeiro e vence) e fixa a
+      // ordem canônica também no bloco de assinaturas.
+      qualificationParties = sortPartiesByRole(dedupePartiesByEmail(qualificationParties), (p) => p.role);
 
       // NCNDA Mestre (14/08/2026): mesmo dado, formato de prosa corrida em
       // vez de variável por chave de role, reaproveitado de
       // app/api/cm/qualifications/legal-text/route.ts (identBlock), mesma
       // regra PF/PJ. Só populado quando o template usa esse placeholder.
-      const partyProseLines = qualifications.map(renderPartyQualificationProse);
+      const partyProseLines = qualifications.map((q) => renderPartyQualificationProse(q, displayLabels[q.role_in_document]));
 
       // P0 real achado 04/09/2026: o Head da mesa entrava em
       // qualificationParties (bloco de assinatura, linha 336 acima), mas
@@ -485,13 +511,15 @@ export async function POST(req: NextRequest) {
         const headQualificacao = typeof variables.head_qualificacao === "string" && variables.head_qualificacao.trim()
           ? variables.head_qualificacao
           : "[qualificação não preenchida em /perfil]";
-        const headCpfText = typeof variables.head_cpf === "string" ? variables.head_cpf : "[CPF não preenchido em /perfil]";
+        const headCpfText = typeof variables.head_cpf === "string" ? (formatDocumentNumber(variables.head_cpf) ?? variables.head_cpf) : "[CPF não preenchido em /perfil]";
         partyProseLines.push(
           `${(typeof variables.head_role_label === "string" ? variables.head_role_label : "HEAD DA MESA").toUpperCase()}: ${variables.head_full_name}, ${headQualificacao}, CPF ${headCpfText}, e-mail ${variables.head_email}`
         );
       }
 
-      variables.party_qualifications_block = partyProseLines.join("<br/>");
+      // Uma linha em branco entre as partes (21/09/2026): com "<br/>" simples as 8
+      // qualificações saíam coladas num único bloco ("embolado" na impressão).
+      variables.party_qualifications_block = partyProseLines.join("<br/><br/>");
       variables.official_emails_protocol = Array.from(new Set([
         "joao.lemos@v3partners.com.br",
         typeof variables.head_email === "string" ? variables.head_email : null,
@@ -529,7 +557,7 @@ export async function POST(req: NextRequest) {
   // aparece em contracts-panel-client.tsx (exige ao menos 1 parte não-V3
   // com e-mail).
   const headParty = typeof variables.head_email === "string" && typeof variables.head_full_name === "string"
-    ? [{ role: "head_mesa", name: variables.head_full_name, doc: typeof variables.head_cpf === "string" ? variables.head_cpf : null, email: variables.head_email }]
+    ? [{ role: "head_mesa", name: variables.head_full_name, doc: typeof variables.head_cpf === "string" ? formatDocumentNumber(variables.head_cpf) : null, email: variables.head_email }]
     : [];
 
   // E-mail é obrigatório pra cada parte poder assinar de verdade (gate de

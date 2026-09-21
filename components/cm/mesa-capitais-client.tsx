@@ -23,6 +23,7 @@ import { CmSearchFilterBar, EMPTY_CM_FILTERS, CM_STATUS_LABELS, CM_VALOR_FACE_BU
 import { ForjaJuridicoPanel } from "./forja-juridico-panel";
 import { CM_DOCUMENT_CHECKLISTS, type CmAssetType } from "@/lib/cm-checklists";
 import { ASSET_DECLINE_REASONS, BID_DECLINE_REASONS } from "@/lib/cm-decline-reasons";
+import { formatDocumentNumber } from "@/lib/legal-qualification";
 import { createClient as createBrowserSupabaseClient } from "@/lib/supabase/client";
 
 interface Listing {
@@ -4036,7 +4037,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
                               <div className="flex items-center justify-between gap-2">
                                 <div className="min-w-0">
                                   <div className="text-[10px] text-[#F5F1E8] font-bold truncate">{p.full_name}</div>
-                                  <div className="text-[8px] text-[#9BAFC5]">{p.role_in_document} {p.cpf_cnpj ? `· ${p.cpf_cnpj}` : "(sem CPF/CNPJ)"}</div>
+                                  <div className="text-[8px] text-[#9BAFC5]">{p.role_in_document} {p.cpf_cnpj ? `· ${formatDocumentNumber(p.cpf_cnpj) ?? p.cpf_cnpj}` : "(sem CPF/CNPJ)"}</div>
                                 </div>
                                 <span className={`text-[8px] font-bold uppercase px-1.5 py-0.5 rounded flex-shrink-0 ${p.checked ? "bg-emerald-500/15 text-emerald-400" : "bg-amber-500/15 text-amber-400"}`}>
                                   {p.checked ? "Checado" : "Pendente"}

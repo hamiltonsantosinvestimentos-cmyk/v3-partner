@@ -78,7 +78,124 @@ export interface QualificationPartyForProse {
 // única compartilhada com app/api/cm/qualifications/legal-text/route.ts.
 // Esta função só prefixa o papel no documento (mandatário, testemunha etc),
 // mesmo formato usado desde sempre pelo NCNDA Mestre (lib/ncnda-desk-head.ts).
-export function renderPartyQualificationProse(party: QualificationPartyForProse): string {
-  const roleLabel = (ROLE_LABELS[party.role_in_document] ?? party.role_in_document).toUpperCase();
+//
+// displayLabel (21/09/2026, D2b): rótulo de exibição já renumerado por
+// buildPartyDisplayLabels(). Sem ele, cai no rótulo de origem do papel.
+export function renderPartyQualificationProse(party: QualificationPartyForProse, displayLabel?: string): string {
+  const roleLabel = (displayLabel ?? ROLE_LABELS[party.role_in_document] ?? party.role_in_document).toUpperCase();
   return `${roleLabel}: ${buildLegalQualification(party)}`;
+}
+
+// ---------------------------------------------------------------------------
+// Ordem canônica das partes do instrumento (21/09/2026, BRIEF NCNDA, D2).
+//
+// Achado real no NCNDA V3C-NDA-2026-0036: a leitura de cm_party_qualifications
+// não tinha ORDER BY, então prosa e bloco de assinaturas saíam na ordem física
+// do Postgres (nem a do preenchimento, nem a numérica). Ordem oficial aprovada
+// por João: 1 Estruturador, 2 Head da Mesa, 3 Partner, 4 Mandatário,
+// 5 Intermediários por número crescente. Papéis legados (finder, parte
+// principal, testemunha) ganham posição fixa em vez de ordem arbitrária.
+// ---------------------------------------------------------------------------
+const ROLE_GROUP_ESTRUTURADOR = 0;
+const ROLE_GROUP_HEAD = 1;
+const ROLE_GROUP_PARTNER = 2;
+const ROLE_GROUP_MANDATARIO = 3;
+const ROLE_GROUP_INTERMEDIARIO = 4;
+const ROLE_GROUP_INTERMEDIARIO_LEGADO = 5;
+const ROLE_GROUP_OUTROS = 8;
+const ROLE_GROUP_TESTEMUNHA = 9;
+
+const LEGACY_INTERMEDIARY_ROLES = new Set([
+  "intermediario_finder_venda",
+  "intermediario_finder_compra",
+  "finder_originacao_venda",
+  "finder_originacao_compra",
+  "intermediario_venda",
+  "intermediario_compra",
+]);
+
+function roleNumericSuffix(role: string): number {
+  const m = role.match(/_(\d+)$/);
+  return m ? parseInt(m[1], 10) : 0;
+}
+
+/** Par [grupo, número] que define a posição canônica de um papel. */
+export function partyRoleSortKey(role: string): [number, number] {
+  if (role === "estruturador" || role === "v3_partners") return [ROLE_GROUP_ESTRUTURADOR, 0];
+  if (role === "head_mesa") return [ROLE_GROUP_HEAD, 0];
+  if (role === "partner" || role === "parte_principal") return [ROLE_GROUP_PARTNER, 0];
+  if (role === "mandatario" || /^mandatario_\d+$/.test(role)) return [ROLE_GROUP_MANDATARIO, roleNumericSuffix(role)];
+  if (/^intermediario_\d+$/.test(role)) return [ROLE_GROUP_INTERMEDIARIO, roleNumericSuffix(role)];
+  if (LEGACY_INTERMEDIARY_ROLES.has(role)) return [ROLE_GROUP_INTERMEDIARIO_LEGADO, 0];
+  if (role === "testemunha") return [ROLE_GROUP_TESTEMUNHA, 0];
+  return [ROLE_GROUP_OUTROS, 0];
+}
+
+/**
+ * Ordenação determinística: grupo, número do papel e, por fim, o desempate
+ * informado (data de criação e nome, no caso das qualificações). Nunca muta o
+ * array recebido.
+ */
+export function sortPartiesByRole<T>(
+  parties: readonly T[],
+  roleOf: (p: T) => string,
+  tieBreakOf?: (p: T) => string,
+): T[] {
+  return [...parties].sort((a, b) => {
+    const [ga, na] = partyRoleSortKey(roleOf(a));
+    const [gb, nb] = partyRoleSortKey(roleOf(b));
+    if (ga !== gb) return ga - gb;
+    if (na !== nb) return na - nb;
+    const ta = tieBreakOf?.(a) ?? "";
+    const tb = tieBreakOf?.(b) ?? "";
+    return ta < tb ? -1 : ta > tb ? 1 : 0;
+  });
+}
+
+/** Ordena linhas de cm_party_qualifications pela ordem canônica. */
+export function sortQualificationParties<T extends { role_in_document: string; created_at?: string | null; full_name?: string | null }>(
+  parties: readonly T[],
+): T[] {
+  return sortPartiesByRole(parties, (p) => p.role_in_document, (p) => `${p.created_at ?? ""}|${p.full_name ?? ""}`);
+}
+
+/**
+ * Rótulos de exibição (D2b, decisão de João para o Dr. Luiz): os
+ * intermediários numerados são renumerados de 1 a N na ordem crescente do
+ * papel, para o texto do instrumento ficar limpo e contínuo (sem parecer que
+ * alguém foi ocultado quando o lote vai de 2 a 6). A chave do papel no banco
+ * (role_in_document) NUNCA é renumerada: variáveis {{intermediario_N_nome}} e
+ * a rastreabilidade ao formulário de qualificação seguem intactas. Só entram
+ * no mapa os papéis cujo rótulo muda; os demais usam ROLE_LABELS.
+ */
+export function buildPartyDisplayLabels(roles: readonly string[]): Record<string, string> {
+  const numbered = Array.from(new Set(roles.filter((r) => /^intermediario_\d+$/.test(r))))
+    .sort((a, b) => roleNumericSuffix(a) - roleNumericSuffix(b));
+  const labels: Record<string, string> = {};
+  numbered.forEach((role, i) => {
+    const display = `Intermediário ${i + 1}`;
+    if (display !== ROLE_LABELS[role]) labels[role] = display;
+  });
+  return labels;
+}
+
+/**
+ * Desduplica signatários pelo e-mail normalizado (minúsculas, sem espaços).
+ * A primeira ocorrência vence; e-mail vazio nunca desduplica (o gate de
+ * integridade de send/route.ts trata parte sem e-mail à parte). Achado real
+ * em V3C-NDA-2026-0036: Head da Mesa entrava duas vezes com o mesmo e-mail
+ * (uma vez pelo lote de qualificação, outra pelo perfil do Head).
+ */
+export function dedupePartiesByEmail<T extends { email?: string | null }>(parties: readonly T[]): T[] {
+  const seen = new Set<string>();
+  const out: T[] = [];
+  for (const p of parties) {
+    const key = (p.email ?? "").trim().toLowerCase();
+    if (key) {
+      if (seen.has(key)) continue;
+      seen.add(key);
+    }
+    out.push(p);
+  }
+  return out;
 }

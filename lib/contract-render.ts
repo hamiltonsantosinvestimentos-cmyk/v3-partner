@@ -117,12 +117,46 @@ function renderPartiesBlock(parties?: ContractParty[]): string {
   return `<div class="parties">${cards}</div>`;
 }
 
+// Título impresso do instrumento (21/09/2026, BRIEF NCNDA, problema 2).
+// wrapContractInV3Html recebia template.template_name (rótulo interno de
+// gestão, ex: "NCNDA V3 PARTNERS MODELO 2026 09 03") e o imprimia no <title> e
+// num <h1> de cabeçalho, ACIMA do <h1> jurídico que o corpo da minuta já traz
+// ("INSTRUMENTO PARTICULAR DE CONFIDENCIALIDADE..."). Regra: quando o corpo
+// abre com o próprio <h1>, ele É o título do instrumento e o nome interno não
+// é impresso em lugar nenhum. Sem <h1> no corpo (8 minutas ativas hoje),
+// nada muda: continua valendo o título recebido.
+function stripTags(html: string): string {
+  return html.replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
+}
+
+/** Título do instrumento quando o corpo abre com o próprio <h1>; senão null. */
+export function extractBodyTitle(body: string): string | null {
+  const m = body.match(/^\s*<h1[^>]*>([\s\S]*?)<\/h1>/i);
+  const text = m ? stripTags(m[1]) : "";
+  return text || null;
+}
+
+/**
+ * Título impresso a partir de um rendered_html COMPLETO já gravado: o primeiro
+ * <h1> fora do <div class="header">. Devolve null quando o único <h1> é o do
+ * cabeçalho (minuta sem título no corpo). Usado por send/route.ts.
+ */
+export function extractPrintedTitle(fullHtml: string): string | null {
+  const withoutHeader = fullHtml.replace(/<div class="header">[\s\S]*?<\/div>/i, "");
+  const m = withoutHeader.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i);
+  const text = m ? stripTags(m[1]) : "";
+  return text || null;
+}
+
 export function wrapContractInV3Html(title: string, body: string, parties?: ContractParty[]): string {
+  const bodyTitle = extractBodyTitle(body);
+  const printedTitle = bodyTitle ?? title;
+  const headerTitle = bodyTitle ? "" : `\n<h1>${title}</h1>`;
   return `<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<title>${title} · V3 Partners</title>
+<title>${printedTitle} · V3 Partners</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 body{font-family:'DM Sans',sans-serif;background:#09081A;color:#9BAFC5;padding:40px 60px;line-height:1.8;font-size:13px}
@@ -138,13 +172,17 @@ p{margin-bottom:12px}
 .party .name{font-weight:700;color:#F5F1E8;font-size:12px}
 .party .doc{font-size:10px;color:#9BAFC5}
 .footer{text-align:center;margin-top:48px;font-size:10px;color:#9BAFC5}
+h2{break-after:avoid;page-break-after:avoid}
+p{orphans:3;widows:3}
+.parties{break-inside:avoid;page-break-inside:avoid}
+.party{break-inside:avoid;page-break-inside:avoid}
+.footer{break-inside:avoid;page-break-inside:avoid}
 @media print{@page{size:A4;margin:13mm 14mm}body{background:#09081A!important;-webkit-print-color-adjust:exact!important}.header img{height:15mm!important}}
 </style>
 </head>
 <body>
 <div class="header">
-<img src="https://app.v3partners.com.br/v3-logo-flat-gold-alpha.png" alt="V3 Partners">
-<h1>${title}</h1>
+<img src="https://app.v3partners.com.br/v3-logo-flat-gold-alpha.png" alt="V3 Partners">${headerTitle}
 <p>V3 Partners Soluções Ltda, CNPJ 14.219.287/0001-50</p>
 </div>
 ${body}
