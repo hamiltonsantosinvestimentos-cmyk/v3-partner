@@ -154,7 +154,12 @@ export async function POST(req: NextRequest) {
     const msg = codeErr instanceof Error ? codeErr.message : String(codeErr);
     return NextResponse.json({ error: `Falha ao emitir código da listagem: ${msg}` }, { status: 500 });
   }
-  const { data: numeroInterno } = await svc().rpc("generate_cm_numero_interno");
+  // P0 (22/09/2026): numero_interno tinha uma segunda funcao de numeracao
+  // propria (generate_cm_numero_interno, formato V3-YYYY-MM-BOL-NNN, serie
+  // "BOL" nunca registrada em v3_code_series), gerando um codigo divergente
+  // do anonymous_id real na mesma linha -- 63/63 listagens com numero_interno
+  // preenchido estavam divergentes. numero_interno deixa de ter geracao
+  // propria e passa a ser sempre o mesmo valor do anonymous_id emitido acima.
 
   // Client 360, Fase A (10/08/2026): best-effort, nunca bloqueia a criacao.
   const v3ClientId = await resolveClient(seller_cpf_cnpj, { legalName: seller_name, vertical: "bolsa_de_ativos" }).catch(() => null);
@@ -164,7 +169,7 @@ export async function POST(req: NextRequest) {
     .insert({
       anonymous_id: anonId,
       apelido: apelido ?? null,
-      numero_interno: numeroInterno,
+      numero_interno: anonId,
       originator_profile_id: originator_profile_id ?? null,
       originator_referral_id: originator_referral_id ?? null,
       asset_type,
