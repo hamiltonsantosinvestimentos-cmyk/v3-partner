@@ -86,19 +86,24 @@ async function carregar(db: SupabaseClient, proposalId: string): Promise<(Contex
   };
 }
 
-/** O que será apagado e o que o operador precisa saber antes de confirmar. Não altera nada. */
-export async function impactoDaExclusao(db: SupabaseClient, proposalId: string): Promise<ImpactoExclusao | ErroExclusao> {
-  const c = await carregar(db, proposalId);
-  if (!c.ok) return c;
-
+/** Calcula o impacto a partir de um contexto já carregado (evita recarregar
+ *  proposta/perfis/pedidos/consents quando excluirAnalises já tem tudo em mãos). */
+async function calcularImpacto(db: SupabaseClient, proposalId: string, c: Contexto): Promise<ImpactoExclusao> {
   let comissao = c.pedidos.some((p) => !!p.partner_commission_id);
+  // Comissão de "documento adicional" (sócio/CNPJ) nasce presa ao PEDIDO pai
+  // (commissions.operation_id = partner_service_orders.id, nunca o id do
+  // consent -- ver lib/consulta-commissions.ts), então o fallback busca pelos
+  // pedidos pai dos consents, não pelos próprios consents.
   if (!comissao && c.consents.length) {
-    const { count } = await db
-      .from("commissions")
-      .select("id", { count: "exact", head: true })
-      .eq("operation_type", "CREDITO")
-      .in("operation_id", c.consents.map((x) => x.id));
-    comissao = (count ?? 0) > 0;
+    const pedidosPaiIds = [...new Set(c.consents.map((x) => x.partner_service_order_id).filter(Boolean))] as string[];
+    if (pedidosPaiIds.length) {
+      const { count } = await db
+        .from("commissions")
+        .select("id", { count: "exact", head: true })
+        .eq("operation_type", "CREDITO")
+        .in("operation_id", pedidosPaiIds);
+      comissao = (count ?? 0) > 0;
+    }
   }
 
   return {
@@ -110,6 +115,13 @@ export async function impactoDaExclusao(db: SupabaseClient, proposalId: string):
     relatorio_entregue: [...c.pedidos, ...c.consents].some((x) => !!x.report_delivered_at),
     relatorio_publicado: [...c.pedidos, ...c.consents].some((x) => !!x.report_public_token),
   };
+}
+
+/** O que será apagado e o que o operador precisa saber antes de confirmar. Não altera nada. */
+export async function impactoDaExclusao(db: SupabaseClient, proposalId: string): Promise<ImpactoExclusao | ErroExclusao> {
+  const c = await carregar(db, proposalId);
+  if (!c.ok) return c;
+  return calcularImpacto(db, proposalId, c);
 }
 
 export interface ResultadoExclusao {
@@ -136,8 +148,7 @@ export async function excluirAnalises(
 ): Promise<ResultadoExclusao | ErroExclusao> {
   const c = await carregar(db, proposalId);
   if (!c.ok) return c;
-  const impacto = await impactoDaExclusao(db, proposalId);
-  if (!impacto.ok) return impacto;
+  const impacto = await calcularImpacto(db, proposalId, c);
 
   const ids = c.perfis.map((p) => p.id);
 
@@ -149,7 +160,7 @@ export async function excluirAnalises(
   }
   const pedidosPaiDeDocumento = [...new Set(c.consents.map((x) => x.partner_service_order_id).filter(Boolean))] as string[];
   for (const x of c.consents) {
-    await db.from("credit_consents").update({ report_public_token: null, report_delivered_at: null }).eq("id", x.id);
+    await db.from("credit_consents").update({ report_public_token: null, report_pdf_path: null, report_delivered_at: null }).eq("id", x.id);
   }
   // O PDF do pedido (relatório/unificado) inclui este documento: fica defasado
   for (const orderId of pedidosPaiDeDocumento) {
