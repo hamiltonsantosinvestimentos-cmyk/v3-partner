@@ -192,7 +192,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   let positionedParties: Array<{ name: string; email: string }> | undefined;
   if (!contract.is_master_agreement && contract.rendered_html) {
     try {
-      const docxBuffer = await renderContractDocx(contract.rendered_html, parties as ContractParty[]);
+      const docxBuffer = await renderContractDocx(contract.rendered_html, parties as ContractParty[], contract.contract_code);
       documentDocxBase64 = docxBuffer.toString("base64");
       positionedParties = signatories;
     } catch (docxErr) {

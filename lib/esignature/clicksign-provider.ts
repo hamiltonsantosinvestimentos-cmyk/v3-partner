@@ -129,15 +129,56 @@ async function launchBrowser() {
 // dentro da interface ESignatureProvider, porque "renderizar HTML em PDF"
 // não é uma operação de assinatura, é um passo de preparo de documento que
 // qualquer provedor pode ou não precisar.
-export async function htmlToPdfBase64(html: string): Promise<string> {
+async function fetchAsDataUri(url: string, mime: string): Promise<string | null> {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const buf = Buffer.from(await res.arrayBuffer());
+    return `data:${mime};base64,${buf.toString("base64")}`;
+  } catch {
+    return null;
+  }
+}
+
+export async function htmlToPdfBase64(html: string, opts?: { letterhead?: string }): Promise<string> {
+  void opts; // mantido só por compatibilidade de assinatura; sem uso hoje
   const browser = await launchBrowser();
   try {
     const page = await browser.newPage();
     await page.setContent(html, { waitUntil: "load" });
+
+    // Papel timbrado oficial em toda página (22/09/2026, arquivos aprovados por
+    // João, únicos autorizados como padrão de TODO documento deste motor).
+    // ACHADO REAL: position:fixed no HTML não reserva espaço de verdade em
+    // cada quebra de página (só no início/fim do documento inteiro) -- texto
+    // real de cláusula saiu por baixo do timbre no meio do PDF num teste real.
+    // headerTemplate/footerTemplate do Puppeteer é o mecanismo que de fato
+    // reserva essa faixa em TODA página (por isso margin.top/bottom abaixo
+    // cobre a altura das imagens). Coordenadas em cm iguais às que João deu,
+    // com uma compensação fixa de ~0,5cm medida ao vivo contra um PDF real
+    // (o wrapper interno do template do Chromium não começa exatamente no
+    // canto físico da página -- mesmo achado, mecanismo diferente do CSS
+    // @page). Sem @page{margin} no HTML (ver wrapContractInV3Html) pra não
+    // competir com a margem passada aqui.
+    const [logoUri, rodapeUri] = await Promise.all([
+      fetchAsDataUri("https://app.v3partners.com.br/contratos/timbrado-logo.jpg", "image/jpeg"),
+      fetchAsDataUri("https://app.v3partners.com.br/contratos/timbrado-rodape.jpg", "image/jpeg"),
+    ]);
+    const displayHeaderFooter = !!(logoUri && rodapeUri);
+    const headerTemplate = logoUri
+      ? `<div style="position:relative;width:100%;height:100%"><img src="${logoUri}" style="position:absolute;left:8.06cm;top:0.73cm;width:4.89cm;height:2.33cm"></div>`
+      : "<div></div>";
+    const footerTemplate = rodapeUri
+      ? `<div style="position:relative;width:100%;height:100%"><img src="${rodapeUri}" style="position:absolute;left:2.85cm;top:0.60cm;width:15.98cm;height:2.01cm"></div>`
+      : "<div></div>";
+
     const pdfBuffer = await page.pdf({
       format: "A4",
       printBackground: true,
-      margin: { top: "0", bottom: "0", left: "0", right: "0" },
+      displayHeaderFooter,
+      headerTemplate,
+      footerTemplate,
+      margin: displayHeaderFooter ? { top: "3.6cm", bottom: "3.2cm", left: "0", right: "0" } : { top: "0", bottom: "0", left: "0", right: "0" },
     });
     return `data:application/pdf;base64,${Buffer.from(pdfBuffer).toString("base64")}`;
   } finally {

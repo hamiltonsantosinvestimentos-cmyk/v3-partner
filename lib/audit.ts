@@ -51,7 +51,8 @@ export async function logAudit(params: AuditParams): Promise<void> {
       old_data:   params.oldData ?? null,
       new_data:   params.newData ?? null,
       ip_address: params.ipAddress ?? null,
-      user_agent: params.userAgent ?? null,
+      // user_agent NÃO é gravado: a tabela audit_logs não tem essa coluna, e incluí-la fazia TODO insert
+      // falhar em silêncio (o catch abaixo engole), então nenhuma auditoria era registrada.
     });
   } catch {
     // Audit log não deve derrubar a operação principal

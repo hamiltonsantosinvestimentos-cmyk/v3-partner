@@ -59,10 +59,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Contrato já assinado — não pode ser alterado" }, { status: 409 });
 
   // LOI Casada (BRIEF 2, 30/08/2026): contrato sem par de compra casado
-  // exige unanimidade, não o 2/3 padrão. O gate real (bloqueio de fato)
+  // exige unanimidade, não o padrão. O gate real (bloqueio de fato)
   // acontece em /api/contracts/[id]/send; aqui só ajusta a mensagem pra
-  // não informar "liberado" com 2/3 quando na prática falta 1 sócio ainda.
-  const quorumNecessario = contract.loi_matching_status === "nao_casada" ? 3 : 2;
+  // não informar "liberado" quando na prática falta sócio ainda.
+  //
+  // Quórum padrão reduzido de 2 para 1 sócio (pedido direto de João,
+  // 22/09/2026): a minuta já passou pelo gate jurídico obrigatório antes de
+  // sequer poder gerar o contrato (approval_status='aprovado' em
+  // contract_templates, ver app/api/contracts/generate/route.ts) -- este
+  // quórum aqui é uma segunda camada, de sócio/negócio, sobre um contrato
+  // cuja FORMA já foi auditada. Decisão de João: 1 sócio já é suficiente
+  // pra essa segunda camada. Não altera a exigência de unanimidade (3) da
+  // LOI sem par casado, que é um controle antifraude distinto (BRIEF 2).
+  const quorumNecessario = contract.loi_matching_status === "nao_casada" ? 3 : 1;
 
   const { data: approval, error } = await svc()
     .from("contract_approvals")
@@ -143,7 +152,7 @@ export async function POST(req: NextRequest) {
     message: quorumMet
       ? quorumNecessario === 3
         ? "Unanimidade atingida (3/3 sócios). Carta de Intenção sem par casado liberada para assinatura."
-        : "Quórum atingido (2/3 sócios). Contrato liberado para assinatura."
+        : `Quórum atingido (${approvedCount}/${quorumNecessario} sócio${quorumNecessario > 1 ? "s" : ""}). Contrato liberado para assinatura.`
       : decision === "reprovado"
         ? "Contrato reprovado. Nova rodada de aprovação necessária após revisão."
         : `Aprovação registrada (${approvedCount}/${quorumNecessario}). Aguardando mais ${quorumNecessario - approvedCount} sócio(s)${quorumNecessario === 3 ? ", unanimidade exigida por ser LOI sem par casado" : ""}.`,
@@ -171,7 +180,8 @@ export async function GET(req: NextRequest) {
     .select("loi_matching_status")
     .eq("id", contractId)
     .single();
-  const required = contract?.loi_matching_status === "nao_casada" ? 3 : 2;
+  // Quórum padrão 1 (pedido de João, 22/09/2026) — ver mesma decisão no POST acima.
+  const required = contract?.loi_matching_status === "nao_casada" ? 3 : 1;
 
   const approved = (data ?? []).filter((a: any) => a.decision === "aprovado").length;
 

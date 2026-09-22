@@ -3,12 +3,13 @@
 import React, { useState, useEffect } from "react";
 import { CheckCircle2, ChevronRight, ChevronLeft, Loader2, Shield, Search, Upload } from "lucide-react";
 import { maskCpfCnpjInput, maskPhoneInput, isValidEmail, maskCurrencyBRLInput, parseCurrencyBRLInput, formatCurrencyBRLFromNumber } from "@/lib/utils";
+import { fetchCep, buildEnderecoFromCep, formatCepMask } from "@/lib/viacep";
 
 const STEPS = [
   { label: "Identificação Inicial", key: "identificacao_inicial" },
   { label: "NDA", key: "nda" },
   { label: "Identificação Completa", key: "identificacao_completa" },
-  { label: "Mandato de Busca", key: "mandato" },
+  { label: "Critérios da Busca", key: "mandato" },
   { label: "Envio", key: "envio" },
 ];
 
@@ -21,10 +22,11 @@ interface BuyIntakeWizardProps {
   lockedFollowUp?: boolean;
 }
 
-const MANDATO_DOC_TYPES = [
-  { type: "loi_mou", label: "Carta de Intenções (LOI) ou Memorando de Entendimento (MOU)" },
-  { type: "procuracao", label: "Procuração / autorização" },
-] as const;
+// Item 3.3 do brief de 21/09/2026: LOI/MOU e Procuração (antigo MANDATO_DOC_TYPES)
+// deixaram de ser oferecidos nesta etapa preliminar de intake -- nao sao exigidos
+// aqui, ficam para depois do MVP ate o Deal Room (mesmo principio ja decidido pra
+// M&A). O tipo de documento em si continua existindo no sistema (upload route e
+// telas da Mesa nao mudam), so este wizard para de pedir.
 
 // Checklist fixo de KYC (BRIEF 3b, 19/08/2026): contrato social so entra quando o
 // comprador e PJ (CNPJ preenchido) -- nao ha campo person_type neste form, mesma
@@ -86,29 +88,6 @@ export function BuyIntakeWizard({ token, prefill, originPartnerId, lockedFollowU
           </p>
         </div>
         <div>
-          <label className="block text-[10px] font-bold text-[#C9A84C] uppercase tracking-wider mb-2">Documentos de Mandato</label>
-          <div className="space-y-2">
-            {MANDATO_DOC_TYPES.map(({ type, label }) => (
-              <div key={type} className="flex items-center justify-between gap-3 bg-[#162744] border border-[#9BAFC5]/10 rounded-lg px-4 py-3">
-                <span className="text-xs text-[#F5F1E8]">{label}</span>
-                {hasDoc(type) ? (
-                  <span className="text-[10px] text-emerald-400 font-bold flex items-center gap-1"><CheckCircle2 size={12} /> Enviado</span>
-                ) : (
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    <span className="text-[10px] text-[#9BAFC5] font-bold uppercase tracking-wider">Pendente</span>
-                    <label className="flex items-center gap-1.5 px-3 py-1.5 bg-[#12112A] border border-[#9BAFC5]/15 rounded text-[#9BAFC5] text-[10px] font-bold hover:border-[#C9A84C]/30 hover:text-[#C9A84C] transition cursor-pointer">
-                      {uploadingDoc === type ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
-                      Enviar
-                      <input type="file" className="hidden" accept=".pdf,.doc,.docx,.jpg,.png"
-                        onChange={(e) => { if (e.target.files?.[0]) uploadDoc(e.target.files[0], type); }} />
-                    </label>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-        <div>
           <label className="block text-[10px] font-bold text-[#C9A84C] uppercase tracking-wider mb-2">Documentos de KYC</label>
           <div className="space-y-2">
             {kycTypes.map(({ type, label }) => (
@@ -136,6 +115,10 @@ export function BuyIntakeWizard({ token, prefill, originPartnerId, lockedFollowU
   }
 
   const [form, setForm] = useState({
+    // Item 3.2 (brief 21/09/2026): toggle PF/PJ explicito. Default segue a
+    // mesma inferencia ja usada no resto do modulo (CNPJ preenchido = PJ),
+    // pra prefill de cadastro existente continuar funcionando.
+    tipo_pessoa: (prefill.tipo_pessoa as string) || (prefill.cnpj ? "PJ" : "PF"),
     nome_contato: prefill.nome_contato || "",
     email: prefill.email || "",
     telefone: prefill.telefone || "",
@@ -147,23 +130,85 @@ export function BuyIntakeWizard({ token, prefill, originPartnerId, lockedFollowU
     estado_civil: prefill.estado_civil || "",
     identidade_orgao: prefill.identidade_orgao || "",
     endereco: prefill.endereco || "",
+    cep: "",
+    logradouro: "",
+    numero: "",
+    complemento: "",
+    bairro: "",
+    cidade: "",
+    uf: "",
     asset_types_preferidos: prefill.asset_types_preferidos || [],
     jurisdicao_alvo: prefill.jurisdicao_alvo || [],
     natureza_preferida: prefill.natureza_preferida || [],
     ticket_min: prefill.ticket_min ? formatCurrencyBRLFromNumber(Number(prefill.ticket_min)) : "",
     ticket_max: prefill.ticket_max ? formatCurrencyBRLFromNumber(Number(prefill.ticket_max)) : "",
     desagio_min: prefill.desagio_min || "",
+    comissao_aceita_pct: prefill.comissao_aceita_pct || "",
     criterios: prefill.criterios || "",
     nda_accepted: false,
     purchase_frequency_type: prefill.purchase_frequency_type || "SINGLE_PURCHASE",
     recurrence_months: prefill.recurrence_months ? String(prefill.recurrence_months) : "",
   });
+  const [cepLoading, setCepLoading] = useState(false);
+  const [cepError, setCepError] = useState("");
 
   const upd = (field: string, value: any) => setForm((p) => ({ ...p, [field]: value }));
 
   const toggleArray = (field: string, value: string) => {
     const arr = (form as any)[field] || [];
     upd(field, arr.includes(value) ? arr.filter((v: string) => v !== value) : [...arr, value]);
+  };
+
+  // Item 3.2: mesmo padrao ja validado no wizard de venda (lib/viacep) --
+  // busca o CEP, preenche os campos estruturados e recompoe o endereco
+  // (coluna text unica, sem migration) a cada mudanca relevante.
+  const syncEndereco = (next: Partial<typeof form>) => {
+    const merged = { ...form, ...next };
+    if (!merged.logradouro && !merged.cep) return merged.endereco;
+    return buildEnderecoFromCep(
+      { cep: merged.cep, logradouro: merged.logradouro, bairro: merged.bairro, localidade: merged.cidade, uf: merged.uf },
+      merged.numero,
+      merged.complemento
+    );
+  };
+
+  const updEndereco = (field: string, value: string) => {
+    setForm((p) => {
+      const next = { ...p, [field]: value };
+      return { ...next, endereco: syncEndereco(next) };
+    });
+  };
+
+  const handleCepBlur = async () => {
+    const digits = form.cep.replace(/\D/g, "");
+    if (digits.length !== 8) return;
+    setCepLoading(true);
+    setCepError("");
+    try {
+      const result = await fetchCep(digits);
+      if (!result) {
+        setCepError("CEP não encontrado, preencha o endereço manualmente abaixo.");
+        return;
+      }
+      setForm((p) => {
+        const next = { ...p, logradouro: result.logradouro, bairro: result.bairro, cidade: result.localidade, uf: result.uf };
+        return { ...next, endereco: syncEndereco(next) };
+      });
+    } finally {
+      setCepLoading(false);
+    }
+  };
+
+  // Item 3.2: troca de PF/PJ limpa o documento que deixa de se aplicar,
+  // mesmo principio ja usado no wizard de venda pra Tipo de Ativo.
+  const selectTipoPessoa = (value: "PF" | "PJ") => {
+    setForm((p) => ({
+      ...p,
+      tipo_pessoa: value,
+      cpf: value === "PF" ? p.cpf : "",
+      cnpj: value === "PJ" ? p.cnpj : "",
+      empresa: value === "PJ" ? p.empresa : "",
+    }));
   };
 
   const canAdvance = () => {
@@ -207,7 +252,7 @@ export function BuyIntakeWizard({ token, prefill, originPartnerId, lockedFollowU
         <div className="w-16 h-16 rounded-full bg-emerald-500/20 flex items-center justify-center mb-6">
           <CheckCircle2 className="w-8 h-8 text-emerald-400" />
         </div>
-        <h2 className="text-2xl font-bold text-[#F5F1E8] mb-3">Cadastro recebido</h2>
+        <h2 className="text-2xl font-bold text-[#F5F1E8] mb-3">Cadastro aceito</h2>
         <p className="text-[#9BAFC5] max-w-md">
           Seu interesse foi registrado. A equipe V3 Partners entrará em contato para agendar a reunião inicial e dar sequência à qualificação do seu cadastro.
         </p>
@@ -285,19 +330,35 @@ export function BuyIntakeWizard({ token, prefill, originPartnerId, lockedFollowU
           <div>
             <h3 className="text-lg font-bold text-[#F5F1E8] mb-1">Identificação Completa</h3>
             <p className="text-xs text-[#9BAFC5] mb-6">Dados complementares de quem busca adquirir ativos</p>
+
+            <div className="mb-5">
+              <label className={labelClass}>Tipo de Cadastro *</label>
+              <div className="flex gap-2">
+                <button type="button" onClick={() => selectTipoPessoa("PF")}
+                  className={chipClass(form.tipo_pessoa === "PF")}>Pessoa Física</button>
+                <button type="button" onClick={() => selectTipoPessoa("PJ")}
+                  className={chipClass(form.tipo_pessoa === "PJ")}>Pessoa Jurídica</button>
+              </div>
+            </div>
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className={labelClass}>CPF</label>
-                <input className={inputClass} value={form.cpf} onChange={(e) => upd("cpf", maskCpfCnpjInput(e.target.value))} placeholder="000.000.000-00" />
-              </div>
-              <div>
-                <label className={labelClass}>CNPJ (se PJ)</label>
-                <input className={inputClass} value={form.cnpj} onChange={(e) => upd("cnpj", maskCpfCnpjInput(e.target.value))} placeholder="00.000.000/0001-00" />
-              </div>
-              <div>
-                <label className={labelClass}>Empresa</label>
-                <input className={inputClass} value={form.empresa} onChange={(e) => upd("empresa", e.target.value)} placeholder="Nome da empresa ou fundo" />
-              </div>
+              {form.tipo_pessoa === "PF" ? (
+                <div>
+                  <label className={labelClass}>CPF</label>
+                  <input className={inputClass} value={form.cpf} onChange={(e) => upd("cpf", maskCpfCnpjInput(e.target.value))} placeholder="000.000.000-00" />
+                </div>
+              ) : (
+                <>
+                  <div>
+                    <label className={labelClass}>CNPJ</label>
+                    <input className={inputClass} value={form.cnpj} onChange={(e) => upd("cnpj", maskCpfCnpjInput(e.target.value))} placeholder="00.000.000/0001-00" />
+                  </div>
+                  <div>
+                    <label className={labelClass}>Empresa</label>
+                    <input className={inputClass} value={form.empresa} onChange={(e) => upd("empresa", e.target.value)} placeholder="Nome da empresa ou fundo" />
+                  </div>
+                </>
+              )}
               <div>
                 <label className={labelClass}>Telefone (com DDD)</label>
                 <input className={inputClass} value={form.telefone} onChange={(e) => upd("telefone", maskPhoneInput(e.target.value))} placeholder="(21) 99999-0000" />
@@ -325,34 +386,35 @@ export function BuyIntakeWizard({ token, prefill, originPartnerId, lockedFollowU
                 <label className={labelClass}>Identidade / Órgão Expedidor</label>
                 <input className={inputClass} value={form.identidade_orgao} onChange={(e) => upd("identidade_orgao", e.target.value)} placeholder="Ex: 12.345.678-9 SSP/RJ" />
               </div>
-              <div className="sm:col-span-2">
-                <label className={labelClass}>Endereço completo</label>
-                <input className={inputClass} value={form.endereco} onChange={(e) => upd("endereco", e.target.value)} placeholder="Rua, número, complemento, bairro, cidade, UF, CEP" />
+              <div>
+                <label className={labelClass}>CEP</label>
+                <input className={inputClass} value={form.cep} onChange={(e) => updEndereco("cep", formatCepMask(e.target.value))} onBlur={handleCepBlur} placeholder="00000-000" maxLength={9} />
+                {cepLoading && <p className="text-[10px] text-[#9BAFC5] mt-1">Buscando endereço...</p>}
+                {cepError && <p className="text-[10px] text-amber-400 mt-1">{cepError}</p>}
               </div>
-            </div>
-
-            <div className="mt-6 pt-6 border-t border-[#9BAFC5]/10">
-              <label className={labelClass}>Documentos de Mandato</label>
-              <p className="text-[11px] text-[#9BAFC5]/70 mb-2">Você pode enviar agora ou depois, o cadastro não fica bloqueado. Documentos pendentes ficam retidos para validação da Mesa V3 antes de liberar o Full DD.</p>
-              <div className="space-y-2 mt-2">
-                {MANDATO_DOC_TYPES.map(({ type, label }) => (
-                  <div key={type} className="flex items-center justify-between gap-3 bg-[#162744] border border-[#9BAFC5]/10 rounded-lg px-4 py-3">
-                    <span className="text-xs text-[#F5F1E8]">{label}</span>
-                    {hasDoc(type) ? (
-                      <span className="text-[10px] text-emerald-400 font-bold flex items-center gap-1"><CheckCircle2 size={12} /> Enviado</span>
-                    ) : (
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        <span className="text-[10px] text-[#9BAFC5] font-bold uppercase tracking-wider">Pendente</span>
-                        <label className="flex items-center gap-1.5 px-3 py-1.5 bg-[#12112A] border border-[#9BAFC5]/15 rounded text-[#9BAFC5] text-[10px] font-bold hover:border-[#C9A84C]/30 hover:text-[#C9A84C] transition cursor-pointer">
-                          {uploadingDoc === type ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
-                          Enviar
-                          <input type="file" className="hidden" accept=".pdf,.doc,.docx,.jpg,.png"
-                            onChange={(e) => { if (e.target.files?.[0]) uploadDoc(e.target.files[0], type); }} />
-                        </label>
-                      </div>
-                    )}
-                  </div>
-                ))}
+              <div>
+                <label className={labelClass}>Logradouro</label>
+                <input className={inputClass} value={form.logradouro} onChange={(e) => updEndereco("logradouro", e.target.value)} placeholder="Preenchido pelo CEP, ou digite" />
+              </div>
+              <div>
+                <label className={labelClass}>Número</label>
+                <input className={inputClass} value={form.numero} onChange={(e) => updEndereco("numero", e.target.value)} placeholder="Nº" />
+              </div>
+              <div>
+                <label className={labelClass}>Complemento</label>
+                <input className={inputClass} value={form.complemento} onChange={(e) => updEndereco("complemento", e.target.value)} placeholder="Sala, bloco, etc. (opcional)" />
+              </div>
+              <div>
+                <label className={labelClass}>Bairro</label>
+                <input className={inputClass} value={form.bairro} onChange={(e) => updEndereco("bairro", e.target.value)} />
+              </div>
+              <div>
+                <label className={labelClass}>Cidade</label>
+                <input className={inputClass} value={form.cidade} onChange={(e) => updEndereco("cidade", e.target.value)} />
+              </div>
+              <div>
+                <label className={labelClass}>UF</label>
+                <input className={inputClass} value={form.uf} maxLength={2} onChange={(e) => updEndereco("uf", e.target.value.toUpperCase())} placeholder="RJ" />
               </div>
             </div>
 
@@ -385,7 +447,7 @@ export function BuyIntakeWizard({ token, prefill, originPartnerId, lockedFollowU
 
         {step === 3 && (
           <div>
-            <h3 className="text-lg font-bold text-[#F5F1E8] mb-1">Mandato de Busca</h3>
+            <h3 className="text-lg font-bold text-[#F5F1E8] mb-1">Critérios da Busca</h3>
             <p className="text-xs text-[#9BAFC5] mb-6">Defina o perfil de ativos que você procura</p>
             <div className="space-y-5">
               <div>
@@ -434,6 +496,10 @@ export function BuyIntakeWizard({ token, prefill, originPartnerId, lockedFollowU
                   <label className={labelClass}>Deságio mínimo (%)</label>
                   <input type="number" className={inputClass} value={form.desagio_min} onChange={(e) => upd("desagio_min", e.target.value)} placeholder="Ex: 25" />
                 </div>
+                <div>
+                  <label className={labelClass}>Comissão aceita/pretendida na compra (%)</label>
+                  <input type="number" className={inputClass} value={form.comissao_aceita_pct} onChange={(e) => upd("comissao_aceita_pct", e.target.value)} placeholder="Ex: 3" />
+                </div>
               </div>
               <div>
                 <label className={labelClass}>Frequência de Compra</label>
@@ -468,7 +534,7 @@ export function BuyIntakeWizard({ token, prefill, originPartnerId, lockedFollowU
             <Search className="w-12 h-12 text-[#C9A84C] mx-auto mb-4" />
             <h3 className="text-lg font-bold text-[#F5F1E8] mb-2">Confirmar envio</h3>
             <p className="text-sm text-[#9BAFC5] max-w-md mx-auto mb-6">
-              Ao enviar, seu cadastro segue para a reunião inicial e a qualificação pela equipe V3 Partners. Depois da aprovação, seu perfil passa a concorrer no matchmaking e você recebe alertas por email quando ativos compatíveis forem publicados na vitrine.
+              Ao enviar, seu cadastro segue para a reunião inicial e a qualificação pela equipe V3 Partners. Depois da aprovação, seu perfil passa a concorrer na distribuição de comissão e oportunidades compatíveis, e você recebe alertas por email quando ativos compatíveis forem publicados na vitrine.
             </p>
             <div className="bg-[#162744] rounded-lg p-4 text-left max-w-sm mx-auto text-xs text-[#9BAFC5] space-y-1">
               <div>Nome: <span className="text-[#F5F1E8]">{form.nome_contato}</span></div>

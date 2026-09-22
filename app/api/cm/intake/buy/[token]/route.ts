@@ -26,7 +26,7 @@ export async function GET(
 
   if (demand.intake_locked)
     return NextResponse.json({
-      error: "Formulário já enviado. Solicite um novo link à equipe V3 Partners.",
+      error: "Este formulário já foi preenchido anteriormente através deste link. Para nova submissão, solicite um novo link à equipe V3 Partners.",
       locked: true,
     }, { status: 409 });
 
@@ -57,7 +57,7 @@ export async function POST(
 
   if (demand.intake_locked)
     return NextResponse.json({
-      error: "Formulário já enviado. Solicite um novo link à equipe V3 Partners.",
+      error: "Este formulário já foi preenchido anteriormente através deste link. Para nova submissão, solicite um novo link à equipe V3 Partners.",
       locked: true,
     }, { status: 409 });
 
@@ -68,6 +68,9 @@ export async function POST(
     setores, jurisdicao_alvo, natureza_preferida, asset_types_preferidos,
     ticket_min, ticket_max, desagio_min, criterios, nda_accepted,
     purchase_frequency_type, recurrence_months, origin_partner_id,
+    // Item 3 do brief de 21/09/2026: sem coluna propria, dentro de
+    // intake_data (jsonb), mesmo padrao ja usado neste UPDATE.
+    tipo_pessoa, comissao_aceita_pct,
   } = body;
 
   if (!nome_contato || !email)
@@ -135,6 +138,8 @@ export async function POST(
       intake_data: {
         submitted_at: new Date().toISOString(),
         nda_accepted: nda_accepted ?? false,
+        tipo_pessoa: tipo_pessoa === "PF" || tipo_pessoa === "PJ" ? tipo_pessoa : null,
+        comissao_aceita_pct: comissao_aceita_pct ? Number(comissao_aceita_pct) : null,
       },
     })
     .eq("id", demand.id);

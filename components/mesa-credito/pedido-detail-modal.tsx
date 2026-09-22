@@ -7,11 +7,14 @@ import { formatCurrency, formatDate } from "@/lib/utils";
 import type { PartnerOrder } from "./pedidos-partners-client";
 import { ReanalisarPendentes } from "./reanalisar-pendentes";
 import { PdfUnificado } from "./pdf-unificado";
+import { ExcluirAnalise } from "./excluir-analise";
 
 interface Props {
   order: PartnerOrder;
   onClose: () => void;
   onUpdated: () => void;
+  /** ADMIN/GESTAO: mostra "Excluir análise". */
+  podeExcluirAnalise?: boolean;
 }
 
 function StepRow({ done, label, action }: { done: boolean; label: string; action?: React.ReactNode }) {
@@ -44,7 +47,7 @@ interface OrderDocument {
   report_delivered_at: string | null;
 }
 
-function DocRow({ orderId, doc, onUpdated }: { orderId: string; doc: OrderDocument; onUpdated: () => void }) {
+function DocRow({ orderId, doc, onUpdated, podeExcluirAnalise }: { orderId: string; doc: OrderDocument; onUpdated: () => void; podeExcluirAnalise?: boolean }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -125,6 +128,10 @@ function DocRow({ orderId, doc, onUpdated }: { orderId: string; doc: OrderDocume
         <ReanalisarPendentes proposalId={doc.credit_desk_proposal_id} onUpdated={onUpdated} jaGerouRelatorio={hasReport} />
       )}
 
+      {hasAnalysis && podeExcluirAnalise && doc.credit_desk_proposal_id && (
+        <ExcluirAnalise proposalId={doc.credit_desk_proposal_id} nome={doc.label ?? doc.doc} onDeleted={onUpdated} />
+      )}
+
       {hasReport && (
         <a href={`/relatorio-credito/${doc.report_public_token}`} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 text-[11px] text-[#C9A84C] hover:underline">
           <ExternalLink className="w-3 h-3" /> Ver link público do relatório
@@ -136,7 +143,7 @@ function DocRow({ orderId, doc, onUpdated }: { orderId: string; doc: OrderDocume
   );
 }
 
-function AdditionalDocuments({ order, onUpdated }: { order: PartnerOrder; onUpdated: () => void }) {
+function AdditionalDocuments({ order, onUpdated, podeExcluirAnalise }: { order: PartnerOrder; onUpdated: () => void; podeExcluirAnalise?: boolean }) {
   const [docs, setDocs] = useState<OrderDocument[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -247,7 +254,7 @@ function AdditionalDocuments({ order, onUpdated }: { order: PartnerOrder; onUpda
       ) : (
         <div className="space-y-2">
           {docs.map((d) => (
-            <DocRow key={d.id} orderId={order.id} doc={d} onUpdated={() => { load(); onUpdated(); }} />
+            <DocRow key={d.id} orderId={order.id} doc={d} onUpdated={() => { load(); onUpdated(); }} podeExcluirAnalise={podeExcluirAnalise} />
           ))}
         </div>
       )}
@@ -255,7 +262,7 @@ function AdditionalDocuments({ order, onUpdated }: { order: PartnerOrder; onUpda
   );
 }
 
-export function PedidoDetailModal({ order, onClose, onUpdated }: Props) {
+export function PedidoDetailModal({ order, onClose, onUpdated, podeExcluirAnalise }: Props) {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [reportUrl, setReportUrl] = useState<string | null>(null);
@@ -425,6 +432,11 @@ export function PedidoDetailModal({ order, onClose, onUpdated }: Props) {
                   <ReanalisarPendentes proposalId={order.credit_desk_proposal_id} onUpdated={onUpdated} jaGerouRelatorio={hasReport} />
                 </div>
               )}
+              {hasAnalysis && podeExcluirAnalise && order.credit_desk_proposal_id && (
+                <div className="py-3 border-b border-border/30">
+                  <ExcluirAnalise proposalId={order.credit_desk_proposal_id} nome={order.client_name} onDeleted={onUpdated} />
+                </div>
+              )}
               {hasAnalysis && (
                 <div className="py-3 border-b border-border/30">
                   <PdfUnificado orderId={order.id} temSocios={((order.cnpj_count ?? 0) + (order.cpf_count ?? 0)) > 1} />
@@ -458,7 +470,7 @@ export function PedidoDetailModal({ order, onClose, onUpdated }: Props) {
           </div>
 
           {(order.cnpj_count ?? 1) + (order.cpf_count ?? 0) > 1 && (
-            <AdditionalDocuments order={order} onUpdated={onUpdated} />
+            <AdditionalDocuments order={order} onUpdated={onUpdated} podeExcluirAnalise={podeExcluirAnalise} />
           )}
 
           <div className="rounded-xl border border-border/50 bg-secondary/30 p-3 text-[11px] text-muted-foreground">

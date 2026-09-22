@@ -87,6 +87,10 @@ export async function POST(
     intermediarios,
     checklist_contato_direto, checklist_ativo_livre_onus,
     checklist_regularidade_fiscal, checklist_intermediarios_cientes,
+    // Item 2.2 do brief de 21/09/2026: campos informativos só para ativos
+    // tributários (ICMS/IPI), sem coluna propria -- mesmo padrao de
+    // intermediarios/checklist, dentro de intake_data (jsonb).
+    origem_credito, forma_transferencia,
   } = body;
 
   if (!seller_name || !valor_face || !asset_type) {
@@ -132,6 +136,10 @@ export async function POST(
     .from("cm_asset_listings")
     .update({
       anonymous_id: anonId,
+      // P0 (22/09/2026): numero_interno passa a ser sempre o mesmo valor de
+      // anonymous_id -- antes vinha de generate_cm_numero_interno(), uma
+      // segunda serie nunca registrada em v3_code_series, sempre divergente.
+      numero_interno: anonId,
       asset_type,
       seller_name,
       seller_cpf_cnpj: seller_cpf_cnpj ?? null,
@@ -169,6 +177,8 @@ export async function POST(
         // usa isso pra gerar o link de qualificacao de cada intermediario
         // (nao a Mesa preenchendo dados por telefone/WhatsApp).
         intermediarios: Array.isArray(intermediarios) ? intermediarios : [],
+        origem_credito: origem_credito ?? null,
+        forma_transferencia: forma_transferencia ?? null,
         checklist: {
           contato_direto: checklist_contato_direto ?? false,
           ativo_livre_onus: checklist_ativo_livre_onus ?? false,
