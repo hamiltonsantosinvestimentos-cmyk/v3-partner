@@ -23,11 +23,35 @@ export function isValidCPF(value: string): boolean {
   return true;
 }
 
-export function isValidCNPJ(value: string): boolean {
-  const cnpj = onlyDigits(value);
-  if (cnpj.length !== 14 || /^(\d)\1{13}$/.test(cnpj)) return false;
+/**
+ * Remove tudo que não é [0-9A-Za-z] e força maiúsculas. Usado só para CNPJ,
+ * que desde 31/07/2026 (emissão pela Receita/Serpro) aceita letras nas 12
+ * primeiras posições -- nunca usar onlyDigits() aqui, que apaga a letra e
+ * corrompe o CNPJ novo (achado real 21/09/2026, v3-governance-qa).
+ */
+function normalizeCnpjChars(value: string): string {
+  return value.replace(/[^0-9A-Za-z]/g, "").toUpperCase();
+}
 
-  const digits = cnpj.split("").map(Number);
+/**
+ * Valor de um caractere de CNPJ para o cálculo do dígito verificador: código
+ * ASCII menos 48 (dígito "0"-"9" vale 0-9, "A" vale 17, ..., "Z" vale 42).
+ * Regra oficial da Receita/Serpro para o CNPJ alfanumérico, módulo 11. Num
+ * CNPJ legado (só dígitos) isso é idêntico a Number(char), então o mesmo
+ * algoritmo valida os dois formatos sem ramificação.
+ */
+function cnpjCharValue(c: string): number {
+  return c.charCodeAt(0) - 48;
+}
+
+export function isValidCNPJ(value: string): boolean {
+  const cnpj = normalizeCnpjChars(value);
+  if (cnpj.length !== 14) return false;
+  if (/^(.)\1{13}$/.test(cnpj)) return false;
+  // Os 2 dígitos verificadores continuam sempre numéricos nos dois formatos.
+  if (!/^\d{2}$/.test(cnpj.slice(12))) return false;
+
+  const values = cnpj.split("").map(cnpjCharValue);
 
   const calcCheck = (base: number[]): number => {
     const weights = base.length === 12
@@ -38,11 +62,11 @@ export function isValidCNPJ(value: string): boolean {
     return rest < 2 ? 0 : 11 - rest;
   };
 
-  const check1 = calcCheck(digits.slice(0, 12));
-  if (check1 !== digits[12]) return false;
+  const check1 = calcCheck(values.slice(0, 12));
+  if (check1 !== values[12]) return false;
 
-  const check2 = calcCheck(digits.slice(0, 13));
-  if (check2 !== digits[13]) return false;
+  const check2 = calcCheck(values.slice(0, 13));
+  if (check2 !== values[13]) return false;
 
   return true;
 }
@@ -53,6 +77,6 @@ export function formatCPF(value: string): string {
 }
 
 export function formatCNPJ(value: string): string {
-  const d = onlyDigits(value);
-  return d.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5");
+  const d = normalizeCnpjChars(value);
+  return d.replace(/(.{2})(.{3})(.{3})(.{4})(.{2})/, "$1.$2.$3/$4-$5");
 }
