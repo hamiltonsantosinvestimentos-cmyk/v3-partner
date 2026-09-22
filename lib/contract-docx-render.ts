@@ -180,8 +180,36 @@ function renderPartiesBlockDocx(parties?: ContractParty[]): (Paragraph)[] {
     }
     // Papel da parte (BRIEF NCNDA formatação: "ESTRUTURADORA, HEAD V3 PARTNERS,
     // MANDATÁRIO"), mesmo rótulo do bloco de assinaturas em tela/PDF.
-    out.push(new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 40 }, children: [new TextRun({ text: signatureRoleLabel(p.role), color: GOLD, size: 16, bold: true })] }));
+    //
+    // BUG real corrigido 22/09/2026 (auditoria de diagramação, achado A):
+    // este caminho (.docx, o canal REAL de assinatura via ClickSign, ver
+    // comentário acima de renderPartiesBlockDocx) ainda chamava
+    // signatureRoleLabel(p.role) direto, a mesma causa raiz já corrigida no
+    // caminho HTML/PDF (lib/contract-render.ts) -- o rótulo renumerado
+    // (display_label) nunca era lido aqui, então o .docx enviado pra
+    // assinatura real continuaria divergindo do preâmbulo mesmo depois do
+    // fix anterior, que só cobriu o fallback.
+    out.push(new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 40 }, children: [new TextRun({ text: (p.display_label ?? signatureRoleLabel(p.role)).toUpperCase(), color: GOLD, size: 16, bold: true })] }));
   });
+  // Fechamento anti-fraude (22/09/2026, mesmo motivo do caminho HTML/PDF):
+  // espaço em branco depois da última assinatura é margem para inserção de
+  // texto após a assinatura. Fórmula notarial padrão declara sem ambiguidade
+  // onde o instrumento termina.
+  out.push(
+    new Paragraph({ spacing: { before: 360 }, border: { top: { style: BorderStyle.DASHED, size: 4, color: GOLD } } }),
+    new Paragraph({
+      alignment: AlignmentType.CENTER,
+      spacing: { before: 120 },
+      children: [
+        new TextRun({
+          text: "Nada mais havendo a tratar, encerra-se o presente instrumento neste ponto. Nenhum texto, cláusula ou acréscimo posterior a esta linha integra ou vincula as Partes.",
+          italics: true,
+          size: 16,
+          color: CREAM,
+        }),
+      ],
+    }),
+  );
   return out;
 }
 

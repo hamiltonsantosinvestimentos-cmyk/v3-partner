@@ -203,7 +203,17 @@ ${p.doc ? `<div class="party-doc">${p.doc}</div>` : ""}
 </div>`
     )
     .join("");
-  return `<div class="parties">${rows}</div>`;
+  // Fórmula de encerramento (achado real 22/09/2026, pedido de João: espaço
+  // em branco depois da última assinatura é vetor clássico de fraude,
+  // margem para inserir cláusula/texto depois de assinado). Prática notarial
+  // brasileira padrão pra isso é o fechamento explícito ("nada mais havendo
+  // a tratar"), que declara sem ambiguidade onde o instrumento termina --
+  // qualquer coisa impressa depois desta linha é, por definição, estranha
+  // ao documento assinado. break-inside/page-break-before:avoid tenta manter
+  // colada à última assinatura; se não couber, vira sozinha a única linha da
+  // página seguinte, o que também fecha o documento sem ambiguidade.
+  const closing = `<div class="doc-closing">Nada mais havendo a tratar, encerra-se o presente instrumento neste ponto. Nenhum texto, cláusula ou acréscimo posterior a esta linha integra ou vincula as Partes.</div>`;
+  return `<div class="parties">${rows}${closing}</div>`;
 }
 
 // Título impresso do instrumento (21/09/2026, BRIEF NCNDA, problema 2).
@@ -314,6 +324,10 @@ p{margin-bottom:12px;text-align:justify}
 .party-doc{font-size:10px;color:#5B6B82;margin-top:2px}
 .party-role{font-size:9px;color:#8C6D1F;text-transform:uppercase;letter-spacing:.06em;margin-top:4px}
 .party-sig{flex:0 0 45%;text-align:left;font-size:9px;color:#5B6B82;font-style:italic}
+/* Fechamento anti-fraude (22/09/2026): linha final explícita logo após a
+   última assinatura, para nenhum espaço em branco no fim do documento
+   parecer "margem" para inserção posterior de texto. */
+.doc-closing{margin-top:16px;padding-top:12px;border-top:1px dashed #C9A84C;text-align:center;font-size:10px;font-style:italic;color:#5B6B82;text-transform:uppercase;letter-spacing:.04em}
 .footer{text-align:center;margin-top:48px;font-size:10px;color:#5B6B82}
 h2,h3{break-after:avoid;page-break-after:avoid}
 p{orphans:3;widows:3}
@@ -326,6 +340,7 @@ p{orphans:3;widows:3}
    continua só em CADA LINHA (.party) para nenhuma firma isolada ser cortada
    ao meio entre duas páginas. */
 .party{break-inside:avoid;page-break-inside:avoid}
+.doc-closing{break-inside:avoid;page-break-inside:avoid;break-before:avoid;page-break-before:avoid}
 .footer{break-inside:avoid;page-break-inside:avoid}
 /* Sem @page{margin:...} de propósito: margem de impressão quem controla é o
    Puppeteer (page.pdf({margin}), ver htmlToPdfBase64) -- uma regra @page
