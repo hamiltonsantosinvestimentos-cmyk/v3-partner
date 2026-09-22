@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency } from "@/lib/utils";
 import { uploadCreditDocument } from "@/lib/credit-documents/upload";
+import { buildAnaliseCreditoLink } from "@/lib/analise-credito-link";
 
 // Checklists de documentos e linhas por nível — em lib/credit-checklists.ts
 // (importavel em rotas server-side sem trazer dependencias de UI/React).
@@ -312,7 +313,10 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
   const [gerandoPDF, setGerandoPDF] = useState(false);
   // Link de Análise de Crédito + comissão, montados após o cadastro da proposta
   // (precisam do `code` que o servidor emite — ver comentário em handleSubmit).
-  const [analysisLink, setAnalysisLink] = useState<{ url: string; payoutReais: number } | null>(null);
+  // payoutReais null = comissão não configurada (consulta-commissions.ts não
+  // gera comissão nesse caso) -- não mostramos "R$ 0,00", que sugeriria o
+  // contrário.
+  const [analysisLink, setAnalysisLink] = useState<{ url: string; payoutReais: number | null } | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
 
   // Dados do cliente
@@ -587,11 +591,10 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
           fetch("/api/settings/consulta-partner-payout").then(r => r.json()).catch(() => null),
         ]);
         const code = propRes?.proposal?.code as string | undefined;
-        const payoutReais = typeof payoutRes?.payout_reais === "number" ? payoutRes.payout_reais : 60;
+        const payoutRaw = typeof payoutRes?.payout_reais === "number" ? payoutRes.payout_reais : null;
+        const payoutReais = payoutRaw !== null && payoutRaw > 0 ? payoutRaw : null;
         if (code) {
-          const params = new URLSearchParams({ prop: code });
-          if (partnerId) params.set("ref", partnerId);
-          setAnalysisLink({ url: `https://app.v3partners.com.br/analise-v2?${params.toString()}#configurador`, payoutReais });
+          setAnalysisLink({ url: buildAnaliseCreditoLink({ proposalCode: code, partnerId }), payoutReais });
         }
       } catch { /* link é complementar, não bloqueia a confirmação da proposta */ }
 
@@ -608,6 +611,10 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
     navigator.clipboard.writeText(analysisLink.url).then(() => {
       setLinkCopied(true);
       setTimeout(() => setLinkCopied(false), 2000);
+    }).catch(() => {
+      // Permissão de clipboard negada ou contexto não-seguro: sem feedback de
+      // sucesso, o botão volta a mostrar "Copiar" e o partner pode tentar de
+      // novo ou selecionar o link manualmente.
     });
   }
 
@@ -680,9 +687,11 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
                   <><Link2 className="w-3.5 h-3.5" /> Copiar link de Análise de Crédito</>
                 )}
               </button>
-              <p className="text-[11px] text-emerald-400 font-semibold">
-                Cada análise entregue gera {formatCurrency(analysisLink.payoutReais)} de comissão para você.
-              </p>
+              {analysisLink.payoutReais !== null && (
+                <p className="text-[11px] text-emerald-400 font-semibold">
+                  Cada análise entregue gera {formatCurrency(analysisLink.payoutReais)} de comissão para você.
+                </p>
+              )}
             </div>
           )}
 

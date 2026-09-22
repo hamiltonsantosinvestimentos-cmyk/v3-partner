@@ -4361,7 +4361,9 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
           if (!json.ok) {
             throw new Error(typeof json.error === "string" ? json.error : "Erro ao salvar na Mesa de Crédito");
           }
-          setShowCreditoForm(false);
+          // Não fecha o modal aqui: o próprio NovaPropostaModal ainda precisa
+          // renderizar a tela "Proposta Enviada!" (link de Análise de Crédito
+          // + comissão) antes de fechar via onClose (botão "Fechar").
           return (json.proposal as Record<string, unknown>).id as string;
         }}
       />

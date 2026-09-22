@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { STATUS_LABELS, STATUS_COLORS, PLAN_COMMISSION_PCT, ROLE_LABELS, type OperationStatus, type UserRole } from "@/lib/constants";
 import { uploadCreditDocument } from "@/lib/credit-documents/upload";
+import { buildAnaliseCreditoLink } from "@/lib/analise-credito-link";
 import { CHECKLISTS, DEFAULT_CHECKLIST } from "./nova-proposta-modal";
 import { RecomendacaoLinha } from "./recomendacao-linha";
 import { LinkServicoStatusBadge } from "@/components/partner/link-servico-status-badge";
@@ -321,9 +322,7 @@ function AnaliseCreditoLinkButton({ proposalId, proposalCode, partnerId, hideBad
   }, [proposalId]);
 
   function handleCopy() {
-    const params = new URLSearchParams({ prop: proposalCode });
-    if (partnerId) params.set("ref", partnerId);
-    const url = `https://app.v3partners.com.br/analise-v2?${params.toString()}#configurador`;
+    const url = buildAnaliseCreditoLink({ proposalCode, partnerId });
     navigator.clipboard.writeText(url).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
