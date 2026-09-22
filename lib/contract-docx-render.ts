@@ -46,9 +46,33 @@ import { signatureRoleLabel, type ContractParty } from "./contract-render";
 const GOLD = "C9A84C";
 const CREAM = "1A1A1A"; // corpo do .docx é sempre texto escuro sobre fundo branco -- documento pra assinatura, nunca segue a paleta navy/ouro de tela (regra de identidade visual V3 é pra peça de marca, não pra instrumento jurídico que o signatário assina)
 
+// Achado real 22/09/2026 (conferido só depois de converter o .docx pra PDF e
+// olhar página por página -- nunca visível na extração de texto do XML):
+// TextNode.rawText do node-html-parser devolve o texto CRU entre as tags,
+// sem decodificar entidade nenhuma. O "&nbsp;" que applyClauseHangingIndent
+// (lib/contract-render.ts) injeta entre o número da cláusula e o texto (pra
+// o espaço nunca esticar no justificado) saía LITERAL na tela -- "1.&nbsp;DAS
+// PARTES" em vez de "1. DAS PARTES". Cobre só as entidades que este motor de
+// fato produz (não é um decoder HTML genérico) -- nunca puxar a dependência
+// inteira `entities` só pra isso.
+function decodeHtmlEntities(text: string): string {
+  return text
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'");
+}
+
 function textRunsFromInline(node: Node, bold = false): TextRun[] {
   if (node.nodeType === NodeType.TEXT_NODE) {
-    const text = node.rawText.replace(/\s+/g, " ");
+    // Ordem importa: colapsar \s+ ANTES de decodificar "&nbsp;" -- \s em
+    // regex JS também casa   (nbsp já decodificado), então decodificar
+    // primeiro faria o próprio replace de espaços engolir de volta o nbsp
+    // que a entidade devia proteger (o objetivo inteiro do &nbsp; aqui é
+    // nunca ser tratado como espaço comum).
+    const text = decodeHtmlEntities(node.rawText.replace(/\s+/g, " "));
     if (!text.trim()) return [];
     return [new TextRun({ text, bold, color: CREAM })];
   }
@@ -251,7 +275,13 @@ async function buildLetterheadHeader(): Promise<Header> {
         floating: {
           horizontalPosition: { relative: HorizontalPositionRelativeFrom.PAGE, offset: 8.06 * CM },
           verticalPosition: { relative: VerticalPositionRelativeFrom.PAGE, offset: 1.25 * CM },
-          wrap: { type: TextWrappingType.NONE },
+          // TOP_AND_BOTTOM (achado real 22/09/2026, conferido convertendo o
+          // .docx pra PDF via Word e olhando página por página): NONE deixa
+          // o texto correr POR CIMA da imagem em vez de desviar -- é isso
+          // que causava "V3 PARTNERS" com linha de cláusula atravessada por
+          // cima na página 2. Nunca detectável só lendo o XML/texto extraído
+          // (conferido em sessão anterior), só abrindo o documento renderizado.
+          wrap: { type: TextWrappingType.TOP_AND_BOTTOM },
         },
       }),
     );
@@ -265,7 +295,7 @@ async function buildLetterheadHeader(): Promise<Header> {
         floating: {
           horizontalPosition: { relative: HorizontalPositionRelativeFrom.PAGE, offset: 2.85 * CM },
           verticalPosition: { relative: VerticalPositionRelativeFrom.PAGE, offset: 26.61 * CM },
-          wrap: { type: TextWrappingType.NONE },
+          wrap: { type: TextWrappingType.TOP_AND_BOTTOM },
         },
       }),
     );
@@ -316,7 +346,21 @@ export async function renderContractDocx(fullHtml: string, parties?: ContractPar
   const header = await buildLetterheadHeader();
 
   const doc = new Document({
-    sections: [{ headers: { default: header }, children }],
+    // Margens reais de página (achado real 22/09/2026, mesma auditoria do
+    // wrap acima): sem isso a seção usava o padrão do Word (~2,54cm), MENOR
+    // que o espaço ocupado pela logo (1,25cm a 3,58cm do topo) e pelo rodapé
+    // (26,61cm a 28,62cm, página A4 = 29,7cm) -- corpo do texto nascia raso
+    // o bastante pra entrar na área das duas imagens em toda página sem
+    // título grande acima (a primeira página escapava por ter o <h1> e o
+    // "1.1 PARTES" ocupando a folga). Valores em twips (1cm ≈ 566,93 twips).
+    // Margem de baixo com folga um pouco maior que o mínimo (29,7-26,61=
+    // 3,09cm) pra sobrar respiro visual antes do rodapé, não só evitar
+    // sobreposição matemática.
+    sections: [{
+      headers: { default: header },
+      properties: { page: { margin: { top: 2268, bottom: 2155, left: 1134, right: 1134 } } },
+      children,
+    }],
     styles: {
       default: {
         document: { run: { font: "Calibri", size: 22, color: CREAM } },
