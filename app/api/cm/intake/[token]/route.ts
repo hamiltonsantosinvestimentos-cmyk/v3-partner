@@ -132,6 +132,10 @@ export async function POST(
     .from("cm_asset_listings")
     .update({
       anonymous_id: anonId,
+      // P0 (22/09/2026): numero_interno passa a ser sempre o mesmo valor de
+      // anonymous_id -- antes vinha de generate_cm_numero_interno(), uma
+      // segunda serie nunca registrada em v3_code_series, sempre divergente.
+      numero_interno: anonId,
       asset_type,
       seller_name,
       seller_cpf_cnpj: seller_cpf_cnpj ?? null,
