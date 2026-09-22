@@ -312,6 +312,7 @@ export function PedidosPartnersClient({ canManagePayout = false }: Props) {
           order={selected}
           onClose={() => setSelected(null)}
           onUpdated={refreshSelected}
+          podeExcluirAnalise={canManagePayout}
         />
       )}
     </div>
