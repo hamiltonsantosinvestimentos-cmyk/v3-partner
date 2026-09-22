@@ -9,7 +9,7 @@
 // Robson Lino, mesmo bloco).
 import { useState, useEffect } from "react";
 import { User, Loader2, FileText, Download, X } from "lucide-react";
-import { PARTY_NATURE_LABELS, REPRESENTATIVE_TYPE_LABELS, type PartyNature } from "@/lib/legal-qualification";
+import { PARTY_NATURE_LABELS, REPRESENTATIVE_TYPE_LABELS, formatDocumentNumber, type PartyNature } from "@/lib/legal-qualification";
 import { KYC_DOCUMENT_KIND_LABELS } from "@/lib/kyc-documents";
 import { ROLE_LABELS } from "@/lib/qualification-roles";
 
@@ -71,7 +71,7 @@ function PartyCardBody({ data, onPreview }: { data: any; onPreview: (url: string
       </div>
 
       <div className="grid grid-cols-2 gap-2 text-[11px]">
-        {q.cpf_cnpj && <div><span className="text-[#9BAFC5]">CPF</span><p className="text-[#F5F1E8]">{q.cpf_cnpj}</p></div>}
+        {q.cpf_cnpj && <div><span className="text-[#9BAFC5]">CPF</span><p className="text-[#F5F1E8]">{formatDocumentNumber(q.cpf_cnpj) ?? q.cpf_cnpj}</p></div>}
         {q.rg && <div><span className="text-[#9BAFC5]">RG</span><p className="text-[#F5F1E8]">{q.rg}</p></div>}
         {q.nationality && <div><span className="text-[#9BAFC5]">Nacionalidade</span><p className="text-[#F5F1E8]">{q.nationality}</p></div>}
         {q.marital_status && <div><span className="text-[#9BAFC5]">Estado Civil</span><p className="text-[#F5F1E8]">{q.marital_status}</p></div>}
@@ -87,7 +87,7 @@ function PartyCardBody({ data, onPreview }: { data: any; onPreview: (url: string
         <div className="pt-2 border-t border-[#9BAFC5]/10 space-y-1.5">
           <p className="text-[9px] font-bold text-[#C9A84C] uppercase">Empresa</p>
           <div className="text-[11px]"><span className="text-[#9BAFC5]">Razão Social</span><p className="text-[#F5F1E8]">{q.company_name}</p></div>
-          <div className="text-[11px]"><span className="text-[#9BAFC5]">CNPJ</span><p className="text-[#F5F1E8]">{q.company_cnpj}</p></div>
+          <div className="text-[11px]"><span className="text-[#9BAFC5]">CNPJ</span><p className="text-[#F5F1E8]">{formatDocumentNumber(q.company_cnpj) ?? q.company_cnpj}</p></div>
           {q.company_address && <div className="text-[11px]"><span className="text-[#9BAFC5]">Endereço da Sede</span><p className="text-[#F5F1E8]">{q.company_address}</p></div>}
         </div>
       )}
@@ -116,7 +116,7 @@ function PartyCardBody({ data, onPreview }: { data: any; onPreview: (url: string
             <div key={i} className="bg-[#12112A] border border-[#9BAFC5]/10 rounded-lg p-2.5 space-y-1" style={{ marginLeft: rep.depth * 12 }}>
               <p className="text-[10px] text-[#C9A84C] font-bold uppercase">{REPRESENTATIVE_TYPE_LABELS[rep.representative_type as keyof typeof REPRESENTATIVE_TYPE_LABELS] ?? rep.representative_type}</p>
               <p className="text-xs text-[#F5F1E8] font-medium">{rep.party_nature === "PJ" ? rep.company_name : rep.full_name}</p>
-              <p className="text-[10px] text-[#9BAFC5]">{rep.party_nature === "PJ" ? rep.company_cnpj : rep.cpf_cnpj}</p>
+              <p className="text-[10px] text-[#9BAFC5]">{formatDocumentNumber(rep.party_nature === "PJ" ? rep.company_cnpj : rep.cpf_cnpj) ?? (rep.party_nature === "PJ" ? rep.company_cnpj : rep.cpf_cnpj)}</p>
               {rep.documents?.length > 0 && (
                 <div className="pt-1 space-y-1">
                   {rep.documents.map((doc: any, j: number) => <DocumentRow key={j} doc={doc} onPreview={onPreview} />)}

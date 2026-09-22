@@ -5,6 +5,7 @@ import { randomUUID } from "crypto";
 import { getProvider, type SendEnvelopeInput } from "@/lib/esignature";
 import { renderContractDocx } from "@/lib/contract-docx-render";
 import type { ContractParty } from "@/lib/contract-render";
+import { buildEnvelopeLabel } from "@/lib/contract-envelope-label";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -103,6 +104,24 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     }, { status: 422 });
   }
 
+  // Gate de signatário duplicado (21/09/2026, BRIEF NCNDA, problema 4): o
+  // NCNDA V3C-NDA-2026-0036 saiu do gerador com o Head da Mesa duas vezes, mesmo
+  // e-mail. Dois signatários com o mesmo e-mail viram requisitos repetidos no
+  // envelope e assinatura em dobro no bloco do documento. Bloqueia antes de
+  // qualquer chamada externa; a correção é regerar/ajustar as partes.
+  const emailCount = new Map<string, string[]>();
+  for (const p of parties) {
+    const key = p.email?.trim().toLowerCase();
+    if (!key) continue;
+    emailCount.set(key, [...(emailCount.get(key) ?? []), p.name ?? ""]);
+  }
+  const duplicated = Array.from(emailCount.entries()).filter(([, names]) => names.length > 1);
+  if (duplicated.length > 0) {
+    return NextResponse.json({
+      error: `Contrato não pode ser enviado: signatário duplicado (mesmo e-mail em mais de uma parte): ${duplicated.map(([email, names]) => `${email} (${names.join(" / ")})`).join("; ")}. Corrija as partes antes de enviar.`,
+    }, { status: 422 });
+  }
+
   // document: repassa o CPF/CNPJ já cadastrado em `parties` (mesmo campo
   // `doc`) -- a ClickSign ignora este campo, a CertOne exige CPF válido
   // aqui (ver lib/esignature/certone-provider.ts, achado real de 11/09/2026).
@@ -133,9 +152,15 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   // dá uma chave de correlação confiável pra identificar o contrato quando
   // o PDF assinado retornar por e-mail via Observador de Assinatura, sem
   // depender do formato de e-mail da própria ClickSign, que não controlamos.
-  const documentLabel = contract.contract_code
-    ? `${contract.contract_code} · ${contract.contract_title}`
-    : contract.contract_title;
+  // 21/09/2026 (decisão de João): o envelope leva número do contrato, tipo, setor e partner
+  // ("V3C-NDA-2026-0036 · NCNDA · Bolsa de Ativos · Partner Fulano"), nunca o nome interno da
+  // minuta. O código continua PRIMEIRO: é a chave de correlação do arquivamento acima.
+  const documentLabel = buildEnvelopeLabel({
+    contract_code: contract.contract_code,
+    contract_title: contract.contract_title,
+    vertical: contract.vertical,
+    parties,
+  });
 
   // Regularização de contrato manual (19/08/2026): o PDF já está pronto no
   // Storage (capa Termo + original mesclados e estampados, ver

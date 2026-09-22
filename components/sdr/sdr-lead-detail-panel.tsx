@@ -23,6 +23,8 @@ export const PROSPECCAO_ETAPA_LABELS: Record<string, { label: string; text: stri
   prospect:    { label: "Prospect",    text: "text-[#7A8FA8]",   bg: "bg-[#7A8FA8]/10",   border: "border-[#7A8FA8]/30" },
   contatado:   { label: "Contatado",   text: "text-blue-400",    bg: "bg-blue-400/10",    border: "border-blue-400/30" },
   interessado: { label: "Interessado", text: "text-amber-400",   bg: "bg-amber-400/10",   border: "border-amber-400/30" },
+  agenda_reuniao:   { label: "Agenda de Reunião",   text: "text-teal-400",   bg: "bg-teal-400/10",   border: "border-teal-400/30" },
+  proposta_retorno: { label: "Proposta e Retorno", text: "text-orange-400", bg: "bg-orange-400/10", border: "border-orange-400/30" },
   trial:       { label: "Em Trial",    text: "text-violet-400",  bg: "bg-violet-400/10",  border: "border-violet-400/30" },
   convertido:  { label: "Convertido",  text: "text-emerald-400", bg: "bg-emerald-400/10", border: "border-emerald-400/30" },
   perdido:     { label: "Perdido",     text: "text-red-400",     bg: "bg-red-400/10",     border: "border-red-400/30" },

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
-import { lookupProspeccaoLeadsByPhones, ensureProspeccaoLead } from "@/lib/sdr-prospeccao-sync";
+import { lookupProspeccaoLeadsByPhones, ensureProspeccaoLead, etapaParaKanbanSdr } from "@/lib/sdr-prospeccao-sync";
 import { SDR_INTERNO_PARTNER_ID } from "@/lib/sdr-agent";
 
 const ALLOWED_ROLES = ["ADMIN", "GESTAO", "SDR", "CLOSER"] as const;
@@ -61,7 +61,7 @@ export async function GET() {
     last_message_at: l.last_message_at,
     last_message_preview: l.last_message_preview,
     prospeccao_lead_id: prospeccaoByPhone[l.phone]?.id ?? null,
-    etapa: prospeccaoByPhone[l.phone]?.etapa ?? "prospect",
+    etapa: etapaParaKanbanSdr(prospeccaoByPhone[l.phone]?.etapa ?? "prospect"),
   }));
 
   // Equipe (pro filtro "responsável" — só faz sentido pro admin, que vê todo mundo)

@@ -4,7 +4,8 @@ import React, { useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import { Plus, Save, Trash2, Loader2, FileText, Eye, ChevronDown, Upload, Send, CheckCircle2, XCircle, Scale, Users, X, FilePlus2, UserPlus, Copy, Share2, RotateCcw, Pencil, Maximize2 } from "lucide-react";
 import { cn, isValidEmail } from "@/lib/utils";
-import { ROLE_LABELS } from "@/lib/qualification-roles";
+import { ROLE_LABELS, sortQualificationParties } from "@/lib/qualification-roles";
+import { formatDocumentNumber } from "@/lib/legal-qualification";
 import { VERTICAL_LABELS, CONCRETE_VERTICALS } from "@/lib/contract-verticals";
 import { extractPlainVariables } from "@/lib/contract-render";
 import { PartyQualificationCardModal } from "./party-qualification-card";
@@ -836,13 +837,16 @@ export function ContractTemplatesClient() {
     const statusLabel = (APPROVAL_STATUS_MAP[selected.approval_status] ?? APPROVAL_STATUS_MAP.rascunho).label;
 
     const relevantBatches = qualBatches.filter((b) => !b.consumido_por_contract_id);
-    const allParties = relevantBatches.flatMap((b) => b.cm_party_qualifications);
+    // Ordem canônica (21/09/2026, BRIEF NCNDA): o quadro de leitura mostra o
+    // rótulo de ORIGEM do papel (visão de auditoria, mapeia direto ao
+    // formulário); só o texto do instrumento renumera os intermediários.
+    const allParties = sortQualificationParties(relevantBatches.flatMap((b) => b.cm_party_qualifications));
 
     const qualVars: Record<string, string> = {};
     for (const p of allParties) {
       if (p.status !== "preenchido") continue;
       qualVars[`${p.role_in_document}_nome`] = p.full_name;
-      if (p.cpf_cnpj) qualVars[`${p.role_in_document}_cpf_cnpj`] = p.cpf_cnpj;
+      if (p.cpf_cnpj) qualVars[`${p.role_in_document}_cpf_cnpj`] = formatDocumentNumber(p.cpf_cnpj) ?? p.cpf_cnpj;
       qualVars[`${p.role_in_document}_email`] = p.email;
     }
     // anyResolved conta SUBSTITUIÇÕES DE VERDADE no texto, não só se há dado
@@ -884,7 +888,7 @@ export function ContractTemplatesClient() {
       return `<tr>
       <td>${esc(ROLE_LABELS[p.role_in_document] ?? p.role_in_document)}</td>
       <td>${esc(p.full_name)}</td>
-      <td>${p.cpf_cnpj ? esc(p.cpf_cnpj) : "<span class=\"pend\">Pendente</span>"}</td>
+      <td>${p.cpf_cnpj ? esc(formatDocumentNumber(p.cpf_cnpj) ?? p.cpf_cnpj) : "<span class=\"pend\">Pendente</span>"}</td>
       <td>${p.status === "preenchido" ? "<span class=\"ok\">Preenchido</span>" : "<span class=\"pend\">Pendente</span>"}</td>
       ${hasAnyPJ ? `<td>${cnpjCell}</td>` : ""}
     </tr>`;
@@ -1317,7 +1321,7 @@ ${allParties.length > 0 ? `<div class="qualbox">
                           </div>
                         </div>
                         <div className="space-y-1.5">
-                          {batch.cm_party_qualifications.map((p) => (
+                          {sortQualificationParties(batch.cm_party_qualifications).map((p) => (
                             editingPartyId === p.id ? (
                               <div key={p.id} className="bg-[#162744] rounded px-2.5 py-2 space-y-1.5">
                                 <input value={editPartyForm.full_name} onChange={(e) => setEditPartyForm((f) => ({ ...f, full_name: e.target.value }))} placeholder="Nome completo *"
@@ -1346,7 +1350,7 @@ ${allParties.length > 0 ? `<div class="qualbox">
                             ) : (
                             <div key={p.id} className="flex items-center justify-between gap-2 bg-[#162744] rounded px-2.5 py-1.5">
                               <div className="min-w-0">
-                                <p className="text-xs text-[#F5F1E8] truncate">{p.full_name} <span className="text-[9px] text-[#9BAFC5]">· {ROLE_LABELS[p.role_in_document] ?? p.role_in_document}{p.cpf_cnpj ? ` · CPF/CNPJ ${p.cpf_cnpj}` : ""}</span></p>
+                                <p className="text-xs text-[#F5F1E8] truncate">{p.full_name} <span className="text-[9px] text-[#9BAFC5]">· {ROLE_LABELS[p.role_in_document] ?? p.role_in_document}{p.cpf_cnpj ? ` · CPF/CNPJ ${formatDocumentNumber(p.cpf_cnpj) ?? p.cpf_cnpj}` : ""}</span></p>
                                 {p.party_nature === "PJ" && (
                                   <p className="text-[9px] mt-0.5">
                                     {p.cnpj_situacao_cadastral ? (
@@ -2205,7 +2209,7 @@ ${allParties.length > 0 ? `<div class="qualbox">
                         {completedUnconsumedBatches.map((b) => (
                           <label key={b.id} className="flex items-center gap-2 text-xs text-[#F5F1E8] cursor-pointer">
                             <input type="radio" name="qualBatchPicker" checked={selectedQualBatchId === b.id} onChange={() => setSelectedQualBatchId(b.id)} />
-                            {b.cm_party_qualifications.map((p) => p.full_name).join(", ")}
+                            {sortQualificationParties(b.cm_party_qualifications).map((p) => p.full_name).join(", ")}
                           </label>
                         ))}
                       </div>

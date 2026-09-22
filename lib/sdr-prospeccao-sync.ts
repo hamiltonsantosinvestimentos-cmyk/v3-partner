@@ -19,14 +19,23 @@ const STATUS_TO_ETAPA: Record<string, string> = {
   arquivado: "perdido",
 };
 
+// agenda_reuniao / proposta_retorno (Kanban de Prospecção) ficam entre interessado e trial.
+// Sem estar aqui, a sincronização do SDR trataria esses leads como rank 0 e os regrediria.
 const ETAPA_RANK: Record<string, number> = {
-  prospect: 0, contatado: 1, interessado: 2, trial: 3, convertido: 4,
+  prospect: 0, contatado: 1, interessado: 2, agenda_reuniao: 3, proposta_retorno: 4, trial: 5, convertido: 6,
 };
+
+/** O Kanban do SDR (WhatsApp) tem só 5 colunas: as etapas novas aparecem em "Interessado" nele. */
+export function etapaParaKanbanSdr(etapa: string): string {
+  return etapa === "agenda_reuniao" || etapa === "proposta_retorno" ? "interessado" : etapa;
+}
 
 export const ETAPA_LABELS: Record<string, { label: string; color: string }> = {
   prospect:    { label: "Prospect",    color: "#7A8FA8" },
   contatado:   { label: "Contatado",   color: "#60A5FA" },
   interessado: { label: "Interessado", color: "#F59E0B" },
+  agenda_reuniao:   { label: "Agenda de Reunião",   color: "#2DD4BF" },
+  proposta_retorno: { label: "Proposta e Retorno", color: "#FB923C" },
   trial:       { label: "Em Trial",    color: "#A78BFA" },
   convertido:  { label: "Convertido",  color: "#34D399" },
   perdido:     { label: "Perdido",     color: "#EF4444" },
@@ -91,7 +100,7 @@ export async function syncSdrLeadToProspeccao(opts: {
   // "perdido" só é aplicado se o prospect ainda não passou de "interessado"
   const rankAtual = ETAPA_RANK[match.etapa] ?? 0;
   const deveAtualizar = etapaAlvo === "perdido"
-    ? !["convertido", "trial", "perdido"].includes(match.etapa)
+    ? !["convertido", "trial", "agenda_reuniao", "proposta_retorno", "perdido"].includes(match.etapa)
     : ETAPA_RANK[etapaAlvo] > rankAtual;
 
   if (!deveAtualizar) return;

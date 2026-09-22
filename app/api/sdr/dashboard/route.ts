@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
-import { lookupProspeccaoEtapaByPhones } from "@/lib/sdr-prospeccao-sync";
+import { lookupProspeccaoEtapaByPhones, etapaParaKanbanSdr } from "@/lib/sdr-prospeccao-sync";
 import { SDR_INTERNO_PARTNER_ID } from "@/lib/sdr-agent";
 
 const ALLOWED_ROLES = ["ADMIN", "GESTAO", "SDR", "CLOSER"] as const;
@@ -41,7 +41,7 @@ export async function GET() {
   // Funil (etapa de Prospecção — leads sem etapa vinculada contam como "prospect")
   const funil = ETAPAS.map(etapa => ({
     etapa,
-    count: leads.filter(l => (etapaByPhone[l.phone] ?? "prospect") === etapa).length,
+    count: leads.filter(l => etapaParaKanbanSdr(etapaByPhone[l.phone] ?? "prospect") === etapa).length,
   }));
 
   // Mensagens hoje (só do usuário, não da IA), escopadas aos telefones visíveis

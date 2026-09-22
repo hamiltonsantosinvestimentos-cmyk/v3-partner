@@ -184,8 +184,13 @@ function renderPartiesBlockDocx(parties?: ContractParty[]): (Paragraph)[] {
 export async function renderContractDocx(fullHtml: string, parties?: ContractParty[]): Promise<Buffer> {
   const root = parse(fullHtml);
   const body = root.querySelector("body") ?? root;
-  const titleEl = body.querySelector(".header h1") ?? root.querySelector("h1");
-  const title = titleEl?.text?.trim() || "Contrato V3 Partners";
+  // 21/09/2026 (BRIEF NCNDA): só existe <h1> no .header quando o corpo da minuta
+  // NÃO traz o próprio (ver wrapContractInV3Html). Quando o corpo abre com o
+  // título jurídico, ele é renderizado por blocksFromRoot() e NENHUM título é
+  // injetado aqui, senão o nome interno do modelo (ou um título duplicado)
+  // apareceria acima do instrumento no .docx que vai para a assinatura.
+  const headerTitleEl = body.querySelector(".header h1");
+  const title = headerTitleEl?.text?.trim() || null;
 
   const contentBlocks: HTMLElement[] = [];
   for (const node of body.childNodes) {
@@ -200,7 +205,7 @@ export async function renderContractDocx(fullHtml: string, parties?: ContractPar
   const contentRoot = parse(`<div>${contentBlocks.map((b) => b.toString()).join("")}</div>`).querySelector("div")!;
 
   const children: (Paragraph | Table)[] = [
-    new Paragraph({ text: title, heading: HeadingLevel.HEADING_1, alignment: AlignmentType.CENTER, spacing: { after: 240 } }),
+    ...(title ? [new Paragraph({ text: title, heading: HeadingLevel.HEADING_1, alignment: AlignmentType.CENTER, spacing: { after: 240 } })] : []),
     ...blocksFromRoot(contentRoot),
     ...renderPartiesBlockDocx(parties),
   ];
