@@ -1,5 +1,8 @@
 import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
+import { isValidCPF, isValidCNPJ } from "@/lib/validators/cpf-cnpj";
+
+export { isValidCPF, isValidCNPJ };
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -80,11 +83,22 @@ export function isValidEmail(value: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 }
 
-/** Mascara progressiva para campo hibrido CPF/CNPJ — detecta pelo numero de digitos. */
+/**
+ * Mascara progressiva para campo hibrido CPF/CNPJ -- detecta pelo numero de
+ * caracteres. CPF (11) so aceita digito, nunca chega a ter letra. CNPJ (14,
+ * desde 31/07/2026 aceita letra maiuscula nas 12 primeiras posicoes) preserva
+ * letra e forca maiusculas -- nunca usar replace(/\D/g,"") aqui, que apagaria
+ * a letra e corromperia o CNPJ novo em andamento (achado real 21/09/2026,
+ * v3-governance-qa).
+ */
 export function maskCpfCnpjInput(value: string): string {
-  const d = value.replace(/\D/g, "").slice(0, 14);
-  if (d.length <= 11) return maskCpfInput(d);
-  return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}/${d.slice(8, 12)}-${d.slice(12)}`;
+  const alnum = value.replace(/[^0-9A-Za-z]/g, "").toUpperCase().slice(0, 14);
+  if (/^\d*$/.test(alnum) && alnum.length <= 11) return maskCpfInput(alnum);
+  if (alnum.length <= 2) return alnum;
+  if (alnum.length <= 5) return `${alnum.slice(0, 2)}.${alnum.slice(2)}`;
+  if (alnum.length <= 8) return `${alnum.slice(0, 2)}.${alnum.slice(2, 5)}.${alnum.slice(5)}`;
+  if (alnum.length <= 12) return `${alnum.slice(0, 2)}.${alnum.slice(2, 5)}.${alnum.slice(5, 8)}/${alnum.slice(8)}`;
+  return `${alnum.slice(0, 2)}.${alnum.slice(2, 5)}.${alnum.slice(5, 8)}/${alnum.slice(8, 12)}-${alnum.slice(12)}`;
 }
 
 // Validacao real de digito verificador (10/09/2026). Achado real: nenhuma validacao de
@@ -93,59 +107,23 @@ export function maskCpfCnpjInput(value: string): string {
 // e so foi descoberto quando a propria Checktudo recusou a consulta. Helper unico, pensado
 // pra ser reaproveitado por qualquer formulario do portal que capture CPF/CNPJ, nao so o
 // intake que originou o achado.
+//
+// isValidCPF/isValidCNPJ moraram aqui duplicados de lib/validators/cpf-cnpj.ts ate
+// 21/09/2026 (achado v3-governance-qa: a copia daqui tinha o mesmo bug de \D que
+// corrompe CNPJ alfanumerico, e uma correcao feita so na outra copia teria deixado
+// esta quebrada). Consolidado numa fonte unica -- ver o import/re-export no topo
+// do arquivo -- REUSE > ADAPT > CREATE.
 
-/** Confere o digito verificador real de um CPF (algoritmo padrao, modulo 11). Rejeita
- *  sequencias repetidas (000.000.000-00, 111.111.111-11, etc.), que passam no calculo mas
- *  nunca sao CPF valido de verdade. */
-export function isValidCPF(value: string): boolean {
-  const cpf = value.replace(/\D/g, "");
-  if (cpf.length !== 11 || /^(\d)\1{10}$/.test(cpf)) return false;
-
-  const digits = cpf.split("").map(Number);
-  const checkDigit = (slice: number[]) => {
-    let sum = 0;
-    let factor = slice.length + 1;
-    for (const d of slice) sum += d * factor--;
-    const rest = (sum * 10) % 11;
-    return rest === 10 ? 0 : rest;
-  };
-
-  if (checkDigit(digits.slice(0, 9)) !== digits[9]) return false;
-  if (checkDigit(digits.slice(0, 10)) !== digits[10]) return false;
-  return true;
-}
-
-/** Confere o digito verificador real de um CNPJ (algoritmo padrao, modulo 11, pesos
- *  6..2/9..2). Rejeita sequencias repetidas pelo mesmo motivo do CPF. */
-export function isValidCNPJ(value: string): boolean {
-  const cnpj = value.replace(/\D/g, "");
-  if (cnpj.length !== 14 || /^(\d)\1{13}$/.test(cnpj)) return false;
-
-  const checkDigit = (base: string) => {
-    const weights = base.length === 12
-      ? [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]
-      : [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
-    let sum = 0;
-    for (let i = 0; i < base.length; i++) sum += Number(base[i]) * weights[i];
-    const rest = sum % 11;
-    return rest < 2 ? 0 : 11 - rest;
-  };
-
-  const base = cnpj.slice(0, 12);
-  const d1 = checkDigit(base);
-  if (d1 !== Number(cnpj[12])) return false;
-  const d2 = checkDigit(base + d1);
-  if (d2 !== Number(cnpj[13])) return false;
-  return true;
-}
-
-/** Entrypoint unico pra campo hibrido CPF/CNPJ -- detecta pelo numero de digitos e valida
+/** Entrypoint unico pra campo hibrido CPF/CNPJ -- detecta pelo tamanho e valida
  *  o checksum real, nunca so o tamanho. Usar sempre que um formulario aceitar os dois
- *  tipos de documento no mesmo campo (mesmo padrao de deteccao de maskCpfCnpjInput). */
+ *  tipos de documento no mesmo campo (mesmo padrao de deteccao de maskCpfCnpjInput).
+ *  CNPJ alfanumerico (desde 31/07/2026) tem letra nas 12 primeiras posicoes -- por
+ *  isso o caminho de CNPJ normaliza preservando letra, nunca com \D. */
 export function isValidCpfCnpj(value: string): boolean {
   const digits = value.replace(/\D/g, "");
   if (digits.length === 11) return isValidCPF(digits);
-  if (digits.length === 14) return isValidCNPJ(digits);
+  const alnum = value.replace(/[^0-9A-Za-z]/g, "");
+  if (alnum.length === 14) return isValidCNPJ(alnum);
   return false;
 }
 

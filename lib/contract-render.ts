@@ -109,10 +109,13 @@ export interface ContractParty {
 // ("Posicionar assinatura ou rubrica") na tela web do ClickSign também não
 // se aplica aqui (esta integração ativa o envelope via API, nunca passa pela
 // tela de envio manual).
+// Regra 2.1 (v3-governance-qa, achado real 21/09/2026): nome de pessoa física
+// e razão social saem em CAIXA ALTA no bloco de assinatura, igual ao contrato
+// físico impresso -- antes saía exatamente como cadastrado, sem conversão.
 function renderPartiesBlock(parties?: ContractParty[]): string {
   if (!parties || parties.length === 0) return "";
   const cards = parties
-    .map((p) => `<div class="party"><div class="line"></div><div class="name">${p.name}</div>${p.doc ? `<div class="doc">${p.doc}</div>` : ""}</div>`)
+    .map((p) => `<div class="party"><div class="line"></div><div class="name">${p.name.toUpperCase()}</div>${p.doc ? `<div class="doc">${p.doc}</div>` : ""}</div>`)
     .join("");
   return `<div class="parties">${cards}</div>`;
 }

@@ -136,47 +136,62 @@ export function cleanPartyText(value: string | null | undefined): string | null 
 }
 
 /**
- * Formata CPF (11 dígitos) ou CNPJ (14 dígitos) no padrão brasileiro,
- * qualquer que seja a forma como foi digitado (só dígitos, com ponto, com
+ * Formata CPF (11 dígitos) ou CNPJ (14 caracteres) no padrão brasileiro,
+ * qualquer que seja a forma como foi digitado (só caracteres, com ponto, com
  * espaço). Achado real 21/09/2026 (NCNDA V3C-NDA-2026-0036): 5 dos 8 CPFs do
  * lote estavam gravados só com dígitos e 3 já com pontuação, e o instrumento
  * saía com os dois formatos misturados. Só apresentação: o dado gravado em
  * cm_party_qualifications nunca é reescrito. Tamanho diferente de 11 ou 14
- * dígitos volta exatamente como digitado (nunca inventa nem corta dígito).
+ * volta exatamente como digitado (nunca inventa nem corta caractere).
  * Vazio ou nulo devolve null, para o chamador cair no "[não informado]".
+ *
+ * CNPJ alfanumérico (emissão pela Receita/Serpro desde 31/07/2026) tem letras
+ * nas 12 primeiras posições, os 2 dígitos verificadores continuam numéricos —
+ * nunca usar \D aqui, que apaga a letra e corrompe o CNPJ novo (achado real
+ * 21/09/2026, v3-governance-qa). CPF é sempre numérico, sem essa ressalva.
  */
 export function formatDocumentNumber(value: string | null | undefined): string | null {
   const raw = (value ?? "").trim();
   if (!raw) return null;
-  const digits = raw.replace(/\D/g, "");
-  if (digits.length === 11) return digits.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, "$1.$2.$3-$4");
-  if (digits.length === 14) return digits.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5");
+  const chars = raw.replace(/[^0-9A-Za-z]/g, "").toUpperCase();
+  if (/^\d{11}$/.test(chars)) return chars.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, "$1.$2.$3-$4");
+  if (chars.length === 14) return chars.replace(/^(.{2})(.{3})(.{3})(.{4})(.{2})$/, "$1.$2.$3/$4-$5");
   return raw;
 }
 
+// Regra 2.1 (v3-governance-qa): nome de pessoa física e razão social saem em
+// CAIXA ALTA no preâmbulo do instrumento, para evitar ambiguidade legal na
+// hora da leitura. Achado real 21/09/2026: nenhuma das 5 bases abaixo fazia
+// essa conversão -- só o RÓTULO do papel (ROLE_LABELS) saía maiúsculo, nunca
+// o nome da parte. `?? NAO_INFORMADO` já é caixa alta, então aplicar
+// .toUpperCase() no resultado combinado é seguro e idempotente nos dois casos.
+function partyNameUpper(name?: string | null): string {
+  return (cleanPartyText(name) ?? NAO_INFORMADO).toUpperCase();
+}
+
 function pfBase(p: { full_name?: string | null; nationality?: string | null; profession?: string | null; marital_status?: string | null; cpf_cnpj?: string | null; rg?: string | null; email?: string | null; phone?: string | null; endereco_completo?: string | null }): string {
-  return `${cleanPartyText(p.full_name) ?? NAO_INFORMADO}, ${p.nationality ?? NAO_INFORMADO}, ${p.profession ?? NAO_INFORMADO}, ${p.marital_status ?? NAO_INFORMADO}, CPF ${formatDocumentNumber(p.cpf_cnpj) ?? NAO_INFORMADO}${frag(", Identidade ", p.rg)}${frag(", e-mail ", p.email)}${frag(", ", formatPhoneBR(p.phone))}, residente e domiciliado(a) na ${formatAddressCodes(p.endereco_completo) ?? NAO_INFORMADO}`;
+  return `${partyNameUpper(p.full_name)}, ${p.nationality ?? NAO_INFORMADO}, ${p.profession ?? NAO_INFORMADO}, ${p.marital_status ?? NAO_INFORMADO}, CPF ${formatDocumentNumber(p.cpf_cnpj) ?? NAO_INFORMADO}${frag(", Identidade ", p.rg)}${frag(", e-mail ", p.email)}${frag(", ", formatPhoneBR(p.phone))}, residente e domiciliado(a) na ${formatAddressCodes(p.endereco_completo) ?? NAO_INFORMADO}`;
 }
 
 /** B2: Pessoa Relativamente Incapaz -- mesma base de A1, com a cláusula de incapacidade logo após o nome. */
 function incapazRelativoBase(p: LegalQualificationParty): string {
-  return `${cleanPartyText(p.full_name) ?? NAO_INFORMADO}, relativamente incapaz, ${p.nationality ?? NAO_INFORMADO}, ${p.profession ?? NAO_INFORMADO}, ${p.marital_status ?? NAO_INFORMADO}, CPF ${formatDocumentNumber(p.cpf_cnpj) ?? NAO_INFORMADO}${frag(", Identidade ", p.rg)}${frag(", e-mail ", p.email)}${frag(", ", formatPhoneBR(p.phone))}, residente e domiciliado(a) na ${formatAddressCodes(p.endereco_completo) ?? NAO_INFORMADO}`;
+  return `${partyNameUpper(p.full_name)}, relativamente incapaz, ${p.nationality ?? NAO_INFORMADO}, ${p.profession ?? NAO_INFORMADO}, ${p.marital_status ?? NAO_INFORMADO}, CPF ${formatDocumentNumber(p.cpf_cnpj) ?? NAO_INFORMADO}${frag(", Identidade ", p.rg)}${frag(", e-mail ", p.email)}${frag(", ", formatPhoneBR(p.phone))}, residente e domiciliado(a) na ${formatAddressCodes(p.endereco_completo) ?? NAO_INFORMADO}`;
 }
 
 /** B3: Pessoa Totalmente Incapaz (menor impúbere) -- só nome, nacionalidade, CPF e RG se houver. Sem profissão/estado civil/endereço, por desenho (menor). */
 function incapazAbsolutoBase(p: LegalQualificationParty): string {
-  return `${cleanPartyText(p.full_name) ?? NAO_INFORMADO}, menor impúbere, totalmente incapaz, ${p.nationality ?? NAO_INFORMADO}, CPF ${formatDocumentNumber(p.cpf_cnpj) ?? NAO_INFORMADO}${frag(", Identidade ", p.rg)}`;
+  return `${partyNameUpper(p.full_name)}, menor impúbere, totalmente incapaz, ${p.nationality ?? NAO_INFORMADO}, CPF ${formatDocumentNumber(p.cpf_cnpj) ?? NAO_INFORMADO}${frag(", Identidade ", p.rg)}`;
 }
 
 /** C1: Espólio -- full_name/cpf_cnpj aqui são os dados do FALECIDO. */
 function espolioBase(p: LegalQualificationParty): string {
-  return `ESPÓLIO DE ${cleanPartyText(p.full_name) ?? NAO_INFORMADO}, CPF ${formatDocumentNumber(p.cpf_cnpj) ?? NAO_INFORMADO}`;
+  return `ESPÓLIO DE ${partyNameUpper(p.full_name)}, CPF ${formatDocumentNumber(p.cpf_cnpj) ?? NAO_INFORMADO}`;
 }
 
 /** D1: Pessoa Jurídica. */
 function pjBase(p: { company_name?: string | null; company_legal_nature?: CompanyLegalNature | null; company_cnpj?: string | null; email?: string | null; phone?: string | null; company_address?: string | null }): string {
   const legalNature = p.company_legal_nature ?? "privado";
-  return `${cleanPartyText(p.company_name) ?? NAO_INFORMADO}, pessoa jurídica de direito ${legalNature}, CNPJ ${formatDocumentNumber(p.company_cnpj) ?? NAO_INFORMADO}${frag(", e-mail ", p.email)}${frag(", ", formatPhoneBR(p.phone))}, com sede na ${formatAddressCodes(p.company_address) ?? NAO_INFORMADO}`;
+  return `${partyNameUpper(p.company_name)}, pessoa jurídica de direito ${legalNature}, CNPJ ${formatDocumentNumber(p.company_cnpj) ?? NAO_INFORMADO}${frag(", e-mail ", p.email)}${frag(", ", formatPhoneBR(p.phone))}, com sede na ${formatAddressCodes(p.company_address) ?? NAO_INFORMADO}`;
 }
 
 /**
