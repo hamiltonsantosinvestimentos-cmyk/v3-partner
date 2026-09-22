@@ -1,4 +1,5 @@
 import { CONCRETE_VERTICALS } from "@/lib/contract-verticals";
+import { ROLE_LABELS } from "@/lib/qualification-roles";
 
 // NDA Multi-Vertical (11/09/2026, pedido de João): uma minuta "multi_vertical"
 // tem trechos que só entram no contrato final conforme a vertical ESCOLHIDA
@@ -75,6 +76,77 @@ export interface ContractParty {
   role: string;
   name: string;
   doc?: string | null;
+  // Rótulo renumerado (achado real 22/09/2026, auditoria de diagramação):
+  // buildPartyDisplayLabels() renumera intermediários numerados de 1 a N só
+  // NA PROSA do preâmbulo (party_qualifications_block, app/api/contracts/
+  // generate/route.ts) -- o bloco de ASSINATURAS nunca recebia esse rótulo,
+  // e derivava o número de novo a partir do role_in_document original
+  // (ex: "intermediario_3" -- que pode não ser o 3º do lote, se algum
+  // intermediário anterior foi excluído). Resultado real: preâmbulo dizia
+  // "INTERMEDIÁRIO 2" pra uma pessoa que assinava como "INTERMEDIÁRIO 3".
+  // Quando presente, este campo é a fonte da verdade do rótulo exibido --
+  // signatureRoleLabel(role) só serve de fallback quando ausente.
+  display_label?: string;
+}
+
+// Rótulo do papel no bloco de assinaturas (BRIEF NCNDA formatação, 22/09/2026):
+// reaproveita ROLE_LABELS (mesmo dicionário da tela de qualificação), com
+// 2 papéis extras que só existem como ContractParty.role sintético, nunca
+// como cm_party_qualifications.role_in_document -- "v3_partners" (a própria
+// V3, sempre a Estruturadora do instrumento) e "cedente" (fluxo de NDA de
+// cliente único, sem lote de qualificação). Mapa local para não alterar
+// ROLE_LABELS (usado também no dropdown de "Adicionar Envolvido").
+const SIGNATURE_ROLE_LABEL_OVERRIDES: Record<string, string> = {
+  v3_partners: "Estruturadora",
+  cedente: "Cedente",
+};
+
+export function signatureRoleLabel(role: string): string {
+  return (SIGNATURE_ROLE_LABEL_OVERRIDES[role] ?? ROLE_LABELS[role] ?? role).toUpperCase();
+}
+
+// Numeração progressiva do corpo (BRIEF NCNDA formatação, 22/09/2026, decisão
+// de João: motor de renderização, não recálculo -- os números continuam
+// digitados pelo Dr. Luis/agente estruturador, nunca recalculados aqui).
+// Marca com uma classe o número já digitado no início de cada parágrafo/
+// título ("7.1. ", "12.3. ", "a) ", "a.1) ") para o CSS aplicar o recuo de
+// primeira linha negativo (número solto à esquerda, texto revertido alinhado
+// à margem), do jeito que o Word desenha uma lista numerada -- medido byte a
+// byte no numbering.xml do modelo do Dr. Luis (recuo real: 1,27cm no nível
+// 1, 1,52cm no nível 2, nunca um valor fixo único). Nunca reescreve o número
+// em si, só envolve o texto já existente -- reversível, e uma minuta sem
+// nenhum parágrafo numerado (ex: cláusula em prosa livre) passa intacta.
+//
+// "\d+\)" (achado real 22/09/2026, auditoria de diagramação): a lista de
+// partes qualificadas (party_qualifications_block, gerada dinamicamente em
+// app/api/contracts/generate/route.ts, nunca digitada à mão) usa marcador
+// "1) ", "2) " -- não é uma cláusula do corpo digitada pelo Dr. Luis, mas
+// precisa do mesmo recuo francês e da mesma numeração sequencial visível
+// para "garantir integridade referencial" entre os nomes das partes.
+// Reaproveita o motor em vez de duplicar a lógica de recuo.
+const CLAUSE_MARKER_RE = /^(\d+(?:\.\d+){0,3}\.|\d+\)|[a-z]\.\d+\)|[a-z]\))\s+/i;
+
+function applyClauseHangingIndent(body: string): string {
+  return body.replace(/<(p|h2|h3)([^>]*)>([\s\S]*?)<\/\1>/gi, (full, tag, attrs, inner) => {
+    const m = inner.match(CLAUSE_MARKER_RE);
+    if (!m) return full;
+    const marker = m[0].trimEnd();
+    const rest = inner.slice(m[0].length);
+    // Nível 2 (ex: "1.1.2.", "a.1)") recebe recuo maior, igual ao numbering.xml original.
+    const level2 = /^\d+(?:\.\d+){2,}\.$/.test(marker) || /^[a-z]\.\d+\)$/i.test(marker);
+    const cls = `clause-item${level2 ? " clause-item-2" : ""}`;
+    const existingClass = /class="([^"]*)"/.exec(attrs);
+    const newAttrs = existingClass
+      ? attrs.replace(/class="([^"]*)"/, `class="$1 ${cls}"`)
+      : `${attrs} class="${cls}"`;
+    // "&nbsp;" em vez de espaço literal (achado real da auditoria de
+    // diagramação, página com cláusulas 2.4/3.1-4.6: texto justificado
+    // (text-align:justify) trata qualquer espaço da linha como esticável,
+    // inclusive este -- o vão entre o número e a primeira palavra variava de
+    // cláusula pra cláusula porque o justify espichava esse espaço junto com
+    // os das palavras normais da linha. Espaço fixo nunca estica.
+    return `<${tag}${newAttrs}><span class="clause-num">${marker}</span>&nbsp;${rest}</${tag}>`;
+  });
 }
 
 // Bloco de assinatura estilo manuscrito: uma linha por parte, com nome e
@@ -109,12 +181,39 @@ export interface ContractParty {
 // ("Posicionar assinatura ou rubrica") na tela web do ClickSign também não
 // se aplica aqui (esta integração ativa o envelope via API, nunca passa pela
 // tela de envio manual).
+// Bloco de assinaturas redesenhado (BRIEF NCNDA formatação, 22/09/2026,
+// achado real no modelo do Dr. Luis: nenhuma linha "___" no .docx de
+// referência, e o pedido de João é explícito -- "expressamente proibido o
+// uso de linhas mecânicas"). Página dividida em 2 colunas por parte: dados
+// (nome em CAIXA ALTA, CPF/CNPJ, papel) à esquerda, espaço reservado para a
+// assinatura à direita. Sem tabulação manual do Word (o próprio modelo tinha
+// tabs inconsistentes -- às vezes nome+CPF na mesma linha, às vezes em linhas
+// separadas): aqui a estrutura é sempre a mesma para toda parte.
 function renderPartiesBlock(parties?: ContractParty[]): string {
   if (!parties || parties.length === 0) return "";
-  const cards = parties
-    .map((p) => `<div class="party"><div class="line"></div><div class="name">${p.name}</div>${p.doc ? `<div class="doc">${p.doc}</div>` : ""}</div>`)
+  const rows = parties
+    .map(
+      (p) => `<div class="party">
+<div class="party-info">
+<div class="party-name">${p.name.toUpperCase()}</div>
+${p.doc ? `<div class="party-doc">${p.doc}</div>` : ""}
+<div class="party-role">${(p.display_label ?? signatureRoleLabel(p.role)).toUpperCase()}</div>
+</div>
+<div class="party-sig">Assinatura eletrônica</div>
+</div>`
+    )
     .join("");
-  return `<div class="parties">${cards}</div>`;
+  // Fórmula de encerramento (achado real 22/09/2026, pedido de João: espaço
+  // em branco depois da última assinatura é vetor clássico de fraude,
+  // margem para inserir cláusula/texto depois de assinado). Prática notarial
+  // brasileira padrão pra isso é o fechamento explícito ("nada mais havendo
+  // a tratar"), que declara sem ambiguidade onde o instrumento termina --
+  // qualquer coisa impressa depois desta linha é, por definição, estranha
+  // ao documento assinado. break-inside/page-break-before:avoid tenta manter
+  // colada à última assinatura; se não couber, vira sozinha a única linha da
+  // página seguinte, o que também fecha o documento sem ambiguidade.
+  const closing = `<div class="doc-closing">Nada mais havendo a tratar, encerra-se o presente instrumento neste ponto. Nenhum texto, cláusula ou acréscimo posterior a esta linha integra ou vincula as Partes.</div>`;
+  return `<div class="parties">${rows}${closing}</div>`;
 }
 
 // Título impresso do instrumento (21/09/2026, BRIEF NCNDA, problema 2).
@@ -148,10 +247,11 @@ export function extractPrintedTitle(fullHtml: string): string | null {
   return text || null;
 }
 
-export function wrapContractInV3Html(title: string, body: string, parties?: ContractParty[]): string {
+export function wrapContractInV3Html(title: string, body: string, parties?: ContractParty[], contractCode?: string | null): string {
   const bodyTitle = extractBodyTitle(body);
   const printedTitle = bodyTitle ?? title;
   const headerTitle = bodyTitle ? "" : `\n<h1>${title}</h1>`;
+  const bodyWithIndent = applyClauseHangingIndent(body);
   return `<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -159,33 +259,103 @@ export function wrapContractInV3Html(title: string, body: string, parties?: Cont
 <title>${printedTitle} · V3 Partners</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-body{font-family:'DM Sans',sans-serif;background:#09081A;color:#9BAFC5;padding:40px 60px;line-height:1.8;font-size:13px}
-h1{font-size:20px;font-weight:700;color:#C9A84C;text-align:center;margin-bottom:8px}
-h2{font-size:14px;font-weight:700;color:#C9A84C;margin:24px 0 8px;text-transform:uppercase;letter-spacing:.5px}
-.header{text-align:center;margin-bottom:32px;padding-bottom:16px;border-bottom:2px solid #C9A84C}
-.header img{height:40px;margin-bottom:8px}
-.header p{font-size:11px;color:#9BAFC5}
-p{margin-bottom:12px}
-.parties{display:flex;flex-wrap:wrap;justify-content:center;gap:40px;margin-top:48px;padding-top:24px;border-top:1px solid #243A66}
-.party{flex:1 1 200px;max-width:220px;text-align:center}
-.party .line{width:200px;border-top:1px solid #9BAFC5;margin:40px auto 8px}
-.party .name{font-weight:700;color:#F5F1E8;font-size:12px}
-.party .doc{font-size:10px;color:#9BAFC5}
-.footer{text-align:center;margin-top:48px;font-size:10px;color:#9BAFC5}
-h2{break-after:avoid;page-break-after:avoid}
+/* Instrumento jurídico (22/09/2026, pedido explícito de João): documento pra
+   assinatura NUNCA tem fundo colorido -- regra V3 de fundo navy é pra peça
+   de marca/tela, não pra contrato impresso. Fundo branco, texto em tom navy
+   (a cor pode ser navy, o FUNDO nunca). Mesma paleta de texto escuro sobre
+   branco que o .docx do ClickSign já usava desde sempre (ver CREAM/GOLD em
+   lib/contract-docx-render.ts) -- os dois caminhos saem visualmente iguais.
+   */
+body{font-family:'DM Sans',sans-serif;background:#FFFFFF;color:#13223A;padding:145px 60px 135px;line-height:1.8;font-size:13px;position:relative}
+/* Papel timbrado oficial (22/09/2026, arquivos aprovados por João, únicos
+   autorizados como padrão de TODO documento gerado por este motor -- nunca
+   recriar logo/rodapé com CSS/texto). Coordenada em cm a partir do canto
+   superior esquerdo da PÁGINA física (mesma referência do Word). Tamanho
+   físico de cada imagem = o embutido no próprio arquivo (DPI real, nunca
+   redimensionado à mão): logo 4,89cm × 2,33cm, rodapé 15,98cm × 2,01cm.
+
+   ACHADO REAL (2 tentativas, medidas byte a byte no PDF gerado, não só
+   visual): position:fixed FUNCIONA pra tela, mas no PDF paginado (Puppeteer)
+   o padding do body só reserva espaço no início/fim do documento inteiro,
+   nunca em cada quebra de página -- conferido texto real de cláusula saindo
+   POR BAIXO do timbre no meio do documento. A solução que reserva espaço de
+   verdade EM TODA página é o headerTemplate/footerTemplate do próprio
+   Puppeteer (ver htmlToPdfBase64), não CSS. Por isso as imagens abaixo são
+   só pra VISUALIZAÇÃO EM TELA (envolvidas em @media screen); no PDF elas
+   nunca aparecem (a diretiva !print logo abaixo esconde), quem desenha o
+   timbre ali é o Puppeteer, com as MESMAS 2 imagens e as MESMAS coordenadas
+   (compensação de ~0,5cm por conta do wrapper interno do template do
+   Chromium, documentada e testada em htmlToPdfBase64). */
+@media screen{
+.timbrado-logo{position:fixed;left:8.06cm;top:1.25cm;width:4.89cm;height:2.33cm;z-index:2}
+.timbrado-rodape{position:fixed;left:2.85cm;top:26.61cm;width:15.98cm;height:2.01cm;z-index:2}
+}
+@media print{.timbrado-logo,.timbrado-rodape{display:none}}
+.header,h1,h2,h3,p,.parties,.footer{position:relative;z-index:1}
+h1{font-size:20px;font-weight:700;color:#13223A;text-align:center;margin-bottom:8px}
+h2,h3{font-size:14px;font-weight:700;color:#13223A;margin:24px 0 8px;text-transform:uppercase;letter-spacing:.5px;text-align:justify}
+p{margin-bottom:12px;text-align:justify}
+/* Recuo de cláusula (BRIEF NCNDA, medido no modelo do Dr. Luis: 1,27cm nível
+   1, 1,52cm nível 2) -- número solto à esquerda, texto revertido alinhado. */
+.clause-item{padding-left:1.27cm;text-indent:-1.27cm}
+.clause-item-2{padding-left:1.52cm;text-indent:-1.52cm}
+.clause-num{display:inline-block}
+.header{text-align:center;margin-bottom:32px}
+.header p{font-size:11px;color:#5B6B82}
+/* Bloco de assinaturas: 2 colunas proporcionais por parte -- dados (55%) e
+   espaço da assinatura (45%) ADJACENTES, sem traço/linha mecânica (proibido
+   pelo BRIEF). CORREÇÃO 22/09/2026 (auditoria de diagramação, item 4): o
+   "justify-content:space-between" antigo esticava as 2 colunas até as
+   extremidades da linha inteira, empurrando "Assinatura eletrônica" pra
+   margem direita da página e deixando um vão vazio enorme no meio -- sem
+   nenhuma relação com a largura real do conteúdo de cada coluna. Largura fixa
+   em flex-basis (55%/45%) mantém a assinatura logo ao lado dos dados, à
+   esquerda do eixo central, como pedido. */
+/* Densidade reduzida (achado real 22/09/2026, auditoria de diagramação, item
+   C): com padding:14px por linha, 8 signatários não cabiam na mesma página
+   do fecho (5 numa página, 3 isolados sozinhos na seguinte). 8px por linha
+   melhora pra 6+2 (testado; reduzir mais não rendeu linha extra nenhuma,
+   então mantido no valor que preserva legibilidade). Caber TODOS numa única
+   página depende também do item B (assinatura da Estruturadora, em aberto). */
+.parties{margin-top:32px;padding-top:16px;border-top:1px solid #C9C9C9}
+.party{display:flex;align-items:flex-end;gap:24px;padding:8px 0;border-bottom:1px solid #E5E5E5}
+.party-info{flex:0 0 55%;text-align:left}
+.party-name{font-weight:700;color:#13223A;font-size:12px}
+.party-doc{font-size:10px;color:#5B6B82;margin-top:2px}
+.party-role{font-size:9px;color:#8C6D1F;text-transform:uppercase;letter-spacing:.06em;margin-top:4px}
+.party-sig{flex:0 0 45%;text-align:left;font-size:9px;color:#5B6B82;font-style:italic}
+/* Fechamento anti-fraude (22/09/2026): linha final explícita logo após a
+   última assinatura, para nenhum espaço em branco no fim do documento
+   parecer "margem" para inserção posterior de texto. */
+.doc-closing{margin-top:16px;padding-top:12px;border-top:1px dashed #C9A84C;text-align:center;font-size:10px;font-style:italic;color:#5B6B82;text-transform:uppercase;letter-spacing:.04em}
+.footer{text-align:center;margin-top:48px;font-size:10px;color:#5B6B82}
+h2,h3{break-after:avoid;page-break-after:avoid}
 p{orphans:3;widows:3}
-.parties{break-inside:avoid;page-break-inside:avoid}
+/* CORREÇÃO 22/09/2026 (auditoria de diagramação, item 3): "break-inside:avoid"
+   no CONTAINER inteiro (.parties, 8 linhas) forçava o bloco INTEIRO pra
+   próxima página sempre que não coubesse inteiro no espaço restante depois
+   da data -- é isso que deixava o vão vazio enorme na página 9, com o bloco
+   de assinaturas inteiro isolado na página 10. Removido: o bloco agora pode
+   começar imediatamente após a data, na mesma página; break-inside:avoid
+   continua só em CADA LINHA (.party) para nenhuma firma isolada ser cortada
+   ao meio entre duas páginas. */
 .party{break-inside:avoid;page-break-inside:avoid}
+.doc-closing{break-inside:avoid;page-break-inside:avoid;break-before:avoid;page-break-before:avoid}
 .footer{break-inside:avoid;page-break-inside:avoid}
-@media print{@page{size:A4;margin:13mm 14mm}body{background:#09081A!important;-webkit-print-color-adjust:exact!important}.header img{height:15mm!important}}
+/* Sem @page{margin:...} de propósito: margem de impressão quem controla é o
+   Puppeteer (page.pdf({margin}), ver htmlToPdfBase64) -- uma regra @page
+   aqui competiria com essa opção e já demonstrou (nesta sessão) sobrepor o
+   valor passado pela API, quebrando o espaço reservado pro header/footer. */
+@media print{@page{size:A4}body{background:#FFFFFF!important;-webkit-print-color-adjust:exact!important}}
 </style>
 </head>
 <body>
-<div class="header">
-<img src="https://app.v3partners.com.br/v3-logo-flat-gold-alpha.png" alt="V3 Partners">${headerTitle}
-<p>V3 Partners Soluções Ltda, CNPJ 14.219.287/0001-50</p>
+<img class="timbrado-logo" src="https://app.v3partners.com.br/contratos/timbrado-logo.jpg" alt="V3 Partners">
+<img class="timbrado-rodape" src="https://app.v3partners.com.br/contratos/timbrado-rodape.jpg" alt="V3 Partners Soluções Ltda">
+<div class="header">${headerTitle}
+${contractCode ? `<p>${contractCode}</p>` : ""}
 </div>
-${body}
+${bodyWithIndent}
 ${renderPartiesBlock(parties)}
 <div class="footer">
 <p>Documento gerado automaticamente pela plataforma V3 Partners em ${new Date().toLocaleDateString("pt-BR")}.</p>

@@ -764,7 +764,11 @@ export function ContractsPanelClient({ role }: { role: string }) {
                   <div className="flex items-center gap-1">
                     {c.approval_count > 0 && (
                       <span className="text-[9px] text-emerald-400 flex items-center gap-0.5">
-                        <CheckCircle2 size={10} /> {c.approval_count}/2
+                        {/* Quórum 1 por padrão, 3 (unanimidade) só pra LOI sem
+                            par casado (pedido de João, 22/09/2026) -- badge
+                            antes mostrava "/2" fixo, sempre errado pros dois
+                            casos reais. */}
+                        <CheckCircle2 size={10} /> {c.approval_count}/{c.loi_matching_status === "nao_casada" ? 3 : 1}
                       </span>
                     )}
                     {c.notes.length > 0 && (
