@@ -200,6 +200,11 @@ const NAV_SECTIONS: NavSection[] = [
       { href: "/admin-links", label: "Dashboard de Links", icon: "Link2", roles: ["ADMIN", "GESTAO"] },
       { href: "/admin-sdr-addon", label: "Add-on Atendimento IA", icon: "MessageSquare", roles: ["ADMIN", "GESTAO"] },
       { href: "/usuarios",       label: "Usuários",       icon: "Users",    roles: ["ADMIN"] },
+      // 21/09/2026 (BRIEF Varredura Sistemática de Governança, aprovado por
+      // João após o piloto v3-governance-qa): agenda de correção + inventário
+      // de funcionalidades auditadas. Mesmo par de roles das tabelas
+      // governance_* (RLS via get_user_role() IN ('ADMIN','GESTAO')).
+      { href: "/governanca-padrao", label: "Governança de Padrão", icon: "ShieldCheck", roles: ["ADMIN", "GESTAO"] },
       { href: "/configuracoes",  label: "Configurações",  icon: "Settings2", roles: ["ADMIN", "STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE", "GESTAO", "MESA_OPERACIONAL", "FINANCEIRO"] },
     ],
   },
