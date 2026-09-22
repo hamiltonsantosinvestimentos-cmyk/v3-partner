@@ -76,6 +76,17 @@ export interface ContractParty {
   role: string;
   name: string;
   doc?: string | null;
+  // Rótulo renumerado (achado real 22/09/2026, auditoria de diagramação):
+  // buildPartyDisplayLabels() renumera intermediários numerados de 1 a N só
+  // NA PROSA do preâmbulo (party_qualifications_block, app/api/contracts/
+  // generate/route.ts) -- o bloco de ASSINATURAS nunca recebia esse rótulo,
+  // e derivava o número de novo a partir do role_in_document original
+  // (ex: "intermediario_3" -- que pode não ser o 3º do lote, se algum
+  // intermediário anterior foi excluído). Resultado real: preâmbulo dizia
+  // "INTERMEDIÁRIO 2" pra uma pessoa que assinava como "INTERMEDIÁRIO 3".
+  // Quando presente, este campo é a fonte da verdade do rótulo exibido --
+  // signatureRoleLabel(role) só serve de fallback quando ausente.
+  display_label?: string;
 }
 
 // Rótulo do papel no bloco de assinaturas (BRIEF NCNDA formatação, 22/09/2026):
@@ -186,7 +197,7 @@ function renderPartiesBlock(parties?: ContractParty[]): string {
 <div class="party-info">
 <div class="party-name">${p.name.toUpperCase()}</div>
 ${p.doc ? `<div class="party-doc">${p.doc}</div>` : ""}
-<div class="party-role">${signatureRoleLabel(p.role)}</div>
+<div class="party-role">${(p.display_label ?? signatureRoleLabel(p.role)).toUpperCase()}</div>
 </div>
 <div class="party-sig">Assinatura eletrônica</div>
 </div>`
@@ -290,8 +301,14 @@ p{margin-bottom:12px;text-align:justify}
    nenhuma relação com a largura real do conteúdo de cada coluna. Largura fixa
    em flex-basis (55%/45%) mantém a assinatura logo ao lado dos dados, à
    esquerda do eixo central, como pedido. */
-.parties{margin-top:48px;padding-top:24px;border-top:1px solid #C9C9C9}
-.party{display:flex;align-items:flex-end;gap:24px;padding:14px 0;border-bottom:1px solid #E5E5E5}
+/* Densidade reduzida (achado real 22/09/2026, auditoria de diagramação, item
+   C): com padding:14px por linha, 8 signatários não cabiam na mesma página
+   do fecho (5 numa página, 3 isolados sozinhos na seguinte). 8px por linha
+   melhora pra 6+2 (testado; reduzir mais não rendeu linha extra nenhuma,
+   então mantido no valor que preserva legibilidade). Caber TODOS numa única
+   página depende também do item B (assinatura da Estruturadora, em aberto). */
+.parties{margin-top:32px;padding-top:16px;border-top:1px solid #C9C9C9}
+.party{display:flex;align-items:flex-end;gap:24px;padding:8px 0;border-bottom:1px solid #E5E5E5}
 .party-info{flex:0 0 55%;text-align:left}
 .party-name{font-weight:700;color:#13223A;font-size:12px}
 .party-doc{font-size:10px;color:#5B6B82;margin-top:2px}
