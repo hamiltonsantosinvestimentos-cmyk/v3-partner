@@ -105,7 +105,15 @@ export function signatureRoleLabel(role: string): string {
 // 1, 1,52cm no nível 2, nunca um valor fixo único). Nunca reescreve o número
 // em si, só envolve o texto já existente -- reversível, e uma minuta sem
 // nenhum parágrafo numerado (ex: cláusula em prosa livre) passa intacta.
-const CLAUSE_MARKER_RE = /^(\d+(?:\.\d+){0,3}\.|[a-z]\.\d+\)|[a-z]\))\s+/i;
+//
+// "\d+\)" (achado real 22/09/2026, auditoria de diagramação): a lista de
+// partes qualificadas (party_qualifications_block, gerada dinamicamente em
+// app/api/contracts/generate/route.ts, nunca digitada à mão) usa marcador
+// "1) ", "2) " -- não é uma cláusula do corpo digitada pelo Dr. Luis, mas
+// precisa do mesmo recuo francês e da mesma numeração sequencial visível
+// para "garantir integridade referencial" entre os nomes das partes.
+// Reaproveita o motor em vez de duplicar a lógica de recuo.
+const CLAUSE_MARKER_RE = /^(\d+(?:\.\d+){0,3}\.|\d+\)|[a-z]\.\d+\)|[a-z]\))\s+/i;
 
 function applyClauseHangingIndent(body: string): string {
   return body.replace(/<(p|h2|h3)([^>]*)>([\s\S]*?)<\/\1>/gi, (full, tag, attrs, inner) => {
@@ -120,7 +128,13 @@ function applyClauseHangingIndent(body: string): string {
     const newAttrs = existingClass
       ? attrs.replace(/class="([^"]*)"/, `class="$1 ${cls}"`)
       : `${attrs} class="${cls}"`;
-    return `<${tag}${newAttrs}><span class="clause-num">${marker}</span> ${rest}</${tag}>`;
+    // "&nbsp;" em vez de espaço literal (achado real da auditoria de
+    // diagramação, página com cláusulas 2.4/3.1-4.6: texto justificado
+    // (text-align:justify) trata qualquer espaço da linha como esticável,
+    // inclusive este -- o vão entre o número e a primeira palavra variava de
+    // cláusula pra cláusula porque o justify espichava esse espaço junto com
+    // os das palavras normais da linha. Espaço fixo nunca estica.
+    return `<${tag}${newAttrs}><span class="clause-num">${marker}</span>&nbsp;${rest}</${tag}>`;
   });
 }
 
@@ -267,19 +281,33 @@ p{margin-bottom:12px;text-align:justify}
 .clause-num{display:inline-block}
 .header{text-align:center;margin-bottom:32px}
 .header p{font-size:11px;color:#5B6B82}
-/* Bloco de assinaturas: 2 colunas por parte (dados à esquerda, espaço da
-   assinatura à direita), sem traço/linha mecânica (proibido pelo BRIEF). */
+/* Bloco de assinaturas: 2 colunas proporcionais por parte -- dados (55%) e
+   espaço da assinatura (45%) ADJACENTES, sem traço/linha mecânica (proibido
+   pelo BRIEF). CORREÇÃO 22/09/2026 (auditoria de diagramação, item 4): o
+   "justify-content:space-between" antigo esticava as 2 colunas até as
+   extremidades da linha inteira, empurrando "Assinatura eletrônica" pra
+   margem direita da página e deixando um vão vazio enorme no meio -- sem
+   nenhuma relação com a largura real do conteúdo de cada coluna. Largura fixa
+   em flex-basis (55%/45%) mantém a assinatura logo ao lado dos dados, à
+   esquerda do eixo central, como pedido. */
 .parties{margin-top:48px;padding-top:24px;border-top:1px solid #C9C9C9}
-.party{display:flex;justify-content:space-between;align-items:flex-end;gap:24px;padding:14px 0;border-bottom:1px solid #E5E5E5}
-.party-info{text-align:left}
+.party{display:flex;align-items:flex-end;gap:24px;padding:14px 0;border-bottom:1px solid #E5E5E5}
+.party-info{flex:0 0 55%;text-align:left}
 .party-name{font-weight:700;color:#13223A;font-size:12px}
 .party-doc{font-size:10px;color:#5B6B82;margin-top:2px}
 .party-role{font-size:9px;color:#8C6D1F;text-transform:uppercase;letter-spacing:.06em;margin-top:4px}
-.party-sig{flex:0 0 auto;min-width:180px;text-align:right;font-size:9px;color:#5B6B82;font-style:italic}
+.party-sig{flex:0 0 45%;text-align:left;font-size:9px;color:#5B6B82;font-style:italic}
 .footer{text-align:center;margin-top:48px;font-size:10px;color:#5B6B82}
 h2,h3{break-after:avoid;page-break-after:avoid}
 p{orphans:3;widows:3}
-.parties{break-inside:avoid;page-break-inside:avoid}
+/* CORREÇÃO 22/09/2026 (auditoria de diagramação, item 3): "break-inside:avoid"
+   no CONTAINER inteiro (.parties, 8 linhas) forçava o bloco INTEIRO pra
+   próxima página sempre que não coubesse inteiro no espaço restante depois
+   da data -- é isso que deixava o vão vazio enorme na página 9, com o bloco
+   de assinaturas inteiro isolado na página 10. Removido: o bloco agora pode
+   começar imediatamente após a data, na mesma página; break-inside:avoid
+   continua só em CADA LINHA (.party) para nenhuma firma isolada ser cortada
+   ao meio entre duas páginas. */
 .party{break-inside:avoid;page-break-inside:avoid}
 .footer{break-inside:avoid;page-break-inside:avoid}
 /* Sem @page{margin:...} de propósito: margem de impressão quem controla é o

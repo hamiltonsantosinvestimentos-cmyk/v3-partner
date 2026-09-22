@@ -517,9 +517,18 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      // Uma linha em branco entre as partes (21/09/2026): com "<br/>" simples as 8
-      // qualificações saíam coladas num único bloco ("embolado" na impressão).
-      variables.party_qualifications_block = partyProseLines.join("<br/><br/>");
+      // Recuo francês + numeração sequencial (achado real 22/09/2026, auditoria
+      // de diagramação, item 1): "<br/><br/>" juntava as 8 qualificações num
+      // único parágrafo -- cada nome saía flush na margem esquerda, sem recuo
+      // nem numeração, inconsistente com o resto do corpo numerado da minuta.
+      // Cada parte agora é o seu próprio <p> com marcador "N) " sequencial,
+      // reaproveitando o mesmo motor de recuo francês do corpo (ver
+      // CLAUSE_MARKER_RE/applyClauseHangingIndent em lib/contract-render.ts)
+      // em vez de duplicar a lógica de indentação aqui. Números "N)" numeram
+      // as PARTES entre si (integridade referencial pedida na auditoria); não
+      // são cláusula do corpo, então nunca colidem com a numeração digitada
+      // pelo Dr. Luis em outro lugar da minuta.
+      variables.party_qualifications_block = partyProseLines.map((line, i) => `<p>${i + 1}) ${line}</p>`).join("");
       variables.official_emails_protocol = Array.from(new Set([
         "joao.lemos@v3partners.com.br",
         typeof variables.head_email === "string" ? variables.head_email : null,
