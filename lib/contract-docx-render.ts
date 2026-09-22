@@ -34,8 +34,14 @@ import {
   TableCell,
   WidthType,
   BorderStyle,
+  Header,
+  ImageRun,
+  HorizontalPositionRelativeFrom,
+  VerticalPositionRelativeFrom,
+  TextWrappingType,
+  TextWrappingSide,
 } from "docx";
-import type { ContractParty } from "./contract-render";
+import { signatureRoleLabel, type ContractParty } from "./contract-render";
 
 const GOLD = "C9A84C";
 const CREAM = "1A1A1A"; // corpo do .docx é sempre texto escuro sobre fundo branco -- documento pra assinatura, nunca segue a paleta navy/ouro de tela (regra de identidade visual V3 é pra peça de marca, não pra instrumento jurídico que o signatário assina)
@@ -164,13 +170,79 @@ function renderPartiesBlockDocx(parties?: ContractParty[]): (Paragraph)[] {
         // precisa (e não deve) ser escondido por nós.
         children: [new TextRun(`{{~position_sign_${i + 1}}}`)],
       }),
-      new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 20 }, children: [new TextRun({ text: p.name, bold: true, color: CREAM })] })
+      // Nome em CAIXA ALTA (BRIEF NCNDA formatação, 22/09/2026, regra 2.1 do QA
+      // de governança). Paragrafo SEPARADO do da tag acima -- não mexe no
+      // TextRun da tag em si, mantém o reconhecimento intacto.
+      new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 20 }, children: [new TextRun({ text: p.name.toUpperCase(), bold: true, color: CREAM })] })
     );
     if (p.doc) {
       out.push(new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: p.doc, color: CREAM, size: 18 })] }));
     }
+    // Papel da parte (BRIEF NCNDA formatação: "ESTRUTURADORA, HEAD V3 PARTNERS,
+    // MANDATÁRIO"), mesmo rótulo do bloco de assinaturas em tela/PDF.
+    out.push(new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 40 }, children: [new TextRun({ text: signatureRoleLabel(p.role), color: GOLD, size: 16, bold: true })] }));
   });
   return out;
+}
+
+// Papel timbrado oficial em todas as páginas (22/09/2026, arquivos aprovados
+// por João, únicos autorizados como padrão de TODO documento deste motor --
+// nunca recriar logo/rodapé com formas/texto). ImageRun não aceita URL, só
+// bytes: busca as 2 imagens públicas uma vez por documento gerado (arquivos
+// pequenos, poucos KB, sem custo relevante). `floating` com `relative: PAGE`
+// ancora pela página inteira, não pelo parágrafo -- por isso as 2 imagens
+// cabem dentro do MESMO Header mesmo a segunda estando fisicamente no rodapé
+// da folha (26,61cm), sem precisar de um Footer separado. Coordenadas em EMU
+// (1cm = 360000 EMU), idênticas em cm ao que João mediu no Word (canto
+// superior esquerdo da página física). Falha de rede num logo nunca derruba
+// a geração do .docx inteiro -- aquela imagem simplesmente não entra.
+async function fetchImageBuffer(url: string): Promise<Buffer | null> {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    return Buffer.from(await res.arrayBuffer());
+  } catch {
+    return null;
+  }
+}
+
+const CM = 360000; // EMU por centímetro
+
+async function buildLetterheadHeader(): Promise<Header> {
+  const [logo, rodape] = await Promise.all([
+    fetchImageBuffer("https://app.v3partners.com.br/contratos/timbrado-logo.jpg"),
+    fetchImageBuffer("https://app.v3partners.com.br/contratos/timbrado-rodape.jpg"),
+  ]);
+  const images: ImageRun[] = [];
+  if (logo) {
+    images.push(
+      new ImageRun({
+        data: logo,
+        type: "jpg",
+        transformation: { width: 4.89 * 96 / 2.54, height: 2.33 * 96 / 2.54 },
+        floating: {
+          horizontalPosition: { relative: HorizontalPositionRelativeFrom.PAGE, offset: 8.06 * CM },
+          verticalPosition: { relative: VerticalPositionRelativeFrom.PAGE, offset: 1.25 * CM },
+          wrap: { type: TextWrappingType.NONE },
+        },
+      }),
+    );
+  }
+  if (rodape) {
+    images.push(
+      new ImageRun({
+        data: rodape,
+        type: "jpg",
+        transformation: { width: 15.98 * 96 / 2.54, height: 2.01 * 96 / 2.54 },
+        floating: {
+          horizontalPosition: { relative: HorizontalPositionRelativeFrom.PAGE, offset: 2.85 * CM },
+          verticalPosition: { relative: VerticalPositionRelativeFrom.PAGE, offset: 26.61 * CM },
+          wrap: { type: TextWrappingType.NONE },
+        },
+      }),
+    );
+  }
+  return new Header({ children: [new Paragraph({ children: images })] });
 }
 
 // Recebe o `rendered_html` COMPLETO (a mesma string que operation_contracts
@@ -181,7 +253,7 @@ function renderPartiesBlockDocx(parties?: ContractParty[]): (Paragraph)[] {
 // só serve pro PDF) + <div class="footer">. Aqui pulamos .header e .parties
 // -- o título vem do <h1> dentro do header, e o bloco de assinatura é
 // reconstruído do zero com as tags posicionadas em vez da linha.
-export async function renderContractDocx(fullHtml: string, parties?: ContractParty[]): Promise<Buffer> {
+export async function renderContractDocx(fullHtml: string, parties?: ContractParty[], contractCode?: string | null): Promise<Buffer> {
   const root = parse(fullHtml);
   const body = root.querySelector("body") ?? root;
   // 21/09/2026 (BRIEF NCNDA): só existe <h1> no .header quando o corpo da minuta
@@ -210,8 +282,13 @@ export async function renderContractDocx(fullHtml: string, parties?: ContractPar
     ...renderPartiesBlockDocx(parties),
   ];
 
+  // contractCode reservado pra uso futuro (o timbre oficial hoje é só imagem
+  // estática, sem texto dinâmico -- ver comentário de buildLetterheadHeader).
+  void contractCode;
+  const header = await buildLetterheadHeader();
+
   const doc = new Document({
-    sections: [{ children }],
+    sections: [{ headers: { default: header }, children }],
     styles: {
       default: {
         document: { run: { font: "Calibri", size: 22, color: CREAM } },
