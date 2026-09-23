@@ -642,7 +642,23 @@ export async function POST(req: NextRequest) {
   // (que trataria as tags como variável desconhecida e corromperia o texto).
   // Em minuta comum (não multi_vertical) o corpo não tem essas tags, então
   // isso é um no-op idêntico ao comportamento de antes.
-  const bodyAfterVerticalBlocks = resolveVerticalBlocks(template.body_text_raw, effectiveVertical);
+  let bodyAfterVerticalBlocks = resolveVerticalBlocks(template.body_text_raw, effectiveVertical);
+
+  // Achado real 23/09/2026 (Dr. Athaydes, comparando V3C-NDA-2026-0043
+  // real): a minuta digita {{party_qualifications_block}} dentro do seu
+  // próprio <p>...</p> (texto do Dr. Luis, nunca deve ser editado aqui). O
+  // valor desta variável já é um bloco de vários <p> próprios (fix de
+  // 22/09/2026, numeração "N)" das partes) -- substituir dentro do <p> da
+  // minuta gera <p><p>1) ...</p><p>2) ...</p></p> malformado, e o parser
+  // (node-html-parser, tanto no caminho HTML/PDF quanto no .docx) sobra um
+  // <p></p> vazio logo depois da ESTRUTURADORA, criando o vão vertical
+  // extra entre ela e a primeira parte numerada. Remove só o wrapper <p>
+  // ao redor do placeholder, nunca o texto da minuta em si.
+  bodyAfterVerticalBlocks = bodyAfterVerticalBlocks.replace(
+    /<p>\s*\{\{party_qualifications_block\}\}\s*<\/p>/i,
+    "{{party_qualifications_block}}"
+  );
+
   const renderedBody = resolveContractVariables(bodyAfterVerticalBlocks, variables);
   const contractTitle = resolveContractVariables(template.template_name, variables);
   const renderedHtml = wrapContractInV3Html(contractTitle, renderedBody, resolvedParties);
