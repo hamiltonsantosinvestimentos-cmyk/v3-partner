@@ -281,24 +281,26 @@ function renderPartiesBlockDocx(parties?: ContractParty[]): (Paragraph | Table)[
       // do que o centro visual da linha, quando a tag dependia de
       // verticalAlign da célula pra centralizar. O ClickSign parece ancorar
       // o widget pela posição bruta do parágrafo no fluxo do documento, não
-      // pelo efeito de centralização vertical que só o Word renderiza --
-      // por isso a centralização agora é feita por um parágrafo espaçador
-      // real ANTES da tag (mesma altura da linha do nome), nunca por
-      // vertical-align da célula.
+      // pelo efeito de centralização vertical que só o Word renderiza.
+      //
+      // CALIBRAÇÃO FINAL (23/09/2026, 2ª rodada, confirmada contra a tela
+      // real do ClickSign): alvo não é o meio do bloco de 3 linhas -- é a
+      // MESMA linha do NOME (1ª linha de Bloco A, o texto em negrito). Por
+      // isso: sem espaçador nenhum antes da tag. Tag é a PRIMEIRA (e única)
+      // paragraph da célula, sem `spacing.before`, com o mesmo `margins.top`
+      // do dataCell (SIG_ROW_MARGIN_TOP) e o mesmo tamanho/fonte herdados do
+      // padrão do documento (nenhuma formatação custom no TextRun da tag,
+      // regra já estabelecida) -- como o nome também herda o mesmo
+      // font/size do padrão, as duas primeiras linhas de cada célula
+      // nascem na mesma altura por fluxo real, sem depender de nenhum
+      // efeito de renderização que o ClickSign possa interpretar diferente.
       verticalAlign: VerticalAlignTable.TOP,
       margins: { top: SIG_ROW_MARGIN_TOP, bottom: SIG_ROW_MARGIN_BOTTOM, left: 120, right: 0 },
       borders: { top: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" }, left: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" }, right: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" }, bottom: { style: BorderStyle.SINGLE, size: 2, color: "E5E5E5" } },
       children: [
-        // Espaçador real (mesma altura aproximada da linha do nome em
-        // Bloco A: 12pt + 20 twips de espaço depois) -- empurra a tag pra
-        // começar na altura da 2ª linha de dados (CPF/CNPJ), o meio
-        // geométrico do bloco de 3 linhas (nome/CPF/papel). Parágrafo real
-        // no fluxo, não um efeito de renderização -- qualquer leitor de
-        // posição (Word ou o motor do ClickSign) enxerga a mesma coisa.
-        // Pendente reconfirmar contra a tela real de assinatura.
-        new Paragraph({ children: [new TextRun({ text: "", size: BODY_SIZE, font: BODY_FONT })], spacing: { after: 20 } }),
         new Paragraph({
           alignment: AlignmentType.LEFT,
+          spacing: { before: 0, after: 0 },
           // Tag de posicionamento (BRIEF "Assinatura Posicionada"): a
           // ClickSign localiza este texto literal no .docx convertido e
           // desenha a área de assinatura manuscrita exatamente aqui,
