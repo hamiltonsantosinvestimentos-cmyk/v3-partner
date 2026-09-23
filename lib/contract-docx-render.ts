@@ -41,6 +41,7 @@ import {
   TextWrappingType,
   TextWrappingSide,
   LineRuleType,
+  VerticalAlignTable,
 } from "docx";
 import { signatureRoleLabel, type ContractParty } from "./contract-render";
 
@@ -48,17 +49,33 @@ const GOLD = "C9A84C";
 const CREAM = "1A1A1A"; // corpo do .docx é sempre texto escuro sobre fundo branco -- documento pra assinatura, nunca segue a paleta navy/ouro de tela (regra de identidade visual V3 é pra peça de marca, não pra instrumento jurídico que o signatário assina)
 
 // Calibração 23/09/2026 (novo padrão, a partir do documento revisado pelo Dr.
-// Athaydes -- V3C-NDA-2026-0039, comparado byte a byte contra o que o
-// ClickSign de fato entrega): fonte Arial (era Calibri), tamanho 24
-// half-points = 12pt. BODY_SIZE agora é passado EXPLICITAMENTE em cada
-// TextRun (não só como default do documento) -- achado real da mesma
-// auditoria: o processamento de Modelo do ClickSign reseta o tamanho de
-// fonte do PADRÃO do documento (docDefaults) e também apaga a justificação
-// de parágrafo, mas preserva propriedades explícitas de cada `run` (cor,
-// negrito já sobreviviam) -- aposta calibrada em cima disso, precisa
-// reconfirmar testando um envio real de novo antes de virar padrão.
+// Athaydes -- V3C-NDA-2026-0039): fonte Arial (era Calibri), tamanho 24
+// half-points = 12pt, agora passado EXPLICITAMENTE em cada TextRun (não só
+// como default do documento).
+//
+// CORREÇÃO DE DIAGNÓSTICO (23/09/2026, mesmo dia): a hipótese original aqui
+// dizia que o processamento de Modelo do ClickSign resetava justificação e
+// tamanho de fonte. Falso -- comparando um envio de teste posterior
+// (V3C-NDA-2026-0040) contra o momento exato do deploy, o que aconteceu nos
+// dois primeiros testes foi só ATRASO DE PROPAGAÇÃO da Vercel: o envio saiu
+// 3 a 4 minutos depois do merge, cedo demais, e pegou o código anterior.
+// Quando o deploy já estava de fato no ar, jc="both" e o tamanho novo
+// sobreviveram ao ClickSign perfeitamente. Fica registrado aqui porque o
+// comentário anterior (e o commit que o acompanha) chegou a afirmar o
+// contrário -- lição: esperar bem mais que os "3-4 min" de referência antes
+// de testar contra produção depois de um merge.
 const BODY_FONT = "Arial";
 const BODY_SIZE = 24;
+
+// Largura útil da página em DXA (23/09/2026, layout de assinaturas em
+// tabela): 11910 (pgSz.width) - 425 (margem esquerda) - 708 (margem direita)
+// = 10777. Coluna 1 (dados) 55%, coluna 2 (assinatura) 45% -- mesma
+// proporção já usada no caminho HTML/PDF (lib/contract-render.ts,
+// renderPartiesBlock). docx exige as duas larguras (tabela E célula) em DXA
+// -- PERCENTAGE quebra no Google Docs, por isso os números fixos aqui.
+const PAGE_CONTENT_WIDTH = 10777;
+const SIG_COL_DATA_WIDTH = Math.round(PAGE_CONTENT_WIDTH * 0.55);
+const SIG_COL_ASSIN_WIDTH = PAGE_CONTENT_WIDTH - SIG_COL_DATA_WIDTH;
 
 // Achado real 22/09/2026 (conferido só depois de converter o .docx pra PDF e
 // olhar página por página -- nunca visível na extração de texto do XML):
@@ -195,66 +212,101 @@ function blocksFromRoot(root: HTMLElement): (Paragraph | Table)[] {
   return out;
 }
 
-function renderPartiesBlockDocx(parties?: ContractParty[]): (Paragraph)[] {
+// Bloco de assinaturas em TABELA (23/09/2026, pedido explícito do Dr.
+// Athaydes): antes cada parte era um empilhado vertical de 4 parágrafos
+// centralizados (tag de posição, nome, CPF, papel), com 480 twips (24pt) de
+// respiro ANTES de cada tag -- 8 assinaturas geravam um bloco alto, cheio de
+// vão vertical entre uma assinatura e a próxima. Achado real comparando o
+// .docx que voltou assinado do ClickSign (V3C-NDA-2026-0040): esse vão é
+// exatamente o que o Dr. Athaydes aponta como risco (espaço em branco entre
+// linhas é margem pra inserção de conteúdo depois da assinatura).
+//
+// Agora cada parte é UMA LINHA de tabela de 2 colunas: dados (55%, nome/CPF/
+// papel empilhados COM ESPAÇAMENTO MÍNIMO) à esquerda, tag de posição (45%)
+// também à esquerda dentro da própria coluna -- nunca centralizada, nunca
+// solta numa linha própria. Mesma proporção 55/45 já usada no caminho HTML/
+// PDF (renderPartiesBlock em lib/contract-render.ts).
+function renderPartiesBlockDocx(parties?: ContractParty[]): (Paragraph | Table)[] {
   if (!parties || parties.length === 0) return [];
-  const out: Paragraph[] = [
-    new Paragraph({ text: "", spacing: { before: 480 } }),
-  ];
-  parties.forEach((p, i) => {
-    out.push(
-      new Paragraph({
-        alignment: AlignmentType.CENTER,
-        spacing: { before: 480, after: 40 },
-        // Tag de posicionamento (BRIEF "Assinatura Posicionada"): a ClickSign
-        // localiza este texto literal no .docx convertido e desenha a área
-        // de assinatura manuscrita exatamente aqui, vinculada ao requisito
-        // rubricate/manuscript com o mesmo rubric_field.
-        //
-        // CAUSA RAIZ do bug real de 11/09/2026 (rev.123, feature desativada
-        // no mesmo dia após travar a tela de um signatário real): a versão
-        // original desta linha tinha `color: "FFFFFF", size: 2` (tentativa
-        // de deixar a tag invisível caso não fosse reconhecida). Isso
-        // quebrava o reconhecimento -- confirmado isolando 4 variantes
-        // contra a API real e checando `metadata.position_sign_fields` do
-        // documento (não só o 201 da chamada, que não garante reconhecimento
-        // nenhum): TextRun com `color`/`size` sempre dava campo vazio ([]);
-        // TextRun sem nenhuma formatação de rPr sempre reconhecia a tag
-        // corretamente. Nunca mais aplicar cor/tamanho custom neste TextRun
-        // específico -- a ClickSign, ao reconhecer a tag de verdade,
-        // substitui o texto por uma área de assinatura real na tela, não
-        // precisa (e não deve) ser escondido por nós.
-        children: [new TextRun(`{{~position_sign_${i + 1}}}`)],
-      }),
-      // Nome em CAIXA ALTA (BRIEF NCNDA formatação, 22/09/2026, regra 2.1 do QA
-      // de governança). Paragrafo SEPARADO do da tag acima -- não mexe no
-      // TextRun da tag em si, mantém o reconhecimento intacto.
-      new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 20 }, children: [new TextRun({ text: p.name.toUpperCase(), bold: true, color: CREAM, font: BODY_FONT })] })
-    );
-    if (p.doc) {
-      out.push(new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: p.doc, color: CREAM, size: 18, font: BODY_FONT })] }));
-    }
-    // Papel da parte (BRIEF NCNDA formatação: "ESTRUTURADORA, HEAD V3 PARTNERS,
-    // MANDATÁRIO"), mesmo rótulo do bloco de assinaturas em tela/PDF.
-    //
-    // BUG real corrigido 22/09/2026 (auditoria de diagramação, achado A):
-    // este caminho (.docx, o canal REAL de assinatura via ClickSign, ver
-    // comentário acima de renderPartiesBlockDocx) ainda chamava
-    // signatureRoleLabel(p.role) direto, a mesma causa raiz já corrigida no
-    // caminho HTML/PDF (lib/contract-render.ts) -- o rótulo renumerado
-    // (display_label) nunca era lido aqui, então o .docx enviado pra
-    // assinatura real continuaria divergindo do preâmbulo mesmo depois do
-    // fix anterior, que só cobriu o fallback.
-    out.push(new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 40 }, children: [new TextRun({ text: (p.display_label ?? signatureRoleLabel(p.role)).toUpperCase(), color: GOLD, size: 16, bold: true, font: BODY_FONT })] }));
+
+  const rows = parties.map((p, i) => {
+    const dataCell = new TableCell({
+      width: { size: SIG_COL_DATA_WIDTH, type: WidthType.DXA },
+      verticalAlign: VerticalAlignTable.CENTER,
+      margins: { top: 80, bottom: 80, left: 0, right: 120 },
+      borders: { top: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" }, left: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" }, right: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" }, bottom: { style: BorderStyle.SINGLE, size: 2, color: "E5E5E5" } },
+      children: [
+        // Nome em CAIXA ALTA (BRIEF NCNDA formatação, 22/09/2026, regra 2.1
+        // do QA de governança), agora alinhado à ESQUERDA (era CENTER) --
+        // segundo pedido explícito do Dr. Athaydes nesta rodada.
+        new Paragraph({ alignment: AlignmentType.LEFT, spacing: { after: 20 }, children: [new TextRun({ text: p.name.toUpperCase(), bold: true, color: CREAM, font: BODY_FONT })] }),
+        ...(p.doc ? [new Paragraph({ alignment: AlignmentType.LEFT, spacing: { after: 20 }, children: [new TextRun({ text: p.doc, color: CREAM, size: 18, font: BODY_FONT })] })] : []),
+        // Papel da parte (BRIEF NCNDA formatação: "ESTRUTURADORA, HEAD V3
+        // PARTNERS, MANDATÁRIO"), mesmo rótulo do bloco de assinaturas em
+        // tela/PDF. display_label (achado 22/09/2026, auditoria de
+        // diagramação, achado A): renumeração de intermediários, nunca
+        // signatureRoleLabel(role) puro, senão diverge do preâmbulo.
+        new Paragraph({ alignment: AlignmentType.LEFT, children: [new TextRun({ text: (p.display_label ?? signatureRoleLabel(p.role)).toUpperCase(), color: GOLD, size: 16, bold: true, font: BODY_FONT })] }),
+      ],
+    });
+
+    const sigCell = new TableCell({
+      width: { size: SIG_COL_ASSIN_WIDTH, type: WidthType.DXA },
+      verticalAlign: VerticalAlignTable.CENTER,
+      margins: { top: 80, bottom: 80, left: 120, right: 0 },
+      borders: { top: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" }, left: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" }, right: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" }, bottom: { style: BorderStyle.SINGLE, size: 2, color: "E5E5E5" } },
+      children: [
+        new Paragraph({
+          alignment: AlignmentType.LEFT,
+          // Tag de posicionamento (BRIEF "Assinatura Posicionada"): a
+          // ClickSign localiza este texto literal no .docx convertido e
+          // desenha a área de assinatura manuscrita exatamente aqui,
+          // vinculada ao requisito rubricate/manuscript com o mesmo
+          // rubric_field.
+          //
+          // CAUSA RAIZ do bug real de 11/09/2026 (rev.123, feature
+          // desativada no mesmo dia após travar a tela de um signatário
+          // real): a versão original desta linha tinha `color: "FFFFFF",
+          // size: 2` (tentativa de deixar a tag invisível caso não fosse
+          // reconhecida). Isso quebrava o reconhecimento -- confirmado
+          // isolando 4 variantes contra a API real e checando
+          // `metadata.position_sign_fields` do documento (não só o 201 da
+          // chamada, que não garante reconhecimento nenhum): TextRun com
+          // `color`/`size` sempre dava campo vazio ([]); TextRun sem
+          // nenhuma formatação de rPr sempre reconhecia a tag corretamente.
+          // Nunca mais aplicar cor/tamanho custom neste TextRun específico.
+          //
+          // 23/09/2026: movido pra dentro de uma célula de tabela (era
+          // parágrafo solto no corpo) -- o texto da tag continua idêntico e
+          // sem formatação nenhuma, célula de tabela não muda o
+          // reconhecimento da ClickSign (ela varre o texto do documento
+          // inteiro, não só o nível de parágrafo direto do body). Precisa
+          // reconfirmar com um envio real antes de virar padrão definitivo.
+          children: [new TextRun(`{{~position_sign_${i + 1}}}`)],
+        }),
+      ],
+    });
+
+    return new TableRow({ children: [dataCell, sigCell] });
   });
+
+  const table = new Table({
+    rows,
+    width: { size: PAGE_CONTENT_WIDTH, type: WidthType.DXA },
+    columnWidths: [SIG_COL_DATA_WIDTH, SIG_COL_ASSIN_WIDTH],
+  });
+
   // Fechamento anti-fraude (22/09/2026, mesmo motivo do caminho HTML/PDF):
   // espaço em branco depois da última assinatura é margem para inserção de
   // texto após a assinatura. Fórmula notarial padrão declara sem ambiguidade
-  // onde o instrumento termina.
-  out.push(
-    new Paragraph({ spacing: { before: 360 }, border: { top: { style: BorderStyle.DASHED, size: 4, color: GOLD } } }),
+  // onde o instrumento termina. Espaçamento reduzido (era before:360/120,
+  // agora 160/80) pra não reabrir o mesmo vão vertical que a tabela acima
+  // acabou de eliminar.
+  const closing = [
+    new Paragraph({ spacing: { before: 160 }, border: { top: { style: BorderStyle.DASHED, size: 4, color: GOLD } } }),
     new Paragraph({
       alignment: AlignmentType.CENTER,
-      spacing: { before: 120 },
+      spacing: { before: 80 },
       children: [
         new TextRun({
           text: "Nada mais havendo a tratar, encerra-se o presente instrumento neste ponto. Nenhum texto, cláusula ou acréscimo posterior a esta linha integra ou vincula as Partes.",
@@ -265,8 +317,9 @@ function renderPartiesBlockDocx(parties?: ContractParty[]): (Paragraph)[] {
         }),
       ],
     }),
-  );
-  return out;
+  ];
+
+  return [new Paragraph({ text: "", spacing: { before: 160 } }), table, ...closing];
 }
 
 // Papel timbrado oficial em todas as páginas (22/09/2026, arquivos aprovados
