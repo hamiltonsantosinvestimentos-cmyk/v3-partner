@@ -110,7 +110,9 @@ export default async function ComissoesPage() {
       partnerName={profile.full_name ?? ""}
       role={profile.role}
       taxPercent={taxPercent}
-      commissions={(commissions ?? []) as Parameters<typeof ComissoesPartnerClient>[0]["commissions"]}
+      // unknown: as colunas vêm de string montada em runtime (fallback do reference_cost),
+      // então o supabase-js não infere o tipo da linha.
+      commissions={(commissions ?? []) as unknown as Parameters<typeof ComissoesPartnerClient>[0]["commissions"]}
       partners={partners}
       marketplaceLeads={(marketplaceLeads ?? []) as unknown as Parameters<typeof ComissoesPartnerClient>[0]["marketplaceLeads"]}
     />
