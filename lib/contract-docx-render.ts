@@ -88,7 +88,14 @@ function textRunsFromInline(node: Node, bold = false): TextRun[] {
 function paragraphFromBlock(el: HTMLElement): Paragraph {
   const tag = el.tagName?.toLowerCase();
   const runs = textRunsFromInline(el);
-  const base: ConstructorParameters<typeof Paragraph>[0] = { children: runs.length ? runs : [new TextRun("")], spacing: { after: 160 } };
+  // Justificado (23/09/2026, decisão de João): documento de referência do
+  // Dr. Athaydes (Mandato Phocus, mesmo timbre) usa o estilo "Corpodetexto"
+  // com jc="both" (justificado) pra todo parágrafo de corpo real -- o
+  // gerador nunca tinha sido configurado pra bater com isso (saía sem
+  // alinhamento explícito, ou seja, à esquerda por padrão do Word). h1 abaixo
+  // sobrescreve para CENTER; h2/h3 herdam JUSTIFIED daqui (heading curta de
+  // uma linha só não muda visualmente com justificado).
+  const base: ConstructorParameters<typeof Paragraph>[0] = { children: runs.length ? runs : [new TextRun("")], spacing: { after: 160 }, alignment: AlignmentType.JUSTIFIED };
   if (tag === "h1") return new Paragraph({ ...base, heading: HeadingLevel.HEADING_1, alignment: AlignmentType.CENTER });
   if (tag === "h2") return new Paragraph({ ...base, heading: HeadingLevel.HEADING_2 });
   if (tag === "h3") return new Paragraph({ ...base, heading: HeadingLevel.HEADING_3 });
@@ -384,7 +391,11 @@ export async function renderContractDocx(fullHtml: string, parties?: ContractPar
     }],
     styles: {
       default: {
-        document: { run: { font: "Calibri", size: 22, color: CREAM } },
+        // Tamanho 24 half-points = 12pt (23/09/2026, decisão de João): mesmo
+        // "w:sz" do estilo Corpodetexto do documento de referência do Dr.
+        // Athaydes (Mandato Phocus), antes 22 (11pt) sem nenhuma validação
+        // contra o padrão real dele.
+        document: { run: { font: "Calibri", size: 24, color: CREAM } },
         heading1: { run: { font: "Calibri", size: 32, bold: true, color: GOLD } },
         heading2: { run: { font: "Calibri", size: 26, bold: true, color: GOLD } },
         heading3: { run: { font: "Calibri", size: 24, bold: true, color: GOLD } },
