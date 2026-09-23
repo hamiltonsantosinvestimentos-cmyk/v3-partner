@@ -229,78 +229,66 @@ function blocksFromRoot(root: HTMLElement): (Paragraph | Table)[] {
   return out;
 }
 
-// Bloco de assinaturas em TABELA (23/09/2026, pedido explícito do Dr.
-// Athaydes): antes cada parte era um empilhado vertical de 4 parágrafos
-// centralizados (tag de posição, nome, CPF, papel), com 480 twips (24pt) de
-// respiro ANTES de cada tag -- 8 assinaturas geravam um bloco alto, cheio de
-// vão vertical entre uma assinatura e a próxima. Achado real comparando o
-// .docx que voltou assinado do ClickSign (V3C-NDA-2026-0040): esse vão é
-// exatamente o que o Dr. Athaydes aponta como risco (espaço em branco entre
-// linhas é margem pra inserção de conteúdo depois da assinatura).
-//
-// Agora cada parte é UMA LINHA de tabela de 2 colunas: dados (50%, nome/CPF/
-// papel empilhados COM ESPAÇAMENTO MÍNIMO) à esquerda de uma linha vertical
-// de referência exatamente no meio da página, tag de posição (50%) também à
-// esquerda dentro da própria coluna, começando exatamente naquela linha --
-// nunca centralizada, nunca solta numa linha própria. Regra fixa,
-// independente da quantidade de partes (23/09/2026, pedido de João,
-// confirmado contra o mockup antes de implementar). Mesma proporção 50/50
-// também no caminho HTML/PDF (renderPartiesBlock em lib/contract-render.ts).
+// Bloco de assinaturas em TABELA, "Table Row Split" (23/09/2026, 3ª
+// calibração, pedido estrutural de João depois de 2 tentativas de
+// alinhamento vertical dentro de UMA célula multi-parágrafo falharem contra
+// a tela real do ClickSign): nome, CPF e papel deixam de ser 3 parágrafos
+// empilhados NA MESMA célula (o que fazia o motor de posicionamento da
+// ClickSign "cair" a caixa de assinatura pro meio ou pro fim do bloco,
+// ignorando verticalAlign e spacing -- ela não interpreta a altura de
+// célula multi-linha do jeito que o Word renderiza). Agora cada parte é
+// LITERALMENTE 3 LINHAS DE TABELA distintas, sem borda entre si:
+//   Linha 1: Nome (Bloco A) | tag {{~position_sign_N}} (Bloco B)
+//   Linha 2: CPF/CNPJ (Bloco A) | célula vazia (Bloco B)
+//   Linha 3: Papel (Bloco A) | célula vazia (Bloco B)
+// A tag fica ISOLADA numa linha de tabela com a altura exata de UMA linha
+// de texto (a do nome) -- fisicamente não existe "meio do bloco" pra ela
+// cair, porque não há bloco, só uma linha. Border/espaçamento de 3 linhas
+// (regra de 23/09, mockup confirmado por João) só na 3ª linha de cada
+// parte, nunca entre as 3 linhas da mesma pessoa. Coluna 50/50 com linha de
+// referência central (mesma regra), mesma proporção no caminho HTML/PDF.
 function renderPartiesBlockDocx(parties?: ContractParty[]): (Paragraph | Table)[] {
   if (!parties || parties.length === 0) return [];
 
-  const rows = parties.map((p, i) => {
-    const dataCell = new TableCell({
-      width: { size: SIG_COL_DATA_WIDTH, type: WidthType.DXA },
-      // TOP (era CENTER): consistente com o sigCell abaixo -- Bloco A é a
-      // célula mais alta da linha, então isso não muda nada visualmente
-      // aqui, só evita depender de vertical-align onde não precisa.
-      verticalAlign: VerticalAlignTable.TOP,
-      margins: { top: SIG_ROW_MARGIN_TOP, bottom: SIG_ROW_MARGIN_BOTTOM, left: 0, right: 120 },
-      borders: { top: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" }, left: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" }, right: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" }, bottom: { style: BorderStyle.SINGLE, size: 2, color: "E5E5E5" } },
-      children: [
-        // Nome em CAIXA ALTA (BRIEF NCNDA formatação, 22/09/2026, regra 2.1
-        // do QA de governança), agora alinhado à ESQUERDA (era CENTER) --
-        // segundo pedido explícito do Dr. Athaydes nesta rodada.
-        new Paragraph({ alignment: AlignmentType.LEFT, spacing: { after: 20 }, children: [new TextRun({ text: p.name.toUpperCase(), bold: true, color: CREAM, font: BODY_FONT })] }),
-        ...(p.doc ? [new Paragraph({ alignment: AlignmentType.LEFT, spacing: { after: 20 }, children: [new TextRun({ text: p.doc, color: CREAM, size: 18, font: BODY_FONT })] })] : []),
-        // Papel da parte (BRIEF NCNDA formatação: "ESTRUTURADORA, HEAD V3
-        // PARTNERS, MANDATÁRIO"), mesmo rótulo do bloco de assinaturas em
-        // tela/PDF. display_label (achado 22/09/2026, auditoria de
-        // diagramação, achado A): renumeração de intermediários, nunca
-        // signatureRoleLabel(role) puro, senão diverge do preâmbulo.
-        new Paragraph({ alignment: AlignmentType.LEFT, children: [new TextRun({ text: (p.display_label ?? signatureRoleLabel(p.role)).toUpperCase(), color: GOLD, size: 16, bold: true, font: BODY_FONT })] }),
-      ],
-    });
+  const NO_BORDER = { style: BorderStyle.NONE, size: 0, color: "FFFFFF" } as const;
+  const SEP_BORDER = { style: BorderStyle.SINGLE, size: 2, color: "E5E5E5" } as const;
 
-    const sigCell = new TableCell({
-      width: { size: SIG_COL_ASSIN_WIDTH, type: WidthType.DXA },
-      // TOP, não CENTER (achado real 23/09/2026, conferido na tela de
-      // assinatura de verdade do ClickSign, nunca visível abrindo o .docx no
-      // Word): o botão "Clique para assinar" saía desalinhado, mais abaixo
-      // do que o centro visual da linha, quando a tag dependia de
-      // verticalAlign da célula pra centralizar. O ClickSign parece ancorar
-      // o widget pela posição bruta do parágrafo no fluxo do documento, não
-      // pelo efeito de centralização vertical que só o Word renderiza.
-      //
-      // CALIBRAÇÃO FINAL (23/09/2026, 2ª rodada, confirmada contra a tela
-      // real do ClickSign): alvo não é o meio do bloco de 3 linhas -- é a
-      // MESMA linha do NOME (1ª linha de Bloco A, o texto em negrito). Por
-      // isso: sem espaçador nenhum antes da tag. Tag é a PRIMEIRA (e única)
-      // paragraph da célula, sem `spacing.before`, com o mesmo `margins.top`
-      // do dataCell (SIG_ROW_MARGIN_TOP) e o mesmo tamanho/fonte herdados do
-      // padrão do documento (nenhuma formatação custom no TextRun da tag,
-      // regra já estabelecida) -- como o nome também herda o mesmo
-      // font/size do padrão, as duas primeiras linhas de cada célula
-      // nascem na mesma altura por fluxo real, sem depender de nenhum
-      // efeito de renderização que o ClickSign possa interpretar diferente.
+  function dataLine(text: string, opts: { bold?: boolean; color?: string; size?: number }, isLast: boolean): TableCell {
+    return new TableCell({
+      width: { size: SIG_COL_DATA_WIDTH, type: WidthType.DXA },
       verticalAlign: VerticalAlignTable.TOP,
-      margins: { top: SIG_ROW_MARGIN_TOP, bottom: SIG_ROW_MARGIN_BOTTOM, left: 120, right: 0 },
-      borders: { top: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" }, left: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" }, right: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" }, bottom: { style: BorderStyle.SINGLE, size: 2, color: "E5E5E5" } },
+      margins: { top: 0, bottom: isLast ? SIG_ROW_GAP_TWIPS : 0, left: 0, right: 120 },
+      borders: { top: NO_BORDER, left: NO_BORDER, right: NO_BORDER, bottom: isLast ? SEP_BORDER : NO_BORDER },
       children: [
         new Paragraph({
           alignment: AlignmentType.LEFT,
           spacing: { before: 0, after: 0 },
+          // keepNext (não a última linha da parte): acorrenta esta linha à
+          // próxima no fluxo de paginação do Word -- sem isso, achado real
+          // 23/09/2026 (V3C-NDA teste local, "Table Row Split" recém
+          // dividido em 3 linhas físicas): o Word pode quebrar a página
+          // NO MEIO das 3 linhas de uma mesma pessoa (ex: nome+CPF numa
+          // página, papel sozinho e órfão no topo da próxima). `cantSplit`
+          // na TableRow só impede quebra DENTRO de uma linha; quem impede
+          // quebra ENTRE linhas da mesma pessoa é keepNext encadeado.
+          keepNext: !isLast,
+          children: [new TextRun({ text, bold: opts.bold, color: opts.color ?? CREAM, size: opts.size, font: BODY_FONT })],
+        }),
+      ],
+    });
+  }
+
+  function sigLine(content: string | null, isLast: boolean): TableCell {
+    return new TableCell({
+      width: { size: SIG_COL_ASSIN_WIDTH, type: WidthType.DXA },
+      verticalAlign: VerticalAlignTable.TOP,
+      margins: { top: 0, bottom: isLast ? SIG_ROW_GAP_TWIPS : 0, left: 120, right: 0 },
+      borders: { top: NO_BORDER, left: NO_BORDER, right: NO_BORDER, bottom: isLast ? SEP_BORDER : NO_BORDER },
+      children: [
+        new Paragraph({
+          alignment: AlignmentType.LEFT,
+          spacing: { before: 0, after: 0 },
+          keepNext: !isLast,
           // Tag de posicionamento (BRIEF "Assinatura Posicionada"): a
           // ClickSign localiza este texto literal no .docx convertido e
           // desenha a área de assinatura manuscrita exatamente aqui,
@@ -317,20 +305,24 @@ function renderPartiesBlockDocx(parties?: ContractParty[]): (Paragraph | Table)[
           // chamada, que não garante reconhecimento nenhum): TextRun com
           // `color`/`size` sempre dava campo vazio ([]); TextRun sem
           // nenhuma formatação de rPr sempre reconhecia a tag corretamente.
-          // Nunca mais aplicar cor/tamanho custom neste TextRun específico.
-          //
-          // 23/09/2026: movido pra dentro de uma célula de tabela (era
-          // parágrafo solto no corpo) -- o texto da tag continua idêntico e
-          // sem formatação nenhuma, célula de tabela não muda o
-          // reconhecimento da ClickSign (ela varre o texto do documento
-          // inteiro, não só o nível de parágrafo direto do body). Precisa
-          // reconfirmar com um envio real antes de virar padrão definitivo.
-          children: [new TextRun(`{{~position_sign_${i + 1}}}`)],
+          // Nunca mais aplicar cor/tamanho custom neste TextRun específico
+          // -- inclusive nas células vazias (linhas 2 e 3), que usam o
+          // TextRun vazio comum sem cor/tamanho pra manter o padrão.
+          children: content ? [new TextRun(content)] : [new TextRun({ text: "", font: BODY_FONT, size: BODY_SIZE })],
         }),
       ],
     });
+  }
 
-    return new TableRow({ children: [dataCell, sigCell] });
+  const rows: TableRow[] = [];
+  parties.forEach((p, i) => {
+    const roleText = (p.display_label ?? signatureRoleLabel(p.role)).toUpperCase();
+    const lines: { data: TableCell; sig: TableCell }[] = [
+      { data: dataLine(p.name.toUpperCase(), { bold: true }, false), sig: sigLine(`{{~position_sign_${i + 1}}}`, false) },
+      ...(p.doc ? [{ data: dataLine(p.doc, { size: 18 }, false), sig: sigLine(null, false) }] : []),
+      { data: dataLine(roleText, { bold: true, color: GOLD, size: 16 }, true), sig: sigLine(null, true) },
+    ];
+    for (const line of lines) rows.push(new TableRow({ cantSplit: true, children: [line.data, line.sig] }));
   });
 
   const table = new Table({
