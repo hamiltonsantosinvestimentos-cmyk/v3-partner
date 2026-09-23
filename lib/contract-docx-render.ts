@@ -40,11 +40,25 @@ import {
   VerticalPositionRelativeFrom,
   TextWrappingType,
   TextWrappingSide,
+  LineRuleType,
 } from "docx";
 import { signatureRoleLabel, type ContractParty } from "./contract-render";
 
 const GOLD = "C9A84C";
 const CREAM = "1A1A1A"; // corpo do .docx é sempre texto escuro sobre fundo branco -- documento pra assinatura, nunca segue a paleta navy/ouro de tela (regra de identidade visual V3 é pra peça de marca, não pra instrumento jurídico que o signatário assina)
+
+// Calibração 23/09/2026 (novo padrão, a partir do documento revisado pelo Dr.
+// Athaydes -- V3C-NDA-2026-0039, comparado byte a byte contra o que o
+// ClickSign de fato entrega): fonte Arial (era Calibri), tamanho 24
+// half-points = 12pt. BODY_SIZE agora é passado EXPLICITAMENTE em cada
+// TextRun (não só como default do documento) -- achado real da mesma
+// auditoria: o processamento de Modelo do ClickSign reseta o tamanho de
+// fonte do PADRÃO do documento (docDefaults) e também apaga a justificação
+// de parágrafo, mas preserva propriedades explícitas de cada `run` (cor,
+// negrito já sobreviviam) -- aposta calibrada em cima disso, precisa
+// reconfirmar testando um envio real de novo antes de virar padrão.
+const BODY_FONT = "Arial";
+const BODY_SIZE = 24;
 
 // Achado real 22/09/2026 (conferido só depois de converter o .docx pra PDF e
 // olhar página por página -- nunca visível na extração de texto do XML):
@@ -74,7 +88,7 @@ function textRunsFromInline(node: Node, bold = false): TextRun[] {
     // nunca ser tratado como espaço comum).
     const text = decodeHtmlEntities(node.rawText.replace(/\s+/g, " "));
     if (!text.trim()) return [];
-    return [new TextRun({ text, bold, color: CREAM })];
+    return [new TextRun({ text, bold, color: CREAM, font: BODY_FONT, size: BODY_SIZE })];
   }
   if (node.nodeType !== NodeType.ELEMENT_NODE) return [];
   const el = node as HTMLElement;
@@ -95,7 +109,17 @@ function paragraphFromBlock(el: HTMLElement): Paragraph {
   // alinhamento explícito, ou seja, à esquerda por padrão do Word). h1 abaixo
   // sobrescreve para CENTER; h2/h3 herdam JUSTIFIED daqui (heading curta de
   // uma linha só não muda visualmente com justificado).
-  const base: ConstructorParameters<typeof Paragraph>[0] = { children: runs.length ? runs : [new TextRun("")], spacing: { after: 160 }, alignment: AlignmentType.JUSTIFIED };
+  //
+  // Espaçamento 240 (era 160) e entrelinha 276/auto = 1,15x (23/09/2026,
+  // 2ª calibração): valores exatos que o Dr. Athaydes aplicou na revisão de
+  // V3C-NDA-2026-0039 (comparado byte a byte contra o .docx que ele devolveu).
+  // Justificação sozinha (sem esses dois) é o que o ClickSign resetava; teste
+  // real de novo antes de virar padrão definitivo, ver comentário de BODY_SIZE.
+  const base: ConstructorParameters<typeof Paragraph>[0] = {
+    children: runs.length ? runs : [new TextRun("")],
+    spacing: { after: 240, line: 276, lineRule: LineRuleType.AUTO },
+    alignment: AlignmentType.JUSTIFIED,
+  };
   if (tag === "h1") return new Paragraph({ ...base, heading: HeadingLevel.HEADING_1, alignment: AlignmentType.CENTER });
   if (tag === "h2") return new Paragraph({ ...base, heading: HeadingLevel.HEADING_2 });
   if (tag === "h3") return new Paragraph({ ...base, heading: HeadingLevel.HEADING_3 });
@@ -106,7 +130,7 @@ function listItemParagraph(el: HTMLElement, ordered: boolean, index: number): Pa
   const runs = textRunsFromInline(el);
   const bullet = ordered ? `${index}. ` : "• ";
   return new Paragraph({
-    children: [new TextRun({ text: bullet, color: CREAM }), ...runs],
+    children: [new TextRun({ text: bullet, color: CREAM, font: BODY_FONT, size: BODY_SIZE }), ...runs],
     spacing: { after: 120 },
     indent: { left: 360 },
   });
@@ -204,10 +228,10 @@ function renderPartiesBlockDocx(parties?: ContractParty[]): (Paragraph)[] {
       // Nome em CAIXA ALTA (BRIEF NCNDA formatação, 22/09/2026, regra 2.1 do QA
       // de governança). Paragrafo SEPARADO do da tag acima -- não mexe no
       // TextRun da tag em si, mantém o reconhecimento intacto.
-      new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 20 }, children: [new TextRun({ text: p.name.toUpperCase(), bold: true, color: CREAM })] })
+      new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 20 }, children: [new TextRun({ text: p.name.toUpperCase(), bold: true, color: CREAM, font: BODY_FONT })] })
     );
     if (p.doc) {
-      out.push(new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: p.doc, color: CREAM, size: 18 })] }));
+      out.push(new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: p.doc, color: CREAM, size: 18, font: BODY_FONT })] }));
     }
     // Papel da parte (BRIEF NCNDA formatação: "ESTRUTURADORA, HEAD V3 PARTNERS,
     // MANDATÁRIO"), mesmo rótulo do bloco de assinaturas em tela/PDF.
@@ -220,7 +244,7 @@ function renderPartiesBlockDocx(parties?: ContractParty[]): (Paragraph)[] {
     // (display_label) nunca era lido aqui, então o .docx enviado pra
     // assinatura real continuaria divergindo do preâmbulo mesmo depois do
     // fix anterior, que só cobriu o fallback.
-    out.push(new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 40 }, children: [new TextRun({ text: (p.display_label ?? signatureRoleLabel(p.role)).toUpperCase(), color: GOLD, size: 16, bold: true })] }));
+    out.push(new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 40 }, children: [new TextRun({ text: (p.display_label ?? signatureRoleLabel(p.role)).toUpperCase(), color: GOLD, size: 16, bold: true, font: BODY_FONT })] }));
   });
   // Fechamento anti-fraude (22/09/2026, mesmo motivo do caminho HTML/PDF):
   // espaço em branco depois da última assinatura é margem para inserção de
@@ -237,6 +261,7 @@ function renderPartiesBlockDocx(parties?: ContractParty[]): (Paragraph)[] {
           italics: true,
           size: 16,
           color: CREAM,
+          font: BODY_FONT,
         }),
       ],
     }),
@@ -391,14 +416,17 @@ export async function renderContractDocx(fullHtml: string, parties?: ContractPar
     }],
     styles: {
       default: {
-        // Tamanho 24 half-points = 12pt (23/09/2026, decisão de João): mesmo
-        // "w:sz" do estilo Corpodetexto do documento de referência do Dr.
-        // Athaydes (Mandato Phocus), antes 22 (11pt) sem nenhuma validação
-        // contra o padrão real dele.
-        document: { run: { font: "Calibri", size: 24, color: CREAM } },
-        heading1: { run: { font: "Calibri", size: 32, bold: true, color: GOLD } },
-        heading2: { run: { font: "Calibri", size: 26, bold: true, color: GOLD } },
-        heading3: { run: { font: "Calibri", size: 24, bold: true, color: GOLD } },
+        // Fonte Arial + 12pt (23/09/2026, 2ª calibração, byte a byte contra
+        // V3C-NDA-2026-0039 revisado pelo Dr. Athaydes): antes Calibri/22
+        // (11pt), nunca validado contra padrão real do jurídico. Isto aqui é
+        // só o FALLBACK do documento -- o corpo real já leva font/size
+        // explícitos em cada run (textRunsFromInline), porque o processamento
+        // de Modelo do ClickSign reseta justamente este default, ver
+        // BODY_FONT/BODY_SIZE acima.
+        document: { run: { font: BODY_FONT, size: BODY_SIZE, color: CREAM } },
+        heading1: { run: { font: BODY_FONT, size: 32, bold: true, color: GOLD } },
+        heading2: { run: { font: BODY_FONT, size: 26, bold: true, color: GOLD } },
+        heading3: { run: { font: BODY_FONT, size: 24, bold: true, color: GOLD } },
       },
     },
   });
