@@ -30,9 +30,9 @@ export async function GET(req: NextRequest) {
       id, partner_id, client_name, client_email, client_doc, amount_cents, status,
       paid_at, intake_token, intake_submitted_at, credit_desk_proposal_id,
       report_public_token, report_delivered_at, partner_commission_id, created_at,
-      service_type, source, ref_partner_id, cnpj_count, cpf_count, has_consultancy,
+      service_type, source, ref_partner_id, cnpj_count, cpf_count, has_consultancy, ma_deal_id,
       partner_service_links(title, service_type),
-      credit_desk_proposals(id, credit_profile_id, status),
+      credit_desk_proposals(id, code, created_at, credit_profile_id, status),
       partner:profiles!partner_id(full_name),
       ref_partner:profiles!ref_partner_id(full_name)
     `)
@@ -65,6 +65,14 @@ export async function GET(req: NextRequest) {
     consentsByToken = Object.fromEntries((consents ?? []).map((c) => [c.intake_token, c]));
   }
 
+  // Código do deal M&A (pedidos vindos de ?prop=<code>&deal_type=ma), buscado à parte
+  const maIds = [...new Set(filtered.map((o) => (o as { ma_deal_id: string | null }).ma_deal_id).filter(Boolean))] as string[];
+  let maCodeById: Record<string, string> = {};
+  if (maIds.length > 0) {
+    const { data: deals } = await svc.from("ma_deals").select("id, code").in("id", maIds);
+    maCodeById = Object.fromEntries((deals ?? []).map((d) => [d.id, d.code]));
+  }
+
   const result = filtered.map((o) => {
     const row = o as unknown as {
       id: string; partner_id: string | null; client_name: string; client_email: string; client_doc: string;
@@ -74,8 +82,9 @@ export async function GET(req: NextRequest) {
       partner_commission_id: string | null; created_at: string;
       service_type: string | null; source: string; ref_partner_id: string | null;
       cnpj_count: number | null; cpf_count: number | null; has_consultancy: boolean | null;
+      ma_deal_id: string | null;
       partner_service_links: { title?: string } | null;
-      credit_desk_proposals: { id: string; credit_profile_id: string | null; status: string } | null;
+      credit_desk_proposals: { id: string; code: string | null; created_at: string; credit_profile_id: string | null; status: string } | null;
       partner: { full_name?: string } | null;
       ref_partner: { full_name?: string } | null;
     };
@@ -85,8 +94,24 @@ export async function GET(req: NextRequest) {
     const directTitle = row.cnpj_count != null
       ? buildModularTitle({ cnpjCount: row.cnpj_count, cpfCount: row.cpf_count ?? 0, hasConsultancy: Boolean(row.has_consultancy) })
       : LEGACY_DIRECT_TITLES[row.service_type ?? ""] ?? "Análise de Crédito Empresarial";
+    // De onde veio a solicitação (22/09/2026). O link da Mesa de Crédito (?prop=<code>)
+    // grava credit_desk_proposal_id já na criação, apontando para uma proposta que existia
+    // ANTES do pedido; o vínculo manual (link-proposal) sempre cria uma proposta nova DEPOIS
+    // do pedido. Por isso a comparação de datas separa os dois casos sem coluna nova.
+    const prop = row.credit_desk_proposals;
+    const origem: "mesa_credito" | "mesa_ma" | "link_partner" | "site" =
+      row.source === "direct" && prop && new Date(prop.created_at) <= new Date(row.created_at)
+        ? "mesa_credito"
+        : row.source === "direct" && row.ma_deal_id
+          ? "mesa_ma"
+          : row.source === "direct"
+            ? "site"
+            : "link_partner";
     return {
       id: row.id,
+      origem,
+      proposal_code: prop?.code ?? null,
+      ma_deal_code: row.ma_deal_id ? maCodeById[row.ma_deal_id] ?? null : null,
       client_name: row.client_name,
       client_email: row.client_email,
       client_doc: row.client_doc,
