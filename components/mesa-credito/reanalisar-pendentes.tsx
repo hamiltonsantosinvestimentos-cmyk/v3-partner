@@ -14,6 +14,7 @@ interface EstadoFonte {
   consultada: boolean;
   habilitada: boolean;
   ultimo_erro: string | null;
+  duplicada: boolean;
 }
 
 interface Estado {
@@ -44,6 +45,8 @@ export function ReanalisarPendentes({
   const [busy, setBusy] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [resultado, setResultado] = useState<Resultado | null>(null);
+  // Segundo clique obrigatório antes de pagar de novo um SCR recusado por consulta repetida
+  const [confirmarCobranca, setConfirmarCobranca] = useState(false);
 
   const carregar = useCallback(async () => {
     try {
@@ -61,15 +64,16 @@ export function ReanalisarPendentes({
 
   useEffect(() => { carregar(); }, [carregar]);
 
-  async function reanalisar() {
+  async function reanalisar(forcarBacen = false) {
     setBusy(true);
     setErro(null);
     setResultado(null);
+    setConfirmarCobranca(false);
     try {
       const res = await fetch("/api/credit-engine/reanalyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ proposal_id: proposalId }),
+        body: JSON.stringify({ proposal_id: proposalId, forcar_bacen: forcarBacen }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Falha na reanálise");
@@ -93,6 +97,7 @@ export function ReanalisarPendentes({
   const fontes = estado.fontes.filter((f) => f.habilitada);
   const pendentes = fontes.filter((f) => !f.consultada);
   const semCredencial = pendentes.filter((f) => !estado.configurado[f.fonte]);
+  const bacenDuplicado = pendentes.some((f) => f.fonte === "bacen" && f.duplicada);
 
   return (
     <div className="rounded-lg border border-border/40 bg-secondary/20 p-3 space-y-2.5">
@@ -121,7 +126,7 @@ export function ReanalisarPendentes({
           size="sm"
           variant={pendentes.length ? "default" : "outline"}
           disabled={busy || pendentes.length === 0}
-          onClick={reanalisar}
+          onClick={() => reanalisar()}
           title={pendentes.length ? "Consulta só o que ainda não foi consultado" : "Todas as fontes já foram consultadas"}
           className="flex-shrink-0"
         >
@@ -134,6 +139,28 @@ export function ReanalisarPendentes({
         <p className="text-[11px] text-muted-foreground">
           Vai consultar apenas: {pendentes.map((f) => f.label).join(" e ")}. O que já foi consultado não é refeito nem cobrado de novo.
         </p>
+      )}
+      {bacenDuplicado && (
+        <div className="rounded-md border border-amber-500/30 bg-amber-500/5 px-2.5 py-2 text-[11px] space-y-1.5">
+          <p className="text-amber-300">
+            O CheckTudo recusou o SCR porque este documento já foi consultado há pouco. Repetir agora gera uma nova cobrança.
+          </p>
+          {confirmarCobranca ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-muted-foreground">Confirma a nova cobrança do SCR?</span>
+              <Button size="sm" disabled={busy} onClick={() => reanalisar(true)}>
+                Confirmar e consultar
+              </Button>
+              <Button size="sm" variant="outline" disabled={busy} onClick={() => setConfirmarCobranca(false)}>
+                Cancelar
+              </Button>
+            </div>
+          ) : (
+            <Button size="sm" variant="outline" disabled={busy} onClick={() => setConfirmarCobranca(true)}>
+              Consultar SCR mesmo assim (nova cobrança)
+            </Button>
+          )}
+        </div>
       )}
       {semCredencial.length > 0 && (
         <p className="text-[11px] text-amber-400">

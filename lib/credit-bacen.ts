@@ -1,4 +1,4 @@
-import { checktudoLogin, checktudoSCR, type ChecktudoDocType } from "@/lib/checktudo";
+import { checktudoLogin, checktudoSCR, ChecktudoDuplicityError, type ChecktudoDocType } from "@/lib/checktudo";
 
 // SCR do CheckTudo (BACEN) — 01/09/2026, decisão de João: fica como dado de
 // REFERÊNCIA na tela da proposta, nunca entra no cálculo do Tier/score da V3
@@ -27,17 +27,24 @@ export interface BacenScrData {
   consultado_em: string;
 }
 
-export type BacenResult = { ok: true; data: BacenScrData } | { ok: false; error: string };
+export type BacenResult =
+  | { ok: true; data: BacenScrData }
+  /** duplicada: o CheckTudo recusou por consulta repetida recente; só roda de novo pagando outra vez. */
+  | { ok: false; error: string; duplicada?: boolean };
 
 /** Consulta o SCR no CheckTudo e devolve o dado ou o motivo da falha. Nunca lança. */
-export async function consultarBacenScr(docType: ChecktudoDocType, docValue: string): Promise<BacenResult> {
+export async function consultarBacenScr(
+  docType: ChecktudoDocType,
+  docValue: string,
+  opts: { forcarNovaCobranca?: boolean } = {}
+): Promise<BacenResult> {
   const username = process.env.CHECKTUDO_USERNAME;
   const password = process.env.CHECKTUDO_PASSWORD;
   if (!username || !password) return { ok: false, error: "Credenciais do CheckTudo não configuradas no portal" };
 
   try {
     const session = await checktudoLogin(username, password);
-    const raw = await checktudoSCR(session, docType, docValue);
+    const raw = await checktudoSCR(session, docType, docValue, { permitirDuplicidade: !!opts.forcarNovaCobranca });
     const scr = (raw?.body as any)?.data?.scr ?? {};
     const consolidado = scr.consolidado ?? {};
     const mapOps = (ops: any[] | undefined): BacenOperacao[] =>
@@ -59,6 +66,16 @@ export async function consultarBacenScr(docType: ChecktudoDocType, docValue: str
       },
     };
   } catch (e) {
+    if (e instanceof ChecktudoDuplicityError) {
+      return {
+        ok: false,
+        duplicada: true,
+        error:
+          `O CheckTudo já consultou o SCR deste documento recentemente` +
+          (e.consultadoEm ? ` (${e.consultadoEm})` : "") +
+          ` e não repetiu a consulta sem autorização, porque ela seria cobrada de novo.`,
+      };
+    }
     return { ok: false, error: (e as Error).message };
   }
 }

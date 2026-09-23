@@ -43,7 +43,7 @@ export async function GET(req: NextRequest) {
   });
 }
 
-// POST { proposal_id } — consulta só as fontes pendentes, atualiza o mesmo perfil e refaz o dossiê
+// POST { proposal_id, forcar_bacen? } — consulta só as fontes pendentes, atualiza o mesmo perfil e refaz o dossiê
 export async function POST(req: NextRequest) {
   const negado = await autorizado();
   if (negado) return NextResponse.json({ error: negado.error }, { status: negado.status });
@@ -54,7 +54,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "proposal_id obrigatório" }, { status: 400 });
   }
 
-  const r = await reanalisarPendentes(serviceClient(), proposalId);
+  // forcar_bacen: autorização explícita para pagar de novo um SCR recusado por consulta repetida
+  const r = await reanalisarPendentes(serviceClient(), proposalId, {}, { forcarBacen: body?.forcar_bacen === true });
   if (!r.ok) return NextResponse.json({ error: r.error }, { status: r.status });
   return NextResponse.json(r);
 }

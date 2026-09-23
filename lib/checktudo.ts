@@ -83,15 +83,44 @@ export async function checktudoLogin(username: string, password: string): Promis
  * POST /api/person/:userid -- NAO /api/vehicle/userid (esse e so pra consulta veicular,
  * apesar do resumo geral que a Checktudo mandou citar esse exemplo).
  */
+/**
+ * A mesma consulta (querycode + documento) foi feita ha pouco na Checktudo. Achado real em
+ * producao (22/09/2026): com duplicity=false a Checktudo NAO executa de novo e responde HTTP
+ * 206 "partial content" com body.duplicity_checking avisando que prosseguir sera cobrado. So
+ * reenviando com duplicity=true a consulta roda (e cobra de novo) -- decisao que precisa ser
+ * explicita de quem opera, nunca automatica.
+ */
+export class ChecktudoDuplicityError extends Error {
+  constructor(
+    public querycode: number,
+    public queryid: string | null,
+    public consultadoEm: string | null,
+    public aviso: string
+  ) {
+    super(
+      `Checktudo querycode ${querycode}: consulta repetida recentemente` +
+        (consultadoEm ? ` (anterior em ${consultadoEm})` : "") +
+        ` -- ${aviso}`
+    );
+    this.name = "ChecktudoDuplicityError";
+  }
+}
+
+export interface ChecktudoQueryOptions {
+  /** true = aceita executar (e pagar) de novo uma consulta repetida recentemente. */
+  permitirDuplicidade?: boolean;
+}
+
 async function checktudoQuery(
   session: ChecktudoSession,
   querycode: number,
-  keys: Record<string, string>
+  keys: Record<string, string>,
+  opts: ChecktudoQueryOptions = {}
 ): Promise<Record<string, unknown>> {
   const res = await fetch(`${CHECKTUDO_BASE}/api/person/${session.userid}`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: session.token },
-    body: JSON.stringify({ querycode, keys, duplicity: false }),
+    body: JSON.stringify({ querycode, keys, duplicity: !!opts.permitirDuplicidade }),
     signal: AbortSignal.timeout(30000),
   });
 
@@ -104,6 +133,17 @@ async function checktudoQuery(
   }
 
   const status = json.status as { cod?: number; msg?: string } | undefined;
+  const dupBody = json.body as
+    | { duplicity_checking?: string; headerInfos?: { queryid?: string; date?: string } }
+    | undefined;
+  if ((res.status === 206 || status?.cod === 206) && dupBody?.duplicity_checking) {
+    throw new ChecktudoDuplicityError(
+      querycode,
+      dupBody.headerInfos?.queryid ?? null,
+      dupBody.headerInfos?.date ?? null,
+      dupBody.duplicity_checking
+    );
+  }
   if (!res.ok || status?.cod !== 200) {
     throw new Error(`Checktudo querycode ${querycode} HTTP ${res.status}: ${JSON.stringify(json).slice(0, 300)}`);
   }
@@ -125,8 +165,13 @@ async function checktudoQuery(
 }
 
 /** querycode 3090 -- SCR (Sistema de Informacoes de Credito, BACEN). */
-export async function checktudoSCR(session: ChecktudoSession, docType: ChecktudoDocType, docValue: string) {
-  return checktudoQuery(session, 3090, { [docType]: docValue });
+export async function checktudoSCR(
+  session: ChecktudoSession,
+  docType: ChecktudoDocType,
+  docValue: string,
+  opts: ChecktudoQueryOptions = {}
+) {
+  return checktudoQuery(session, 3090, { [docType]: docValue }, opts);
 }
 
 /** querycode 200 -- Dossie Juridico Resumido. Documentado oficialmente pela Checktudo. */
