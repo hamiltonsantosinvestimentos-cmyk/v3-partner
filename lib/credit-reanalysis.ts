@@ -28,6 +28,8 @@ export interface EstadoFonte {
   /** Ligada na config de fontes desta análise. Desligada = nem conta como pendente. */
   habilitada: boolean;
   ultimo_erro: string | null;
+  /** A última tentativa foi recusada por consulta repetida: só sai pagando de novo (forcar_bacen). */
+  duplicada: boolean;
 }
 
 export interface EstadoAnalise {
@@ -92,7 +94,7 @@ async function carregar(db: SupabaseClient, proposalId: string) {
 }
 
 function montarFontes(perfil: PerfilRow, cfg: SourceConfig, isPj: boolean): EstadoFonte[] {
-  const status = (perfil.raw_result?.fontes_status ?? {}) as Record<string, { ok?: boolean; erro?: string }>;
+  const status = (perfil.raw_result?.fontes_status ?? {}) as Record<string, { ok?: boolean; erro?: string; duplicada?: boolean }>;
   const serasaOk = !!perfil.serasa_data && !(perfil.serasa_data as { error?: unknown }).error;
   const bacenOk = !!perfil.bacen_scr_data;
   return [
@@ -102,6 +104,7 @@ function montarFontes(perfil: PerfilRow, cfg: SourceConfig, isPj: boolean): Esta
       consultada: serasaOk,
       habilitada: !!cfg.serasa && (isPj ? !!cfg.serasa_cnpj : true),
       ultimo_erro: !serasaOk && status.serasa?.ok === false ? status.serasa.erro ?? null : null,
+      duplicada: false,
     },
     {
       fonte: "bacen",
@@ -109,6 +112,9 @@ function montarFontes(perfil: PerfilRow, cfg: SourceConfig, isPj: boolean): Esta
       consultada: bacenOk,
       habilitada: !!cfg.registrato_bacen,
       ultimo_erro: !bacenOk && status.bacen?.ok === false ? status.bacen.erro ?? null : null,
+      // erro com "duplicity_checking": gravado antes do flag existir (resposta crua do 206)
+      duplicada: !bacenOk && status.bacen?.ok === false &&
+        (!!status.bacen.duplicada || !!status.bacen.erro?.includes("duplicity_checking")),
     },
   ];
 }
@@ -131,7 +137,7 @@ export interface ResultadoReanalise {
   ok: true;
   profile_id: string;
   atualizadas: { fonte: FonteReanalise; label: string }[];
-  falhas: { fonte: FonteReanalise; label: string; erro: string }[];
+  falhas: { fonte: FonteReanalise; label: string; erro: string; duplicada?: boolean }[];
   pendentes_restantes: FonteReanalise[];
   score_total: number | null;
   tier: string | null;
@@ -151,7 +157,9 @@ export interface ReanaliseDeps {
 export async function reanalisarPendentes(
   db: SupabaseClient,
   proposalId: string,
-  deps: ReanaliseDeps = {}
+  deps: ReanaliseDeps = {},
+  /** forcarBacen: quem opera autorizou pagar de novo um SCR recusado por consulta repetida. */
+  opts: { forcarBacen?: boolean } = {}
 ): Promise<ResultadoReanalise | ErroReanalise> {
   const fSerasa = deps.serasa ?? consultarSerasa;
   const fBacen = deps.bacen ?? consultarBacenScr;
@@ -182,7 +190,7 @@ export async function reanalisarPendentes(
 
   const executar = async (): Promise<ResultadoReanalise> => {
   const now = new Date().toISOString();
-  const statusNovo: Record<string, { ok: boolean; erro?: string; em: string }> = {};
+  const statusNovo: Record<string, { ok: boolean; erro?: string; duplicada?: boolean; em: string }> = {};
   const atualizadas: ResultadoReanalise["atualizadas"] = [];
   const falhas: ResultadoReanalise["falhas"] = [];
   const update: Record<string, unknown> = {};
@@ -196,15 +204,16 @@ export async function reanalisarPendentes(
       if (f.fonte === "serasa") {
         return { fonte: f.fonte, r: await fSerasa({ doc: rawDoc, isPj, modalidade: cfg.serasa_modalidade }) };
       }
-      return { fonte: f.fonte, r: await fBacen(isPj ? "cnpj" : "cpf", rawDoc) };
+      return { fonte: f.fonte, r: await fBacen(isPj ? "cnpj" : "cpf", rawDoc, { forcarNovaCobranca: !!opts.forcarBacen }) };
     })
   );
 
   for (const { fonte, r } of consultas) {
     const label = FONTE_LABEL[fonte];
     if (!r.ok) {
-      falhas.push({ fonte, label, erro: r.error });
-      statusNovo[fonte] = { ok: false, erro: r.error.slice(0, 500), em: now };
+      const duplicada = "duplicada" in r && !!r.duplicada;
+      falhas.push({ fonte, label, erro: r.error, duplicada });
+      statusNovo[fonte] = { ok: false, erro: r.error.slice(0, 500), duplicada, em: now };
       continue;
     }
     statusNovo[fonte] = { ok: true, em: now };
