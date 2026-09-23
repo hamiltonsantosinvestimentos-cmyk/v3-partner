@@ -1,6 +1,7 @@
 import { createClient as sc } from "@supabase/supabase-js";
 import { createNotification, notifyByRoles } from "@/lib/notify";
 import { notifyNovaComissao } from "@/lib/email";
+import { UNIT_PRICE_CENTS } from "@/lib/credit-analysis-pricing";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -94,7 +95,8 @@ async function documentosAdicionaisAnalisados(db: ReturnType<typeof svc>, orderI
  *    adicional já analisado (sócio/garantidor CPF, CNPJ do grupo). Um pedido de empresa + sócio
  *    são duas consultas, portanto duas comissões.
  *  - Valor de cada uma = config global `consulta_partner_payout_cents` (valor FIXO, cheio,
- *    sem retenção adicional de imposto).
+ *    sem retenção adicional de imposto), editável na aba Pedidos de Partners. O custo de uma análise
+ *    (UNIT_PRICE_CENTS, R$197) vai em `reference_cost`, só para exibição na aba Comissões.
  *  - Beneficiário = partner do pedido; se venda direta, o partner que indicou.
  *  - status inicial AGUARDANDO_AUTORIZACAO (mesmo fluxo do crédito liberado):
  *    ADMIN/FINANCEIRO autorizam e definem a data prevista na aba Comissões.
@@ -129,6 +131,11 @@ export async function gerarComissaoConsultaEntregue(
   const payoutCents = await getConsultaPartnerPayoutCents(db);
   if (payoutCents <= 0) return { status: "skipped", reason: "no_payout_configured" };
   const payout = Math.round(payoutCents) / 100;
+  // Custo de UMA análise (R$197 por CNPJ/CPF), gravado em commissions.reference_cost só para
+  // exibição (decisão de Hamilton, 23/09/2026: a aba Comissões mostra "Custo da análise R$197 ·
+  // Comissão fixa R$60"). Não entra no cálculo: commission_percent tem 2 casas decimais e
+  // nenhum percentual sobre R$197 dá exatamente R$60, então o valor pago segue fixo × 100%.
+  const custoAnalise = UNIT_PRICE_CENTS / 100;
 
   const pRaw = (order.partner_id ? order.partner : order.ref_partner) as unknown;
   const partner = (Array.isArray(pRaw) ? pRaw[0] : pRaw) as { id: string; full_name: string | null } | null | undefined;
@@ -149,7 +156,7 @@ export async function gerarComissaoConsultaEntregue(
     const { count } = await db.from("commissions").select("*", { count: "exact", head: true });
     const code = `COM-26-${String((count ?? 0) + 1).padStart(4, "0")}-CON`;
 
-    const { data: commission, error } = await db.from("commissions").insert({
+    const linha = {
       code,
       partner_id: beneficiaryId,
       operation_type: "CREDITO",
@@ -166,12 +173,21 @@ export async function gerarComissaoConsultaEntregue(
       created_by: actorId,
       is_referral_commission: false,
       notes: opts.nota,
-    }).select("id, commission_value").single();
+      reference_cost: custoAnalise,
+    };
+    let { data: commission, error } = await db.from("commissions").insert(linha).select("id, commission_value").single();
 
-    if (error) {
+    // Migration 20260923_commissions_reference_cost ainda não rodada (PGRST204 = coluna
+    // desconhecida): grava sem o custo de referência em vez de perder a comissão.
+    if (error && (error as { code?: string }).code === "PGRST204") {
+      const { reference_cost: _semCusto, ...semCusto } = linha;
+      ({ data: commission, error } = await db.from("commissions").insert(semCusto).select("id, commission_value").single());
+    }
+
+    if (error || !commission) {
       // 23505 = corrida com outra entrega simultânea → trata como já gerada.
-      if ((error as { code?: string }).code === "23505") return null;
-      throw new Error(`Falha ao gerar comissão da consulta (${opts.referencia}): ${error.message}`);
+      if ((error as { code?: string } | null)?.code === "23505") return null;
+      throw new Error(`Falha ao gerar comissão da consulta (${opts.referencia}): ${error?.message ?? "sem retorno"}`);
     }
 
     const valor = Number(commission.commission_value ?? payout);
@@ -223,7 +239,7 @@ export async function gerarComissaoConsultaEntregue(
     const referencia = order.client_name ?? order.client_doc ?? "cliente";
     const nota =
       `Comissão da consulta gerada na entrega do relatório ao cliente (Pedidos de Partners). ` +
-      `Valor fixo configurado em Configurações → Comissões: ${money(payout)}. ` +
+      `Custo por análise ${money(custoAnalise)} · comissão fixa ${money(payout)} (configurada em Pedidos de Partners). ` +
       `Pedido pago ${pedidoPago}.` + vendaDireta;
     const c = await criarComissao({
       operationId: orderId,
@@ -257,7 +273,8 @@ export async function gerarComissaoConsultaEntregue(
           nota:
             `Comissão da consulta do documento adicional ${a.documento} (sócio/garantidor ou CNPJ do grupo), ` +
             `gerada na entrega do relatório ao cliente (Pedidos de Partners). Cada documento consultado gera ` +
-            `uma comissão. Valor fixo configurado em Configurações → Comissões: ${money(payout)}. ` +
+            `uma comissão. Custo por análise ${money(custoAnalise)} · comissão fixa ${money(payout)} ` +
+            `(configurada em Pedidos de Partners). ` +
             `Pedido pago ${pedidoPago}.` + vendaDireta,
           referencia: a.nome,
         });

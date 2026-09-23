@@ -20,6 +20,8 @@ export interface CommissionRow {
   tax_percent?: number | null;
   tax_value?: number | null;
   commission_net_value?: number | null;
+  /** Custo de referência (ex.: R$197 por análise de crédito). Só exibição: a comissão é valor fixo. */
+  reference_cost?: number | null;
   status: string;
   operation_closed_at: string | null;
   payment_date: string | null;
@@ -1283,8 +1285,17 @@ export function ComissoesPartnerClient({ partnerId, partnerName, role, taxPercen
                   <div className="min-w-0">
                     <p className="text-xs font-semibold text-[#F0ECE4] truncate">{c.code} · {c.operation_description}</p>
                     <p className="text-[10px] text-muted-foreground">
-                      {c.operation_code ?? "—"} · base {formatMoeda(c.operation_value)} · {c.commission_percent}% ·
-                      {" "}<span className="text-[#C9A84C] font-semibold">{formatMoeda(c.commission_value)}</span>
+                      {c.reference_cost != null ? (
+                        <>
+                          Custo da análise {formatMoeda(c.reference_cost)} · comissão fixa
+                          {" "}<span className="text-[#C9A84C] font-semibold">{formatMoeda(c.commission_value)}</span>
+                        </>
+                      ) : (
+                        <>
+                          {c.operation_code ?? "—"} · base {formatMoeda(c.operation_value)} · {c.commission_percent}% ·
+                          {" "}<span className="text-[#C9A84C] font-semibold">{formatMoeda(c.commission_value)}</span>
+                        </>
+                      )}
                     </p>
                     {c.notes && <p className="text-[10px] text-muted-foreground/70 mt-0.5 line-clamp-2">{c.notes}</p>}
                   </div>
@@ -1433,8 +1444,18 @@ export function ComissoesPartnerClient({ partnerId, partnerName, role, taxPercen
                       <div className="text-[10px] text-muted-foreground">{c.operation_code ?? "—"}</div>
                     </td>
                     <td className="px-4 py-3"><TipoBadge tipo={c.operation_type} /></td>
-                    <td className="px-4 py-3 text-white">{formatMoeda(c.operation_value)}</td>
-                    <td className="px-4 py-3 text-[#C9A84C] font-semibold">{c.commission_percent}%</td>
+                    {c.reference_cost != null ? (
+                      // Comissão de valor fixo (consulta/análise): mostra o custo da análise como base
+                      <>
+                        <td className="px-4 py-3 text-white" title="Custo da análise">{formatMoeda(c.reference_cost)}</td>
+                        <td className="px-4 py-3 text-[#C9A84C] font-semibold" title="Comissão de valor fixo">Fixa</td>
+                      </>
+                    ) : (
+                      <>
+                        <td className="px-4 py-3 text-white">{formatMoeda(c.operation_value)}</td>
+                        <td className="px-4 py-3 text-[#C9A84C] font-semibold">{c.commission_percent}%</td>
+                      </>
+                    )}
                     {anyTax ? (
                       <>
                         <td className="px-4 py-3 text-muted-foreground">{formatMoeda(c.commission_value)}</td>

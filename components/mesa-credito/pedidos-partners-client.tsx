@@ -5,6 +5,7 @@ import { Handshake, Loader2, Wallet, Check, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { PedidoDetailModal } from "./pedido-detail-modal";
+import { UNIT_PRICE_CENTS } from "@/lib/credit-analysis-pricing";
 
 export interface PartnerOrder {
   id: string;
@@ -162,8 +163,9 @@ function PayoutConfigStrip({ canManage }: { canManage: boolean }) {
         <div className="flex-1 min-w-0">
           <p className="text-xs font-semibold text-[#E8C97A]">Valor direcionado ao partner por consulta</p>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Valor fixo que vira comissão do partner quando o relatório da consulta é entregue ao cliente.
-            A comissão nasce como <strong className="text-foreground">Aguardando autorização</strong> na aba Comissões.
+            Valor fixo que vira comissão do partner para cada análise (CNPJ ou CPF, custo de {formatCurrency(UNIT_PRICE_CENTS / 100)} cada)
+            quando o relatório é entregue ao cliente. A comissão nasce como <strong className="text-foreground">Aguardando autorização</strong> na
+            aba Comissões, mostrando o custo da análise e este valor fixo.
           </p>
 
           {loading ? (
