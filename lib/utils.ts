@@ -50,6 +50,14 @@ export function formatCnpj(cnpj: string): string {
   );
 }
 
+/** CPF ou CNPJ formatado conforme a quantidade de dígitos (aceita com ou sem máscara). */
+export function formatDoc(doc: string | null | undefined): string {
+  const d = (doc ?? "").replace(/\D/g, "");
+  if (d.length === 11) return formatCpf(d);
+  if (d.length === 14) return formatCnpj(d);
+  return doc || "—";
+}
+
 export function formatPhone(phone: string): string {
   const cleaned = phone.replace(/\D/g, "");
   if (cleaned.length === 11) {

@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, type MouseEvent } from "react";
 import { Handshake, Loader2, Wallet, Check, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { formatCurrency, formatDate, formatDoc } from "@/lib/utils";
 import { PedidoDetailModal } from "./pedido-detail-modal";
 import { UNIT_PRICE_CENTS } from "@/lib/credit-analysis-pricing";
 
@@ -293,7 +293,7 @@ function OrdersTable({
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-border/50">
-            {["Cliente", "Origem", "Código do crédito", "Valor Pago", "Consentimento", "Etapa", "Comissão", "Pago em"].map((h) => (
+            {["Cliente", "Origem", "Serviço", "Código do crédito", "Valor Pago", "Consentimento", "Etapa", "Comissão", "Pedido em", "Pago em"].map((h) => (
               <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">{h}</th>
             ))}
             {podeExcluir && <th className="w-12" aria-label="Ações" />}
@@ -306,13 +306,24 @@ function OrdersTable({
               className="border-b border-border/30 cursor-pointer transition-colors hover:bg-secondary/50"
               onClick={() => onSelect(o)}
             >
-              <td className="px-4 py-3 font-medium text-foreground max-w-48 truncate">{o.client_name}</td>
+              <td className="px-4 py-3 min-w-56">
+                <p className="font-medium text-foreground">{o.client_name}</p>
+                <p className="text-[11px] text-muted-foreground whitespace-nowrap">{formatDoc(o.client_doc)}</p>
+                <p className="text-[11px] text-muted-foreground break-all">{o.client_email}</p>
+              </td>
               <td className="px-4 py-3"><OriginBadge order={o} /></td>
+              <td className="px-4 py-3 min-w-44">
+                <p className="text-xs text-foreground">{o.service_title}</p>
+                {(o.cnpj_count != null || o.cpf_count != null) && (
+                  <p className="text-[11px] text-muted-foreground whitespace-nowrap">{o.cnpj_count ?? 0} CNPJ · {o.cpf_count ?? 0} CPF</p>
+                )}
+              </td>
               <td className="px-4 py-3"><CodigoCell order={o} /></td>
               <td className="px-4 py-3 text-right font-semibold text-white">{formatCurrency(o.amount_cents / 100)}</td>
               <td className="px-4 py-3"><ConsentBadge status={o.consent_status} /></td>
               <td className="px-4 py-3"><StageBadge order={o} /></td>
               <td className="px-4 py-3"><CommissionBadge order={o} /></td>
+              <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">{formatDate(o.created_at)}</td>
               <td className="px-4 py-3"><PaidCell order={o} /></td>
               {podeExcluir && (
                 <td className="px-2 py-3 text-right">
