@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
-import { Handshake, Loader2, Wallet, Check } from "lucide-react";
+import { useEffect, useState, useCallback, type MouseEvent } from "react";
+import { Handshake, Loader2, Wallet, Check, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { PedidoDetailModal } from "./pedido-detail-modal";
@@ -168,9 +168,81 @@ interface Props {
   canManagePayout?: boolean;
 }
 
+const STATUS_NAO_PAGO: Record<string, string> = {
+  PENDING: "Não pago",
+  CANCELLED: "Cancelado",
+  EXPIRED: "Expirado",
+};
+
+function PaidCell({ order }: { order: PartnerOrder }) {
+  if (order.status === "PAID") {
+    return <span className="text-xs text-muted-foreground">{order.paid_at ? formatDate(order.paid_at) : "Pago"}</span>;
+  }
+  return (
+    <Badge className="bg-amber-500/10 text-amber-400 border-amber-500/20">
+      {STATUS_NAO_PAGO[order.status] ?? order.status}
+    </Badge>
+  );
+}
+
+// "Excluir solicitação" (ADMIN/GESTAO): limpeza manual dos pedidos que não foram pagos
+// (22/09/2026). Pedido com comissão gerada ou relatório entregue não pode ser excluído
+// (a API também barra). Ver app/api/credit-engine/orders/[id]/route.ts.
+function ExcluirSolicitacao({ order, onDeleted }: { order: PartnerOrder; onDeleted: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const bloqueio = order.partner_commission_id
+    ? "Já gerou comissão: não pode ser excluída"
+    : order.report_delivered_at
+      ? "Relatório já entregue: não pode ser excluída"
+      : null;
+
+  async function excluir(e: MouseEvent) {
+    e.stopPropagation(); // não abre o modal da linha
+    const linhas = [`Excluir a solicitação de "${order.client_name}"?`, ""];
+    if (order.status === "PAID") linhas.push("ATENÇÃO: esta solicitação está PAGA.", "");
+    if (order.credit_desk_proposal_id) linhas.push("A proposta de crédito vinculada não será apagada.", "");
+    linhas.push("Ela sai da lista de Pedidos de Partners. Esta ação não pode ser desfeita.");
+    if (!window.confirm(linhas.join("\n"))) return;
+
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/credit-engine/orders/${order.id}`, { method: "DELETE" });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error ?? "Falha ao excluir a solicitação");
+      onDeleted();
+    } catch (err) {
+      window.alert((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <button
+      onClick={excluir}
+      disabled={busy || !!bloqueio}
+      title={bloqueio ?? "Excluir solicitação"}
+      aria-label="Excluir solicitação"
+      className="p-1.5 rounded-md text-muted-foreground hover:text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-muted-foreground disabled:cursor-not-allowed"
+    >
+      {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+    </button>
+  );
+}
+
 // Tabela reutilizada pelas 2 abas (via partner / direto no site) — mesmas
 // colunas, mesma linha clicável, só o array de pedidos muda.
-function OrdersTable({ orders, onSelect }: { orders: PartnerOrder[]; onSelect: (o: PartnerOrder) => void }) {
+function OrdersTable({
+  orders,
+  onSelect,
+  podeExcluir,
+  onDeleted,
+}: {
+  orders: PartnerOrder[];
+  onSelect: (o: PartnerOrder) => void;
+  podeExcluir: boolean;
+  onDeleted: () => void;
+}) {
   if (orders.length === 0) {
     return (
       <div className="rounded-xl border border-border/50 bg-card p-8 text-center text-sm text-muted-foreground">
@@ -186,6 +258,7 @@ function OrdersTable({ orders, onSelect }: { orders: PartnerOrder[]; onSelect: (
             {["Cliente", "Origem", "Valor Pago", "Consentimento", "Etapa", "Comissão", "Pago em"].map((h) => (
               <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">{h}</th>
             ))}
+            {podeExcluir && <th className="w-12" aria-label="Ações" />}
           </tr>
         </thead>
         <tbody>
@@ -201,7 +274,12 @@ function OrdersTable({ orders, onSelect }: { orders: PartnerOrder[]; onSelect: (
               <td className="px-4 py-3"><ConsentBadge status={o.consent_status} /></td>
               <td className="px-4 py-3"><StageBadge order={o} /></td>
               <td className="px-4 py-3"><CommissionBadge order={o} /></td>
-              <td className="px-4 py-3 text-xs text-muted-foreground">{o.paid_at ? formatDate(o.paid_at) : "—"}</td>
+              <td className="px-4 py-3"><PaidCell order={o} /></td>
+              {podeExcluir && (
+                <td className="px-2 py-3 text-right">
+                  <ExcluirSolicitacao order={o} onDeleted={onDeleted} />
+                </td>
+              )}
             </tr>
           ))}
         </tbody>
@@ -303,7 +381,12 @@ export function PedidosPartnersClient({ canManagePayout = false }: Props) {
             </p>
           )}
 
-          <OrdersTable orders={tab === "partner" ? partnerOrders : directOrders} onSelect={setSelected} />
+          <OrdersTable
+            orders={tab === "partner" ? partnerOrders : directOrders}
+            onSelect={setSelected}
+            podeExcluir={canManagePayout}
+            onDeleted={load}
+          />
         </>
       )}
 
