@@ -100,6 +100,9 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     success: true,
     report_url: reportUrl,
     commission_generated: commission?.status === "created",
+    // Soma das comissões criadas nesta entrega (uma por documento consultado: empresa + sócios)
     commission_value: commission?.value ?? null,
+    commissions_created: commission?.criadas?.length ?? 0,
+    commission_errors: commission?.erros ?? [],
   });
 }

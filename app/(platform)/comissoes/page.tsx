@@ -67,21 +67,21 @@ export default async function ComissoesPage() {
   const taxPercentRaw = taxRow?.value != null ? Number(taxRow.value) : 0;
   const taxPercent = Number.isFinite(taxPercentRaw) && taxPercentRaw >= 0 && taxPercentRaw <= 100 ? taxPercentRaw : 0;
 
-  let query = svc
-    .from("commissions")
-    .select(`
+  const COLS = `
       id, code, partner_id, operation_type, operation_code, operation_description,
       operation_value, commission_percent, commission_value,
       tax_percent, tax_value, commission_net_value, status,
-      operation_closed_at, payment_date, notes, created_at
-    `)
-    .order("created_at", { ascending: false });
+      operation_closed_at, payment_date, notes, created_at`;
+  const buscar = (cols: string) => {
+    let query = svc.from("commissions").select(cols).order("created_at", { ascending: false });
+    if (!isAdmin) query = query.eq("partner_id", user.id);
+    return query;
+  };
 
-  if (!isAdmin) {
-    query = query.eq("partner_id", user.id);
-  }
-
-  const { data: commissions } = await query;
+  // reference_cost (custo da análise, migration 20260923): se a coluna ainda não existir
+  // no banco, carrega sem ela em vez de deixar a aba vazia.
+  const comCusto = await buscar(`${COLS}, reference_cost`);
+  const commissions = comCusto.error ? (await buscar(COLS)).data : comCusto.data;
 
   // Para admin: busca lista de partners para criar comissões
   let partners: { id: string; full_name: string | null; email: string; role: string }[] = [];
@@ -110,7 +110,9 @@ export default async function ComissoesPage() {
       partnerName={profile.full_name ?? ""}
       role={profile.role}
       taxPercent={taxPercent}
-      commissions={(commissions ?? []) as Parameters<typeof ComissoesPartnerClient>[0]["commissions"]}
+      // unknown: as colunas vêm de string montada em runtime (fallback do reference_cost),
+      // então o supabase-js não infere o tipo da linha.
+      commissions={(commissions ?? []) as unknown as Parameters<typeof ComissoesPartnerClient>[0]["commissions"]}
       partners={partners}
       marketplaceLeads={(marketplaceLeads ?? []) as unknown as Parameters<typeof ComissoesPartnerClient>[0]["marketplaceLeads"]}
     />
