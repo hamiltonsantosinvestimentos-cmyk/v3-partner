@@ -302,28 +302,30 @@ p{margin-bottom:12px;text-align:justify}
 .clause-num{display:inline-block}
 .header{text-align:center;margin-bottom:32px}
 .header p{font-size:11px;color:#5B6B82}
-/* Bloco de assinaturas: 2 colunas proporcionais por parte -- dados (55%) e
-   espaço da assinatura (45%) ADJACENTES, sem traço/linha mecânica (proibido
-   pelo BRIEF). CORREÇÃO 22/09/2026 (auditoria de diagramação, item 4): o
+/* Bloco de assinaturas: linha vertical de referência EXATAMENTE no meio da
+   página (50%/50%, nunca 55/45), regra fixa independente da quantidade de
+   partes (23/09/2026, pedido explícito de João, confirmado contra o mockup
+   https://claude.ai/artifact/CiHWQw3mVxcnpJmaxgGBg5 antes de implementar).
+   Bloco A (dados) à esquerda da linha, Bloco B (assinatura) começando
+   exatamente nela, sem traço/linha mecânica (proibido pelo BRIEF).
+   CORREÇÃO 22/09/2026 (auditoria de diagramação, item 4): o
    "justify-content:space-between" antigo esticava as 2 colunas até as
    extremidades da linha inteira, empurrando "Assinatura eletrônica" pra
-   margem direita da página e deixando um vão vazio enorme no meio -- sem
-   nenhuma relação com a largura real do conteúdo de cada coluna. Largura fixa
-   em flex-basis (55%/45%) mantém a assinatura logo ao lado dos dados, à
-   esquerda do eixo central, como pedido. */
-/* Densidade reduzida (achado real 22/09/2026, auditoria de diagramação, item
-   C): com padding:14px por linha, 8 signatários não cabiam na mesma página
-   do fecho (5 numa página, 3 isolados sozinhos na seguinte). 8px por linha
-   melhora pra 6+2 (testado; reduzir mais não rendeu linha extra nenhuma,
-   então mantido no valor que preserva legibilidade). Caber TODOS numa única
-   página depende também do item B (assinatura da Estruturadora, em aberto). */
+   margem direita da página. Largura fixa em flex-basis (50%/50%) mantém a
+   assinatura exatamente na linha central, nunca na borda da página. */
+/* Espaçamento de 3 linhas entre assinaturas (23/09/2026, mesmo pedido): 1
+   linha de corpo = font-size 13px × line-height 1.8 ≈ 23,4px; 3 linhas ≈
+   70px, dividido entre a margem inferior de cada linha e a superior da
+   próxima (a borda fina entre elas soma espessura desprezível). Substitui a
+   densidade de 8px testada em 22/09/2026 -- espaço é regra fixa agora, não
+   mais otimizado pra caber o máximo de assinaturas numa página só. */
 .parties{margin-top:32px;padding-top:16px;border-top:1px solid #C9C9C9}
-.party{display:flex;align-items:flex-end;gap:24px;padding:8px 0;border-bottom:1px solid #E5E5E5}
-.party-info{flex:0 0 55%;text-align:left}
+.party{display:flex;align-items:flex-end;gap:24px;padding:10px 0 60px;border-bottom:1px solid #E5E5E5}
+.party-info{flex:0 0 50%;text-align:left}
 .party-name{font-weight:700;color:#13223A;font-size:12px}
 .party-doc{font-size:10px;color:#5B6B82;margin-top:2px}
 .party-role{font-size:9px;color:#8C6D1F;text-transform:uppercase;letter-spacing:.06em;margin-top:4px}
-.party-sig{flex:0 0 45%;text-align:left;font-size:9px;color:#5B6B82;font-style:italic}
+.party-sig{flex:0 0 50%;text-align:left;font-size:9px;color:#5B6B82;font-style:italic}
 /* Fechamento anti-fraude (22/09/2026): linha final explícita logo após a
    última assinatura, para nenhum espaço em branco no fim do documento
    parecer "margem" para inserção posterior de texto. */

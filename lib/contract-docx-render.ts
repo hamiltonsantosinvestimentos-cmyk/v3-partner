@@ -69,13 +69,30 @@ const BODY_SIZE = 24;
 
 // Largura útil da página em DXA (23/09/2026, layout de assinaturas em
 // tabela): 11910 (pgSz.width) - 425 (margem esquerda) - 708 (margem direita)
-// = 10777. Coluna 1 (dados) 55%, coluna 2 (assinatura) 45% -- mesma
-// proporção já usada no caminho HTML/PDF (lib/contract-render.ts,
-// renderPartiesBlock). docx exige as duas larguras (tabela E célula) em DXA
-// -- PERCENTAGE quebra no Google Docs, por isso os números fixos aqui.
+// = 10777.
+//
+// REGRA DE DIAGRAMAÇÃO (23/09/2026, pedido explícito de João, confirmado
+// contra o mockup https://claude.ai/artifact/CiHWQw3mVxcnpJmaxgGBg5 antes de
+// implementar): padrão fixo pra QUALQUER contrato deste motor, independente
+// de quantas partes assinam -- uma linha vertical de referência exatamente
+// no meio da página (50%, nunca 55/45), nunca desenhada no documento final.
+// Bloco A (dados) à esquerda dela, Bloco B (assinatura) começando
+// exatamente nela, sempre na mesma linha horizontal do Bloco A
+// correspondente. docx exige as duas larguras (tabela E célula) em DXA --
+// PERCENTAGE quebra no Google Docs, por isso os números fixos aqui.
 const PAGE_CONTENT_WIDTH = 10777;
-const SIG_COL_DATA_WIDTH = Math.round(PAGE_CONTENT_WIDTH * 0.55);
+const SIG_COL_DATA_WIDTH = Math.round(PAGE_CONTENT_WIDTH / 2);
 const SIG_COL_ASSIN_WIDTH = PAGE_CONTENT_WIDTH - SIG_COL_DATA_WIDTH;
+
+// "3 linhas" de distância entre uma assinatura e a próxima (mesmo pedido):
+// 1 linha de corpo ≈ 276 twips (mesmo valor de spacing.line/lineRule:auto
+// já usado no corpo do texto, BODY_SIZE 12pt com entrelinha 1,15x). 3 linhas
+// = 828 twips, dividido entre a margem inferior da linha atual e a margem
+// superior da próxima (a borda fina entre elas soma espessura desprezível).
+const LINE_HEIGHT_TWIPS = 276;
+const SIG_ROW_GAP_TWIPS = LINE_HEIGHT_TWIPS * 3;
+const SIG_ROW_MARGIN_TOP = 60;
+const SIG_ROW_MARGIN_BOTTOM = SIG_ROW_GAP_TWIPS - SIG_ROW_MARGIN_TOP;
 
 // Achado real 22/09/2026 (conferido só depois de converter o .docx pra PDF e
 // olhar página por página -- nunca visível na extração de texto do XML):
@@ -221,11 +238,14 @@ function blocksFromRoot(root: HTMLElement): (Paragraph | Table)[] {
 // exatamente o que o Dr. Athaydes aponta como risco (espaço em branco entre
 // linhas é margem pra inserção de conteúdo depois da assinatura).
 //
-// Agora cada parte é UMA LINHA de tabela de 2 colunas: dados (55%, nome/CPF/
-// papel empilhados COM ESPAÇAMENTO MÍNIMO) à esquerda, tag de posição (45%)
-// também à esquerda dentro da própria coluna -- nunca centralizada, nunca
-// solta numa linha própria. Mesma proporção 55/45 já usada no caminho HTML/
-// PDF (renderPartiesBlock em lib/contract-render.ts).
+// Agora cada parte é UMA LINHA de tabela de 2 colunas: dados (50%, nome/CPF/
+// papel empilhados COM ESPAÇAMENTO MÍNIMO) à esquerda de uma linha vertical
+// de referência exatamente no meio da página, tag de posição (50%) também à
+// esquerda dentro da própria coluna, começando exatamente naquela linha --
+// nunca centralizada, nunca solta numa linha própria. Regra fixa,
+// independente da quantidade de partes (23/09/2026, pedido de João,
+// confirmado contra o mockup antes de implementar). Mesma proporção 50/50
+// também no caminho HTML/PDF (renderPartiesBlock em lib/contract-render.ts).
 function renderPartiesBlockDocx(parties?: ContractParty[]): (Paragraph | Table)[] {
   if (!parties || parties.length === 0) return [];
 
@@ -233,7 +253,7 @@ function renderPartiesBlockDocx(parties?: ContractParty[]): (Paragraph | Table)[
     const dataCell = new TableCell({
       width: { size: SIG_COL_DATA_WIDTH, type: WidthType.DXA },
       verticalAlign: VerticalAlignTable.CENTER,
-      margins: { top: 80, bottom: 80, left: 0, right: 120 },
+      margins: { top: SIG_ROW_MARGIN_TOP, bottom: SIG_ROW_MARGIN_BOTTOM, left: 0, right: 120 },
       borders: { top: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" }, left: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" }, right: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" }, bottom: { style: BorderStyle.SINGLE, size: 2, color: "E5E5E5" } },
       children: [
         // Nome em CAIXA ALTA (BRIEF NCNDA formatação, 22/09/2026, regra 2.1
@@ -253,7 +273,7 @@ function renderPartiesBlockDocx(parties?: ContractParty[]): (Paragraph | Table)[
     const sigCell = new TableCell({
       width: { size: SIG_COL_ASSIN_WIDTH, type: WidthType.DXA },
       verticalAlign: VerticalAlignTable.CENTER,
-      margins: { top: 80, bottom: 80, left: 120, right: 0 },
+      margins: { top: SIG_ROW_MARGIN_TOP, bottom: SIG_ROW_MARGIN_BOTTOM, left: 120, right: 0 },
       borders: { top: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" }, left: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" }, right: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" }, bottom: { style: BorderStyle.SINGLE, size: 2, color: "E5E5E5" } },
       children: [
         new Paragraph({
@@ -420,7 +440,13 @@ export async function renderContractDocx(fullHtml: string, parties?: ContractPar
   const contentRoot = parse(`<div>${contentBlocks.map((b) => b.toString()).join("")}</div>`).querySelector("div")!;
 
   const children: (Paragraph | Table)[] = [
-    ...(title ? [new Paragraph({ text: title, heading: HeadingLevel.HEADING_1, alignment: AlignmentType.CENTER, spacing: { after: 240 } })] : []),
+    // Espaçamento antes do título (achado real 23/09/2026, pedido de João:
+    // título saía colado no timbre na página 1). A margem superior da seção
+    // (2020 twips = 3,56cm) só garante o mínimo pra não sobrepor a logo
+    // (que termina em 3,58cm) -- sem folga nenhuma além disso, o título
+    // nascia praticamente encostado nela. `before` aqui soma respiro visual
+    // de verdade, além da margem de clearance.
+    ...(title ? [new Paragraph({ text: title, heading: HeadingLevel.HEADING_1, alignment: AlignmentType.CENTER, spacing: { before: 200, after: 240 } })] : []),
     ...blocksFromRoot(contentRoot),
     ...renderPartiesBlockDocx(parties),
   ];
