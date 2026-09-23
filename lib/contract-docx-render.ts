@@ -252,7 +252,10 @@ function renderPartiesBlockDocx(parties?: ContractParty[]): (Paragraph | Table)[
   const rows = parties.map((p, i) => {
     const dataCell = new TableCell({
       width: { size: SIG_COL_DATA_WIDTH, type: WidthType.DXA },
-      verticalAlign: VerticalAlignTable.CENTER,
+      // TOP (era CENTER): consistente com o sigCell abaixo -- Bloco A é a
+      // célula mais alta da linha, então isso não muda nada visualmente
+      // aqui, só evita depender de vertical-align onde não precisa.
+      verticalAlign: VerticalAlignTable.TOP,
       margins: { top: SIG_ROW_MARGIN_TOP, bottom: SIG_ROW_MARGIN_BOTTOM, left: 0, right: 120 },
       borders: { top: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" }, left: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" }, right: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" }, bottom: { style: BorderStyle.SINGLE, size: 2, color: "E5E5E5" } },
       children: [
@@ -272,10 +275,28 @@ function renderPartiesBlockDocx(parties?: ContractParty[]): (Paragraph | Table)[
 
     const sigCell = new TableCell({
       width: { size: SIG_COL_ASSIN_WIDTH, type: WidthType.DXA },
-      verticalAlign: VerticalAlignTable.CENTER,
+      // TOP, não CENTER (achado real 23/09/2026, conferido na tela de
+      // assinatura de verdade do ClickSign, nunca visível abrindo o .docx no
+      // Word): o botão "Clique para assinar" saía desalinhado, mais abaixo
+      // do que o centro visual da linha, quando a tag dependia de
+      // verticalAlign da célula pra centralizar. O ClickSign parece ancorar
+      // o widget pela posição bruta do parágrafo no fluxo do documento, não
+      // pelo efeito de centralização vertical que só o Word renderiza --
+      // por isso a centralização agora é feita por um parágrafo espaçador
+      // real ANTES da tag (mesma altura da linha do nome), nunca por
+      // vertical-align da célula.
+      verticalAlign: VerticalAlignTable.TOP,
       margins: { top: SIG_ROW_MARGIN_TOP, bottom: SIG_ROW_MARGIN_BOTTOM, left: 120, right: 0 },
       borders: { top: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" }, left: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" }, right: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" }, bottom: { style: BorderStyle.SINGLE, size: 2, color: "E5E5E5" } },
       children: [
+        // Espaçador real (mesma altura aproximada da linha do nome em
+        // Bloco A: 12pt + 20 twips de espaço depois) -- empurra a tag pra
+        // começar na altura da 2ª linha de dados (CPF/CNPJ), o meio
+        // geométrico do bloco de 3 linhas (nome/CPF/papel). Parágrafo real
+        // no fluxo, não um efeito de renderização -- qualquer leitor de
+        // posição (Word ou o motor do ClickSign) enxerga a mesma coisa.
+        // Pendente reconfirmar contra a tela real de assinatura.
+        new Paragraph({ children: [new TextRun({ text: "", size: BODY_SIZE, font: BODY_FONT })], spacing: { after: 20 } }),
         new Paragraph({
           alignment: AlignmentType.LEFT,
           // Tag de posicionamento (BRIEF "Assinatura Posicionada"): a
