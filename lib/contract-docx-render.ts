@@ -352,13 +352,34 @@ export async function renderContractDocx(fullHtml: string, parties?: ContractPar
     // (26,61cm a 28,62cm, página A4 = 29,7cm) -- corpo do texto nascia raso
     // o bastante pra entrar na área das duas imagens em toda página sem
     // título grande acima (a primeira página escapava por ter o <h1> e o
-    // "1.1 PARTES" ocupando a folga). Valores em twips (1cm ≈ 566,93 twips).
-    // Margem de baixo com folga um pouco maior que o mínimo (29,7-26,61=
-    // 3,09cm) pra sobrar respiro visual antes do rodapé, não só evitar
-    // sobreposição matemática.
+    // "1.1 PARTES" ocupando a folga).
+    //
+    // Valores exatos (23/09/2026, achado de João): extraídos byte a byte do
+    // <w:pgMar> de um .docx de referência real (mandato Phocus, papel
+    // timbrado da mesma logo/rodapé) que João confirmou sem sobreposição
+    // nenhuma -- não são um cálculo teórico daqui, são a configuração já
+    // validada visualmente pela V3. As posições das duas imagens (8,06cm/
+    // 1,25cm e 2,85cm/26,61cm, ver buildLetterheadHeader acima) já batiam
+    // exatamente com esse mesmo arquivo antes desta mudança; só a margem
+    // estava divergente. Valores em twips (1cm ≈ 566,93 twips): top 2020
+    // (3,56cm), right 708 (1,25cm), bottom 1760 (3,10cm), left 425 (0,75cm),
+    // header 709 (1,25cm), footer 1573 (2,77cm) -- os dois últimos são a
+    // distância do topo/base física da página até a área de cabeçalho/
+    // rodapé, mesmo conceito que os rótulos "1,3cm"/"2,78cm" que João usa
+    // pra descrever essa mesma configuração no Word.
     sections: [{
       headers: { default: header },
-      properties: { page: { margin: { top: 2268, bottom: 2155, left: 1134, right: 1134 } } },
+      properties: {
+        page: {
+          // Tamanho travado explicitamente em A4 (23/09/2026, pedido de
+          // João) -- mesmos w:w/w:h do <w:pgSz> do arquivo de referência
+          // (11910×16840 twips ≈ 21,0×29,7cm), em vez de depender do padrão
+          // da lib docx (que já é A4 hoje, mas sem garantia contra mudança
+          // futura da dependência).
+          size: { width: 11910, height: 16840 },
+          margin: { top: 2020, right: 708, bottom: 1760, left: 425, header: 709, footer: 1573, gutter: 0 },
+        },
+      },
       children,
     }],
     styles: {
