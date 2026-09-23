@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import {
   X, User, Building2, FileText, Upload, CheckCircle2, Circle,
   ChevronRight, AlertCircle, Home, Shield, TrendingUp, Zap, Download, Loader2,
+  Link2, CheckCheck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -309,6 +310,10 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [gerandoPDF, setGerandoPDF] = useState(false);
+  // Link de Análise de Crédito + comissão, montados após o cadastro da proposta
+  // (precisam do `code` que o servidor emite — ver comentário em handleSubmit).
+  const [analysisLink, setAnalysisLink] = useState<{ url: string; payoutReais: number } | null>(null);
+  const [linkCopied, setLinkCopied] = useState(false);
 
   // Dados do cliente
   const [nome, setNome] = useState("");
@@ -572,6 +577,24 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
           : f));
       }
 
+      // Link de Análise de Crédito (Serasa/Bacen/Jurídico/Cadastro) para o
+      // partner copiar e enviar ao cliente. Best effort: se falhar, a proposta
+      // já foi salva — o partner ainda consegue pegar o link depois no detalhe
+      // da proposta (AnaliseCreditoLinkButton, em proposta-detail-modal.tsx).
+      try {
+        const [propRes, payoutRes] = await Promise.all([
+          fetch(`/api/credit-proposals?id=${proposalId}`).then(r => r.json()).catch(() => null),
+          fetch("/api/settings/consulta-partner-payout").then(r => r.json()).catch(() => null),
+        ]);
+        const code = propRes?.proposal?.code as string | undefined;
+        const payoutReais = typeof payoutRes?.payout_reais === "number" ? payoutRes.payout_reais : 60;
+        if (code) {
+          const params = new URLSearchParams({ prop: code });
+          if (partnerId) params.set("ref", partnerId);
+          setAnalysisLink({ url: `https://app.v3partners.com.br/analise-v2?${params.toString()}#configurador`, payoutReais });
+        }
+      } catch { /* link é complementar, não bloqueia a confirmação da proposta */ }
+
       setSubmitted(true);
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : "Erro ao salvar proposta. Tente novamente.");
@@ -580,10 +603,20 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
     }
   }
 
+  function handleCopyAnalysisLink() {
+    if (!analysisLink) return;
+    navigator.clipboard.writeText(analysisLink.url).then(() => {
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2000);
+    });
+  }
+
   function handleClose() {
     setSubmitted(false);
     setSaving(false);
     setSaveError(null);
+    setAnalysisLink(null);
+    setLinkCopied(false);
     setTab("cliente");
     setClientType("PF");
     // Dados PF
@@ -613,16 +646,47 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
   if (submitted) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-        <div className="bg-card border border-border rounded-2xl p-10 max-w-md w-full text-center animate-fade-in">
-          <div className="w-16 h-16 rounded-full bg-emerald-500/20 flex items-center justify-center mx-auto mb-4">
-            <CheckCircle2 className="w-8 h-8 text-emerald-400" />
+        <div className="bg-card border border-border rounded-2xl p-8 max-w-lg w-full animate-fade-in">
+          <div className="text-center mb-5">
+            <div className="w-16 h-16 rounded-full bg-emerald-500/20 flex items-center justify-center mx-auto mb-4">
+              <CheckCircle2 className="w-8 h-8 text-emerald-400" />
+            </div>
+            <h2 className="text-xl font-bold text-white mb-2">Proposta Enviada!</h2>
+            <p className="text-sm text-muted-foreground mb-1">
+              A proposta foi registrada e vinculada ao partner:
+            </p>
+            <p className="text-base font-semibold text-primary">{partnerName}</p>
           </div>
-          <h2 className="text-xl font-bold text-white mb-2">Proposta Enviada!</h2>
-          <p className="text-sm text-muted-foreground mb-1">
-            A proposta foi registrada e vinculada ao partner:
-          </p>
-          <p className="text-base font-semibold text-primary mb-4">{partnerName}</p>
-          <p className="text-xs text-muted-foreground mb-6">
+
+          {analysisLink && (
+            <div className="rounded-xl border border-[#C9A84C]/40 p-4 mb-4 text-left" style={{ background: "rgba(201,168,76,0.07)" }}>
+              <p className="text-xs font-bold text-[#C9A84C] uppercase tracking-wide mb-1.5 flex items-center gap-1.5">
+                <Link2 className="w-3.5 h-3.5" /> Próximo passo: análise de crédito
+              </p>
+              <p className="text-[11px] text-[#7A8FA8] leading-relaxed mb-3">
+                Copie o link abaixo e envie ao cliente para que ele pague a consulta de análise
+                (Serasa, Bacen, Jurídico e Cadastro) — ela é obrigatória para validarmos a operação.
+                Os documentos do checklist também precisam estar completos para seguirmos com a
+                operação assim que o relatório for emitido pela nossa equipe.
+              </p>
+              <button
+                type="button"
+                onClick={handleCopyAnalysisLink}
+                className="w-full flex items-center justify-center gap-2 h-9 px-3 rounded-lg bg-[#243A66]/50 border border-[#243A66] text-[#F0ECE4] hover:bg-[#243A66] transition-colors text-xs font-semibold mb-2"
+              >
+                {linkCopied ? (
+                  <><CheckCheck className="w-3.5 h-3.5 text-emerald-400" /> Link copiado!</>
+                ) : (
+                  <><Link2 className="w-3.5 h-3.5" /> Copiar link de Análise de Crédito</>
+                )}
+              </button>
+              <p className="text-[11px] text-emerald-400 font-semibold">
+                Cada análise entregue gera {formatCurrency(analysisLink.payoutReais)} de comissão para você.
+              </p>
+            </div>
+          )}
+
+          <p className="text-xs text-muted-foreground mb-6 text-center">
             A Mesa Operacional irá analisar e mover para a próxima etapa.
           </p>
           <Button onClick={handleClose} className="w-full">Fechar</Button>

@@ -1,13 +1,17 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
-import { Handshake, Loader2, Wallet, Check } from "lucide-react";
+import { useEffect, useState, useCallback, type MouseEvent } from "react";
+import { Handshake, Loader2, Wallet, Check, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { PedidoDetailModal } from "./pedido-detail-modal";
 
 export interface PartnerOrder {
   id: string;
+  /** De onde veio a solicitação (calculado na API, ver app/api/credit-engine/orders/route.ts). */
+  origem: "mesa_credito" | "mesa_ma" | "link_partner" | "site";
+  proposal_code: string | null;
+  ma_deal_code: string | null;
   client_name: string;
   client_email: string;
   client_doc: string;
@@ -38,6 +42,17 @@ function ConsentBadge({ status }: { status: string }) {
 }
 
 function OriginBadge({ order }: { order: PartnerOrder }) {
+  if (order.origem === "mesa_credito" || order.origem === "mesa_ma") {
+    const quem = order.ref_partner_name ?? order.partner_name;
+    return (
+      <div className="flex flex-col gap-1">
+        <Badge className="bg-[#C9A84C]/10 text-[#E8C97A] border-[#C9A84C]/20 w-fit">
+          {order.origem === "mesa_credito" ? "Mesa de Crédito" : "Mesa M&A"}
+        </Badge>
+        {quem && <span className="text-[11px] text-muted-foreground truncate max-w-40">Partner: {quem}</span>}
+      </div>
+    );
+  }
   if (order.source === "direct") {
     return (
       <div className="flex flex-col gap-1">
@@ -54,6 +69,27 @@ function OriginBadge({ order }: { order: PartnerOrder }) {
       <span className="text-[11px] text-muted-foreground truncate max-w-40">{order.partner_name ?? "—"}</span>
     </div>
   );
+}
+
+// Código do crédito (proposta da Mesa de Crédito) ou do deal M&A. Clicar abre a proposta
+// na Mesa Operacional (mesmo deep-link do modal do pedido) sem abrir o modal da linha.
+function CodigoCell({ order }: { order: PartnerOrder }) {
+  if (order.proposal_code && order.credit_desk_proposal_id) {
+    return (
+      <a
+        href={`/mesa-operacional?proposalId=${order.credit_desk_proposal_id}`}
+        onClick={(e) => e.stopPropagation()}
+        className="font-mono text-xs font-semibold text-[#C9A84C] hover:text-[#E8C97A] hover:underline whitespace-nowrap"
+        title="Abrir proposta na Mesa Operacional"
+      >
+        {order.proposal_code}
+      </a>
+    );
+  }
+  if (order.ma_deal_code) {
+    return <span className="font-mono text-xs font-semibold text-[#C9A84C] whitespace-nowrap">{order.ma_deal_code}</span>;
+  }
+  return <span className="text-xs text-muted-foreground">—</span>;
 }
 
 function StageBadge({ order }: { order: PartnerOrder }) {
@@ -168,9 +204,81 @@ interface Props {
   canManagePayout?: boolean;
 }
 
+const STATUS_NAO_PAGO: Record<string, string> = {
+  PENDING: "Não pago",
+  CANCELLED: "Cancelado",
+  EXPIRED: "Expirado",
+};
+
+function PaidCell({ order }: { order: PartnerOrder }) {
+  if (order.status === "PAID") {
+    return <span className="text-xs text-muted-foreground">{order.paid_at ? formatDate(order.paid_at) : "Pago"}</span>;
+  }
+  return (
+    <Badge className="bg-amber-500/10 text-amber-400 border-amber-500/20">
+      {STATUS_NAO_PAGO[order.status] ?? order.status}
+    </Badge>
+  );
+}
+
+// "Excluir solicitação" (ADMIN/GESTAO): limpeza manual dos pedidos que não foram pagos
+// (22/09/2026). Pedido com comissão gerada ou relatório entregue não pode ser excluído
+// (a API também barra). Ver app/api/credit-engine/orders/[id]/route.ts.
+function ExcluirSolicitacao({ order, onDeleted }: { order: PartnerOrder; onDeleted: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const bloqueio = order.partner_commission_id
+    ? "Já gerou comissão: não pode ser excluída"
+    : order.report_delivered_at
+      ? "Relatório já entregue: não pode ser excluída"
+      : null;
+
+  async function excluir(e: MouseEvent) {
+    e.stopPropagation(); // não abre o modal da linha
+    const linhas = [`Excluir a solicitação de "${order.client_name}"?`, ""];
+    if (order.status === "PAID") linhas.push("ATENÇÃO: esta solicitação está PAGA.", "");
+    if (order.credit_desk_proposal_id) linhas.push("A proposta de crédito vinculada não será apagada.", "");
+    linhas.push("Ela sai da lista de Pedidos de Partners. Esta ação não pode ser desfeita.");
+    if (!window.confirm(linhas.join("\n"))) return;
+
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/credit-engine/orders/${order.id}`, { method: "DELETE" });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error ?? "Falha ao excluir a solicitação");
+      onDeleted();
+    } catch (err) {
+      window.alert((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <button
+      onClick={excluir}
+      disabled={busy || !!bloqueio}
+      title={bloqueio ?? "Excluir solicitação"}
+      aria-label="Excluir solicitação"
+      className="p-1.5 rounded-md text-muted-foreground hover:text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-muted-foreground disabled:cursor-not-allowed"
+    >
+      {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+    </button>
+  );
+}
+
 // Tabela reutilizada pelas 2 abas (via partner / direto no site) — mesmas
 // colunas, mesma linha clicável, só o array de pedidos muda.
-function OrdersTable({ orders, onSelect }: { orders: PartnerOrder[]; onSelect: (o: PartnerOrder) => void }) {
+function OrdersTable({
+  orders,
+  onSelect,
+  podeExcluir,
+  onDeleted,
+}: {
+  orders: PartnerOrder[];
+  onSelect: (o: PartnerOrder) => void;
+  podeExcluir: boolean;
+  onDeleted: () => void;
+}) {
   if (orders.length === 0) {
     return (
       <div className="rounded-xl border border-border/50 bg-card p-8 text-center text-sm text-muted-foreground">
@@ -183,9 +291,10 @@ function OrdersTable({ orders, onSelect }: { orders: PartnerOrder[]; onSelect: (
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-border/50">
-            {["Cliente", "Origem", "Valor Pago", "Consentimento", "Etapa", "Comissão", "Pago em"].map((h) => (
+            {["Cliente", "Origem", "Código do crédito", "Valor Pago", "Consentimento", "Etapa", "Comissão", "Pago em"].map((h) => (
               <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">{h}</th>
             ))}
+            {podeExcluir && <th className="w-12" aria-label="Ações" />}
           </tr>
         </thead>
         <tbody>
@@ -197,11 +306,17 @@ function OrdersTable({ orders, onSelect }: { orders: PartnerOrder[]; onSelect: (
             >
               <td className="px-4 py-3 font-medium text-foreground max-w-48 truncate">{o.client_name}</td>
               <td className="px-4 py-3"><OriginBadge order={o} /></td>
+              <td className="px-4 py-3"><CodigoCell order={o} /></td>
               <td className="px-4 py-3 text-right font-semibold text-white">{formatCurrency(o.amount_cents / 100)}</td>
               <td className="px-4 py-3"><ConsentBadge status={o.consent_status} /></td>
               <td className="px-4 py-3"><StageBadge order={o} /></td>
               <td className="px-4 py-3"><CommissionBadge order={o} /></td>
-              <td className="px-4 py-3 text-xs text-muted-foreground">{o.paid_at ? formatDate(o.paid_at) : "—"}</td>
+              <td className="px-4 py-3"><PaidCell order={o} /></td>
+              {podeExcluir && (
+                <td className="px-2 py-3 text-right">
+                  <ExcluirSolicitacao order={o} onDeleted={onDeleted} />
+                </td>
+              )}
             </tr>
           ))}
         </tbody>
@@ -218,7 +333,9 @@ export function PedidosPartnersClient({ canManagePayout = false }: Props) {
   // Pedidos "direct" (cadastro direto no site, sem partner) ficam numa aba
   // separada de "Pedidos de Partners" — não é o mesmo fluxo/dono, mesmo que
   // as duas tabelas venham do mesmo endpoint (decisão 11/09/2026).
-  const [tab, setTab] = useState<"partner" | "direct">("partner");
+  // Aba "Mesa de Crédito" (22/09/2026): pedidos que vieram do link de Análise gerado numa
+  // proposta da Mesa de Crédito — antes caíam misturados em "Diretos (Site)".
+  const [tab, setTab] = useState<"partner" | "mesa" | "direct">("partner");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -249,8 +366,16 @@ export function PedidosPartnersClient({ canManagePayout = false }: Props) {
     setSelected((cur) => (cur ? fresh.find((o) => o.id === cur.id) ?? null : null));
   }, [load]);
 
-  const partnerOrders = orders.filter((o) => o.source !== "direct");
-  const directOrders = orders.filter((o) => o.source === "direct");
+  const porAba = {
+    partner: orders.filter((o) => o.source !== "direct"),
+    mesa: orders.filter((o) => o.source === "direct" && o.origem === "mesa_credito"),
+    direct: orders.filter((o) => o.source === "direct" && o.origem !== "mesa_credito"),
+  };
+  const abas: { id: keyof typeof porAba; label: string }[] = [
+    { id: "partner", label: "Via Partner" },
+    { id: "mesa", label: "Mesa de Crédito" },
+    { id: "direct", label: "Diretos (Site)" },
+  ];
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -278,32 +403,37 @@ export function PedidosPartnersClient({ canManagePayout = false }: Props) {
 
       {!loading && !error && (
         <>
-          <div className="flex items-center gap-1 border-b border-border/50">
-            <button
-              onClick={() => setTab("partner")}
-              className={`px-4 py-2.5 text-sm font-semibold border-b-2 -mb-px transition-colors ${
-                tab === "partner" ? "border-teal-400 text-white" : "border-transparent text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              Via Partner ({partnerOrders.length})
-            </button>
-            <button
-              onClick={() => setTab("direct")}
-              className={`px-4 py-2.5 text-sm font-semibold border-b-2 -mb-px transition-colors ${
-                tab === "direct" ? "border-teal-400 text-white" : "border-transparent text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              Diretos (Site) ({directOrders.length})
-            </button>
+          <div className="flex items-center gap-1 border-b border-border/50 overflow-x-auto">
+            {abas.map((a) => (
+              <button
+                key={a.id}
+                onClick={() => setTab(a.id)}
+                className={`px-4 py-2.5 text-sm font-semibold border-b-2 -mb-px transition-colors whitespace-nowrap ${
+                  tab === a.id ? "border-teal-400 text-white" : "border-transparent text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {a.label} ({porAba[a.id].length})
+              </button>
+            ))}
           </div>
 
+          {tab === "mesa" && (
+            <p className="text-xs text-muted-foreground -mt-2">
+              Clientes que pagaram pelo link de Análise de Crédito gerado numa proposta da Mesa de Crédito. O código do crédito leva direto à proposta.
+            </p>
+          )}
           {tab === "direct" && (
             <p className="text-xs text-muted-foreground -mt-2">
               Clientes que compraram análise sozinhos em /analise-v2, sem partner envolvido na venda. Fluxo de operação é o mesmo, só a origem muda.
             </p>
           )}
 
-          <OrdersTable orders={tab === "partner" ? partnerOrders : directOrders} onSelect={setSelected} />
+          <OrdersTable
+            orders={porAba[tab]}
+            onSelect={setSelected}
+            podeExcluir={canManagePayout}
+            onDeleted={load}
+          />
         </>
       )}
 
@@ -312,6 +442,7 @@ export function PedidosPartnersClient({ canManagePayout = false }: Props) {
           order={selected}
           onClose={() => setSelected(null)}
           onUpdated={refreshSelected}
+          podeExcluirAnalise={canManagePayout}
         />
       )}
     </div>

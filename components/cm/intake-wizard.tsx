@@ -24,10 +24,10 @@ interface Intermediario {
 }
 
 const CHECKLIST_ITEMS = [
-  { key: "checklist_contato_direto", label: "Tenho contato direto com o cedente/detentor do ativo, não é uma indicação de terceiros sem confirmação." },
+  { key: "checklist_contato_direto", label: "Contatei previamente o mandatário e/ou cedente do ativo para confirmar a oferta, não se trata de uma indicação de terceiros sem confirmação." },
   { key: "checklist_ativo_livre_onus", label: "Pelo meu conhecimento, o ativo está livre de ônus, gravames, penhoras ou cessões anteriores." },
   { key: "checklist_regularidade_fiscal", label: "O cedente não possui, pelo meu conhecimento, pendências fiscais que impeçam a transferência." },
-  { key: "checklist_intermediarios_cientes", label: "Todos os intermediários listados abaixo estão cientes de que serão contatados pela V3 Partners para qualificação." },
+  { key: "checklist_intermediarios_cientes", label: "Todos os intermediários listados nesta página estão cientes de que serão contatados pela V3 Partners para qualificação." },
 ];
 
 // Padrao V3 (19/09/2026, pedido de Joao): dropdowns sempre em ordem
@@ -73,6 +73,8 @@ export function IntakeWizard({ token, prefill, anonymousId }: IntakeWizardProps)
     tribunal: prefill.tribunal || "",
     natureza: prefill.natureza || "",
     numero_processo: prefill.numero_processo || "",
+    origem_credito: prefill.origem_credito || "",
+    forma_transferencia: prefill.forma_transferencia || "",
     valor_face: prefill.valor_face ? formatCurrencyBRLFromNumber(Number(prefill.valor_face)) : "",
     valor_atualizado: prefill.valor_atualizado ? formatCurrencyBRLFromNumber(Number(prefill.valor_atualizado)) : "",
     desagio_pretendido: prefill.desagio_pretendido || "",
@@ -170,6 +172,21 @@ export function IntakeWizard({ token, prefill, anonymousId }: IntakeWizardProps)
     } finally {
       setCepLoading(false);
     }
+  };
+
+  // Item 2.2 (brief 21/09/2026): Natureza so faz sentido para Precatorio;
+  // ICMS e IPI tem esfera fixa pela propria natureza do tributo (estadual e
+  // federal, respectivamente) e ganham 2 campos informativos proprios.
+  // Troca de Tipo de Ativo limpa o que nao se aplica mais ao tipo novo.
+  const selectAssetType = (value: string) => {
+    setForm((p) => ({
+      ...p,
+      asset_type: value,
+      natureza: value === "precatorio" ? p.natureza : "",
+      esfera: value === "icms" ? "Estadual" : value === "ipi" ? "Federal" : (value === "precatorio" ? p.esfera : ""),
+      origem_credito: value === "icms" || value === "ipi" ? p.origem_credito : "",
+      forma_transferencia: value === "icms" || value === "ipi" ? p.forma_transferencia : "",
+    }));
   };
 
   const selectUf = async (uf: string) => {
@@ -451,7 +468,7 @@ export function IntakeWizard({ token, prefill, anonymousId }: IntakeWizardProps)
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className={labelClass}>Tipo de Ativo *</label>
-                <select className={selectClass} value={form.asset_type} onChange={(e) => upd("asset_type", e.target.value)}>
+                <select className={selectClass} value={form.asset_type} onChange={(e) => selectAssetType(e.target.value)}>
                   {ASSET_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
                 </select>
               </div>
@@ -474,30 +491,50 @@ export function IntakeWizard({ token, prefill, anonymousId }: IntakeWizardProps)
                 </select>
               </div>
               <div>
-                <label className={labelClass}>Esfera Judicial</label>
-                <select className={selectClass} value={form.esfera} onChange={(e) => upd("esfera", e.target.value)}>
-                  <option value="">Selecione</option>
-                  <option value="Federal">Federal</option>
-                  <option value="Estadual">Estadual</option>
-                  <option value="Municipal">Municipal</option>
-                </select>
+                <label className={labelClass}>Esfera {(form.asset_type === "icms" || form.asset_type === "ipi") ? "" : "Judicial"}</label>
+                {(form.asset_type === "icms" || form.asset_type === "ipi") ? (
+                  <input className={inputClass + " opacity-60 cursor-not-allowed"} value={form.esfera} disabled readOnly />
+                ) : (
+                  <select className={selectClass} value={form.esfera} onChange={(e) => upd("esfera", e.target.value)}>
+                    <option value="">Selecione</option>
+                    <option value="Federal">Federal</option>
+                    <option value="Estadual">Estadual</option>
+                    <option value="Municipal">Municipal</option>
+                  </select>
+                )}
+                {form.asset_type === "icms" && <p className="text-[10px] text-[#9BAFC5]/60 mt-1">ICMS é tributo estadual, esfera travada.</p>}
+                {form.asset_type === "ipi" && <p className="text-[10px] text-[#9BAFC5]/60 mt-1">IPI é tributo federal, esfera travada.</p>}
               </div>
               <div>
                 <label className={labelClass}>Tribunal</label>
                 <input className={inputClass} value={form.tribunal} onChange={(e) => upd("tribunal", e.target.value)} placeholder="Ex: TRF-1, TJRJ, TJSP" />
               </div>
-              <div>
-                <label className={labelClass}>Natureza</label>
-                <select className={selectClass} value={form.natureza} onChange={(e) => upd("natureza", e.target.value)}>
-                  <option value="">Selecione</option>
-                  <option value="Alimentar">Alimentar</option>
-                  <option value="Comum">Comum</option>
-                </select>
-              </div>
+              {form.asset_type === "precatorio" && (
+                <div>
+                  <label className={labelClass}>Natureza</label>
+                  <select className={selectClass} value={form.natureza} onChange={(e) => upd("natureza", e.target.value)}>
+                    <option value="">Selecione</option>
+                    <option value="Alimentar">Alimentar</option>
+                    <option value="Comum">Comum</option>
+                  </select>
+                </div>
+              )}
               <div>
                 <label className={labelClass}>Número do Processo (opcional)</label>
                 <input className={inputClass} value={form.numero_processo} onChange={(e) => upd("numero_processo", e.target.value)} placeholder="0000000-00.0000.0.00.0000" />
               </div>
+              {(form.asset_type === "icms" || form.asset_type === "ipi") && (
+                <>
+                  <div>
+                    <label className={labelClass}>Origem do Crédito</label>
+                    <input className={inputClass} value={form.origem_credito} onChange={(e) => upd("origem_credito", e.target.value)} placeholder="Ex: acúmulo de saldo credor na apuração" />
+                  </div>
+                  <div>
+                    <label className={labelClass}>Forma de Transferência</label>
+                    <input className={inputClass} value={form.forma_transferencia} onChange={(e) => upd("forma_transferencia", e.target.value)} placeholder="Ex: Nota Fiscal, Incorporação" />
+                  </div>
+                </>
+              )}
             </div>
           </div>
         )}

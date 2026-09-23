@@ -455,7 +455,7 @@ export async function POST(req: NextRequest) {
       // e-mail de verdade), então só entra o rótulo vazio quando NÃO há
       // head resolvido pra este vertical (ex: "clientes"/"institucional").
       const willPushHeadMesa = typeof variables.head_email === "string" && typeof variables.head_full_name === "string";
-      if (!willPushHeadMesa) {
+      if (!willPushHeadMesa && !template.head_declared_in_body) {
         qualificationParties.push({ role: "v3_partners", name: "V3 Partners Soluções Ltda", doc: "14.219.287/0001-50", email: "" });
       }
 
@@ -469,6 +469,28 @@ export async function POST(req: NextRequest) {
           name: variables.head_full_name,
           doc: typeof variables.head_cpf === "string" ? formatDocumentNumber(variables.head_cpf) : null,
           email: variables.head_email,
+        });
+      }
+
+      // Achado real 22/09/2026 (auditoria de diagramação, item B, decisão de
+      // João): quando o corpo já declara a cláusula ESTRUTURADORA fixa
+      // (head_declared_in_body), ela qualifica a V3 Partners representada
+      // por João Lemos Netto -- papel distinto do Head da Mesa (que opera o
+      // desk daquela vertical, não necessariamente o mesmo signatário;
+      // nesta minuta são pessoas diferentes: João x Dr. Luis Athaydes). Sem
+      // isso, João era citado como representante no preâmbulo e nunca tinha
+      // campo de assinatura -- risco real de nulidade/ilegitimidade por
+      // parte qualificada que nunca assina. Doc = CNPJ da V3 (mesmo padrão
+      // já usado no resto deste arquivo para "João Lemos Netto" representando
+      // a V3, nunca CPF pessoal em texto puro no repositório). Substitui a
+      // antiga entrada "V3 Partners Soluções Ltda" sem e-mail (linha acima)
+      // por um signatário real.
+      if (template.head_declared_in_body) {
+        qualificationParties.push({
+          role: "v3_partners",
+          name: "João Lemos Netto",
+          doc: "14.219.287/0001-50",
+          email: "joao.lemos@v3partners.com.br",
         });
       }
 
@@ -517,9 +539,18 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      // Uma linha em branco entre as partes (21/09/2026): com "<br/>" simples as 8
-      // qualificações saíam coladas num único bloco ("embolado" na impressão).
-      variables.party_qualifications_block = partyProseLines.join("<br/><br/>");
+      // Recuo francês + numeração sequencial (achado real 22/09/2026, auditoria
+      // de diagramação, item 1): "<br/><br/>" juntava as 8 qualificações num
+      // único parágrafo -- cada nome saía flush na margem esquerda, sem recuo
+      // nem numeração, inconsistente com o resto do corpo numerado da minuta.
+      // Cada parte agora é o seu próprio <p> com marcador "N) " sequencial,
+      // reaproveitando o mesmo motor de recuo francês do corpo (ver
+      // CLAUSE_MARKER_RE/applyClauseHangingIndent em lib/contract-render.ts)
+      // em vez de duplicar a lógica de indentação aqui. Números "N)" numeram
+      // as PARTES entre si (integridade referencial pedida na auditoria); não
+      // são cláusula do corpo, então nunca colidem com a numeração digitada
+      // pelo Dr. Luis em outro lugar da minuta.
+      variables.party_qualifications_block = partyProseLines.map((line, i) => `<p>${i + 1}) ${line}</p>`).join("");
       variables.official_emails_protocol = Array.from(new Set([
         "joao.lemos@v3partners.com.br",
         typeof variables.head_email === "string" ? variables.head_email : null,

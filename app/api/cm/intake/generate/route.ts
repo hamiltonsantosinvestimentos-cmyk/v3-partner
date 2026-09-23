@@ -131,7 +131,13 @@ export async function POST(req: NextRequest) {
   // UNIQUE de anonymous_id — nunca aparece como referência real ao cedente
   // (a tela de confirmação usa o anonymous_id devolvido pelo POST, não este).
   const placeholderAnonId = `PENDENTE-${randomUUID().slice(0, 8).toUpperCase()}`;
-  const { data: numeroInterno } = await svc().rpc("generate_cm_numero_interno");
+  // P0 (22/09/2026): numero_interno tinha geracao propria via
+  // generate_cm_numero_interno() (formato V3-YYYY-MM-BOL-NNN, serie "BOL"
+  // nunca registrada em v3_code_series), nunca reconciliada com o codigo
+  // real emitido depois em /api/cm/intake/[token]. numero_interno passa a
+  // ser sempre o mesmo valor de anonymous_id -- aqui, o mesmo placeholder;
+  // o codigo definitivo dos dois so nasce apos a classificacao.
+  const numeroInterno = placeholderAnonId;
 
   // Partner so cria link para SI MESMO como originador -- nunca aceito do
   // body (mesmo padrao de investor-demands/cm listings): impede um partner
