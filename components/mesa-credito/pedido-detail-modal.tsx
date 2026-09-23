@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { X, Loader2, CheckCircle2, Circle, ExternalLink, Plus, Copy, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { formatCurrency, formatDate, formatDoc } from "@/lib/utils";
 import type { PartnerOrder } from "./pedidos-partners-client";
 import { ReanalisarPendentes } from "./reanalisar-pendentes";
 import { PdfUnificado } from "./pdf-unificado";
@@ -340,13 +341,17 @@ export function PedidoDetailModal({ order, onClose, onUpdated, podeExcluirAnalis
   const hasReport = Boolean(order.report_public_token);
   const delivered = Boolean(order.report_delivered_at);
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="bg-card border border-border rounded-2xl w-full max-w-lg max-h-[92vh] flex flex-col animate-fade-in">
+  // Portal no <body>: a página usa .animate-fade-in (transform com fill "forwards"),
+  // que vira o containing block de qualquer `fixed` dentro dela — o modal ficava
+  // posicionado no meio da página (não da tela) e cortava o topo do pedido.
+  // Alinhado no topo pra abrir sempre com o cabeçalho visível.
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-start justify-center p-4 pt-6 sm:pt-10 bg-black/60 backdrop-blur-sm overflow-y-auto">
+      <div className="bg-card border border-border rounded-2xl w-full max-w-lg max-h-[calc(100vh-3rem)] sm:max-h-[calc(100vh-5rem)] flex flex-col animate-fade-in">
         <div className="flex items-center justify-between px-6 py-4 border-b border-border">
           <div>
             <h2 className="text-base font-bold text-white">{order.client_name}</h2>
-            <p className="text-xs text-muted-foreground">{order.client_doc} · {order.client_email}</p>
+            <p className="text-xs text-muted-foreground break-all">{formatDoc(order.client_doc)} · {order.client_email}</p>
           </div>
           <button onClick={onClose} className="w-8 h-8 rounded-lg hover:bg-secondary flex items-center justify-center text-muted-foreground hover:text-white transition-colors">
             <X className="w-4 h-4" />
@@ -366,6 +371,12 @@ export function PedidoDetailModal({ order, onClose, onUpdated, podeExcluirAnalis
               </p>
             </div>
             <div><p className="text-[10px] text-muted-foreground uppercase tracking-wider">Pago em</p><p className="text-foreground font-medium">{order.paid_at ? formatDate(order.paid_at) : "—"}</p></div>
+            <div><p className="text-[10px] text-muted-foreground uppercase tracking-wider">Pedido em</p><p className="text-foreground font-medium">{formatDate(order.created_at)}</p></div>
+            <div><p className="text-[10px] text-muted-foreground uppercase tracking-wider">CPF/CNPJ</p><p className="text-foreground font-medium">{formatDoc(order.client_doc)}</p></div>
+            <div className="col-span-2"><p className="text-[10px] text-muted-foreground uppercase tracking-wider">E-mail</p><p className="text-foreground font-medium break-all">{order.client_email}</p></div>
+            {(order.cnpj_count != null || order.cpf_count != null) && (
+              <div className="col-span-2"><p className="text-[10px] text-muted-foreground uppercase tracking-wider">Pacote</p><p className="text-foreground font-medium">{order.cnpj_count ?? 0} CNPJ · {order.cpf_count ?? 0} CPF</p></div>
+            )}
           </div>
 
           <div className="rounded-xl border border-border/50 bg-card p-4 flex items-center justify-between gap-3 flex-wrap">
@@ -503,6 +514,7 @@ export function PedidoDetailModal({ order, onClose, onUpdated, podeExcluirAnalis
           {error && <div className="rounded-lg border border-red-500/20 bg-red-500/5 p-3 text-xs text-red-400">{error}</div>}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
