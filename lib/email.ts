@@ -32,6 +32,11 @@ async function send(
   } catch { /* silent */ }
 }
 
+/** E-mail com HTML já montado (ex.: relatório mensal de partners), pelo mesmo ponto de saída/gate. */
+export async function enviarEmailHtml(to: string, subject: string, html: string): Promise<void> {
+  await send(to, subject, html);
+}
+
 // ── Template base ──────────────────────────────────────────────────────────
 function template(title: string, body: string, cta?: { label: string; url: string }): string {
   return `<!DOCTYPE html>
