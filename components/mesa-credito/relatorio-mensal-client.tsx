@@ -2,8 +2,25 @@
 
 import { Fragment, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ChevronDown, ChevronRight, Loader2, Send, Check } from "lucide-react";
+import { ChevronDown, ChevronRight, Loader2, Send, Check, FileDown } from "lucide-react";
 import type { RelatorioMensal, RelatorioPartner } from "@/lib/relatorio-mensal-partners";
+
+const pdfUrl = (mes: string, partnerId?: string) =>
+  `/api/mesa-credito/relatorio-mensal/pdf?mes=${mes}${partnerId ? `&partner_id=${partnerId}` : ""}`;
+
+function BotaoPdf({ href, label }: { href: string; label: string }) {
+  const [gerando, setGerando] = useState(false);
+  return (
+    <a
+      href={href}
+      onClick={() => { setGerando(true); setTimeout(() => setGerando(false), 8000); }}
+      className="h-9 px-3 rounded-lg border border-border text-foreground text-xs font-semibold inline-flex items-center gap-1.5 hover:bg-secondary"
+    >
+      {gerando ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileDown className="w-3.5 h-3.5" />}
+      {gerando ? "Gerando PDF…" : label}
+    </a>
+  );
+}
 
 const brl = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 
@@ -31,12 +48,13 @@ function Kpi({ label, valor, sub }: { label: string; valor: string; sub?: string
   );
 }
 
-function DetalhePartner({ r }: { r: RelatorioPartner }) {
+function DetalhePartner({ r, pdfHref }: { r: RelatorioPartner; pdfHref?: string }) {
   const m = r.mes;
   const c = r.comissao;
   const pct = (n: number) => (m.enviadas ? ` · ${Math.round((n / m.enviadas) * 100)}%` : "");
   return (
     <div className="space-y-4">
+      {pdfHref && <div className="flex justify-end"><BotaoPdf href={pdfHref} label="PDF deste partner" /></div>}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <Kpi label="Enviadas no mês" valor={String(m.enviadas)} sub={brl(m.valorTotal)} />
         <Kpi label="Foram para análise" valor={String(m.foramParaAnalise)} sub={`das enviadas${pct(m.foramParaAnalise)}`} />
@@ -152,6 +170,7 @@ export function RelatorioMensalClient({ rel, equipe, podeReenviar, basePath = "/
           {!meses.some((m) => m.chave === rel.periodo.chave) && <option value={rel.periodo.chave}>{rel.periodo.label}</option>}
           {meses.map((m) => <option key={m.chave} value={m.chave} className="capitalize">{m.label}</option>)}
         </select>
+        <BotaoPdf href={pdfUrl(rel.periodo.chave)} label={equipe ? "Gerar PDF (rede)" : "Gerar PDF"} />
         {podeReenviar && (
           <button
             onClick={reenviar}
@@ -214,7 +233,7 @@ export function RelatorioMensalClient({ rel, equipe, podeReenviar, basePath = "/
                       </tr>
                       {open && (
                         <tr className="border-b border-border/30 bg-secondary/20">
-                          <td colSpan={11} className="p-4"><DetalhePartner r={r} /></td>
+                          <td colSpan={11} className="p-4"><DetalhePartner r={r} pdfHref={pdfUrl(rel.periodo.chave, r.partner.id)} /></td>
                         </tr>
                       )}
                     </Fragment>
