@@ -1,4 +1,5 @@
 import { PDFDocument } from "pdf-lib";
+import { nomeOficialDoPerfil, mesmoNome, semRotulo } from "@/lib/credit-nome-oficial";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { generateAndStoreCreditReportPdf, launchBrowser } from "@/lib/credit-report-generate";
 import { CREDIT_REPORT_STYLE, LOGO_URL } from "@/lib/credit-report-template";
@@ -54,7 +55,9 @@ export interface PerfilRow {
   subject_type: string | null;
   tier: string | null;
   score_total: number | null;
-  serasa_data: { error?: unknown } | null;
+  serasa_data: { error?: unknown; nome_serasa?: unknown } | null;
+  /** Só a razão social da Receita (select com alias), pro nome oficial da parte. */
+  receita_data: { razao_social?: unknown } | null;
   bacen_scr_data: unknown | null;
   report_pdf_path: string | null;
   report_generated_at: string | null;
@@ -119,6 +122,8 @@ table.partes .pg { text-align:center; font-weight:700; color: var(--gl); width: 
 export function capaBodyHtml(opts: {
   cliente: string;
   documentoCliente: string;
+  /** Nome digitado na compra, mostrado só quando difere do nome oficial da empresa. */
+  solicitante?: string | null;
   partes: ResumoParte[];
   emitidoEm: string;
   /** Mostra a coluna com a página onde cada dossiê começa (só faz sentido no PDF). */
@@ -158,7 +163,9 @@ export function capaBodyHtml(opts: {
   </div>
 
   <div class="cliente">${esc(opts.cliente)}</div>
-  <div class="cliente-doc">${esc(fmtDoc(opts.documentoCliente))}</div>
+  <div class="cliente-doc">${esc(fmtDoc(opts.documentoCliente))}${
+    opts.solicitante && !mesmoNome(opts.solicitante, opts.cliente) ? `<br>Solicitante: ${esc(opts.solicitante)}` : ""
+  }</div>
 
   <div class="resumo">
     <div class="box"><div class="lbl">Partes analisadas</div><div class="val">${opts.partes.length}</div><div class="sub">empresa e sócios/garantidores</div></div>
@@ -249,7 +256,8 @@ export async function resolverPartesDoPedido(db: SupabaseClient, orderId: string
     // ("VIVIANE WIPPEL MOSER") ou o rótulo padrão ("Sócio/garantidor"). Só o padrão vira "papel".
     const rotuloPadrao = !c.document_label || ["Sócio/garantidor", "CNPJ adicional"].includes(c.document_label);
     const papel = ehPj ? "CNPJ do grupo" : "Sócio / garantidor";
-    const nomeRotulo = rotuloPadrao ? null : (c.document_label as string);
+    // Sócio informado no consentimento do site vem como "Sócio · Nome".
+    const nomeRotulo = rotuloPadrao ? null : (c.document_label as string).replace(/^Sócio · /, "");
     const profileId = c.credit_desk_proposal_id ? perfilPorProposta[c.credit_desk_proposal_id] : undefined;
     if (!profileId) {
       ausentes.push({ documento: fmtDoc(doc), papel, motivo: c.status !== "consented" ? "consentimento LGPD pendente" : "análise ainda não rodada" });
@@ -267,7 +275,7 @@ export async function resolverPartesDoPedido(db: SupabaseClient, orderId: string
 
   const { data: perfis } = await db
     .from("credit_profiles")
-    .select("id, subject_name, subject_cpf_cnpj, subject_type, tier, score_total, serasa_data, bacen_scr_data, report_pdf_path, report_generated_at, updated_at")
+    .select("id, subject_name, subject_cpf_cnpj, subject_type, tier, score_total, serasa_data, receita_data, bacen_scr_data, report_pdf_path, report_generated_at, updated_at")
     .in("id", ordem.map((o) => o.profileId));
   const perfilMap = new Map((perfis ?? []).map((p) => [p.id, p as PerfilRow]));
 
@@ -286,7 +294,8 @@ export function resumoDaParte(parte: ParteDoPedido, indice: number): ResumoParte
   const tipo: "PF" | "PJ" = p.subject_type === "PJ" ? "PJ" : "PF";
   return {
     papel: indice === 0 ? (tipo === "PJ" ? "Empresa" : "Titular") : parte.papel,
-    nome: parte.nomeRotulo ?? p.subject_name ?? "—",
+    // Nome oficial (Receita/Serasa) vence o rótulo digitado pela Mesa/cliente.
+    nome: nomeOficialDoPerfil(p) ?? parte.nomeRotulo ?? semRotulo(p.subject_name) ?? "—",
     documento: p.subject_cpf_cnpj ?? "",
     tipo,
     tier: p.tier,
@@ -346,7 +355,7 @@ export async function gerarPdfUnificado(db: SupabaseClient, orderId: string): Pr
     const renderCapa = async () => {
       const page = await browser!.newPage();
       await page.setContent(
-        capaHtml({ cliente: order.client_name ?? partes[0].nome, documentoCliente: order.client_doc ?? partes[0].documento, partes, emitidoEm, mostrarPagina: true, rotulo: "arquivo" }),
+        capaHtml({ cliente: partes[0].nome || order.client_name || "—", documentoCliente: partes[0].documento || order.client_doc || "", solicitante: order.client_name, partes, emitidoEm, mostrarPagina: true, rotulo: "arquivo" }),
         { waitUntil: "load", timeout: 60000 }
       );
       const buf = await page.pdf({ format: "A4", printBackground: true, margin: { top: "0", right: "0", bottom: "0", left: "0" } });
@@ -367,7 +376,7 @@ export async function gerarPdfUnificado(db: SupabaseClient, orderId: string): Pr
 
   // Junta capa + dossiês
   const saida = await PDFDocument.create();
-  saida.setTitle(`Dossiê de Análise de Crédito · ${order.client_name ?? partes[0].nome}`);
+  saida.setTitle(`Dossiê de Análise de Crédito · ${partes[0].nome || order.client_name}`);
   saida.setProducer("V3 Partners");
   saida.setCreator("V3 Partners · Mesa de Crédito");
   for (const bytes of [capaBytes, ...pdfs.map((p) => p.bytes)]) {

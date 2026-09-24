@@ -66,8 +66,10 @@ export default async function RelatorioCreditoPage({ params }: PageProps) {
 
       const maisRecente = completos.reduce((a, b) => (new Date(a.validUntilISO) >= new Date(b.validUntilISO) ? a : b));
       const capa = capaBodyHtml({
-        cliente: resolvido.order.client_name ?? completos[0].subjectName,
-        documentoCliente: resolvido.order.client_doc ?? completos[0].subjectCpfCnpj,
+        // Capa com o nome oficial da empresa analisada; o digitado na compra vira "Solicitante".
+        cliente: completos[0].subjectName || resolvido.order.client_name || "—",
+        documentoCliente: completos[0].subjectCpfCnpj || resolvido.order.client_doc || "",
+        solicitante: resolvido.order.client_name,
         partes: resolvido.partes.map((p, i) => resumoDaParte(p, i)),
         emitidoEm: maisRecente.emittedAt,
         mostrarPagina: false,

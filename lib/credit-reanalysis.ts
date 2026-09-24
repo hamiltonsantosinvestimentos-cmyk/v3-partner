@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { resolveEffectiveSourceConfig, type SourceConfig } from "@/lib/credit-source-config";
 import { consultarBacenScr } from "@/lib/credit-bacen";
+import { corrigirNomeAnalisado } from "@/lib/credit-nome-oficial";
 import { consultarSerasa } from "@/lib/serasa";
 import { recalcularScoreComSerasa, restricoesSerasa } from "@/lib/credit-score";
 import { generateAndStoreCreditReportPdf } from "@/lib/credit-report-generate";
@@ -254,9 +255,12 @@ export async function reanalisarPendentes(
     .update({ ...update, sources_paid: sourcesPaid, flags, raw_result: raw })
     .eq("id", perfil.id);
 
+  // Serasa novo pode trazer o nome oficial (CPF/CNPJ): troca o digitado antes do dossiê.
+  const nome = atualizadas.length ? await corrigirNomeAnalisado(db, perfil.id).catch(() => ({ corrigido: false })) : { corrigido: false };
+
   // Dossiê refeito só se algo novo entrou
   let pdf: Awaited<ReturnType<typeof fPdf>> | null = null;
-  if (atualizadas.length) {
+  if (atualizadas.length || nome.corrigido) {
     pdf = await fPdf(perfil.id).catch((e) => ({ ok: false as const, error: (e as Error).message }));
   }
 
