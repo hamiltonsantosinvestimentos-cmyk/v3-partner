@@ -498,6 +498,36 @@ export function buildExternalReportBodyHtml(data: CreditReportData): string {
           )
           .join("")}</ul>`
       : "";
+  // Crédito a vencer e limites (23/09/2026): valor + percentual, com as operações
+  // abertas por modalidade quando o SCR trouxer. Some sozinho em consulta antiga (null).
+  const pct = (p: string | null) => (p ? ` · ${esc(p.includes("%") ? p : `${p}%`)}` : "");
+  const bacenScrPctList = (ops: typeof bs.creditoAVencerOperacoes) =>
+    ops.length
+      ? `<ul style="margin:6px 0 0 18px;padding:0">${ops
+          .map(
+            (o) =>
+              `<li style="font-size:12px;color:var(--mu);margin-bottom:3px">${v(o.descricao, "Operação")}: ${v(o.valor)}${pct(o.percentual)}</li>`
+          )
+          .join("")}</ul>`
+      : "";
+  const temAVencer = bs.creditoAVencerValor !== null || bs.creditoAVencerOperacoes.length > 0;
+  const temLimite = bs.limiteCreditoValor !== null || bs.limiteCreditoOperacoes.length > 0;
+  const bacenScrCarteira =
+    temAVencer || temLimite
+      ? `<div class="bacen-card">${
+          temAVencer
+            ? `<div class="bacen-row"><span>Crédito a vencer (tomado no mercado, em dia)</span><span>${v(bs.creditoAVencerValor)}${pct(
+                bs.creditoAVencerPercentual
+              )}</span></div>${bacenScrPctList(bs.creditoAVencerOperacoes)}`
+            : ""
+        }${
+          temLimite
+            ? `<div class="bacen-row"><span>Limites de crédito</span><span>${v(bs.limiteCreditoValor)}${pct(
+                bs.limiteCreditoPercentual
+              )}</span></div>${bacenScrPctList(bs.limiteCreditoOperacoes)}`
+            : ""
+        }</div>`
+      : "";
   const bacenScrBlock = bs.consultado
     ? `<div class="keep"><h3 class="sec">Endividamento bancário (SCR · consulta automática)</h3>
   <p class="note">Sistema de Informações de Crédito do Banco Central, consultado automaticamente na data de emissão${
@@ -510,6 +540,7 @@ export function buildExternalReportBodyHtml(data: CreditReportData): string {
         }</span></div></div></div>`
       : ""
   }
+  ${bacenScrCarteira}
   ${
     bs.creditoVencidoOperacoes.length > 0
       ? `<div class="hl hl-red"><strong>Crédito vencido no SCR: ${v(bs.creditoVencidoValor)}.</strong> Operação vencida há mais de 14 dias, conforme critério do Banco Central.${bacenScrOpsList(

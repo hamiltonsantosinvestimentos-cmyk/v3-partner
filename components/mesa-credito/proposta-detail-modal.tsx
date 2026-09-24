@@ -2358,6 +2358,10 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
       score_pontuacao: string | null; score_faixa: string | null;
       credito_vencido_valor: string | null; credito_vencido_operacoes: { descricao: string | null; valor: string | null; qtd_meses: string | null }[];
       prejuizo_valor: string | null; prejuizo_operacoes: { descricao: string | null; valor: string | null; qtd_meses: string | null }[];
+      credito_a_vencer_valor?: string | number | null; credito_a_vencer_percentual?: string | number | null;
+      credito_a_vencer_operacoes?: { descricao: string | null; valor: string | null; percentual?: string | null }[];
+      limite_credito_valor?: string | number | null; limite_credito_percentual?: string | number | null;
+      limite_credito_operacoes?: { descricao: string | null; valor: string | null; percentual?: string | null }[];
     } | null;
   } | null>(null);
   const [creditError, setCreditError] = useState<string>("");
@@ -3650,6 +3654,25 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
                           Score nativo SCR: <strong>{creditResult.bacen_scr.score_pontuacao}</strong>
                           {creditResult.bacen_scr.score_faixa && ` (${creditResult.bacen_scr.score_faixa})`}
                         </p>
+                      )}
+                      {([
+                        ["Crédito a vencer (tomado no mercado)", creditResult.bacen_scr.credito_a_vencer_valor, creditResult.bacen_scr.credito_a_vencer_percentual, creditResult.bacen_scr.credito_a_vencer_operacoes],
+                        ["Limites de crédito", creditResult.bacen_scr.limite_credito_valor, creditResult.bacen_scr.limite_credito_percentual, creditResult.bacen_scr.limite_credito_operacoes],
+                      ] as const).map(([rotulo, valor, perc, ops]) =>
+                        valor != null || (ops?.length ?? 0) > 0 ? (
+                          <div key={rotulo}>
+                            <p className="text-xs font-semibold text-foreground">
+                              {rotulo}: {valor ?? "—"}
+                              {perc != null && ` · ${String(perc).includes("%") ? perc : `${perc}%`}`}
+                            </p>
+                            {ops?.map((op, i) => (
+                              <p key={i} className="text-[10px] text-muted-foreground pl-2">
+                                {op.descricao} — {op.valor}
+                                {op.percentual && ` (${String(op.percentual).includes("%") ? op.percentual : `${op.percentual}%`})`}
+                              </p>
+                            ))}
+                          </div>
+                        ) : null
                       )}
                       {creditResult.bacen_scr.credito_vencido_operacoes.length > 0 ? (
                         <div>
